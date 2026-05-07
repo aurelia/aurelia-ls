@@ -74,38 +74,45 @@ export class ConfigurationRecognitionProjectPass {
   ): ConfigurationRecognitionProjectResult {
     const projectEvaluation = evaluation ?? new StaticProjectEvaluationPass().evaluateAndEmit(store, project);
     const recognition = new ConfigurationRecognitionPass();
-    const sources: ConfigurationRecognitionSourceResult[] = [];
+    return new ConfigurationRecognitionProjectResult(
+      project,
+      projectEvaluation,
+      projectEvaluation.sources.map((source) =>
+        this.recognizeSource(store, recognition, source, resources)
+      ),
+    );
+  }
 
-    for (const source of projectEvaluation.sources) {
-      if (!isEvaluatedProjectSource(source)) {
-        sources.push(new ConfigurationRecognitionSourceResult(
-          source.admission,
-          [],
-          emptyConfigurationEmission(),
-          source.unresolvedModules,
-        ));
-        continue;
-      }
-
-      const result: ConfigurationRecognitionResult = recognition.recognizeAndEmit(
-        store,
-        new ConfigurationRecognitionContext(
-          source.sourceFile,
-          source.moduleKey,
-          source.admission.addressHandle,
-          source.evaluation,
-        ),
-        resources,
-      );
-      sources.push(new ConfigurationRecognitionSourceResult(
+  private recognizeSource(
+    store: KernelStore,
+    recognition: ConfigurationRecognitionPass,
+    source: StaticProjectEvaluationResult['sources'][number],
+    resources: ResourceDefinitionIndex | null,
+  ): ConfigurationRecognitionSourceResult {
+    if (!isEvaluatedProjectSource(source)) {
+      return new ConfigurationRecognitionSourceResult(
         source.admission,
-        result.observations,
-        result.emission,
+        [],
+        emptyConfigurationEmission(),
         source.unresolvedModules,
-      ));
+      );
     }
-
-    return new ConfigurationRecognitionProjectResult(project, projectEvaluation, sources);
+    const result: ConfigurationRecognitionResult = recognition.recognizeAndEmit(
+      store,
+      new ConfigurationRecognitionContext(
+        source.sourceFile,
+        source.moduleKey,
+        source.admission.addressHandle,
+        source.evaluation,
+      ),
+      resources,
+    );
+    return new ConfigurationRecognitionSourceResult(
+      source.admission,
+      result.observations,
+      result.emission,
+      source.unresolvedModules,
+    );
   }
 }
 

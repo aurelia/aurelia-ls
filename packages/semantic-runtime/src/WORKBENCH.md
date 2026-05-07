@@ -34,6 +34,7 @@ The broad horizontal substrate is present but not finished end to end. The activ
 - `resources`, `configuration`, `registration`, and `di` for Aurelia world construction.
 - `template` and `expression` for authored template/compiler surfaces and parser-owned recovery.
 - `type-system` for TypeChecker-backed projection where runtime emulation should stop.
+- `observation` for TypeChecker-backed ObserverLocator lookup, value channels, and source/target data flow.
 - `router` for router model anchors that are not yet deeply wired into passes.
 
 This breadth is intentional. The useful work is not to preserve compatibility with retired readers, but to let real
@@ -47,6 +48,30 @@ consumers pressure these layers and then refactor horizontally when the boundari
 - Put durable semantics in product records and vocabulary, not in documentation tables.
 - Keep uncertainty explicit with open seams instead of flattening partial knowledge into resolved-looking facts.
 - Treat package-local READMEs as boundary notes. Keep them short enough that future agents actually read them.
+
+## Decision Provenance
+
+User-directed product taste:
+
+- Model Aurelia framework concepts directly when possible. Prefer names such as `PropertyBinding`, `Controller`,
+  `ObserverLocator`, renderer, binding, and template-controller semantics over custom emulator/policy suffix sprawl.
+- Avoid compatibility shims while there are no external consumers. Breaking refactors are acceptable when they improve
+  conceptual clarity and framework correspondence.
+- Treat `runtime.ts` growth as pressure. If it starts compensating for missing semantic products, add or reshape the
+  product layer instead.
+- Use ordinary DI-injectable state classes and ID-shaped component boundaries in authoring fixtures where that better
+  reflects idiomatic app design; do not lean on function bindables as an app composition pattern.
+- Do not infer custom elements from cross-framework heuristics such as dash-cased tag names. Follow Aurelia runtime
+  semantics and generated framework data instead.
+
+Current inferred engineering heuristics:
+
+- If Atlas needs large local tables or fragile inference to explain this package, first ask whether semantic-runtime
+  should expose a typed product record, vocabulary term, claim, or provenance link.
+- Use Atlas pressure scripts as navigation, not as a substitute for understanding. A pressure row just chooses the
+  next source span to inspect.
+- Small framework-policy tables are helpful when they make a real axis mapping explicit; observation, hydration, and
+  recursive rendering classifiers need framework-semantic review before table-only cleanup.
 
 ## Active Pressure
 

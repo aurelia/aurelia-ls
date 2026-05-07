@@ -28,7 +28,7 @@ export class ResourceAliasDefinition {
 
 export class ResourceDependencyReference {
   constructor(
-    readonly identityHandle: IdentityHandle,
+    readonly identityHandle: IdentityHandle | null,
     readonly keyName: string | null = null,
   ) {}
 }

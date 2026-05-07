@@ -246,6 +246,160 @@ interface SiteClassification {
   readonly targetKind: FrameworkRelationshipEndpointKind;
 }
 
+const returnExpressionClassifications = new Map<string, SiteClassification>([
+  [
+    "propertyAccessor",
+    locatorSite(
+      FrameworkObservationFlowSiteKind.NodeAccessor,
+      "PropertyAccessor",
+      FrameworkRelationshipRelation.LooksUpObserver,
+    ),
+  ],
+  [
+    "elementPropertyAccessor",
+    nodeSite(
+      FrameworkObservationFlowSiteKind.NodeAccessor,
+      "elementPropertyAccessor",
+      FrameworkRelationshipRelation.LooksUpObserver,
+    ),
+  ],
+  [
+    "attrAccessor",
+    nodeSite(
+      FrameworkObservationFlowSiteKind.NodeAccessor,
+      "attrAccessor",
+      FrameworkRelationshipRelation.LooksUpObserver,
+    ),
+  ],
+  [
+    "cached",
+    lookupSite(
+      FrameworkObservationFlowSiteKind.ObserverCacheRead,
+      FrameworkRelationshipMechanism.ObserverCache,
+      "observer lookup cache",
+      FrameworkRelationshipRelation.LooksUpObserver,
+      FrameworkRelationshipEndpointKind.Concept,
+    ),
+  ],
+]);
+
+const newExpressionClassifications = new Map<string, SiteClassification>([
+  [
+    "PrimitiveObserver",
+    locatorSite(
+      FrameworkObservationFlowSiteKind.PrimitiveObserver,
+      "PrimitiveObserver",
+      FrameworkRelationshipRelation.ConstructsInstance,
+    ),
+  ],
+  [
+    "ComputedObserver",
+    locatorSite(
+      FrameworkObservationFlowSiteKind.ComputedObserver,
+      "ComputedObserver",
+      FrameworkRelationshipRelation.ConstructsInstance,
+    ),
+  ],
+  [
+    "ControlledComputedObserver",
+    locatorSite(
+      FrameworkObservationFlowSiteKind.ControlledComputedObserver,
+      "ControlledComputedObserver",
+      FrameworkRelationshipRelation.ConstructsInstance,
+    ),
+  ],
+  [
+    "ExpressionObserver",
+    locatorSite(
+      FrameworkObservationFlowSiteKind.ExpressionObserver,
+      "ExpressionObserver",
+      FrameworkRelationshipRelation.ConstructsInstance,
+    ),
+  ],
+  [
+    "SetterObserver",
+    locatorSite(
+      FrameworkObservationFlowSiteKind.SetterObserver,
+      "SetterObserver",
+      FrameworkRelationshipRelation.ConstructsInstance,
+    ),
+  ],
+  [
+    "DefaultNodeObserverLocator",
+    nodeSite(
+      FrameworkObservationFlowSiteKind.DefaultNodeObserverLocator,
+      "DefaultNodeObserverLocator",
+      FrameworkRelationshipRelation.ConstructsInstance,
+    ),
+  ],
+  ...["ClassAttributeAccessor", "StyleAttributeAccessor"].map((target) =>
+    [
+      target,
+      nodeSite(
+        FrameworkObservationFlowSiteKind.NodeAccessor,
+        target,
+        FrameworkRelationshipRelation.ConstructsInstance,
+      ),
+    ] as const
+  ),
+  [
+    "DirtyCheckProperty",
+    dirtySite(
+      FrameworkObservationFlowSiteKind.DirtyCheckProperty,
+      "DirtyCheckProperty",
+      FrameworkRelationshipRelation.ConstructsInstance,
+    ),
+  ],
+  [
+    "BindingObserverRecord",
+    connectableSite(
+      FrameworkObservationFlowSiteKind.ConnectableRecord,
+      "BindingObserverRecord",
+      FrameworkRelationshipRelation.ConstructsInstance,
+    ),
+  ],
+  [
+    "WatchDefinition",
+    watchDecoratorSite(
+      FrameworkObservationFlowSiteKind.WatchDefinitionCreate,
+      "WatchDefinition",
+      FrameworkRelationshipRelation.StoresWatchDefinition,
+    ),
+  ],
+  [
+    "ComputedWatcher",
+    watcherSite(
+      FrameworkObservationFlowSiteKind.ComputedWatcher,
+      "ComputedWatcher",
+      FrameworkRelationshipRelation.ConstructsInstance,
+    ),
+  ],
+  [
+    "ExpressionWatcher",
+    watcherSite(
+      FrameworkObservationFlowSiteKind.ExpressionWatcher,
+      "ExpressionWatcher",
+      FrameworkRelationshipRelation.ConstructsInstance,
+    ),
+  ],
+  [
+    "RunEffect",
+    effectSite(
+      FrameworkObservationFlowSiteKind.EffectRunner,
+      "RunEffect",
+      FrameworkRelationshipRelation.ConstructsInstance,
+    ),
+  ],
+  [
+    "AuSlotWatcherBinding",
+    watcherSite(
+      FrameworkObservationFlowSiteKind.SlotWatcher,
+      "AuSlotWatcherBinding",
+      FrameworkRelationshipRelation.ConstructsInstance,
+    ),
+  ],
+]);
+
 const observationInternalsMemo =
   new SourceProjectMemo<ObservationInternalsIndex>();
 const observationInternalsBySurfaceKind = new SourceProjectKeyedMemo<
@@ -1570,105 +1724,25 @@ function classifyNewExpression(
   callSite: TypeScriptCallSiteEntry,
 ): SiteClassification | null {
   const target = callSite.calleeName || node.expression.getText(sourceFile);
-  switch (target) {
-    case "PrimitiveObserver":
-      return locatorSite(
-        FrameworkObservationFlowSiteKind.PrimitiveObserver,
-        target,
-        FrameworkRelationshipRelation.ConstructsInstance,
-      );
-    case "ComputedObserver":
-      return locatorSite(
-        FrameworkObservationFlowSiteKind.ComputedObserver,
-        target,
-        FrameworkRelationshipRelation.ConstructsInstance,
-      );
-    case "ControlledComputedObserver":
-      return locatorSite(
-        FrameworkObservationFlowSiteKind.ControlledComputedObserver,
-        target,
-        FrameworkRelationshipRelation.ConstructsInstance,
-      );
-    case "ExpressionObserver":
-      return locatorSite(
-        FrameworkObservationFlowSiteKind.ExpressionObserver,
-        target,
-        FrameworkRelationshipRelation.ConstructsInstance,
-      );
-    case "SetterObserver":
-      return locatorSite(
-        FrameworkObservationFlowSiteKind.SetterObserver,
-        target,
-        FrameworkRelationshipRelation.ConstructsInstance,
-      );
-    case "DefaultNodeObserverLocator":
-      return nodeSite(
-        FrameworkObservationFlowSiteKind.DefaultNodeObserverLocator,
-        target,
-        FrameworkRelationshipRelation.ConstructsInstance,
-      );
-    case "ClassAttributeAccessor":
-    case "StyleAttributeAccessor":
-      return nodeSite(
-        FrameworkObservationFlowSiteKind.NodeAccessor,
-        target,
-        FrameworkRelationshipRelation.ConstructsInstance,
-      );
-    case "DirtyCheckProperty":
-      return dirtySite(
-        FrameworkObservationFlowSiteKind.DirtyCheckProperty,
-        target,
-        FrameworkRelationshipRelation.ConstructsInstance,
-      );
-    case "BindingObserverRecord":
-      return connectableSite(
-        FrameworkObservationFlowSiteKind.ConnectableRecord,
-        target,
-        FrameworkRelationshipRelation.ConstructsInstance,
-      );
-    case "WatchDefinition":
-      return watchDecoratorSite(
-        FrameworkObservationFlowSiteKind.WatchDefinitionCreate,
-        target,
-        FrameworkRelationshipRelation.StoresWatchDefinition,
-      );
-    case "ComputedWatcher":
-      return watcherSite(
-        FrameworkObservationFlowSiteKind.ComputedWatcher,
-        target,
-        FrameworkRelationshipRelation.ConstructsInstance,
-      );
-    case "ExpressionWatcher":
-      return watcherSite(
-        FrameworkObservationFlowSiteKind.ExpressionWatcher,
-        target,
-        FrameworkRelationshipRelation.ConstructsInstance,
-      );
-    case "RunEffect":
-      return effectSite(
-        FrameworkObservationFlowSiteKind.EffectRunner,
-        target,
-        FrameworkRelationshipRelation.ConstructsInstance,
-      );
-    case "AuSlotWatcherBinding":
-      return watcherSite(
-        FrameworkObservationFlowSiteKind.SlotWatcher,
-        target,
-        FrameworkRelationshipRelation.ConstructsInstance,
-      );
-    default:
-      if (
-        executable.surfaceKind === FrameworkObservationSurfaceKind.NodeObserverLocator &&
-        node.expression.getText(sourceFile).includes("ValueAttributeObserver")
-      ) {
-        return nodeSite(
-          FrameworkObservationFlowSiteKind.NodeObserver,
-          "INodeObserverConstructor",
-          FrameworkRelationshipRelation.ConstructsInstance,
-        );
-      }
-      return null;
+  const staticClassification = newExpressionClassifications.get(target);
+  if (staticClassification !== undefined) {
+    return staticClassification;
   }
+  if (
+    executable.surfaceKind === FrameworkObservationSurfaceKind.NodeObserverLocator &&
+    node.expression.getText(sourceFile).includes("ValueAttributeObserver")
+  ) {
+    return valueAttributeObserverConstructorSite();
+  }
+  return null;
+}
+
+function valueAttributeObserverConstructorSite(): SiteClassification {
+  return nodeSite(
+    FrameworkObservationFlowSiteKind.NodeObserver,
+    "INodeObserverConstructor",
+    FrameworkRelationshipRelation.ConstructsInstance,
+  );
 }
 
 function classifyCollectionCall(
@@ -1712,47 +1786,25 @@ function classifyReturnExpression(
   expression: ts.Expression,
 ): SiteClassification | null {
   const text = expression.getText(sourceFile);
-  if (text === "propertyAccessor") {
-    return locatorSite(
-      FrameworkObservationFlowSiteKind.NodeAccessor,
-      "PropertyAccessor",
-      FrameworkRelationshipRelation.LooksUpObserver,
-    );
-  }
-  if (text === "elementPropertyAccessor") {
-    return nodeSite(
-      FrameworkObservationFlowSiteKind.NodeAccessor,
-      "elementPropertyAccessor",
-      FrameworkRelationshipRelation.LooksUpObserver,
-    );
-  }
-  if (text === "attrAccessor") {
-    return nodeSite(
-      FrameworkObservationFlowSiteKind.NodeAccessor,
-      "attrAccessor",
-      FrameworkRelationshipRelation.LooksUpObserver,
-    );
-  }
-  if (text === "cached") {
-    return lookupSite(
-      FrameworkObservationFlowSiteKind.ObserverCacheRead,
-      FrameworkRelationshipMechanism.ObserverCache,
-      "observer lookup cache",
-      FrameworkRelationshipRelation.LooksUpObserver,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
+  const staticClassification = returnExpressionClassifications.get(text);
+  if (staticClassification !== undefined) {
+    return staticClassification;
   }
   if (
     executable.surfaceKind === FrameworkObservationSurfaceKind.NodeObserverLocator &&
     text === "observer"
   ) {
-    return nodeSite(
-      FrameworkObservationFlowSiteKind.NodeObserver,
-      "configured node observer",
-      FrameworkRelationshipRelation.LooksUpObserver,
-    );
+    return configuredNodeObserverReturnSite();
   }
   return null;
+}
+
+function configuredNodeObserverReturnSite(): SiteClassification {
+  return nodeSite(
+    FrameworkObservationFlowSiteKind.NodeObserver,
+    "configured node observer",
+    FrameworkRelationshipRelation.LooksUpObserver,
+  );
 }
 
 function classifyPropertyAccess(

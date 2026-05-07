@@ -13,6 +13,8 @@ export const enum SubstrateId {
   TypeScriptChecker = "typescript.checker",
   /** Product-owned vocabulary terms and slots. */
   ProductVocabulary = "product.vocabulary",
+  /** Product-owned semantic-runtime source architecture substrate. */
+  ProductArchitecture = "product.architecture",
   /** Product-to-framework auLink anchors. */
   ProductAuLink = "product.aulink",
   /** Framework static evaluator substrate. */
@@ -151,6 +153,20 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
       EvidenceKind.VocabularyTerm,
       EvidenceKind.ProductClaim,
       EvidenceKind.SourceSpan,
+    ],
+    dependsOn: [SubstrateId.TypeScriptProgram],
+  },
+  {
+    id: SubstrateId.ProductArchitecture,
+    kind: SubstrateKind.Product,
+    trust: SubstrateTrust.Derived,
+    summary:
+      "Semantic-runtime source areas, modules, import dependencies, and declaration surfaces derived from the hot TypeScript Program.",
+    basisKinds: [BasisKind.TypeScriptProgram],
+    produces: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.SourceSpan,
+      EvidenceKind.Symbol,
     ],
     dependsOn: [SubstrateId.TypeScriptProgram],
   },

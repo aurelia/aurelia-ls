@@ -8,7 +8,7 @@ import type { Continuation } from "../inquiry/continuation.js";
 import type { LensId } from "../inquiry/lens.js";
 import type { InquiryRuntimeRequest } from "../inquiry/runtime/index.js";
 import type { InquirySurfaceMap } from "../inquiry/surface-map.js";
-import { computeBuildOutputHash } from "./hash.js";
+import { computeSessionCompatibilityHash } from "./hash.js";
 import { readInquirySessionManifest, removeInquirySessionManifest } from "./manifest.js";
 import { resolveInquirySessionPaths, type InquirySessionPaths } from "./paths.js";
 import {
@@ -152,7 +152,7 @@ export function ensureInquirySession(
   const manifestPath = options.manifestPath ?? paths.manifestPath;
   const startupLockPath = manifestPath === paths.manifestPath ? paths.startupLockPath : `${manifestPath}.startup.lock.json`;
   const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_SESSION_REQUEST_TIMEOUT_MS;
-  const buildHash = options.buildHash ?? computeBuildOutputHash({ packageRoot: paths.packageRoot });
+  const buildHash = options.buildHash ?? computeSessionCompatibilityHash({ packageRoot: paths.packageRoot });
   const resolved: ResolvedEnsureInquirySessionOptions = {
     paths,
     manifestPath,

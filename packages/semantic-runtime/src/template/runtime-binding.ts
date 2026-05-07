@@ -8,13 +8,14 @@ import type { FieldProvenance } from '../kernel/provenance.js';
 import type {
   BindingKindKey,
 } from '../kernel/vocabulary.js';
-import type { BindingCommandExecutableReference } from './binding-command-execution.js';
-import type { HtmlAttributeReference, HtmlNodeReference } from './html-ir.js';
+import type { CheckerTypeReference } from '../type-system/type-shape.js';
+import type { BindingCommandExecutableReference } from './binding-command-reference.js';
+import { HtmlNamespaceKind, type HtmlAttributeReference, type HtmlNodeReference } from './html-ir.js';
+import { TemplateBindingMode } from './instruction-ir.js';
 import type {
-  TemplateBindingMode,
   TemplateListenerStrategy,
 } from './instruction-ir.js';
-import type { RuntimeRendererReference } from './runtime-renderer.js';
+import type { RuntimeRendererReference } from './runtime-renderer-reference.js';
 
 export const enum RuntimeBindingKind {
   Property = 'property',
@@ -42,6 +43,77 @@ export const enum LetBindingTargetContext {
   OverrideContext = 'override-context',
 }
 
+export const enum RuntimeBindingTargetAccessLookup {
+  Accessor = 'accessor',
+  Observer = 'observer',
+  Open = 'open',
+}
+
+export const enum RuntimeBindingTargetAccessStrategy {
+  PropertyAccessor = 'property-accessor',
+  SetterObserver = 'setter-observer',
+  ComputedObserver = 'computed-observer',
+  ValueAttributeObserver = 'value-attribute-observer',
+  CheckedObserver = 'checked-observer',
+  SelectValueObserver = 'select-value-observer',
+  ElementPropertyAccessor = 'element-property-accessor',
+  AttributeAccessor = 'attribute-accessor',
+  DataAttributeAccessor = 'data-attribute-accessor',
+  ClassAttributeAccessor = 'class-attribute-accessor',
+  StyleAttributeAccessor = 'style-attribute-accessor',
+  DirtyCheck = 'dirty-check',
+  Unknown = 'unknown',
+}
+
+export const enum RuntimeBindingTargetAccessAuthority {
+  FrameworkConfig = 'framework-config',
+  TypeChecker = 'type-checker',
+  FrameworkConfigAndTypeChecker = 'framework-config-and-type-checker',
+  Open = 'open',
+}
+
+export const enum RuntimeBindingTargetOperationKind {
+  PropertySet = 'property-set',
+  AttributeSet = 'attribute-set',
+  ClassListAdd = 'class-list-add',
+  StyleCssTextAppend = 'style-css-text-append',
+  TextContentSet = 'text-content-set',
+  EventListenerAdd = 'event-listener-add',
+  ClassListToggle = 'class-list-toggle',
+  StyleSetProperty = 'style-set-property',
+  AttributeSetOrRemove = 'attribute-set-or-remove',
+  Open = 'open',
+}
+
+export const enum RuntimeBindingSourceOperationKind {
+  RefAssignTarget = 'ref-assign-target',
+  Open = 'open',
+}
+
+export const enum RuntimeTargetOperationOwnerKind {
+  RuntimeBinding = 'runtime-binding',
+  RuntimeRenderer = 'runtime-renderer',
+}
+
+export const enum RuntimeBindingTargetOperationAuthority {
+  RuntimeRendererImplementation = 'runtime-renderer-implementation',
+  RuntimeBindingImplementation = 'runtime-binding-implementation',
+  Open = 'open',
+}
+
+export const enum RuntimeBindingSourceOperationAuthority {
+  RuntimeBindingImplementation = 'runtime-binding-implementation',
+  Open = 'open',
+}
+
+export const enum RuntimeBindingTargetKind {
+  Node = 'node',
+  Host = 'host',
+  Controller = 'controller',
+  ControllerViewModel = 'controller-view-model',
+  Unknown = 'unknown',
+}
+
 export type RuntimeBindingField =
   | 'instruction'
   | 'renderer'
@@ -58,6 +130,54 @@ export type RuntimeBindingField =
   | 'bindingKind'
   | 'isParameterContext'
   | 'scopeEffects'
+  | 'source';
+
+export type RuntimeBindingTargetAccessField =
+  | 'binding'
+  | 'lookup'
+  | 'targetKind'
+  | 'targetNode'
+  | 'targetController'
+  | 'targetProperty'
+  | 'strategy'
+  | 'events'
+  | 'targetType'
+  | 'propertyType'
+  | 'propertyExists'
+  | 'isWritable'
+  | 'isObservable'
+  | 'authority'
+  | 'openReason'
+  | 'source';
+
+export type RuntimeBindingTargetOperationField =
+  | 'ownerKind'
+  | 'binding'
+  | 'renderer'
+  | 'instruction'
+  | 'targetKind'
+  | 'targetNode'
+  | 'targetController'
+  | 'targetAttribute'
+  | 'targetProperty'
+  | 'value'
+  | 'operationKind'
+  | 'affectedNames'
+  | 'authority'
+  | 'openReason'
+  | 'source';
+
+export type RuntimeBindingSourceOperationField =
+  | 'binding'
+  | 'instruction'
+  | 'targetKind'
+  | 'targetNode'
+  | 'targetController'
+  | 'targetName'
+  | 'targetType'
+  | 'operationKind'
+  | 'authority'
+  | 'openReason'
   | 'source';
 
 export type RuntimeBindingScopeEffectField =
@@ -94,6 +214,62 @@ export class RuntimeBindingScopeEffectReference {
     /** Identity handle for the scope effect, when materialized. */
     readonly identityHandle: IdentityHandle | null,
     /** Source or generated address for the effect site. */
+    readonly addressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** Reference to a runtime binding target-access product without expanding TypeChecker facts. */
+export class RuntimeBindingTargetAccessReference {
+  constructor(
+    /** ObserverLocator method family used by the target access. */
+    readonly lookup: RuntimeBindingTargetAccessLookup,
+    /** Runtime target lane selected by renderer/controller emulation. */
+    readonly targetKind: RuntimeBindingTargetKind,
+    /** Runtime property key passed to ObserverLocator. */
+    readonly targetProperty: string,
+    /** Product handle for the target-access product, when materialized. */
+    readonly productHandle: ProductHandle | null,
+    /** Identity handle for the target-access product, when materialized. */
+    readonly identityHandle: IdentityHandle | null,
+    /** Source or generated address for the binding site. */
+    readonly addressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** Reference to a runtime binding direct target operation product without expanding target detail. */
+export class RuntimeBindingTargetOperationReference {
+  constructor(
+    /** Direct target update represented by the operation product. */
+    readonly operationKind: RuntimeBindingTargetOperationKind,
+    /** Runtime target lane selected by renderer/controller emulation. */
+    readonly targetKind: RuntimeBindingTargetKind,
+    /** HTML attribute lane updated by the operation. */
+    readonly targetAttribute: string,
+    /** Runtime property/token/key passed to AttributeBinding.updateTarget. */
+    readonly targetProperty: string,
+    /** Product handle for the target-operation product, when materialized. */
+    readonly productHandle: ProductHandle | null,
+    /** Identity handle for the target-operation product, when materialized. */
+    readonly identityHandle: IdentityHandle | null,
+    /** Source or generated address for the binding site. */
+    readonly addressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** Reference to a runtime binding source-side operation without expanding source-assignment detail. */
+export class RuntimeBindingSourceOperationReference {
+  constructor(
+    /** Source update represented by the operation product. */
+    readonly operationKind: RuntimeBindingSourceOperationKind,
+    /** Runtime value lane assigned into the source expression. */
+    readonly targetKind: RuntimeBindingTargetKind,
+    /** Ref target name passed through RefBindingRenderer getRefTarget(...). */
+    readonly targetName: string,
+    /** Product handle for the source-operation product, when materialized. */
+    readonly productHandle: ProductHandle | null,
+    /** Identity handle for the source-operation product, when materialized. */
+    readonly identityHandle: IdentityHandle | null,
+    /** Source or generated address for the binding site. */
     readonly addressHandle: AddressHandle | null,
   ) {}
 }
@@ -156,6 +332,274 @@ export type RuntimeBindingScopeEffect =
   | LetBindingScopeEffect
   | IteratorBindingScopeEffect;
 
+/**
+ * Runtime target selected before a binding performs its bind-time target setup.
+ *
+ * This is the semantic counterpart of renderer `getTarget(target)`: controllers and renderers decide what object the
+ * binding sees, while the binding decides how it uses that target during `bind(scope)`.
+ */
+export class RuntimeBindingTarget {
+  constructor(
+    readonly targetKind: RuntimeBindingTargetKind,
+    readonly targetNode: HtmlNodeReference | null,
+    readonly targetControllerProductHandle: ProductHandle | null,
+    readonly targetType: CheckerTypeReference | null,
+    readonly tagName: string | null,
+    readonly namespace: HtmlNamespaceKind | null,
+  ) {}
+}
+
+/** Target-side lookup requested by a framework-shaped binding during its bind lifecycle. */
+export class RuntimeBindingTargetAccessRequest {
+  constructor(
+    readonly localKey: string,
+    readonly binding: RuntimeBinding,
+    readonly lookup: RuntimeBindingTargetAccessLookup,
+    readonly targetProperty: string,
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** Direct target operation requested by a framework-shaped binding during its bind/update lifecycle. */
+export class RuntimeBindingTargetOperationRequest {
+  constructor(
+    readonly localKey: string,
+    readonly binding: RuntimeBinding,
+    readonly targetAttribute: string,
+    readonly targetProperty: string,
+    readonly operationKind: RuntimeBindingTargetOperationKind,
+    readonly affectedNames: readonly string[],
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** Source-side assignment requested by a framework-shaped binding during bind/updateSource. */
+export class RuntimeBindingSourceOperationRequest {
+  constructor(
+    readonly localKey: string,
+    readonly binding: RuntimeBinding,
+    readonly targetName: string,
+    readonly operationKind: RuntimeBindingSourceOperationKind,
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** Host callback used by binding classes to publish bind-time target products. */
+export interface RuntimeBindingBindHost {
+  materializeTargetAccess(request: RuntimeBindingTargetAccessRequest): RuntimeBindingTargetAccess | null;
+
+  materializeTargetOperation(request: RuntimeBindingTargetOperationRequest): RuntimeBindingTargetOperation | null;
+
+  materializeSourceOperation(request: RuntimeBindingSourceOperationRequest): RuntimeBindingSourceOperation | null;
+}
+
+/** Input visible to one runtime binding while its owning controller is binding. */
+export class RuntimeBindingBindInput {
+  constructor(
+    readonly localKey: string,
+    readonly host: RuntimeBindingBindHost,
+    readonly spreadValueTargetProperties: readonly string[] = [],
+  ) {}
+
+  targetAccess(
+    binding: RuntimeBinding,
+    lookup: RuntimeBindingTargetAccessLookup,
+    targetProperty: string | null,
+    localSuffix: string | null = null,
+  ): RuntimeBindingBindContribution {
+    if (targetProperty == null) {
+      return RuntimeBindingBindContribution.none();
+    }
+    const localKey = localSuffix == null
+      ? this.localKey
+      : `${this.localKey}:${localSuffix}`;
+    const targetAccess = this.host.materializeTargetAccess(new RuntimeBindingTargetAccessRequest(
+      localKey,
+      binding,
+      lookup,
+      targetProperty,
+      binding.sourceAddressHandle,
+    ));
+    return targetAccess == null
+      ? RuntimeBindingBindContribution.none()
+      : RuntimeBindingBindContribution.targetAccess(targetAccess);
+  }
+
+  targetOperation(
+    binding: RuntimeBinding,
+    targetAttribute: string,
+    targetProperty: string,
+    operationKind: RuntimeBindingTargetOperationKind,
+    affectedNames: readonly string[],
+  ): RuntimeBindingBindContribution {
+    const targetOperation = this.host.materializeTargetOperation(new RuntimeBindingTargetOperationRequest(
+      this.localKey,
+      binding,
+      targetAttribute,
+      targetProperty,
+      operationKind,
+      affectedNames,
+      binding.sourceAddressHandle,
+    ));
+    return targetOperation == null
+      ? RuntimeBindingBindContribution.none()
+      : RuntimeBindingBindContribution.targetOperation(targetOperation);
+  }
+
+  sourceOperation(
+    binding: RuntimeBinding,
+    targetName: string,
+    operationKind: RuntimeBindingSourceOperationKind,
+  ): RuntimeBindingBindContribution {
+    const sourceOperation = this.host.materializeSourceOperation(new RuntimeBindingSourceOperationRequest(
+      this.localKey,
+      binding,
+      targetName,
+      operationKind,
+      binding.sourceAddressHandle,
+    ));
+    return sourceOperation == null
+      ? RuntimeBindingBindContribution.none()
+      : RuntimeBindingBindContribution.sourceOperation(sourceOperation);
+  }
+}
+
+/** Products contributed by one binding during controller bind. */
+export class RuntimeBindingBindContribution {
+  constructor(
+    readonly targetAccesses: readonly RuntimeBindingTargetAccess[],
+    readonly targetOperations: readonly RuntimeBindingTargetOperation[],
+    readonly sourceOperations: readonly RuntimeBindingSourceOperation[],
+  ) {}
+
+  static none(): RuntimeBindingBindContribution {
+    return new RuntimeBindingBindContribution([], [], []);
+  }
+
+  static targetAccess(targetAccess: RuntimeBindingTargetAccess): RuntimeBindingBindContribution {
+    return new RuntimeBindingBindContribution([targetAccess], [], []);
+  }
+
+  static targetOperation(targetOperation: RuntimeBindingTargetOperation): RuntimeBindingBindContribution {
+    return new RuntimeBindingBindContribution([], [targetOperation], []);
+  }
+
+  static sourceOperation(sourceOperation: RuntimeBindingSourceOperation): RuntimeBindingBindContribution {
+    return new RuntimeBindingBindContribution([], [], [sourceOperation]);
+  }
+}
+
+/** Target accessor or observer selected by PropertyBinding.bind for its target side. */
+export class RuntimeBindingTargetAccess {
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly binding: RuntimeBindingReference,
+    readonly lookup: RuntimeBindingTargetAccessLookup,
+    readonly targetKind: RuntimeBindingTargetKind,
+    readonly targetNode: HtmlNodeReference | null,
+    readonly targetControllerProductHandle: ProductHandle | null,
+    readonly targetProperty: string,
+    readonly strategy: RuntimeBindingTargetAccessStrategy,
+    readonly eventNames: readonly string[],
+    readonly targetType: CheckerTypeReference | null,
+    readonly propertyType: CheckerTypeReference | null,
+    readonly propertyExists: boolean | null,
+    readonly isWritable: boolean | null,
+    readonly isObservable: boolean,
+    readonly authority: RuntimeBindingTargetAccessAuthority,
+    readonly openReason: string | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingTargetAccessField>[] = [],
+  ) {}
+
+  toReference(): RuntimeBindingTargetAccessReference {
+    return new RuntimeBindingTargetAccessReference(
+      this.lookup,
+      this.targetKind,
+      this.targetProperty,
+      this.productHandle,
+      this.identityHandle,
+      this.sourceAddressHandle,
+    );
+  }
+}
+
+/** Direct target update selected by renderer render or binding updateTarget behavior. */
+export class RuntimeTargetOperation {
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly ownerKind: RuntimeTargetOperationOwnerKind,
+    readonly binding: RuntimeBindingReference | null,
+    readonly renderer: RuntimeRendererReference | null,
+    readonly instructionProductHandle: ProductHandle | null,
+    readonly instructionIdentityHandle: IdentityHandle | null,
+    readonly targetKind: RuntimeBindingTargetKind,
+    readonly targetNode: HtmlNodeReference | null,
+    readonly targetControllerProductHandle: ProductHandle | null,
+    readonly targetAttribute: string,
+    readonly targetProperty: string,
+    readonly value: string | null,
+    readonly operationKind: RuntimeBindingTargetOperationKind,
+    readonly affectedNames: readonly string[],
+    readonly authority: RuntimeBindingTargetOperationAuthority,
+    readonly openReason: string | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingTargetOperationField>[] = [],
+  ) {}
+
+  toReference(): RuntimeBindingTargetOperationReference {
+    return new RuntimeBindingTargetOperationReference(
+      this.operationKind,
+      this.targetKind,
+      this.targetAttribute,
+      this.targetProperty,
+      this.productHandle,
+      this.identityHandle,
+      this.sourceAddressHandle,
+    );
+  }
+}
+
+export type RuntimeBindingTargetOperation = RuntimeTargetOperation;
+export const RuntimeBindingTargetOperation = RuntimeTargetOperation;
+
+/** Source-side update selected by binding updateSource behavior. */
+export class RuntimeSourceOperation {
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly binding: RuntimeBindingReference,
+    readonly instructionProductHandle: ProductHandle,
+    readonly instructionIdentityHandle: IdentityHandle,
+    readonly targetKind: RuntimeBindingTargetKind,
+    readonly targetNode: HtmlNodeReference | null,
+    readonly targetControllerProductHandle: ProductHandle | null,
+    readonly targetName: string,
+    readonly targetType: CheckerTypeReference | null,
+    readonly operationKind: RuntimeBindingSourceOperationKind,
+    readonly authority: RuntimeBindingSourceOperationAuthority,
+    readonly openReason: string | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingSourceOperationField>[] = [],
+  ) {}
+
+  toReference(): RuntimeBindingSourceOperationReference {
+    return new RuntimeBindingSourceOperationReference(
+      this.operationKind,
+      this.targetKind,
+      this.targetName,
+      this.productHandle,
+      this.identityHandle,
+      this.sourceAddressHandle,
+    );
+  }
+}
+
+export type RuntimeBindingSourceOperation = RuntimeSourceOperation;
+export const RuntimeBindingSourceOperation = RuntimeSourceOperation;
+
 /** Runtime PropertyBinding model produced by property, iterator, and style-property renderers. */
 @auLink('runtime-html:PropertyBinding')
 export class PropertyBinding {
@@ -186,6 +630,14 @@ export class PropertyBinding {
   readScopeEffects(): readonly RuntimeBindingScopeEffectReference[] {
     return this.scopeEffects;
   }
+
+  bind(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+    return input.targetAccess(
+      this,
+      targetAccessLookupForBindingMode(this.bindingMode),
+      this.target,
+    );
+  }
 }
 
 /** Runtime AttributeBinding model produced by attr/class/style command lowering. */
@@ -215,6 +667,20 @@ export class AttributeBinding {
 
   readScopeEffects(): readonly RuntimeBindingScopeEffectReference[] {
     return this.scopeEffects;
+  }
+
+  bind(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+    return this.updateTarget(input);
+  }
+
+  updateTarget(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+    return input.targetOperation(
+      this,
+      this.attr,
+      this.target,
+      targetOperationKindForAttributeBinding(this.attr),
+      affectedNamesForAttributeBinding(this.attr, this.target),
+    );
   }
 }
 
@@ -278,6 +744,16 @@ export class ListenerBinding {
   readScopeEffects(): readonly RuntimeBindingScopeEffectReference[] {
     return this.scopeEffects;
   }
+
+  bind(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+    return input.targetOperation(
+      this,
+      this.eventName,
+      this.eventName,
+      RuntimeBindingTargetOperationKind.EventListenerAdd,
+      this.eventModifier == null ? [this.eventName] : [this.eventName, this.eventModifier],
+    );
+  }
 }
 
 /** Runtime InterpolationBinding model produced by text or attribute interpolation renderers. */
@@ -306,6 +782,14 @@ export class InterpolationBinding {
 
   readScopeEffects(): readonly RuntimeBindingScopeEffectReference[] {
     return this.scopeEffects;
+  }
+
+  bind(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+    return input.targetAccess(
+      this,
+      RuntimeBindingTargetAccessLookup.Accessor,
+      this.target,
+    );
   }
 }
 
@@ -336,12 +820,25 @@ export class RefBinding {
   readScopeEffects(): readonly RuntimeBindingScopeEffectReference[] {
     return this.scopeEffects;
   }
+
+  bind(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+    return this.updateSource(input);
+  }
+
+  updateSource(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+    return input.sourceOperation(
+      this,
+      this.target,
+      RuntimeBindingSourceOperationKind.RefAssignTarget,
+    );
+  }
 }
 
 /** Runtime ContentBinding model produced by text-binding renderers. */
 @auLink('runtime-html:ContentBinding')
 export class ContentBinding {
   readonly bindingKind = RuntimeBindingKind.Content;
+  readonly target = 'textContent';
 
   constructor(
     readonly productHandle: ProductHandle,
@@ -363,12 +860,23 @@ export class ContentBinding {
   readScopeEffects(): readonly RuntimeBindingScopeEffectReference[] {
     return this.scopeEffects;
   }
+
+  bind(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+    return input.targetOperation(
+      this,
+      '#text',
+      this.target,
+      RuntimeBindingTargetOperationKind.TextContentSet,
+      [this.target],
+    );
+  }
 }
 
 /** Runtime SpreadBinding model for captured attribute transfer. */
 @auLink('runtime-html:SpreadBinding')
 export class SpreadBinding {
   readonly bindingKind = RuntimeBindingKind.Spread;
+  private readonly innerBindings: RuntimeBinding[] = [];
 
   constructor(
     readonly productHandle: ProductHandle,
@@ -389,6 +897,14 @@ export class SpreadBinding {
 
   readScopeEffects(): readonly RuntimeBindingScopeEffectReference[] {
     return this.scopeEffects;
+  }
+
+  addInnerBinding(binding: RuntimeBinding): void {
+    this.innerBindings.push(binding);
+  }
+
+  readInnerBindings(): readonly RuntimeBinding[] {
+    return [...this.innerBindings];
   }
 }
 
@@ -418,6 +934,21 @@ export class SpreadValueBinding {
 
   readScopeEffects(): readonly RuntimeBindingScopeEffectReference[] {
     return this.scopeEffects;
+  }
+
+  bind(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+    if (this.target === '$bindables' && input.spreadValueTargetProperties.length > 0) {
+      const targetAccesses = input.spreadValueTargetProperties.flatMap((targetProperty, index) =>
+        input.targetAccess(
+          this,
+          RuntimeBindingTargetAccessLookup.Accessor,
+          targetProperty,
+          `spread-bindable:${index}:${targetProperty}`,
+        ).targetAccesses
+      );
+      return new RuntimeBindingBindContribution(targetAccesses, [], []);
+    }
+    return input.targetAccess(this, RuntimeBindingTargetAccessLookup.Open, this.target);
   }
 }
 
@@ -524,3 +1055,66 @@ export type RuntimeBinding =
   | TranslationBinding
   | StateBinding
   | StateDispatchBinding;
+
+export function bindRuntimeBinding(
+  binding: RuntimeBinding,
+  input: RuntimeBindingBindInput,
+): RuntimeBindingBindContribution {
+  if (binding instanceof PropertyBinding
+    || binding instanceof AttributeBinding
+    || binding instanceof InterpolationBinding
+    || binding instanceof ContentBinding
+    || binding instanceof ListenerBinding
+    || binding instanceof RefBinding
+    || binding instanceof SpreadValueBinding) {
+    return binding.bind(input);
+  }
+  return RuntimeBindingBindContribution.none();
+}
+
+function targetAccessLookupForBindingMode(
+  bindingMode: TemplateBindingMode,
+): RuntimeBindingTargetAccessLookup {
+  switch (bindingMode) {
+    case TemplateBindingMode.FromView:
+    case TemplateBindingMode.TwoWay:
+      return RuntimeBindingTargetAccessLookup.Observer;
+    case TemplateBindingMode.OneTime:
+    case TemplateBindingMode.ToView:
+      return RuntimeBindingTargetAccessLookup.Accessor;
+    case TemplateBindingMode.Default:
+    case TemplateBindingMode.Open:
+      return RuntimeBindingTargetAccessLookup.Open;
+  }
+}
+
+function targetOperationKindForAttributeBinding(
+  targetAttribute: string,
+): RuntimeBindingTargetOperationKind {
+  switch (targetAttribute) {
+    case 'class':
+      return RuntimeBindingTargetOperationKind.ClassListToggle;
+    case 'style':
+      return RuntimeBindingTargetOperationKind.StyleSetProperty;
+    default:
+      return RuntimeBindingTargetOperationKind.AttributeSetOrRemove;
+  }
+}
+
+function affectedNamesForAttributeBinding(
+  targetAttribute: string,
+  targetProperty: string,
+): readonly string[] {
+  switch (targetAttribute) {
+    case 'class':
+      return splitWhitespace(targetProperty);
+    case 'style':
+      return targetProperty.trim().length === 0 ? [] : [targetProperty.trim()];
+    default:
+      return [targetAttribute];
+  }
+}
+
+function splitWhitespace(value: string): readonly string[] {
+  return value.match(/\S+/g) ?? [];
+}

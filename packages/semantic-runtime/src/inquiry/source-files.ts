@@ -32,6 +32,10 @@ export class AdmittedSourcesQuery {
     /** Page request for ordered source rows. */
     readonly page: InquiryPageRequest = new InquiryPageRequest(),
   ) {}
+
+  withPage(page: InquiryPageRequest): AdmittedSourcesQuery {
+    return new AdmittedSourcesQuery(this.projectKey, this.language, page);
+  }
 }
 
 export interface AdmittedSourceRow {
@@ -45,6 +49,13 @@ export interface AdmittedSourceRow {
 
 export interface AdmittedSourcesResult {
   readonly sources: readonly AdmittedSourceRow[];
+}
+
+interface AdmittedSourcesPage {
+  readonly size: number;
+  readonly rows: readonly SourceFileAddress[];
+  readonly nextCursor: string | null;
+  readonly hasMore: boolean;
 }
 
 function unique<TValue>(values: readonly TValue[]): readonly TValue[] {
@@ -71,35 +82,11 @@ export function answerAdmittedSources(
   store: KernelStore,
   query: AdmittedSourcesQuery = new AdmittedSourcesQuery(),
 ): InquiryAnswer<AdmittedSourcesResult, AdmittedSourcesQuery> {
-  const matched = store.readAddresses()
-    .filter(isSourceFileAddress)
-    .filter((address) => query.projectKey == null || address.workspaceKey === query.projectKey)
-    .filter((address) => query.language == null || address.language === query.language)
-    .sort((left, right) => left.path.localeCompare(right.path));
-
-  const pageSize = Math.max(0, query.page.size);
-  const pageRows = pageAfterCursor(matched, query.page.cursor).slice(0, pageSize);
-  const sources = pageRows.map((address): AdmittedSourceRow => {
-    const evidenceHandles = store.readEvidenceForAddress(address.handle);
-    const provenanceHandles = unique(evidenceHandles.flatMap((handle) =>
-      store.readProvenanceForEvidence(handle)
-    ));
-    return {
-      projectKey: address.workspaceKey,
-      path: address.path,
-      language: address.language,
-      addressHandle: address.handle,
-      evidenceHandles,
-      provenanceHandles,
-    };
-  });
-  const hasMore = pageRows.length > 0 && pageAfterCursor(matched, pageRows.at(-1)?.path ?? null).length > 0;
-  const result: AdmittedSourcesResult = {
-    sources,
-  };
-  const locus = query.projectKey == null
-    ? new WorkspaceInquiryLocus('(all-projects)')
-    : new ProjectInquiryLocus(query.projectKey);
+  const matched = matchedAdmittedSourceAddresses(store, query);
+  const page = admittedSourcesPage(matched, query.page);
+  const sources = page.rows.map((address) => admittedSourceRow(store, address));
+  const result: AdmittedSourcesResult = { sources };
+  const locus = admittedSourcesLocus(query);
 
   if (matched.length === 0) {
     return new InquiryAnswer(
@@ -118,30 +105,14 @@ export function answerAdmittedSources(
     );
   }
 
-  const nextCursor = hasMore ? pageRows.at(-1)?.path ?? null : null;
-  const page = new InquiryPageInfo(
-    pageSize,
-    query.page.cursor,
-    nextCursor,
-    sources.length,
-    matched.length,
-  );
   const evidenceHandles = unique(sources.flatMap((source) => source.evidenceHandles));
   const provenanceHandles = unique(sources.flatMap((source) => source.provenanceHandles));
-  const continuations = hasMore && nextCursor != null
-    ? [
-      new InquiryContinuation(
-        InquiryContinuationKind.NextPage,
-        'Continue with the next page of admitted source files.',
-        new AdmittedSourcesQuery(query.projectKey, query.language, new InquiryPageRequest(pageSize, nextCursor)),
-      ),
-    ]
-    : [];
+  const continuations = admittedSourcesContinuations(query, page);
 
   return new InquiryAnswer(
-    hasMore ? InquiryOutcomeKind.Partial : InquiryOutcomeKind.Hit,
+    page.hasMore ? InquiryOutcomeKind.Partial : InquiryOutcomeKind.Hit,
     locus,
-    hasMore
+    page.hasMore
       ? `Returned ${sources.length} of ${matched.length} admitted source files.`
       : `Returned ${sources.length} admitted source file(s).`,
     KernelExactBasis,
@@ -151,7 +122,81 @@ export function answerAdmittedSources(
     [],
     [],
     continuations,
-    page,
+    new InquiryPageInfo(
+      page.size,
+      query.page.cursor,
+      page.nextCursor,
+      sources.length,
+      matched.length,
+    ),
     null,
   );
+}
+
+function matchedAdmittedSourceAddresses(
+  store: KernelStore,
+  query: AdmittedSourcesQuery,
+): readonly SourceFileAddress[] {
+  return store.readAddresses()
+    .filter(isSourceFileAddress)
+    .filter((address) => query.projectKey == null || address.workspaceKey === query.projectKey)
+    .filter((address) => query.language == null || address.language === query.language)
+    .sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function admittedSourcesPage(
+  matched: readonly SourceFileAddress[],
+  request: InquiryPageRequest,
+): AdmittedSourcesPage {
+  const size = Math.max(0, request.size);
+  const rows = pageAfterCursor(matched, request.cursor).slice(0, size);
+  const nextCursor = rows.at(-1)?.path ?? null;
+  return {
+    size,
+    rows,
+    nextCursor: rows.length > 0 && pageAfterCursor(matched, nextCursor).length > 0
+      ? nextCursor
+      : null,
+    hasMore: rows.length > 0 && pageAfterCursor(matched, nextCursor).length > 0,
+  };
+}
+
+function admittedSourceRow(
+  store: KernelStore,
+  address: SourceFileAddress,
+): AdmittedSourceRow {
+  const evidenceHandles = store.readEvidenceForAddress(address.handle);
+  return {
+    projectKey: address.workspaceKey,
+    path: address.path,
+    language: address.language,
+    addressHandle: address.handle,
+    evidenceHandles,
+    provenanceHandles: unique(evidenceHandles.flatMap((handle) =>
+      store.readProvenanceForEvidence(handle)
+    )),
+  };
+}
+
+function admittedSourcesLocus(
+  query: AdmittedSourcesQuery,
+): WorkspaceInquiryLocus | ProjectInquiryLocus {
+  return query.projectKey == null
+    ? new WorkspaceInquiryLocus('(all-projects)')
+    : new ProjectInquiryLocus(query.projectKey);
+}
+
+function admittedSourcesContinuations(
+  query: AdmittedSourcesQuery,
+  page: AdmittedSourcesPage,
+): readonly InquiryContinuation<AdmittedSourcesQuery>[] {
+  return page.nextCursor == null
+    ? []
+    : [
+      new InquiryContinuation(
+        InquiryContinuationKind.NextPage,
+        'Continue with the next page of admitted source files.',
+        query.withPage(new InquiryPageRequest(page.size, page.nextCursor)),
+      ),
+    ];
 }

@@ -1,5 +1,5 @@
 import type { IdentityHandle } from '../kernel/handles.js';
-import type { ContainerReference } from './container.js';
+import type { ContainerReference } from './container-reference.js';
 import type {
   ContainerFactorySlot,
   ContainerResourceSlot,

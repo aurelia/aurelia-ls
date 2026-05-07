@@ -90,6 +90,228 @@ interface FrameworkRelationshipClassification {
   readonly strategy?: FrameworkDiResolverStrategy;
 }
 
+const staticNewExpressionClassifications =
+  new Map<string, FrameworkRelationshipClassification>([
+    [
+      "Factory",
+      {
+        relation: FrameworkRelationshipRelation.CreatesFactory,
+        mechanism: FrameworkRelationshipMechanism.FactoryConstruct,
+        phase: FrameworkRelationshipPhase.Materialization,
+        closure: FrameworkRelationshipClosure.Exact,
+        toKind: FrameworkRelationshipEndpointKind.Symbol,
+        toName: "Factory",
+      },
+    ],
+    [
+      "Container",
+      {
+        relation: FrameworkRelationshipRelation.CreatesContainer,
+        mechanism: FrameworkRelationshipMechanism.ContainerChild,
+        phase: FrameworkRelationshipPhase.ContainerConstruction,
+        closure: FrameworkRelationshipClosure.Exact,
+        toKind: FrameworkRelationshipEndpointKind.Symbol,
+        toName: "Container",
+      },
+    ],
+    [
+      "ResolverBuilder",
+      {
+        relation: FrameworkRelationshipRelation.CreatesRegistration,
+        mechanism: FrameworkRelationshipMechanism.ResolverBuilder,
+        phase: FrameworkRelationshipPhase.Definition,
+        closure: FrameworkRelationshipClosure.Exact,
+        toKind: FrameworkRelationshipEndpointKind.Symbol,
+        toName: "ResolverBuilder",
+      },
+    ],
+    [
+      "InstanceProvider",
+      {
+        relation: FrameworkRelationshipRelation.CreatesResolver,
+        mechanism: FrameworkRelationshipMechanism.ResolverHelper,
+        phase: FrameworkRelationshipPhase.Materialization,
+        closure: FrameworkRelationshipClosure.Exact,
+        toKind: FrameworkRelationshipEndpointKind.Symbol,
+        toName: "InstanceProvider",
+        strategy: FrameworkDiResolverStrategy.Instance,
+      },
+    ],
+    ...["Type", "this.Type", "RealType"].map((name) =>
+      [
+        name,
+        {
+          relation: FrameworkRelationshipRelation.ConstructsInstance,
+          mechanism: FrameworkRelationshipMechanism.FactoryConstruct,
+          phase: FrameworkRelationshipPhase.Materialization,
+          closure: FrameworkRelationshipClosure.Exact,
+          toKind: FrameworkRelationshipEndpointKind.Symbol,
+          toName: name,
+        },
+      ] as const
+    ),
+  ]);
+
+const resourceStoreRelationshipFacts = {
+  family: FrameworkRelationshipFamily.Di,
+  relation: FrameworkRelationshipRelation.StoresResourceSlot,
+  mechanism: FrameworkRelationshipMechanism.ResourceStore,
+  phase: FrameworkRelationshipPhase.Registration,
+  evidenceBasis: FrameworkRelationshipEvidenceBasis.KernelSource,
+  closure: FrameworkRelationshipClosure.Exact,
+  toKind: FrameworkRelationshipEndpointKind.ContainerSlot,
+  toName: "container.res",
+} as const;
+
+const createInterfaceProviderRelationshipFacts = {
+  family: FrameworkRelationshipFamily.Di,
+  mechanism: FrameworkRelationshipMechanism.ResolverBuilder,
+  phase: FrameworkRelationshipPhase.Definition,
+  evidenceBasis: FrameworkRelationshipEvidenceBasis.Syntax,
+  closure: FrameworkRelationshipClosure.Exact,
+} as const;
+
+const registrationFactoryProviderRelationshipFacts = {
+  family: FrameworkRelationshipFamily.Di,
+  mechanism: FrameworkRelationshipMechanism.RegistrationFactory,
+  phase: FrameworkRelationshipPhase.Definition,
+  evidenceBasis: FrameworkRelationshipEvidenceBasis.Checker,
+  closure: FrameworkRelationshipClosure.Exact,
+} as const;
+
+const kernelCallClassifications = new Map<
+  string,
+  FrameworkRelationshipClassification
+>([
+  [
+    "registerResolver",
+    {
+      relation: FrameworkRelationshipRelation.RegistersProvider,
+      mechanism: FrameworkRelationshipMechanism.ContainerRegisterResolver,
+      phase: FrameworkRelationshipPhase.Registration,
+      closure: FrameworkRelationshipClosure.Exact,
+      toKind: FrameworkRelationshipEndpointKind.ContainerSlot,
+      toName: "resolver-slot",
+    },
+  ],
+  [
+    "register",
+    {
+      relation: FrameworkRelationshipRelation.InvokesRegistry,
+      mechanism: FrameworkRelationshipMechanism.ContainerRegister,
+      phase: FrameworkRelationshipPhase.Registration,
+      closure: FrameworkRelationshipClosure.Modeled,
+      toKind: FrameworkRelationshipEndpointKind.Method,
+      toName: "register",
+    },
+  ],
+  [
+    "getResolver",
+    {
+      relation: FrameworkRelationshipRelation.LooksUpKey,
+      mechanism: FrameworkRelationshipMechanism.ContainerGetResolver,
+      phase: FrameworkRelationshipPhase.Lookup,
+      closure: FrameworkRelationshipClosure.Exact,
+      toKind: FrameworkRelationshipEndpointKind.Method,
+      toName: "getResolver",
+    },
+  ],
+  [
+    "get",
+    {
+      relation: FrameworkRelationshipRelation.ResolvesKey,
+      mechanism: FrameworkRelationshipMechanism.ContainerGet,
+      phase: FrameworkRelationshipPhase.Resolution,
+      closure: FrameworkRelationshipClosure.Exact,
+      toKind: FrameworkRelationshipEndpointKind.Method,
+      toName: "get",
+    },
+  ],
+  [
+    "getAll",
+    {
+      relation: FrameworkRelationshipRelation.ResolvesKey,
+      mechanism: FrameworkRelationshipMechanism.ContainerGetAll,
+      phase: FrameworkRelationshipPhase.Resolution,
+      closure: FrameworkRelationshipClosure.Exact,
+      toKind: FrameworkRelationshipEndpointKind.Method,
+      toName: "getAll",
+    },
+  ],
+  [
+    "has",
+    {
+      relation: FrameworkRelationshipRelation.LooksUpKey,
+      mechanism: FrameworkRelationshipMechanism.ContainerHas,
+      phase: FrameworkRelationshipPhase.Lookup,
+      closure: FrameworkRelationshipClosure.Exact,
+      toKind: FrameworkRelationshipEndpointKind.Method,
+      toName: "has",
+    },
+  ],
+  [
+    "find",
+    {
+      relation: FrameworkRelationshipRelation.LooksUpKey,
+      mechanism: FrameworkRelationshipMechanism.ContainerFind,
+      phase: FrameworkRelationshipPhase.ResourceLookup,
+      closure: FrameworkRelationshipClosure.Exact,
+      toKind: FrameworkRelationshipEndpointKind.Method,
+      toName: "find",
+    },
+  ],
+  [
+    "getFactory",
+    {
+      relation: FrameworkRelationshipRelation.LooksUpKey,
+      mechanism: FrameworkRelationshipMechanism.ResolverGetFactory,
+      phase: FrameworkRelationshipPhase.Materialization,
+      closure: FrameworkRelationshipClosure.Exact,
+      toKind: FrameworkRelationshipEndpointKind.Method,
+      toName: "getFactory",
+    },
+  ],
+  [
+    "_jitRegister",
+    {
+      relation: FrameworkRelationshipRelation.RegistersProvider,
+      mechanism: FrameworkRelationshipMechanism.JitRegister,
+      phase: FrameworkRelationshipPhase.Registration,
+      closure: FrameworkRelationshipClosure.Modeled,
+      toKind: FrameworkRelationshipEndpointKind.Method,
+      toName: "_jitRegister",
+    },
+  ],
+  [
+    "createContainer",
+    {
+      relation: FrameworkRelationshipRelation.CreatesContainer,
+      mechanism: FrameworkRelationshipMechanism.ContainerChild,
+      phase: FrameworkRelationshipPhase.ContainerConstruction,
+      closure: FrameworkRelationshipClosure.Exact,
+      toKind: FrameworkRelationshipEndpointKind.Symbol,
+      toName: "Container",
+    },
+  ],
+  [
+    "createResolver",
+    {
+      relation: FrameworkRelationshipRelation.CreatesResolver,
+      mechanism: FrameworkRelationshipMechanism.ResolverHelper,
+      phase: FrameworkRelationshipPhase.Definition,
+      closure: FrameworkRelationshipClosure.Exact,
+      toKind: FrameworkRelationshipEndpointKind.Symbol,
+      toName: "callable-resolver",
+    },
+  ],
+]);
+
+const resolverStrategyRegistrationFacts = {
+  phase: FrameworkRelationshipPhase.Definition,
+  closure: FrameworkRelationshipClosure.Exact,
+  toKind: FrameworkRelationshipEndpointKind.ResolverStrategy,
+} as const;
+
 const FRAMEWORK_DI_RELATIONSHIP_INDEX_VERSION = "di-relationship-atoms@3";
 
 const frameworkDiIndexMemo = new SourceProjectMemo<FrameworkDiIndex>();
@@ -417,12 +639,8 @@ function createInterfaceBuilderProviderAtom(
     id: `framework-di:${packageId}:${file.repoPath}:${builderCall.getStart(
       sourceFile,
     )}:builder-provider:${strategy}`,
-    family: FrameworkRelationshipFamily.Di,
+    ...createInterfaceProviderRelationshipFacts,
     relation,
-    mechanism: FrameworkRelationshipMechanism.ResolverBuilder,
-    phase: FrameworkRelationshipPhase.Definition,
-    evidenceBasis: FrameworkRelationshipEvidenceBasis.Syntax,
-    closure: FrameworkRelationshipClosure.Exact,
     packageId,
     packageName,
     from: keyEndpoint,
@@ -674,12 +892,12 @@ function relationshipAtomForBinaryExpression(
     id: `framework-di:${packageId}:${file.repoPath}:${node.getStart(
       sourceFile,
     )}:stores-resource-slot`,
-    family: FrameworkRelationshipFamily.Di,
-    relation: FrameworkRelationshipRelation.StoresResourceSlot,
-    mechanism: FrameworkRelationshipMechanism.ResourceStore,
-    phase: FrameworkRelationshipPhase.Registration,
-    evidenceBasis: FrameworkRelationshipEvidenceBasis.KernelSource,
-    closure: FrameworkRelationshipClosure.Exact,
+    family: resourceStoreRelationshipFacts.family,
+    relation: resourceStoreRelationshipFacts.relation,
+    mechanism: resourceStoreRelationshipFacts.mechanism,
+    phase: resourceStoreRelationshipFacts.phase,
+    evidenceBasis: resourceStoreRelationshipFacts.evidenceBasis,
+    closure: resourceStoreRelationshipFacts.closure,
     packageId,
     packageName,
     from: enclosingEndpoint(
@@ -691,8 +909,8 @@ function relationshipAtomForBinaryExpression(
       node,
     ),
     to: {
-      kind: FrameworkRelationshipEndpointKind.ContainerSlot,
-      name: "container.res",
+      kind: resourceStoreRelationshipFacts.toKind,
+      name: resourceStoreRelationshipFacts.toName,
       packageId,
       packageName,
       source,
@@ -721,7 +939,7 @@ function registrationFactoryProviderAtomForCall(
 ): FrameworkRelationshipAtom | null {
   if (
     classified.mechanism !==
-      FrameworkRelationshipMechanism.RegistrationFactory ||
+      registrationFactoryProviderRelationshipFacts.mechanism ||
     classified.strategy === undefined ||
     classified.strategy === FrameworkDiResolverStrategy.Defer
   ) {
@@ -751,12 +969,8 @@ function registrationFactoryProviderAtomForCall(
     id: `framework-di:${packageId}:${file.repoPath}:${call.getStart(
       sourceFile,
     )}:registration-provider:${classified.strategy}`,
-    family: FrameworkRelationshipFamily.Di,
+    ...registrationFactoryProviderRelationshipFacts,
     relation,
-    mechanism: FrameworkRelationshipMechanism.RegistrationFactory,
-    phase: FrameworkRelationshipPhase.Definition,
-    evidenceBasis: FrameworkRelationshipEvidenceBasis.Checker,
-    closure: FrameworkRelationshipClosure.Exact,
     packageId,
     packageName,
     from: expressionEndpoint(
@@ -802,196 +1016,134 @@ function classifyCall(
     calleeName,
   );
   if (registrationStrategy !== null) {
-    return {
-      relation:
-        registrationStrategy === FrameworkDiResolverStrategy.Alias
-          ? FrameworkRelationshipRelation.AliasesKey
-          : FrameworkRelationshipRelation.CreatesRegistration,
-      mechanism: FrameworkRelationshipMechanism.RegistrationFactory,
-      phase: FrameworkRelationshipPhase.Definition,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.ResolverStrategy,
-      toName: registrationStrategy,
-      strategy: registrationStrategy,
-    };
+    return registrationFactoryClassification(registrationStrategy);
   }
-  if (includeKernelInternals && resolverBuilderStrategy(call) !== null) {
-    const strategy = resolverBuilderStrategy(call)!;
-    return {
-      relation:
-        strategy === FrameworkDiResolverStrategy.Alias
-          ? FrameworkRelationshipRelation.AliasesKey
-          : FrameworkRelationshipRelation.CreatesRegistration,
-      mechanism: FrameworkRelationshipMechanism.ResolverBuilder,
-      phase: FrameworkRelationshipPhase.Definition,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.ResolverStrategy,
-      toName: strategy,
-      strategy,
-    };
+  const builderStrategy = includeKernelInternals
+    ? resolverBuilderStrategy(call)
+    : null;
+  if (builderStrategy !== null) {
+    return resolverBuilderClassification(builderStrategy);
   }
   if (!includeKernelInternals) {
     return null;
   }
-  if (calleeName === "registerResolver") {
-    return {
-      relation: FrameworkRelationshipRelation.RegistersProvider,
-      mechanism: FrameworkRelationshipMechanism.ContainerRegisterResolver,
-      phase: FrameworkRelationshipPhase.Registration,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.ContainerSlot,
-      toName: "resolver-slot",
-    };
+  const resolverStoreClassification = classifyResolverStoreCall(calleeText);
+  if (resolverStoreClassification !== null) {
+    return resolverStoreClassification;
   }
+  if (calleeName === "construct") {
+    return constructCallClassification(sourceFile, call);
+  }
+  if (calleeName === "resolve") {
+    return resolveCallClassification(sourceFile, call);
+  }
+  return kernelCallClassifications.get(calleeName) ?? null;
+}
+
+function registrationFactoryClassification(
+  strategy: FrameworkDiResolverStrategy,
+): FrameworkRelationshipClassification {
+  return resolverStrategyRegistrationClassification(
+    strategy,
+    FrameworkRelationshipMechanism.RegistrationFactory,
+  );
+}
+
+function resolverBuilderClassification(
+  strategy: FrameworkDiResolverStrategy,
+): FrameworkRelationshipClassification {
+  return resolverStrategyRegistrationClassification(
+    strategy,
+    FrameworkRelationshipMechanism.ResolverBuilder,
+  );
+}
+
+function resolverStrategyRegistrationClassification(
+  strategy: FrameworkDiResolverStrategy,
+  mechanism: FrameworkRelationshipMechanism,
+): FrameworkRelationshipClassification {
+  return {
+    relation:
+      strategy === FrameworkDiResolverStrategy.Alias
+        ? FrameworkRelationshipRelation.AliasesKey
+        : FrameworkRelationshipRelation.CreatesRegistration,
+    mechanism,
+    phase: resolverStrategyRegistrationFacts.phase,
+    closure: resolverStrategyRegistrationFacts.closure,
+    toKind: resolverStrategyRegistrationFacts.toKind,
+    toName: strategy,
+    strategy,
+  };
+}
+
+function classifyResolverStoreCall(
+  calleeText: string,
+): FrameworkRelationshipClassification | null {
   if (
     calleeText.endsWith("._resolvers.set") ||
     calleeText.endsWith("_resolvers.set")
   ) {
-    return {
-      relation: FrameworkRelationshipRelation.StoresResolverSlot,
-      mechanism: FrameworkRelationshipMechanism.ResolverStore,
-      phase: FrameworkRelationshipPhase.Registration,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.ContainerSlot,
-      toName: "_resolvers",
-    };
+    return resolverStoreSetClassification();
   }
   if (
     calleeText.endsWith("._resolvers.get") ||
     calleeText.endsWith("_resolvers.get")
   ) {
-    return {
-      relation: FrameworkRelationshipRelation.LooksUpKey,
-      mechanism: FrameworkRelationshipMechanism.ResolverStore,
-      phase: FrameworkRelationshipPhase.Lookup,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.ContainerSlot,
-      toName: "_resolvers",
-    };
-  }
-  if (calleeName === "register") {
-    return {
-      relation: FrameworkRelationshipRelation.InvokesRegistry,
-      mechanism: FrameworkRelationshipMechanism.ContainerRegister,
-      phase: FrameworkRelationshipPhase.Registration,
-      closure: FrameworkRelationshipClosure.Modeled,
-      toKind: FrameworkRelationshipEndpointKind.Method,
-      toName: "register",
-    };
-  }
-  if (calleeName === "getResolver") {
-    return {
-      relation: FrameworkRelationshipRelation.LooksUpKey,
-      mechanism: FrameworkRelationshipMechanism.ContainerGetResolver,
-      phase: FrameworkRelationshipPhase.Lookup,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.Method,
-      toName: "getResolver",
-    };
-  }
-  if (calleeName === "get") {
-    return {
-      relation: FrameworkRelationshipRelation.ResolvesKey,
-      mechanism: FrameworkRelationshipMechanism.ContainerGet,
-      phase: FrameworkRelationshipPhase.Resolution,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.Method,
-      toName: "get",
-    };
-  }
-  if (calleeName === "getAll") {
-    return {
-      relation: FrameworkRelationshipRelation.ResolvesKey,
-      mechanism: FrameworkRelationshipMechanism.ContainerGetAll,
-      phase: FrameworkRelationshipPhase.Resolution,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.Method,
-      toName: "getAll",
-    };
-  }
-  if (calleeName === "has") {
-    return {
-      relation: FrameworkRelationshipRelation.LooksUpKey,
-      mechanism: FrameworkRelationshipMechanism.ContainerHas,
-      phase: FrameworkRelationshipPhase.Lookup,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.Method,
-      toName: "has",
-    };
-  }
-  if (calleeName === "find") {
-    return {
-      relation: FrameworkRelationshipRelation.LooksUpKey,
-      mechanism: FrameworkRelationshipMechanism.ContainerFind,
-      phase: FrameworkRelationshipPhase.ResourceLookup,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.Method,
-      toName: "find",
-    };
-  }
-  if (calleeName === "getFactory") {
-    return {
-      relation: FrameworkRelationshipRelation.LooksUpKey,
-      mechanism: FrameworkRelationshipMechanism.ResolverGetFactory,
-      phase: FrameworkRelationshipPhase.Materialization,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.Method,
-      toName: "getFactory",
-    };
-  }
-  if (calleeName === "construct") {
-    return {
-      relation: FrameworkRelationshipRelation.MaterializesKey,
-      mechanism: FrameworkRelationshipMechanism.FactoryConstruct,
-      phase: FrameworkRelationshipPhase.Materialization,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.Method,
-      toName: "construct",
-      strategy: resolverStrategyForNearestCase(sourceFile, call),
-    };
-  }
-  if (calleeName === "resolve") {
-    return {
-      relation: FrameworkRelationshipRelation.ResolvesKey,
-      mechanism: FrameworkRelationshipMechanism.ResolverResolve,
-      phase: FrameworkRelationshipPhase.Resolution,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.Method,
-      toName: "resolve",
-      strategy: resolverStrategyForNearestCase(sourceFile, call),
-    };
-  }
-  if (calleeName === "_jitRegister") {
-    return {
-      relation: FrameworkRelationshipRelation.RegistersProvider,
-      mechanism: FrameworkRelationshipMechanism.JitRegister,
-      phase: FrameworkRelationshipPhase.Registration,
-      closure: FrameworkRelationshipClosure.Modeled,
-      toKind: FrameworkRelationshipEndpointKind.Method,
-      toName: "_jitRegister",
-    };
-  }
-  if (calleeName === "createContainer") {
-    return {
-      relation: FrameworkRelationshipRelation.CreatesContainer,
-      mechanism: FrameworkRelationshipMechanism.ContainerChild,
-      phase: FrameworkRelationshipPhase.ContainerConstruction,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.Symbol,
-      toName: "Container",
-    };
-  }
-  if (calleeName === "createResolver") {
-    return {
-      relation: FrameworkRelationshipRelation.CreatesResolver,
-      mechanism: FrameworkRelationshipMechanism.ResolverHelper,
-      phase: FrameworkRelationshipPhase.Definition,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.Symbol,
-      toName: "callable-resolver",
-    };
+    return resolverStoreGetClassification();
   }
   return null;
+}
+
+function resolverStoreSetClassification(): FrameworkRelationshipClassification {
+  return {
+    relation: FrameworkRelationshipRelation.StoresResolverSlot,
+    mechanism: FrameworkRelationshipMechanism.ResolverStore,
+    phase: FrameworkRelationshipPhase.Registration,
+    closure: FrameworkRelationshipClosure.Exact,
+    toKind: FrameworkRelationshipEndpointKind.ContainerSlot,
+    toName: "_resolvers",
+  };
+}
+
+function resolverStoreGetClassification(): FrameworkRelationshipClassification {
+  return {
+    relation: FrameworkRelationshipRelation.LooksUpKey,
+    mechanism: FrameworkRelationshipMechanism.ResolverStore,
+    phase: FrameworkRelationshipPhase.Lookup,
+    closure: FrameworkRelationshipClosure.Exact,
+    toKind: FrameworkRelationshipEndpointKind.ContainerSlot,
+    toName: "_resolvers",
+  };
+}
+
+function constructCallClassification(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+): FrameworkRelationshipClassification {
+  return {
+    relation: FrameworkRelationshipRelation.MaterializesKey,
+    mechanism: FrameworkRelationshipMechanism.FactoryConstruct,
+    phase: FrameworkRelationshipPhase.Materialization,
+    closure: FrameworkRelationshipClosure.Exact,
+    toKind: FrameworkRelationshipEndpointKind.Method,
+    toName: "construct",
+    strategy: resolverStrategyForNearestCase(sourceFile, call),
+  };
+}
+
+function resolveCallClassification(
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+): FrameworkRelationshipClassification {
+  return {
+    relation: FrameworkRelationshipRelation.ResolvesKey,
+    mechanism: FrameworkRelationshipMechanism.ResolverResolve,
+    phase: FrameworkRelationshipPhase.Resolution,
+    closure: FrameworkRelationshipClosure.Exact,
+    toKind: FrameworkRelationshipEndpointKind.Method,
+    toName: "resolve",
+    strategy: resolverStrategyForNearestCase(sourceFile, call),
+  };
 }
 
 function classifyNewExpression(
@@ -1000,71 +1152,24 @@ function classifyNewExpression(
 ): FrameworkRelationshipClassification | null {
   const name = node.expression.getText(sourceFile);
   if (name === "Resolver") {
-    return {
-      relation: FrameworkRelationshipRelation.CreatesResolver,
-      mechanism: FrameworkRelationshipMechanism.ResolverConstructor,
-      phase: FrameworkRelationshipPhase.Definition,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.Symbol,
-      toName: "Resolver",
-      strategy: resolverStrategyFromExpressionText(
-        sourceFile,
-        node.arguments?.[1],
-      ),
-    };
+    return resolverNewExpressionClassification(sourceFile, node);
   }
-  if (name === "Factory") {
-    return {
-      relation: FrameworkRelationshipRelation.CreatesFactory,
-      mechanism: FrameworkRelationshipMechanism.FactoryConstruct,
-      phase: FrameworkRelationshipPhase.Materialization,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.Symbol,
-      toName: "Factory",
-    };
-  }
-  if (name === "Container") {
-    return {
-      relation: FrameworkRelationshipRelation.CreatesContainer,
-      mechanism: FrameworkRelationshipMechanism.ContainerChild,
-      phase: FrameworkRelationshipPhase.ContainerConstruction,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.Symbol,
-      toName: "Container",
-    };
-  }
-  if (name === "ResolverBuilder") {
-    return {
-      relation: FrameworkRelationshipRelation.CreatesRegistration,
-      mechanism: FrameworkRelationshipMechanism.ResolverBuilder,
-      phase: FrameworkRelationshipPhase.Definition,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.Symbol,
-      toName: "ResolverBuilder",
-    };
-  }
-  if (name === "InstanceProvider") {
-    return {
-      relation: FrameworkRelationshipRelation.CreatesResolver,
-      mechanism: FrameworkRelationshipMechanism.ResolverHelper,
-      phase: FrameworkRelationshipPhase.Materialization,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.Symbol,
-      toName: "InstanceProvider",
-      strategy: FrameworkDiResolverStrategy.Instance,
-    };
-  }
-  if (name === "Type" || name === "this.Type" || name === "RealType") {
-    return {
-      relation: FrameworkRelationshipRelation.ConstructsInstance,
-      mechanism: FrameworkRelationshipMechanism.FactoryConstruct,
-      phase: FrameworkRelationshipPhase.Materialization,
-      closure: FrameworkRelationshipClosure.Exact,
-      toKind: FrameworkRelationshipEndpointKind.Symbol,
-      toName: name,
-    };
-  }
-  return null;
+  return staticNewExpressionClassifications.get(name) ?? null;
+}
+
+function resolverNewExpressionClassification(
+  sourceFile: ts.SourceFile,
+  node: ts.NewExpression,
+): FrameworkRelationshipClassification {
+  return {
+    relation: FrameworkRelationshipRelation.CreatesResolver,
+    mechanism: FrameworkRelationshipMechanism.ResolverConstructor,
+    phase: FrameworkRelationshipPhase.Definition,
+    closure: FrameworkRelationshipClosure.Exact,
+    toKind: FrameworkRelationshipEndpointKind.Symbol,
+    toName: "Resolver",
+    strategy: resolverStrategyFromExpressionText(sourceFile, node.arguments?.[1]),
+  };
 }
 
 function registrationFactoryStrategy(
@@ -1748,7 +1853,7 @@ function countBy<TValue>(
   rows: readonly TValue[],
   keyFor: (row: TValue) => string,
 ): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
+  const counts: Record<string, number> = Object.create(null) as Record<string, number>;
   for (const row of rows) {
     const key = keyFor(row);
     counts[key] = (counts[key] ?? 0) + 1;

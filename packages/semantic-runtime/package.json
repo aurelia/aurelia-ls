@@ -17,6 +17,7 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true }); require('node:fs').rmSync('tsconfig.tsbuildinfo', { force: true })\"",
+    "smoke:storefront": "pnpm build && node scripts/smoke-authoring-storefront.mjs",
     "test": "pnpm build"
   },
   "dependencies": {

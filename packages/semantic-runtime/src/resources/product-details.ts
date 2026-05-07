@@ -8,7 +8,7 @@ import type {
 import type {
   FullResourceDefinition,
 } from './resource-definition.js';
-import type { ResourceDefinitionHeaderEmission } from './resource-recognition-kernel-emitter.js';
+import type { ResourceDefinitionHeaderEmission } from './resource-definition-header-emission.js';
 
 export type ResourceDefinitionHeaderDetail =
   | ResourceDefinitionHeaderEmission

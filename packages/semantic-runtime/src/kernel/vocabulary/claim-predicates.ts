@@ -272,6 +272,94 @@ export const KernelClaimPredicates = {
       ),
     ),
 
+    /** A modeled controller is associated with the compiled template for its resource definition. */
+    ControllerUsesCompiledTemplate: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'controller-uses-compiled-template',
+      'A modeled controller is associated with the compiled template for its custom-element resource definition.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.Controller),
+        productEndpoint(KernelProductKinds.Template.CompiledTemplate),
+      ),
+    ),
+
+    /** A modeled controller is associated with a nested instruction sequence owned by its hydration instruction. */
+    ControllerUsesInstructionSequence: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'controller-uses-instruction-sequence',
+      'A modeled controller is associated with a nested instruction sequence owned by its hydration instruction.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.Controller),
+        productEndpoint(KernelProductKinds.Instruction.Sequence),
+      ),
+    ),
+
+    /** A modeled controller receives or owns a runtime IViewFactory value. */
+    ControllerUsesViewFactory: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'controller-uses-view-factory',
+      'A modeled controller receives or owns a runtime IViewFactory value.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.Controller),
+        productEndpoint(KernelProductKinds.Configuration.ViewFactory),
+      ),
+    ),
+
+    /** A template-controller controller linked itself to another template-controller controller. */
+    ControllerLinksTemplateController: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'controller-links-template-controller',
+      'A template-controller controller linked itself to another template-controller controller through ICustomAttributeViewModel.link.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.Controller),
+        productEndpoint(KernelProductKinds.Configuration.Controller),
+      ),
+    ),
+
+    /** A lowered template-controller instruction created a runtime IViewFactory value. */
+    InstructionCreatesViewFactory: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'instruction-creates-view-factory',
+      'A lowered template-controller instruction created a runtime IViewFactory value.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Instruction.Instruction),
+        productEndpoint(KernelProductKinds.Configuration.ViewFactory),
+      ),
+    ),
+
+    /** A runtime IViewFactory creates synthetic views from a nested instruction sequence. */
+    ViewFactoryUsesInstructionSequence: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'view-factory-uses-instruction-sequence',
+      'A runtime IViewFactory creates synthetic views from a nested instruction sequence.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.ViewFactory),
+        productEndpoint(KernelProductKinds.Instruction.Sequence),
+      ),
+    ),
+
+    /** A runtime IViewFactory carries the generated embedded custom-element definition used to create child views. */
+    ViewFactoryUsesDefinition: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'view-factory-uses-definition',
+      'A runtime IViewFactory carries the generated embedded custom-element definition used to create child views.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.ViewFactory),
+        productEndpoint(KernelProductKinds.Resource.Definition),
+      ),
+    ),
+
+    /** A runtime IViewFactory created a modeled aggregate synthetic-view controller. */
+    ViewFactoryCreatesSyntheticView: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'view-factory-creates-synthetic-view',
+      'A runtime IViewFactory created a modeled aggregate synthetic-view controller for TypeChecker-backed child-view analysis.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.ViewFactory),
+        productEndpoint(KernelProductKinds.Configuration.Controller),
+      ),
+    ),
+
     /** A lowered rendering instruction created a modeled runtime controller. */
     InstructionCreatesController: defineClaimPredicate(
       KernelVocabularyNamespace.Configuration,
@@ -737,6 +825,17 @@ export const KernelClaimPredicates = {
       ),
     ),
 
+    /** A compiled template uses one ordered surrogate instruction sequence for host attribute work. */
+    CompiledTemplateUsesSurrogateInstructionSequence: defineClaimPredicate(
+      KernelVocabularyNamespace.Template,
+      'compiled-template-uses-surrogate-instruction-sequence',
+      'A compiled template uses one ordered surrogate instruction sequence for host attribute work.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Template.CompiledTemplate),
+        productEndpoint(KernelProductKinds.Instruction.Sequence),
+      ),
+    ),
+
     /** An authored HTML document or node contains a child HTML node. */
     ContainsHtmlNode: defineClaimPredicate(
       KernelVocabularyNamespace.Template,
@@ -848,6 +947,28 @@ export const KernelClaimPredicates = {
       ),
     ),
 
+    /** A lowered instruction is rendered into an immediate target operation. */
+    InstructionCreatesTargetOperation: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'instruction-creates-target-operation',
+      'A lowered rendering instruction is rendered into an immediate target operation.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Instruction.Instruction),
+        productEndpoint(KernelProductKinds.Binding.TargetOperation),
+      ),
+    ),
+
+    /** A runtime renderer performed an immediate target operation. */
+    RuntimeRendererUsesTargetOperation: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'runtime-renderer-uses-target-operation',
+      'A runtime renderer performed an immediate target operation during Rendering.render.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Compiler.RuntimeRenderer),
+        productEndpoint(KernelProductKinds.Binding.TargetOperation),
+      ),
+    ),
+
     /** A runtime binding targets a child or custom-attribute controller rather than the rendering controller itself. */
     RuntimeBindingTargetsController: defineClaimPredicate(
       KernelVocabularyNamespace.Binding,
@@ -859,6 +980,17 @@ export const KernelClaimPredicates = {
       ),
     ),
 
+    /** A runtime binding owns another runtime binding through a surrogate controller-like lane. */
+    RuntimeBindingOwnsRuntimeBinding: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'runtime-binding-owns-runtime-binding',
+      'A runtime binding owns another runtime binding through a surrogate controller-like lane such as SpreadBinding.addBinding.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.RuntimeBinding),
+        productEndpoint(KernelProductKinds.Binding.RuntimeBinding),
+      ),
+    ),
+
     /** A runtime binding exposes a scope effect such as let or iterator locals. */
     RuntimeBindingCreatesScopeEffect: defineClaimPredicate(
       KernelVocabularyNamespace.Binding,
@@ -867,6 +999,61 @@ export const KernelClaimPredicates = {
       claimSignature(
         productEndpoint(KernelProductKinds.Binding.RuntimeBinding),
         productEndpoint(KernelProductKinds.Binding.ScopeEffect),
+      ),
+    ),
+
+    /** A runtime binding selected a target-side accessor or observer. */
+    RuntimeBindingUsesTargetAccess: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'runtime-binding-uses-target-access',
+      'A runtime binding selected a target-side accessor or observer through runtime observation lookup.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.RuntimeBinding),
+        productEndpoint(KernelProductKinds.Binding.TargetAccess),
+      ),
+    ),
+
+    /** A runtime binding selected a direct target update operation. */
+    RuntimeBindingUsesTargetOperation: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'runtime-binding-uses-target-operation',
+      'A runtime binding selected a direct target update operation such as classList.toggle, style.setProperty, or setAttribute/removeAttribute.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.RuntimeBinding),
+        productEndpoint(KernelProductKinds.Binding.TargetOperation),
+      ),
+    ),
+
+    /** A runtime binding selected a source-side update operation. */
+    RuntimeBindingUsesSourceOperation: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'runtime-binding-uses-source-operation',
+      'A runtime binding selected a source-side update operation such as assigning a resolved ref target into Scope.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.RuntimeBinding),
+        productEndpoint(KernelProductKinds.Binding.SourceOperation),
+      ),
+    ),
+
+    /** A runtime binding exposes a modeled observer/accessor value channel. */
+    RuntimeBindingUsesValueChannel: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'runtime-binding-uses-value-channel',
+      'A runtime binding exposes a modeled observer or accessor value channel through observation semantics.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.RuntimeBinding),
+        productEndpoint(KernelProductKinds.Binding.ValueChannel),
+      ),
+    ),
+
+    /** A runtime binding exposes a modeled source/target data-flow edge. */
+    RuntimeBindingUsesDataFlow: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'runtime-binding-uses-data-flow',
+      'A runtime binding exposes a modeled source/target data-flow edge through Scope lookup and observation facts.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.RuntimeBinding),
+        productEndpoint(KernelProductKinds.Binding.DataFlow),
       ),
     ),
 
@@ -882,6 +1069,17 @@ export const KernelClaimPredicates = {
     ),
   },
   Instruction: {
+
+    /** A runtime-compiled spread instruction came from a captured AttrSyntax. */
+    DynamicInstructionOriginatesFromCapturedAttributeSyntax: defineClaimPredicate(
+      KernelVocabularyNamespace.Instruction,
+      'dynamic-instruction-originates-from-captured-attribute-syntax',
+      'A dynamic instruction allocated during TemplateCompiler.compileSpread originated from a captured runtime AttrSyntax product.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Instruction.Instruction),
+        productEndpoint(KernelProductKinds.Template.AttributeSyntax),
+      ),
+    ),
 
     /** A lowered hydrate instruction owns a child instruction sequence. */
     InstructionOwnsChildSequence: defineClaimPredicate(

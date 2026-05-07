@@ -225,6 +225,19 @@ export interface FrameworkLifecycleAppTaskExecutionFilters {
   readonly query?: string;
 }
 
+type FrameworkLifecycleHookParticipantKind =
+  | FrameworkLifecycleParticipantKind.ViewModelHook
+  | FrameworkLifecycleParticipantKind.LifecycleHook;
+
+const hookDispatchTargetEndpointKindByParticipantKind: Readonly<
+  Record<FrameworkLifecycleHookParticipantKind, FrameworkRelationshipEndpointKind>
+> = {
+  [FrameworkLifecycleParticipantKind.ViewModelHook]:
+    FrameworkRelationshipEndpointKind.Method,
+  [FrameworkLifecycleParticipantKind.LifecycleHook]:
+    FrameworkRelationshipEndpointKind.AppTask,
+};
+
 const controllerLifecycleMemo = new SourceProjectMemo<
   {
     readonly methods: readonly FrameworkLifecycleControllerMethodRow[];
@@ -1575,11 +1588,7 @@ function hookDispatchRelationship(
       source: row.source,
     },
     to: {
-      kind:
-        row.participantKind ===
-        FrameworkLifecycleParticipantKind.ViewModelHook
-          ? FrameworkRelationshipEndpointKind.Method
-          : FrameworkRelationshipEndpointKind.AppTask,
+      kind: hookDispatchTargetEndpointKind(row.participantKind),
       name: row.hookName,
       packageId: row.packageId,
       packageName: row.packageName,
@@ -1590,6 +1599,12 @@ function hookDispatchRelationship(
     sourceRowId: row.id,
     summary: row.summary,
   };
+}
+
+function hookDispatchTargetEndpointKind(
+  participantKind: FrameworkLifecycleHookParticipantKind,
+): FrameworkRelationshipEndpointKind {
+  return hookDispatchTargetEndpointKindByParticipantKind[participantKind];
 }
 
 function phaseForLifecycleStage(stage: string): FrameworkRelationshipPhase {

@@ -46,8 +46,8 @@ import {
 } from "./framework-compiler-flow.js";
 import type { FrameworkCompilerFilters } from "./framework-compiler-model.js";
 import {
-  compilerRelationshipsFromProducts,
   readFrameworkCompilerInstructionProducts,
+  readFrameworkCompilerRelationships,
   type FrameworkCompilerRelationshipRow,
 } from "./framework-compiler-products.js";
 import {
@@ -131,10 +131,7 @@ export function answerFrameworkCompiler(
     sourceProject,
     filters,
   );
-  const relationships = compilerRelationshipsFromProducts(
-    instructionProducts,
-    filters,
-  );
+  const relationships = readFrameworkCompilerRelationships(sourceProject, filters);
   const compileFlow = readFrameworkCompileFlowRows(sourceProject, filters);
   const attributeClassification = readFrameworkAttributeClassificationRows(
     sourceProject,

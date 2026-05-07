@@ -539,7 +539,7 @@ function uniqueRowsBy<TRow>(
 }
 
 function countFlat(values: readonly string[]): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
+  const counts: Record<string, number> = Object.create(null) as Record<string, number>;
   for (const value of values) {
     counts[value] = (counts[value] ?? 0) + 1;
   }

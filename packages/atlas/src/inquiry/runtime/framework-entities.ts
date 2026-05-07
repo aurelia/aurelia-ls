@@ -237,6 +237,8 @@ export interface FrameworkResourceCarrierRow {
   readonly targetName: string | null;
   /** Exact carrier source range. */
   readonly source: SourceRange;
+  /** Backing declaration/source-export range, which may differ from the exact resource carrier span. */
+  readonly declarationSource: SourceRange | null;
 }
 
 /** Public Aurelia framework package export that points at a resource source carrier. */
@@ -255,6 +257,8 @@ export interface FrameworkResourceExportRow extends FrameworkPackageExportRow {
   readonly targetName: string | null;
   /** Exact carrier source range. */
   readonly source: SourceRange;
+  /** Backing declaration/source-export range, which may differ from the exact resource carrier span. */
+  readonly declarationSource: SourceRange | null;
 }
 
 /** One evaluated association between a registry/configuration bundle and a registration argument. */
@@ -417,18 +421,47 @@ export interface FrameworkControllerCreationRow {
   readonly childControllerExpression: string;
   /** View-model construction or invocation call when visible. */
   readonly viewModelCall: TypeScriptCallSiteEntry | null;
+  /** View-factory creation call for template-controller synthetic views, when visible. */
+  readonly viewFactoryCall: TypeScriptCallSiteEntry | null;
+  /** Render-location conversion call for template-controller anchors, when visible. */
+  readonly renderLocationCall: TypeScriptCallSiteEntry | null;
   /** Controller factory call such as Controller.$el(...) or Controller.$attr(...). */
   readonly controllerFactoryCall: TypeScriptCallSiteEntry;
+  /** Ref registration call that records a child controller by key/location, when visible. */
+  readonly referenceRegistrationCall: TypeScriptCallSiteEntry | null;
   /** Parent addChild(...) admission call when visible. */
   readonly childAdmissionCall: TypeScriptCallSiteEntry | null;
   /** Recursive renderer dispatches that render property instructions into the child controller. */
   readonly recursiveDispatchCalls: readonly TypeScriptCallSiteEntry[];
   /** Template-controller link hook call when visible. */
   readonly linkCall: TypeScriptCallSiteEntry | null;
+  /** Ordered source-backed handoff steps inside the renderer hydration flow. */
+  readonly hydrationSteps: readonly FrameworkControllerHydrationStepRow[];
   /** Exact renderer method source range. */
   readonly source: SourceRange;
   /** Human-facing row summary. */
   readonly summary: string;
+}
+
+/** Step kind inside a renderer-owned controller hydration handoff. */
+export type FrameworkControllerHydrationStepKind =
+  | "view-factory-creation"
+  | "render-location"
+  | "view-model-invocation"
+  | "controller-creation"
+  | "reference-registration"
+  | "template-controller-link"
+  | "recursive-dispatch"
+  | "child-admission";
+
+/** One ordered call-site step inside a renderer-owned controller hydration handoff. */
+export interface FrameworkControllerHydrationStepRow {
+  /** Zero-based order after sorting source call sites inside the renderer method. */
+  readonly order: number;
+  /** Semantic role played by the call site. */
+  readonly stepKind: FrameworkControllerHydrationStepKind;
+  /** Exact checker-backed call site for this step. */
+  readonly callSite: TypeScriptCallSiteEntry;
 }
 
 /** Constructor parameter summary for a binding class. */
@@ -836,6 +869,7 @@ export interface FrameworkExpressionEntityRow
 export const enum FrameworkRenderingStructureKind {
   AppRoot = "app-root",
   Controller = "controller",
+  Scope = "scope",
   View = "view",
   ViewFactory = "view-factory",
   Hydration = "hydration",

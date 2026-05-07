@@ -95,6 +95,8 @@ Required shapes:
 ## AI And MCP Pressures
 
 Large-scale codebase management for LLMs adds obligations that classic IDE/compiler tooling does not fully cover.
+Atlas is the current mapping and inquiry surface for this repo; MCP language in this document is packaging grammar and
+integration pressure, not a reason to revive au-mcp-style source mapping as an authority.
 
 ### Context Economics
 

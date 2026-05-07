@@ -5,6 +5,10 @@ import {
   type StaticModuleEvaluationResult,
 } from './evaluator.js';
 import {
+  DefaultStaticEvaluationPolicy,
+  type StaticEvaluationPolicy,
+} from './policy.js';
+import {
   EvaluationExportKind,
   EvaluationImportKind,
   type EvaluationImportEntry,
@@ -38,6 +42,8 @@ export class StaticModuleGraphEvaluator {
   constructor(
     /** Directed module graph built from source syntax and host resolution. */
     readonly graph: EvaluationModuleGraph,
+    /** Product-specific ownership hooks for expression statements whose effects are modeled elsewhere. */
+    readonly policy: StaticEvaluationPolicy = DefaultStaticEvaluationPolicy,
   ) {}
 
   /** Evaluate one entry module and any modules needed by its imports or re-exports. */
@@ -63,7 +69,7 @@ export class StaticModuleGraphEvaluator {
 
     this.evaluatingModules.add(moduleKey);
     const imports = this.resolveImportValues(record);
-    const result = new StaticEvaluator().evaluateSourceFile(record.sourceFile, moduleKey, imports);
+    const result = new StaticEvaluator(this.policy).evaluateSourceFile(record.sourceFile, moduleKey, imports);
     this.moduleResults.set(moduleKey, result);
     this.evaluatingModules.delete(moduleKey);
     return result;

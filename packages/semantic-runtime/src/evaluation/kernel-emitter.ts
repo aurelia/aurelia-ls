@@ -13,7 +13,10 @@ import {
 } from '../kernel/evidence.js';
 import type {
   AddressHandle,
+  EvidenceHandle,
   KernelRecordHandle,
+  OpenSeamHandle,
+  ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
   ProvenanceRecord,
@@ -25,6 +28,13 @@ import {
 } from '../kernel/store.js';
 import type { StaticModuleEvaluationResult } from './evaluator.js';
 import { EvaluationOpenSeam } from './seams.js';
+
+interface EvaluationOpenSeamHandles {
+  readonly spanHandle: AddressHandle;
+  readonly evidenceHandle: EvidenceHandle;
+  readonly provenanceHandle: ProvenanceHandle;
+  readonly openSeamHandle: OpenSeamHandle;
+}
 
 /** Emits durable kernel records for evaluator boundary pressure. */
 export class EvaluationKernelEmitter {
@@ -58,35 +68,51 @@ export class EvaluationKernelEmitter {
     index: number,
   ): readonly KernelStoreRecord[] {
     const local = `${moduleKey}:${seam.seamKind}:${seam.node.getStart(sourceFile)}:${seam.node.end}:${index}`;
-    const spanHandle = this.store.handles.address(`evaluation-span:${local}`);
-    const evidenceHandle = this.store.handles.evidence(`evaluation-open:${local}`);
-    const provenanceHandle = this.store.handles.provenance(`evaluation-open:${local}`);
-    const openSeamHandle = this.store.handles.openSeam(`evaluation-open:${local}`);
-    const span = new SourceSpanAddress(
-      spanHandle,
+    const handles = this.evaluationOpenSeamHandles(local);
+    return [
+      this.sourceSpanForOpenSeam(sourceFile, sourceFileAddressHandle, seam, handles),
+      this.evidenceForOpenSeam(seam, handles),
+      new ProvenanceRecord(handles.provenanceHandle, [handles.evidenceHandle]),
+      new OpenSeam(handles.openSeamHandle, seam.seamKind, seam.summary, handles.spanHandle, handles.evidenceHandle),
+    ];
+  }
+
+  private evaluationOpenSeamHandles(
+    local: string,
+  ): EvaluationOpenSeamHandles {
+    return {
+      spanHandle: this.store.handles.address(`evaluation-span:${local}`),
+      evidenceHandle: this.store.handles.evidence(`evaluation-open:${local}`),
+      provenanceHandle: this.store.handles.provenance(`evaluation-open:${local}`),
+      openSeamHandle: this.store.handles.openSeam(`evaluation-open:${local}`),
+    };
+  }
+
+  private sourceSpanForOpenSeam(
+    sourceFile: ts.SourceFile,
+    sourceFileAddressHandle: AddressHandle,
+    seam: EvaluationOpenSeam,
+    handles: EvaluationOpenSeamHandles,
+  ): SourceSpanAddress {
+    return new SourceSpanAddress(
+      handles.spanHandle,
       sourceFileAddressHandle,
       seam.node.getStart(sourceFile),
       seam.node.end,
       SourceSpanRole.Range,
     );
-    const evidence = new EvidenceRecord(
-      evidenceHandle,
+  }
+
+  private evidenceForOpenSeam(
+    seam: EvaluationOpenSeam,
+    handles: EvaluationOpenSeamHandles,
+  ): EvidenceRecord {
+    return new EvidenceRecord(
+      handles.evidenceHandle,
       EvidenceKind.SemanticObservation,
       [EvidenceRole.Diagnostic],
       seam.summary,
-      spanHandle,
+      handles.spanHandle,
     );
-    const provenance = new ProvenanceRecord(
-      provenanceHandle,
-      [evidenceHandle],
-    );
-    const openSeam = new OpenSeam(
-      openSeamHandle,
-      seam.seamKind,
-      seam.summary,
-      spanHandle,
-      evidenceHandle,
-    );
-    return [span, evidence, provenance, openSeam];
   }
 }

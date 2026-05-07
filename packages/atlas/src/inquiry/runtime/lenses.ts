@@ -394,6 +394,24 @@ export function answerRepoMap(
           ),
         },
         {
+          id: "repo.map:product-architecture",
+          kind: ContinuationKind.SwitchLens,
+          priority: ContinuationPriority.Primary,
+          rationale:
+            "Enter semantic-runtime source areas, modules, declarations, and cross-area import pressure.",
+          inquiry: {
+            lens: LensId.ProductArchitecture,
+            locus: RepoRootLocus,
+            projection: "summary",
+          },
+          route: route(
+            NavigationPlane.Structure,
+            NavigationRelation.ProjectionOf,
+            [BasisKind.TypeScriptProgram],
+            "Semantic-runtime product architecture rows behind the surface map.",
+          ),
+        },
+        {
           id: "repo.map:self",
           kind: ContinuationKind.SwitchLens,
           priority: ContinuationPriority.Secondary,
@@ -1923,8 +1941,11 @@ function filterClassSurfaces(
   const packageId = stringFilter(inquiry, "packageId");
   const className = stringFilter(inquiry, "className");
   const methodName = stringFilter(inquiry, "methodName");
+  const minLineCount = numberFilter(inquiry, "minLineCount");
+  const minMethodCount = numberFilter(inquiry, "minMethodCount");
+  const minPropertyCount = numberFilter(inquiry, "minPropertyCount");
   const query = lowerStringFilter(inquiry, "query");
-  return rows.filter((row) => {
+  const filtered = rows.filter((row) => {
     if (packageId !== undefined && row.packageId !== packageId) {
       return false;
     }
@@ -1934,7 +1955,19 @@ function filterClassSurfaces(
     if (
       methodName !== undefined &&
       !row.methods.includes(methodName) &&
-      !row.staticMethods.includes(methodName)
+        !row.staticMethods.includes(methodName)
+    ) {
+      return false;
+    }
+    if (minLineCount !== undefined && row.lineCount < minLineCount) {
+      return false;
+    }
+    if (minMethodCount !== undefined && row.methodCount < minMethodCount) {
+      return false;
+    }
+    if (
+      minPropertyCount !== undefined &&
+      row.propertyCount < minPropertyCount
     ) {
       return false;
     }
@@ -1958,6 +1991,40 @@ function filterClassSurfaces(
       row.properties.some((property) => property.toLowerCase().includes(query))
     );
   });
+  return orderClassSurfaces(filtered, stringFilter(inquiry, "orderBy"));
+}
+
+function orderClassSurfaces(
+  rows: readonly AtlasSelfClassSurfaceRow[],
+  orderBy: string | undefined,
+): readonly AtlasSelfClassSurfaceRow[] {
+  switch (orderBy) {
+    case "size":
+    case "lineCount":
+      return [...rows].sort((left, right) =>
+        right.lineCount - left.lineCount ||
+        left.filePath.localeCompare(right.filePath) ||
+        left.name.localeCompare(right.name),
+      );
+    case "methodCount":
+      return [...rows].sort((left, right) =>
+        right.methodCount - left.methodCount ||
+        right.lineCount - left.lineCount ||
+        left.filePath.localeCompare(right.filePath) ||
+        left.name.localeCompare(right.name),
+      );
+    case "propertyCount":
+      return [...rows].sort((left, right) =>
+        right.propertyCount - left.propertyCount ||
+        right.lineCount - left.lineCount ||
+        left.filePath.localeCompare(right.filePath) ||
+        left.name.localeCompare(right.name),
+      );
+    case undefined:
+    case "source":
+    default:
+      return rows;
+  }
 }
 
 function filterFunctionSurfaces(
@@ -1968,8 +2035,14 @@ function filterFunctionSurfaces(
   const functionKind = stringFilter(inquiry, "functionKind");
   const className = stringFilter(inquiry, "className");
   const functionName = stringFilter(inquiry, "functionName");
+  const minLineCount = numberFilter(inquiry, "minLineCount");
+  const minCallCount = numberFilter(inquiry, "minCallCount");
+  const minUniqueCallTargetCount = numberFilter(
+    inquiry,
+    "minUniqueCallTargetCount",
+  );
   const query = lowerStringFilter(inquiry, "query");
-  return rows.filter((row) => {
+  const filtered = rows.filter((row) => {
     if (packageId !== undefined && row.packageId !== packageId) {
       return false;
     }
@@ -1982,6 +2055,18 @@ function filterFunctionSurfaces(
     if (functionName !== undefined && row.name !== functionName) {
       return false;
     }
+    if (minLineCount !== undefined && row.lineCount < minLineCount) {
+      return false;
+    }
+    if (minCallCount !== undefined && row.callCount < minCallCount) {
+      return false;
+    }
+    if (
+      minUniqueCallTargetCount !== undefined &&
+      row.uniqueCallTargetCount < minUniqueCallTargetCount
+    ) {
+      return false;
+    }
     if (query === undefined) {
       return true;
     }
@@ -1992,6 +2077,46 @@ function filterFunctionSurfaces(
       row.functionKind.toLowerCase().includes(query)
     );
   });
+  return orderFunctionSurfaces(filtered, stringFilter(inquiry, "orderBy"));
+}
+
+function orderFunctionSurfaces(
+  rows: readonly AtlasSelfFunctionSurfaceRow[],
+  orderBy: string | undefined,
+): readonly AtlasSelfFunctionSurfaceRow[] {
+  switch (orderBy) {
+    case "size":
+    case "lineCount":
+      return [...rows].sort((left, right) =>
+        right.lineCount - left.lineCount ||
+        right.callCount - left.callCount ||
+        left.filePath.localeCompare(right.filePath) ||
+        left.functionKind.localeCompare(right.functionKind) ||
+        left.name.localeCompare(right.name),
+      );
+    case "callCount":
+      return [...rows].sort((left, right) =>
+        right.callCount - left.callCount ||
+        right.uniqueCallTargetCount - left.uniqueCallTargetCount ||
+        right.lineCount - left.lineCount ||
+        left.filePath.localeCompare(right.filePath) ||
+        left.functionKind.localeCompare(right.functionKind) ||
+        left.name.localeCompare(right.name),
+      );
+    case "uniqueCallTargetCount":
+      return [...rows].sort((left, right) =>
+        right.uniqueCallTargetCount - left.uniqueCallTargetCount ||
+        right.callCount - left.callCount ||
+        right.lineCount - left.lineCount ||
+        left.filePath.localeCompare(right.filePath) ||
+        left.functionKind.localeCompare(right.functionKind) ||
+        left.name.localeCompare(right.name),
+      );
+    case undefined:
+    case "source":
+    default:
+      return rows;
+  }
 }
 
 function filterContracts(
@@ -2534,6 +2659,7 @@ function evidenceForClassSurface(row: AtlasSelfClassSurfaceRow): Evidence {
       exported: row.exported,
       abstract: row.abstract,
       filePath: row.filePath,
+      lineCount: row.lineCount,
       extendsType: row.extendsType,
       implementsTypes: row.implementsTypes,
       methods: row.methods,
@@ -2541,6 +2667,8 @@ function evidenceForClassSurface(row: AtlasSelfClassSurfaceRow): Evidence {
       accessors: row.accessors,
       properties: row.properties,
       constructorCount: row.constructorCount,
+      methodCount: row.methodCount,
+      propertyCount: row.propertyCount,
     },
   };
 }
@@ -2604,6 +2732,18 @@ function stringFilter(inquiry: Inquiry, key: string): string | undefined {
 
 function lowerStringFilter(inquiry: Inquiry, key: string): string | undefined {
   return stringFilter(inquiry, key)?.toLowerCase();
+}
+
+function numberFilter(inquiry: Inquiry, key: string): number | undefined {
+  const value = inquiry.filters?.[key];
+  if (typeof value === "number" && Number.isFinite(value)) {
+    return value;
+  }
+  if (typeof value === "string" && value.trim().length > 0) {
+    const parsed = Number(value);
+    return Number.isFinite(parsed) ? parsed : undefined;
+  }
+  return undefined;
 }
 
 function booleanFilter(

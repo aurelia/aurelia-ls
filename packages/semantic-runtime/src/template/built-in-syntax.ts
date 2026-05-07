@@ -14,11 +14,11 @@ import {
 } from './attribute-syntax.js';
 import {
   BindingCommandBuildResult,
-  BindingCommandExecutableReference,
   BindingCommandExecutionKind,
   type BindingCommandBuildContext,
   type BindingCommandBuildInfo,
 } from './binding-command-execution.js';
+import { BindingCommandExecutableReference } from './binding-command-reference.js';
 import {
   AttributeBindingInstruction,
   DispatchBindingInstruction,
@@ -993,7 +993,7 @@ export class SpreadValueBindingCommand {
         info.attribute,
         info.syntax.target as '$bindables' | '$element',
         info.syntax.rawValue,
-        null,
+        context.parsePropertyExpression(info.syntax.rawValue, info),
         instructionSource(info),
       ),
     ]);

@@ -11,11 +11,17 @@ import type { SourceProject } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 import type { FrameworkSyntaxProductRow } from "./framework-entities.js";
 import type { FrameworkCompilerFilters } from "./framework-compiler-model.js";
+import {
+  readAllFrameworkCompileFlowRows,
+  readFrameworkAttributeClassificationRows,
+  type FrameworkAttributeClassificationRow,
+  type FrameworkCompileFlowRow,
+} from "./framework-compiler-flow.js";
 import { readFrameworkCompilerSyntaxProducts } from "./framework-rendering-graph.js";
 
 export type { FrameworkCompilerFilters } from "./framework-compiler-model.js";
 
-/** Compiler relationship row derived from instruction-producing syntax rows. */
+/** Compiler relationship row derived from TemplateCompiler flow and instruction-producing syntax rows. */
 export interface FrameworkCompilerRelationshipRow {
   readonly id: string;
   readonly family: FrameworkRelationshipFamily.Compiler;
@@ -31,6 +37,17 @@ export interface FrameworkCompilerRelationshipRow {
   readonly summary: string;
 }
 
+const compilerProductMechanismByProducerKind: Readonly<
+  Record<FrameworkSyntaxProducerKind, FrameworkRelationshipMechanism>
+> = {
+  [FrameworkSyntaxProducerKind.BindingCommand]:
+    FrameworkRelationshipMechanism.BindingCommandBuild,
+  [FrameworkSyntaxProducerKind.Renderer]:
+    FrameworkRelationshipMechanism.InstructionFactory,
+  [FrameworkSyntaxProducerKind.InstructionFactory]:
+    FrameworkRelationshipMechanism.InstructionFactory,
+};
+
 export function readFrameworkCompilerInstructionProducts(
   sourceProject: SourceProject,
   filters: FrameworkCompilerFilters,
@@ -42,10 +59,20 @@ export function readFrameworkCompilerRelationships(
   sourceProject: SourceProject,
   filters: FrameworkCompilerFilters,
 ): readonly FrameworkCompilerRelationshipRow[] {
-  return compilerRelationshipsFromProducts(
-    readFrameworkCompilerInstructionProducts(sourceProject, filters),
-    filters,
-  );
+  return [
+    ...compilerRelationshipsFromProducts(
+      readFrameworkCompilerInstructionProducts(sourceProject, filters),
+      filters,
+    ),
+    ...compilerRelationshipsFromCompileFlow(
+      readAllFrameworkCompileFlowRows(sourceProject, filters),
+      filters,
+    ),
+    ...compilerRelationshipsFromAttributeClassification(
+      readFrameworkAttributeClassificationRows(sourceProject, filters),
+      filters,
+    ),
+  ].sort(compareCompilerRelationshipRows);
 }
 
 export function compilerRelationshipsFromProducts(
@@ -60,10 +87,7 @@ export function compilerRelationshipsFromProducts(
 function compilerRelationshipFromProduct(
   row: FrameworkSyntaxProductRow,
 ): FrameworkCompilerRelationshipRow {
-  const mechanism =
-    row.producerKind === FrameworkSyntaxProducerKind.BindingCommand
-      ? FrameworkRelationshipMechanism.BindingCommandBuild
-      : FrameworkRelationshipMechanism.InstructionFactory;
+  const mechanism = compilerProductMechanismByProducerKind[row.producerKind];
   const instructionName = row.instructionName ?? "unknown-instruction";
   return {
     id: `${row.id}:compiler-relationship:produces-instruction`,
@@ -92,6 +116,194 @@ function compilerRelationshipFromProduct(
   };
 }
 
+export function compilerRelationshipsFromCompileFlow(
+  rows: readonly FrameworkCompileFlowRow[],
+  filters: FrameworkCompilerFilters,
+): readonly FrameworkCompilerRelationshipRow[] {
+  return rows
+    .flatMap(compilerRelationshipsForCompileFlowRow)
+    .filter((row) => compilerRelationshipMatches(row, filters));
+}
+
+function compilerRelationshipsForCompileFlowRow(
+  row: FrameworkCompileFlowRow,
+): readonly FrameworkCompilerRelationshipRow[] {
+  const targets = compilerFlowTargets(row);
+  if (targets.length === 0) {
+    return [];
+  }
+  return targets.map((target) => {
+    const relation = compileFlowRelation(row, target);
+    return {
+      id: `${row.id}:compiler-relationship:${relation}:${target}`,
+      family: FrameworkRelationshipFamily.Compiler,
+      relation,
+      mechanism: FrameworkRelationshipMechanism.SyntaxProduct,
+      phase: FrameworkRelationshipPhase.Compilation,
+      packageId: "template-compiler",
+      packageName: "@aurelia/template-compiler",
+      from: compilerMethodEndpoint(row.methodName, row.source),
+      to: compilerTargetEndpoint(target),
+      source: row.source,
+      sourceRowId: row.id,
+      summary: `${row.ownerName}.${row.methodName} ${relation} ${target} during ${row.stage}: ${row.summary}`,
+    };
+  });
+}
+
+export function compilerRelationshipsFromAttributeClassification(
+  rows: readonly FrameworkAttributeClassificationRow[],
+  filters: FrameworkCompilerFilters,
+): readonly FrameworkCompilerRelationshipRow[] {
+  return rows
+    .flatMap(compilerRelationshipsForAttributeClassificationRow)
+    .filter((row) => compilerRelationshipMatches(row, filters));
+}
+
+function compilerRelationshipsForAttributeClassificationRow(
+  row: FrameworkAttributeClassificationRow,
+): readonly FrameworkCompilerRelationshipRow[] {
+  const targets = [
+    ...(row.targetKind === undefined ? [] : [row.targetKind]),
+    ...row.instructionNames,
+  ].filter(isConcreteCompilerTarget);
+  if (targets.length === 0) {
+    return [];
+  }
+  return unique(targets).map((target) => {
+    const relation = attributeClassificationRelation(row, target);
+    return {
+      id: `${row.id}:compiler-relationship:${relation}:${target}`,
+      family: FrameworkRelationshipFamily.Compiler,
+      relation,
+      mechanism: attributeClassificationMechanism(row),
+      phase: FrameworkRelationshipPhase.Compilation,
+      packageId: "template-compiler",
+      packageName: "@aurelia/template-compiler",
+      from: compilerMethodEndpoint(row.methodName, row.source),
+      to: compilerTargetEndpoint(target),
+      source: row.source,
+      sourceRowId: row.id,
+      summary: `${row.ownerName}.${row.methodName} ${relation} ${target} in ${row.branchKind}: ${row.summary}`,
+    };
+  });
+}
+
+function compilerFlowTargets(row: FrameworkCompileFlowRow): readonly string[] {
+  if (row.targetName === undefined) {
+    return [];
+  }
+  return unique(
+    row.targetName
+      .split("/")
+      .map((target) => target.trim())
+      .filter(isConcreteCompilerTarget),
+  );
+}
+
+function isConcreteCompilerTarget(target: string): boolean {
+  return target.length > 0 && target !== "unknown-instruction";
+}
+
+function compileFlowRelation(
+  row: FrameworkCompileFlowRow,
+  target: string,
+): FrameworkRelationshipRelation {
+  if (row.stage === "compile-context") {
+    return FrameworkRelationshipRelation.ConstructsInstance;
+  }
+  if (row.stage.includes("lookup")) {
+    return FrameworkRelationshipRelation.LooksUpResource;
+  }
+  if (
+    row.stage.includes("instruction") ||
+    row.stage === "let-element" ||
+    row.stage === "text-binding" ||
+    target.endsWith("Instruction") ||
+    target === "HydrateTemplateController"
+  ) {
+    return FrameworkRelationshipRelation.ProducesInstruction;
+  }
+  if (
+    row.stage === "local-elements" ||
+    row.stage === "local-element-registration" ||
+    row.stage === "compiled-definition" ||
+    target.includes("ComponentDefinition")
+  ) {
+    return FrameworkRelationshipRelation.CollectsDependency;
+  }
+  if (target.startsWith("_")) {
+    return FrameworkRelationshipRelation.InvokesCallback;
+  }
+  return FrameworkRelationshipRelation.CollectsDependency;
+}
+
+function attributeClassificationRelation(
+  row: FrameworkAttributeClassificationRow,
+  target: string,
+): FrameworkRelationshipRelation {
+  if (row.operation === "parse" || target === "AttrSyntax") {
+    return FrameworkRelationshipRelation.ParsesExpression;
+  }
+  if (row.operation === "find") {
+    return FrameworkRelationshipRelation.LooksUpResource;
+  }
+  if (
+    row.operation === "emit" ||
+    row.operation === "build" ||
+    target.endsWith("Instruction")
+  ) {
+    return FrameworkRelationshipRelation.ProducesInstruction;
+  }
+  return FrameworkRelationshipRelation.CollectsDependency;
+}
+
+function attributeClassificationMechanism(
+  row: FrameworkAttributeClassificationRow,
+): FrameworkRelationshipMechanism {
+  if (row.operation === "get") {
+    return FrameworkRelationshipMechanism.BindingCommandResolver;
+  }
+  if (row.operation === "build") {
+    return FrameworkRelationshipMechanism.BindingCommandBuild;
+  }
+  if (row.operation === "find") {
+    return FrameworkRelationshipMechanism.ResourceFind;
+  }
+  if (row.operation === "emit") {
+    return FrameworkRelationshipMechanism.InstructionFactory;
+  }
+  return FrameworkRelationshipMechanism.SyntaxProduct;
+}
+
+function compilerMethodEndpoint(
+  methodName: string,
+  source: SourceRange,
+): FrameworkRelationshipEndpoint {
+  return {
+    kind: FrameworkRelationshipEndpointKind.Method,
+    name: `TemplateCompiler.${methodName}`,
+    packageId: "template-compiler",
+    packageName: "@aurelia/template-compiler",
+    source,
+  };
+}
+
+function compilerTargetEndpoint(target: string): FrameworkRelationshipEndpoint {
+  return {
+    kind: target.startsWith("_")
+      ? FrameworkRelationshipEndpointKind.Method
+      : FrameworkRelationshipEndpointKind.Symbol,
+    name: target.startsWith("_") ? `TemplateCompiler.${target}` : target,
+    packageId: "template-compiler",
+    packageName: "@aurelia/template-compiler",
+  };
+}
+
+function unique(values: readonly string[]): readonly string[] {
+  return [...new Set(values)];
+}
+
 function compilerRelationshipMatches(
   row: FrameworkCompilerRelationshipRow,
   filters: FrameworkCompilerFilters,
@@ -104,5 +316,18 @@ function compilerRelationshipMatches(
     (filters.query === undefined ||
       row.from.name.includes(filters.query) ||
       row.to.name.includes(filters.query))
+  );
+}
+
+function compareCompilerRelationshipRows(
+  left: FrameworkCompilerRelationshipRow,
+  right: FrameworkCompilerRelationshipRow,
+): number {
+  return (
+    left.relation.localeCompare(right.relation) ||
+    left.mechanism.localeCompare(right.mechanism) ||
+    left.from.name.localeCompare(right.from.name) ||
+    left.to.name.localeCompare(right.to.name) ||
+    left.id.localeCompare(right.id)
   );
 }

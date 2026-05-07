@@ -11,6 +11,8 @@ source, value, expression, or template-local slot.
 
 - Preserve current TypeChecker type/member surfaces for template and expression inquiry.
 - Build one TypeScript Program/checker epoch over the same parsed source files used by static evaluation.
+- Keep the checker epoch app-local: use the booted project root's `tsconfig.json` when present, otherwise fall back to
+  Aurelia-app-shaped defaults instead of inheriting the semantic-runtime package's own build config.
 - Materialize type-shape and type-member product envelopes with identities, claims, provenance, and typed details.
 - Allow hot product details to retain `ts.TypeChecker`, `ts.Type`, `ts.Symbol`, and declaration carriers when that
   avoids lossy re-resolution.
@@ -58,6 +60,11 @@ expression tooling should prefer TypeChecker projection when it needs the static
 view-model types. Future SSR/SSG or richer abstract interpretation can connect the two through explicit products and
 claims rather than collapsing the distinction.
 
+Fixture and ad hoc app roots are allowed to start without package-manager scaffolding. The default checker options
+therefore use bundler-style module resolution, a small `*.html` module declaration, and an optional local Aurelia
+checkout type-path map when this repository's `aurelia/packages/*/dist/types` tree is present. Real app `tsconfig.json`
+files remain authoritative and can override those defaults.
+
 For template work, the split begins after compiled-template/render-row assembly. The compiler side can still be modeled
 as evaluation-shaped construction because it consumes closed resource metadata, DI/compiler-world products, HTML IR, and
 lowered instruction rows. Controller activation, nested template-controller view creation, repeated view instances, and
@@ -85,8 +92,18 @@ determine which member surface is visible, while leaving unsupported expression 
   definition. Argument-sensitive overload choice, `fromView`, custom expression plugins, and richer collection
   prototype semantics should stay explicit until the binding direction or plugin-specific substrate supplies the
   missing facts.
+- Binding direction is part of expression meaning. Promise `then`/`catch` value expressions are from-view write
+  targets that seed scoped locals; child interpolations read those locals afterward. Future expression inquiry should
+  carry that direction instead of evaluating every parse as an ordinary read.
 - Synthetic union shapes preserve only members and secondary type references common to every branch. If a future inquiry
   needs branch-aware completions, add an explicit answer continuation instead of weakening the union product into a bag
   of possible names.
+- Template-controller branch narrowing is deliberately explicit and local. The current closed branch profile handles
+  scope-name truthiness, loose nullish comparisons, simple boolean negation, truthy `&&`, falsy `||`, and adjacent
+  `else` negative narrowing. Broader control-flow analysis should continue to land as named semantic profiles rather
+  than as accidental evaluator behavior.
+- Promise template-controller result slots now cross from runtime activation semantics back into TypeChecker-backed
+  expression scopes: `then="value"` receives the awaited `promise.bind` value type, while `catch="reason"` receives
+  `unknown` because JavaScript promise rejection is not statically typed by `Promise<T>`.
 - Repeat rest patterns stay open until the product has a precise array/object rest taxonomy. A destructured local gets
   a type when the runtime-shaped path to that local is known.

@@ -10,14 +10,14 @@ import type {
 } from '../resources/attribute-pattern-definition.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
-import type { BindingCommandExecutableReference } from './binding-command-execution.js';
+import type { BindingCommandExecutableReference } from './binding-command-reference.js';
 import type { HtmlAttributeReference, HtmlNodeReference } from './html-ir.js';
 import {
   TemplateCompilerServiceKind,
   TemplateCompilerServiceReference,
   type TemplateBindableReference,
   type TemplateVisibleResource,
-} from './compiler-world.js';
+} from './compiler-world-reference.js';
 
 export const enum AttributeSyntaxKind {
   /** Attribute name did not match an Aurelia attribute pattern. */

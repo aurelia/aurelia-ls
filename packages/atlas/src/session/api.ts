@@ -30,6 +30,10 @@ export interface Orientation {
 export interface OrientationGuide {
   /** Stable package API calls available after orientation. */
   readonly entrypoints: OrientationEntrypoints;
+  /** Local package scripts that are useful before opening source files. */
+  readonly scripts: readonly OrientationScriptGuide[];
+  /** Compact docs that preserve current intent and should be read after orient when context allows. */
+  readonly docs: readonly OrientationDocumentGuide[];
   /** Shared request and answer lanes every lens uses. */
   readonly contract: OrientationContractGuide;
   /** Runtime-implemented lenses and compact projection ids. */
@@ -90,6 +94,20 @@ export interface OrientationEntrypoints {
   readonly follow: "createApi().follow(continuation)";
   readonly frameworkEmulationSymbolsReport: "createApi().frameworkEmulationSymbolsReport()";
   readonly selfCheck: "createApi().selfCheck()";
+}
+
+/** Compact package-script row for first-call orientation. */
+export interface OrientationScriptGuide {
+  readonly id: string;
+  readonly command: string;
+  readonly summary: string;
+}
+
+/** Compact documentation pointer for follow-up orientation. */
+export interface OrientationDocumentGuide {
+  readonly id: string;
+  readonly path: string;
+  readonly summary: string;
 }
 
 /** Shared request and answer lanes every lens uses. */
@@ -258,6 +276,8 @@ function createOrientationGuide(
       frameworkEmulationSymbolsReport: "createApi().frameworkEmulationSymbolsReport()",
       selfCheck: "createApi().selfCheck()",
     },
+    scripts: orientationScripts(),
+    docs: orientationDocs(),
     contract: {
       requestFields: ["lens", "locus?", "subject?", "projection?", "filters?", "budget?", "page?"],
       answerFields: ["schemaVersion", "inquiry", "outcome", "summary", "value?", "basis", "evidence", "openSeams", "page?", "continuations"],
@@ -291,6 +311,88 @@ function createOrientationGuide(
     })),
     sourceProject: sourceProjectGuide(status.world.sourceProject),
   };
+}
+
+function orientationDocs(): readonly OrientationDocumentGuide[] {
+  return [
+    {
+      id: "repo.agents",
+      path: "AGENTS.md",
+      summary:
+        "Repo-level agent policy: Atlas-first workflow, semantic-runtime ownership, external checkout boundary, and commit style.",
+    },
+    {
+      id: "atlas.agent-handoff",
+      path: "packages/atlas/workbench/agent-handoff.md",
+      summary:
+        "Compact post-orient handoff for future sessions: fast lanes, product architecture costs, mapping policy, and current pressure pointers.",
+    },
+    {
+      id: "atlas.readme",
+      path: "packages/atlas/README.md",
+      summary:
+        "Atlas package overview and high-level inquiry/substrate ownership notes.",
+    },
+    {
+      id: "atlas.framework-workbench",
+      path: "packages/atlas/src/framework/WORKBENCH.md",
+      summary:
+        "Near-work framework-emulation notes and pressure pointers for Atlas framework lenses.",
+    },
+    {
+      id: "semantic-runtime.workbench",
+      path: "packages/semantic-runtime/src/WORKBENCH.md",
+      summary:
+        "Semantic-runtime workbench notes for the current product substrate.",
+    },
+    {
+      id: "semantic-runtime.controller-binding-lifecycle",
+      path: "packages/semantic-runtime/src/WORKBENCH-controller-binding-lifecycle.md",
+      summary:
+        "Durable controller, binding, observer-locator, target-operation, and recursive hydration pressure notes.",
+    },
+  ];
+}
+
+function orientationScripts(): readonly OrientationScriptGuide[] {
+  return [
+    {
+      id: "orient",
+      command: "pnpm --filter @aurelia-ls/atlas orient",
+      summary:
+        "Print this live orientation bundle through the auto-starting session API.",
+    },
+    {
+      id: "pressure:self",
+      command: "pnpm --filter @aurelia-ls/atlas pressure:self",
+      summary:
+        "Print Atlas class, function, and high-axis-pressure rows before maintenance refactors.",
+    },
+    {
+      id: "pressure:product-architecture",
+      command: "pnpm --filter @aurelia-ls/atlas pressure:product-architecture",
+      summary:
+        "Print semantic-runtime structure pressure and call-backed function pressure before product cleanup passes.",
+    },
+    {
+      id: "profile:product-architecture",
+      command: "pnpm --filter @aurelia-ls/atlas profile:product-architecture",
+      summary:
+        "Profile structure, core, symbol, and full product.architecture lanes before cache or split work.",
+    },
+    {
+      id: "report:framework-emulation",
+      command: "pnpm --filter @aurelia-ls/atlas report:framework-emulation",
+      summary:
+        "Regenerate the deterministic StandardConfiguration/framework emulation Markdown report.",
+    },
+    {
+      id: "self-check",
+      command: "pnpm --filter @aurelia-ls/atlas self-check",
+      summary:
+        "Validate the live inquiry surface map, contracted lenses, continuations, and answer invariants.",
+    },
+  ];
 }
 
 function orientationCapabilityMoves(): readonly OrientationCapabilityMove[] {
@@ -403,6 +505,48 @@ function orientationCapabilityMoves(): readonly OrientationCapabilityMove[] {
       },
     },
     {
+      id: "product.architecture",
+      family: "product",
+      summary:
+        "Inspect semantic-runtime areas, modules, declarations, implementation bodies, imports, checker-backed calls, and symbol coupling.",
+      ask: {
+        lens: LensId.ProductArchitecture,
+        locus: RepoRootLocus,
+        projection: "summary",
+        budget: { rows: 40, evidencePerSubject: 3 },
+      },
+    },
+    {
+      id: "product.architecture-profile",
+      family: "product",
+      summary:
+        "Profile full cold product.architecture phase costs; use profile:product-architecture for all lanes.",
+      ask: {
+        lens: LensId.ProductArchitecture,
+        locus: RepoRootLocus,
+        projection: "profile",
+        budget: { evidencePerSubject: 20 },
+      },
+    },
+    {
+      id: "product.architecture-pressure",
+      family: "product",
+      summary:
+        "Inspect semantic-runtime function call pressure rows; use pressure:product-architecture for the broader structure/function bundle.",
+      ask: {
+        lens: LensId.ProductArchitecture,
+        locus: RepoRootLocus,
+        projection: "functions",
+        filters: {
+          minLineCount: 35,
+          minCallSiteCount: 5,
+          minCrossAreaCallSiteCount: 2,
+          orderBy: "crossAreaCallSiteCount",
+        },
+        budget: { rows: 30, evidencePerSubject: 2 },
+      },
+    },
+    {
       id: "atlas.self",
       family: "self",
       summary:
@@ -424,6 +568,19 @@ function orientationCapabilityMoves(): readonly OrientationCapabilityMove[] {
         locus: RepoRootLocus,
         projection: "recipes",
         budget: { rows: 12, evidencePerSubject: 3 },
+      },
+    },
+    {
+      id: "atlas.self-pressure",
+      family: "self",
+      summary:
+        "Inspect high source-backed Atlas axis pressure before maintenance refactors.",
+      ask: {
+        lens: LensId.AtlasSelf,
+        locus: RepoRootLocus,
+        projection: "axis-pressure",
+        filters: { pressure: "high" },
+        budget: { rows: 12, evidencePerSubject: 2 },
       },
     },
   ];

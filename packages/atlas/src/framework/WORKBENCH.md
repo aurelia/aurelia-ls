@@ -1,6 +1,6 @@
 # Atlas Framework Workbench
 
-This is the live ledger for long-running Atlas framework work. Keep it short enough that a future agent will read it.
+This is the near-work note for Atlas framework work. Keep it short enough that a future agent will read it.
 Stable ownership belongs in [README.md](README.md), runtime lens details belong in
 [../inquiry/runtime/README.md](../inquiry/runtime/README.md), and generated evidence belongs in
 [../../workbench/emulation-symbols.md](../../workbench/emulation-symbols.md).
@@ -33,6 +33,11 @@ touches most framework surfaces; it is not the ontology.
   Atlas projections, not from compat-style assertions over today's row shapes.
 - `atlas.self` is not an architectural judge. It exposes source-backed rows, enum/value-space pressure, route topology,
   continuations, modules, classes, and functions so maintainers can reason faster.
+- `product.architecture` is the product-side source map for semantic-runtime. Use its `area-dependencies`, `modules`,
+  `cycles`, `declarations`, `classes`, `functions`, `call-sites`, `call-dependencies`, `symbol-references`,
+  `symbol-dependencies`, and `profile` projections before manually spelunking semantic-runtime architecture pressure;
+  it should expose import coupling, checker-backed call flow, checker-backed runtime/type/value coupling, cold analysis
+  phase cost, and source surfaces, not decide the refactor.
 - Substantial Atlas behavior should prefer named classes, indexes, classifiers, graphs, registries, builders, and memos
   over broad object-literal surfaces. Atlas and TypeScript must be able to inspect Atlas itself.
 - Repeated row-family answers should use [../inquiry/paged-row-family.ts](../inquiry/paged-row-family.ts) and
@@ -73,14 +78,19 @@ touches most framework surfaces; it is not the ontology.
 - Rendering/hydration: [../inquiry/runtime/framework-rendering-hydration-flow.ts](../inquiry/runtime/framework-rendering-hydration-flow.ts),
   [../inquiry/runtime/framework-rendering-consequences.ts](../inquiry/runtime/framework-rendering-consequences.ts), and
   [../inquiry/runtime/framework-rendering-public-rows.ts](../inquiry/runtime/framework-rendering-public-rows.ts).
-  Current pressure: use compact overview rows before opening instruction/controller/binding detail families.
+  Current pressure: use compact overview rows before opening instruction/controller/binding detail families. For
+  controller detail, `framework.rendering:controller-creations` now exposes ordered `hydrationSteps` so renderer
+  handoffs such as `TemplateControllerRenderer` can be compared with semantic-runtime controller materialization before
+  reading raw source.
 - Resource runtime policy: [resources.ts](resources.ts) and
   [../inquiry/runtime/framework-materialization-lenses.ts](../inquiry/runtime/framework-materialization-lenses.ts).
   Resource catalog admission is not resource instance lifetime.
 - Observation and TypeChecker handoff: [../inquiry/runtime/framework-observation-lenses.ts](../inquiry/runtime/framework-observation-lenses.ts),
   [../inquiry/runtime/framework-observation-internals.ts](../inquiry/runtime/framework-observation-internals.ts), and
   [../../workbench/emulation-symbols.md](../../workbench/emulation-symbols.md). Current handoff rows are navigation
-  boundaries, not a complete binding/reactivity behavior graph.
+  boundaries, not a complete binding/reactivity behavior graph. `pressure:self` still points at watcher/effect/
+  collection classifiers here; treat those as framework-semantic pressure and read the Aurelia observation flow before
+  doing table-only cleanup.
 - auLink bridge pressure: [../../workbench/aulink-mirror-workbench.md](../../workbench/aulink-mirror-workbench.md) and
   [../../workbench/bridge-usage-navigation-workbench.md](../../workbench/bridge-usage-navigation-workbench.md). Re-run
   live bridge projections before treating older probe notes as current product/framework mirror state.
@@ -109,6 +119,11 @@ touches most framework surfaces; it is not the ontology.
 
 ## Near Work
 
+- Before choosing Atlas maintenance work, run
+  `pnpm --filter @aurelia-ls/atlas pressure:self`; before choosing semantic-runtime cleanup pressure, run
+  `pnpm --filter @aurelia-ls/atlas pressure:product-architecture`.
+  For the compact cross-cutting handoff, read
+  [../../workbench/agent-handoff.md](../../workbench/agent-handoff.md).
 1. Re-run `bridge.aulink` usage comparison after the semantic-runtime TemplateCompilerService refactor.
    Inspect `usage-comparison`, `member-surface`, and `usage-consumers` for `TemplateCompiler`, `IAttributeParser`,
    `IBindingCommandResolver`, `Rendering`, and `Container`.
@@ -120,8 +135,9 @@ touches most framework surfaces; it is not the ontology.
 3. Keep `framework.composition:emulation` as the compact semantic-runtime obligation map, but avoid encoding the final
    semantic-runtime ontology there. If semantic-runtime product metadata or auLink evidence can carry the bridge, use
    that instead.
-4. Before adding cache/warmup, profile the live query. If a derived row family is repeatedly slow, ask whether it should
-   become a stable atom producer with exact row keys.
+4. Before adding cache/warmup, profile the live query with `product.architecture:profile` or
+   `pnpm --filter @aurelia-ls/atlas profile:product-architecture`. Compare structure, core, symbol, and full lanes; if
+   a derived row family is repeatedly slow, ask whether it should become a stable atom producer with exact row keys.
 5. Keep docs tight. If this workbench starts accumulating file-by-file implementation descriptions again, move stable
    ownership into the relevant README and leave only active pressure plus evidence pointers here.
 

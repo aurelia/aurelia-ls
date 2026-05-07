@@ -8,6 +8,10 @@ open seams without executing user code.
 
 The evaluator is intentionally not an Aurelia recognizer. Resource, DI, template, and configuration materializers
 consume evaluator results and decide which kernel claims or materialized products are warranted.
+Product-specific passes may provide an evaluation policy for expression-statement ownership. The Aurelia configuration
+pass uses that hook to suppress source-noise seams for top-level facade setup chains rooted in an imported `Aurelia`
+constructor, but the generic evaluator still does not know Aurelia vocabulary. Configuration recognition owns the
+actual `new Aurelia(...).register(...).app(...).start()` facts.
 
 It is also not the TypeChecker projection layer. Evaluation interprets source/module/value flow; `../type-system`
 projects static type and member surfaces from the checker for template/expression inquiry.
@@ -70,3 +74,6 @@ are worth materializing.
 - Template compilation currently uses evaluation-shaped facts until compiled-template/render-row assembly. After that,
   controller activation and template expression member surfaces should cross into the TypeChecker projection lane unless
   a future SSR/SSG materializer explicitly models more runtime value state.
+- Expression reads and writes are different products. A `from-view` template-controller value such as `then="note"` is
+  a write target that introduces a child-scope slot for later reads; sweeping every parse as a read should continue to
+  show that pressure until expression inquiry carries binding direction explicitly.

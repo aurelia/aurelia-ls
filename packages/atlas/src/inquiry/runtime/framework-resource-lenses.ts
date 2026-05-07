@@ -119,7 +119,9 @@ export interface FrameworkResourceConvergenceRow {
   readonly materializationPhases: readonly string[];
   readonly materializationRelations: readonly string[];
   readonly openReasons: readonly string[];
+  readonly carrierSourceRole: string;
   readonly source: SourceRange;
+  readonly declarationSource: SourceRange | null;
   readonly summary: string;
 }
 
@@ -312,7 +314,9 @@ function convergenceRow(
       materializationSites.map((site) => site.relation),
     ),
     openReasons,
+    carrierSourceRole: carrierSourceRole(carrier.carrierKind),
     source: carrier.source,
+    declarationSource: carrier.declarationSource,
     summary: convergenceSummary(carrier, lanes, publicExportNames, admissionRows),
   };
 }
@@ -607,10 +611,24 @@ function resourceContinuations(
       builder.source(
         "source",
         row.source,
-        "Inspect the source carrier that defines this resource.",
-        "Resource convergence row to source carrier.",
+        `Inspect the exact ${row.carrierSourceRole} that defines this resource.`,
+        "Resource convergence row to exact source carrier.",
       ),
     );
+    if (
+      row.declarationSource !== null &&
+      !sameSourceRange(row.source, row.declarationSource)
+    ) {
+      continuations.push(
+        builder.source(
+          "declaration-source",
+          row.declarationSource,
+          "Inspect the backing declaration or source-export header for this resource.",
+          "Resource convergence row to backing declaration source.",
+          { priority: ContinuationPriority.Secondary },
+        ),
+      );
+    }
     continuations.push(
       semanticRoute.continuation(
         FrameworkSemanticRoutes.ResourceToMaterializationResourceInstantiations,
@@ -701,6 +719,31 @@ function hasRenderingSyntaxProduct(row: FrameworkResourceConvergenceRow): boolea
       kind === FrameworkSyntaxProductKind.HandlesInstruction ||
       kind === FrameworkSyntaxProductKind.CreatesBinding,
   );
+}
+
+function carrierSourceRole(carrierKind: string): string {
+  switch (carrierKind) {
+    case "decorator":
+      return "decorator expression";
+    case "static-$au":
+      return "static $au definition initializer";
+    case "define-call":
+      return "resource define call";
+    case "attribute-pattern-create":
+      return "attribute-pattern create call";
+    case "renderer-helper":
+      return "renderer helper call";
+    default:
+      return "resource carrier";
+  }
+}
+
+function sameSourceRange(left: SourceRange, right: SourceRange): boolean {
+  return left.filePath === right.filePath &&
+    left.start.line === right.start.line &&
+    left.start.character === right.start.character &&
+    left.end.line === right.end.line &&
+    left.end.character === right.end.character;
 }
 
 function resourceConvergenceBasis(sourceProject: SourceProject): Basis {

@@ -5,7 +5,10 @@ import type {
   BindingScope,
   OverrideContext,
 } from './scope.js';
-import type { ControllerProduct } from './controller.js';
+import type {
+  ControllerProduct,
+  ViewFactory,
+} from './controller.js';
 
 /** Typed detail slots for configuration products used by later inquiry and compiler-world passes. */
 export const ConfigurationProductDetails = {
@@ -13,6 +16,11 @@ export const ConfigurationProductDetails = {
     KernelVocabulary.Configuration.Controller.key,
     'configuration.controller',
     'Runtime-shaped controller detail with children, bindings, scope, and resource/container links.',
+  ),
+  ViewFactory: defineProductDetailSlot<ViewFactory>(
+    KernelVocabulary.Configuration.ViewFactory.key,
+    'configuration.view-factory',
+    'Runtime IViewFactory detail that creates synthetic views from nested instruction sequences.',
   ),
   BindingContext: defineProductDetailSlot<BindingContext>(
     KernelVocabulary.Configuration.BindingContext.key,

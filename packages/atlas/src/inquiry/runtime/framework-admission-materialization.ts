@@ -17,6 +17,7 @@ import type { SourceProject } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 import {
   readFrameworkMaterializationIndex,
+  type FrameworkMaterializationIndex,
   type FrameworkMaterializationInstantiationRow,
 } from "./framework-materialization-lenses.js";
 import { type FrameworkResourceInstantiationRow } from "./framework-resource-materialization.js";
@@ -87,6 +88,29 @@ export interface FrameworkAdmissionMaterializationLinkRow {
   readonly summary: string;
 }
 
+type AdmissionMaterializationLinker = (
+  relationship: FrameworkAdmissionRelationshipRow,
+  materialization: FrameworkMaterializationIndex,
+) => readonly FrameworkAdmissionMaterializationLinkRow[];
+
+const materializationLinkersByAdmittedEndpointKind =
+  new Map<FrameworkRelationshipEndpointKind, AdmissionMaterializationLinker>([
+    [
+      FrameworkRelationshipEndpointKind.DiKey,
+      (relationship, materialization) =>
+        materialization.instantiations.flatMap((instantiation) =>
+          diLinkForInstantiation(relationship, instantiation),
+        ),
+    ],
+    [
+      FrameworkRelationshipEndpointKind.Resource,
+      (relationship, materialization) =>
+        materialization.resourceInstantiations.flatMap((resource) =>
+          resourceLinkForInstantiation(relationship, resource),
+        ),
+    ],
+  ]);
+
 /** Join admission relationships to materialization rows without projecting an answer. */
 export function readFrameworkAdmissionMaterializationLinks(
   /** Hot source project owned by the daemon. */
@@ -98,20 +122,9 @@ export function readFrameworkAdmissionMaterializationLinks(
 ): readonly FrameworkAdmissionMaterializationLinkRow[] {
   const materialization = readFrameworkMaterializationIndex(sourceProject);
   return relationships
-    .flatMap((relationship) => {
-      switch (relationship.to.kind) {
-        case FrameworkRelationshipEndpointKind.DiKey:
-          return materialization.instantiations.flatMap((instantiation) =>
-            diLinkForInstantiation(relationship, instantiation),
-          );
-        case FrameworkRelationshipEndpointKind.Resource:
-          return materialization.resourceInstantiations.flatMap((resource) =>
-            resourceLinkForInstantiation(relationship, resource),
-          );
-        default:
-          return [];
-      }
-    })
+    .flatMap((relationship) =>
+      materializationLinksForRelationship(relationship, materialization),
+    )
     .filter((row) => linkMatches(row, filters))
     .sort(
       (left, right) =>
@@ -121,6 +134,16 @@ export function readFrameworkAdmissionMaterializationLinks(
         left.materializationKind.localeCompare(right.materializationKind) ||
         left.materializationId.localeCompare(right.materializationId),
     );
+}
+
+function materializationLinksForRelationship(
+  relationship: FrameworkAdmissionRelationshipRow,
+  materialization: FrameworkMaterializationIndex,
+): readonly FrameworkAdmissionMaterializationLinkRow[] {
+  return materializationLinkersByAdmittedEndpointKind.get(relationship.to.kind)?.(
+    relationship,
+    materialization,
+  ) ?? [];
 }
 
 function diLinkForInstantiation(
@@ -140,30 +163,52 @@ function diLinkForInstantiation(
       admissionRelationshipId: relationship.id,
       admissionRelation: relationship.relation,
       associationKind: relationship.associationKind,
-      linkKind: FrameworkAdmissionMaterializationLinkKind.DiKeyInstantiation,
+      linkKind: diMaterializationLinkKind(),
       matchBasis,
       admittedTarget: relationship.to,
       materializedTarget: instantiation.provider,
       materializationId: instantiation.id,
       materializationKind: instantiation.routeKind,
       routeId: instantiation.routeId,
-      materializationSiteKinds: instantiation.constructionSites.map(
-        (site) => site.siteKind,
-      ),
-      materializationRelations: [
-        FrameworkRelationshipRelation.InstantiatesKey,
-        ...unique(instantiation.constructionSites.map((site) => site.relation)),
-      ],
-      materializationMechanisms: unique(
-        instantiation.constructionSites.map((site) => site.mechanism),
-      ),
-      materializationPhases: [FrameworkRelationshipPhase.Materialization],
+      materializationSiteKinds: diMaterializationSiteKinds(instantiation),
+      materializationRelations: diMaterializationRelations(instantiation),
+      materializationMechanisms: diMaterializationMechanisms(instantiation),
+      materializationPhases: diMaterializationPhases(),
       closure: instantiation.closure,
       source: relationship.source,
       materializationSource: instantiation.source,
       summary: `${relationship.exportName} admits DI key ${relationship.to.name}; ${instantiation.summary}`,
     },
   ];
+}
+
+function diMaterializationLinkKind(): FrameworkAdmissionMaterializationLinkKind {
+  return FrameworkAdmissionMaterializationLinkKind.DiKeyInstantiation;
+}
+
+function diMaterializationSiteKinds(
+  instantiation: FrameworkMaterializationInstantiationRow,
+): readonly string[] {
+  return instantiation.constructionSites.map((site) => site.siteKind);
+}
+
+function diMaterializationRelations(
+  instantiation: FrameworkMaterializationInstantiationRow,
+): readonly FrameworkRelationshipRelation[] {
+  return [
+    FrameworkRelationshipRelation.InstantiatesKey,
+    ...unique(instantiation.constructionSites.map((site) => site.relation)),
+  ];
+}
+
+function diMaterializationMechanisms(
+  instantiation: FrameworkMaterializationInstantiationRow,
+): readonly FrameworkRelationshipMechanism[] {
+  return unique(instantiation.constructionSites.map((site) => site.mechanism));
+}
+
+function diMaterializationPhases(): readonly FrameworkRelationshipPhase[] {
+  return [FrameworkRelationshipPhase.Materialization];
 }
 
 function diMatchBasis(

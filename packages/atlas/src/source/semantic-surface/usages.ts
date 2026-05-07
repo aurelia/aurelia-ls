@@ -308,7 +308,7 @@ function countBy<T>(
   values: readonly T[],
   keyFor: (value: T) => string,
 ): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
+  const counts: Record<string, number> = Object.create(null) as Record<string, number>;
   for (const value of values) {
     const key = keyFor(value);
     counts[key] = (counts[key] ?? 0) + 1;

@@ -1,0 +1,20 @@
+<main>
+  <header>
+    <h1>Harbor & Field</h1>
+    <p>${productCount} seasonal goods ready to ship</p>
+    <p if.bind="isLoading">Refreshing catalog...</p>
+    <section promise.bind="launchNote">
+      <p pending>Checking fulfillment note...</p>
+      <p then="note">${note}</p>
+      <p catch="reason">${reason}</p>
+    </section>
+    <cart-summary
+      count.bind="cartCount"
+      data-cart-count.bind="cartCount"
+      aria-label.attr="'Cart contains ' + cartCount + ' items'">
+    </cart-summary>
+  </header>
+
+  <product-list></product-list>
+  <checkout-form></checkout-form>
+</main>

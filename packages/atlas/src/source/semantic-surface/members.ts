@@ -15,6 +15,13 @@ export type TypeScriptMemberDeclarationKindId =
   | "parameter-property"
   | "unknown";
 
+/** Publicness lane for class/interface member surfaces. */
+export type TypeScriptMemberAccessKindId =
+  | "public"
+  | "protected"
+  | "private"
+  | "convention-private";
+
 export const TypeScriptMemberSlotKind = {
   Constructor: "constructor",
   Method: "method",
@@ -29,6 +36,7 @@ export interface TypeScriptMemberSurface {
   readonly name: string;
   readonly slotKind: TypeScriptMemberSlotKindId;
   readonly declarationKind: TypeScriptMemberDeclarationKindId;
+  readonly accessKind: TypeScriptMemberAccessKindId;
 }
 
 export function memberSurfacesForDeclaration(
@@ -46,6 +54,7 @@ export function memberSurfacesForDeclaration(
         name,
         slotKind,
         declarationKind: memberDeclarationKind(node),
+        accessKind: memberAccessKind(node, name),
       };
     })
     .filter((row): row is TypeScriptMemberSurface => row !== null);
@@ -120,6 +129,23 @@ export function memberDeclarationKind(
     return "parameter-property";
   }
   return memberSlotKindForDeclaration(member) ?? "unknown";
+}
+
+export function memberAccessKind(
+  member: ts.Node,
+  name: string,
+): TypeScriptMemberAccessKindId {
+  const flags = ts.getCombinedModifierFlags(member as ts.Declaration);
+  if ((flags & ts.ModifierFlags.Private) !== 0) {
+    return "private";
+  }
+  if ((flags & ts.ModifierFlags.Protected) !== 0) {
+    return "protected";
+  }
+  if (name.startsWith("_")) {
+    return "convention-private";
+  }
+  return "public";
 }
 
 export function isParameterProperty(parameter: ts.ParameterDeclaration): boolean {

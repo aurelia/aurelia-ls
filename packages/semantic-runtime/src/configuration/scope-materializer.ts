@@ -6,6 +6,7 @@ import {
 } from '../kernel/evidence.js';
 import type {
   AddressHandle,
+  IdentityHandle,
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
@@ -30,15 +31,19 @@ import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { ConfigurationProductDetails } from './product-details.js';
 import {
   BindingContext,
-  BindingContextSlotInput,
+  BindingContextSlotDraft,
   BindingScope,
-  BindingScopeConstructionInput,
+  BindingScopeConstructionRequest,
   OverrideContext,
   type BindingContextSlotField,
   type BindingContextField,
   type BindingScopeField,
 } from './scope.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
+import type {
+  CheckerTypeMember,
+  CheckerTypeShape,
+} from '../type-system/type-shape.js';
 
 export class BindingScopeConstructionEmission {
   constructor(
@@ -57,6 +62,42 @@ class BindingScopeSourceSet {
   ) {}
 }
 
+class BindingScopeHandleSet {
+  constructor(
+    readonly bindingContextProductHandle: ProductHandle,
+    readonly bindingContextIdentityHandle: IdentityHandle,
+    readonly overrideContextProductHandle: ProductHandle,
+    readonly overrideContextIdentityHandle: IdentityHandle,
+    readonly scopeProductHandle: ProductHandle,
+    readonly scopeIdentityHandle: IdentityHandle,
+  ) {}
+
+  get materializedProductHandles(): readonly ProductHandle[] {
+    return [
+      this.bindingContextProductHandle,
+      this.overrideContextProductHandle,
+      this.scopeProductHandle,
+    ];
+  }
+}
+
+class BindingScopeProducts {
+  constructor(
+    readonly bindingContext: BindingContext,
+    readonly overrideContext: OverrideContext,
+    readonly scope: BindingScope,
+  ) {}
+
+  toEmission(records: readonly KernelStoreRecord[]): BindingScopeConstructionEmission {
+    return new BindingScopeConstructionEmission(
+      this.bindingContext,
+      this.overrideContext,
+      this.scope,
+      records,
+    );
+  }
+}
+
 /** Materializes runtime Scope, BindingContext, and OverrideContext products for controller/expression lookup. */
 export class BindingScopeMaterializer {
   constructor(
@@ -64,7 +105,7 @@ export class BindingScopeMaterializer {
     readonly store: KernelStore,
   ) {}
 
-  construct(input: BindingScopeConstructionInput): BindingScopeConstructionEmission {
+  construct(input: BindingScopeConstructionRequest): BindingScopeConstructionEmission {
     const emission = this.recordsForScope(input);
     if (emission.records.length > 0) {
       this.store.commit(new KernelStoreBatch(emission.records, `binding-scope:${input.localKey}`));
@@ -79,19 +120,53 @@ export class BindingScopeMaterializer {
     this.store.productDetails.add(ConfigurationProductDetails.BindingScope, emission.scope.productHandle, emission.scope);
   }
 
-  private recordsForScope(input: BindingScopeConstructionInput): BindingScopeConstructionEmission {
+  private recordsForScope(input: BindingScopeConstructionRequest): BindingScopeConstructionEmission {
     const records: KernelStoreRecord[] = [];
     const local = input.localKey;
     const source = this.recordsForSource(local, input.sourceAddressHandle);
     records.push(...source.records);
 
-    const bindingContextProductHandle = this.store.handles.product(`binding-context:${local}`);
-    const bindingContextIdentityHandle = this.store.handles.identity(`binding-context:${local}`);
-    const overrideContextProductHandle = this.store.handles.product(`override-context:${local}`);
-    const overrideContextIdentityHandle = this.store.handles.identity(`override-context:${local}`);
-    const scopeProductHandle = this.store.handles.product(`binding-scope:${local}`);
-    const scopeIdentityHandle = this.store.handles.identity(`binding-scope:${local}`);
+    const handles = this.handlesForScope(local);
+    const products = this.productsForScope(input, handles, source);
+    const claims = this.recordsForClaims(
+      local,
+      input,
+      products.bindingContext,
+      products.overrideContext,
+      products.scope,
+      source.provenanceHandle,
+    );
+    records.push(...claims);
+    records.push(
+      ...this.identityRecordsForScope(local, input, handles, source),
+      ...this.materializedProductRecordsForScope(handles, source),
+      new MaterializationRecord(
+        this.store.handles.materialization(`binding-scope:${local}`),
+        handles.scopeIdentityHandle,
+        handles.materializedProductHandles,
+        claims.map((claim) => claim.handle),
+      ),
+    );
 
+    return products.toEmission(records);
+  }
+
+  private handlesForScope(local: string): BindingScopeHandleSet {
+    return new BindingScopeHandleSet(
+      this.store.handles.product(`binding-context:${local}`),
+      this.store.handles.identity(`binding-context:${local}`),
+      this.store.handles.product(`override-context:${local}`),
+      this.store.handles.identity(`override-context:${local}`),
+      this.store.handles.product(`binding-scope:${local}`),
+      this.store.handles.identity(`binding-scope:${local}`),
+    );
+  }
+
+  private productsForScope(
+    input: BindingScopeConstructionRequest,
+    handles: BindingScopeHandleSet,
+    source: BindingScopeSourceSet,
+  ): BindingScopeProducts {
     const bindingContextSlots = this.contextSlotsFor(
       input.bindingContextSlots,
       input.bindingContextType,
@@ -102,10 +177,37 @@ export class BindingScopeMaterializer {
       input.overrideContextType,
       source.provenanceHandle,
     );
+    const bindingContext = this.bindingContextForScope(
+      input,
+      handles,
+      source,
+      bindingContextSlots,
+    );
+    const overrideContext = this.overrideContextForScope(
+      input,
+      handles,
+      source,
+      overrideContextSlots,
+    );
+    const scope = this.bindingScopeForContexts(
+      input,
+      handles,
+      source,
+      bindingContext,
+      overrideContext,
+    );
+    return new BindingScopeProducts(bindingContext, overrideContext, scope);
+  }
 
-    const bindingContext = new BindingContext(
-      bindingContextProductHandle,
-      bindingContextIdentityHandle,
+  private bindingContextForScope(
+    input: BindingScopeConstructionRequest,
+    handles: BindingScopeHandleSet,
+    source: BindingScopeSourceSet,
+    bindingContextSlots: readonly BindingContextSlotDraft[],
+  ): BindingContext {
+    return new BindingContext(
+      handles.bindingContextProductHandle,
+      handles.bindingContextIdentityHandle,
       input.bindingContextKind,
       input.ownerProductHandle,
       input.bindingContextType,
@@ -119,10 +221,18 @@ export class BindingScopeMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
-    const overrideContext = new OverrideContext(
-      overrideContextProductHandle,
-      overrideContextIdentityHandle,
-      scopeProductHandle,
+  }
+
+  private overrideContextForScope(
+    input: BindingScopeConstructionRequest,
+    handles: BindingScopeHandleSet,
+    source: BindingScopeSourceSet,
+    overrideContextSlots: readonly BindingContextSlotDraft[],
+  ): OverrideContext {
+    return new OverrideContext(
+      handles.overrideContextProductHandle,
+      handles.overrideContextIdentityHandle,
+      handles.scopeProductHandle,
       input.overrideContextType,
       overrideContextSlots.map((slot) => slot.toSlot()),
       source.sourceAddressHandle,
@@ -134,9 +244,18 @@ export class BindingScopeMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
-    const scope = new BindingScope(
-      scopeProductHandle,
-      scopeIdentityHandle,
+  }
+
+  private bindingScopeForContexts(
+    input: BindingScopeConstructionRequest,
+    handles: BindingScopeHandleSet,
+    source: BindingScopeSourceSet,
+    bindingContext: BindingContext,
+    overrideContext: OverrideContext,
+  ): BindingScope {
+    return new BindingScope(
+      handles.scopeProductHandle,
+      handles.scopeIdentityHandle,
       input.parent,
       bindingContext,
       overrideContext,
@@ -151,108 +270,131 @@ export class BindingScopeMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
+  }
 
-    const claims = this.recordsForClaims(local, input, bindingContext, overrideContext, scope, source.provenanceHandle);
-    records.push(...claims);
-    records.push(
+  private identityRecordsForScope(
+    local: string,
+    input: BindingScopeConstructionRequest,
+    handles: BindingScopeHandleSet,
+    source: BindingScopeSourceSet,
+  ): readonly ConfigurationIdentity[] {
+    return [
       new ConfigurationIdentity(
-        bindingContextIdentityHandle,
+        handles.bindingContextIdentityHandle,
         KernelVocabulary.Configuration.BindingContext.key,
         input.ownerIdentityHandle,
         source.sourceAddressHandle,
         `binding-context:${local}`,
       ),
       new ConfigurationIdentity(
-        overrideContextIdentityHandle,
+        handles.overrideContextIdentityHandle,
         KernelVocabulary.Configuration.OverrideContext.key,
-        scopeIdentityHandle,
+        handles.scopeIdentityHandle,
         source.sourceAddressHandle,
         `override-context:${local}`,
       ),
       new ConfigurationIdentity(
-        scopeIdentityHandle,
+        handles.scopeIdentityHandle,
         KernelVocabulary.Configuration.BindingScope.key,
         input.ownerIdentityHandle,
         source.sourceAddressHandle,
         `binding-scope:${local}`,
       ),
-      new MaterializedProduct(
-        bindingContextProductHandle,
-        KernelVocabulary.Configuration.BindingContext.key,
-        bindingContextIdentityHandle,
-        source.sourceAddressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializedProduct(
-        overrideContextProductHandle,
-        KernelVocabulary.Configuration.OverrideContext.key,
-        overrideContextIdentityHandle,
-        source.sourceAddressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializedProduct(
-        scopeProductHandle,
-        KernelVocabulary.Configuration.BindingScope.key,
-        scopeIdentityHandle,
-        source.sourceAddressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializationRecord(
-        this.store.handles.materialization(`binding-scope:${local}`),
-        scopeIdentityHandle,
-        [
-          bindingContextProductHandle,
-          overrideContextProductHandle,
-          scopeProductHandle,
-        ],
-        claims.map((claim) => claim.handle),
-      ),
-    );
+    ];
+  }
 
-    return new BindingScopeConstructionEmission(bindingContext, overrideContext, scope, records);
+  private materializedProductRecordsForScope(
+    handles: BindingScopeHandleSet,
+    source: BindingScopeSourceSet,
+  ): readonly MaterializedProduct[] {
+    return [
+      new MaterializedProduct(
+        handles.bindingContextProductHandle,
+        KernelVocabulary.Configuration.BindingContext.key,
+        handles.bindingContextIdentityHandle,
+        source.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+      new MaterializedProduct(
+        handles.overrideContextProductHandle,
+        KernelVocabulary.Configuration.OverrideContext.key,
+        handles.overrideContextIdentityHandle,
+        source.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+      new MaterializedProduct(
+        handles.scopeProductHandle,
+        KernelVocabulary.Configuration.BindingScope.key,
+        handles.scopeIdentityHandle,
+        source.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+    ];
   }
 
   private contextSlotsFor(
-    explicitSlots: readonly BindingContextSlotInput[],
-    contextType: BindingScopeConstructionInput['bindingContextType'],
+    explicitSlots: readonly BindingContextSlotDraft[],
+    contextType: BindingScopeConstructionRequest['bindingContextType'],
     scopeProvenanceHandle: ProvenanceHandle,
-  ): readonly BindingContextSlotInput[] {
-    const slotsByName = new Map<string, BindingContextSlotInput>();
+  ): readonly BindingContextSlotDraft[] {
+    const slotsByName = this.explicitContextSlotsByName(explicitSlots);
+    const typeShape = this.typeShapeForContext(contextType);
+    if (typeShape != null) {
+      this.addTypeShapeSlots(slotsByName, typeShape, scopeProvenanceHandle);
+    }
+    return [...slotsByName.values()];
+  }
+
+  private explicitContextSlotsByName(
+    explicitSlots: readonly BindingContextSlotDraft[],
+  ): Map<string, BindingContextSlotDraft> {
+    const slotsByName = new Map<string, BindingContextSlotDraft>();
     for (const slot of explicitSlots) {
       slotsByName.set(slot.name, slot);
     }
+    return slotsByName;
+  }
 
-    if (contextType?.productHandle == null) {
-      return [...slotsByName.values()];
-    }
+  private typeShapeForContext(
+    contextType: BindingScopeConstructionRequest['bindingContextType'],
+  ): CheckerTypeShape | null {
+    return contextType?.productHandle == null
+      ? null
+      : this.store.productDetails.read(TypeSystemProductDetails.TypeShape, contextType.productHandle);
+  }
 
-    const typeShape = this.store.productDetails.read(TypeSystemProductDetails.TypeShape, contextType.productHandle);
-    if (typeShape == null) {
-      return [...slotsByName.values()];
-    }
-
+  private addTypeShapeSlots(
+    slotsByName: Map<string, BindingContextSlotDraft>,
+    typeShape: CheckerTypeShape,
+    scopeProvenanceHandle: ProvenanceHandle,
+  ): void {
     for (const member of typeShape.members) {
       if (slotsByName.has(member.name)) {
         continue;
       }
-      const product = this.store.readProduct(member.productHandle);
-      const provenanceHandle = product?.provenanceHandle ?? scopeProvenanceHandle;
-      slotsByName.set(member.name, new BindingContextSlotInput(
-        member.name,
-        member.identityHandle,
-        member.productHandle,
-        member.valueType,
-        member.sourceAddressHandle,
-        compactFieldProvenance<BindingContextSlotField>([
-          new FieldProvenance('name', provenanceHandle),
-          new FieldProvenance('target', provenanceHandle),
-          member.valueType == null ? null : new FieldProvenance('targetType', provenanceHandle),
-          member.sourceAddressHandle == null ? null : new FieldProvenance('source', provenanceHandle),
-        ]),
-      ));
+      slotsByName.set(member.name, this.slotDraftForTypeMember(member, scopeProvenanceHandle));
     }
+  }
 
-    return [...slotsByName.values()];
+  private slotDraftForTypeMember(
+    member: CheckerTypeMember,
+    scopeProvenanceHandle: ProvenanceHandle,
+  ): BindingContextSlotDraft {
+    const product = this.store.readProduct(member.productHandle);
+    const provenanceHandle = product?.provenanceHandle ?? scopeProvenanceHandle;
+    return new BindingContextSlotDraft(
+      member.name,
+      member.identityHandle,
+      member.productHandle,
+      member.valueType,
+      member.sourceAddressHandle,
+      compactFieldProvenance<BindingContextSlotField>([
+        new FieldProvenance('name', provenanceHandle),
+        new FieldProvenance('target', provenanceHandle),
+        member.valueType == null ? null : new FieldProvenance('targetType', provenanceHandle),
+        member.sourceAddressHandle == null ? null : new FieldProvenance('source', provenanceHandle),
+      ]),
+    );
   }
 
   private recordsForSource(local: string, addressHandle: AddressHandle | null): BindingScopeSourceSet {
@@ -276,13 +418,28 @@ export class BindingScopeMaterializer {
 
   private recordsForClaims(
     local: string,
-    input: BindingScopeConstructionInput,
+    input: BindingScopeConstructionRequest,
     bindingContext: BindingContext,
     overrideContext: OverrideContext,
     scope: BindingScope,
     provenanceHandle: ProvenanceHandle,
   ): readonly SemanticClaim[] {
-    const claims: SemanticClaim[] = [
+    return [
+      ...this.contextClaimsForScope(local, bindingContext, overrideContext, scope, provenanceHandle),
+      ...nullableClaim(this.parentClaimForScope(local, input, scope, provenanceHandle)),
+      ...nullableClaim(this.controllerOwnerClaimForScope(local, input, scope, provenanceHandle)),
+      ...this.scopeEffectOwnerClaimsForScope(local, input, scope, provenanceHandle),
+    ];
+  }
+
+  private contextClaimsForScope(
+    local: string,
+    bindingContext: BindingContext,
+    overrideContext: OverrideContext,
+    scope: BindingScope,
+    provenanceHandle: ProvenanceHandle,
+  ): readonly SemanticClaim[] {
+    return [
       new SemanticClaim(
         this.store.handles.claim(`binding-scope:${local}:uses-binding-context`),
         scope.productHandle,
@@ -298,41 +455,61 @@ export class BindingScopeMaterializer {
         provenanceHandle,
       ),
     ];
+  }
 
-    if (input.parent != null) {
-      claims.push(new SemanticClaim(
+  private parentClaimForScope(
+    local: string,
+    input: BindingScopeConstructionRequest,
+    scope: BindingScope,
+    provenanceHandle: ProvenanceHandle,
+  ): SemanticClaim | null {
+    return input.parent == null
+      ? null
+      : new SemanticClaim(
         this.store.handles.claim(`binding-scope:${local}:parent`),
         scope.productHandle,
         KernelVocabulary.Configuration.BindingScopeHasParent.key,
         input.parent.productHandle,
         provenanceHandle,
-      ));
-    }
+      );
+  }
 
-    if (input.ownerProductHandle != null && this.isControllerProduct(input.ownerProductHandle)) {
-      claims.push(new SemanticClaim(
+  private controllerOwnerClaimForScope(
+    local: string,
+    input: BindingScopeConstructionRequest,
+    scope: BindingScope,
+    provenanceHandle: ProvenanceHandle,
+  ): SemanticClaim | null {
+    return input.ownerProductHandle != null && this.isControllerProduct(input.ownerProductHandle)
+      ? new SemanticClaim(
         this.store.handles.claim(`binding-scope:${local}:controller-owner`),
         input.ownerProductHandle,
         KernelVocabulary.Configuration.ControllerUsesBindingScope.key,
         scope.productHandle,
         provenanceHandle,
-      ));
-    }
+      )
+      : null;
+  }
 
-    input.scopeEffectOwnerProductHandles.forEach((ownerProductHandle, index) => {
-      if (!this.isScopeEffectProduct(ownerProductHandle)) {
-        return;
-      }
-      claims.push(new SemanticClaim(
-        this.store.handles.claim(`binding-scope:${local}:scope-effect-owner:${index}`),
-        ownerProductHandle,
-        KernelVocabulary.Binding.ScopeEffectCreatesBindingScope.key,
-        scope.productHandle,
-        provenanceHandle,
-      ));
-    });
-
-    return claims;
+  private scopeEffectOwnerClaimsForScope(
+    local: string,
+    input: BindingScopeConstructionRequest,
+    scope: BindingScope,
+    provenanceHandle: ProvenanceHandle,
+  ): readonly SemanticClaim[] {
+    return input.scopeEffectOwnerProductHandles.flatMap((ownerProductHandle, index) =>
+      this.isScopeEffectProduct(ownerProductHandle)
+        ? [
+          new SemanticClaim(
+            this.store.handles.claim(`binding-scope:${local}:scope-effect-owner:${index}`),
+            ownerProductHandle,
+            KernelVocabulary.Binding.ScopeEffectCreatesBindingScope.key,
+            scope.productHandle,
+            provenanceHandle,
+          ),
+        ]
+        : []
+    );
   }
 
   private isControllerProduct(productHandle: ProductHandle): boolean {
@@ -352,4 +529,8 @@ function claimsForProduct(
     claim.subjectHandle === productHandle
     || claim.objectHandle === productHandle
   );
+}
+
+function nullableClaim(claim: SemanticClaim | null): readonly SemanticClaim[] {
+  return claim == null ? [] : [claim];
 }

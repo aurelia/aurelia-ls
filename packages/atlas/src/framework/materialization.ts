@@ -61,34 +61,53 @@ export class FrameworkMaterializationProviderIdentity {
     expressionLabel?: string,
   ): FrameworkMaterializationProviderIdentity {
     if (isCallbackProvider(routeKind, provider, expressionLabel)) {
-      return new FrameworkMaterializationProviderIdentity(
-        providerIdentityId("callback", key, provider),
-        FrameworkMaterializationProviderIdentityKind.Callback,
-        `${key} callback provider`,
-        provider.name,
-      );
+      return FrameworkMaterializationProviderIdentity.callback(key, provider);
     }
     if (isNamedProvider(provider)) {
-      return new FrameworkMaterializationProviderIdentity(
-        `framework-materialization-provider:named:${provider.packageId ?? "repo"}:${provider.name}`,
-        FrameworkMaterializationProviderIdentityKind.Named,
-        provider.name,
-        provider.name,
-      );
+      return FrameworkMaterializationProviderIdentity.named(provider);
     }
     if (provider.kind === FrameworkRelationshipEndpointKind.Expression) {
-      const label = expressionLabel ?? expressionProviderLabel(provider);
-      return new FrameworkMaterializationProviderIdentity(
-        providerIdentityId("expression", key, provider),
-        FrameworkMaterializationProviderIdentityKind.Expression,
-        `${key} ${label} provider`,
-        provider.name,
+      return FrameworkMaterializationProviderIdentity.expression(
+        key,
+        provider,
+        expressionLabel ?? expressionProviderLabel(provider),
       );
     }
+    return FrameworkMaterializationProviderIdentity.named(provider);
+  }
+
+  private static callback(
+    key: string,
+    provider: FrameworkRelationshipEndpoint,
+  ): FrameworkMaterializationProviderIdentity {
     return new FrameworkMaterializationProviderIdentity(
-      `framework-materialization-provider:named:${provider.packageId ?? "repo"}:${provider.name}`,
+      providerIdentityId("callback", key, provider),
+      FrameworkMaterializationProviderIdentityKind.Callback,
+      `${key} callback provider`,
+      provider.name,
+    );
+  }
+
+  private static named(
+    provider: FrameworkRelationshipEndpoint,
+  ): FrameworkMaterializationProviderIdentity {
+    return new FrameworkMaterializationProviderIdentity(
+      namedProviderIdentityId(provider),
       FrameworkMaterializationProviderIdentityKind.Named,
       provider.name,
+      provider.name,
+    );
+  }
+
+  private static expression(
+    key: string,
+    provider: FrameworkRelationshipEndpoint,
+    label: string,
+  ): FrameworkMaterializationProviderIdentity {
+    return new FrameworkMaterializationProviderIdentity(
+      providerIdentityId("expression", key, provider),
+      FrameworkMaterializationProviderIdentityKind.Expression,
+      `${key} ${label} provider`,
       provider.name,
     );
   }
@@ -298,6 +317,12 @@ function providerIdentityId(
   provider: FrameworkRelationshipEndpoint,
 ): string {
   return `framework-materialization-provider:${kind}:${name}:${sourceIdentity(provider)}`;
+}
+
+function namedProviderIdentityId(
+  provider: FrameworkRelationshipEndpoint,
+): string {
+  return `framework-materialization-provider:named:${provider.packageId ?? "repo"}:${provider.name}`;
 }
 
 function sourceIdentity(provider: FrameworkRelationshipEndpoint): string {

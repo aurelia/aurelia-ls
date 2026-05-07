@@ -14,6 +14,7 @@ import {
   sourceRangeKey,
   usageCallAggregate,
   type SourceProject,
+  type TypeScriptMemberAccessKindId,
   type TypeScriptUsageCallAggregate,
 } from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
@@ -77,6 +78,7 @@ export interface FrameworkApiMemberSlotSummaryRow {
   readonly declarationCount: number;
   readonly surfaceContributionCount: number;
   readonly usageCount: number;
+  readonly accessKinds: Readonly<Record<string, number>>;
   readonly declarationKinds: Readonly<Record<string, number>>;
   readonly firstSource: SourceRange;
   readonly summary: string;
@@ -94,6 +96,7 @@ export interface FrameworkApiMemberDeclarationRow {
   readonly facetNames: readonly string[];
   readonly surfaceContributionCount: number;
   readonly declarationKind: string;
+  readonly accessKinds: Readonly<Record<string, number>>;
   readonly source: SourceRange;
   readonly symbolKey: string | null;
   readonly summary: string;
@@ -126,6 +129,7 @@ export interface FrameworkApiUsageConsumerRow
 
 interface FrameworkApiMemberDeclarationGroup {
   readonly declarationKind: string;
+  readonly accessKinds: Readonly<Record<string, number>>;
   readonly source: SourceRange;
   readonly symbolKey: string | null;
   readonly facetIds: readonly string[];
@@ -735,6 +739,7 @@ function compactMemberSlotRow(
     declarationCount: declarations.length,
     surfaceContributionCount: row.declarations.length,
     usageCount: row.usageCount,
+    accessKinds: countBy(declarations, (declaration) => declaration.accessKind),
     declarationKinds: countBy(declarations, (declaration) => declaration.declarationKind),
     firstSource: row.firstSource,
     summary: `${row.subjectName}.${row.name} ${row.slotKind} slot has ${declarations.length} source declaration(s), ${row.declarations.length} surface contribution(s), and ${row.usageCount} repo usage(s)`,
@@ -755,6 +760,7 @@ function memberDeclarationRowsForSlot(
     facetNames: group.facetNames,
     surfaceContributionCount: group.surfaceContributionCount,
     declarationKind: group.declarationKind,
+    accessKinds: group.accessKinds,
     source: group.source,
     symbolKey: group.symbolKey,
     summary: `${slot.subjectName}.${slot.name} ${slot.slotKind} source declaration contributes through ${group.surfaceContributionCount} surface(s)`,
@@ -768,6 +774,7 @@ function uniqueMemberDeclarationRefs(
     facetId: group.facetIds[0] ?? "",
     facetName: group.facetNames[0] ?? "",
     declarationKind: group.declarationKind,
+    accessKind: firstAccessKind(group.accessKinds),
     source: group.source,
     symbolKey: group.symbolKey,
   }));
@@ -778,6 +785,7 @@ function uniqueMemberDeclarationGroups(
 ): readonly FrameworkApiMemberDeclarationGroup[] {
   const bySource = new Map<string, {
     readonly declarationKind: string;
+    readonly accessKinds: Record<string, number>;
     readonly source: SourceRange;
     readonly symbolKey: string | null;
     readonly facetIds: Set<string>;
@@ -790,6 +798,7 @@ function uniqueMemberDeclarationGroups(
     if (existing === undefined) {
       bySource.set(key, {
         declarationKind: declaration.declarationKind,
+        accessKinds: { [declaration.accessKind]: 1 },
         source: declaration.source,
         symbolKey: declaration.symbolKey,
         facetIds: new Set([declaration.facetId]),
@@ -800,11 +809,13 @@ function uniqueMemberDeclarationGroups(
     }
     existing.facetIds.add(declaration.facetId);
     existing.facetNames.add(declaration.facetName);
+    existing.accessKinds[declaration.accessKind] = (existing.accessKinds[declaration.accessKind] ?? 0) + 1;
     existing.surfaceContributionCount += 1;
   }
   return [...bySource.values()]
     .map((group) => ({
       declarationKind: group.declarationKind,
+      accessKinds: sortedRecord(group.accessKinds),
       source: group.source,
       symbolKey: group.symbolKey,
       facetIds: [...group.facetIds].sort((left, right) => left.localeCompare(right)),
@@ -819,11 +830,19 @@ function uniqueMemberDeclarationGroups(
     );
 }
 
+function firstAccessKind(accessKinds: Readonly<Record<string, number>>): TypeScriptMemberAccessKindId {
+  return (Object.keys(accessKinds).sort((left, right) => left.localeCompare(right))[0] ?? "public") as TypeScriptMemberAccessKindId;
+}
+
+function sortedRecord(record: Readonly<Record<string, number>>): Readonly<Record<string, number>> {
+  return Object.fromEntries(Object.entries(record).sort(([left], [right]) => left.localeCompare(right)));
+}
+
 function countBy<TValue>(
   rows: readonly TValue[],
   keyFor: (row: TValue) => string,
 ): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
+  const counts: Record<string, number> = Object.create(null) as Record<string, number>;
   for (const row of rows) {
     const key = keyFor(row);
     counts[key] = (counts[key] ?? 0) + 1;

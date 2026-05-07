@@ -7,6 +7,7 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { ResourceTargetReference } from './resource-reference.js';
+import type { ResourceDependencyReference } from './resource-reference.js';
 import type { FullResourceDefinition } from './resource-definition.js';
 import type { ResourceRecognitionProjectResult } from './resource-recognition-project-pass.js';
 
@@ -80,6 +81,14 @@ export class ResourceDefinitionIndex {
       : this.byTargetIdentity.get(identityHandle) ?? null;
   }
 
+  lookupByLocalName(localName: string | null): FullResourceDefinition | null {
+    if (localName == null) {
+      return null;
+    }
+    const matching = this.byLocalName.get(localName) ?? [];
+    return matching.length === 1 ? matching[0]! : null;
+  }
+
   lookupByTargetReference(reference: ResourceTargetReference | null): FullResourceDefinition | null {
     if (reference == null) {
       return null;
@@ -91,8 +100,15 @@ export class ResourceDefinitionIndex {
     if (reference.localName == null) {
       return null;
     }
-    const matching = this.byLocalName.get(reference.localName) ?? [];
-    return matching.length === 1 ? matching[0]! : null;
+    return this.lookupByLocalName(reference.localName);
+  }
+
+  lookupByDependencyReference(reference: ResourceDependencyReference | null): FullResourceDefinition | null {
+    if (reference == null) {
+      return null;
+    }
+    const byIdentity = this.lookupByTargetIdentity(reference.identityHandle);
+    return byIdentity ?? this.lookupByLocalName(reference.keyName);
   }
 
   lookupExpression(

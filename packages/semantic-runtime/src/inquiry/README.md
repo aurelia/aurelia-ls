@@ -61,8 +61,8 @@ candidates. Member completion after `foo.` can derive the member-owner type from
 the visible binding scope, and the TypeChecker expression evaluator. That is an answer-local type projection, not
 runtime execution and not completion ranking.
 
-`templateCompletionQueryForCursor` is the cursor adapter over the horizontal compiler path. It consumes a
-materialized `TemplateResourceCompilationEmission`, picks the smallest HTML/value/scope products around the cursor,
+`templateCompletionQueryForCursor` is the cursor adapter over the horizontal compiler/runtime path. It consumes a
+materialized `TemplateResourceRuntimeAnalysisEmission`, picks the smallest HTML/value/scope products around the cursor,
 classifies the site, and returns the same product-handle `TemplateCompletionQuery` used by the answer. Empty start-tag
 attribute positions, such as `<my-element |>` before an authored attribute product exists, are still classified from
 the materialized element and template-source span rather than by rescanning project source. That keeps cursor-sensitive

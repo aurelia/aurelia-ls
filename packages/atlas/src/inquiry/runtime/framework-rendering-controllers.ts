@@ -9,6 +9,8 @@ import {
 } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 import type {
+  FrameworkControllerHydrationStepKind,
+  FrameworkControllerHydrationStepRow,
   FrameworkControllerCreationRow,
 } from "./framework-entities.js";
 import type { FrameworkDiscoveryFilters } from "./framework-filters.js";
@@ -122,8 +124,17 @@ function controllerCreationForDeclaration(
     instructionTarget,
     controllerFactoryCall,
   );
+  const viewFactoryCall =
+    callSiteEntryForFirst(sourceProject, sourceFile, calls, isViewFactoryCall) ??
+    null;
+  const renderLocationCall =
+    callSiteEntryForFirst(sourceProject, sourceFile, calls, isRenderLocationCall) ??
+    null;
   const viewModelCall =
     callSiteEntryForFirst(sourceProject, sourceFile, calls, isViewModelCall) ??
+    null;
+  const referenceRegistrationCall =
+    callSiteEntryForFirst(sourceProject, sourceFile, calls, isReferenceRegistrationCall) ??
     null;
   const childAdmissionCall =
     callSiteEntryForFirst(sourceProject, sourceFile, calls, isChildAdmissionCall) ??
@@ -137,6 +148,16 @@ function controllerCreationForDeclaration(
   const linkCall =
     callSiteEntryForFirst(sourceProject, sourceFile, calls, isLinkHookCall) ??
     null;
+  const hydrationSteps = orderedHydrationSteps([
+    stepFor("view-factory-creation", viewFactoryCall),
+    stepFor("render-location", renderLocationCall),
+    stepFor("view-model-invocation", viewModelCall),
+    stepFor("controller-creation", controllerFactoryEntry),
+    stepFor("reference-registration", referenceRegistrationCall),
+    stepFor("template-controller-link", linkCall),
+    ...recursiveDispatchCalls.map((call) => stepFor("recursive-dispatch", call)),
+    stepFor("child-admission", childAdmissionCall),
+  ]);
   const childControllerExpression =
     assignedNameForCall(controllerFactoryCall) ??
     childAdmissionCall?.arguments[0]?.expression.text ??
@@ -157,11 +178,15 @@ function controllerCreationForDeclaration(
       instructionTarget,
       parentControllerExpression,
       childControllerExpression,
+      viewFactoryCall,
+      renderLocationCall,
       viewModelCall,
       controllerFactoryCall: controllerFactoryEntry,
+      referenceRegistrationCall,
       childAdmissionCall,
       recursiveDispatchCalls,
       linkCall,
+      hydrationSteps,
       source: sourceRangeForNode(sourceProject, sourceFile, renderMethod),
       summary: `${rendererName} creates ${resourceKind} child controller ${childControllerExpression} and admits it to ${parentControllerExpression}.`,
     },
@@ -190,6 +215,21 @@ function isViewModelCall(call: ts.CallExpression): boolean {
   return (
     (tail === "invoke" && call.expression.getText(call.getSourceFile()).includes(".invoke")) ||
     tail === "invokeAttribute"
+  );
+}
+
+function isViewFactoryCall(call: ts.CallExpression): boolean {
+  return calleeTail(call.expression) === "getViewFactory";
+}
+
+function isRenderLocationCall(call: ts.CallExpression): boolean {
+  return calleeTail(call.expression) === "convertToRenderLocation";
+}
+
+function isReferenceRegistrationCall(call: ts.CallExpression): boolean {
+  return (
+    calleeTail(call.expression) === "set" &&
+    call.expression.getText(call.getSourceFile()).startsWith("refs.")
   );
 }
 
@@ -229,6 +269,22 @@ function assignedNameForCall(call: ts.CallExpression): string | null {
     return parent.name.text;
   }
   return null;
+}
+
+function stepFor(
+  stepKind: FrameworkControllerHydrationStepKind,
+  callSite: TypeScriptCallSiteEntry | null,
+): Omit<FrameworkControllerHydrationStepRow, "order"> | null {
+  return callSite === null ? null : { stepKind, callSite };
+}
+
+function orderedHydrationSteps(
+  inputs: readonly (Omit<FrameworkControllerHydrationStepRow, "order"> | null)[],
+): readonly FrameworkControllerHydrationStepRow[] {
+  return inputs
+    .filter((input): input is Omit<FrameworkControllerHydrationStepRow, "order"> => input !== null)
+    .sort((left, right) => left.callSite.span.start - right.callSite.span.start)
+    .map((input, order) => ({ ...input, order }));
 }
 
 function resourceKindForRenderer(

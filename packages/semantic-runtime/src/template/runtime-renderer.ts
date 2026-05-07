@@ -15,6 +15,7 @@ import {
 import type { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import {
   TemplateRenderTarget,
+  TemplateRenderTargetKind,
 } from './compiled-template.js';
 import {
   AttributeBindingInstruction,
@@ -29,6 +30,10 @@ import {
   ListenerBindingInstruction,
   PropertyBindingInstruction,
   RefBindingInstruction,
+  SetAttributeInstruction,
+  SetClassAttributeInstruction,
+  SetPropertyInstruction,
+  SetStyleAttributeInstruction,
   SpreadTransferedBindingInstruction,
   SpreadValueBindingInstruction,
   StateBindingInstruction,
@@ -55,6 +60,10 @@ import {
   RuntimeBindingReference,
   RuntimeBindingKind,
   RuntimeBindingScopeEffectKind,
+  RuntimeBindingTargetKind,
+  RuntimeBindingTargetOperationAuthority,
+  type RuntimeBindingTargetOperationField,
+  RuntimeBindingTargetOperationKind,
   SpreadBinding,
   SpreadValueBinding,
   StateBinding,
@@ -64,12 +73,18 @@ import {
   type RuntimeBindingField,
   type RuntimeBindingScopeEffect,
   type RuntimeBindingScopeEffectField,
+  RuntimeTargetOperation,
+  RuntimeTargetOperationOwnerKind,
 } from './runtime-binding.js';
 import {
-  RuntimeControllerCreationInput,
+  RuntimeControllerCreationRequest,
   RuntimeControllerCreationKind,
   RuntimeControllerFrame,
 } from './runtime-controller.js';
+import {
+  RuntimeRendererKind,
+  RuntimeRendererReference,
+} from './runtime-renderer-reference.js';
 
 export const enum RuntimeRendererPackage {
   RuntimeHtml = 'runtime-html',
@@ -81,32 +96,6 @@ export const enum RuntimeRendererGroup {
   RuntimeHtmlDefaultRenderers = 'runtime-html-default-renderers',
   I18nTranslationRenderers = 'i18n-translation-renderers',
   StateDefaultRenderers = 'state-default-renderers',
-}
-
-export const enum RuntimeRendererKind {
-  SetProperty = 'set-property-renderer',
-  CustomElement = 'custom-element-renderer',
-  CustomAttribute = 'custom-attribute-renderer',
-  TemplateController = 'template-controller-renderer',
-  LetElement = 'let-element-renderer',
-  RefBinding = 'ref-binding-renderer',
-  InterpolationBinding = 'interpolation-binding-renderer',
-  PropertyBinding = 'property-binding-renderer',
-  IteratorBinding = 'iterator-binding-renderer',
-  TextBinding = 'text-binding-renderer',
-  ListenerBinding = 'listener-binding-renderer',
-  SetAttribute = 'set-attribute-renderer',
-  SetClassAttribute = 'set-class-attribute-renderer',
-  SetStyleAttribute = 'set-style-attribute-renderer',
-  StylePropertyBinding = 'style-property-binding-renderer',
-  AttributeBinding = 'attribute-binding-renderer',
-  Spread = 'spread-renderer',
-  SpreadValue = 'spread-value-renderer',
-  TranslationBinding = 'translation-binding-renderer',
-  TranslationBindBinding = 'translation-bind-binding-renderer',
-  TranslationParametersBinding = 'translation-parameters-binding-renderer',
-  StateBinding = 'state-binding-renderer',
-  DispatchBinding = 'dispatch-binding-renderer',
 }
 
 export type RuntimeRendererField =
@@ -130,16 +119,6 @@ export type ConfiguredBuiltInRuntimeRendererCatalogSelectionField =
   | 'frameworkKind'
   | 'catalogs'
   | 'source';
-
-export class RuntimeRendererReference {
-  constructor(
-    readonly rendererKind: RuntimeRendererKind,
-    readonly productHandle: ProductHandle | null,
-    readonly identityHandle: IdentityHandle | null,
-    readonly targetInstructionKind: TemplateInstructionKind,
-    readonly sourceAddressHandle: AddressHandle | null,
-  ) {}
-}
 
 export class RuntimeRendererAllocation {
   constructor(
@@ -165,6 +144,7 @@ export class RuntimeRendererRenderResult {
     bindings: RuntimeBinding | readonly RuntimeBinding[] | null = [],
     readonly scopeEffects: readonly RuntimeBindingScopeEffect[] = [],
     readonly createdControllers: readonly RuntimeControllerFrame[] = [],
+    readonly targetOperations: readonly RuntimeTargetOperation[] = [],
   ) {
     this.bindings = bindings == null
       ? []
@@ -189,6 +169,12 @@ export class RuntimeRendererRenderResult {
     scopeEffects: readonly RuntimeBindingScopeEffect[] = [],
   ): RuntimeRendererRenderResult {
     return new RuntimeRendererRenderResult(bindings, scopeEffects);
+  }
+
+  static targetOperation(
+    targetOperation: RuntimeTargetOperation,
+  ): RuntimeRendererRenderResult {
+    return new RuntimeRendererRenderResult([], [], [], [targetOperation]);
   }
 
   get binding(): RuntimeBinding | null {
@@ -217,7 +203,10 @@ export class RuntimeRendererSpreadCompileInput {
 export class RuntimeRendererSpreadCompileResult {
   constructor(
     readonly state: RuntimeRendererSpreadCompileState,
-    readonly instructionProductHandles: readonly ProductHandle[],
+    /** Root dynamic instructions returned by TemplateCompiler.compileSpread for the current spread transfer. */
+    readonly instructions: readonly TemplateInstruction[],
+    /** Every dynamic instruction allocated for this compile, including inner instructions wrapped by SpreadElementProp. */
+    readonly createdInstructions: readonly TemplateInstruction[],
     readonly summary: string | null,
     readonly addressHandle: AddressHandle | null,
   ) {}
@@ -225,6 +214,7 @@ export class RuntimeRendererSpreadCompileResult {
   static noCapturedAttributes(addressHandle: AddressHandle | null): RuntimeRendererSpreadCompileResult {
     return new RuntimeRendererSpreadCompileResult(
       RuntimeRendererSpreadCompileState.NoCapturedAttributes,
+      [],
       [],
       null,
       addressHandle,
@@ -238,18 +228,21 @@ export class RuntimeRendererSpreadCompileResult {
     return new RuntimeRendererSpreadCompileResult(
       RuntimeRendererSpreadCompileState.Open,
       [],
+      [],
       summary,
       addressHandle,
     );
   }
 
   static compiled(
-    instructionProductHandles: readonly ProductHandle[],
+    instructions: readonly TemplateInstruction[],
+    createdInstructions: readonly TemplateInstruction[],
     addressHandle: AddressHandle | null,
   ): RuntimeRendererSpreadCompileResult {
     return new RuntimeRendererSpreadCompileResult(
       RuntimeRendererSpreadCompileState.Compiled,
-      instructionProductHandles,
+      instructions,
+      createdInstructions,
       null,
       addressHandle,
     );
@@ -261,7 +254,7 @@ export interface RuntimeRenderingRun {
 
   allocate(local: string): RuntimeRendererAllocation;
 
-  createChildController(input: RuntimeControllerCreationInput): RuntimeControllerFrame | null;
+  createChildController(input: RuntimeControllerCreationRequest): RuntimeControllerFrame | null;
 
   compileSpread(input: RuntimeRendererSpreadCompileInput): RuntimeRendererSpreadCompileResult;
 
@@ -278,6 +271,7 @@ export interface RuntimeRenderingRun {
     renderingController: RuntimeControllerFrame,
     targetController: RuntimeControllerFrame,
     target: TemplateRenderTarget,
+    bindingOwner?: RuntimeBinding | null,
   ): void;
 }
 
@@ -301,12 +295,16 @@ export class RuntimeRendererInvocation {
     return this.run.allocate(`${this.local}:${suffix}`);
   }
 
+  allocateTargetOperation(suffix = 'target-operation'): RuntimeRendererAllocation {
+    return this.run.allocate(`${this.local}:${suffix}`);
+  }
+
   createChildController(
     localSuffix: string,
     creationKind: RuntimeControllerCreationKind,
     instruction: HydrateElementInstruction | HydrateAttributeInstruction | HydrateTemplateControllerInstruction,
   ): RuntimeControllerFrame | null {
-    return this.run.createChildController(new RuntimeControllerCreationInput(
+    return this.run.createChildController(new RuntimeControllerCreationRequest(
       `${this.local}:${localSuffix}`,
       creationKind,
       instruction,
@@ -361,6 +359,24 @@ export class RuntimeRendererInvocation {
       targetController,
       this.target,
     );
+  }
+
+  renderCompiledSpreadInstructions(
+    localSuffix: string,
+    instructions: readonly TemplateInstruction[],
+    bindingOwner: RuntimeBinding,
+  ): void {
+    instructions.forEach((instruction, index) => {
+      this.run.renderInstruction(
+        `${this.local}:${localSuffix}:${index}`,
+        instruction,
+        null,
+        this.renderingController,
+        this.targetController,
+        this.target,
+        bindingOwner,
+      );
+    });
   }
 
   inputForChildInstruction(
@@ -434,8 +450,8 @@ export class SetPropertyRenderer {
     return rendererReference(this);
   }
 
-  render(_input: RuntimeRendererInvocation): RuntimeRendererRenderResult {
-    return RuntimeRendererRenderResult.none();
+  render(input: RuntimeRendererInvocation): RuntimeRendererRenderResult {
+    return renderSetPropertyTargetOperation(input);
   }
 }
 
@@ -805,8 +821,8 @@ export class SetAttributeRenderer {
     return rendererReference(this);
   }
 
-  render(_input: RuntimeRendererInvocation): RuntimeRendererRenderResult {
-    return RuntimeRendererRenderResult.none();
+  render(input: RuntimeRendererInvocation): RuntimeRendererRenderResult {
+    return renderSetAttributeTargetOperation(input);
   }
 }
 
@@ -831,8 +847,8 @@ export class SetClassAttributeRenderer {
     return rendererReference(this);
   }
 
-  render(_input: RuntimeRendererInvocation): RuntimeRendererRenderResult {
-    return RuntimeRendererRenderResult.none();
+  render(input: RuntimeRendererInvocation): RuntimeRendererRenderResult {
+    return renderSetClassAttributeTargetOperation(input);
   }
 }
 
@@ -857,8 +873,8 @@ export class SetStyleAttributeRenderer {
     return rendererReference(this);
   }
 
-  render(_input: RuntimeRendererInvocation): RuntimeRendererRenderResult {
-    return RuntimeRendererRenderResult.none();
+  render(input: RuntimeRendererInvocation): RuntimeRendererRenderResult {
+    return renderSetStyleAttributeTargetOperation(input);
   }
 }
 
@@ -1163,6 +1179,164 @@ function rendererReference(renderer: RuntimeRenderer): RuntimeRendererReference 
   );
 }
 
+function renderSetPropertyTargetOperation(input: RuntimeRendererInvocation): RuntimeRendererRenderResult {
+  const instruction = input.instruction;
+  if (!(instruction instanceof SetPropertyInstruction)) {
+    return RuntimeRendererRenderResult.none();
+  }
+  const targetClosed = input.targetController.viewModel != null;
+  return RuntimeRendererRenderResult.targetOperation(renderRendererTargetOperation(
+    input,
+    RuntimeBindingTargetOperationKind.PropertySet,
+    targetClosed ? RuntimeBindingTargetKind.ControllerViewModel : RuntimeBindingTargetKind.Unknown,
+    targetClosed ? null : 'SetPropertyRenderer.render uses getTarget(controller), but the semantic controller frame has no closed view-model target.',
+    null,
+    input.targetController.productHandle,
+    instruction.attribute.rawName ?? instruction.targetProperty,
+    instruction.targetProperty,
+    instruction.value,
+    [instruction.targetProperty],
+  ));
+}
+
+function renderSetAttributeTargetOperation(input: RuntimeRendererInvocation): RuntimeRendererRenderResult {
+  const instruction = input.instruction;
+  if (!(instruction instanceof SetAttributeInstruction)) {
+    return RuntimeRendererRenderResult.none();
+  }
+  const isSurrogate = input.target.targetKind === TemplateRenderTargetKind.Surrogate;
+  return RuntimeRendererRenderResult.targetOperation(renderRendererTargetOperation(
+    input,
+    RuntimeBindingTargetOperationKind.AttributeSet,
+    isSurrogate
+      ? RuntimeBindingTargetKind.Host
+      : instruction.node.productHandle == null ? RuntimeBindingTargetKind.Unknown : RuntimeBindingTargetKind.Node,
+    !isSurrogate && instruction.node.productHandle == null
+      ? 'SetAttributeRenderer.render received a target instruction whose authored HTML node is not closed.'
+      : null,
+    isSurrogate ? null : instruction.node,
+    isSurrogate ? input.renderingController.productHandle : null,
+    instruction.targetAttribute,
+    instruction.targetAttribute,
+    instruction.value,
+    [instruction.targetAttribute],
+  ));
+}
+
+function renderSetClassAttributeTargetOperation(input: RuntimeRendererInvocation): RuntimeRendererRenderResult {
+  const instruction = input.instruction;
+  if (!(instruction instanceof SetClassAttributeInstruction)) {
+    return RuntimeRendererRenderResult.none();
+  }
+  const isSurrogate = input.target.targetKind === TemplateRenderTargetKind.Surrogate;
+  return RuntimeRendererRenderResult.targetOperation(renderRendererTargetOperation(
+    input,
+    RuntimeBindingTargetOperationKind.ClassListAdd,
+    isSurrogate
+      ? RuntimeBindingTargetKind.Host
+      : instruction.node.productHandle == null ? RuntimeBindingTargetKind.Unknown : RuntimeBindingTargetKind.Node,
+    !isSurrogate && instruction.node.productHandle == null
+      ? 'SetClassAttributeRenderer.render received a target instruction whose authored HTML node is not closed.'
+      : null,
+    isSurrogate ? null : instruction.node,
+    isSurrogate ? input.renderingController.productHandle : null,
+    instruction.attribute.rawName ?? 'class',
+    'classList',
+    instruction.value,
+    splitWhitespace(instruction.value),
+  ));
+}
+
+function renderSetStyleAttributeTargetOperation(input: RuntimeRendererInvocation): RuntimeRendererRenderResult {
+  const instruction = input.instruction;
+  if (!(instruction instanceof SetStyleAttributeInstruction)) {
+    return RuntimeRendererRenderResult.none();
+  }
+  const isSurrogate = input.target.targetKind === TemplateRenderTargetKind.Surrogate;
+  return RuntimeRendererRenderResult.targetOperation(renderRendererTargetOperation(
+    input,
+    RuntimeBindingTargetOperationKind.StyleCssTextAppend,
+    isSurrogate
+      ? RuntimeBindingTargetKind.Host
+      : instruction.node.productHandle == null ? RuntimeBindingTargetKind.Unknown : RuntimeBindingTargetKind.Node,
+    !isSurrogate && instruction.node.productHandle == null
+      ? 'SetStyleAttributeRenderer.render received a target instruction whose authored HTML node is not closed.'
+      : null,
+    isSurrogate ? null : instruction.node,
+    isSurrogate ? input.renderingController.productHandle : null,
+    instruction.attribute.rawName ?? 'style',
+    'cssText',
+    instruction.value,
+    affectedStyleNamesFromCssText(instruction.value),
+  ));
+}
+
+function renderRendererTargetOperation(
+  input: RuntimeRendererInvocation,
+  operationKind: RuntimeBindingTargetOperationKind,
+  targetKind: RuntimeBindingTargetKind,
+  openReason: string | null,
+  targetNode: RuntimeTargetOperation['targetNode'],
+  targetControllerProductHandle: ProductHandle | null,
+  targetAttribute: string,
+  targetProperty: string,
+  value: string,
+  affectedNames: readonly string[],
+): RuntimeTargetOperation {
+  const allocation = input.allocateTargetOperation();
+  return new RuntimeTargetOperation(
+    allocation.productHandle,
+    allocation.identityHandle,
+    RuntimeTargetOperationOwnerKind.RuntimeRenderer,
+    null,
+    input.renderer.toReference(),
+    input.instruction.productHandle,
+    input.instruction.identityHandle,
+    targetKind,
+    targetNode,
+    targetControllerProductHandle,
+    targetAttribute,
+    targetProperty,
+    value,
+    openReason == null ? operationKind : RuntimeBindingTargetOperationKind.Open,
+    affectedNames,
+    openReason == null
+      ? RuntimeBindingTargetOperationAuthority.RuntimeRendererImplementation
+      : RuntimeBindingTargetOperationAuthority.Open,
+    openReason,
+    input.instruction.sourceAddressHandle,
+    input.fieldProvenance<RuntimeBindingTargetOperationField>([
+      'ownerKind',
+      'renderer',
+      'instruction',
+      'targetKind',
+      targetNode == null ? null : 'targetNode',
+      targetControllerProductHandle == null ? null : 'targetController',
+      'targetAttribute',
+      'targetProperty',
+      'value',
+      'operationKind',
+      affectedNames.length === 0 ? null : 'affectedNames',
+      'authority',
+      openReason == null ? null : 'openReason',
+      'source',
+    ]),
+  );
+}
+
+function affectedStyleNamesFromCssText(cssText: string): readonly string[] {
+  return cssText
+    .split(';')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .map((part) => part.slice(0, part.indexOf(':')).trim())
+    .filter((name) => name.length > 0);
+}
+
+function splitWhitespace(value: string): readonly string[] {
+  return value.match(/\S+/g) ?? [];
+}
+
 function renderPropertyRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRendererRenderResult {
   const instruction = input.instruction;
   if (!(instruction instanceof PropertyBindingInstruction)
@@ -1432,12 +1606,8 @@ function renderSpreadRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRe
   if (!(instruction instanceof SpreadTransferedBindingInstruction)) {
     return RuntimeRendererRenderResult.none();
   }
-  const spreadCompile = input.compileSpread('compile-spread', instruction);
-  if (spreadCompile.state === RuntimeRendererSpreadCompileState.Open && spreadCompile.summary != null) {
-    input.recordOpenInstruction('compile-spread', spreadCompile.summary, spreadCompile.addressHandle);
-  }
   const allocation = input.allocateBinding();
-  return new RuntimeRendererRenderResult(new SpreadBinding(
+  const spreadBinding = new SpreadBinding(
     allocation.productHandle,
     allocation.identityHandle,
     instruction.productHandle,
@@ -1448,7 +1618,15 @@ function renderSpreadRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRe
     [],
     instruction.sourceAddressHandle,
     input.fieldProvenance<RuntimeBindingField>(['instruction', 'renderer', 'node', 'attribute', 'bindingKind', 'source']),
-  ));
+  );
+  const spreadCompile = input.compileSpread('compile-spread', instruction);
+  if (spreadCompile.state === RuntimeRendererSpreadCompileState.Open && spreadCompile.summary != null) {
+    input.recordOpenInstruction('compile-spread', spreadCompile.summary, spreadCompile.addressHandle);
+  }
+  if (spreadCompile.state === RuntimeRendererSpreadCompileState.Compiled) {
+    input.renderCompiledSpreadInstructions('compiled-spread', spreadCompile.instructions, spreadBinding);
+  }
+  return new RuntimeRendererRenderResult(spreadBinding);
 }
 
 function renderSpreadValueRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRendererRenderResult {

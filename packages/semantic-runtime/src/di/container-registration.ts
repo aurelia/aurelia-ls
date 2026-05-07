@@ -4,7 +4,7 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
-import type { ContainerReference } from './container.js';
+import type { ContainerReference } from './container-reference.js';
 
 export type ContainerRegistrationField =
   | 'container'

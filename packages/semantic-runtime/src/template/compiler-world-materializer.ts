@@ -2,7 +2,6 @@ import { AttributeParserMachine, AttributeParserService } from './attribute-synt
 import { BindingCommandResolverService } from './binding-command-execution.js';
 import {
   TemplateCompilerService,
-  type TemplateCompilerServiceReference,
   TemplateCompilerWorld,
   TemplateCompilerWorldKind,
   TemplateAttributeMapperService,
@@ -10,9 +9,12 @@ import {
   TemplateRenderingService,
   TemplateResourceResolverService,
   TemplateResourceScope,
+} from './compiler-world.js';
+import {
+  type TemplateCompilerServiceReference,
   TemplateResourceVisibilityKind,
   TemplateVisibleResource,
-} from './compiler-world.js';
+} from './compiler-world-reference.js';
 import type {
   BuiltInAttributePatternEmission,
   BuiltInBindingCommandEmission,
@@ -56,7 +58,7 @@ import {
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import { TemplateProductDetails } from './product-details.js';
 
-export class TemplateCompilerWorldConstructionInput {
+export class TemplateCompilerWorldConstructionRequest {
   constructor(
     /** Store-local key for the compiler world being materialized. */
     readonly localKey: string,
@@ -83,6 +85,7 @@ export class TemplateCompilerWorldConstructionInput {
 
 export class TemplateCompilerWorldEmission {
   constructor(
+    readonly container: Container,
     readonly world: TemplateCompilerWorld,
     readonly resourceScope: TemplateResourceScope,
     readonly templateCompiler: TemplateCompilerService,
@@ -121,6 +124,87 @@ class CompilerWorldClaims {
   }
 }
 
+class CompilerWorldHandleSet {
+  constructor(
+    readonly worldProductHandle: ProductHandle,
+    readonly worldIdentityHandle: IdentityHandle,
+    readonly scopeProductHandle: ProductHandle,
+    readonly scopeIdentityHandle: IdentityHandle,
+    readonly machineProductHandle: ProductHandle,
+    readonly machineIdentityHandle: IdentityHandle,
+    readonly attributeParserProductHandle: ProductHandle,
+    readonly attributeParserIdentityHandle: IdentityHandle,
+    readonly bindingResolverProductHandle: ProductHandle,
+    readonly bindingResolverIdentityHandle: IdentityHandle,
+    readonly templateCompilerProductHandle: ProductHandle,
+    readonly templateCompilerIdentityHandle: IdentityHandle,
+    readonly resourceResolverProductHandle: ProductHandle,
+    readonly resourceResolverIdentityHandle: IdentityHandle,
+    readonly expressionParserProductHandle: ProductHandle,
+    readonly expressionParserIdentityHandle: IdentityHandle,
+    readonly attributeMapperProductHandle: ProductHandle,
+    readonly attributeMapperIdentityHandle: IdentityHandle,
+    readonly renderingProductHandle: ProductHandle,
+    readonly renderingIdentityHandle: IdentityHandle,
+  ) {}
+
+  get materializedProductHandles(): readonly ProductHandle[] {
+    return [
+      this.worldProductHandle,
+      this.scopeProductHandle,
+      this.machineProductHandle,
+      this.attributeParserProductHandle,
+      this.bindingResolverProductHandle,
+      this.templateCompilerProductHandle,
+      this.resourceResolverProductHandle,
+      this.expressionParserProductHandle,
+      this.attributeMapperProductHandle,
+      this.renderingProductHandle,
+    ];
+  }
+}
+
+class CompilerWorldProducts {
+  constructor(
+    readonly world: TemplateCompilerWorld,
+    readonly resourceScope: TemplateResourceScope,
+    readonly templateCompiler: TemplateCompilerService,
+    readonly resourceResolver: TemplateResourceResolverService,
+    readonly expressionParser: TemplateExpressionParserService,
+    readonly attributeMapper: TemplateAttributeMapperService,
+    readonly rendering: TemplateRenderingService,
+    readonly attributeParser: AttributeParserService,
+    readonly attributeParserMachine: AttributeParserMachine,
+    readonly bindingCommandResolver: BindingCommandResolverService,
+    readonly syntaxResources: readonly TemplateVisibleResource[],
+    readonly serviceReferences: readonly TemplateCompilerServiceReference[],
+  ) {}
+
+  toEmission(
+    input: TemplateCompilerWorldConstructionRequest,
+    records: readonly KernelStoreRecord[],
+  ): TemplateCompilerWorldEmission {
+    return new TemplateCompilerWorldEmission(
+      input.container,
+      this.world,
+      this.resourceScope,
+      this.templateCompiler,
+      this.resourceResolver,
+      this.expressionParser,
+      this.attributeMapper,
+      this.rendering,
+      this.attributeParser,
+      this.attributeParserMachine,
+      this.bindingCommandResolver,
+      input.attributePatterns,
+      input.bindingCommands,
+      input.runtimeRenderers,
+      this.syntaxResources,
+      records,
+    );
+  }
+}
+
 /** Materializes the compiler-facing world once visibility has already been selected. */
 export class TemplateCompilerWorldMaterializer {
   constructor(
@@ -128,7 +212,7 @@ export class TemplateCompilerWorldMaterializer {
     readonly store: KernelStore,
   ) {}
 
-  construct(input: TemplateCompilerWorldConstructionInput): TemplateCompilerWorldEmission {
+  construct(input: TemplateCompilerWorldConstructionRequest): TemplateCompilerWorldEmission {
     const emission = this.recordsForWorld(input);
     if (emission.records.length > 0) {
       this.store.commit(new KernelStoreBatch(emission.records, `template-compiler-world:${input.localKey}`));
@@ -140,6 +224,11 @@ export class TemplateCompilerWorldMaterializer {
   private registerProductDetails(emission: TemplateCompilerWorldEmission): void {
     this.store.productDetails.add(TemplateProductDetails.World, emission.world.productHandle, emission.world);
     this.store.productDetails.add(TemplateProductDetails.ResourceScope, emission.resourceScope.productHandle, emission.resourceScope);
+    this.registerCompilerServiceProductDetails(emission);
+    this.registerAttributeParserProductDetails(emission);
+  }
+
+  private registerCompilerServiceProductDetails(emission: TemplateCompilerWorldEmission): void {
     this.store.productDetails.add(
       TemplateProductDetails.TemplateCompilerService,
       emission.templateCompiler.productHandle,
@@ -165,6 +254,9 @@ export class TemplateCompilerWorldMaterializer {
       emission.rendering.productHandle,
       emission.rendering,
     );
+  }
+
+  private registerAttributeParserProductDetails(emission: TemplateCompilerWorldEmission): void {
     this.store.productDetails.add(
       TemplateProductDetails.AttributeParserService,
       emission.attributeParser.productHandle,
@@ -182,41 +274,124 @@ export class TemplateCompilerWorldMaterializer {
     );
   }
 
-  private recordsForWorld(input: TemplateCompilerWorldConstructionInput): TemplateCompilerWorldEmission {
+  private recordsForWorld(input: TemplateCompilerWorldConstructionRequest): TemplateCompilerWorldEmission {
     const records: KernelStoreRecord[] = [];
     const local = input.localKey;
     const source = this.recordsForSource(local, input.sourceAddressHandle ?? input.container.sourceAddressHandle);
     records.push(...source.records);
 
-    const worldProductHandle = this.store.handles.product(`template-world:${local}`);
-    const worldIdentityHandle = this.store.handles.identity(`template-world:${local}`);
-    const scopeProductHandle = this.store.handles.product(`template-resource-scope:${local}`);
-    const scopeIdentityHandle = this.store.handles.identity(`template-resource-scope:${local}`);
-    const machineProductHandle = this.store.handles.product(`attribute-parser-machine:${local}`);
-    const machineIdentityHandle = this.store.handles.identity(`attribute-parser-machine:${local}`);
-    const attributeParserProductHandle = this.store.handles.product(`attribute-parser:${local}`);
-    const attributeParserIdentityHandle = this.store.handles.identity(`attribute-parser:${local}`);
-    const bindingResolverProductHandle = this.store.handles.product(`binding-command-resolver:${local}`);
-    const bindingResolverIdentityHandle = this.store.handles.identity(`binding-command-resolver:${local}`);
-    const templateCompilerProductHandle = this.store.handles.product(`template-compiler-service:${local}`);
-    const templateCompilerIdentityHandle = this.store.handles.identity(`template-compiler-service:${local}`);
-    const resourceResolverProductHandle = this.store.handles.product(`resource-resolver-service:${local}`);
-    const resourceResolverIdentityHandle = this.store.handles.identity(`resource-resolver-service:${local}`);
-    const expressionParserProductHandle = this.store.handles.product(`expression-parser-service:${local}`);
-    const expressionParserIdentityHandle = this.store.handles.identity(`expression-parser-service:${local}`);
-    const attributeMapperProductHandle = this.store.handles.product(`attribute-mapper-service:${local}`);
-    const attributeMapperIdentityHandle = this.store.handles.identity(`attribute-mapper-service:${local}`);
-    const renderingProductHandle = this.store.handles.product(`rendering-service:${local}`);
-    const renderingIdentityHandle = this.store.handles.identity(`rendering-service:${local}`);
+    const handles = this.handlesForWorld(local);
+    const products = this.productsForWorld(input, handles, source);
 
-    const syntaxResources = [
-      ...input.attributePatterns.map((pattern) => visibleAttributePattern(pattern, input.syntaxVisibilityKind)),
-      ...input.bindingCommands.map((command) => visibleBindingCommand(command, input.syntaxVisibilityKind)),
+    const claims = this.recordsForClaims(
+      local,
+      products.world,
+      products.resourceScope,
+      products.serviceReferences,
+      input.resources,
+      products.syntaxResources,
+      products.attributeParser,
+      products.attributeParserMachine,
+      products.rendering,
+      source.provenanceHandle,
+    );
+    records.push(...claims.allClaims);
+    records.push(
+      ...this.identityRecordsForWorld(input, handles, source),
+      ...this.materializedProductRecordsForWorld(handles, source),
+      this.materializationRecordForWorld(local, handles, claims),
+    );
+
+    return products.toEmission(input, records);
+  }
+
+  private handlesForWorld(local: string): CompilerWorldHandleSet {
+    return new CompilerWorldHandleSet(
+      this.store.handles.product(`template-world:${local}`),
+      this.store.handles.identity(`template-world:${local}`),
+      this.store.handles.product(`template-resource-scope:${local}`),
+      this.store.handles.identity(`template-resource-scope:${local}`),
+      this.store.handles.product(`attribute-parser-machine:${local}`),
+      this.store.handles.identity(`attribute-parser-machine:${local}`),
+      this.store.handles.product(`attribute-parser:${local}`),
+      this.store.handles.identity(`attribute-parser:${local}`),
+      this.store.handles.product(`binding-command-resolver:${local}`),
+      this.store.handles.identity(`binding-command-resolver:${local}`),
+      this.store.handles.product(`template-compiler-service:${local}`),
+      this.store.handles.identity(`template-compiler-service:${local}`),
+      this.store.handles.product(`resource-resolver-service:${local}`),
+      this.store.handles.identity(`resource-resolver-service:${local}`),
+      this.store.handles.product(`expression-parser-service:${local}`),
+      this.store.handles.identity(`expression-parser-service:${local}`),
+      this.store.handles.product(`attribute-mapper-service:${local}`),
+      this.store.handles.identity(`attribute-mapper-service:${local}`),
+      this.store.handles.product(`rendering-service:${local}`),
+      this.store.handles.identity(`rendering-service:${local}`),
+    );
+  }
+
+  private productsForWorld(
+    input: TemplateCompilerWorldConstructionRequest,
+    handles: CompilerWorldHandleSet,
+    source: CompilerWorldSourceSet,
+  ): CompilerWorldProducts {
+    const syntaxResources = syntaxResourcesForInput(input);
+    const resourceScope = this.resourceScopeForWorld(input, handles, source, syntaxResources);
+    const attributeParserMachine = this.attributeParserMachineForWorld(handles, source);
+    const attributeParser = this.attributeParserForWorld(
+      input,
+      handles,
+      source,
+      attributeParserMachine,
+    );
+    const bindingCommandResolver = this.bindingCommandResolverForWorld(input, handles, source);
+    const templateCompiler = this.templateCompilerServiceForWorld(input, handles, source);
+    const resourceResolver = this.resourceResolverForWorld(input, handles, source);
+    const expressionParser = this.expressionParserForWorld(input, handles, source);
+    const attributeMapper = this.attributeMapperForWorld(input, handles, source);
+    const rendering = this.renderingServiceForWorld(input, handles, source);
+    const services = [
+      templateCompiler.toReference(),
+      resourceResolver.toReference(),
+      attributeParser.toReference(),
+      bindingCommandResolver.toReference(),
+      expressionParser.toReference(),
+      attributeMapper.toReference(),
+      rendering.toReference(),
     ];
+    const world = this.compilerWorldForProducts(
+      input,
+      handles,
+      source,
+      resourceScope,
+      services,
+    );
 
-    const resourceScope = new TemplateResourceScope(
-      scopeProductHandle,
-      scopeIdentityHandle,
+    return new CompilerWorldProducts(
+      world,
+      resourceScope,
+      templateCompiler,
+      resourceResolver,
+      expressionParser,
+      attributeMapper,
+      rendering,
+      attributeParser,
+      attributeParserMachine,
+      bindingCommandResolver,
+      syntaxResources,
+      services,
+    );
+  }
+
+  private resourceScopeForWorld(
+    input: TemplateCompilerWorldConstructionRequest,
+    handles: CompilerWorldHandleSet,
+    source: CompilerWorldSourceSet,
+    syntaxResources: readonly TemplateVisibleResource[],
+  ): TemplateResourceScope {
+    return new TemplateResourceScope(
+      handles.scopeProductHandle,
+      handles.scopeIdentityHandle,
       input.container.toReference(),
       input.resources,
       syntaxResources,
@@ -228,9 +403,15 @@ export class TemplateCompilerWorldMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
-    const attributeParserMachine = new AttributeParserMachine(
-      machineProductHandle,
-      machineIdentityHandle,
+  }
+
+  private attributeParserMachineForWorld(
+    handles: CompilerWorldHandleSet,
+    source: CompilerWorldSourceSet,
+  ): AttributeParserMachine {
+    return new AttributeParserMachine(
+      handles.machineProductHandle,
+      handles.machineIdentityHandle,
       [],
       [],
       source.addressHandle,
@@ -239,9 +420,17 @@ export class TemplateCompilerWorldMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
+  }
+
+  private attributeParserForWorld(
+    input: TemplateCompilerWorldConstructionRequest,
+    handles: CompilerWorldHandleSet,
+    source: CompilerWorldSourceSet,
+    attributeParserMachine: AttributeParserMachine,
+  ): AttributeParserService {
     const attributeParser = new AttributeParserService(
-      attributeParserProductHandle,
-      attributeParserIdentityHandle,
+      handles.attributeParserProductHandle,
+      handles.attributeParserIdentityHandle,
       [],
       attributeParserMachine,
       source.addressHandle,
@@ -254,9 +443,17 @@ export class TemplateCompilerWorldMaterializer {
     for (const pattern of input.attributePatterns) {
       attributeParser.registerPattern(pattern.executable, pattern.compiledPatterns);
     }
-    const bindingCommandResolver = new BindingCommandResolverService(
-      bindingResolverProductHandle,
-      bindingResolverIdentityHandle,
+    return attributeParser;
+  }
+
+  private bindingCommandResolverForWorld(
+    input: TemplateCompilerWorldConstructionRequest,
+    handles: CompilerWorldHandleSet,
+    source: CompilerWorldSourceSet,
+  ): BindingCommandResolverService {
+    return new BindingCommandResolverService(
+      handles.bindingResolverProductHandle,
+      handles.bindingResolverIdentityHandle,
       input.bindingCommands.map((command) => command.executable),
       source.addressHandle,
       compactFieldProvenance([
@@ -264,9 +461,16 @@ export class TemplateCompilerWorldMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
-    const templateCompiler = new TemplateCompilerService(
-      templateCompilerProductHandle,
-      templateCompilerIdentityHandle,
+  }
+
+  private templateCompilerServiceForWorld(
+    input: TemplateCompilerWorldConstructionRequest,
+    handles: CompilerWorldHandleSet,
+    source: CompilerWorldSourceSet,
+  ): TemplateCompilerService {
+    return new TemplateCompilerService(
+      handles.templateCompilerProductHandle,
+      handles.templateCompilerIdentityHandle,
       input.container.toReference(),
       source.addressHandle,
       compactFieldProvenance([
@@ -277,9 +481,16 @@ export class TemplateCompilerWorldMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
-    const resourceResolver = new TemplateResourceResolverService(
-      resourceResolverProductHandle,
-      resourceResolverIdentityHandle,
+  }
+
+  private resourceResolverForWorld(
+    input: TemplateCompilerWorldConstructionRequest,
+    handles: CompilerWorldHandleSet,
+    source: CompilerWorldSourceSet,
+  ): TemplateResourceResolverService {
+    return new TemplateResourceResolverService(
+      handles.resourceResolverProductHandle,
+      handles.resourceResolverIdentityHandle,
       input.container.toReference(),
       input.resources,
       source.addressHandle,
@@ -290,9 +501,16 @@ export class TemplateCompilerWorldMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
-    const expressionParser = new TemplateExpressionParserService(
-      expressionParserProductHandle,
-      expressionParserIdentityHandle,
+  }
+
+  private expressionParserForWorld(
+    input: TemplateCompilerWorldConstructionRequest,
+    handles: CompilerWorldHandleSet,
+    source: CompilerWorldSourceSet,
+  ): TemplateExpressionParserService {
+    return new TemplateExpressionParserService(
+      handles.expressionParserProductHandle,
+      handles.expressionParserIdentityHandle,
       input.container.toReference(),
       source.addressHandle,
       compactFieldProvenance([
@@ -301,9 +519,16 @@ export class TemplateCompilerWorldMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
-    const attributeMapper = new TemplateAttributeMapperService(
-      attributeMapperProductHandle,
-      attributeMapperIdentityHandle,
+  }
+
+  private attributeMapperForWorld(
+    input: TemplateCompilerWorldConstructionRequest,
+    handles: CompilerWorldHandleSet,
+    source: CompilerWorldSourceSet,
+  ): TemplateAttributeMapperService {
+    return new TemplateAttributeMapperService(
+      handles.attributeMapperProductHandle,
+      handles.attributeMapperIdentityHandle,
       input.container.toReference(),
       source.addressHandle,
       compactFieldProvenance([
@@ -312,9 +537,16 @@ export class TemplateCompilerWorldMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
-    const rendering = new TemplateRenderingService(
-      renderingProductHandle,
-      renderingIdentityHandle,
+  }
+
+  private renderingServiceForWorld(
+    input: TemplateCompilerWorldConstructionRequest,
+    handles: CompilerWorldHandleSet,
+    source: CompilerWorldSourceSet,
+  ): TemplateRenderingService {
+    return new TemplateRenderingService(
+      handles.renderingProductHandle,
+      handles.renderingIdentityHandle,
       input.container.toReference(),
       input.runtimeRenderers.map((renderer) => renderer.renderer),
       source.addressHandle,
@@ -325,18 +557,18 @@ export class TemplateCompilerWorldMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
-    const services = [
-      templateCompiler.toReference(),
-      resourceResolver.toReference(),
-      attributeParser.toReference(),
-      bindingCommandResolver.toReference(),
-      expressionParser.toReference(),
-      attributeMapper.toReference(),
-      rendering.toReference(),
-    ];
-    const world = new TemplateCompilerWorld(
-      worldProductHandle,
-      worldIdentityHandle,
+  }
+
+  private compilerWorldForProducts(
+    input: TemplateCompilerWorldConstructionRequest,
+    handles: CompilerWorldHandleSet,
+    source: CompilerWorldSourceSet,
+    resourceScope: TemplateResourceScope,
+    services: readonly TemplateCompilerServiceReference[],
+  ): TemplateCompilerWorld {
+    return new TemplateCompilerWorld(
+      handles.worldProductHandle,
+      handles.worldIdentityHandle,
       input.worldKind,
       input.appRoot?.toReference() ?? null,
       input.container.toReference(),
@@ -352,136 +584,64 @@ export class TemplateCompilerWorldMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
+  }
 
-    const claims = this.recordsForClaims(
-      local,
-      world,
-      resourceScope,
-      services,
-      input.resources,
-      syntaxResources,
-      attributeParser,
-      attributeParserMachine,
-      rendering,
-      source.provenanceHandle,
-    );
-    records.push(...claims.allClaims);
-    records.push(
-      identity(worldIdentityHandle, KernelVocabulary.Compiler.World.key, input.container.identityHandle, source),
-      identity(scopeIdentityHandle, KernelVocabulary.Compiler.ResourceScope.key, worldIdentityHandle, source),
-      identity(machineIdentityHandle, KernelVocabulary.Compiler.AttributeParserMachine.key, worldIdentityHandle, source),
-      identity(attributeParserIdentityHandle, KernelVocabulary.Compiler.Service.key, worldIdentityHandle, source, 'IAttributeParser'),
-      identity(bindingResolverIdentityHandle, KernelVocabulary.Compiler.Service.key, worldIdentityHandle, source, 'IBindingCommandResolver'),
-      identity(templateCompilerIdentityHandle, KernelVocabulary.Compiler.Service.key, worldIdentityHandle, source, 'TemplateCompiler'),
-      identity(resourceResolverIdentityHandle, KernelVocabulary.Compiler.Service.key, worldIdentityHandle, source, 'IResourceResolver'),
-      identity(expressionParserIdentityHandle, KernelVocabulary.Compiler.Service.key, worldIdentityHandle, source, 'IExpressionParser'),
-      identity(attributeMapperIdentityHandle, KernelVocabulary.Compiler.Service.key, worldIdentityHandle, source, 'IAttrMapper'),
-      identity(renderingIdentityHandle, KernelVocabulary.Compiler.Service.key, worldIdentityHandle, source, 'Rendering'),
-      new MaterializedProduct(
-        worldProductHandle,
-        KernelVocabulary.Compiler.World.key,
-        worldIdentityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializedProduct(
-        scopeProductHandle,
-        KernelVocabulary.Compiler.ResourceScope.key,
-        scopeIdentityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializedProduct(
-        machineProductHandle,
-        KernelVocabulary.Compiler.AttributeParserMachine.key,
-        machineIdentityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializedProduct(
-        attributeParserProductHandle,
-        KernelVocabulary.Compiler.AttributeParser.key,
-        attributeParserIdentityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializedProduct(
-        bindingResolverProductHandle,
-        KernelVocabulary.Compiler.BindingCommandResolver.key,
-        bindingResolverIdentityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializedProduct(
-        templateCompilerProductHandle,
-        KernelVocabulary.Compiler.Service.key,
-        templateCompilerIdentityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializedProduct(
-        resourceResolverProductHandle,
-        KernelVocabulary.Compiler.Service.key,
-        resourceResolverIdentityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializedProduct(
-        expressionParserProductHandle,
-        KernelVocabulary.Compiler.Service.key,
-        expressionParserIdentityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializedProduct(
-        attributeMapperProductHandle,
-        KernelVocabulary.Compiler.Service.key,
-        attributeMapperIdentityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializedProduct(
-        renderingProductHandle,
-        KernelVocabulary.Compiler.Service.key,
-        renderingIdentityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializationRecord(
-        this.store.handles.materialization(`template-world:${local}`),
-        worldIdentityHandle,
-        [
-          worldProductHandle,
-          scopeProductHandle,
-          machineProductHandle,
-          attributeParserProductHandle,
-          bindingResolverProductHandle,
-          templateCompilerProductHandle,
-          resourceResolverProductHandle,
-          expressionParserProductHandle,
-          attributeMapperProductHandle,
-          renderingProductHandle,
-        ],
-        claims.allClaims.map((claim) => claim.handle),
-      ),
-    );
+  private identityRecordsForWorld(
+    input: TemplateCompilerWorldConstructionRequest,
+    handles: CompilerWorldHandleSet,
+    source: CompilerWorldSourceSet,
+  ): readonly CompilerIdentity[] {
+    return [
+      identity(handles.worldIdentityHandle, KernelVocabulary.Compiler.World.key, input.container.identityHandle, source),
+      identity(handles.scopeIdentityHandle, KernelVocabulary.Compiler.ResourceScope.key, handles.worldIdentityHandle, source),
+      identity(handles.machineIdentityHandle, KernelVocabulary.Compiler.AttributeParserMachine.key, handles.worldIdentityHandle, source),
+      identity(handles.attributeParserIdentityHandle, KernelVocabulary.Compiler.Service.key, handles.worldIdentityHandle, source, 'IAttributeParser'),
+      identity(handles.bindingResolverIdentityHandle, KernelVocabulary.Compiler.Service.key, handles.worldIdentityHandle, source, 'IBindingCommandResolver'),
+      identity(handles.templateCompilerIdentityHandle, KernelVocabulary.Compiler.Service.key, handles.worldIdentityHandle, source, 'TemplateCompiler'),
+      identity(handles.resourceResolverIdentityHandle, KernelVocabulary.Compiler.Service.key, handles.worldIdentityHandle, source, 'IResourceResolver'),
+      identity(handles.expressionParserIdentityHandle, KernelVocabulary.Compiler.Service.key, handles.worldIdentityHandle, source, 'IExpressionParser'),
+      identity(handles.attributeMapperIdentityHandle, KernelVocabulary.Compiler.Service.key, handles.worldIdentityHandle, source, 'IAttrMapper'),
+      identity(handles.renderingIdentityHandle, KernelVocabulary.Compiler.Service.key, handles.worldIdentityHandle, source, 'Rendering'),
+    ];
+  }
 
-    return new TemplateCompilerWorldEmission(
-      world,
-      resourceScope,
-      templateCompiler,
-      resourceResolver,
-      expressionParser,
-      attributeMapper,
-      rendering,
-      attributeParser,
-      attributeParserMachine,
-      bindingCommandResolver,
-      input.attributePatterns,
-      input.bindingCommands,
-      input.runtimeRenderers,
-      syntaxResources,
-      records,
+  private materializedProductRecordsForWorld(
+    handles: CompilerWorldHandleSet,
+    source: CompilerWorldSourceSet,
+  ): readonly MaterializedProduct[] {
+    const products: readonly (readonly [ProductHandle, ProductKindKey, IdentityHandle])[] = [
+      [handles.worldProductHandle, KernelVocabulary.Compiler.World.key, handles.worldIdentityHandle],
+      [handles.scopeProductHandle, KernelVocabulary.Compiler.ResourceScope.key, handles.scopeIdentityHandle],
+      [handles.machineProductHandle, KernelVocabulary.Compiler.AttributeParserMachine.key, handles.machineIdentityHandle],
+      [handles.attributeParserProductHandle, KernelVocabulary.Compiler.AttributeParser.key, handles.attributeParserIdentityHandle],
+      [handles.bindingResolverProductHandle, KernelVocabulary.Compiler.BindingCommandResolver.key, handles.bindingResolverIdentityHandle],
+      [handles.templateCompilerProductHandle, KernelVocabulary.Compiler.Service.key, handles.templateCompilerIdentityHandle],
+      [handles.resourceResolverProductHandle, KernelVocabulary.Compiler.Service.key, handles.resourceResolverIdentityHandle],
+      [handles.expressionParserProductHandle, KernelVocabulary.Compiler.Service.key, handles.expressionParserIdentityHandle],
+      [handles.attributeMapperProductHandle, KernelVocabulary.Compiler.Service.key, handles.attributeMapperIdentityHandle],
+      [handles.renderingProductHandle, KernelVocabulary.Compiler.Service.key, handles.renderingIdentityHandle],
+    ];
+    return products.map(([productHandle, productKindKey, identityHandle]) =>
+      new MaterializedProduct(
+        productHandle,
+        productKindKey,
+        identityHandle,
+        source.addressHandle,
+        source.provenanceHandle,
+      )
+    );
+  }
+
+  private materializationRecordForWorld(
+    local: string,
+    handles: CompilerWorldHandleSet,
+    claims: CompilerWorldClaims,
+  ): MaterializationRecord {
+    return new MaterializationRecord(
+      this.store.handles.materialization(`template-world:${local}`),
+      handles.worldIdentityHandle,
+      handles.materializedProductHandles,
+      claims.allClaims.map((claim) => claim.handle),
     );
   }
 
@@ -516,7 +676,21 @@ export class TemplateCompilerWorldMaterializer {
     rendering: TemplateRenderingService,
     provenanceHandle: ProvenanceHandle,
   ): CompilerWorldClaims {
-    const worldClaims: SemanticClaim[] = [
+    return new CompilerWorldClaims(
+      this.worldClaimsForCompilerWorld(local, world, scope, services, provenanceHandle),
+      this.scopeClaimsForCompilerWorld(local, scope, resources, syntaxResources, provenanceHandle),
+      this.serviceClaimsForCompilerWorld(local, attributeParser, attributeParserMachine, rendering, provenanceHandle),
+    );
+  }
+
+  private worldClaimsForCompilerWorld(
+    local: string,
+    world: TemplateCompilerWorld,
+    scope: TemplateResourceScope,
+    services: readonly TemplateCompilerServiceReference[],
+    provenanceHandle: ProvenanceHandle,
+  ): readonly SemanticClaim[] {
+    const claims: SemanticClaim[] = [
       new SemanticClaim(
         this.store.handles.claim(`template-world:${local}:uses-resource-scope`),
         world.productHandle,
@@ -525,12 +699,11 @@ export class TemplateCompilerWorldMaterializer {
         provenanceHandle,
       ),
     ];
-    const scopeClaims: SemanticClaim[] = [];
     services.forEach((service, index) => {
       if (service.productHandle == null) {
         return;
       }
-      worldClaims.push(new SemanticClaim(
+      claims.push(new SemanticClaim(
         this.store.handles.claim(`template-world:${local}:uses-service:${index}`),
         world.productHandle,
         KernelVocabulary.Compiler.UsesService.key,
@@ -538,20 +711,20 @@ export class TemplateCompilerWorldMaterializer {
         provenanceHandle,
       ));
     });
+    return claims;
+  }
+
+  private scopeClaimsForCompilerWorld(
+    local: string,
+    scope: TemplateResourceScope,
+    resources: readonly TemplateVisibleResource[],
+    syntaxResources: readonly TemplateVisibleResource[],
+    provenanceHandle: ProvenanceHandle,
+  ): readonly SemanticClaim[] {
+    const claims: SemanticClaim[] = [];
     resources.forEach((resource, index) => {
-      if (resource.resourceProductHandle == null) {
-        if (resource.definitionProductHandle == null) {
-          return;
-        }
-      }
-      const productHandles = [
-        resource.resourceProductHandle,
-        resource.definitionProductHandle,
-      ].filter((productHandle, productIndex): productHandle is ProductHandle =>
-        productHandle != null && (productIndex === 0 || productHandle !== resource.resourceProductHandle)
-      );
-      for (const [productIndex, productHandle] of productHandles.entries()) {
-        scopeClaims.push(new SemanticClaim(
+      for (const [productIndex, productHandle] of productHandlesForVisibleResource(resource).entries()) {
+        claims.push(new SemanticClaim(
           this.store.handles.claim(`template-resource-scope:${local}:provides-resource:${index}:${productIndex}`),
           scope.productHandle,
           KernelVocabulary.Compiler.ProvidesResource.key,
@@ -564,7 +737,7 @@ export class TemplateCompilerWorldMaterializer {
       if (resource.resourceProductHandle == null) {
         return;
       }
-      scopeClaims.push(new SemanticClaim(
+      claims.push(new SemanticClaim(
         this.store.handles.claim(`template-resource-scope:${local}:provides-syntax-resource:${index}`),
         scope.productHandle,
         KernelVocabulary.Compiler.ProvidesSyntaxResource.key,
@@ -572,48 +745,80 @@ export class TemplateCompilerWorldMaterializer {
         provenanceHandle,
       ));
     });
-    const serviceClaims: SemanticClaim[] = [
-      new SemanticClaim(
-        this.store.handles.claim(`attribute-parser:${local}:uses-machine`),
-        attributeParser.productHandle,
-        KernelVocabulary.Compiler.UsesAttributeParserMachine.key,
-        attributeParserMachine.productHandle,
-        provenanceHandle,
-      ),
+    return claims;
+  }
+
+  private serviceClaimsForCompilerWorld(
+    local: string,
+    attributeParser: AttributeParserService,
+    attributeParserMachine: AttributeParserMachine,
+    rendering: TemplateRenderingService,
+    provenanceHandle: ProvenanceHandle,
+  ): readonly SemanticClaim[] {
+    return [
+      this.attributeParserUsesMachineClaim(local, attributeParser, attributeParserMachine, provenanceHandle),
+      ...this.attributeParserMachinePatternClaims(local, attributeParserMachine, provenanceHandle),
+      ...this.renderingRendererClaims(local, rendering, provenanceHandle),
     ];
-    attributeParserMachine.compiledPatternProductHandles.forEach((productHandle, index) => {
-      serviceClaims.push(new SemanticClaim(
-        this.store.handles.claim(`attribute-parser-machine:${local}:uses-compiled-pattern:${index}`),
-        attributeParserMachine.productHandle,
-        KernelVocabulary.Compiler.UsesCompiledAttributePattern.key,
-        productHandle,
-        provenanceHandle,
-      ));
-    });
-    rendering.renderers.forEach((renderer, index) => {
-      if (renderer.productHandle == null) {
-        return;
-      }
-      serviceClaims.push(new SemanticClaim(
+  }
+
+  private attributeParserUsesMachineClaim(
+    local: string,
+    attributeParser: AttributeParserService,
+    attributeParserMachine: AttributeParserMachine,
+    provenanceHandle: ProvenanceHandle,
+  ): SemanticClaim {
+    return new SemanticClaim(
+      this.store.handles.claim(`attribute-parser:${local}:uses-machine`),
+      attributeParser.productHandle,
+      KernelVocabulary.Compiler.UsesAttributeParserMachine.key,
+      attributeParserMachine.productHandle,
+      provenanceHandle,
+    );
+  }
+
+  private attributeParserMachinePatternClaims(
+    local: string,
+    attributeParserMachine: AttributeParserMachine,
+    provenanceHandle: ProvenanceHandle,
+  ): readonly SemanticClaim[] {
+    return attributeParserMachine.compiledPatternProductHandles.map((productHandle, index) => new SemanticClaim(
+      this.store.handles.claim(`attribute-parser-machine:${local}:uses-compiled-pattern:${index}`),
+      attributeParserMachine.productHandle,
+      KernelVocabulary.Compiler.UsesCompiledAttributePattern.key,
+      productHandle,
+      provenanceHandle,
+    ));
+  }
+
+  private renderingRendererClaims(
+    local: string,
+    rendering: TemplateRenderingService,
+    provenanceHandle: ProvenanceHandle,
+  ): readonly SemanticClaim[] {
+    return rendering.renderers.flatMap((renderer, index) => renderer.productHandle == null
+      ? []
+      : [new SemanticClaim(
         this.store.handles.claim(`rendering:${local}:uses-runtime-renderer:${index}`),
         rendering.productHandle,
         KernelVocabulary.Compiler.RenderingServiceUsesRenderer.key,
         renderer.productHandle,
         provenanceHandle,
-      ));
-    });
-    return new CompilerWorldClaims(worldClaims, scopeClaims, serviceClaims);
+      )]);
   }
 }
 
-function claimsForProduct(
-  claims: readonly SemanticClaim[],
-  productHandle: ProductHandle,
-): readonly SemanticClaim[] {
-  return claims.filter((claim) =>
-    claim.subjectHandle === productHandle
-    || claim.objectHandle === productHandle
-  );
+function syntaxResourcesForInput(
+  input: TemplateCompilerWorldConstructionRequest,
+): readonly TemplateVisibleResource[] {
+  return [
+    ...input.attributePatterns.map((pattern) =>
+      visibleAttributePattern(pattern, input.syntaxVisibilityKind)
+    ),
+    ...input.bindingCommands.map((command) =>
+      visibleBindingCommand(command, input.syntaxVisibilityKind)
+    ),
+  ];
 }
 
 function visibleAttributePattern(
@@ -647,6 +852,17 @@ function visibleBindingCommand(
     null,
     visibilityKind,
     emission.executable.sourceAddressHandle,
+  );
+}
+
+function productHandlesForVisibleResource(
+  resource: TemplateVisibleResource,
+): readonly ProductHandle[] {
+  return [
+    resource.resourceProductHandle,
+    resource.definitionProductHandle,
+  ].filter((productHandle, productIndex): productHandle is ProductHandle =>
+    productHandle != null && (productIndex === 0 || productHandle !== resource.resourceProductHandle)
   );
 }
 

@@ -34,7 +34,7 @@ export const enum FrameworkBundleAssociationKind {
 }
 
 /** Minimal source association shape needed to classify admission axes. */
-export interface FrameworkAdmissionAssociationInput {
+export interface FrameworkAdmissionAssociationSource {
   /** Bundle association classifier. */
   readonly associationKind: FrameworkBundleAssociationKind;
   /** Registration helper call name, when the association came through one. */
@@ -109,7 +109,7 @@ export interface FrameworkAdmissionRelationshipRow {
 
 /** Classify evaluator bundle associations into shared relationship axes. */
 export function classifyFrameworkAdmissionAssociation(
-  association: FrameworkAdmissionAssociationInput,
+  association: FrameworkAdmissionAssociationSource,
 ): FrameworkAdmissionClassification {
   return {
     relation: admissionRelationForAssociation(),
@@ -123,7 +123,7 @@ function admissionRelationForAssociation(): FrameworkRelationshipRelation {
 }
 
 function admissionMechanismForAssociation(
-  association: FrameworkAdmissionAssociationInput,
+  association: FrameworkAdmissionAssociationSource,
 ): FrameworkRelationshipMechanism {
   if (
     association.associationKind ===
@@ -156,7 +156,7 @@ function admissionMechanismForAssociation(
 }
 
 function admissionPhaseForAssociation(
-  association: FrameworkAdmissionAssociationInput,
+  association: FrameworkAdmissionAssociationSource,
 ): FrameworkRelationshipPhase {
   if (
     association.associationKind ===

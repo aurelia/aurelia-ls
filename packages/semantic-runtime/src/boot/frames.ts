@@ -1,7 +1,6 @@
 import type { AddressHandle, EvidenceHandle, ProvenanceHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { SourceLanguage } from '../kernel/address.js';
-import type { SourceDiscoveryResult } from './source-discovery.js';
 
 /** Input source admitted during boot before Aurelia semantics are interpreted. */
 export interface BootSourceFileInput {
@@ -33,6 +32,22 @@ export interface BootWorkspaceInput {
   readonly store?: KernelStore;
   /** Project frames to boot; omitted creates one project at the workspace root. */
   readonly projects?: readonly BootProjectInput[];
+}
+
+/** Source discovery result before TypeScript or Aurelia semantics are interpreted. */
+export class SourceDiscoveryResult {
+  constructor(
+    /** Root directory that was scanned or attempted. */
+    readonly rootDir: string,
+    /** Source files admitted by the discovery pass. */
+    readonly sourceFiles: readonly BootSourceFileInput[],
+    /** Whether the root directory existed when discovery ran. */
+    readonly rootExists: boolean,
+    /** Whether discovery stopped because it reached the configured file limit. */
+    readonly truncated: boolean,
+    /** Maximum file count used by discovery; null means no explicit file limit. */
+    readonly maxFiles: number | null,
+  ) {}
 }
 
 /** Kernel handles produced when a source file is admitted into the active analysis world. */

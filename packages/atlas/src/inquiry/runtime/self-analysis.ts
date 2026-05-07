@@ -115,6 +115,8 @@ export interface AtlasSelfClassSurfaceRow {
   readonly abstract: boolean;
   /** Source file that owns the class. */
   readonly filePath: string;
+  /** Declaration span line count. */
+  readonly lineCount: number;
   /** Base class expression text when present. */
   readonly extendsType: string | null;
   /** Implemented interface/type expression text when present. */
@@ -155,6 +157,12 @@ export interface AtlasSelfFunctionSurfaceRow {
   readonly exported: boolean;
   /** Source file that owns the declaration. */
   readonly filePath: string;
+  /** Declaration span line count. */
+  readonly lineCount: number;
+  /** Direct call-expression count inside this declaration, excluding nested executable declarations. */
+  readonly callCount: number;
+  /** Unique locally resolved call targets observed inside this declaration. */
+  readonly uniqueCallTargetCount: number;
   /** Exact declaration source. */
   readonly source: SourceRange;
   /** Compact row summary. */
@@ -1102,6 +1110,8 @@ function classSurfaceForDeclaration(
   ).length;
   const methodCount = methods.length + staticMethods.length;
   const propertyCount = properties.length + accessors.length;
+  const source = sourceRangeForNode(sourceFile, filePath, node);
+  const lineCount = source.end.line - source.start.line + 1;
   return {
     id: `atlas-self:class:${packageId}:${filePath}:${node.name!.text}`,
     packageId,
@@ -1109,6 +1119,7 @@ function classSurfaceForDeclaration(
     exported: hasModifier(node, ts.SyntaxKind.ExportKeyword),
     abstract: hasModifier(node, ts.SyntaxKind.AbstractKeyword),
     filePath,
+    lineCount,
     extendsType,
     implementsTypes,
     methods,
@@ -1118,10 +1129,10 @@ function classSurfaceForDeclaration(
     constructorCount,
     methodCount,
     propertyCount,
-    source: sourceRangeForNode(sourceFile, filePath, node),
+    source,
     summary: `${
       node.name!.text
-    } exposes ${methodCount} method(s), ${propertyCount} property/accessor surface(s), and ${constructorCount} constructor declaration(s).`,
+    } spans ${lineCount} line(s) and exposes ${methodCount} method(s), ${propertyCount} property/accessor surface(s), and ${constructorCount} constructor declaration(s).`,
   };
 }
 
@@ -1131,6 +1142,8 @@ function functionSurfaceForFunctionDeclaration(
   filePath: string,
   node: ts.FunctionDeclaration,
 ): AtlasSelfFunctionSurfaceRow {
+  const source = sourceRangeForNode(sourceFile, filePath, node);
+  const callStats = callStatsForFunctionLike(node, null);
   return {
     id: `atlas-self:function:${packageId}:${filePath}:${node.name!.text}`,
     packageId,
@@ -1139,8 +1152,11 @@ function functionSurfaceForFunctionDeclaration(
     className: null,
     exported: hasModifier(node, ts.SyntaxKind.ExportKeyword),
     filePath,
-    source: sourceRangeForNode(sourceFile, filePath, node),
-    summary: `${node.name!.text} is a top-level function in ${filePath}.`,
+    lineCount: lineCountForSourceRange(source),
+    callCount: callStats.callCount,
+    uniqueCallTargetCount: callStats.uniqueCallTargetCount,
+    source,
+    summary: `${node.name!.text} is a top-level function in ${filePath} with ${callStats.callCount} direct call(s).`,
   };
 }
 
@@ -1152,6 +1168,8 @@ function functionSurfaceForMethodDeclaration(
   functionName: string,
   className: string | null,
 ): AtlasSelfFunctionSurfaceRow {
+  const source = sourceRangeForNode(sourceFile, filePath, node);
+  const callStats = callStatsForFunctionLike(node, className);
   return {
     id: `atlas-self:function:${packageId}:${filePath}:${functionName}`,
     packageId,
@@ -1160,9 +1178,49 @@ function functionSurfaceForMethodDeclaration(
     className,
     exported: methodOwningClassIsExported(node),
     filePath,
-    source: sourceRangeForNode(sourceFile, filePath, node),
-    summary: `${functionName} is a class method in ${filePath}.`,
+    lineCount: lineCountForSourceRange(source),
+    callCount: callStats.callCount,
+    uniqueCallTargetCount: callStats.uniqueCallTargetCount,
+    source,
+    summary: `${functionName} is a class method in ${filePath} with ${callStats.callCount} direct call(s).`,
   };
+}
+
+function callStatsForFunctionLike(
+  node: ts.FunctionDeclaration | ts.MethodDeclaration,
+  currentClass: string | null,
+): { readonly callCount: number; readonly uniqueCallTargetCount: number } {
+  let callCount = 0;
+  const targets = new Set<string>();
+  const visit = (child: ts.Node): void => {
+    if (child !== node && isNestedExecutableDeclaration(child)) {
+      return;
+    }
+    if (ts.isCallExpression(child)) {
+      callCount += 1;
+      const target = calledFunctionName(child, currentClass);
+      if (target !== null) {
+        targets.add(target);
+      }
+    }
+    ts.forEachChild(child, visit);
+  };
+  visit(node);
+  return {
+    callCount,
+    uniqueCallTargetCount: targets.size,
+  };
+}
+
+function isNestedExecutableDeclaration(node: ts.Node): boolean {
+  return ts.isFunctionDeclaration(node) ||
+    ts.isFunctionExpression(node) ||
+    ts.isArrowFunction(node) ||
+    ts.isMethodDeclaration(node) ||
+    ts.isGetAccessor(node) ||
+    ts.isSetAccessor(node) ||
+    ts.isConstructorDeclaration(node) ||
+    ts.isClassDeclaration(node);
 }
 
 function methodOwningClassIsExported(node: ts.MethodDeclaration): boolean {
@@ -2636,17 +2694,7 @@ function axisMapperPressureForFunctionLike(
     return [];
   }
   const source = sourceRangeForNode(sourceFile, filePath, node);
-  const returnsFrameworkRelationshipAxis = targetAxes.some(
-    (axis) =>
-      axis.includes("FrameworkRelationship") ||
-      axis.includes("FrameworkBundleAssociation") ||
-      axis.includes("FrameworkMaterialization"),
-  );
-  const pressure = returnsFrameworkRelationshipAxis
-    ? "high"
-    : targetAxes.length > 1
-    ? "medium"
-    : "low";
+  const pressure = axisMapperFunctionPressure(targetAxes, sourceAxes);
   return [
     {
       id: `atlas-self:axis-pressure:mapper:${filePath}:${functionName}`,
@@ -2670,6 +2718,31 @@ function axisMapperPressureForFunctionLike(
       }.`,
     },
   ];
+}
+
+function axisMapperFunctionPressure(
+  targetAxes: readonly string[],
+  sourceAxes: readonly string[],
+): AtlasSelfAxisPressureRow["pressure"] {
+  const frameworkAxisCount = targetAxes.filter(isFrameworkSemanticAxis).length;
+  if (frameworkAxisCount > 1) {
+    return "high";
+  }
+  if (
+    frameworkAxisCount === 1 &&
+    (targetAxes.length > 1 || sourceAxes.length > 1)
+  ) {
+    return "medium";
+  }
+  return targetAxes.length > 1 ? "medium" : "low";
+}
+
+function isFrameworkSemanticAxis(axis: string): boolean {
+  return (
+    axis.includes("FrameworkRelationship") ||
+    axis.includes("FrameworkBundleAssociation") ||
+    axis.includes("FrameworkMaterialization")
+  );
 }
 
 function parallelAxisPressure(
@@ -2953,6 +3026,10 @@ function sourceRangeForNode(
   node: ts.Node,
 ): SourceRange {
   return sourceRangeFromFileSpan(filePath, sourceSpan(sourceFile, node));
+}
+
+function lineCountForSourceRange(source: SourceRange): number {
+  return source.end.line - source.start.line + 1;
 }
 
 function sourceSpan(sourceFile: ts.SourceFile, node: ts.Node): SourceSpan {

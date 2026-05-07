@@ -33,8 +33,7 @@ classification, expression parsing, and instruction lowering converge on the sam
 - `template-compilation-project-pass.ts` is the current project-level template entrypoint. It consumes app-world
   compiler worlds and compiler-visible custom element definitions, then runs compilation-unit materialization, HTML
   parsing, attribute syntax parsing, attribute classification, compiler-owned value-site selection, binding-command
-  lowering, compiled-template handoff materialization, runtime Rendering dispatch, and TypeChecker-backed scope
-  projection.
+  lowering, compiled-template handoff materialization, and the runtime-analysis phase.
 - `html-ir.ts` models authored HTML before Aurelia syntax interpretation. It preserves source addresses and recovery
   observations without performing resource lookup.
 - `html-parse-materializer.ts` is the HTML materialization boundary. It spends a template compilation unit into authored
@@ -55,7 +54,8 @@ classification, expression parsing, and instruction lowering converge on the sam
 - `value-site.ts` and `value-site-materializer.ts` model the compiler-owned handoff from authored template
   values into expression parser publications. They preserve value-site provenance above the parser and deliberately
   transfer ownership away from the parser for binding-command values and secondary grammars that need command/compiler
-  preprocessing first.
+  preprocessing first. Direct spread values are parser-owned here as `SpreadValue` sites so `...$bindables="source"`
+  and shorthand `...source` lower through expression products instead of becoming static attributes.
 - `binding-command-execution.ts` models runtime binding-command executables, resolver state, command build inputs, and
   lowering results. Custom command bodies can stay opaque while still preserving the exact command/input boundary.
 - `binding-command-lowering-materializer.ts` spends command-bearing attribute classifications and custom-attribute
@@ -63,12 +63,19 @@ classification, expression parsing, and instruction lowering converge on the sam
   bindable lookup. Built-in commands and closed multi-binding segments emit instruction products plus expression parses;
   custom command bodies, unresolved commands, and invalid segment targets become explicit open seams rather than
   parser-owned special cases.
+- `multi-binding-segments.ts` owns the source-offset-preserving parser for inline custom-attribute multi-binding
+  segments. Keep raw segment splitting there so command lowering can focus on product publication and executable
+  handoff.
 - `compiled-template.ts` and `compiled-template-materializer.ts` model the compiler/runtime handoff that the runtime
   stores as transformed template DOM, target rows, surrogate rows, and `ICompiledElementComponentDefinition`
   instructions. This is the point where authored HTML plus lowered instructions become render targets and instruction
   sequences. The materializer now assembles runtime-shaped rows for text interpolation, let elements, custom elements,
-  custom attributes, template controllers, static/property-set instructions, and command-produced bindings, while
-  keeping compiler DOM work that still needs sharper modeling visible through open seams.
+  custom attributes, template controllers, surrogate host attribute instructions, static/property-set instructions, and
+  command-produced bindings, while keeping compiler DOM work that still needs sharper modeling visible through open
+  seams. It also lowers direct spread syntax to `SpreadTransferedBindingInstruction` or
+  `SpreadValueBindingInstruction` at this boundary, matching Aurelia compiler behavior instead of routing spread through
+  static set-property fallback. `...$attrs` stays on the transferred plain-instruction lane; spread values such as
+  `...$bindables` stay on the spread-value bindable lane.
   Custom-element `processContent` hooks are treated as owning the child-DOM transform: the assembler can still emit the
   element's direct hydration row, but it does not compile the authored children through as ordinary content unless that
   hook execution is modeled.
@@ -76,20 +83,109 @@ classification, expression parsing, and instruction lowering converge on the sam
   instruction sequences. `runtime-renderer.ts` contains the concrete runtime renderer emulators: controller renderers
   create child controller frames and binding renderers return runtime binding instances that are attached to the
   invoking controller, matching `Controller.addBinding` / `Controller.addChild` rather than a loose instruction
-  post-pass.
+  post-pass. Static renderers now emit renderer-owned target-operation products for property set, attribute set,
+  class-list add, and cssText append; surrogate rows render against the host target lane before ordinary target rows,
+  matching Aurelia's `definition.surrogates` pass. `SpreadBinding` is the deliberate exception to direct controller
+  admission: it can own dynamically compiled inner bindings created by `TemplateCompiler.compileSpread(...)`, and those
+  ownership edges are recorded as binding-to-binding claims so the later `Controller.bind` emulation still walks them.
+- `runtime-spread-compile-host.ts` contains the runtime-shaped
+  `TemplateCompiler.compileSpread(...)` host used by rendering. Keep captured-attribute command lowering, dynamic
+  instruction allocation, dynamic value-site/expression publication, and `SpreadElementPropBindingInstruction`
+  wrapping there instead of growing the rendering materializer into a second compiler. Dynamic spread-created
+  instructions publish
+  `instruction.dynamic-instruction-originates-from-captured-attribute-syntax` claims so scope construction can
+  reconnect them to the parent `HydrateElementInstruction` that captured the attribute without a renderer-local
+  provenance side channel.
+- `template-runtime-analysis.ts` owns the post-compiled-template runtime/checker phase: runtime Rendering dispatch,
+  template scope construction, `Controller.bind` emulation, observer value-channel projection, and binding data-flow
+  materialization. Runtime analysis runs after the project has compiled every template front door, and receives
+  `TemplateRuntimeAnalysisProjectContext` so controller products can be linked to already-known compiled templates.
+  Custom-element controllers publish `configuration.controller-uses-compiled-template` claims; template-controller
+  controllers publish `configuration.controller-uses-instruction-sequence` claims for their nested child sequence. Those
+  controllers also materialize an `IViewFactory` product with a generated embedded custom-element definition, matching
+  the `ViewFactory.def` shape produced by `Rendering.getViewFactory(...)`. The factory links to both that definition and
+  the child instruction sequence, creates an aggregate `SyntheticViewController` product, and runs a child
+  `Rendering.render(...)` pass for the embedded instruction sequence, mirroring `TemplateControllerRenderer ->
+  Rendering.getViewFactory(...) -> factory.create(...) -> Controller.$view(...) -> _hydrateSynthetic()`. This is
+  intentionally aggregate/cardinality-aware rather than per-runtime-instance: the controller row records `many`,
+  `optional`, or `single` through template-controller semantics. The synthetic render pass groups embedded instructions
+  by authored target node before dispatch so nested renderer and spread-compile logic can still see the target node.
+  Recursive rendering work should extend this phase instead of pulling runtime instance concerns back into the
+  compiler-front-door pass.
+- `template-controller-scope-materializer.ts` owns the TypeChecker-backed control-flow handoff for built-in template
+  controllers. It now publishes link-hook claims for branch controllers whose framework `link(...)` method attaches
+  them to another template controller: `else` links to the previous `if`, promise result controllers link to the parent
+  `promise`, and switch cases/defaults link to `switch` when present. Keep these branch relationships in the controller
+  graph rather than baking them into expression evaluation.
 - `runtime-controller.ts` is the mutable render-time controller frame used while renderer emulation runs. It freezes
   into auLink-backed controller products from `configuration/controller.ts` after scope projection has attached modeled
-  `Scope` references; the frame itself is not the durable product.
+  `Scope` references; the frame itself is not the durable product. The frame keeps an exact local lifecycle timeline
+  for the framework-shaped operations semantic-runtime currently emulates: creation, child-container setup, child and
+  binding admission, view-factory/synthetic-view handoff, render dispatch, Scope attachment, and bind. Public controller
+  rows compress consecutive repeated steps so broad app reads stay useful, but the underlying frame remains exact enough
+  for future phase-specific projections.
 - `runtime-rendering-materializer.ts` records renderer-created controller products, binding products, scope effects,
-  durable handle allocation, provenance, materialization, and renderer/controller/binding claims. Binding and
-  scope-effect details are attached immediately; controller details are attached by scope materialization so their
-  `scope` fields do not freeze before the modeled runtime scope exists. `runtime-binding.ts` holds the resulting
-  binding and scope-effect models.
+  binding render contexts, durable handle allocation, provenance, materialization, and renderer/controller/binding
+  claims. Binding and scope-effect details are attached immediately; controller details are attached by scope
+  materialization so their `scope` fields do not freeze before the modeled runtime scope exists.
+  `runtime-binding.ts` holds the framework-shaped binding, target-access, value-channel, data-flow, and scope-effect
+  model classes. Observation-owned value-channel and data-flow detail slots live in
+  `observation/product-details.ts`.
+- `runtime-controller-bind-materializer.ts` owns the explicit `Controller.bind` materialization layer. It asks
+  `RuntimeControllerFrame.bind(...)` to walk controller-owned bindings, then records the target-side contributions
+  requested by framework-shaped binding classes. `PropertyBinding` and `InterpolationBinding` publish
+  `ObserverLocator` / `NodeObserverLocator` target-access products; `AttributeBinding.updateTarget(...)` publishes
+  direct target-operation products for `.class`, `.style`, and ordinary attribute writes, while
+  `ContentBinding.updateTarget(...)` publishes text-content target operations for text interpolation and
+  `ListenerBinding.bind(...)` publishes event-listener subscription operations. `RefBinding.updateSource(...)` publishes
+  source-operation products for resolved ref targets instead of masquerading as a DOM target update; `element.ref`
+  resolves through TypeChecker-backed HTML tag maps, while component/custom-attribute/controller refs resolve through
+  the renderer-created controller tree. Target-access rows record whether
+  bind-time asks for an accessor or observer, whether the target is a native node or controller view-model, and the
+  selected built-in access strategy for common form controls and presentation targets such as input value, checkbox
+  checked, select value, textarea value, class/style accessors, and ordinary element properties. The access strategy is
+  selected by `observation/observer-locator.ts`, which combines framework node observer configuration with TypeChecker
+  target/property facts. Controller view-model targeting comes from renderer dispatch and child-controller creation, not
+  from tag-name heuristics. Object-side observation follows Aurelia's framework fallbacks: accessor lookups select the
+  runtime `PropertyAccessor`, while observer lookups select `ComputedObserver` for readonly getter-like members or
+  `SetterObserver` for ordinary and dynamically-created keys. The checker still contributes property existence,
+  writability, and type facts for downstream policy and data-flow products.
+- `observation/binding-value-channel-materializer.ts` turns target-access and target-operation products into
+  value-channel products before source/target flow is checked. This keeps special form-control semantics, such as static
+  `SelectValueObserver` option domains, static multi-select array element domains, plain checkbox boolean flow, radio
+  element values, checkbox collection membership values, class token channels, class toggle channels, style rule
+  channels, and style property channels, out of API glue and renderer dispatch. It consumes compiler-lowered sibling
+  `model.bind`, `value.bind`, and `multiple.bind` property bindings for element values and select mode, and consumes
+  lowered `AttributeBinding`/`InterpolationBinding` products for `.class`, `.style`, `class="${...}"`, and
+  `style="${...}"` sites so compiler behavior remains visible as products. It also consumes `RefBinding` source
+  operations as `ref-target` channels, keeping source assignment separate from target mutation. `SpreadValueBinding`
+  emits one value channel per statically known target bindable, reflecting the runtime's per-bindable inner
+  `PropertyBinding` creation without creating a second renderer-owned instruction layer.
+- After scope projection, `observation/binding-data-flow-materializer.ts` materializes a separate source/target flow
+  product for each runtime property binding, attribute binding, interpolation, ref binding, and spread value binding with
+  target access, target operation, source operation, or explicit open value channel. It spends the instruction's modeled
+  `Scope`, the expression parser publication, runtime-side facts, and value-channel facts to record direction, source
+  type, raw target property type, runtime target value type, source writability, TypeChecker assignability, and open flow
+  pressure without expanding runtime rendering. For spread value bindings, the flow projects each target bindable key
+  through the spread expression's source type, for example `bindings.productId` into a `product-id`/`productId`
+  bindable.
 - `template-controller-scope-materializer.ts` spends the controller tree plus runtime binding scope effects into
   runtime-shaped `Scope`, binding-context, and override-context products. Controller and `Scope` model classes own the
   construction shapes; the materializer only preserves template-order effects and commits records.
-  It preserves the CE boundary-scope rule, repeat local binding-context rule, repeat override contextual names, and
+  It preserves the CE boundary-scope rule, repeat local binding-context rule, repeat override contextual names,
+  `with.bind` object binding-context rule, branch-local `if.bind`/`else` narrowing, promise result locals, and
   let-binding target-context rule so expression inquiry can use the same scope substrate as runtime-shaped compilation.
+  Dynamic instructions compiled from closed `...$attrs` captures first try to reuse the parent usage scope that captured
+  the attribute; this lets wrapper components forward expressions such as `value.bind="email"` into an inner input
+  while typechecking `email` against the parent view model. They still receive a root-scope fallback when no capture
+  scope can be found. Definition-level spread fallback groups captures by parent `HydrateElementInstruction` usage, so
+  wrapper components under built-in template controllers can keep the child-view scope that the controller semantics
+  produced. Repeated runtime instances still need instance-specific controller/template products beyond the current
+  definition-level aggregate rows.
+- `template-controller-semantics.ts` records built-in template-controller child-scope, child-view cardinality, and
+  control-flow roles as product-side semantic profiles. The built-in resource descriptors remain the single auLink
+  anchors for runtime-html template-controller classes; these profiles are behavior data consumed by scope, controller,
+  and API projections rather than separate framework mirror placements.
 - `built-in-syntax.ts` records framework-provided attribute-pattern and binding-command handlers as concrete
   runtime-shaped model classes with `auLink` anchors.
 - `built-in-syntax-catalog-materializer.ts` materializes framework-owned syntax catalogs into kernel-backed catalog, executable,
@@ -167,15 +263,20 @@ Runtime `DefaultBindingSyntax` also registers `EventModifierRegistration`. That 
 pattern or binding command, so it is intentionally not part of the built-in syntax catalog yet. Model it as a separate
 renderer/listener modifier surface when instruction lowering or renderer-world materialization needs it.
 
-Renderer-created child controllers intentionally carry an open container reference today. Runtime custom elements,
-custom attributes, and template controllers do not simply reuse the compiler-world container; they go through
-element/attribute container creation and hydration-context handoff. Keep this open seam visible until the DI/controller
-child-container materializer exists.
+Renderer-created child controllers now materialize runtime child containers instead of carrying open container
+references. This covers the common element/attribute hydration path: a child container product, the built-in
+`IContainer` self resolver, and the contextual resolver slots for host node, controller, instruction, render location,
+view factory, slots info, and custom-element hydration context. Keep deeper controller activation facts separate:
+view-model instance resolvers, definition dependency registration, view-factory-owned containers, synthetic-view
+containers, and cross-template per-instance parent container chains should land as explicit products when app pressure
+needs them.
 
 Runtime Rendering is downstream of compiled-template products, not raw binding-command lowerings. Do not let renderer
 emulation consume unassembled instruction lists as if target rows, transformed DOM markers, surrogate instructions, and
 template-controller child templates already existed. If the runtime compiler would have inserted markers or created a
-child `CompilationContext`, model that at the compiled-template boundary first.
+child `CompilationContext`, model that at the compiled-template boundary first. Root `<template>` host attributes are
+the current closed surrogate slice; more complex surrogate invalid/edge cases should either lower explicitly or stay
+visible as compiler seams.
 
 `processContent`, content projection, and containerless child handling are compiler DOM transforms, not ordinary
 instruction gaps. Keep their seam vocabulary in the compiler namespace and do not let these cases fall back to a generic

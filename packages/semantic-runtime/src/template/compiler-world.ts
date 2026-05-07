@@ -7,7 +7,7 @@ import type {
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { AppRootReference } from '../configuration/app-root.js';
-import type { ContainerReference } from '../di/container.js';
+import type { ContainerReference } from '../di/container-reference.js';
 import type { ExpressionType } from '../expression/ast.js';
 import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
 import { ExpressionParser } from '../expression/expression-parser.js';
@@ -36,14 +36,17 @@ import {
   type TemplateInstruction,
 } from './instruction-ir.js';
 import type { AttributeSyntax } from './attribute-syntax.js';
-import type {
-  CompiledTemplate,
+import {
   TemplateRenderTarget,
+  TemplateRenderTargetKind,
+  type CompiledTemplate,
 } from './compiled-template.js';
 import type { TemplateInstructionSequence } from './instruction-ir.js';
 import {
+  SpreadBinding,
   type RuntimeBinding,
   type RuntimeBindingScopeEffect,
+  type RuntimeTargetOperation,
 } from './runtime-binding.js';
 import {
   RuntimeRendererAllocation,
@@ -51,12 +54,13 @@ import {
   RuntimeRendererInvocation,
   RuntimeRendererSpreadCompileInput,
   RuntimeRendererSpreadCompileResult,
+  RuntimeRendererSpreadCompileState,
   type RuntimeRenderer,
-  type RuntimeRendererReference,
   type RuntimeRenderingRun,
 } from './runtime-renderer.js';
+import type { RuntimeRendererReference } from './runtime-renderer-reference.js';
 import type {
-  RuntimeControllerCreationInput,
+  RuntimeControllerCreationRequest,
   RuntimeControllerFrame,
 } from './runtime-controller.js';
 import {
@@ -64,6 +68,13 @@ import {
   shouldDefaultToTwoWay,
   type TemplateAttributeMapperNode,
 } from './attribute-mapper.js';
+import {
+  TemplateBindableReference,
+  TemplateCompilerServiceKind,
+  TemplateCompilerServiceReference,
+  TemplateResourceVisibilityKind,
+  TemplateVisibleResource,
+} from './compiler-world-reference.js';
 
 export const enum TemplateCompilerWorldKind {
   /** Compiler world for an app root or app-level container. */
@@ -74,36 +85,6 @@ export const enum TemplateCompilerWorldKind {
   SyntheticView = 'synthetic-view',
   /** Compiler world exists but its owner is still open. */
   Unknown = 'unknown',
-}
-
-export const enum TemplateCompilerServiceKind {
-  /** Runtime TemplateCompiler service. */
-  TemplateCompiler = 'template-compiler',
-  /** Runtime IResourceResolver service for custom element/custom attribute lookup and bindable maps. */
-  ResourceResolver = 'resource-resolver',
-  /** Runtime IAttributeParser service for raw attribute syntax classification. */
-  AttributeParser = 'attribute-parser',
-  /** Runtime IBindingCommandResolver service for binding command lookup. */
-  BindingCommandResolver = 'binding-command-resolver',
-  /** Expression parser used by binding commands and renderers. */
-  ExpressionParser = 'expression-parser',
-  /** Attribute mapper used by binding commands and plain-attribute lowering. */
-  AttributeMapper = 'attribute-mapper',
-  /** Runtime Rendering service that dispatches lowered instructions to IRenderer products. */
-  Rendering = 'rendering',
-}
-
-export const enum TemplateResourceVisibilityKind {
-  /** Resource is visible through the current container. */
-  Local = 'local',
-  /** Resource is visible through an ancestor/root container. */
-  Inherited = 'inherited',
-  /** Resource is visible because compiler configuration injected it directly. */
-  Configured = 'configured',
-  /** Resource is the root component supplied to Aurelia.app(...). */
-  AppRoot = 'app-root',
-  /** Visibility is known to be requested but the container path is open. */
-  Open = 'open',
 }
 
 export type TemplateCompilerWorldField =
@@ -166,16 +147,6 @@ export const enum TemplateResourceResolutionKind {
   HeaderOnly = 'header-only',
 }
 
-/** Runtime-shaped bindable lookup entry owned by a resource definition. */
-export class TemplateBindableReference {
-  constructor(
-    /** Runtime bindable definition metadata. */
-    readonly definition: BindableDefinition,
-    /** Durable reference for the nested bindable. */
-    readonly reference: BindableDefinitionReference,
-  ) {}
-}
-
 /** Runtime IElementBindablesInfo model for custom element definitions. */
 @auLink('template-compiler:IElementBindablesInfo')
 export class TemplateElementBindablesInfo {
@@ -234,49 +205,11 @@ export class TemplateResolvedResource {
   ) {}
 }
 
-/** Resource definition visible to template compilation through DI/container lookup. */
-export class TemplateVisibleResource {
-  constructor(
-    /** Resource kind visible to the compiler. */
-    readonly resourceKind: ResourceDefinitionKind,
-    /** Runtime lookup name such as element name, attribute name, converter name, or binding-command name. */
-    readonly name: string,
-    /** Other lookup names that resolve to the same resource product. */
-    readonly aliases: readonly string[],
-    /** Product handle for the visible resource model, which may be a header, full definition, or syntax executable. */
-    readonly resourceProductHandle: ProductHandle | null,
-    /** Identity handle for the visible resource model, when materialized. */
-    readonly resourceIdentityHandle: IdentityHandle | null,
-    /** Product handle for the full resource definition, when convergence has produced one. */
-    readonly definitionProductHandle: ProductHandle | null,
-    /** Full definition detail visible to compiler and inquiry consumers, when known. */
-    readonly definition: FullResourceDefinition | null,
-    /** How this resource became visible to the compiler world. */
-    readonly visibilityKind: TemplateResourceVisibilityKind,
-    /** Source address for the registration, definition, import, or convention that made it visible. */
-    readonly sourceAddressHandle: AddressHandle | null,
-  ) {}
-}
-
-/** Reference to a compiler service without retaining a runtime singleton instance. */
-export class TemplateCompilerServiceReference {
-  constructor(
-    /** Service lane represented by this reference. */
-    readonly serviceKind: TemplateCompilerServiceKind,
-    /** Product handle for the service model, when materialized. */
-    readonly productHandle: ProductHandle | null,
-    /** Identity handle for the service model, when materialized. */
-    readonly identityHandle: IdentityHandle | null,
-    /** Source address for the lookup or registration that produced this service. */
-    readonly addressHandle: AddressHandle | null,
-  ) {}
-}
-
 /** Kernel-materialization host used by the runtime Rendering service emulation. */
 export interface TemplateRenderingRunHost {
   allocate(local: string): RuntimeRendererAllocation;
 
-  createChildController(input: RuntimeControllerCreationInput): RuntimeControllerFrame | null;
+  createChildController(input: RuntimeControllerCreationRequest): RuntimeControllerFrame | null;
 
   compileSpread(input: RuntimeRendererSpreadCompileInput): RuntimeRendererSpreadCompileResult;
 }
@@ -298,6 +231,8 @@ export class TemplateRenderingRunInput {
     readonly provenanceHandle: ProvenanceHandle,
     /** Kernel-materialization operations needed when the runtime render loop creates products. */
     readonly host: TemplateRenderingRunHost,
+    /** Whether this pass should spend host/surrogate instructions from the compiled template. */
+    readonly renderSurrogate: boolean = true,
   ) {}
 }
 
@@ -322,9 +257,12 @@ export class TemplateRenderedInstruction {
     readonly renderer: RuntimeRenderer,
     readonly renderingController: RuntimeControllerFrame,
     readonly targetController: RuntimeControllerFrame,
+    /** Runtime binding that receives any bindings created by this instruction, such as SpreadBinding's surrogate controller lane. */
+    readonly bindingOwner: RuntimeBinding | null,
     readonly bindings: readonly RuntimeBinding[],
     readonly scopeEffects: readonly RuntimeBindingScopeEffect[],
     readonly createdControllers: readonly RuntimeControllerFrame[],
+    readonly targetOperations: readonly RuntimeTargetOperation[],
   ) {}
 }
 
@@ -345,6 +283,10 @@ export class TemplateRenderingRunResult {
 
   get scopeEffects(): readonly RuntimeBindingScopeEffect[] {
     return this.renderedInstructions.flatMap((rendered) => rendered.scopeEffects);
+  }
+
+  get targetOperations(): readonly RuntimeTargetOperation[] {
+    return this.renderedInstructions.flatMap((rendered) => rendered.targetOperations);
   }
 
   get controllers(): readonly RuntimeControllerFrame[] {
@@ -451,7 +393,10 @@ export class TemplateCompilerSpreadCompileResult {
   constructor(
     readonly state: TemplateCompilerSpreadCompileState,
     readonly request: TemplateCompilerSpreadCompileRequest,
+    /** Root dynamic instructions returned by TemplateCompiler.compileSpread. */
     readonly instructions: readonly TemplateInstruction[],
+    /** Every dynamic instruction allocated during spread compilation, including wrapped inner instructions. */
+    readonly createdInstructions: readonly TemplateInstruction[],
     readonly summary: string | null,
   ) {}
 
@@ -459,6 +404,7 @@ export class TemplateCompilerSpreadCompileResult {
     return new TemplateCompilerSpreadCompileResult(
       TemplateCompilerSpreadCompileState.NoCapturedAttributes,
       request,
+      [],
       [],
       null,
     );
@@ -472,7 +418,22 @@ export class TemplateCompilerSpreadCompileResult {
       TemplateCompilerSpreadCompileState.Open,
       request,
       [],
+      [],
       summary,
+    );
+  }
+
+  static compiled(
+    request: TemplateCompilerSpreadCompileRequest,
+    instructions: readonly TemplateInstruction[],
+    createdInstructions: readonly TemplateInstruction[],
+  ): TemplateCompilerSpreadCompileResult {
+    return new TemplateCompilerSpreadCompileResult(
+      TemplateCompilerSpreadCompileState.Compiled,
+      request,
+      instructions,
+      createdInstructions,
+      null,
     );
   }
 }
@@ -717,7 +678,7 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
 
   private readonly renderedInstructions: TemplateRenderedInstruction[] = [];
   private readonly openInstructions: TemplateRenderingOpenInstruction[] = [];
-  private readonly instructionsByProduct: ReadonlyMap<ProductHandle, TemplateInstruction>;
+  private readonly instructionsByProduct: Map<ProductHandle, TemplateInstruction>;
   private readonly consumed = new Set<ProductHandle>();
 
   constructor(
@@ -730,6 +691,44 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
   }
 
   render(): TemplateRenderingRunResult {
+    const surrogateSequence = this.input.compiledTemplate.surrogateSequence;
+    if (this.input.renderSurrogate && surrogateSequence != null) {
+      const surrogateTarget = new TemplateRenderTarget(
+        this.input.compiledTemplate.productHandle,
+        this.input.compiledTemplate.identityHandle,
+        TemplateRenderTargetKind.Surrogate,
+        null,
+        surrogateSequence.productHandle,
+        surrogateSequence.sourceAddressHandle,
+        [],
+      );
+      surrogateSequence.instructions.forEach((reference, instructionIndex) => {
+        const instruction = reference.productHandle == null
+          ? null
+          : this.readInstruction(reference.productHandle);
+        if (instruction == null) {
+          this.openInstructions.push(new TemplateRenderingOpenInstruction(
+            `${this.input.localKey}:surrogate:instruction:${instructionIndex}:missing-instruction`,
+            `Surrogate instruction reference '${reference.productHandle ?? '(null)'}' could not be hydrated for runtime Rendering.`,
+            reference.addressHandle,
+          ));
+          return;
+        }
+        if (this.consumed.has(instruction.productHandle)) {
+          return;
+        }
+        this.consumeInstruction(instruction.productHandle);
+        this.renderInstruction(
+          `${this.input.localKey}:surrogate:instruction:${instructionIndex}`,
+          instruction,
+          null,
+          this.input.rootController,
+          this.input.rootController,
+          surrogateTarget,
+        );
+      });
+    }
+
     this.input.targets.forEach((target, targetIndex) => {
       target.instructions.forEach((instruction, instructionIndex) => {
         if (this.consumed.has(instruction.productHandle)) {
@@ -758,12 +757,18 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
     return this.input.host.allocate(local);
   }
 
-  createChildController(input: RuntimeControllerCreationInput): RuntimeControllerFrame | null {
+  createChildController(input: RuntimeControllerCreationRequest): RuntimeControllerFrame | null {
     return this.input.host.createChildController(input);
   }
 
   compileSpread(input: RuntimeRendererSpreadCompileInput): RuntimeRendererSpreadCompileResult {
-    return this.input.host.compileSpread(input);
+    const result = this.input.host.compileSpread(input);
+    if (result.state === RuntimeRendererSpreadCompileState.Compiled) {
+      for (const instruction of result.createdInstructions) {
+        this.instructionsByProduct.set(instruction.productHandle, instruction);
+      }
+    }
+    return result;
   }
 
   recordOpenInstruction(local: string, summary: string, addressHandle: AddressHandle | null): void {
@@ -785,6 +790,7 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
     renderingController: RuntimeControllerFrame,
     targetController: RuntimeControllerFrame,
     target = this.defaultTarget(),
+    bindingOwner: RuntimeBinding | null = null,
   ): void {
     if (instruction instanceof SpreadElementPropBindingInstruction) {
       const wrappedInstruction = this.readInstruction(instruction.instructionProductHandle);
@@ -804,6 +810,7 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
         renderingController,
         targetController,
         target,
+        bindingOwner,
       );
       return;
     }
@@ -829,7 +836,11 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
       this,
     ));
     for (const binding of result.bindings) {
-      renderingController.addBinding(binding);
+      if (bindingOwner instanceof SpreadBinding) {
+        bindingOwner.addInnerBinding(binding);
+      } else {
+        renderingController.addBinding(binding);
+      }
     }
     this.renderedInstructions.push(new TemplateRenderedInstruction(
       local,
@@ -838,9 +849,11 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
       renderer,
       renderingController,
       targetController,
+      bindingOwner,
       result.bindings,
       result.scopeEffects,
       result.createdControllers,
+      result.targetOperations,
     ));
   }
 

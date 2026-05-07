@@ -23,6 +23,7 @@ import {
   usageText,
   unwrapExpression,
   visitNode,
+  type TypeScriptMemberAccessKindId,
   type TypeScriptMemberSlotKindId,
   type TypeScriptUsageCallSite,
   type TypeScriptUsageOwner,
@@ -42,7 +43,8 @@ export type AureliaApiMergeRelation =
 /** Exact type-shape relation between public API facets that does not imply identity. */
 export type AureliaApiShapeRelation =
   | "class-implements-interface"
-  | "interface-extends-interface";
+  | "interface-extends-interface"
+  | "interface-extends-class";
 
 /** Exact syntax/member role observed at one repo usage site. */
 export type AureliaApiUsageRoleId = TypeScriptUsageRoleId;
@@ -119,6 +121,7 @@ export interface AureliaApiMemberSlotRow {
   readonly facetCount: number;
   readonly declarationCount: number;
   readonly usageCount: number;
+  readonly accessKinds: Readonly<Record<string, number>>;
   readonly declarationKinds: Readonly<Record<string, number>>;
   readonly declarations: readonly AureliaApiMemberDeclarationRef[];
   readonly firstSource: SourceRange;
@@ -130,6 +133,7 @@ export interface AureliaApiMemberDeclarationRef {
   readonly facetId: string;
   readonly facetName: string;
   readonly declarationKind: string;
+  readonly accessKind: TypeScriptMemberAccessKindId;
   readonly source: SourceRange;
   readonly symbolKey: string | null;
 }
@@ -226,6 +230,7 @@ interface RawMemberDeclaration {
   readonly name: string;
   readonly slotKind: TypeScriptMemberSlotKindId;
   readonly declarationKind: string;
+  readonly accessKind: TypeScriptMemberAccessKindId;
   readonly source: SourceRange;
   readonly symbolKey: string | null;
   readonly symbol: ts.Symbol | null;
@@ -472,13 +477,19 @@ class AureliaApiUsageIndexBuilder {
 
   #collectSameSymbolEdges(): void {
     for (const facets of this.#facetsBySymbol.values()) {
-      const sorted = uniqueById(facets).sort(compareMutableFacets);
-      const first = sorted[0];
-      if (first === undefined) {
-        continue;
-      }
-      for (const facet of sorted.slice(1)) {
-        this.#addMergeEdge("same-symbol", first, facet, facet.source);
+      const facetsByLocalName = groupBy(
+        uniqueById(facets),
+        (facet) => facet.localName,
+      );
+      for (const sameNameFacets of facetsByLocalName.values()) {
+        const sorted = [...sameNameFacets].sort(compareMutableFacets);
+        const first = sorted[0];
+        if (first === undefined) {
+          continue;
+        }
+        for (const facet of sorted.slice(1)) {
+          this.#addMergeEdge("same-symbol", first, facet, facet.source);
+        }
       }
     }
   }
@@ -497,6 +508,7 @@ class AureliaApiUsageIndexBuilder {
           name: member.name,
           slotKind: member.slotKind,
           declarationKind: member.declarationKind,
+          accessKind: member.accessKind,
           source,
           symbolKey: symbol === null ? null : symbolKeyForSymbol(this.#checker, symbol),
           symbol,
@@ -522,7 +534,7 @@ class AureliaApiUsageIndexBuilder {
       }
       if (ts.isVariableDeclaration(facet.declaration) && facet.declaration.initializer !== undefined) {
         const target = this.#facetForExpression(facet.declaration.initializer);
-        if (target !== null) {
+        if (target !== null && target.localName === facet.localName) {
           this.#addMergeEdge("value-alias", facet, target, facet.source);
         }
       }
@@ -544,20 +556,27 @@ class AureliaApiUsageIndexBuilder {
       readonly source: SourceRange;
     }[] = [];
     for (const clause of declaration.heritageClauses ?? []) {
-      const relation =
-        ts.isClassDeclaration(declaration) && clause.token === ts.SyntaxKind.ImplementsKeyword
-          ? "class-implements-interface"
-          : ts.isInterfaceDeclaration(declaration) && clause.token === ts.SyntaxKind.ExtendsKeyword
-          ? "interface-extends-interface"
-          : null;
-      if (relation === null) {
-        continue;
-      }
       for (const type of clause.types) {
         const target = this.#facetForExpression(type.expression);
         const source = sourceRangeForNode(this.#sourceProject, type);
+        const relation =
+          ts.isClassDeclaration(declaration) && clause.token === ts.SyntaxKind.ImplementsKeyword
+            ? "class-implements-interface"
+            : ts.isInterfaceDeclaration(declaration) &&
+              clause.token === ts.SyntaxKind.ExtendsKeyword &&
+              target !== null &&
+              ts.isInterfaceDeclaration(target.declaration)
+            ? "interface-extends-interface"
+            : ts.isInterfaceDeclaration(declaration) &&
+              clause.token === ts.SyntaxKind.ExtendsKeyword &&
+              target !== null &&
+              ts.isClassDeclaration(target.declaration)
+            ? "interface-extends-class"
+            : null;
         if (target !== null && source !== null) {
-          edges.push({ relation, target, source });
+          if (relation !== null) {
+            edges.push({ relation, target, source });
+          }
         }
       }
     }
@@ -571,7 +590,17 @@ class AureliaApiUsageIndexBuilder {
       return null;
     }
     const facets = this.#facetsBySymbol.get(symbol);
-    return facets?.slice().sort(compareMutableFacets)[0] ?? null;
+    const sorted = facets?.slice().sort(compareMutableFacets) ?? [];
+    const name = expressionNameText(current);
+    if (name !== null) {
+      const matchingName = sorted.find((facet) =>
+        facet.localName === name || facet.exportName === name
+      );
+      if (matchingName !== undefined) {
+        return matchingName;
+      }
+    }
+    return sorted[0] ?? null;
   }
 
   #addMergeEdge(
@@ -703,6 +732,7 @@ class AureliaApiUsageIndexBuilder {
           facetId: declaration.facetId,
           facetName: declaration.facetName,
           declarationKind: declaration.declarationKind,
+          accessKind: declaration.accessKind,
           source: declaration.source,
           symbolKey: declaration.symbolKey,
         }))
@@ -716,6 +746,7 @@ class AureliaApiUsageIndexBuilder {
         facetCount: new Set(declarations.map((declaration) => declaration.facetId)).size,
         declarationCount: declarations.length,
         usageCount: 0,
+        accessKinds: countBy(declarations, (declaration) => declaration.accessKind),
         declarationKinds: countBy(declarations, (declaration) => declaration.declarationKind),
         declarations: declarationRefs,
         firstSource: first.source,
@@ -1100,6 +1131,23 @@ function uniqueSubjectId(existing: Set<string>, baseId: string): string {
   }
   existing.add(candidate);
   return candidate;
+}
+
+function expressionNameText(expression: ts.Expression): string | null {
+  if (ts.isIdentifier(expression) || ts.isPrivateIdentifier(expression)) {
+    return expression.text;
+  }
+  if (ts.isPropertyAccessExpression(expression)) {
+    return expression.name.text;
+  }
+  if (
+    ts.isElementAccessExpression(expression) &&
+    expression.argumentExpression !== undefined &&
+    ts.isStringLiteralLike(expression.argumentExpression)
+  ) {
+    return expression.argumentExpression.text;
+  }
+  return null;
 }
 
 function uniqueById<TValue extends { readonly id: string }>(

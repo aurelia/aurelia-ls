@@ -77,11 +77,11 @@ export interface AtlasSelfContractStringRow {
   readonly summary: string;
 }
 
-interface ContinuationStringInput {
+interface ContinuationStringSource {
   readonly continuationId: string | null;
 }
 
-interface SubstrateSurfaceStringInput {
+interface SubstrateSurfaceStringSource {
   readonly value: string | null;
 }
 
@@ -144,8 +144,8 @@ export class AtlasSelfContractStringClassifier {
 
   constructor(
     strings: readonly AtlasSelfStringLiteralRow[],
-    continuations: readonly ContinuationStringInput[],
-    substrateSurfaces: readonly SubstrateSurfaceStringInput[],
+    continuations: readonly ContinuationStringSource[],
+    substrateSurfaces: readonly SubstrateSurfaceStringSource[],
   ) {
     this.#strings = strings;
     this.#continuationIds = new Set(
@@ -321,7 +321,7 @@ function countBy<TValue>(
   rows: readonly TValue[],
   key: (row: TValue) => string,
 ): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
+  const counts: Record<string, number> = Object.create(null) as Record<string, number>;
   for (const row of rows) {
     const rowKey = key(row);
     counts[rowKey] = (counts[rowKey] ?? 0) + 1;

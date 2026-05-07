@@ -69,6 +69,47 @@ export interface FrameworkRenderingRelationshipFilters
   readonly phase?: string;
 }
 
+interface BindingEffectRelationshipFacts {
+  readonly relation: FrameworkRelationshipRelation;
+  readonly mechanism: FrameworkRelationshipMechanism;
+  readonly phase: FrameworkRelationshipPhase;
+  readonly idSegment: string;
+  readonly summaryVerb: string;
+}
+
+const bindingEffectRelationshipFactsByKind: Readonly<
+  Record<FrameworkBindingEffectKind, BindingEffectRelationshipFacts>
+> = {
+  [FrameworkBindingEffectKind.ObserverLookup]: {
+    relation: FrameworkRelationshipRelation.LooksUpObserver,
+    mechanism: FrameworkRelationshipMechanism.ObserverLookup,
+    phase: FrameworkRelationshipPhase.Observation,
+    idSegment: "looks-up-observer",
+    summaryVerb: "looks up observer",
+  },
+  [FrameworkBindingEffectKind.LifecycleMethod]: {
+    relation: FrameworkRelationshipRelation.PerformsBindingEffect,
+    mechanism: FrameworkRelationshipMechanism.BindingLifecycle,
+    phase: FrameworkRelationshipPhase.Lifecycle,
+    idSegment: "binding-effect",
+    summaryVerb: "performs binding effect",
+  },
+  [FrameworkBindingEffectKind.EventListener]: {
+    relation: FrameworkRelationshipRelation.PerformsBindingEffect,
+    mechanism: FrameworkRelationshipMechanism.BindingLifecycle,
+    phase: FrameworkRelationshipPhase.Lifecycle,
+    idSegment: "binding-effect",
+    summaryVerb: "performs binding effect",
+  },
+  [FrameworkBindingEffectKind.Subscription]: {
+    relation: FrameworkRelationshipRelation.PerformsBindingEffect,
+    mechanism: FrameworkRelationshipMechanism.BindingLifecycle,
+    phase: FrameworkRelationshipPhase.Lifecycle,
+    idSegment: "binding-effect",
+    summaryVerb: "performs binding effect",
+  },
+};
+
 /** Read derived rendering relationship rows. */
 export function readFrameworkRenderingRelationships(
   sourceProject: SourceProject,
@@ -251,20 +292,13 @@ function bindingAdmissionRelationship(
 function bindingEffectRelationship(
   row: FrameworkBindingEffectRow,
 ): FrameworkRenderingRelationshipRow {
-  const observerLookup =
-    row.effectKind === FrameworkBindingEffectKind.ObserverLookup;
+  const facts = bindingEffectRelationshipFactsByKind[row.effectKind];
   return {
-    id: `${row.id}:relationship:${observerLookup ? "looks-up-observer" : "binding-effect"}`,
+    id: `${row.id}:relationship:${facts.idSegment}`,
     family: FrameworkRelationshipFamily.Rendering,
-    relation: observerLookup
-      ? FrameworkRelationshipRelation.LooksUpObserver
-      : FrameworkRelationshipRelation.PerformsBindingEffect,
-    mechanism: observerLookup
-      ? FrameworkRelationshipMechanism.ObserverLookup
-      : FrameworkRelationshipMechanism.BindingLifecycle,
-    phase: observerLookup
-      ? FrameworkRelationshipPhase.Observation
-      : FrameworkRelationshipPhase.Lifecycle,
+    relation: facts.relation,
+    mechanism: facts.mechanism,
+    phase: facts.phase,
     packageId: row.packageId,
     packageName: row.packageName,
     from: symbolEndpoint(row.bindingName, row.packageId, row.packageName),
@@ -278,7 +312,7 @@ function bindingEffectRelationship(
     },
     source: row.source,
     sourceRowId: row.id,
-    summary: `${row.bindingName}.${row.methodName} ${observerLookup ? "looks up observer" : "performs binding effect"} ${row.effectName}.`,
+    summary: `${row.bindingName}.${row.methodName} ${facts.summaryVerb} ${row.effectName}.`,
   };
 }
 

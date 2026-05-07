@@ -43,6 +43,7 @@ import { answerFrameworkComposition } from "./framework-composition-lenses.js";
 import { answerFrameworkObservation } from "./framework-observation-lenses.js";
 import { answerFrameworkResources } from "./framework-resource-lenses.js";
 import { answerProductVocabulary } from "./product-vocabulary-lenses.js";
+import { answerProductArchitecture } from "./product-architecture-lenses.js";
 import type { InquiryWorld } from "./world.js";
 
 /** Hot substrate context shared by runtime lens implementations. */
@@ -80,6 +81,7 @@ export class InquiryEngine {
     LensId.TsStructure,
     LensId.TsType,
     LensId.ProductVocabulary,
+    LensId.ProductArchitecture,
     LensId.BridgeAuLink,
     LensId.FrameworkDiscovery,
     LensId.FrameworkApi,
@@ -148,6 +150,11 @@ export class InquiryEngine {
         return answerTsType(normalized.inquiry, this.substrates.sourceProject);
       case LensId.ProductVocabulary:
         return answerProductVocabulary(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
+      case LensId.ProductArchitecture:
+        return answerProductArchitecture(
           normalized.inquiry,
           this.substrates.sourceProject,
         );

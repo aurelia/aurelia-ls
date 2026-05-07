@@ -106,6 +106,27 @@ class ConfiguredRuntimeRendererSelectionEmission {
   ) {}
 }
 
+class ConfiguredRuntimeRendererSelectionHandles {
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+  ) {}
+}
+
+class BuiltInRuntimeRendererCatalogHandles {
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+  ) {}
+}
+
+class BuiltInRuntimeRendererHandles {
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+  ) {}
+}
+
 /** Materializes framework-owned runtime renderer catalogs before compiler-world visibility is decided. */
 export class BuiltInRuntimeRendererCatalogMaterializer {
   constructor(
@@ -164,68 +185,20 @@ export class BuiltInRuntimeRendererCatalogMaterializer {
     );
     records.push(...source.records);
 
-    const catalogProductHandle = this.store.handles.product(local);
-    const catalogIdentityHandle = this.store.handles.identity(local);
-    const rendererEmissions = input.renderers.map((renderer, index) =>
-      this.recordsForRenderer(
-        renderer,
-        `${local}:renderer:${index}`,
-        catalogProductHandle,
-        catalogIdentityHandle,
-        this.store.handles.claim(`${local}:contains-runtime-renderer:${index}`),
-        source,
-      )
-    );
+    const handles = this.handlesForCatalog(local);
+    const rendererEmissions = this.rendererEmissionsForCatalog(input, local, handles, source);
     for (const emission of rendererEmissions) {
       records.push(...emission.records);
     }
 
-    const rendererProductHandles = rendererEmissions.map((emission) => emission.product.renderer.productHandle!);
-    const catalogClaims = rendererProductHandles.map((productHandle, index) => new SemanticClaim(
-      this.store.handles.claim(`${local}:contains-runtime-renderer:${index}`),
-      catalogProductHandle,
-      KernelVocabulary.Compiler.ContainsRuntimeRenderer.key,
-      productHandle,
-      source.provenanceHandle,
-    ));
+    const rendererProductHandles = productHandlesForRendererEmissions(rendererEmissions);
+    const catalogClaims = this.catalogClaimsForRenderers(local, handles.productHandle, rendererProductHandles, source.provenanceHandle);
     records.push(...catalogClaims);
 
     const materializedRenderers = rendererEmissions.map((emission) => emission.product.renderer);
-    const catalog = new BuiltInRuntimeRendererCatalog(
-      catalogProductHandle,
-      catalogIdentityHandle,
-      input.packageId,
-      input.group,
-      materializedRenderers,
-      source.addressHandle,
-      compactFieldProvenance<BuiltInRuntimeRendererCatalogField>([
-        new FieldProvenance('package', source.provenanceHandle),
-        new FieldProvenance('group', source.provenanceHandle),
-        materializedRenderers.length === 0 ? null : new FieldProvenance('renderers', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
-    );
+    const catalog = catalogForInput(input, handles, materializedRenderers, source);
     records.push(
-      new CompilerIdentity(
-        catalogIdentityHandle,
-        KernelVocabulary.Compiler.BuiltInRuntimeRendererCatalog.key,
-        null,
-        source.addressHandle,
-        `${input.packageId}:${input.group}`,
-      ),
-      new MaterializedProduct(
-        catalogProductHandle,
-        KernelVocabulary.Compiler.BuiltInRuntimeRendererCatalog.key,
-        catalogIdentityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializationRecord(
-        this.store.handles.materialization(local),
-        catalogIdentityHandle,
-        [catalogProductHandle, ...rendererProductHandles],
-        catalogClaims.map((claim) => claim.handle),
-      ),
+      ...this.recordsForCatalogProduct(local, input, handles, source, rendererProductHandles, catalogClaims),
     );
 
     return {
@@ -235,20 +208,124 @@ export class BuiltInRuntimeRendererCatalogMaterializer {
     };
   }
 
+  private handlesForCatalog(local: string): BuiltInRuntimeRendererCatalogHandles {
+    return new BuiltInRuntimeRendererCatalogHandles(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+    );
+  }
+
+  private rendererEmissionsForCatalog(
+    input: BuiltInRuntimeRendererCatalogInput,
+    local: string,
+    handles: BuiltInRuntimeRendererCatalogHandles,
+    source: BuiltInRuntimeRendererSourceSet,
+  ): readonly {
+    readonly records: readonly KernelStoreRecord[];
+    readonly product: BuiltInRuntimeRendererEmission;
+  }[] {
+    return input.renderers.map((renderer, index) =>
+      this.recordsForRenderer(
+        renderer,
+        `${local}:renderer:${index}`,
+        handles.productHandle,
+        handles.identityHandle,
+        source,
+      )
+    );
+  }
+
+  private catalogClaimsForRenderers(
+    local: string,
+    catalogProductHandle: ProductHandle,
+    rendererProductHandles: readonly ProductHandle[],
+    provenanceHandle: ProvenanceHandle,
+  ): readonly SemanticClaim[] {
+    return rendererProductHandles.map((productHandle, index) => new SemanticClaim(
+      this.store.handles.claim(`${local}:contains-runtime-renderer:${index}`),
+      catalogProductHandle,
+      KernelVocabulary.Compiler.ContainsRuntimeRenderer.key,
+      productHandle,
+      provenanceHandle,
+    ));
+  }
+
+  private recordsForCatalogProduct(
+    local: string,
+    input: BuiltInRuntimeRendererCatalogInput,
+    handles: BuiltInRuntimeRendererCatalogHandles,
+    source: BuiltInRuntimeRendererSourceSet,
+    rendererProductHandles: readonly ProductHandle[],
+    catalogClaims: readonly SemanticClaim[],
+  ): readonly KernelStoreRecord[] {
+    return [
+      new CompilerIdentity(
+        handles.identityHandle,
+        KernelVocabulary.Compiler.BuiltInRuntimeRendererCatalog.key,
+        null,
+        source.addressHandle,
+        `${input.packageId}:${input.group}`,
+      ),
+      new MaterializedProduct(
+        handles.productHandle,
+        KernelVocabulary.Compiler.BuiltInRuntimeRendererCatalog.key,
+        handles.identityHandle,
+        source.addressHandle,
+        source.provenanceHandle,
+      ),
+      new MaterializationRecord(
+        this.store.handles.materialization(local),
+        handles.identityHandle,
+        [handles.productHandle, ...rendererProductHandles],
+        catalogClaims.map((claim) => claim.handle),
+      ),
+    ];
+  }
+
   private recordsForRenderer(
     renderer: RuntimeRenderer,
     local: string,
     catalogProductHandle: ProductHandle,
     catalogIdentityHandle: IdentityHandle,
-    catalogClaimHandle: ClaimHandle,
     source: BuiltInRuntimeRendererSourceSet,
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly product: BuiltInRuntimeRendererEmission;
   } {
-    const productHandle = this.store.handles.product(local);
-    const identityHandle = this.store.handles.identity(local);
-    const fieldProvenance = compactFieldProvenance<RuntimeRendererField>([
+    const handles = this.handlesForRenderer(local);
+    const materializedRenderer = this.runtimeRendererProduct(renderer, handles, source);
+    return {
+      records: this.recordsForRendererProduct(local, catalogIdentityHandle, source, handles, materializedRenderer),
+      product: new BuiltInRuntimeRendererEmission(catalogProductHandle, materializedRenderer),
+    };
+  }
+
+  private handlesForRenderer(local: string): BuiltInRuntimeRendererHandles {
+    return new BuiltInRuntimeRendererHandles(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+    );
+  }
+
+  private runtimeRendererProduct(
+    renderer: RuntimeRenderer,
+    handles: BuiltInRuntimeRendererHandles,
+    source: BuiltInRuntimeRendererSourceSet,
+  ): RuntimeRenderer {
+    return materializeRuntimeRenderer(
+      renderer,
+      handles.productHandle,
+      handles.identityHandle,
+      source.addressHandle,
+      this.runtimeRendererFieldProvenance(renderer, source),
+    );
+  }
+
+  private runtimeRendererFieldProvenance(
+    renderer: RuntimeRenderer,
+    source: BuiltInRuntimeRendererSourceSet,
+  ): readonly FieldProvenance<RuntimeRendererField>[] {
+    return compactFieldProvenance<RuntimeRendererField>([
       new FieldProvenance('rendererKind', source.provenanceHandle),
       new FieldProvenance('targetInstructionKind', source.provenanceHandle),
       renderer.runtimeBindingKind == null ? null : new FieldProvenance('runtimeBindingKind', source.provenanceHandle),
@@ -258,32 +335,31 @@ export class BuiltInRuntimeRendererCatalogMaterializer {
       new FieldProvenance('group', source.provenanceHandle),
       new FieldProvenance('source', source.provenanceHandle),
     ]);
-    const materializedRenderer = materializeRuntimeRenderer(
-      renderer,
-      productHandle,
-      identityHandle,
-      source.addressHandle,
-      fieldProvenance,
-    );
-    return {
-      records: [
-        new CompilerIdentity(
-          identityHandle,
-          KernelVocabulary.Compiler.RuntimeRenderer.key,
-          catalogIdentityHandle,
-          source.addressHandle,
-          materializedRenderer.rendererKind,
-        ),
-        new MaterializedProduct(
-          productHandle,
-          KernelVocabulary.Compiler.RuntimeRenderer.key,
-          identityHandle,
-          source.addressHandle,
-          source.provenanceHandle,
-        ),
-      ],
-      product: new BuiltInRuntimeRendererEmission(catalogProductHandle, materializedRenderer),
-    };
+  }
+
+  private recordsForRendererProduct(
+    local: string,
+    catalogIdentityHandle: IdentityHandle,
+    source: BuiltInRuntimeRendererSourceSet,
+    handles: BuiltInRuntimeRendererHandles,
+    materializedRenderer: RuntimeRenderer,
+  ): readonly KernelStoreRecord[] {
+    return [
+      new CompilerIdentity(
+        handles.identityHandle,
+        KernelVocabulary.Compiler.RuntimeRenderer.key,
+        catalogIdentityHandle,
+        source.addressHandle,
+        materializedRenderer.rendererKind,
+      ),
+      new MaterializedProduct(
+        handles.productHandle,
+        KernelVocabulary.Compiler.RuntimeRenderer.key,
+        handles.identityHandle,
+        source.addressHandle,
+        source.provenanceHandle,
+      ),
+    ];
   }
 
   private recordsForSource(
@@ -330,31 +406,66 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
   }
 
   materialize(configuration: ConfigurationKernelEmission): ConfiguredBuiltInRuntimeRendererCatalogEmission {
-    const selectionInputs = readConfiguredRuntimeRendererCatalogInputs(configuration);
-    const catalogInputs = uniqueCatalogInputs(selectionInputs.flatMap((input) => input.catalogInputs));
-    const catalogEmission = this.catalogMaterializer.materialize(catalogInputs);
-    const catalogsByKey = new Map(catalogEmission.catalogs.map((catalog) => [catalogKey(catalog), catalog]));
+    const selectionRequests = readConfiguredRuntimeRendererCatalogRequests(configuration);
+    const catalogEmission = this.catalogEmissionForRequests(selectionRequests);
+    const selectionEmission = this.selectionEmissionForRequests(selectionRequests, catalogEmission);
+    this.commitSelectionRecords(selectionEmission.records);
+    this.registerSelectionDetails(selectionEmission.selections);
 
+    return new ConfiguredBuiltInRuntimeRendererCatalogEmission(
+      catalogEmission,
+      selectionEmission.selections,
+      selectionEmission.records,
+    );
+  }
+
+  private catalogEmissionForRequests(
+    selectionRequests: readonly ConfiguredRuntimeRendererCatalogRequest[],
+  ): BuiltInRuntimeRendererCatalogEmission {
+    const catalogInputs = uniqueCatalogInputs(selectionRequests.flatMap((request) => request.catalogInputs));
+    return this.catalogMaterializer.materialize(catalogInputs);
+  }
+
+  private selectionEmissionForRequests(
+    selectionRequests: readonly ConfiguredRuntimeRendererCatalogRequest[],
+    catalogEmission: BuiltInRuntimeRendererCatalogEmission,
+  ): {
+    readonly records: readonly KernelStoreRecord[];
+    readonly selections: readonly ConfiguredBuiltInRuntimeRendererCatalogSelection[];
+  } {
+    const catalogsByKey = new Map(catalogEmission.catalogs.map((catalog) => [catalogKey(catalog), catalog]));
     const records: KernelStoreRecord[] = [];
     const selections: ConfiguredBuiltInRuntimeRendererCatalogSelection[] = [];
-    for (const input of selectionInputs) {
-      const catalogs = input.catalogInputs
-        .map((catalogInput) => catalogsByKey.get(catalogInputKey(catalogInput)) ?? null)
-        .filter((catalog): catalog is BuiltInRuntimeRendererCatalog => catalog != null);
+    for (const request of selectionRequests) {
+      const catalogs = this.catalogsForRequest(request, catalogsByKey);
       if (catalogs.length === 0) {
         continue;
       }
-      const emission = this.recordsForSelection(input.admission, input.frameworkKind, catalogs);
+      const emission = this.recordsForSelection(request.admission, request.frameworkKind, catalogs);
       if (this.store.readProduct(emission.selection.productHandle) == null) {
         records.push(...emission.records);
       }
       selections.push(emission.selection);
     }
+    return { records, selections };
+  }
 
+  private catalogsForRequest(
+    request: ConfiguredRuntimeRendererCatalogRequest,
+    catalogsByKey: ReadonlyMap<string, BuiltInRuntimeRendererCatalog>,
+  ): readonly BuiltInRuntimeRendererCatalog[] {
+    return request.catalogInputs
+      .map((catalogInput) => catalogsByKey.get(catalogInputKey(catalogInput)) ?? null)
+      .filter((catalog): catalog is BuiltInRuntimeRendererCatalog => catalog != null);
+  }
+
+  private commitSelectionRecords(records: readonly KernelStoreRecord[]): void {
     if (records.length > 0) {
       this.store.commit(new KernelStoreBatch(records, 'configured-built-in-runtime-renderer-catalogs'));
     }
+  }
 
+  private registerSelectionDetails(selections: readonly ConfiguredBuiltInRuntimeRendererCatalogSelection[]): void {
     for (const selection of selections) {
       this.store.productDetails.addIfAbsent(
         TemplateProductDetails.ConfiguredBuiltInRuntimeRendererCatalogSelection,
@@ -362,8 +473,6 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
         selection,
       );
     }
-
-    return new ConfiguredBuiltInRuntimeRendererCatalogEmission(catalogEmission, selections, records);
   }
 
   private recordsForSelection(
@@ -377,18 +486,47 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
       admission.sourceAddressHandle,
       summaryForFrameworkKind(frameworkKind),
     );
-    const productHandle = this.store.handles.product(local);
-    const identityHandle = this.store.handles.identity(local);
-    const claims = catalogs.map((catalog, index) => new SemanticClaim(
+    const handles = this.configuredSelectionHandles(local);
+    const claims = this.claimsForConfiguredSelection(local, handles.productHandle, catalogs, source);
+    const selection = this.createConfiguredSelection(admission, frameworkKind, catalogs, handles, source);
+    return new ConfiguredRuntimeRendererSelectionEmission(
+      this.recordsForConfiguredSelectionProduct(local, admission, frameworkKind, source, handles, claims),
+      selection,
+    );
+  }
+
+  private configuredSelectionHandles(local: string): ConfiguredRuntimeRendererSelectionHandles {
+    return new ConfiguredRuntimeRendererSelectionHandles(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+    );
+  }
+
+  private claimsForConfiguredSelection(
+    local: string,
+    selectionProductHandle: ProductHandle,
+    catalogs: readonly BuiltInRuntimeRendererCatalog[],
+    source: ConfiguredRuntimeRendererSourceSet,
+  ): readonly SemanticClaim[] {
+    return catalogs.map((catalog, index) => new SemanticClaim(
       this.store.handles.claim(`${local}:admits-runtime-renderer-catalog:${index}`),
-      productHandle,
+      selectionProductHandle,
       KernelVocabulary.Compiler.AdmitsRuntimeRendererCatalog.key,
       catalog.productHandle,
       source.provenanceHandle,
     ));
-    const selection = new ConfiguredBuiltInRuntimeRendererCatalogSelection(
-      productHandle,
-      identityHandle,
+  }
+
+  private createConfiguredSelection(
+    admission: RegistrationAdmissionProduct,
+    frameworkKind: FrameworkRegistrationKind,
+    catalogs: readonly BuiltInRuntimeRendererCatalog[],
+    handles: ConfiguredRuntimeRendererSelectionHandles,
+    source: ConfiguredRuntimeRendererSourceSet,
+  ): ConfiguredBuiltInRuntimeRendererCatalogSelection {
+    return new ConfiguredBuiltInRuntimeRendererCatalogSelection(
+      handles.productHandle,
+      handles.identityHandle,
       admission.productHandle,
       frameworkKind,
       catalogs.map((catalog) => catalog.productHandle),
@@ -400,33 +538,40 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
-    return new ConfiguredRuntimeRendererSelectionEmission(
-      [
-        ...source.records,
-        new CompilerIdentity(
-          identityHandle,
-          KernelVocabulary.Compiler.ConfiguredRuntimeRendererCatalogSelection.key,
-          admission.identityHandle,
-          admission.sourceAddressHandle,
-          frameworkKind,
-        ),
-        ...claims,
-        new MaterializedProduct(
-          productHandle,
-          KernelVocabulary.Compiler.ConfiguredRuntimeRendererCatalogSelection.key,
-          identityHandle,
-          admission.sourceAddressHandle,
-          source.provenanceHandle,
-        ),
-        new MaterializationRecord(
-          this.store.handles.materialization(local),
-          identityHandle,
-          [productHandle],
-          claims.map((claim) => claim.handle),
-        ),
-      ],
-      selection,
-    );
+  }
+
+  private recordsForConfiguredSelectionProduct(
+    local: string,
+    admission: RegistrationAdmissionProduct,
+    frameworkKind: FrameworkRegistrationKind,
+    source: ConfiguredRuntimeRendererSourceSet,
+    handles: ConfiguredRuntimeRendererSelectionHandles,
+    claims: readonly SemanticClaim[],
+  ): readonly KernelStoreRecord[] {
+    return [
+      ...source.records,
+      new CompilerIdentity(
+        handles.identityHandle,
+        KernelVocabulary.Compiler.ConfiguredRuntimeRendererCatalogSelection.key,
+        admission.identityHandle,
+        admission.sourceAddressHandle,
+        frameworkKind,
+      ),
+      ...claims,
+      new MaterializedProduct(
+        handles.productHandle,
+        KernelVocabulary.Compiler.ConfiguredRuntimeRendererCatalogSelection.key,
+        handles.identityHandle,
+        admission.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+      new MaterializationRecord(
+        this.store.handles.materialization(local),
+        handles.identityHandle,
+        [handles.productHandle],
+        claims.map((claim) => claim.handle),
+      ),
+    ];
   }
 
   private recordsForConfiguredSource(
@@ -455,7 +600,7 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
   }
 }
 
-class ConfiguredRuntimeRendererCatalogInput {
+class ConfiguredRuntimeRendererCatalogRequest {
   constructor(
     readonly admission: RegistrationAdmissionProduct,
     readonly frameworkKind: FrameworkRegistrationKind,
@@ -463,10 +608,10 @@ class ConfiguredRuntimeRendererCatalogInput {
   ) {}
 }
 
-function readConfiguredRuntimeRendererCatalogInputs(
+function readConfiguredRuntimeRendererCatalogRequests(
   configuration: ConfigurationKernelEmission,
-): readonly ConfiguredRuntimeRendererCatalogInput[] {
-  const inputs: ConfiguredRuntimeRendererCatalogInput[] = [];
+): readonly ConfiguredRuntimeRendererCatalogRequest[] {
+  const requests: ConfiguredRuntimeRendererCatalogRequest[] = [];
   for (const admission of configuration.registrationAdmissions) {
     const frameworkKind = frameworkRegistrationKindForAdmission(admission);
     if (frameworkKind == null) {
@@ -476,9 +621,9 @@ function readConfiguredRuntimeRendererCatalogInputs(
     if (catalogInputs.length === 0) {
       continue;
     }
-    inputs.push(new ConfiguredRuntimeRendererCatalogInput(admission, frameworkKind, catalogInputs));
+    requests.push(new ConfiguredRuntimeRendererCatalogRequest(admission, frameworkKind, catalogInputs));
   }
-  return inputs;
+  return requests;
 }
 
 function catalogInputsForAdmission(
@@ -561,6 +706,34 @@ function summaryForFrameworkKind(frameworkKind: FrameworkRegistrationKind): stri
     case FrameworkRegistrationKind.AppTask:
       return 'AppTask registry does not admit runtime renderer catalogs.';
   }
+}
+
+function catalogForInput(
+  input: BuiltInRuntimeRendererCatalogInput,
+  handles: BuiltInRuntimeRendererCatalogHandles,
+  materializedRenderers: readonly RuntimeRenderer[],
+  source: BuiltInRuntimeRendererSourceSet,
+): BuiltInRuntimeRendererCatalog {
+  return new BuiltInRuntimeRendererCatalog(
+    handles.productHandle,
+    handles.identityHandle,
+    input.packageId,
+    input.group,
+    materializedRenderers,
+    source.addressHandle,
+    compactFieldProvenance<BuiltInRuntimeRendererCatalogField>([
+      new FieldProvenance('package', source.provenanceHandle),
+      new FieldProvenance('group', source.provenanceHandle),
+      materializedRenderers.length === 0 ? null : new FieldProvenance('renderers', source.provenanceHandle),
+      new FieldProvenance('source', source.provenanceHandle),
+    ]),
+  );
+}
+
+function productHandlesForRendererEmissions(
+  emissions: readonly { readonly product: BuiltInRuntimeRendererEmission }[],
+): readonly ProductHandle[] {
+  return emissions.map((emission) => emission.product.renderer.productHandle!);
 }
 
 type RuntimeRendererConstructor = new (

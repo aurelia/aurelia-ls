@@ -9,10 +9,10 @@ import type { FieldProvenance } from '../kernel/provenance.js';
 import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { TemplateSourceOffsetMap } from '../resources/custom-element-definition.js';
 import type {
-  TemplateCompilerServiceReference,
   TemplateCompilerWorldReference,
   TemplateResourceScopeReference,
 } from './compiler-world.js';
+import type { TemplateCompilerServiceReference } from './compiler-world-reference.js';
 import type { TemplateParseContextReference } from './parse-context.js';
 
 export const enum TemplateSourceKind {

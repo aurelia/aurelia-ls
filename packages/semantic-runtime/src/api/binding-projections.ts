@@ -1,0 +1,223 @@
+import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
+import type { KernelStore } from '../kernel/store.js';
+import {
+  describeAddress,
+} from './source-reference.js';
+import type {
+  SemanticBindingDataFlowRow,
+  SemanticBindingSourceOperationRow,
+  SemanticBindingTargetAccessRow,
+  SemanticBindingValueChannelRow,
+  SemanticTargetOperationRow,
+} from './contracts.js';
+
+export function readBindingTargetAccessRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): readonly SemanticBindingTargetAccessRow[] {
+  return emission.templates.resources
+    .flatMap((resource): readonly SemanticBindingTargetAccessRow[] =>
+      resource.runtimeAnalysis.controllerBind.targetAccesses.map((access) => ({
+        definitionName: resource.compilation.definition.name,
+        bindingKind: access.binding.bindingKind,
+        lookup: access.lookup,
+        targetKind: access.targetKind,
+        targetProperty: access.targetProperty,
+        strategy: access.strategy,
+        eventNames: access.eventNames,
+        targetType: access.targetType?.display ?? null,
+        propertyType: access.propertyType?.display ?? null,
+        propertyExists: access.propertyExists,
+        isWritable: access.isWritable,
+        isObservable: access.isObservable,
+        authority: access.authority,
+        openReason: access.openReason,
+        source: describeAddress(store, access.sourceAddressHandle),
+        ...(handles ? {
+          handles: {
+            bindingProductHandle: access.binding.productHandle,
+            targetAccessProductHandle: access.productHandle,
+            targetTypeProductHandle: access.targetType?.productHandle ?? null,
+            propertyTypeProductHandle: access.propertyType?.productHandle ?? null,
+            sourceAddressHandle: access.sourceAddressHandle,
+          },
+        } : {}),
+      }))
+    )
+    .sort((left, right) =>
+      `${left.definitionName}:${left.targetProperty}:${left.lookup}:${left.strategy}`
+        .localeCompare(`${right.definitionName}:${right.targetProperty}:${right.lookup}:${right.strategy}`)
+    );
+}
+
+export function readTargetOperationRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): readonly SemanticTargetOperationRow[] {
+  return emission.templates.resources
+    .flatMap((resource): readonly SemanticTargetOperationRow[] =>
+      [
+        ...resource.runtimeAnalysis.runtimeRendering.targetOperations,
+        ...resource.runtimeAnalysis.controllerBind.targetOperations,
+      ].map((operation) => ({
+        definitionName: resource.compilation.definition.name,
+        ownerKind: operation.ownerKind,
+        bindingKind: operation.binding?.bindingKind ?? null,
+        rendererKind: operation.renderer?.rendererKind ?? null,
+        targetKind: operation.targetKind,
+        targetAttribute: operation.targetAttribute,
+        targetProperty: operation.targetProperty,
+        staticValue: operation.value,
+        operationKind: operation.operationKind,
+        affectedNames: operation.affectedNames,
+        authority: operation.authority,
+        openReason: operation.openReason,
+        source: describeAddress(store, operation.sourceAddressHandle),
+        ...(handles ? {
+          handles: {
+            bindingProductHandle: operation.binding?.productHandle ?? null,
+            rendererProductHandle: operation.renderer?.productHandle ?? null,
+            instructionProductHandle: operation.instructionProductHandle,
+            targetOperationProductHandle: operation.productHandle,
+            sourceAddressHandle: operation.sourceAddressHandle,
+          },
+        } : {}),
+      }))
+    )
+    .sort((left, right) =>
+      `${left.definitionName}:${left.ownerKind}:${left.targetAttribute}:${left.targetProperty}:${left.operationKind}`
+        .localeCompare(`${right.definitionName}:${right.ownerKind}:${right.targetAttribute}:${right.targetProperty}:${right.operationKind}`)
+    );
+}
+
+export function readBindingSourceOperationRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): readonly SemanticBindingSourceOperationRow[] {
+  return emission.templates.resources
+    .flatMap((resource): readonly SemanticBindingSourceOperationRow[] =>
+      resource.runtimeAnalysis.controllerBind.sourceOperations.map((operation) => ({
+        definitionName: resource.compilation.definition.name,
+        bindingKind: operation.binding.bindingKind,
+        targetKind: operation.targetKind,
+        targetName: operation.targetName,
+        targetType: operation.targetType?.display ?? null,
+        operationKind: operation.operationKind,
+        authority: operation.authority,
+        openReason: operation.openReason,
+        source: describeAddress(store, operation.sourceAddressHandle),
+        ...(handles ? {
+          handles: {
+            bindingProductHandle: operation.binding.productHandle,
+            instructionProductHandle: operation.instructionProductHandle,
+            sourceOperationProductHandle: operation.productHandle,
+            targetTypeProductHandle: operation.targetType?.productHandle ?? null,
+            sourceAddressHandle: operation.sourceAddressHandle,
+          },
+        } : {}),
+      }))
+    )
+    .sort((left, right) =>
+      `${left.definitionName}:${left.targetName}:${left.operationKind}:${left.targetKind}`
+        .localeCompare(`${right.definitionName}:${right.targetName}:${right.operationKind}:${right.targetKind}`)
+    );
+}
+
+export function readBindingValueChannelRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): readonly SemanticBindingValueChannelRow[] {
+  return emission.templates.resources
+    .flatMap((resource): readonly SemanticBindingValueChannelRow[] =>
+      resource.runtimeAnalysis.bindingValueChannel.valueChannels.map((valueChannel) => ({
+        definitionName: resource.compilation.definition.name,
+        bindingKind: valueChannel.binding.bindingKind,
+        targetProperty: valueChannel.targetAccess?.targetProperty
+          ?? valueChannel.targetOperation?.targetProperty
+          ?? valueChannel.sourceOperation?.targetName
+          ?? null,
+        targetOperationKind: valueChannel.targetOperation?.operationKind ?? null,
+        sourceOperationKind: valueChannel.sourceOperation?.operationKind ?? null,
+        channelKind: valueChannel.channelKind,
+        authority: valueChannel.authority,
+        rawTargetPropertyType: valueChannel.rawTargetPropertyType?.display ?? null,
+        runtimeValueType: valueChannel.runtimeValueType?.display ?? null,
+        valueDomain: valueChannel.valueDomain,
+        isCollection: valueChannel.isCollection,
+        openReason: valueChannel.openReason,
+        source: describeAddress(store, valueChannel.sourceAddressHandle),
+        ...(handles ? {
+          handles: {
+            bindingProductHandle: valueChannel.binding.productHandle,
+            valueChannelProductHandle: valueChannel.productHandle,
+            targetAccessProductHandle: valueChannel.targetAccess?.productHandle ?? null,
+            targetOperationProductHandle: valueChannel.targetOperation?.productHandle ?? null,
+            sourceOperationProductHandle: valueChannel.sourceOperation?.productHandle ?? null,
+            rawTargetPropertyTypeProductHandle: valueChannel.rawTargetPropertyType?.productHandle ?? null,
+            runtimeValueTypeProductHandle: valueChannel.runtimeValueType?.productHandle ?? null,
+            sourceAddressHandle: valueChannel.sourceAddressHandle,
+          },
+        } : {}),
+      }))
+    )
+    .sort((left, right) =>
+      `${left.definitionName}:${left.targetProperty ?? ''}:${left.channelKind}:${left.runtimeValueType ?? ''}`
+        .localeCompare(`${right.definitionName}:${right.targetProperty ?? ''}:${right.channelKind}:${right.runtimeValueType ?? ''}`)
+    );
+}
+
+export function readBindingDataFlowRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): readonly SemanticBindingDataFlowRow[] {
+  return emission.templates.resources
+    .flatMap((resource): readonly SemanticBindingDataFlowRow[] =>
+      resource.runtimeAnalysis.bindingDataFlow.dataFlows.map((dataFlow) => ({
+        definitionName: resource.compilation.definition.name,
+        bindingKind: dataFlow.binding.bindingKind,
+        direction: dataFlow.direction,
+        sourceKind: dataFlow.sourceKind,
+        sourceName: dataFlow.sourceName,
+        sourceType: dataFlow.sourceType?.display ?? null,
+        targetProperty: dataFlow.targetAccess?.targetProperty
+          ?? dataFlow.targetOperation?.targetProperty
+          ?? dataFlow.sourceOperation?.targetName
+          ?? null,
+        targetOperationKind: dataFlow.targetOperation?.operationKind ?? null,
+        sourceOperationKind: dataFlow.sourceOperation?.operationKind ?? null,
+        targetPropertyType: dataFlow.targetPropertyType?.display ?? null,
+        targetValueType: dataFlow.targetValueType?.display ?? null,
+        valueChannelKind: dataFlow.valueChannel?.channelKind ?? null,
+        sourceWritable: dataFlow.sourceWritable,
+        sourceToTargetAssignable: dataFlow.sourceToTargetAssignable,
+        targetToSourceAssignable: dataFlow.targetToSourceAssignable,
+        openReason: dataFlow.openReason,
+        source: describeAddress(store, dataFlow.sourceAddressHandle),
+        ...(handles ? {
+          handles: {
+            bindingProductHandle: dataFlow.binding.productHandle,
+            dataFlowProductHandle: dataFlow.productHandle,
+            targetAccessProductHandle: dataFlow.targetAccess?.productHandle ?? null,
+            targetOperationProductHandle: dataFlow.targetOperation?.productHandle ?? null,
+            sourceOperationProductHandle: dataFlow.sourceOperation?.productHandle ?? null,
+            valueChannelProductHandle: dataFlow.valueChannel?.productHandle ?? null,
+            expressionProductHandle: dataFlow.expressionProductHandle,
+            bindingScopeProductHandle: dataFlow.bindingScope?.productHandle ?? null,
+            sourceTypeProductHandle: dataFlow.sourceType?.productHandle ?? null,
+            targetPropertyTypeProductHandle: dataFlow.targetPropertyType?.productHandle ?? null,
+            targetValueTypeProductHandle: dataFlow.targetValueType?.productHandle ?? null,
+            sourceAddressHandle: dataFlow.sourceAddressHandle,
+          },
+        } : {}),
+      }))
+    )
+    .sort((left, right) =>
+      `${left.definitionName}:${left.sourceName ?? ''}:${left.direction}:${left.targetProperty ?? ''}`
+        .localeCompare(`${right.definitionName}:${right.sourceName ?? ''}:${right.direction}:${right.targetProperty ?? ''}`)
+    );
+}

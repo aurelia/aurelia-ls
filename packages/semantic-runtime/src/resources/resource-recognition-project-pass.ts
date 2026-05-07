@@ -15,8 +15,8 @@ import type { ResourceRecognitionObservation } from './resource-observation.js';
 import { ResourceRecognitionPass } from './resource-recognition-pass.js';
 import {
   ResourceRecognitionKernelEmission,
-  type ResourceDefinitionHeaderEmission,
 } from './resource-recognition-kernel-emitter.js';
+import type { ResourceDefinitionHeaderEmission } from './resource-definition-header-emission.js';
 import {
   ResourceDefinitionConvergenceEmission,
 } from './resource-definition-converger.js';
@@ -74,40 +74,55 @@ export class ResourceRecognitionProjectPass {
   ): ResourceRecognitionProjectResult {
     const projectEvaluation = evaluation ?? new StaticProjectEvaluationPass().evaluateAndEmit(store, project);
     const recognition = new ResourceRecognitionPass();
-    const sources: ResourceRecognitionSourceResult[] = [];
+    return new ResourceRecognitionProjectResult(
+      project,
+      projectEvaluation.sources.map((source) =>
+        this.recognizeSource(store, project, recognition, source, typeSystem)
+      ),
+    );
+  }
 
-    for (const source of projectEvaluation.sources) {
-      if (!isEvaluatedProjectSource(source)) {
-        sources.push(new ResourceRecognitionSourceResult(
-          source.admission,
-          [],
-          emptyResourceEmission(),
-          emptyDefinitionConvergence(),
-          source.unresolvedModules,
-        ));
-        continue;
-      }
-
-      const result = recognition.recognizeAndEmit(
-        store,
-        new ResourceRecognitionContext(
-          source.sourceFile,
-          source.moduleKey,
-          source.admission.addressHandle,
-          source.evaluation,
-          typeSystem,
-        ),
-      );
-      sources.push(new ResourceRecognitionSourceResult(
-        source.admission,
-        result.observations,
-        result.emission,
-        result.convergence,
-        source.unresolvedModules,
-      ));
+  private recognizeSource(
+    store: KernelStore,
+    project: ProjectBootFrame,
+    recognition: ResourceRecognitionPass,
+    source: StaticProjectEvaluationResult['sources'][number],
+    typeSystem: TypeSystemProject | null,
+  ): ResourceRecognitionSourceResult {
+    if (!isEvaluatedProjectSource(source)) {
+      return this.openSourceResult(source);
     }
+    const result = recognition.recognizeAndEmit(
+      store,
+      new ResourceRecognitionContext(
+        source.sourceFile,
+        source.moduleKey,
+        source.admission.addressHandle,
+        source.evaluation,
+        typeSystem,
+        project.rootDir,
+        project.sourceFiles,
+      ),
+    );
+    return new ResourceRecognitionSourceResult(
+      source.admission,
+      result.observations,
+      result.emission,
+      result.convergence,
+      source.unresolvedModules,
+    );
+  }
 
-    return new ResourceRecognitionProjectResult(project, sources);
+  private openSourceResult(
+    source: StaticProjectEvaluationResult['sources'][number],
+  ): ResourceRecognitionSourceResult {
+    return new ResourceRecognitionSourceResult(
+      source.admission,
+      [],
+      emptyResourceEmission(),
+      emptyDefinitionConvergence(),
+      source.unresolvedModules,
+    );
   }
 }
 

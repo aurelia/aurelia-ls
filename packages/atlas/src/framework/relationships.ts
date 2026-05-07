@@ -21,6 +21,10 @@ export const enum FrameworkRelationshipFamily {
   Lifecycle = "lifecycle",
   /** Observer location, subscription, dirty-checking, and reactivity relationships. */
   Observation = "observation",
+  /** Expression parser, AST node, visitor, evaluator, and expression helper relationships. */
+  Expression = "expression",
+  /** Router configuration, route tree, viewport, and navigation relationships. */
+  Router = "router",
   /** Cross-domain routes that explain where runtime values come into existence. */
   Materialization = "materialization",
   /** Configuration/registry admission relationships into the framework world. */
@@ -69,6 +73,10 @@ export const enum FrameworkRelationshipRelation {
   ReadsWatchDefinition = "reads-watch-definition",
   ParsesExpression = "parses-expression",
   EvaluatesExpression = "evaluates-expression",
+  DefinesExpression = "defines-expression",
+  DefinesObserver = "defines-observer",
+  DefinesRenderingStructure = "defines-rendering-structure",
+  DefinesRouterEntity = "defines-router-entity",
   CollectsDependency = "collects-dependency",
   SchedulesEffect = "schedules-effect",
   InvokesCallback = "invokes-callback",

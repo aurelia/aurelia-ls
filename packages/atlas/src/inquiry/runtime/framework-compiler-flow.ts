@@ -65,11 +65,23 @@ export function readFrameworkCompileFlowRows(
   sourceProject: SourceProject,
   filters: FrameworkCompilerFilters,
 ): readonly FrameworkCompileFlowRow[] {
+  const rows = readAllFrameworkCompileFlowRows(sourceProject, filters);
+  const visibleRows = shouldUseCompileFlowOverview(filters)
+    ? rows.filter(isCompileFlowOverviewRow)
+    : rows;
+  return visibleRows;
+}
+
+/** Read every TemplateCompiler compile-flow row, including detail rows hidden from overview answers. */
+export function readAllFrameworkCompileFlowRows(
+  sourceProject: SourceProject,
+  filters: FrameworkCompilerFilters,
+): readonly FrameworkCompileFlowRow[] {
   const basis = templateCompilerBasis(sourceProject);
   if (basis === null) {
     return [];
   }
-  const rows = [
+  return [
     ...compileMethodRows(basis),
     ...compileSpreadRows(basis),
     ...compileNodeRows(basis),
@@ -80,11 +92,7 @@ export function readFrameworkCompileFlowRows(
     ...compileProjectionRows(basis),
     ...compileLocalElementRows(basis),
     ...compileAttributeReorderRows(basis),
-  ];
-  const visibleRows = shouldUseCompileFlowOverview(filters)
-    ? rows.filter(isCompileFlowOverviewRow)
-    : rows;
-  return visibleRows.filter((row) => compileFlowRowMatches(row, filters));
+  ].filter((row) => compileFlowRowMatches(row, filters));
 }
 
 /** Read detailed TemplateCompiler._classifyAttributes branch rows. */

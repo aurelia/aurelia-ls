@@ -5,7 +5,7 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
-import type { ContainerReference } from '../di/container.js';
+import type { ContainerReference } from '../di/container-reference.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
 import type { ControllerReference } from './controller.js';
 

@@ -1,5 +1,4 @@
 import {
-  FrameworkBundleAssociationKind,
   type FrameworkAdmissionRelationshipRow,
 } from "../../framework/admission.js";
 import {
@@ -12,9 +11,6 @@ import {
 } from "../../framework/resources.js";
 import type { SourceProject } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
-import {
-  type FrameworkBundleAssociationRow,
-} from "./framework-entities.js";
 import type { FrameworkDiscoveryFilters } from "./framework-filters.js";
 import { readFrameworkBundles } from "./framework-bundles.js";
 import {
@@ -34,9 +30,10 @@ import {
 import { FrameworkResourceMaterializationSiteKind } from "./framework-resource-materialization.js";
 import {
   countBy,
-  sourceRangeForCallSiteEntry,
-  sourceRangeForTarget,
 } from "./framework-support.js";
+import {
+  endpointForAdmissionAssociation,
+} from "./framework-admission-endpoints.js";
 
 /** Node kinds used by the admission flow graph. */
 export type FrameworkAdmissionFlowNodeKind =
@@ -479,7 +476,7 @@ class FrameworkAdmissionFlowBuilder {
     });
     for (const bundle of bundles) {
       for (const association of bundle.associations) {
-        const child = endpointForAssociation(association);
+        const child = endpointForAdmissionAssociation(association);
         const from = this.nodeForEndpoint(endpoint, "registry-export");
         const to = this.nodeForEndpoint(child, nodeKindForEndpoint(child));
         this.addEdge({
@@ -1054,72 +1051,6 @@ function isJitCompilerResourceKind(
 ): boolean {
   return resourceKind !== undefined &&
     JIT_COMPILER_RESOURCE_KINDS.has(resourceKind);
-}
-
-function endpointForAssociation(
-  association: FrameworkBundleAssociationRow,
-): FrameworkRelationshipEndpoint {
-  if (association.diInterface !== undefined) {
-    return {
-      kind: FrameworkRelationshipEndpointKind.DiKey,
-      name: association.diInterface.interfaceKey,
-      packageId: association.diInterface.packageId,
-      packageName: association.diInterface.packageName,
-      source: sourceRangeForCallSiteEntry(
-        association.diInterface.createInterfaceCall,
-      ),
-    };
-  }
-  if (association.resourceCarrier !== undefined) {
-    return {
-      kind: FrameworkRelationshipEndpointKind.Resource,
-      name:
-        association.resourceCarrier.targetName ??
-        association.resourceCarrier.sourceExportName,
-      packageId: association.resourceCarrier.packageId,
-      packageName: association.resourceCarrier.packageName,
-      source: association.resourceCarrier.source,
-      resourceKind: association.resourceCarrier.resourceKind,
-      resourceName: association.resourceCarrier.resourceName,
-    };
-  }
-  if (association.registryExport !== undefined) {
-    return {
-      kind: FrameworkRelationshipEndpointKind.RegistryExport,
-      name: association.registryExport.exportEntry.exportName,
-      packageId: association.registryExport.packageId,
-      packageName: association.registryExport.packageName,
-      source:
-        sourceRangeForTarget(association.registryExport.exportEntry.targets[0]) ??
-        association.source,
-    };
-  }
-  if (
-    association.associationKind ===
-    FrameworkBundleAssociationKind.RegistrationCatalog
-  ) {
-    return {
-      kind: FrameworkRelationshipEndpointKind.RegistrationCatalog,
-      name:
-        association.catalogName ??
-        association.targetName ??
-        association.expression.text,
-      packageId: association.packageId,
-      packageName: association.packageName,
-      source: association.source,
-    };
-  }
-  return {
-    kind: FrameworkRelationshipEndpointKind.RegistrationArgument,
-    name:
-      association.targetName ??
-      association.helperName ??
-      association.expression.symbolName ??
-      association.expression.text,
-    packageId: association.packageId,
-    packageName: association.packageName,
-    source: association.source,
-  };
 }
 
 function nodeKindForEndpoint(

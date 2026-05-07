@@ -8,7 +8,10 @@ import {
   relative,
 } from 'node:path';
 import { SourceLanguage } from '../kernel/address.js';
-import type { BootSourceFileInput } from './frames.js';
+import {
+  SourceDiscoveryResult,
+  type BootSourceFileInput,
+} from './frames.js';
 
 const DEFAULT_SOURCE_EXTENSIONS = new Set([
   '.ts',
@@ -36,22 +39,6 @@ export interface SourceDiscoveryOptions {
   readonly excludedDirectories?: ReadonlySet<string>;
   /** Optional maximum admitted source files before discovery stops. */
   readonly maxFiles?: number | null;
-}
-
-/** Source discovery result before TypeScript or Aurelia semantics are interpreted. */
-export class SourceDiscoveryResult {
-  constructor(
-    /** Root directory that was scanned or attempted. */
-    readonly rootDir: string,
-    /** Source files admitted by the discovery pass. */
-    readonly sourceFiles: readonly BootSourceFileInput[],
-    /** Whether the root directory existed when discovery ran. */
-    readonly rootExists: boolean,
-    /** Whether discovery stopped because it reached the configured file limit. */
-    readonly truncated: boolean,
-    /** Maximum file count used by discovery; null means no explicit file limit. */
-    readonly maxFiles: number | null,
-  ) {}
 }
 
 /** Infer a coarse source language from the path extension. */

@@ -10,7 +10,6 @@ import {
 } from '../kernel/evidence.js';
 import type {
   AddressHandle,
-  ClaimHandle,
   IdentityHandle,
   ProductHandle,
   ProvenanceHandle,
@@ -91,6 +90,14 @@ class BuiltInSyntaxSourceSet {
   ) {}
 }
 
+class BuiltInSyntaxCatalogHandles {
+  constructor(
+    readonly local: string,
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+  ) {}
+}
+
 export class BuiltInAttributePatternEmission {
   constructor(
     /** Built-in syntax catalog product that owns this executable. */
@@ -139,6 +146,43 @@ class ConfiguredSyntaxSelectionEmission {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly selection: ConfiguredBuiltInSyntaxCatalogSelection,
+  ) {}
+}
+
+class ConfiguredSyntaxSelectionHandles {
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+  ) {}
+}
+
+class BuiltInExecutableHandles {
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+  ) {}
+}
+
+class BuiltInCompiledPatternHandles {
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+  ) {}
+}
+
+class BuiltInCompiledPatternEmission {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly product: CompiledAttributePattern,
+  ) {}
+}
+
+class BuiltInSyntaxCatalogPublication {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly catalog: BuiltInSyntaxCatalog,
+    readonly attributePatterns: readonly BuiltInAttributePatternEmission[],
+    readonly bindingCommands: readonly BuiltInBindingCommandEmission[],
   ) {}
 }
 
@@ -205,31 +249,23 @@ export class BuiltInSyntaxCatalogMaterializer {
     }
   }
 
-  private recordsForCatalog(input: BuiltInSyntaxCatalogInput): {
-    readonly records: readonly KernelStoreRecord[];
-    readonly catalog: BuiltInSyntaxCatalog;
-    readonly attributePatterns: readonly BuiltInAttributePatternEmission[];
-    readonly bindingCommands: readonly BuiltInBindingCommandEmission[];
-  } {
+  private recordsForCatalog(input: BuiltInSyntaxCatalogInput): BuiltInSyntaxCatalogPublication {
     const records: KernelStoreRecord[] = [];
-    const local = `built-in-syntax:${input.packageId}:${input.group}${input.variantKey == null ? '' : `:${input.variantKey}`}`;
+    const local = syntaxCatalogLocal(input);
     const source = this.recordsForSource(
       `${local}:source`,
       input.packageId,
       input.group,
       `Framework built-in syntax catalog ${input.packageId}/${input.group}.`,
     );
+    const handles = this.syntaxCatalogHandles(local);
     records.push(...source.records);
-
-    const catalogProductHandle = this.store.handles.product(local);
-    const catalogIdentityHandle = this.store.handles.identity(local);
     const attributePatternEmissions = input.attributePatterns.map((pattern, index) =>
       this.recordsForAttributePattern(
         pattern,
         `${local}:attribute-pattern:${index}`,
-        catalogProductHandle,
-        catalogIdentityHandle,
-        this.store.handles.claim(`${local}:contains-syntax-resource:${index}`),
+        handles.productHandle,
+        handles.identityHandle,
         source,
       )
     );
@@ -237,37 +273,87 @@ export class BuiltInSyntaxCatalogMaterializer {
       this.recordsForBindingCommand(
         command,
         `${local}:binding-command:${index}`,
-        catalogProductHandle,
-        catalogIdentityHandle,
-        this.store.handles.claim(`${local}:contains-syntax-resource:${attributePatternEmissions.length + index}`),
+        handles.productHandle,
+        handles.identityHandle,
         source,
       )
     );
-    for (const emission of attributePatternEmissions) {
-      records.push(...emission.records);
-    }
-    for (const emission of bindingCommandEmissions) {
-      records.push(...emission.records);
-    }
+    records.push(...attributePatternEmissions.flatMap((emission) => emission.records));
+    records.push(...bindingCommandEmissions.flatMap((emission) => emission.records));
 
-    const executableProductHandles = [
-      ...attributePatternEmissions.map((emission) => emission.executable.productHandle),
-      ...bindingCommandEmissions.map((emission) => emission.executable.productHandle),
-    ];
-    const catalogClaims = executableProductHandles.map((productHandle, index) => new SemanticClaim(
-      this.store.handles.claim(`${local}:contains-syntax-resource:${index}`),
-      catalogProductHandle,
+    const executableProductHandles = executableProductHandlesForSyntaxCatalog(
+      attributePatternEmissions,
+      bindingCommandEmissions,
+    );
+    const catalogClaims = this.claimsForSyntaxCatalogResources(
+      handles,
+      executableProductHandles,
+      source,
+    );
+    records.push(...catalogClaims);
+
+    const catalog = this.createSyntaxCatalog(
+      input,
+      handles,
+      attributePatternEmissions,
+      bindingCommandEmissions,
+      source,
+    );
+    records.push(...this.recordsForSyntaxCatalog(
+      handles,
+      catalog,
+      executableProductHandles,
+      attributePatternEmissions,
+      catalogClaims,
+      source,
+    ));
+
+    return new BuiltInSyntaxCatalogPublication(
+      records,
+      catalog,
+      attributePatternEmissions.map((emission) => emission.product),
+      bindingCommandEmissions.map((emission) => emission.product),
+    );
+  }
+
+  private syntaxCatalogHandles(local: string): BuiltInSyntaxCatalogHandles {
+    return new BuiltInSyntaxCatalogHandles(
+      local,
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+    );
+  }
+
+  private claimsForSyntaxCatalogResources(
+    handles: BuiltInSyntaxCatalogHandles,
+    executableProductHandles: readonly ProductHandle[],
+    source: BuiltInSyntaxSourceSet,
+  ): readonly SemanticClaim[] {
+    return executableProductHandles.map((productHandle, index) => new SemanticClaim(
+      this.store.handles.claim(`${handles.local}:contains-syntax-resource:${index}`),
+      handles.productHandle,
       KernelVocabulary.Compiler.ContainsSyntaxResource.key,
       productHandle,
       source.provenanceHandle,
     ));
-    records.push(...catalogClaims);
+  }
 
-    const materializedAttributePatterns = attributePatternEmissions.map((emission) => emission.product.handler);
-    const materializedBindingCommands = bindingCommandEmissions.map((emission) => emission.product.handler);
-    const catalog = new BuiltInSyntaxCatalog(
-      catalogProductHandle,
-      catalogIdentityHandle,
+  private createSyntaxCatalog(
+    input: BuiltInSyntaxCatalogInput,
+    handles: BuiltInSyntaxCatalogHandles,
+    attributePatterns: readonly {
+      readonly product: BuiltInAttributePatternEmission;
+    }[],
+    bindingCommands: readonly {
+      readonly product: BuiltInBindingCommandEmission;
+    }[],
+    source: BuiltInSyntaxSourceSet,
+  ): BuiltInSyntaxCatalog {
+    const materializedAttributePatterns = attributePatterns.map((emission) => emission.product.handler);
+    const materializedBindingCommands = bindingCommands.map((emission) => emission.product.handler);
+    return new BuiltInSyntaxCatalog(
+      handles.productHandle,
+      handles.identityHandle,
       input.packageId,
       input.variantKey ?? null,
       input.group,
@@ -283,43 +369,46 @@ export class BuiltInSyntaxCatalogMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
-    records.push(
+  }
+
+  private recordsForSyntaxCatalog(
+    handles: BuiltInSyntaxCatalogHandles,
+    catalog: BuiltInSyntaxCatalog,
+    executableProductHandles: readonly ProductHandle[],
+    attributePatterns: readonly {
+      readonly compiledPatterns: readonly CompiledAttributePattern[];
+    }[],
+    catalogClaims: readonly SemanticClaim[],
+    source: BuiltInSyntaxSourceSet,
+  ): readonly KernelStoreRecord[] {
+    return [
       new CompilerIdentity(
-        catalogIdentityHandle,
+        handles.identityHandle,
         KernelVocabulary.Compiler.BuiltInSyntaxCatalog.key,
         null,
-        source.addressHandle,
-        input.variantKey == null
-          ? `${input.packageId}:${input.group}`
-          : `${input.packageId}:${input.group}:${input.variantKey}`,
+        catalog.sourceAddressHandle,
+        syntaxCatalogIdentityDiscriminator(catalog),
       ),
       new MaterializedProduct(
-        catalogProductHandle,
+        handles.productHandle,
         KernelVocabulary.Compiler.BuiltInSyntaxCatalog.key,
-        catalogIdentityHandle,
-        source.addressHandle,
+        handles.identityHandle,
+        catalog.sourceAddressHandle,
         source.provenanceHandle,
       ),
       new MaterializationRecord(
-        this.store.handles.materialization(local),
-        catalogIdentityHandle,
+        this.store.handles.materialization(handles.local),
+        handles.identityHandle,
         [
-          catalogProductHandle,
+          handles.productHandle,
           ...executableProductHandles,
-          ...attributePatternEmissions.flatMap((emission) =>
+          ...attributePatterns.flatMap((emission) =>
             emission.compiledPatterns.map((pattern) => pattern.productHandle)
           ),
         ],
         catalogClaims.map((claim) => claim.handle),
       ),
-    );
-
-    return {
-      records,
-      catalog,
-      attributePatterns: attributePatternEmissions.map((emission) => emission.product),
-      bindingCommands: bindingCommandEmissions.map((emission) => emission.product),
-    };
+    ];
   }
 
   private recordsForAttributePattern(
@@ -327,7 +416,6 @@ export class BuiltInSyntaxCatalogMaterializer {
     local: string,
     catalogProductHandle: ProductHandle,
     catalogIdentityHandle: IdentityHandle,
-    catalogClaimHandle: ClaimHandle,
     source: BuiltInSyntaxSourceSet,
   ): {
     readonly records: readonly KernelStoreRecord[];
@@ -335,74 +423,41 @@ export class BuiltInSyntaxCatalogMaterializer {
     readonly executable: AttributePatternExecutable;
     readonly compiledPatterns: readonly CompiledAttributePattern[];
   } {
-    const productHandle = this.store.handles.product(`${local}:executable`);
-    const identityHandle = this.store.handles.identity(`${local}:executable`);
-    const fieldProvenance = compactFieldProvenance<BuiltInAttributePatternField>([
-      new FieldProvenance('targetName', source.provenanceHandle),
-      new FieldProvenance('patterns', source.provenanceHandle),
-      new FieldProvenance('package', source.provenanceHandle),
-      new FieldProvenance('group', source.provenanceHandle),
-    ]);
+    const handles = this.executableHandles(`${local}:executable`);
     const materializedHandler = materializeAttributePatternHandler(
       handler,
-      productHandle,
-      identityHandle,
+      handles.productHandle,
+      handles.identityHandle,
       source.addressHandle,
-      fieldProvenance,
+      fieldProvenanceForAttributePattern(source),
     );
-    const executable = new AttributePatternExecutable(
-      productHandle,
-      identityHandle,
-      null,
-      new ResourceTargetReference(null, source.addressHandle, materializedHandler.targetName),
-      materializedHandler.patterns,
-      AttributePatternExecutionKind.BuiltIn,
-      source.addressHandle,
-      compactFieldProvenance<AttributePatternExecutableField>([
-        new FieldProvenance('target', source.provenanceHandle),
-        new FieldProvenance('patterns', source.provenanceHandle),
-        new FieldProvenance('executionKind', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+    const executable = this.attributePatternExecutableFor(
+      handles,
+      source,
+      materializedHandler,
     );
     const compiledPatternEmissions = handler.patterns.map((definition, index) =>
       this.recordsForCompiledPattern(
         definition,
         `${local}:compiled-pattern:${index}`,
-        identityHandle,
-        productHandle,
-        this.store.handles.claim(`${local}:compiles-attribute-pattern:${index}`),
+        handles.identityHandle,
+        handles.productHandle,
         source,
       )
     );
-    const compiledPatternClaims = compiledPatternEmissions.map((emission, index) => new SemanticClaim(
-      this.store.handles.claim(`${local}:compiles-attribute-pattern:${index}`),
-      productHandle,
-      KernelVocabulary.Compiler.CompilesAttributePattern.key,
-      emission.product.productHandle,
-      source.provenanceHandle,
-    ));
-    const records: KernelStoreRecord[] = [
-      new CompilerIdentity(
-        identityHandle,
-        KernelVocabulary.Compiler.AttributePatternExecutable.key,
-        catalogIdentityHandle,
-        source.addressHandle,
-        materializedHandler.targetName,
-      ),
-      new MaterializedProduct(
-        productHandle,
-        KernelVocabulary.Compiler.AttributePatternExecutable.key,
-        identityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      ...compiledPatternClaims,
-      ...compiledPatternEmissions.flatMap((emission) => emission.records),
-    ];
+    const compiledPatternClaims = this.claimsForCompiledAttributePatterns(
+      local,
+      handles.productHandle,
+      compiledPatternEmissions.map((emission) => emission.product),
+      source,
+    );
     const compiledPatterns = compiledPatternEmissions.map((emission) => emission.product);
     return {
-      records,
+      records: [
+        ...this.recordsForAttributePatternExecutable(catalogIdentityHandle, executable, source),
+        ...compiledPatternClaims,
+        ...compiledPatternEmissions.flatMap((emission) => emission.records),
+      ],
       product: new BuiltInAttributePatternEmission(
         catalogProductHandle,
         materializedHandler,
@@ -414,23 +469,108 @@ export class BuiltInSyntaxCatalogMaterializer {
     };
   }
 
+  private executableHandles(
+    local: string,
+  ): BuiltInExecutableHandles {
+    return new BuiltInExecutableHandles(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+    );
+  }
+
+  private attributePatternExecutableFor(
+    handles: BuiltInExecutableHandles,
+    source: BuiltInSyntaxSourceSet,
+    handler: BuiltInAttributePattern,
+  ): AttributePatternExecutable {
+    return new AttributePatternExecutable(
+      handles.productHandle,
+      handles.identityHandle,
+      null,
+      new ResourceTargetReference(null, source.addressHandle, handler.targetName),
+      handler.patterns,
+      AttributePatternExecutionKind.BuiltIn,
+      source.addressHandle,
+      compactFieldProvenance<AttributePatternExecutableField>([
+        new FieldProvenance('target', source.provenanceHandle),
+        new FieldProvenance('patterns', source.provenanceHandle),
+        new FieldProvenance('executionKind', source.provenanceHandle),
+        new FieldProvenance('source', source.provenanceHandle),
+      ]),
+    );
+  }
+
+  private claimsForCompiledAttributePatterns(
+    local: string,
+    executableProductHandle: ProductHandle,
+    compiledPatterns: readonly CompiledAttributePattern[],
+    source: BuiltInSyntaxSourceSet,
+  ): readonly SemanticClaim[] {
+    return compiledPatterns.map((pattern, index) => new SemanticClaim(
+      this.store.handles.claim(`${local}:compiles-attribute-pattern:${index}`),
+      executableProductHandle,
+      KernelVocabulary.Compiler.CompilesAttributePattern.key,
+      pattern.productHandle,
+      source.provenanceHandle,
+    ));
+  }
+
+  private recordsForAttributePatternExecutable(
+    catalogIdentityHandle: IdentityHandle,
+    executable: AttributePatternExecutable,
+    source: BuiltInSyntaxSourceSet,
+  ): readonly KernelStoreRecord[] {
+    return [
+      new CompilerIdentity(
+        executable.identityHandle,
+        KernelVocabulary.Compiler.AttributePatternExecutable.key,
+        catalogIdentityHandle,
+        executable.sourceAddressHandle,
+        executable.target?.localName ?? null,
+      ),
+      new MaterializedProduct(
+        executable.productHandle,
+        KernelVocabulary.Compiler.AttributePatternExecutable.key,
+        executable.identityHandle,
+        executable.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+    ];
+  }
+
   private recordsForCompiledPattern(
     definition: BuiltInAttributePattern['patterns'][number],
     local: string,
     ownerIdentityHandle: IdentityHandle,
     executableProductHandle: ProductHandle,
-    executableClaimHandle: ClaimHandle,
     source: BuiltInSyntaxSourceSet,
-  ): {
-    readonly records: readonly KernelStoreRecord[];
-    readonly product: CompiledAttributePattern;
-  } {
-    const productHandle = this.store.handles.product(local);
-    const identityHandle = this.store.handles.identity(local);
+  ): BuiltInCompiledPatternEmission {
+    const handles = this.compiledPatternHandles(local);
     const compiled = compileAttributePatternDefinition(definition);
-    const product = new CompiledAttributePattern(
-      productHandle,
-      identityHandle,
+    const product = this.compiledPatternProduct(definition, handles, compiled, executableProductHandle, source);
+    return new BuiltInCompiledPatternEmission(
+      this.recordsForCompiledPatternProduct(definition, product, handles, ownerIdentityHandle, source),
+      product,
+    );
+  }
+
+  private compiledPatternHandles(local: string): BuiltInCompiledPatternHandles {
+    return new BuiltInCompiledPatternHandles(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+    );
+  }
+
+  private compiledPatternProduct(
+    definition: BuiltInAttributePattern['patterns'][number],
+    handles: BuiltInCompiledPatternHandles,
+    compiled: ReturnType<typeof compileAttributePatternDefinition>,
+    executableProductHandle: ProductHandle,
+    source: BuiltInSyntaxSourceSet,
+  ): CompiledAttributePattern {
+    return new CompiledAttributePattern(
+      handles.productHandle,
+      handles.identityHandle,
       definition,
       compiled.tokens,
       compiled.score,
@@ -438,25 +578,31 @@ export class BuiltInSyntaxCatalogMaterializer {
       executableProductHandle,
       definition.addressHandle ?? source.addressHandle,
     );
-    return {
-      records: [
-        new CompilerIdentity(
-          identityHandle,
-          KernelVocabulary.Compiler.CompiledAttributePattern.key,
-          ownerIdentityHandle,
-          product.sourceAddressHandle,
-          definition.pattern,
-        ),
-        new MaterializedProduct(
-          productHandle,
-          KernelVocabulary.Compiler.CompiledAttributePattern.key,
-          identityHandle,
-          product.sourceAddressHandle,
-          source.provenanceHandle,
-        ),
-      ],
-      product,
-    };
+  }
+
+  private recordsForCompiledPatternProduct(
+    definition: BuiltInAttributePattern['patterns'][number],
+    product: CompiledAttributePattern,
+    handles: BuiltInCompiledPatternHandles,
+    ownerIdentityHandle: IdentityHandle,
+    source: BuiltInSyntaxSourceSet,
+  ): readonly KernelStoreRecord[] {
+    return [
+      new CompilerIdentity(
+        handles.identityHandle,
+        KernelVocabulary.Compiler.CompiledAttributePattern.key,
+        ownerIdentityHandle,
+        product.sourceAddressHandle,
+        definition.pattern,
+      ),
+      new MaterializedProduct(
+        handles.productHandle,
+        KernelVocabulary.Compiler.CompiledAttributePattern.key,
+        handles.identityHandle,
+        product.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+    ];
   }
 
   private recordsForBindingCommand(
@@ -464,72 +610,27 @@ export class BuiltInSyntaxCatalogMaterializer {
     local: string,
     catalogProductHandle: ProductHandle,
     catalogIdentityHandle: IdentityHandle,
-    catalogClaimHandle: ClaimHandle,
     source: BuiltInSyntaxSourceSet,
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly product: BuiltInBindingCommandEmission;
     readonly executable: BindingCommandExecutable;
   } {
-    const productHandle = this.store.handles.product(`${local}:executable`);
-    const identityHandle = this.store.handles.identity(`${local}:executable`);
-    const fieldProvenance = compactFieldProvenance<BuiltInBindingCommandField>([
-      new FieldProvenance('targetName', source.provenanceHandle),
-      new FieldProvenance('name', source.provenanceHandle),
-      handler.aliases.length === 0 ? null : new FieldProvenance('aliases', source.provenanceHandle),
-      new FieldProvenance('key', source.provenanceHandle),
-      new FieldProvenance('ignoreAttr', source.provenanceHandle),
-      new FieldProvenance('produces', source.provenanceHandle),
-      handler.producedInstructionTypeNames.length === 0 ? null : new FieldProvenance('producedInstructionTypeNames', source.provenanceHandle),
-      new FieldProvenance('package', source.provenanceHandle),
-      new FieldProvenance('group', source.provenanceHandle),
-    ]);
+    const handles = this.executableHandles(`${local}:executable`);
     const materializedHandler = materializeBindingCommandHandler(
       handler,
-      productHandle,
-      identityHandle,
+      handles.productHandle,
+      handles.identityHandle,
       source.addressHandle,
-      fieldProvenance,
+      fieldProvenanceForBindingCommand(source, handler),
     );
-    const executable = new BindingCommandExecutable(
-      productHandle,
-      identityHandle,
-      null,
-      new ResourceTargetReference(null, source.addressHandle, materializedHandler.targetName),
-      materializedHandler.name,
-      materializedHandler.aliases,
-      materializedHandler.key,
-      materializedHandler.ignoreAttr,
-      BindingCommandExecutionKind.BuiltIn,
-      source.addressHandle,
-      compactFieldProvenance<BindingCommandExecutableField>([
-        new FieldProvenance('target', source.provenanceHandle),
-        new FieldProvenance('name', source.provenanceHandle),
-        materializedHandler.aliases.length === 0 ? null : new FieldProvenance('aliases', source.provenanceHandle),
-        new FieldProvenance('key', source.provenanceHandle),
-        new FieldProvenance('ignoreAttr', source.provenanceHandle),
-        new FieldProvenance('executionKind', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+    const executable = this.bindingCommandExecutableFor(
+      handles,
+      source,
+      materializedHandler,
     );
-    const records: KernelStoreRecord[] = [
-      new CompilerIdentity(
-        identityHandle,
-        KernelVocabulary.Compiler.BindingCommandExecutable.key,
-        catalogIdentityHandle,
-        source.addressHandle,
-        materializedHandler.name,
-      ),
-      new MaterializedProduct(
-        productHandle,
-        KernelVocabulary.Compiler.BindingCommandExecutable.key,
-        identityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-    ];
     return {
-      records,
+      records: this.recordsForBindingCommandExecutable(catalogIdentityHandle, executable, source),
       product: new BuiltInBindingCommandEmission(
         catalogProductHandle,
         materializedHandler,
@@ -537,6 +638,57 @@ export class BuiltInSyntaxCatalogMaterializer {
       ),
       executable,
     };
+  }
+
+  private bindingCommandExecutableFor(
+    handles: BuiltInExecutableHandles,
+    source: BuiltInSyntaxSourceSet,
+    handler: BuiltInBindingCommand,
+  ): BindingCommandExecutable {
+    return new BindingCommandExecutable(
+      handles.productHandle,
+      handles.identityHandle,
+      null,
+      new ResourceTargetReference(null, source.addressHandle, handler.targetName),
+      handler.name,
+      handler.aliases,
+      handler.key,
+      handler.ignoreAttr,
+      BindingCommandExecutionKind.BuiltIn,
+      source.addressHandle,
+      compactFieldProvenance<BindingCommandExecutableField>([
+        new FieldProvenance('target', source.provenanceHandle),
+        new FieldProvenance('name', source.provenanceHandle),
+        handler.aliases.length === 0 ? null : new FieldProvenance('aliases', source.provenanceHandle),
+        new FieldProvenance('key', source.provenanceHandle),
+        new FieldProvenance('ignoreAttr', source.provenanceHandle),
+        new FieldProvenance('executionKind', source.provenanceHandle),
+        new FieldProvenance('source', source.provenanceHandle),
+      ]),
+    );
+  }
+
+  private recordsForBindingCommandExecutable(
+    catalogIdentityHandle: IdentityHandle,
+    executable: BindingCommandExecutable,
+    source: BuiltInSyntaxSourceSet,
+  ): readonly KernelStoreRecord[] {
+    return [
+      new CompilerIdentity(
+        executable.identityHandle,
+        KernelVocabulary.Compiler.BindingCommandExecutable.key,
+        catalogIdentityHandle,
+        executable.sourceAddressHandle,
+        executable.name,
+      ),
+      new MaterializedProduct(
+        executable.productHandle,
+        KernelVocabulary.Compiler.BindingCommandExecutable.key,
+        executable.identityHandle,
+        executable.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+    ];
   }
 
   private recordsForSource(
@@ -588,31 +740,66 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
   }
 
   materialize(configuration: ConfigurationKernelEmission): ConfiguredBuiltInSyntaxCatalogEmission {
-    const selectionInputs = readConfiguredSyntaxCatalogInputs(configuration, this.store);
-    const catalogInputs = uniqueCatalogInputs(selectionInputs.flatMap((input) => input.catalogInputs));
-    const catalogEmission = this.catalogMaterializer.materialize(catalogInputs);
-    const catalogsByKey = new Map(catalogEmission.catalogs.map((catalog) => [catalogKey(catalog), catalog]));
+    const selectionRequests = readConfiguredSyntaxCatalogRequests(configuration, this.store);
+    const catalogEmission = this.catalogEmissionForRequests(selectionRequests);
+    const selectionEmission = this.selectionEmissionForRequests(selectionRequests, catalogEmission);
+    this.commitSelectionRecords(selectionEmission.records);
+    this.registerSelectionDetails(selectionEmission.selections);
 
+    return new ConfiguredBuiltInSyntaxCatalogEmission(
+      catalogEmission,
+      selectionEmission.selections,
+      selectionEmission.records,
+    );
+  }
+
+  private catalogEmissionForRequests(
+    selectionRequests: readonly ConfiguredSyntaxCatalogRequest[],
+  ): BuiltInSyntaxCatalogEmission {
+    const catalogInputs = uniqueCatalogInputs(selectionRequests.flatMap((request) => request.catalogInputs));
+    return this.catalogMaterializer.materialize(catalogInputs);
+  }
+
+  private selectionEmissionForRequests(
+    selectionRequests: readonly ConfiguredSyntaxCatalogRequest[],
+    catalogEmission: BuiltInSyntaxCatalogEmission,
+  ): {
+    readonly records: readonly KernelStoreRecord[];
+    readonly selections: readonly ConfiguredBuiltInSyntaxCatalogSelection[];
+  } {
+    const catalogsByKey = new Map(catalogEmission.catalogs.map((catalog) => [catalogKey(catalog), catalog]));
     const records: KernelStoreRecord[] = [];
     const selections: ConfiguredBuiltInSyntaxCatalogSelection[] = [];
-    for (const input of selectionInputs) {
-      const catalogs = input.catalogInputs
-        .map((catalogInput) => catalogsByKey.get(catalogInputKey(catalogInput)) ?? null)
-        .filter((catalog): catalog is BuiltInSyntaxCatalog => catalog != null);
+    for (const request of selectionRequests) {
+      const catalogs = this.catalogsForRequest(request, catalogsByKey);
       if (catalogs.length === 0) {
         continue;
       }
-      const emission = this.recordsForSelection(input.admission, input.frameworkKind, catalogs);
+      const emission = this.recordsForSelection(request.admission, request.frameworkKind, catalogs);
       if (this.store.readProduct(emission.selection.productHandle) == null) {
         records.push(...emission.records);
       }
       selections.push(emission.selection);
     }
+    return { records, selections };
+  }
 
+  private catalogsForRequest(
+    request: ConfiguredSyntaxCatalogRequest,
+    catalogsByKey: ReadonlyMap<string, BuiltInSyntaxCatalog>,
+  ): readonly BuiltInSyntaxCatalog[] {
+    return request.catalogInputs
+      .map((catalogInput) => catalogsByKey.get(catalogInputKey(catalogInput)) ?? null)
+      .filter((catalog): catalog is BuiltInSyntaxCatalog => catalog != null);
+  }
+
+  private commitSelectionRecords(records: readonly KernelStoreRecord[]): void {
     if (records.length > 0) {
       this.store.commit(new KernelStoreBatch(records, 'configured-built-in-syntax-catalogs'));
     }
+  }
 
+  private registerSelectionDetails(selections: readonly ConfiguredBuiltInSyntaxCatalogSelection[]): void {
     for (const selection of selections) {
       this.store.productDetails.addIfAbsent(
         TemplateProductDetails.ConfiguredBuiltInSyntaxCatalogSelection,
@@ -620,8 +807,6 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
         selection,
       );
     }
-
-    return new ConfiguredBuiltInSyntaxCatalogEmission(catalogEmission, selections, records);
   }
 
   private recordsForSelection(
@@ -635,18 +820,47 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
       admission.sourceAddressHandle,
       summaryForFrameworkKind(frameworkKind),
     );
-    const productHandle = this.store.handles.product(local);
-    const identityHandle = this.store.handles.identity(local);
-    const claims = catalogs.map((catalog, index) => new SemanticClaim(
+    const handles = this.configuredSelectionHandles(local);
+    const claims = this.claimsForConfiguredSelection(local, handles.productHandle, catalogs, source);
+    const selection = this.createConfiguredSelection(admission, frameworkKind, catalogs, handles, source);
+    return new ConfiguredSyntaxSelectionEmission(
+      this.recordsForConfiguredSelectionProduct(local, admission, frameworkKind, source, handles, claims),
+      selection,
+    );
+  }
+
+  private configuredSelectionHandles(local: string): ConfiguredSyntaxSelectionHandles {
+    return new ConfiguredSyntaxSelectionHandles(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+    );
+  }
+
+  private claimsForConfiguredSelection(
+    local: string,
+    selectionProductHandle: ProductHandle,
+    catalogs: readonly BuiltInSyntaxCatalog[],
+    source: ConfiguredSyntaxSourceSet,
+  ): readonly SemanticClaim[] {
+    return catalogs.map((catalog, index) => new SemanticClaim(
       this.store.handles.claim(`${local}:admits-syntax-catalog:${index}`),
-      productHandle,
+      selectionProductHandle,
       KernelVocabulary.Compiler.AdmitsSyntaxCatalog.key,
       catalog.productHandle,
       source.provenanceHandle,
     ));
-    const selection = new ConfiguredBuiltInSyntaxCatalogSelection(
-      productHandle,
-      identityHandle,
+  }
+
+  private createConfiguredSelection(
+    admission: RegistrationAdmissionProduct,
+    frameworkKind: FrameworkRegistrationKind,
+    catalogs: readonly BuiltInSyntaxCatalog[],
+    handles: ConfiguredSyntaxSelectionHandles,
+    source: ConfiguredSyntaxSourceSet,
+  ): ConfiguredBuiltInSyntaxCatalogSelection {
+    return new ConfiguredBuiltInSyntaxCatalogSelection(
+      handles.productHandle,
+      handles.identityHandle,
       admission.productHandle,
       frameworkKind,
       catalogs.map((catalog) => catalog.productHandle),
@@ -658,33 +872,40 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
-    return new ConfiguredSyntaxSelectionEmission(
-      [
-        ...source.records,
-        new CompilerIdentity(
-          identityHandle,
-          KernelVocabulary.Compiler.ConfiguredSyntaxCatalogSelection.key,
-          admission.identityHandle,
-          admission.sourceAddressHandle,
-          frameworkKind,
-        ),
-        ...claims,
-        new MaterializedProduct(
-          productHandle,
-          KernelVocabulary.Compiler.ConfiguredSyntaxCatalogSelection.key,
-          identityHandle,
-          admission.sourceAddressHandle,
-          source.provenanceHandle,
-        ),
-        new MaterializationRecord(
-          this.store.handles.materialization(local),
-          identityHandle,
-          [productHandle],
-          claims.map((claim) => claim.handle),
-        ),
-      ],
-      selection,
-    );
+  }
+
+  private recordsForConfiguredSelectionProduct(
+    local: string,
+    admission: RegistrationAdmissionProduct,
+    frameworkKind: FrameworkRegistrationKind,
+    source: ConfiguredSyntaxSourceSet,
+    handles: ConfiguredSyntaxSelectionHandles,
+    claims: readonly SemanticClaim[],
+  ): readonly KernelStoreRecord[] {
+    return [
+      ...source.records,
+      new CompilerIdentity(
+        handles.identityHandle,
+        KernelVocabulary.Compiler.ConfiguredSyntaxCatalogSelection.key,
+        admission.identityHandle,
+        admission.sourceAddressHandle,
+        frameworkKind,
+      ),
+      ...claims,
+      new MaterializedProduct(
+        handles.productHandle,
+        KernelVocabulary.Compiler.ConfiguredSyntaxCatalogSelection.key,
+        handles.identityHandle,
+        admission.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+      new MaterializationRecord(
+        this.store.handles.materialization(local),
+        handles.identityHandle,
+        [handles.productHandle],
+        claims.map((claim) => claim.handle),
+      ),
+    ];
   }
 
   private recordsForConfiguredSource(
@@ -713,7 +934,7 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
   }
 }
 
-class ConfiguredSyntaxCatalogInput {
+class ConfiguredSyntaxCatalogRequest {
   constructor(
     readonly admission: RegistrationAdmissionProduct,
     readonly frameworkKind: FrameworkRegistrationKind,
@@ -721,11 +942,11 @@ class ConfiguredSyntaxCatalogInput {
   ) {}
 }
 
-function readConfiguredSyntaxCatalogInputs(
+function readConfiguredSyntaxCatalogRequests(
   configuration: ConfigurationKernelEmission,
   store: KernelStore,
-): readonly ConfiguredSyntaxCatalogInput[] {
-  const inputs: ConfiguredSyntaxCatalogInput[] = [];
+): readonly ConfiguredSyntaxCatalogRequest[] {
+  const requests: ConfiguredSyntaxCatalogRequest[] = [];
   for (const admission of configuration.registrationAdmissions) {
     const frameworkKind = frameworkRegistrationKindForAdmission(admission);
     if (frameworkKind == null) {
@@ -735,9 +956,9 @@ function readConfiguredSyntaxCatalogInputs(
     if (catalogInputs.length === 0) {
       continue;
     }
-    inputs.push(new ConfiguredSyntaxCatalogInput(admission, frameworkKind, catalogInputs));
+    requests.push(new ConfiguredSyntaxCatalogRequest(admission, frameworkKind, catalogInputs));
   }
-  return inputs;
+  return requests;
 }
 
 function catalogInputsForAdmission(
@@ -880,8 +1101,32 @@ function catalogInputKey(input: BuiltInSyntaxCatalogInput): string {
   return `${input.packageId}:${input.group}:${input.variantKey ?? 'default'}`;
 }
 
+function syntaxCatalogLocal(input: BuiltInSyntaxCatalogInput): string {
+  return `built-in-syntax:${input.packageId}:${input.group}${input.variantKey == null ? '' : `:${input.variantKey}`}`;
+}
+
 function catalogKey(catalog: BuiltInSyntaxCatalog): string {
   return `${catalog.packageId}:${catalog.group}:${catalog.variantKey ?? 'default'}`;
+}
+
+function syntaxCatalogIdentityDiscriminator(catalog: BuiltInSyntaxCatalog): string {
+  return catalog.variantKey == null
+    ? `${catalog.packageId}:${catalog.group}`
+    : `${catalog.packageId}:${catalog.group}:${catalog.variantKey}`;
+}
+
+function executableProductHandlesForSyntaxCatalog(
+  attributePatterns: readonly {
+    readonly executable: AttributePatternExecutable;
+  }[],
+  bindingCommands: readonly {
+    readonly executable: BindingCommandExecutable;
+  }[],
+): readonly ProductHandle[] {
+  return [
+    ...attributePatterns.map((emission) => emission.executable.productHandle),
+    ...bindingCommands.map((emission) => emission.executable.productHandle),
+  ];
 }
 
 function summaryForFrameworkKind(frameworkKind: FrameworkRegistrationKind): string {
@@ -918,6 +1163,34 @@ type BuiltInBindingCommandConstructor = new (
   sourceAddressHandle?: AddressHandle | null,
   fieldProvenance?: readonly FieldProvenance<BuiltInBindingCommandField>[],
 ) => BuiltInBindingCommand;
+
+function fieldProvenanceForAttributePattern(
+  source: BuiltInSyntaxSourceSet,
+): readonly FieldProvenance<BuiltInAttributePatternField>[] {
+  return compactFieldProvenance<BuiltInAttributePatternField>([
+    new FieldProvenance('targetName', source.provenanceHandle),
+    new FieldProvenance('patterns', source.provenanceHandle),
+    new FieldProvenance('package', source.provenanceHandle),
+    new FieldProvenance('group', source.provenanceHandle),
+  ]);
+}
+
+function fieldProvenanceForBindingCommand(
+  source: BuiltInSyntaxSourceSet,
+  handler: BuiltInBindingCommand,
+): readonly FieldProvenance<BuiltInBindingCommandField>[] {
+  return compactFieldProvenance<BuiltInBindingCommandField>([
+    new FieldProvenance('targetName', source.provenanceHandle),
+    new FieldProvenance('name', source.provenanceHandle),
+    handler.aliases.length === 0 ? null : new FieldProvenance('aliases', source.provenanceHandle),
+    new FieldProvenance('key', source.provenanceHandle),
+    new FieldProvenance('ignoreAttr', source.provenanceHandle),
+    new FieldProvenance('produces', source.provenanceHandle),
+    handler.producedInstructionTypeNames.length === 0 ? null : new FieldProvenance('producedInstructionTypeNames', source.provenanceHandle),
+    new FieldProvenance('package', source.provenanceHandle),
+    new FieldProvenance('group', source.provenanceHandle),
+  ]);
+}
 
 function materializeAttributePatternHandler(
   handler: BuiltInAttributePattern,

@@ -30,8 +30,10 @@ This is not a compatibility layer for old readers and not the default caller sur
   continuations, and small composition aids; strategic decisions still come from reading the surrounding code and
   deciding which primitive should exist.
   Prefer named classes for substantial analyzers, builders, graphs, classifiers, registries, and memos. `atlas.self`
-  can now inspect class and function surfaces directly, so future refactors should leave stable TypeScript shapes that
-  the API can navigate without source-reading fallback.
+  can now inspect class and function surfaces directly, including line-count, method-count, and property-count pressure
+  filters for class rows plus line-count, direct-call-count, and unique-call-target-count pressure filters for function
+  rows, so future refactors should leave stable TypeScript shapes that the API can navigate without source-reading
+  fallback.
 - [ts-lenses.ts](ts-lenses.ts) adapts the hot TypeScript source substrate and LanguageService into `ts.source`,
   `ts.structure`, and `ts.type` answers, including IDE primitives and read-only TypeScript edit plans.
   `ts.type:call-sites` supports exact callee and runtime-argument filters (`argumentText`, `argumentSymbolName`,
@@ -46,13 +48,59 @@ This is not a compatibility layer for old readers and not the default caller sur
   primitives; [bridge-aulink-usage-lenses.ts](bridge-aulink-usage-lenses.ts) owns the `usage-comparison`,
   `member-surface`, `usage-members`, `usage-consumers`, and `usage-sites` answer families. Keep new bridge detail
   families near the substrate they spend, and keep `bridge-lenses.ts` focused on base auLink
-  catalog/anchor/target/gap/mirror routing.
+  catalog/anchor/target/gap/mirror routing. `usage-comparison` supports pressure-oriented `orderBy` values such as
+  `frameworkUsageCount`, `productUsageCount`, `memberDivergence`, `publicMemberDivergence`,
+  `publicFrameworkOnlyMemberNameCount`, `publicProductOnlyMemberNameCount`, and `usageImbalance` so broad
+  framework/product shape questions can start from
+  the largest exact rows instead of alphabetical lookup order; compact comparison rows also report public shared,
+  framework-only, product-only, and divergence member counts for that rank signal. `member-surface` rows carry
+  declaration-kind and access-kind counts and accept `memberAccess`, side-specific `frameworkMemberAccess` /
+  `productMemberAccess`, and `memberDeclarationKind` filters so API shape questions can be separated from private
+  implementation churn and data-record fields. Use `frameworkScopeMode: "direct"` when only the directly linked
+  framework subject should count, `frameworkScopeMode: "subject"` when inherited shape subjects should count, or the
+  default implementation scope when the full implementation-shaped contract is the question.
+  `bridge.aulink:mirror` also accepts `hasRoleEvidence`, `hasEmulationObligations`, and pressure-oriented `orderBy`
+  values such as `roleEvidence`, `emulationObligation`, and `mirrorPressure`. Use those before reading source when
+  you need to distinguish well-grounded framework anchors from auLink placements that still lack semantic evidence.
 - [product-vocabulary-analysis.ts](product-vocabulary-analysis.ts) and
   [product-vocabulary-lenses.ts](product-vocabulary-lenses.ts) expose `product.vocabulary`. They walk the
   semantic-runtime vocabulary package through the hot TypeScript Program, then return the declared catalog, exact
   definition/key usages, claim predicate signatures, and product-kind adjacency expanded from those signatures. Keep
   this lens algebra-oriented: product-specific pressure belongs in the product model and in maintainer judgment, not in
   hard-coded Atlas cleanup checks.
+- [product-architecture-analysis.ts](product-architecture-analysis.ts) and
+  [product-architecture-lenses.ts](product-architecture-lenses.ts) expose `product.architecture`. They walk
+  `packages/semantic-runtime/src` through the hot TypeScript Program and return source areas, modules, declarations,
+  exact import rows, grouped area-to-area dependency rows, strongly-connected import cycle rows, class surfaces, and
+  function/method/constructor/accessor surfaces. It resolves semantic-runtime call/constructor invocations as
+  `call-sites` and groups them into `call-dependencies`, then separately resolves identifier usages as
+  `symbol-references` and `symbol-dependencies`, with `usageFamily` filters for import/export, type, value, call, or
+  runtime-side coupling. Module, declaration, cycle, class, function, call, and symbol dependency rows support
+  `orderBy` for size and coupling triage, and class rows support `minMethodCount` / `minPropertyCount` filters for
+  large-class pressure. Projection cost is intentionally visible: `summary`, `symbol-references`,
+  and `symbol-dependencies` spend the full symbol-backed memo, while row projections such as `functions`,
+  `call-sites`, and `call-dependencies` use the lighter core memo and omit rollup counts that would pretend symbol
+  rows had been built. `areas`, `modules`, `dependencies`, `area-dependencies`, `declarations`, `cycles`, and
+  `classes` use the no-call-site structure lane; `functions`, `call-sites`, and `call-dependencies` use the
+  call-site lane; symbol projections use the symbol lane. The `profile` projection accepts `includeCallSites` and
+  `includeSymbols` so future profiling can separate those costs. Use `profile` or
+  `pnpm --filter @aurelia-ls/atlas profile:product-architecture` before adding cache, warmup, or split points; the
+  current cold pressure tends to sit in checker call-site rows and checker symbol reference rows. Source-file,
+  source-range, symbol-with-file, semantic-runtime package, and semantic-runtime repo-area loci now scope rows the same
+  way as an explicit `pathPrefix`, including exact participant-file filtering for `area-dependencies`, so
+  continuations and direct file probes do not need to rediscover the path filter.
+  Use this lens when semantic-runtime architecture or refactor pressure would otherwise require source spelunking; it
+  is a visibility substrate, not an automated judgment about which dependencies are good or bad.
+- [framework-compiler-products.ts](framework-compiler-products.ts) owns compiler relationship atoms derived from both
+  instruction-producing syntax products and source-backed TemplateCompiler compile-flow/attribute-classification rows.
+  This keeps actors such as `CompilationContext` and `AttrSyntax` visible in the auLink mirror as framework
+  relationships instead of only as derived emulation obligations.
+- [framework-expression-relationships.ts](framework-expression-relationships.ts) and
+  [framework-structural-relationships.ts](framework-structural-relationships.ts) lift framework catalog entity rows
+  into relationship evidence for the auLink mirror and composition graph. They intentionally model definition/catalog
+  grounding (`defines-expression`, `defines-observer`, `defines-rendering-structure`, and `defines-router-entity`)
+  rather than pretending those entities have DI, hydration, or lifecycle behavior when the lower-level substrates have
+  not exposed that behavior yet.
 - [framework-lenses.ts](framework-lenses.ts) is now a compatibility facade. The actual inquiry work is split across
   discovery, compiler, and rendering answerers, entity catalogs, bundle readers, rendering syntax/instruction/binding
   phases, evidence builders, filters, and continuation families. Keep new framework semantics in the narrowest phase
@@ -117,7 +165,10 @@ This is not a compatibility layer for old readers and not the default caller sur
   carriers with public package exports, evaluated bundle admissions, syntax products, and materialization lanes without
   claiming final container/template visibility. Its materialization, admission, and syntax-product route hops use the
   shared framework semantic route primitive. Use it when the question starts from "which resource is this and what
-  evidence lanes does Atlas already know?" instead of from DI, admission, rendering, or lifecycle.
+  evidence lanes does Atlas already know?" instead of from DI, admission, rendering, or lifecycle. Convergence evidence
+  uses the exact resource carrier span as its primary source, such as a static `$au` initializer, resource `define`
+  call, decorator, attribute-pattern create call, or renderer helper call. Rows also carry a separate declaration-source
+  continuation when the backing class/export header is a different span.
 - [framework-compiler-lenses.ts](framework-compiler-lenses.ts) exposes `framework.compiler`. It projects
   binding-command `build(...)` and instruction-factory instruction production into compiler relationship atoms, then
   continues into rendering dispatch and controller creation rows for the produced instruction by instruction name so
@@ -135,7 +186,9 @@ This is not a compatibility layer for old readers and not the default caller sur
   construct resource view models, create child controllers with `Controller.$el` / `Controller.$attr`, recursively
   dispatch child property instructions, invoke template-controller link hooks, and admit children back to the parent
   controller. This is the source-backed bridge from resource construction into controller lifecycle without flattening
-  recursive rendering into fake closure.
+  recursive rendering into fake closure. Public `controller-creations` rows expose an ordered `hydrationSteps` trace so
+  semantic-runtime controller/view-factory/synthetic-view modeling can be compared to the actual framework handoff
+  sequence before opening raw `renderer.ts` source.
 - [framework-rendering-hydration-flow.ts](framework-rendering-hydration-flow.ts) owns the compact resolved-runtime
   hydration corridor. It is not a second rendering graph; it is a source-backed entry map from `AppRoot` and
   `Controller` through `Rendering.compile`, `Rendering.render`, renderer-table materialization, renderer-side

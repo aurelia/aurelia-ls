@@ -1,7 +1,7 @@
 import type {
   AttributePatternObservation,
   ResourceTargetObservation,
-} from './resource-observation.js';
+} from './resource-observation-primitives.js';
 import type { AttributePatternDefinition } from './attribute-pattern-definition.js';
 import type { BindingBehaviorDefinition } from './binding-behavior-definition.js';
 import type { BindingCommandDefinition } from './binding-command-definition.js';

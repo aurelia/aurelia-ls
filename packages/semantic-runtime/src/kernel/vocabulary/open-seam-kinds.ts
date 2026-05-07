@@ -288,6 +288,45 @@ export const KernelOpenSeamKinds = {
   Template: {
   },
   Binding: {
+    /** Runtime binding target-side accessor or observer selection stayed open. */
+    OpenTargetAccess: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'open-target-access',
+      KernelVocabularySlot.OpenSeamKind,
+      'Runtime binding target-side accessor or observer selection could not close without guessing.',
+    ),
+
+    /** Runtime binding direct target operation selection stayed open. */
+    OpenTargetOperation: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'open-target-operation',
+      KernelVocabularySlot.OpenSeamKind,
+      'Runtime binding direct target update operation could not close without guessing.',
+    ),
+
+    /** Runtime binding source-side update operation stayed open. */
+    OpenSourceOperation: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'open-source-operation',
+      KernelVocabularySlot.OpenSeamKind,
+      'Runtime binding source-side update operation could not close without guessing.',
+    ),
+
+    /** Runtime binding observer/accessor value channel stayed open. */
+    OpenValueChannel: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'open-value-channel',
+      KernelVocabularySlot.OpenSeamKind,
+      'Runtime binding observer or accessor value channel could not close without guessing.',
+    ),
+
+    /** Runtime binding source/target data-flow stayed open. */
+    OpenDataFlow: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'open-data-flow',
+      KernelVocabularySlot.OpenSeamKind,
+      'Runtime binding source/target data-flow could not close without guessing.',
+    ),
   },
   Instruction: {
     OpenInstruction: defineVocabulary(

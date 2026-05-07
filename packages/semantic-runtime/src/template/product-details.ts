@@ -51,6 +51,9 @@ import type { TemplateParseContext } from './parse-context.js';
 import type {
   RuntimeBinding,
   RuntimeBindingScopeEffect,
+  RuntimeBindingSourceOperation,
+  RuntimeBindingTargetAccess,
+  RuntimeBindingTargetOperation,
 } from './runtime-binding.js';
 import type {
   BuiltInRuntimeRendererCatalog,
@@ -263,5 +266,20 @@ export const TemplateProductDetails = {
     KernelVocabulary.Binding.ScopeEffect.key,
     'binding.scope-effect',
     'Runtime binding scope-effect detail consumed by template scope construction.',
+  ),
+  RuntimeBindingTargetAccess: defineProductDetailSlot<RuntimeBindingTargetAccess>(
+    KernelVocabulary.Binding.TargetAccess.key,
+    'binding.target-access',
+    'Runtime binding target-side accessor or observer detail consumed by observation and data-flow emulation.',
+  ),
+  RuntimeBindingTargetOperation: defineProductDetailSlot<RuntimeBindingTargetOperation>(
+    KernelVocabulary.Binding.TargetOperation.key,
+    'binding.target-operation',
+    'Runtime renderer or binding direct target update operation detail consumed by query, value-channel, and data-flow emulation.',
+  ),
+  RuntimeBindingSourceOperation: defineProductDetailSlot<RuntimeBindingSourceOperation>(
+    KernelVocabulary.Binding.SourceOperation.key,
+    'binding.source-operation',
+    'Runtime binding source-side update detail consumed by value-channel and data-flow emulation.',
   ),
 } as const;

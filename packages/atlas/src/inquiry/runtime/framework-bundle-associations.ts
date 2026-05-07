@@ -8,6 +8,7 @@ import {
   readTypeScriptCallSiteEntry,
   readTypeScriptExpressionFact,
   type SourceProject,
+  type TypeScriptCallSiteArgument,
   type TypeScriptExpressionFact,
 } from "../../source/index.js";
 import { FrameworkBundleAssociationKind } from "../../framework/admission.js";
@@ -49,6 +50,45 @@ import {
   visibleExpressionName,
   visibleExpressionNameText,
 } from "./framework-ts-utils.js";
+
+interface RegistrationExpressionFrame {
+  readonly path: readonly string[];
+  readonly catalogName: string | null;
+  readonly helperName: string | null;
+}
+
+function registrationExpressionFrame(
+  ...path: readonly string[]
+): RegistrationExpressionFrame {
+  return {
+    path,
+    catalogName: null,
+    helperName: null,
+  };
+}
+
+function childRegistrationExpressionFrame(
+  frame: RegistrationExpressionFrame,
+  ...segments: readonly string[]
+): RegistrationExpressionFrame {
+  return {
+    path: [...frame.path, ...segments],
+    catalogName: frame.catalogName,
+    helperName: frame.helperName,
+  };
+}
+
+function catalogChildRegistrationExpressionFrame(
+  frame: RegistrationExpressionFrame,
+  catalogName: string | null,
+  ...segments: readonly string[]
+): RegistrationExpressionFrame {
+  return {
+    path: [...frame.path, ...segments],
+    catalogName,
+    helperName: frame.helperName,
+  };
+}
 
 export function associationsForBundleEffect(
   sourceProject: SourceProject,
@@ -111,11 +151,7 @@ export function associationsForBundleEffect(
           argument,
           sourceFile,
           expression,
-          {
-            path: [`arg${argument.index}`],
-            catalogName: null,
-            helperName: null,
-          },
+          registrationExpressionFrame(`arg${argument.index}`),
         );
   });
 }
@@ -210,11 +246,7 @@ function associationsForRegistrationExpression(
   argument: EvaluationInvocationArgumentEffect,
   sourceFile: ts.SourceFile,
   expression: ts.Expression,
-  context: {
-    readonly path: readonly string[];
-    readonly catalogName: string | null;
-    readonly helperName: string | null;
-  },
+  frame: RegistrationExpressionFrame,
 ): readonly FrameworkBundleAssociationRow[] {
   const current = unwrapExpression(expression);
   classification.metrics.expressions += 1;
@@ -265,8 +297,8 @@ function associationsForRegistrationExpression(
               : visibleExpressionName(keyExpression),
           expression: expressionFact,
           sourceFile,
-          path: context.path,
-          catalogName: context.catalogName,
+          path: frame.path,
+          catalogName: frame.catalogName,
           helperName,
           ...(diInterface === undefined ? {} : { diInterface }),
         },
@@ -302,8 +334,8 @@ function associationsForRegistrationExpression(
               : visibleExpressionName(keyExpression)),
           expression: expressionFact,
           sourceFile,
-          path: context.path,
-          catalogName: context.catalogName,
+          path: frame.path,
+          catalogName: frame.catalogName,
           helperName: appTaskName,
           ...(diInterface === undefined ? {} : { diInterface }),
         },
@@ -328,9 +360,9 @@ function associationsForRegistrationExpression(
             visibleExpressionName(current),
           expression: expressionFact,
           sourceFile,
-          path: context.path,
-          catalogName: context.catalogName,
-          helperName: context.helperName,
+          path: frame.path,
+          catalogName: frame.catalogName,
+          helperName: frame.helperName,
         },
       ),
     ];
@@ -355,9 +387,9 @@ function associationsForRegistrationExpression(
           targetName: registryExportFromCall.exportEntry.exportName,
           expression: expressionFact,
           sourceFile,
-          path: context.path,
-          catalogName: context.catalogName,
-          helperName: context.helperName,
+          path: frame.path,
+          catalogName: frame.catalogName,
+          helperName: frame.helperName,
           registryExport: registryExportFromCall,
         },
       ),
@@ -384,9 +416,9 @@ function associationsForRegistrationExpression(
         targetName: catalogName,
         expression: expressionFact,
         sourceFile,
-        path: context.path,
+        path: frame.path,
         catalogName,
-        helperName: context.helperName,
+        helperName: frame.helperName,
       },
     );
     const elementRows = arrayBinding.expression.elements.flatMap(
@@ -397,33 +429,24 @@ function associationsForRegistrationExpression(
         const elementExpression = ts.isSpreadElement(element)
           ? element.expression
           : element;
-        const elementPath = [
-          ...context.path,
-          `${catalogName ?? "array"}[${index}]${
-            ts.isSpreadElement(element) ? ":spread" : ""
-          }`,
-        ];
+        const elementPath = `${catalogName ?? "array"}[${index}]${
+          ts.isSpreadElement(element) ? ":spread" : ""
+        }`;
         return associationsForRegistrationExpression(
           sourceProject,
           classification,
           row,
           effect,
-          {
-            ...argument,
-            spread: argument.spread || ts.isSpreadElement(element),
-            expression: readTypeScriptExpressionFact(
-              sourceProject,
-              arrayBinding.sourceFile,
-              unwrapExpression(elementExpression),
-            ),
-          },
+          registrationArgumentForExpression(
+            sourceProject,
+            arrayBinding.sourceFile,
+            argument,
+            unwrapExpression(elementExpression),
+            argument.spread || ts.isSpreadElement(element),
+          ),
           arrayBinding.sourceFile,
           elementExpression,
-          {
-            path: elementPath,
-            catalogName,
-            helperName: context.helperName,
-          },
+          catalogChildRegistrationExpressionFrame(frame, catalogName, elementPath),
         );
       },
     );
@@ -438,7 +461,7 @@ function associationsForRegistrationExpression(
     argument,
     sourceFile,
     current,
-    context,
+    frame,
   );
   if (inlineRegistryRows.length > 0) {
     return inlineRegistryRows;
@@ -466,9 +489,9 @@ function associationsForRegistrationExpression(
             resourceCarrier.targetName ?? resourceCarrier.sourceExportName,
           expression: expressionFact,
           sourceFile,
-          path: context.path,
-          catalogName: context.catalogName,
-          helperName: context.helperName,
+          path: frame.path,
+          catalogName: frame.catalogName,
+          helperName: frame.helperName,
           resourceCarrier,
         },
       ),
@@ -496,9 +519,9 @@ function associationsForRegistrationExpression(
           targetName: diInterface.exportEntry.exportName,
           expression: expressionFact,
           sourceFile,
-          path: context.path,
-          catalogName: context.catalogName,
-          helperName: context.helperName,
+          path: frame.path,
+          catalogName: frame.catalogName,
+          helperName: frame.helperName,
           diInterface,
         },
       ),
@@ -526,9 +549,9 @@ function associationsForRegistrationExpression(
           targetName: registryExport.exportEntry.exportName,
           expression: expressionFact,
           sourceFile,
-          path: context.path,
-          catalogName: context.catalogName,
-          helperName: context.helperName,
+          path: frame.path,
+          catalogName: frame.catalogName,
+          helperName: frame.helperName,
           registryExport,
         },
       ),
@@ -545,24 +568,18 @@ function associationsForRegistrationExpression(
       classification,
       row,
       effect,
-      {
-        ...argument,
-        expression: readTypeScriptExpressionFact(
-          sourceProject,
-          aliasExpression.getSourceFile(),
-          unwrapExpression(aliasExpression),
-        ),
-      },
+      registrationArgumentForExpression(
+        sourceProject,
+        aliasExpression.getSourceFile(),
+        argument,
+        unwrapExpression(aliasExpression),
+      ),
       aliasExpression.getSourceFile(),
       aliasExpression,
-      {
-        path: [
-          ...context.path,
-          `${visibleExpressionName(current) ?? "alias"}:initializer`,
-        ],
-        catalogName: context.catalogName,
-        helperName: context.helperName,
-      },
+      childRegistrationExpressionFrame(
+        frame,
+        `${visibleExpressionName(current) ?? "alias"}:initializer`,
+      ),
     );
   }
 
@@ -573,42 +590,30 @@ function associationsForRegistrationExpression(
         classification,
         row,
         effect,
-        {
-          ...argument,
-          expression: readTypeScriptExpressionFact(
-            sourceProject,
-            sourceFile,
-            unwrapExpression(current.whenTrue),
-          ),
-        },
+        registrationArgumentForExpression(
+          sourceProject,
+          sourceFile,
+          argument,
+          unwrapExpression(current.whenTrue),
+        ),
         sourceFile,
         current.whenTrue,
-        {
-          path: [...context.path, "conditional:true"],
-          catalogName: context.catalogName,
-          helperName: context.helperName,
-        },
+        childRegistrationExpressionFrame(frame, "conditional:true"),
       ),
       ...associationsForRegistrationExpression(
         sourceProject,
         classification,
         row,
         effect,
-        {
-          ...argument,
-          expression: readTypeScriptExpressionFact(
-            sourceProject,
-            sourceFile,
-            unwrapExpression(current.whenFalse),
-          ),
-        },
+        registrationArgumentForExpression(
+          sourceProject,
+          sourceFile,
+          argument,
+          unwrapExpression(current.whenFalse),
+        ),
         sourceFile,
         current.whenFalse,
-        {
-          path: [...context.path, "conditional:false"],
-          catalogName: context.catalogName,
-          helperName: context.helperName,
-        },
+        childRegistrationExpressionFrame(frame, "conditional:false"),
       ),
     ];
   }
@@ -627,9 +632,9 @@ function associationsForRegistrationExpression(
         targetName,
         expression: expressionFact,
         sourceFile,
-        path: context.path,
-        catalogName: context.catalogName,
-        helperName: context.helperName,
+        path: frame.path,
+        catalogName: frame.catalogName,
+        helperName: frame.helperName,
       },
     ),
   ];
@@ -643,11 +648,7 @@ function associationsForInlineRegistryExpression(
   outerArgument: EvaluationInvocationArgumentEffect,
   sourceFile: ts.SourceFile,
   expression: ts.Expression,
-  context: {
-    readonly path: readonly string[];
-    readonly catalogName: string | null;
-    readonly helperName: string | null;
-  },
+  frame: RegistrationExpressionFrame,
 ): readonly FrameworkBundleAssociationRow[] {
   const current = unwrapExpression(expression);
   if (!ts.isCallExpression(current)) {
@@ -709,13 +710,13 @@ function associationsForInlineRegistryExpression(
                 ),
                 expression: nestedArgument.expression,
                 sourceFile,
-                path: [
-                  ...context.path,
+                path: childRegistrationExpressionFrame(
+                  frame,
                   `${factoryName}.register`,
                   `arg${nestedArgument.index}`,
-                ],
-                catalogName: context.catalogName,
-                helperName: context.helperName,
+                ).path,
+                catalogName: frame.catalogName,
+                helperName: frame.helperName,
               },
             ),
           );
@@ -727,21 +728,17 @@ function associationsForInlineRegistryExpression(
             classification,
             row,
             nestedEffect,
-            {
-              ...nestedArgument,
-              spread: outerArgument.spread || nestedArgument.spread,
-            },
+            registrationArgumentWithSpread(
+              nestedArgument,
+              outerArgument.spread || nestedArgument.spread,
+            ),
             sourceFile,
             nestedExpression,
-            {
-              path: [
-                ...context.path,
-                `${factoryName}.register`,
-                `arg${nestedArgument.index}`,
-              ],
-              catalogName: context.catalogName,
-              helperName: context.helperName,
-            },
+            childRegistrationExpressionFrame(
+              frame,
+              `${factoryName}.register`,
+              `arg${nestedArgument.index}`,
+            ),
           ),
         );
       }
@@ -766,13 +763,47 @@ function associationsForInlineRegistryExpression(
           current,
         ),
         sourceFile,
-        path: context.path,
+        path: frame.path,
         catalogName,
-        helperName: context.helperName,
+        helperName: frame.helperName,
       },
     ),
     ...rows,
   ];
+}
+
+function registrationArgumentForExpression(
+  sourceProject: SourceProject,
+  sourceFile: ts.SourceFile,
+  argument: EvaluationInvocationArgumentEffect,
+  expression: ts.Expression,
+  spread: boolean = argument.spread,
+): EvaluationInvocationArgumentEffect {
+  return {
+    ...argument,
+    spread,
+    expression: readTypeScriptExpressionFact(
+      sourceProject,
+      sourceFile,
+      expression,
+    ),
+  };
+}
+
+function registrationArgumentWithSpread(
+  argument: EvaluationInvocationArgumentEffect,
+  spread: boolean,
+): EvaluationInvocationArgumentEffect {
+  return spread === argument.spread ? argument : { ...argument, spread };
+}
+
+function syntheticInvocationArgument(
+  argument: TypeScriptCallSiteArgument,
+): EvaluationInvocationArgumentEffect {
+  return {
+    ...argument,
+    binding: null,
+  };
 }
 
 function syntheticEffectForRegisterCall(
@@ -815,10 +846,7 @@ function syntheticEffectForRegisterCall(
     memberName,
     receiver,
     receiverBinding: null,
-    arguments: callSite.arguments.map((argument) => ({
-      ...argument,
-      binding: null,
-    })),
+    arguments: callSite.arguments.map(syntheticInvocationArgument),
   };
 }
 

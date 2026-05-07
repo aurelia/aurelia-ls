@@ -1,0 +1,21 @@
+<template
+  class="product-card-host card-ready"
+  style="display: block; --card-gap: 1rem;"
+  data-card-kind="product">
+  <article if.bind="product != null" with.bind="product">
+    <h2>${name}</h2>
+    <p>${summary}</p>
+    <strong>${price}</strong>
+    <template switch.bind="availability">
+      <p case="in-stock">Ready to ship.</p>
+      <p case="limited">Limited stock.</p>
+      <p default-case>Available by backorder.</p>
+    </template>
+    <button type="button" click.trigger="$parent.buy()">Add to cart</button>
+  </article>
+
+  <article else>
+    <h2>Loading product</h2>
+    <p if.bind="isLoading">Fetching ${productId}...</p>
+  </article>
+</template>

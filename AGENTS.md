@@ -9,6 +9,18 @@ pnpm --filter @aurelia-ls/atlas orient
 ```
 
 Atlas is the live self-description layer for the repo and should be treated as the first read before broad product or architecture work.
+The orientation payload includes compact follow-up docs; read `packages/atlas/workbench/agent-handoff.md` after orient
+when starting a broad or resumed session.
+
+Useful Atlas follow-up commands:
+
+```powershell
+pnpm --filter @aurelia-ls/atlas pressure:self
+pnpm --filter @aurelia-ls/atlas pressure:product-architecture
+pnpm --filter @aurelia-ls/atlas profile:product-architecture
+```
+
+Use `pressure:self` before Atlas maintenance refactors, `pressure:product-architecture` before semantic-runtime cleanup passes, and `profile:product-architecture` before adding cache, warmup, or split points to semantic-runtime architecture queries. The pressure commands print source line anchors when available; `pressure:self` focuses its high mapper lane on multi-axis framework-semantic pressure, and the profile command prints structure, core, symbol, and full lanes.
 
 ## Semantic Runtime
 

@@ -5,7 +5,7 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
-import type { ContainerReference } from '../di/container.js';
+import type { ContainerReference } from '../di/container-reference.js';
 import type { AppRootReference } from './app-root.js';
 
 export type AureliaField =

@@ -1,6 +1,7 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
   StaticProjectEvaluationPass,
+  StaticProjectEvaluationOptions,
   type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
 import type { KernelStore } from '../kernel/store.js';
@@ -27,6 +28,7 @@ import {
   ConfigurationRecognitionProjectPass,
   type ConfigurationRecognitionProjectResult,
 } from './configuration-recognition-project-pass.js';
+import { aureliaConfigurationEvaluationPolicy } from './evaluation-policy.js';
 
 /**
  * Current project-level composition result.
@@ -62,7 +64,11 @@ export class AureliaAppWorldProjectPass {
     store: KernelStore,
     project: ProjectBootFrame,
   ): AureliaAppWorldProjectEmission {
-    const evaluation = new StaticProjectEvaluationPass().evaluateAndEmit(store, project);
+    const evaluation = new StaticProjectEvaluationPass().evaluateAndEmit(
+      store,
+      project,
+      new StaticProjectEvaluationOptions(aureliaConfigurationEvaluationPolicy),
+    );
     const typeSystem = new TypeSystemProjectBuilder().build(project, evaluation);
     const resources = new ResourceRecognitionProjectPass().recognizeAndEmit(store, project, evaluation, typeSystem);
     const resourceIndex = ResourceDefinitionIndex.fromProject(resources);

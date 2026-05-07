@@ -103,7 +103,7 @@ export type FrameworkObservationRelationshipRow =
   | FrameworkRenderingRelationshipRow
   | FrameworkObservationInternalRelationshipRow;
 
-interface FrameworkObservationRollupInput {
+interface FrameworkObservationRollupParts {
   readonly observers?: readonly FrameworkObserverEntityRow[];
   readonly bindingLookups?: readonly FrameworkBindingEffectRow[];
   readonly bindingSetups?: readonly FrameworkBindingSetupRow[];
@@ -372,7 +372,7 @@ function observationPagedAnswer<TRow>(
 }
 
 function observationBaseValue(
-  input: FrameworkObservationRollupInput,
+  parts: FrameworkObservationRollupParts,
 ): FrameworkObservationValue {
   const {
     observers,
@@ -382,7 +382,7 @@ function observationBaseValue(
     flowSites,
     flowEntityLinks,
     relationships,
-  } = input;
+  } = parts;
   return {
     ...(observers === undefined
       ? {}

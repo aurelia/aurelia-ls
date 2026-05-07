@@ -13,10 +13,13 @@ import type {
 } from '../expression/ast.js';
 import type {
   AddressHandle,
+  ClaimHandle,
   IdentityHandle,
   ProductHandle,
+  ProvenanceHandle,
 } from '../kernel/handles.js';
 import { SourceSpanAddress } from '../kernel/address.js';
+import type { MaterializedProduct } from '../kernel/materialization.js';
 import type { KernelStore } from '../kernel/store.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
@@ -42,9 +45,9 @@ import type {
 } from '../type-system/type-shape.js';
 import {
   TemplateResourceScope,
-  TemplateVisibleResource,
 } from '../template/compiler-world.js';
-import type { TemplateResourceCompilationEmission } from '../template/template-compilation-project-pass.js';
+import { TemplateVisibleResource } from '../template/compiler-world-reference.js';
+import type { TemplateResourceRuntimeAnalysisEmission } from '../template/template-compilation-project-pass.js';
 import type {
   TemplateExpressionParse,
   TemplateValueSite,
@@ -229,7 +232,7 @@ export class TemplateCompletionCursorContextInput {
     /** Concrete source cursor inside a materialized template compilation emission. */
     readonly locus: SourceCursorInquiryLocus,
     /** Horizontal template compilation emission that owns HTML, syntax, value, render, and scope products. */
-    readonly resource: TemplateResourceCompilationEmission,
+    readonly resource: TemplateResourceRuntimeAnalysisEmission,
     /** Page request copied into the resulting completion query. */
     readonly page: InquiryPageRequest = new InquiryPageRequest(),
     /** Projection copied into the resulting completion query. */
@@ -252,12 +255,31 @@ export class TemplateCompletionCursorContext {
   ) {}
 }
 
+interface TemplateCompletionAnswerFrame {
+  readonly store: KernelStore;
+  readonly query: TemplateCompletionQuery;
+  readonly missingInputs: string[];
+  readonly candidates: TemplateCompletionCandidate[];
+  readonly expressionParse: TemplateExpressionParse | null;
+  readonly expressionResult: ExpressionParseResult | null;
+  readonly expressionFrontier: TemplateExpressionCompletionFrontier | null;
+  readonly bindingScope: BindingScope | null;
+  readonly resourceScope: TemplateResourceScope | null;
+  memberOwnerTypeProductHandle: ProductHandle | null;
+}
+
+interface TemplateCompletionCandidatePage {
+  readonly rows: readonly TemplateCompletionCandidate[];
+  readonly info: InquiryPageInfo;
+}
+
 /** Resolve a materialized template cursor into the product-handle completion query shape. */
 export function templateCompletionQueryForCursor(
   store: KernelStore,
   input: TemplateCompletionCursorContextInput,
 ): TemplateCompletionCursorContext {
   const offset = input.locus.cursor.offset;
+  const compilation = input.resource.compilation;
   if (offset == null) {
     return new TemplateCompletionCursorContext(
       new TemplateCompletionQuery(
@@ -265,7 +287,7 @@ export function templateCompletionQueryForCursor(
         TemplateCompletionSiteKind.Unknown,
         input.page,
         null,
-        input.resource.compilerWorld.resourceScope.productHandle,
+        compilation.compilerWorld.resourceScope.productHandle,
         null,
         null,
         null,
@@ -279,12 +301,12 @@ export function templateCompletionQueryForCursor(
   }
 
   const htmlNode = smallestContaining(
-    input.resource.html.nodes,
+    compilation.html.nodes,
     offset,
     (node) => sourceSpanFor(store, node.sourceAddressHandle),
   );
   const htmlAttribute = smallestContaining(
-    input.resource.html.attributes,
+    compilation.html.attributes,
     offset,
     (attribute) => sourceSpanFor(store, attribute.sourceAddressHandle),
   );
@@ -303,17 +325,17 @@ export function templateCompletionQueryForCursor(
     : cursorFocusedExpressionResult(store, expressionParse, offset);
   const syntax = htmlAttribute == null
     ? null
-    : syntaxForAttribute(input.resource.attributeSyntax.syntaxes, htmlAttribute);
+    : syntaxForAttribute(compilation.attributeSyntax.syntaxes, htmlAttribute);
   const classification = syntax == null
     ? null
-    : classificationForSyntax(input.resource.attributeClassification.classifications, syntax);
-  const activeElement = elementForCursorContext(input.resource.html.nodes, htmlNode, classification);
+    : classificationForSyntax(compilation.attributeClassification.classifications, syntax);
+  const activeElement = elementForCursorContext(compilation.html.nodes, htmlNode, classification);
   const siteKind = classifyTemplateCompletionSite(
     store,
     offset,
-    input.resource.unit.templateSource.markup,
-    input.resource.unit.templateSource.sourceAddressHandle,
-    input.resource.unit.templateSource.sourceMap,
+    compilation.unit.templateSource.markup,
+    compilation.unit.templateSource.sourceAddressHandle,
+    compilation.unit.templateSource.sourceMap,
     htmlNode,
     activeElement,
     htmlAttribute,
@@ -334,7 +356,7 @@ export function templateCompletionQueryForCursor(
       memberOwnerExpression,
       expressionParse!.sourceAddressHandle,
       bindingScope,
-      input.resource.compilerWorld.resourceScope,
+      compilation.compilerWorld.resourceScope,
       missingInputs,
     )
     : null;
@@ -345,7 +367,7 @@ export function templateCompletionQueryForCursor(
       siteKind,
       input.page,
       bindingScope?.productHandle ?? null,
-      input.resource.compilerWorld.resourceScope.productHandle,
+      compilation.compilerWorld.resourceScope.productHandle,
       selectedDefinitionProductHandle,
       siteKindUsesExpressionParse(siteKind) ? expressionParse?.productHandle ?? null : null,
       memberOwnerTypeProductHandle,
@@ -363,8 +385,18 @@ export function answerTemplateCompletion(
   store: KernelStore,
   query: TemplateCompletionQuery,
 ): InquiryAnswer<TemplateCompletionResult, TemplateCompletionQuery> {
+  const frame = createTemplateCompletionAnswerFrame(store, query);
+  collectTemplateCompletionCandidates(frame);
+  const uniqueCandidates = uniqueCandidatesByKey(frame.candidates);
+  const page = pageCandidates(uniqueCandidates, query.page);
+  return templateCompletionAnswer(frame, uniqueCandidates, page);
+}
+
+function createTemplateCompletionAnswerFrame(
+  store: KernelStore,
+  query: TemplateCompletionQuery,
+): TemplateCompletionAnswerFrame {
   const missingInputs: string[] = [];
-  const candidates: TemplateCompletionCandidate[] = [];
   const expressionParse = siteKindUsesExpressionParse(query.siteKind)
     ? readExpressionParse(store, query.expressionParseProductHandle, missingInputs)
     : null;
@@ -385,97 +417,185 @@ export function answerTemplateCompletion(
   const resourceScope = needsResourceScope
     ? readResourceScope(store, query.resourceScopeProductHandle, missingInputs)
     : null;
-  let memberOwnerTypeProductHandle = query.memberOwnerTypeProductHandle;
-
-  if (shouldReadBindingScope(query.siteKind, expressionFrontier)) {
-    if (bindingScope != null) {
-      candidates.push(...scopeCandidates(bindingScope));
-    }
-  }
-
-  if (shouldReadResourceScope(query.siteKind, expressionFrontier)) {
-    if (resourceScope != null) {
-      candidates.push(...resourceScopeCandidates(resourceScope, query.siteKind, expressionFrontier));
-    }
-  }
-
-  if (shouldOfferBindableCandidates(query.siteKind)) {
-    const selectedDefinition = readSelectedDefinition(store, query.selectedDefinitionProductHandle, missingInputs);
-    if (selectedDefinition != null) {
-      candidates.push(...bindableCandidates(selectedDefinition));
-    }
-  }
-
-  if (query.siteKind === TemplateCompletionSiteKind.ExpressionMember) {
-    memberOwnerTypeProductHandle ??= deriveMemberOwnerTypeProductHandle(store, query, expressionParse, bindingScope, resourceScope, missingInputs);
-    const members = readTypeMembers(store, memberOwnerTypeProductHandle, missingInputs);
-    if (members != null) {
-      candidates.push(...typeMemberCandidates(members));
-    }
-  }
-
-  const uniqueCandidates = uniqueCandidatesByKey(candidates);
-  const page = pageCandidates(uniqueCandidates, query.page);
-  const result = new TemplateCompletionResult(
-    query.siteKind,
-    page.rows,
+  return {
+    store,
+    query,
+    missingInputs,
+    candidates: [],
+    expressionParse,
+    expressionResult,
     expressionFrontier,
-    unique(missingInputs),
+    bindingScope,
+    resourceScope,
+    memberOwnerTypeProductHandle: query.memberOwnerTypeProductHandle,
+  };
+}
+
+function collectTemplateCompletionCandidates(
+  frame: TemplateCompletionAnswerFrame,
+): void {
+  collectBindingScopeCandidates(frame);
+  collectResourceScopeCandidates(frame);
+  collectBindableCandidates(frame);
+  collectExpressionMemberCandidates(frame);
+}
+
+function collectBindingScopeCandidates(
+  frame: TemplateCompletionAnswerFrame,
+): void {
+  if (!shouldReadBindingScope(frame.query.siteKind, frame.expressionFrontier) || frame.bindingScope == null) {
+    return;
+  }
+  frame.candidates.push(...scopeCandidates(frame.bindingScope));
+}
+
+function collectResourceScopeCandidates(
+  frame: TemplateCompletionAnswerFrame,
+): void {
+  if (!shouldReadResourceScope(frame.query.siteKind, frame.expressionFrontier) || frame.resourceScope == null) {
+    return;
+  }
+  frame.candidates.push(...resourceScopeCandidates(frame.resourceScope, frame.query.siteKind, frame.expressionFrontier));
+}
+
+function collectBindableCandidates(
+  frame: TemplateCompletionAnswerFrame,
+): void {
+  if (!shouldOfferBindableCandidates(frame.query.siteKind)) {
+    return;
+  }
+  const selectedDefinition = readSelectedDefinition(frame.store, frame.query.selectedDefinitionProductHandle, frame.missingInputs);
+  if (selectedDefinition != null) {
+    frame.candidates.push(...bindableCandidates(selectedDefinition));
+  }
+}
+
+function collectExpressionMemberCandidates(
+  frame: TemplateCompletionAnswerFrame,
+): void {
+  if (frame.query.siteKind !== TemplateCompletionSiteKind.ExpressionMember) {
+    return;
+  }
+  frame.memberOwnerTypeProductHandle ??= deriveMemberOwnerTypeProductHandle(
+    frame.store,
+    frame.query,
+    frame.expressionParse,
+    frame.bindingScope,
+    frame.resourceScope,
+    frame.missingInputs,
   );
-  const candidateProductHandles = unique(
-    page.rows
+  const members = readTypeMembers(frame.store, frame.memberOwnerTypeProductHandle, frame.missingInputs);
+  if (members != null) {
+    frame.candidates.push(...typeMemberCandidates(members));
+  }
+}
+
+function templateCompletionAnswer(
+  frame: TemplateCompletionAnswerFrame,
+  uniqueCandidates: readonly TemplateCompletionCandidate[],
+  page: TemplateCompletionCandidatePage,
+): InquiryAnswer<TemplateCompletionResult, TemplateCompletionQuery> {
+  const products = completionCandidateProducts(frame.store, page.rows);
+  const missingInputs = unique(frame.missingInputs);
+  return new InquiryAnswer(
+    outcomeForCompletion(page.rows, uniqueCandidates, missingInputs),
+    frame.query.locus,
+    summaryForCompletion(page.rows.length, uniqueCandidates.length, missingInputs),
+    KernelExactBasis,
+    templateCompletionResult(frame, page.rows, missingInputs),
+    [],
+    completionProductProvenanceHandles(products),
+    completionProductClaimHandles(frame.store, products),
+    [],
+    completionContinuations(frame.query, page.info),
+    page.info,
+    completionProjection(frame),
+  );
+}
+
+function templateCompletionResult(
+  frame: TemplateCompletionAnswerFrame,
+  rows: readonly TemplateCompletionCandidate[],
+  missingInputs: readonly string[],
+): TemplateCompletionResult {
+  return new TemplateCompletionResult(
+    frame.query.siteKind,
+    rows,
+    frame.expressionFrontier,
+    missingInputs,
+  );
+}
+
+function completionCandidateProducts(
+  store: KernelStore,
+  rows: readonly TemplateCompletionCandidate[],
+): readonly MaterializedProduct[] {
+  return unique(
+    rows
       .map((candidate) => candidate.productHandle)
       .filter((handle): handle is ProductHandle => handle != null),
-  );
-  const products = candidateProductHandles
+  )
     .map((handle) => store.readProduct(handle))
-    .filter((product): product is NonNullable<typeof product> => product != null);
-  const claimHandles = unique(products.flatMap((product) => [
+    .filter((product): product is MaterializedProduct => product != null);
+}
+
+function completionProductClaimHandles(
+  store: KernelStore,
+  products: readonly MaterializedProduct[],
+): readonly ClaimHandle[] {
+  return unique(products.flatMap((product) => [
     ...store.readClaimsForSubject(product.handle),
     ...store.readClaimsForObject(product.handle),
   ]));
-  const provenanceHandles = unique(products.map((product) => product.provenanceHandle));
-  const continuations = page.info.nextCursor == null
+}
+
+function completionProductProvenanceHandles(
+  products: readonly MaterializedProduct[],
+): readonly ProvenanceHandle[] {
+  return unique(products.map((product) => product.provenanceHandle));
+}
+
+function completionContinuations(
+  query: TemplateCompletionQuery,
+  page: InquiryPageInfo,
+): readonly InquiryContinuation<TemplateCompletionQuery>[] {
+  return page.nextCursor == null
     ? []
     : [
       new InquiryContinuation(
         InquiryContinuationKind.NextPage,
         'Read the next page of completion candidates.',
-        query.withPage(new InquiryPageRequest(page.info.size, page.info.nextCursor)),
+        query.withPage(new InquiryPageRequest(page.size, page.nextCursor)),
       ),
     ];
-  const projection = new InquiryProjection(
-    query.projection.projectionKind,
+}
+
+function completionProjection(
+  frame: TemplateCompletionAnswerFrame,
+): InquiryProjection {
+  return new InquiryProjection(
+    frame.query.projection.projectionKind,
     [
       new InquiryExpansion(
         InquiryExpansionKind.ProductDetail,
         [],
-        [
-          query.bindingScopeProductHandle,
-          query.resourceScopeProductHandle,
-          query.selectedDefinitionProductHandle,
-          query.expressionParseProductHandle,
-          memberOwnerTypeProductHandle,
-        ].filter((handle): handle is ProductHandle => handle != null),
+        completionProjectionProductHandles(frame),
         'Completion answer read typed product details supplied by parser, resource, and scope materializers.',
       ),
     ],
   );
+}
 
-  return new InquiryAnswer(
-    outcomeForCompletion(page.rows, uniqueCandidates, unique(missingInputs)),
-    query.locus,
-    summaryForCompletion(page.rows.length, uniqueCandidates.length, unique(missingInputs)),
-    KernelExactBasis,
-    result,
-    [],
-    provenanceHandles,
-    claimHandles,
-    [],
-    continuations,
-    page.info,
-    projection,
-  );
+function completionProjectionProductHandles(
+  frame: TemplateCompletionAnswerFrame,
+): readonly ProductHandle[] {
+  return [
+    frame.query.bindingScopeProductHandle,
+    frame.query.resourceScopeProductHandle,
+    frame.query.selectedDefinitionProductHandle,
+    frame.query.expressionParseProductHandle,
+    frame.memberOwnerTypeProductHandle,
+  ].filter((handle): handle is ProductHandle => handle != null);
 }
 
 function readBindingScope(
@@ -1640,26 +1760,26 @@ function isBindingCommandNameOffset(
 }
 
 function templateValueSitesForCursor(
-  resource: TemplateResourceCompilationEmission,
+  resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly TemplateValueSite[] {
   return [
-    ...resource.bindingCommandLowering.valueSites,
-    ...resource.valueSites.sites,
+    ...resource.compilation.bindingCommandLowering.valueSites,
+    ...resource.compilation.valueSites.sites,
   ];
 }
 
 function templateExpressionParsesForCursor(
-  resource: TemplateResourceCompilationEmission,
+  resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly TemplateExpressionParse[] {
   return [
-    ...resource.bindingCommandLowering.expressionParses,
-    ...resource.valueSites.parses,
+    ...resource.compilation.bindingCommandLowering.expressionParses,
+    ...resource.compilation.valueSites.parses,
   ];
 }
 
 function bindingScopeForCursor(
   store: KernelStore,
-  resource: TemplateResourceCompilationEmission,
+  resource: TemplateResourceRuntimeAnalysisEmission,
   offset: number,
   expressionParse: TemplateExpressionParse | null,
 ): BindingScope | null {
@@ -1670,9 +1790,9 @@ function bindingScopeForCursor(
     return instructionScope;
   }
 
-  const root = resource.scopes.rootScope;
+  const root = resource.runtimeAnalysis.scopes.rootScope;
   let best: { readonly scope: BindingScope; readonly span: SourceSpanAddress } | null = null;
-  for (const scope of resource.scopes.readScopes()) {
+  for (const scope of resource.runtimeAnalysis.scopes.readScopes()) {
     const span = sourceSpanFor(store, scopeRangeAddressHandle(resource, scope));
     if (!cursorTouchesSpan(span, offset) || span == null) {
       continue;
@@ -1689,16 +1809,16 @@ function bindingScopeForCursor(
 }
 
 function bindingScopeForExpressionParse(
-  resource: TemplateResourceCompilationEmission,
+  resource: TemplateResourceRuntimeAnalysisEmission,
   expressionParse: TemplateExpressionParse,
 ): BindingScope | null {
-  const instruction = resource.compiledTemplate.instructions.find((candidate) =>
+  const instruction = resource.compilation.compiledTemplate.instructions.find((candidate) =>
     expressionProductHandlesForInstruction(candidate).includes(expressionParse.productHandle)
   ) ?? null;
   if (instruction == null) {
     return null;
   }
-  return resource.scopes.instructionScopes.find((candidate) =>
+  return resource.runtimeAnalysis.scopes.instructionScopes.find((candidate) =>
     candidate.instructionProductHandle === instruction.productHandle
   )?.scope ?? null;
 }
@@ -1714,7 +1834,7 @@ function scopeDepth(scope: BindingScope): number {
 }
 
 function scopeRangeAddressHandle(
-  resource: TemplateResourceCompilationEmission,
+  resource: TemplateResourceRuntimeAnalysisEmission,
   scope: BindingScope,
 ): AddressHandle | null {
   const ownerProductHandle = scope.bindingContext.ownerProductHandle;
@@ -1722,10 +1842,10 @@ function scopeRangeAddressHandle(
     return scope.sourceAddressHandle;
   }
 
-  const effect = resource.runtimeRendering.scopeEffects.find((candidate) =>
+  const effect = resource.runtimeAnalysis.runtimeRendering.scopeEffects.find((candidate) =>
     candidate.productHandle === ownerProductHandle
   ) ?? null;
-  const controller = resource.runtimeRendering.controllers.find((candidate) =>
+  const controller = resource.runtimeAnalysis.runtimeRendering.controllers.find((candidate) =>
     candidate.productHandle === ownerProductHandle
   ) ?? null;
   const instructionProductHandle = effect?.ownerInstructionProductHandle
@@ -1734,13 +1854,13 @@ function scopeRangeAddressHandle(
   if (instructionProductHandle == null) {
     return scope.sourceAddressHandle;
   }
-  const instruction = resource.compiledTemplate.instructions.find((candidate) =>
+  const instruction = resource.compilation.compiledTemplate.instructions.find((candidate) =>
     candidate.productHandle === instructionProductHandle
   ) ?? null;
   const nodeProductHandle = instruction == null ? null : instructionNodeProductHandle(instruction);
   const node = nodeProductHandle == null
     ? null
-    : resource.html.nodes.find((candidate) => candidate.productHandle === nodeProductHandle) ?? null;
+    : resource.compilation.html.nodes.find((candidate) => candidate.productHandle === nodeProductHandle) ?? null;
   return node?.sourceAddressHandle ?? scope.sourceAddressHandle;
 }
 
@@ -1767,7 +1887,7 @@ function expressionProductHandlesForInstruction(
 }
 
 function selectedDefinitionForCursor(
-  resource: TemplateResourceCompilationEmission,
+  resource: TemplateResourceRuntimeAnalysisEmission,
   activeElement: HtmlElement | null,
   classification: AttributeClassification | null,
 ): ProductHandle | null {
@@ -1777,14 +1897,14 @@ function selectedDefinitionForCursor(
 }
 
 function definitionForElement(
-  resource: TemplateResourceCompilationEmission,
+  resource: TemplateResourceRuntimeAnalysisEmission,
   activeElement: HtmlElement | null,
 ): ProductHandle | null {
   if (activeElement == null) {
     return null;
   }
   const lookup = activeElement.tagName.toLowerCase();
-  const resourceRow = resource.compilerWorld.resourceScope.resources.find((candidate) =>
+  const resourceRow = resource.compilation.compilerWorld.resourceScope.resources.find((candidate) =>
     candidate.resourceKind === ResourceDefinitionKind.CustomElement
     && (
       candidate.name.toLowerCase() === lookup

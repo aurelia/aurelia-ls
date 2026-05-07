@@ -396,8 +396,15 @@ function filtersFromRecord(
     ...stringField(source, "obligationKind"),
     ...stringField(source, "productArea"),
     ...stringField(source, "productDeclarationKind"),
+    ...booleanField(source, "hasRoleEvidence"),
+    ...booleanField(source, "hasEmulationObligations"),
     ...stringField(source, "side"),
     ...stringField(source, "memberName"),
+    ...stringField(source, "memberAccess"),
+    ...stringField(source, "frameworkScopeMode"),
+    ...stringField(source, "frameworkMemberAccess"),
+    ...stringField(source, "productMemberAccess"),
+    ...stringField(source, "memberDeclarationKind"),
     ...stringField(source, "presence"),
     ...stringField(source, "ownerName"),
     ...stringField(source, "ownerKind"),
@@ -408,6 +415,7 @@ function filtersFromRecord(
     ...stringField(source, "callArgumentSymbolName"),
     ...stringField(source, "callArgumentFullyQualifiedName"),
     ...stringField(source, "query"),
+    ...stringField(source, "orderBy"),
     ...(typeof source.symbolName === "string"
       ? { symbolName: source.symbolName }
       : {}),
@@ -423,6 +431,23 @@ function stringField(
 ): object {
   const value = source[key];
   return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
+}
+
+function booleanField(
+  source: Record<string, unknown>,
+  key: keyof AuLinkMirrorFilters,
+): object {
+  const value = source[key];
+  if (typeof value === "boolean") {
+    return { [key]: value };
+  }
+  if (value === "true") {
+    return { [key]: true };
+  }
+  if (value === "false") {
+    return { [key]: false };
+  }
+  return {};
 }
 
 function summaryForRollup(rollup: AuLinkRollup): string {
@@ -1143,6 +1168,15 @@ function mirrorOverviewContinuations(
   const continuations: Continuation[] = [
     mirrorProjectionContinuation(
       inquiry,
+      "bridge.aulink:mirror:pressure",
+      "mirror",
+      "Inspect the highest-pressure auLink mirror rows first.",
+      { orderBy: "mirrorPressure" },
+      undefined,
+      AULINK_MIRROR_DETAIL_BUDGET,
+    ),
+    mirrorProjectionContinuation(
+      inquiry,
       "bridge.aulink:mirror:role-evidence",
       "role-evidence",
       "Inspect exact framework relationship rows behind the mirror.",
@@ -1160,6 +1194,36 @@ function mirrorOverviewContinuations(
       AULINK_MIRROR_DETAIL_BUDGET,
     ),
   ];
+  if (mirror.rollup.linksWithoutRoleEvidence > 0) {
+    continuations.push(
+      mirrorProjectionContinuation(
+        inquiry,
+        "bridge.aulink:mirror:without-role-evidence",
+        "mirror",
+        "Inspect auLink rows that have no attached framework relationship evidence.",
+        { hasRoleEvidence: false, orderBy: "emulationObligation" },
+        undefined,
+        AULINK_MIRROR_DETAIL_BUDGET,
+      ),
+    );
+  }
+  if (mirror.rollup.linksWithoutEmulationObligations > 0) {
+    continuations.push(
+      mirrorProjectionContinuation(
+        inquiry,
+        "bridge.aulink:mirror:without-emulation-obligations",
+        "mirror",
+        "Inspect auLink rows that have framework role evidence but no attached emulation obligation.",
+        {
+          hasRoleEvidence: true,
+          hasEmulationObligations: false,
+          orderBy: "roleEvidence",
+        },
+        undefined,
+        AULINK_MIRROR_DETAIL_BUDGET,
+      ),
+    );
+  }
   for (const sourceLens of Object.keys(mirror.rollup.sourceLenses).slice(0, 4)) {
     continuations.push(
       mirrorProjectionContinuation(

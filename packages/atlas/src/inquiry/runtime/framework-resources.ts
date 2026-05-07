@@ -3,6 +3,7 @@ import ts from "typescript";
 import {
   SourceProjectKeyedMemo,
   SourceDeclarationKind,
+  type SourceTargetRow,
   type SourceProject,
   type TypeScriptExportNameEntry,
   type TypeScriptExportSurfaceEntry,
@@ -710,6 +711,7 @@ export function resourceCarrierRow(
     aliases: values.aliases,
     targetName: values.targetName,
     source: sourceRangeFromFileSpan(file.repoPath, span),
+    declarationSource: declarationSourceForCarrier(carrierEntry),
   };
 }
 
@@ -739,7 +741,26 @@ export function resourceExportRowFromCarrier(
     aliases: carrier.aliases,
     targetName: carrier.targetName,
     source: carrier.source,
+    declarationSource: carrier.declarationSource,
   };
+}
+
+function declarationSourceForCarrier(
+  carrierEntry: TypeScriptExportSurfaceEntry,
+): ReturnType<typeof sourceRangeFromFileSpan> | null {
+  const target = carrierEntry.targets.find(hasSourceTargetRange);
+  return target === undefined
+    ? null
+    : sourceRangeFromFileSpan(target.file.repoPath, target.span);
+}
+
+function hasSourceTargetRange(
+  target: SourceTargetRow,
+): target is SourceTargetRow & {
+  readonly file: NonNullable<SourceTargetRow["file"]>;
+  readonly span: NonNullable<SourceTargetRow["span"]>;
+} {
+  return target.file !== undefined && target.span !== undefined;
 }
 
 export function decoratorCalleeName(decorator: ts.Decorator): string | null {

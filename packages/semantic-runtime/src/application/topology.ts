@@ -28,6 +28,8 @@ export type ApplicationFileRole =
   | 'component-style'
   | 'resource-source'
   | 'service-source'
+  | 'state-source'
+  | 'model-source'
   | 'route-source'
   | 'configuration-source'
   | 'asset';

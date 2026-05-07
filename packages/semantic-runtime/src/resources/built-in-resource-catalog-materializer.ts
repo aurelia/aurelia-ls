@@ -9,6 +9,7 @@ import {
 } from '../kernel/evidence.js';
 import type {
   AddressHandle,
+  ClaimHandle,
   IdentityHandle,
   ProductHandle,
   ProvenanceHandle,
@@ -140,6 +141,35 @@ class ConfiguredResourceSelectionEmission {
   ) {}
 }
 
+class ConfiguredResourceSelectionHandles {
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+  ) {}
+}
+
+class BuiltInResourceCatalogHandles {
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+  ) {}
+}
+
+class BuiltInResourceHandles {
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly definitionProductHandle: ProductHandle,
+  ) {}
+}
+
+class BuiltInResourceAliasEmission {
+  constructor(
+    readonly identity: AureliaResourceIdentity,
+    readonly claim: SemanticClaim,
+  ) {}
+}
+
 /** Materializes framework-owned resource headers and static full definitions before compiler-world visibility is decided. */
 export class BuiltInResourceCatalogMaterializer {
   constructor(
@@ -197,7 +227,6 @@ export class BuiltInResourceCatalogMaterializer {
     readonly catalog: BuiltInResourceCatalog;
     readonly resources: readonly BuiltInResourceEmission[];
   } {
-    const records: KernelStoreRecord[] = [];
     const local = `built-in-resource:${input.packageId}:${input.group}`;
     const source = this.recordsForSource(
       `${local}:source`,
@@ -205,81 +234,176 @@ export class BuiltInResourceCatalogMaterializer {
       input.group,
       `Framework built-in resource catalog ${input.packageId}/${input.group}.`,
     );
-    records.push(...source.records);
+    const handles = this.catalogHandles(local);
+    const resourceEmissions = this.resourceEmissionsForCatalog(input, local, source);
+    const materializedResources = resourceEmissions.map((emission) => emission.resource);
+    const catalog = this.createCatalog(input, handles, source, materializedResources);
+    const catalogClaims = this.catalogClaimsForResources(local, handles.productHandle, resourceEmissions, source);
+    const records = [
+      ...source.records,
+      ...resourceEmissions.flatMap((emission) => emission.records),
+      ...this.recordsForCatalogProduct(
+        local,
+        input,
+        source,
+        handles,
+        catalog,
+        resourceEmissions,
+        catalogClaims,
+      ),
+    ];
 
-    const catalogProductHandle = this.store.handles.product(local);
-    const catalogIdentityHandle = this.store.handles.identity(local);
-    const resourceEmissions = input.resources.map((resource, index) =>
+    return {
+      records,
+      catalog,
+      resources: resourceEmissions.map((emission) =>
+        new BuiltInResourceEmission(catalog.productHandle, emission.resource, emission.definition)
+      ),
+    };
+  }
+
+  private catalogHandles(local: string): BuiltInResourceCatalogHandles {
+    return new BuiltInResourceCatalogHandles(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+    );
+  }
+
+  private resourceEmissionsForCatalog(
+    input: BuiltInResourceCatalogInput,
+    local: string,
+    source: BuiltInResourceSourceSet,
+  ): readonly {
+    readonly records: readonly KernelStoreRecord[];
+    readonly resource: BuiltInResource;
+    readonly definition: FullResourceDefinition | null;
+  }[] {
+    return input.resources.map((resource, index) =>
       this.recordsForResource(
         resource,
         `${local}:resource:${resource.resourceKind}:${resource.name}:${index}`,
         source,
       )
     );
-    for (const emission of resourceEmissions) {
-      records.push(...emission.records);
-    }
+  }
 
-    const catalogClaims = resourceEmissions.map((emission, index) => new SemanticClaim(
+  private createCatalog(
+    input: BuiltInResourceCatalogInput,
+    handles: BuiltInResourceCatalogHandles,
+    source: BuiltInResourceSourceSet,
+    resources: readonly BuiltInResource[],
+  ): BuiltInResourceCatalog {
+    return new BuiltInResourceCatalog(
+      handles.productHandle,
+      handles.identityHandle,
+      input.packageId,
+      input.group,
+      resources,
+      source.addressHandle,
+      compactFieldProvenance<BuiltInResourceCatalogField>([
+        new FieldProvenance('packageId', source.provenanceHandle),
+        new FieldProvenance('group', source.provenanceHandle),
+        resources.length === 0 ? null : new FieldProvenance('resources', source.provenanceHandle),
+        new FieldProvenance('source', source.provenanceHandle),
+      ]),
+    );
+  }
+
+  private catalogClaimsForResources(
+    local: string,
+    catalogProductHandle: ProductHandle,
+    resourceEmissions: readonly {
+      readonly resource: BuiltInResource;
+    }[],
+    source: BuiltInResourceSourceSet,
+  ): readonly SemanticClaim[] {
+    return resourceEmissions.map((emission, index) => new SemanticClaim(
       this.store.handles.claim(`${local}:contains-resource:${index}`),
       catalogProductHandle,
       KernelVocabulary.Resource.ContainsDefinitionHeader.key,
       emission.resource.productHandle!,
       source.provenanceHandle,
     ));
-    records.push(...catalogClaims);
+  }
 
-    const materializedResources = resourceEmissions.map((emission) => emission.resource);
-    const catalog = new BuiltInResourceCatalog(
-      catalogProductHandle,
-      catalogIdentityHandle,
-      input.packageId,
-      input.group,
-      materializedResources,
+  private recordsForCatalogProduct(
+    local: string,
+    input: BuiltInResourceCatalogInput,
+    source: BuiltInResourceSourceSet,
+    handles: BuiltInResourceCatalogHandles,
+    catalog: BuiltInResourceCatalog,
+    resourceEmissions: readonly {
+      readonly resource: BuiltInResource;
+      readonly definition: FullResourceDefinition | null;
+    }[],
+    claims: readonly SemanticClaim[],
+  ): readonly KernelStoreRecord[] {
+    return [
+      ...claims,
+      this.catalogIdentity(input, source, handles),
+      this.catalogProduct(source, handles),
+      this.catalogMaterialization(local, handles, catalog, resourceEmissions, claims),
+    ];
+  }
+
+  private catalogIdentity(
+    input: BuiltInResourceCatalogInput,
+    source: BuiltInResourceSourceSet,
+    handles: BuiltInResourceCatalogHandles,
+  ): CompilerIdentity {
+    return new CompilerIdentity(
+      handles.identityHandle,
+      KernelVocabulary.Resource.BuiltInCatalog.key,
+      null,
       source.addressHandle,
-      compactFieldProvenance<BuiltInResourceCatalogField>([
-        new FieldProvenance('packageId', source.provenanceHandle),
-        new FieldProvenance('group', source.provenanceHandle),
-        materializedResources.length === 0 ? null : new FieldProvenance('resources', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      `${input.packageId}:${input.group}`,
     );
-    records.push(
-      new CompilerIdentity(
-        catalogIdentityHandle,
-        KernelVocabulary.Resource.BuiltInCatalog.key,
-        null,
-        source.addressHandle,
-        `${input.packageId}:${input.group}`,
-      ),
-      new MaterializedProduct(
-        catalogProductHandle,
-        KernelVocabulary.Resource.BuiltInCatalog.key,
-        catalogIdentityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializationRecord(
-        this.store.handles.materialization(local),
-        catalogIdentityHandle,
-        [
-          catalogProductHandle,
-          ...materializedResources.map((resource) => resource.productHandle!),
-          ...resourceEmissions.flatMap((emission) =>
-            emission.definition?.productHandle == null ? [] : [emission.definition.productHandle]
-          ),
-        ],
-        catalogClaims.map((claim) => claim.handle),
-      ),
-    );
+  }
 
-    return {
-      records,
-      catalog,
-      resources: resourceEmissions.map((emission) =>
-        new BuiltInResourceEmission(catalogProductHandle, emission.resource, emission.definition)
+  private catalogProduct(
+    source: BuiltInResourceSourceSet,
+    handles: BuiltInResourceCatalogHandles,
+  ): MaterializedProduct {
+    return new MaterializedProduct(
+      handles.productHandle,
+      KernelVocabulary.Resource.BuiltInCatalog.key,
+      handles.identityHandle,
+      source.addressHandle,
+      source.provenanceHandle,
+    );
+  }
+
+  private catalogMaterialization(
+    local: string,
+    handles: BuiltInResourceCatalogHandles,
+    catalog: BuiltInResourceCatalog,
+    resourceEmissions: readonly {
+      readonly definition: FullResourceDefinition | null;
+    }[],
+    claims: readonly SemanticClaim[],
+  ): MaterializationRecord {
+    return new MaterializationRecord(
+      this.store.handles.materialization(local),
+      handles.identityHandle,
+      this.catalogMaterializedProductHandles(handles, catalog, resourceEmissions),
+      claims.map((claim) => claim.handle),
+    );
+  }
+
+  private catalogMaterializedProductHandles(
+    handles: BuiltInResourceCatalogHandles,
+    catalog: BuiltInResourceCatalog,
+    resourceEmissions: readonly {
+      readonly definition: FullResourceDefinition | null;
+    }[],
+  ): readonly ProductHandle[] {
+    return [
+      handles.productHandle,
+      ...catalog.resources.map((resource) => resource.productHandle!),
+      ...resourceEmissions.flatMap((emission) =>
+        emission.definition?.productHandle == null ? [] : [emission.definition.productHandle]
       ),
-    };
+    ];
   }
 
   private recordsForResource(
@@ -291,103 +415,173 @@ export class BuiltInResourceCatalogMaterializer {
     readonly resource: BuiltInResource;
     readonly definition: FullResourceDefinition | null;
   } {
-    const productHandle = this.store.handles.product(local);
-    const identityHandle = this.store.handles.identity(local);
-    const definitionProductHandle = this.store.handles.product(`${local}:definition`);
-    const fieldProvenance = compactFieldProvenance<BuiltInResourceField>([
-      new FieldProvenance('targetName', source.provenanceHandle),
-      new FieldProvenance('resourceKind', source.provenanceHandle),
-      new FieldProvenance('name', source.provenanceHandle),
-      resource.aliases.length === 0 ? null : new FieldProvenance('aliases', source.provenanceHandle),
-      new FieldProvenance('packageId', source.provenanceHandle),
-      new FieldProvenance('group', source.provenanceHandle),
-      new FieldProvenance('source', source.provenanceHandle),
-    ]);
-    const materializedResource = materializeResource(resource, productHandle, identityHandle, source.addressHandle, fieldProvenance);
-    const declareClaim = new SemanticClaim(
-      this.store.handles.claim(`${local}:declares`),
-      productHandle,
-      KernelVocabulary.Resource.Declares.key,
-      identityHandle,
-      source.provenanceHandle,
+    const handles = this.resourceHandles(local);
+    const materializedResource = materializeResource(
+      resource,
+      handles.productHandle,
+      handles.identityHandle,
+      source.addressHandle,
+      builtInResourceFieldProvenance(resource, source),
     );
-    const aliasClaims = materializedResource.aliases.map((alias, index) => {
-      const aliasIdentityHandle = this.store.handles.identity(`${local}:alias:${alias}`);
-      return {
-        identity: new AureliaResourceIdentity(
-          aliasIdentityHandle,
-          toAureliaResourceIdentityKind(materializedResource.resourceKind),
-          alias,
-          null,
-        ),
-        claim: new SemanticClaim(
-          this.store.handles.claim(`${local}:alias:${index}`),
-          aliasIdentityHandle,
-          KernelVocabulary.Resource.AliasOf.key,
-          identityHandle,
-          source.provenanceHandle,
-        ),
-      };
-    });
-    const claimHandles = [
-      declareClaim.handle,
-      ...aliasClaims.map((alias) => alias.claim.handle),
-    ];
+    const declareClaim = this.declareClaimForResource(local, handles, materializedResource, source);
+    const aliasEmissions = this.aliasEmissionsForResource(local, handles, materializedResource, source);
     const definition = materializeBuiltInResourceDefinition(
       materializedResource,
-      definitionProductHandle,
-      identityHandle,
+      handles.definitionProductHandle,
+      handles.identityHandle,
       source,
     );
     const convergenceClaim = definition == null
       ? null
       : new SemanticClaim(
         this.store.handles.claim(`${local}:converges-to-definition`),
-        productHandle,
+        handles.productHandle,
         KernelVocabulary.Resource.ConvergesToDefinition.key,
-        definitionProductHandle,
+        handles.definitionProductHandle,
         source.provenanceHandle,
       );
-    const allClaimHandles = convergenceClaim == null
-      ? claimHandles
-      : [...claimHandles, convergenceClaim.handle];
     return {
-      records: [
-        new AureliaResourceIdentity(
-          identityHandle,
-          toAureliaResourceIdentityKind(materializedResource.resourceKind),
-          materializedResource.name,
-          null,
-        ),
+      records: this.recordsForResourcePublication(
+        local,
+        handles,
+        materializedResource,
+        definition,
         declareClaim,
-        ...aliasClaims.flatMap((alias) => [alias.identity, alias.claim]),
-        ...(convergenceClaim == null ? [] : [convergenceClaim]),
-        new MaterializedProduct(
-          productHandle,
-          KernelVocabulary.Resource.DefinitionHeader.key,
-          identityHandle,
-          source.addressHandle,
-          source.provenanceHandle,
-        ),
-        ...(definition == null ? [] : [
-          new MaterializedProduct(
-            definitionProductHandle,
-            KernelVocabulary.Resource.Definition.key,
-            identityHandle,
-            source.addressHandle,
-            source.provenanceHandle,
-          ),
-        ]),
-        new MaterializationRecord(
-          this.store.handles.materialization(local),
-          identityHandle,
-          definition == null ? [productHandle] : [productHandle, definitionProductHandle],
-          allClaimHandles,
-        ),
-      ],
+        aliasEmissions,
+        convergenceClaim,
+        source,
+      ),
       resource: materializedResource,
       definition,
     };
+  }
+
+  private resourceHandles(local: string): BuiltInResourceHandles {
+    return new BuiltInResourceHandles(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+      this.store.handles.product(`${local}:definition`),
+    );
+  }
+
+  private declareClaimForResource(
+    local: string,
+    handles: BuiltInResourceHandles,
+    resource: BuiltInResource,
+    source: BuiltInResourceSourceSet,
+  ): SemanticClaim {
+    return new SemanticClaim(
+      this.store.handles.claim(`${local}:declares`),
+      handles.productHandle,
+      KernelVocabulary.Resource.Declares.key,
+      handles.identityHandle,
+      source.provenanceHandle,
+    );
+  }
+
+  private aliasEmissionsForResource(
+    local: string,
+    handles: BuiltInResourceHandles,
+    resource: BuiltInResource,
+    source: BuiltInResourceSourceSet,
+  ): readonly BuiltInResourceAliasEmission[] {
+    return resource.aliases.map((alias, index) => {
+      const aliasIdentityHandle = this.store.handles.identity(`${local}:alias:${alias}`);
+      return new BuiltInResourceAliasEmission(
+        new AureliaResourceIdentity(
+          aliasIdentityHandle,
+          toAureliaResourceIdentityKind(resource.resourceKind),
+          alias,
+          null,
+        ),
+        new SemanticClaim(
+          this.store.handles.claim(`${local}:alias:${index}`),
+          aliasIdentityHandle,
+          KernelVocabulary.Resource.AliasOf.key,
+          handles.identityHandle,
+          source.provenanceHandle,
+        ),
+      );
+    });
+  }
+
+  private recordsForResourcePublication(
+    local: string,
+    handles: BuiltInResourceHandles,
+    resource: BuiltInResource,
+    definition: FullResourceDefinition | null,
+    declareClaim: SemanticClaim,
+    aliasEmissions: readonly BuiltInResourceAliasEmission[],
+    convergenceClaim: SemanticClaim | null,
+    source: BuiltInResourceSourceSet,
+  ): readonly KernelStoreRecord[] {
+    const claimHandles = resourcePublicationClaimHandles(declareClaim, aliasEmissions, convergenceClaim);
+    return [
+      this.builtInResourceIdentity(handles, resource),
+      declareClaim,
+      ...aliasEmissions.flatMap((alias) => [alias.identity, alias.claim]),
+      ...(convergenceClaim == null ? [] : [convergenceClaim]),
+      this.builtInResourceHeaderProduct(handles, source),
+      ...this.builtInResourceDefinitionProduct(handles, definition, source),
+      this.builtInResourceMaterialization(local, handles, definition, claimHandles),
+    ];
+  }
+
+  private builtInResourceIdentity(
+    handles: BuiltInResourceHandles,
+    resource: BuiltInResource,
+  ): AureliaResourceIdentity {
+    return new AureliaResourceIdentity(
+      handles.identityHandle,
+      toAureliaResourceIdentityKind(resource.resourceKind),
+      resource.name,
+      null,
+    );
+  }
+
+  private builtInResourceHeaderProduct(
+    handles: BuiltInResourceHandles,
+    source: BuiltInResourceSourceSet,
+  ): MaterializedProduct {
+    return new MaterializedProduct(
+      handles.productHandle,
+      KernelVocabulary.Resource.DefinitionHeader.key,
+      handles.identityHandle,
+      source.addressHandle,
+      source.provenanceHandle,
+    );
+  }
+
+  private builtInResourceDefinitionProduct(
+    handles: BuiltInResourceHandles,
+    definition: FullResourceDefinition | null,
+    source: BuiltInResourceSourceSet,
+  ): readonly MaterializedProduct[] {
+    return definition == null ? [] : [
+      new MaterializedProduct(
+        handles.definitionProductHandle,
+        KernelVocabulary.Resource.Definition.key,
+        handles.identityHandle,
+        source.addressHandle,
+        source.provenanceHandle,
+      ),
+    ];
+  }
+
+  private builtInResourceMaterialization(
+    local: string,
+    handles: BuiltInResourceHandles,
+    definition: FullResourceDefinition | null,
+    claimHandles: readonly ClaimHandle[],
+  ): MaterializationRecord {
+    return new MaterializationRecord(
+      this.store.handles.materialization(local),
+      handles.identityHandle,
+      definition == null
+        ? [handles.productHandle]
+        : [handles.productHandle, handles.definitionProductHandle],
+      claimHandles,
+    );
   }
 
   private recordsForSource(
@@ -439,31 +633,66 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
   }
 
   materialize(configuration: ConfigurationKernelEmission): ConfiguredBuiltInResourceCatalogEmission {
-    const selectionInputs = readConfiguredResourceCatalogInputs(configuration);
-    const catalogInputs = uniqueCatalogInputs(selectionInputs.flatMap((input) => input.catalogInputs));
-    const catalogEmission = this.catalogMaterializer.materialize(catalogInputs);
-    const catalogsByKey = new Map(catalogEmission.catalogs.map((catalog) => [catalogKey(catalog), catalog]));
+    const selectionRequests = readConfiguredResourceCatalogRequests(configuration);
+    const catalogEmission = this.catalogEmissionForRequests(selectionRequests);
+    const selectionEmission = this.selectionEmissionForRequests(selectionRequests, catalogEmission);
+    this.commitSelectionRecords(selectionEmission.records);
+    this.registerSelectionDetails(selectionEmission.selections);
 
+    return new ConfiguredBuiltInResourceCatalogEmission(
+      catalogEmission,
+      selectionEmission.selections,
+      selectionEmission.records,
+    );
+  }
+
+  private catalogEmissionForRequests(
+    selectionRequests: readonly ConfiguredResourceCatalogRequest[],
+  ): BuiltInResourceCatalogEmission {
+    const catalogInputs = uniqueCatalogInputs(selectionRequests.flatMap((request) => request.catalogInputs));
+    return this.catalogMaterializer.materialize(catalogInputs);
+  }
+
+  private selectionEmissionForRequests(
+    selectionRequests: readonly ConfiguredResourceCatalogRequest[],
+    catalogEmission: BuiltInResourceCatalogEmission,
+  ): {
+    readonly records: readonly KernelStoreRecord[];
+    readonly selections: readonly ConfiguredBuiltInResourceCatalogSelection[];
+  } {
+    const catalogsByKey = new Map(catalogEmission.catalogs.map((catalog) => [catalogKey(catalog), catalog]));
     const records: KernelStoreRecord[] = [];
     const selections: ConfiguredBuiltInResourceCatalogSelection[] = [];
-    for (const input of selectionInputs) {
-      const catalogs = input.catalogInputs
-        .map((catalogInput) => catalogsByKey.get(catalogInputKey(catalogInput)) ?? null)
-        .filter((catalog): catalog is BuiltInResourceCatalog => catalog != null);
+    for (const request of selectionRequests) {
+      const catalogs = this.catalogsForRequest(request, catalogsByKey);
       if (catalogs.length === 0) {
         continue;
       }
-      const emission = this.recordsForSelection(input.admission, input.frameworkKind, catalogs);
+      const emission = this.recordsForSelection(request.admission, request.frameworkKind, catalogs);
       if (this.store.readProduct(emission.selection.productHandle) == null) {
         records.push(...emission.records);
       }
       selections.push(emission.selection);
     }
+    return { records, selections };
+  }
 
+  private catalogsForRequest(
+    request: ConfiguredResourceCatalogRequest,
+    catalogsByKey: ReadonlyMap<string, BuiltInResourceCatalog>,
+  ): readonly BuiltInResourceCatalog[] {
+    return request.catalogInputs
+      .map((catalogInput) => catalogsByKey.get(catalogInputKey(catalogInput)) ?? null)
+      .filter((catalog): catalog is BuiltInResourceCatalog => catalog != null);
+  }
+
+  private commitSelectionRecords(records: readonly KernelStoreRecord[]): void {
     if (records.length > 0) {
       this.store.commit(new KernelStoreBatch(records, 'configured-built-in-resource-catalogs'));
     }
+  }
 
+  private registerSelectionDetails(selections: readonly ConfiguredBuiltInResourceCatalogSelection[]): void {
     for (const selection of selections) {
       this.store.productDetails.addIfAbsent(
         ResourceProductDetails.ConfiguredBuiltInResourceCatalogSelection,
@@ -471,8 +700,6 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
         selection,
       );
     }
-
-    return new ConfiguredBuiltInResourceCatalogEmission(catalogEmission, selections, records);
   }
 
   private recordsForSelection(
@@ -486,18 +713,47 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
       admission.sourceAddressHandle,
       summaryForFrameworkKind(frameworkKind),
     );
-    const productHandle = this.store.handles.product(local);
-    const identityHandle = this.store.handles.identity(local);
-    const claims = catalogs.map((catalog, index) => new SemanticClaim(
+    const handles = this.configuredSelectionHandles(local);
+    const claims = this.claimsForConfiguredSelection(local, handles.productHandle, catalogs, source);
+    const selection = this.createConfiguredSelection(admission, frameworkKind, catalogs, handles, source);
+    return new ConfiguredResourceSelectionEmission(
+      this.recordsForConfiguredSelectionProduct(local, admission, frameworkKind, source, handles, claims),
+      selection,
+    );
+  }
+
+  private configuredSelectionHandles(local: string): ConfiguredResourceSelectionHandles {
+    return new ConfiguredResourceSelectionHandles(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+    );
+  }
+
+  private claimsForConfiguredSelection(
+    local: string,
+    selectionProductHandle: ProductHandle,
+    catalogs: readonly BuiltInResourceCatalog[],
+    source: ConfiguredResourceSourceSet,
+  ): readonly SemanticClaim[] {
+    return catalogs.map((catalog, index) => new SemanticClaim(
       this.store.handles.claim(`${local}:admits-resource-catalog:${index}`),
-      productHandle,
+      selectionProductHandle,
       KernelVocabulary.Compiler.AdmitsResourceCatalog.key,
       catalog.productHandle,
       source.provenanceHandle,
     ));
-    const selection = new ConfiguredBuiltInResourceCatalogSelection(
-      productHandle,
-      identityHandle,
+  }
+
+  private createConfiguredSelection(
+    admission: RegistrationAdmissionProduct,
+    frameworkKind: FrameworkRegistrationKind,
+    catalogs: readonly BuiltInResourceCatalog[],
+    handles: ConfiguredResourceSelectionHandles,
+    source: ConfiguredResourceSourceSet,
+  ): ConfiguredBuiltInResourceCatalogSelection {
+    return new ConfiguredBuiltInResourceCatalogSelection(
+      handles.productHandle,
+      handles.identityHandle,
       admission.productHandle,
       frameworkKind,
       catalogs.map((catalog) => catalog.productHandle),
@@ -509,33 +765,40 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
-    return new ConfiguredResourceSelectionEmission(
-      [
-        ...source.records,
-        new CompilerIdentity(
-          identityHandle,
-          KernelVocabulary.Compiler.ConfiguredResourceCatalogSelection.key,
-          admission.identityHandle,
-          admission.sourceAddressHandle,
-          frameworkKind,
-        ),
-        ...claims,
-        new MaterializedProduct(
-          productHandle,
-          KernelVocabulary.Compiler.ConfiguredResourceCatalogSelection.key,
-          identityHandle,
-          admission.sourceAddressHandle,
-          source.provenanceHandle,
-        ),
-        new MaterializationRecord(
-          this.store.handles.materialization(local),
-          identityHandle,
-          [productHandle],
-          claims.map((claim) => claim.handle),
-        ),
-      ],
-      selection,
-    );
+  }
+
+  private recordsForConfiguredSelectionProduct(
+    local: string,
+    admission: RegistrationAdmissionProduct,
+    frameworkKind: FrameworkRegistrationKind,
+    source: ConfiguredResourceSourceSet,
+    handles: ConfiguredResourceSelectionHandles,
+    claims: readonly SemanticClaim[],
+  ): readonly KernelStoreRecord[] {
+    return [
+      ...source.records,
+      new CompilerIdentity(
+        handles.identityHandle,
+        KernelVocabulary.Compiler.ConfiguredResourceCatalogSelection.key,
+        admission.identityHandle,
+        admission.sourceAddressHandle,
+        frameworkKind,
+      ),
+      ...claims,
+      new MaterializedProduct(
+        handles.productHandle,
+        KernelVocabulary.Compiler.ConfiguredResourceCatalogSelection.key,
+        handles.identityHandle,
+        admission.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+      new MaterializationRecord(
+        this.store.handles.materialization(local),
+        handles.identityHandle,
+        [handles.productHandle],
+        claims.map((claim) => claim.handle),
+      ),
+    ];
   }
 
   private recordsForConfiguredSource(
@@ -564,7 +827,7 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
   }
 }
 
-class ConfiguredResourceCatalogInput {
+class ConfiguredResourceCatalogRequest {
   constructor(
     readonly admission: RegistrationAdmissionProduct,
     readonly frameworkKind: FrameworkRegistrationKind,
@@ -572,10 +835,10 @@ class ConfiguredResourceCatalogInput {
   ) {}
 }
 
-function readConfiguredResourceCatalogInputs(
+function readConfiguredResourceCatalogRequests(
   configuration: ConfigurationKernelEmission,
-): readonly ConfiguredResourceCatalogInput[] {
-  const inputs: ConfiguredResourceCatalogInput[] = [];
+): readonly ConfiguredResourceCatalogRequest[] {
+  const requests: ConfiguredResourceCatalogRequest[] = [];
   for (const admission of configuration.registrationAdmissions) {
     const frameworkKind = frameworkRegistrationKindForAdmission(admission);
     if (frameworkKind == null) {
@@ -585,9 +848,9 @@ function readConfiguredResourceCatalogInputs(
     if (catalogInputs.length === 0) {
       continue;
     }
-    inputs.push(new ConfiguredResourceCatalogInput(admission, frameworkKind, catalogInputs));
+    requests.push(new ConfiguredResourceCatalogRequest(admission, frameworkKind, catalogInputs));
   }
-  return inputs;
+  return requests;
 }
 
 function catalogInputsForFrameworkKind(
@@ -633,6 +896,18 @@ function catalogKey(catalog: BuiltInResourceCatalog): string {
   return `${catalog.packageId}:${catalog.group}`;
 }
 
+function resourcePublicationClaimHandles(
+  declareClaim: SemanticClaim,
+  aliasEmissions: readonly BuiltInResourceAliasEmission[],
+  convergenceClaim: SemanticClaim | null,
+): readonly ClaimHandle[] {
+  return [
+    declareClaim.handle,
+    ...aliasEmissions.map((alias) => alias.claim.handle),
+    ...(convergenceClaim == null ? [] : [convergenceClaim.handle]),
+  ];
+}
+
 function summaryForFrameworkKind(frameworkKind: FrameworkRegistrationKind): string {
   switch (frameworkKind) {
     case FrameworkRegistrationKind.StandardConfiguration:
@@ -659,6 +934,21 @@ interface BuiltInBindableInput {
   readonly mode?: BindableBindingMode;
   readonly setterKind?: BindableSetterKind;
   readonly setterName?: string;
+}
+
+function builtInResourceFieldProvenance(
+  resource: BuiltInResource,
+  source: BuiltInResourceSourceSet,
+): readonly FieldProvenance<BuiltInResourceField>[] {
+  return compactFieldProvenance<BuiltInResourceField>([
+    new FieldProvenance('targetName', source.provenanceHandle),
+    new FieldProvenance('resourceKind', source.provenanceHandle),
+    new FieldProvenance('name', source.provenanceHandle),
+    resource.aliases.length === 0 ? null : new FieldProvenance('aliases', source.provenanceHandle),
+    new FieldProvenance('packageId', source.provenanceHandle),
+    new FieldProvenance('group', source.provenanceHandle),
+    new FieldProvenance('source', source.provenanceHandle),
+  ]);
 }
 
 function materializeBuiltInResourceDefinition(

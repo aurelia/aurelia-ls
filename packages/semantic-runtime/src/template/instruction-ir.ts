@@ -5,7 +5,7 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
-import type { BindingCommandExecutableReference } from './binding-command-execution.js';
+import type { BindingCommandExecutableReference } from './binding-command-reference.js';
 import type { HtmlAttributeReference, HtmlNodeReference } from './html-ir.js';
 
 export const enum TemplateInstructionKind {

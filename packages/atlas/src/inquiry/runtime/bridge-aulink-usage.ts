@@ -87,7 +87,7 @@ export interface AuLinkUsageComparisonRow {
   readonly frameworkCandidateCount: number;
   readonly productTargetNames: readonly string[];
   readonly productAreas: Readonly<Record<string, number>>;
-  readonly frameworkUsageScope: "implementation-shape" | "subject" | "target-declaration" | "unresolved";
+  readonly frameworkUsageScope: "implementation-shape" | "subject" | "direct-subject" | "target-declaration" | "unresolved";
   readonly frameworkSubjectNames: readonly string[];
   readonly frameworkUsageCount: number;
   readonly frameworkMemberUsageCount: number;
@@ -158,6 +158,8 @@ export interface AuLinkMemberSurfaceRow {
   readonly productDeclarationCount: number;
   readonly frameworkDeclarationKinds: Readonly<Record<string, number>>;
   readonly productDeclarationKinds: Readonly<Record<string, number>>;
+  readonly frameworkAccessKinds: Readonly<Record<string, number>>;
+  readonly productAccessKinds: Readonly<Record<string, number>>;
   readonly frameworkUsageCount: number;
   readonly productUsageCount: number;
   readonly frameworkDeclarationSources: readonly SourceRange[];
@@ -295,6 +297,7 @@ interface FrameworkUsageScope {
 interface MemberSurfaceRef {
   readonly memberName: string;
   readonly declarationKind: string;
+  readonly accessKind: string;
   readonly source: SourceRange;
 }
 
@@ -323,7 +326,11 @@ export function readAuLinkUsageComparisonModel(
 
   for (const target of auLink.frameworkTargets) {
     const anchors = anchorsByLinkId.get(target.linkId) ?? [];
-    const frameworkScope = frameworkUsageScope(frameworkApi, target);
+    const frameworkScope = frameworkUsageScope(
+      frameworkApi,
+      target,
+      filters.frameworkScopeMode,
+    );
     const frameworkUsages = frameworkUsagesForScope(
       frameworkApi,
       frameworkScope,
@@ -368,7 +375,7 @@ export function readAuLinkUsageComparisonModel(
         options.queryScope ?? "detail",
       ),
     )
-    .sort(compareComparisonRows);
+    .sort((left, right) => compareComparisonRowsForOrder(left, right, filters.orderBy, surfaceRows));
   const visibleLinkIds = new Set(visibleRows.map((row) => row.linkId));
   const visibleMemberRows = memberRows
     .filter((row) => visibleLinkIds.has(row.linkId))
@@ -703,19 +710,30 @@ function usageComparisonRow(
 function frameworkUsageScope(
   frameworkApi: AureliaApiUsageIndex,
   target: AuLinkFrameworkTargetResolution,
+  scopeMode: string | undefined,
 ): FrameworkUsageScope {
+  if (scopeMode === "direct") {
+    return directFrameworkSubjectScope(frameworkApi, target);
+  }
   const implementation = frameworkApi.implementationShapes.find(
     (row) =>
       row.packageId === target.packageId &&
       row.implementationName === target.symbolName,
   );
-  if (implementation !== undefined) {
+  if (implementation !== undefined && scopeMode !== "subject") {
     return {
       kind: "implementation-shape",
       subjectIds: new Set(implementation.shapeSubjectIds),
       subjectNames: implementation.shapeSubjectNames,
     };
   }
+  return expandedFrameworkSubjectScope(frameworkApi, target);
+}
+
+function directFrameworkSubjectScope(
+  frameworkApi: AureliaApiUsageIndex,
+  target: AuLinkFrameworkTargetResolution,
+): FrameworkUsageScope {
   const subjects = frameworkApi.subjects.filter(
     (row) => row.packageId === target.packageId && row.name === target.symbolName,
   );
@@ -727,10 +745,79 @@ function frameworkUsageScope(
     };
   }
   return {
-    kind: "subject",
+    kind: "direct-subject",
     subjectIds: new Set(subjects.map((row) => row.id)),
     subjectNames: uniqueSorted(subjects.map((row) => row.name)),
   };
+}
+
+function expandedFrameworkSubjectScope(
+  frameworkApi: AureliaApiUsageIndex,
+  target: AuLinkFrameworkTargetResolution,
+): FrameworkUsageScope {
+  const subjects = frameworkApi.subjects.filter(
+    (row) => row.packageId === target.packageId && row.name === target.symbolName,
+  );
+  if (subjects.length === 0) {
+    return {
+      kind: "unresolved",
+      subjectIds: new Set(),
+      subjectNames: [],
+    };
+  }
+  const subjectIds = expandedShapeSubjectIds(frameworkApi, subjects.map((row) => row.id));
+  const subjectNames = subjectIds
+    .map((id) => frameworkApi.subjects.find((row) => row.id === id)?.name ?? id)
+    .sort((left, right) => left.localeCompare(right));
+  return {
+    kind: "subject",
+    subjectIds: new Set(subjectIds),
+    subjectNames: uniqueSorted(subjectNames),
+  };
+}
+
+function expandedShapeSubjectIds(
+  frameworkApi: AureliaApiUsageIndex,
+  rootIds: readonly string[],
+): readonly string[] {
+  const facetSubjectById = new Map(
+    frameworkApi.subjects.flatMap((subject) =>
+      subject.facets.map((facet) => [facet.id, subject.id] as const),
+    ),
+  );
+  const targetsBySubject = new Map<string, Set<string>>();
+  for (const edge of frameworkApi.shapeEdges) {
+    const from = facetSubjectById.get(edge.fromFacetId);
+    const to = facetSubjectById.get(edge.toFacetId);
+    if (from === undefined || to === undefined || from === to) {
+      continue;
+    }
+    setAdd(targetsBySubject, from, to);
+  }
+  const seen = new Set(rootIds);
+  const queue = rootIds.flatMap((id) => [...(targetsBySubject.get(id) ?? [])]);
+  while (queue.length > 0) {
+    const current = queue.shift()!;
+    if (seen.has(current)) {
+      continue;
+    }
+    seen.add(current);
+    queue.push(...(targetsBySubject.get(current) ?? []));
+  }
+  return [...seen].sort((left, right) => left.localeCompare(right));
+}
+
+function setAdd<TKey, TValue>(
+  map: Map<TKey, Set<TValue>>,
+  key: TKey,
+  value: TValue,
+): void {
+  const existing = map.get(key);
+  if (existing === undefined) {
+    map.set(key, new Set([value]));
+  } else {
+    existing.add(value);
+  }
 }
 
 function frameworkUsagesForScope(
@@ -1176,6 +1263,8 @@ function memberSurfaceRows(
       productDeclarationCount: productSources.length,
       frameworkDeclarationKinds: countBy(frameworkMemberRefs, (ref) => ref.declarationKind),
       productDeclarationKinds: countBy(productMemberRefs, (ref) => ref.declarationKind),
+      frameworkAccessKinds: countBy(frameworkMemberRefs, (ref) => ref.accessKind),
+      productAccessKinds: countBy(productMemberRefs, (ref) => ref.accessKind),
       frameworkUsageCount: usage?.frameworkUsageCount ?? 0,
       productUsageCount: usage?.productUsageCount ?? 0,
       frameworkDeclarationSources: frameworkSources,
@@ -1212,6 +1301,7 @@ function frameworkMemberSurfaceRefs(
         slot.declarations.map((declaration) => ({
           memberName: slot.name,
           declarationKind: slot.slotKind,
+          accessKind: declaration.accessKind,
           source: declaration.source,
         })),
       );
@@ -1231,6 +1321,7 @@ function frameworkMemberSurfaceRefs(
       refs.push({
         memberName: member.name,
         declarationKind: member.declarationKind,
+        accessKind: member.accessKind,
         source: requiredSourceRangeForNode(sourceProject, member.node),
       });
     }
@@ -1252,6 +1343,7 @@ function productMemberSurfaceRefs(
       refs.push({
         memberName: member.name,
         declarationKind: member.declarationKind,
+        accessKind: member.accessKind,
         source: requiredSourceRangeForNode(sourceProject, member.node),
       });
     }
@@ -1343,6 +1435,16 @@ function memberSurfaceRowMatches(
     (filters.packageId === undefined || row.packageId === filters.packageId) &&
     (filters.symbolName === undefined || row.symbolName === filters.symbolName) &&
     (filters.memberName === undefined || row.memberName === filters.memberName) &&
+    (filters.memberAccess === undefined ||
+      row.frameworkAccessKinds[filters.memberAccess] !== undefined ||
+      row.productAccessKinds[filters.memberAccess] !== undefined) &&
+    (filters.frameworkMemberAccess === undefined ||
+      row.frameworkAccessKinds[filters.frameworkMemberAccess] !== undefined) &&
+    (filters.productMemberAccess === undefined ||
+      row.productAccessKinds[filters.productMemberAccess] !== undefined) &&
+    (filters.memberDeclarationKind === undefined ||
+      row.frameworkDeclarationKinds[filters.memberDeclarationKind] !== undefined ||
+      row.productDeclarationKinds[filters.memberDeclarationKind] !== undefined) &&
     (filters.presence === undefined || row.presence === filters.presence) &&
     (filters.side === undefined || memberSurfaceHasSide(row, filters.side)) &&
     (filters.query === undefined || memberSurfaceContains(row, filters.query))
@@ -1367,6 +1469,8 @@ function memberSurfaceContains(row: AuLinkMemberSurfaceRow, query: string): bool
     row.symbolName,
     row.memberName,
     row.presence,
+    ...Object.keys(row.frameworkAccessKinds),
+    ...Object.keys(row.productAccessKinds),
     row.summary,
     row.firstFrameworkSource?.filePath,
     row.firstProductSource?.filePath,
@@ -1606,7 +1710,7 @@ function countRecordKeys<TValue>(
   rows: readonly TValue[],
   select: (row: TValue) => Readonly<Record<string, number>>,
 ): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
+  const counts: Record<string, number> = Object.create(null) as Record<string, number>;
   for (const row of rows) {
     for (const [key, count] of Object.entries(select(row))) {
       counts[key] = (counts[key] ?? 0) + count;
@@ -1701,6 +1805,96 @@ function compareComparisonRows(
   return left.packageId.localeCompare(right.packageId) ||
     left.symbolName.localeCompare(right.symbolName) ||
     left.linkId.localeCompare(right.linkId);
+}
+
+function compareComparisonRowsForOrder(
+  left: AuLinkUsageComparisonRow,
+  right: AuLinkUsageComparisonRow,
+  orderBy: string | undefined,
+  surfaceRows: readonly AuLinkMemberSurfaceRow[],
+): number {
+  switch (orderBy) {
+    case "frameworkUsageCount":
+      return right.frameworkUsageCount - left.frameworkUsageCount ||
+        compareComparisonRows(left, right);
+    case "productUsageCount":
+      return right.productUsageCount - left.productUsageCount ||
+        compareComparisonRows(left, right);
+    case "frameworkOnlyMemberNameCount":
+      return right.frameworkOnlyMemberNames.length - left.frameworkOnlyMemberNames.length ||
+        compareComparisonRows(left, right);
+    case "productOnlyMemberNameCount":
+      return right.productOnlyMemberNames.length - left.productOnlyMemberNames.length ||
+        compareComparisonRows(left, right);
+    case "memberDivergence":
+      return memberDivergence(right) - memberDivergence(left) ||
+        compareComparisonRows(left, right);
+    case "publicMemberDivergence":
+      return publicMemberDivergence(right, surfaceRows) - publicMemberDivergence(left, surfaceRows) ||
+        compareComparisonRows(left, right);
+    case "publicFrameworkOnlyMemberNameCount":
+      return publicFrameworkOnlyMemberNameCount(right, surfaceRows) -
+        publicFrameworkOnlyMemberNameCount(left, surfaceRows) ||
+        compareComparisonRows(left, right);
+    case "publicProductOnlyMemberNameCount":
+      return publicProductOnlyMemberNameCount(right, surfaceRows) -
+        publicProductOnlyMemberNameCount(left, surfaceRows) ||
+        compareComparisonRows(left, right);
+    case "usageImbalance":
+      return usageImbalance(right) - usageImbalance(left) ||
+        compareComparisonRows(left, right);
+    default:
+      return compareComparisonRows(left, right);
+  }
+}
+
+function memberDivergence(row: AuLinkUsageComparisonRow): number {
+  return row.frameworkOnlyMemberNames.length + row.productOnlyMemberNames.length;
+}
+
+function publicMemberDivergence(
+  row: AuLinkUsageComparisonRow,
+  surfaceRows: readonly AuLinkMemberSurfaceRow[],
+): number {
+  return surfaceRows.filter((surface) =>
+    surface.linkId === row.linkId &&
+    surface.presence !== "both" &&
+    memberSurfaceHasAccess(surface, "public")
+  ).length;
+}
+
+function publicFrameworkOnlyMemberNameCount(
+  row: AuLinkUsageComparisonRow,
+  surfaceRows: readonly AuLinkMemberSurfaceRow[],
+): number {
+  return surfaceRows.filter((surface) =>
+    surface.linkId === row.linkId &&
+    surface.presence === "framework-only" &&
+    surface.frameworkAccessKinds.public !== undefined
+  ).length;
+}
+
+function publicProductOnlyMemberNameCount(
+  row: AuLinkUsageComparisonRow,
+  surfaceRows: readonly AuLinkMemberSurfaceRow[],
+): number {
+  return surfaceRows.filter((surface) =>
+    surface.linkId === row.linkId &&
+    surface.presence === "product-only" &&
+    surface.productAccessKinds.public !== undefined
+  ).length;
+}
+
+function memberSurfaceHasAccess(
+  row: AuLinkMemberSurfaceRow,
+  accessKind: string,
+): boolean {
+  return row.frameworkAccessKinds[accessKind] !== undefined ||
+    row.productAccessKinds[accessKind] !== undefined;
+}
+
+function usageImbalance(row: AuLinkUsageComparisonRow): number {
+  return Math.abs(row.frameworkUsageCount - row.productUsageCount);
 }
 
 function compareMemberRows(

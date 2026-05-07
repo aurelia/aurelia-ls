@@ -27,11 +27,13 @@ import {
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   AttributeSyntax,
+  type AttributeParserParseResult,
   type AttributeSyntaxField,
 } from './attribute-syntax.js';
 import { BuiltInAttributeParserExecutionHost } from './attribute-parser-execution-host.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
+import type { HtmlAttribute } from './html-ir.js';
 import type { HtmlParseEmission } from './html-parse-materializer.js';
 import { TemplateProductDetails } from './product-details.js';
 
@@ -62,6 +64,14 @@ class AttributeSyntaxSourceSet {
   ) {}
 }
 
+class AttributeSyntaxPublication {
+  constructor(
+    readonly syntax: AttributeSyntax,
+    readonly records: readonly KernelStoreRecord[],
+    readonly claims: readonly SemanticClaim[],
+  ) {}
+}
+
 /** Interprets authored HTML attributes through the runtime-shaped IAttributeParser model. */
 export class AttributeSyntaxMaterializer {
   constructor(
@@ -88,67 +98,16 @@ export class AttributeSyntaxMaterializer {
     const executionHost = new BuiltInAttributeParserExecutionHost(input.compilerWorld);
 
     input.html.attributes.forEach((attribute, index) => {
-      const local = `attribute-syntax:${input.localKey}:${index}`;
-      const productHandle = this.store.handles.product(local);
-      const identityHandle = this.store.handles.identity(local);
-      const parse = input.compilerWorld.attributeParser.parse(attribute.rawName, attribute.rawValue, executionHost);
-      const execution = parse.execution;
-      const syntax = new AttributeSyntax(
-        productHandle,
-        identityHandle,
-        execution.syntaxKind,
-        execution.rawName,
-        execution.rawValue,
-        execution.target,
-        execution.command,
-        execution.parts,
-        parse.pattern,
-        attribute.toReference(),
-        attribute.sourceAddressHandle,
-        compactFieldProvenance<AttributeSyntaxField>([
-          new FieldProvenance('rawName', source.provenanceHandle),
-          new FieldProvenance('rawValue', source.provenanceHandle),
-          new FieldProvenance('target', source.provenanceHandle),
-          execution.command == null ? null : new FieldProvenance('command', source.provenanceHandle),
-          execution.parts.length === 0 ? null : new FieldProvenance('parts', source.provenanceHandle),
-          parse.pattern == null ? null : new FieldProvenance('pattern', source.provenanceHandle),
-          new FieldProvenance('source', source.provenanceHandle),
-        ]),
+      const publication = this.publishAttributeSyntax(
+        `attribute-syntax:${input.localKey}:${index}`,
+        source,
+        input,
+        executionHost,
+        attribute,
       );
-      const parseClaim = new SemanticClaim(
-        this.store.handles.claim(`${local}:parses-to-attribute-syntax`),
-        attribute.productHandle,
-        KernelVocabulary.Template.ParsesToAttributeSyntax.key,
-        productHandle,
-        source.provenanceHandle,
-      );
-      claims.push(parseClaim);
-      if (parse.executableProductHandle != null) {
-        claims.push(new SemanticClaim(
-          this.store.handles.claim(`${local}:references-attribute-pattern`),
-          productHandle,
-          KernelVocabulary.Template.ReferencesResource.key,
-          parse.executableProductHandle,
-          source.provenanceHandle,
-        ));
-      }
-      syntaxes.push(syntax);
-      records.push(
-        new CompilerIdentity(
-          identityHandle,
-          KernelVocabulary.Template.AttributeSyntax.key,
-          attribute.identityHandle,
-          attribute.sourceAddressHandle,
-          attribute.rawName,
-        ),
-        new MaterializedProduct(
-          productHandle,
-          KernelVocabulary.Template.AttributeSyntax.key,
-          identityHandle,
-          attribute.sourceAddressHandle,
-          source.provenanceHandle,
-        ),
-      );
+      syntaxes.push(publication.syntax);
+      records.push(...publication.records);
+      claims.push(...publication.claims);
     });
 
     records.push(
@@ -162,6 +121,106 @@ export class AttributeSyntaxMaterializer {
     );
 
     return new AttributeSyntaxParseEmission(syntaxes, records);
+  }
+
+  private publishAttributeSyntax(
+    local: string,
+    source: AttributeSyntaxSourceSet,
+    input: AttributeSyntaxParseInput,
+    executionHost: BuiltInAttributeParserExecutionHost,
+    attribute: HtmlAttribute,
+  ): AttributeSyntaxPublication {
+    const parse = input.compilerWorld.attributeParser.parse(attribute.rawName, attribute.rawValue, executionHost);
+    const syntax = this.createAttributeSyntax(local, source, attribute, parse);
+    const claims = this.claimsForAttributeSyntax(local, source, attribute, syntax, parse.executableProductHandle);
+    return new AttributeSyntaxPublication(
+      syntax,
+      this.recordsForAttributeSyntaxProduct(source, attribute, syntax),
+      claims,
+    );
+  }
+
+  private createAttributeSyntax(
+    local: string,
+    source: AttributeSyntaxSourceSet,
+    attribute: HtmlAttribute,
+    parse: AttributeParserParseResult,
+  ): AttributeSyntax {
+    const execution = parse.execution;
+    return new AttributeSyntax(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+      execution.syntaxKind,
+      execution.rawName,
+      execution.rawValue,
+      execution.target,
+      execution.command,
+      execution.parts,
+      parse.pattern,
+      attribute.toReference(),
+      attribute.sourceAddressHandle,
+      compactFieldProvenance<AttributeSyntaxField>([
+        new FieldProvenance('rawName', source.provenanceHandle),
+        new FieldProvenance('rawValue', source.provenanceHandle),
+        new FieldProvenance('target', source.provenanceHandle),
+        execution.command == null ? null : new FieldProvenance('command', source.provenanceHandle),
+        execution.parts.length === 0 ? null : new FieldProvenance('parts', source.provenanceHandle),
+        parse.pattern == null ? null : new FieldProvenance('pattern', source.provenanceHandle),
+        new FieldProvenance('source', source.provenanceHandle),
+      ]),
+    );
+  }
+
+  private claimsForAttributeSyntax(
+    local: string,
+    source: AttributeSyntaxSourceSet,
+    attribute: HtmlAttribute,
+    syntax: AttributeSyntax,
+    executableProductHandle: AttributeParserParseResult['executableProductHandle'],
+  ): readonly SemanticClaim[] {
+    return [
+      new SemanticClaim(
+        this.store.handles.claim(`${local}:parses-to-attribute-syntax`),
+        attribute.productHandle,
+        KernelVocabulary.Template.ParsesToAttributeSyntax.key,
+        syntax.productHandle,
+        source.provenanceHandle,
+      ),
+      ...(executableProductHandle == null
+        ? []
+        : [
+          new SemanticClaim(
+            this.store.handles.claim(`${local}:references-attribute-pattern`),
+            syntax.productHandle,
+            KernelVocabulary.Template.ReferencesResource.key,
+            executableProductHandle,
+            source.provenanceHandle,
+          ),
+        ]),
+    ];
+  }
+
+  private recordsForAttributeSyntaxProduct(
+    source: AttributeSyntaxSourceSet,
+    attribute: HtmlAttribute,
+    syntax: AttributeSyntax,
+  ): readonly KernelStoreRecord[] {
+    return [
+      new CompilerIdentity(
+        syntax.identityHandle,
+        KernelVocabulary.Template.AttributeSyntax.key,
+        attribute.identityHandle,
+        attribute.sourceAddressHandle,
+        attribute.rawName,
+      ),
+      new MaterializedProduct(
+        syntax.productHandle,
+        KernelVocabulary.Template.AttributeSyntax.key,
+        syntax.identityHandle,
+        attribute.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+    ];
   }
 
   private recordsForSource(input: AttributeSyntaxParseInput): AttributeSyntaxSourceSet {

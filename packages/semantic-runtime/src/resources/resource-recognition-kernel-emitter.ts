@@ -4,9 +4,9 @@ import {
   SourceSpanRole,
 } from '../kernel/address.js';
 import {
-  OpenSeam,
-} from '../kernel/open-seam.js';
-import { SemanticClaim } from '../kernel/claim.js';
+  SemanticClaim,
+  type ClaimEndpointHandle,
+} from '../kernel/claim.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -15,6 +15,7 @@ import {
 import type {
   AddressHandle,
   ClaimHandle,
+  EvidenceHandle,
   IdentityHandle,
   OpenSeamHandle,
   ProductHandle,
@@ -37,6 +38,10 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  recordsForSourceOpenSeams,
+  SourceOpenSeamInput,
+} from '../kernel/source-open-seam.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   CheckerTypeProjectionInput,
@@ -53,7 +58,10 @@ import {
   type ResourceDefinitionHeader,
   type NamedResourceDefinitionHeader,
 } from './resource-definition.js';
+import { ResourceDefinitionHeaderEmission } from './resource-definition-header-emission.js';
 import {
+  type AttributePatternObservation,
+  type ResourceTargetObservation,
   ResourceRecognitionObservation,
   ResourceRecognitionOpen,
 } from './resource-observation.js';
@@ -63,32 +71,6 @@ import {
 } from './resource-kind.js';
 import { ResourceTargetReference } from './resource-reference.js';
 import { ResourceProductDetails } from './product-details.js';
-
-/** Typed handle surface for a resource definition header that was admitted into the kernel. */
-export class ResourceDefinitionHeaderEmission {
-  constructor(
-    /** Emission-local key shared by header, target, convergence, and materialization records. */
-    readonly localKey: string,
-    /** Index of the source observation that produced this header. */
-    readonly observationIndex: number,
-    /** Product handle for the materialized resource-definition header. */
-    readonly productHandle: ProductHandle,
-    /** Primary resource identity, when recognition produced one unambiguous identity. */
-    readonly primaryIdentityHandle: IdentityHandle | null,
-    /** Target reference for the resource implementation, when statically visible. */
-    readonly targetReference: ResourceTargetReference | null,
-    /** Recognized Aurelia resource kind for this header. */
-    readonly resourceKind: ResourceDefinitionHeader['type'],
-    /** Runtime lookup names or pattern strings observed for this header. */
-    readonly lookupNames: readonly string[],
-    /** Source address for the header carrier. */
-    readonly sourceAddressHandle: AddressHandle,
-    /** Provenance handle for the header recognition observation. */
-    readonly provenanceHandle: ProvenanceHandle,
-    /** Claims emitted for resource identities and aliases. */
-    readonly claimHandles: readonly ClaimHandle[],
-  ) {}
-}
 
 /** Result of emitting resource recognition observations into kernel-backed definition headers. */
 export class ResourceRecognitionKernelEmission {
@@ -104,6 +86,31 @@ class ResourceObservationEmission {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly definition: ResourceDefinitionHeaderEmission | null,
+  ) {}
+}
+
+class ResourceObservationSourceSet {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly sourceAddressHandle: AddressHandle,
+    readonly evidenceHandle: EvidenceHandle,
+    readonly provenanceHandle: ProvenanceHandle,
+  ) {}
+}
+
+class ResourceIdentityPublication {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly identityHandle: IdentityHandle,
+    readonly claimHandle: ClaimHandle,
+  ) {}
+}
+
+class ResourceTargetPublication {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly targetReference: ResourceTargetReference | null,
+    readonly identityHandle: IdentityHandle | null,
   ) {}
 }
 
@@ -142,35 +149,9 @@ export class ResourceRecognitionKernelEmitter {
     observation: ResourceRecognitionObservation,
     index: number,
   ): ResourceObservationEmission {
-    const records: KernelStoreRecord[] = [];
     const local = observationLocalKey(context, observation.sourceNode, index);
-    const sourceAddressHandle = this.store.handles.address(`resource-source:${local}`);
-    const evidenceHandle = this.store.handles.evidence(`resource-observation:${local}`);
-    const provenanceHandle = this.store.handles.provenance(`resource-observation:${local}`);
-    const sourceAddress = new SourceSpanAddress(
-      sourceAddressHandle,
-      context.sourceFileAddressHandle,
-      observation.sourceNode.getStart(context.sourceFile),
-      observation.sourceNode.end,
-      SourceSpanRole.Range,
-    );
-    const evidence = new EvidenceRecord(
-      evidenceHandle,
-      EvidenceKind.SourceObservation,
-      [EvidenceRole.Declaration],
-      `${observation.carrierKind} recognized ${observation.definition?.type ?? 'an open resource kind'}.`,
-      sourceAddressHandle,
-    );
-    const provenance = new ProvenanceRecord(
-      provenanceHandle,
-      [evidenceHandle],
-    );
-
-    records.push(sourceAddress, evidence, provenance);
-
+    const source = this.recordsForObservationSource(context, observation, local);
     const target = this.recordsForTarget(context, observation, local);
-    records.push(...target.records);
-
     const productHandle = observation.definition == null
       ? null
       : this.store.handles.product(`resource-definition:${local}`);
@@ -180,68 +161,176 @@ export class ResourceRecognitionKernelEmitter {
       local,
       productHandle,
       target.identityHandle,
-      sourceAddressHandle,
-      provenanceHandle,
+      source.sourceAddressHandle,
+      source.provenanceHandle,
     );
-    records.push(...resourceIdentities.records);
     const openSeams = this.recordsForOpenSeams(context, observation.openSeams, local);
-    records.push(...openSeams.records);
-
-    if (productHandle != null) {
-      records.push(new MaterializedProduct(
-        productHandle,
-        KernelVocabulary.Resource.DefinitionHeader.key,
-        resourceIdentities.primaryIdentityHandle,
-        sourceAddressHandle,
-        provenanceHandle,
-      ));
-    }
-    records.push(new MaterializationRecord(
-      this.store.handles.materialization(`resource-recognition:${local}`),
-      target.identityHandle ?? sourceAddressHandle,
-      productHandle == null ? [] : [productHandle],
-      resourceIdentities.claimHandles,
-      openSeams.handles,
-    ));
 
     return new ResourceObservationEmission(
-      records,
-      productHandle == null || observation.definition == null
-        ? null
-        : new ResourceDefinitionHeaderEmission(
-          local,
-          index,
-          productHandle,
-          resourceIdentities.primaryIdentityHandle,
-          target.targetReference,
-          observation.definition.type,
-          lookupNamesForDefinition(observation.definition),
-          sourceAddressHandle,
-          provenanceHandle,
-          resourceIdentities.claimHandles,
-        ),
+      [
+        ...source.records,
+        ...target.records,
+        ...resourceIdentities.records,
+        ...openSeams.records,
+        ...this.recordsForDefinitionProduct(local, source, target.identityHandle, productHandle, resourceIdentities, openSeams),
+      ],
+      this.definitionEmissionForObservation(local, index, observation, source, target.targetReference, productHandle, resourceIdentities),
     );
+  }
+
+  private recordsForObservationSource(
+    context: ResourceRecognitionContext,
+    observation: ResourceRecognitionObservation,
+    local: string,
+  ): ResourceObservationSourceSet {
+    const sourceAddressHandle = this.store.handles.address(`resource-source:${local}`);
+    const evidenceHandle = this.store.handles.evidence(`resource-observation:${local}`);
+    const provenanceHandle = this.store.handles.provenance(`resource-observation:${local}`);
+    return new ResourceObservationSourceSet(
+      [
+        new SourceSpanAddress(
+          sourceAddressHandle,
+          context.sourceFileAddressHandle,
+          observation.sourceNode.getStart(context.sourceFile),
+          observation.sourceNode.end,
+          SourceSpanRole.Range,
+        ),
+        new EvidenceRecord(
+          evidenceHandle,
+          EvidenceKind.SourceObservation,
+          [EvidenceRole.Declaration],
+          `${observation.carrierKind} recognized ${observation.definition?.type ?? 'an open resource kind'}.`,
+          sourceAddressHandle,
+        ),
+        new ProvenanceRecord(
+          provenanceHandle,
+          [evidenceHandle],
+        ),
+      ],
+      sourceAddressHandle,
+      evidenceHandle,
+      provenanceHandle,
+    );
+  }
+
+  private recordsForDefinitionProduct(
+    local: string,
+    source: ResourceObservationSourceSet,
+    targetIdentityHandle: IdentityHandle | null,
+    productHandle: ProductHandle | null,
+    resourceIdentities: {
+      readonly primaryIdentityHandle: IdentityHandle | null;
+      readonly claimHandles: readonly ClaimHandle[];
+    },
+    openSeams: {
+      readonly handles: readonly OpenSeamHandle[];
+    },
+  ): readonly KernelStoreRecord[] {
+    return [
+      ...(productHandle == null
+        ? []
+        : [
+          new MaterializedProduct(
+            productHandle,
+            KernelVocabulary.Resource.DefinitionHeader.key,
+            resourceIdentities.primaryIdentityHandle,
+            source.sourceAddressHandle,
+            source.provenanceHandle,
+          ),
+        ]),
+      new MaterializationRecord(
+        this.store.handles.materialization(`resource-recognition:${local}`),
+        targetIdentityHandle ?? source.sourceAddressHandle,
+        productHandle == null ? [] : [productHandle],
+        resourceIdentities.claimHandles,
+        openSeams.handles,
+      ),
+    ];
+  }
+
+  private definitionEmissionForObservation(
+    local: string,
+    index: number,
+    observation: ResourceRecognitionObservation,
+    source: ResourceObservationSourceSet,
+    targetReference: ResourceTargetReference | null,
+    productHandle: ProductHandle | null,
+    resourceIdentities: {
+      readonly primaryIdentityHandle: IdentityHandle | null;
+      readonly claimHandles: readonly ClaimHandle[];
+    },
+  ): ResourceDefinitionHeaderEmission | null {
+    return productHandle == null || observation.definition == null
+      ? null
+      : new ResourceDefinitionHeaderEmission(
+        local,
+        index,
+        productHandle,
+        resourceIdentities.primaryIdentityHandle,
+        targetReference,
+        observation.definition.type,
+        lookupNamesForDefinition(observation.definition),
+        source.sourceAddressHandle,
+        source.provenanceHandle,
+        resourceIdentities.claimHandles,
+      );
   }
 
   private recordsForTarget(
     context: ResourceRecognitionContext,
     observation: ResourceRecognitionObservation,
     local: string,
-  ): {
-    readonly records: readonly KernelStoreRecord[];
-    readonly targetReference: ResourceTargetReference | null;
-    readonly identityHandle: IdentityHandle | null;
-  } {
+  ): ResourceTargetPublication {
     const target = observation.definition?.target ?? null;
     if (target == null) {
-      return { records: [], targetReference: null, identityHandle: null };
+      return new ResourceTargetPublication([], null, null);
     }
 
     const addressHandle = this.store.handles.address(`resource-target:${local}`);
-    const identityHandle = target.localName == null || !target.isDeclaration
+    const identityHandle = this.targetIdentityHandle(target, local);
+    const targetReference = this.targetReferenceForObservation(context, target, local, addressHandle, identityHandle);
+    return new ResourceTargetPublication(
+      [
+        this.targetAddress(context, target, addressHandle),
+        ...this.recordsForTargetIdentity(context, target, addressHandle, identityHandle),
+      ],
+      targetReference,
+      identityHandle,
+    );
+  }
+
+  private targetIdentityHandle(
+    target: ResourceTargetObservation,
+    local: string,
+  ): IdentityHandle | null {
+    return target.localName == null || !target.isDeclaration
       ? null
       : this.store.handles.identity(`resource-target:${local}`);
-    const targetType = context.typeSystem == null
+  }
+
+  private targetReferenceForObservation(
+    context: ResourceRecognitionContext,
+    target: ResourceTargetObservation,
+    local: string,
+    addressHandle: AddressHandle,
+    identityHandle: IdentityHandle | null,
+  ): ResourceTargetReference {
+    return new ResourceTargetReference(
+      identityHandle,
+      addressHandle,
+      target.localName,
+      this.targetTypeReference(context, target, local, addressHandle, identityHandle),
+    );
+  }
+
+  private targetTypeReference(
+    context: ResourceRecognitionContext,
+    target: ResourceTargetObservation,
+    local: string,
+    addressHandle: AddressHandle,
+    identityHandle: IdentityHandle | null,
+  ): CheckerTypeReference | null {
+    return context.typeSystem == null
       ? null
       : projectTargetType(
         this.store,
@@ -252,26 +341,31 @@ export class ResourceRecognitionKernelEmitter {
         identityHandle,
         target.localName,
       );
-    const targetReference = new ResourceTargetReference(identityHandle, addressHandle, target.localName, targetType);
-    const address = new SourceSpanAddress(
+  }
+
+  private targetAddress(
+    context: ResourceRecognitionContext,
+    target: ResourceTargetObservation,
+    addressHandle: AddressHandle,
+  ): SourceSpanAddress {
+    return new SourceSpanAddress(
       addressHandle,
       context.sourceFileAddressHandle,
       target.node.getStart(context.sourceFile),
       target.node.end,
       SourceSpanRole.Name,
     );
-    if (identityHandle == null) {
-      return {
-        targetReference,
-        identityHandle,
-        records: [address],
-      };
-    }
-    return {
-      identityHandle,
-      targetReference,
-      records: [
-        address,
+  }
+
+  private recordsForTargetIdentity(
+    context: ResourceRecognitionContext,
+    target: ResourceTargetObservation,
+    addressHandle: AddressHandle,
+    identityHandle: IdentityHandle | null,
+  ): readonly TypeScriptDeclarationIdentity[] {
+    return identityHandle == null
+      ? []
+      : [
         new TypeScriptDeclarationIdentity(
           identityHandle,
           context.moduleKey,
@@ -279,8 +373,7 @@ export class ResourceRecognitionKernelEmitter {
           target.localName,
           addressHandle,
         ),
-      ],
-    };
+      ];
   }
 
   private recordsForResourceIdentities(
@@ -312,38 +405,53 @@ export class ResourceRecognitionKernelEmitter {
       );
     }
 
+    return this.recordsForNamedResourceIdentities(
+      definition,
+      local,
+      productHandle,
+      declarationIdentityHandle,
+      sourceAddressHandle,
+      provenanceHandle,
+    );
+  }
+
+  private recordsForNamedResourceIdentities(
+    definition: NamedResourceDefinitionHeader,
+    local: string,
+    productHandle: ProductHandle | null,
+    declarationIdentityHandle: IdentityHandle | null,
+    sourceAddressHandle: AddressHandle,
+    provenanceHandle: ProvenanceHandle,
+  ): {
+    readonly records: readonly KernelStoreRecord[];
+    readonly primaryIdentityHandle: IdentityHandle | null;
+    readonly claimHandles: readonly ClaimHandle[];
+  } {
     const records: KernelStoreRecord[] = [];
     const claimHandles: ClaimHandle[] = [];
     let primaryIdentityHandle: IdentityHandle | null = null;
     const resourceKind = definition.type;
     const primaryNames = primaryResourceNames(definition);
     primaryNames.forEach((name, nameIndex) => {
-      const identityHandle = this.store.handles.identity(resourceIdentityLocalKey(local, resourceKind, name, nameIndex));
-      const claimHandle = this.store.handles.claim(`resource-declares:${local}:${nameIndex}`);
-      primaryIdentityHandle ??= identityHandle;
-      claimHandles.push(claimHandle);
-      records.push(
-        new AureliaResourceIdentity(
-          identityHandle,
-          toAureliaResourceIdentityKind(resourceKind),
-          name,
-          declarationIdentityHandle,
-        ),
-        new SemanticClaim(
-          claimHandle,
-          productHandle ?? declarationIdentityHandle ?? sourceAddressHandle,
-          KernelVocabulary.Resource.Declares.key,
-          identityHandle,
-          provenanceHandle,
-        ),
+      const publication = this.publishNamedResourceIdentity(
+        local,
+        resourceKind,
+        name,
+        nameIndex,
+        productHandle ?? declarationIdentityHandle ?? sourceAddressHandle,
+        declarationIdentityHandle,
+        provenanceHandle,
       );
+      primaryIdentityHandle ??= publication.identityHandle;
+      claimHandles.push(publication.claimHandle);
+      records.push(...publication.records);
 
       if (nameIndex === 0 && name != null) {
         const aliases = this.recordsForAliases(
           definition.aliases,
           resourceKind,
           local,
-          identityHandle,
+          publication.identityHandle,
           declarationIdentityHandle,
           provenanceHandle,
         );
@@ -353,28 +461,55 @@ export class ResourceRecognitionKernelEmitter {
     });
 
     if (primaryNames.length === 0) {
-      const identityHandle = this.store.handles.identity(resourceIdentityLocalKey(local, resourceKind, null, 0));
-      const claimHandle = this.store.handles.claim(`resource-declares:${local}:anonymous`);
-      primaryIdentityHandle = identityHandle;
-      claimHandles.push(claimHandle);
-      records.push(
+      const publication = this.publishNamedResourceIdentity(
+        local,
+        resourceKind,
+        null,
+        0,
+        productHandle ?? declarationIdentityHandle ?? sourceAddressHandle,
+        declarationIdentityHandle,
+        provenanceHandle,
+        'anonymous',
+      );
+      primaryIdentityHandle = publication.identityHandle;
+      claimHandles.push(publication.claimHandle);
+      records.push(...publication.records);
+    }
+
+    return { records, primaryIdentityHandle, claimHandles };
+  }
+
+  private publishNamedResourceIdentity(
+    local: string,
+    resourceKind: NamedResourceDefinitionKind,
+    name: string | null,
+    nameIndex: number,
+    subjectHandle: ClaimEndpointHandle,
+    declarationIdentityHandle: IdentityHandle | null,
+    provenanceHandle: ProvenanceHandle,
+    claimSuffix: string = String(nameIndex),
+  ): ResourceIdentityPublication {
+    const identityHandle = this.store.handles.identity(resourceIdentityLocalKey(local, resourceKind, name, nameIndex));
+    const claimHandle = this.store.handles.claim(`resource-declares:${local}:${claimSuffix}`);
+    return new ResourceIdentityPublication(
+      [
         new AureliaResourceIdentity(
           identityHandle,
           toAureliaResourceIdentityKind(resourceKind),
-          null,
+          name,
           declarationIdentityHandle,
         ),
         new SemanticClaim(
           claimHandle,
-          productHandle ?? declarationIdentityHandle ?? sourceAddressHandle,
+          subjectHandle,
           KernelVocabulary.Resource.Declares.key,
           identityHandle,
           provenanceHandle,
         ),
-      );
-    }
-
-    return { records, primaryIdentityHandle, claimHandles };
+      ],
+      identityHandle,
+      claimHandle,
+    );
   }
 
   private recordsForAttributePatternIdentities(
@@ -394,34 +529,18 @@ export class ResourceRecognitionKernelEmitter {
     const claimHandles: ClaimHandle[] = [];
     let primaryIdentityHandle: IdentityHandle | null = null;
     definition.patterns.forEach((pattern, patternIndex) => {
-      const addressHandle = this.store.handles.address(`resource-attribute-pattern:${local}:${patternIndex}`);
-      const identityHandle = this.store.handles.identity(attributePatternIdentityLocalKey(local, pattern.pattern, pattern.symbols, patternIndex));
-      const claimHandle = this.store.handles.claim(`resource-declares:${local}:attribute-pattern:${patternIndex}`);
-      primaryIdentityHandle ??= identityHandle;
-      claimHandles.push(claimHandle);
-      records.push(
-        new SourceSpanAddress(
-          addressHandle,
-          context.sourceFileAddressHandle,
-          pattern.node.getStart(context.sourceFile),
-          pattern.node.end,
-          SourceSpanRole.Value,
-        ),
-        new AureliaAttributePatternIdentity(
-          identityHandle,
-          pattern.pattern,
-          pattern.symbols,
-          declarationIdentityHandle,
-          addressHandle,
-        ),
-        new SemanticClaim(
-          claimHandle,
-          productHandle ?? declarationIdentityHandle ?? sourceAddressHandle,
-          KernelVocabulary.Resource.Declares.key,
-          identityHandle,
-          provenanceHandle,
-        ),
+      const publication = this.publishAttributePatternIdentity(
+        context,
+        pattern,
+        patternIndex,
+        local,
+        productHandle ?? declarationIdentityHandle ?? sourceAddressHandle,
+        declarationIdentityHandle,
+        provenanceHandle,
       );
+      primaryIdentityHandle ??= publication.identityHandle;
+      claimHandles.push(publication.claimHandle);
+      records.push(...publication.records);
     });
 
     return {
@@ -429,6 +548,69 @@ export class ResourceRecognitionKernelEmitter {
       primaryIdentityHandle: definition.patterns.length === 1 ? primaryIdentityHandle : null,
       claimHandles,
     };
+  }
+
+  private publishAttributePatternIdentity(
+    context: ResourceRecognitionContext,
+    pattern: AttributePatternObservation,
+    patternIndex: number,
+    local: string,
+    subjectHandle: ClaimEndpointHandle,
+    declarationIdentityHandle: IdentityHandle | null,
+    provenanceHandle: ProvenanceHandle,
+  ): ResourceIdentityPublication {
+    const addressHandle = this.store.handles.address(`resource-attribute-pattern:${local}:${patternIndex}`);
+    const identityHandle = this.store.handles.identity(attributePatternIdentityLocalKey(local, pattern.pattern, pattern.symbols, patternIndex));
+    const claimHandle = this.store.handles.claim(`resource-declares:${local}:attribute-pattern:${patternIndex}`);
+    return new ResourceIdentityPublication(
+      this.recordsForAttributePatternIdentity(
+        context,
+        pattern,
+        addressHandle,
+        identityHandle,
+        claimHandle,
+        subjectHandle,
+        declarationIdentityHandle,
+        provenanceHandle,
+      ),
+      identityHandle,
+      claimHandle,
+    );
+  }
+
+  private recordsForAttributePatternIdentity(
+    context: ResourceRecognitionContext,
+    pattern: AttributePatternObservation,
+    addressHandle: AddressHandle,
+    identityHandle: IdentityHandle,
+    claimHandle: ClaimHandle,
+    subjectHandle: ClaimEndpointHandle,
+    declarationIdentityHandle: IdentityHandle | null,
+    provenanceHandle: ProvenanceHandle,
+  ): readonly KernelStoreRecord[] {
+    return [
+      new SourceSpanAddress(
+        addressHandle,
+        context.sourceFileAddressHandle,
+        pattern.node.getStart(context.sourceFile),
+        pattern.node.end,
+        SourceSpanRole.Value,
+      ),
+      new AureliaAttributePatternIdentity(
+        identityHandle,
+        pattern.pattern,
+        pattern.symbols,
+        declarationIdentityHandle,
+        addressHandle,
+      ),
+      new SemanticClaim(
+        claimHandle,
+        subjectHandle,
+        KernelVocabulary.Resource.Declares.key,
+        identityHandle,
+        provenanceHandle,
+      ),
+    ];
   }
 
   private recordsForAliases(
@@ -475,44 +657,19 @@ export class ResourceRecognitionKernelEmitter {
     readonly records: readonly KernelStoreRecord[];
     readonly handles: readonly OpenSeamHandle[];
   } {
-    const records: KernelStoreRecord[] = [];
-    const handles: OpenSeamHandle[] = [];
-    seams.forEach((seam, index) => {
-      const seamLocal = `resource-open:${local}:${seam.openKind}:${index}`;
-      const addressHandle = this.store.handles.address(`${seamLocal}:span`);
-      const evidenceHandle = this.store.handles.evidence(seamLocal);
-      const provenanceHandle = this.store.handles.provenance(seamLocal);
-      const openSeamHandle = this.store.handles.openSeam(seamLocal);
-      handles.push(openSeamHandle);
-      records.push(
-        new SourceSpanAddress(
-          addressHandle,
-          context.sourceFileAddressHandle,
-          seam.node.getStart(context.sourceFile),
-          seam.node.end,
-          SourceSpanRole.Range,
-        ),
-        new EvidenceRecord(
-          evidenceHandle,
-          EvidenceKind.SemanticObservation,
-          [EvidenceRole.Diagnostic],
-          seam.summary,
-          addressHandle,
-        ),
-        new ProvenanceRecord(
-          provenanceHandle,
-          [evidenceHandle],
-        ),
-        new OpenSeam(
-          openSeamHandle,
-          seam.openKind,
-          seam.summary,
-          addressHandle,
-          evidenceHandle,
-        ),
-      );
-    });
-    return { records, handles };
+    return recordsForSourceOpenSeams(
+      this.store,
+      seams.map((seam, index) => new SourceOpenSeamInput(
+        `resource-open:${local}:${seam.openKind}:${index}`,
+        seam.openKind,
+        seam.summary,
+        context.sourceFileAddressHandle,
+        seam.node.getStart(context.sourceFile),
+        seam.node.end,
+        [EvidenceRole.Diagnostic],
+        true,
+      )),
+    );
   }
 }
 

@@ -125,6 +125,65 @@ export const enum FrameworkMaterializationDependencyPolicy {
   Deferred = "deferred",
 }
 
+const constructionSiteKindByRelation =
+  new Map<FrameworkRelationshipRelation, FrameworkMaterializationConstructionSiteKind>([
+    [
+      FrameworkRelationshipRelation.MaterializesKey,
+      FrameworkMaterializationConstructionSiteKind.FactoryEntry,
+    ],
+  ]);
+
+const dependencyAccessByDiWorldAccess =
+  new Map<FrameworkDiDependencyAccess, FrameworkMaterializationDependencyAccess>([
+    ["get", FrameworkMaterializationDependencyAccess.Get],
+    ["get-all", FrameworkMaterializationDependencyAccess.GetAll],
+    ["get-resolver", FrameworkMaterializationDependencyAccess.GetResolver],
+    ["has", FrameworkMaterializationDependencyAccess.Has],
+    ["find", FrameworkMaterializationDependencyAccess.Find],
+    ["invoke", FrameworkMaterializationDependencyAccess.Invoke],
+    ["resolve", FrameworkMaterializationDependencyAccess.Get],
+  ]);
+
+const endpointKindByDiWorldValueKind = new Map<
+  FrameworkDiValueRef["kind"],
+  FrameworkRelationshipEndpointKind
+>([
+  ["interface", FrameworkRelationshipEndpointKind.DiKey],
+  ["class", FrameworkRelationshipEndpointKind.Symbol],
+  ["function", FrameworkRelationshipEndpointKind.Symbol],
+  ["class-expression", FrameworkRelationshipEndpointKind.Expression],
+  ["function-expression", FrameworkRelationshipEndpointKind.Expression],
+  ["object", FrameworkRelationshipEndpointKind.Expression],
+  ["value", FrameworkRelationshipEndpointKind.Expression],
+  ["resource", FrameworkRelationshipEndpointKind.Resource],
+  ["registry", FrameworkRelationshipEndpointKind.RegistryExport],
+  ["unknown", FrameworkRelationshipEndpointKind.Unknown],
+]);
+
+interface DependencyPolicyRule {
+  readonly policy: FrameworkMaterializationDependencyPolicy;
+  readonly matches: (effect: EvaluationInvocationEffect) => boolean;
+}
+
+const dependencyPolicyRules: readonly DependencyPolicyRule[] = [
+  {
+    policy: FrameworkMaterializationDependencyPolicy.Deferred,
+    matches: isDeferredDependencyEffect,
+  },
+  {
+    policy: FrameworkMaterializationDependencyPolicy.Repeated,
+    matches: isRepeatedDependencyEffect,
+  },
+  {
+    policy: FrameworkMaterializationDependencyPolicy.Fallback,
+    matches: isFallbackDependencyEffect,
+  },
+  {
+    policy: FrameworkMaterializationDependencyPolicy.Guarded,
+    matches: isGuardedDependencyEffect,
+  },
+];
+
 /** Dependency edge observed inside a materialization route callback provider. */
 export interface FrameworkMaterializationDependencyRow {
   /** Stable dependency id. */
@@ -844,25 +903,7 @@ function endpointForDiWorldValueRef(
 function endpointKindForDiWorldValueRef(
   ref: FrameworkDiValueRef,
 ): FrameworkRelationshipEndpointKind {
-  switch (ref.kind) {
-    case "interface":
-      return FrameworkRelationshipEndpointKind.DiKey;
-    case "class":
-    case "function":
-      return FrameworkRelationshipEndpointKind.Symbol;
-    case "class-expression":
-    case "function-expression":
-    case "object":
-      return FrameworkRelationshipEndpointKind.Expression;
-    case "resource":
-      return FrameworkRelationshipEndpointKind.Resource;
-    case "registry":
-      return FrameworkRelationshipEndpointKind.RegistryExport;
-    case "unknown":
-      return FrameworkRelationshipEndpointKind.Unknown;
-    case "value":
-      return FrameworkRelationshipEndpointKind.Expression;
-  }
+  return endpointKindByDiWorldValueKind.get(ref.kind)!;
 }
 
 function providerExpressionLabelForDiWorldValueRef(
@@ -923,22 +964,7 @@ function uniqueMaterializationRoutes(
 function dependencyAccessForDiWorldAccess(
   access: FrameworkDiDependencyAccess,
 ): FrameworkMaterializationDependencyAccess {
-  switch (access) {
-    case "get":
-      return FrameworkMaterializationDependencyAccess.Get;
-    case "get-all":
-      return FrameworkMaterializationDependencyAccess.GetAll;
-    case "get-resolver":
-      return FrameworkMaterializationDependencyAccess.GetResolver;
-    case "has":
-      return FrameworkMaterializationDependencyAccess.Has;
-    case "find":
-      return FrameworkMaterializationDependencyAccess.Find;
-    case "invoke":
-      return FrameworkMaterializationDependencyAccess.Invoke;
-    case "resolve":
-      return FrameworkMaterializationDependencyAccess.Get;
-  }
+  return dependencyAccessByDiWorldAccess.get(access)!;
 }
 
 function relationshipsForRoute(
@@ -1062,9 +1088,8 @@ function constructionSitesForRoute(
 function constructionSiteKindForAtom(
   atom: FrameworkRelationshipAtom,
 ): FrameworkMaterializationConstructionSiteKind {
-  return atom.relation === FrameworkRelationshipRelation.MaterializesKey
-    ? FrameworkMaterializationConstructionSiteKind.FactoryEntry
-    : FrameworkMaterializationConstructionSiteKind.ConstructorCall;
+  return constructionSiteKindByRelation.get(atom.relation) ??
+    FrameworkMaterializationConstructionSiteKind.ConstructorCall;
 }
 
 function instantiationClosureForRoute(
@@ -1211,37 +1236,41 @@ function dependencyRowForEffect(
 function dependencyPolicyForEffect(
   effect: EvaluationInvocationEffect,
 ): FrameworkMaterializationDependencyPolicy {
-  if (
-    effect.certainty === "deferred" ||
-    effect.controlPath.some((part) => /^callback:.+:\d+$/u.test(part))
-  ) {
-    return FrameworkMaterializationDependencyPolicy.Deferred;
-  }
-  if (
-    effect.certainty === "repeated" ||
-    effect.controlPath.some(
-      (part) =>
-        part === "for" ||
-        part === "for-of" ||
-        part === "loop" ||
-        part === "callback:forEach" ||
-        part === "callback:map" ||
-        part === "callback:flatMap",
-    )
-  ) {
-    return FrameworkMaterializationDependencyPolicy.Repeated;
-  }
-  if (
-    effect.controlPath.some(
-      (part) => part.endsWith(":else") || part.endsWith(":false"),
-    )
-  ) {
-    return FrameworkMaterializationDependencyPolicy.Fallback;
-  }
-  if (effect.certainty === "potential" || effect.controlPath.length > 0) {
-    return FrameworkMaterializationDependencyPolicy.Guarded;
+  for (const rule of dependencyPolicyRules) {
+    if (rule.matches(effect)) {
+      return rule.policy;
+    }
   }
   return FrameworkMaterializationDependencyPolicy.Direct;
+}
+
+function isDeferredDependencyEffect(effect: EvaluationInvocationEffect): boolean {
+  return effect.certainty === "deferred" ||
+    effect.controlPath.some((part) => /^callback:.+:\d+$/u.test(part));
+}
+
+function isRepeatedDependencyEffect(effect: EvaluationInvocationEffect): boolean {
+  return effect.certainty === "repeated" ||
+    effect.controlPath.some(isRepeatedControlPathPart);
+}
+
+function isRepeatedControlPathPart(part: string): boolean {
+  return part === "for" ||
+    part === "for-of" ||
+    part === "loop" ||
+    part === "callback:forEach" ||
+    part === "callback:map" ||
+    part === "callback:flatMap";
+}
+
+function isFallbackDependencyEffect(effect: EvaluationInvocationEffect): boolean {
+  return effect.controlPath.some((part) =>
+    part.endsWith(":else") || part.endsWith(":false")
+  );
+}
+
+function isGuardedDependencyEffect(effect: EvaluationInvocationEffect): boolean {
+  return effect.certainty === "potential" || effect.controlPath.length > 0;
 }
 
 function dependencyAccessForEffect(

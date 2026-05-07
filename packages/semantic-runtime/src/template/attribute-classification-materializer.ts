@@ -5,6 +5,7 @@ import {
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type {
+  IdentityHandle,
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
@@ -36,10 +37,12 @@ import {
 } from './attribute-syntax.js';
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
 import type {
-  TemplateBindableReference,
   TemplateResolvedResource,
-  TemplateVisibleResource,
 } from './compiler-world.js';
+import type {
+  TemplateBindableReference,
+  TemplateVisibleResource,
+} from './compiler-world-reference.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import {
@@ -98,6 +101,14 @@ class ClassificationDecision {
   ) {}
 }
 
+class AttributeClassificationPublication {
+  constructor(
+    readonly classification: AttributeClassification,
+    readonly records: readonly KernelStoreRecord[],
+    readonly claims: readonly SemanticClaim[],
+  ) {}
+}
+
 /** Classifies runtime AttrSyntax against the compiler world's resource and command resolvers. */
 export class AttributeClassificationMaterializer {
   constructor(
@@ -129,78 +140,17 @@ export class AttributeClassificationMaterializer {
     const ownersByAttributeProduct = ownerElementsByAttributeProduct(input.html);
 
     input.attributeSyntax.syntaxes.forEach((syntax, index) => {
-      const attribute = syntax.attribute.productHandle == null
-        ? null
-        : attributesByProduct.get(syntax.attribute.productHandle) ?? null;
-      const owner = syntax.attribute.productHandle == null
-        ? null
-        : ownersByAttributeProduct.get(syntax.attribute.productHandle) ?? null;
-      const local = `attribute-classification:${input.localKey}:${index}`;
-      const productHandle = this.store.handles.product(local);
-      const identityHandle = this.store.handles.identity(local);
-      const decision = attribute == null || owner == null
-        ? openDecision()
-        : classifySyntax(syntax, attribute, owner, input.compilerWorld);
-      const classification = new AttributeClassification(
-        productHandle,
-        identityHandle,
-        syntax.productHandle,
-        owner?.reference ?? new HtmlNodeReference(HtmlIrNodeKind.Element, null, null, syntax.attribute.addressHandle),
-        decision.classificationKind,
-        decision.resourceKind,
-        decision.resource,
-        decision.bindingCommand,
-        decision.bindable,
-        [],
-        syntax.sourceAddressHandle,
-        compactFieldProvenance<AttributeClassificationField>([
-          new FieldProvenance('syntax', source.provenanceHandle),
-          new FieldProvenance('classificationKind', source.provenanceHandle),
-          decision.resource == null ? null : new FieldProvenance('resource', source.provenanceHandle),
-          decision.bindingCommand == null ? null : new FieldProvenance('bindingCommand', source.provenanceHandle),
-          decision.bindable == null ? null : new FieldProvenance('bindable', source.provenanceHandle),
-          new FieldProvenance('instructions', source.provenanceHandle),
-          new FieldProvenance('source', source.provenanceHandle),
-        ]),
+      const publication = this.publishAttributeClassification(
+        `attribute-classification:${input.localKey}:${index}`,
+        source,
+        input.compilerWorld,
+        syntax,
+        attributeForSyntax(syntax, attributesByProduct),
+        ownerForSyntax(syntax, ownersByAttributeProduct),
       );
-      const classificationClaim = new SemanticClaim(
-        this.store.handles.claim(`${local}:classifies-attribute-syntax`),
-        syntax.productHandle,
-        KernelVocabulary.Template.ClassifiesAttributeSyntax.key,
-        productHandle,
-        source.provenanceHandle,
-      );
-      claims.push(classificationClaim);
-      const referencedProductHandle = decision.resource?.definitionProductHandle
-        ?? decision.resource?.resourceProductHandle
-        ?? decision.bindingCommand?.productHandle
-        ?? null;
-      if (referencedProductHandle != null) {
-        claims.push(new SemanticClaim(
-          this.store.handles.claim(`${local}:references-resource`),
-          productHandle,
-          KernelVocabulary.Template.ReferencesResource.key,
-          referencedProductHandle,
-          source.provenanceHandle,
-        ));
-      }
-      classifications.push(classification);
-      records.push(
-        new CompilerIdentity(
-          identityHandle,
-          KernelVocabulary.Template.AttributeClassification.key,
-          syntax.identityHandle,
-          syntax.sourceAddressHandle,
-          syntax.rawName,
-        ),
-        new MaterializedProduct(
-          productHandle,
-          KernelVocabulary.Template.AttributeClassification.key,
-          identityHandle,
-          syntax.sourceAddressHandle,
-          source.provenanceHandle,
-        ),
-      );
+      classifications.push(publication.classification);
+      records.push(...publication.records);
+      claims.push(...publication.claims);
     });
 
     records.push(
@@ -214,6 +164,120 @@ export class AttributeClassificationMaterializer {
     );
 
     return new AttributeClassificationEmission(classifications, records);
+  }
+
+  private publishAttributeClassification(
+    local: string,
+    source: AttributeClassificationSourceSet,
+    compilerWorld: TemplateCompilerWorldEmission,
+    syntax: AttributeSyntax,
+    attribute: HtmlAttribute | null,
+    owner: OwnerElement | null,
+  ): AttributeClassificationPublication {
+    const productHandle = this.store.handles.product(local);
+    const identityHandle = this.store.handles.identity(local);
+    const decision = attribute == null || owner == null
+      ? openDecision()
+      : classifySyntax(syntax, attribute, owner, compilerWorld);
+    const classification = this.createAttributeClassification(
+      productHandle,
+      identityHandle,
+      source,
+      syntax,
+      owner,
+      decision,
+    );
+    const claims = this.claimsForAttributeClassification(local, source, syntax, classification, decision);
+    return new AttributeClassificationPublication(
+      classification,
+      this.recordsForAttributeClassificationProduct(source, syntax, classification),
+      claims,
+    );
+  }
+
+  private createAttributeClassification(
+    productHandle: ProductHandle,
+    identityHandle: IdentityHandle,
+    source: AttributeClassificationSourceSet,
+    syntax: AttributeSyntax,
+    owner: OwnerElement | null,
+    decision: ClassificationDecision,
+  ): AttributeClassification {
+    return new AttributeClassification(
+      productHandle,
+      identityHandle,
+      syntax.productHandle,
+      owner?.reference ?? new HtmlNodeReference(HtmlIrNodeKind.Element, null, null, syntax.attribute.addressHandle),
+      decision.classificationKind,
+      decision.resourceKind,
+      decision.resource,
+      decision.bindingCommand,
+      decision.bindable,
+      [],
+      syntax.sourceAddressHandle,
+      compactFieldProvenance<AttributeClassificationField>([
+        new FieldProvenance('syntax', source.provenanceHandle),
+        new FieldProvenance('classificationKind', source.provenanceHandle),
+        decision.resource == null ? null : new FieldProvenance('resource', source.provenanceHandle),
+        decision.bindingCommand == null ? null : new FieldProvenance('bindingCommand', source.provenanceHandle),
+        decision.bindable == null ? null : new FieldProvenance('bindable', source.provenanceHandle),
+        new FieldProvenance('instructions', source.provenanceHandle),
+        new FieldProvenance('source', source.provenanceHandle),
+      ]),
+    );
+  }
+
+  private claimsForAttributeClassification(
+    local: string,
+    source: AttributeClassificationSourceSet,
+    syntax: AttributeSyntax,
+    classification: AttributeClassification,
+    decision: ClassificationDecision,
+  ): readonly SemanticClaim[] {
+    const referencedProductHandle = referencedProductHandleForDecision(decision);
+    return [
+      new SemanticClaim(
+        this.store.handles.claim(`${local}:classifies-attribute-syntax`),
+        syntax.productHandle,
+        KernelVocabulary.Template.ClassifiesAttributeSyntax.key,
+        classification.productHandle,
+        source.provenanceHandle,
+      ),
+      ...(referencedProductHandle == null
+        ? []
+        : [
+          new SemanticClaim(
+            this.store.handles.claim(`${local}:references-resource`),
+            classification.productHandle,
+            KernelVocabulary.Template.ReferencesResource.key,
+            referencedProductHandle,
+            source.provenanceHandle,
+          ),
+        ]),
+    ];
+  }
+
+  private recordsForAttributeClassificationProduct(
+    source: AttributeClassificationSourceSet,
+    syntax: AttributeSyntax,
+    classification: AttributeClassification,
+  ): readonly KernelStoreRecord[] {
+    return [
+      new CompilerIdentity(
+        classification.identityHandle,
+        KernelVocabulary.Template.AttributeClassification.key,
+        syntax.identityHandle,
+        classification.sourceAddressHandle,
+        syntax.rawName,
+      ),
+      new MaterializedProduct(
+        classification.productHandle,
+        KernelVocabulary.Template.AttributeClassification.key,
+        classification.identityHandle,
+        classification.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+    ];
   }
 
   private recordsForSource(input: AttributeClassificationInput): AttributeClassificationSourceSet {
@@ -258,6 +322,33 @@ function ownerElementsByAttributeProduct(html: HtmlParseEmission): ReadonlyMap<P
     }
   }
   return owners;
+}
+
+function attributeForSyntax(
+  syntax: AttributeSyntax,
+  attributesByProduct: ReadonlyMap<ProductHandle, HtmlAttribute>,
+): HtmlAttribute | null {
+  return syntax.attribute.productHandle == null
+    ? null
+    : attributesByProduct.get(syntax.attribute.productHandle) ?? null;
+}
+
+function ownerForSyntax(
+  syntax: AttributeSyntax,
+  ownersByAttributeProduct: ReadonlyMap<ProductHandle, OwnerElement>,
+): OwnerElement | null {
+  return syntax.attribute.productHandle == null
+    ? null
+    : ownersByAttributeProduct.get(syntax.attribute.productHandle) ?? null;
+}
+
+function referencedProductHandleForDecision(
+  decision: ClassificationDecision,
+): ProductHandle | null {
+  return decision.resource?.definitionProductHandle
+    ?? decision.resource?.resourceProductHandle
+    ?? decision.bindingCommand?.productHandle
+    ?? null;
 }
 
 function classifySyntax(

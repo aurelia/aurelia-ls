@@ -900,6 +900,16 @@ export function renderingStructureKindsForPackageExport(
   if (texts.some((text) => text.includes("approot") || text === "aurelia")) {
     kinds.push(FrameworkRenderingStructureKind.AppRoot);
   }
+  if (
+    texts.some(
+      (text) =>
+        text === "scope" ||
+        text.includes("bindingcontext") ||
+        text.includes("overridecontext"),
+    )
+  ) {
+    kinds.push(FrameworkRenderingStructureKind.Scope);
+  }
   if (texts.some((text) => text.includes("controller"))) {
     kinds.push(FrameworkRenderingStructureKind.Controller);
   }
@@ -1110,6 +1120,9 @@ export function isRenderingStructureMatchText(text: string): boolean {
   return (
     normalized.includes("approot") ||
     normalized === "aurelia" ||
+    normalized === "scope" ||
+    normalized.includes("bindingcontext") ||
+    normalized.includes("overridecontext") ||
     normalized.includes("controller") ||
     normalized.includes("viewfactory") ||
     normalized.includes("syntheticview") ||

@@ -23,6 +23,7 @@ import type { SourceRange } from "../locus.js";
 import {
   readFrameworkCompilerRelationships,
 } from "./framework-compiler-lenses.js";
+import { readFrameworkExpressionRelationships } from "./framework-expression-relationships.js";
 import type { FrameworkDiscoveryFilters } from "./framework-filters.js";
 import {
   type FrameworkEmulationObligationRow,
@@ -41,6 +42,7 @@ import { readFrameworkResourceConvergenceRows } from "./framework-resource-lense
 import {
   readFrameworkRenderingRelationships,
 } from "./framework-rendering-relationships.js";
+import { readFrameworkStructuralRelationships } from "./framework-structural-relationships.js";
 import { countBy } from "./framework-support.js";
 
 /** Filters accepted by auLink mirror projections. */
@@ -54,8 +56,15 @@ export interface AuLinkMirrorFilters extends AuLinkFilters {
   readonly obligationKind?: string;
   readonly productArea?: string;
   readonly productDeclarationKind?: string;
+  readonly hasRoleEvidence?: boolean;
+  readonly hasEmulationObligations?: boolean;
   readonly side?: string;
   readonly memberName?: string;
+  readonly memberAccess?: string;
+  readonly frameworkScopeMode?: string;
+  readonly frameworkMemberAccess?: string;
+  readonly productMemberAccess?: string;
+  readonly memberDeclarationKind?: string;
   readonly presence?: string;
   readonly ownerName?: string;
   readonly ownerKind?: string;
@@ -66,6 +75,7 @@ export interface AuLinkMirrorFilters extends AuLinkFilters {
   readonly callArgumentSymbolName?: string;
   readonly callArgumentFullyQualifiedName?: string;
   readonly query?: string;
+  readonly orderBy?: string;
 }
 
 /** Compact rollup for the product-to-framework mirror graph. */
@@ -76,7 +86,9 @@ export interface AuLinkMirrorRollup {
   readonly ambiguousTargetCount: number;
   readonly unresolvedTargetCount: number;
   readonly linksWithRoleEvidence: number;
+  readonly linksWithoutRoleEvidence: number;
   readonly linksWithEmulationObligations: number;
+  readonly linksWithoutEmulationObligations: number;
   readonly roleEvidenceCount: number;
   readonly emulationObligationCount: number;
   readonly roleFamilies: Readonly<Record<string, number>>;
@@ -258,9 +270,13 @@ export function readAuLinkMirrorModel(
   }
 
   const filteredRoleEvidence = roleEvidence
-    .filter((row) => roleEvidenceMatches(row, filters));
+    .filter((row) => roleEvidenceMatches(row, filters))
+    .sort((left, right) => compareRoleEvidenceRows(left, right, filters.orderBy));
   const filteredObligationEvidence = obligationEvidence
-    .filter((row) => obligationEvidenceMatches(row, filters));
+    .filter((row) => obligationEvidenceMatches(row, filters))
+    .sort((left, right) =>
+      compareObligationEvidenceRows(left, right, filters.orderBy),
+    );
   const rows = auLink.frameworkTargets
     .map((target) =>
       mirrorRow(
@@ -270,7 +286,8 @@ export function readAuLinkMirrorModel(
         filteredObligationEvidence.filter((row) => row.linkId === target.linkId),
       ),
     )
-    .filter((row) => mirrorRowMatches(row, filters));
+    .filter((row) => mirrorRowMatches(row, filters))
+    .sort((left, right) => compareMirrorRows(left, right, filters.orderBy));
   const rowLinkIds = new Set(rows.map((row) => row.linkId));
   const visibleRoleEvidence = filteredRoleEvidence.filter((row) =>
     rowLinkIds.has(row.linkId),
@@ -372,151 +389,177 @@ function frameworkRelationshipRows(
 ): readonly RelationshipSourceRow[] {
   const filters: FrameworkDiscoveryFilters = {};
   return [
-    ...readFrameworkDiIndex(sourceProject).relationships.map((row) => ({
-      id: row.id,
-      roleFamily: row.family,
-      relation: row.relation,
-      mechanism: row.mechanism,
-      phase: row.phase,
-      packageId: row.packageId,
-      packageName: row.packageName,
-      from: row.from,
-      to: row.to,
-      sourceLens: LensId.FrameworkDi,
-      sourceProjection: "relationships",
-      sourceRowId: row.id,
-      source: row.source,
-      basis: [BasisKind.TypeScriptChecker],
-      detailFilters: relationshipDetailFilters(row),
-      summary: row.summary,
-    })),
-    ...readFrameworkMaterializationIndex(sourceProject, filters).relationships.map((row) => ({
-      id: row.id,
-      roleFamily: FrameworkRelationshipFamily.Materialization,
-      relation: row.relation,
-      packageId: row.packageId,
-      packageName: row.packageName,
-      from: row.from,
-      to: row.to,
-      sourceLens: LensId.FrameworkMaterialization,
-      sourceProjection: "relationships",
-      sourceRowId: row.id,
-      source: row.source,
-      basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
-      detailFilters: {
-        key: row.key,
-        relation: row.relation,
-        ...(row.access === undefined ? {} : { access: row.access }),
-      },
-      summary: row.summary,
-    })),
-    ...readFrameworkCompilerRelationships(sourceProject, filters).map((row) => ({
-      id: row.id,
-      roleFamily: row.family,
-      relation: row.relation,
-      mechanism: row.mechanism,
-      phase: row.phase,
-      packageId: row.packageId,
-      packageName: row.packageName,
-      from: row.from,
-      to: row.to,
-      sourceLens: LensId.FrameworkCompiler,
-      sourceProjection: "relationships",
-      sourceRowId: row.sourceRowId,
-      source: row.source,
-      basis: [BasisKind.TypeScriptChecker],
-      detailFilters: relationshipDetailFilters(row),
-      summary: row.summary,
-    })),
-    ...readFrameworkRenderingRelationships(sourceProject, filters).map((row) => ({
-      id: row.id,
-      roleFamily: row.family,
-      relation: row.relation,
-      mechanism: row.mechanism,
-      phase: row.phase,
-      packageId: row.packageId,
-      packageName: row.packageName,
-      from: row.from,
-      to: row.to,
-      sourceLens: LensId.FrameworkRendering,
-      sourceProjection: "relationships",
-      sourceRowId: row.sourceRowId,
-      source: row.source,
-      basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-      detailFilters: relationshipDetailFilters(row),
-      summary: row.summary,
-    })),
-    ...readFrameworkLifecycleRelationships(sourceProject, filters).map((row) => ({
-      id: row.id,
-      roleFamily: row.family,
-      relation: row.relation,
-      mechanism: row.mechanism,
-      phase: row.phase,
-      packageId: row.packageId,
-      packageName: row.packageName,
-      from: row.from,
-      to: row.to,
-      sourceLens: LensId.FrameworkLifecycle,
-      sourceProjection: "relationships",
-      sourceRowId: row.sourceRowId,
-      source: row.source,
-      basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-      detailFilters: relationshipDetailFilters(row),
-      summary: row.summary,
-    })),
-    ...readFrameworkObservationRelationships(sourceProject, filters).map((row) => ({
-      id: row.id,
-      roleFamily: row.family,
-      relation: row.relation,
-      mechanism: row.mechanism,
-      phase: row.phase,
-      packageId: row.packageId,
-      packageName: row.packageName,
-      from: row.from,
-      to: row.to,
-      sourceLens: LensId.FrameworkObservation,
-      sourceProjection: "relationships",
-      sourceRowId: row.sourceRowId,
-      source: row.source,
-      basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-      detailFilters: relationshipDetailFilters(row),
-      summary: row.summary,
-    })),
-    ...readFrameworkResourceConvergenceRows(sourceProject, filters).map((row) => ({
-      id: row.id,
-      roleFamily: FrameworkRelationshipFamily.Resource,
-      relation: FrameworkRelationshipRelation.RegistersResource,
-      packageId: row.packageId,
-      packageName: row.packageName,
-      from: {
-        kind: FrameworkRelationshipEndpointKind.Symbol,
-        name: row.sourceExportName,
-        packageId: row.packageId,
-        packageName: row.packageName,
-        source: row.source,
-      },
-      to: {
-        kind: FrameworkRelationshipEndpointKind.Resource,
-        name: row.targetName ?? row.resourceName ?? row.sourceExportName,
-        packageId: row.packageId,
-        packageName: row.packageName,
-        source: row.source,
-        resourceKind: row.resourceKind,
-        resourceName: row.resourceName,
-      },
-      sourceLens: LensId.FrameworkResources,
-      sourceProjection: "convergence",
-      sourceRowId: row.id,
-      source: row.source,
-      basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
-      detailFilters: {
-        packageId: row.packageId,
-        resourceKind: row.resourceKind,
-        targetName: row.targetName ?? row.sourceExportName,
-      },
-      summary: row.summary,
-    })),
+    ...readFrameworkDiIndex(sourceProject).relationships.map((row) =>
+      relationshipSourceRow(row, {
+        sourceLens: LensId.FrameworkDi,
+        sourceProjection: "relationships",
+        sourceRowId: row.id,
+        basis: [BasisKind.TypeScriptChecker],
+      }),
+    ),
+    ...readFrameworkMaterializationIndex(
+      sourceProject,
+      filters,
+    ).relationships.map((row) =>
+      relationshipSourceRow(row, {
+        roleFamily: FrameworkRelationshipFamily.Materialization,
+        sourceLens: LensId.FrameworkMaterialization,
+        sourceProjection: "relationships",
+        sourceRowId: row.id,
+        basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+        detailFilters: {
+          key: row.key,
+          relation: row.relation,
+          ...(row.access === undefined ? {} : { access: row.access }),
+        },
+      }),
+    ),
+    ...readFrameworkCompilerRelationships(sourceProject, filters).map((row) =>
+      relationshipSourceRow(row, {
+        sourceLens: LensId.FrameworkCompiler,
+        sourceProjection: "relationships",
+        sourceRowId: row.sourceRowId,
+        basis: [BasisKind.TypeScriptChecker],
+      }),
+    ),
+    ...readFrameworkExpressionRelationships(sourceProject, filters).map((row) =>
+      relationshipSourceRow(row, {
+        sourceLens: LensId.FrameworkDiscovery,
+        sourceProjection: "expression-entities",
+        sourceRowId: row.sourceRowId,
+        basis: [BasisKind.TypeScriptChecker],
+        detailFilters: {
+          packageId: row.packageId,
+          exportName: row.to.name,
+        },
+      }),
+    ),
+    ...readFrameworkStructuralRelationships(sourceProject, filters).map((row) =>
+      relationshipSourceRow(row, {
+        sourceLens: LensId.FrameworkDiscovery,
+        sourceProjection: structuralRelationshipProjection(row.family),
+        sourceRowId: row.sourceRowId,
+        basis: [BasisKind.TypeScriptChecker],
+        detailFilters: {
+          packageId: row.packageId,
+          exportName: row.to.name,
+        },
+      }),
+    ),
+    ...readFrameworkRenderingRelationships(sourceProject, filters).map((row) =>
+      relationshipSourceRow(row, {
+        sourceLens: LensId.FrameworkRendering,
+        sourceProjection: "relationships",
+        sourceRowId: row.sourceRowId,
+        basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+      }),
+    ),
+    ...readFrameworkLifecycleRelationships(sourceProject, filters).map((row) =>
+      relationshipSourceRow(row, {
+        sourceLens: LensId.FrameworkLifecycle,
+        sourceProjection: "relationships",
+        sourceRowId: row.sourceRowId,
+        basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+      }),
+    ),
+    ...readFrameworkObservationRelationships(sourceProject, filters).map((row) =>
+      relationshipSourceRow(row, {
+        sourceLens: LensId.FrameworkObservation,
+        sourceProjection: "relationships",
+        sourceRowId: row.sourceRowId,
+        basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+      }),
+    ),
+    ...readFrameworkResourceConvergenceRows(sourceProject, filters).map(
+      resourceConvergenceRelationshipSourceRow,
+    ),
   ].sort(compareRelationshipRows);
+}
+
+interface FrameworkRelationshipSource {
+  readonly id: string;
+  readonly family?: string;
+  readonly relation: string;
+  readonly mechanism?: string;
+  readonly phase?: string;
+  readonly packageId: string;
+  readonly packageName: string;
+  readonly from: FrameworkRelationshipEndpoint;
+  readonly to: FrameworkRelationshipEndpoint;
+  readonly source: SourceRange;
+  readonly summary: string;
+}
+
+interface RelationshipSourceOptions {
+  readonly roleFamily?: string;
+  readonly sourceLens: LensId;
+  readonly sourceProjection: string;
+  readonly sourceRowId: string;
+  readonly basis: readonly BasisKind[];
+  readonly detailFilters?: Readonly<Record<string, string>>;
+}
+
+function relationshipSourceRow(
+  row: FrameworkRelationshipSource,
+  options: RelationshipSourceOptions,
+): RelationshipSourceRow {
+  return {
+    id: row.id,
+    roleFamily: options.roleFamily ?? row.family ?? "framework",
+    relation: row.relation,
+    ...(row.mechanism === undefined ? {} : { mechanism: row.mechanism }),
+    ...(row.phase === undefined ? {} : { phase: row.phase }),
+    packageId: row.packageId,
+    packageName: row.packageName,
+    from: row.from,
+    to: row.to,
+    sourceLens: options.sourceLens,
+    sourceProjection: options.sourceProjection,
+    sourceRowId: options.sourceRowId,
+    source: row.source,
+    basis: options.basis,
+    detailFilters: options.detailFilters ?? relationshipDetailFilters(row),
+    summary: row.summary,
+  };
+}
+
+function resourceConvergenceRelationshipSourceRow(
+  row: ReturnType<typeof readFrameworkResourceConvergenceRows>[number],
+): RelationshipSourceRow {
+  return {
+    id: row.id,
+    roleFamily: FrameworkRelationshipFamily.Resource,
+    relation: FrameworkRelationshipRelation.RegistersResource,
+    packageId: row.packageId,
+    packageName: row.packageName,
+    from: {
+      kind: FrameworkRelationshipEndpointKind.Symbol,
+      name: row.sourceExportName,
+      packageId: row.packageId,
+      packageName: row.packageName,
+      source: row.source,
+    },
+    to: {
+      kind: FrameworkRelationshipEndpointKind.Resource,
+      name: row.targetName ?? row.resourceName ?? row.sourceExportName,
+      packageId: row.packageId,
+      packageName: row.packageName,
+      source: row.source,
+      resourceKind: row.resourceKind,
+      resourceName: row.resourceName,
+    },
+    sourceLens: LensId.FrameworkResources,
+    sourceProjection: "convergence",
+    sourceRowId: row.id,
+    source: row.source,
+    basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+    detailFilters: {
+      packageId: row.packageId,
+      resourceKind: row.resourceKind,
+      targetName: row.targetName ?? row.sourceExportName,
+    },
+    summary: row.summary,
+  };
 }
 
 function relationshipDetailFilters(row: {
@@ -533,6 +576,18 @@ function relationshipDetailFilters(row: {
     ...(row.phase === undefined ? {} : { phase: row.phase }),
     query: row.from.name,
   };
+}
+
+function structuralRelationshipProjection(family: string): string {
+  switch (family) {
+    case FrameworkRelationshipFamily.Observation:
+      return "observers";
+    case FrameworkRelationshipFamily.Router:
+      return "router-entities";
+    case FrameworkRelationshipFamily.Rendering:
+    default:
+      return "rendering-structures";
+  }
 }
 
 function roleEvidenceRow(
@@ -678,8 +733,12 @@ function rollup(
     ambiguousTargetCount: rows.filter((row) => row.targetStatus === "ambiguous").length,
     unresolvedTargetCount: rows.filter((row) => row.targetStatus === "unresolved").length,
     linksWithRoleEvidence: rows.filter((row) => row.roleEvidenceCount > 0).length,
+    linksWithoutRoleEvidence: rows.filter((row) => row.roleEvidenceCount === 0).length,
     linksWithEmulationObligations: rows.filter(
       (row) => row.emulationObligationCount > 0,
+    ).length,
+    linksWithoutEmulationObligations: rows.filter(
+      (row) => row.emulationObligationCount === 0,
     ).length,
     roleEvidenceCount: roleEvidence.length,
     emulationObligationCount: obligationEvidence.length,
@@ -701,7 +760,7 @@ function countMirrorRowRecords(
   rows: readonly AuLinkMirrorRow[],
   select: (row: AuLinkMirrorRow) => Readonly<Record<string, number>>,
 ): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
+  const counts: Record<string, number> = Object.create(null) as Record<string, number>;
   for (const row of rows) {
     for (const [key, count] of Object.entries(select(row))) {
       counts[key] = (counts[key] ?? 0) + count;
@@ -765,6 +824,10 @@ function mirrorRowMatches(
       row.productAreas[filters.productArea] !== undefined) &&
     (filters.productDeclarationKind === undefined ||
       row.productDeclarationKinds[filters.productDeclarationKind] !== undefined) &&
+    (filters.hasRoleEvidence === undefined ||
+      (row.roleEvidenceCount > 0) === filters.hasRoleEvidence) &&
+    (filters.hasEmulationObligations === undefined ||
+      (row.emulationObligationCount > 0) === filters.hasEmulationObligations) &&
     (filters.query === undefined || mirrorRowContains(row, filters.query))
   );
 }
@@ -875,4 +938,98 @@ function compareRelationshipRows(
     left.packageId.localeCompare(right.packageId) ||
     left.id.localeCompare(right.id)
   );
+}
+
+function compareMirrorRows(
+  left: AuLinkMirrorRow,
+  right: AuLinkMirrorRow,
+  orderBy: string | undefined,
+): number {
+  const fallback =
+    left.packageId.localeCompare(right.packageId) ||
+    left.symbolName.localeCompare(right.symbolName) ||
+    left.linkId.localeCompare(right.linkId);
+  switch (orderBy) {
+    case "roleEvidence":
+      return right.roleEvidenceCount - left.roleEvidenceCount || fallback;
+    case "emulationObligation":
+    case "emulationObligations":
+      return (
+        right.emulationObligationCount - left.emulationObligationCount ||
+        fallback
+      );
+    case "mirrorPressure":
+      return (
+        right.roleEvidenceCount +
+          right.emulationObligationCount -
+          (left.roleEvidenceCount + left.emulationObligationCount) ||
+        fallback
+      );
+    case "targetStatus":
+      return left.targetStatus.localeCompare(right.targetStatus) || fallback;
+    case "productArea":
+      return primaryRecordKey(left.productAreas).localeCompare(
+        primaryRecordKey(right.productAreas),
+      ) || fallback;
+    case "packageId":
+      return fallback;
+    case "linkId":
+    default:
+      return left.linkId.localeCompare(right.linkId);
+  }
+}
+
+function compareRoleEvidenceRows(
+  left: AuLinkMirrorRoleEvidenceRow,
+  right: AuLinkMirrorRoleEvidenceRow,
+  orderBy: string | undefined,
+): number {
+  const fallback =
+    left.linkId.localeCompare(right.linkId) ||
+    left.roleFamily.localeCompare(right.roleFamily) ||
+    left.relation.localeCompare(right.relation) ||
+    left.id.localeCompare(right.id);
+  switch (orderBy) {
+    case "sourceLens":
+      return left.sourceLens.localeCompare(right.sourceLens) || fallback;
+    case "relation":
+      return left.relation.localeCompare(right.relation) || fallback;
+    case "roleFamily":
+      return left.roleFamily.localeCompare(right.roleFamily) || fallback;
+    case "linkId":
+    default:
+      return fallback;
+  }
+}
+
+function compareObligationEvidenceRows(
+  left: AuLinkMirrorObligationEvidenceRow,
+  right: AuLinkMirrorObligationEvidenceRow,
+  orderBy: string | undefined,
+): number {
+  const fallback =
+    left.linkId.localeCompare(right.linkId) ||
+    left.layer.localeCompare(right.layer) ||
+    left.mode.localeCompare(right.mode) ||
+    left.obligationKind.localeCompare(right.obligationKind) ||
+    left.id.localeCompare(right.id);
+  switch (orderBy) {
+    case "sourceLens":
+      return left.sourceLens.localeCompare(right.sourceLens) || fallback;
+    case "obligationKind":
+      return left.obligationKind.localeCompare(right.obligationKind) || fallback;
+    case "emulationLayer":
+      return left.layer.localeCompare(right.layer) || fallback;
+    case "emulationMode":
+      return left.mode.localeCompare(right.mode) || fallback;
+    case "linkId":
+    default:
+      return fallback;
+  }
+}
+
+function primaryRecordKey(record: Readonly<Record<string, number>>): string {
+  const [first] = Object.entries(record)
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+  return first?.[0] ?? "";
 }

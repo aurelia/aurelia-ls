@@ -14,6 +14,10 @@ import {
 } from './module-host.js';
 import { StaticModuleGraphEvaluator } from './module-evaluator.js';
 import { normalizeModuleKey } from './module-graph.js';
+import {
+  DefaultStaticEvaluationPolicy,
+  type StaticEvaluationPolicy,
+} from './policy.js';
 
 export type EvaluatedProjectSource = StaticProjectEvaluationSourceResult & {
   readonly sourceFile: ts.SourceFile;
@@ -54,22 +58,34 @@ export class StaticProjectEvaluationResult {
   }
 }
 
+export class StaticProjectEvaluationOptions {
+  constructor(
+    /** Product-specific ownership hooks for source effects that are intentionally modeled by later passes. */
+    readonly policy: StaticEvaluationPolicy = DefaultStaticEvaluationPolicy,
+  ) {}
+}
+
 /** Project-level static evaluation shared by Aurelia semantic passes. */
 export class StaticProjectEvaluationPass {
-  evaluate(project: ProjectBootFrame): StaticProjectEvaluationResult {
-    return this.evaluateCore(project, null);
+  evaluate(
+    project: ProjectBootFrame,
+    options: StaticProjectEvaluationOptions = new StaticProjectEvaluationOptions(),
+  ): StaticProjectEvaluationResult {
+    return this.evaluateCore(project, null, options);
   }
 
   evaluateAndEmit(
     store: KernelStore,
     project: ProjectBootFrame,
+    options: StaticProjectEvaluationOptions = new StaticProjectEvaluationOptions(),
   ): StaticProjectEvaluationResult {
-    return this.evaluateCore(project, new EvaluationKernelEmitter(store));
+    return this.evaluateCore(project, new EvaluationKernelEmitter(store), options);
   }
 
   private evaluateCore(
     project: ProjectBootFrame,
     kernelEmitter: EvaluationKernelEmitter | null,
+    options: StaticProjectEvaluationOptions,
   ): StaticProjectEvaluationResult {
     const host = new FileSystemEvaluationModuleSourceHost(project.rootDir);
     const sources: StaticProjectEvaluationSourceResult[] = [];
@@ -87,7 +103,7 @@ export class StaticProjectEvaluationPass {
         continue;
       }
 
-      const graphEvaluation = new StaticModuleGraphEvaluator(build.graph).evaluate(moduleKey);
+      const graphEvaluation = new StaticModuleGraphEvaluator(build.graph, options.policy).evaluate(moduleKey);
       const evaluation = graphEvaluation.modules.get(moduleKey) ?? null;
       if (evaluation == null) {
         sources.push(new StaticProjectEvaluationSourceResult(admission, moduleKey, record.sourceFile, null, build.unresolvedModules));

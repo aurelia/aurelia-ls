@@ -47,6 +47,8 @@ export const enum LensId {
   TsType = "ts.type",
   /** Product vocabulary definitions and usages. */
   ProductVocabulary = "product.vocabulary",
+  /** Semantic-runtime source architecture, module dependencies, and declaration surfaces. */
+  ProductArchitecture = "product.architecture",
   /** auLink product-to-framework anchors. */
   BridgeAuLink = "bridge.aulink",
   /** Aurelia framework discovery seeds. */
@@ -550,6 +552,409 @@ export const LensCatalog: readonly LensSpec[] = [
     defaultBudget: { rows: 100 },
   },
   {
+    id: LensId.ProductArchitecture,
+    family: LensFamily.Product,
+    stage: LensStage.Implemented,
+    summary:
+      "Read semantic-runtime source areas, modules, import dependencies, declaration surfaces, implementation bodies, and checker-backed symbol coupling.",
+    supportedLoci: [
+      LocusKind.Repo,
+      LocusKind.RepoArea,
+      LocusKind.Package,
+      LocusKind.SourceFile,
+      LocusKind.Symbol,
+      LocusKind.Handle,
+    ],
+    requiredSubstrates: [
+      SubstrateId.ProductArchitecture,
+      SubstrateId.TypeScriptProgram,
+    ],
+    projections: [
+      {
+        id: "summary",
+        summary:
+          "Architecture rollup with area, module, declaration, and cross-area dependency counts.",
+      },
+      {
+        id: "areas",
+        summary:
+          "Top-level semantic-runtime source areas with declaration and dependency counts.",
+      },
+      {
+        id: "modules",
+        summary:
+          "Source files with line, declaration, export, import, fan-in, and fan-out counts.",
+      },
+      {
+        id: "dependencies",
+        summary:
+          "Import declaration rows resolved to local semantic-runtime targets when possible.",
+      },
+      {
+        id: "area-dependencies",
+        summary:
+          "Grouped area-to-area import dependency rows for compact coupling pressure.",
+      },
+      {
+        id: "declarations",
+        summary:
+          "Source declaration surfaces by area, file, kind, export, and top-level status.",
+      },
+      {
+        id: "cycles",
+        summary:
+          "Strongly-connected local import groups with participating files, areas, and internal dependency counts.",
+      },
+      {
+        id: "classes",
+        summary:
+          "Class implementation surfaces with heritage, member counts, and source-span size.",
+      },
+      {
+        id: "functions",
+        summary:
+          "Function, method, constructor, and accessor bodies with source-span size.",
+      },
+      {
+        id: "call-sites",
+        summary:
+          "Exact semantic-runtime call and constructor invocations resolved through the TypeScript checker, with owner function/class and target declaration.",
+      },
+      {
+        id: "call-dependencies",
+        summary:
+          "Grouped checker-backed call dependencies between semantic-runtime source files and admitted package targets.",
+      },
+      {
+        id: "symbol-references",
+        summary:
+          "Exact semantic-runtime identifier references resolved through the TypeScript checker, with owner function/class and target declaration.",
+      },
+      {
+        id: "symbol-dependencies",
+        summary:
+          "Grouped checker-backed symbol dependencies between semantic-runtime source files and admitted package targets.",
+      },
+      {
+        id: "profile",
+        summary:
+          "Cold product.architecture build timings by analysis phase for finding split and cache pressure.",
+      },
+    ],
+    parameters: [
+      {
+        id: "area",
+        role: ParameterRole.Filter,
+        summary: "Filter rows by semantic-runtime source area such as template or api.",
+      },
+      {
+        id: "fromArea",
+        role: ParameterRole.Filter,
+        summary: "Filter dependency rows by source area.",
+      },
+      {
+        id: "toArea",
+        role: ParameterRole.Filter,
+        summary: "Filter dependency rows by resolved target area or external.",
+      },
+      {
+        id: "filePath",
+        role: ParameterRole.Filter,
+        summary: "Filter architecture rows by exact repository-relative file path.",
+      },
+      {
+        id: "pathPrefix",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter architecture rows by repository-relative source path prefix; accepts absolute paths that contain packages/semantic-runtime/src.",
+      },
+      {
+        id: "minLineCount",
+        role: ParameterRole.Filter,
+        summary: "Filter module, class, or function rows to source spans with at least this many lines.",
+      },
+      {
+        id: "minFunctionSurfaceCount",
+        role: ParameterRole.Filter,
+        summary: "Filter module rows to files with at least this many function-like body surfaces.",
+      },
+      {
+        id: "minLargeFunctionCount",
+        role: ParameterRole.Filter,
+        summary: "Filter module rows to files with at least this many large function-like bodies.",
+      },
+      {
+        id: "minMaxFunctionLineCount",
+        role: ParameterRole.Filter,
+        summary: "Filter module rows by minimum largest function-like body line count.",
+      },
+      {
+        id: "minCallSiteCount",
+        role: ParameterRole.Filter,
+        summary: "Filter function rows to bodies with at least this many checker-backed call sites.",
+      },
+      {
+        id: "minDistinctCalleeCount",
+        role: ParameterRole.Filter,
+        summary: "Filter function rows to bodies with at least this many distinct resolved callees or callee names.",
+      },
+      {
+        id: "minCrossAreaCallSiteCount",
+        role: ParameterRole.Filter,
+        summary: "Filter function rows to bodies with at least this many cross-area call sites.",
+      },
+      {
+        id: "minMethodCount",
+        role: ParameterRole.Filter,
+        summary: "Filter class rows to classes with at least this many instance or static methods.",
+      },
+      {
+        id: "minPropertyCount",
+        role: ParameterRole.Filter,
+        summary: "Filter class rows to classes with at least this many fields, properties, or accessors.",
+      },
+      {
+        id: "fromFilePath",
+        role: ParameterRole.Filter,
+        summary: "Filter dependency rows by exact repository-relative source file path.",
+      },
+      {
+        id: "toFilePath",
+        role: ParameterRole.Filter,
+        summary: "Filter dependency rows by exact repository-relative resolved target file path.",
+      },
+      {
+        id: "declarationKind",
+        role: ParameterRole.Filter,
+        summary: "Filter declaration rows by Atlas source declaration kind.",
+      },
+      {
+        id: "importKind",
+        role: ParameterRole.Filter,
+        summary: "Filter dependency rows by value-or-type, type-only, or side-effect imports.",
+      },
+      {
+        id: "orderBy",
+        role: ParameterRole.Execution,
+        summary:
+          "Order architecture rows by filePath/source, size/lineCount, bodyPressure/maxFunctionLineCount, functionSurfaceCount, largeFunctionCount, declarationCount, importCount, crossAreaImportCount, incomingImportCount, methodCount, propertyCount, parameterCount, callPressure/callSiteCount, distinctCalleeCount, crossAreaCallSiteCount, callCount, constructorCallCount, memberCallCount, calleeName, argumentCount, crossArea, referenceCount, distinctSymbolCount, runtimeReferenceCount, callReferenceCount, typeReferenceCount, symbolName, or usageRole where applicable.",
+        values: [
+          "filePath",
+          "source",
+          "size",
+          "lineCount",
+          "bodyPressure",
+          "maxFunctionLineCount",
+          "cyclePressure",
+          "callPressure",
+          "referencePressure",
+          "moduleCount",
+          "internalDependencyCount",
+          "functionSurfaceCount",
+          "largeFunctionCount",
+          "declarationCount",
+          "importCount",
+          "crossAreaImportCount",
+          "incomingImportCount",
+          "methodCount",
+          "propertyCount",
+          "parameterCount",
+          "callSiteCount",
+          "callCount",
+          "distinctCalleeCount",
+          "crossAreaCallSiteCount",
+          "constructorCallCount",
+          "memberCallCount",
+          "calleeName",
+          "argumentCount",
+          "crossArea",
+          "referenceCount",
+          "distinctSymbolCount",
+          "runtimeReferenceCount",
+          "callReferenceCount",
+          "typeReferenceCount",
+          "symbolName",
+          "usageRole",
+        ],
+      },
+      {
+        id: "className",
+        role: ParameterRole.Filter,
+        summary: "Filter class or function rows by exact owning class name.",
+      },
+      {
+        id: "methodName",
+        role: ParameterRole.Filter,
+        summary: "Filter class rows to classes exposing an exact instance or static method name.",
+      },
+      {
+        id: "functionName",
+        role: ParameterRole.Filter,
+        summary: "Filter function rows by exact function surface name.",
+      },
+      {
+        id: "parentFunctionName",
+        role: ParameterRole.Filter,
+        summary: "Filter local function rows by exact parent function surface name.",
+      },
+      {
+        id: "functionKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter function rows by top-level, top-level-variable, class-method, class-field-function, constructor, accessor, or local-function.",
+        values: [
+          "top-level",
+          "top-level-variable",
+          "class-method",
+          "class-field-function",
+          "constructor",
+          "accessor",
+          "local-function",
+        ],
+      },
+      {
+        id: "usageRole",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter symbol reference rows by usage role such as type-reference, call-expression, member-reference, or heritage.",
+        values: [
+          "import",
+          "export",
+          "type-reference",
+          "heritage",
+          "new-expression",
+          "call-expression",
+          "member-call",
+          "member-reference",
+          "value-reference",
+        ],
+      },
+      {
+        id: "usageFamily",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter symbol rows by coarse usage family: import-export, type, value, call, or runtime.",
+        values: ["import-export", "type", "value", "call", "runtime"],
+      },
+      {
+        id: "callKind",
+        role: ParameterRole.Filter,
+        summary: "Filter call-site rows by call or new.",
+        values: ["call", "new"],
+      },
+      {
+        id: "calleeName",
+        role: ParameterRole.Filter,
+        summary: "Filter call-site rows by exact callee name.",
+      },
+      {
+        id: "calleeSymbolName",
+        role: ParameterRole.Filter,
+        summary: "Filter call-site rows by exact checker-visible callee symbol name.",
+      },
+      {
+        id: "calleeSymbolKey",
+        role: ParameterRole.Filter,
+        summary: "Filter call-site rows by exact checker fully-qualified callee symbol key.",
+      },
+      {
+        id: "symbolName",
+        role: ParameterRole.Filter,
+        summary: "Filter symbol reference rows by exact checker-visible symbol name.",
+      },
+      {
+        id: "symbolKey",
+        role: ParameterRole.Filter,
+        summary: "Filter symbol reference rows by exact checker fully-qualified symbol key.",
+      },
+      {
+        id: "targetPackageId",
+        role: ParameterRole.Filter,
+        summary: "Filter symbol rows by admitted target package id such as semantic-runtime or runtime-html.",
+      },
+      {
+        id: "exported",
+        role: ParameterRole.Filter,
+        summary: "Filter declaration, class, or function rows by exported true or false.",
+        values: ["true", "false"],
+      },
+      {
+        id: "static",
+        role: ParameterRole.Filter,
+        summary: "Filter function rows by static true or false.",
+        values: ["true", "false"],
+      },
+      {
+        id: "async",
+        role: ParameterRole.Filter,
+        summary: "Filter function rows by async true or false.",
+        values: ["true", "false"],
+      },
+      {
+        id: "topLevel",
+        role: ParameterRole.Filter,
+        summary: "Filter declaration rows by top-level true or false.",
+        values: ["true", "false"],
+      },
+      {
+        id: "local",
+        role: ParameterRole.Filter,
+        summary: "Filter dependency rows by local semantic-runtime target true or false.",
+        values: ["true", "false"],
+      },
+      {
+        id: "relative",
+        role: ParameterRole.Filter,
+        summary: "Filter dependency rows by relative module specifier true or false.",
+        values: ["true", "false"],
+      },
+      {
+        id: "resolved",
+        role: ParameterRole.Filter,
+        summary: "Filter dependency or call rows by resolved true or false.",
+        values: ["true", "false"],
+      },
+      {
+        id: "crossesArea",
+        role: ParameterRole.Filter,
+        summary: "Filter dependency rows by cross-area true or false.",
+        values: ["true", "false"],
+      },
+      {
+        id: "runtimeCycle",
+        role: ParameterRole.Filter,
+        summary: "Filter cycle rows by whether they include a value or side-effect import edge.",
+        values: ["true", "false"],
+      },
+      {
+        id: "includeSymbols",
+        role: ParameterRole.Execution,
+        summary:
+          "For the profile projection, include checker-backed symbol-reference phases when true; false profiles the cheaper core lane used by row projections that do not need symbols.",
+        values: ["true", "false"],
+      },
+      {
+        id: "includeCallSites",
+        role: ParameterRole.Execution,
+        summary:
+          "For the profile projection, include checker-backed call-site phases when true; false profiles the structure lane used by projections that only need source, import, declaration, module, cycle, or class rows.",
+        values: ["true", "false"],
+      },
+      {
+        id: "query",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter architecture rows by exact substring across ids, summaries, names, paths, areas, and specifiers.",
+      },
+    ],
+    outputKinds: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.SourceSpan,
+      EvidenceKind.Symbol,
+    ],
+    defaultBudget: { rows: 100 },
+  },
+  {
     id: LensId.BridgeAuLink,
     family: LensFamily.Bridge,
     stage: LensStage.Implemented,
@@ -643,7 +1048,7 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "roleFamily",
         role: ParameterRole.Filter,
         summary:
-          "Filter mirror role rows by framework relationship family such as di, compiler, rendering, resource, materialization, lifecycle, or observation.",
+          "Filter mirror role rows by framework relationship family such as di, compiler, rendering, resource, materialization, lifecycle, observation, expression, or router.",
       },
       {
         id: "relation",
@@ -694,6 +1099,20 @@ export const LensCatalog: readonly LensSpec[] = [
           "Filter mirror rows by product-side declaration kind such as class, interface, or type-alias.",
       },
       {
+        id: "hasRoleEvidence",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter mirror rows by whether at least one framework relationship row is attached.",
+        values: ["true", "false"],
+      },
+      {
+        id: "hasEmulationObligations",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter mirror rows by whether at least one semantic-runtime emulation obligation is attached.",
+        values: ["true", "false"],
+      },
+      {
         id: "side",
         role: ParameterRole.Filter,
         summary:
@@ -705,6 +1124,33 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Filter,
         summary:
           "Filter bridge usage rows by exact member name on the linked target.",
+      },
+      {
+        id: "frameworkScopeMode",
+        role: ParameterRole.Filter,
+        summary:
+          "Choose framework API scope for usage/member comparisons: implementation (default), subject, or direct.",
+        values: ["implementation", "subject", "direct"],
+      },
+      {
+        id: "memberAccess",
+        role: ParameterRole.Filter,
+        summary: "Filter bridge member rows by access kind on either side.",
+      },
+      {
+        id: "frameworkMemberAccess",
+        role: ParameterRole.Filter,
+        summary: "Filter bridge member rows by framework-side access kind.",
+      },
+      {
+        id: "productMemberAccess",
+        role: ParameterRole.Filter,
+        summary: "Filter bridge member rows by product-side access kind.",
+      },
+      {
+        id: "memberDeclarationKind",
+        role: ParameterRole.Filter,
+        summary: "Filter bridge member rows by declaration kind such as method or property.",
       },
       {
         id: "presence",
@@ -766,6 +1212,27 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Filter,
         summary:
           "Filter mirror rows by exact substring across link ids, endpoint names, summaries, and source paths.",
+      },
+      {
+        id: "orderBy",
+        role: ParameterRole.Filter,
+        summary:
+          "Order mirror rows by linkId, roleEvidence, emulationObligation, mirrorPressure, targetStatus, packageId, or productArea.",
+        values: [
+          "linkId",
+          "roleEvidence",
+          "emulationObligation",
+          "mirrorPressure",
+          "targetStatus",
+          "packageId",
+          "productArea",
+          "sourceLens",
+          "relation",
+          "roleFamily",
+          "obligationKind",
+          "emulationLayer",
+          "emulationMode",
+        ],
       },
     ],
     outputKinds: [
@@ -3028,6 +3495,37 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Filter,
         summary: "Filter function surfaces by declaration family.",
         values: ["top-level", "class-method"],
+      },
+      {
+        id: "minLineCount",
+        role: ParameterRole.Filter,
+        summary: "Filter class or function surfaces to declarations spanning at least this many lines.",
+      },
+      {
+        id: "minCallCount",
+        role: ParameterRole.Filter,
+        summary: "Filter function surfaces to declarations containing at least this many direct call expressions.",
+      },
+      {
+        id: "minUniqueCallTargetCount",
+        role: ParameterRole.Filter,
+        summary: "Filter function surfaces to declarations calling at least this many unique local targets.",
+      },
+      {
+        id: "minMethodCount",
+        role: ParameterRole.Filter,
+        summary: "Filter class surfaces to declarations exposing at least this many methods.",
+      },
+      {
+        id: "minPropertyCount",
+        role: ParameterRole.Filter,
+        summary: "Filter class surfaces to declarations exposing at least this many fields, properties, or accessors.",
+      },
+      {
+        id: "orderBy",
+        role: ParameterRole.Execution,
+        summary: "Order Atlas self rows by source, size, lineCount, methodCount, propertyCount, callCount, or uniqueCallTargetCount where applicable.",
+        values: ["source", "size", "lineCount", "methodCount", "propertyCount", "callCount", "uniqueCallTargetCount"],
       },
       {
         id: "includeSourceProject",

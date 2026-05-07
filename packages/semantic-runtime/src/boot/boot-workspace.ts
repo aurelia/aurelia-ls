@@ -14,11 +14,11 @@ import {
   type BootProjectInput,
   type BootSourceFileInput,
   type BootWorkspaceInput,
+  type SourceDiscoveryResult,
 } from './frames.js';
 import {
   discoverSourceFiles,
   inferSourceLanguage,
-  type SourceDiscoveryResult,
 } from './source-discovery.js';
 
 function normalizePathForProject(rootDir: string, path: string): string {
@@ -43,6 +43,22 @@ function evidenceLocalKey(projectKey: string, path: string): string {
 
 function provenanceLocalKey(projectKey: string, path: string): string {
   return `source-admission:${projectKey}:${path}`;
+}
+
+class SourceFileAdmissionPaths {
+  constructor(
+    readonly projectPath: string,
+    readonly workspacePath: string,
+    readonly language: ReturnType<typeof inferSourceLanguage>,
+  ) {}
+}
+
+class SourceFileAdmissionHandles {
+  constructor(
+    readonly addressHandle: ReturnType<KernelStore['handles']['address']>,
+    readonly evidenceHandle: ReturnType<KernelStore['handles']['evidence']>,
+    readonly provenanceHandle: ReturnType<KernelStore['handles']['provenance']>,
+  ) {}
 }
 
 /** Boot one workspace into a kernel store without interpreting Aurelia semantics yet. */
@@ -81,44 +97,71 @@ export function admitSourceFile(
   projectKey: string,
   source: BootSourceFileInput,
 ): SourceFileAdmission {
-  const path = normalizePathForProject(projectRootDir, source.path);
-  const language = source.language ?? inferSourceLanguage(path);
-  const workspacePath = normalizePathForProject(workspaceRootDir, isAbsolute(source.path)
-    ? source.path
-    : join(projectRootDir, path));
-  const addressHandle = store.handles.address(sourceLocalKey(projectKey, path));
-  const evidenceHandle = store.handles.evidence(evidenceLocalKey(projectKey, path));
-  const provenanceHandle = store.handles.provenance(provenanceLocalKey(projectKey, path));
-
+  const paths = sourceFileAdmissionPaths(workspaceRootDir, projectRootDir, source);
+  const handles = sourceFileAdmissionHandles(store, projectKey, paths.projectPath);
   store.commit(new KernelStoreBatch(
-    [
-      new SourceFileAddress(
-        addressHandle,
-        projectKey,
-        workspacePath,
-        language,
-      ),
-      new EvidenceRecord(
-        evidenceHandle,
-        EvidenceKind.SourceObservation,
-        [EvidenceRole.Admission],
-        source.note ?? 'Source file admitted during boot.',
-        addressHandle,
-      ),
-      new ProvenanceRecord(
-        provenanceHandle,
-        [evidenceHandle],
-      ),
-    ],
-    `boot-source:${projectKey}:${path}`,
+    recordsForSourceFileAdmission(projectKey, source, paths, handles),
+    `boot-source:${projectKey}:${paths.projectPath}`,
   ));
 
   return new SourceFileAdmission(
     projectKey,
-    path,
-    language,
-    addressHandle,
-    evidenceHandle,
-    provenanceHandle,
+    paths.projectPath,
+    paths.language,
+    handles.addressHandle,
+    handles.evidenceHandle,
+    handles.provenanceHandle,
   );
+}
+
+function sourceFileAdmissionPaths(
+  workspaceRootDir: string,
+  projectRootDir: string,
+  source: BootSourceFileInput,
+): SourceFileAdmissionPaths {
+  const projectPath = normalizePathForProject(projectRootDir, source.path);
+  const language = source.language ?? inferSourceLanguage(projectPath);
+  const workspacePath = normalizePathForProject(workspaceRootDir, isAbsolute(source.path)
+    ? source.path
+    : join(projectRootDir, projectPath));
+  return new SourceFileAdmissionPaths(projectPath, workspacePath, language);
+}
+
+function sourceFileAdmissionHandles(
+  store: KernelStore,
+  projectKey: string,
+  path: string,
+): SourceFileAdmissionHandles {
+  return new SourceFileAdmissionHandles(
+    store.handles.address(sourceLocalKey(projectKey, path)),
+    store.handles.evidence(evidenceLocalKey(projectKey, path)),
+    store.handles.provenance(provenanceLocalKey(projectKey, path)),
+  );
+}
+
+function recordsForSourceFileAdmission(
+  projectKey: string,
+  source: BootSourceFileInput,
+  paths: SourceFileAdmissionPaths,
+  handles: SourceFileAdmissionHandles,
+): readonly (SourceFileAddress | EvidenceRecord | ProvenanceRecord)[] {
+  return [
+    new SourceFileAddress(
+      handles.addressHandle,
+      projectKey,
+      paths.workspacePath,
+      paths.language,
+    ),
+    new EvidenceRecord(
+      handles.evidenceHandle,
+      EvidenceKind.SourceObservation,
+      [EvidenceRole.Admission],
+      source.note ?? 'Source file admitted during boot.',
+      handles.addressHandle,
+    ),
+    new ProvenanceRecord(
+      handles.provenanceHandle,
+      [handles.evidenceHandle],
+    ),
+  ];
 }

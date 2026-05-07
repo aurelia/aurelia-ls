@@ -1,0 +1,12 @@
+import { bindable, customElement } from '@aurelia/runtime-html';
+import template from './field-shell.html';
+
+@customElement({
+  name: 'field-shell',
+  template,
+  capture: true,
+})
+export class FieldShell {
+  @bindable label = '';
+  @bindable inputId = '';
+}

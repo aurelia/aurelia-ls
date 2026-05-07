@@ -48,10 +48,8 @@ import {
 import { ConfigurationProductDetails } from '../configuration/product-details.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { ValueConverterDefinition } from '../resources/value-converter-definition.js';
-import type {
-  TemplateResourceScope,
-  TemplateVisibleResource,
-} from '../template/compiler-world.js';
+import type { TemplateResourceScope } from '../template/compiler-world.js';
+import type { TemplateVisibleResource } from '../template/compiler-world-reference.js';
 import {
   CheckerSyntheticTypeMemberInput,
   CheckerSyntheticTypeProjectionInput,
@@ -744,36 +742,32 @@ export class CheckerExpressionTypeEvaluator {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerExpressionTypeEvaluation {
-    const parameterSlots = expression.args.map((parameter, index) => {
-      const isRest = expression.rest && index === expression.args.length - 1;
-      const parameterType = isRest
-        ? this.synthesizeArrayType(
-          expression,
-          scope,
-          this.synthesizeUnknownType(`${localKey}:param:${index}:${parameter.name.name}:rest-element`, sourceAddressHandle),
-          `${localKey}:param:${index}:${parameter.name.name}:rest-array`,
-          sourceAddressHandle,
-        ).toReference()
-        : this.synthesizeUnknownType(`${localKey}:param:${index}:${parameter.name.name}`, sourceAddressHandle);
-      return new BindingContextSlot(
-        parameter.name.name,
-        null,
-        null,
-        parameterType,
-        sourceAddressHandle,
-      );
-    });
-    const functionScope = new BindingScope(
+    const functionScope = this.arrowFunctionScope(expression, scope, localKey, sourceAddressHandle);
+    const body = this.evaluateNode(expression.body, functionScope, `${localKey}:return`, sourceAddressHandle);
+    const returnType = typeReferenceForEvaluation(body);
+    return this.type(
+      this.projectArrowFunctionType(expression, returnType, localKey, sourceAddressHandle),
+      arrowFunctionSummary(returnType),
+    );
+  }
+
+  private arrowFunctionScope(
+    expression: ArrowFunction,
+    parentScope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): BindingScope {
+    return new BindingScope(
       this.store.handles.product(`type-system:arrow-scope:${localKey}`),
       this.store.handles.identity(`type-system:arrow-scope:${localKey}`),
-      scope,
+      parentScope,
       new BindingContext(
         this.store.handles.product(`type-system:arrow-binding-context:${localKey}`),
         this.store.handles.identity(`type-system:arrow-binding-context:${localKey}`),
         BindingContextKind.Object,
         null,
         null,
-        parameterSlots,
+        this.arrowParameterSlots(expression, parentScope, localKey, sourceAddressHandle),
         sourceAddressHandle,
       ),
       new OverrideContext(
@@ -788,11 +782,50 @@ export class CheckerExpressionTypeEvaluator {
       BindingScopeOwnerKind.SyntheticView,
       sourceAddressHandle,
     );
-    const body = this.evaluateNode(expression.body, functionScope, `${localKey}:return`, sourceAddressHandle);
-    const returnType = body.kind === CheckerExpressionTypeEvaluationResultKind.Type
-      ? body.typeReference
-      : null;
-    const typeShape = this.projector.ensureSyntheticProjection(new CheckerSyntheticTypeProjectionInput(
+  }
+
+  private arrowParameterSlots(
+    expression: ArrowFunction,
+    scope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): readonly BindingContextSlot[] {
+    return expression.args.map((parameter, index) => new BindingContextSlot(
+      parameter.name.name,
+      null,
+      null,
+      this.arrowParameterType(expression, scope, localKey, sourceAddressHandle, parameter.name.name, index),
+      sourceAddressHandle,
+    ));
+  }
+
+  private arrowParameterType(
+    expression: ArrowFunction,
+    scope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+    name: string,
+    index: number,
+  ): CheckerTypeReference {
+    const isRest = expression.rest && index === expression.args.length - 1;
+    return isRest
+      ? this.synthesizeArrayType(
+        expression,
+        scope,
+        this.synthesizeUnknownType(`${localKey}:param:${index}:${name}:rest-element`, sourceAddressHandle),
+        `${localKey}:param:${index}:${name}:rest-array`,
+        sourceAddressHandle,
+      ).toReference()
+      : this.synthesizeUnknownType(`${localKey}:param:${index}:${name}`, sourceAddressHandle);
+  }
+
+  private projectArrowFunctionType(
+    expression: ArrowFunction,
+    returnType: CheckerTypeReference | null,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeShape {
+    return this.projector.ensureSyntheticProjection(new CheckerSyntheticTypeProjectionInput(
       `${localKey}:arrow-function`,
       CheckerTypeShapeKind.Function,
       displayArrowFunctionType(expression, returnType),
@@ -805,12 +838,6 @@ export class CheckerExpressionTypeEvaluator {
       returnType,
       null,
     ));
-    return this.type(
-      typeShape,
-      returnType == null
-        ? 'Synthesized ArrowFunction shape; return type remains open because the body could not be projected.'
-        : 'Synthesized ArrowFunction shape with projected body return type.',
-    );
   }
 
   private evaluateArrayLiteral(
@@ -1920,6 +1947,20 @@ function displayArrowFunctionType(
     return `${isRest ? '...' : ''}${arg.name.name}: unknown`;
   }).join(', ');
   return `(${parameters}) => ${returnType?.display ?? 'unknown'}`;
+}
+
+function typeReferenceForEvaluation(
+  evaluation: CheckerExpressionTypeEvaluation,
+): CheckerTypeReference | null {
+  return evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
+    ? evaluation.typeReference
+    : null;
+}
+
+function arrowFunctionSummary(returnType: CheckerTypeReference | null): string {
+  return returnType == null
+    ? 'Synthesized ArrowFunction shape; return type remains open because the body could not be projected.'
+    : 'Synthesized ArrowFunction shape with projected body return type.';
 }
 
 function encodeLocalPart(value: string): string {

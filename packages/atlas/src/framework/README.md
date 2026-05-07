@@ -49,7 +49,9 @@ files as substrates:
   dependencies, DAG, and evidence.
 - `framework.admission` exposes bundle/configuration admission, materialization/world-formation joins, and graph flow
   corridors such as the JIT compiler slice.
-- `framework.resources` converges resource evidence lanes without claiming final template/container visibility.
+- `framework.resources` converges resource evidence lanes without claiming final template/container visibility; resource
+  convergence rows point first at the exact carrier span and carry a separate declaration source when the class/export
+  header is different.
 - `framework.compiler` owns instruction production and TemplateCompiler compile-flow/attribute-classification views.
 - `framework.rendering` owns instruction dispatch, hydration flow, render consequences, controller creation, binding
   products/admissions/effects, and observation-adjacent setup.
@@ -75,6 +77,6 @@ files as substrates:
 
 ## Workbench
 
-[WORKBENCH.md](WORKBENCH.md) is the live framework ledger. Keep only active directional context, durable design
+[WORKBENCH.md](WORKBENCH.md) is the near-work framework note. Keep only active directional context, durable design
 decisions, and evidence-backed loose ends there. When adding a workbench item, include the code file, API projection, or
 report that should be inspected before future agents treat the note as current truth.

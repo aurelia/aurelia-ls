@@ -14,11 +14,12 @@ import type {
   TemplateInstruction,
   TemplateInstructionKind,
 } from './instruction-ir.js';
+import { BindingCommandExecutableReference } from './binding-command-reference.js';
 import {
   TemplateCompilerServiceKind,
   TemplateCompilerServiceReference,
   type TemplateBindableReference,
-} from './compiler-world.js';
+} from './compiler-world-reference.js';
 
 export const enum BindingCommandExecutionKind {
   /** Runtime built-in command whose build behavior can be modeled directly. */
@@ -209,20 +210,6 @@ export class BindingCommandBuildResult {
   static open(message: string): BindingCommandBuildResult {
     return new BindingCommandBuildResult(BindingCommandLoweringState.Open, [], message);
   }
-}
-
-/** Reference to a binding-command executable without retaining handler instances. */
-export class BindingCommandExecutableReference {
-  constructor(
-    /** Product handle for the executable command model, when emitted. */
-    readonly productHandle: ProductHandle | null,
-    /** Identity for the executable command model, when emitted. */
-    readonly identityHandle: IdentityHandle | null,
-    /** Runtime command name such as `bind`, `two-way`, or `trigger`. */
-    readonly name: string,
-    /** Runtime DI/resource key, when materialized. */
-    readonly key: string | null,
-  ) {}
 }
 
 /** Runtime BindingCommandInstance model used by lowering. */

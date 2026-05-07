@@ -23,12 +23,37 @@ source/type/semantic route claims.
 
 `src/session` is the default request surface. `createApi()` auto-starts or reuses the local daemon before every request, giving long-running work a place to keep hot state while still restarting when the compiled build output changes.
 
-`createApi().orient()` is the highest-level entrypoint. It returns daemon status, the surface map, the `atlas.self` maintenance answer, and first continuations through the same auto-starting session path. The package script `pnpm --filter @aurelia-ls/atlas orient` is the stable Codex-facing activation call.
+`createApi().orient()` is the highest-level entrypoint. It returns daemon status, the surface map, the `atlas.self`
+maintenance answer, first continuations, package scripts, and compact follow-up docs through the same auto-starting
+session path. The package script `pnpm --filter @aurelia-ls/atlas orient` is the stable Codex-facing activation call.
 
 `createApi().frameworkEmulationSymbolsReport()` returns the deterministic framework emulation Markdown report used as
 the StandardConfiguration/composition eyeball golden. Re-run it with
 `pnpm --filter @aurelia-ls/atlas report:framework-emulation`, which writes
 `packages/atlas/workbench/emulation-symbols.md`.
+
+## Fast Agent Lanes
+
+For a compact current handoff, read [workbench/agent-handoff.md](workbench/agent-handoff.md) after `orient`.
+
+- Start broad work with `pnpm --filter @aurelia-ls/atlas orient`; it is the compact live map of lenses, projections,
+  terrain, source roots, first continuations, shortcut scripts, and compact follow-up docs.
+- Use `product.architecture` before opening semantic-runtime source for structure pressure. `functions`, `classes`,
+  `call-sites`, and `call-dependencies` are the usual fast product refactor lanes; `summary` and symbol projections
+  spend the heavier symbol-backed memo. The shortcut script is
+  `pnpm --filter @aurelia-ls/atlas pressure:product-architecture`; it prints cheap structure pressure first, then the
+  call-site-backed function pressure.
+- Use `pnpm --filter @aurelia-ls/atlas profile:product-architecture` when a product architecture query feels slow.
+  The script prints structure, core, symbol, and full cold phase timings so cache or split decisions start from
+  measured cost instead of vibes.
+- Use `atlas.self:classes` and `atlas.self:functions` before opening Atlas source for Atlas refactors. Class rows
+  support `minLineCount`, `minMethodCount`, `minPropertyCount`, and pressure-oriented ordering; function rows support
+  `minLineCount`, `minCallCount`, `minUniqueCallTargetCount`, and pressure-oriented ordering. The shortcut script is
+  `pnpm --filter @aurelia-ls/atlas pressure:self`; it also prints high `atlas.self:axis-pressure` rows.
+- Use framework lenses for Aurelia grounding rather than pattern-matching from other frameworks. `framework.resources`
+  preserves exact carrier spans plus declaration spans, `framework.rendering` owns hydration/binding/controller rows,
+  `framework.observation` owns observer-locator/reactivity rows, and `framework.composition:emulation` is the compact
+  semantic-runtime obligation map.
 
 ## Map
 

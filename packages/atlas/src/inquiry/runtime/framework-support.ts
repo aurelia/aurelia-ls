@@ -106,7 +106,7 @@ export function countBy<TValue>(
   rows: readonly TValue[],
   keyFor: (row: TValue) => string,
 ): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = {};
+  const counts: Record<string, number> = Object.create(null) as Record<string, number>;
   for (const row of rows) {
     const key = keyFor(row);
     counts[key] = (counts[key] ?? 0) + 1;

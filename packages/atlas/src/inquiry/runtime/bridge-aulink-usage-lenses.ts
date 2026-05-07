@@ -76,6 +76,10 @@ export interface AuLinkUsageComparisonSummaryRow {
   readonly sharedMemberNameCount: number;
   readonly frameworkOnlyMemberNameCount: number;
   readonly productOnlyMemberNameCount: number;
+  readonly publicSharedMemberNameCount: number;
+  readonly publicFrameworkOnlyMemberNameCount: number;
+  readonly publicProductOnlyMemberNameCount: number;
+  readonly publicMemberDivergenceCount: number;
   readonly frameworkConsumerPackages: Readonly<Record<string, number>>;
   readonly productConsumerAreas: Readonly<Record<string, number>>;
   readonly frameworkUsageRoles: Readonly<Record<string, number>>;
@@ -203,7 +207,9 @@ export function answerBridgeAuLinkUsageProjection(
         filters,
         rollup,
         usageComparisonRollup: comparison.rollup,
-        usageComparison: page.rows.map(compactUsageComparisonRow),
+        usageComparison: page.rows.map((row) =>
+          compactUsageComparisonRow(row, comparison.surfaceRows),
+        ),
       }),
       summary: (page) =>
         usageComparisonSummary(comparison, `returned ${page.rows.length} comparison row(s)`),
@@ -439,7 +445,9 @@ function compactUsageComparisonEvidence(
 
 function compactUsageComparisonRow(
   row: AuLinkUsageComparisonRow,
+  surfaceRows: readonly AuLinkMemberSurfaceRow[],
 ): AuLinkUsageComparisonSummaryRow {
+  const publicCounts = publicMemberCountsForLink(row, surfaceRows);
   return {
     id: row.id,
     linkId: row.linkId,
@@ -461,6 +469,10 @@ function compactUsageComparisonRow(
     sharedMemberNameCount: row.sharedMemberNames.length,
     frameworkOnlyMemberNameCount: row.frameworkOnlyMemberNames.length,
     productOnlyMemberNameCount: row.productOnlyMemberNames.length,
+    publicSharedMemberNameCount: publicCounts.shared,
+    publicFrameworkOnlyMemberNameCount: publicCounts.frameworkOnly,
+    publicProductOnlyMemberNameCount: publicCounts.productOnly,
+    publicMemberDivergenceCount: publicCounts.frameworkOnly + publicCounts.productOnly,
     frameworkConsumerPackages: row.frameworkConsumerPackages,
     productConsumerAreas: row.productConsumerAreas,
     frameworkUsageRoles: row.frameworkUsageRoles,
@@ -469,6 +481,34 @@ function compactUsageComparisonRow(
     firstFrameworkSource: row.firstFrameworkSource,
     summary: row.summary,
   };
+}
+
+function publicMemberCountsForLink(
+  row: AuLinkUsageComparisonRow,
+  surfaceRows: readonly AuLinkMemberSurfaceRow[],
+): {
+  readonly shared: number;
+  readonly frameworkOnly: number;
+  readonly productOnly: number;
+} {
+  let shared = 0;
+  let frameworkOnly = 0;
+  let productOnly = 0;
+  for (const surface of surfaceRows) {
+    if (surface.linkId !== row.linkId) {
+      continue;
+    }
+    const frameworkPublic = surface.frameworkAccessKinds.public !== undefined;
+    const productPublic = surface.productAccessKinds.public !== undefined;
+    if (surface.presence === "both" && frameworkPublic && productPublic) {
+      shared++;
+    } else if (surface.presence === "framework-only" && frameworkPublic) {
+      frameworkOnly++;
+    } else if (surface.presence === "product-only" && productPublic) {
+      productOnly++;
+    }
+  }
+  return { shared, frameworkOnly, productOnly };
 }
 
 function evidenceForMemberSurface(row: AuLinkMemberSurfaceRow): Evidence {

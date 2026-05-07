@@ -5,12 +5,12 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
-import type { ContainerReference } from '../di/container.js';
+import type { ContainerReference } from '../di/container-reference.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
 import {
   BindingContextKind,
-  BindingScopeConstructionInput,
+  BindingScopeConstructionRequest,
   BindingScopeOwnerKind,
   type BindingScope,
   type BindingScopeReference,
@@ -44,10 +44,20 @@ export type ControllerField =
   | 'parent'
   | 'children'
   | 'bindings'
+  | 'viewFactory'
   | 'location'
   | 'nodes'
   | 'shadowRoot'
   | 'hydrationInstruction'
+  | 'instructionSequence'
+  | 'source';
+
+export type ViewFactoryField =
+  | 'container'
+  | 'definition'
+  | 'instruction'
+  | 'instructionSequence'
+  | 'parent'
   | 'source';
 
 /** Reference to a modeled controller without retaining the runtime Controller instance. */
@@ -142,6 +152,33 @@ export class HydratableController {
   }
 }
 
+/** Runtime IViewFactory shape injected into template-controller view models. */
+@auLink('runtime-html:IViewFactory')
+export class ViewFactory {
+  constructor(
+    /** Product handle for the materialized view factory product. */
+    readonly productHandle: ProductHandle,
+    /** Identity for this modeled view factory. */
+    readonly identityHandle: IdentityHandle,
+    /** Trace name of the embedded view factory. */
+    readonly name: string | null,
+    /** Container that owns the view factory and compiles the nested view. */
+    readonly container: ContainerReference,
+    /** Custom-element definition product backing the factory, when the embedded definition is materialized. */
+    readonly definitionProductHandle: ProductHandle | null,
+    /** Template-controller instruction that caused this factory to exist. */
+    readonly instructionProductHandle: ProductHandle | null,
+    /** Nested instruction sequence used when the factory creates a synthetic view. */
+    readonly instructionSequenceProductHandle: ProductHandle,
+    /** Template-controller controller that receives the factory. */
+    readonly parent: ControllerReference | null,
+    /** Source address for the template-controller instruction. */
+    readonly sourceAddressHandle: AddressHandle | null,
+    /** Field-level provenance for source facts that matter to explanation or ambiguity. */
+    readonly fieldProvenance: readonly FieldProvenance<ViewFactoryField>[] = [],
+  ) {}
+}
+
 /** Synthetic-view controller produced by template controllers and view factories. */
 @auLink('runtime-html:ISyntheticView')
 export class SyntheticViewController {
@@ -157,6 +194,8 @@ export class SyntheticViewController {
     readonly children: readonly ControllerReference[],
     readonly scope: BindingScopeReference | null,
     readonly bindingProductHandles: readonly ProductHandle[] | null,
+    readonly viewFactoryProductHandle: ProductHandle | null,
+    readonly instructionSequenceProductHandle: ProductHandle | null,
     readonly hostAddressHandle: AddressHandle | null,
     readonly locationAddressHandle: AddressHandle | null,
     readonly shadowRootAddressHandle: AddressHandle | null,
@@ -172,8 +211,8 @@ export class SyntheticViewController {
     readonly ownerIdentityHandle: IdentityHandle | null;
     readonly parent: BindingScope;
     readonly sourceAddressHandle: AddressHandle | null;
-  }): BindingScopeConstructionInput {
-    return new BindingScopeConstructionInput(
+  }): BindingScopeConstructionRequest {
+    return new BindingScopeConstructionRequest(
       input.localKey,
       BindingScopeOwnerKind.SyntheticView,
       input.ownerProductHandle,
@@ -249,8 +288,8 @@ export class DryCustomElementController {
     readonly parent: BindingScope | null;
     readonly viewModelType: CheckerTypeReference | null;
     readonly sourceAddressHandle: AddressHandle | null;
-  }): BindingScopeConstructionInput {
-    return new BindingScopeConstructionInput(
+  }): BindingScopeConstructionRequest {
+    return new BindingScopeConstructionRequest(
       input.localKey,
       BindingScopeOwnerKind.CustomElementController,
       input.ownerProductHandle,

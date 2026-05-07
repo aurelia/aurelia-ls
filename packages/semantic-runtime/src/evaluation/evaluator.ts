@@ -15,6 +15,11 @@ import {
 } from './environment.js';
 import { EvaluationOpenSeam, EvaluationOpenSeamKind } from './seams.js';
 import {
+  DefaultStaticEvaluationPolicy,
+  StaticEvaluationExpressionStatementDisposition,
+  type StaticEvaluationPolicy,
+} from './policy.js';
+import {
   EvaluationArrayElement,
   EvaluationArrayValue,
   EvaluationBigIntValue,
@@ -71,6 +76,10 @@ export class StaticExpressionEvaluationResult {
 export class StaticEvaluator {
   private readonly openSeams: EvaluationOpenSeam[] = [];
   private statementCount = 0;
+
+  constructor(
+    readonly policy: StaticEvaluationPolicy = DefaultStaticEvaluationPolicy,
+  ) {}
 
   /** Evaluate one TypeScript source file as an ECMAScript module body. */
   evaluateSourceFile(
@@ -212,7 +221,7 @@ export class StaticEvaluator {
       case ts.SyntaxKind.VariableStatement:
         return this.evaluateVariableStatement(statement as ts.VariableStatement, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.ExpressionStatement:
-        return new NormalEvaluationCompletion(this.evaluateExpression((statement as ts.ExpressionStatement).expression, environment, moduleKey, depth + 1));
+        return this.evaluateExpressionStatement(statement as ts.ExpressionStatement, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.Block:
         return this.evaluateBlock(statement as ts.Block, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.EmptyStatement:
@@ -316,6 +325,21 @@ export class StaticEvaluator {
     }
 
     this.open(EvaluationOpenSeamKind.UnsupportedBindingPattern, 'Binding pattern declarations are not materialized into environment cells yet.', declaration.name, moduleKey);
+  }
+
+  private evaluateExpressionStatement(
+    statement: ts.ExpressionStatement,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+    depth: number,
+  ): EvaluationCompletion {
+    if (
+      this.policy.dispositionForExpressionStatement(statement.expression, environment, moduleKey)
+      === StaticEvaluationExpressionStatementDisposition.ExternallyOwned
+    ) {
+      return new NormalEvaluationCompletion();
+    }
+    return new NormalEvaluationCompletion(this.evaluateExpression(statement.expression, environment, moduleKey, depth + 1));
   }
 
   private evaluateEnumDeclaration(
@@ -789,7 +813,7 @@ export class StaticEvaluator {
       return this.unknown('Async and generator functions are not evaluated.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
     }
 
-    const callEnvironment = callee.environment.clone(`${moduleKey}:call:${call.getStart()}`);
+    const callEnvironment = callee.environment.clone(`${moduleKey}:call:${call.getStart()}`) as ModuleEnvironmentRecord;
     for (let index = 0; index < callee.declaration.parameters.length; index++) {
       const parameter = callee.declaration.parameters[index];
       if (parameter == null || !ts.isIdentifier(parameter.name)) {

@@ -62,8 +62,8 @@ export interface EvaluationIntrinsicContext {
   readonly moduleKey: string;
 }
 
-/** Input supplied to one evaluator intrinsic. */
-export interface EvaluationIntrinsicInput {
+/** Request supplied to one evaluator intrinsic. */
+export interface EvaluationIntrinsicRequest {
   /** Call expression being reduced. */
   readonly call: ts.CallExpression;
   /** Evaluated argument values in source order. */
@@ -77,7 +77,7 @@ export interface EvaluationIntrinsic {
   /** Stable intrinsic id for diagnostics and future capability maps. */
   readonly id: string;
   /** Reduce a call or return null when this intrinsic does not apply. */
-  evaluate(input: EvaluationIntrinsicInput): EvaluationValue | null;
+  evaluate(request: EvaluationIntrinsicRequest): EvaluationValue | null;
 }
 
 /** Guardrail and extension options for one evaluator instance. */

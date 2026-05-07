@@ -1,29 +1,14 @@
-import {
-  SourceFileAddress,
-  SourceSpanAddress,
-} from '../kernel/address.js';
-import { SemanticClaim } from '../kernel/claim.js';
+import type { SemanticClaim } from '../kernel/claim.js';
 import {
   EvidenceKind,
   EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
-import type {
-  AddressHandle,
-  ClaimHandle,
-  ProductHandle,
-  ProvenanceHandle,
-} from '../kernel/handles.js';
-import {
-  CompilerIdentity,
-} from '../kernel/identity.js';
+import type { ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
 import {
   MaterializationRecord,
-  MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  compactFieldProvenance,
-  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -31,12 +16,6 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
-import { KernelVocabulary } from '../kernel/vocabulary.js';
-import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
-import {
-  SourceFileRef,
-  sourceSpanFromBounds,
-} from '../expression/source-span.js';
 import type { ExpressionType } from '../expression/ast.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
@@ -49,7 +28,7 @@ import {
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
 import type {
   TemplateBindableReference,
-} from './compiler-world.js';
+} from './compiler-world-reference.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import {
@@ -58,14 +37,14 @@ import {
 } from './html-ir.js';
 import type { HtmlParseEmission } from './html-parse-materializer.js';
 import {
-  expressionParseStateForResult,
   TemplateExpressionParse,
-  TemplateExpressionParseState,
   TemplateValueSite,
   TemplateValueSiteKind,
-  type TemplateExpressionParseField,
-  type TemplateValueSiteField,
 } from './value-site.js';
+import {
+  TemplateValueSitePublicationRequest,
+  TemplateValueSitePublisher,
+} from './value-site-publication.js';
 import { TemplateProductDetails } from './product-details.js';
 
 export class TemplateValueSiteInput {
@@ -115,12 +94,25 @@ class PendingValueSite {
   ) {}
 }
 
+class ValueSiteMaterializationEmission {
+  constructor(
+    readonly site: TemplateValueSite,
+    readonly parse: TemplateExpressionParse | null,
+    readonly claims: readonly SemanticClaim[],
+    readonly records: readonly KernelStoreRecord[],
+  ) {}
+}
+
 /** Selects compiler-owned template value sites and publishes parser-owned values. */
 export class TemplateValueSiteMaterializer {
+  private readonly valueSitePublisher: TemplateValueSitePublisher;
+
   constructor(
     /** Hot analysis store that receives value-site records. */
     readonly store: KernelStore,
-  ) {}
+  ) {
+    this.valueSitePublisher = new TemplateValueSitePublisher(store);
+  }
 
   materialize(input: TemplateValueSiteInput): TemplateValueSiteEmission {
     const emission = this.recordsForValueSites(input);
@@ -142,142 +134,19 @@ export class TemplateValueSiteMaterializer {
     const sites: TemplateValueSite[] = [];
     const parses: TemplateExpressionParse[] = [];
     const claims: SemanticClaim[] = [];
-    const parserService = input.compilerWorld.expressionParser;
     const pendingSites = [
       ...textValueSites(input.html),
       ...attributeValueSites(input.html, input.attributeSyntax, input.attributeClassification),
     ];
 
     pendingSites.forEach((pending, index) => {
-      const siteLocal = `template-value-site:${input.localKey}:${index}`;
-      const siteProductHandle = this.store.handles.product(siteLocal);
-      const siteIdentityHandle = this.store.handles.identity(siteLocal);
-      const site = new TemplateValueSite(
-        siteProductHandle,
-        siteIdentityHandle,
-        pending.siteKind,
-        pending.rawValue,
-        pending.entryFamily,
-        pending.node,
-        pending.attribute,
-        pending.syntax,
-        pending.classification,
-        pending.bindingCommand,
-        pending.bindable,
-        pending.sourceAddressHandle,
-        compactFieldProvenance<TemplateValueSiteField>([
-          new FieldProvenance('siteKind', source.provenanceHandle),
-          new FieldProvenance('rawValue', source.provenanceHandle),
-          pending.entryFamily == null ? null : new FieldProvenance('entryFamily', source.provenanceHandle),
-          new FieldProvenance('node', source.provenanceHandle),
-          pending.attribute == null ? null : new FieldProvenance('attribute', source.provenanceHandle),
-          pending.syntax == null ? null : new FieldProvenance('syntax', source.provenanceHandle),
-          pending.classification == null ? null : new FieldProvenance('classification', source.provenanceHandle),
-          pending.bindingCommand == null ? null : new FieldProvenance('bindingCommand', source.provenanceHandle),
-          pending.bindable == null ? null : new FieldProvenance('bindable', source.provenanceHandle),
-          new FieldProvenance('source', source.provenanceHandle),
-        ]),
-      );
-      const routeSubjectHandle = valueSiteSubject(pending);
-      const routeClaim = routeSubjectHandle == null
-        ? null
-        : new SemanticClaim(
-          this.store.handles.claim(`${siteLocal}:selects-value-site`),
-          routeSubjectHandle,
-          KernelVocabulary.Template.SelectsValueSite.key,
-          site.productHandle,
-          source.provenanceHandle,
-        );
-      if (routeClaim != null) {
-        claims.push(routeClaim);
+      const emission = this.recordsForValueSite(input, source, pending, index);
+      sites.push(emission.site);
+      if (emission.parse != null) {
+        parses.push(emission.parse);
       }
-      sites.push(site);
-      const siteClaimHandles: ClaimHandle[] = routeClaim == null ? [] : [routeClaim.handle];
-      const siteRecords: KernelStoreRecord[] = [
-        new CompilerIdentity(
-          site.identityHandle,
-          KernelVocabulary.Template.ValueSite.key,
-          input.compilationUnit.identityHandle,
-          pending.sourceAddressHandle,
-          pending.siteKind,
-        ),
-      ];
-
-      if (pending.entryFamily == null) {
-        records.push(
-          ...siteRecords,
-          ...(routeClaim == null ? [] : [routeClaim]),
-          new MaterializedProduct(
-            site.productHandle,
-            KernelVocabulary.Template.ValueSite.key,
-            site.identityHandle,
-            pending.sourceAddressHandle,
-            source.provenanceHandle,
-          ),
-        );
-        return;
-      }
-
-      const parseLocal = `template-expression-parse:${input.localKey}:${index}`;
-      const parseProductHandle = this.store.handles.product(parseLocal);
-      const parseIdentityHandle = this.store.handles.identity(parseLocal);
-      const result = parserService.parse(
-        pending.rawValue,
-        pending.entryFamily,
-        this.expressionParseContext(pending.sourceAddressHandle),
-      );
-      const parse = new TemplateExpressionParse(
-        parseProductHandle,
-        parseIdentityHandle,
-        site.toReference(),
-        parserService.productHandle,
-        expressionParseStateForResult(result),
-        result.kind,
-        result,
-        pending.sourceAddressHandle,
-        compactFieldProvenance<TemplateExpressionParseField>([
-          new FieldProvenance('site', source.provenanceHandle),
-          new FieldProvenance('parser', source.provenanceHandle),
-          new FieldProvenance('state', source.provenanceHandle),
-          new FieldProvenance('resultKind', source.provenanceHandle),
-          new FieldProvenance('source', source.provenanceHandle),
-        ]),
-      );
-      const claim = new SemanticClaim(
-        this.store.handles.claim(`${parseLocal}:parses-to-expression-parse`),
-        site.productHandle,
-        KernelVocabulary.Template.ParsesToExpressionParse.key,
-        parse.productHandle,
-        source.provenanceHandle,
-      );
-      claims.push(claim);
-      parses.push(parse);
-      records.push(
-        ...siteRecords,
-        ...(routeClaim == null ? [] : [routeClaim]),
-        new MaterializedProduct(
-          site.productHandle,
-          KernelVocabulary.Template.ValueSite.key,
-          site.identityHandle,
-          pending.sourceAddressHandle,
-          source.provenanceHandle,
-        ),
-        new CompilerIdentity(
-          parse.identityHandle,
-          KernelVocabulary.Template.ExpressionParse.key,
-          site.identityHandle,
-          pending.sourceAddressHandle,
-          `${pending.siteKind}:${result.kind}`,
-        ),
-        new MaterializedProduct(
-          parse.productHandle,
-          KernelVocabulary.Template.ExpressionParse.key,
-          parse.identityHandle,
-          pending.sourceAddressHandle,
-          source.provenanceHandle,
-        ),
-        claim,
-      );
+      claims.push(...emission.claims);
+      records.push(...emission.records);
     });
 
     records.push(new MaterializationRecord(
@@ -291,6 +160,41 @@ export class TemplateValueSiteMaterializer {
     ));
 
     return new TemplateValueSiteEmission(sites, parses, records);
+  }
+
+  private recordsForValueSite(
+    input: TemplateValueSiteInput,
+    source: TemplateValueSiteSourceSet,
+    pending: PendingValueSite,
+    index: number,
+  ): ValueSiteMaterializationEmission {
+    const siteLocal = `template-value-site:${input.localKey}:${index}`;
+    const publication = this.valueSitePublisher.publish(new TemplateValueSitePublicationRequest(
+      siteLocal,
+      pending.entryFamily == null ? null : `template-expression-parse:${input.localKey}:${index}`,
+      input.compilerWorld.expressionParser,
+      source.provenanceHandle,
+      pending.siteKind,
+      pending.rawValue,
+      pending.entryFamily,
+      pending.node,
+      pending.attribute,
+      pending.syntax,
+      pending.classification,
+      pending.bindingCommand,
+      pending.bindable,
+      pending.sourceAddressHandle,
+      input.compilationUnit.identityHandle,
+      pending.siteKind,
+      valueSiteSubject(pending),
+      (result) => `${pending.siteKind}:${result.kind}`,
+    ));
+    return new ValueSiteMaterializationEmission(
+      publication.site,
+      publication.parse,
+      publication.claims,
+      publication.records,
+    );
   }
 
   private recordsForSource(input: TemplateValueSiteInput): TemplateValueSiteSourceSet {
@@ -314,22 +218,6 @@ export class TemplateValueSiteMaterializer {
     );
   }
 
-  private expressionParseContext(addressHandle: AddressHandle | null): ExpressionParseContext | undefined {
-    if (addressHandle == null) {
-      return undefined;
-    }
-    const address = this.store.readAddress(addressHandle);
-    if (!(address instanceof SourceSpanAddress)) {
-      return undefined;
-    }
-    const fileAddress = this.store.readAddress(address.fileHandle);
-    const file = fileAddress instanceof SourceFileAddress
-      ? new SourceFileRef(fileAddress.handle, fileAddress.path)
-      : null;
-    return {
-      baseSpan: sourceSpanFromBounds(address.start, address.end, file),
-    };
-  }
 }
 
 function valueSiteSubject(
@@ -433,10 +321,25 @@ function siteForAttributeClassification(
         syntax,
         attribute,
       );
+    case AttributeClassificationKind.Spread:
+      if (syntax.target.toLowerCase() === '...$attrs') {
+        return null;
+      }
+      return new PendingValueSite(
+        TemplateValueSiteKind.SpreadValue,
+        spreadValueExpression(syntax),
+        'IsProperty',
+        classification.ownerNode,
+        attribute.toReference(),
+        syntax,
+        classification,
+        null,
+        null,
+        attribute.valueAddressHandle ?? attribute.sourceAddressHandle,
+      );
     case AttributeClassificationKind.BindingCommand:
     case AttributeClassificationKind.CompilerControl:
     case AttributeClassificationKind.Ref:
-    case AttributeClassificationKind.Spread:
     case AttributeClassificationKind.Open:
       return null;
   }
@@ -495,6 +398,14 @@ function customAttributeOrTemplateControllerSite(
     syntax,
     attribute,
   );
+}
+
+function spreadValueExpression(
+  syntax: AttributeSyntax,
+): string {
+  return syntax.target.toLowerCase() === '...$bindables'
+    ? syntax.rawValue
+    : syntax.target.slice(3);
 }
 
 function hasInlineBindings(rawValue: string): boolean {

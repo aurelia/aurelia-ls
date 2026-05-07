@@ -158,6 +158,37 @@ class HtmlMaterializationState {
   ) {}
 }
 
+class HtmlNodeMaterializationFrame {
+  constructor(
+    readonly local: string,
+    readonly pathKey: string,
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly nodeAddressHandle: AddressHandle,
+    readonly recoveries: readonly HtmlRecovery[],
+  ) {}
+}
+
+class HtmlAttributeMaterializationFrame {
+  constructor(
+    readonly local: string,
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly nameAddressHandle: AddressHandle | null,
+    readonly valueAddressHandle: AddressHandle | null,
+    readonly recoveries: readonly HtmlRecovery[],
+  ) {}
+}
+
+class HtmlDocumentHandles {
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+  ) {}
+}
+
 /** Parses authored template markup into HTML IR records without performing Aurelia syntax classification. */
 export class HtmlParseMaterializer {
   constructor(
@@ -189,72 +220,18 @@ export class HtmlParseMaterializer {
     const state = new HtmlMaterializationState(input.localKey, input.templateSource, source, this.store);
     state.records.push(...source.records);
 
-    const text = input.templateSource.markup ?? '';
-    const draft = input.templateSource.markup == null
-      ? new ParsedHtmlDocumentDraft(
-        [],
-        [new HtmlRecoveryDraft(HtmlRecoveryKind.Open, 'Template source did not carry closed markup text.', 0, 0)],
-      )
-      : new HtmlScanner(text, input.parseContext.recoveryPolicy).parseDocument();
-
-    const documentProductHandle = this.store.handles.product(`html-document:${input.localKey}`);
-    const documentIdentityHandle = this.store.handles.identity(`html-document:${input.localKey}`);
+    const draft = this.parseDocumentDraft(input);
+    const handles = this.documentHandles(input);
     const rootNodes = draft.rootNodes.map((node) =>
-      this.materializeNode(input, state, node, documentProductHandle)
+      this.materializeNode(input, state, node, handles.productHandle)
     );
-    const documentRecoveries = draft.recoveries.map((recovery, index) =>
-      this.materializeRecovery(state, recovery, `document-recovery:${index}`)
-    );
+    const documentRecoveries = this.materializeDocumentRecoveries(state, draft);
     state.recoveries.push(...documentRecoveries);
 
-    const document = new HtmlDocument(
-      documentProductHandle,
-      documentIdentityHandle,
-      rootNodes,
-      documentRecoveries,
-      source.sourceAddressHandle,
-      compactFieldProvenance<HtmlDocumentField>([
-        new FieldProvenance('rootNodes', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-        documentRecoveries.length === 0 ? null : new FieldProvenance('recovery', source.provenanceHandle),
-      ]),
-    );
-    const sourceClaim = new SemanticClaim(
-      this.store.handles.claim(`html-document:${input.localKey}:source-parses-to-document`),
-      input.templateSource.productHandle,
-      KernelVocabulary.Template.ParsesToHtmlDocument.key,
-      documentProductHandle,
-      source.provenanceHandle,
-    );
+    const document = this.createDocument(handles, source, rootNodes, documentRecoveries);
+    const sourceClaim = this.sourceClaimForDocument(input, source, document);
     state.claims.push(sourceClaim);
-    state.records.push(
-      new CompilerIdentity(
-        documentIdentityHandle,
-        KernelVocabulary.Template.HtmlDocument.key,
-        input.templateSource.identityHandle,
-        source.sourceAddressHandle,
-        input.compilationUnit.unitKind,
-      ),
-      new MaterializedProduct(
-        documentProductHandle,
-        KernelVocabulary.Template.HtmlDocument.key,
-        documentIdentityHandle,
-        source.sourceAddressHandle,
-        source.provenanceHandle,
-      ),
-      sourceClaim,
-      ...state.claims.filter((claim) => claim !== sourceClaim),
-      new MaterializationRecord(
-        this.store.handles.materialization(`html-parse:${input.localKey}`),
-        documentIdentityHandle,
-        [
-          documentProductHandle,
-          ...state.nodes.map((node) => node.productHandle),
-          ...state.attributes.map((attribute) => attribute.productHandle),
-        ],
-        state.claims.map((claim) => claim.handle),
-      ),
-    );
+    state.records.push(...this.recordsForDocument(input, state, document, sourceClaim));
 
     return new HtmlParseEmission(
       document,
@@ -263,6 +240,102 @@ export class HtmlParseMaterializer {
       state.recoveries,
       state.records,
     );
+  }
+
+  private parseDocumentDraft(input: HtmlParseInput): ParsedHtmlDocumentDraft {
+    if (input.templateSource.markup == null) {
+      return new ParsedHtmlDocumentDraft(
+        [],
+        [new HtmlRecoveryDraft(HtmlRecoveryKind.Open, 'Template source did not carry closed markup text.', 0, 0)],
+      );
+    }
+    return new HtmlScanner(input.templateSource.markup, input.parseContext.recoveryPolicy).parseDocument();
+  }
+
+  private documentHandles(input: HtmlParseInput): HtmlDocumentHandles {
+    return new HtmlDocumentHandles(
+      this.store.handles.product(`html-document:${input.localKey}`),
+      this.store.handles.identity(`html-document:${input.localKey}`),
+    );
+  }
+
+  private materializeDocumentRecoveries(
+    state: HtmlMaterializationState,
+    draft: ParsedHtmlDocumentDraft,
+  ): readonly HtmlRecovery[] {
+    return draft.recoveries.map((recovery, index) =>
+      this.materializeRecovery(state, recovery, `document-recovery:${index}`)
+    );
+  }
+
+  private createDocument(
+    handles: HtmlDocumentHandles,
+    source: HtmlParseSourceSet,
+    rootNodes: readonly HtmlNodeReference[],
+    recoveries: readonly HtmlRecovery[],
+  ): HtmlDocument {
+    return new HtmlDocument(
+      handles.productHandle,
+      handles.identityHandle,
+      rootNodes,
+      recoveries,
+      source.sourceAddressHandle,
+      compactFieldProvenance<HtmlDocumentField>([
+        new FieldProvenance('rootNodes', source.provenanceHandle),
+        new FieldProvenance('source', source.provenanceHandle),
+        recoveries.length === 0 ? null : new FieldProvenance('recovery', source.provenanceHandle),
+      ]),
+    );
+  }
+
+  private sourceClaimForDocument(
+    input: HtmlParseInput,
+    source: HtmlParseSourceSet,
+    document: HtmlDocument,
+  ): SemanticClaim {
+    return new SemanticClaim(
+      this.store.handles.claim(`html-document:${input.localKey}:source-parses-to-document`),
+      input.templateSource.productHandle,
+      KernelVocabulary.Template.ParsesToHtmlDocument.key,
+      document.productHandle,
+      source.provenanceHandle,
+    );
+  }
+
+  private recordsForDocument(
+    input: HtmlParseInput,
+    state: HtmlMaterializationState,
+    document: HtmlDocument,
+    sourceClaim: SemanticClaim,
+  ): readonly KernelStoreRecord[] {
+    return [
+      new CompilerIdentity(
+        document.identityHandle,
+        KernelVocabulary.Template.HtmlDocument.key,
+        input.templateSource.identityHandle,
+        state.source.sourceAddressHandle,
+        input.compilationUnit.unitKind,
+      ),
+      new MaterializedProduct(
+        document.productHandle,
+        KernelVocabulary.Template.HtmlDocument.key,
+        document.identityHandle,
+        state.source.sourceAddressHandle,
+        state.source.provenanceHandle,
+      ),
+      sourceClaim,
+      ...state.claims.filter((claim) => claim !== sourceClaim),
+      new MaterializationRecord(
+        this.store.handles.materialization(`html-parse:${input.localKey}`),
+        document.identityHandle,
+        [
+          document.productHandle,
+          ...state.nodes.map((node) => node.productHandle),
+          ...state.attributes.map((attribute) => attribute.productHandle),
+        ],
+        state.claims.map((claim) => claim.handle),
+      ),
+    ];
   }
 
   private recordsForSource(input: HtmlParseInput): HtmlParseSourceSet {
@@ -290,111 +363,153 @@ export class HtmlParseMaterializer {
     draft: ParsedHtmlNodeDraft,
     parentProductHandle: ProductHandle,
   ): HtmlNodeReference {
+    const frame = this.materializeNodeFrame(input, state, draft);
+    const node = this.htmlNodeForDraft(input, state, draft, frame);
+    this.recordMaterializedNode(state, draft, frame, parentProductHandle, node);
+    return node.toReference();
+  }
+
+  private materializeNodeFrame(
+    input: HtmlParseInput,
+    state: HtmlMaterializationState,
+    draft: ParsedHtmlNodeDraft,
+  ): HtmlNodeMaterializationFrame {
     const pathKey = draft.path.join('.');
     const local = `html-node:${input.localKey}:${pathKey}`;
-    const productHandle = this.store.handles.product(local);
-    const identityHandle = this.store.handles.identity(local);
     const sourceAddressHandle = this.sourceSpanAddress(state, `${local}:source`, draft.start, draft.end, SourceSpanRole.Range);
-    const nodeAddressHandle = this.templateNodeAddress(state, `${local}:node`, draft.path, sourceAddressHandle);
     const recoveries = draft.recoveries.map((recovery, index) =>
       this.materializeRecovery(state, recovery, `${local}:recovery:${index}`)
     );
     state.recoveries.push(...recoveries);
+    return new HtmlNodeMaterializationFrame(
+      local,
+      pathKey,
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+      sourceAddressHandle,
+      this.templateNodeAddress(state, `${local}:node`, draft.path, sourceAddressHandle),
+      recoveries,
+    );
+  }
 
-    let node: HtmlElement | HtmlText | HtmlComment | HtmlDoctype;
+  private htmlNodeForDraft(
+    input: HtmlParseInput,
+    state: HtmlMaterializationState,
+    draft: ParsedHtmlNodeDraft,
+    frame: HtmlNodeMaterializationFrame,
+  ): HtmlElement | HtmlText | HtmlComment | HtmlDoctype {
     switch (draft.nodeKind) {
-      case HtmlIrNodeKind.Element: {
-        const attributes = draft.attributes.map((attribute, index) =>
-          this.materializeAttribute(input, state, attribute, productHandle, identityHandle, `${pathKey}:attr:${index}`)
-        );
-        const children = draft.children.map((child) => this.materializeNode(input, state, child, productHandle));
-        node = new HtmlElement(
-          productHandle,
-          identityHandle,
-          draft.tagName ?? '',
-          draft.namespace,
-          attributes,
-          children,
-          draft.selfClosing,
-          sourceAddressHandle,
-          recoveries,
-          compactFieldProvenance<HtmlElementField>([
-            new FieldProvenance('tagName', state.source.provenanceHandle),
-            new FieldProvenance('namespace', state.source.provenanceHandle),
-            attributes.length === 0 ? null : new FieldProvenance('attributes', state.source.provenanceHandle),
-            children.length === 0 ? null : new FieldProvenance('children', state.source.provenanceHandle),
-            new FieldProvenance('selfClosing', state.source.provenanceHandle),
-            new FieldProvenance('source', state.source.provenanceHandle),
-            recoveries.length === 0 ? null : new FieldProvenance('recovery', state.source.provenanceHandle),
-          ]),
-        );
-        break;
-      }
+      case HtmlIrNodeKind.Element:
+        return this.htmlElementForDraft(input, state, draft, frame);
       case HtmlIrNodeKind.Comment:
-        node = new HtmlComment(
-          productHandle,
-          identityHandle,
-          draft.text ?? '',
-          HtmlCommentSemanticKind.Plain,
-          sourceAddressHandle,
-          recoveries,
-          compactFieldProvenance<HtmlCommentField>([
-            new FieldProvenance('text', state.source.provenanceHandle),
-            new FieldProvenance('semanticKind', state.source.provenanceHandle),
-            new FieldProvenance('source', state.source.provenanceHandle),
-            recoveries.length === 0 ? null : new FieldProvenance('recovery', state.source.provenanceHandle),
-          ]),
-        );
-        break;
+        return this.htmlCommentForDraft(state, draft, frame);
       case HtmlIrNodeKind.Doctype:
-        node = new HtmlDoctype(
-          productHandle,
-          identityHandle,
+        return new HtmlDoctype(
+          frame.productHandle,
+          frame.identityHandle,
           draft.text,
-          sourceAddressHandle,
-          recoveries,
+          frame.sourceAddressHandle,
+          frame.recoveries,
         );
-        break;
       case HtmlIrNodeKind.Text:
       default:
-        node = new HtmlText(
-          productHandle,
-          identityHandle,
+        return new HtmlText(
+          frame.productHandle,
+          frame.identityHandle,
           draft.text ?? '',
-          sourceAddressHandle,
+          frame.sourceAddressHandle,
           compactFieldProvenance<HtmlTextField>([
             new FieldProvenance('text', state.source.provenanceHandle),
             new FieldProvenance('source', state.source.provenanceHandle),
           ]),
         );
-        break;
     }
+  }
 
+  private htmlElementForDraft(
+    input: HtmlParseInput,
+    state: HtmlMaterializationState,
+    draft: ParsedHtmlNodeDraft,
+    frame: HtmlNodeMaterializationFrame,
+  ): HtmlElement {
+    const attributes = draft.attributes.map((attribute, index) =>
+      this.materializeAttribute(input, state, attribute, frame.productHandle, frame.identityHandle, `${frame.pathKey}:attr:${index}`)
+    );
+    const children = draft.children.map((child) => this.materializeNode(input, state, child, frame.productHandle));
+    return new HtmlElement(
+      frame.productHandle,
+      frame.identityHandle,
+      draft.tagName ?? '',
+      draft.namespace,
+      attributes,
+      children,
+      draft.selfClosing,
+      frame.sourceAddressHandle,
+      frame.recoveries,
+      compactFieldProvenance<HtmlElementField>([
+        new FieldProvenance('tagName', state.source.provenanceHandle),
+        new FieldProvenance('namespace', state.source.provenanceHandle),
+        attributes.length === 0 ? null : new FieldProvenance('attributes', state.source.provenanceHandle),
+        children.length === 0 ? null : new FieldProvenance('children', state.source.provenanceHandle),
+        new FieldProvenance('selfClosing', state.source.provenanceHandle),
+        new FieldProvenance('source', state.source.provenanceHandle),
+        frame.recoveries.length === 0 ? null : new FieldProvenance('recovery', state.source.provenanceHandle),
+      ]),
+    );
+  }
+
+  private htmlCommentForDraft(
+    state: HtmlMaterializationState,
+    draft: ParsedHtmlNodeDraft,
+    frame: HtmlNodeMaterializationFrame,
+  ): HtmlComment {
+    return new HtmlComment(
+      frame.productHandle,
+      frame.identityHandle,
+      draft.text ?? '',
+      HtmlCommentSemanticKind.Plain,
+      frame.sourceAddressHandle,
+      frame.recoveries,
+      compactFieldProvenance<HtmlCommentField>([
+        new FieldProvenance('text', state.source.provenanceHandle),
+        new FieldProvenance('semanticKind', state.source.provenanceHandle),
+        new FieldProvenance('source', state.source.provenanceHandle),
+        frame.recoveries.length === 0 ? null : new FieldProvenance('recovery', state.source.provenanceHandle),
+      ]),
+    );
+  }
+
+  private recordMaterializedNode(
+    state: HtmlMaterializationState,
+    draft: ParsedHtmlNodeDraft,
+    frame: HtmlNodeMaterializationFrame,
+    parentProductHandle: ProductHandle,
+    node: HtmlElement | HtmlText | HtmlComment | HtmlDoctype,
+  ): void {
     const claim = new SemanticClaim(
-      this.store.handles.claim(`${local}:contained-by-parent`),
+      this.store.handles.claim(`${frame.local}:contained-by-parent`),
       parentProductHandle,
       KernelVocabulary.Template.ContainsHtmlNode.key,
-      productHandle,
+      frame.productHandle,
       state.source.provenanceHandle,
     );
     state.claims.push(claim);
     state.nodes.push(node);
     state.records.push(
       new TemplateNodeIdentity(
-        identityHandle,
+        frame.identityHandle,
         state.templateSource.identityHandle,
-        nodeKey(draft, sourceAddressHandle),
-        nodeAddressHandle,
+        nodeKey(draft, frame.sourceAddressHandle),
+        frame.nodeAddressHandle,
       ),
       new MaterializedProduct(
-        productHandle,
+        frame.productHandle,
         KernelVocabulary.Template.HtmlNode.key,
-        identityHandle,
-        sourceAddressHandle,
+        frame.identityHandle,
+        frame.sourceAddressHandle,
         state.source.provenanceHandle,
       ),
     );
-    return node.toReference();
   }
 
   private materializeAttribute(
@@ -405,61 +520,100 @@ export class HtmlParseMaterializer {
     parentIdentityHandle: IdentityHandle,
     pathKey: string,
   ) {
+    const frame = this.materializeAttributeFrame(input, state, draft, pathKey);
+    const attribute = this.htmlAttributeForDraft(state, draft, frame);
+    this.recordMaterializedAttribute(state, draft, frame, parentProductHandle, parentIdentityHandle, attribute);
+    return attribute.toReference();
+  }
+
+  private materializeAttributeFrame(
+    input: HtmlParseInput,
+    state: HtmlMaterializationState,
+    draft: ParsedHtmlAttributeDraft,
+    pathKey: string,
+  ): HtmlAttributeMaterializationFrame {
     const local = `html-attribute:${input.localKey}:${pathKey}`;
-    const productHandle = this.store.handles.product(local);
-    const identityHandle = this.store.handles.identity(local);
-    const sourceAddressHandle = this.sourceSpanAddress(state, `${local}:source`, draft.start, draft.end, SourceSpanRole.Range);
-    const nameAddressHandle = this.sourceSpanAddress(state, `${local}:name`, draft.nameStart, draft.nameEnd, SourceSpanRole.Name);
-    const valueAddressHandle = draft.valueStart == null || draft.valueEnd == null
-      ? null
-      : this.sourceSpanAddress(state, `${local}:value`, draft.valueStart, draft.valueEnd, SourceSpanRole.Value);
     const recoveries = draft.recoveries.map((recovery, index) =>
       this.materializeRecovery(state, recovery, `${local}:recovery:${index}`)
     );
     state.recoveries.push(...recoveries);
+    return new HtmlAttributeMaterializationFrame(
+      local,
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+      this.sourceSpanAddress(state, `${local}:source`, draft.start, draft.end, SourceSpanRole.Range),
+      this.sourceSpanAddress(state, `${local}:name`, draft.nameStart, draft.nameEnd, SourceSpanRole.Name),
+      draft.valueStart == null || draft.valueEnd == null
+        ? null
+        : this.sourceSpanAddress(state, `${local}:value`, draft.valueStart, draft.valueEnd, SourceSpanRole.Value),
+      recoveries,
+    );
+  }
 
-    const attribute = new HtmlAttribute(
-      productHandle,
-      identityHandle,
+  private htmlAttributeForDraft(
+    state: HtmlMaterializationState,
+    draft: ParsedHtmlAttributeDraft,
+    frame: HtmlAttributeMaterializationFrame,
+  ): HtmlAttribute {
+    return new HtmlAttribute(
+      frame.productHandle,
+      frame.identityHandle,
       draft.rawName,
       draft.rawValue,
-      nameAddressHandle,
-      valueAddressHandle,
-      sourceAddressHandle,
-      recoveries,
+      frame.nameAddressHandle,
+      frame.valueAddressHandle,
+      frame.sourceAddressHandle,
+      frame.recoveries,
       compactFieldProvenance<HtmlAttributeField>([
         new FieldProvenance('name', state.source.provenanceHandle),
         new FieldProvenance('value', state.source.provenanceHandle),
         new FieldProvenance('source', state.source.provenanceHandle),
-        recoveries.length === 0 ? null : new FieldProvenance('recovery', state.source.provenanceHandle),
+        frame.recoveries.length === 0 ? null : new FieldProvenance('recovery', state.source.provenanceHandle),
       ]),
     );
-    const claim = new SemanticClaim(
-      this.store.handles.claim(`${local}:contained-by-element`),
-      parentProductHandle,
-      KernelVocabulary.Template.ContainsHtmlAttribute.key,
-      productHandle,
-      state.source.provenanceHandle,
-    );
+  }
+
+  private recordMaterializedAttribute(
+    state: HtmlMaterializationState,
+    draft: ParsedHtmlAttributeDraft,
+    frame: HtmlAttributeMaterializationFrame,
+    parentProductHandle: ProductHandle,
+    parentIdentityHandle: IdentityHandle,
+    attribute: HtmlAttribute,
+  ): void {
+    const claim = this.attributeContainmentClaim(state, frame, parentProductHandle);
     state.claims.push(claim);
     state.attributes.push(attribute);
     state.records.push(
       new CompilerIdentity(
-        identityHandle,
+        frame.identityHandle,
         KernelVocabulary.Template.HtmlAttribute.key,
         parentIdentityHandle,
-        sourceAddressHandle,
+        frame.sourceAddressHandle,
         draft.rawName,
       ),
       new MaterializedProduct(
-        productHandle,
+        frame.productHandle,
         KernelVocabulary.Template.HtmlAttribute.key,
-        identityHandle,
-        sourceAddressHandle,
+        frame.identityHandle,
+        frame.sourceAddressHandle,
         state.source.provenanceHandle,
       ),
     );
-    return attribute.toReference();
+  }
+
+  private attributeContainmentClaim(
+    state: HtmlMaterializationState,
+    frame: HtmlAttributeMaterializationFrame,
+    parentProductHandle: ProductHandle,
+  ): SemanticClaim {
+    return new SemanticClaim(
+      this.store.handles.claim(`${frame.local}:contained-by-element`),
+      parentProductHandle,
+      KernelVocabulary.Template.ContainsHtmlAttribute.key,
+      frame.productHandle,
+      state.source.provenanceHandle,
+    );
   }
 
   private materializeRecovery(

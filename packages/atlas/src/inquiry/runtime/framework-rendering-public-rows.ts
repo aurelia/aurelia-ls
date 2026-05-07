@@ -3,6 +3,7 @@ import type {
   FrameworkBindingAdmissionRow,
   FrameworkBindingConstructorParameterRow,
   FrameworkBindingProductRow,
+  FrameworkControllerHydrationStepRow,
   FrameworkControllerCreationRow,
   FrameworkInstructionDeclarationRow,
   FrameworkInstructionDispatchRow,
@@ -10,6 +11,7 @@ import type {
   FrameworkResourceCarrierRow,
   FrameworkSyntaxProductRow,
 } from "./framework-entities.js";
+import { sourceRangeForCallSiteEntry } from "./framework-support.js";
 
 /** Small public reference to a source resource carrier joined into a rendering product. */
 export interface FrameworkResourceCarrierReferenceRow {
@@ -216,6 +218,22 @@ export interface FrameworkInstructionDispatchSummaryRow {
   readonly summary: string;
 }
 
+/** Public compact row for an ordered renderer controller-hydration step. */
+export interface FrameworkControllerHydrationStepSummaryRow {
+  /** Zero-based order after sorting source call sites inside the renderer method. */
+  readonly order: number;
+  /** Semantic role played by the call site. */
+  readonly stepKind: FrameworkControllerHydrationStepRow["stepKind"];
+  /** Call-site callee name such as getViewFactory, invokeAttribute, link, or addChild. */
+  readonly calleeName: string;
+  /** Callee expression text as seen in source. */
+  readonly calleeText: string;
+  /** Runtime argument expressions in source order. */
+  readonly argumentTexts: readonly string[];
+  /** Exact call-site source range. */
+  readonly source: SourceRange;
+}
+
 /** Public compact row for controller-creation projection answers. */
 export interface FrameworkControllerCreationSummaryRow {
   /** Stable row id. */
@@ -246,6 +264,8 @@ export interface FrameworkControllerCreationSummaryRow {
   readonly recursiveDispatchCount: number;
   /** Template-controller link hook callee name, when visible. */
   readonly linkCalleeName: string | null;
+  /** Ordered source-backed handoff steps inside the renderer hydration flow. */
+  readonly hydrationSteps: readonly FrameworkControllerHydrationStepSummaryRow[];
   /** Exact renderer method source range. */
   readonly source: SourceRange;
   /** Human-facing row summary. */
@@ -334,6 +354,7 @@ export function controllerCreationSummaryRow(
     childAdmissionCalleeName: row.childAdmissionCall?.calleeName ?? null,
     recursiveDispatchCount: row.recursiveDispatchCalls.length,
     linkCalleeName: row.linkCall?.calleeName ?? null,
+    hydrationSteps: row.hydrationSteps.map(controllerHydrationStepSummaryRow),
     source: row.source,
     summary: row.summary,
   };
@@ -424,6 +445,19 @@ function instructionDeclarationReferenceRow(
     instructionName: row.instructionName,
     declarationKind: row.declarationKind,
     source: row.source,
+  };
+}
+
+function controllerHydrationStepSummaryRow(
+  row: FrameworkControllerHydrationStepRow,
+): FrameworkControllerHydrationStepSummaryRow {
+  return {
+    order: row.order,
+    stepKind: row.stepKind,
+    calleeName: row.callSite.calleeName,
+    calleeText: row.callSite.callee.text,
+    argumentTexts: row.callSite.arguments.map((argument) => argument.expression.text),
+    source: sourceRangeForCallSiteEntry(row.callSite),
   };
 }
 

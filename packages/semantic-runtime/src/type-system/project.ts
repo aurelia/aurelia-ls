@@ -5,6 +5,7 @@ import {
   normalizeModuleKey,
 } from '../evaluation/module-graph.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
+import { buildTypeSystemProjectOptions } from './project-options.js';
 
 /** Current TypeScript Program/checker epoch for one booted project frame. */
 export class TypeSystemProject {
@@ -68,7 +69,12 @@ export class TypeSystemProjectBuilder {
       byModuleKey.set(normalizeModuleKey(source.moduleKey), source.sourceFile);
     }
 
-    const options = readCompilerOptions(project.rootDir);
+    const projectOptions = buildTypeSystemProjectOptions(project.rootDir);
+    for (const ambientSource of projectOptions.ambientSourceFiles) {
+      byPath.set(normalizePath(ambientSource.fileName), ambientSource);
+    }
+
+    const options = projectOptions.compilerOptions;
     const host = ts.createCompilerHost(options, true);
     const defaultGetSourceFile = host.getSourceFile.bind(host);
     host.getSourceFile = (
@@ -96,42 +102,6 @@ export class TypeSystemProjectBuilder {
       byPath,
     );
   }
-}
-
-function readCompilerOptions(rootDir: string): ts.CompilerOptions {
-  const configFile = ts.findConfigFile(rootDir, ts.sys.fileExists, 'tsconfig.json');
-  if (configFile == null) {
-    return defaultCompilerOptions();
-  }
-
-  const read = ts.readConfigFile(configFile, ts.sys.readFile);
-  if (read.error != null || read.config == null) {
-    return defaultCompilerOptions();
-  }
-
-  const parsed = ts.parseJsonConfigFileContent(
-    read.config,
-    ts.sys,
-    path.dirname(configFile),
-  );
-  return {
-    ...defaultCompilerOptions(),
-    ...parsed.options,
-  };
-}
-
-function defaultCompilerOptions(): ts.CompilerOptions {
-  return {
-    allowJs: true,
-    checkJs: false,
-    experimentalDecorators: true,
-    jsx: ts.JsxEmit.Preserve,
-    module: ts.ModuleKind.ESNext,
-    moduleResolution: ts.ModuleResolutionKind.NodeNext,
-    noEmit: true,
-    skipLibCheck: true,
-    target: ts.ScriptTarget.Latest,
-  };
 }
 
 function classDeclarationForTarget(

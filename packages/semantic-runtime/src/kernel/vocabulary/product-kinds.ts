@@ -208,6 +208,14 @@ export const KernelProductKinds = {
       'A modeled runtime controller at a known controller phase, used to connect resources, containers, and templates.',
     ),
 
+    /** Product kind for a runtime IViewFactory value that can create synthetic child views. */
+    ViewFactory: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'view-factory',
+      KernelVocabularySlot.ProductKind,
+      'A modeled runtime IViewFactory value that can create synthetic child views from a nested instruction sequence.',
+    ),
+
     /** Product kind for runtime Scope objects used by controller activation and binding lookup. */
     BindingScope: defineVocabulary(
       KernelVocabularyNamespace.Configuration,
@@ -532,6 +540,46 @@ export const KernelProductKinds = {
       'scope-effect',
       KernelVocabularySlot.ProductKind,
       'Runtime binding effect that creates or mutates template binding scope.',
+    ),
+
+    /** Product kind for a runtime binding target-side accessor or observer decision. */
+    TargetAccess: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'target-access',
+      KernelVocabularySlot.ProductKind,
+      'Runtime binding target-side accessor or observer selected through ObserverLocator and NodeObserverLocator semantics.',
+    ),
+
+    /** Product kind for a runtime renderer or binding direct target update operation. */
+    TargetOperation: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'target-operation',
+      KernelVocabularySlot.ProductKind,
+      'Runtime renderer or binding direct target update operation such as setAttribute, classList.add/toggle, cssText append, style.setProperty, or setAttribute/removeAttribute.',
+    ),
+
+    /** Product kind for a runtime binding source-side update operation. */
+    SourceOperation: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'source-operation',
+      KernelVocabularySlot.ProductKind,
+      'Runtime binding source-side update operation such as RefBinding assigning a resolved target into the binding scope.',
+    ),
+
+    /** Product kind for a runtime binding observer/accessor value channel. */
+    ValueChannel: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'value-channel',
+      KernelVocabularySlot.ProductKind,
+      'Runtime binding observer or accessor value channel selected from target access plus observer semantics.',
+    ),
+
+    /** Product kind for a runtime binding source/target data-flow edge. */
+    DataFlow: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'data-flow',
+      KernelVocabularySlot.ProductKind,
+      'Runtime binding data-flow edge connecting source expression scope lookup to target accessor or observer facts.',
     ),
   },
   Instruction: {

@@ -1,5 +1,4 @@
 import {
-  SourceFileAddress,
   SourceSpanRole,
   SourceSpanAddress,
 } from '../kernel/address.js';
@@ -46,11 +45,6 @@ import type {
   BindingIdentifierOrPattern,
   ExpressionType,
 } from '../expression/ast.js';
-import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
-import {
-  SourceFileRef,
-  sourceSpanFromBounds,
-} from '../expression/source-span.js';
 import type {
   ExpressionParseResult,
   IteratorParseResult,
@@ -67,6 +61,7 @@ import {
   AttributeClassification,
   AttributePatternExecutionResult,
   AttributeSyntax,
+  type AttributeParserParseResult,
   type AttributeSyntaxField,
 } from './attribute-syntax.js';
 import type {
@@ -97,25 +92,31 @@ import {
 import { BuiltInAttributeParserExecutionHost } from './attribute-parser-execution-host.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type {
-  TemplateBindableReference,
+  TemplateAttributeBindablesInfo,
   TemplateExpressionParserService,
 } from './compiler-world.js';
+import type { TemplateBindableReference } from './compiler-world-reference.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import {
-  expressionParseStateForResult,
   TemplateExpressionParse,
   TemplateExpressionParseState,
   TemplateValueSite,
   TemplateValueSiteKind,
-  type TemplateExpressionParseField,
-  type TemplateValueSiteField,
 } from './value-site.js';
+import {
+  TemplateValueSitePublicationRequest,
+  TemplateValueSitePublisher,
+} from './value-site-publication.js';
 import type { TemplateValueSiteEmission } from './value-site-materializer.js';
 import {
   HtmlAttribute,
   HtmlElement,
   HtmlAttributeReference,
 } from './html-ir.js';
+import {
+  ParsedMultiBindingSegment,
+  parseInlineMultiBindingSegments,
+} from './multi-binding-segments.js';
 import type {
   HtmlNodeReference,
 } from './html-ir.js';
@@ -174,21 +175,13 @@ class OwnerElement {
     return this.element.tagName;
   }
 
+  get namespace(): HtmlElement['namespace'] {
+    return this.element.namespace;
+  }
+
   constructor(
     readonly element: HtmlElement,
     readonly attributes: readonly HtmlAttribute[],
-  ) {}
-}
-
-class ParsedMultiBindingSegment {
-  constructor(
-    readonly segmentIndex: number,
-    readonly rawName: string,
-    readonly rawValue: string,
-    readonly start: number,
-    readonly end: number,
-    readonly valueStart: number,
-    readonly valueEnd: number,
   ) {}
 }
 
@@ -202,6 +195,45 @@ class CommandHandlerMatch {
 class OpenLoweringResult {
   constructor(
     readonly result: BindingCommandBuildResult,
+    readonly openSeams: readonly OpenSeam[],
+  ) {}
+}
+
+type CommandAttributeClassification = AttributeClassification & {
+  readonly bindingCommand: NonNullable<AttributeClassification['bindingCommand']>;
+};
+
+type BindingCommandLoweringHandleSet = {
+  readonly buildInputProductHandle: ProductHandle;
+  readonly buildInputIdentityHandle: IdentityHandle;
+  readonly loweringProductHandle: ProductHandle;
+  readonly loweringIdentityHandle: IdentityHandle;
+};
+
+type TemplateInstructionHandleSet = {
+  readonly productHandle: ProductHandle;
+  readonly identityHandle: IdentityHandle;
+};
+
+type MultiBindingSegmentHandleSet = {
+  readonly productHandle: ProductHandle;
+  readonly identityHandle: IdentityHandle;
+};
+
+type AttributeSyntaxHandleSet = {
+  readonly productHandle: ProductHandle;
+  readonly identityHandle: IdentityHandle;
+};
+
+class BindingCommandClassificationLoweringResult {
+  constructor(
+    readonly buildInput: BindingCommandBuildInput,
+    readonly lowering: BindingCommandLowering,
+    readonly instructions: readonly TemplateInstruction[],
+    readonly valueSites: readonly TemplateValueSite[],
+    readonly expressionParses: readonly TemplateExpressionParse[],
+    readonly records: readonly KernelStoreRecord[],
+    readonly claims: readonly SemanticClaim[],
     readonly openSeams: readonly OpenSeam[],
   ) {}
 }
@@ -222,6 +254,101 @@ class MultiBindingLoweringResult {
   ) {}
 }
 
+class MultiBindingSegmentLoweringResult {
+  constructor(
+    readonly segment: MultiBindingSegment,
+    readonly commandLowerings: readonly BindingCommandLowering[],
+    readonly buildInputs: readonly BindingCommandBuildInput[],
+    readonly attributeSyntaxes: readonly AttributeSyntax[],
+    readonly instructions: readonly TemplateInstruction[],
+    readonly directInstructions: readonly TemplateInstruction[],
+    readonly valueSites: readonly TemplateValueSite[],
+    readonly expressionParses: readonly TemplateExpressionParse[],
+    readonly records: readonly KernelStoreRecord[],
+    readonly claims: readonly SemanticClaim[],
+    readonly openSeams: readonly OpenSeam[],
+  ) {}
+}
+
+class ClosedMultiBindingSite {
+  constructor(
+    readonly attribute: HtmlAttribute,
+    readonly owner: OwnerElement,
+    readonly classification: AttributeClassification,
+    readonly definition: CustomAttributeDefinition,
+    readonly parsedSegments: readonly ParsedMultiBindingSegment[],
+    readonly bindables: TemplateAttributeBindablesInfo,
+  ) {}
+}
+
+class MultiBindingSiteSegmentBatch {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly claims: readonly SemanticClaim[],
+    readonly openSeams: readonly OpenSeam[],
+    readonly buildInputs: readonly BindingCommandBuildInput[],
+    readonly commandLowerings: readonly BindingCommandLowering[],
+    readonly attributeSyntaxes: readonly AttributeSyntax[],
+    readonly segments: readonly MultiBindingSegment[],
+    readonly instructions: readonly TemplateInstruction[],
+    readonly directInstructions: readonly TemplateInstruction[],
+    readonly valueSites: readonly TemplateValueSite[],
+    readonly expressionParses: readonly TemplateExpressionParse[],
+  ) {}
+}
+
+class MaterializedMultiBindingSegment {
+  constructor(
+    readonly segment: MultiBindingSegment,
+    readonly syntax: AttributeSyntax,
+    readonly bindable: TemplateBindableReference | null,
+    readonly commandMatch: CommandHandlerMatch | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly records: readonly KernelStoreRecord[],
+    readonly claims: readonly SemanticClaim[],
+  ) {}
+}
+
+class MultiBindingSegmentSelection {
+  constructor(
+    readonly bindable: TemplateBindableReference | null,
+    readonly commandMatch: CommandHandlerMatch | null,
+    readonly commandReference: MultiBindingSegment['command'],
+  ) {}
+}
+
+class PublishedMultiBindingSegment {
+  constructor(
+    readonly segment: MultiBindingSegment,
+    readonly records: readonly KernelStoreRecord[],
+    readonly claims: readonly SemanticClaim[],
+  ) {}
+}
+
+class PublishedMultiBindingAttributeSyntax {
+  constructor(
+    readonly syntax: AttributeSyntax,
+    readonly records: readonly KernelStoreRecord[],
+    readonly claims: readonly SemanticClaim[],
+  ) {}
+}
+
+class PublishedBindingCommandLowering {
+  constructor(
+    readonly lowering: BindingCommandLowering,
+    readonly records: readonly KernelStoreRecord[],
+    readonly claims: readonly SemanticClaim[],
+  ) {}
+}
+
+class PublishedBindingCommandBuildInput {
+  constructor(
+    readonly input: BindingCommandBuildInput,
+    readonly records: readonly KernelStoreRecord[],
+    readonly claims: readonly SemanticClaim[],
+  ) {}
+}
+
 class CommandParsePublication {
   constructor(
     readonly site: TemplateValueSite,
@@ -235,6 +362,7 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
   readonly claims: SemanticClaim[] = [];
   readonly sites: TemplateValueSite[] = [];
   readonly parses: TemplateExpressionParse[] = [];
+  private readonly valueSitePublisher: TemplateValueSitePublisher;
   private instructionIndex = 0;
   private expressionIndex = 0;
 
@@ -250,7 +378,9 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
     readonly commandReference: BindingCommandLowering['command'],
     readonly bindable: TemplateBindableReference | null,
     readonly parser: TemplateExpressionParserService,
-  ) {}
+  ) {
+    this.valueSitePublisher = new TemplateValueSitePublisher(store);
+  }
 
   allocateInstruction(
     _kind: TemplateInstructionKind,
@@ -325,19 +455,12 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
     const index = this.expressionIndex++;
     const siteLocal = `${this.local}:value-site:${index}`;
     const parseLocal = `${this.local}:expression-parse:${index}`;
-    const siteProductHandle = this.store.handles.product(siteLocal);
-    const siteIdentityHandle = this.store.handles.identity(siteLocal);
-    const parseProductHandle = this.store.handles.product(parseLocal);
-    const parseIdentityHandle = this.store.handles.identity(parseLocal);
     const addressHandle = info.expressionSourceAddressHandle;
-    const result = this.parser.parse(
-      expression,
-      entryFamily,
-      this.expressionParseContext(addressHandle),
-    );
-    const site = new TemplateValueSite(
-      siteProductHandle,
-      siteIdentityHandle,
+    const publication = this.valueSitePublisher.publish(new TemplateValueSitePublicationRequest(
+      siteLocal,
+      parseLocal,
+      this.parser,
+      this.source.provenanceHandle,
       TemplateValueSiteKind.BindingCommandValue,
       expression,
       entryFamily,
@@ -348,116 +471,33 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
       this.commandReference,
       this.bindable,
       addressHandle,
-      compactFieldProvenance<TemplateValueSiteField>([
-        new FieldProvenance('siteKind', this.source.provenanceHandle),
-        new FieldProvenance('rawValue', this.source.provenanceHandle),
-        new FieldProvenance('entryFamily', this.source.provenanceHandle),
-        new FieldProvenance('node', this.source.provenanceHandle),
-        new FieldProvenance('attribute', this.source.provenanceHandle),
-        new FieldProvenance('syntax', this.source.provenanceHandle),
-        new FieldProvenance('classification', this.source.provenanceHandle),
-        new FieldProvenance('bindingCommand', this.source.provenanceHandle),
-        this.bindable == null ? null : new FieldProvenance('bindable', this.source.provenanceHandle),
-        new FieldProvenance('source', this.source.provenanceHandle),
-      ]),
-    );
-    const parse = new TemplateExpressionParse(
-      parseProductHandle,
-      parseIdentityHandle,
-      site.toReference(),
-      this.compilerWorld.expressionParser.productHandle,
-      expressionParseStateForResult(result),
-      result.kind,
-      result,
-      addressHandle,
-      compactFieldProvenance<TemplateExpressionParseField>([
-        new FieldProvenance('site', this.source.provenanceHandle),
-        new FieldProvenance('parser', this.source.provenanceHandle),
-        new FieldProvenance('state', this.source.provenanceHandle),
-        new FieldProvenance('resultKind', this.source.provenanceHandle),
-        new FieldProvenance('source', this.source.provenanceHandle),
-      ]),
-    );
-    const routeClaim = info.buildInputProductHandle == null
-      ? null
-      : new SemanticClaim(
-        this.store.handles.claim(`${siteLocal}:selects-value-site`),
-        info.buildInputProductHandle,
-        KernelVocabulary.Template.SelectsValueSite.key,
-        site.productHandle,
-        this.source.provenanceHandle,
-      );
-    const claim = new SemanticClaim(
-      this.store.handles.claim(`${parseLocal}:parses-to-expression-parse`),
-      site.productHandle,
-      KernelVocabulary.Template.ParsesToExpressionParse.key,
-      parse.productHandle,
-      this.source.provenanceHandle,
-    );
-    if (routeClaim != null) {
-      this.claims.push(routeClaim);
+      this.classification.identityHandle,
+      `${this.command.name}:${entryFamily}`,
+      info.buildInputProductHandle,
+      (result) => `${this.command.name}:${result.kind}`,
+    ));
+    if (publication.parse == null || publication.result == null) {
+      throw new Error('Binding command expression parsing must publish an expression parse.');
     }
-    this.claims.push(claim);
+    this.claims.push(...publication.claims);
+    this.records.push(...publication.records);
+    const { site, parse, result } = publication;
     this.sites.push(site);
     this.parses.push(parse);
-    this.records.push(
-      new CompilerIdentity(
-        site.identityHandle,
-        KernelVocabulary.Template.ValueSite.key,
-        this.classification.identityHandle,
-        addressHandle,
-        `${this.command.name}:${entryFamily}`,
-      ),
-      new MaterializedProduct(
-        site.productHandle,
-        KernelVocabulary.Template.ValueSite.key,
-        site.identityHandle,
-        addressHandle,
-        this.source.provenanceHandle,
-      ),
-      new CompilerIdentity(
-        parse.identityHandle,
-        KernelVocabulary.Template.ExpressionParse.key,
-        site.identityHandle,
-        addressHandle,
-        `${this.command.name}:${result.kind}`,
-      ),
-      new MaterializedProduct(
-        parse.productHandle,
-        KernelVocabulary.Template.ExpressionParse.key,
-        parse.identityHandle,
-        addressHandle,
-        this.source.provenanceHandle,
-      ),
-      claim,
-    );
     return new CommandParsePublication(site, parse, result);
-  }
-
-  private expressionParseContext(addressHandle: AddressHandle | null): ExpressionParseContext | undefined {
-    if (addressHandle == null) {
-      return undefined;
-    }
-    const address = this.store.readAddress(addressHandle);
-    if (!(address instanceof SourceSpanAddress)) {
-      return undefined;
-    }
-    const fileAddress = this.store.readAddress(address.fileHandle);
-    const file = fileAddress instanceof SourceFileAddress
-      ? new SourceFileRef(fileAddress.handle, fileAddress.path)
-      : null;
-    return {
-      baseSpan: sourceSpanFromBounds(address.start, address.end, file),
-    };
   }
 }
 
 /** Lowers command-bearing attribute classifications through runtime-shaped binding-command models. */
 export class BindingCommandLoweringMaterializer {
+  private readonly valueSitePublisher: TemplateValueSitePublisher;
+
   constructor(
     /** Hot analysis store that receives binding-command lowering records. */
     readonly store: KernelStore,
-  ) {}
+  ) {
+    this.valueSitePublisher = new TemplateValueSitePublisher(store);
+  }
 
   lower(input: BindingCommandLoweringInput): BindingCommandLoweringEmission {
     const emission = this.recordsForLowering(input);
@@ -524,151 +564,26 @@ export class BindingCommandLoweringMaterializer {
       const owner = syntax?.attribute.productHandle == null
         ? null
         : ownersByAttributeProduct.get(syntax.attribute.productHandle) ?? null;
-      const commandMatch = findCommand(input.compilerWorld, classification.bindingCommand);
       const local = `binding-command-lowering:${input.localKey}:${index}`;
       const expressionSite = valueSiteByClassificationProduct.get(classification.productHandle) ?? null;
-      const handles = this.handlesForLocal(local);
-      const buildInput = new BindingCommandBuildInput(
-        handles.buildInputProductHandle,
-        handles.buildInputIdentityHandle,
-        classification.bindable == null
-          ? BindingCommandBuildInputKind.PlainAttribute
-          : BindingCommandBuildInputKind.Bindable,
-        classification.ownerNode,
-        syntax?.attribute ?? attribute?.toReference() ?? new HtmlAttributeReference(null, null, null),
-        syntax?.productHandle ?? null,
-        expressionSite?.productHandle ?? null,
-        classification.bindable?.reference.ownerDefinitionProductHandle ?? null,
-        classification.resource?.definitionProductHandle ?? null,
-        syntax?.sourceAddressHandle ?? attribute?.sourceAddressHandle ?? classification.sourceAddressHandle,
-        compactFieldProvenance<BindingCommandBuildInputField>([
-          new FieldProvenance('inputKind', source.provenanceHandle),
-          new FieldProvenance('attribute', source.provenanceHandle),
-          syntax == null ? null : new FieldProvenance('syntax', source.provenanceHandle),
-          expressionSite == null ? null : new FieldProvenance('expressionSite', source.provenanceHandle),
-          classification.bindable == null ? null : new FieldProvenance('bindable', source.provenanceHandle),
-          classification.resource == null ? null : new FieldProvenance('definition', source.provenanceHandle),
-          new FieldProvenance('node', source.provenanceHandle),
-          new FieldProvenance('source', source.provenanceHandle),
-        ]),
-      );
-      const buildInputClaim = new SemanticClaim(
-        this.store.handles.claim(`${local}:builds-command-input`),
-        classification.productHandle,
-        KernelVocabulary.Compiler.BuildsCommandInput.key,
-        buildInput.productHandle,
-        source.provenanceHandle,
-      );
-      claims.push(buildInputClaim);
-      buildInputs.push(buildInput);
-      records.push(
-        new CompilerIdentity(
-          buildInput.identityHandle,
-          KernelVocabulary.Compiler.BindingCommandBuildInput.key,
-          classification.identityHandle,
-          buildInput.sourceAddressHandle,
-          classification.bindingCommand.name,
-        ),
-        new MaterializedProduct(
-          buildInput.productHandle,
-          KernelVocabulary.Compiler.BindingCommandBuildInput.key,
-          buildInput.identityHandle,
-          buildInput.sourceAddressHandle,
-          source.provenanceHandle,
-        ),
-        buildInputClaim,
-      );
-
-      const loweringResult = syntax == null || attribute == null || owner == null || commandMatch == null
-        ? this.openLowering(local, source, syntax?.sourceAddressHandle ?? classification.sourceAddressHandle, missingInputSummary(syntax, attribute, owner, commandMatch))
-        : this.executeCommand(local, source, input.compilerWorld, owner, syntax, attribute, classification, buildInput, commandMatch);
-      records.push(...loweringResult.openSeams);
-      openSeams.push(...loweringResult.openSeams);
-
-      const result = loweringResult.result;
-      const commandReference = classification.bindingCommand;
-      const lowering = new BindingCommandLowering(
-        handles.loweringProductHandle,
-        handles.loweringIdentityHandle,
-        commandReference,
-        buildInput.productHandle,
-        result.state,
-        result.instructions.map((instruction) => instruction.productHandle),
-        buildInput.sourceAddressHandle,
-        compactFieldProvenance<BindingCommandLoweringField>([
-          new FieldProvenance('command', source.provenanceHandle),
-          new FieldProvenance('input', source.provenanceHandle),
-          new FieldProvenance('state', source.provenanceHandle),
-          result.instructions.length === 0 ? null : new FieldProvenance('instructions', source.provenanceHandle),
-          new FieldProvenance('source', source.provenanceHandle),
-        ]),
-      );
-      const loweringClaim = new SemanticClaim(
-        this.store.handles.claim(`${local}:lowers-binding-command`),
-        buildInput.productHandle,
-        KernelVocabulary.Compiler.LowersBindingCommand.key,
-        lowering.productHandle,
-        source.provenanceHandle,
-      );
-      claims.push(loweringClaim);
-      if (commandReference.productHandle != null) {
-        claims.push(new SemanticClaim(
-          this.store.handles.claim(`${local}:uses-binding-command-executable`),
-          lowering.productHandle,
-          KernelVocabulary.Compiler.UsesBindingCommandExecutable.key,
-          commandReference.productHandle,
-          source.provenanceHandle,
-        ));
-      }
-      result.instructions.forEach((instruction, instructionIndex) => {
-        claims.push(new SemanticClaim(
-          this.store.handles.claim(`${local}:produces-instruction:${instructionIndex}`),
-          lowering.productHandle,
-          KernelVocabulary.Compiler.ProducesInstruction.key,
-          instruction.productHandle,
-          source.provenanceHandle,
-        ));
-        for (const [expressionIndex, expressionProductHandle] of expressionProductHandlesForInstruction(instruction).entries()) {
-          claims.push(new SemanticClaim(
-            this.store.handles.claim(`${local}:instruction:${instructionIndex}:uses-expression-parse:${expressionIndex}`),
-            instruction.productHandle,
-            KernelVocabulary.Compiler.UsesExpressionParse.key,
-            expressionProductHandle,
-            source.provenanceHandle,
-          ));
-        }
-      });
-      const instructionRecords = recordsForInstructions(
-        result.instructions,
-        lowering.identityHandle,
+      const result = this.lowerBindingCommandClassification(
+        local,
         source,
-        claims,
+        input.compilerWorld,
+        classification as CommandAttributeClassification,
+        syntax,
+        attribute,
+        owner,
+        expressionSite,
       );
-      records.push(
-        new CompilerIdentity(
-          lowering.identityHandle,
-          KernelVocabulary.Compiler.BindingCommandLowering.key,
-          buildInput.identityHandle,
-          lowering.sourceAddressHandle,
-          commandReference.name,
-        ),
-        new MaterializedProduct(
-          lowering.productHandle,
-          KernelVocabulary.Compiler.BindingCommandLowering.key,
-          lowering.identityHandle,
-          lowering.sourceAddressHandle,
-          source.provenanceHandle,
-        ),
-        ...instructionRecords,
-      );
-      lowerings.push(lowering);
+      records.push(...result.records);
+      claims.push(...result.claims);
+      openSeams.push(...result.openSeams);
+      buildInputs.push(result.buildInput);
+      lowerings.push(result.lowering);
       instructions.push(...result.instructions);
-      if (loweringResult instanceof ExecutedLoweringResult) {
-        records.push(...loweringResult.context.records);
-        claims.push(...loweringResult.context.claims);
-        valueSites.push(...loweringResult.context.sites);
-        expressionParses.push(...loweringResult.context.parses);
-      }
+      valueSites.push(...result.valueSites);
+      expressionParses.push(...result.expressionParses);
     });
 
     input.valueSites.sites.forEach((site, index) => {
@@ -729,6 +644,150 @@ export class BindingCommandLoweringMaterializer {
     );
   }
 
+  private lowerBindingCommandClassification(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    compilerWorld: TemplateCompilerWorldEmission,
+    classification: CommandAttributeClassification,
+    syntax: AttributeSyntax | null,
+    attribute: HtmlAttribute | null,
+    owner: OwnerElement | null,
+    expressionSite: TemplateValueSite | null,
+  ): BindingCommandClassificationLoweringResult {
+    const records: KernelStoreRecord[] = [];
+    const claims: SemanticClaim[] = [];
+    const openSeams: OpenSeam[] = [];
+    const valueSites: TemplateValueSite[] = [];
+    const expressionParses: TemplateExpressionParse[] = [];
+    const commandMatch = findCommand(compilerWorld, classification.bindingCommand);
+    const buildInput = this.publishBindingCommandBuildInput(
+      local,
+      source,
+      classification,
+      syntax,
+      attribute,
+      expressionSite,
+    );
+    records.push(...buildInput.records);
+    claims.push(...buildInput.claims);
+
+    const loweringResult = syntax == null || attribute == null || owner == null || commandMatch == null
+      ? this.openLowering(local, source, syntax?.sourceAddressHandle ?? classification.sourceAddressHandle, missingInputSummary(syntax, attribute, owner, commandMatch))
+      : this.executeCommand(local, source, compilerWorld, owner, syntax, attribute, classification, buildInput.input, commandMatch);
+    records.push(...loweringResult.openSeams);
+    openSeams.push(...loweringResult.openSeams);
+    const commandLowering = this.materializeCommandLowering(
+      local,
+      source,
+      classification.bindingCommand,
+      buildInput.input,
+      loweringResult.result,
+    );
+    records.push(...commandLowering.records);
+    claims.push(...commandLowering.claims);
+    if (loweringResult instanceof ExecutedLoweringResult) {
+      records.push(...loweringResult.context.records);
+      claims.push(...loweringResult.context.claims);
+      valueSites.push(...loweringResult.context.sites);
+      expressionParses.push(...loweringResult.context.parses);
+    }
+    return new BindingCommandClassificationLoweringResult(
+      buildInput.input,
+      commandLowering.lowering,
+      loweringResult.result.instructions,
+      valueSites,
+      expressionParses,
+      records,
+      claims,
+      openSeams,
+    );
+  }
+
+  private publishBindingCommandBuildInput(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    classification: CommandAttributeClassification,
+    syntax: AttributeSyntax | null,
+    attribute: HtmlAttribute | null,
+    expressionSite: TemplateValueSite | null,
+  ): PublishedBindingCommandBuildInput {
+    const handles = this.handlesForLocal(local);
+    const buildInput = this.createBindingCommandBuildInput(handles, source, classification, syntax, attribute, expressionSite);
+    const claims = [
+      new SemanticClaim(
+        this.store.handles.claim(`${local}:builds-command-input`),
+        classification.productHandle,
+        KernelVocabulary.Compiler.BuildsCommandInput.key,
+        buildInput.productHandle,
+        source.provenanceHandle,
+      ),
+    ];
+    return new PublishedBindingCommandBuildInput(
+      buildInput,
+      this.recordsForBindingCommandBuildInput(source, classification, buildInput, claims),
+      claims,
+    );
+  }
+
+  private createBindingCommandBuildInput(
+    handles: BindingCommandLoweringHandleSet,
+    source: BindingCommandLoweringSourceSet,
+    classification: CommandAttributeClassification,
+    syntax: AttributeSyntax | null,
+    attribute: HtmlAttribute | null,
+    expressionSite: TemplateValueSite | null,
+  ): BindingCommandBuildInput {
+    return new BindingCommandBuildInput(
+      handles.buildInputProductHandle,
+      handles.buildInputIdentityHandle,
+      classification.bindable == null
+        ? BindingCommandBuildInputKind.PlainAttribute
+        : BindingCommandBuildInputKind.Bindable,
+      classification.ownerNode,
+      syntax?.attribute ?? attribute?.toReference() ?? new HtmlAttributeReference(null, null, null),
+      syntax?.productHandle ?? null,
+      expressionSite?.productHandle ?? null,
+      classification.bindable?.reference.ownerDefinitionProductHandle ?? null,
+      classification.resource?.definitionProductHandle ?? null,
+      syntax?.sourceAddressHandle ?? attribute?.sourceAddressHandle ?? classification.sourceAddressHandle,
+      compactFieldProvenance<BindingCommandBuildInputField>([
+        new FieldProvenance('inputKind', source.provenanceHandle),
+        new FieldProvenance('attribute', source.provenanceHandle),
+        syntax == null ? null : new FieldProvenance('syntax', source.provenanceHandle),
+        expressionSite == null ? null : new FieldProvenance('expressionSite', source.provenanceHandle),
+        classification.bindable == null ? null : new FieldProvenance('bindable', source.provenanceHandle),
+        classification.resource == null ? null : new FieldProvenance('definition', source.provenanceHandle),
+        new FieldProvenance('node', source.provenanceHandle),
+        new FieldProvenance('source', source.provenanceHandle),
+      ]),
+    );
+  }
+
+  private recordsForBindingCommandBuildInput(
+    source: BindingCommandLoweringSourceSet,
+    classification: CommandAttributeClassification,
+    buildInput: BindingCommandBuildInput,
+    claims: readonly SemanticClaim[],
+  ): readonly KernelStoreRecord[] {
+    return [
+      new CompilerIdentity(
+        buildInput.identityHandle,
+        KernelVocabulary.Compiler.BindingCommandBuildInput.key,
+        classification.identityHandle,
+        buildInput.sourceAddressHandle,
+        classification.bindingCommand.name,
+      ),
+      new MaterializedProduct(
+        buildInput.productHandle,
+        KernelVocabulary.Compiler.BindingCommandBuildInput.key,
+        buildInput.identityHandle,
+        buildInput.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+      ...claims,
+    ];
+  }
+
   private lowerMultiBindingSite(
     local: string,
     source: BindingCommandLoweringSourceSet,
@@ -737,19 +796,46 @@ export class BindingCommandLoweringMaterializer {
     attributesByProduct: ReadonlyMap<ProductHandle, HtmlAttribute>,
     ownersByAttributeProduct: ReadonlyMap<ProductHandle, OwnerElement>,
   ): MultiBindingLoweringResult {
-    const records: KernelStoreRecord[] = [];
-    const claims: SemanticClaim[] = [];
-    const openSeams: OpenSeam[] = [];
-    const buildInputs: BindingCommandBuildInput[] = [];
-    const commandLowerings: BindingCommandLowering[] = [];
-    const attributeSyntaxes: AttributeSyntax[] = [];
-    const segments: MultiBindingSegment[] = [];
-    const instructions: TemplateInstruction[] = [];
-    const directInstructions: TemplateInstruction[] = [];
-    const valueSites: TemplateValueSite[] = [];
-    const expressionParses: TemplateExpressionParse[] = [];
-    const loweringProductHandle = this.store.handles.product(`${local}:lowering`);
-    const loweringIdentityHandle = this.store.handles.identity(`${local}:lowering`);
+    const closed = this.closeMultiBindingSite(
+      local,
+      source,
+      compilerWorld,
+      site,
+      attributesByProduct,
+      ownersByAttributeProduct,
+    );
+    const batch = closed instanceof ClosedMultiBindingSite
+      ? this.lowerMultiBindingSiteSegments(local, source, compilerWorld, site, closed)
+      : this.openMultiBindingSiteBatch(closed);
+    const state = loweringStateFor(batch.openSeams, batch.commandLowerings, batch.expressionParses);
+    const lowering = this.createMultiBindingLowering(local, source, site, state, batch);
+    const loweringClaims = this.claimsForMultiBindingLowering(local, source, site, lowering, batch.instructions);
+    return new MultiBindingLoweringResult(
+      lowering,
+      batch.segments,
+      batch.commandLowerings,
+      batch.buildInputs,
+      batch.attributeSyntaxes,
+      batch.instructions,
+      batch.valueSites,
+      batch.expressionParses,
+      [
+        ...batch.records,
+        ...this.recordsForMultiBindingLowering(source, site, lowering, batch.directInstructions, loweringClaims),
+      ],
+      [...batch.claims, ...loweringClaims],
+      batch.openSeams,
+    );
+  }
+
+  private closeMultiBindingSite(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    compilerWorld: TemplateCompilerWorldEmission,
+    site: TemplateValueSite,
+    attributesByProduct: ReadonlyMap<ProductHandle, HtmlAttribute>,
+    ownersByAttributeProduct: ReadonlyMap<ProductHandle, OwnerElement>,
+  ): ClosedMultiBindingSite | OpenSeam {
     const attribute = site.attribute?.productHandle == null
       ? null
       : attributesByProduct.get(site.attribute.productHandle) ?? null;
@@ -763,267 +849,168 @@ export class BindingCommandLoweringMaterializer {
     const parsedSegments = parseInlineMultiBindingSegments(site.rawValue);
 
     if (attribute == null || owner == null || classification == null || definition == null) {
-      openSeams.push(this.openSeam(
+      return this.openSeam(
         local,
         source,
         site.sourceAddressHandle,
         'Inline multi-binding lowering could not close over its authored attribute, owner element, classification, and custom-attribute definition.',
         KernelVocabulary.Instruction.OpenInstruction.key,
-      ));
-    } else if (parsedSegments.length === 0) {
-      openSeams.push(this.openSeam(
+      );
+    }
+    if (parsedSegments.length === 0) {
+      return this.openSeam(
         local,
         source,
         site.sourceAddressHandle,
         `Inline multi-binding value for '${classification.resource?.name ?? attribute.rawName}' did not contain a closed segment.`,
         KernelVocabulary.Instruction.OpenInstruction.key,
-      ));
-    } else {
-      const bindables = compilerWorld.resourceResolver.bindables(definition);
-      for (const parsed of parsedSegments) {
-        const segmentLocal = `${local}:segment:${parsed.segmentIndex}`;
-        const segmentAddress = this.segmentSourceAddress(segmentLocal, site.sourceAddressHandle, parsed);
-        if (segmentAddress.record != null) {
-          records.push(segmentAddress.record);
-        }
-        const syntax = this.materializeMultiBindingAttributeSyntax(
-          segmentLocal,
-          source,
-          compilerWorld,
-          site,
-          attribute,
-          parsed,
-          segmentAddress.handle,
-        );
-        records.push(...syntax.records);
-        claims.push(...syntax.claims);
-        attributeSyntaxes.push(syntax.syntax);
+      );
+    }
+    return new ClosedMultiBindingSite(
+      attribute,
+      owner,
+      classification,
+      definition,
+      parsedSegments,
+      compilerWorld.resourceResolver.bindables(definition),
+    );
+  }
 
-        const bindable = bindables.attr(syntax.syntax.target);
-        const command = syntax.syntax.command == null
-          ? null
-          : compilerWorld.bindingCommandResolver.get(syntax.syntax.command);
-        const commandMatch = command == null
-          ? null
-          : findCommand(compilerWorld, command.toReference());
-        const commandReference = commandMatch?.executable.toReference() ?? null;
-        const segment = new MultiBindingSegment(
-          this.store.handles.product(segmentLocal),
-          this.store.handles.identity(segmentLocal),
-          site.toReference(),
-          attribute.toReference(),
-          syntax.syntax.productHandle,
-          bindable,
-          commandReference,
-          parsed.segmentIndex,
-          parsed.rawName,
-          parsed.rawValue,
-          segmentAddress.handle,
-          compactFieldProvenance<MultiBindingSegmentField>([
-            new FieldProvenance('site', source.provenanceHandle),
-            new FieldProvenance('attribute', source.provenanceHandle),
-            new FieldProvenance('syntax', source.provenanceHandle),
-            bindable == null ? null : new FieldProvenance('bindable', source.provenanceHandle),
-            commandReference == null ? null : new FieldProvenance('command', source.provenanceHandle),
-            new FieldProvenance('rawName', source.provenanceHandle),
-            new FieldProvenance('rawValue', source.provenanceHandle),
-            new FieldProvenance('source', source.provenanceHandle),
-          ]),
-        );
-        segments.push(segment);
-        const splitClaim = new SemanticClaim(
-          this.store.handles.claim(`${segmentLocal}:splits-multi-binding-segment`),
-          site.productHandle,
-          KernelVocabulary.Compiler.SplitsMultiBindingSegment.key,
-          segment.productHandle,
-          source.provenanceHandle,
-        );
-        claims.push(splitClaim);
-        const syntaxClaim = new SemanticClaim(
-          this.store.handles.claim(`${segmentLocal}:parses-to-attribute-syntax`),
-          segment.productHandle,
-          KernelVocabulary.Template.ParsesToAttributeSyntax.key,
-          syntax.syntax.productHandle,
-          source.provenanceHandle,
-        );
-        claims.push(syntaxClaim);
-        if (commandReference?.productHandle != null) {
-          claims.push(new SemanticClaim(
-            this.store.handles.claim(`${segmentLocal}:uses-binding-command-executable`),
-            segment.productHandle,
-            KernelVocabulary.Compiler.UsesBindingCommandExecutable.key,
-            commandReference.productHandle,
-            source.provenanceHandle,
-          ));
-        }
-        records.push(
-          new MaterializedProduct(
-            syntax.syntax.productHandle,
-            KernelVocabulary.Template.AttributeSyntax.key,
-            syntax.syntax.identityHandle,
-            syntax.syntax.sourceAddressHandle,
-            source.provenanceHandle,
-          ),
-          new CompilerIdentity(
-            segment.identityHandle,
-            KernelVocabulary.Compiler.MultiBindingSegment.key,
-            site.identityHandle,
-            segmentAddress.handle,
-            syntax.syntax.target,
-          ),
-          new MaterializedProduct(
-            segment.productHandle,
-            KernelVocabulary.Compiler.MultiBindingSegment.key,
-            segment.identityHandle,
-            segmentAddress.handle,
-            source.provenanceHandle,
-          ),
-          splitClaim,
-          syntaxClaim,
-        );
+  private openMultiBindingSiteBatch(openSeam: OpenSeam): MultiBindingSiteSegmentBatch {
+    return new MultiBindingSiteSegmentBatch(
+      [openSeam],
+      [],
+      [openSeam],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+      [],
+    );
+  }
 
-        if (bindable == null) {
-          openSeams.push(this.openSeam(
-            segmentLocal,
-            source,
-            segmentAddress.handle,
-            `Inline multi-binding segment '${syntax.syntax.target}' does not match a bindable on '${definition.name}'.`,
-            KernelVocabulary.Instruction.OpenInstruction.key,
-          ));
-          continue;
-        }
+  private lowerMultiBindingSiteSegments(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    compilerWorld: TemplateCompilerWorldEmission,
+    site: TemplateValueSite,
+    closed: ClosedMultiBindingSite,
+  ): MultiBindingSiteSegmentBatch {
+    const records: KernelStoreRecord[] = [];
+    const claims: SemanticClaim[] = [];
+    const openSeams: OpenSeam[] = [];
+    const buildInputs: BindingCommandBuildInput[] = [];
+    const commandLowerings: BindingCommandLowering[] = [];
+    const attributeSyntaxes: AttributeSyntax[] = [];
+    const segments: MultiBindingSegment[] = [];
+    const instructions: TemplateInstruction[] = [];
+    const directInstructions: TemplateInstruction[] = [];
+    const valueSites: TemplateValueSite[] = [];
+    const expressionParses: TemplateExpressionParse[] = [];
 
-        if (commandMatch == null) {
-          const publication = this.publishMultiBindingExpressionParse(
-            `${segmentLocal}:interpolation`,
-            source,
-            compilerWorld,
-            site,
-            segment,
-            syntax.syntax,
-            bindable,
-            parsed.rawValue,
-            'Interpolation',
-            segmentAddress.handle,
-          );
-          records.push(...publication.records);
-          claims.push(...publication.claims);
-          valueSites.push(publication.site);
-          expressionParses.push(publication.parse);
-          const instruction = this.createMultiBindingValueInstruction(
-            `${segmentLocal}:instruction`,
-            source,
-            owner,
-            attribute,
-            bindable.definition.name,
-            parsed.rawValue,
-            publication.parse,
-            segmentAddress.handle,
-          );
-          directInstructions.push(instruction);
-          instructions.push(instruction);
-          continue;
-        }
-        const closedCommandReference = commandMatch.executable.toReference();
-
-        const buildInput = this.createMultiBindingCommandBuildInput(
-          segmentLocal,
-          source,
-          owner,
-          attribute,
-          syntax.syntax,
-          segment,
-          bindable,
-        );
-        buildInputs.push(buildInput.input);
-        claims.push(...buildInput.claims);
-        records.push(...buildInput.records);
-        const loweringResult = this.executeCommand(
-          segmentLocal,
-          source,
-          compilerWorld,
-          owner,
-          syntax.syntax,
-          attribute,
-          classification,
-          buildInput.input,
-          commandMatch,
-          bindable,
-          closedCommandReference,
-        );
-        records.push(...loweringResult.openSeams);
-        openSeams.push(...loweringResult.openSeams);
-        const commandLowering = this.materializeCommandLowering(
-          `${segmentLocal}:command`,
-          source,
-          closedCommandReference,
-          buildInput.input,
-          loweringResult.result,
-          claims,
-        );
-        records.push(...commandLowering.records);
-        claims.push(...commandLowering.claims);
-        commandLowerings.push(commandLowering.lowering);
-        instructions.push(...loweringResult.result.instructions);
-        if (loweringResult instanceof ExecutedLoweringResult) {
-          records.push(...loweringResult.context.records);
-          claims.push(...loweringResult.context.claims);
-          valueSites.push(...loweringResult.context.sites);
-          expressionParses.push(...loweringResult.context.parses);
-        }
-      }
+    for (const parsed of closed.parsedSegments) {
+      const segmentLocal = `${local}:segment:${parsed.segmentIndex}`;
+      const result = this.lowerMultiBindingSegment(
+        segmentLocal,
+        source,
+        compilerWorld,
+        site,
+        closed.attribute,
+        closed.owner,
+        closed.classification,
+        closed.definition,
+        parsed,
+        closed.bindables,
+      );
+      records.push(...result.records);
+      claims.push(...result.claims);
+      openSeams.push(...result.openSeams);
+      buildInputs.push(...result.buildInputs);
+      commandLowerings.push(...result.commandLowerings);
+      attributeSyntaxes.push(...result.attributeSyntaxes);
+      segments.push(result.segment);
+      instructions.push(...result.instructions);
+      directInstructions.push(...result.directInstructions);
+      valueSites.push(...result.valueSites);
+      expressionParses.push(...result.expressionParses);
     }
 
-    const state = loweringStateFor(openSeams, commandLowerings, expressionParses);
-    const lowering = new MultiBindingLowering(
-      loweringProductHandle,
-      loweringIdentityHandle,
+    return new MultiBindingSiteSegmentBatch(
+      records,
+      claims,
+      openSeams,
+      buildInputs,
+      commandLowerings,
+      attributeSyntaxes,
+      segments,
+      instructions,
+      directInstructions,
+      valueSites,
+      expressionParses,
+    );
+  }
+
+  private createMultiBindingLowering(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    site: TemplateValueSite,
+    state: BindingCommandLoweringState,
+    batch: MultiBindingSiteSegmentBatch,
+  ): MultiBindingLowering {
+    return new MultiBindingLowering(
+      this.store.handles.product(`${local}:lowering`),
+      this.store.handles.identity(`${local}:lowering`),
       site.toReference(),
       state,
-      segments.map((segment) => segment.productHandle),
-      instructions.map((instruction) => instruction.productHandle),
+      batch.segments.map((segment) => segment.productHandle),
+      batch.instructions.map((instruction) => instruction.productHandle),
       site.sourceAddressHandle,
       compactFieldProvenance<MultiBindingLoweringField>([
         new FieldProvenance('site', source.provenanceHandle),
         new FieldProvenance('state', source.provenanceHandle),
-        segments.length === 0 ? null : new FieldProvenance('segments', source.provenanceHandle),
-        instructions.length === 0 ? null : new FieldProvenance('instructions', source.provenanceHandle),
+        batch.segments.length === 0 ? null : new FieldProvenance('segments', source.provenanceHandle),
+        batch.instructions.length === 0 ? null : new FieldProvenance('instructions', source.provenanceHandle),
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
-    const loweringClaim = new SemanticClaim(
-      this.store.handles.claim(`${local}:lowers-multi-binding`),
-      site.productHandle,
-      KernelVocabulary.Compiler.LowersMultiBinding.key,
-      lowering.productHandle,
-      source.provenanceHandle,
-    );
-    claims.push(loweringClaim);
-    instructions.forEach((instruction, instructionIndex) => {
-      claims.push(new SemanticClaim(
-        this.store.handles.claim(`${local}:produces-instruction:${instructionIndex}`),
+  }
+
+  private claimsForMultiBindingLowering(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    site: TemplateValueSite,
+    lowering: MultiBindingLowering,
+    instructions: readonly TemplateInstruction[],
+  ): readonly SemanticClaim[] {
+    return [
+      new SemanticClaim(
+        this.store.handles.claim(`${local}:lowers-multi-binding`),
+        site.productHandle,
+        KernelVocabulary.Compiler.LowersMultiBinding.key,
         lowering.productHandle,
-        KernelVocabulary.Compiler.ProducesInstruction.key,
-        instruction.productHandle,
         source.provenanceHandle,
-      ));
-      for (const [expressionIndex, expressionProductHandle] of expressionProductHandlesForInstruction(instruction).entries()) {
-        claims.push(new SemanticClaim(
-          this.store.handles.claim(`${local}:instruction:${instructionIndex}:uses-expression-parse:${expressionIndex}`),
-          instruction.productHandle,
-          KernelVocabulary.Compiler.UsesExpressionParse.key,
-          expressionProductHandle,
-          source.provenanceHandle,
-        ));
-      }
-    });
-    records.push(
+      ),
+      ...this.claimsForProducedInstructions(local, source, lowering.productHandle, instructions),
+    ];
+  }
+
+  private recordsForMultiBindingLowering(
+    source: BindingCommandLoweringSourceSet,
+    site: TemplateValueSite,
+    lowering: MultiBindingLowering,
+    directInstructions: readonly TemplateInstruction[],
+    claims: readonly SemanticClaim[],
+  ): readonly KernelStoreRecord[] {
+    return [
       new CompilerIdentity(
         lowering.identityHandle,
         KernelVocabulary.Compiler.MultiBindingLowering.key,
         site.identityHandle,
         site.sourceAddressHandle,
-        state,
+        lowering.state,
       ),
       new MaterializedProduct(
         lowering.productHandle,
@@ -1032,23 +1019,414 @@ export class BindingCommandLoweringMaterializer {
         lowering.sourceAddressHandle,
         source.provenanceHandle,
       ),
-      loweringClaim,
-      ...recordsForInstructions(directInstructions, lowering.identityHandle, source, claims),
-    );
+      ...claims,
+      ...recordsForInstructions(directInstructions, lowering.identityHandle, source),
+    ];
+  }
 
-    return new MultiBindingLoweringResult(
-      lowering,
-      segments,
+  private lowerMultiBindingSegment(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    compilerWorld: TemplateCompilerWorldEmission,
+    site: TemplateValueSite,
+    attribute: HtmlAttribute,
+    owner: OwnerElement,
+    classification: AttributeClassification,
+    definition: CustomAttributeDefinition,
+    parsed: ParsedMultiBindingSegment,
+    bindables: TemplateAttributeBindablesInfo,
+  ): MultiBindingSegmentLoweringResult {
+    const records: KernelStoreRecord[] = [];
+    const claims: SemanticClaim[] = [];
+    const openSeams: OpenSeam[] = [];
+    const buildInputs: BindingCommandBuildInput[] = [];
+    const commandLowerings: BindingCommandLowering[] = [];
+    const attributeSyntaxes: AttributeSyntax[] = [];
+    const instructions: TemplateInstruction[] = [];
+    const directInstructions: TemplateInstruction[] = [];
+    const valueSites: TemplateValueSite[] = [];
+    const expressionParses: TemplateExpressionParse[] = [];
+    const materializedSegment = this.materializeMultiBindingSegment(
+      local,
+      source,
+      compilerWorld,
+      site,
+      attribute,
+      parsed,
+      bindables,
+    );
+    const { segment, syntax, bindable, commandMatch, sourceAddressHandle } = materializedSegment;
+    records.push(...materializedSegment.records);
+    claims.push(...materializedSegment.claims);
+    attributeSyntaxes.push(syntax);
+
+    if (bindable == null) {
+      openSeams.push(this.openSeam(
+        local,
+        source,
+        sourceAddressHandle,
+        `Inline multi-binding segment '${syntax.target}' does not match a bindable on '${definition.name}'.`,
+        KernelVocabulary.Instruction.OpenInstruction.key,
+      ));
+    } else if (commandMatch == null) {
+      const publication = this.publishMultiBindingExpressionParse(
+        `${local}:interpolation`,
+        source,
+        compilerWorld,
+        site,
+        segment,
+        syntax,
+        bindable,
+        parsed.rawValue,
+        'Interpolation',
+        sourceAddressHandle,
+      );
+      records.push(...publication.records);
+      claims.push(...publication.claims);
+      valueSites.push(publication.site);
+      expressionParses.push(publication.parse);
+      const instruction = this.createMultiBindingValueInstruction(
+        `${local}:instruction`,
+        source,
+        owner,
+        attribute,
+        bindable.definition.name,
+        parsed.rawValue,
+        publication.parse,
+        sourceAddressHandle,
+      );
+      directInstructions.push(instruction);
+      instructions.push(instruction);
+    } else {
+      const closedCommandReference = commandMatch.executable.toReference();
+      const buildInput = this.publishMultiBindingCommandBuildInput(
+        local,
+        source,
+        owner,
+        attribute,
+        syntax,
+        segment,
+        bindable,
+      );
+      buildInputs.push(buildInput.input);
+      claims.push(...buildInput.claims);
+      records.push(...buildInput.records);
+      const loweringResult = this.executeCommand(
+        local,
+        source,
+        compilerWorld,
+        owner,
+        syntax,
+        attribute,
+        classification,
+        buildInput.input,
+        commandMatch,
+        bindable,
+        closedCommandReference,
+      );
+      records.push(...loweringResult.openSeams);
+      openSeams.push(...loweringResult.openSeams);
+      const commandLowering = this.materializeCommandLowering(
+        `${local}:command`,
+        source,
+        closedCommandReference,
+        buildInput.input,
+        loweringResult.result,
+      );
+      records.push(...commandLowering.records);
+      claims.push(...commandLowering.claims);
+      commandLowerings.push(commandLowering.lowering);
+      instructions.push(...loweringResult.result.instructions);
+      if (loweringResult instanceof ExecutedLoweringResult) {
+        records.push(...loweringResult.context.records);
+        claims.push(...loweringResult.context.claims);
+        valueSites.push(...loweringResult.context.sites);
+        expressionParses.push(...loweringResult.context.parses);
+      }
+    }
+
+    return new MultiBindingSegmentLoweringResult(
+      segment,
       commandLowerings,
       buildInputs,
       attributeSyntaxes,
       instructions,
+      directInstructions,
       valueSites,
       expressionParses,
       records,
       claims,
       openSeams,
     );
+  }
+
+  private materializeMultiBindingSegment(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    compilerWorld: TemplateCompilerWorldEmission,
+    site: TemplateValueSite,
+    attribute: HtmlAttribute,
+    parsed: ParsedMultiBindingSegment,
+    bindables: TemplateAttributeBindablesInfo,
+  ): MaterializedMultiBindingSegment {
+    const segmentAddress = this.segmentSourceAddress(local, site.sourceAddressHandle, parsed);
+    const syntax = this.materializeMultiBindingAttributeSyntax(
+      local,
+      source,
+      compilerWorld,
+      site,
+      attribute,
+      parsed,
+      segmentAddress.handle,
+    );
+    const selection = this.selectMultiBindingSegment(
+      compilerWorld,
+      syntax.syntax,
+      bindables,
+    );
+    const segment = this.publishMultiBindingSegment(
+      local,
+      source,
+      site,
+      attribute,
+      syntax.syntax,
+      parsed,
+      selection,
+      segmentAddress.handle,
+    );
+
+    return new MaterializedMultiBindingSegment(
+      segment.segment,
+      syntax.syntax,
+      selection.bindable,
+      selection.commandMatch,
+      segmentAddress.handle,
+      [
+        ...(segmentAddress.record == null ? [] : [segmentAddress.record]),
+        ...syntax.records,
+        ...segment.records,
+      ],
+      [
+        ...syntax.claims,
+        ...segment.claims,
+      ],
+    );
+  }
+
+  private selectMultiBindingSegment(
+    compilerWorld: TemplateCompilerWorldEmission,
+    syntax: AttributeSyntax,
+    bindables: TemplateAttributeBindablesInfo,
+  ): MultiBindingSegmentSelection {
+    const bindable = bindables.attr(syntax.target);
+    const command = syntax.command == null
+      ? null
+      : compilerWorld.bindingCommandResolver.get(syntax.command);
+    const commandMatch = command == null
+      ? null
+      : findCommand(compilerWorld, command.toReference());
+    return new MultiBindingSegmentSelection(
+      bindable,
+      commandMatch,
+      commandMatch?.executable.toReference() ?? null,
+    );
+  }
+
+  private publishMultiBindingSegment(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    site: TemplateValueSite,
+    attribute: HtmlAttribute,
+    syntax: AttributeSyntax,
+    parsed: ParsedMultiBindingSegment,
+    selection: MultiBindingSegmentSelection,
+    sourceAddressHandle: AddressHandle | null,
+  ): PublishedMultiBindingSegment {
+    const segment = this.createMultiBindingSegment(
+      local,
+      source,
+      site,
+      attribute,
+      syntax,
+      parsed,
+      selection,
+      sourceAddressHandle,
+    );
+    const claims = this.claimsForMultiBindingSegment(
+      local,
+      source,
+      site,
+      syntax,
+      segment,
+      selection.commandReference,
+    );
+    return new PublishedMultiBindingSegment(
+      segment,
+      this.recordsForMultiBindingSegment(
+        source,
+        site,
+        syntax,
+        segment,
+        sourceAddressHandle,
+        claims,
+      ),
+      claims,
+    );
+  }
+
+  private createMultiBindingSegment(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    site: TemplateValueSite,
+    attribute: HtmlAttribute,
+    syntax: AttributeSyntax,
+    parsed: ParsedMultiBindingSegment,
+    selection: MultiBindingSegmentSelection,
+    sourceAddressHandle: AddressHandle | null,
+  ): MultiBindingSegment {
+    const handles = this.multiBindingSegmentHandles(local);
+    return new MultiBindingSegment(
+      handles.productHandle,
+      handles.identityHandle,
+      site.toReference(),
+      attribute.toReference(),
+      syntax.productHandle,
+      selection.bindable,
+      selection.commandReference,
+      parsed.segmentIndex,
+      parsed.rawName,
+      parsed.rawValue,
+      sourceAddressHandle,
+      this.multiBindingSegmentProvenance(source, selection),
+    );
+  }
+
+  private multiBindingSegmentHandles(local: string): MultiBindingSegmentHandleSet {
+    return {
+      productHandle: this.store.handles.product(local),
+      identityHandle: this.store.handles.identity(local),
+    };
+  }
+
+  private multiBindingSegmentProvenance(
+    source: BindingCommandLoweringSourceSet,
+    selection: MultiBindingSegmentSelection,
+  ): MultiBindingSegment['fieldProvenance'] {
+    return compactFieldProvenance<MultiBindingSegmentField>([
+      new FieldProvenance('site', source.provenanceHandle),
+      new FieldProvenance('attribute', source.provenanceHandle),
+      new FieldProvenance('syntax', source.provenanceHandle),
+      selection.bindable == null ? null : new FieldProvenance('bindable', source.provenanceHandle),
+      selection.commandReference == null ? null : new FieldProvenance('command', source.provenanceHandle),
+      new FieldProvenance('rawName', source.provenanceHandle),
+      new FieldProvenance('rawValue', source.provenanceHandle),
+      new FieldProvenance('source', source.provenanceHandle),
+    ]);
+  }
+
+  private claimsForMultiBindingSegment(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    site: TemplateValueSite,
+    syntax: AttributeSyntax,
+    segment: MultiBindingSegment,
+    commandReference: MultiBindingSegment['command'],
+  ): readonly SemanticClaim[] {
+    return [
+      this.splitsMultiBindingSegmentClaim(local, source, site, segment),
+      this.multiBindingSegmentParsesToSyntaxClaim(local, source, segment, syntax),
+      ...this.multiBindingSegmentCommandClaims(local, source, segment, commandReference),
+    ];
+  }
+
+  private splitsMultiBindingSegmentClaim(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    site: TemplateValueSite,
+    segment: MultiBindingSegment,
+  ): SemanticClaim {
+    return new SemanticClaim(
+      this.store.handles.claim(`${local}:splits-multi-binding-segment`),
+      site.productHandle,
+      KernelVocabulary.Compiler.SplitsMultiBindingSegment.key,
+      segment.productHandle,
+      source.provenanceHandle,
+    );
+  }
+
+  private multiBindingSegmentParsesToSyntaxClaim(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    segment: MultiBindingSegment,
+    syntax: AttributeSyntax,
+  ): SemanticClaim {
+    return new SemanticClaim(
+      this.store.handles.claim(`${local}:parses-to-attribute-syntax`),
+      segment.productHandle,
+      KernelVocabulary.Template.ParsesToAttributeSyntax.key,
+      syntax.productHandle,
+      source.provenanceHandle,
+    );
+  }
+
+  private multiBindingSegmentCommandClaims(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    segment: MultiBindingSegment,
+    commandReference: MultiBindingSegment['command'],
+  ): readonly SemanticClaim[] {
+    return commandReference?.productHandle == null
+      ? []
+      : [
+        new SemanticClaim(
+          this.store.handles.claim(`${local}:uses-binding-command-executable`),
+          segment.productHandle,
+          KernelVocabulary.Compiler.UsesBindingCommandExecutable.key,
+          commandReference.productHandle,
+          source.provenanceHandle,
+        ),
+      ];
+  }
+
+  private recordsForMultiBindingSegment(
+    source: BindingCommandLoweringSourceSet,
+    site: TemplateValueSite,
+    syntax: AttributeSyntax,
+    segment: MultiBindingSegment,
+    sourceAddressHandle: AddressHandle | null,
+    claims: readonly SemanticClaim[],
+  ): readonly KernelStoreRecord[] {
+    const splitClaim = claims.find((claim) =>
+      claim.predicateKey === KernelVocabulary.Compiler.SplitsMultiBindingSegment.key
+    );
+    const syntaxClaim = claims.find((claim) =>
+      claim.predicateKey === KernelVocabulary.Template.ParsesToAttributeSyntax.key
+    );
+    return [
+      new MaterializedProduct(
+        syntax.productHandle,
+        KernelVocabulary.Template.AttributeSyntax.key,
+        syntax.identityHandle,
+        syntax.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+      new CompilerIdentity(
+        segment.identityHandle,
+        KernelVocabulary.Compiler.MultiBindingSegment.key,
+        site.identityHandle,
+        sourceAddressHandle,
+        syntax.target,
+      ),
+      new MaterializedProduct(
+        segment.productHandle,
+        KernelVocabulary.Compiler.MultiBindingSegment.key,
+        segment.identityHandle,
+        sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+      ...(splitClaim == null ? [] : [splitClaim]),
+      ...(syntaxClaim == null ? [] : [syntaxClaim]),
+    ];
   }
 
   private materializeMultiBindingAttributeSyntax(
@@ -1065,12 +1443,38 @@ export class BindingCommandLoweringMaterializer {
     readonly claims: readonly SemanticClaim[];
   } {
     const parse = parseAttributeSyntaxInWorld(compilerWorld, segment.rawName, segment.rawValue);
+    const syntax = this.createMultiBindingAttributeSyntax(
+      this.attributeSyntaxHandles(`${local}:attribute-syntax`),
+      source,
+      attribute,
+      parse,
+      sourceAddressHandle,
+    );
+    return new PublishedMultiBindingAttributeSyntax(
+      syntax,
+      this.recordsForMultiBindingAttributeSyntax(site, syntax, sourceAddressHandle),
+      [],
+    );
+  }
+
+  private attributeSyntaxHandles(local: string): AttributeSyntaxHandleSet {
+    return {
+      productHandle: this.store.handles.product(local),
+      identityHandle: this.store.handles.identity(local),
+    };
+  }
+
+  private createMultiBindingAttributeSyntax(
+    handles: AttributeSyntaxHandleSet,
+    source: BindingCommandLoweringSourceSet,
+    attribute: HtmlAttribute,
+    parse: AttributeParserParseResult,
+    sourceAddressHandle: AddressHandle | null,
+  ): AttributeSyntax {
     const execution = parse.execution;
-    const syntaxProductHandle = this.store.handles.product(`${local}:attribute-syntax`);
-    const syntaxIdentityHandle = this.store.handles.identity(`${local}:attribute-syntax`);
-    const syntax = new AttributeSyntax(
-      syntaxProductHandle,
-      syntaxIdentityHandle,
+    return new AttributeSyntax(
+      handles.productHandle,
+      handles.identityHandle,
       execution.syntaxKind,
       execution.rawName,
       execution.rawValue,
@@ -1080,32 +1484,43 @@ export class BindingCommandLoweringMaterializer {
       parse.pattern,
       attribute.toReference(),
       sourceAddressHandle,
-      compactFieldProvenance<AttributeSyntaxField>([
-        new FieldProvenance('rawName', source.provenanceHandle),
-        new FieldProvenance('rawValue', source.provenanceHandle),
-        new FieldProvenance('target', source.provenanceHandle),
-        execution.command == null ? null : new FieldProvenance('command', source.provenanceHandle),
-        execution.parts.length === 0 ? null : new FieldProvenance('parts', source.provenanceHandle),
-        parse.pattern == null ? null : new FieldProvenance('pattern', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      this.multiBindingAttributeSyntaxProvenance(source, parse),
     );
-    return {
-      syntax,
-      records: [
-        new CompilerIdentity(
-          syntax.identityHandle,
-          KernelVocabulary.Template.AttributeSyntax.key,
-          site.identityHandle,
-          sourceAddressHandle,
-          syntax.rawName,
-        ),
-      ],
-      claims: [],
-    };
   }
 
-  private createMultiBindingCommandBuildInput(
+  private multiBindingAttributeSyntaxProvenance(
+    source: BindingCommandLoweringSourceSet,
+    parse: AttributeParserParseResult,
+  ): AttributeSyntax['fieldProvenance'] {
+    const execution = parse.execution;
+    return compactFieldProvenance<AttributeSyntaxField>([
+      new FieldProvenance('rawName', source.provenanceHandle),
+      new FieldProvenance('rawValue', source.provenanceHandle),
+      new FieldProvenance('target', source.provenanceHandle),
+      execution.command == null ? null : new FieldProvenance('command', source.provenanceHandle),
+      execution.parts.length === 0 ? null : new FieldProvenance('parts', source.provenanceHandle),
+      parse.pattern == null ? null : new FieldProvenance('pattern', source.provenanceHandle),
+      new FieldProvenance('source', source.provenanceHandle),
+    ]);
+  }
+
+  private recordsForMultiBindingAttributeSyntax(
+    site: TemplateValueSite,
+    syntax: AttributeSyntax,
+    sourceAddressHandle: AddressHandle | null,
+  ): readonly KernelStoreRecord[] {
+    return [
+      new CompilerIdentity(
+        syntax.identityHandle,
+        KernelVocabulary.Template.AttributeSyntax.key,
+        site.identityHandle,
+        sourceAddressHandle,
+        syntax.rawName,
+      ),
+    ];
+  }
+
+  private publishMultiBindingCommandBuildInput(
     local: string,
     source: BindingCommandLoweringSourceSet,
     owner: OwnerElement,
@@ -1118,11 +1533,49 @@ export class BindingCommandLoweringMaterializer {
     readonly records: readonly KernelStoreRecord[];
     readonly claims: readonly SemanticClaim[];
   } {
-    const productHandle = this.store.handles.product(`${local}:build-input`);
-    const identityHandle = this.store.handles.identity(`${local}:build-input`);
-    const input = new BindingCommandBuildInput(
-      productHandle,
-      identityHandle,
+    const handles = this.multiBindingCommandBuildInputHandles(local);
+    const input = this.createMultiBindingCommandBuildInput(
+      handles,
+      source,
+      owner,
+      attribute,
+      syntax,
+      segment,
+      bindable,
+    );
+    const claim = this.multiBindingCommandBuildInputClaim(local, source, segment, input);
+    return new PublishedBindingCommandBuildInput(
+      input,
+      this.recordsForMultiBindingCommandBuildInput(input, syntax, segment, source, claim),
+      [claim],
+    );
+  }
+
+  private multiBindingCommandBuildInputHandles(local: string): {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+  } {
+    return {
+      productHandle: this.store.handles.product(`${local}:build-input`),
+      identityHandle: this.store.handles.identity(`${local}:build-input`),
+    };
+  }
+
+  private createMultiBindingCommandBuildInput(
+    handles: {
+      readonly productHandle: ProductHandle;
+      readonly identityHandle: IdentityHandle;
+    },
+    source: BindingCommandLoweringSourceSet,
+    owner: OwnerElement,
+    attribute: HtmlAttribute,
+    syntax: AttributeSyntax,
+    segment: MultiBindingSegment,
+    bindable: TemplateBindableReference,
+  ): BindingCommandBuildInput {
+    return new BindingCommandBuildInput(
+      handles.productHandle,
+      handles.identityHandle,
       BindingCommandBuildInputKind.Bindable,
       owner.element.toReference(),
       attribute.toReference(),
@@ -1141,34 +1594,47 @@ export class BindingCommandLoweringMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
-    const claim = new SemanticClaim(
+  }
+
+  private multiBindingCommandBuildInputClaim(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    segment: MultiBindingSegment,
+    input: BindingCommandBuildInput,
+  ): SemanticClaim {
+    return new SemanticClaim(
       this.store.handles.claim(`${local}:builds-command-input`),
       segment.productHandle,
       KernelVocabulary.Compiler.BuildsCommandInput.key,
       input.productHandle,
       source.provenanceHandle,
     );
-    return {
-      input,
-      records: [
-        new CompilerIdentity(
-          input.identityHandle,
-          KernelVocabulary.Compiler.BindingCommandBuildInput.key,
-          segment.identityHandle,
-          input.sourceAddressHandle,
-          segment.command?.name ?? syntax.command ?? null,
-        ),
-        new MaterializedProduct(
-          input.productHandle,
-          KernelVocabulary.Compiler.BindingCommandBuildInput.key,
-          input.identityHandle,
-          input.sourceAddressHandle,
-          source.provenanceHandle,
-        ),
-        claim,
-      ],
-      claims: [claim],
-    };
+  }
+
+  private recordsForMultiBindingCommandBuildInput(
+    input: BindingCommandBuildInput,
+    syntax: AttributeSyntax,
+    segment: MultiBindingSegment,
+    source: BindingCommandLoweringSourceSet,
+    claim: SemanticClaim,
+  ): readonly KernelStoreRecord[] {
+    return [
+      new CompilerIdentity(
+        input.identityHandle,
+        KernelVocabulary.Compiler.BindingCommandBuildInput.key,
+        segment.identityHandle,
+        input.sourceAddressHandle,
+        segment.command?.name ?? syntax.command ?? null,
+      ),
+      new MaterializedProduct(
+        input.productHandle,
+        KernelVocabulary.Compiler.BindingCommandBuildInput.key,
+        input.identityHandle,
+        input.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+      claim,
+    ];
   }
 
   private publishMultiBindingExpressionParse(
@@ -1188,18 +1654,11 @@ export class BindingCommandLoweringMaterializer {
     readonly records: readonly KernelStoreRecord[];
     readonly claims: readonly SemanticClaim[];
   } {
-    const siteProductHandle = this.store.handles.product(`${local}:value-site`);
-    const siteIdentityHandle = this.store.handles.identity(`${local}:value-site`);
-    const parseProductHandle = this.store.handles.product(`${local}:expression-parse`);
-    const parseIdentityHandle = this.store.handles.identity(`${local}:expression-parse`);
-    const result = compilerWorld.expressionParser.parse(
-      expression,
-      entryFamily,
-      this.expressionParseContext(sourceAddressHandle),
-    );
-    const site = new TemplateValueSite(
-      siteProductHandle,
-      siteIdentityHandle,
+    const publication = this.valueSitePublisher.publish(new TemplateValueSitePublicationRequest(
+      `${local}:value-site`,
+      `${local}:expression-parse`,
+      compilerWorld.expressionParser,
+      source.provenanceHandle,
       TemplateValueSiteKind.CustomAttributeValue,
       expression,
       entryFamily,
@@ -1210,85 +1669,19 @@ export class BindingCommandLoweringMaterializer {
       null,
       bindable,
       sourceAddressHandle,
-      compactFieldProvenance<TemplateValueSiteField>([
-        new FieldProvenance('siteKind', source.provenanceHandle),
-        new FieldProvenance('rawValue', source.provenanceHandle),
-        new FieldProvenance('entryFamily', source.provenanceHandle),
-        new FieldProvenance('node', source.provenanceHandle),
-        new FieldProvenance('attribute', source.provenanceHandle),
-        new FieldProvenance('syntax', source.provenanceHandle),
-        new FieldProvenance('classification', source.provenanceHandle),
-        new FieldProvenance('bindable', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
-    );
-    const parse = new TemplateExpressionParse(
-      parseProductHandle,
-      parseIdentityHandle,
-      site.toReference(),
-      compilerWorld.expressionParser.productHandle,
-      expressionParseStateForResult(result),
-      result.kind,
-      result,
-      sourceAddressHandle,
-      compactFieldProvenance<TemplateExpressionParseField>([
-        new FieldProvenance('site', source.provenanceHandle),
-        new FieldProvenance('parser', source.provenanceHandle),
-        new FieldProvenance('state', source.provenanceHandle),
-        new FieldProvenance('resultKind', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
-    );
-    const routeClaim = new SemanticClaim(
-      this.store.handles.claim(`${local}:selects-value-site`),
+      segment.identityHandle,
+      `${segment.rawName}:Interpolation`,
       segment.productHandle,
-      KernelVocabulary.Template.SelectsValueSite.key,
-      site.productHandle,
-      source.provenanceHandle,
-    );
-    const parseClaim = new SemanticClaim(
-      this.store.handles.claim(`${local}:parses-to-expression-parse`),
-      site.productHandle,
-      KernelVocabulary.Template.ParsesToExpressionParse.key,
-      parse.productHandle,
-      source.provenanceHandle,
-    );
+      (result) => `${segment.rawName}:${result.kind}`,
+    ));
+    if (publication.parse == null) {
+      throw new Error('Inline multi-binding expression parsing must publish an expression parse.');
+    }
     return {
-      site,
-      parse,
-      claims: [routeClaim, parseClaim],
-      records: [
-        new CompilerIdentity(
-          site.identityHandle,
-          KernelVocabulary.Template.ValueSite.key,
-          segment.identityHandle,
-          sourceAddressHandle,
-          `${segment.rawName}:Interpolation`,
-        ),
-        new MaterializedProduct(
-          site.productHandle,
-          KernelVocabulary.Template.ValueSite.key,
-          site.identityHandle,
-          sourceAddressHandle,
-          source.provenanceHandle,
-        ),
-        new CompilerIdentity(
-          parse.identityHandle,
-          KernelVocabulary.Template.ExpressionParse.key,
-          site.identityHandle,
-          sourceAddressHandle,
-          `${segment.rawName}:${result.kind}`,
-        ),
-        new MaterializedProduct(
-          parse.productHandle,
-          KernelVocabulary.Template.ExpressionParse.key,
-          parse.identityHandle,
-          sourceAddressHandle,
-          source.provenanceHandle,
-        ),
-        routeClaim,
-        parseClaim,
-      ],
+      site: publication.site,
+      parse: publication.parse,
+      claims: publication.claims,
+      records: publication.records,
     };
   }
 
@@ -1302,42 +1695,83 @@ export class BindingCommandLoweringMaterializer {
     parse: TemplateExpressionParse,
     sourceAddressHandle: AddressHandle | null,
   ): TemplateInstruction {
-    const productHandle = this.store.handles.product(local);
-    const identityHandle = this.store.handles.identity(local);
-    if (parse.resultKind === ExpressionParseResultKind.InterpolationAbsent) {
-      return new SetPropertyInstruction(
-        productHandle,
-        identityHandle,
-        owner.element.toReference(),
-        attribute.toReference(),
-        target,
-        value,
-        sourceAddressHandle,
-        compactFieldProvenance<TemplateInstructionField>([
-          new FieldProvenance('node', source.provenanceHandle),
-          new FieldProvenance('attribute', source.provenanceHandle),
-          new FieldProvenance('target', source.provenanceHandle),
-          new FieldProvenance('value', source.provenanceHandle),
-          new FieldProvenance('source', source.provenanceHandle),
-        ]),
-      );
-    }
+    const handles = this.templateInstructionHandles(local);
+    return parse.resultKind === ExpressionParseResultKind.InterpolationAbsent
+      ? this.createMultiBindingSetPropertyInstruction(handles, source, owner, attribute, target, value, sourceAddressHandle)
+      : this.createMultiBindingInterpolationInstruction(handles, source, owner, attribute, target, parse, sourceAddressHandle);
+  }
+
+  private templateInstructionHandles(local: string): TemplateInstructionHandleSet {
+    return {
+      productHandle: this.store.handles.product(local),
+      identityHandle: this.store.handles.identity(local),
+    };
+  }
+
+  private createMultiBindingSetPropertyInstruction(
+    handles: TemplateInstructionHandleSet,
+    source: BindingCommandLoweringSourceSet,
+    owner: OwnerElement,
+    attribute: HtmlAttribute,
+    target: string,
+    value: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): SetPropertyInstruction {
+    return new SetPropertyInstruction(
+      handles.productHandle,
+      handles.identityHandle,
+      owner.element.toReference(),
+      attribute.toReference(),
+      target,
+      value,
+      sourceAddressHandle,
+      this.multiBindingSetPropertyInstructionProvenance(source),
+    );
+  }
+
+  private createMultiBindingInterpolationInstruction(
+    handles: TemplateInstructionHandleSet,
+    source: BindingCommandLoweringSourceSet,
+    owner: OwnerElement,
+    attribute: HtmlAttribute,
+    target: string,
+    parse: TemplateExpressionParse,
+    sourceAddressHandle: AddressHandle | null,
+  ): InterpolationInstruction {
     return new InterpolationInstruction(
-      productHandle,
-      identityHandle,
+      handles.productHandle,
+      handles.identityHandle,
       owner.element.toReference(),
       attribute.toReference(),
       target,
       [parse.productHandle],
       sourceAddressHandle,
-      compactFieldProvenance<TemplateInstructionField>([
-        new FieldProvenance('node', source.provenanceHandle),
-        new FieldProvenance('attribute', source.provenanceHandle),
-        new FieldProvenance('target', source.provenanceHandle),
-        new FieldProvenance('expression', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      this.multiBindingInterpolationInstructionProvenance(source),
     );
+  }
+
+  private multiBindingSetPropertyInstructionProvenance(
+    source: BindingCommandLoweringSourceSet,
+  ): TemplateInstruction['fieldProvenance'] {
+    return compactFieldProvenance<TemplateInstructionField>([
+      new FieldProvenance('node', source.provenanceHandle),
+      new FieldProvenance('attribute', source.provenanceHandle),
+      new FieldProvenance('target', source.provenanceHandle),
+      new FieldProvenance('value', source.provenanceHandle),
+      new FieldProvenance('source', source.provenanceHandle),
+    ]);
+  }
+
+  private multiBindingInterpolationInstructionProvenance(
+    source: BindingCommandLoweringSourceSet,
+  ): TemplateInstruction['fieldProvenance'] {
+    return compactFieldProvenance<TemplateInstructionField>([
+      new FieldProvenance('node', source.provenanceHandle),
+      new FieldProvenance('attribute', source.provenanceHandle),
+      new FieldProvenance('target', source.provenanceHandle),
+      new FieldProvenance('expression', source.provenanceHandle),
+      new FieldProvenance('source', source.provenanceHandle),
+    ]);
   }
 
   private materializeCommandLowering(
@@ -1346,18 +1780,46 @@ export class BindingCommandLoweringMaterializer {
     commandReference: BindingCommandLowering['command'],
     buildInput: BindingCommandBuildInput,
     result: BindingCommandBuildResult,
-    existingClaims: readonly SemanticClaim[],
-  ): {
-    readonly lowering: BindingCommandLowering;
-    readonly records: readonly KernelStoreRecord[];
-    readonly claims: readonly SemanticClaim[];
-  } {
-    const productHandle = this.store.handles.product(`${local}:lowering`);
-    const identityHandle = this.store.handles.identity(`${local}:lowering`);
-    const claims: SemanticClaim[] = [];
-    const lowering = new BindingCommandLowering(
-      productHandle,
-      identityHandle,
+  ): PublishedBindingCommandLowering {
+    const lowering = this.createBindingCommandLowering(
+      local,
+      source,
+      commandReference,
+      buildInput,
+      result,
+    );
+    const claims = this.claimsForBindingCommandLowering(
+      local,
+      source,
+      commandReference,
+      lowering,
+      buildInput,
+      result.instructions,
+    );
+    return new PublishedBindingCommandLowering(
+      lowering,
+      this.recordsForBindingCommandLowering(
+        source,
+        commandReference,
+        buildInput,
+        lowering,
+        result.instructions,
+        claims,
+      ),
+      claims,
+    );
+  }
+
+  private createBindingCommandLowering(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    commandReference: BindingCommandLowering['command'],
+    buildInput: BindingCommandBuildInput,
+    result: BindingCommandBuildResult,
+  ): BindingCommandLowering {
+    return new BindingCommandLowering(
+      this.store.handles.product(`${local}:lowering`),
+      this.store.handles.identity(`${local}:lowering`),
       commandReference,
       buildInput.productHandle,
       result.state,
@@ -1371,80 +1833,91 @@ export class BindingCommandLoweringMaterializer {
         new FieldProvenance('source', source.provenanceHandle),
       ]),
     );
-    claims.push(new SemanticClaim(
-      this.store.handles.claim(`${local}:lowers-binding-command`),
-      buildInput.productHandle,
-      KernelVocabulary.Compiler.LowersBindingCommand.key,
-      lowering.productHandle,
-      source.provenanceHandle,
-    ));
-    if (commandReference.productHandle != null) {
-      claims.push(new SemanticClaim(
-        this.store.handles.claim(`${local}:uses-binding-command-executable`),
+  }
+
+  private claimsForBindingCommandLowering(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    commandReference: BindingCommandLowering['command'],
+    lowering: BindingCommandLowering,
+    buildInput: BindingCommandBuildInput,
+    instructions: readonly TemplateInstruction[],
+  ): readonly SemanticClaim[] {
+    return [
+      new SemanticClaim(
+        this.store.handles.claim(`${local}:lowers-binding-command`),
+        buildInput.productHandle,
+        KernelVocabulary.Compiler.LowersBindingCommand.key,
         lowering.productHandle,
-        KernelVocabulary.Compiler.UsesBindingCommandExecutable.key,
-        commandReference.productHandle,
         source.provenanceHandle,
-      ));
-    }
-    result.instructions.forEach((instruction, instructionIndex) => {
-      claims.push(new SemanticClaim(
-        this.store.handles.claim(`${local}:produces-instruction:${instructionIndex}`),
+      ),
+      ...(commandReference.productHandle == null
+        ? []
+        : [
+          new SemanticClaim(
+            this.store.handles.claim(`${local}:uses-binding-command-executable`),
+            lowering.productHandle,
+            KernelVocabulary.Compiler.UsesBindingCommandExecutable.key,
+            commandReference.productHandle,
+            source.provenanceHandle,
+          ),
+        ]),
+      ...this.claimsForProducedInstructions(local, source, lowering.productHandle, instructions),
+    ];
+  }
+
+  private recordsForBindingCommandLowering(
+    source: BindingCommandLoweringSourceSet,
+    commandReference: BindingCommandLowering['command'],
+    buildInput: BindingCommandBuildInput,
+    lowering: BindingCommandLowering,
+    instructions: readonly TemplateInstruction[],
+    claims: readonly SemanticClaim[],
+  ): readonly KernelStoreRecord[] {
+    return [
+      new CompilerIdentity(
+        lowering.identityHandle,
+        KernelVocabulary.Compiler.BindingCommandLowering.key,
+        buildInput.identityHandle,
+        lowering.sourceAddressHandle,
+        commandReference.name,
+      ),
+      new MaterializedProduct(
         lowering.productHandle,
+        KernelVocabulary.Compiler.BindingCommandLowering.key,
+        lowering.identityHandle,
+        lowering.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+      ...recordsForInstructions(instructions, lowering.identityHandle, source),
+      ...claims,
+    ];
+  }
+
+  private claimsForProducedInstructions(
+    local: string,
+    source: BindingCommandLoweringSourceSet,
+    producerHandle: ProductHandle,
+    instructions: readonly TemplateInstruction[],
+  ): readonly SemanticClaim[] {
+    return instructions.flatMap((instruction, instructionIndex) => [
+      new SemanticClaim(
+        this.store.handles.claim(`${local}:produces-instruction:${instructionIndex}`),
+        producerHandle,
         KernelVocabulary.Compiler.ProducesInstruction.key,
         instruction.productHandle,
         source.provenanceHandle,
-      ));
-      for (const [expressionIndex, expressionProductHandle] of expressionProductHandlesForInstruction(instruction).entries()) {
-        claims.push(new SemanticClaim(
+      ),
+      ...expressionProductHandlesForInstruction(instruction).map((expressionProductHandle, expressionIndex) =>
+        new SemanticClaim(
           this.store.handles.claim(`${local}:instruction:${instructionIndex}:uses-expression-parse:${expressionIndex}`),
           instruction.productHandle,
           KernelVocabulary.Compiler.UsesExpressionParse.key,
           expressionProductHandle,
           source.provenanceHandle,
-        ));
-      }
-    });
-    const allClaims = [...existingClaims, ...claims];
-    return {
-      lowering,
-      claims,
-      records: [
-        new CompilerIdentity(
-          lowering.identityHandle,
-          KernelVocabulary.Compiler.BindingCommandLowering.key,
-          buildInput.identityHandle,
-          lowering.sourceAddressHandle,
-          commandReference.name,
-        ),
-        new MaterializedProduct(
-          lowering.productHandle,
-          KernelVocabulary.Compiler.BindingCommandLowering.key,
-          lowering.identityHandle,
-          lowering.sourceAddressHandle,
-          source.provenanceHandle,
-        ),
-        ...recordsForInstructions(result.instructions, lowering.identityHandle, source, allClaims),
-        ...claims,
-      ],
-    };
-  }
-
-  private expressionParseContext(addressHandle: AddressHandle | null): ExpressionParseContext | undefined {
-    if (addressHandle == null) {
-      return undefined;
-    }
-    const address = this.store.readAddress(addressHandle);
-    if (!(address instanceof SourceSpanAddress)) {
-      return undefined;
-    }
-    const fileAddress = this.store.readAddress(address.fileHandle);
-    const file = fileAddress instanceof SourceFileAddress
-      ? new SourceFileRef(fileAddress.handle, fileAddress.path)
-      : null;
-    return {
-      baseSpan: sourceSpanFromBounds(address.start, address.end, file),
-    };
+        )
+      ),
+    ]);
   }
 
   private segmentSourceAddress(
@@ -1601,12 +2074,7 @@ export class BindingCommandLoweringMaterializer {
     );
   }
 
-  private handlesForLocal(local: string): {
-    readonly buildInputProductHandle: ProductHandle;
-    readonly buildInputIdentityHandle: IdentityHandle;
-    readonly loweringProductHandle: ProductHandle;
-    readonly loweringIdentityHandle: IdentityHandle;
-  } {
+  private handlesForLocal(local: string): BindingCommandLoweringHandleSet {
     return {
       buildInputProductHandle: this.store.handles.product(`${local}:build-input`),
       buildInputIdentityHandle: this.store.handles.identity(`${local}:build-input`),
@@ -1705,7 +2173,6 @@ function recordsForInstructions(
   instructions: readonly TemplateInstruction[],
   ownerIdentityHandle: IdentityHandle,
   source: BindingCommandLoweringSourceSet,
-  claims: readonly SemanticClaim[],
 ): readonly KernelStoreRecord[] {
   return instructions.flatMap((instruction) => [
     new InstructionIdentity(
@@ -1869,61 +2336,6 @@ function iteratorRawTailText(result: IteratorParseResult): string | null {
     case ExpressionParseResultKind.CompleteInputParseError:
       return null;
   }
-}
-
-function parseInlineMultiBindingSegments(rawValue: string): readonly ParsedMultiBindingSegment[] {
-  const segments: ParsedMultiBindingSegment[] = [];
-  const len = rawValue.length;
-  let start = 0;
-  let segmentIndex = 0;
-  for (let i = 0; i < len; i += 1) {
-    const ch = rawValue.charCodeAt(i);
-    if (ch === 92 /* backslash */) {
-      i += 1;
-      continue;
-    }
-    if (ch !== 58 /* colon */) {
-      continue;
-    }
-
-    const rawName = rawValue.slice(start, i);
-    let valueStart = i + 1;
-    while (valueStart < len && rawValue.charCodeAt(valueStart) <= 32 /* space */) {
-      valueStart += 1;
-    }
-
-    let valueEnd = len;
-    let cursor = valueStart;
-    for (; cursor < len; cursor += 1) {
-      const valueCh = rawValue.charCodeAt(cursor);
-      if (valueCh === 92 /* backslash */) {
-        cursor += 1;
-        continue;
-      }
-      if (valueCh === 59 /* semicolon */) {
-        valueEnd = cursor;
-        break;
-      }
-    }
-
-    segments.push(new ParsedMultiBindingSegment(
-      segmentIndex++,
-      rawName,
-      rawValue.slice(valueStart, valueEnd),
-      start,
-      valueEnd,
-      valueStart,
-      valueEnd,
-    ));
-
-    let nextStart = valueEnd < len ? valueEnd + 1 : valueEnd;
-    while (nextStart < len && rawValue.charCodeAt(nextStart) <= 32 /* space */) {
-      nextStart += 1;
-    }
-    start = nextStart;
-    i = nextStart - 1;
-  }
-  return segments;
 }
 
 function loweringStateFor(

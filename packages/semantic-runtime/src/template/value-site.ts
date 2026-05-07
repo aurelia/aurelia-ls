@@ -7,9 +7,9 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
-import type { TemplateBindableReference } from './compiler-world.js';
+import type { TemplateBindableReference } from './compiler-world-reference.js';
 import type { AttributeClassification, AttributeSyntax } from './attribute-syntax.js';
-import type { BindingCommandExecutableReference } from './binding-command-execution.js';
+import type { BindingCommandExecutableReference } from './binding-command-reference.js';
 import type {
   HtmlAttributeReference,
   HtmlNodeReference,
@@ -32,6 +32,8 @@ export const enum TemplateValueSiteKind {
   BindingCommandValue = 'binding-command-value',
   /** Custom-attribute inline multi-binding value transferred to a secondary grammar. */
   MultiBindingValue = 'multi-binding-value',
+  /** Direct spread value owned by SpreadValueBindingInstruction lowering. */
+  SpreadValue = 'spread-value',
 }
 
 export const enum TemplateExpressionParseState {

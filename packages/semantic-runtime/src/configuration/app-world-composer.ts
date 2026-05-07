@@ -1,6 +1,5 @@
 import type { KernelStore } from '../kernel/store.js';
 import type {
-  IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
 import { DiWorldConstructor } from '../di/world-constructor.js';
@@ -23,17 +22,11 @@ import {
 } from '../resources/built-in-resource-catalog-materializer.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import {
-  readRuntimeResourceKey,
-  ResourceDefinitionKind,
-  runtimeResourceKeyForKind,
-} from '../resources/resource-kind.js';
-import {
   TemplateCompilerWorldKind,
-  TemplateResourceVisibilityKind,
-  TemplateVisibleResource,
 } from '../template/compiler-world.js';
+import { TemplateResourceVisibilityKind } from '../template/compiler-world-reference.js';
 import {
-  TemplateCompilerWorldConstructionInput,
+  TemplateCompilerWorldConstructionRequest,
   TemplateCompilerWorldMaterializer,
   type TemplateCompilerWorldEmission,
 } from '../template/compiler-world-materializer.js';
@@ -44,6 +37,9 @@ import {
 import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import type { AppRoot } from './app-root.js';
 import type { ConfigurationKernelEmission } from './configuration-kernel-emitter.js';
+import {
+  AppWorldResourceVisibilityComposer,
+} from './app-world-resource-visibility.js';
 
 /**
  * Current app-world composition envelope.
@@ -76,6 +72,7 @@ export class AureliaAppWorldComposer {
   private readonly configuredResourceMaterializer: ConfiguredBuiltInResourceCatalogMaterializer;
   private readonly configuredRendererMaterializer: ConfiguredBuiltInRuntimeRendererCatalogMaterializer;
   private readonly compilerWorldMaterializer: TemplateCompilerWorldMaterializer;
+  private readonly resourceVisibilityComposer: AppWorldResourceVisibilityComposer;
 
   constructor(
     /** Hot analysis store shared by the composed materializers. */
@@ -86,6 +83,7 @@ export class AureliaAppWorldComposer {
     this.configuredResourceMaterializer = new ConfiguredBuiltInResourceCatalogMaterializer(store);
     this.configuredRendererMaterializer = new ConfiguredBuiltInRuntimeRendererCatalogMaterializer(store);
     this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(store);
+    this.resourceVisibilityComposer = new AppWorldResourceVisibilityComposer();
   }
 
   construct(
@@ -137,9 +135,15 @@ export class AureliaAppWorldComposer {
       }
       const syntax = syntaxForAdmissions(admissions, configuredSyntax);
       const runtimeRenderers = runtimeRenderersForAdmissions(admissions, configuredRenderers);
-      const resources = resourcesForContainer(container, diWorld, configuredResources, resourceDefinitions, appRoot);
+      const resources = this.resourceVisibilityComposer.construct(
+        container,
+        diWorld,
+        configuredResources,
+        resourceDefinitions,
+        appRoot,
+      );
 
-      compilerWorlds.push(this.compilerWorldMaterializer.construct(new TemplateCompilerWorldConstructionInput(
+      compilerWorlds.push(this.compilerWorldMaterializer.construct(new TemplateCompilerWorldConstructionRequest(
         `app-root:${appRoot.productHandle}`,
         TemplateCompilerWorldKind.AppRoot,
         container,
@@ -161,7 +165,7 @@ function runtimeRenderersForAdmissions(
   admissions: readonly RegistrationAdmissionProduct[],
   configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
 ): readonly BuiltInRuntimeRendererEmission[] {
-  const catalogProductHandles = rendererCatalogProductHandlesForAdmissions(admissions, configuredRenderers);
+  const catalogProductHandles = catalogProductHandlesForAdmissions(admissions, configuredRenderers.selections);
   return configuredRenderers.catalogEmission.renderers.filter((renderer) =>
     catalogProductHandles.has(renderer.catalogProductHandle)
   );
@@ -183,7 +187,7 @@ function syntaxForAdmissions(
   readonly attributePatterns: readonly BuiltInAttributePatternEmission[];
   readonly bindingCommands: readonly BuiltInBindingCommandEmission[];
 } {
-  const catalogProductHandles = syntaxCatalogProductHandlesForAdmissions(admissions, configuredSyntax);
+  const catalogProductHandles = catalogProductHandlesForAdmissions(admissions, configuredSyntax.selections);
   return {
     attributePatterns: configuredSyntax.catalogEmission.attributePatterns.filter((pattern) =>
       catalogProductHandles.has(pattern.catalogProductHandle)
@@ -192,184 +196,6 @@ function syntaxForAdmissions(
       catalogProductHandles.has(command.catalogProductHandle)
     ),
   };
-}
-
-interface VisibleContainerResourceSlot {
-  readonly resourceKey: string;
-  readonly resourceProductHandle: ProductHandle | null;
-  readonly resourceIdentityHandle: IdentityHandle | null;
-  readonly sourceAddressHandle: TemplateVisibleResource['sourceAddressHandle'];
-  readonly visibilityKind: TemplateResourceVisibilityKind;
-}
-
-function resourcesForContainer(
-  container: Container,
-  diWorld: DiWorldConstructionEmission,
-  configuredResources: ConfiguredBuiltInResourceCatalogEmission,
-  resourceDefinitions: ResourceDefinitionIndex | null,
-  appRoot: AppRoot | null,
-): readonly TemplateVisibleResource[] {
-  const configuredResourceByProduct = new Map(configuredResources.catalogEmission.resources.map((emission) => [
-    emission.resource.productHandle,
-    emission,
-  ]));
-  const resources: TemplateVisibleResource[] = [];
-  const seenLookupKeys = new Set<string>();
-  const seenResourceProducts = new Set<ProductHandle>();
-
-  for (const visibleSlot of visibleResourceSlotsForContainer(container, diWorld)) {
-    if (seenLookupKeys.has(visibleSlot.resourceKey)) {
-      continue;
-    }
-    seenLookupKeys.add(visibleSlot.resourceKey);
-
-    const configuredResource = visibleSlot.resourceProductHandle == null
-      ? null
-      : configuredResourceByProduct.get(visibleSlot.resourceProductHandle) ?? null;
-    if (configuredResource != null && configuredResource.resource.productHandle != null) {
-      if (seenResourceProducts.has(configuredResource.resource.productHandle)) {
-        continue;
-      }
-      seenResourceProducts.add(configuredResource.resource.productHandle);
-      resources.push(new TemplateVisibleResource(
-        configuredResource.resource.resourceKind,
-        configuredResource.resource.name,
-        configuredResource.resource.aliases,
-        configuredResource.resource.productHandle,
-        configuredResource.resource.identityHandle,
-        configuredResource.definition?.productHandle ?? null,
-        configuredResource.definition,
-        visibleSlot.visibilityKind,
-        configuredResource.resource.sourceAddressHandle ?? visibleSlot.sourceAddressHandle,
-      ));
-      continue;
-    }
-
-    const resourceDefinition = resourceDefinitions?.lookupByProduct(visibleSlot.resourceProductHandle) ?? null;
-    if (resourceDefinition != null
-      && resourceDefinition.productHandle != null
-      && resourceDefinition.type !== ResourceDefinitionKind.AttributePattern) {
-      if (seenResourceProducts.has(resourceDefinition.productHandle)) {
-        continue;
-      }
-      seenResourceProducts.add(resourceDefinition.productHandle);
-      resources.push(new TemplateVisibleResource(
-        resourceDefinition.type,
-        resourceDefinition.name,
-        resourceDefinition.aliases.map((alias) => alias.name),
-        resourceDefinition.productHandle,
-        resourceDefinition.identityHandle,
-        resourceDefinition.productHandle,
-        resourceDefinition,
-        visibleSlot.visibilityKind,
-        resourceDefinition.sourceAddressHandle ?? visibleSlot.sourceAddressHandle,
-      ));
-      continue;
-    }
-
-    const parsedKey = readRuntimeResourceKey(visibleSlot.resourceKey);
-    if (parsedKey == null || parsedKey.resourceKind === ResourceDefinitionKind.BindingCommand) {
-      continue;
-    }
-    resources.push(new TemplateVisibleResource(
-      parsedKey.resourceKind,
-      parsedKey.name,
-      [],
-      visibleSlot.resourceProductHandle,
-      visibleSlot.resourceIdentityHandle,
-      null,
-      null,
-      visibleSlot.visibilityKind,
-      visibleSlot.sourceAddressHandle,
-    ));
-  }
-
-  const rootComponent = rootComponentResource(appRoot, resourceDefinitions);
-  if (rootComponent != null) {
-    const resourceKey = runtimeResourceKeyForKind(rootComponent.resourceKind, rootComponent.name);
-    if (
-      (resourceKey == null || !seenLookupKeys.has(resourceKey))
-      && (
-        rootComponent.resourceProductHandle == null
-        || !seenResourceProducts.has(rootComponent.resourceProductHandle)
-      )
-    ) {
-      if (resourceKey != null) {
-        seenLookupKeys.add(resourceKey);
-      }
-      if (rootComponent.resourceProductHandle != null) {
-        seenResourceProducts.add(rootComponent.resourceProductHandle);
-      }
-      resources.unshift(rootComponent);
-    }
-  }
-
-  return resources;
-}
-
-function rootComponentResource(
-  appRoot: AppRoot | null,
-  resourceDefinitions: ResourceDefinitionIndex | null,
-): TemplateVisibleResource | null {
-  const definition = resourceDefinitions?.lookupByTargetReference(appRoot?.component ?? null) ?? null;
-  if (
-    definition == null
-    || definition.productHandle == null
-    || definition.type !== ResourceDefinitionKind.CustomElement
-  ) {
-    return null;
-  }
-
-  return new TemplateVisibleResource(
-    definition.type,
-    definition.name,
-    definition.aliases.map((alias) => alias.name),
-    definition.productHandle,
-    definition.identityHandle,
-    definition.productHandle,
-    definition,
-    TemplateResourceVisibilityKind.AppRoot,
-    appRoot?.component?.addressHandle ?? definition.sourceAddressHandle,
-  );
-}
-
-function visibleResourceSlotsForContainer(
-  container: Container,
-  diWorld: DiWorldConstructionEmission,
-): readonly VisibleContainerResourceSlot[] {
-  const containerProductHandle = container.productHandle;
-  const rootProductHandle = container.readRootReference().productHandle;
-  const slots: VisibleContainerResourceSlot[] = [];
-
-  for (const slot of diWorld.resourceSlots) {
-    if (slot.container.productHandle === containerProductHandle) {
-      slots.push({
-        resourceKey: slot.resourceKey,
-        resourceProductHandle: slot.resourceProductHandle,
-        resourceIdentityHandle: slot.resourceIdentityHandle,
-        sourceAddressHandle: slot.sourceAddressHandle,
-        visibilityKind: TemplateResourceVisibilityKind.Local,
-      });
-    }
-  }
-
-  if (rootProductHandle == null || rootProductHandle === containerProductHandle) {
-    return slots;
-  }
-
-  for (const slot of diWorld.resourceSlots) {
-    if (slot.container.productHandle === rootProductHandle) {
-      slots.push({
-        resourceKey: slot.resourceKey,
-        resourceProductHandle: slot.resourceProductHandle,
-        resourceIdentityHandle: slot.resourceIdentityHandle,
-        sourceAddressHandle: slot.sourceAddressHandle,
-        visibilityKind: TemplateResourceVisibilityKind.Inherited,
-      });
-    }
-  }
-
-  return slots;
 }
 
 function registrationAdmissionsForAppRoot(
@@ -407,33 +233,14 @@ function registrationAdmissionsForAppRoot(
   return admissions;
 }
 
-function syntaxCatalogProductHandlesForAdmissions(
-  admissions: readonly RegistrationAdmissionProduct[],
-  configuredSyntax: ConfiguredBuiltInSyntaxCatalogEmission,
-): ReadonlySet<ProductHandle> {
-  const admissionProductHandles = new Set<ProductHandle>();
-  for (const admission of admissions) {
-    admissionProductHandles.add(admission.productHandle);
-  }
-  if (admissionProductHandles.size === 0) {
-    return new Set();
-  }
-
-  const catalogProductHandles = new Set<ProductHandle>();
-  for (const selection of configuredSyntax.selections) {
-    if (!admissionProductHandles.has(selection.registrationAdmissionProductHandle)) {
-      continue;
-    }
-    for (const catalogProductHandle of selection.catalogProductHandles) {
-      catalogProductHandles.add(catalogProductHandle);
-    }
-  }
-  return catalogProductHandles;
+interface ConfiguredCatalogSelection {
+  readonly registrationAdmissionProductHandle: ProductHandle;
+  readonly catalogProductHandles: readonly ProductHandle[];
 }
 
-function rendererCatalogProductHandlesForAdmissions(
+function catalogProductHandlesForAdmissions(
   admissions: readonly RegistrationAdmissionProduct[],
-  configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
+  selections: readonly ConfiguredCatalogSelection[],
 ): ReadonlySet<ProductHandle> {
   const admissionProductHandles = new Set<ProductHandle>();
   for (const admission of admissions) {
@@ -444,7 +251,7 @@ function rendererCatalogProductHandlesForAdmissions(
   }
 
   const catalogProductHandles = new Set<ProductHandle>();
-  for (const selection of configuredRenderers.selections) {
+  for (const selection of selections) {
     if (!admissionProductHandles.has(selection.registrationAdmissionProductHandle)) {
       continue;
     }

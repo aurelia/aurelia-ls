@@ -1,6 +1,10 @@
+import { isStandardSvgAttribute } from '../observation/svg-analyzer-data.generated.js';
+import { HtmlNamespaceKind } from './html-ir.js';
+
 /** Minimal element shape consumed by AttrMapper without depending on DOM nodes. */
 export interface TemplateAttributeMapperNode {
   readonly tagName: string;
+  readonly namespace?: HtmlNamespaceKind;
   readonly attributes?: readonly {
     readonly rawName: string | null;
     readonly rawValue?: string;
@@ -26,7 +30,7 @@ export function mapAttribute(
             : null;
   return tagMapping
     ?? globalAttributeMapping(lowerAttr)
-    ?? (lowerAttr.startsWith('data-') ? attr : null);
+    ?? (isDataAttribute(element, attr) ? attr : null);
 }
 
 export function shouldDefaultToTwoWay(
@@ -120,6 +124,19 @@ function globalAttributeMapping(attr: string): string | null {
     default:
       return null;
   }
+}
+
+function isDataAttribute(
+  element: TemplateAttributeMapperNode,
+  attr: string,
+): boolean {
+  const lowerAttr = attr.toLowerCase();
+  return lowerAttr.startsWith('data-')
+    || lowerAttr.startsWith('aria-')
+    || (
+      element.namespace === HtmlNamespaceKind.Svg
+      && isStandardSvgAttribute(element.tagName, attr)
+    );
 }
 
 function attributeValue(

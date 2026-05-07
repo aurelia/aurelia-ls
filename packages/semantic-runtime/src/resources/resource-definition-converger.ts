@@ -1,12 +1,14 @@
+import {
+  existsSync,
+  readFileSync,
+} from 'node:fs';
+import path from 'node:path';
 import ts from 'typescript';
 import {
   SourceSpanAddress,
   SourceSpanRole,
 } from '../kernel/address.js';
 import { SemanticClaim } from '../kernel/claim.js';
-import {
-  OpenSeam,
-} from '../kernel/open-seam.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -16,6 +18,7 @@ import type {
   AddressHandle,
   ClaimHandle,
   EvidenceHandle,
+  IdentityHandle,
   OpenSeamHandle,
   ProductHandle,
   ProvenanceHandle,
@@ -37,6 +40,10 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  recordsForSourceOpenSeam,
+  SourceOpenSeamInput,
+} from '../kernel/source-open-seam.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   EvaluationRead,
@@ -123,12 +130,11 @@ import {
   runtimeResourceKeyForKind,
   toAureliaResourceIdentityKind,
 } from './resource-kind.js';
-import type {
-  ResourceDefinitionHeaderEmission,
-  ResourceRecognitionKernelEmission,
-} from './resource-recognition-kernel-emitter.js';
+import type { ResourceDefinitionHeaderEmission } from './resource-definition-header-emission.js';
+import type { ResourceRecognitionKernelEmission } from './resource-recognition-kernel-emitter.js';
 import {
   ResourceAliasDefinition,
+  ResourceDependencyReference,
   ResourceTargetReference,
 } from './resource-reference.js';
 import { ResourceProductDetails } from './product-details.js';
@@ -173,8 +179,47 @@ class ConvergenceSourceSet {
 class ConvergenceOpen {
   constructor(
     readonly summary: string,
-    readonly node: ts.Node | null,
+    readonly node: ts.Node,
   ) {}
+}
+
+function convergenceOpenForNode(
+  summary: string,
+  node: ts.Node | null | undefined,
+): readonly ConvergenceOpen[] {
+  return node == null ? [] : [new ConvergenceOpen(summary, node)];
+}
+
+function nullableConvergenceOpenForNode(
+  summary: string,
+  node: ts.Node | null | undefined,
+): ConvergenceOpen | null {
+  return convergenceOpenForNode(summary, node)[0] ?? null;
+}
+
+function appendConvergenceOpen(
+  opens: ConvergenceOpen[],
+  summary: string,
+  node: ts.Node | null | undefined,
+): void {
+  const open = nullableConvergenceOpenForNode(summary, node);
+  if (open != null) {
+    opens.push(open);
+  }
+}
+
+function convergenceOpenForRead(
+  summary: string,
+  read: EvaluationRead<EvaluationValue> | null,
+): readonly ConvergenceOpen[] {
+  return convergenceOpenForNode(summary, read?.node ?? read?.value?.node);
+}
+
+function nullableConvergenceOpenForRead(
+  summary: string,
+  read: EvaluationRead<EvaluationValue> | null,
+): ConvergenceOpen | null {
+  return convergenceOpenForRead(summary, read)[0] ?? null;
 }
 
 class BindableRead {
@@ -193,6 +238,13 @@ class TemplateDefinitionRead {
   ) {}
 }
 
+class ResourceDependenciesRead {
+  constructor(
+    readonly dependencies: readonly ResourceDependencyReference[],
+    readonly open: readonly ConvergenceOpen[],
+  ) {}
+}
+
 class TemplateSourceAddressSet {
   constructor(
     readonly records: readonly KernelStoreRecord[],
@@ -206,6 +258,72 @@ class SourceSpanAddressSet {
     readonly records: readonly KernelStoreRecord[],
     readonly addressHandle: AddressHandle,
   ) {}
+}
+
+class InlineTemplateMarkupSource {
+  constructor(
+    readonly contentStart: number,
+    readonly contentEnd: number,
+    readonly sourceMap: TemplateSourceOffsetMap | null,
+  ) {}
+}
+
+class ResourceAliasClaimsEmission {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly claimHandles: readonly ClaimHandle[],
+  ) {}
+}
+
+class ResourceAliasClaimEmission {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly claimHandle: ClaimHandle,
+  ) {}
+}
+
+type AliasableResourceDefinitionHeader =
+  | CustomElementDefinitionHeader
+  | CustomAttributeDefinitionHeader
+  | TemplateControllerDefinitionHeader
+  | ValueConverterDefinitionHeader
+  | BindingBehaviorDefinitionHeader
+  | BindingCommandDefinitionHeader;
+
+function emptyResourceAliasClaims(): ResourceAliasClaimsEmission {
+  return new ResourceAliasClaimsEmission([], []);
+}
+
+function aliasableResourceHeader(
+  headerDefinition: ResourceDefinitionHeader,
+): AliasableResourceDefinitionHeader | null {
+  if (
+    headerDefinition instanceof CustomElementDefinitionHeader
+    || headerDefinition instanceof CustomAttributeDefinitionHeader
+    || headerDefinition instanceof TemplateControllerDefinitionHeader
+    || headerDefinition instanceof ValueConverterDefinitionHeader
+    || headerDefinition instanceof BindingBehaviorDefinitionHeader
+    || headerDefinition instanceof BindingCommandDefinitionHeader
+  ) {
+    return headerDefinition;
+  }
+  return null;
+}
+
+function aliasesForDefinition(
+  definition: FullResourceDefinition,
+): readonly ResourceAliasDefinition[] | null {
+  return 'aliases' in definition ? definition.aliases : null;
+}
+
+function newAliasNames(
+  headerAliases: readonly string[],
+  aliases: readonly ResourceAliasDefinition[],
+): readonly string[] {
+  const seenHeaderAliases = new Set(headerAliases);
+  return aliases
+    .map((alias) => alias.name)
+    .filter((alias) => !seenHeaderAliases.has(alias));
 }
 
 /** Turns recognized resource headers and source metadata into compiler-consumable definition products. */
@@ -255,39 +373,68 @@ export class ResourceDefinitionConverger {
     if (observation.definition == null) {
       return new ResourceDefinitionConvergenceProduct([], null);
     }
-    const source = this.recordsForConvergenceSource(observation, header);
     const definitionProductHandle = this.store.handles.product(`resource-definition-converged:${header.localKey}`);
     if (this.store.readProduct(definitionProductHandle) != null) {
       return new ResourceDefinitionConvergenceProduct([], null);
     }
 
+    const source = this.recordsForConvergenceSource(observation, header);
     const converged = this.convergeDefinition(context, observation, header, definitionProductHandle, source.provenanceHandle);
     if (converged == null) {
       return new ResourceDefinitionConvergenceProduct([], null);
     }
-    const definition = converged.definition;
+    return this.convergenceProductForDefinition(context, observation.definition, header, source, converged);
+  }
 
-    const aliasClaims = this.recordsForNewAliasClaims(observation.definition, definition, header, source.provenanceHandle);
-    const convergenceClaim = new SemanticClaim(
-      this.store.handles.claim(`resource-definition-convergence:${header.localKey}:converges`),
-      header.productHandle,
-      KernelVocabulary.Resource.ConvergesToDefinition.key,
-      definitionProductHandle,
-      source.provenanceHandle,
-    );
+  private convergenceProductForDefinition(
+    context: ResourceRecognitionContext,
+    sourceDefinition: ResourceDefinitionHeader,
+    header: ResourceDefinitionHeaderEmission,
+    source: ConvergenceSourceSet,
+    converged: ConvergedResourceDefinition,
+  ): ResourceDefinitionConvergenceProduct {
+    const definition = converged.definition;
+    const aliasClaims = this.recordsForNewAliasClaims(sourceDefinition, definition, header, source.provenanceHandle);
+    const convergenceClaim = this.convergenceClaimForDefinition(header, definition, source);
     const openSeams = this.recordsForOpenSeams(context, header, converged.open);
-    const claimHandles = [
-      convergenceClaim.handle,
-      ...aliasClaims.claimHandles,
-    ];
-    const records: KernelStoreRecord[] = [
+    const records = [
       ...source.records,
       ...converged.records,
       ...aliasClaims.records,
       convergenceClaim,
       ...openSeams.records,
+      ...this.recordsForDefinitionEnvelope(header, definition, source, [
+        convergenceClaim.handle,
+        ...aliasClaims.claimHandles,
+      ], openSeams.handles),
+    ];
+    return new ResourceDefinitionConvergenceProduct(records, definition);
+  }
+
+  private convergenceClaimForDefinition(
+    header: ResourceDefinitionHeaderEmission,
+    definition: FullResourceDefinition,
+    source: ConvergenceSourceSet,
+  ): SemanticClaim {
+    return new SemanticClaim(
+      this.store.handles.claim(`resource-definition-convergence:${header.localKey}:converges`),
+      header.productHandle,
+      KernelVocabulary.Resource.ConvergesToDefinition.key,
+      definition.productHandle!,
+      source.provenanceHandle,
+    );
+  }
+
+  private recordsForDefinitionEnvelope(
+    header: ResourceDefinitionHeaderEmission,
+    definition: FullResourceDefinition,
+    source: ConvergenceSourceSet,
+    claimHandles: readonly ClaimHandle[],
+    openSeamHandles: readonly OpenSeamHandle[],
+  ): readonly KernelStoreRecord[] {
+    return [
       new MaterializedProduct(
-        definitionProductHandle,
+        definition.productHandle!,
         KernelVocabulary.Resource.Definition.key,
         header.primaryIdentityHandle,
         header.sourceAddressHandle,
@@ -296,12 +443,11 @@ export class ResourceDefinitionConverger {
       new MaterializationRecord(
         this.store.handles.materialization(`resource-definition-convergence:${header.localKey}`),
         header.primaryIdentityHandle ?? header.sourceAddressHandle,
-        [definitionProductHandle],
+        [definition.productHandle!],
         claimHandles,
-        openSeams.handles,
+        openSeamHandles,
       ),
     ];
-    return new ResourceDefinitionConvergenceProduct(records, definition);
   }
 
   private recordsForConvergenceSource(
@@ -391,6 +537,7 @@ export class ResourceDefinitionConverger {
       targetClass,
       `resource-definition-converged:${header.localKey}:template`,
     );
+    const dependencies = readResourceDependencies(context, definitionExpression, targetClass);
     const containerless = readBooleanField(context, definitionExpression, targetClass, 'containerless') ?? false;
     const shadowOptions = readShadowOptions(context, definitionExpression, targetClass);
     const hasSlots = readBooleanField(context, definitionExpression, targetClass, 'hasSlots') ?? false;
@@ -400,7 +547,7 @@ export class ResourceDefinitionConverger {
     const processContent = readTargetField(context, definitionExpression, targetClass, 'processContent');
     const open = [
       ...bindables.open,
-      ...openIfPresent(context, definitionExpression, targetClass, 'dependencies', 'Custom element dependencies are present but dependency references are not converged yet.'),
+      ...dependencies.open,
       ...openIfPresent(context, definitionExpression, targetClass, 'instructions', 'Custom element instructions are present before template lowering is modeled.'),
       ...openIfPresent(context, definitionExpression, targetClass, 'surrogates', 'Custom element surrogates are present before surrogate lowering is modeled.'),
       ...openIfPresent(context, definitionExpression, targetClass, 'watches', 'Custom element watches are present but watch convergence is still deferred.'),
@@ -440,7 +587,7 @@ export class ResourceDefinitionConverger {
         capture,
         template.template,
         [],
-        [],
+        dependencies.dependencies,
         null,
         needsCompile,
         [],
@@ -462,7 +609,7 @@ export class ResourceDefinitionConverger {
             capture,
             template.template,
             [],
-            [],
+            dependencies.dependencies,
             null,
             needsCompile,
             [],
@@ -518,9 +665,10 @@ export class ResourceDefinitionConverger {
     const noMultiBindings = readBooleanField(context, definitionExpression, targetClass, 'noMultiBindings') ?? false;
     const defaultProperty = readStringField(context, definitionExpression, targetClass, 'defaultProperty') ?? 'value';
     const containerStrategy = readContainerStrategy(context, definitionExpression, targetClass);
+    const dependencies = readResourceDependencies(context, definitionExpression, targetClass);
     const open = [
       ...bindables.open,
-      ...openIfPresent(context, definitionExpression, targetClass, 'dependencies', 'Custom attribute dependencies are present but dependency references are not converged yet.'),
+      ...dependencies.open,
       ...openIfPresent(context, definitionExpression, targetClass, 'watches', 'Custom attribute watches are present but watch convergence is still deferred.'),
     ];
     const fieldProvenance = fieldProvenanceFor<CustomAttributeDefinitionField>(provenanceHandle, [
@@ -551,7 +699,7 @@ export class ResourceDefinitionConverger {
         bindables.bindables,
         noMultiBindings,
         [],
-        [],
+        dependencies.dependencies,
         containerStrategy,
         defaultProperty,
         [
@@ -565,7 +713,7 @@ export class ResourceDefinitionConverger {
             bindables.contributions,
             noMultiBindings,
             [],
-            [],
+            dependencies.dependencies,
             containerStrategy,
             defaultProperty,
             fieldProvenance,
@@ -699,35 +847,35 @@ export class ResourceDefinitionConverger {
     definition: FullResourceDefinition,
     header: ResourceDefinitionHeaderEmission,
     provenanceHandle: ProvenanceHandle,
-  ): {
-    readonly records: readonly KernelStoreRecord[];
-    readonly claimHandles: readonly ClaimHandle[];
-  } {
-    if (
-      !(headerDefinition instanceof CustomElementDefinitionHeader)
-      && !(headerDefinition instanceof CustomAttributeDefinitionHeader)
-      && !(headerDefinition instanceof TemplateControllerDefinitionHeader)
-      && !(headerDefinition instanceof ValueConverterDefinitionHeader)
-      && !(headerDefinition instanceof BindingBehaviorDefinitionHeader)
-      && !(headerDefinition instanceof BindingCommandDefinitionHeader)
-    ) {
-      return { records: [], claimHandles: [] };
-    }
+  ): ResourceAliasClaimsEmission {
+    const aliasHeader = aliasableResourceHeader(headerDefinition);
+    const aliases = aliasesForDefinition(definition);
     const primaryIdentityHandle = header.primaryIdentityHandle;
-    if (primaryIdentityHandle == null || !('aliases' in definition)) {
-      return { records: [], claimHandles: [] };
+    if (aliasHeader == null || aliases == null || primaryIdentityHandle == null) {
+      return emptyResourceAliasClaims();
     }
 
-    const headerAliases = new Set(headerDefinition.aliases);
-    const newAliases = definition.aliases
-      .map((alias) => alias.name)
-      .filter((alias) => !headerAliases.has(alias));
-    const records: KernelStoreRecord[] = [];
-    const claimHandles: ClaimHandle[] = [];
-    newAliases.forEach((alias, index) => {
-      const aliasIdentityHandle = this.store.handles.identity(`resource-definition-converged:${header.localKey}:alias:${alias}:${index}`);
-      const aliasClaimHandle = this.store.handles.claim(`resource-definition-converged:${header.localKey}:alias:${index}`);
-      records.push(
+    const emissions = newAliasNames(aliasHeader.aliases, aliases).map((alias, index) =>
+      this.recordsForNewAliasClaim(alias, index, aliasHeader, header, primaryIdentityHandle, provenanceHandle)
+    );
+    return new ResourceAliasClaimsEmission(
+      emissions.flatMap((emission) => emission.records),
+      emissions.map((emission) => emission.claimHandle),
+    );
+  }
+
+  private recordsForNewAliasClaim(
+    alias: string,
+    index: number,
+    headerDefinition: AliasableResourceDefinitionHeader,
+    header: ResourceDefinitionHeaderEmission,
+    primaryIdentityHandle: IdentityHandle,
+    provenanceHandle: ProvenanceHandle,
+  ): ResourceAliasClaimEmission {
+    const aliasIdentityHandle = this.store.handles.identity(`resource-definition-converged:${header.localKey}:alias:${alias}:${index}`);
+    const aliasClaimHandle = this.store.handles.claim(`resource-definition-converged:${header.localKey}:alias:${index}`);
+    return new ResourceAliasClaimEmission(
+      [
         new AureliaResourceIdentity(
           aliasIdentityHandle,
           toAureliaResourceIdentityKind(headerDefinition.type),
@@ -741,10 +889,9 @@ export class ResourceDefinitionConverger {
           primaryIdentityHandle,
           provenanceHandle,
         ),
-      );
-      claimHandles.push(aliasClaimHandle);
-    });
-    return { records, claimHandles };
+      ],
+      aliasClaimHandle,
+    );
   }
 
   private recordsForOpenSeams(
@@ -758,40 +905,32 @@ export class ResourceDefinitionConverger {
     const records: KernelStoreRecord[] = [];
     const handles: OpenSeamHandle[] = [];
     opens.forEach((open, index) => {
-      const local = `resource-definition-converged:${header.localKey}:open:${index}`;
-      const addressHandle = open.node == null
-        ? header.sourceAddressHandle
-        : this.store.handles.address(`${local}:span`);
-      const evidenceHandle = this.store.handles.evidence(local);
-      const openSeamHandle = this.store.handles.openSeam(local);
-      handles.push(openSeamHandle);
-      if (open.node != null) {
-        records.push(new SourceSpanAddress(
-          addressHandle,
-          context.sourceFileAddressHandle,
-          open.node.getStart(context.sourceFile),
-          open.node.end,
-          SourceSpanRole.Range,
-        ));
-      }
-      records.push(
-        new EvidenceRecord(
-          evidenceHandle,
-          EvidenceKind.SemanticObservation,
-          [EvidenceRole.Diagnostic],
-          open.summary,
-          addressHandle,
-        ),
-        new OpenSeam(
-          openSeamHandle,
-          KernelVocabulary.Resource.OpenDefinitionField.key,
-          open.summary,
-          addressHandle,
-          evidenceHandle,
-        ),
-      );
+      const emission = this.recordsForOpenSeam(context, header, open, index);
+      records.push(...emission.records);
+      handles.push(emission.handle);
     });
     return { records, handles };
+  }
+
+  private recordsForOpenSeam(
+    context: ResourceRecognitionContext,
+    header: ResourceDefinitionHeaderEmission,
+    open: ConvergenceOpen,
+    index: number,
+  ): {
+    readonly records: readonly KernelStoreRecord[];
+    readonly handle: OpenSeamHandle;
+  } {
+    const local = `resource-definition-converged:${header.localKey}:open:${index}`;
+    return recordsForSourceOpenSeam(this.store, new SourceOpenSeamInput(
+      local,
+      KernelVocabulary.Resource.OpenDefinitionField.key,
+      open.summary,
+      context.sourceFileAddressHandle,
+      open.node.getStart(context.sourceFile),
+      open.node.end,
+      [EvidenceRole.Diagnostic],
+    ));
   }
 }
 
@@ -929,6 +1068,13 @@ function readCustomElementTemplate(
   local: string,
 ): TemplateDefinitionRead {
   const read = readFieldValue(context, definitionExpression, targetClass, 'template');
+  const imported = read?.node == null
+    ? null
+    : readImportedHtmlTemplate(store, context, read.node, local);
+  if (imported != null) {
+    return imported;
+  }
+
   const value = read?.value;
   if (value == null || value.kind === EvaluationValueKind.Null || value.kind === EvaluationValueKind.Undefined) {
     return new TemplateDefinitionRead(new CustomElementTemplateDefinition(CustomElementTemplateKind.None));
@@ -950,6 +1096,136 @@ function readCustomElementTemplate(
   return new TemplateDefinitionRead(new CustomElementTemplateDefinition(CustomElementTemplateKind.Open));
 }
 
+function readImportedHtmlTemplate(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  node: ts.Node,
+  local: string,
+): TemplateDefinitionRead | null {
+  const carrier = templateCarrierExpression(node);
+  if (carrier == null) {
+    return null;
+  }
+  const importSpecifier = htmlImportSpecifierForCarrier(context.sourceFile, carrier);
+  if (importSpecifier == null) {
+    return null;
+  }
+  const templatePath = htmlPathFromModuleSpecifier(importSpecifier);
+  if (templatePath == null) {
+    return null;
+  }
+  const projectPath = projectRelativeImportPath(context.moduleKey, templatePath);
+  const admission = context.sourceFiles.find((source) => source.path === projectPath) ?? null;
+  if (admission == null) {
+    return null;
+  }
+  const absolutePath = path.resolve(path.dirname(context.sourceFile.fileName), templatePath);
+  if (!existsSync(absolutePath)) {
+    return null;
+  }
+
+  const markup = readFileSync(absolutePath, 'utf8');
+  const source = externalTemplateSourceAddress(store, admission.addressHandle, markup, local);
+  return new TemplateDefinitionRead(
+    new CustomElementTemplateDefinition(
+      CustomElementTemplateKind.Markup,
+      markup,
+      source.addressHandle,
+      null,
+    ),
+    source.records,
+  );
+}
+
+function templateCarrierExpression(node: ts.Node): ts.Expression | null {
+  if (ts.isPropertyAssignment(node)) {
+    return node.initializer;
+  }
+  if (ts.isShorthandPropertyAssignment(node)) {
+    return node.name;
+  }
+  return ts.isExpression(node) ? node : null;
+}
+
+function htmlImportSpecifierForCarrier(
+  sourceFile: ts.SourceFile,
+  carrier: ts.Expression,
+): string | null {
+  const current = unwrapExpression(carrier);
+  if (!ts.isIdentifier(current)) {
+    return null;
+  }
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
+      continue;
+    }
+    const clause = statement.importClause;
+    if (clause == null) {
+      continue;
+    }
+    if (clause.name?.text === current.text) {
+      return statement.moduleSpecifier.text;
+    }
+    const named = clause.namedBindings;
+    if (named == null || !ts.isNamedImports(named)) {
+      continue;
+    }
+    for (const element of named.elements) {
+      if (
+        element.name.text === current.text
+        && (element.propertyName?.text ?? element.name.text) === 'default'
+      ) {
+        return statement.moduleSpecifier.text;
+      }
+    }
+  }
+  return null;
+}
+
+function htmlPathFromModuleSpecifier(moduleSpecifier: string): string | null {
+  const pathOnly = moduleSpecifier.split(/[?#]/, 1)[0] ?? '';
+  return path.extname(pathOnly).toLowerCase() === '.html' ? pathOnly : null;
+}
+
+function projectRelativeImportPath(
+  fromModuleKey: string,
+  moduleSpecifierPath: string,
+): string {
+  return path.posix.normalize(path.posix.join(path.posix.dirname(fromModuleKey), moduleSpecifierPath));
+}
+
+function externalTemplateSourceAddress(
+  store: KernelStore,
+  sourceFileAddressHandle: AddressHandle,
+  markup: string,
+  local: string,
+): TemplateSourceAddressSet {
+  const addressHandle = store.handles.address(`${local}:source`);
+  const evidenceHandle = store.handles.evidence(local);
+  const provenanceHandle = store.handles.provenance(local);
+  const records: KernelStoreRecord[] = [
+    new SourceSpanAddress(
+      addressHandle,
+      sourceFileAddressHandle,
+      0,
+      markup.length,
+      SourceSpanRole.Value,
+    ),
+    new EvidenceRecord(
+      evidenceHandle,
+      EvidenceKind.SemanticObservation,
+      [EvidenceRole.Declaration],
+      'Custom element external template markup source.',
+      addressHandle,
+    ),
+    new ProvenanceRecord(
+      provenanceHandle,
+      [evidenceHandle],
+    ),
+  ];
+  return new TemplateSourceAddressSet(records, addressHandle, null);
+}
+
 function templateMarkupSourceAddress(
   store: KernelStore,
   context: ResourceRecognitionContext,
@@ -957,32 +1233,60 @@ function templateMarkupSourceAddress(
   markup: string,
   local: string,
 ): TemplateSourceAddressSet | null {
-  const nodeExpression = ts.isPropertyAssignment(node)
-    ? node.initializer
-    : ts.isExpression(node)
-      ? node
-      : null;
-  if (nodeExpression == null) {
+  const expression = inlineTemplateStringExpression(node);
+  if (expression == null) {
     return null;
   }
-  const expression = unwrapExpression(nodeExpression);
-  if (
-    !ts.isStringLiteral(expression)
-    && !ts.isNoSubstitutionTemplateLiteral(expression)
-  ) {
+  const source = inlineTemplateMarkupSource(context, expression, markup);
+  if (source == null) {
     return null;
   }
+  return inlineTemplateSourceAddressSet(store, context, local, source);
+}
 
+function inlineTemplateStringExpression(
+  node: ts.Node,
+): ts.StringLiteral | ts.NoSubstitutionTemplateLiteral | null {
+  const carrier = templateCarrierExpression(node);
+  if (carrier == null) {
+    return null;
+  }
+  const expression = unwrapExpression(carrier);
+  return ts.isStringLiteral(expression) || ts.isNoSubstitutionTemplateLiteral(expression)
+    ? expression
+    : null;
+}
+
+function inlineTemplateMarkupSource(
+  context: ResourceRecognitionContext,
+  expression: ts.StringLiteral | ts.NoSubstitutionTemplateLiteral,
+  markup: string,
+): InlineTemplateMarkupSource | null {
   const contentStart = expression.getStart(context.sourceFile) + 1;
   const contentEnd = expression.end - 1;
   const rawContent = context.sourceFile.text.slice(contentStart, contentEnd);
-  const sourceMap = rawContent.length === markup.length
+  const sourceMap = inlineTemplateSourceMap(rawContent, markup, contentStart);
+  return sourceMap === undefined
     ? null
-    : decodedStringSourceMap(rawContent, markup, contentStart);
-  if (rawContent.length !== markup.length && sourceMap == null) {
-    return null;
-  }
+    : new InlineTemplateMarkupSource(contentStart, contentEnd, sourceMap);
+}
 
+function inlineTemplateSourceMap(
+  rawContent: string,
+  markup: string,
+  contentStart: number,
+): TemplateSourceOffsetMap | null | undefined {
+  return rawContent.length === markup.length
+    ? null
+    : decodedStringSourceMap(rawContent, markup, contentStart) ?? undefined;
+}
+
+function inlineTemplateSourceAddressSet(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  source: InlineTemplateMarkupSource,
+): TemplateSourceAddressSet {
   const addressHandle = store.handles.address(`${local}:source`);
   const evidenceHandle = store.handles.evidence(local);
   const provenanceHandle = store.handles.provenance(local);
@@ -990,8 +1294,8 @@ function templateMarkupSourceAddress(
     new SourceSpanAddress(
       addressHandle,
       context.sourceFileAddressHandle,
-      contentStart,
-      contentEnd,
+      source.contentStart,
+      source.contentEnd,
       SourceSpanRole.Value,
     ),
     new EvidenceRecord(
@@ -1006,7 +1310,7 @@ function templateMarkupSourceAddress(
       [evidenceHandle],
     ),
   ];
-  return new TemplateSourceAddressSet(records, addressHandle, sourceMap);
+  return new TemplateSourceAddressSet(records, addressHandle, source.sourceMap);
 }
 
 function decodedStringSourceMap(
@@ -1202,6 +1506,48 @@ function readTargetField(
   return targetReferenceForFunction(value, null);
 }
 
+function readResourceDependencies(
+  context: ResourceRecognitionContext,
+  definitionExpression: ts.Expression | null,
+  targetClass: ts.ClassLikeDeclarationBase | null,
+): ResourceDependenciesRead {
+  const read = readFieldValue(context, definitionExpression, targetClass, 'dependencies');
+  if (read == null || read.value == null
+    || read.value.kind === EvaluationValueKind.Undefined
+    || read.value.kind === EvaluationValueKind.Null) {
+    return new ResourceDependenciesRead([], []);
+  }
+  const value = read.value;
+  if (value.kind !== EvaluationValueKind.Array) {
+    return new ResourceDependenciesRead(
+      [],
+      convergenceOpenForRead('Resource dependencies did not close to a static array.', read),
+    );
+  }
+
+  const dependencies: ResourceDependencyReference[] = [];
+  const open: ConvergenceOpen[] = [];
+  for (const element of value.elements) {
+    if (
+      element.value.kind !== EvaluationValueKind.Class
+      && element.value.kind !== EvaluationValueKind.Function
+    ) {
+      appendConvergenceOpen(open, 'Resource dependency entry did not close to a static class or function.', element.expression);
+      continue;
+    }
+    const target = targetReferenceForFunction(element.value, null);
+    if (target.identityHandle == null && target.localName == null) {
+      appendConvergenceOpen(open, 'Resource dependency entry did not expose a usable target name.', element.expression);
+      continue;
+    }
+    dependencies.push(new ResourceDependencyReference(target.identityHandle, target.localName));
+  }
+  if (value.mayHaveUnknownElements) {
+    appendConvergenceOpen(open, 'Resource dependencies include open spread or hole entries.', value.node);
+  }
+  return new ResourceDependenciesRead(dependencies, open);
+}
+
 function readContainerStrategy(
   context: ResourceRecognitionContext,
   definitionExpression: ts.Expression | null,
@@ -1393,15 +1739,19 @@ function readBindableListValue(
       if (element.value.kind === EvaluationValueKind.Object) {
         const name = readObjectString(element.value, 'name');
         return name == null
-          ? new BindableEntryRead(null, null, new ConvergenceOpen('Bindable array entry did not expose a static name.', element.expression))
+          ? new BindableEntryRead(null, null, nullableConvergenceOpenForNode('Bindable array entry did not expose a static name.', element.expression))
           : bindableEntry(name, element.value, contributionKind, provenanceHandle, source);
       }
-      return new BindableEntryRead(null, null, new ConvergenceOpen('Bindable array entry did not close to a string or static object.', element.expression));
+      return new BindableEntryRead(
+        null,
+        null,
+        nullableConvergenceOpenForNode('Bindable array entry did not close to a string or static object.', element.expression),
+      );
     });
     if (value.mayHaveUnknownElements) {
       return [
         ...entries,
-        new BindableEntryRead(null, null, new ConvergenceOpen('Bindable array includes open spread or hole entries.', value.node)),
+        new BindableEntryRead(null, null, nullableConvergenceOpenForNode('Bindable array includes open spread or hole entries.', value.node)),
       ];
     }
     return entries;
@@ -1421,20 +1771,20 @@ function readBindableListValue(
       entries.push(new BindableEntryRead(
         null,
         null,
-        new ConvergenceOpen(`Bindable '${property.name}' did not close to true or a static configuration object.`, property.node),
+        nullableConvergenceOpenForNode(`Bindable '${property.name}' did not close to true or a static configuration object.`, property.node),
       ));
     }
     if (value.mayHaveUnknownProperties) {
       entries.push(new BindableEntryRead(
         null,
         null,
-        new ConvergenceOpen('Bindable object includes open spread or computed property entries.', value.node),
+        nullableConvergenceOpenForNode('Bindable object includes open spread or computed property entries.', value.node),
       ));
     }
     return entries;
   }
   return [
-    new BindableEntryRead(null, null, new ConvergenceOpen('Bindable list did not close to a static array or object.', read?.node ?? null)),
+    new BindableEntryRead(null, null, nullableConvergenceOpenForRead('Bindable list did not close to a static array or object.', read)),
   ];
 }
 
@@ -1606,7 +1956,7 @@ function openIfPresent(
   if (definitionRead == null && staticExpression == null) {
     return [];
   }
-  return [new ConvergenceOpen(summary, definitionRead?.node ?? staticExpression)];
+  return convergenceOpenForNode(summary, definitionRead?.node ?? staticExpression);
 }
 
 function mergeAliases(

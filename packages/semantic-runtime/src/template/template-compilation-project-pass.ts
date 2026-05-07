@@ -25,7 +25,7 @@ import {
   type TemplateCompilerService,
 } from './compiler-world.js';
 import {
-  TemplateCompilationUnitConstructionInput,
+  TemplateCompilationUnitConstructionRequest,
   TemplateCompilationUnitMaterializer,
   type TemplateCompilationUnitEmission,
 } from './compilation-unit-materializer.js';
@@ -55,19 +55,20 @@ import {
   type CompiledTemplateEmission,
 } from './compiled-template-materializer.js';
 import {
-  RuntimeRenderingMaterializationInput,
-  RuntimeRenderingMaterializer,
-  type RuntimeRenderingEmission,
-} from './runtime-rendering-materializer.js';
+  TemplateRuntimeAnalysisMaterializer,
+  TemplateRuntimeAnalysisRequest,
+  type TemplateRuntimeAnalysisEmission,
+} from './template-runtime-analysis.js';
 import {
-  TemplateControllerScopeMaterializer,
-  TemplateScopeConstructionInput,
-  type TemplateScopeConstructionEmission,
-} from './template-controller-scope-materializer.js';
+  TemplateRuntimeAnalysisProjectContext,
+  TemplateRuntimeAnalysisResource,
+} from './template-runtime-analysis-context.js';
 
 /** Front-door template products produced for one compiler-visible custom element definition. */
 export class TemplateResourceCompilationEmission {
   constructor(
+    /** Store-local key shared by this resource's compiler and runtime phases. */
+    readonly localKey: string,
     /** Compiler world that supplied resources, syntax handlers, and runtime-shaped compiler services. */
     readonly compilerWorld: TemplateCompilerWorldEmission,
     /** Custom element definition whose authored template was admitted. */
@@ -86,10 +87,16 @@ export class TemplateResourceCompilationEmission {
     readonly bindingCommandLowering: BindingCommandLoweringEmission,
     /** Compiled template handoff: render targets, instruction rows, and visible compiler gaps. */
     readonly compiledTemplate: CompiledTemplateEmission,
-    /** Runtime renderer emulation over compiled-template target rows. */
-    readonly runtimeRendering: RuntimeRenderingEmission,
-    /** Checker-backed binding scopes derived from controller/rendering scope effects. */
-    readonly scopes: TemplateScopeConstructionEmission,
+  ) {}
+}
+
+/** Runtime/checker products produced after the project has admitted compiled template front doors. */
+export class TemplateResourceRuntimeAnalysisEmission {
+  constructor(
+    /** Compiler-front-door products for the analyzed resource. */
+    readonly compilation: TemplateResourceCompilationEmission,
+    /** Runtime/checker analysis downstream of compiled-template row assembly. */
+    readonly runtimeAnalysis: TemplateRuntimeAnalysisEmission,
   ) {}
 }
 
@@ -98,8 +105,8 @@ export class TemplateCompilationProjectEmission {
   constructor(
     /** App-world composition that supplied compiler worlds. */
     readonly appWorld: AureliaAppWorldEmission,
-    /** Per-resource template compilation-front-door emissions. */
-    readonly resources: readonly TemplateResourceCompilationEmission[],
+    /** Per-resource template compilation plus runtime/checker analysis emissions. */
+    readonly resources: readonly TemplateResourceRuntimeAnalysisEmission[],
   ) {}
 }
 
@@ -120,8 +127,7 @@ export class TemplateCompilationProjectPass {
   private readonly valueSites: TemplateValueSiteMaterializer;
   private readonly bindingCommandLowering: BindingCommandLoweringMaterializer;
   private readonly compiledTemplate: CompiledTemplateMaterializer;
-  private readonly runtimeRendering: RuntimeRenderingMaterializer;
-  private readonly templateScopes: TemplateControllerScopeMaterializer;
+  private readonly runtimeAnalysis: TemplateRuntimeAnalysisMaterializer;
 
   constructor(
     /** Hot analysis store shared by child materializers. */
@@ -134,15 +140,14 @@ export class TemplateCompilationProjectPass {
     this.valueSites = new TemplateValueSiteMaterializer(store);
     this.bindingCommandLowering = new BindingCommandLoweringMaterializer(store);
     this.compiledTemplate = new CompiledTemplateMaterializer(store);
-    this.runtimeRendering = new RuntimeRenderingMaterializer(store);
-    this.templateScopes = new TemplateControllerScopeMaterializer(store);
+    this.runtimeAnalysis = new TemplateRuntimeAnalysisMaterializer(store);
   }
 
   compile(
     appWorld: AureliaAppWorldEmission,
     typeSystem: TypeSystemProject | null = null,
   ): TemplateCompilationProjectEmission {
-    const resources: TemplateResourceCompilationEmission[] = [];
+    const compilations: TemplateResourceCompilationEmission[] = [];
 
     appWorld.compilerWorlds.forEach((compilerWorld, worldIndex) => {
       compilerWorld.resourceScope.resources.forEach((visibleResource, resourceIndex) => {
@@ -156,10 +161,25 @@ export class TemplateCompilationProjectPass {
           new ProjectTemplateCompilerHost(this, compilerWorld, typeSystem),
         );
         if (result.output != null) {
-          resources.push(result.output);
+          compilations.push(result.output);
         }
       });
     });
+
+    const projectContext = new TemplateRuntimeAnalysisProjectContext(compilations.flatMap((compilation) =>
+      compilation.definition.productHandle == null
+        ? []
+        : [new TemplateRuntimeAnalysisResource(
+          compilation.definition.productHandle,
+          compilation.compiledTemplate.compiledTemplate.productHandle,
+        )]
+    ));
+    const resources = compilations.map((compilation) =>
+      new TemplateResourceRuntimeAnalysisEmission(
+        compilation,
+        this.analyzeResource(compilation, projectContext, typeSystem),
+      )
+    );
 
     return new TemplateCompilationProjectEmission(appWorld, resources);
   }
@@ -183,7 +203,7 @@ export class TemplateCompilationProjectPass {
       definition.sourceAddressHandle,
     );
     const sourceAddressHandle = definition.template?.addressHandle ?? definition.sourceAddressHandle;
-    const unit = this.unitMaterializer.construct(new TemplateCompilationUnitConstructionInput(
+    const unit = this.unitMaterializer.construct(new TemplateCompilationUnitConstructionRequest(
       localKey,
       TemplateCompilationUnitKind.CustomElement,
       compilerWorld,
@@ -239,23 +259,8 @@ export class TemplateCompilationProjectPass {
       bindingCommandLowering,
       compilerWorld,
     ));
-    const runtimeRendering = this.runtimeRendering.materialize(new RuntimeRenderingMaterializationInput(
-      localKey,
-      definition,
-      compiledTemplate,
-      attributeSyntax,
-      compilerWorld,
-    ));
-    const scopes = this.templateScopes.construct(new TemplateScopeConstructionInput(
-      localKey,
-      definition,
-      compiledTemplate,
-      runtimeRendering,
-      typeSystem,
-      compilerWorld.resourceScope,
-    ));
-
     return new TemplateResourceCompilationEmission(
+      localKey,
       compilerWorld,
       definition,
       unit,
@@ -265,9 +270,23 @@ export class TemplateCompilationProjectPass {
       valueSites,
       bindingCommandLowering,
       compiledTemplate,
-      runtimeRendering,
-      scopes,
     );
+  }
+
+  analyzeResource(
+    compilation: TemplateResourceCompilationEmission,
+    projectContext: TemplateRuntimeAnalysisProjectContext,
+    typeSystem: TypeSystemProject | null,
+  ): TemplateRuntimeAnalysisEmission {
+    return this.runtimeAnalysis.materialize(new TemplateRuntimeAnalysisRequest(
+      compilation.localKey,
+      compilation.definition,
+      compilation.compiledTemplate,
+      compilation.attributeSyntax,
+      compilation.compilerWorld,
+      projectContext,
+      typeSystem,
+    ));
   }
 }
 

@@ -25,14 +25,32 @@ export const enum AuLinkGapKind {
 
 /** Framework-side resolution state for one auLink id. */
 export const enum AuLinkFrameworkTargetStatus {
-  /** Exactly one framework declaration matched the auLink package and symbol. */
+  /** A single conceptual framework target matched the auLink package and symbol. */
   Resolved = "resolved",
-  /** More than one framework declaration matched the auLink package and symbol. */
+  /** More than one non-merged framework target matched the auLink package and symbol. */
   Ambiguous = "ambiguous",
   /** The package was admitted but no declaration matched the symbol. */
   Unresolved = "unresolved",
   /** The auLink package prefix is not admitted in the current source project. */
   PackageUnadmitted = "package-unadmitted",
+}
+
+/** Type/value declaration composition observed for one framework-side auLink target. */
+export const enum AuLinkFrameworkTargetCompositionKind {
+  /** No declaration matched the target id. */
+  NoDeclaration = "no-declaration",
+  /** One declaration matched the target id. */
+  SingleDeclaration = "single-declaration",
+  /** A class declaration provides both type and value sides. */
+  ClassDeclaration = "class-declaration",
+  /** Interface and class declarations share the same framework export name. */
+  InterfaceClassPair = "interface-class-pair",
+  /** Interface and variable declarations share the same framework export name, commonly for DI keys. */
+  InterfaceVariablePair = "interface-variable-pair",
+  /** Type alias and variable declarations share the same framework export name. */
+  TypeAliasVariablePair = "type-alias-variable-pair",
+  /** More than one type-side or value-side declaration matched. */
+  MultipleDeclarations = "multiple-declarations",
 }
 
 /** Exact filter lanes accepted by auLink substrate reads. */
@@ -87,6 +105,16 @@ export interface AuLinkFrameworkTargetResolution extends AuLinkIdParts {
   readonly status: AuLinkFrameworkTargetStatus;
   /** Number of framework candidates for this auLink id. */
   readonly candidateCount: number;
+  /** Coarse TypeScript declaration composition for this framework export name. */
+  readonly compositionKind: AuLinkFrameworkTargetCompositionKind;
+  /** Candidate count that can participate on the TypeScript type side. */
+  readonly typeCandidateCount: number;
+  /** Candidate count that can participate on the JavaScript/runtime value side. */
+  readonly valueCandidateCount: number;
+  /** Preferred type-side candidate when Atlas can choose one without hiding the full candidate set. */
+  readonly preferredTypeCandidate: AuLinkFrameworkTargetCandidate | null;
+  /** Preferred value-side candidate when Atlas can choose one without hiding the full candidate set. */
+  readonly preferredValueCandidate: AuLinkFrameworkTargetCandidate | null;
   /** Framework declaration candidates that matched this auLink id. */
   readonly candidates: readonly AuLinkFrameworkTargetCandidate[];
 }
@@ -504,11 +532,13 @@ function frameworkTargetForParts(
 ): AuLinkFrameworkTargetResolution {
   const candidates = frameworkTargetsByLinkId.get(parts.linkId) ?? [];
   const packageAdmitted = context.admittedPackageIds.has(parts.packageId);
+  const composition = frameworkTargetComposition(candidates);
   return {
     id: `aulink-framework-target:${parts.linkId}`,
     ...parts,
-    status: frameworkTargetStatus(packageAdmitted, candidates.length),
+    status: frameworkTargetStatus(packageAdmitted, composition.compositionKind),
     candidateCount: candidates.length,
+    ...composition,
     candidates,
   };
 }
@@ -519,21 +549,128 @@ function frameworkTargetForPartsFromLinkId(parts: AuLinkIdParts): AuLinkFramewor
     ...parts,
     status: AuLinkFrameworkTargetStatus.PackageUnadmitted,
     candidateCount: 0,
+    compositionKind: AuLinkFrameworkTargetCompositionKind.NoDeclaration,
+    typeCandidateCount: 0,
+    valueCandidateCount: 0,
+    preferredTypeCandidate: null,
+    preferredValueCandidate: null,
     candidates: [],
   };
 }
 
-function frameworkTargetStatus(packageAdmitted: boolean, candidateCount: number): AuLinkFrameworkTargetStatus {
+function frameworkTargetComposition(candidates: readonly AuLinkFrameworkTargetCandidate[]): {
+  readonly compositionKind: AuLinkFrameworkTargetCompositionKind;
+  readonly typeCandidateCount: number;
+  readonly valueCandidateCount: number;
+  readonly preferredTypeCandidate: AuLinkFrameworkTargetCandidate | null;
+  readonly preferredValueCandidate: AuLinkFrameworkTargetCandidate | null;
+} {
+  const typeCandidates = candidates.filter((candidate) => isTypeSideDeclaration(candidate.kind));
+  const valueCandidates = candidates.filter((candidate) => isValueSideDeclaration(candidate.kind));
+  const kinds = new Set(candidates.map((candidate) => candidate.kind));
+  return {
+    compositionKind: frameworkTargetCompositionKind(candidates, kinds, typeCandidates, valueCandidates),
+    typeCandidateCount: typeCandidates.length,
+    valueCandidateCount: valueCandidates.length,
+    preferredTypeCandidate: preferredTypeCandidate(typeCandidates),
+    preferredValueCandidate: preferredValueCandidate(valueCandidates),
+  };
+}
+
+function frameworkTargetCompositionKind(
+  candidates: readonly AuLinkFrameworkTargetCandidate[],
+  kinds: ReadonlySet<SourceDeclarationKind>,
+  typeCandidates: readonly AuLinkFrameworkTargetCandidate[],
+  valueCandidates: readonly AuLinkFrameworkTargetCandidate[],
+): AuLinkFrameworkTargetCompositionKind {
+  if (candidates.length === 1) {
+    return kinds.has(SourceDeclarationKind.Class)
+      ? AuLinkFrameworkTargetCompositionKind.ClassDeclaration
+      : AuLinkFrameworkTargetCompositionKind.SingleDeclaration;
+  }
+  if (candidates.length === 0) {
+    return AuLinkFrameworkTargetCompositionKind.NoDeclaration;
+  }
+  if (
+    candidates.length === 2 &&
+    kinds.has(SourceDeclarationKind.Interface) &&
+    kinds.has(SourceDeclarationKind.Class)
+  ) {
+    return AuLinkFrameworkTargetCompositionKind.InterfaceClassPair;
+  }
+  if (
+    candidates.length === 2 &&
+    kinds.has(SourceDeclarationKind.Interface) &&
+    kinds.has(SourceDeclarationKind.Variable)
+  ) {
+    return AuLinkFrameworkTargetCompositionKind.InterfaceVariablePair;
+  }
+  if (
+    candidates.length === 2 &&
+    kinds.has(SourceDeclarationKind.TypeAlias) &&
+    kinds.has(SourceDeclarationKind.Variable)
+  ) {
+    return AuLinkFrameworkTargetCompositionKind.TypeAliasVariablePair;
+  }
+  if (typeCandidates.length <= 1 && valueCandidates.length <= 1) {
+    return AuLinkFrameworkTargetCompositionKind.SingleDeclaration;
+  }
+  return AuLinkFrameworkTargetCompositionKind.MultipleDeclarations;
+}
+
+function isTypeSideDeclaration(kind: SourceDeclarationKind): boolean {
+  return kind === SourceDeclarationKind.Class
+    || kind === SourceDeclarationKind.Interface
+    || kind === SourceDeclarationKind.TypeAlias
+    || kind === SourceDeclarationKind.Enum;
+}
+
+function isValueSideDeclaration(kind: SourceDeclarationKind): boolean {
+  return kind === SourceDeclarationKind.Class
+    || kind === SourceDeclarationKind.Variable
+    || kind === SourceDeclarationKind.Function
+    || kind === SourceDeclarationKind.Enum;
+}
+
+function preferredTypeCandidate(
+  candidates: readonly AuLinkFrameworkTargetCandidate[],
+): AuLinkFrameworkTargetCandidate | null {
+  return candidates.find((candidate) => candidate.kind === SourceDeclarationKind.Interface)
+    ?? candidates.find((candidate) => candidate.kind === SourceDeclarationKind.TypeAlias)
+    ?? candidates.find((candidate) => candidate.kind === SourceDeclarationKind.Class)
+    ?? candidates.find((candidate) => candidate.kind === SourceDeclarationKind.Enum)
+    ?? null;
+}
+
+function preferredValueCandidate(
+  candidates: readonly AuLinkFrameworkTargetCandidate[],
+): AuLinkFrameworkTargetCandidate | null {
+  return candidates.find((candidate) => candidate.kind === SourceDeclarationKind.Class)
+    ?? candidates.find((candidate) => candidate.kind === SourceDeclarationKind.Variable)
+    ?? candidates.find((candidate) => candidate.kind === SourceDeclarationKind.Function)
+    ?? candidates.find((candidate) => candidate.kind === SourceDeclarationKind.Enum)
+    ?? null;
+}
+
+function frameworkTargetStatus(
+  packageAdmitted: boolean,
+  compositionKind: AuLinkFrameworkTargetCompositionKind,
+): AuLinkFrameworkTargetStatus {
   if (!packageAdmitted) {
     return AuLinkFrameworkTargetStatus.PackageUnadmitted;
   }
-  if (candidateCount === 1) {
-    return AuLinkFrameworkTargetStatus.Resolved;
+  switch (compositionKind) {
+    case AuLinkFrameworkTargetCompositionKind.NoDeclaration:
+      return AuLinkFrameworkTargetStatus.Unresolved;
+    case AuLinkFrameworkTargetCompositionKind.MultipleDeclarations:
+      return AuLinkFrameworkTargetStatus.Ambiguous;
+    case AuLinkFrameworkTargetCompositionKind.SingleDeclaration:
+    case AuLinkFrameworkTargetCompositionKind.ClassDeclaration:
+    case AuLinkFrameworkTargetCompositionKind.InterfaceClassPair:
+    case AuLinkFrameworkTargetCompositionKind.InterfaceVariablePair:
+    case AuLinkFrameworkTargetCompositionKind.TypeAliasVariablePair:
+      return AuLinkFrameworkTargetStatus.Resolved;
   }
-  if (candidateCount > 1) {
-    return AuLinkFrameworkTargetStatus.Ambiguous;
-  }
-  return AuLinkFrameworkTargetStatus.Unresolved;
 }
 
 function targetRowsForFilters(

@@ -1,6 +1,5 @@
 import {
   FRAMEWORK_ADMISSION_RELATIONSHIP_VERSION,
-  FrameworkBundleAssociationKind,
   classifyFrameworkAdmissionAssociation,
   type FrameworkAdmissionRelationshipRow,
 } from "../../framework/admission.js";
@@ -12,12 +11,10 @@ import {
 import {
   FrameworkRelationshipClosure,
   FrameworkRelationshipEndpointKind,
-  type FrameworkRelationshipEndpoint,
 } from "../../framework/relationships.js";
 import {
   AURELIA_FRAMEWORK_PACKAGE_IDS,
   type SourceProject,
-  type SourceTargetRow,
 } from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import {
@@ -83,8 +80,6 @@ import { FrameworkSemanticRoutes } from "./framework-route-catalog.js";
 import {
   countBy,
   route,
-  sourceRangeForCallSiteEntry,
-  sourceRangeForTarget,
 } from "./framework-support.js";
 import { readFrameworkBundles } from "./framework-bundles.js";
 import {
@@ -92,6 +87,11 @@ import {
   type FrameworkBundleExportRow,
 } from "./framework-entities.js";
 import type { FrameworkDiscoveryFilters } from "./framework-filters.js";
+import {
+  endpointForAdmissionAssociation,
+  endpointForAdmissionBundle,
+  sourceRangeForBundleExport,
+} from "./framework-admission-endpoints.js";
 
 /** Compact bundle row returned by framework.admission bundle projections. */
 export interface FrameworkAdmissionBundleSummaryRow {
@@ -502,8 +502,8 @@ function relationshipForAssociation(
   association: FrameworkBundleAssociationRow,
 ): FrameworkAdmissionRelationshipRow {
   const classification = classifyFrameworkAdmissionAssociation(association);
-  const from = endpointForBundle(bundle, association);
-  const to = endpointForAssociation(association);
+  const from = endpointForAdmissionBundle(bundle, association.source);
+  const to = endpointForAdmissionAssociation(association);
   return {
     id: `framework-admission:${association.id}`,
     version: FRAMEWORK_ADMISSION_RELATIONSHIP_VERSION,
@@ -529,121 +529,6 @@ function relationshipForAssociation(
     bundleAssociationId: association.id,
     bundleId: bundle.id,
     summary: `${association.packageId}:${association.exportName} ${classification.relation} ${to.name} via ${classification.mechanism}.`,
-  };
-}
-
-function endpointForBundle(
-  bundle: FrameworkBundleExportRow,
-  association: FrameworkBundleAssociationRow,
-): FrameworkRelationshipEndpoint {
-  return {
-    kind: FrameworkRelationshipEndpointKind.ConfigurationExport,
-    name: bundle.exportEntry.exportName,
-    packageId: bundle.packageId,
-    packageName: bundle.packageName,
-    source: sourceRangeForExportEntry(bundle) ?? association.source,
-  };
-}
-
-function endpointForAssociation(
-  association: FrameworkBundleAssociationRow,
-): FrameworkRelationshipEndpoint {
-  if (association.diInterface !== undefined) {
-    return {
-      kind: FrameworkRelationshipEndpointKind.DiKey,
-      name: association.diInterface.interfaceKey,
-      packageId: association.diInterface.packageId,
-      packageName: association.diInterface.packageName,
-      source: sourceRangeForCallSiteEntry(
-        association.diInterface.createInterfaceCall,
-      ),
-    };
-  }
-  if (association.resourceCarrier !== undefined) {
-    return {
-      kind: FrameworkRelationshipEndpointKind.Resource,
-      name:
-        association.resourceCarrier.targetName ??
-        association.resourceCarrier.sourceExportName,
-      packageId: association.resourceCarrier.packageId,
-      packageName: association.resourceCarrier.packageName,
-      source: association.resourceCarrier.source,
-      resourceKind: association.resourceCarrier.resourceKind,
-      resourceName: association.resourceCarrier.resourceName,
-    };
-  }
-  if (association.registryExport !== undefined) {
-    return {
-      kind: FrameworkRelationshipEndpointKind.RegistryExport,
-      name: association.registryExport.exportEntry.exportName,
-      packageId: association.registryExport.packageId,
-      packageName: association.registryExport.packageName,
-      source:
-        sourceRangeForExportEntry(association.registryExport) ??
-        association.source,
-    };
-  }
-  if (
-    association.associationKind ===
-    FrameworkBundleAssociationKind.RegistrationCatalog
-  ) {
-    return {
-      kind: FrameworkRelationshipEndpointKind.RegistrationCatalog,
-      name:
-        association.catalogName ??
-        association.targetName ??
-        association.expression.text,
-      packageId: association.packageId,
-      packageName: association.packageName,
-      source: association.source,
-    };
-  }
-  if (
-    association.associationKind ===
-    FrameworkBundleAssociationKind.AppTaskRegistration
-  ) {
-    return expressionEndpoint(
-      FrameworkRelationshipEndpointKind.AppTask,
-      association,
-    );
-  }
-  if (
-    association.associationKind ===
-    FrameworkBundleAssociationKind.FactoryRegistration
-  ) {
-    return expressionEndpoint(
-      FrameworkRelationshipEndpointKind.Factory,
-      association,
-    );
-  }
-  if (
-    association.associationKind ===
-    FrameworkBundleAssociationKind.UnknownRegistrationArgument
-  ) {
-    return expressionEndpoint(
-      FrameworkRelationshipEndpointKind.Unknown,
-      association,
-    );
-  }
-  return expressionEndpoint(
-    FrameworkRelationshipEndpointKind.RegistrationArgument,
-    association,
-  );
-}
-
-function expressionEndpoint(
-  kind: FrameworkRelationshipEndpointKind,
-  association: FrameworkBundleAssociationRow,
-): FrameworkRelationshipEndpoint {
-  return {
-    kind,
-    name:
-      association.targetName ??
-      association.expression.symbolName ??
-      association.expression.text,
-    packageId: association.packageId,
-    packageName: association.packageName,
-    source: association.source,
   };
 }
 
@@ -699,7 +584,7 @@ function bundleSummariesForRelationships(
           relations: countBy(rows, (row) => row.relation),
           endpointKinds: countBy(rows, (row) => row.to.kind),
           associationKinds: countBy(rows, (row) => row.associationKind),
-          source: sourceRangeForExportEntry(bundle) ?? rows[0]?.source,
+          source: sourceRangeForBundleExport(bundle) ?? rows[0]?.source,
           summary: `${bundle.packageId}:${bundle.exportEntry.exportName} admits ${rows.length} framework value(s).`,
         },
       ];
@@ -1660,12 +1545,6 @@ function admissionRelationshipContinuationFilters(
     }
   }
   return Object.keys(retained).length === 0 ? undefined : retained;
-}
-
-function sourceRangeForExportEntry(row: {
-  readonly exportEntry: { readonly targets: readonly SourceTargetRow[] };
-}): SourceRange | null {
-  return sourceRangeForTarget(row.exportEntry.targets[0]);
 }
 
 function frameworkAdmissionBasis(sourceProject: SourceProject): Basis {

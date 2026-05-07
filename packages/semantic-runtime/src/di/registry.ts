@@ -9,7 +9,8 @@ import type {
   RegistrationKeyReference,
   RegistrationValueReference,
 } from '../registration/registration-reference.js';
-import type { Container, ContainerReference } from './container.js';
+import type { Container } from './container.js';
+import type { ContainerReference } from './container-reference.js';
 import type { ContainerResolverLookup } from './container-lookup.js';
 
 export type RegistryField =

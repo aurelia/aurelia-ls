@@ -139,6 +139,34 @@ const resourceMaterializationSitesMemo = new SourceProjectMemo<
   readonly FrameworkResourceMaterializationSiteRow[]
 >();
 
+const resourceInstantiationClosureByKind: Readonly<
+  Record<FrameworkResourceInstantiationKind, FrameworkRelationshipClosure>
+> = {
+  [FrameworkResourceInstantiationKind.ViewModelContainerInvoke]:
+    FrameworkRelationshipClosure.Modeled,
+  [FrameworkResourceInstantiationKind.DynamicComposition]:
+    FrameworkRelationshipClosure.Modeled,
+  [FrameworkResourceInstantiationKind.ExpressionResourceLookup]:
+    FrameworkRelationshipClosure.Modeled,
+  [FrameworkResourceInstantiationKind.CompilerCommand]:
+    FrameworkRelationshipClosure.Modeled,
+  [FrameworkResourceInstantiationKind.SyntaxPatternHandler]:
+    FrameworkRelationshipClosure.Modeled,
+  [FrameworkResourceInstantiationKind.RendererSingleton]:
+    FrameworkRelationshipClosure.Modeled,
+  [FrameworkResourceInstantiationKind.DefinitionOnly]:
+    FrameworkRelationshipClosure.Partial,
+};
+
+const rendererRegistrationSiteFacts = {
+  siteKind: FrameworkResourceMaterializationSiteKind.RendererRegistration,
+  relation: FrameworkRelationshipRelation.ProvidesKey,
+  mechanism: FrameworkRelationshipMechanism.RegistrationHelper,
+  phase: FrameworkRelationshipPhase.Registration,
+  resourceKinds: [FrameworkResourceDefinitionKind.Renderer],
+  subjectText: "IRenderer",
+} as const;
+
 /** Read resource instantiation rows from source-backed resource carriers plus framework materialization sites. */
 export function readFrameworkResourceInstantiationRows(
   sourceProject: SourceProject,
@@ -771,20 +799,9 @@ function resourceInstantiationRow(
     instantiationKind,
     instantiationKinds,
     instanceLifetime: runtimePolicy.instanceLifetime,
-    resource: {
-      kind: FrameworkRelationshipEndpointKind.Resource,
-      name: row.targetName ?? row.sourceExportName,
-      packageId: row.packageId,
-      packageName: row.packageName,
-      source: row.source,
-      resourceKind: row.resourceKind,
-      resourceName: row.resourceName,
-    },
+    resource: resourceEndpointForCarrier(row),
     materializationSites: sites,
-    closure:
-      instantiationKind === FrameworkResourceInstantiationKind.DefinitionOnly
-        ? FrameworkRelationshipClosure.Partial
-        : FrameworkRelationshipClosure.Modeled,
+    closure: resourceInstantiationClosure(instantiationKind),
     source: row.source,
     summary: resourceInstantiationSummary(
       row,
@@ -793,6 +810,26 @@ function resourceInstantiationRow(
       runtimePolicy.instanceLifetime,
     ),
   };
+}
+
+function resourceEndpointForCarrier(
+  row: FrameworkResourceCarrierRow,
+): FrameworkRelationshipEndpoint {
+  return {
+    kind: FrameworkRelationshipEndpointKind.Resource,
+    name: row.targetName ?? row.sourceExportName,
+    packageId: row.packageId,
+    packageName: row.packageName,
+    source: row.source,
+    resourceKind: row.resourceKind,
+    resourceName: row.resourceName,
+  };
+}
+
+function resourceInstantiationClosure(
+  instantiationKind: FrameworkResourceInstantiationKind,
+): FrameworkRelationshipClosure {
+  return resourceInstantiationClosureByKind[instantiationKind];
 }
 
 function registrationSitesForResourceCarrier(
@@ -808,14 +845,9 @@ function registrationSitesForResourceCarrier(
   return [
     {
       id: `framework-resource-materialization:${row.id}:renderer-registration`,
-      siteKind: FrameworkResourceMaterializationSiteKind.RendererRegistration,
-      relation: FrameworkRelationshipRelation.ProvidesKey,
-      mechanism: FrameworkRelationshipMechanism.RegistrationHelper,
-      phase: FrameworkRelationshipPhase.Registration,
-      resourceKinds: [FrameworkResourceDefinitionKind.Renderer],
+      ...rendererRegistrationSiteFacts,
       packageId: row.packageId,
       packageName: row.packageName,
-      subjectText: "IRenderer",
       producerName,
       source: row.source,
       summary: `${producerName} is registered by renderer(...) as a singleton IRenderer provider.`,

@@ -69,6 +69,10 @@ The tooling model should keep that split:
   select one app-level syntax surface from the owning app-root sequence, including both attribute-pattern parser
   inputs and binding-command executables, then read ordinary named resource visibility from DI-produced container
   resource slots. They must not receive every framework catalog recognized in the project.
+- `app-world-resource-visibility.ts` owns the compiler-world resource-scope projection from DI resource slots,
+  configured framework resource catalogs, the app root component, and app-local component dependencies. Keep this
+  projection separate from app-world orchestration so future router, plugin, or view-factory visibility rules can land
+  as visibility semantics instead of private composer glue.
 - `app-world-project-pass.ts` is the current whole-project orchestration pass: shared static evaluation, TypeChecker
   epoch construction, resource recognition/convergence, resource indexing, configuration recognition, DI spending,
   compiler-world construction, template compilation-front-door materialization, renderer emulation, and binding-scope
@@ -91,7 +95,10 @@ register arguments. The configuration layer records an explicit `FrameworkRegist
 semantics in trace names. Body effects still belong to registration/DI spending and later resource/compiler-world
 materializers. The current template materializers consume that framework kind for framework-owned built-in syntax catalog
 selection. Framework-owned built-in resource headers are cataloged from the same kind, then spent into DI resource
-slots before compiler-world resource visibility sees them.
+slots before compiler-world resource visibility sees them. `StandardConfiguration` is closed enough for the current
+app-world path once DI resource slots, compiler services, syntax catalogs, and runtime renderer catalogs have been
+selected; other framework registries keep explicit open registry-body seams until their service/task/plugin effects are
+modeled.
 
 Closed i18n `translationAttributeAliases` contributions are already consumed by built-in syntax materialization when they
 can be source-associated with the `I18nConfiguration.customize(...)` admission. That mirrors the runtime

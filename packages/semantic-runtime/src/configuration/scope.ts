@@ -108,8 +108,8 @@ export type RuntimeBindingContextKind =
   | BindingContextKind.Synthetic
   | BindingContextKind.Object;
 
-/** Construction input for one slot in a runtime BindingContext or IOverrideContext model. */
-export class BindingContextSlotInput {
+/** Draft for one slot in a runtime BindingContext or IOverrideContext model. */
+export class BindingContextSlotDraft {
   constructor(
     /** Runtime property key as authored or inferred. */
     readonly name: string,
@@ -125,8 +125,8 @@ export class BindingContextSlotInput {
     readonly fieldProvenance: readonly FieldProvenance<BindingContextSlotField>[] = [],
   ) {}
 
-  static fromSlot(slot: BindingContextSlot): BindingContextSlotInput {
-    return new BindingContextSlotInput(
+  static fromSlot(slot: BindingContextSlot): BindingContextSlotDraft {
+    return new BindingContextSlotDraft(
       slot.name,
       slot.targetIdentityHandle,
       slot.targetProductHandle,
@@ -148,8 +148,8 @@ export class BindingContextSlotInput {
   }
 }
 
-/** Runtime Scope construction input before kernel handles for the Scope/context trio are minted. */
-export class BindingScopeConstructionInput {
+/** Runtime Scope construction request before kernel handles for the Scope/context trio are minted. */
+export class BindingScopeConstructionRequest {
   constructor(
     /** Store-local key for the binding scope being materialized. */
     readonly localKey: string,
@@ -166,11 +166,11 @@ export class BindingScopeConstructionInput {
     /** Static type of the binding context object itself, if known through the TypeChecker substrate. */
     readonly bindingContextType: CheckerTypeReference | null = null,
     /** Names visible through the binding context. */
-    readonly bindingContextSlots: readonly BindingContextSlotInput[] = [],
+    readonly bindingContextSlots: readonly BindingContextSlotDraft[] = [],
     /** Static type of the override context object itself, if known through the TypeChecker substrate. */
     readonly overrideContextType: CheckerTypeReference | null = null,
     /** Names visible through the override context. */
-    readonly overrideContextSlots: readonly BindingContextSlotInput[] = [],
+    readonly overrideContextSlots: readonly BindingContextSlotDraft[] = [],
     /** Boundary flag that stops ordinary upward Scope lookup. */
     readonly isBoundary: boolean = false,
     /** Source address for the scope owner, activation, or template boundary. */
@@ -301,17 +301,17 @@ export class BindingScope {
   ) {}
 
   /** Runtime `Scope.fromParent` shape for repeat-item contexts. */
-  static fromRepeatedItemInput(input: {
+  static fromRepeatedItem(input: {
     readonly localKey: string;
     readonly ownerProductHandle: ProductHandle | null;
     readonly ownerIdentityHandle: IdentityHandle | null;
     readonly parent: BindingScope;
-    readonly localSlots: readonly BindingContextSlotInput[];
-    readonly overrideSlots: readonly BindingContextSlotInput[];
+    readonly localSlots: readonly BindingContextSlotDraft[];
+    readonly overrideSlots: readonly BindingContextSlotDraft[];
     readonly sourceAddressHandle: AddressHandle | null;
     readonly scopeEffectOwnerProductHandles?: readonly ProductHandle[];
-  }): BindingScopeConstructionInput {
-    return new BindingScopeConstructionInput(
+  }): BindingScopeConstructionRequest {
+    return new BindingScopeConstructionRequest(
       input.localKey,
       BindingScopeOwnerKind.RepeatedItem,
       input.ownerProductHandle,
@@ -328,18 +328,79 @@ export class BindingScope {
     );
   }
 
-  /** Runtime `Scope.fromParent` shape for `let`-introduced context and override-context slots. */
-  static fromLetBindingsInput(input: {
+  /** Runtime `Scope.fromParent(parentScope, value)` shape for object-backed synthetic views such as `with.bind`. */
+  static fromParentObject(input: {
     readonly localKey: string;
     readonly ownerProductHandle: ProductHandle | null;
     readonly ownerIdentityHandle: IdentityHandle | null;
     readonly parent: BindingScope;
-    readonly bindingContextSlots: readonly BindingContextSlotInput[];
-    readonly overrideContextSlots: readonly BindingContextSlotInput[];
+    readonly contextType: CheckerTypeReference | null;
     readonly sourceAddressHandle: AddressHandle | null;
     readonly scopeEffectOwnerProductHandles?: readonly ProductHandle[];
-  }): BindingScopeConstructionInput {
-    return new BindingScopeConstructionInput(
+  }): BindingScopeConstructionRequest {
+    return new BindingScopeConstructionRequest(
+      input.localKey,
+      BindingScopeOwnerKind.SyntheticView,
+      input.ownerProductHandle,
+      input.ownerIdentityHandle,
+      input.parent,
+      BindingContextKind.Object,
+      input.contextType,
+      [],
+      null,
+      [],
+      false,
+      input.sourceAddressHandle,
+      input.scopeEffectOwnerProductHandles ?? [],
+    );
+  }
+
+  /** Speculative same-level scope overlay for branch-local type narrowing such as `if.bind`. */
+  static fromNarrowedBindingScope(input: {
+    readonly localKey: string;
+    readonly ownerProductHandle: ProductHandle | null;
+    readonly ownerIdentityHandle: IdentityHandle | null;
+    readonly base: BindingScope;
+    readonly bindingContextSlots?: readonly BindingContextSlotDraft[];
+    readonly overrideContextSlots?: readonly BindingContextSlotDraft[];
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly scopeEffectOwnerProductHandles?: readonly ProductHandle[];
+  }): BindingScopeConstructionRequest {
+    return new BindingScopeConstructionRequest(
+      input.localKey,
+      BindingScopeOwnerKind.SyntheticView,
+      input.ownerProductHandle,
+      input.ownerIdentityHandle,
+      input.base.parent,
+      input.base.bindingContext.contextKind,
+      input.base.bindingContext.contextType,
+      mergeContextSlotDrafts(
+        input.base.bindingContext.slots.map((slot) => BindingContextSlotDraft.fromSlot(slot)),
+        input.bindingContextSlots ?? [],
+      ),
+      input.base.overrideContext.contextType,
+      mergeContextSlotDrafts(
+        input.base.overrideContext.slots.map((slot) => BindingContextSlotDraft.fromSlot(slot)),
+        input.overrideContextSlots ?? [],
+      ),
+      input.base.isBoundary,
+      input.sourceAddressHandle,
+      input.scopeEffectOwnerProductHandles ?? [],
+    );
+  }
+
+  /** Runtime `Scope.fromParent` shape for `let`-introduced context and override-context slots. */
+  static fromLetBindings(input: {
+    readonly localKey: string;
+    readonly ownerProductHandle: ProductHandle | null;
+    readonly ownerIdentityHandle: IdentityHandle | null;
+    readonly parent: BindingScope;
+    readonly bindingContextSlots: readonly BindingContextSlotDraft[];
+    readonly overrideContextSlots: readonly BindingContextSlotDraft[];
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly scopeEffectOwnerProductHandles?: readonly ProductHandle[];
+  }): BindingScopeConstructionRequest {
+    return new BindingScopeConstructionRequest(
       input.localKey,
       BindingScopeOwnerKind.LetElement,
       input.ownerProductHandle,
@@ -348,12 +409,12 @@ export class BindingScope {
       input.parent.bindingContext.contextKind,
       input.parent.bindingContext.contextType,
       [
-        ...input.parent.bindingContext.slots.map((slot) => BindingContextSlotInput.fromSlot(slot)),
+        ...input.parent.bindingContext.slots.map((slot) => BindingContextSlotDraft.fromSlot(slot)),
         ...input.bindingContextSlots,
       ],
       input.parent.overrideContext.contextType,
       [
-        ...input.parent.overrideContext.slots.map((slot) => BindingContextSlotInput.fromSlot(slot)),
+        ...input.parent.overrideContext.slots.map((slot) => BindingContextSlotDraft.fromSlot(slot)),
         ...input.overrideContextSlots,
       ],
       input.parent.isBoundary,
@@ -458,4 +519,21 @@ export class BindingScope {
       null,
     );
   }
+}
+
+function mergeContextSlotDrafts(
+  base: readonly BindingContextSlotDraft[],
+  overrides: readonly BindingContextSlotDraft[],
+): readonly BindingContextSlotDraft[] {
+  if (overrides.length === 0) {
+    return base;
+  }
+  const byName = new Map<string, BindingContextSlotDraft>();
+  for (const slot of base) {
+    byName.set(slot.name, slot);
+  }
+  for (const slot of overrides) {
+    byName.set(slot.name, slot);
+  }
+  return [...byName.values()];
 }

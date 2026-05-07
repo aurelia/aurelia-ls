@@ -42,6 +42,8 @@ import {
   projectionContinuation,
 } from "./framework-continuation-core.js";
 import { readFrameworkCompilerRelationships } from "./framework-compiler-lenses.js";
+import { readFrameworkExpressionRelationships } from "./framework-expression-relationships.js";
+import { readFrameworkStructuralRelationships } from "./framework-structural-relationships.js";
 import {
   frameworkEmulationValue,
   readFrameworkEmulationObligations,
@@ -91,7 +93,7 @@ interface FrameworkCompositionFilters extends FrameworkDiscoveryFilters {
   readonly targetName?: string;
 }
 
-interface RelationshipClaimInput {
+interface RelationshipClaimDraft {
   readonly id: string;
   readonly family?: string;
   readonly relation: string;
@@ -255,7 +257,7 @@ function readFrameworkCompositionClaims(
       readerFilters,
     ).relationships.map((row) =>
       claimFromRelationship(
-        relationshipInput(row, "materialization"),
+        relationshipDraft(row, "materialization"),
         LensId.FrameworkMaterialization,
         "relationships",
         [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
@@ -264,9 +266,27 @@ function readFrameworkCompositionClaims(
     ...readFrameworkCompilerRelationships(sourceProject, readerFilters).map(
       (row) =>
         claimFromRelationship(
-          relationshipInput(row, "compiler"),
+          relationshipDraft(row, "compiler"),
           LensId.FrameworkCompiler,
           "relationships",
+          [BasisKind.TypeScriptChecker],
+        ),
+    ),
+    ...readFrameworkExpressionRelationships(sourceProject, readerFilters).map(
+      (row) =>
+        claimFromRelationship(
+          relationshipDraft(row, "expression"),
+          LensId.FrameworkDiscovery,
+          "expression-entities",
+          [BasisKind.TypeScriptChecker],
+        ),
+    ),
+    ...readFrameworkStructuralRelationships(sourceProject, readerFilters).map(
+      (row) =>
+        claimFromRelationship(
+          relationshipDraft(row, row.family),
+          LensId.FrameworkDiscovery,
+          structuralRelationshipProjection(row.family),
           [BasisKind.TypeScriptChecker],
         ),
     ),
@@ -281,7 +301,7 @@ function readFrameworkCompositionClaims(
       )
       .map((row) =>
         claimFromRelationship(
-          relationshipInput(row, "rendering"),
+          relationshipDraft(row, "rendering"),
           LensId.FrameworkRendering,
           "relationships",
           [BasisKind.SourceText, BasisKind.TypeScriptChecker],
@@ -292,7 +312,7 @@ function readFrameworkCompositionClaims(
       readerFilters as FrameworkLifecycleFilters,
     ).map((row) =>
       claimFromRelationship(
-        relationshipInput(row, "lifecycle"),
+        relationshipDraft(row, "lifecycle"),
         LensId.FrameworkLifecycle,
         "relationships",
         [BasisKind.SourceText, BasisKind.TypeScriptChecker],
@@ -303,7 +323,7 @@ function readFrameworkCompositionClaims(
       readerFilters as FrameworkObservationFilters,
     ).map((row) =>
       claimFromRelationship(
-        relationshipInput(row, "observation"),
+        relationshipDraft(row, "observation"),
         LensId.FrameworkObservation,
         "relationships",
         [BasisKind.SourceText, BasisKind.TypeScriptChecker],
@@ -333,18 +353,30 @@ function readerFiltersForComposition(
   };
 }
 
-function relationshipInput(
-  row: RelationshipClaimInput,
+function relationshipDraft(
+  row: RelationshipClaimDraft,
   family: string,
-): RelationshipClaimInput {
+): RelationshipClaimDraft {
   return {
     ...row,
     family: row.family ?? family,
   };
 }
 
+function structuralRelationshipProjection(family: string): string {
+  switch (family) {
+    case "observation":
+      return "observers";
+    case "router":
+      return "router-entities";
+    case "rendering":
+    default:
+      return "rendering-structures";
+  }
+}
+
 function claimFromRelationship(
-  row: RelationshipClaimInput,
+  row: RelationshipClaimDraft,
   sourceLens: LensId,
   sourceProjection: string,
   basis: readonly BasisKind[],

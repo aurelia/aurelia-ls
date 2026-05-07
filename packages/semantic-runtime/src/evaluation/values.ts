@@ -1,5 +1,5 @@
 import type ts from 'typescript';
-import type { ModuleEnvironmentRecord } from './environment.js';
+import type { EvaluationEnvironmentRecordReference } from './environment-reference.js';
 
 export const enum EvaluationValueKind {
   /** Value that could not be reduced without guessing. */
@@ -168,7 +168,7 @@ export class EvaluationFunctionValue {
     /** Function-like declaration captured by this value. */
     readonly declaration: ts.FunctionLikeDeclaration,
     /** Captured environment record used for local calls. */
-    readonly environment: ModuleEnvironmentRecord,
+    readonly environment: EvaluationEnvironmentRecordReference,
     /** Syntax node that produced the value, when one exists. */
     readonly node: ts.Node | null = null,
   ) {}
@@ -182,7 +182,7 @@ export class EvaluationClassValue {
     /** Class declaration or expression represented by this value. */
     readonly declaration: ts.ClassLikeDeclaration,
     /** Captured environment record available to later class-aware materializers. */
-    readonly environment: ModuleEnvironmentRecord,
+    readonly environment: EvaluationEnvironmentRecordReference,
     /** Syntax node that produced the value, when one exists. */
     readonly node: ts.Node | null = null,
   ) {}

@@ -5,7 +5,7 @@ import type {
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { RegistrationStrategy } from '../registration/registration-admission.js';
-import type { ContainerReference } from './container.js';
+import type { ContainerReference } from './container-reference.js';
 
 export type ContainerSlotField =
   | 'container'

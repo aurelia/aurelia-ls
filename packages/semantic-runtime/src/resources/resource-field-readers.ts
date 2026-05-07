@@ -11,6 +11,8 @@ import {
 } from '../evaluation/expression-reader.js';
 import type { EvaluationOpenSeam } from '../evaluation/seams.js';
 import {
+  type EvaluationArrayElement,
+  type EvaluationArrayValue,
   EvaluationValueKind,
 } from '../evaluation/values.js';
 import {
@@ -48,6 +50,16 @@ export class ResourceFieldRead<TValue> {
     /** Explanation used when the field did not close. */
     readonly openSummary: string | null = null,
   ) {}
+}
+
+interface AttributePatternEntriesRead {
+  readonly patterns: readonly AttributePatternObservation[];
+  readonly open: boolean;
+}
+
+interface AttributePatternEntryRead {
+  readonly pattern: AttributePatternObservation | null;
+  readonly open: boolean;
 }
 
 export function readDecoratorCalleeName(
@@ -185,42 +197,68 @@ export function readAttributePatternEntries(
     );
   }
 
+  const entries = readAttributePatternArray(value, expression, reader);
+  return attributePatternEntriesFieldRead(entries, expression, result.openSeams);
+}
+
+function readAttributePatternArray(
+  value: EvaluationArrayValue,
+  sourceExpression: ts.Expression,
+  reader: StaticEvaluationExpressionReader,
+): AttributePatternEntriesRead {
   const patterns: AttributePatternObservation[] = [];
   let open = value.mayHaveUnknownElements;
   for (const element of value.elements) {
-    if (element.value.kind !== EvaluationValueKind.Object) {
-      open = true;
+    const entry = readAttributePatternArrayElement(element, sourceExpression, reader);
+    open ||= entry.open;
+    if (entry.pattern == null) {
       continue;
     }
-    const pattern = reader.readObjectStringProperty(element.value, 'pattern');
-    const symbols = reader.readObjectStringProperty(element.value, 'symbols');
-    if (pattern == null || symbols == null) {
-      open = true;
-      continue;
-    }
-    const patternValue = pattern.value;
-    const symbolsValue = symbols.value;
-    if (patternValue == null || symbolsValue == null) {
-      open = true;
-      continue;
-    }
-    patterns.push(new AttributePatternObservation(
-      patternValue,
-      symbolsValue,
-      pattern.node ?? element.expression ?? expression,
-    ));
+    patterns.push(entry.pattern);
+  }
+  return { patterns, open };
+}
+
+function readAttributePatternArrayElement(
+  element: EvaluationArrayElement,
+  sourceExpression: ts.Expression,
+  reader: StaticEvaluationExpressionReader,
+): AttributePatternEntryRead {
+  if (element.value.kind !== EvaluationValueKind.Object) {
+    return { pattern: null, open: true };
   }
 
-  return open
+  const pattern = reader.readObjectStringProperty(element.value, 'pattern');
+  const symbols = reader.readObjectStringProperty(element.value, 'symbols');
+  if (pattern?.value == null || symbols?.value == null) {
+    return { pattern: null, open: true };
+  }
+
+  return {
+    pattern: new AttributePatternObservation(
+      pattern.value,
+      symbols.value,
+      pattern.node ?? element.expression ?? sourceExpression,
+    ),
+    open: false,
+  };
+}
+
+function attributePatternEntriesFieldRead(
+  entries: AttributePatternEntriesRead,
+  expression: ts.Expression,
+  openSeams: readonly EvaluationOpenSeam[],
+): ResourceFieldRead<readonly AttributePatternObservation[]> {
+  return entries.open
     ? new ResourceFieldRead(
-      patterns,
+      entries.patterns,
       expression,
       summaryWithEvaluationSeams(
         'AttributePattern.create(...) pattern source has statically visible entries plus open entries.',
-        result.openSeams,
+        openSeams,
       ),
     )
-    : new ResourceFieldRead(patterns, expression);
+    : new ResourceFieldRead(entries.patterns, expression);
 }
 
 export function readAttributePatternEntry(

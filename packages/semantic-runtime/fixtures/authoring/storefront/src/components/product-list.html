@@ -1,0 +1,16 @@
+<section aria-label="Featured products">
+  <div
+    availability-badge
+    availability-badge.ref="availabilityBadge">
+  </div>
+
+  <product-card
+    component.ref="featuredCard"
+    ...$bindables="featuredCardBindings">
+  </product-card>
+
+  <product-card
+    repeat.for="productId of productIds"
+    product-id.bind="productId">
+  </product-card>
+</section>
