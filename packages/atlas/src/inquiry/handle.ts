@@ -68,6 +68,28 @@ export interface InquiryHandle {
   readonly summary?: string;
 }
 
+/** Handle that points at repository-level terrain or ownership. */
+export interface RepoHandle extends InquiryHandle {
+  /** Repository handles are owned by the repo namespace. */
+  readonly namespace: HandleNamespace.Repo;
+  /** Repository handles identify terrain areas. */
+  readonly kind: HandleKind.RepoArea;
+  /** Repository area id such as active product, framework, or deferred legacy code. */
+  readonly id: string;
+}
+
+/** Handle that points at a configured package root. */
+export interface PackageHandle extends InquiryHandle {
+  /** Package handles are owned by the package namespace. */
+  readonly namespace: HandleNamespace.Package;
+  /** Package handles identify workspace or admitted external packages. */
+  readonly kind: HandleKind.Package;
+  /** Package id in the active source admission basis. */
+  readonly id: string;
+  /** Package name when known. */
+  readonly packageName?: string;
+}
+
 /** Handle that points at source text. */
 export interface SourceHandle extends InquiryHandle {
   /** Source handles are owned by the source namespace. */
@@ -106,6 +128,14 @@ export interface FrameworkHandle extends InquiryHandle {
   readonly namespace: HandleNamespace.Framework;
   /** Framework handles cover DI, evaluator, and framework open-seam facts. */
   readonly kind: HandleKind.DiKey | HandleKind.DiProvider | HandleKind.EvaluatorValue | HandleKind.OpenSeam;
+}
+
+/** Handle that points at Atlas contracts or returned navigation edges. */
+export interface AtlasHandle extends InquiryHandle {
+  /** Atlas handles are owned by the atlas namespace. */
+  readonly namespace: HandleNamespace.Atlas;
+  /** Atlas handles identify lens contracts or continuation edges. */
+  readonly kind: HandleKind.Lens | HandleKind.Continuation;
 }
 
 /** Build the canonical map key for a handle-like value. */

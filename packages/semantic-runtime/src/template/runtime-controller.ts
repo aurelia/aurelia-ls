@@ -40,6 +40,7 @@ import {
 
 export const enum RuntimeControllerCreationKind {
   RootCustomElement = 'root-custom-element',
+  RoutedCustomElement = 'routed-custom-element',
   CustomElement = 'custom-element',
   CustomAttribute = 'custom-attribute',
   TemplateController = 'template-controller',
@@ -109,11 +110,9 @@ export interface RuntimeControllerBindHost {
   ): RuntimeBindingBindInput | null;
 }
 
-export class RuntimeControllerBindInput {
-  constructor(
-    readonly localKey: string,
-    readonly host: RuntimeControllerBindHost,
-  ) {}
+export interface RuntimeControllerBindRequest {
+  readonly localKey: string;
+  readonly host: RuntimeControllerBindHost;
 }
 
 export class RuntimeControllerBindContribution {
@@ -219,7 +218,7 @@ export class RuntimeControllerFrame {
     );
   }
 
-  bind(input: RuntimeControllerBindInput): RuntimeControllerBindResult {
+  bind(input: RuntimeControllerBindRequest): RuntimeControllerBindResult {
     const contributions: RuntimeControllerBindContribution[] = [];
     const bindOne = (binding: RuntimeBinding, index: number): void => {
       const bindInput = input.host.inputForBinding(this, binding, index);

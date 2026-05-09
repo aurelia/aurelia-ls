@@ -30,6 +30,7 @@ import type {
 } from '../resources/resource-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
+  IteratorBindingInstruction,
   SpreadElementPropBindingInstruction,
   type SpreadTransferedBindingInstruction,
   TemplateInstructionKind,
@@ -52,10 +53,10 @@ import {
   RuntimeRendererAllocation,
   RuntimeRendererInstructionOwner,
   RuntimeRendererInvocation,
-  RuntimeRendererSpreadCompileInput,
   RuntimeRendererSpreadCompileResult,
   RuntimeRendererSpreadCompileState,
   type RuntimeRenderer,
+  type RuntimeRendererSpreadCompileRequest,
   type RuntimeRenderingRun,
 } from './runtime-renderer.js';
 import type { RuntimeRendererReference } from './runtime-renderer-reference.js';
@@ -211,41 +212,37 @@ export interface TemplateRenderingRunHost {
 
   createChildController(input: RuntimeControllerCreationRequest): RuntimeControllerFrame | null;
 
-  compileSpread(input: RuntimeRendererSpreadCompileInput): RuntimeRendererSpreadCompileResult;
+  compileSpread(input: RuntimeRendererSpreadCompileRequest): RuntimeRendererSpreadCompileResult;
 }
 
-/** Input to the runtime Rendering service dispatch loop. */
-export class TemplateRenderingRunInput {
-  constructor(
-    /** Store-local key shared with the template compilation pass. */
-    readonly localKey: string,
-    /** Compiled-template product whose rows are being spent by Rendering. */
-    readonly compiledTemplate: CompiledTemplate,
-    /** Render targets paired with their instruction rows. */
-    readonly targets: readonly TemplateRenderingTargetInput[],
-    /** All compiled instruction products, including nested hydrate props not directly present in target rows. */
-    readonly instructions: readonly TemplateInstruction[],
-    /** Current runtime controller that receives renderer-created bindings. */
-    readonly rootController: RuntimeControllerFrame,
-    /** Provenance to attach to renderer-created binding models. */
-    readonly provenanceHandle: ProvenanceHandle,
-    /** Kernel-materialization operations needed when the runtime render loop creates products. */
-    readonly host: TemplateRenderingRunHost,
-    /** Whether this pass should spend host/surrogate instructions from the compiled template. */
-    readonly renderSurrogate: boolean = true,
-  ) {}
+/** Request to the runtime Rendering service dispatch loop. */
+export interface TemplateRenderingRunRequest {
+  /** Store-local key shared with the template compilation pass. */
+  readonly localKey: string;
+  /** Compiled-template product whose rows are being spent by Rendering. */
+  readonly compiledTemplate: CompiledTemplate;
+  /** Render targets paired with their instruction rows. */
+  readonly targets: readonly TemplateRenderingTargetPlan[];
+  /** All compiled instruction products, including nested hydrate props not directly present in target rows. */
+  readonly instructions: readonly TemplateInstruction[];
+  /** Current runtime controller that receives renderer-created bindings. */
+  readonly rootController: RuntimeControllerFrame;
+  /** Provenance to attach to renderer-created binding models. */
+  readonly provenanceHandle: ProvenanceHandle;
+  /** Kernel-materialization operations needed when the runtime render loop creates products. */
+  readonly host: TemplateRenderingRunHost;
+  /** Whether this pass should spend host/surrogate instructions from the compiled template. */
+  readonly renderSurrogate: boolean;
 }
 
 /** One compiled-template row as consumed by runtime Rendering. */
-export class TemplateRenderingTargetInput {
-  constructor(
-    /** Compiler-produced render target corresponding to one runtime target node. */
-    readonly target: TemplateRenderTarget,
-    /** Instruction sequence paired with the target. */
-    readonly sequence: TemplateInstructionSequence,
-    /** Hydrated instruction products in row order. */
-    readonly instructions: readonly TemplateInstruction[],
-  ) {}
+export interface TemplateRenderingTargetPlan {
+  /** Compiler-produced render target corresponding to one runtime target node. */
+  readonly target: TemplateRenderTarget;
+  /** Instruction sequence paired with the target. */
+  readonly sequence: TemplateInstructionSequence;
+  /** Hydrated instruction products in row order. */
+  readonly instructions: readonly TemplateInstruction[];
 }
 
 /** One instruction that the runtime Rendering service spent through an IRenderer. */
@@ -658,7 +655,7 @@ export class TemplateRenderingService {
   }
 
   /** Runtime `Rendering.render(...)` dispatch loop over already-lowered instruction products. */
-  render(input: TemplateRenderingRunInput): TemplateRenderingRunResult {
+  render(input: TemplateRenderingRunRequest): TemplateRenderingRunResult {
     return new TemplateRenderingRun(this, input).render();
   }
 
@@ -679,15 +676,21 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
   private readonly renderedInstructions: TemplateRenderedInstruction[] = [];
   private readonly openInstructions: TemplateRenderingOpenInstruction[] = [];
   private readonly instructionsByProduct: Map<ProductHandle, TemplateInstruction>;
+  private readonly nestedInstructionProductHandles: ReadonlySet<ProductHandle>;
   private readonly consumed = new Set<ProductHandle>();
 
   constructor(
     private readonly rendering: TemplateRenderingService,
-    private readonly input: TemplateRenderingRunInput,
+    private readonly input: TemplateRenderingRunRequest,
   ) {
     this.provenanceHandle = input.provenanceHandle;
     this.instructionsByProduct = new Map(input.instructions
       .map((instruction) => [instruction.productHandle, instruction]));
+    this.nestedInstructionProductHandles = new Set(input.instructions.flatMap((instruction) =>
+      instruction instanceof IteratorBindingInstruction
+        ? instruction.tailInstructionProductHandles
+        : []
+    ));
   }
 
   render(): TemplateRenderingRunResult {
@@ -717,6 +720,9 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
         if (this.consumed.has(instruction.productHandle)) {
           return;
         }
+        if (this.nestedInstructionProductHandles.has(instruction.productHandle)) {
+          return;
+        }
         this.consumeInstruction(instruction.productHandle);
         this.renderInstruction(
           `${this.input.localKey}:surrogate:instruction:${instructionIndex}`,
@@ -732,6 +738,9 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
     this.input.targets.forEach((target, targetIndex) => {
       target.instructions.forEach((instruction, instructionIndex) => {
         if (this.consumed.has(instruction.productHandle)) {
+          return;
+        }
+        if (this.nestedInstructionProductHandles.has(instruction.productHandle)) {
           return;
         }
         this.consumeInstruction(instruction.productHandle);
@@ -761,7 +770,7 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
     return this.input.host.createChildController(input);
   }
 
-  compileSpread(input: RuntimeRendererSpreadCompileInput): RuntimeRendererSpreadCompileResult {
+  compileSpread(input: RuntimeRendererSpreadCompileRequest): RuntimeRendererSpreadCompileResult {
     const result = this.input.host.compileSpread(input);
     if (result.state === RuntimeRendererSpreadCompileState.Compiled) {
       for (const instruction of result.createdInstructions) {

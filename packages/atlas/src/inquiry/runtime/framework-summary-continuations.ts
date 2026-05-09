@@ -5,7 +5,7 @@ import {
   projectionContinuation,
 } from "./framework-continuation-core.js";
 
-export function summaryContinuations(
+export function frameworkSummaryContinuations(
   inquiry: Inquiry,
 ): readonly Continuation[] {
   return [

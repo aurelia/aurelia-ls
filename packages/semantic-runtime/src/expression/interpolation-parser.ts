@@ -9,6 +9,7 @@ import {
   type SourceSpan,
   type TextSpan,
 } from "./source-span.js";
+import { findTemplateExpressionClose } from "./expression-boundary-scanner.js";
 import {
   ClosedSubtreeRef,
   ExpressionCompanionFrameKind,
@@ -42,6 +43,7 @@ interface ClosedInterpolationHoleSegment {
   readonly codeSpan: TextSpan;
   readonly closeSpan: TextSpan;
   readonly code: string;
+  readonly parseResult: PropertyLikeParseResult;
 }
 
 interface UnterminatedInterpolationHoleSegment {
@@ -49,6 +51,7 @@ interface UnterminatedInterpolationHoleSegment {
   readonly openSpan: TextSpan;
   readonly codeSpan: TextSpan;
   readonly code: string;
+  readonly parseResult: PropertyLikeParseResult;
 }
 
 type InterpolationHoleSegment =
@@ -91,7 +94,7 @@ export class InterpolationParser {
     baseSpan: SourceSpan | null = null,
     activeOffset: number | null = null,
   ): InterpolationParseResult {
-    const split = this.extractSegments(text);
+    const split = this.extractSegments(text, parseExpression, baseSpan);
     if (!split) {
       const span = baseSpan ? normalizeSpan(baseSpan) : sourceSpanFromBounds(0, text.length);
       return new InterpolationAbsent(span, text);
@@ -141,17 +144,16 @@ export class InterpolationParser {
     };
 
     for (const [index, hole] of split.holes.entries()) {
-      if (hole.kind === "unterminated" && hole.code.length === 0) {
+      if (hole.code.length === 0) {
         publishCompanion(
           ExpressionParseResultKind.InterpolationFrontierPublication,
           hole,
-          this.createEmptyUnterminatedHoleCompanion(index, hole, text, baseSpan),
+          this.createEmptyHoleCompanion(index, hole, text, baseSpan),
         );
         continue;
       }
 
-      const exprBase = baseSpan ? absoluteSpan(hole.codeSpan, baseSpan) : null;
-      const expr = parseExpression(hole.code, hole.codeSpan.start, exprBase);
+      const expr = hole.parseResult;
       if (expr.kind === ExpressionParseResultKind.CompleteInputParseError) {
         if (this.shouldUseActiveHole(hole, activeOffset, activeHole)) {
           return expr;
@@ -165,6 +167,15 @@ export class InterpolationParser {
             InterpolationSuppressedHolePublicationKind.HardErrorSuppressed,
             baseSpan,
           ),
+        );
+        continue;
+      }
+
+      if (expr.kind === ExpressionParseResultKind.EmptyExpressionSuccess) {
+        publishCompanion(
+          ExpressionParseResultKind.InterpolationFrontierPublication,
+          hole,
+          this.createEmptyHoleCompanion(index, hole, text, baseSpan),
         );
         continue;
       }
@@ -193,7 +204,7 @@ export class InterpolationParser {
         }
 
         publishCompanion(
-          ExpressionParseResultKind.InterpolationDegradedPublication,
+          ExpressionParseResultKind.InterpolationFrontierPublication,
           hole,
           this.createMissingHoleCloseCompanion(index, hole, expr.ast, baseSpan),
         );
@@ -334,25 +345,28 @@ export class InterpolationParser {
     );
   }
 
-  private static createEmptyUnterminatedHoleCompanion(
+  private static createEmptyHoleCompanion(
     holeIndex: number,
-    hole: UnterminatedInterpolationHoleSegment,
+    hole: InterpolationHoleSegment,
     text: string,
     baseSpan: SourceSpan | null,
   ): InterpolationActiveHoleCompanion {
     const interpolationSpan = baseSpan ? normalizeSpan(baseSpan) : sourceSpanFromBounds(0, text.length);
     const holeSpan = this.resolveHoleSpan(hole, baseSpan, interpolationSpan);
     const boundaryState = this.createHoleBoundaryState(hole, baseSpan, interpolationSpan);
+    const expectedContinuationClasses = hole.kind === "closed"
+      ? [ExpressionExpectedContinuationClass.Expression]
+      : [
+          ExpressionExpectedContinuationClass.Expression,
+          ExpressionExpectedContinuationClass.InterpolationHoleClose,
+        ];
 
     return new InterpolationActiveHoleCompanion(
       holeIndex,
       holeSpan,
       boundaryState,
       ExpressionFrontierKind.AmbiguousClosure,
-      [
-        ExpressionExpectedContinuationClass.Expression,
-        ExpressionExpectedContinuationClass.InterpolationHoleClose,
-      ],
+      expectedContinuationClasses,
       [],
       ExpressionCompanionFrameKind.InterpolationHole,
       boundaryState.openSpan,
@@ -398,8 +412,16 @@ export class InterpolationParser {
     return start <= activeOffset && activeOffset <= end;
   }
 
-  private static extractSegments(text: string): InterpolationSegments | null {
-    return this.splitText(text);
+  private static extractSegments(
+    text: string,
+    parseExpression: (
+      segment: string,
+      baseOffset: number,
+      baseSpan: SourceSpan | null,
+    ) => PropertyLikeParseResult,
+    baseSpan: SourceSpan | null,
+  ): InterpolationSegments | null {
+    return this.splitText(text, parseExpression, baseSpan);
   }
 
   private static resolveHoleSpan(
@@ -428,9 +450,16 @@ export class InterpolationParser {
     );
   }
 
-  private static splitText(text: string): InterpolationSegments | null {
+  private static splitText(
+    text: string,
+    parseExpression: (
+      segment: string,
+      baseOffset: number,
+      baseSpan: SourceSpan | null,
+    ) => PropertyLikeParseResult,
+    baseSpan: SourceSpan | null,
+  ): InterpolationSegments | null {
     let index = 0;
-    let depth = 0;
     let partStart = 0;
     let sawHole = false;
 
@@ -451,66 +480,37 @@ export class InterpolationParser {
 
         const holeOpenStart = index;
         index += 2;
-        depth = 1;
-
         const exprStart = index;
-        let innerStringQuote: '"' | "'" | "`" | null = null;
+        const closing = findTemplateExpressionClose(text, exprStart);
+        const exprEnd = closing ?? text.length;
+        const exprBase = baseSpan
+          ? absoluteSpan(spanFromBounds(exprStart, exprEnd), baseSpan)
+          : null;
+        const parsed = parseExpression(text.slice(exprStart, exprEnd), exprStart, exprBase);
 
-        while (index < text.length) {
-          const current = text[index];
-
-          if (innerStringQuote) {
-            if (current === "\\") {
-              index += 2;
-              continue;
-            }
-            if (current === innerStringQuote) {
-              innerStringQuote = null;
-              index++;
-              continue;
-            }
-            index++;
-            continue;
-          }
-
-          if (current === '"' || current === "'" || current === "`") {
-            innerStringQuote = current;
-            index++;
-            continue;
-          }
-
-          if (current === "{") {
-            depth++;
-            index++;
-            continue;
-          }
-
-          if (current === "}" && --depth === 0) {
-            holes.push({
-              kind: "closed",
-              openSpan: spanFromBounds(holeOpenStart, holeOpenStart + 2),
-              codeSpan: spanFromBounds(exprStart, index),
-              closeSpan: spanFromBounds(index, index + 1),
-              code: text.slice(exprStart, index),
-            });
-            index++;
-            partStart = index;
-            break;
-          }
-
-          index++;
-        }
-
-        if (depth !== 0) {
+        if (closing == null) {
           holes.push({
             kind: "unterminated",
             openSpan: spanFromBounds(holeOpenStart, holeOpenStart + 2),
             codeSpan: spanFromBounds(exprStart, text.length),
             code: text.slice(exprStart),
+            parseResult: parsed,
           });
+          parts.push("");
           return { parts, holes };
         }
 
+        const closeEnd = closing + 1;
+        holes.push({
+          kind: "closed",
+          openSpan: spanFromBounds(holeOpenStart, holeOpenStart + 2),
+          codeSpan: spanFromBounds(exprStart, closing),
+          closeSpan: spanFromBounds(closing, closeEnd),
+          code: text.slice(exprStart, closing),
+          parseResult: parsed,
+        });
+        index = closeEnd;
+        partStart = index;
         continue;
       }
 

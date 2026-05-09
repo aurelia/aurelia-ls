@@ -17,6 +17,7 @@ import {
   type FrameworkAdmissionMaterializationFilters,
   type FrameworkAdmissionMaterializationLinkRow,
 } from "./framework-admission-materialization.js";
+import { appTaskSlotName } from "./framework-admission-continuations.js";
 import {
   readLifecycleAppTaskExecutions,
   type FrameworkLifecycleAppTaskExecutionRow,
@@ -189,13 +190,6 @@ function worldFormationRowForAdmissionOnly(
       : { resourceKind: relationship.to.resourceKind }),
     summary: interpretation.summary,
   };
-}
-
-function appTaskSlotName(row: FrameworkAdmissionRelationshipRow): string | null {
-  if (row.helperName?.startsWith("AppTask.") !== true) {
-    return null;
-  }
-  return row.helperName.slice("AppTask.".length);
 }
 
 function worldFormationMatches(

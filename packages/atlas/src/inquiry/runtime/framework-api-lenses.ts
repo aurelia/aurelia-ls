@@ -11,6 +11,10 @@ import {
   type AureliaApiUsageRow,
 } from "../../framework/index.js";
 import {
+  countBy,
+  groupBy,
+} from "../../collections.js";
+import {
   sourceRangeKey,
   usageCallAggregate,
   type SourceProject,
@@ -19,7 +23,6 @@ import {
 } from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import { BasisKind, type Basis } from "../basis.js";
-import { clampBudget } from "../budget.js";
 import {
   ContinuationKind,
   ContinuationPriority,
@@ -36,15 +39,22 @@ import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
 import type { SourceRange } from "../locus.js";
 import { PagedRowFamily } from "../paged-row-family.js";
-import { pageOffset } from "../paging.js";
+import { pageOffset, rowLimit } from "../paging.js";
 import {
   FrameworkRowContinuationBuilder,
   nextPageContinuation,
+  projectionContinuation,
 } from "./framework-continuation-core.js";
 import {
   checkerBasis,
   sourceIndexBasis,
 } from "./framework-support.js";
+import {
+  readInquiryFilters,
+  singletonRecordFilter,
+  stringField,
+  stringFiltersFromRecord,
+} from "./lens-filter-utils.js";
 
 /** Filters accepted by the framework.api lens. */
 export interface FrameworkApiFilters {
@@ -214,8 +224,8 @@ const USAGE_CONSUMER_ROW_FAMILY =
   new PagedRowFamily<FrameworkApiUsageConsumerRow>({
     id: "framework.api:usage-consumers",
     rowLabel: "Aurelia API usage consumer row(s)",
-    evidenceForRow: evidenceForUsageConsumer,
-    continuationsForPage: usageConsumerContinuations,
+    evidenceForRow: evidenceForApiUsageConsumer,
+    continuationsForPage: apiUsageConsumerContinuations,
   });
 
 /** Answer framework API usage inquiries from exact TypeChecker and source identity rows. */
@@ -224,10 +234,10 @@ export function answerFrameworkApi(
   sourceProject: SourceProject,
 ): Answer<FrameworkApiValue> {
   const projection = inquiry.projection ?? "summary";
-  const filters = filtersFromInquiry(inquiry);
+  const filters = readInquiryFilters(inquiry, frameworkApiFiltersFromRecord);
   const index = readAureliaApiUsageIndex(sourceProject);
   const basis = apiBasis(sourceProject);
-  const limit = clampBudget(inquiry.budget?.rows, 80, 1_000);
+  const limit = rowLimit(inquiry);
   const offset = pageOffset(inquiry);
   const implementationSubjectIds = implementationSubjectIdsForFilters(index, filters);
 
@@ -264,7 +274,7 @@ export function answerFrameworkApi(
   }
 
   if (projection === "merge-edges") {
-    const rows = index.mergeEdges.filter((row) => edgeMatches(row, filters));
+    const rows = index.mergeEdges.filter((row) => apiEdgeMatches(row, filters));
     return MERGE_EDGE_ROW_FAMILY.answer({
       inquiry,
       rows,
@@ -278,7 +288,7 @@ export function answerFrameworkApi(
   }
 
   if (projection === "shape-edges") {
-    const rows = index.shapeEdges.filter((row) => edgeMatches(row, filters));
+    const rows = index.shapeEdges.filter((row) => apiEdgeMatches(row, filters));
     return SHAPE_EDGE_ROW_FAMILY.answer({
       inquiry,
       rows,
@@ -372,7 +382,7 @@ export function answerFrameworkApi(
     const matchingUsages = index.usages.filter((row) =>
       usageMatches(row, filters, implementationSubjectIds),
     );
-    const rows = usageConsumerRows(matchingUsages)
+    const rows = apiUsageConsumerRows(matchingUsages)
       .filter((row) => usageConsumerMatches(row, filters, implementationSubjectIds));
     return USAGE_CONSUMER_ROW_FAMILY.answer({
       inquiry,
@@ -398,7 +408,7 @@ export function answerFrameworkApi(
       value: { filters, rollup: index.rollup },
       basis,
       evidence: [],
-      continuations: summaryContinuations(inquiry),
+      continuations: apiSummaryContinuations(inquiry),
     },
   );
 }
@@ -407,45 +417,31 @@ function apiBasis(sourceProject: SourceProject): readonly Basis[] {
   return [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)];
 }
 
-function filtersFromInquiry(inquiry: Inquiry): FrameworkApiFilters {
-  return {
-    ...filtersFromRecord(inquiry.subject),
-    ...filtersFromRecord(inquiry.filters),
-  };
-}
+const frameworkApiFilterKeys = [
+  "packageId",
+  "subjectName",
+  "implementationName",
+  "exportName",
+  "memberName",
+  "consumerPackageId",
+  "role",
+  "ownerName",
+  "ownerKind",
+  "ownerMemberName",
+  "callCalleeName",
+  "callArgumentText",
+  "callArgumentSymbolName",
+  "callArgumentFullyQualifiedName",
+  "relation",
+  "surfaceKind",
+  "query",
+] as const satisfies readonly (keyof FrameworkApiFilters & string)[];
 
-function filtersFromRecord(value: unknown): FrameworkApiFilters {
-  if (value === null || typeof value !== "object") {
-    return {};
-  }
-  const source = value as Record<string, unknown>;
-  return {
-    ...stringFilter(source, "packageId"),
-    ...stringFilter(source, "subjectName"),
-    ...stringFilter(source, "implementationName"),
-    ...stringFilter(source, "exportName"),
-    ...stringFilter(source, "memberName"),
-    ...stringFilter(source, "consumerPackageId"),
-    ...stringFilter(source, "role"),
-    ...stringFilter(source, "ownerName"),
-    ...stringFilter(source, "ownerKind"),
-    ...stringFilter(source, "ownerMemberName"),
-    ...stringFilter(source, "callCalleeName"),
-    ...stringFilter(source, "callArgumentText"),
-    ...stringFilter(source, "callArgumentSymbolName"),
-    ...stringFilter(source, "callArgumentFullyQualifiedName"),
-    ...stringFilter(source, "relation"),
-    ...stringFilter(source, "surfaceKind"),
-    ...stringFilter(source, "query"),
-  };
-}
-
-function stringFilter(
-  source: Record<string, unknown>,
-  key: keyof FrameworkApiFilters,
-): object {
-  const value = source[key];
-  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
+function frameworkApiFiltersFromRecord(value: unknown): FrameworkApiFilters {
+  return stringFiltersFromRecord<FrameworkApiFilters>(
+    value,
+    frameworkApiFilterKeys,
+  );
 }
 
 function implementationSubjectIdsForFilters(
@@ -470,7 +466,7 @@ function subjectMatches(
     (implementationSubjectIds === undefined || implementationSubjectIds.has(row.id)) &&
     (filters.packageId === undefined || row.packageId === filters.packageId) &&
     (filters.subjectName === undefined || row.name === filters.subjectName) &&
-    queryMatches(filters.query, [row.id, row.name, row.packageId, row.summary])
+    frameworkApiQueryMatches(filters.query, [row.id, row.name, row.packageId, row.summary])
   );
 }
 
@@ -485,7 +481,7 @@ function facetMatches(
     (filters.subjectName === undefined || row.localName === filters.subjectName) &&
     (filters.exportName === undefined || row.exportName === filters.exportName) &&
     (filters.surfaceKind === undefined || row.surfaceKind === filters.surfaceKind) &&
-    queryMatches(filters.query, [
+    frameworkApiQueryMatches(filters.query, [
       row.id,
       row.exportName,
       row.localName,
@@ -495,7 +491,7 @@ function facetMatches(
   );
 }
 
-function edgeMatches(
+function apiEdgeMatches(
   row: AureliaApiMergeEdgeRow | AureliaApiShapeEdgeRow,
   filters: FrameworkApiFilters,
 ): boolean {
@@ -504,7 +500,7 @@ function edgeMatches(
     (filters.subjectName === undefined ||
       row.fromName === filters.subjectName ||
       row.toName === filters.subjectName) &&
-    queryMatches(filters.query, [
+    frameworkApiQueryMatches(filters.query, [
       row.id,
       row.fromName,
       row.toName,
@@ -524,7 +520,7 @@ function implementationShapeMatches(
       row.implementationName === filters.implementationName) &&
     (filters.subjectName === undefined ||
       row.shapeSubjectNames.includes(filters.subjectName)) &&
-    queryMatches(filters.query, [
+    frameworkApiQueryMatches(filters.query, [
       row.id,
       row.implementationName,
       ...row.shapeSubjectNames,
@@ -543,7 +539,7 @@ function memberSlotMatches(
     (implementationSubjectIds === undefined || implementationSubjectIds.has(row.subjectId)) &&
     (filters.subjectName === undefined || row.subjectName === filters.subjectName) &&
     (filters.memberName === undefined || row.name === filters.memberName) &&
-    queryMatches(filters.query, [
+    frameworkApiQueryMatches(filters.query, [
       row.id,
       row.subjectName,
       row.name,
@@ -569,8 +565,8 @@ function usageMatches(
     (filters.ownerKind === undefined || row.owner.ownerKind === filters.ownerKind) &&
     (filters.ownerMemberName === undefined ||
       row.owner.ownerMemberName === filters.ownerMemberName) &&
-    usageCallMatches(row, filters) &&
-    queryMatches(filters.query, [
+    apiUsageCallMatches(row, filters) &&
+    frameworkApiQueryMatches(filters.query, [
       row.id,
       row.subjectName,
       row.memberName ?? "",
@@ -594,14 +590,14 @@ function usageMatches(
   );
 }
 
-function usageCallMatches(
+function apiUsageCallMatches(
   row: AureliaApiUsageRow,
   filters: FrameworkApiFilters,
 ): boolean {
   return (
     (filters.callCalleeName === undefined ||
       row.call?.calleeName === filters.callCalleeName) &&
-    (hasCallArgumentFilter(filters)
+    (hasApiCallArgumentFilter(filters)
       ? row.call?.arguments.some((argument) =>
           (filters.callArgumentText === undefined ||
             argument.text === filters.callArgumentText) &&
@@ -614,21 +610,21 @@ function usageCallMatches(
   );
 }
 
-function hasCallArgumentFilter(filters: FrameworkApiFilters): boolean {
+function hasApiCallArgumentFilter(filters: FrameworkApiFilters): boolean {
   return filters.callArgumentText !== undefined ||
     filters.callArgumentSymbolName !== undefined ||
     filters.callArgumentFullyQualifiedName !== undefined;
 }
 
-function usageConsumerRows(
+function apiUsageConsumerRows(
   usages: readonly AureliaApiUsageRow[],
 ): readonly FrameworkApiUsageConsumerRow[] {
-  return [...groupBy(usages, usageConsumerGroupKey).values()]
-    .flatMap(usageConsumerRow)
+  return [...groupBy(usages, apiUsageConsumerGroupKey).values()]
+    .flatMap(apiUsageConsumerRow)
     .sort(compareUsageConsumers);
 }
 
-function usageConsumerRow(
+function apiUsageConsumerRow(
   usages: readonly AureliaApiUsageRow[],
 ): readonly FrameworkApiUsageConsumerRow[] {
   const first = usages[0];
@@ -667,7 +663,7 @@ function usageConsumerRow(
   }];
 }
 
-function usageConsumerGroupKey(row: AureliaApiUsageRow): string {
+function apiUsageConsumerGroupKey(row: AureliaApiUsageRow): string {
   return [
     row.subjectId,
     row.memberName ?? "<subject>",
@@ -702,7 +698,7 @@ function usageConsumerMatches(
       row.callArgumentSymbolNames[filters.callArgumentSymbolName] !== undefined) &&
     (filters.callArgumentFullyQualifiedName === undefined ||
       row.callArgumentFullyQualifiedNames[filters.callArgumentFullyQualifiedName] !== undefined) &&
-    queryMatches(filters.query, [
+    frameworkApiQueryMatches(filters.query, [
       row.id,
       row.subjectName,
       row.memberName ?? "",
@@ -838,35 +834,6 @@ function sortedRecord(record: Readonly<Record<string, number>>): Readonly<Record
   return Object.fromEntries(Object.entries(record).sort(([left], [right]) => left.localeCompare(right)));
 }
 
-function countBy<TValue>(
-  rows: readonly TValue[],
-  keyFor: (row: TValue) => string,
-): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = Object.create(null) as Record<string, number>;
-  for (const row of rows) {
-    const key = keyFor(row);
-    counts[key] = (counts[key] ?? 0) + 1;
-  }
-  return Object.fromEntries(Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)));
-}
-
-function groupBy<TValue>(
-  rows: readonly TValue[],
-  keyFor: (row: TValue) => string,
-): ReadonlyMap<string, readonly TValue[]> {
-  const grouped = new Map<string, TValue[]>();
-  for (const row of rows) {
-    const key = keyFor(row);
-    const existing = grouped.get(key);
-    if (existing === undefined) {
-      grouped.set(key, [row]);
-    } else {
-      existing.push(row);
-    }
-  }
-  return grouped;
-}
-
 function compareUsageConsumers(
   left: FrameworkApiUsageConsumerRow,
   right: FrameworkApiUsageConsumerRow,
@@ -880,7 +847,7 @@ function compareUsageConsumers(
     left.id.localeCompare(right.id);
 }
 
-function queryMatches(query: string | undefined, values: readonly string[]): boolean {
+function frameworkApiQueryMatches(query: string | undefined, values: readonly string[]): boolean {
   return query === undefined || values.some((value) => value.includes(query));
 }
 
@@ -932,7 +899,7 @@ function evidenceForUsage(row: AureliaApiUsageRow): Evidence {
   return evidenceForSourceRow(row.id, EvidenceKind.TypeFact, row.summary, row.source, row);
 }
 
-function evidenceForUsageConsumer(row: FrameworkApiUsageConsumerRow): Evidence {
+function evidenceForApiUsageConsumer(row: FrameworkApiUsageConsumerRow): Evidence {
   return evidenceForSourceRow(
     row.id,
     EvidenceKind.TypeFact,
@@ -970,35 +937,45 @@ function evidenceForSourceRow(
   };
 }
 
-function summaryContinuations(inquiry: Inquiry): readonly Continuation[] {
+function apiSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
   return [
-    projectionContinuation(inquiry, "subjects", "Inspect merged API declaration subjects."),
-    projectionContinuation(inquiry, "implementation-shapes", "Inspect class-rooted API implementation shapes."),
-    projectionContinuation(inquiry, "member-slots", "Inspect normalized API member slots."),
-    projectionContinuation(inquiry, "usages", "Inspect repo-wide TypeChecker-resolved API usage rows."),
-    projectionContinuation(inquiry, "usage-consumers", "Group API usage rows by owning declaration."),
-    projectionContinuation(inquiry, "shape-edges", "Inspect exact implementation and interface-extension shape edges."),
+    projectionContinuation(
+      inquiry,
+      "framework.api:subjects",
+      "subjects",
+      "Inspect merged API declaration subjects.",
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.api:implementation-shapes",
+      "implementation-shapes",
+      "Inspect class-rooted API implementation shapes.",
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.api:member-slots",
+      "member-slots",
+      "Inspect normalized API member slots.",
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.api:usages",
+      "usages",
+      "Inspect repo-wide TypeChecker-resolved API usage rows.",
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.api:usage-consumers",
+      "usage-consumers",
+      "Group API usage rows by owning declaration.",
+    ),
+    projectionContinuation(
+      inquiry,
+      "framework.api:shape-edges",
+      "shape-edges",
+      "Inspect exact implementation and interface-extension shape edges.",
+    ),
   ];
-}
-
-function projectionContinuation(
-  inquiry: Inquiry,
-  projection: string,
-  rationale: string,
-): Continuation {
-  return {
-    id: `framework.api:${projection}`,
-    kind: ContinuationKind.SwitchLens,
-    priority: ContinuationPriority.Primary,
-    rationale,
-    inquiry: {
-      lens: LensId.FrameworkApi,
-      locus: inquiry.locus,
-      projection,
-      filters: inquiry.filters,
-      budget: inquiry.budget,
-    },
-  };
 }
 
 function sourceAndTypeContinuations(
@@ -1157,7 +1134,7 @@ function usageContinuations(
   ];
 }
 
-function usageConsumerContinuations(
+function apiUsageConsumerContinuations(
   inquiry: Inquiry,
   rows: readonly FrameworkApiUsageConsumerRow[],
   nextOffset: number | undefined,
@@ -1166,7 +1143,7 @@ function usageConsumerContinuations(
   return [
     ...nextPage(inquiry, "framework.api:usage-consumers", nextOffset, limit),
     ...rows.slice(0, 4).flatMap((row, index) => {
-      const evidence = evidenceForUsageConsumer(row);
+      const evidence = evidenceForApiUsageConsumer(row);
       const continuations: Continuation[] = [
         ...sourceAndTypeContinuations(
           inquiry,
@@ -1185,7 +1162,7 @@ function usageConsumerContinuations(
       ];
       if (row.ownerSource !== undefined) {
         continuations.push(
-          sourceContinuation(
+          apiSourceContinuation(
             inquiry,
             "framework.api:usage-consumers",
             index,
@@ -1198,7 +1175,7 @@ function usageConsumerContinuations(
       }
       if (row.ownerMemberSource !== undefined) {
         continuations.push(
-          sourceContinuation(
+          apiSourceContinuation(
             inquiry,
             "framework.api:usage-consumers",
             index,
@@ -1262,7 +1239,7 @@ function edgeContinuations<TRow extends AureliaApiMergeEdgeRow | AureliaApiShape
   ];
 }
 
-function sourceContinuation(
+function apiSourceContinuation(
   inquiry: Inquiry,
   idPrefix: string,
   index: number,
@@ -1311,14 +1288,6 @@ function callSitesContinuation(
   );
 }
 
-function singletonRecordFilter(
-  values: Readonly<Record<string, number>>,
-  key: string,
-): Record<string, string> {
-  const entries = Object.keys(values);
-  return entries.length === 1 ? { [key]: entries[0]! } : {};
-}
-
 function callSiteFiltersFromFrameworkFilters(
   filters: Inquiry["filters"],
 ): Record<string, string> {
@@ -1334,15 +1303,6 @@ function callSiteFiltersFromFrameworkFilters(
       "argumentFullyQualifiedName",
     ),
   };
-}
-
-function stringField(
-  source: Readonly<Record<string, unknown>>,
-  sourceKey: string,
-  targetKey: string,
-): Record<string, string> {
-  const value = source[sourceKey];
-  return typeof value === "string" && value.length > 0 ? { [targetKey]: value } : {};
 }
 
 function projectionForSubject(

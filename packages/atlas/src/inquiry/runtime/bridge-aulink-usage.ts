@@ -6,10 +6,19 @@ import {
   type AureliaApiUsageRow,
 } from "../../framework/index.js";
 import {
+  countBy,
+  groupBy,
+  pushMapSetValue,
+  pushMapValue,
+  uniqueByKey,
+  uniqueSortedStrings,
+} from "../../collections.js";
+import {
   AURELIA_FRAMEWORK_PACKAGE_IDS,
   declarationNameNode,
   memberSurfacesForDeclaration,
   readAuLinkModel,
+  requiredSourceFileIdentity,
   requiredSourceRangeForNode,
   SourcePackageId,
   SourceProjectMemo,
@@ -18,7 +27,6 @@ import {
   sourceRangeKey,
   symbolForNode,
   type AuLinkAnchorRow,
-  type AuLinkFilters,
   type AuLinkFrameworkTargetResolution,
   type SourceProject,
   type SourceSpan,
@@ -34,8 +42,8 @@ import {
   visitNode,
 } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
+import { auLinkModelFilters } from "./bridge-aulink-lens-support.js";
 import type { AuLinkMirrorFilters } from "./bridge-aulink-mirror.js";
-import { countBy } from "./framework-support.js";
 
 const productUsageMemo = new SourceProjectMemo<AuLinkProductUsageIndex>();
 const frameworkTargetUsageMemo = new SourceProjectMemo<AuLinkFrameworkTargetUsageIndex>();
@@ -307,7 +315,7 @@ export function readAuLinkUsageComparisonModel(
   filters: AuLinkMirrorFilters = {},
   options: AuLinkUsageComparisonReadOptions = {},
 ): AuLinkUsageComparisonModel {
-  const auLink = readAuLinkModel(sourceProject, auLinkFilters(filters));
+  const auLink = readAuLinkModel(sourceProject, auLinkModelFilters(filters));
   const frameworkApi = readAureliaApiUsageIndex(sourceProject);
   const frameworkTargetUsage = readAuLinkFrameworkTargetUsageIndex(sourceProject);
   const productUsage = readAuLinkProductUsageIndex(sourceProject);
@@ -350,7 +358,7 @@ export function readAuLinkUsageComparisonModel(
     );
     const productSites = productUsages.map(productUsageSiteRow);
     siteRows.push(...frameworkSites, ...productSites);
-    consumerRows.push(...usageConsumerRows(row, frameworkSites, productSites));
+    consumerRows.push(...auLinkUsageConsumerRows(row, frameworkSites, productSites));
     const currentMemberRows = usageMemberComparisonRows(row, frameworkSites, productSites);
     memberRows.push(...currentMemberRows);
     surfaceRows.push(...memberSurfaceRows(
@@ -384,7 +392,7 @@ export function readAuLinkUsageComparisonModel(
   const visibleSurfaceRows = surfaceRows
     .filter((row) => visibleLinkIds.has(row.linkId))
     .filter((row) => memberSurfaceRowMatches(row, filters))
-    .sort(compareSurfaceRows);
+    .sort(compareMemberSurfaceRows);
   const visibleSiteRows = siteRows
     .filter((row) => visibleLinkIds.has(row.linkId))
     .filter((row) => usageSiteRowMatches(row, filters))
@@ -439,9 +447,9 @@ function buildProductUsageIndex(sourceProject: SourceProject): AuLinkProductUsag
     if (symbol === null) {
       continue;
     }
-    mapPush(targetSymbols, symbol, { anchor, symbol });
+    pushMapValue(targetSymbols, symbol, { anchor, symbol });
     for (const property of checker.getPropertiesOfType(checker.getDeclaredTypeOfSymbol(symbol))) {
-      mapPush(memberSymbols, property, {
+      pushMapValue(memberSymbols, property, {
         anchor,
         memberName: property.getName(),
         symbol: property,
@@ -451,8 +459,8 @@ function buildProductUsageIndex(sourceProject: SourceProject): AuLinkProductUsag
 
   const usages: AuLinkProductUsageRow[] = [];
   for (const sourceFile of sourceProject.ownedSourceFiles()) {
-    const file = sourceProject.sourceFileIdentity(sourceFile);
-    if (file === null || file.packageId !== SourcePackageId.SemanticRuntime) {
+    const file = requiredSourceFileIdentity(sourceProject, sourceFile);
+    if (file.packageId !== SourcePackageId.SemanticRuntime) {
       continue;
     }
     visitNode(sourceFile, (node) => {
@@ -479,7 +487,9 @@ function buildProductUsageIndex(sourceProject: SourceProject): AuLinkProductUsag
     });
   }
 
-  return { usages: [...uniqueUsages(usages)].sort(compareProductUsages) };
+  return {
+    usages: uniqueByKey(usages, (usage) => usage.id).sort(compareProductUsages),
+  };
 }
 
 function buildFrameworkTargetUsageIndex(
@@ -502,9 +512,9 @@ function buildFrameworkTargetUsageIndex(
       if (symbol === null) {
         continue;
       }
-      mapPush(targetSymbols, symbol, { target, symbol });
+      pushMapValue(targetSymbols, symbol, { target, symbol });
       for (const property of checker.getPropertiesOfType(checker.getDeclaredTypeOfSymbol(symbol))) {
-        mapPush(memberSymbols, property, {
+        pushMapValue(memberSymbols, property, {
           target,
           memberName: property.getName(),
           symbol: property,
@@ -515,9 +525,8 @@ function buildFrameworkTargetUsageIndex(
 
   const usages: AuLinkFrameworkTargetUsageRow[] = [];
   for (const sourceFile of sourceProject.ownedSourceFiles()) {
-    const file = sourceProject.sourceFileIdentity(sourceFile);
+    const file = requiredSourceFileIdentity(sourceProject, sourceFile);
     if (
-      file === null ||
       file.packageId === null ||
       !frameworkPackageIds.has(file.packageId)
     ) {
@@ -547,7 +556,9 @@ function buildFrameworkTargetUsageIndex(
     });
   }
 
-  return { usages: [...uniqueFrameworkTargetUsages(usages)].sort(compareFrameworkTargetUsages) };
+  return {
+    usages: uniqueByKey(usages, (usage) => usage.id).sort(compareFrameworkTargetUsages),
+  };
 }
 
 function productMemberTargetsForIdentifier(
@@ -651,12 +662,12 @@ function usageComparisonRow(
           subjectNames: target.candidates.map((candidate) => candidate.symbolName),
         }
       : frameworkScope;
-  const frameworkMemberNames = uniqueSorted(
+  const frameworkMemberNames = uniqueSortedStrings(
     frameworkUsages.flatMap((usage) =>
       usage.memberName === undefined ? [] : [usage.memberName],
     ),
   );
-  const productMemberNames = uniqueSorted(
+  const productMemberNames = uniqueSortedStrings(
     productUsages.flatMap((usage) =>
       usage.memberName === undefined ? [] : [usage.memberName],
     ),
@@ -666,7 +677,7 @@ function usageComparisonRow(
   const productOnlyMemberNames = difference(productMemberNames, frameworkMemberNames);
   const firstAnchor = anchors[0];
   const firstCandidate = target.candidates[0];
-  const productTargetNames = uniqueSorted(
+  const productTargetNames = uniqueSortedStrings(
     anchors.flatMap((anchor) => anchor.target.name === null ? [] : [anchor.target.name]),
   );
 
@@ -683,7 +694,7 @@ function usageComparisonRow(
       productAreaForPath(sourceRangeForAuLinkTarget(anchor).filePath),
     ),
     frameworkUsageScope: effectiveFrameworkScope.kind,
-    frameworkSubjectNames: uniqueSorted(effectiveFrameworkScope.subjectNames),
+    frameworkSubjectNames: uniqueSortedStrings(effectiveFrameworkScope.subjectNames),
     frameworkUsageCount: frameworkUsages.length,
     frameworkMemberUsageCount: frameworkUsages.filter((usage) => usage.memberName !== undefined).length,
     productUsageCount: productUsages.length,
@@ -747,7 +758,7 @@ function directFrameworkSubjectScope(
   return {
     kind: "direct-subject",
     subjectIds: new Set(subjects.map((row) => row.id)),
-    subjectNames: uniqueSorted(subjects.map((row) => row.name)),
+    subjectNames: uniqueSortedStrings(subjects.map((row) => row.name)),
   };
 }
 
@@ -772,7 +783,7 @@ function expandedFrameworkSubjectScope(
   return {
     kind: "subject",
     subjectIds: new Set(subjectIds),
-    subjectNames: uniqueSorted(subjectNames),
+    subjectNames: uniqueSortedStrings(subjectNames),
   };
 }
 
@@ -792,7 +803,7 @@ function expandedShapeSubjectIds(
     if (from === undefined || to === undefined || from === to) {
       continue;
     }
-    setAdd(targetsBySubject, from, to);
+    pushMapSetValue(targetsBySubject, from, to);
   }
   const seen = new Set(rootIds);
   const queue = rootIds.flatMap((id) => [...(targetsBySubject.get(id) ?? [])]);
@@ -805,19 +816,6 @@ function expandedShapeSubjectIds(
     queue.push(...(targetsBySubject.get(current) ?? []));
   }
   return [...seen].sort((left, right) => left.localeCompare(right));
-}
-
-function setAdd<TKey, TValue>(
-  map: Map<TKey, Set<TValue>>,
-  key: TKey,
-  value: TValue,
-): void {
-  const existing = map.get(key);
-  if (existing === undefined) {
-    map.set(key, new Set([value]));
-  } else {
-    existing.add(value);
-  }
 }
 
 function frameworkUsagesForScope(
@@ -879,17 +877,6 @@ function usageComparisonRollup(
     productAreas: countRecordKeys(rows, (row) => row.productAreas),
     frameworkUsageRoles: countRecordKeys(rows, (row) => row.frameworkUsageRoles),
     productUsageRoles: countRecordKeys(rows, (row) => row.productUsageRoles),
-  };
-}
-
-function auLinkFilters(filters: AuLinkMirrorFilters): AuLinkFilters {
-  return {
-    ...(filters.linkId === undefined ? {} : { linkId: filters.linkId }),
-    ...(filters.packageId === undefined ? {} : { packageId: filters.packageId }),
-    ...(filters.symbolName === undefined ? {} : { symbolName: filters.symbolName }),
-    ...(filters.targetName === undefined ? {} : { targetName: filters.targetName }),
-    ...(filters.filePath === undefined ? {} : { filePath: filters.filePath }),
-    ...(filters.frameworkStatus === undefined ? {} : { frameworkStatus: filters.frameworkStatus }),
   };
 }
 
@@ -1075,7 +1062,7 @@ function usageMemberComparisonRows(
   frameworkSites: readonly AuLinkUsageSiteRow[],
   productSites: readonly AuLinkUsageSiteRow[],
 ): readonly AuLinkUsageMemberComparisonRow[] {
-  const memberNames = uniqueSorted([
+  const memberNames = uniqueSortedStrings([
     ...frameworkSites.flatMap((site) =>
       site.memberName === undefined ? [] : [site.memberName],
     ),
@@ -1124,15 +1111,15 @@ function usageMemberComparisonRows(
   });
 }
 
-function usageConsumerRows(
+function auLinkUsageConsumerRows(
   row: AuLinkUsageComparisonRow,
   frameworkSites: readonly AuLinkUsageSiteRow[],
   productSites: readonly AuLinkUsageSiteRow[],
 ): readonly AuLinkUsageConsumerRow[] {
   return [...groupBy(
     [...frameworkSites, ...productSites],
-    usageConsumerGroupKey,
-  ).values()].flatMap((sites) => usageConsumerRow(row, sites));
+    auLinkUsageConsumerGroupKey,
+  ).values()].flatMap((sites) => auLinkUsageConsumerRow(row, sites));
 }
 
 function consumerRowsForVisibleSites(
@@ -1142,7 +1129,7 @@ function consumerRowsForVisibleSites(
   const sitesByLinkId = groupBy(siteRows, (row) => row.linkId);
   return rows.flatMap((row) => {
     const sites = sitesByLinkId.get(row.linkId) ?? [];
-    return usageConsumerRows(
+    return auLinkUsageConsumerRows(
       row,
       sites.filter((site) => site.side === "framework"),
       sites.filter((site) => site.side === "product"),
@@ -1160,10 +1147,10 @@ function shouldRegroupConsumerRows(filters: AuLinkMirrorFilters): boolean {
     filters.ownerMemberName !== undefined ||
     filters.presence !== undefined ||
     filters.callCalleeName !== undefined ||
-    hasCallArgumentFilter(filters);
+    hasAuLinkCallArgumentFilter(filters);
 }
 
-function usageConsumerRow(
+function auLinkUsageConsumerRow(
   row: AuLinkUsageComparisonRow,
   sites: readonly AuLinkUsageSiteRow[],
 ): readonly AuLinkUsageConsumerRow[] {
@@ -1207,7 +1194,7 @@ function usageConsumerRow(
   }];
 }
 
-function usageConsumerGroupKey(site: AuLinkUsageSiteRow): string {
+function auLinkUsageConsumerGroupKey(site: AuLinkUsageSiteRow): string {
   return [
     site.side,
     site.linkId,
@@ -1237,7 +1224,7 @@ function memberSurfaceRows(
   );
   const productRefs = productMemberSurfaceRefs(sourceProject, anchors);
   const usageByMember = new Map(usageRows.map((usage) => [usage.memberName, usage]));
-  const memberNames = uniqueSorted([
+  const memberNames = uniqueSortedStrings([
     ...frameworkRefs.map((ref) => ref.memberName),
     ...productRefs.map((ref) => ref.memberName),
   ]);
@@ -1493,19 +1480,19 @@ function usageSiteRowMatches(
     (filters.ownerKind === undefined || row.owner.ownerKind === filters.ownerKind) &&
     (filters.ownerMemberName === undefined ||
       row.owner.ownerMemberName === filters.ownerMemberName) &&
-    usageCallMatches(row, filters) &&
+    auLinkUsageCallMatches(row, filters) &&
     (filters.query === undefined || usageSiteContains(row, filters.query))
   );
 }
 
-function usageCallMatches(
+function auLinkUsageCallMatches(
   row: AuLinkUsageSiteRow,
   filters: AuLinkMirrorFilters,
 ): boolean {
   return (
     (filters.callCalleeName === undefined ||
       row.call?.calleeName === filters.callCalleeName) &&
-    (hasCallArgumentFilter(filters)
+    (hasAuLinkCallArgumentFilter(filters)
       ? row.call?.arguments.some((argument) =>
           (filters.callArgumentText === undefined ||
             argument.text === filters.callArgumentText) &&
@@ -1518,7 +1505,7 @@ function usageCallMatches(
   );
 }
 
-function hasCallArgumentFilter(filters: AuLinkMirrorFilters): boolean {
+function hasAuLinkCallArgumentFilter(filters: AuLinkMirrorFilters): boolean {
   return filters.callArgumentText !== undefined ||
     filters.callArgumentSymbolName !== undefined ||
     filters.callArgumentFullyQualifiedName !== undefined;
@@ -1650,10 +1637,9 @@ function productAnchorDeclaration(
   sourceProject: SourceProject,
   anchor: AuLinkAnchorRow,
 ): ts.ClassDeclaration | null {
-  const sourceFile = sourceProject.readSourceFile(anchor.target.file.repoPath);
-  if (sourceFile === null) {
-    return null;
-  }
+  const sourceFile = sourceProject.requiredSourceFileForIdentity(
+    anchor.target.file,
+  );
   let found: ts.ClassDeclaration | null = null;
   visitNode(sourceFile, (node) => {
     if (found !== null || !ts.isClassDeclaration(node)) {
@@ -1734,46 +1720,6 @@ function intersection(left: readonly string[], right: readonly string[]): readon
 function difference(left: readonly string[], right: readonly string[]): readonly string[] {
   const rightSet = new Set(right);
   return left.filter((value) => !rightSet.has(value));
-}
-
-function uniqueSorted(values: readonly string[]): readonly string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
-}
-
-function groupBy<TValue>(
-  rows: readonly TValue[],
-  keyFor: (row: TValue) => string,
-): ReadonlyMap<string, readonly TValue[]> {
-  const grouped = new Map<string, TValue[]>();
-  for (const row of rows) {
-    mapPush(grouped, keyFor(row), row);
-  }
-  return grouped;
-}
-
-function mapPush<TKey, TValue>(
-  map: Map<TKey, TValue[]>,
-  key: TKey,
-  value: TValue,
-): void {
-  const existing = map.get(key);
-  if (existing === undefined) {
-    map.set(key, [value]);
-  } else {
-    existing.push(value);
-  }
-}
-
-function uniqueUsages(
-  usages: readonly AuLinkProductUsageRow[],
-): readonly AuLinkProductUsageRow[] {
-  return [...new Map(usages.map((usage) => [usage.id, usage])).values()];
-}
-
-function uniqueFrameworkTargetUsages(
-  usages: readonly AuLinkFrameworkTargetUsageRow[],
-): readonly AuLinkFrameworkTargetUsageRow[] {
-  return [...new Map(usages.map((usage) => [usage.id, usage])).values()];
 }
 
 function compareProductUsages(
@@ -1908,7 +1854,7 @@ function compareMemberRows(
     left.linkId.localeCompare(right.linkId);
 }
 
-function compareSurfaceRows(
+function compareMemberSurfaceRows(
   left: AuLinkMemberSurfaceRow,
   right: AuLinkMemberSurfaceRow,
 ): number {

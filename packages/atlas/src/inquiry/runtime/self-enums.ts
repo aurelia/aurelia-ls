@@ -1,7 +1,11 @@
+import { countByMap } from "../../collections.js";
+import { sourceRangeFromFileSpan } from "../../source/index.js";
 import type {
-  SourceSpan,
   TypeScriptEnumMemberReferenceRow,
+  TypeScriptEnumTranslationCarrier,
   TypeScriptEnumTranslationEdgeRow,
+  TypeScriptEnumTranslationEvidence,
+  TypeScriptEnumTranslationRelation,
   TypeScriptEnumUsageIndex,
   TypeScriptEnumValueSpaceRow,
 } from "../../source/index.js";
@@ -15,7 +19,7 @@ export interface AtlasSelfEnumMemberRow {
   readonly value: string | number | null;
   /** Property-access references such as EnumName.Member outside the declaration. */
   readonly referenceCount: number;
-  /** String literal occurrences that duplicate this member's string value outside enum declarations/imports. */
+  /** String literal occurrences that duplicate this member's string value in a checker-backed enum context. */
   readonly literalReuseCount: number;
   /** Enum-to-enum translation edges that read from this member. */
   readonly translationOutCount: number;
@@ -43,7 +47,7 @@ export interface AtlasSelfEnumRow {
   readonly referencedMemberCount: number;
   /** Members with no property-access reference. */
   readonly unreferencedMemberCount: number;
-  /** String literal occurrences that duplicate string-valued member values outside enum declarations/imports. */
+  /** String literal occurrences that duplicate string-valued member values in checker-backed enum contexts. */
   readonly literalReuseCount: number;
   /** Enum-to-enum translation edges that read from this enum. */
   readonly translationOutCount: number;
@@ -91,9 +95,9 @@ export interface AtlasSelfEnumMappingRow {
   readonly fromMemberName: string;
   readonly toEnumName: string;
   readonly toMemberName: string;
-  readonly carrier: string;
-  readonly relation: string;
-  readonly evidence: string;
+  readonly carrier: TypeScriptEnumTranslationCarrier;
+  readonly relation: TypeScriptEnumTranslationRelation;
+  readonly evidence: TypeScriptEnumTranslationEvidence;
   readonly expressionText: string;
   readonly source: SourceRange;
   readonly summary: string;
@@ -191,7 +195,7 @@ function atlasEnumRows(
       translationInCount: row.translationInCount,
       source: sourceRangeFromFileSpan(row.file.repoPath, row.span),
       members,
-      summary: `${row.enumName} declares ${row.memberCount} member(s); ${row.unreferencedMemberCount} member(s) have no Enum.Member reference, ${literalReuseCount} raw value occurrence(s) overlap its values, and ${row.translationInCount + row.translationOutCount} translation edge(s) touch it.`,
+      summary: `${row.enumName} declares ${row.memberCount} member(s); ${row.unreferencedMemberCount} member(s) have no Enum.Member reference, ${literalReuseCount} contextual raw value occurrence(s) overlap its values, and ${row.translationInCount + row.translationOutCount} translation edge(s) touch it.`,
     };
   });
 }
@@ -261,33 +265,4 @@ function atlasEnumMappingRows(
     source: sourceRangeFromFileSpan(row.file.repoPath, row.span),
     summary: row.summary,
   }));
-}
-
-function sourceRangeFromFileSpan(
-  filePath: string,
-  span: SourceSpan,
-): SourceRange {
-  return {
-    filePath,
-    start: {
-      line: span.startLine - 1,
-      character: span.startCharacter - 1,
-    },
-    end: {
-      line: span.endLine - 1,
-      character: span.endCharacter - 1,
-    },
-  };
-}
-
-function countByMap<TValue>(
-  rows: readonly TValue[],
-  key: (row: TValue) => string,
-): ReadonlyMap<string, number> {
-  const counts = new Map<string, number>();
-  for (const row of rows) {
-    const rowKey = key(row);
-    counts.set(rowKey, (counts.get(rowKey) ?? 0) + 1);
-  }
-  return counts;
 }

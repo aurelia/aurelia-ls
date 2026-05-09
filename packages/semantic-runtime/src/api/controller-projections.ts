@@ -86,9 +86,15 @@ export function readRuntimeControllerRows(
   handles: boolean,
 ): readonly SemanticRuntimeControllerRow[] {
   const context = runtimeControllerProjectionContext(emission, store, handles);
-  return sortRuntimeControllerRows(emission.templates.resources.flatMap((resource) =>
-    runtimeControllerRowsForResource(resource, context)
-  ));
+  const resourcesByDefinition = runtimeTemplateResourcesByDefinition(emission.templates.resources);
+  return sortRuntimeControllerRows([
+    ...emission.templates.resources.flatMap((resource) =>
+      runtimeControllerRowsForResource(resource, context)
+    ),
+    ...emission.routeComponentAgents.readControllers().map((controller) =>
+      runtimeControllerRow(renderingDefinitionNameForController(controller, resourcesByDefinition), controller, context)
+    ),
+  ]);
 }
 
 function runtimeControllerProjectionContext(
@@ -140,19 +146,19 @@ function runtimeControllerRowsForResource(
   context: RuntimeControllerProjectionContext,
 ): readonly SemanticRuntimeControllerRow[] {
   return resource.runtimeAnalysis.runtimeRendering.controllers.map((controller) =>
-    runtimeControllerRow(resource, controller, context)
+    runtimeControllerRow(resource.compilation.definition.name, controller, context)
   );
 }
 
 function runtimeControllerRow(
-  resource: RuntimeTemplateResourceEmission,
+  renderingDefinitionName: string,
   controller: RuntimeControllerFrame,
   context: RuntimeControllerProjectionContext,
 ): SemanticRuntimeControllerRow {
   const state = runtimeControllerProjectionState(controller, context);
   const controllerProduct = controller.toControllerProduct();
   return {
-    renderingDefinitionName: resource.compilation.definition.name,
+    renderingDefinitionName,
     controllerName: controller.name,
     controllerPhase: controllerProduct.phase,
     creationKind: controller.creationKind,
@@ -167,6 +173,26 @@ function runtimeControllerRow(
     ...runtimeControllerLifecycleRowFields(controller, context),
     ...runtimeControllerRowHandles(controller, state, context),
   };
+}
+
+function runtimeTemplateResourcesByDefinition(
+  resources: readonly RuntimeTemplateResourceEmission[],
+): ReadonlyMap<ProductHandle, RuntimeTemplateResourceEmission> {
+  return new Map(resources.flatMap((resource) =>
+    resource.compilation.definition.productHandle == null
+      ? []
+      : [[resource.compilation.definition.productHandle, resource] as const]
+  ));
+}
+
+function renderingDefinitionNameForController(
+  controller: RuntimeControllerFrame,
+  resourcesByDefinition: ReadonlyMap<ProductHandle, RuntimeTemplateResourceEmission>,
+): string {
+  const resource = controller.definitionProductHandle == null
+    ? null
+    : resourcesByDefinition.get(controller.definitionProductHandle) ?? null;
+  return resource?.compilation.definition.name ?? controller.name ?? 'unknown';
 }
 
 function runtimeControllerDefinitionRowFields(

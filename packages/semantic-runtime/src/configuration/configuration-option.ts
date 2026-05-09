@@ -4,10 +4,13 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
+import type { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 
 export const enum ConfigurationOptionContributionKind {
   /** Option value came from a user customization callback. */
   CustomizeCallback = 'customize-callback',
+  /** Option value came from an object literal passed directly to `.customize(...)`. */
+  CustomizeObject = 'customize-object',
   /** Option value came from a builder method argument such as `.withStore(...)`. */
   BuilderArgument = 'builder-argument',
 }
@@ -41,6 +44,7 @@ export const enum ConfigurationOptionValueKind {
 
 export type ConfigurationOptionField =
   | 'contributionKind'
+  | 'configurationKind'
   | 'optionPath'
   | 'value'
   | 'source';
@@ -225,6 +229,8 @@ export class ConfigurationOptionContribution {
     readonly identityHandle: IdentityHandle,
     /** Source lane that produced the contribution. */
     readonly contributionKind: ConfigurationOptionContributionKind,
+    /** Framework configuration object that owns this option path, when the receiver is recognized. */
+    readonly configurationKind: FrameworkRegistrationKind | null,
     /** Runtime option path, such as `coercingOptions.enableCoercion` or `devToolsOptions.disable`. */
     readonly optionPath: readonly string[],
     /** Value reference observed for this option path. */

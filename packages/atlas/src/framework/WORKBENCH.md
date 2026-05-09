@@ -67,9 +67,13 @@ touches most framework surfaces; it is not the ontology.
 - Framework boot and DI world: [module-boot.ts](module-boot.ts), [di-world.ts](di-world.ts), and
   [../inquiry/runtime/framework-di-graph.ts](../inquiry/runtime/framework-di-graph.ts). Current pressure: keep
   `Container` emulator behavior in semantic-runtime while Atlas exposes framework facts that make emulator gaps visible.
+  `framework.di:world` accepts `configurationPackageId` and `configurationExportName`; it can spend both
+  register-method configurations and closed bundle arrays such as runtime-html default groups.
 - Admission flow: [admission.ts](admission.ts), [admission-world.ts](admission-world.ts), and
   [../inquiry/runtime/framework-admission-flow.ts](../inquiry/runtime/framework-admission-flow.ts). Current pressure:
-  keep `flow` as a cheap graph rollup, with source/evidence paid through `flow-edge-details`.
+  keep `flow` as a cheap graph rollup, with source/evidence paid through `flow-edge-details`. Bundle discovery should
+  preserve returned-registry factory shapes such as configuration `init(...)` methods, including local const/arrow
+  factories that return `AppTask` or registration helper products.
 - JIT compiler corridor: [../inquiry/runtime/framework-jit-compiler-corridor.ts](../inquiry/runtime/framework-jit-compiler-corridor.ts),
   [../inquiry/runtime/framework-compiler-flow.ts](../inquiry/runtime/framework-compiler-flow.ts), and
   [../inquiry/runtime/framework-compiler-products.ts](../inquiry/runtime/framework-compiler-products.ts). Current
@@ -82,18 +86,34 @@ touches most framework surfaces; it is not the ontology.
   controller detail, `framework.rendering:controller-creations` now exposes ordered `hydrationSteps` so renderer
   handoffs such as `TemplateControllerRenderer` can be compared with semantic-runtime controller materialization before
   reading raw source.
+- Router grounding: [../inquiry/runtime/framework-router-analysis.ts](../inquiry/runtime/framework-router-analysis.ts),
+  [../inquiry/runtime/framework-router-lenses.ts](../inquiry/runtime/framework-router-lenses.ts), and
+  [../inquiry/runtime/framework-router-relationships.ts](../inquiry/runtime/framework-router-relationships.ts).
+  Current pressure: use `framework.router:flow`, `recognizer`, `flow-issues`, `recognizer-issues`, and `relationships`
+  before semantic-runtime router modeling. The flow and recognizer mechanic rows must self-audit against live
+  router/route-recognizer source, and relationship rows should use router-specific relation/mechanism/phase axes rather
+  than generic app-pressure heuristics. Router relationships include both the ordered router flow spine and
+  route-recognizer mechanic rows so auLink mirror reads can attach role evidence to `RouteConfig`,
+  `RouteConfigContext`, `ContextRouter`, `TypedNavigationInstruction`, `ConfigurableRoute`, `Parameter`, and segment
+  anchors. Router stage rows now have
+  declared semantic route hops into resource materialization, rendering hydration/controller creation, and lifecycle
+  controller-call projections when they cross those framework boundaries.
 - Resource runtime policy: [resources.ts](resources.ts) and
   [../inquiry/runtime/framework-materialization-lenses.ts](../inquiry/runtime/framework-materialization-lenses.ts).
   Resource catalog admission is not resource instance lifetime.
 - Observation and TypeChecker handoff: [../inquiry/runtime/framework-observation-lenses.ts](../inquiry/runtime/framework-observation-lenses.ts),
   [../inquiry/runtime/framework-observation-internals.ts](../inquiry/runtime/framework-observation-internals.ts), and
   [../../workbench/emulation-symbols.md](../../workbench/emulation-symbols.md). Current handoff rows are navigation
-  boundaries, not a complete binding/reactivity behavior graph. `pressure:self` still points at watcher/effect/
-  collection classifiers here; treat those as framework-semantic pressure and read the Aurelia observation flow before
-  doing table-only cleanup.
+  boundaries, not a complete binding/reactivity behavior graph. The watcher/effect/collection call-site classifiers are
+  now descriptor-driven, but treat future observation pressure as framework-semantic pressure and read the Aurelia
+  observation flow before doing table-only cleanup.
 - auLink bridge pressure: [../../workbench/aulink-mirror-workbench.md](../../workbench/aulink-mirror-workbench.md) and
   [../../workbench/bridge-usage-navigation-workbench.md](../../workbench/bridge-usage-navigation-workbench.md). Re-run
   live bridge projections before treating older probe notes as current product/framework mirror state.
+- Framework composition: [../inquiry/runtime/framework-composition-lenses.ts](../inquiry/runtime/framework-composition-lenses.ts)
+  should include router flow relationships in `family: "router"` claims alongside structural router entity claims.
+  Structured filters such as `family`, `relation`, `mechanism`, and `phase` should not be intersected with the default
+  high-salience actor seed terms.
 
 ## Semantic Watchpoints
 
@@ -138,7 +158,12 @@ touches most framework surfaces; it is not the ontology.
 4. Before adding cache/warmup, profile the live query with `product.architecture:profile` or
    `pnpm --filter @aurelia-ls/atlas profile:product-architecture`. Compare structure, core, symbol, and full lanes; if
    a derived row family is repeatedly slow, ask whether it should become a stable atom producer with exact row keys.
-5. Keep docs tight. If this workbench starts accumulating file-by-file implementation descriptions again, move stable
+5. Current semantic-runtime cleanup pressure from `pressure:product-architecture` is a deliberate multi-area thread:
+   `di/world-constructor.ts`, `router/route-tree-materialization.ts`, expression scanner/interpolation/completed-input
+   parser substrate, and repeated catalog/local-key helpers. Use Atlas to inspect source architecture, call flow,
+   auLink/framework anchors, and provenance before refactoring; the goal is conceptual compression around framework
+   semantics, not line-count reduction or a rushed helper extraction.
+6. Keep docs tight. If this workbench starts accumulating file-by-file implementation descriptions again, move stable
    ownership into the relevant README and leave only active pressure plus evidence pointers here.
 
 ## Verification Notes

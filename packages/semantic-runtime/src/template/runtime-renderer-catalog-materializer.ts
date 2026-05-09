@@ -1,6 +1,7 @@
 import {
   ExternalAddress,
 } from '../kernel/address.js';
+import { uniqueByKey } from '../collections.js';
 import { SemanticClaim } from '../kernel/claim.js';
 import {
   EvidenceKind,
@@ -38,6 +39,10 @@ import {
   type RegistrationAdmissionProduct,
 } from '../registration/registration-admission.js';
 import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
+import {
+  FrameworkRegistrationCapability,
+  frameworkRegistrationCapabilitiesForKind,
+} from '../registration/framework-registration-manifest.js';
 import { TemplateProductDetails } from './product-details.js';
 import {
   BuiltInRuntimeRendererCatalog,
@@ -422,7 +427,10 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
   private catalogEmissionForRequests(
     selectionRequests: readonly ConfiguredRuntimeRendererCatalogRequest[],
   ): BuiltInRuntimeRendererCatalogEmission {
-    const catalogInputs = uniqueCatalogInputs(selectionRequests.flatMap((request) => request.catalogInputs));
+    const catalogInputs = uniqueByKey(
+      selectionRequests.flatMap((request) => request.catalogInputs),
+      runtimeRendererCatalogInputKey,
+    );
     return this.catalogMaterializer.materialize(catalogInputs);
   }
 
@@ -455,7 +463,7 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
     catalogsByKey: ReadonlyMap<string, BuiltInRuntimeRendererCatalog>,
   ): readonly BuiltInRuntimeRendererCatalog[] {
     return request.catalogInputs
-      .map((catalogInput) => catalogsByKey.get(catalogInputKey(catalogInput)) ?? null)
+      .map((catalogInput) => catalogsByKey.get(runtimeRendererCatalogInputKey(catalogInput)) ?? null)
       .filter((catalog): catalog is BuiltInRuntimeRendererCatalog => catalog != null);
   }
 
@@ -629,20 +637,40 @@ function readConfiguredRuntimeRendererCatalogRequests(
 function catalogInputsForAdmission(
   frameworkKind: FrameworkRegistrationKind,
 ): readonly BuiltInRuntimeRendererCatalogInput[] {
-  switch (frameworkKind) {
-    case FrameworkRegistrationKind.StandardConfiguration:
-      return [RuntimeRendererCatalogs.RuntimeHtmlDefaultRenderers];
-    case FrameworkRegistrationKind.I18nConfiguration:
-      return [RuntimeRendererCatalogs.I18nTranslationRenderers];
-    case FrameworkRegistrationKind.StateDefaultConfiguration:
-      return [RuntimeRendererCatalogs.StateDefaultRenderers];
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
-    case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage:
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
-    case FrameworkRegistrationKind.AppTask:
-      return [];
+  const inputs: BuiltInRuntimeRendererCatalogInput[] = [];
+  for (const capability of frameworkRegistrationCapabilitiesForKind(frameworkKind)) {
+    switch (capability) {
+      case FrameworkRegistrationCapability.RuntimeHtmlDefaultRenderers:
+        inputs.push(RuntimeRendererCatalogs.RuntimeHtmlDefaultRenderers);
+        break;
+      case FrameworkRegistrationCapability.I18nTranslationRenderers:
+        inputs.push(RuntimeRendererCatalogs.I18nTranslationRenderers);
+        break;
+      case FrameworkRegistrationCapability.StateRuntimeRenderers:
+        inputs.push(RuntimeRendererCatalogs.StateDefaultRenderers);
+        break;
+      case FrameworkRegistrationCapability.RuntimeHtmlCompilerServices:
+      case FrameworkRegistrationCapability.RuntimeHtmlDefaultBindingSyntax:
+      case FrameworkRegistrationCapability.RuntimeHtmlShortHandBindingSyntax:
+      case FrameworkRegistrationCapability.RuntimeHtmlDefaultBindingLanguage:
+      case FrameworkRegistrationCapability.RuntimeHtmlDefaultResources:
+      case FrameworkRegistrationCapability.I18nDefaultResources:
+      case FrameworkRegistrationCapability.I18nTranslationSyntax:
+      case FrameworkRegistrationCapability.I18nServiceResolvers:
+      case FrameworkRegistrationCapability.I18nLifecycleTasks:
+      case FrameworkRegistrationCapability.RouterDefaultComponents:
+      case FrameworkRegistrationCapability.RouterDefaultResources:
+      case FrameworkRegistrationCapability.RouterConfigurationResolvers:
+      case FrameworkRegistrationCapability.RouterLifecycleTasks:
+      case FrameworkRegistrationCapability.StateDefaultResources:
+      case FrameworkRegistrationCapability.StateBindingSyntax:
+      case FrameworkRegistrationCapability.StateStoreResolvers:
+      case FrameworkRegistrationCapability.StateStoreTasks:
+      case FrameworkRegistrationCapability.AppTask:
+        break;
+    }
   }
+  return inputs;
 }
 
 export const RuntimeRendererCatalogs = {
@@ -663,23 +691,7 @@ export const RuntimeRendererCatalogs = {
   },
 } as const;
 
-function uniqueCatalogInputs(
-  inputs: readonly BuiltInRuntimeRendererCatalogInput[],
-): readonly BuiltInRuntimeRendererCatalogInput[] {
-  const seen = new Set<string>();
-  const result: BuiltInRuntimeRendererCatalogInput[] = [];
-  for (const input of inputs) {
-    const key = catalogInputKey(input);
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    result.push(input);
-  }
-  return result;
-}
-
-function catalogInputKey(input: BuiltInRuntimeRendererCatalogInput): string {
+function runtimeRendererCatalogInputKey(input: BuiltInRuntimeRendererCatalogInput): string {
   return `${input.packageId}:${input.group}`;
 }
 
@@ -691,10 +703,22 @@ function summaryForFrameworkKind(frameworkKind: FrameworkRegistrationKind): stri
   switch (frameworkKind) {
     case FrameworkRegistrationKind.StandardConfiguration:
       return 'RuntimeHtml StandardConfiguration admitted default runtime renderers.';
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultComponents:
+      return 'RuntimeHtml DefaultComponents admitted compiler services but no runtime renderers.';
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultRenderers:
+      return 'RuntimeHtml DefaultRenderers spread admitted default runtime renderers.';
     case FrameworkRegistrationKind.I18nConfiguration:
       return 'I18nConfiguration admitted translation runtime renderers.';
+    case FrameworkRegistrationKind.RouterConfiguration:
+      return 'RouterConfiguration admitted no runtime renderers in the current catalog.';
+    case FrameworkRegistrationKind.RouterDefaultComponents:
+      return 'Router DefaultComponents admitted router services but no runtime renderers.';
+    case FrameworkRegistrationKind.RouterDefaultResources:
+      return 'Router DefaultResources admitted resources but no runtime renderers.';
     case FrameworkRegistrationKind.StateDefaultConfiguration:
       return 'StateDefaultConfiguration admitted state runtime renderers.';
+    case FrameworkRegistrationKind.DialogConfiguration:
+      return 'DialogConfiguration admitted dialog services but no runtime renderers.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
       return 'RuntimeHtml DefaultBindingSyntax spread does not admit runtime renderers.';
     case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:

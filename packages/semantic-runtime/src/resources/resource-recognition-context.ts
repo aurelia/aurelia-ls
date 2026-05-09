@@ -17,6 +17,8 @@ export class ResourceRecognitionContext {
     readonly moduleKey: string,
     /** Source-file address admitted by boot or host setup. */
     readonly sourceFileAddressHandle: AddressHandle,
+    /** Boot project frame that owns the admitted source address. */
+    readonly projectKey: string,
     /** Static evaluator result for the same source file. */
     readonly evaluation: StaticModuleEvaluationResult,
     /** Current TypeChecker epoch for the project, when the caller needs runtime target types. */
@@ -26,6 +28,11 @@ export class ResourceRecognitionContext {
     /** Boot-admitted source files for this project, including HTML/CSS assets not parsed by TS evaluation. */
     readonly sourceFiles: readonly SourceFileAdmission[] = [],
   ) {
-    this.expressionReader = new StaticEvaluationExpressionReader(evaluation.environment, moduleKey);
+    this.expressionReader = new StaticEvaluationExpressionReader(
+      evaluation.environment,
+      moduleKey,
+      evaluation.policy,
+      evaluation.runtimeHost,
+    );
   }
 }

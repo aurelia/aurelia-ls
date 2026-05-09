@@ -1,4 +1,5 @@
 import { auLink } from '../kernel/au-link.js';
+import { splitWhitespace } from '../strings.js';
 import type {
   AddressHandle,
   IdentityHandle,
@@ -1113,8 +1114,4 @@ function affectedNamesForAttributeBinding(
     default:
       return [targetAttribute];
   }
-}
-
-function splitWhitespace(value: string): readonly string[] {
-  return value.match(/\S+/g) ?? [];
 }

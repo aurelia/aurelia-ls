@@ -1,7 +1,11 @@
 import ts from 'typescript';
 import type { StaticEvaluationExpressionReader } from '../evaluation/expression-reader.js';
 import { normalizeModuleKey } from '../evaluation/module-graph.js';
-import { EvaluationValueKind } from '../evaluation/values.js';
+import { readDeclarationLocalName } from '../evaluation/ts-syntax.js';
+import {
+  EvaluationValueKind,
+  type EvaluationValue,
+} from '../evaluation/values.js';
 import type {
   IdentityHandle,
   ProductHandle,
@@ -30,7 +34,7 @@ export class ResourceDefinitionIndex {
     const entries: ResourceDefinitionIndexEntry[] = [];
 
     for (const source of project.sources) {
-      const moduleKey = normalizeModuleKey(source.admission.path);
+      const moduleKey = normalizeModuleKey(source.moduleKey);
       for (const definition of source.convergence.definitions) {
         if (definition.target.localName == null) {
           continue;
@@ -108,7 +112,30 @@ export class ResourceDefinitionIndex {
       return null;
     }
     const byIdentity = this.lookupByTargetIdentity(reference.identityHandle);
-    return byIdentity ?? this.lookupByLocalName(reference.keyName);
+    if (byIdentity != null) {
+      return byIdentity;
+    }
+    if (reference.moduleKey != null && reference.localName != null) {
+      const byModuleLocal = this.lookupByModuleLocal(reference.moduleKey, reference.localName);
+      if (byModuleLocal != null) {
+        return byModuleLocal;
+      }
+    }
+    return this.lookupByLocalName(reference.keyName);
+  }
+
+  lookupValue(value: EvaluationValue | null): FullResourceDefinition | null {
+    if (value == null) {
+      return null;
+    }
+    if (value.kind !== EvaluationValueKind.Class && value.kind !== EvaluationValueKind.Function) {
+      return null;
+    }
+    const localName = readDeclarationLocalName(value.declaration);
+    if (localName == null) {
+      return null;
+    }
+    return this.lookupByModuleLocal(value.environment.moduleKey, localName);
   }
 
   lookupExpression(
@@ -116,29 +143,10 @@ export class ResourceDefinitionIndex {
     reader: StaticEvaluationExpressionReader,
   ): FullResourceDefinition | null {
     const read = reader.evaluateExpression(expression);
-    const value = read.value;
-    if (value == null) {
-      return null;
-    }
-    if (value.kind !== EvaluationValueKind.Class && value.kind !== EvaluationValueKind.Function) {
-      return null;
-    }
-
-    const localName = declarationLocalName(value.declaration);
-    if (localName == null) {
-      return null;
-    }
-
-    return this.lookupByModuleLocal(value.environment.moduleKey, localName);
+    return this.lookupValue(read.value);
   }
 }
 
 function resourceDefinitionIndexKey(moduleKey: string, localName: string): string {
   return `${normalizeModuleKey(moduleKey)}\0${localName}`;
-}
-
-function declarationLocalName(declaration: ts.ClassLikeDeclaration | ts.FunctionLikeDeclaration): string | null {
-  return declaration.name != null && ts.isIdentifier(declaration.name)
-    ? declaration.name.text
-    : null;
 }

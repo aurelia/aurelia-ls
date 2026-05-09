@@ -1,5 +1,6 @@
 import ts from "typescript";
 
+import { uniqueFirstByKey } from "../collections.js";
 import {
   EvaluationBindingKind,
   EvaluationClassValue,
@@ -14,11 +15,16 @@ import type { SourceRange } from "../inquiry/locus.js";
 import {
   readTypeScriptCallSiteEntry,
   readTypeScriptExpressionFact,
-  SourceProjectMemo,
+  isAssignmentOperator,
+  propertyOrIdentifierName,
+  propertyNameText,
+  requiredSourceFileIdentity,
+  sourceRangeForSourceFileNode,
+  SourceProjectKeyedMemo,
+  unwrapExpression,
   type TypeScriptCallSiteEntry,
   type TypeScriptExpressionFact,
   type SourceProject,
-  type SourceSpan,
 } from "../source/index.js";
 import {
   FrameworkDiResolverStrategy,
@@ -36,7 +42,7 @@ import {
   type FrameworkResourceInstanceLifetime,
 } from "./resources.js";
 
-const standardConfigurationDiWorldMemo = new SourceProjectMemo<FrameworkDiWorld>();
+const configurationDiWorldMemo = new SourceProjectKeyedMemo<string, FrameworkDiWorld>();
 
 /** Runtime-shaped value lane admitted by abstract container registration. */
 export type FrameworkDiAdmissionKind =
@@ -321,14 +327,17 @@ export class FrameworkDiWorld {
   }
 }
 
-/** Build/read StandardConfiguration's abstract DI world from linked framework source values. */
-export function readFrameworkStandardConfigurationDiWorld(
+/** Build/read one configuration or bundle's abstract DI world from linked framework source values. */
+export function readFrameworkConfigurationDiWorld(
   sourceProject: SourceProject,
+  packageId: string = "runtime-html",
+  exportName: string = "StandardConfiguration",
 ): FrameworkDiWorld {
-  return standardConfigurationDiWorldMemo.read(sourceProject, () =>
+  const key = `${packageId}:${exportName}`;
+  return configurationDiWorldMemo.read(sourceProject, key, () =>
     new FrameworkDiWorldBuilder(sourceProject).buildConfiguration(
-      "runtime-html",
-      "StandardConfiguration",
+      packageId,
+      exportName,
     ),
   );
 }
@@ -359,13 +368,18 @@ class FrameworkDiWorldBuilder {
       exportName,
     );
     const owner = `${packageId}:${exportName}`;
+    if (read.value?.kind === EvaluationValueKind.Array) {
+      this.spendRegistrationBundleArray(read.value, owner, ["bundle"]);
+      this.closeDefaultInterfaceDependencyGraph();
+      return this.world(owner);
+    }
     if (read.value?.kind !== EvaluationValueKind.Object) {
-      this.open(owner, `Configuration ${owner} did not evaluate to an object.`, undefined);
+      this.open(owner, `Configuration or bundle ${owner} did not evaluate to an object or array.`, undefined);
       return this.world(owner);
     }
     const register = read.value.properties.get("register")?.value;
     if (register?.kind !== EvaluationValueKind.Function) {
-      this.open(owner, `Configuration ${owner} does not expose a static register function.`, sourceRangeForValue(read.value));
+      this.open(owner, `Configuration ${owner} does not expose a static register function.`, sourceRangeForValue(this.sourceProject, read.value));
       return this.world(owner);
     }
     this.spendRegisterFunction(register, owner, ["register"]);
@@ -373,14 +387,39 @@ class FrameworkDiWorldBuilder {
     return this.world(owner);
   }
 
+  private spendRegistrationBundleArray(
+    value: Extract<EvaluationValue, { readonly kind: EvaluationValueKind.Array }>,
+    owner: string,
+    path: readonly string[],
+  ): void {
+    const frame = new EvaluationEnvironment(`${owner}:di-bundle`);
+    value.elements.forEach((element, index) => {
+      const sourceNode = element.expression ?? sourceNodeForValue(element.value);
+      if (sourceNode === null) {
+        this.open(owner, "Registration bundle element has no source node to spend.", sourceRangeForValue(this.sourceProject, element.value));
+        return;
+      }
+      this.spendRegisterValue(
+        element.value,
+        sourceNode,
+        frame,
+        owner,
+        [...path, String(index)],
+      );
+    });
+    if (value.mayHaveUnknownElements) {
+      this.open(owner, "Registration bundle array contains open spread or hole elements.", sourceRangeForValue(this.sourceProject, value));
+    }
+  }
+
   private world(owner: string): FrameworkDiWorld {
     return new FrameworkDiWorld(
       owner,
       [...this.#admissions],
-      uniqueBy(this.#resolverSlots, (row) => `${row.key.name}:${row.provider.name}:${row.strategy}:${row.role}`),
-      uniqueBy(this.#resourceSlots, (row) => `${row.key.name}:${row.resource.name}:${row.instanceLifetime}`),
-      uniqueBy(this.#dependencies, (row) => `${row.slotId}:${row.dependencyKey.name}:${row.access}:${row.source?.filePath}:${row.source?.start.line}:${row.source?.start.character}`),
-      uniqueBy(this.#variableDependencies, (row) => `${row.slotId}:${row.variableKey.expressionText}:${row.access}:${row.source?.filePath}:${row.source?.start.line}:${row.source?.start.character}`),
+      uniqueFirstByKey(this.#resolverSlots, (row) => `${row.key.name}:${row.provider.name}:${row.strategy}:${row.role}`),
+      uniqueFirstByKey(this.#resourceSlots, (row) => `${row.key.name}:${row.resource.name}:${row.instanceLifetime}`),
+      uniqueFirstByKey(this.#dependencies, (row) => `${row.slotId}:${row.dependencyKey.name}:${row.access}:${row.source?.filePath}:${row.source?.start.line}:${row.source?.start.character}`),
+      uniqueFirstByKey(this.#variableDependencies, (row) => `${row.slotId}:${row.variableKey.expressionText}:${row.access}:${row.source?.filePath}:${row.source?.start.line}:${row.source?.start.character}`),
       [...this.#opens],
     );
   }
@@ -393,7 +432,7 @@ class FrameworkDiWorldBuilder {
   ): void {
     const body = register.declaration.body;
     if (body === undefined) {
-      this.open(owner, "Register function has no body.", sourceRangeForValue(register));
+      this.open(owner, "Register function has no body.", sourceRangeForValue(this.sourceProject, register));
       return;
     }
     const frame = register.environment.clone(`${owner}:di-register`);
@@ -534,7 +573,7 @@ class FrameworkDiWorldBuilder {
         owner,
       ).value;
       if (spread.kind !== EvaluationValueKind.Array) {
-        this.open(owner, "Register spread did not evaluate to an array.", sourceRangeForNode(argument));
+        this.open(owner, "Register spread did not evaluate to an array.", sourceRangeForOptionalNode(this.sourceProject, argument));
         return;
       }
       spread.elements.forEach((element, index) =>
@@ -554,12 +593,12 @@ class FrameworkDiWorldBuilder {
 
   private spendRegisterValue(
     value: EvaluationValue,
-    expression: ts.Expression,
+    expression: ts.Node,
     frame: EvaluationEnvironment,
     owner: string,
     path: readonly string[],
   ): void {
-    const helper = ts.isCallExpression(unwrapExpression(expression))
+    const helper = ts.isExpression(expression) && ts.isCallExpression(unwrapExpression(expression))
       ? this.spendRegistrationHelperCall(unwrapExpression(expression), frame, owner, path)
       : false;
     if (helper) {
@@ -591,7 +630,7 @@ class FrameworkDiWorldBuilder {
     }
 
     if (value.kind === EvaluationValueKind.Unknown) {
-      this.open(owner, value.reason, sourceRangeForNode(expression));
+      this.open(owner, value.reason, sourceRangeForOptionalNode(this.sourceProject, expression));
       this.admit(owner, "unknown", valueRefForValue(this.sourceProject, value, expression), path, expression);
       return;
     }
@@ -623,7 +662,7 @@ class FrameworkDiWorldBuilder {
       ts.isSpreadElement(keyArgument) ||
       ts.isSpreadElement(providerArgument)
     ) {
-      this.open(owner, `Registration helper ${helper} does not expose key/provider arguments.`, sourceRangeForNode(call));
+      this.open(owner, `Registration helper ${helper} does not expose key/provider arguments.`, sourceRangeForOptionalNode(this.sourceProject, call));
       return true;
     }
     const keyValue = this.#evaluator.evaluateExpressionInEnvironment(keyArgument, frame, owner).value;
@@ -638,14 +677,14 @@ class FrameworkDiWorldBuilder {
       helper,
       "di-key-provider",
       FrameworkRelationshipClosure.Exact,
-      sourceRangeForNode(call),
+      sourceRangeForOptionalNode(this.sourceProject, call),
     );
     return true;
   }
 
   private spendClassValue(
     value: EvaluationClassValue,
-    expression: ts.Expression,
+    expression: ts.Node,
     owner: string,
     path: readonly string[],
   ): void {
@@ -831,7 +870,7 @@ class FrameworkDiWorldBuilder {
       kind,
       value,
       path,
-      sourceRangeForNode(node),
+      sourceRangeForOptionalNode(this.sourceProject, node),
       `${owner} admits ${value.name} through ${kind}.`,
     );
     this.#admissions.push(admission);
@@ -1194,10 +1233,10 @@ class FrameworkDiWorldBuilder {
         key,
         access,
         path,
-        sourceRangeForNode(sourceNode),
+        sourceRangeForOptionalNode(this.sourceProject, sourceNode),
         callSite ?? undefined,
         argument,
-        sourceRangeForNode(keyExpression),
+        sourceRangeForOptionalNode(this.sourceProject, keyExpression),
         `${slot.provider.name} ${access} dependency on ${key.name}.`,
       ),
     );
@@ -1225,7 +1264,7 @@ class FrameworkDiWorldBuilder {
       argument?.symbolName ?? null,
       argument?.type,
       argument?.apparentType,
-      sourceRangeForNode(keyExpression),
+      sourceRangeForOptionalNode(this.sourceProject, keyExpression),
     );
     this.#variableDependencies.push(
       new FrameworkDiVariableDependencyRead(
@@ -1237,10 +1276,10 @@ class FrameworkDiWorldBuilder {
         variableKey,
         reason,
         path,
-        sourceRangeForNode(sourceNode),
+        sourceRangeForOptionalNode(this.sourceProject, sourceNode),
         callSite ?? undefined,
         argument,
-        sourceRangeForNode(keyExpression),
+        sourceRangeForOptionalNode(this.sourceProject, keyExpression),
         `${slot.provider.name} ${access} uses variable-carried key/type ${variableKey.expressionText}.`,
       ),
     );
@@ -1271,7 +1310,7 @@ function staticDependencyKeyRefFromChecker(
   if (symbol === null || declaration === null || !isModuleScopeDeclaration(declaration)) {
     return null;
   }
-  const source = sourceRangeForNode(declaration);
+  const source = sourceRangeForOptionalNode(sourceProject, declaration);
   const typeText = sourceProject.checker.typeToString(
     sourceProject.checker.getTypeAtLocation(current),
   );
@@ -1451,7 +1490,7 @@ function implementedDiKeysForClass(
   if (implementedNames.size === 0) {
     return [];
   }
-  return uniqueBy(
+  return uniqueFirstByKey(
     readFrameworkDiIndex(sourceProject).keys
       .filter(
         (row) =>
@@ -1573,7 +1612,7 @@ function staticAuResourceRef(
     return new FrameworkDiValueRef(
       "resource",
       resourceKey(type, name),
-      sourceRangeForNode(member),
+      sourceRangeForOptionalNode(sourceProject, member),
     );
   }
   return null;
@@ -1635,7 +1674,7 @@ function staticDefineResourceRef(
       return new FrameworkDiValueRef(
         "resource",
         resourceKey(kind, resourceName),
-        sourceRangeForNode(call),
+        sourceRangeForOptionalNode(sourceProject, call),
       );
     }
   }
@@ -1809,11 +1848,11 @@ function functionEnvironmentForDeclaration(
 ): EvaluationEnvironment {
   const sourceFile = declaration.getSourceFile();
   const boot = readFrameworkModuleBootIndex(sourceProject);
-  const identity = sourceProject.sourceFileIdentity(sourceFile);
-  const packageId = identity?.packageId;
+  const identity = requiredSourceFileIdentity(sourceProject, sourceFile);
+  const packageId = identity.packageId;
   if (packageId !== undefined && packageId !== null) {
     const packageBoot = boot.readPackage(packageId);
-    const moduleKey = identity?.repoPath ?? sourceFile.fileName.replace(/\\/gu, "/");
+    const moduleKey = identity.repoPath;
     const result = packageBoot?.evaluator.evaluateModule(moduleKey);
     if (result !== undefined && result !== null) {
       return result.environment;
@@ -1828,11 +1867,11 @@ function classEnvironmentForDeclaration(
 ): EvaluationEnvironment {
   const sourceFile = declaration.getSourceFile();
   const boot = readFrameworkModuleBootIndex(sourceProject);
-  const identity = sourceProject.sourceFileIdentity(sourceFile);
-  const packageId = identity?.packageId;
+  const identity = requiredSourceFileIdentity(sourceProject, sourceFile);
+  const packageId = identity.packageId;
   if (packageId !== undefined && packageId !== null) {
     const packageBoot = boot.readPackage(packageId);
-    const moduleKey = identity?.repoPath ?? sourceFile.fileName.replace(/\\/gu, "/");
+    const moduleKey = identity.repoPath;
     const result = packageBoot?.evaluator.evaluateModule(moduleKey);
     const className = declaration.name?.text;
     const classValue = className === undefined ? null : result?.environment.readValue(className);
@@ -1946,7 +1985,9 @@ function valueRefForValue(
   value: EvaluationValue,
   expression: ts.Node,
 ): FrameworkDiValueRef {
-  const source = sourceRangeForValue(value) ?? sourceRangeForNode(expression);
+  const source =
+    sourceRangeForValue(sourceProject, value) ??
+    sourceRangeForOptionalNode(sourceProject, expression);
   switch (value.kind) {
     case EvaluationValueKind.Class:
       return new FrameworkDiValueRef(
@@ -1997,46 +2038,24 @@ function sourceNodeForValue(value: EvaluationValue): ts.Node | null {
   return "node" in value ? value.node : null;
 }
 
-function sourceRangeForValue(value: EvaluationValue): SourceRange | undefined {
+function sourceRangeForValue(
+  sourceProject: SourceProject,
+  value: EvaluationValue,
+): SourceRange | undefined {
   const node = sourceNodeForValue(value);
-  return node === null ? undefined : sourceRangeForNode(node);
+  return node === null ? undefined : sourceRangeForOptionalNode(sourceProject, node);
 }
 
-function sourceRangeForNode(node: ts.Node | undefined): SourceRange | undefined {
+function sourceRangeForOptionalNode(
+  sourceProject: SourceProject,
+  node: ts.Node | undefined,
+): SourceRange | undefined {
   if (node === undefined) {
     return undefined;
   }
   const sourceFile = node.getSourceFile();
-  return sourceRangeForSpan(sourceFile.fileName, sourceSpan(sourceFile, node));
-}
-
-function sourceRangeForSpan(filePath: string, span: SourceSpan): SourceRange {
-  return {
-    filePath: filePath.replace(/\\/gu, "/"),
-    start: {
-      line: span.startLine - 1,
-      character: span.startCharacter - 1,
-    },
-    end: {
-      line: span.endLine - 1,
-      character: span.endCharacter - 1,
-    },
-  };
-}
-
-function sourceSpan(sourceFile: ts.SourceFile, node: ts.Node): SourceSpan {
-  const start = node.getStart(sourceFile);
-  const end = node.getEnd();
-  const startPosition = sourceFile.getLineAndCharacterOfPosition(start);
-  const endPosition = sourceFile.getLineAndCharacterOfPosition(end);
-  return {
-    start,
-    end,
-    startLine: startPosition.line + 1,
-    startCharacter: startPosition.character + 1,
-    endLine: endPosition.line + 1,
-    endCharacter: endPosition.character + 1,
-  };
+  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
+  return sourceRangeForSourceFileNode(file.repoPath, sourceFile, node);
 }
 
 function isStaticMemberNamed(member: ts.ClassElement, name: string): boolean {
@@ -2051,30 +2070,6 @@ function isStaticClassElement(member: ts.ClassElement): boolean {
     ts.canHaveModifiers(member) &&
     ts.getModifiers(member)?.some((modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword) === true
   );
-}
-
-function propertyNameText(name: ts.PropertyName | undefined): string | null {
-  if (name === undefined) {
-    return null;
-  }
-  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
-    return name.text;
-  }
-  if (ts.isPrivateIdentifier(name)) {
-    return name.getText(name.getSourceFile());
-  }
-  return null;
-}
-
-function propertyOrIdentifierName(expression: ts.Expression): string | null {
-  const current = unwrapExpression(expression);
-  if (ts.isIdentifier(current)) {
-    return current.text;
-  }
-  if (ts.isPropertyAccessExpression(current)) {
-    return current.name.text;
-  }
-  return null;
 }
 
 type FunctionBodyClassMember =
@@ -2193,22 +2188,6 @@ function dependencyArgumentForResolveCall(
 function functionNameText(declaration: ts.FunctionLikeDeclaration): string | null {
   const name = declaration.name;
   return name === undefined ? null : propertyNameText(name);
-}
-
-function unwrapExpression<T extends ts.Node>(node: T): T;
-function unwrapExpression(node: ts.Expression): ts.Expression;
-function unwrapExpression(node: ts.Node): ts.Node {
-  let current = node;
-  while (
-    ts.isParenthesizedExpression(current) ||
-    ts.isAsExpression(current) ||
-    ts.isTypeAssertionExpression(current) ||
-    ts.isNonNullExpression(current) ||
-    ts.isSatisfiesExpression(current)
-  ) {
-    current = current.expression;
-  }
-  return current;
 }
 
 function isInterfaceSymbolValue(value: EvaluationValue): boolean {
@@ -2434,22 +2413,4 @@ function typeIsContainerLike(
 
 function expressionText(expression: ts.Expression): string {
   return unwrapExpression(expression).getText(expression.getSourceFile());
-}
-
-function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
-  return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
-}
-
-function uniqueBy<T>(rows: readonly T[], keyFor: (row: T) => string): readonly T[] {
-  const seen = new Set<string>();
-  const unique: T[] = [];
-  for (const row of rows) {
-    const key = keyFor(row);
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    unique.push(row);
-  }
-  return unique;
 }

@@ -1,6 +1,9 @@
 import ts from "typescript";
 
 import {
+  requiredSourceFileIdentity,
+  sourceRangeFromFileSpan,
+  sourceRangeForSourceFileNode,
   SourceProjectKeyedMemo,
   SourceDeclarationKind,
   type SourceTargetRow,
@@ -24,11 +27,6 @@ import {
   readFrameworkPackageNames,
   readFrameworkPublicExportSurface,
 } from "./framework-package-exports.js";
-import {
-  externalFileIdentity,
-  sourceRangeFromFileSpan,
-  sourceSpan,
-} from "./framework-support.js";
 import {
   declarationNameText,
   declarationsForExpressionSymbol,
@@ -155,11 +153,7 @@ export function scanFrameworkResourcePackageCarrierRows(
   exportName?: string,
 ): readonly FrameworkResourceCarrierRow[] {
   return sourceProject
-    .ownedSourceFiles()
-    .filter(
-      (sourceFile) =>
-        sourceProject.packageForFileName(sourceFile.fileName)?.id === packageId,
-    )
+    .ownedImplementationSourceFilesForPackage(packageId)
     .flatMap((sourceFile) => [
       ...exportedClassDeclarations(sourceFile).flatMap((declaration) => {
         const name = declaration.name?.text;
@@ -337,13 +331,15 @@ export function resourceCarriersForClass(
 ): readonly FrameworkResourceCarrierRow[] {
   const rows: FrameworkResourceCarrierRow[] = [];
   const targetName = declaration.name?.text ?? "<anonymous-class>";
-  const carrierEntry = exportSurfaceEntryForNamedDeclaration(
-    sourceProject,
-    sourceFile,
-    declaration.name ?? declaration,
-    declaration,
-    SourceDeclarationKind.Class,
-  );
+  let carrierEntry: TypeScriptExportSurfaceEntry | undefined;
+  const readCarrierEntry = (): TypeScriptExportSurfaceEntry =>
+    (carrierEntry ??= exportSurfaceEntryForNamedDeclaration(
+      sourceProject,
+      sourceFile,
+      declaration.name ?? declaration,
+      declaration,
+      SourceDeclarationKind.Class,
+    ));
 
   for (const decorator of ts.canHaveDecorators(declaration)
     ? ts.getDecorators(declaration) ?? []
@@ -373,7 +369,7 @@ export function resourceCarriersForClass(
         sourceFile,
         packageId,
         packageName,
-        carrierEntry,
+        readCarrierEntry(),
         resourceKind,
         FrameworkResourceCarrierKind.Decorator,
         decorator,
@@ -418,7 +414,7 @@ export function resourceCarriersForClass(
           sourceFile,
           packageId,
           packageName,
-          carrierEntry,
+          readCarrierEntry(),
           resourceKind,
           FrameworkResourceCarrierKind.StaticAu,
           staticAu,
@@ -450,7 +446,7 @@ export function resourceCarriersForClass(
             sourceFile,
             packageId,
             packageName,
-            carrierEntry,
+            readCarrierEntry(),
             defineKind,
             FrameworkResourceCarrierKind.DefineCall,
             call,
@@ -483,11 +479,11 @@ export function resourceCarriersForClass(
       }
       rows.push(
         resourceCarrierRow(
-          sourceProject,
-          sourceFile,
-          packageId,
-          packageName,
-          carrierEntry,
+        sourceProject,
+        sourceFile,
+        packageId,
+        packageName,
+        readCarrierEntry(),
           FrameworkResourceDefinitionKind.AttributePattern,
           FrameworkResourceCarrierKind.AttributePatternCreate,
           call,
@@ -515,11 +511,13 @@ export function resourceCarriersForVariable(
   if (initializer === undefined) {
     return [];
   }
-  const carrierEntry = exportSurfaceEntryForVariable(
-    sourceProject,
-    sourceFile,
-    declaration,
-  );
+  let carrierEntry: TypeScriptExportSurfaceEntry | undefined;
+  const readCarrierEntry = (): TypeScriptExportSurfaceEntry =>
+    (carrierEntry ??= exportSurfaceEntryForVariable(
+      sourceProject,
+      sourceFile,
+      declaration,
+    ));
   const rows: FrameworkResourceCarrierRow[] = [];
   for (const call of callExpressionsIn(initializer)) {
     if (isRendererHelperCall(call)) {
@@ -532,7 +530,7 @@ export function resourceCarriersForVariable(
           sourceFile,
           packageId,
           packageName,
-          carrierEntry,
+          readCarrierEntry(),
           FrameworkResourceDefinitionKind.Renderer,
           FrameworkResourceCarrierKind.RendererHelper,
           call,
@@ -554,7 +552,7 @@ export function resourceCarriersForVariable(
           sourceFile,
           packageId,
           packageName,
-          carrierEntry,
+          readCarrierEntry(),
           defineKind,
           FrameworkResourceCarrierKind.DefineCall,
           call,
@@ -586,7 +584,7 @@ export function resourceCarriersForVariable(
           sourceFile,
           packageId,
           packageName,
-          carrierEntry,
+          readCarrierEntry(),
           FrameworkResourceDefinitionKind.AttributePattern,
           FrameworkResourceCarrierKind.AttributePatternCreate,
           call,
@@ -695,12 +693,10 @@ export function resourceCarrierRow(
     readonly targetName: string | null;
   },
 ): FrameworkResourceCarrierRow {
-  const file =
-    sourceProject.sourceFileIdentity(sourceFile) ??
-    externalFileIdentity(sourceProject, sourceFile);
-  const span = sourceSpan(sourceFile, carrierNode);
+  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
+  const span = carrierNode.getStart(sourceFile);
   return {
-    id: `framework-resource-carrier:${packageId}:${carrierEntry.exportName}:${resourceKind}:${span.start}`,
+    id: `framework-resource-carrier:${packageId}:${carrierEntry.exportName}:${resourceKind}:${span}`,
     packageId,
     packageName,
     sourceExportName: carrierEntry.exportName,
@@ -710,7 +706,7 @@ export function resourceCarrierRow(
     resourceName: values.resourceName,
     aliases: values.aliases,
     targetName: values.targetName,
-    source: sourceRangeFromFileSpan(file.repoPath, span),
+    source: sourceRangeForSourceFileNode(file.repoPath, sourceFile, carrierNode),
     declarationSource: declarationSourceForCarrier(carrierEntry),
   };
 }
@@ -747,11 +743,12 @@ export function resourceExportRowFromCarrier(
 
 function declarationSourceForCarrier(
   carrierEntry: TypeScriptExportSurfaceEntry,
-): ReturnType<typeof sourceRangeFromFileSpan> | null {
+): ReturnType<typeof sourceRangeFromFileSpan> {
   const target = carrierEntry.targets.find(hasSourceTargetRange);
-  return target === undefined
-    ? null
-    : sourceRangeFromFileSpan(target.file.repoPath, target.span);
+  if (target === undefined) {
+    throw new Error(`Resource carrier ${carrierEntry.id} is missing a source-backed declaration target.`);
+  }
+  return sourceRangeFromFileSpan(target.file.repoPath, target.span);
 }
 
 function hasSourceTargetRange(

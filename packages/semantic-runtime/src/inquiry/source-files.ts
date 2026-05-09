@@ -1,4 +1,8 @@
-import { SourceLanguage, type SourceFileAddress } from '../kernel/address.js';
+import {
+  SourceFileRole,
+  SourceLanguage,
+  type SourceFileAddress,
+} from '../kernel/address.js';
 import type {
   AddressHandle,
   EvidenceHandle,
@@ -20,6 +24,8 @@ import {
   InquiryPageInfo,
   InquiryPageRequest,
 } from './page.js';
+import { uniqueValues } from './collections.js';
+import { isSourceFileAddress } from './source-file-addresses.js';
 
 export class AdmittedSourcesQuery {
   readonly kind = 'admitted-sources' as const;
@@ -31,10 +37,12 @@ export class AdmittedSourcesQuery {
     readonly language: SourceLanguage | null = null,
     /** Page request for ordered source rows. */
     readonly page: InquiryPageRequest = new InquiryPageRequest(),
+    /** Optional source-role filter. */
+    readonly role: SourceFileRole | null = null,
   ) {}
 
   withPage(page: InquiryPageRequest): AdmittedSourcesQuery {
-    return new AdmittedSourcesQuery(this.projectKey, this.language, page);
+    return new AdmittedSourcesQuery(this.projectKey, this.language, page, this.role);
   }
 }
 
@@ -42,6 +50,7 @@ export interface AdmittedSourceRow {
   readonly projectKey: string;
   readonly path: string;
   readonly language: SourceLanguage;
+  readonly role: SourceFileRole;
   readonly addressHandle: AddressHandle;
   readonly evidenceHandles: readonly EvidenceHandle[];
   readonly provenanceHandles: readonly ProvenanceHandle[];
@@ -56,14 +65,6 @@ interface AdmittedSourcesPage {
   readonly rows: readonly SourceFileAddress[];
   readonly nextCursor: string | null;
   readonly hasMore: boolean;
-}
-
-function unique<TValue>(values: readonly TValue[]): readonly TValue[] {
-  return [...new Set(values)];
-}
-
-function isSourceFileAddress(address: { readonly kind: string }): address is SourceFileAddress {
-  return address.kind === 'source-file-address';
 }
 
 function pageAfterCursor(
@@ -105,8 +106,8 @@ export function answerAdmittedSources(
     );
   }
 
-  const evidenceHandles = unique(sources.flatMap((source) => source.evidenceHandles));
-  const provenanceHandles = unique(sources.flatMap((source) => source.provenanceHandles));
+  const evidenceHandles = uniqueValues(sources.flatMap((source) => source.evidenceHandles));
+  const provenanceHandles = uniqueValues(sources.flatMap((source) => source.provenanceHandles));
   const continuations = admittedSourcesContinuations(query, page);
 
   return new InquiryAnswer(
@@ -141,6 +142,7 @@ function matchedAdmittedSourceAddresses(
     .filter(isSourceFileAddress)
     .filter((address) => query.projectKey == null || address.workspaceKey === query.projectKey)
     .filter((address) => query.language == null || address.language === query.language)
+    .filter((address) => query.role == null || address.role === query.role)
     .sort((left, right) => left.path.localeCompare(right.path));
 }
 
@@ -170,9 +172,10 @@ function admittedSourceRow(
     projectKey: address.workspaceKey,
     path: address.path,
     language: address.language,
+    role: address.role,
     addressHandle: address.handle,
     evidenceHandles,
-    provenanceHandles: unique(evidenceHandles.flatMap((handle) =>
+    provenanceHandles: uniqueValues(evidenceHandles.flatMap((handle) =>
       store.readProvenanceForEvidence(handle)
     )),
   };

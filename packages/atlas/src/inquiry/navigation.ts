@@ -1,4 +1,4 @@
-import { BasisKind, type BasisTransition } from "./basis.js";
+import { BasisKind, BasisTransitionKind, type BasisTransition } from "./basis.js";
 import { ContinuationKind, ContinuationPriority } from "./continuation.js";
 import { EvidenceKind } from "./evidence.js";
 import { HandleKind, HandleNamespace } from "./handle.js";
@@ -148,6 +148,15 @@ export function routeClaim(
   };
 }
 
+function basisTransition(
+  kind: BasisTransitionKind,
+  from: readonly BasisKind[],
+  to: readonly BasisKind[],
+  summary: string,
+): BasisTransition {
+  return { kind, from, to, summary };
+}
+
 /** Generic inquiry routes that every substrate can reuse before product/framework meaning is added. */
 export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
   {
@@ -168,6 +177,28 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
       BasisKind.AtlasContract,
     ],
     evidenceKinds: [],
+    basisTransition: basisTransition(
+      BasisTransitionKind.Preserve,
+      [
+        BasisKind.SourceText,
+        BasisKind.TypeScriptProgram,
+        BasisKind.TypeScriptChecker,
+        BasisKind.StaticEvaluator,
+        BasisKind.ProductVocabulary,
+        BasisKind.AuLink,
+        BasisKind.AtlasContract,
+      ],
+      [
+        BasisKind.SourceText,
+        BasisKind.TypeScriptProgram,
+        BasisKind.TypeScriptChecker,
+        BasisKind.StaticEvaluator,
+        BasisKind.ProductVocabulary,
+        BasisKind.AuLink,
+        BasisKind.AtlasContract,
+      ],
+      "Paging preserves the answer basis while advancing within the same ordered row family.",
+    ),
     summary: "Continue an ordered answer without changing the question shape.",
   },
   {
@@ -188,6 +219,28 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
       BasisKind.AuLink,
     ],
     evidenceKinds: [],
+    basisTransition: basisTransition(
+      BasisTransitionKind.Preserve,
+      [
+        BasisKind.AtlasContract,
+        BasisKind.SourceText,
+        BasisKind.TypeScriptProgram,
+        BasisKind.TypeScriptChecker,
+        BasisKind.StaticEvaluator,
+        BasisKind.ProductVocabulary,
+        BasisKind.AuLink,
+      ],
+      [
+        BasisKind.AtlasContract,
+        BasisKind.SourceText,
+        BasisKind.TypeScriptProgram,
+        BasisKind.TypeScriptChecker,
+        BasisKind.StaticEvaluator,
+        BasisKind.ProductVocabulary,
+        BasisKind.AuLink,
+      ],
+      "Projection switches keep the same subject and authority while changing the answer shape.",
+    ),
     summary: "Switch projection over the same subject, filters, and basis.",
   },
   {
@@ -208,6 +261,28 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
       BasisKind.AuLink,
     ],
     evidenceKinds: [],
+    basisTransition: basisTransition(
+      BasisTransitionKind.Refine,
+      [
+        BasisKind.AtlasContract,
+        BasisKind.SourceText,
+        BasisKind.TypeScriptProgram,
+        BasisKind.TypeScriptChecker,
+        BasisKind.StaticEvaluator,
+        BasisKind.ProductVocabulary,
+        BasisKind.AuLink,
+      ],
+      [
+        BasisKind.AtlasContract,
+        BasisKind.SourceText,
+        BasisKind.TypeScriptProgram,
+        BasisKind.TypeScriptChecker,
+        BasisKind.StaticEvaluator,
+        BasisKind.ProductVocabulary,
+        BasisKind.AuLink,
+      ],
+      "Refinement narrows the inquiry without crossing into a different authority lane.",
+    ),
     summary:
       "Narrow filters, locus, or subject while preserving the current answer family.",
   },
@@ -234,6 +309,12 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
       EvidenceKind.TypeFact,
       EvidenceKind.CallSite,
     ],
+    basisTransition: basisTransition(
+      BasisTransitionKind.Handoff,
+      [BasisKind.TypeScriptProgram, BasisKind.TypeScriptChecker],
+      [BasisKind.SourceText],
+      "Source inspection hands off from symbol/checker-backed evidence to exact source text.",
+    ),
     summary:
       "Inspect exact source behind evidence that carries or resolves to a source range.",
   },
@@ -307,6 +388,12 @@ export const CORE_NAVIGATION_ROUTES: readonly NavigationRouteSpec[] = [
       EvidenceKind.TypeFact,
       EvidenceKind.SourceSpan,
     ],
+    basisTransition: basisTransition(
+      BasisTransitionKind.Join,
+      [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+      [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+      "Call-site inspection joins exact syntax with checker-resolved callee and argument facts.",
+    ),
     summary:
       "Inspect exact call expressions, resolved signatures, and argument facts behind call-site evidence.",
   },

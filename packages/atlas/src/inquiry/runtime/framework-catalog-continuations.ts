@@ -602,7 +602,7 @@ export function resourceExportContinuations(
   return continuations;
 }
 
-export function bundleContinuations(
+export function frameworkCatalogBundleContinuations(
   inquiry: Inquiry,
   rows: readonly FrameworkBundleExportRow[],
   nextOffset: number | undefined,
@@ -640,6 +640,30 @@ export function bundleContinuations(
     const evidence = evidenceForBundle(row);
     const firstTarget = concreteExportTarget(row.exportEntry.targets);
     const source = sourceRangeForTarget(firstTarget);
+    continuations.push({
+      id: `framework.discovery:bundles:${index}:di-world`,
+      kind: ContinuationKind.SwitchLens,
+      priority: ContinuationPriority.Primary,
+      rationale:
+        "Spend this exact configuration, registry, or catalog export through the framework DI-world projection.",
+      inquiry: {
+        lens: LensId.FrameworkDi,
+        locus: inquiry.locus,
+        projection: "world",
+        filters: {
+          configurationPackageId: row.packageId,
+          configurationExportName: row.exportEntry.exportName,
+        },
+        budget: inquiry.budget,
+      },
+      evidence: [evidence],
+      route: route(
+        NavigationPlane.Semantic,
+        NavigationRelation.FrameworkFlowOf,
+        [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
+        "Bundle export to DI-world spending.",
+      ),
+    });
     if (source !== null) {
       const builder = new FrameworkRowContinuationBuilder(
         inquiry,

@@ -64,15 +64,22 @@ or product substrates instead of widening this layer.
 
 ## Modules
 
-- [source-ranges.ts](source-ranges.ts) owns admitted-node ranges, source spans, and range keys.
+- [source-ranges.ts](source-ranges.ts) owns admitted-node ranges, source spans, and range keys. Its required admitted
+  file identity helper is a source-range convenience around `SourceProject.requiredSourceFileIdentity(...)`, which is
+  the lower-level admission invariant. Framework/product projections should use required admitted identity when their
+  roots come from owned source walks; TypeScript LanguageService projections that legitimately mention lib/external
+  files should name that program-file policy explicitly instead of falling back through this layer.
 - [declarations.ts](declarations.ts) owns declaration names, exported top-level declaration surfaces, package index
   checks, generated declaration-file to source mirror lookup, and usage-site owner declarations.
+- [expression-text.ts](expression-text.ts) owns compact expression rendering for source-shape keys, so lens mechanisms
+  can name call chains without embedding argument objects, callback bodies, or app/framework source snippets.
 - [symbols.ts](symbols.ts) owns alias resolution, symbol lookup, fully qualified symbol keys, and canonical source symbol
   keys.
 - [members.ts](members.ts) owns normalized member slots, declaration kinds, and constructor parameter properties.
 - [usages.ts](usages.ts) owns exact identifier usage-role classification, compact usage text, compact call-shape
   metadata for call usages, and reusable call-shape aggregation.
-- [ast.ts](ast.ts) owns generic AST traversal and expression unwrapping.
+- [ast.ts](ast.ts) owns generic AST traversal, expression unwrapping, property-name/member-access text extraction, and
+  small syntax classifiers such as assignment-operator and modifier detection.
 
 ## Expansion Rule
 

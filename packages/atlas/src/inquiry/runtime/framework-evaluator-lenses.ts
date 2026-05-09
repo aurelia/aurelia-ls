@@ -11,7 +11,9 @@ import {
 import { readFrameworkModuleBootIndex } from "../../framework/module-boot.js";
 import ts from "typescript";
 import {
+  requiredSourceFileIdentity,
   resolveSourceSelector,
+  sourceSpanForNode,
   type SourceProject,
   type SourceSelector,
 } from "../../source/index.js";
@@ -21,6 +23,7 @@ import {
   BasisClosure,
   BasisFreshness,
   BasisKind,
+  sourceTextBasis,
   type Basis,
 } from "../basis.js";
 import { clampBudget } from "../budget.js";
@@ -40,13 +43,15 @@ import type { Inquiry } from "../inquiry.js";
 import {
   evidenceLimit,
   pageOffset,
+  rowLimit,
 } from "../paging.js";
 import {
   FrameworkRowContinuationBuilder,
   nextPageContinuation,
   projectionContinuation,
 } from "./framework-continuation-core.js";
-import { sourceSelectorFromInquiry as selectorFromInquiry } from "./source-selector.js";
+import { stringFilter } from "./lens-filter-utils.js";
+import { sourceSelectorFromInquiry } from "./source-selector.js";
 
 /** Value returned by the framework.evaluator runtime lens. */
 export interface FrameworkEvaluatorValue {
@@ -97,11 +102,11 @@ export function answerFrameworkEvaluator(
   /** Hot source project owned by the daemon. */
   sourceProject: SourceProject,
 ): Answer<FrameworkEvaluatorValue> {
-  const selector = selectorFromInquiry(inquiry);
+  const selector = sourceSelectorFromInquiry(inquiry);
   const resolution = resolveSourceSelector(sourceProject, selector);
   const projection = inquiry.projection ?? "effects";
   const pageOptions = {
-    limit: clampBudget(inquiry.budget?.rows, 80, 1_000),
+    limit: rowLimit(inquiry),
     offset: pageOffset(inquiry),
     maxDepth: clampBudget(inquiry.budget?.depth, 80, 500),
     ...stringFilter(inquiry.filters, "memberName"),
@@ -132,9 +137,9 @@ export function answerFrameworkEvaluator(
         {
           value,
           basis: [
-            staticEvaluatorBasis(sourceProject),
-            checkerBasis(sourceProject),
-            sourceTextBasis(sourceProject),
+            frameworkEvaluatorStaticBasis(sourceProject),
+            evaluatorCheckerBasis(sourceProject),
+            frameworkEvaluatorSourceTextBasis(sourceProject),
           ],
           evidence: effectTrace.openSeams
             .slice(0, evidenceLimit(inquiry))
@@ -153,9 +158,9 @@ export function answerFrameworkEvaluator(
       {
         value,
         basis: [
-          staticEvaluatorBasis(sourceProject),
-          checkerBasis(sourceProject),
-          sourceTextBasis(sourceProject),
+          frameworkEvaluatorStaticBasis(sourceProject),
+          evaluatorCheckerBasis(sourceProject),
+          frameworkEvaluatorSourceTextBasis(sourceProject),
         ],
         evidence: effectTrace.effects
           .slice(0, evidenceLimit(inquiry))
@@ -191,8 +196,8 @@ export function answerFrameworkEvaluator(
         openSeams: modules.flatMap((module) => module.openSeams),
       },
       basis: [
-        staticEvaluatorBasis(sourceProject),
-        sourceTextBasis(sourceProject),
+        frameworkEvaluatorStaticBasis(sourceProject),
+        frameworkEvaluatorSourceTextBasis(sourceProject),
       ],
       evidence: modules
         .flatMap((module) => module.openSeams)
@@ -222,10 +227,10 @@ function moduleSummaries(
   );
   const frameworkBoot = readFrameworkModuleBootIndex(sourceProject);
   return sourceFiles.slice(0, limit).map((sourceFile) => {
-    const identity = sourceProject.sourceFileIdentity(sourceFile);
-    const moduleKey = identity?.repoPath ?? sourceFile.fileName;
+    const identity = requiredSourceFileIdentity(sourceProject, sourceFile);
+    const moduleKey = identity.repoPath;
     const result =
-      identity?.packageId === undefined || identity.packageId === null
+      identity.packageId === undefined || identity.packageId === null
         ? null
         : frameworkBoot.readPackage(identity.packageId)?.evaluator.evaluateModule(
             moduleKey,
@@ -253,13 +258,8 @@ function moduleSummaries(
         id: `module-evaluation-open:${moduleKey}:${index}`,
         openKind: seam.openKind,
         summary: seam.summary,
-        file: sourceProject.sourceFileIdentity(sourceFile) ?? {
-          absolutePath: sourceFile.fileName,
-          repoPath: moduleKey as never,
-          packageId:
-            sourceProject.packageForFileName(sourceFile.fileName)?.id ?? null,
-        },
-        span: sourceSpan(sourceFile, seam.node),
+        file: identity,
+        span: sourceSpanForNode(sourceFile, seam.node),
         syntaxKindName: ts.SyntaxKind[seam.node.kind] ?? String(seam.node.kind),
       })),
     };
@@ -442,41 +442,14 @@ function uniqueSourceFiles(
   );
 }
 
-function sourceSpan(sourceFile: ts.SourceFile, node: ts.Node) {
-  const start = node.getStart(sourceFile);
-  const end = node.getEnd();
-  const startPosition = sourceFile.getLineAndCharacterOfPosition(start);
-  const endPosition = sourceFile.getLineAndCharacterOfPosition(end);
-  return {
-    start,
-    end,
-    startLine: startPosition.line + 1,
-    startCharacter: startPosition.character + 1,
-    endLine: endPosition.line + 1,
-    endCharacter: endPosition.character + 1,
-  };
+function frameworkEvaluatorSourceTextBasis(sourceProject: SourceProject): Basis {
+  return sourceTextBasis(
+    sourceProject.snapshot().identity,
+    "Answered from exact source text selected in the current source project.",
+  );
 }
 
-function stringFilter(
-  source: Record<string, unknown> | undefined,
-  key: string,
-): object {
-  const value = source?.[key];
-  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
-}
-
-function sourceTextBasis(sourceProject: SourceProject): Basis {
-  return {
-    kind: BasisKind.SourceText,
-    closure: BasisClosure.Exact,
-    freshness: BasisFreshness.Live,
-    summary:
-      "Answered from exact source text selected in the current source project.",
-    identity: sourceProject.snapshot().identity,
-  };
-}
-
-function checkerBasis(sourceProject: SourceProject): Basis {
+function evaluatorCheckerBasis(sourceProject: SourceProject): Basis {
   return {
     kind: BasisKind.TypeScriptChecker,
     closure: BasisClosure.Exact,
@@ -488,7 +461,7 @@ function checkerBasis(sourceProject: SourceProject): Basis {
   };
 }
 
-function staticEvaluatorBasis(sourceProject: SourceProject): Basis {
+function frameworkEvaluatorStaticBasis(sourceProject: SourceProject): Basis {
   return {
     ...staticEvaluatorBasisForIdentity(
       "Answered from Atlas static invocation/effect tracing.",

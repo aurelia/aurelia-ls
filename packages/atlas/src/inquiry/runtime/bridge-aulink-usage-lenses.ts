@@ -45,7 +45,7 @@ import {
   AULINK_MIRROR_DETAIL_BUDGET,
   auLinkBasis,
   callSitesRangeContinuation,
-  checkerBasis,
+  auLinkCheckerBasis,
   continuationRoute,
   frameworkBasis,
   isUnscopedBridgeInquiry,
@@ -53,6 +53,10 @@ import {
   nextPageRoute,
   sourceRangeContinuation,
 } from "./bridge-aulink-lens-support.js";
+import {
+  singletonRecordFilter,
+  stringField,
+} from "./lens-filter-utils.js";
 
 /** Compact public row for per-link usage comparison. */
 export interface AuLinkUsageComparisonSummaryRow {
@@ -155,8 +159,8 @@ const AULINK_USAGE_CONSUMER_ROW_FAMILY =
   new PagedRowFamily<AuLinkUsageConsumerRow>({
     id: "bridge.aulink:usage-consumers",
     rowLabel: "auLink usage consumer row(s)",
-    evidenceForRow: evidenceForUsageConsumer,
-    continuationsForPage: usageConsumerContinuations,
+    evidenceForRow: evidenceForAuLinkUsageConsumer,
+    continuationsForPage: auLinkUsageConsumerContinuations,
   });
 
 /** Answer one bridge.aulink usage projection, or decline non-usage projections. */
@@ -595,7 +599,7 @@ function evidenceForUsageSite(row: AuLinkUsageSiteRow): Evidence {
   };
 }
 
-function evidenceForUsageConsumer(row: AuLinkUsageConsumerRow): Evidence {
+function evidenceForAuLinkUsageConsumer(row: AuLinkUsageConsumerRow): Evidence {
   return {
     id: row.id,
     kind: EvidenceKind.TypeFact,
@@ -639,7 +643,7 @@ function evidenceForUsageConsumer(row: AuLinkUsageConsumerRow): Evidence {
 function usageComparisonBasis(sourceProject: SourceProject): readonly Basis[] {
   return [
     auLinkBasis(sourceProject),
-    checkerBasis(sourceProject),
+    auLinkCheckerBasis(sourceProject),
     frameworkBasis(sourceProject),
     {
       kind: BasisKind.TypeScriptChecker,
@@ -1229,7 +1233,7 @@ function usageMemberContinuations(
   return continuations;
 }
 
-function usageConsumerContinuations(
+function auLinkUsageConsumerContinuations(
   inquiry: Inquiry,
   rows: readonly AuLinkUsageConsumerRow[],
   nextOffset: number | undefined,
@@ -1264,7 +1268,7 @@ function usageConsumerContinuations(
     ),
   );
   for (const [index, row] of rows.slice(0, 5).entries()) {
-    const evidence = evidenceForUsageConsumer(row);
+    const evidence = evidenceForAuLinkUsageConsumer(row);
     continuations.push(
       mirrorProjectionContinuation(
         inquiry,
@@ -1407,14 +1411,6 @@ function frameworkApiUsageConsumerContinuation(
   };
 }
 
-function singletonRecordFilter(
-  values: Readonly<Record<string, number>>,
-  key: string,
-): Record<string, string> {
-  const entries = Object.keys(values);
-  return entries.length === 1 ? { [key]: entries[0]! } : {};
-}
-
 function callSiteFiltersFromBridgeFilters(
   filters: Inquiry["filters"],
 ): Record<string, string> {
@@ -1448,15 +1444,6 @@ function frameworkCallFiltersFromBridgeFilters(
       "callArgumentFullyQualifiedName",
     ),
   };
-}
-
-function stringField(
-  source: Readonly<Record<string, unknown>>,
-  sourceKey: string,
-  targetKey: string,
-): Record<string, string> {
-  const value = source[sourceKey];
-  return typeof value === "string" && value.length > 0 ? { [targetKey]: value } : {};
 }
 
 function usageSiteContinuations(

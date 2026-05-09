@@ -13,6 +13,11 @@ import {
   EvaluationBindingKind,
   ModuleEnvironmentRecord,
 } from './environment.js';
+import {
+  evaluateKnownConstructor as evaluateStaticConstructor,
+  evaluateKnownIntrinsic as evaluateStaticIntrinsic,
+  type StaticIntrinsicEvaluationHost,
+} from './intrinsics.js';
 import { EvaluationOpenSeam, EvaluationOpenSeamKind } from './seams.js';
 import {
   DefaultStaticEvaluationPolicy,
@@ -23,23 +28,30 @@ import {
   EvaluationArrayElement,
   EvaluationArrayValue,
   EvaluationBigIntValue,
+  EvaluationBoundaryKind,
   EvaluationBooleanValue,
   EvaluationClassValue,
   EvaluationFunctionValue,
+  EvaluationBoundaryValue,
+  EvaluationInstanceValue,
   EvaluationNullValue,
   EvaluationNumberValue,
   EvaluationObjectProperty,
   EvaluationObjectValue,
+  EvaluationPromiseValue,
+  EvaluationRegularExpressionValue,
   EvaluationStringValue,
   EvaluationUndefined,
   EvaluationUndefinedValue,
   EvaluationUnknownValue,
   EvaluationValueKind,
+  evaluationValuesEqual,
   isEvaluationPrimitiveValue,
   readEvaluationPrimitive,
   readEvaluationTruthiness,
   type EvaluationValue,
 } from './values.js';
+import { hasModifier } from './ts-syntax.js';
 
 const DEFAULT_MAX_EXPRESSION_DEPTH = 80;
 const DEFAULT_MAX_STATEMENTS = 5000;
@@ -47,6 +59,42 @@ const DEFAULT_MAX_LOOP_ITERATIONS = 200;
 
 /** Linked import values keyed by local import binding name before module-body evaluation. */
 export type StaticEvaluationImportValues = ReadonlyMap<string, EvaluationValue>;
+
+export interface StaticEvaluationRuntimeHost {
+  resolveIdentifier?(
+    identifier: ts.Identifier,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+  ): EvaluationValue | null;
+
+  resolveCommonJsRequire?(
+    moduleKey: string,
+    moduleSpecifier: string,
+    node: ts.CallExpression,
+  ): EvaluationValue | null;
+
+  resolveDynamicImport?(
+    moduleKey: string,
+    moduleSpecifier: string,
+    node: ts.CallExpression,
+  ): EvaluationValue | null;
+
+  evaluateCallExpression?(
+    call: ts.CallExpression,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+    depth: number,
+    host: StaticIntrinsicEvaluationHost,
+  ): EvaluationValue | null;
+
+  evaluateNewExpression?(
+    expression: ts.NewExpression,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+    depth: number,
+    host: StaticIntrinsicEvaluationHost,
+  ): EvaluationValue | null;
+}
 
 /** Result of evaluating one source module. */
 export class StaticModuleEvaluationResult {
@@ -59,6 +107,10 @@ export class StaticModuleEvaluationResult {
     readonly completion: EvaluationCompletion,
     /** Explicit open seams produced while evaluating this module. */
     readonly openSeams: readonly EvaluationOpenSeam[],
+    /** Policy used by follow-up expression reads against this module environment. */
+    readonly policy: StaticEvaluationPolicy = DefaultStaticEvaluationPolicy,
+    /** Runtime host used by follow-up expression reads against this module environment. */
+    readonly runtimeHost: StaticEvaluationRuntimeHost = {},
   ) {}
 }
 
@@ -79,6 +131,7 @@ export class StaticEvaluator {
 
   constructor(
     readonly policy: StaticEvaluationPolicy = DefaultStaticEvaluationPolicy,
+    readonly runtimeHost: StaticEvaluationRuntimeHost = {},
   ) {}
 
   /** Evaluate one TypeScript source file as an ECMAScript module body. */
@@ -100,7 +153,14 @@ export class StaticEvaluator {
       }
     }
 
-    return new StaticModuleEvaluationResult(moduleKey, environment, completion, [...this.openSeams]);
+    return new StaticModuleEvaluationResult(
+      moduleKey,
+      environment,
+      completion,
+      [...this.openSeams],
+      this.policy,
+      this.runtimeHost,
+    );
   }
 
   /** Evaluate one expression with a supplied environment record. */
@@ -111,6 +171,30 @@ export class StaticEvaluator {
   ): StaticExpressionEvaluationResult {
     const openStart = this.openSeams.length;
     const value = this.evaluateExpression(expression, environment, moduleKey, 0);
+    return new StaticExpressionEvaluationResult(value, this.openSeams.slice(openStart));
+  }
+
+  /** Instantiate an evaluator-known class value without requiring a synthetic `new` expression. */
+  evaluateClassValueInstantiation(
+    callee: EvaluationClassValue,
+    moduleKey: string,
+    node: ts.Node,
+    argumentValues: readonly EvaluationValue[] = [],
+  ): StaticExpressionEvaluationResult {
+    const openStart = this.openSeams.length;
+    const value = this.evaluateClassInstantiation(callee, node, argumentValues, moduleKey, 0);
+    return new StaticExpressionEvaluationResult(value, this.openSeams.slice(openStart));
+  }
+
+  /** Read one property from an evaluator value, including guarded accessor invocation for local getters. */
+  evaluatePropertyValue(
+    receiver: EvaluationValue,
+    propertyName: string,
+    moduleKey: string,
+    node: ts.Node,
+  ): StaticExpressionEvaluationResult {
+    const openStart = this.openSeams.length;
+    const value = this.evaluatePropertyValueCore(receiver, propertyName, node, moduleKey, 0);
     return new StaticExpressionEvaluationResult(value, this.openSeams.slice(openStart));
   }
 
@@ -126,18 +210,7 @@ export class StaticEvaluator {
         continue;
       }
       if (ts.isFunctionDeclaration(statement)) {
-        const localName = statement.name?.text
-          ?? (hasModifier(statement, ts.SyntaxKind.DefaultKeyword) ? 'default' : null);
-        if (localName == null) {
-          continue;
-        }
-        environment.initializeBinding(
-          localName,
-          new EvaluationFunctionValue(statement, environment, statement),
-          EvaluationBindingKind.Function,
-          false,
-          statement,
-        );
+        this.instantiateFunctionDeclaration(statement, environment);
         continue;
       }
       if (ts.isClassDeclaration(statement)) {
@@ -148,13 +221,47 @@ export class StaticEvaluator {
         }
         environment.initializeBinding(
           localName,
-          new EvaluationClassValue(statement, environment, statement),
+          new EvaluationClassValue(
+            statement,
+            environment,
+            statement,
+            this.readStaticClassProperties(statement, environment, moduleKey, 0),
+          ),
           EvaluationBindingKind.Class,
           false,
           statement,
         );
       }
     }
+  }
+
+  private instantiateBlockFunctionDeclarations(
+    block: ts.Block,
+    environment: ModuleEnvironmentRecord,
+  ): void {
+    for (const statement of block.statements) {
+      if (ts.isFunctionDeclaration(statement)) {
+        this.instantiateFunctionDeclaration(statement, environment);
+      }
+    }
+  }
+
+  private instantiateFunctionDeclaration(
+    statement: ts.FunctionDeclaration,
+    environment: ModuleEnvironmentRecord,
+  ): void {
+    const localName = statement.name?.text
+      ?? (hasModifier(statement, ts.SyntaxKind.DefaultKeyword) ? 'default' : null);
+    if (localName == null) {
+      return;
+    }
+    environment.initializeBinding(
+      localName,
+      new EvaluationFunctionValue(statement, environment, statement),
+      EvaluationBindingKind.Function,
+      false,
+      statement,
+    );
   }
 
   private instantiateImportDeclaration(
@@ -178,7 +285,7 @@ export class StaticEvaluator {
         imported ?? new EvaluationUnknownValue('Default import binding is not linked to its source module in this evaluator pass.', clause.name),
         EvaluationBindingKind.Import,
         false,
-        clause.name,
+        clause,
       );
     }
     if (clause.namedBindings == null) {
@@ -191,7 +298,7 @@ export class StaticEvaluator {
         imported ?? new EvaluationUnknownValue('Namespace import binding is not linked to its source module in this evaluator pass.', clause.namedBindings.name),
         EvaluationBindingKind.Import,
         false,
-        clause.namedBindings.name,
+        clause.namedBindings,
       );
       return;
     }
@@ -234,8 +341,9 @@ export class StaticEvaluator {
       case ts.SyntaxKind.ExportAssignment:
         return this.evaluateExportAssignment(statement as ts.ExportAssignment, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.FunctionDeclaration:
-      case ts.SyntaxKind.ClassDeclaration:
         return new NormalEvaluationCompletion();
+      case ts.SyntaxKind.ClassDeclaration:
+        return this.evaluateClassDeclaration(statement as ts.ClassDeclaration, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.EnumDeclaration:
         return this.evaluateEnumDeclaration(statement as ts.EnumDeclaration, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.ModuleDeclaration:
@@ -245,8 +353,9 @@ export class StaticEvaluator {
       case ts.SyntaxKind.DoStatement:
       case ts.SyntaxKind.WhileStatement:
       case ts.SyntaxKind.ForStatement:
-      case ts.SyntaxKind.ForInStatement:
         return this.unsupportedStatement(statement, moduleKey, 'Loop statement is not reduced unless it is a for-of over a known array.');
+      case ts.SyntaxKind.ForInStatement:
+        return this.evaluateForInStatement(statement as ts.ForInStatement, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.ForOfStatement:
         return this.evaluateForOfStatement(statement as ts.ForOfStatement, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.ContinueStatement:
@@ -284,6 +393,7 @@ export class StaticEvaluator {
     moduleKey: string,
     depth: number,
   ): EvaluationCompletion {
+    this.instantiateBlockFunctionDeclarations(block, environment);
     for (const statement of block.statements) {
       const completion = this.evaluateStatement(statement, environment, moduleKey, depth + 1);
       if (completion.kind !== EvaluationCompletionKind.Normal) {
@@ -342,6 +452,33 @@ export class StaticEvaluator {
     return new NormalEvaluationCompletion(this.evaluateExpression(statement.expression, environment, moduleKey, depth + 1));
   }
 
+  private evaluateClassDeclaration(
+    declaration: ts.ClassDeclaration,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+    depth: number,
+  ): EvaluationCompletion {
+    const localName = declaration.name?.text
+      ?? (hasModifier(declaration, ts.SyntaxKind.DefaultKeyword) ? 'default' : null);
+    if (localName == null) {
+      this.open(EvaluationOpenSeamKind.UnsupportedBindingPattern, 'Class declaration did not expose a local binding name.', declaration, moduleKey);
+      return new NormalEvaluationCompletion();
+    }
+    environment.initializeBinding(
+      localName,
+      new EvaluationClassValue(
+        declaration,
+        environment,
+        declaration,
+        this.readStaticClassProperties(declaration, environment, moduleKey, depth + 1),
+      ),
+      EvaluationBindingKind.Class,
+      false,
+      declaration,
+    );
+    return new NormalEvaluationCompletion();
+  }
+
   private evaluateEnumDeclaration(
     declaration: ts.EnumDeclaration,
     environment: ModuleEnvironmentRecord,
@@ -381,6 +518,9 @@ export class StaticEvaluator {
     depth: number,
   ): EvaluationCompletion {
     const condition = this.evaluateExpression(statement.expression, environment, moduleKey, depth + 1);
+    if (condition.kind === EvaluationValueKind.BoundaryValue) {
+      return new NormalEvaluationCompletion();
+    }
     if (condition.kind === EvaluationValueKind.Unknown) {
       this.materializeUnknownUse(condition, statement.expression, moduleKey, 'If statement depended on an open condition.', EvaluationOpenSeamKind.DynamicBranch);
       return new NormalEvaluationCompletion();
@@ -404,6 +544,9 @@ export class StaticEvaluator {
     depth: number,
   ): EvaluationCompletion {
     const iterable = this.evaluateExpression(statement.expression, environment, moduleKey, depth + 1);
+    if (iterable.kind === EvaluationValueKind.BoundaryValue) {
+      return new NormalEvaluationCompletion();
+    }
     if (iterable.kind === EvaluationValueKind.Unknown) {
       this.materializeUnknownUse(iterable, statement.expression, moduleKey, 'For-of statement depended on an open iterable.', EvaluationOpenSeamKind.DynamicLoop);
       return new NormalEvaluationCompletion();
@@ -412,13 +555,13 @@ export class StaticEvaluator {
       this.open(EvaluationOpenSeamKind.DynamicLoop, 'For-of iterable did not reduce to a known array value.', statement.expression, moduleKey);
       return new NormalEvaluationCompletion();
     }
-    if (iterable.elements.length > DEFAULT_MAX_LOOP_ITERATIONS || iterable.mayHaveUnknownElements) {
+    if (iterable.elements.length > DEFAULT_MAX_LOOP_ITERATIONS || iterable.mayHaveUnknownElements || iterable.mayHaveUnknownOrder) {
       this.open(EvaluationOpenSeamKind.DynamicLoop, 'For-of iterable has unknown or excessive iteration shape.', statement.expression, moduleKey);
       return new NormalEvaluationCompletion();
     }
 
     for (const element of iterable.elements) {
-      this.bindForOfInitializer(statement.initializer, element.value, environment, moduleKey);
+      this.bindLoopInitializer(statement.initializer, element.value, environment, moduleKey);
       const completion = this.evaluateStatementLike(statement.statement, environment, moduleKey, depth + 1);
       if (completion.kind === EvaluationCompletionKind.Continue) {
         continue;
@@ -433,7 +576,46 @@ export class StaticEvaluator {
     return new NormalEvaluationCompletion();
   }
 
-  private bindForOfInitializer(
+  private evaluateForInStatement(
+    statement: ts.ForInStatement,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+    depth: number,
+  ): EvaluationCompletion {
+    const source = this.evaluateExpression(statement.expression, environment, moduleKey, depth + 1);
+    if (source.kind === EvaluationValueKind.BoundaryValue || source.kind === EvaluationValueKind.BoundaryObject) {
+      return new NormalEvaluationCompletion();
+    }
+    if (source.kind === EvaluationValueKind.Unknown) {
+      this.materializeUnknownUse(source, statement.expression, moduleKey, 'For-in statement depended on an open object.', EvaluationOpenSeamKind.DynamicLoop);
+      return new NormalEvaluationCompletion();
+    }
+    if (source.kind !== EvaluationValueKind.Object) {
+      this.open(EvaluationOpenSeamKind.DynamicLoop, 'For-in source did not reduce to a known object value.', statement.expression, moduleKey);
+      return new NormalEvaluationCompletion();
+    }
+    if (source.properties.size > DEFAULT_MAX_LOOP_ITERATIONS || source.mayHaveUnknownProperties) {
+      this.open(EvaluationOpenSeamKind.DynamicLoop, 'For-in source has unknown or excessive property shape.', statement.expression, moduleKey);
+      return new NormalEvaluationCompletion();
+    }
+
+    for (const name of source.properties.keys()) {
+      this.bindLoopInitializer(statement.initializer, new EvaluationStringValue(name, statement.expression), environment, moduleKey);
+      const completion = this.evaluateStatementLike(statement.statement, environment, moduleKey, depth + 1);
+      if (completion.kind === EvaluationCompletionKind.Continue) {
+        continue;
+      }
+      if (completion.kind === EvaluationCompletionKind.Break) {
+        return new NormalEvaluationCompletion();
+      }
+      if (completion.kind !== EvaluationCompletionKind.Normal) {
+        return completion;
+      }
+    }
+    return new NormalEvaluationCompletion();
+  }
+
+  private bindLoopInitializer(
     initializer: ts.ForInitializer,
     value: EvaluationValue,
     environment: ModuleEnvironmentRecord,
@@ -458,7 +640,7 @@ export class StaticEvaluator {
       }
       return;
     }
-    this.open(EvaluationOpenSeamKind.UnsupportedBindingPattern, 'For-of initializer is not an identifier binding.', initializer, moduleKey);
+    this.open(EvaluationOpenSeamKind.UnsupportedBindingPattern, 'Loop initializer is not an identifier binding.', initializer, moduleKey);
   }
 
   private evaluateReturnStatement(
@@ -523,12 +705,17 @@ export class StaticEvaluator {
         return new EvaluationNumberValue(Number((current as ts.NumericLiteral).text), current);
       case ts.SyntaxKind.BigIntLiteral:
         return new EvaluationBigIntValue((current as ts.BigIntLiteral).text, current);
+      case ts.SyntaxKind.RegularExpressionLiteral:
+        return this.evaluateRegularExpressionLiteral(current as ts.RegularExpressionLiteral);
       case ts.SyntaxKind.TrueKeyword:
         return new EvaluationBooleanValue(true, current);
       case ts.SyntaxKind.FalseKeyword:
         return new EvaluationBooleanValue(false, current);
       case ts.SyntaxKind.NullKeyword:
         return new EvaluationNullValue(current);
+      case ts.SyntaxKind.ThisKeyword:
+        return environment.readValue('this')
+          ?? this.unknown('`this` is not available in the current static evaluation environment.', current, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
       case ts.SyntaxKind.Identifier:
         return this.evaluateIdentifier(current as ts.Identifier, environment, moduleKey);
       case ts.SyntaxKind.ArrayLiteralExpression:
@@ -542,18 +729,25 @@ export class StaticEvaluator {
       case ts.SyntaxKind.CallExpression:
         return this.evaluateCallExpression(current as ts.CallExpression, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.NewExpression:
-        return this.unknown('New expressions are not executed by static evaluation.', current, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+        return this.evaluateNewExpression(current as ts.NewExpression, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.ArrowFunction:
       case ts.SyntaxKind.FunctionExpression:
         return new EvaluationFunctionValue(current as ts.FunctionLikeDeclaration, environment.clone(`${moduleKey}:closure`), current);
       case ts.SyntaxKind.ClassExpression:
-        return new EvaluationClassValue(current as ts.ClassExpression, environment.clone(`${moduleKey}:class`), current);
+        return new EvaluationClassValue(
+          current as ts.ClassExpression,
+          environment.clone(`${moduleKey}:class`),
+          current,
+          this.readStaticClassProperties(current as ts.ClassExpression, environment, moduleKey, depth + 1),
+        );
       case ts.SyntaxKind.TemplateExpression:
         return this.evaluateTemplateExpression(current as ts.TemplateExpression, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.BinaryExpression:
         return this.evaluateBinaryExpression(current as ts.BinaryExpression, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.PrefixUnaryExpression:
         return this.evaluatePrefixUnaryExpression(current as ts.PrefixUnaryExpression, environment, moduleKey, depth + 1);
+      case ts.SyntaxKind.TypeOfExpression:
+        return this.evaluateTypeOfExpression(current as ts.TypeOfExpression, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.ConditionalExpression:
         return this.evaluateConditionalExpression(current as ts.ConditionalExpression, environment, moduleKey, depth + 1);
       case ts.SyntaxKind.SpreadElement:
@@ -576,12 +770,92 @@ export class StaticEvaluator {
     }
     const value = environment.readValue(identifier.text);
     if (value == null) {
+      const commonJsCarrier = this.evaluateCommonJsCarrierIdentifier(identifier, environment);
+      if (commonJsCarrier != null) {
+        return commonJsCarrier;
+      }
+      const hostValue = this.runtimeHost.resolveIdentifier?.(identifier, environment, moduleKey) ?? null;
+      if (hostValue != null) {
+        return hostValue;
+      }
       return this.unknown(`Identifier '${identifier.text}' is not available in the current environment.`, identifier, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
     }
     if (value.kind === EvaluationValueKind.Unknown && !value.hasOpenSeam) {
       return this.materializeUnknownUse(value, identifier, moduleKey, `Identifier '${identifier.text}' is open in the current environment.`, EvaluationOpenSeamKind.UnresolvedIdentifier);
     }
     return value;
+  }
+
+  private evaluateRegularExpressionLiteral(
+    literal: ts.RegularExpressionLiteral,
+  ): EvaluationValue {
+    const text = literal.getText(literal.getSourceFile());
+    const closingSlash = text.lastIndexOf('/');
+    if (!text.startsWith('/') || closingSlash <= 0) {
+      return new EvaluationRegularExpressionValue(text, '', literal);
+    }
+    return new EvaluationRegularExpressionValue(
+      text.slice(1, closingSlash),
+      text.slice(closingSlash + 1),
+      literal,
+    );
+  }
+
+  private evaluateCommonJsCarrierIdentifier(
+    identifier: ts.Identifier,
+    environment: ModuleEnvironmentRecord,
+  ): EvaluationValue | null {
+    switch (identifier.text) {
+      case 'exports':
+        return this.ensureCommonJsExports(environment, identifier);
+      case 'module':
+        return this.ensureCommonJsModule(environment, identifier);
+      default:
+        return null;
+    }
+  }
+
+  private ensureCommonJsExports(
+    environment: ModuleEnvironmentRecord,
+    node: ts.Node,
+  ): EvaluationObjectValue {
+    const existing = environment.readValue('exports');
+    if (existing?.kind === EvaluationValueKind.Object) {
+      return existing;
+    }
+    const moduleValue = environment.readValue('module');
+    if (moduleValue?.kind === EvaluationValueKind.Object) {
+      const moduleExports = moduleValue.properties.get('exports')?.value;
+      if (moduleExports?.kind === EvaluationValueKind.Object) {
+        environment.initializeBinding('exports', moduleExports, EvaluationBindingKind.CommonJs, false, node);
+        return moduleExports;
+      }
+    }
+    const exportsValue = new EvaluationObjectValue(new Map(), false, node);
+    environment.initializeBinding('exports', exportsValue, EvaluationBindingKind.CommonJs, false, node);
+    if (moduleValue?.kind === EvaluationValueKind.Object) {
+      moduleValue.properties.set('exports', new EvaluationObjectProperty('exports', exportsValue, node));
+    }
+    return exportsValue;
+  }
+
+  private ensureCommonJsModule(
+    environment: ModuleEnvironmentRecord,
+    node: ts.Node,
+  ): EvaluationObjectValue {
+    const existing = environment.readValue('module');
+    if (existing?.kind === EvaluationValueKind.Object) {
+      if (!existing.properties.has('exports')) {
+        existing.properties.set('exports', new EvaluationObjectProperty('exports', this.ensureCommonJsExports(environment, node), node));
+      }
+      return existing;
+    }
+    const exportsValue = this.ensureCommonJsExports(environment, node);
+    const moduleValue = new EvaluationObjectValue(new Map([
+      ['exports', new EvaluationObjectProperty('exports', exportsValue, node)],
+    ]), false, node);
+    environment.initializeBinding('module', moduleValue, EvaluationBindingKind.CommonJs, false, node);
+    return moduleValue;
   }
 
   private evaluateArrayLiteral(
@@ -599,6 +873,10 @@ export class StaticEvaluator {
       }
       if (ts.isSpreadElement(element)) {
         const spread = this.evaluateExpression(element.expression, environment, moduleKey, depth + 1);
+        if (spread.kind === EvaluationValueKind.BoundaryValue) {
+          mayHaveUnknownElements = true;
+          continue;
+        }
         if (spread.kind === EvaluationValueKind.Array) {
           elements.push(...spread.elements);
           mayHaveUnknownElements ||= spread.mayHaveUnknownElements;
@@ -647,6 +925,10 @@ export class StaticEvaluator {
       }
       if (ts.isSpreadAssignment(property)) {
         const spread = this.evaluateExpression(property.expression, environment, moduleKey, depth + 1);
+        if (spread.kind === EvaluationValueKind.BoundaryValue || spread.kind === EvaluationValueKind.BoundaryObject) {
+          mayHaveUnknownProperties = true;
+          continue;
+        }
         if (spread.kind === EvaluationValueKind.Object) {
           for (const [name, entry] of spread.properties) {
             properties.set(name, entry);
@@ -678,6 +960,126 @@ export class StaticEvaluator {
     return new EvaluationObjectValue(properties, mayHaveUnknownProperties, literal);
   }
 
+  private readStaticClassProperties(
+    declaration: ts.ClassLikeDeclaration,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+    depth: number,
+  ): Map<string, EvaluationObjectProperty> {
+    const properties = new Map<string, EvaluationObjectProperty>();
+    for (const member of declaration.members) {
+      if (!hasModifier(member, ts.SyntaxKind.StaticKeyword)) {
+        continue;
+      }
+      if (
+        !ts.isMethodDeclaration(member)
+        && !ts.isPropertyDeclaration(member)
+        && !ts.isGetAccessorDeclaration(member)
+      ) {
+        continue;
+      }
+      const name = this.readPropertyName(member.name, environment, moduleKey, depth + 1);
+      if (name == null) {
+        continue;
+      }
+      if (ts.isMethodDeclaration(member) || ts.isGetAccessorDeclaration(member)) {
+        properties.set(name, new EvaluationObjectProperty(
+          name,
+          new EvaluationFunctionValue(member, environment.clone(`${moduleKey}:static:${name}`), member),
+          member,
+        ));
+        continue;
+      }
+      if (member.initializer != null) {
+        properties.set(name, new EvaluationObjectProperty(
+          name,
+          this.evaluateExpression(member.initializer, environment, moduleKey, depth + 1),
+          member,
+        ));
+      }
+    }
+    return properties;
+  }
+
+  private readInstanceClassProperties(
+    declaration: ts.ClassLikeDeclaration,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+    depth: number,
+    properties: Map<string, EvaluationObjectProperty>,
+  ): void {
+    for (const member of declaration.members) {
+      if (hasModifier(member, ts.SyntaxKind.StaticKeyword) || hasModifier(member, ts.SyntaxKind.DeclareKeyword)) {
+        continue;
+      }
+      if (
+        !ts.isMethodDeclaration(member)
+        && !ts.isPropertyDeclaration(member)
+        && !ts.isGetAccessorDeclaration(member)
+      ) {
+        continue;
+      }
+      const name = this.readPropertyName(member.name, environment, moduleKey, depth + 1);
+      if (name == null) {
+        continue;
+      }
+      if (ts.isMethodDeclaration(member) || ts.isGetAccessorDeclaration(member)) {
+        properties.set(name, new EvaluationObjectProperty(
+          name,
+          new EvaluationFunctionValue(member, environment.clone(`${moduleKey}:instance:${name}`), member),
+          member,
+        ));
+        continue;
+      }
+      properties.set(name, new EvaluationObjectProperty(
+        name,
+        member.initializer == null
+          ? EvaluationUndefined
+          : this.evaluateExpression(member.initializer, environment, moduleKey, depth + 1),
+        member,
+      ));
+    }
+  }
+
+  private initializeFunctionParameters(
+    declaration: ts.FunctionLikeDeclaration,
+    argumentValues: readonly EvaluationValue[],
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+    call: ts.Node,
+  ): boolean {
+    for (let index = 0; index < declaration.parameters.length; index++) {
+      const parameter = declaration.parameters[index];
+      if (parameter == null || !ts.isIdentifier(parameter.name)) {
+        this.unknown('Function or constructor parameter binding is not an identifier.', call, moduleKey, EvaluationOpenSeamKind.UnsupportedBindingPattern);
+        return false;
+      }
+      const value = argumentValues[index] ?? EvaluationUndefined;
+      environment.initializeBinding(parameter.name.text, value, EvaluationBindingKind.Parameter, true, parameter);
+    }
+    return true;
+  }
+
+  private applyConstructorParameterProperties(
+    declaration: ts.ConstructorDeclaration,
+    argumentValues: readonly EvaluationValue[],
+    instance: EvaluationInstanceValue,
+    node: ts.Node,
+  ): void {
+    for (let index = 0; index < declaration.parameters.length; index++) {
+      const parameter = declaration.parameters[index];
+      if (parameter == null || !ts.isIdentifier(parameter.name) || !isParameterProperty(parameter)) {
+        continue;
+      }
+      const name = parameter.name.text;
+      instance.properties.set(name, new EvaluationObjectProperty(
+        name,
+        argumentValues[index] ?? EvaluationUndefined,
+        node,
+      ));
+    }
+  }
+
   private evaluatePropertyAccess(
     expression: ts.PropertyAccessExpression,
     environment: ModuleEnvironmentRecord,
@@ -685,20 +1087,73 @@ export class StaticEvaluator {
     depth: number,
   ): EvaluationValue {
     const receiver = this.evaluateExpression(expression.expression, environment, moduleKey, depth + 1);
+    if (hasQuestionDotToken(expression) && isNullishEvaluationValue(receiver)) {
+      return new EvaluationUndefinedValue(expression);
+    }
     if (receiver.kind === EvaluationValueKind.Unknown) {
       return this.materializeUnknownUse(receiver, expression, moduleKey, `Property access '${expression.name.text}' depended on an open receiver.`, EvaluationOpenSeamKind.UnresolvedIdentifier);
     }
-    if (receiver.kind === EvaluationValueKind.Object) {
-      return receiver.properties.get(expression.name.text)?.value
-        ?? this.unknown(`Object property '${expression.name.text}' was not known.`, expression.name, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+    return this.evaluatePropertyValueCore(receiver, expression.name.text, expression, moduleKey, depth + 1);
+  }
+
+  private evaluatePropertyValueCore(
+    receiver: EvaluationValue,
+    propertyName: string,
+    node: ts.Node,
+    moduleKey: string,
+    depth: number,
+  ): EvaluationValue {
+    const ownProperty = this.readOwnProperty(receiver, propertyName);
+    if (ownProperty != null) {
+      if (ts.isGetAccessorDeclaration(ownProperty.node) && ownProperty.value.kind === EvaluationValueKind.Function) {
+        return this.evaluateFunctionWithArguments(
+          ownProperty.value,
+          node,
+          [],
+          moduleKey,
+          depth + 1,
+          receiver,
+        );
+      }
+      return ownProperty.value;
     }
-    if (receiver.kind === EvaluationValueKind.Array && expression.name.text === 'length') {
-      return new EvaluationNumberValue(receiver.elements.length, expression);
+    if (receiver.kind === EvaluationValueKind.BoundaryObject) {
+      return new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}.${propertyName}`, node);
     }
-    if (receiver.kind === EvaluationValueKind.String && expression.name.text === 'length') {
-      return new EvaluationNumberValue(receiver.value.length, expression);
+    if (receiver.kind === EvaluationValueKind.BoundaryValue) {
+      return new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}.${propertyName}`, node);
     }
-    return this.unknown(`Property access '${expression.name.text}' did not close over a known receiver.`, expression, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+    if (
+      receiver.kind === EvaluationValueKind.Object
+      || receiver.kind === EvaluationValueKind.Function
+      || receiver.kind === EvaluationValueKind.Class
+      || receiver.kind === EvaluationValueKind.Instance
+    ) {
+      return this.unknown(`Object property '${propertyName}' was not known.`, node, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+    }
+    if (receiver.kind === EvaluationValueKind.ModuleNamespace) {
+      return receiver.exports.get(propertyName)
+        ?? this.unknown(`Module namespace export '${propertyName}' was not known.`, node, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+    }
+    if (receiver.kind === EvaluationValueKind.Array && isKnownArrayPrototypeFunction(propertyName)) {
+      return new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, `Array.prototype.${propertyName}`, node);
+    }
+    if (receiver.kind === EvaluationValueKind.String && isKnownStringPrototypeFunction(propertyName)) {
+      return new EvaluationBoundaryValue(EvaluationBoundaryKind.HostEnvironment, `String.prototype.${propertyName}`, node);
+    }
+    if (receiver.kind === EvaluationValueKind.Array && propertyName === 'length') {
+      return new EvaluationNumberValue(receiver.elements.length, node);
+    }
+    if (receiver.kind === EvaluationValueKind.Set && propertyName === 'size' && !receiver.weak) {
+      return new EvaluationNumberValue(receiver.elements.length, node);
+    }
+    if (receiver.kind === EvaluationValueKind.Map && propertyName === 'size' && !receiver.weak) {
+      return new EvaluationNumberValue(receiver.entries.length, node);
+    }
+    if (receiver.kind === EvaluationValueKind.String && propertyName === 'length') {
+      return new EvaluationNumberValue(receiver.value.length, node);
+    }
+    return this.unknown(`Property access '${propertyName}' did not close over a known receiver.`, node, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
   }
 
   private evaluateElementAccess(
@@ -708,6 +1163,9 @@ export class StaticEvaluator {
     depth: number,
   ): EvaluationValue {
     const receiver = this.evaluateExpression(expression.expression, environment, moduleKey, depth + 1);
+    if (hasQuestionDotToken(expression) && isNullishEvaluationValue(receiver)) {
+      return new EvaluationUndefinedValue(expression);
+    }
     const argument = expression.argumentExpression == null
       ? null
       : this.evaluateExpression(expression.argumentExpression, environment, moduleKey, depth + 1);
@@ -721,13 +1179,37 @@ export class StaticEvaluator {
       return this.unknown('Element access had no argument expression.', expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
     }
     if (receiver.kind === EvaluationValueKind.Array && argument.kind === EvaluationValueKind.Number) {
+      if (receiver.mayHaveUnknownOrder) {
+        return this.unknown(`Array index ${argument.value} depends on an unknown element order.`, expression, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+      }
       return receiver.elements.at(argument.value)?.value
         ?? this.unknown(`Array index ${argument.value} is not known.`, expression, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
     }
-    if (receiver.kind === EvaluationValueKind.Object && (argument.kind === EvaluationValueKind.String || argument.kind === EvaluationValueKind.Number)) {
+    if (argument.kind === EvaluationValueKind.String || argument.kind === EvaluationValueKind.Number) {
       const name = String(argument.value);
-      return receiver.properties.get(name)?.value
-        ?? this.unknown(`Object property '${name}' is not known.`, expression, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+      const ownProperty = this.readOwnProperty(receiver, name);
+      if (ownProperty != null) {
+        return ownProperty.value;
+      }
+      if (receiver.kind === EvaluationValueKind.BoundaryObject) {
+        return new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}[${JSON.stringify(name)}]`, expression);
+      }
+      if (receiver.kind === EvaluationValueKind.BoundaryValue) {
+        return new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}[${JSON.stringify(name)}]`, expression);
+      }
+      if (
+        receiver.kind === EvaluationValueKind.Object
+        || receiver.kind === EvaluationValueKind.Function
+        || receiver.kind === EvaluationValueKind.Class
+        || receiver.kind === EvaluationValueKind.Instance
+      ) {
+        return this.unknown(`Object property '${name}' is not known.`, expression, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
+      }
+    }
+    if (receiver.kind === EvaluationValueKind.ModuleNamespace && (argument.kind === EvaluationValueKind.String || argument.kind === EvaluationValueKind.Number)) {
+      const name = String(argument.value);
+      return receiver.exports.get(name)
+        ?? this.unknown(`Module namespace export '${name}' is not known.`, expression, moduleKey, EvaluationOpenSeamKind.UnresolvedIdentifier);
     }
     return this.unknown('Element access did not close over a known receiver and key.', expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
   }
@@ -742,15 +1224,75 @@ export class StaticEvaluator {
     if (intrinsic != null) {
       return intrinsic;
     }
+    const functionPrototypeCall = this.evaluateFunctionPrototypeCall(call, environment, moduleKey, depth + 1);
+    if (functionPrototypeCall != null) {
+      return functionPrototypeCall;
+    }
 
     const callee = this.evaluateExpression(call.expression, environment, moduleKey, depth + 1);
+    if (hasQuestionDotToken(call) && isNullishEvaluationValue(callee)) {
+      return new EvaluationUndefinedValue(call);
+    }
     if (callee.kind === EvaluationValueKind.Unknown) {
       return this.materializeUnknownUse(callee, call, moduleKey, 'Call expression depended on an open callee.', EvaluationOpenSeamKind.DynamicCall);
+    }
+    if (callee.kind === EvaluationValueKind.BoundaryValue) {
+      return boundaryDependencyValue(call, callee);
     }
     if (callee.kind === EvaluationValueKind.Function) {
       return this.evaluateFunctionCall(callee, call, environment, moduleKey, depth + 1);
     }
     return this.unknown('Call expression is not a known intrinsic or simple local function.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+
+  private evaluateFunctionPrototypeCall(
+    call: ts.CallExpression,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+    depth: number,
+  ): EvaluationValue | null {
+    const expression = skipStaticOuterExpression(call.expression);
+    if (
+      !ts.isPropertyAccessExpression(expression)
+      || expression.name.text !== 'call'
+    ) {
+      return null;
+    }
+    const receiver = this.evaluateExpression(expression.expression, environment, moduleKey, depth + 1);
+    if (receiver.kind === EvaluationValueKind.Unknown) {
+      return this.materializeUnknownUse(
+        receiver,
+        call,
+        moduleKey,
+        'Function.prototype.call depended on an open receiver.',
+        EvaluationOpenSeamKind.DynamicCall,
+      );
+    }
+    if (receiver.kind === EvaluationValueKind.BoundaryValue) {
+      return boundaryDependencyValue(call, receiver);
+    }
+    if (receiver.kind !== EvaluationValueKind.Function) {
+      return this.unknown(
+        'Function.prototype.call receiver did not reduce to a known function.',
+        call,
+        moduleKey,
+        EvaluationOpenSeamKind.DynamicCall,
+      );
+    }
+    const thisValue = call.arguments[0] == null
+      ? EvaluationUndefined
+      : this.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
+    const argumentValues = call.arguments
+      .slice(1)
+      .map((argument) => this.evaluateExpression(argument, environment, moduleKey, depth + 1));
+    return this.evaluateFunctionWithArguments(
+      receiver,
+      call,
+      argumentValues,
+      moduleKey,
+      depth + 1,
+      thisValue,
+    );
   }
 
   private evaluateKnownIntrinsic(
@@ -759,47 +1301,100 @@ export class StaticEvaluator {
     moduleKey: string,
     depth: number,
   ): EvaluationValue | null {
-    const calleeText = readCalleeText(call.expression);
-    if (calleeText === 'Object.freeze' && call.arguments[0] != null) {
-      return this.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
-    }
-    if (calleeText === 'Object.assign') {
-      return this.evaluateObjectAssign(call, environment, moduleKey, depth + 1);
-    }
-    if (calleeText === 'Array.of') {
-      return new EvaluationArrayValue(
-        call.arguments.map((argument) => new EvaluationArrayElement(
-          this.evaluateExpression(argument, environment, moduleKey, depth + 1),
-          argument,
-        )),
-        false,
-        call,
-      );
-    }
-    return null;
+    return evaluateStaticIntrinsic(call, environment, moduleKey, depth, this.intrinsicHost());
   }
 
-  private evaluateObjectAssign(
-    call: ts.CallExpression,
+  private evaluateNewExpression(
+    expression: ts.NewExpression,
     environment: ModuleEnvironmentRecord,
     moduleKey: string,
     depth: number,
   ): EvaluationValue {
-    const properties = new Map<string, EvaluationObjectProperty>();
-    let mayHaveUnknownProperties = false;
-    for (const argument of call.arguments) {
-      const value = this.evaluateExpression(argument, environment, moduleKey, depth + 1);
-      if (value.kind !== EvaluationValueKind.Object) {
-        mayHaveUnknownProperties = true;
-        this.open(EvaluationOpenSeamKind.DynamicMutation, 'Object.assign argument did not reduce to a known object.', argument, moduleKey);
-        continue;
-      }
-      for (const [name, property] of value.properties) {
-        properties.set(name, property);
-      }
-      mayHaveUnknownProperties ||= value.mayHaveUnknownProperties;
+    const host = this.intrinsicHost();
+    const hostValue = this.runtimeHost.evaluateNewExpression?.(expression, environment, moduleKey, depth, host) ?? null;
+    if (hostValue != null) {
+      return hostValue;
     }
-    return new EvaluationObjectValue(properties, mayHaveUnknownProperties, call);
+    const intrinsic = evaluateStaticConstructor(expression, environment, moduleKey, depth, host);
+    if (intrinsic != null) {
+      return intrinsic;
+    }
+
+    const callee = this.evaluateExpression(expression.expression, environment, moduleKey, depth + 1);
+    if (callee.kind === EvaluationValueKind.Unknown) {
+      return this.materializeUnknownUse(callee, expression, moduleKey, 'New expression depended on an open constructor.', EvaluationOpenSeamKind.DynamicCall);
+    }
+    if (callee.kind === EvaluationValueKind.BoundaryValue) {
+      return boundaryDependencyValue(expression, callee);
+    }
+    if (callee.kind === EvaluationValueKind.Class) {
+      const argumentValues = (expression.arguments ?? []).map((argument) =>
+        this.evaluateExpression(argument, environment, moduleKey, depth + 1)
+      );
+      return this.evaluateClassInstantiation(callee, expression, argumentValues, moduleKey, depth + 1);
+    }
+    return this.unknown('New expression is not a known intrinsic or static constructor.', expression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+
+  private evaluateClassInstantiation(
+    callee: EvaluationClassValue,
+    expression: ts.Node,
+    argumentValues: readonly EvaluationValue[],
+    moduleKey: string,
+    depth: number,
+  ): EvaluationValue {
+    const instance = new EvaluationInstanceValue(callee, new Map(), false, expression);
+    const instanceEnvironment = callee.environment.clone(`${moduleKey}:new:${expression.getStart()}`) as ModuleEnvironmentRecord;
+    instanceEnvironment.initializeBinding('this', instance, EvaluationBindingKind.Parameter, false, expression);
+
+    const constructor = callee.declaration.members.find(ts.isConstructorDeclaration) ?? null;
+    if (constructor != null) {
+      this.initializeFunctionParameters(constructor, argumentValues, instanceEnvironment, moduleKey, expression);
+    }
+
+    this.readInstanceClassProperties(callee.declaration, instanceEnvironment, moduleKey, depth + 1, instance.properties);
+
+    if (constructor != null) {
+      this.applyConstructorParameterProperties(constructor, argumentValues, instance, expression);
+      if (constructor.body != null) {
+        const completion = this.evaluateBlock(constructor.body, instanceEnvironment, moduleKey, depth + 1);
+        if (completion.kind === EvaluationCompletionKind.Return && isObjectReturningConstructorValue(completion.value)) {
+          return completion.value;
+        }
+        if (completion.kind === EvaluationCompletionKind.Throw) {
+          return this.unknown('Class constructor threw during static evaluation.', expression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+        }
+        if (completion.kind === EvaluationCompletionKind.Break || completion.kind === EvaluationCompletionKind.Continue) {
+          return this.unknown('Class constructor control flow did not complete normally.', expression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+        }
+      }
+    }
+
+    return instance;
+  }
+
+  private intrinsicHost(): StaticIntrinsicEvaluationHost {
+    return {
+      evaluateExpression: (expression, currentEnvironment, currentModuleKey, currentDepth) =>
+        this.evaluateExpression(expression, currentEnvironment, currentModuleKey, currentDepth),
+      evaluateFunctionWithArguments: (callee, currentCall, argumentValues, currentModuleKey, currentDepth) =>
+        this.evaluateFunctionWithArguments(callee, currentCall, argumentValues, currentModuleKey, currentDepth),
+      open: (seamKind, summary, node, currentModuleKey) =>
+        this.open(seamKind, summary, node, currentModuleKey),
+      unknown: (reason, node, currentModuleKey, seamKind) =>
+        this.unknown(reason, node, currentModuleKey, seamKind),
+      markOpenSeams: () =>
+        this.openSeams.length,
+      restoreOpenSeams: (mark) => {
+        this.openSeams.splice(mark);
+      },
+      resolveCommonJsRequire: (currentModuleKey, moduleSpecifier, node) =>
+        this.runtimeHost.resolveCommonJsRequire?.(currentModuleKey, moduleSpecifier, node) ?? null,
+      resolveDynamicImport: (currentModuleKey, moduleSpecifier, node) =>
+        this.runtimeHost.resolveDynamicImport?.(currentModuleKey, moduleSpecifier, node) ?? null,
+      evaluateCallExpression: (currentCall, currentEnvironment, currentModuleKey, currentDepth, currentHost) =>
+        this.runtimeHost.evaluateCallExpression?.(currentCall, currentEnvironment, currentModuleKey, currentDepth, currentHost) ?? null,
+    };
   }
 
   private evaluateFunctionCall(
@@ -809,20 +1404,47 @@ export class StaticEvaluator {
     moduleKey: string,
     depth: number,
   ): EvaluationValue {
-    if (callee.declaration.asteriskToken != null || callee.declaration.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword) === true) {
-      return this.unknown('Async and generator functions are not evaluated.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+    return this.evaluateFunctionWithArguments(
+      callee,
+      call,
+      call.arguments.map((argument) => this.evaluateExpression(argument, environment, moduleKey, depth + 1)),
+      moduleKey,
+      depth + 1,
+    );
+  }
+
+  private evaluateFunctionWithArguments(
+    callee: EvaluationFunctionValue,
+    call: ts.Node,
+    argumentValues: readonly EvaluationValue[],
+    moduleKey: string,
+    depth: number,
+    thisValue: EvaluationValue | null = null,
+  ): EvaluationValue {
+    if (callee.declaration.asteriskToken != null) {
+      return this.unknown('Generator functions are not evaluated.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+    }
+    if (isAsyncFunctionLike(callee.declaration)) {
+      return new EvaluationPromiseValue(
+        new EvaluationBoundaryValue(
+          EvaluationBoundaryKind.AsyncExecution,
+          asyncFunctionBoundaryPath(callee.declaration),
+          call,
+        ),
+        call,
+      );
     }
 
     const callEnvironment = callee.environment.clone(`${moduleKey}:call:${call.getStart()}`) as ModuleEnvironmentRecord;
+    if (thisValue != null) {
+      callEnvironment.initializeBinding('this', thisValue, EvaluationBindingKind.Parameter, true, call);
+    }
     for (let index = 0; index < callee.declaration.parameters.length; index++) {
       const parameter = callee.declaration.parameters[index];
       if (parameter == null || !ts.isIdentifier(parameter.name)) {
         return this.unknown('Function call parameter binding is not an identifier.', call, moduleKey, EvaluationOpenSeamKind.UnsupportedBindingPattern);
       }
-      const argument = call.arguments[index];
-      const value = argument == null
-        ? EvaluationUndefined
-        : this.evaluateExpression(argument, environment, moduleKey, depth + 1);
+      const value = argumentValues[index] ?? EvaluationUndefined;
       callEnvironment.initializeBinding(parameter.name.text, value, EvaluationBindingKind.Parameter, true, parameter);
     }
 
@@ -855,6 +1477,9 @@ export class StaticEvaluator {
       const value = this.evaluateExpression(span.expression, environment, moduleKey, depth + 1);
       if (value.kind === EvaluationValueKind.Unknown) {
         return this.materializeUnknownUse(value, span.expression, moduleKey, 'Template expression span depended on an open value.', EvaluationOpenSeamKind.UnsupportedExpression);
+      }
+      if (value.kind === EvaluationValueKind.BoundaryValue) {
+        return boundaryDependencyValue(expression, value);
       }
       if (!isEvaluationPrimitiveValue(value)) {
         return this.unknown('Template expression span did not reduce to a primitive value.', span.expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
@@ -894,6 +1519,9 @@ export class StaticEvaluator {
     if (right.kind === EvaluationValueKind.Unknown) {
       return this.materializeUnknownUse(right, expression, moduleKey, 'Binary expression depended on an open right operand.', EvaluationOpenSeamKind.UnsupportedExpression);
     }
+    if (left.kind === EvaluationValueKind.BoundaryValue || right.kind === EvaluationValueKind.BoundaryValue) {
+      return boundaryDependencyValue(expression, left, right);
+    }
     return evaluateBinaryOperator(expression.operatorToken.kind, left, right, expression)
       ?? this.unknown(`Binary operator ${tokenName(expression.operatorToken.kind)} did not close over known operands.`, expression, moduleKey, EvaluationOpenSeamKind.UnsupportedExpression);
   }
@@ -907,6 +1535,9 @@ export class StaticEvaluator {
     const left = this.evaluateExpression(expression.left, environment, moduleKey, depth + 1);
     if (left.kind === EvaluationValueKind.Unknown) {
       return this.materializeUnknownUse(left, expression, moduleKey, 'Short-circuit expression depended on an open left operand.', EvaluationOpenSeamKind.DynamicBranch);
+    }
+    if (left.kind === EvaluationValueKind.BoundaryValue) {
+      return boundaryDependencyValue(expression, left);
     }
     if (expression.operatorToken.kind === ts.SyntaxKind.QuestionQuestionToken) {
       if (left.kind === EvaluationValueKind.Null || left.kind === EvaluationValueKind.Undefined) {
@@ -933,6 +1564,9 @@ export class StaticEvaluator {
     const operand = this.evaluateExpression(expression.operand, environment, moduleKey, depth + 1);
     if (operand.kind === EvaluationValueKind.Unknown) {
       return this.materializeUnknownUse(operand, expression, moduleKey, 'Unary expression depended on an open operand.', EvaluationOpenSeamKind.UnsupportedExpression);
+    }
+    if (operand.kind === EvaluationValueKind.BoundaryValue) {
+      return boundaryDependencyValue(expression, operand);
     }
     switch (expression.operator) {
       case ts.SyntaxKind.ExclamationToken: {
@@ -963,6 +1597,69 @@ export class StaticEvaluator {
     }
   }
 
+  private evaluateTypeOfExpression(
+    expression: ts.TypeOfExpression,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+    depth: number,
+  ): EvaluationValue {
+    const operandExpression = skipStaticOuterExpression(expression.expression);
+    const operand = ts.isIdentifier(operandExpression)
+      ? this.evaluateTypeOfIdentifier(operandExpression, environment, moduleKey)
+      : this.evaluateExpression(operandExpression, environment, moduleKey, depth + 1);
+    if (operand.kind === EvaluationValueKind.Unknown) {
+      return this.materializeUnknownUse(
+        operand,
+        expression,
+        moduleKey,
+        'typeof depended on an open value.',
+        EvaluationOpenSeamKind.UnsupportedExpression,
+      );
+    }
+    switch (operand.kind) {
+      case EvaluationValueKind.Undefined:
+        return new EvaluationStringValue('undefined', expression);
+      case EvaluationValueKind.Boolean:
+        return new EvaluationStringValue('boolean', expression);
+      case EvaluationValueKind.Number:
+        return new EvaluationStringValue('number', expression);
+      case EvaluationValueKind.BigInt:
+        return new EvaluationStringValue('bigint', expression);
+      case EvaluationValueKind.String:
+        return new EvaluationStringValue('string', expression);
+      case EvaluationValueKind.Function:
+      case EvaluationValueKind.Class:
+        return new EvaluationStringValue('function', expression);
+      case EvaluationValueKind.Null:
+      case EvaluationValueKind.Array:
+      case EvaluationValueKind.Set:
+      case EvaluationValueKind.Map:
+      case EvaluationValueKind.Object:
+      case EvaluationValueKind.BoundaryObject:
+      case EvaluationValueKind.RegularExpression:
+      case EvaluationValueKind.Instance:
+      case EvaluationValueKind.ModuleNamespace:
+      case EvaluationValueKind.Promise:
+        return new EvaluationStringValue('object', expression);
+      case EvaluationValueKind.BoundaryValue:
+        return new EvaluationUnknownValue(`typeof ${operand.path} depends on host environment state.`, expression, true);
+    }
+  }
+
+  private evaluateTypeOfIdentifier(
+    identifier: ts.Identifier,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+  ): EvaluationValue {
+    if (identifier.text === 'undefined') {
+      return EvaluationUndefined;
+    }
+    const value = environment.readValue(identifier.text)
+      ?? this.runtimeHost.resolveIdentifier?.(identifier, environment, moduleKey)
+      ?? null;
+    return value ?? EvaluationUndefined;
+  }
+
   private evaluateConditionalExpression(
     expression: ts.ConditionalExpression,
     environment: ModuleEnvironmentRecord,
@@ -972,6 +1669,9 @@ export class StaticEvaluator {
     const condition = this.evaluateExpression(expression.condition, environment, moduleKey, depth + 1);
     if (condition.kind === EvaluationValueKind.Unknown) {
       return this.materializeUnknownUse(condition, expression.condition, moduleKey, 'Conditional expression depended on an open condition.', EvaluationOpenSeamKind.DynamicBranch);
+    }
+    if (condition.kind === EvaluationValueKind.BoundaryValue) {
+      return boundaryDependencyValue(expression, condition);
     }
     const truthy = readEvaluationTruthiness(condition);
     if (truthy == null) {
@@ -999,12 +1699,110 @@ export class StaticEvaluator {
     }
     if (ts.isPropertyAccessExpression(left)) {
       const receiver = this.evaluateExpression(left.expression, environment, moduleKey, depth + 1);
-      if (receiver.kind === EvaluationValueKind.Object) {
-        receiver.properties.set(left.name.text, new EvaluationObjectProperty(left.name.text, value, expression));
+      if (this.writeOwnProperty(receiver, left.name.text, value, expression)) {
+        return value;
+      }
+      if (receiver.kind === EvaluationValueKind.BoundaryValue) {
         return value;
       }
     }
+    if (ts.isElementAccessExpression(left)) {
+      const receiver = this.evaluateExpression(left.expression, environment, moduleKey, depth + 1);
+      const argument = left.argumentExpression == null
+        ? null
+        : this.evaluateExpression(left.argumentExpression, environment, moduleKey, depth + 1);
+      if (receiver.kind === EvaluationValueKind.Unknown) {
+        return this.materializeUnknownUse(receiver, left.expression, moduleKey, 'Element assignment depended on an open receiver.', EvaluationOpenSeamKind.DynamicMutation);
+      }
+      if (argument?.kind === EvaluationValueKind.Unknown) {
+        return this.materializeUnknownUse(argument, left.argumentExpression ?? left, moduleKey, 'Element assignment depended on an open key.', EvaluationOpenSeamKind.DynamicMutation);
+      }
+      if (receiver.kind === EvaluationValueKind.BoundaryValue || argument?.kind === EvaluationValueKind.BoundaryValue) {
+        return value;
+      }
+      if (argument?.kind === EvaluationValueKind.String || argument?.kind === EvaluationValueKind.Number) {
+        const name = String(argument.value);
+        if (this.writeOwnProperty(receiver, name, value, expression)) {
+          return value;
+        }
+      }
+    }
     return this.unknown('Assignment target is not a supported identifier or object property.', expression.left, moduleKey, EvaluationOpenSeamKind.DynamicMutation);
+  }
+
+  private readOwnProperty(
+    receiver: EvaluationValue,
+    name: string,
+  ): EvaluationObjectProperty | null {
+    switch (receiver.kind) {
+      case EvaluationValueKind.Object:
+      case EvaluationValueKind.BoundaryObject:
+      case EvaluationValueKind.Function:
+      case EvaluationValueKind.Class:
+      case EvaluationValueKind.Instance:
+        return receiver.properties.get(name) ?? null;
+      case EvaluationValueKind.RegularExpression:
+        return this.readRegularExpressionProperty(receiver, name);
+      default:
+        return null;
+    }
+  }
+
+  private readRegularExpressionProperty(
+    receiver: EvaluationRegularExpressionValue,
+    name: string,
+  ): EvaluationObjectProperty | null {
+    const node = receiver.node;
+    if (node == null) {
+      return null;
+    }
+    switch (name) {
+      case 'source':
+        return new EvaluationObjectProperty(name, new EvaluationStringValue(receiver.pattern, node), node);
+      case 'flags':
+        return new EvaluationObjectProperty(name, new EvaluationStringValue(receiver.flags, node), node);
+      case 'global':
+        return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('g'), node), node);
+      case 'ignoreCase':
+        return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('i'), node), node);
+      case 'multiline':
+        return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('m'), node), node);
+      case 'dotAll':
+        return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('s'), node), node);
+      case 'unicode':
+        return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('u'), node), node);
+      case 'unicodeSets':
+        return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('v'), node), node);
+      case 'sticky':
+        return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('y'), node), node);
+      case 'hasIndices':
+        return new EvaluationObjectProperty(name, new EvaluationBooleanValue(receiver.flags.includes('d'), node), node);
+      case 'lastIndex':
+        return new EvaluationObjectProperty(name, new EvaluationNumberValue(0, node), node);
+      default:
+        return null;
+    }
+  }
+
+  private writeOwnProperty(
+    receiver: EvaluationValue,
+    name: string,
+    value: EvaluationValue,
+    node: ts.Node,
+  ): boolean {
+    switch (receiver.kind) {
+      case EvaluationValueKind.Object:
+      case EvaluationValueKind.BoundaryObject:
+      case EvaluationValueKind.Function:
+      case EvaluationValueKind.Class:
+      case EvaluationValueKind.Instance:
+        receiver.properties.set(name, new EvaluationObjectProperty(name, value, node));
+        return true;
+      case EvaluationValueKind.BoundaryValue:
+        return false;
+      default:
+        return false;
+    }
   }
 
   private unsupportedStatement(statement: ts.Statement, moduleKey: string, summary: string): EvaluationCompletion {
@@ -1104,18 +1902,6 @@ function declarationListBindingKind(list: ts.VariableDeclarationList): Evaluatio
   return EvaluationBindingKind.Var;
 }
 
-function readCalleeText(expression: ts.Expression): string | null {
-  const current = skipStaticOuterExpression(expression);
-  if (ts.isIdentifier(current)) {
-    return current.text;
-  }
-  if (ts.isPropertyAccessExpression(current)) {
-    const left = readCalleeText(current.expression);
-    return left == null ? current.name.text : `${left}.${current.name.text}`;
-  }
-  return null;
-}
-
 function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
   return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
 }
@@ -1126,6 +1912,15 @@ function evaluateBinaryOperator(
   right: EvaluationValue,
   node: ts.Node,
 ): EvaluationValue | null {
+  switch (operator) {
+    case ts.SyntaxKind.EqualsEqualsToken:
+    case ts.SyntaxKind.EqualsEqualsEqualsToken:
+      return new EvaluationBooleanValue(evaluationValuesEqual(left, right), node);
+    case ts.SyntaxKind.ExclamationEqualsToken:
+    case ts.SyntaxKind.ExclamationEqualsEqualsToken:
+      return new EvaluationBooleanValue(!evaluationValuesEqual(left, right), node);
+  }
+
   if (!isEvaluationPrimitiveValue(left) || !isEvaluationPrimitiveValue(right)) {
     return null;
   }
@@ -1160,12 +1955,6 @@ function evaluateBinaryOperator(
       return typeof leftPrimitive === 'number' && typeof rightPrimitive === 'number'
         ? new EvaluationNumberValue(leftPrimitive ** rightPrimitive, node)
         : null;
-    case ts.SyntaxKind.EqualsEqualsToken:
-    case ts.SyntaxKind.EqualsEqualsEqualsToken:
-      return new EvaluationBooleanValue(leftPrimitive === rightPrimitive, node);
-    case ts.SyntaxKind.ExclamationEqualsToken:
-    case ts.SyntaxKind.ExclamationEqualsEqualsToken:
-      return new EvaluationBooleanValue(leftPrimitive !== rightPrimitive, node);
     case ts.SyntaxKind.LessThanToken:
       return typeof leftPrimitive === 'number' && typeof rightPrimitive === 'number'
         ? new EvaluationBooleanValue(leftPrimitive < rightPrimitive, node)
@@ -1187,12 +1976,106 @@ function evaluateBinaryOperator(
   }
 }
 
-function tokenName(kind: ts.SyntaxKind): string {
-  return ts.tokenToString(kind) ?? ts.SyntaxKind[kind] ?? String(kind);
+function isObjectReturningConstructorValue(value: EvaluationValue): boolean {
+  switch (value.kind) {
+    case EvaluationValueKind.Object:
+    case EvaluationValueKind.BoundaryObject:
+    case EvaluationValueKind.Function:
+    case EvaluationValueKind.Class:
+    case EvaluationValueKind.Instance:
+    case EvaluationValueKind.Array:
+    case EvaluationValueKind.Set:
+    case EvaluationValueKind.Map:
+    case EvaluationValueKind.RegularExpression:
+    case EvaluationValueKind.ModuleNamespace:
+    case EvaluationValueKind.Promise:
+      return true;
+    case EvaluationValueKind.BoundaryValue:
+    case EvaluationValueKind.Unknown:
+    case EvaluationValueKind.Undefined:
+    case EvaluationValueKind.Null:
+    case EvaluationValueKind.Boolean:
+    case EvaluationValueKind.Number:
+    case EvaluationValueKind.BigInt:
+    case EvaluationValueKind.String:
+      return false;
+  }
 }
 
-function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
-  return ts.canHaveModifiers(node)
-    ? ts.getModifiers(node)?.some((modifier) => modifier.kind === kind) ?? false
-    : false;
+function hasQuestionDotToken(node: ts.Node): boolean {
+  return (node as { readonly questionDotToken?: ts.QuestionDotToken }).questionDotToken != null;
+}
+
+function isNullishEvaluationValue(value: EvaluationValue): boolean {
+  return value.kind === EvaluationValueKind.Null || value.kind === EvaluationValueKind.Undefined;
+}
+
+function isAsyncFunctionLike(declaration: ts.FunctionLikeDeclaration): boolean {
+  return declaration.modifiers?.some((modifier) => modifier.kind === ts.SyntaxKind.AsyncKeyword) === true;
+}
+
+function asyncFunctionBoundaryPath(declaration: ts.FunctionLikeDeclaration): string {
+  const name = ts.isFunctionDeclaration(declaration) || ts.isMethodDeclaration(declaration)
+    ? declaration.name?.getText(declaration.getSourceFile())
+    : null;
+  return name == null
+    ? 'async function fulfillment'
+    : `async function '${name}' fulfillment`;
+}
+
+function boundaryDependencyValue(
+  node: ts.Node,
+  ...values: readonly EvaluationValue[]
+): EvaluationBoundaryValue {
+  const paths = values
+    .filter((value): value is EvaluationBoundaryValue => value.kind === EvaluationValueKind.BoundaryValue)
+    .map((value) => value.path);
+  const boundaryKind = values.find((value): value is EvaluationBoundaryValue =>
+    value.kind === EvaluationValueKind.BoundaryValue
+  )?.boundaryKind;
+  const path = paths.length === 0
+    ? 'boundary expression'
+    : paths.length === 1
+      ? paths[0]!
+      : `boundary expression depending on ${paths.join(', ')}`;
+  return new EvaluationBoundaryValue(boundaryKind ?? EvaluationBoundaryKind.ExternalModule, path, node);
+}
+
+function isKnownArrayPrototypeFunction(name: string): boolean {
+  switch (name) {
+    case 'concat':
+    case 'filter':
+    case 'fill':
+    case 'map':
+    case 'reduce':
+    case 'slice':
+    case 'sort':
+      return true;
+    default:
+      return false;
+  }
+}
+
+function isKnownStringPrototypeFunction(name: string): boolean {
+  switch (name) {
+    case 'replace':
+    case 'slice':
+    case 'split':
+    case 'startsWith':
+    case 'trim':
+      return true;
+    default:
+      return false;
+  }
+}
+
+function isParameterProperty(parameter: ts.ParameterDeclaration): boolean {
+  return hasModifier(parameter, ts.SyntaxKind.PublicKeyword)
+    || hasModifier(parameter, ts.SyntaxKind.PrivateKeyword)
+    || hasModifier(parameter, ts.SyntaxKind.ProtectedKeyword)
+    || hasModifier(parameter, ts.SyntaxKind.ReadonlyKeyword);
+}
+
+function tokenName(kind: ts.SyntaxKind): string {
+  return ts.tokenToString(kind) ?? ts.SyntaxKind[kind] ?? String(kind);
 }

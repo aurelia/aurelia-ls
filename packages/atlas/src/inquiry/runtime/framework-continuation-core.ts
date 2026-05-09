@@ -4,7 +4,10 @@ import {
   ContinuationPriority,
   type Continuation,
 } from "../continuation.js";
-import type { Evidence } from "../evidence.js";
+import {
+  evidenceArray,
+  type Evidence,
+} from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
 import { LocusKind, type SourceRange } from "../locus.js";
@@ -422,10 +425,6 @@ export function projectionContinuation(
       options.summary ?? rationale,
     ),
   };
-}
-
-function evidenceArray(evidence: Evidence | readonly Evidence[]): readonly Evidence[] {
-  return Array.isArray(evidence) ? evidence : [evidence as Evidence];
 }
 
 export function nextPageContinuation(

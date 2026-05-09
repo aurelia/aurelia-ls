@@ -2,6 +2,8 @@ import ts from "typescript";
 
 import {
   readTypeScriptExpressionFact,
+  requiredSourceFileIdentity,
+  sourceRangeForSourceFileNode,
   SourceProjectKeyedMemo,
   SourceProjectMemo,
   SourceDeclarationKind,
@@ -29,11 +31,6 @@ import {
   isInstructionSlotName,
 } from "./framework-rendering-inspection.js";
 import { readFrameworkSyntaxProducts } from "./framework-rendering-syntax.js";
-import {
-  externalFileIdentity,
-  sourceRangeFromFileSpan,
-  sourceSpan,
-} from "./framework-support.js";
 import { uniqueById } from "./framework-symbols.js";
 import {
   calleeTail,
@@ -244,9 +241,7 @@ export function instructionDeclarationsBySlot(
 ): ReadonlyMap<string, readonly FrameworkInstructionDeclarationRow[]> {
   const bySlot = new Map<string, FrameworkInstructionDeclarationRow[]>();
   for (const sourceFile of sourceFiles) {
-    const file =
-      sourceProject.sourceFileIdentity(sourceFile) ??
-      externalFileIdentity(sourceProject, sourceFile);
+    const file = requiredSourceFileIdentity(sourceProject, sourceFile);
     for (const statement of sourceFile.statements) {
       const declaration = instructionDeclarationForStatement(
         sourceFile,
@@ -361,14 +356,8 @@ export function instructionDeclarationRow(
   return {
     instructionName,
     declarationKind,
-    source: sourceRangeFromFileSpan(
-      file.repoPath,
-      sourceSpan(sourceFile, declaration),
-    ),
-    typePropertySource: sourceRangeFromFileSpan(
-      file.repoPath,
-      sourceSpan(sourceFile, typeProperty),
-    ),
+    source: sourceRangeForSourceFileNode(file.repoPath, sourceFile, declaration),
+    typePropertySource: sourceRangeForSourceFileNode(file.repoPath, sourceFile, typeProperty),
   };
 }
 
@@ -426,9 +415,7 @@ export function instructionSlotRow(
     return null;
   }
   const slotName = declaration.name.text;
-  const file =
-    sourceProject.sourceFileIdentity(sourceFile) ??
-    externalFileIdentity(sourceProject, sourceFile);
+  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
   const declarations = declarationsBySlot.get(slotName) ?? [];
   const declarationNames = new Set(
     declarations.map((entry) => entry.instructionName),
@@ -439,9 +426,9 @@ export function instructionSlotRow(
       (product.instructionName !== null &&
         declarationNames.has(product.instructionName)),
   );
-  const span = sourceSpan(sourceFile, declaration);
+  const span = declaration.getStart(sourceFile);
   return {
-    id: `framework-instruction-slot:${packageId}:${slotName}:${span.start}`,
+    id: `framework-instruction-slot:${packageId}:${slotName}:${span}`,
     packageId,
     packageName,
     slotName,
@@ -451,7 +438,7 @@ export function instructionSlotRow(
       sourceFile,
       declaration.initializer,
     ),
-    source: sourceRangeFromFileSpan(file.repoPath, span),
+    source: sourceRangeForSourceFileNode(file.repoPath, sourceFile, declaration),
     instructionDeclarations: declarations,
     syntaxProducts: products,
   };

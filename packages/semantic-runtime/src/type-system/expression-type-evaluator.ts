@@ -29,10 +29,7 @@ import type {
   UnaryExpression,
   ValueConverterExpression,
 } from '../expression/ast.js';
-import type {
-  AddressHandle,
-  ProductHandle,
-} from '../kernel/handles.js';
+import type { AddressHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   BindingContext,
@@ -45,16 +42,15 @@ import {
   type BindingContextReference,
   type BindingScopeLookup,
 } from '../configuration/scope.js';
-import { ConfigurationProductDetails } from '../configuration/product-details.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { ValueConverterDefinition } from '../resources/value-converter-definition.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import type { TemplateVisibleResource } from '../template/compiler-world-reference.js';
 import {
-  CheckerSyntheticTypeMemberInput,
-  CheckerSyntheticTypeProjectionInput,
-  CheckerTypeProjectionInput,
   CheckerTypeProjector,
+  type CheckerSyntheticTypeMemberRequest,
+  type CheckerSyntheticTypeProjectionRequest,
+  type CheckerTypeProjectionRequest,
 } from './checker-projector.js';
 import { TypeSystemProductDetails } from './product-details.js';
 import {
@@ -95,19 +91,6 @@ type CheckerLookupCarrier = {
   readonly checker: ts.TypeChecker;
   readonly location: ts.Node | null;
 };
-
-export class CheckerExpressionTypeEvaluationInput {
-  constructor(
-    /** Store-local key for type projections forced while evaluating this expression. */
-    readonly localKey: string,
-    /** Aurelia expression AST whose static type is requested. */
-    readonly expression: ExpressionAstNode,
-    /** Binding scope visible at the expression site. */
-    readonly bindingScopeProductHandle: ProductHandle,
-    /** Source address for the expression site, when already materialized. */
-    readonly sourceAddressHandle: AddressHandle | null = null,
-  ) {}
-}
 
 export class CheckerExpressionType {
   readonly kind = CheckerExpressionTypeEvaluationResultKind.Type;
@@ -164,22 +147,6 @@ export class CheckerExpressionTypeEvaluator {
     /** Compiler resource scope visible at this expression site, when template compilation supplied one. */
     readonly resourceScope: TemplateResourceScope | null = null,
   ) {}
-
-  evaluate(input: CheckerExpressionTypeEvaluationInput): CheckerExpressionTypeEvaluation {
-    const scope = this.store.productDetails.read(
-      ConfigurationProductDetails.BindingScope,
-      input.bindingScopeProductHandle,
-    );
-    if (scope == null) {
-      return this.open(
-        CheckerExpressionTypeOpenKind.MissingBindingScope,
-        input.expression,
-        `Binding scope detail was not available for ${input.bindingScopeProductHandle}.`,
-      );
-    }
-
-    return this.evaluateNode(input.expression, scope, input.localKey, input.sourceAddressHandle);
-  }
 
   evaluateWithScope(
     expression: ExpressionAstNode,
@@ -448,16 +415,16 @@ export class CheckerExpressionTypeEvaluator {
     }
 
     const sourceNode = member.carrier.declarations[0] ?? null;
-    return this.projector.ensureProjection(new CheckerTypeProjectionInput(
-      `${localKey}:projected-type`,
-      member.carrier.checker,
-      member.carrier.valueType,
-      CheckerTypeProjectionOrigin.TypeChecker,
+    return this.projector.ensureProjection({
+      localKey: `${localKey}:projected-type`,
+      checker: member.carrier.checker,
+      type: member.carrier.valueType,
+      origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceNode,
-      slot.sourceAddressHandle ?? member.sourceAddressHandle,
-      member.identityHandle,
-      reference.display ?? member.valueType?.display ?? null,
-    )).toReference();
+      sourceAddressHandle: slot.sourceAddressHandle ?? member.sourceAddressHandle,
+      ownerIdentityHandle: member.identityHandle,
+      display: reference.display ?? member.valueType?.display ?? null,
+    } satisfies CheckerTypeProjectionRequest).toReference();
   }
 
   private evaluateAccessMember(
@@ -825,19 +792,15 @@ export class CheckerExpressionTypeEvaluator {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeShape {
-    return this.projector.ensureSyntheticProjection(new CheckerSyntheticTypeProjectionInput(
-      `${localKey}:arrow-function`,
-      CheckerTypeShapeKind.Function,
-      displayArrowFunctionType(expression, returnType),
-      [],
-      null,
-      null,
-      CheckerTypeProjectionOrigin.SyntheticExpressionType,
+    return this.projector.ensureSyntheticProjection({
+      localKey: `${localKey}:arrow-function`,
+      shapeKind: CheckerTypeShapeKind.Function,
+      display: displayArrowFunctionType(expression, returnType),
+      members: [],
+      origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
       sourceAddressHandle,
-      null,
-      returnType,
-      null,
-    ));
+      callReturnType: returnType,
+    } satisfies CheckerSyntheticTypeProjectionRequest);
   }
 
   private evaluateArrayLiteral(
@@ -846,7 +809,7 @@ export class CheckerExpressionTypeEvaluator {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerExpressionTypeEvaluation {
-    const members: CheckerSyntheticTypeMemberInput[] = [];
+    const members: CheckerSyntheticTypeMemberRequest[] = [];
     const elementTypes: CheckerTypeReference[] = [];
     const lengthType = this.projectPrimitive(expression, scope, `${localKey}:array:length`, 'number', sourceAddressHandle);
     const lengthReference = lengthType.kind === CheckerExpressionTypeEvaluationResultKind.Type
@@ -854,7 +817,7 @@ export class CheckerExpressionTypeEvaluator {
       : null;
 
     if (lengthReference != null) {
-      members.push(new CheckerSyntheticTypeMemberInput('length', lengthReference, CheckerTypeMemberKind.Property));
+      members.push({ name: 'length', valueType: lengthReference, memberKind: CheckerTypeMemberKind.Property });
     }
 
     expression.elements.forEach((element, index) => {
@@ -865,20 +828,20 @@ export class CheckerExpressionTypeEvaluator {
       if (valueType != null) {
         elementTypes.push(valueType);
       }
-      members.push(new CheckerSyntheticTypeMemberInput(String(index), valueType, CheckerTypeMemberKind.Property));
+      members.push({ name: String(index), valueType, memberKind: CheckerTypeMemberKind.Property });
     });
 
     const commonElementType = commonTypeReference(elementTypes, expression.elements.length);
-    const typeShape = this.projector.ensureSyntheticProjection(new CheckerSyntheticTypeProjectionInput(
-      `${localKey}:array-literal`,
-      CheckerTypeShapeKind.Object,
-      displayArrayLiteralType(commonElementType, expression.elements.length),
+    const typeShape = this.projector.ensureSyntheticProjection({
+      localKey: `${localKey}:array-literal`,
+      shapeKind: CheckerTypeShapeKind.Object,
+      display: displayArrayLiteralType(commonElementType, expression.elements.length),
       members,
-      commonElementType,
-      commonElementType,
-      CheckerTypeProjectionOrigin.SyntheticExpressionType,
+      indexedValueType: commonElementType,
+      iteratedValueType: commonElementType,
+      origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
       sourceAddressHandle,
-    ));
+    } satisfies CheckerSyntheticTypeProjectionRequest);
     return this.type(typeShape, 'Synthesized ArrayLiteral type shape from evaluated element expressions.');
   }
 
@@ -888,7 +851,7 @@ export class CheckerExpressionTypeEvaluator {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerExpressionTypeEvaluation {
-    const memberByName = new Map<string, CheckerSyntheticTypeMemberInput>();
+    const memberByName = new Map<string, CheckerSyntheticTypeMemberRequest>();
     expression.keys.forEach((key, index) => {
       const value = expression.values[index] ?? null;
       const result = value == null
@@ -897,20 +860,18 @@ export class CheckerExpressionTypeEvaluator {
       const valueType = result?.kind === CheckerExpressionTypeEvaluationResultKind.Type
         ? result.typeReference
         : null;
-      memberByName.set(String(key), new CheckerSyntheticTypeMemberInput(String(key), valueType, CheckerTypeMemberKind.Property));
+      memberByName.set(String(key), { name: String(key), valueType, memberKind: CheckerTypeMemberKind.Property });
     });
     const members = [...memberByName.values()];
 
-    const typeShape = this.projector.ensureSyntheticProjection(new CheckerSyntheticTypeProjectionInput(
-      `${localKey}:object-literal`,
-      CheckerTypeShapeKind.Object,
-      displayObjectLiteralType(members),
+    const typeShape = this.projector.ensureSyntheticProjection({
+      localKey: `${localKey}:object-literal`,
+      shapeKind: CheckerTypeShapeKind.Object,
+      display: displayObjectLiteralType(members),
       members,
-      null,
-      null,
-      CheckerTypeProjectionOrigin.SyntheticExpressionType,
+      origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
       sourceAddressHandle,
-    ));
+    } satisfies CheckerSyntheticTypeProjectionRequest);
     return this.type(typeShape, 'Synthesized ObjectLiteral type shape from evaluated property expressions.');
   }
 
@@ -1077,19 +1038,18 @@ export class CheckerExpressionTypeEvaluator {
     }
 
     const shapes = alternatives.map((alternative) => alternative.typeShape);
-    const typeShape = this.projector.ensureSyntheticProjection(new CheckerSyntheticTypeProjectionInput(
-      `${localKey}:union`,
-      CheckerTypeShapeKind.Union,
-      displayUnionType(shapes),
-      commonMembersForUnion(shapes),
-      commonNullableTypeReference(shapes.map((shape) => shape.indexedValueType)),
-      commonNullableTypeReference(shapes.map((shape) => shape.iteratedValueType)),
-      CheckerTypeProjectionOrigin.SyntheticExpressionType,
+    const typeShape = this.projector.ensureSyntheticProjection({
+      localKey: `${localKey}:union`,
+      shapeKind: CheckerTypeShapeKind.Union,
+      display: displayUnionType(shapes),
+      members: commonMembersForUnion(shapes),
+      indexedValueType: commonNullableTypeReference(shapes.map((shape) => shape.indexedValueType)),
+      iteratedValueType: commonNullableTypeReference(shapes.map((shape) => shape.iteratedValueType)),
+      origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
       sourceAddressHandle,
-      null,
-      commonNullableTypeReference(shapes.map((shape) => shape.callReturnType)),
-      commonNullableTypeReference(shapes.map((shape) => shape.constructReturnType)),
-    ));
+      callReturnType: commonNullableTypeReference(shapes.map((shape) => shape.callReturnType)),
+      constructReturnType: commonNullableTypeReference(shapes.map((shape) => shape.constructReturnType)),
+    } satisfies CheckerSyntheticTypeProjectionRequest);
     return this.type(typeShape, summary);
   }
 
@@ -1244,6 +1204,9 @@ export class CheckerExpressionTypeEvaluator {
     memberName: string,
     localKey: string,
   ): CheckerExpressionTypeEvaluation {
+    if (ownerType.shapeKind === CheckerTypeShapeKind.Any) {
+      return this.type(ownerType, `Member '${memberName}' on any remains any.`);
+    }
     const member = ownerType.members.find((candidate) => candidate.name === memberName) ?? null;
     if (member == null) {
       return this.open(
@@ -1270,16 +1233,16 @@ export class CheckerExpressionTypeEvaluator {
 
     if (member.carrier?.valueType != null) {
       const sourceNode = member.carrier.declarations[0] ?? null;
-      const typeShape = this.projector.ensureProjection(new CheckerTypeProjectionInput(
-        `${localKey}:value`,
-        member.carrier.checker,
-        member.carrier.valueType,
-        CheckerTypeProjectionOrigin.TypeChecker,
+      const typeShape = this.projector.ensureProjection({
+        localKey: `${localKey}:value`,
+        checker: member.carrier.checker,
+        type: member.carrier.valueType,
+        origin: CheckerTypeProjectionOrigin.TypeChecker,
         sourceNode,
-        member.sourceAddressHandle,
-        member.identityHandle,
-        member.valueType?.display ?? null,
-      ));
+        sourceAddressHandle: member.sourceAddressHandle,
+        ownerIdentityHandle: member.identityHandle,
+        display: member.valueType?.display ?? null,
+      } satisfies CheckerTypeProjectionRequest);
       return this.type(typeShape, `Projected value type for member '${member.name}'.`);
     }
 
@@ -1297,6 +1260,9 @@ export class CheckerExpressionTypeEvaluator {
     localKey: string,
     sourceAddressHandle: AddressHandle | null = null,
   ): CheckerExpressionTypeEvaluation {
+    if (calleeType.shapeKind === CheckerTypeShapeKind.Any) {
+      return this.type(calleeType, 'Calling any remains any.');
+    }
     if (calleeType.callReturnType?.productHandle != null) {
       return this.resolveReference(
         expression,
@@ -1475,20 +1441,20 @@ export class CheckerExpressionTypeEvaluator {
     const indexedValueType = sameTypeReference(keyReference, valueReference)
       ? keyReference
       : null;
-    const tupleType = this.projector.ensureSyntheticProjection(new CheckerSyntheticTypeProjectionInput(
-      `${localKey}:tuple`,
-      CheckerTypeShapeKind.Object,
-      `[${keyReference.display ?? 'unknown'}, ${valueReference.display ?? 'unknown'}]`,
-      [
-        new CheckerSyntheticTypeMemberInput('0', keyReference, CheckerTypeMemberKind.Property),
-        new CheckerSyntheticTypeMemberInput('1', valueReference, CheckerTypeMemberKind.Property),
-        new CheckerSyntheticTypeMemberInput('length', lengthReference, CheckerTypeMemberKind.Property),
+    const tupleType = this.projector.ensureSyntheticProjection({
+      localKey: `${localKey}:tuple`,
+      shapeKind: CheckerTypeShapeKind.Object,
+      display: `[${keyReference.display ?? 'unknown'}, ${valueReference.display ?? 'unknown'}]`,
+      members: [
+        { name: '0', valueType: keyReference, memberKind: CheckerTypeMemberKind.Property },
+        { name: '1', valueType: valueReference, memberKind: CheckerTypeMemberKind.Property },
+        { name: 'length', valueType: lengthReference, memberKind: CheckerTypeMemberKind.Property },
       ],
       indexedValueType,
-      indexedValueType,
-      CheckerTypeProjectionOrigin.SyntheticTemplateType,
+      iteratedValueType: indexedValueType,
+      origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
       sourceAddressHandle,
-    ));
+    } satisfies CheckerSyntheticTypeProjectionRequest);
     return this.type(tupleType, `Synthesized ${symbolName} repeat entry type for destructuring.`);
   }
 
@@ -1612,16 +1578,14 @@ export class CheckerExpressionTypeEvaluator {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeReference {
-    return this.projector.ensureSyntheticProjection(new CheckerSyntheticTypeProjectionInput(
-      `${localKey}:unknown`,
-      CheckerTypeShapeKind.Unknown,
-      'unknown',
-      [],
-      null,
-      null,
-      CheckerTypeProjectionOrigin.SyntheticExpressionType,
+    return this.projector.ensureSyntheticProjection({
+      localKey: `${localKey}:unknown`,
+      shapeKind: CheckerTypeShapeKind.Unknown,
+      display: 'unknown',
+      members: [],
+      origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
       sourceAddressHandle,
-    )).toReference();
+    } satisfies CheckerSyntheticTypeProjectionRequest).toReference();
   }
 
   private synthesizeArrayType(
@@ -1635,18 +1599,18 @@ export class CheckerExpressionTypeEvaluator {
     const lengthReference = lengthType.kind === CheckerExpressionTypeEvaluationResultKind.Type
       ? lengthType.typeReference
       : null;
-    return this.projector.ensureSyntheticProjection(new CheckerSyntheticTypeProjectionInput(
-      `${localKey}:array`,
-      CheckerTypeShapeKind.Object,
-      `Array<${elementType.display ?? 'unknown'}>`,
-      [
-        new CheckerSyntheticTypeMemberInput('length', lengthReference, CheckerTypeMemberKind.Property),
+    return this.projector.ensureSyntheticProjection({
+      localKey: `${localKey}:array`,
+      shapeKind: CheckerTypeShapeKind.Object,
+      display: `Array<${elementType.display ?? 'unknown'}>`,
+      members: [
+        { name: 'length', valueType: lengthReference, memberKind: CheckerTypeMemberKind.Property },
       ],
-      elementType,
-      elementType,
-      CheckerTypeProjectionOrigin.SyntheticExpressionType,
+      indexedValueType: elementType,
+      iteratedValueType: elementType,
+      origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
       sourceAddressHandle,
-    ));
+    } satisfies CheckerSyntheticTypeProjectionRequest);
   }
 
   private projectPrimitive(
@@ -1675,16 +1639,14 @@ export class CheckerExpressionTypeEvaluator {
     localKey: string,
     sourceAddressHandle: AddressHandle | null = null,
   ): CheckerExpressionType {
-    const typeShape = this.projector.ensureProjection(new CheckerTypeProjectionInput(
+    const typeShape = this.projector.ensureProjection({
       localKey,
       checker,
       type,
-      CheckerTypeProjectionOrigin.TypeChecker,
-      null,
+      origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceAddressHandle,
-      null,
-      checker.typeToString(type),
-    ));
+      display: checker.typeToString(type),
+    } satisfies CheckerTypeProjectionRequest);
     return this.type(typeShape, `Projected ${expression.$kind} through the TypeChecker.`);
   }
 
@@ -1860,29 +1822,29 @@ function commonNullableTypeReference(
 
 function commonMembersForUnion(
   shapes: readonly CheckerTypeShape[],
-): readonly CheckerSyntheticTypeMemberInput[] {
+): readonly CheckerSyntheticTypeMemberRequest[] {
   const [first, ...rest] = shapes;
   if (first == null) {
     return [];
   }
 
-  const members: CheckerSyntheticTypeMemberInput[] = [];
+  const members: CheckerSyntheticTypeMemberRequest[] = [];
   for (const member of first.members) {
     const matches = rest.map((shape) => shape.members.find((candidate) => candidate.name === member.name) ?? null);
     if (matches.some((candidate) => candidate == null)) {
       continue;
     }
     const allMembers = [member, ...(matches as CheckerTypeMember[])];
-    members.push(new CheckerSyntheticTypeMemberInput(
-      member.name,
-      commonNullableTypeReference(allMembers.map((candidate) => candidate.valueType)),
-      allMembers.every((candidate) => candidate.memberKind === member.memberKind)
+    members.push({
+      name: member.name,
+      valueType: commonNullableTypeReference(allMembers.map((candidate) => candidate.valueType)),
+      memberKind: allMembers.every((candidate) => candidate.memberKind === member.memberKind)
         ? member.memberKind
         : CheckerTypeMemberKind.Unknown,
-      allMembers.some((candidate) => candidate.isOptional),
-      allMembers.every((candidate) => candidate.isReadonly),
-      commonAddressHandle(allMembers.map((candidate) => candidate.sourceAddressHandle)),
-    ));
+      isOptional: allMembers.some((candidate) => candidate.isOptional),
+      isReadonly: allMembers.every((candidate) => candidate.isReadonly),
+      sourceAddressHandle: commonAddressHandle(allMembers.map((candidate) => candidate.sourceAddressHandle)),
+    });
   }
   return members;
 }
@@ -1926,7 +1888,7 @@ function displayArrayLiteralType(
   return elementCount === 0 ? 'Array<unknown>' : 'Array<mixed>';
 }
 
-function displayObjectLiteralType(members: readonly CheckerSyntheticTypeMemberInput[]): string {
+function displayObjectLiteralType(members: readonly CheckerSyntheticTypeMemberRequest[]): string {
   if (members.length === 0) {
     return '{}';
   }

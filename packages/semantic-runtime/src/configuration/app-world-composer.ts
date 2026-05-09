@@ -31,15 +31,21 @@ import {
   type TemplateCompilerWorldEmission,
 } from '../template/compiler-world-materializer.js';
 import {
-  frameworkRegistrationKindForAdmission,
   type RegistrationAdmissionProduct,
 } from '../registration/registration-admission.js';
-import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
+import {
+  FrameworkRegistrationCapability,
+  frameworkRegistrationAdmissionCarriesCapability,
+} from '../registration/framework-registration-manifest.js';
 import type { AppRoot } from './app-root.js';
 import type { ConfigurationKernelEmission } from './configuration-kernel-emitter.js';
 import {
   AppWorldResourceVisibilityComposer,
 } from './app-world-resource-visibility.js';
+import {
+  buildRegistryBodyStepIndex,
+  type RegistryBodyStepIndex,
+} from './registry-body-index.js';
 
 /**
  * Current app-world composition envelope.
@@ -122,6 +128,7 @@ export class AureliaAppWorldComposer {
     resourceDefinitions: ResourceDefinitionIndex | null,
   ): readonly TemplateCompilerWorldEmission[] {
     const containersByProduct = new Map(configuration.containers.map((container) => [container.productHandle, container]));
+    const registryBodyIndex = buildRegistryBodyStepIndex(this.store, configuration);
     const compilerWorlds: TemplateCompilerWorldEmission[] = [];
 
     for (const appRoot of configuration.appRoots) {
@@ -129,7 +136,7 @@ export class AureliaAppWorldComposer {
       if (container == null) {
         continue;
       }
-      const admissions = registrationAdmissionsForAppRoot(appRoot, configuration);
+      const admissions = registrationAdmissionsForAppRoot(appRoot, configuration, registryBodyIndex);
       if (!admitsRuntimeCompilerServices(admissions)) {
         continue;
       }
@@ -201,6 +208,7 @@ function syntaxForAdmissions(
 function registrationAdmissionsForAppRoot(
   appRoot: AppRoot,
   configuration: ConfigurationKernelEmission,
+  registryBodyIndex: RegistryBodyStepIndex,
 ): readonly RegistrationAdmissionProduct[] {
   const admissionByProduct = new Map(configuration.registrationAdmissions.map((admission) => [admission.productHandle, admission]));
   const sequenceProductHandles = new Set<ProductHandle>();
@@ -227,6 +235,14 @@ function registrationAdmissionsForAppRoot(
       const admission = admissionByProduct.get(admissionProductHandle);
       if (admission != null) {
         admissions.push(admission);
+        for (const bodyAdmissionHandle of registryBodyIndex.admissionProductHandlesForAdmission(admission)) {
+          const bodyAdmission = admissionByProduct.get(bodyAdmissionHandle);
+          if (bodyAdmission == null || seenAdmissionHandles.has(bodyAdmission.productHandle)) {
+            continue;
+          }
+          seenAdmissionHandles.add(bodyAdmission.productHandle);
+          admissions.push(bodyAdmission);
+        }
       }
     }
   }
@@ -264,6 +280,9 @@ function catalogProductHandlesForAdmissions(
 
 function admitsRuntimeCompilerServices(admissions: readonly RegistrationAdmissionProduct[]): boolean {
   return admissions.some((admission) =>
-    frameworkRegistrationKindForAdmission(admission) === FrameworkRegistrationKind.StandardConfiguration
+    frameworkRegistrationAdmissionCarriesCapability(
+      admission,
+      FrameworkRegistrationCapability.RuntimeHtmlCompilerServices,
+    )
   );
 }

@@ -3,7 +3,14 @@ import {
   FrameworkResourceInstantiationKind,
   FrameworkSyntaxProductKind,
 } from "../../framework/index.js";
-import type { SourceProject } from "../../source/index.js";
+import {
+  groupBy,
+  uniqueSortedStrings,
+} from "../../collections.js";
+import {
+  SourceProjectMemo,
+  type SourceProject,
+} from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import {
   BasisAuthority,
@@ -12,7 +19,6 @@ import {
   BasisKind,
   type Basis,
 } from "../basis.js";
-import { clampBudget } from "../budget.js";
 import {
   ContinuationPriority,
   type Continuation,
@@ -31,12 +37,14 @@ import { PagedRowFamily } from "../paged-row-family.js";
 import {
   evidenceLimit,
   pageOffset,
+  rowLimit,
 } from "../paging.js";
-import type {
-  FrameworkBundleAssociationRow,
-  FrameworkResourceCarrierRow,
-  FrameworkResourceExportRow,
-  FrameworkSyntaxProductRow,
+import {
+  FrameworkResourceCarrierKind,
+  type FrameworkBundleAssociationRow,
+  type FrameworkResourceCarrierRow,
+  type FrameworkResourceExportRow,
+  type FrameworkSyntaxProductRow,
 } from "./framework-entities.js";
 import {
   type FrameworkDiscoveryFilters,
@@ -49,6 +57,7 @@ import {
 } from "./framework-resources.js";
 import {
   readFrameworkResourceInstantiationRows,
+  type FrameworkResourceMaterializationSiteRow,
   type FrameworkResourceInstantiationRow,
 } from "./framework-resource-materialization.js";
 import { readFrameworkSyntaxProducts } from "./framework-rendering-syntax.js";
@@ -60,6 +69,7 @@ import {
 } from "./framework-continuation-core.js";
 import { FrameworkSemanticRoutes } from "./framework-route-catalog.js";
 import { countBy } from "./framework-support.js";
+import { stringFilter } from "./lens-filter-utils.js";
 
 /** Evidence lane present in one resource convergence row. */
 export const enum FrameworkResourceConvergenceLane {
@@ -95,6 +105,21 @@ export interface FrameworkResourceConvergenceAdmissionRow {
   readonly summary: string;
 }
 
+export type FrameworkResourceConvergenceSourceRole =
+  | "definition-carrier"
+  | "backing-declaration"
+  | "bundle-admission"
+  | "syntax-product"
+  | "materialization-site";
+
+/** Exact source site that contributes one lane of a resource convergence row. */
+export interface FrameworkResourceConvergenceSourceSiteRow {
+  readonly id: string;
+  readonly role: FrameworkResourceConvergenceSourceRole;
+  readonly source: SourceRange;
+  readonly summary: string;
+}
+
 /** One converged view of a resource carrier across exports, admissions, syntax, and materialization. */
 export interface FrameworkResourceConvergenceRow {
   readonly id: string;
@@ -102,7 +127,7 @@ export interface FrameworkResourceConvergenceRow {
   readonly packageName: string;
   readonly sourceExportName: string;
   readonly resourceKind: FrameworkResourceDefinitionKind;
-  readonly carrierKind: string;
+  readonly carrierKind: FrameworkResourceCarrierKind;
   readonly resourceName: string | null;
   readonly aliases: readonly string[];
   readonly targetName: string | null;
@@ -120,8 +145,9 @@ export interface FrameworkResourceConvergenceRow {
   readonly materializationRelations: readonly string[];
   readonly openReasons: readonly string[];
   readonly carrierSourceRole: string;
-  readonly source: SourceRange;
-  readonly declarationSource: SourceRange | null;
+  readonly definitionSource: SourceRange;
+  readonly declarationSource: SourceRange;
+  readonly sourceSites: readonly FrameworkResourceConvergenceSourceSiteRow[];
   readonly summary: string;
 }
 
@@ -138,8 +164,16 @@ interface FrameworkResourceFilters extends FrameworkDiscoveryFilters {
 export interface FrameworkResourcesValue {
   readonly resourceConvergenceCount: number;
   readonly resourceKinds: Readonly<Record<string, number>>;
+  readonly carrierKinds: Readonly<Record<string, number>>;
+  readonly carrierSourceRoles: Readonly<Record<string, number>>;
   readonly lanes: Readonly<Record<string, number>>;
+  readonly sourceSiteRoles: Readonly<Record<string, number>>;
   readonly openReasonCount: number;
+  readonly openConvergenceRowCount: number;
+  readonly missingDefinitionSourceSiteCount: number;
+  readonly onlyDefinitionSourceSiteCount: number;
+  readonly definitionSourceSameAsDeclarationCount: number;
+  readonly definitionSourceDiffersFromDeclarationCount: number;
   readonly convergenceRows?: readonly FrameworkResourceConvergenceRow[];
 }
 
@@ -151,6 +185,9 @@ const RESOURCE_CONVERGENCE_ROW_FAMILY =
     continuationsForPage: resourceContinuations,
   });
 
+const frameworkResourceConvergenceMemo =
+  new SourceProjectMemo<readonly FrameworkResourceConvergenceRow[]>();
+
 /** Answer resource convergence inquiries. */
 export function answerFrameworkResources(
   inquiry: Inquiry,
@@ -160,7 +197,7 @@ export function answerFrameworkResources(
   const filters = resourceFiltersFromInquiry(inquiry);
   const rows = readFrameworkResourceConvergenceRows(sourceProject, filters);
   const baseValue = resourceValue(rows);
-  const limit = clampBudget(inquiry.budget?.rows, 80, 1_000);
+  const limit = rowLimit(inquiry);
   const offset = pageOffset(inquiry);
 
   if (projection === "convergence" || projection === "definitions") {
@@ -205,6 +242,15 @@ export function readFrameworkResourceConvergenceRows(
   sourceProject: SourceProject,
   filters: FrameworkResourceFilters,
 ): readonly FrameworkResourceConvergenceRow[] {
+  return frameworkResourceConvergenceMemo
+    .read(sourceProject, () => readAllFrameworkResourceConvergenceRows(sourceProject))
+    .filter((row) => convergenceRowMatches(row, filters));
+}
+
+function readAllFrameworkResourceConvergenceRows(
+  sourceProject: SourceProject,
+): readonly FrameworkResourceConvergenceRow[] {
+  const filters: FrameworkResourceFilters = {};
   const carrierFilters = resourceCarrierFilters(filters);
   const carriers = readFrameworkResourceCarriers(sourceProject, carrierFilters);
   const exportsByCarrier = groupBy(
@@ -237,7 +283,6 @@ export function readFrameworkResourceConvergenceRows(
         syntaxProductsByCarrier.get(carrier.id) ?? [],
       ),
     )
-    .filter((row) => convergenceRowMatches(row, filters))
     .sort(
       (left, right) =>
         left.packageId.localeCompare(right.packageId) ||
@@ -253,7 +298,7 @@ function convergenceRow(
   instantiation: FrameworkResourceInstantiationRow | undefined,
   syntaxProducts: readonly FrameworkSyntaxProductRow[],
 ): FrameworkResourceConvergenceRow {
-  const publicExportNames = unique(
+  const publicExportNames = uniqueSortedStrings(
     publicExports.map((row) => row.exportEntry.exportName),
   );
   const admissionRows = admissions.map((row) => ({
@@ -268,7 +313,7 @@ function convergenceRow(
     summary: `${row.bundleExportName} admits ${carrier.resourceKind} ${carrier.targetName ?? carrier.sourceExportName}.`,
   }));
   const materializationSites = instantiation?.materializationSites ?? [];
-  const instantiationKinds = unique(instantiation?.instantiationKinds ?? []);
+  const instantiationKinds = uniqueSortedStrings(instantiation?.instantiationKinds ?? []);
   const materialized = instantiationKinds.some(
     (kind) => kind !== FrameworkResourceInstantiationKind.DefinitionOnly,
   );
@@ -279,6 +324,12 @@ function convergenceRow(
     materialized,
   });
   const openReasons = convergenceOpenReasons(carrier, lanes);
+  const sourceSites = convergenceSourceSites(
+    carrier,
+    admissionRows,
+    syntaxProducts,
+    materializationSites,
+  );
   return {
     id: `framework-resource-convergence:${carrier.id}`,
     packageId: carrier.packageId,
@@ -293,30 +344,31 @@ function convergenceRow(
     lanes,
     admissions: admissionRows,
     syntaxProductIds: syntaxProducts.map((row) => row.id),
-    syntaxProductKinds: unique(syntaxProducts.map((row) => row.productKind)),
-    instructionNames: unique(
+    syntaxProductKinds: uniqueSortedStrings(syntaxProducts.map((row) => row.productKind)),
+    instructionNames: uniqueSortedStrings(
       syntaxProducts
         .map((row) => row.instructionName)
         .filter((name): name is string => name !== null),
     ),
-    bindingNames: unique(
+    bindingNames: uniqueSortedStrings(
       syntaxProducts
         .map((row) => row.bindingName)
         .filter((name): name is string => name !== null),
     ),
     instantiationKinds,
     instanceLifetime: instantiation?.instanceLifetime ?? "definition-only",
-    materializationSiteKinds: unique(
+    materializationSiteKinds: uniqueSortedStrings(
       materializationSites.map((site) => site.siteKind),
     ),
-    materializationPhases: unique(materializationSites.map((site) => site.phase)),
-    materializationRelations: unique(
+    materializationPhases: uniqueSortedStrings(materializationSites.map((site) => site.phase)),
+    materializationRelations: uniqueSortedStrings(
       materializationSites.map((site) => site.relation),
     ),
     openReasons,
     carrierSourceRole: carrierSourceRole(carrier.carrierKind),
-    source: carrier.source,
+    definitionSource: carrier.source,
     declarationSource: carrier.declarationSource,
+    sourceSites,
     summary: convergenceSummary(carrier, lanes, publicExportNames, admissionRows),
   };
 }
@@ -380,8 +432,53 @@ function convergenceSummary(
   const admissionSurface =
     admissions.length === 0
       ? "not admitted by an evaluated bundle"
-      : `admitted by ${unique(admissions.map((row) => row.bundleExportName)).join(", ")}`;
+      : `admitted by ${uniqueSortedStrings(admissions.map((row) => row.bundleExportName)).join(", ")}`;
   return `${carrier.resourceKind} ${name} is ${publicSurface}, ${admissionSurface}, and has lanes ${lanes.join(", ")}.`;
+}
+
+function convergenceSourceSites(
+  carrier: FrameworkResourceCarrierRow,
+  admissions: readonly FrameworkResourceConvergenceAdmissionRow[],
+  syntaxProducts: readonly FrameworkSyntaxProductRow[],
+  materializationSites: readonly FrameworkResourceMaterializationSiteRow[],
+): readonly FrameworkResourceConvergenceSourceSiteRow[] {
+  return uniqueBySourceSite([
+    {
+      id: `${carrier.id}:source:definition-carrier`,
+      role: "definition-carrier",
+      source: carrier.source,
+      summary: `Exact ${carrierSourceRole(carrier.carrierKind)} that defines the resource.`,
+    },
+    ...(sameSourceRange(carrier.source, carrier.declarationSource)
+      ? []
+      : [
+          {
+            id: `${carrier.id}:source:backing-declaration`,
+            role: "backing-declaration" as const,
+            source: carrier.declarationSource,
+            summary:
+              "Backing declaration or source-export header that owns the resource carrier.",
+          },
+        ]),
+    ...admissions.map((row) => ({
+      id: `${carrier.id}:source:bundle-admission:${row.id}`,
+      role: "bundle-admission" as const,
+      source: row.source,
+      summary: row.summary,
+    })),
+    ...syntaxProducts.map((row) => ({
+      id: `${carrier.id}:source:syntax-product:${row.id}`,
+      role: "syntax-product" as const,
+      source: row.source,
+      summary: `${row.producerName} produces ${row.productKind} syntax product.`,
+    })),
+    ...materializationSites.map((row) => ({
+      id: `${carrier.id}:source:materialization-site:${row.id}`,
+      role: "materialization-site" as const,
+      source: row.source,
+      summary: row.summary,
+    })),
+  ]);
 }
 
 interface ResourceAdmissionWithCarrier {
@@ -524,25 +621,38 @@ function resourceFilterExtras(value: unknown): FrameworkResourceFilters {
   };
 }
 
-function stringFilter(
-  source: Record<string, unknown>,
-  key: keyof FrameworkResourceFilters,
-): object {
-  const value = source[key];
-  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
-}
-
 function resourceValue(
   rows: readonly FrameworkResourceConvergenceRow[],
 ): FrameworkResourcesValue {
   return {
     resourceConvergenceCount: rows.length,
     resourceKinds: countBy(rows, (row) => row.resourceKind),
+    carrierKinds: countBy(rows, (row) => row.carrierKind),
+    carrierSourceRoles: countBy(rows, (row) => row.carrierSourceRole),
     lanes: countBy(rows.flatMap((row) => row.lanes), (lane) => lane),
+    sourceSiteRoles: countBy(
+      rows.flatMap((row) => row.sourceSites),
+      (site) => site.role,
+    ),
     openReasonCount: rows.reduce(
       (total, row) => total + row.openReasons.length,
       0,
     ),
+    openConvergenceRowCount: rows.filter((row) => row.openReasons.length > 0).length,
+    missingDefinitionSourceSiteCount: rows.filter(
+      (row) => !row.sourceSites.some((site) => site.role === "definition-carrier"),
+    ).length,
+    onlyDefinitionSourceSiteCount: rows.filter(
+      (row) =>
+        row.sourceSites.length === 1 &&
+        row.sourceSites[0]?.role === "definition-carrier",
+    ).length,
+    definitionSourceSameAsDeclarationCount: rows.filter(
+      (row) => sameSourceRange(row.definitionSource, row.declarationSource),
+    ).length,
+    definitionSourceDiffersFromDeclarationCount: rows.filter(
+      (row) => !sameSourceRange(row.definitionSource, row.declarationSource),
+    ).length,
   };
 }
 
@@ -555,7 +665,7 @@ function evidenceForRow(row: FrameworkResourceConvergenceRow): Evidence {
       ? EvidenceConfidence.Exact
       : EvidenceConfidence.Strong,
     summary: row.summary,
-    source: row.source,
+    source: row.definitionSource,
     data: row,
   };
 }
@@ -609,15 +719,15 @@ function resourceContinuations(
     );
     continuations.push(
       builder.source(
-        "source",
-        row.source,
+        "definition-source",
+        row.definitionSource,
         `Inspect the exact ${row.carrierSourceRole} that defines this resource.`,
-        "Resource convergence row to exact source carrier.",
+        "Resource convergence row to exact definition carrier.",
       ),
     );
     if (
       row.declarationSource !== null &&
-      !sameSourceRange(row.source, row.declarationSource)
+      !sameSourceRange(row.definitionSource, row.declarationSource)
     ) {
       continuations.push(
         builder.source(
@@ -625,6 +735,22 @@ function resourceContinuations(
           row.declarationSource,
           "Inspect the backing declaration or source-export header for this resource.",
           "Resource convergence row to backing declaration source.",
+          { priority: ContinuationPriority.Secondary },
+        ),
+      );
+    }
+    const secondarySourceSites = row.sourceSites.filter(
+      (sourceSite) =>
+        sourceSite.role !== "definition-carrier" &&
+        sourceSite.role !== "backing-declaration",
+    ).slice(0, 3);
+    for (const [siteIndex, site] of secondarySourceSites.entries()) {
+      continuations.push(
+        builder.source(
+          `source:${site.role}:${siteIndex}`,
+          site.source,
+          site.summary,
+          `Resource convergence row to exact ${site.role} source.`,
           { priority: ContinuationPriority.Secondary },
         ),
       );
@@ -721,20 +847,18 @@ function hasRenderingSyntaxProduct(row: FrameworkResourceConvergenceRow): boolea
   );
 }
 
-function carrierSourceRole(carrierKind: string): string {
+function carrierSourceRole(carrierKind: FrameworkResourceCarrierKind): string {
   switch (carrierKind) {
-    case "decorator":
+    case FrameworkResourceCarrierKind.Decorator:
       return "decorator expression";
-    case "static-$au":
+    case FrameworkResourceCarrierKind.StaticAu:
       return "static $au definition initializer";
-    case "define-call":
+    case FrameworkResourceCarrierKind.DefineCall:
       return "resource define call";
-    case "attribute-pattern-create":
+    case FrameworkResourceCarrierKind.AttributePatternCreate:
       return "attribute-pattern create call";
-    case "renderer-helper":
+    case FrameworkResourceCarrierKind.RendererHelper:
       return "renderer helper call";
-    default:
-      return "resource carrier";
   }
 }
 
@@ -744,6 +868,26 @@ function sameSourceRange(left: SourceRange, right: SourceRange): boolean {
     left.start.character === right.start.character &&
     left.end.line === right.end.line &&
     left.end.character === right.end.character;
+}
+
+function uniqueBySourceSite(
+  sites: readonly FrameworkResourceConvergenceSourceSiteRow[],
+): readonly FrameworkResourceConvergenceSourceSiteRow[] {
+  const byKey = new Map<string, FrameworkResourceConvergenceSourceSiteRow>();
+  for (const site of sites) {
+    const key = [
+      site.role,
+      site.source.filePath,
+      site.source.start.line,
+      site.source.start.character,
+      site.source.end.line,
+      site.source.end.character,
+    ].join(":");
+    if (!byKey.has(key)) {
+      byKey.set(key, site);
+    }
+  }
+  return [...byKey.values()];
 }
 
 function resourceConvergenceBasis(sourceProject: SourceProject): Basis {
@@ -770,27 +914,4 @@ function resourceConvergenceOpenBasis(): Basis {
     summary:
       "Resource convergence is derived from TypeScript/checker rows plus evaluator admission evidence.",
   };
-}
-
-function groupBy<TRow, TKey>(
-  rows: readonly TRow[],
-  keyForRow: (row: TRow) => TKey,
-): Map<TKey, readonly TRow[]> {
-  const groups = new Map<TKey, TRow[]>();
-  for (const row of rows) {
-    const key = keyForRow(row);
-    const group = groups.get(key);
-    if (group === undefined) {
-      groups.set(key, [row]);
-    } else {
-      group.push(row);
-    }
-  }
-  return groups;
-}
-
-function unique<TValue extends string>(
-  values: readonly TValue[],
-): readonly TValue[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }

@@ -4,6 +4,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
+import type { SourceFileAdmission } from '../boot/frames.js';
 import {
   SourceSpanAddress,
   SourceSpanRole,
@@ -42,7 +43,6 @@ import {
 } from '../kernel/store.js';
 import {
   recordsForSourceOpenSeam,
-  SourceOpenSeamInput,
 } from '../kernel/source-open-seam.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
@@ -52,6 +52,8 @@ import {
   type StaticEvaluationExpressionReader,
 } from '../evaluation/expression-reader.js';
 import {
+  hasStaticModifier,
+  readDeclarationLocalName,
   readPropertyName,
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
@@ -121,9 +123,11 @@ import {
   ValueConverterDefinitionHeader,
 } from './resource-definition.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
-import type {
-  ResourceRecognitionObservation,
-  ResourceTargetObservation,
+import { readConventionalTemplateAdmission } from './resource-convention.js';
+import {
+  ResourceCarrierKind,
+  type ResourceRecognitionObservation,
+  type ResourceTargetObservation,
 } from './resource-observation.js';
 import {
   ResourceDefinitionKind,
@@ -497,7 +501,7 @@ export class ResourceDefinitionConverger {
       case ResourceDefinitionKind.ValueConverter:
       case ResourceDefinitionKind.BindingBehavior:
       case ResourceDefinitionKind.BindingCommand:
-        return this.convergeThinNamedResource(definition, header, productHandle, provenanceHandle);
+        return this.convergeThinNamedResource(definition, observation, header, productHandle, provenanceHandle);
       case ResourceDefinitionKind.AttributePattern:
         return this.convergeAttributePattern(definition, header, productHandle, provenanceHandle);
     }
@@ -535,6 +539,7 @@ export class ResourceDefinitionConverger {
       context,
       definitionExpression,
       targetClass,
+      observation,
       `resource-definition-converged:${header.localKey}:template`,
     );
     const dependencies = readResourceDependencies(context, definitionExpression, targetClass);
@@ -601,7 +606,7 @@ export class ResourceDefinitionConverger {
         processContent,
         [
           new CustomElementDefinitionContribution(
-            CustomElementDefinitionContributionKind.Header,
+            customElementContributionKind(observation),
             target,
             name,
             aliasDefinitions,
@@ -704,7 +709,7 @@ export class ResourceDefinitionConverger {
         defaultProperty,
         [
           new CustomAttributeDefinitionContribution(
-            CustomAttributeDefinitionContributionKind.Header,
+            customAttributeContributionKind(observation),
             target,
             name,
             aliasDefinitions,
@@ -728,6 +733,7 @@ export class ResourceDefinitionConverger {
 
   private convergeThinNamedResource(
     definition: NamedResourceDefinitionHeader,
+    observation: ResourceRecognitionObservation,
     header: ResourceDefinitionHeaderEmission,
     productHandle: ProductHandle,
     provenanceHandle: ProvenanceHandle,
@@ -760,7 +766,7 @@ export class ResourceDefinitionConverger {
             name,
             aliases,
             key,
-            [new ValueConverterDefinitionContribution(ValueConverterDefinitionContributionKind.Header, target, name, aliases, key, fieldProvenance)],
+            [new ValueConverterDefinitionContribution(valueConverterContributionKind(observation), target, name, aliases, key, fieldProvenance)],
             fieldProvenance,
           ),
           [],
@@ -777,7 +783,7 @@ export class ResourceDefinitionConverger {
             name,
             aliases,
             key,
-            [new BindingBehaviorDefinitionContribution(BindingBehaviorDefinitionContributionKind.Header, target, name, aliases, key, fieldProvenance)],
+            [new BindingBehaviorDefinitionContribution(bindingBehaviorContributionKind(observation), target, name, aliases, key, fieldProvenance)],
             fieldProvenance,
           ),
           [],
@@ -794,7 +800,7 @@ export class ResourceDefinitionConverger {
             name,
             aliases,
             key,
-            [new BindingCommandDefinitionContribution(BindingCommandDefinitionContributionKind.Header, target, name, aliases, key, fieldProvenance)],
+            [new BindingCommandDefinitionContribution(bindingCommandContributionKind(observation), target, name, aliases, key, fieldProvenance)],
             fieldProvenance,
           ),
           [],
@@ -922,15 +928,15 @@ export class ResourceDefinitionConverger {
     readonly handle: OpenSeamHandle;
   } {
     const local = `resource-definition-converged:${header.localKey}:open:${index}`;
-    return recordsForSourceOpenSeam(this.store, new SourceOpenSeamInput(
-      local,
-      KernelVocabulary.Resource.OpenDefinitionField.key,
-      open.summary,
-      context.sourceFileAddressHandle,
-      open.node.getStart(context.sourceFile),
-      open.node.end,
-      [EvidenceRole.Diagnostic],
-    ));
+    return recordsForSourceOpenSeam(this.store, {
+      localKey: local,
+      openKind: KernelVocabulary.Resource.OpenDefinitionField.key,
+      summary: open.summary,
+      sourceFileAddressHandle: context.sourceFileAddressHandle,
+      start: open.node.getStart(context.sourceFile),
+      end: open.node.end,
+      evidenceRoles: [EvidenceRole.Diagnostic],
+    });
   }
 }
 
@@ -945,6 +951,46 @@ function classNodeForTarget(
   }
   const parent = target.node.parent;
   return ts.isClassDeclaration(parent) || ts.isClassExpression(parent) ? parent : null;
+}
+
+function customElementContributionKind(
+  observation: ResourceRecognitionObservation,
+): CustomElementDefinitionContributionKind {
+  return observation.carrierKind === ResourceCarrierKind.Convention
+    ? CustomElementDefinitionContributionKind.Convention
+    : CustomElementDefinitionContributionKind.Header;
+}
+
+function customAttributeContributionKind(
+  observation: ResourceRecognitionObservation,
+): CustomAttributeDefinitionContributionKind {
+  return observation.carrierKind === ResourceCarrierKind.Convention
+    ? CustomAttributeDefinitionContributionKind.Convention
+    : CustomAttributeDefinitionContributionKind.Header;
+}
+
+function valueConverterContributionKind(
+  observation: ResourceRecognitionObservation,
+): ValueConverterDefinitionContributionKind {
+  return observation.carrierKind === ResourceCarrierKind.Convention
+    ? ValueConverterDefinitionContributionKind.Convention
+    : ValueConverterDefinitionContributionKind.Header;
+}
+
+function bindingBehaviorContributionKind(
+  observation: ResourceRecognitionObservation,
+): BindingBehaviorDefinitionContributionKind {
+  return observation.carrierKind === ResourceCarrierKind.Convention
+    ? BindingBehaviorDefinitionContributionKind.Convention
+    : BindingBehaviorDefinitionContributionKind.Header;
+}
+
+function bindingCommandContributionKind(
+  observation: ResourceRecognitionObservation,
+): BindingCommandDefinitionContributionKind {
+  return observation.carrierKind === ResourceCarrierKind.Convention
+    ? BindingCommandDefinitionContributionKind.Convention
+    : BindingCommandDefinitionContributionKind.Header;
 }
 
 function expressionNode(node: ts.Node | null): ts.Expression | null {
@@ -1065,6 +1111,7 @@ function readCustomElementTemplate(
   context: ResourceRecognitionContext,
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
+  observation: ResourceRecognitionObservation,
   local: string,
 ): TemplateDefinitionRead {
   const read = readFieldValue(context, definitionExpression, targetClass, 'template');
@@ -1077,6 +1124,10 @@ function readCustomElementTemplate(
 
   const value = read?.value;
   if (value == null || value.kind === EvaluationValueKind.Null || value.kind === EvaluationValueKind.Undefined) {
+    const conventional = readConventionalHtmlTemplate(store, context, targetClass, observation, local);
+    if (conventional != null) {
+      return conventional;
+    }
     return new TemplateDefinitionRead(new CustomElementTemplateDefinition(CustomElementTemplateKind.None));
   }
   if (value.kind === EvaluationValueKind.String) {
@@ -1094,6 +1145,45 @@ function readCustomElementTemplate(
     );
   }
   return new TemplateDefinitionRead(new CustomElementTemplateDefinition(CustomElementTemplateKind.Open));
+}
+
+function readConventionalHtmlTemplate(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  targetClass: ts.ClassLikeDeclarationBase | null,
+  observation: ResourceRecognitionObservation,
+  local: string,
+): TemplateDefinitionRead | null {
+  if (
+    targetClass == null
+    || (
+      observation.carrierKind !== ResourceCarrierKind.Convention
+      && observation.carrierKind !== ResourceCarrierKind.Decorator
+      && observation.carrierKind !== ResourceCarrierKind.StaticAu
+    )
+  ) {
+    return null;
+  }
+  const admission = readConventionalTemplateAdmission(context, targetClass);
+  if (admission == null) {
+    return null;
+  }
+  const absolutePath = path.resolve(context.projectRootDir ?? path.dirname(context.sourceFile.fileName), admission.path);
+  if (!existsSync(absolutePath)) {
+    return null;
+  }
+
+  const markup = readFileSync(absolutePath, 'utf8');
+  const source = externalTemplateSourceAddress(store, admission.addressHandle, markup, local);
+  return new TemplateDefinitionRead(
+    new CustomElementTemplateDefinition(
+      CustomElementTemplateKind.Markup,
+      markup,
+      source.addressHandle,
+      null,
+    ),
+    source.records,
+  );
 }
 
 function readImportedHtmlTemplate(
@@ -1114,12 +1204,11 @@ function readImportedHtmlTemplate(
   if (templatePath == null) {
     return null;
   }
-  const projectPath = projectRelativeImportPath(context.moduleKey, templatePath);
-  const admission = context.sourceFiles.find((source) => source.path === projectPath) ?? null;
+  const absolutePath = path.resolve(path.dirname(context.sourceFile.fileName), templatePath);
+  const admission = findTemplateAdmissionForAbsolutePath(context, absolutePath);
   if (admission == null) {
     return null;
   }
-  const absolutePath = path.resolve(path.dirname(context.sourceFile.fileName), templatePath);
   if (!existsSync(absolutePath)) {
     return null;
   }
@@ -1187,13 +1276,6 @@ function htmlPathFromModuleSpecifier(moduleSpecifier: string): string | null {
   return path.extname(pathOnly).toLowerCase() === '.html' ? pathOnly : null;
 }
 
-function projectRelativeImportPath(
-  fromModuleKey: string,
-  moduleSpecifierPath: string,
-): string {
-  return path.posix.normalize(path.posix.join(path.posix.dirname(fromModuleKey), moduleSpecifierPath));
-}
-
 function externalTemplateSourceAddress(
   store: KernelStore,
   sourceFileAddressHandle: AddressHandle,
@@ -1224,6 +1306,22 @@ function externalTemplateSourceAddress(
     ),
   ];
   return new TemplateSourceAddressSet(records, addressHandle, null);
+}
+
+function findTemplateAdmissionForAbsolutePath(
+  context: ResourceRecognitionContext,
+  absolutePath: string,
+): SourceFileAdmission | null {
+  const normalized = normalizeAbsolutePath(absolutePath);
+  const projectRootDir = context.projectRootDir ?? path.dirname(context.sourceFile.fileName);
+  return context.sourceFiles.find((source) =>
+    normalizeAbsolutePath(path.resolve(projectRootDir, source.path)) === normalized
+  ) ?? null;
+}
+
+function normalizeAbsolutePath(value: string): string {
+  const normalized = path.resolve(value);
+  return process.platform === 'win32' ? normalized.toLowerCase() : normalized;
 }
 
 function templateMarkupSourceAddress(
@@ -1532,20 +1630,80 @@ function readResourceDependencies(
       element.value.kind !== EvaluationValueKind.Class
       && element.value.kind !== EvaluationValueKind.Function
     ) {
+      const checkerTarget = readCheckerDependencyReference(context, element.expression);
+      if (checkerTarget != null) {
+        dependencies.push(checkerTarget);
+        continue;
+      }
       appendConvergenceOpen(open, 'Resource dependency entry did not close to a static class or function.', element.expression);
       continue;
     }
-    const target = targetReferenceForFunction(element.value, null);
+    const target = dependencyReferenceForFunction(element.value);
     if (target.identityHandle == null && target.localName == null) {
       appendConvergenceOpen(open, 'Resource dependency entry did not expose a usable target name.', element.expression);
       continue;
     }
-    dependencies.push(new ResourceDependencyReference(target.identityHandle, target.localName));
+    dependencies.push(target);
   }
-  if (value.mayHaveUnknownElements) {
-    appendConvergenceOpen(open, 'Resource dependencies include open spread or hole entries.', value.node);
+  if (value.mayHaveUnknownElements || value.mayHaveUnknownOrder) {
+    appendConvergenceOpen(open, 'Resource dependencies include open spread, hole, or unknown-order entries.', value.node);
   }
   return new ResourceDependenciesRead(dependencies, open);
+}
+
+function readCheckerDependencyReference(
+  context: ResourceRecognitionContext,
+  expression: ts.Expression | null,
+): ResourceDependencyReference | null {
+  if (expression == null || context.typeSystem == null) {
+    return null;
+  }
+  const checker = context.typeSystem.checker;
+  const symbol = readAliasedValueSymbol(checker, expression);
+  const declaration = symbol?.valueDeclaration ?? symbol?.declarations?.[0] ?? null;
+  const type = checker.getTypeAtLocation(expression);
+  const moduleKey = declaration == null
+    ? null
+    : context.typeSystem.readModuleKeyForSourceFile(declaration.getSourceFile());
+  if (
+    moduleKey == null
+    && !isCheckerConstructableOrCallable(type)
+    && !isClassOrFunctionDeclaration(declaration)
+  ) {
+    return null;
+  }
+  const localName = readDeclarationLocalName(declaration) ?? symbol?.getName() ?? null;
+  return localName == null ? null : new ResourceDependencyReference(null, localName, moduleKey, localName);
+}
+
+function readAliasedValueSymbol(
+  checker: ts.TypeChecker,
+  expression: ts.Expression,
+): ts.Symbol | null {
+  const symbol = checker.getSymbolAtLocation(expression) ?? null;
+  if (symbol == null) {
+    return null;
+  }
+  return (symbol.flags & ts.SymbolFlags.Alias) !== 0
+    ? checker.getAliasedSymbol(symbol)
+    : symbol;
+}
+
+function isCheckerConstructableOrCallable(type: ts.Type): boolean {
+  return type.getConstructSignatures().length > 0 || type.getCallSignatures().length > 0;
+}
+
+function isClassOrFunctionDeclaration(
+  declaration: ts.Declaration | null,
+): boolean {
+  return declaration != null
+    && (
+      ts.isClassDeclaration(declaration)
+      || ts.isClassExpression(declaration)
+      || ts.isFunctionDeclaration(declaration)
+      || ts.isFunctionExpression(declaration)
+      || ts.isArrowFunction(declaration)
+    );
 }
 
 function readContainerStrategy(
@@ -1696,10 +1854,19 @@ function readMemberBindableDecorator(
   }
   const value = context.expressionReader.evaluateExpression(argument).value;
   if (value == null || value.kind !== EvaluationValueKind.Object) {
+    const fallback = bindableEntry(
+      propertyName,
+      null,
+      BindableContributionKind.Decorator,
+      provenanceHandle,
+      source,
+      readCheckerBindableSetter(context, argument),
+    );
     return new BindableEntryRead(
-      null,
-      null,
+      fallback.bindable,
+      fallback.contribution,
       new ConvergenceOpen('@bindable(...) configuration did not close to a static object.', argument),
+      fallback.records,
     );
   }
   return bindableEntry(propertyName, value, BindableContributionKind.Decorator, provenanceHandle, source);
@@ -1748,10 +1915,10 @@ function readBindableListValue(
         nullableConvergenceOpenForNode('Bindable array entry did not close to a string or static object.', element.expression),
       );
     });
-    if (value.mayHaveUnknownElements) {
+    if (value.mayHaveUnknownElements || value.mayHaveUnknownOrder) {
       return [
         ...entries,
-        new BindableEntryRead(null, null, nullableConvergenceOpenForNode('Bindable array includes open spread or hole entries.', value.node)),
+        new BindableEntryRead(null, null, nullableConvergenceOpenForNode('Bindable array includes open spread, hole, or unknown-order entries.', value.node)),
       ];
     }
     return entries;
@@ -1794,12 +1961,13 @@ function bindableEntry(
   contributionKind: BindableContributionKind,
   provenanceHandle: ProvenanceHandle,
   source: SourceSpanAddressSet | null,
+  setterOverride: BindableSetterDefinition | null = null,
 ): BindableEntryRead {
   const attribute = readObjectString(partial, 'attribute') ?? toBindableAttribute(propertyName);
   const callback = readObjectString(partial, 'callback') ?? `${propertyName}Changed`;
   const mode = readBindableMode(partial?.properties.get('mode')?.value) ?? BindableBindingMode.ToView;
   const name = readObjectString(partial, 'name') ?? propertyName;
-  const setter = readBindableSetter(partial);
+  const setter = setterOverride ?? readBindableSetter(partial);
   const fieldProvenance = fieldProvenanceFor<BindableDefinitionField>(provenanceHandle, ['attribute', 'callback', 'mode', 'name', 'set', 'source']);
   return new BindableEntryRead(
     new BindableDefinition(
@@ -1839,6 +2007,19 @@ function readBindableSetter(partial: EvaluationObjectValue | null): BindableSett
     return new BindableSetterDefinition(BindableSetterKind.TypeCoercion);
   }
   return new BindableSetterDefinition(BindableSetterKind.Default);
+}
+
+function readCheckerBindableSetter(
+  context: ResourceRecognitionContext,
+  expression: ts.Expression,
+): BindableSetterDefinition | null {
+  if (context.typeSystem == null) {
+    return null;
+  }
+  const type = context.typeSystem.checker.getTypeAtLocation(expression);
+  return context.typeSystem.checker.getPropertyOfType(type, 'set') == null
+    ? null
+    : new BindableSetterDefinition(BindableSetterKind.Open);
 }
 
 function readBindableMode(value: EvaluationValue | null | undefined): BindableBindingMode | null {
@@ -1901,6 +2082,20 @@ function targetReferenceForFunction(
   return new ResourceTargetReference(
     null,
     addressHandle,
+    localName,
+  );
+}
+
+function dependencyReferenceForFunction(
+  value: Extract<EvaluationValue, { readonly kind: EvaluationValueKind.Function | EvaluationValueKind.Class }>,
+): ResourceDependencyReference {
+  const localName = value.declaration.name != null && ts.isIdentifier(value.declaration.name)
+    ? value.declaration.name.text
+    : null;
+  return new ResourceDependencyReference(
+    null,
+    localName,
+    value.environment.moduleKey,
     localName,
   );
 }
@@ -1980,12 +2175,6 @@ function fieldProvenanceFor<TField extends string>(
   fields: readonly TField[],
 ): readonly FieldProvenance<TField>[] {
   return compactFieldProvenance(fields.map((field) => new FieldProvenance(field, provenanceHandle)));
-}
-
-function hasStaticModifier(node: ts.Node): boolean {
-  return ts.canHaveModifiers(node)
-    ? ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword) === true
-    : false;
 }
 
 function toBindableAttribute(name: string): string {

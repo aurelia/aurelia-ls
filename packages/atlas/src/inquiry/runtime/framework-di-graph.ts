@@ -5,9 +5,14 @@ import {
 import {
   FrameworkMaterializationProviderIdentity,
   FrameworkMaterializationRouteDescriptor,
+  type FrameworkMaterializationRouteKind,
 } from "../../framework/materialization.js";
 import {
+  FrameworkDiResolverStrategy,
+  FrameworkRelationshipClosure,
   FrameworkRelationshipEndpointKind,
+  FrameworkRelationshipMechanism,
+  FrameworkRelationshipPhase,
   FrameworkRelationshipRelation,
   type FrameworkRelationshipAtom,
   type FrameworkRelationshipEndpoint,
@@ -88,12 +93,12 @@ export interface FrameworkDiGraphEdgeRow {
   readonly toName: string;
   readonly packageId?: string;
   readonly packageName?: string;
-  readonly relation?: string;
-  readonly mechanism?: string;
-  readonly phase?: string;
-  readonly strategy?: string;
-  readonly routeKind?: string;
-  readonly closure?: string;
+  readonly relation?: FrameworkRelationshipRelation;
+  readonly mechanism?: FrameworkRelationshipMechanism;
+  readonly phase?: FrameworkRelationshipPhase;
+  readonly strategy?: FrameworkDiResolverStrategy;
+  readonly routeKind?: FrameworkMaterializationRouteKind;
+  readonly closure?: FrameworkRelationshipClosure;
   readonly source?: SourceRange;
   readonly sourceRowId?: string;
   readonly summary: string;
@@ -302,8 +307,8 @@ class FrameworkDiGraphBuilder {
       packageId: row.packageId,
       packageName: row.packageName,
       relation: FrameworkRelationshipRelation.DefinesKey,
-      mechanism: "create-interface",
-      phase: "definition",
+      mechanism: FrameworkRelationshipMechanism.CreateInterface,
+      phase: FrameworkRelationshipPhase.Definition,
       source: row.source,
       sourceRowId: row.id,
       summary: `${row.exportName} declares DI key ${row.interfaceKey}.`,

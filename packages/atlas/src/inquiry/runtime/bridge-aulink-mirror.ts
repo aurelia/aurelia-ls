@@ -3,6 +3,8 @@ import path from "node:path";
 import {
   FrameworkRelationshipFamily,
   FrameworkRelationshipEndpointKind,
+  FrameworkRelationshipMechanism,
+  FrameworkRelationshipPhase,
   FrameworkRelationshipRelation,
   type FrameworkRelationshipEndpoint,
 } from "../../framework/relationships.js";
@@ -42,7 +44,17 @@ import { readFrameworkResourceConvergenceRows } from "./framework-resource-lense
 import {
   readFrameworkRenderingRelationships,
 } from "./framework-rendering-relationships.js";
-import { readFrameworkStructuralRelationships } from "./framework-structural-relationships.js";
+import {
+  readFrameworkRouterAnalysis,
+} from "./framework-router-analysis.js";
+import {
+  routerRelationshipsFromRows,
+} from "./framework-router-relationships.js";
+import {
+  frameworkStructuralRelationshipProjection,
+  readFrameworkStructuralRelationships,
+} from "./framework-structural-relationships.js";
+import { auLinkModelFilters } from "./bridge-aulink-lens-support.js";
 import { countBy } from "./framework-support.js";
 
 /** Filters accepted by auLink mirror projections. */
@@ -154,10 +166,10 @@ export type AuLinkMirrorMatchKind =
 export interface AuLinkMirrorRoleEvidenceRow {
   readonly id: string;
   readonly linkId: string;
-  readonly roleFamily: string;
-  readonly relation: string;
-  readonly mechanism?: string;
-  readonly phase?: string;
+  readonly roleFamily: FrameworkRelationshipFamily;
+  readonly relation: FrameworkRelationshipRelation;
+  readonly mechanism?: FrameworkRelationshipMechanism;
+  readonly phase?: FrameworkRelationshipPhase;
   readonly matchKind: AuLinkMirrorMatchKind;
   readonly matchedEndpoint: "from" | "to";
   readonly packageId: string;
@@ -218,10 +230,10 @@ export interface AuLinkMirrorModel {
 
 interface RelationshipSourceRow {
   readonly id: string;
-  readonly roleFamily: string;
-  readonly relation: string;
-  readonly mechanism?: string;
-  readonly phase?: string;
+  readonly roleFamily: FrameworkRelationshipFamily;
+  readonly relation: FrameworkRelationshipRelation;
+  readonly mechanism?: FrameworkRelationshipMechanism;
+  readonly phase?: FrameworkRelationshipPhase;
   readonly packageId: string;
   readonly packageName: string;
   readonly from: FrameworkRelationshipEndpoint;
@@ -245,7 +257,7 @@ export function readAuLinkMirrorModel(
   sourceProject: SourceProject,
   filters: AuLinkMirrorFilters = {},
 ): AuLinkMirrorModel {
-  const auLink = readAuLinkModel(sourceProject, auLinkFilters(filters));
+  const auLink = readAuLinkModel(sourceProject, auLinkModelFilters(filters, { includeQuery: true }));
   const matcher = new AuLinkTargetMatcher();
   const sourceRows = frameworkRelationshipRows(sourceProject);
   const obligations = readFrameworkEmulationObligations(sourceProject, {});
@@ -298,7 +310,7 @@ export function readAuLinkMirrorModel(
 
   return {
     filters,
-    rollup: rollup(
+    rollup: auLinkMirrorRollup(
       rows,
       visibleRoleEvidence,
       visibleObligationEvidence,
@@ -306,18 +318,6 @@ export function readAuLinkMirrorModel(
     rows,
     roleEvidence: visibleRoleEvidence,
     obligationEvidence: visibleObligationEvidence,
-  };
-}
-
-function auLinkFilters(filters: AuLinkMirrorFilters): AuLinkFilters {
-  return {
-    ...(filters.linkId === undefined ? {} : { linkId: filters.linkId }),
-    ...(filters.packageId === undefined ? {} : { packageId: filters.packageId }),
-    ...(filters.symbolName === undefined ? {} : { symbolName: filters.symbolName }),
-    ...(filters.targetName === undefined ? {} : { targetName: filters.targetName }),
-    ...(filters.filePath === undefined ? {} : { filePath: filters.filePath }),
-    ...(filters.frameworkStatus === undefined ? {} : { frameworkStatus: filters.frameworkStatus }),
-    ...(filters.query === undefined ? {} : { query: filters.query }),
   };
 }
 
@@ -437,7 +437,7 @@ function frameworkRelationshipRows(
     ...readFrameworkStructuralRelationships(sourceProject, filters).map((row) =>
       relationshipSourceRow(row, {
         sourceLens: LensId.FrameworkDiscovery,
-        sourceProjection: structuralRelationshipProjection(row.family),
+        sourceProjection: frameworkStructuralRelationshipProjection(row.family),
         sourceRowId: row.sourceRowId,
         basis: [BasisKind.TypeScriptChecker],
         detailFilters: {
@@ -470,18 +470,38 @@ function frameworkRelationshipRows(
         basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
       }),
     ),
+    ...routerRelationshipSourceRows(sourceProject, filters),
     ...readFrameworkResourceConvergenceRows(sourceProject, filters).map(
       resourceConvergenceRelationshipSourceRow,
     ),
   ].sort(compareRelationshipRows);
 }
 
+function routerRelationshipSourceRows(
+  sourceProject: SourceProject,
+  filters: FrameworkDiscoveryFilters,
+): readonly RelationshipSourceRow[] {
+  const router = readFrameworkRouterAnalysis(sourceProject);
+  return routerRelationshipsFromRows(
+    router.flows,
+    router.routeRecognizerMechanics,
+    filters,
+  ).map((row) =>
+    relationshipSourceRow(row, {
+      sourceLens: LensId.FrameworkRouter,
+      sourceProjection: "relationships",
+      sourceRowId: row.sourceRowId,
+      basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+    }),
+  );
+}
+
 interface FrameworkRelationshipSource {
   readonly id: string;
-  readonly family?: string;
-  readonly relation: string;
-  readonly mechanism?: string;
-  readonly phase?: string;
+  readonly family?: FrameworkRelationshipFamily;
+  readonly relation: FrameworkRelationshipRelation;
+  readonly mechanism?: FrameworkRelationshipMechanism;
+  readonly phase?: FrameworkRelationshipPhase;
   readonly packageId: string;
   readonly packageName: string;
   readonly from: FrameworkRelationshipEndpoint;
@@ -491,7 +511,7 @@ interface FrameworkRelationshipSource {
 }
 
 interface RelationshipSourceOptions {
-  readonly roleFamily?: string;
+  readonly roleFamily?: FrameworkRelationshipFamily;
   readonly sourceLens: LensId;
   readonly sourceProjection: string;
   readonly sourceRowId: string;
@@ -505,7 +525,7 @@ function relationshipSourceRow(
 ): RelationshipSourceRow {
   return {
     id: row.id,
-    roleFamily: options.roleFamily ?? row.family ?? "framework",
+    roleFamily: options.roleFamily ?? row.family ?? FrameworkRelationshipFamily.Identity,
     relation: row.relation,
     ...(row.mechanism === undefined ? {} : { mechanism: row.mechanism }),
     ...(row.phase === undefined ? {} : { phase: row.phase }),
@@ -537,21 +557,21 @@ function resourceConvergenceRelationshipSourceRow(
       name: row.sourceExportName,
       packageId: row.packageId,
       packageName: row.packageName,
-      source: row.source,
+      source: row.declarationSource,
     },
     to: {
       kind: FrameworkRelationshipEndpointKind.Resource,
       name: row.targetName ?? row.resourceName ?? row.sourceExportName,
       packageId: row.packageId,
       packageName: row.packageName,
-      source: row.source,
+      source: row.definitionSource,
       resourceKind: row.resourceKind,
       resourceName: row.resourceName,
     },
     sourceLens: LensId.FrameworkResources,
     sourceProjection: "convergence",
     sourceRowId: row.id,
-    source: row.source,
+    source: row.definitionSource,
     basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
     detailFilters: {
       packageId: row.packageId,
@@ -564,9 +584,9 @@ function resourceConvergenceRelationshipSourceRow(
 
 function relationshipDetailFilters(row: {
   readonly packageId: string;
-  readonly relation: string;
-  readonly mechanism?: string;
-  readonly phase?: string;
+  readonly relation: FrameworkRelationshipRelation;
+  readonly mechanism?: FrameworkRelationshipMechanism;
+  readonly phase?: FrameworkRelationshipPhase;
   readonly from: FrameworkRelationshipEndpoint;
 }): Readonly<Record<string, string>> {
   return {
@@ -576,18 +596,6 @@ function relationshipDetailFilters(row: {
     ...(row.phase === undefined ? {} : { phase: row.phase }),
     query: row.from.name,
   };
-}
-
-function structuralRelationshipProjection(family: string): string {
-  switch (family) {
-    case FrameworkRelationshipFamily.Observation:
-      return "observers";
-    case FrameworkRelationshipFamily.Router:
-      return "router-entities";
-    case FrameworkRelationshipFamily.Rendering:
-    default:
-      return "rendering-structures";
-  }
 }
 
 function roleEvidenceRow(
@@ -721,7 +729,7 @@ function endpointRef(
   };
 }
 
-function rollup(
+function auLinkMirrorRollup(
   rows: readonly AuLinkMirrorRow[],
   roleEvidence: readonly AuLinkMirrorRoleEvidenceRow[],
   obligationEvidence: readonly AuLinkMirrorObligationEvidenceRow[],

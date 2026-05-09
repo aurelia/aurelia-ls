@@ -1,7 +1,16 @@
 import ts from "typescript";
 
-import type { SourceRange } from "../locus.js";
-import type { SourceProject } from "../../source/index.js";
+import {
+  groupBy,
+  uniqueValues,
+} from "../../collections.js";
+import {
+  calleeNameForExpression,
+  propertyNameText,
+  requiredSourceFileIdentity,
+  sourceReferenceForNode,
+  type SourceProject,
+} from "../../source/index.js";
 
 export type ProductVocabularySlot =
   | "product-kind"
@@ -212,7 +221,7 @@ export function readProductVocabularyAnalysis(
 
   return {
     version: "product-vocabulary-analysis@2",
-    rollup: rollup(definitions, usages, claimPredicates, claimGraphEdges, claimSignatureIssues),
+    rollup: productVocabularyRollup(definitions, usages, claimPredicates, claimGraphEdges, claimSignatureIssues),
     definitions,
     usages,
     claimPredicates,
@@ -239,6 +248,9 @@ function readVocabularyDefinitions(
         continue;
       }
       const namespace = propertyNameText(namespaceProperty.name, sourceFile);
+      if (namespace === null) {
+        continue;
+      }
       for (const entryProperty of namespaceProperty.initializer.properties) {
         if (!ts.isPropertyAssignment(entryProperty) || !ts.isCallExpression(entryProperty.initializer)) {
           continue;
@@ -247,7 +259,7 @@ function readVocabularyDefinitions(
         const memberName = propertyNameText(entryProperty.name, sourceFile);
         const localName = stringArgument(call, 1);
         const summary = stringArgument(call, moduleSpec.slot === "claim-predicate" ? 2 : 3);
-        if (localName === null || summary === null) {
+        if (memberName === null || localName === null || summary === null) {
           continue;
         }
 
@@ -269,7 +281,7 @@ function readVocabularyDefinitions(
           localName,
           key: `${kebabNamespace(namespace)}.${localName}`,
           summary,
-          source: sourceReference(sourceProject, sourceFile, entryProperty.name),
+          source: sourceReferenceForNode(sourceProject, sourceFile, entryProperty.name),
           usageCount: 0,
           publicUsageCount: 0,
           directUsageCount: 0,
@@ -299,8 +311,8 @@ function readVocabularyUsages(
 
   const usages: ProductVocabularyUsageRow[] = [];
   for (const sourceFile of sourceProject.ownedSourceFiles()) {
-    const identity = sourceProject.sourceFileIdentity(sourceFile);
-    if (identity?.packageId !== "semantic-runtime") {
+    const identity = requiredSourceFileIdentity(sourceProject, sourceFile);
+    if (identity.packageId !== "semantic-runtime") {
       continue;
     }
     if (identity.repoPath.includes("/kernel/vocabulary/")) {
@@ -325,7 +337,7 @@ function readVocabularyUsages(
             accessPath: access.accessPath,
             accessKind: access.accessKind,
             syntacticRole: usageRole(node),
-            source: sourceReference(sourceProject, sourceFile, node),
+            source: sourceReferenceForNode(sourceProject, sourceFile, node),
           });
         }
       }
@@ -559,21 +571,25 @@ function claimPredicateSignatureFromExpression(
         {
           kind: "missing-signature",
           summary: "Claim predicate definition has no claimSignature argument.",
-          source: sourceReference(sourceProject, sourceFile, sourceFile),
+          source: sourceReferenceForNode(sourceProject, sourceFile, sourceFile),
         },
       ],
     };
   }
 
   const call = unwrapInitializer(expression);
-  if (call === undefined || !ts.isCallExpression(call) || calleeName(call.expression) !== "claimSignature") {
+  if (
+    call === undefined ||
+    !ts.isCallExpression(call) ||
+    calleeNameForExpression(call.expression) !== "claimSignature"
+  ) {
     return {
       signature: null,
       issues: [
         {
           kind: "unresolved-signature",
           summary: "Claim predicate signature must use claimSignature(subject, object).",
-          source: sourceReference(sourceProject, sourceFile, expression),
+          source: sourceReferenceForNode(sourceProject, sourceFile, expression),
         },
       ],
     };
@@ -647,7 +663,7 @@ function endpointSignatureFromExpression(
     );
   }
 
-  const helperName = calleeName(call.expression);
+  const helperName = calleeNameForExpression(call.expression);
   switch (helperName) {
     case "identityEndpoint":
       return {
@@ -722,7 +738,7 @@ function endpointIssue(
         kind,
         endpoint,
         summary,
-        source: sourceReference(sourceProject, sourceFile, node),
+        source: sourceReferenceForNode(sourceProject, sourceFile, node),
       },
     ],
   };
@@ -755,7 +771,7 @@ function endpointKindsFromExpression(
   if (array === undefined || !ts.isArrayLiteralExpression(array)) {
     return [];
   }
-  return unique(
+  return uniqueValues(
     array.elements.flatMap((element) => {
       if (ts.isSpreadElement(element)) {
         return [];
@@ -779,7 +795,8 @@ function endpointKindFromExpression(
   if (!ts.isIdentifier(unwrapped.expression) || unwrapped.expression.text !== "KernelClaimEndpointKind") {
     return null;
   }
-  return endpointKindByMemberName[propertyNameText(unwrapped.name, sourceFile)] ?? null;
+  const memberName = propertyNameText(unwrapped.name, sourceFile);
+  return memberName === null ? null : endpointKindByMemberName[memberName] ?? null;
 }
 
 function productKindRefsFromArray(
@@ -797,7 +814,7 @@ function productKindRefsFromExpressions(
   expressions: readonly ts.Expression[],
   sourceFile: ts.SourceFile,
 ): readonly string[] {
-  return unique(
+  return uniqueValues(
     expressions.flatMap((expression) => {
       if (ts.isSpreadElement(expression)) {
         return [];
@@ -821,16 +838,19 @@ function productKindAccess(expression: ts.Expression, sourceFile: ts.SourceFile)
     return null;
   }
   const namespace = propertyNameText(namespaceAccess.name, sourceFile);
+  if (namespace === null) {
+    return null;
+  }
   return `KernelProductKinds.${namespace}.${memberName}`;
 }
 
 function productRefsForSignature(
   signature: ProductClaimPredicateSignatureRow,
 ): readonly string[] {
-  return unique([...signature.subject.productKindRefs, ...signature.object.productKindRefs]);
+  return uniqueValues([...signature.subject.productKindRefs, ...signature.object.productKindRefs]);
 }
 
-function rollup(
+function productVocabularyRollup(
   definitions: readonly ProductVocabularyDefinitionRow[],
   usages: readonly ProductVocabularyUsageRow[],
   claimPredicates: readonly ProductClaimPredicateRow[],
@@ -838,13 +858,13 @@ function rollup(
   claimSignatureIssues: readonly ProductClaimSignatureIssueRow[],
 ): ProductVocabularyRollup {
   const bySlot = Object.fromEntries(
-    [...grouped(definitions, (definition) => definition.slot)].map(([slot, group]) => [
+    [...groupBy(definitions, (definition) => definition.slot)].map(([slot, group]) => [
       slot,
       group.length,
     ]),
   ) as Record<ProductVocabularySlot, number>;
   const byNamespace = Object.fromEntries(
-    [...grouped(definitions, (definition) => definition.namespace)].map(([namespace, group]) => [
+    [...groupBy(definitions, (definition) => definition.namespace)].map(([namespace, group]) => [
       namespace,
       group.length,
     ]),
@@ -910,23 +930,6 @@ function unwrapInitializer(node: ts.Expression | undefined): ts.Expression | und
     return unwrapInitializer(node.expression);
   }
   return node;
-}
-
-function calleeName(expression: ts.Expression): string | undefined {
-  if (ts.isIdentifier(expression)) {
-    return expression.text;
-  }
-  if (ts.isPropertyAccessExpression(expression)) {
-    return expression.name.text;
-  }
-  return undefined;
-}
-
-function propertyNameText(name: ts.PropertyName, sourceFile: ts.SourceFile): string {
-  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) {
-    return name.text;
-  }
-  return name.getText(sourceFile);
 }
 
 function stringArgument(call: ts.CallExpression, index: number): string | null {
@@ -1051,59 +1054,8 @@ function usageRole(node: ts.PropertyAccessExpression): ProductVocabularyUsageRol
   return "property-access";
 }
 
-function sourceReference(
-  sourceProject: SourceProject,
-  sourceFile: ts.SourceFile,
-  node: ts.Node,
-): ProductSourceReference {
-  const identity = sourceProject.sourceFileIdentity(sourceFile);
-  const start = node.getStart(sourceFile);
-  const end = node.getEnd();
-  const startPosition = sourceFile.getLineAndCharacterOfPosition(start);
-  const endPosition = sourceFile.getLineAndCharacterOfPosition(end);
-  return {
-    filePath: identity?.repoPath ?? sourceFile.fileName,
-    startLine: startPosition.line + 1,
-    startCharacter: startPosition.character + 1,
-    endLine: endPosition.line + 1,
-    endCharacter: endPosition.character + 1,
-  };
-}
-
-export function toInquirySourceRange(source: ProductSourceReference): SourceRange {
-  return {
-    filePath: source.filePath,
-    start: {
-      line: source.startLine - 1,
-      character: source.startCharacter - 1,
-    },
-    end: {
-      line: source.endLine - 1,
-      character: source.endCharacter - 1,
-    },
-  };
-}
-
 function kebabNamespace(namespace: string): string {
   return namespace.replace(/[A-Z]/gu, (part, offset) =>
     offset === 0 ? part.toLowerCase() : `-${part.toLowerCase()}`,
   );
-}
-
-function unique<T>(values: readonly T[]): readonly T[] {
-  return [...new Set(values)];
-}
-
-function grouped<T, TKey>(
-  values: readonly T[],
-  keyForValue: (value: T) => TKey,
-): Map<TKey, T[]> {
-  const groups = new Map<TKey, T[]>();
-  for (const value of values) {
-    const key = keyForValue(value);
-    const current = groups.get(key) ?? [];
-    current.push(value);
-    groups.set(key, current);
-  }
-  return groups;
 }

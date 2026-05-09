@@ -20,6 +20,7 @@ import {
 } from "../../framework/syntax.js";
 import {
   readTypeScriptCallSiteEntry,
+  requiredSourceFileIdentity,
   SourceProjectMemo,
   type SourceFileIdentity,
   type SourceProject,
@@ -256,9 +257,9 @@ function materializationSitesForSourceFile(
   sourceProject: SourceProject,
   sourceFile: ts.SourceFile,
 ): readonly FrameworkResourceMaterializationSiteRow[] {
-  const file = sourceProject.sourceFileIdentity(sourceFile);
+  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
   const packageInfo = sourceProject.packageForFileName(sourceFile.fileName);
-  if (file === null || packageInfo === null || file.packageId === null) {
+  if (packageInfo === null || file.packageId === null) {
     return [];
   }
   const rows: FrameworkResourceMaterializationSiteRow[] = [];

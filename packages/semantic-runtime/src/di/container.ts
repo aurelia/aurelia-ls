@@ -9,7 +9,7 @@ import type { FieldProvenance } from '../kernel/provenance.js';
 import { ContainerRegistrationOperation } from './container-registration.js';
 import {
   ContainerConfiguration,
-  ContainerConfigurationInput,
+  type ContainerConfigurationRequest,
 } from './container-configuration.js';
 import {
   ContainerFactoryLookup,
@@ -324,7 +324,7 @@ export class Container {
   }
 
   /** Product-aware child creation. The caller supplies the child factory because it owns handle/provenance minting. */
-  createChild(factory: ContainerChildFactory, input?: ContainerConfiguration | ContainerConfigurationInput): Container {
+  createChild(factory: ContainerChildFactory, input?: ContainerConfiguration | ContainerConfigurationRequest): Container {
     const configuration = this.configurationForChild(input);
     const child = factory(this, configuration);
     this.childContainers.push(child);
@@ -460,18 +460,18 @@ export class Container {
   }
 
   private configurationForChild(
-    input: ContainerConfiguration | ContainerConfigurationInput | null | undefined,
+    input: ContainerConfiguration | ContainerConfigurationRequest | null | undefined,
   ): ContainerConfiguration {
     if (input == null && this.config.inheritParentResources) {
       if (this.config === ContainerConfiguration.DEFAULT) {
         return this.config;
       }
-      return ContainerConfiguration.from(new ContainerConfigurationInput(
-        false,
-        this.config.defaultResolverPolicy,
-        this.config.sourceAddressHandle,
-        this.config.fieldProvenance,
-      ));
+      return ContainerConfiguration.from({
+        inheritParentResources: false,
+        defaultResolverPolicy: this.config.defaultResolverPolicy,
+        sourceAddressHandle: this.config.sourceAddressHandle,
+        fieldProvenance: this.config.fieldProvenance,
+      } satisfies ContainerConfigurationRequest);
     }
     return ContainerConfiguration.from(input ?? this.config);
   }

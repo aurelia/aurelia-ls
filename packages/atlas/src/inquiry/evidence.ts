@@ -80,6 +80,11 @@ export interface Evidence {
   readonly data?: unknown;
 }
 
+/** Normalize a single evidence row or evidence array into a readonly array. */
+export function evidenceArray(evidence: Evidence | readonly Evidence[]): readonly Evidence[] {
+  return Array.isArray(evidence) ? evidence : [evidence as Evidence];
+}
+
 /** Strip lens-local payload data from evidence before embedding it into continuations. */
 export function evidenceBreadcrumb(evidence: Evidence): Evidence {
   return {

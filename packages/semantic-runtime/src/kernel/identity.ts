@@ -342,6 +342,44 @@ export class ConfigurationIdentity {
   ) {}
 }
 
+/** Identity for router configuration and navigation products. */
+export class RouterIdentity {
+  /** String discriminator for serialized router identity records. */
+  readonly kind = 'router-identity' as const;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Controlled product kind represented by this identity. */
+    readonly productKindKey: ProductKindKey,
+    /** Optional owner identity such as a parent route config or route context. */
+    readonly ownerHandle: IdentityHandle | null,
+    /** Source address for the router source shape or runtime owner. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Local source/router label for traces while broader router materializers are still referential. */
+    readonly localName: string | null = null,
+  ) {}
+}
+
+/** Identity for lower-level route-recognizer path grammar and matching products. */
+export class RouteRecognizerIdentity {
+  /** String discriminator for serialized route-recognizer identity records. */
+  readonly kind = 'route-recognizer-identity' as const;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Controlled product kind represented by this identity. */
+    readonly productKindKey: ProductKindKey,
+    /** Optional owner identity such as the route config that produced this recognizer fact. */
+    readonly ownerHandle: IdentityHandle | null,
+    /** Source address for the authored path or recognizer owner. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Local route-recognizer label, usually the authored path. */
+    readonly localName: string | null = null,
+  ) {}
+}
+
 /** Identity for compiler service, scope, parser, syntax, and lowering products. */
 export class CompilerIdentity {
   /** String discriminator for serialized compiler identity records. */
@@ -456,6 +494,8 @@ export type SemanticIdentity =
   | DiProductIdentity
   | RegistrationIdentity
   | ConfigurationIdentity
+  | RouterIdentity
+  | RouteRecognizerIdentity
   | CompilerIdentity
   | TemplateIdentity
   | TemplateNodeIdentity

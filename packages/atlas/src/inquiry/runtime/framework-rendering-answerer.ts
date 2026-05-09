@@ -1,9 +1,8 @@
 import { readFrameworkDiscoverySeedIndex } from "../../framework/index.js";
 import type { SourceProject } from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
-import { clampBudget } from "../budget.js";
 import type { Inquiry } from "../inquiry.js";
-import { pageOffset } from "../paging.js";
+import { pageOffset, rowLimit } from "../paging.js";
 import {
   bindingAdmissionContinuations,
   bindingEffectContinuations,
@@ -120,7 +119,7 @@ class FrameworkRenderingQueryContext {
       ...relationshipAxisFiltersFromInquiry(inquiry),
     };
     this.seedIndex = readFrameworkDiscoverySeedIndex(sourceProject);
-    this.limit = clampBudget(inquiry.budget?.rows, 80, 1_000);
+    this.limit = rowLimit(inquiry);
     this.offset = pageOffset(inquiry);
   }
 }

@@ -24,7 +24,6 @@ import {
   BasisKind,
   type Basis,
 } from "../basis.js";
-import { clampBudget } from "../budget.js";
 import {
   ContinuationKind,
   ContinuationPriority,
@@ -44,6 +43,7 @@ import type { SourceRange } from "../locus.js";
 import {
   evidenceLimit,
   pageOffset,
+  rowLimit,
 } from "../paging.js";
 import {
   NavigationPlane,
@@ -60,6 +60,10 @@ import {
   nextPageContinuation,
   projectionContinuation,
 } from "./framework-continuation-core.js";
+import {
+  readInquiryFilters,
+  stringFiltersFromRecord,
+} from "./lens-filter-utils.js";
 import {
   readFrameworkAdmissionWorldFormationRows,
 } from "./framework-admission-world-formation.js";
@@ -90,7 +94,7 @@ import type { FrameworkDiscoveryFilters } from "./framework-filters.js";
 import {
   endpointForAdmissionAssociation,
   endpointForAdmissionBundle,
-  sourceRangeForBundleExport,
+  requiredSourceRangeForBundleExport,
 } from "./framework-admission-endpoints.js";
 
 /** Compact bundle row returned by framework.admission bundle projections. */
@@ -115,8 +119,8 @@ export interface FrameworkAdmissionBundleSummaryRow {
   readonly endpointKinds: Readonly<Record<string, number>>;
   /** Counts by source bundle association kind. */
   readonly associationKinds: Readonly<Record<string, number>>;
-  /** Best source anchor for the bundle or its first retained association. */
-  readonly source?: SourceRange;
+  /** Exact source anchor for the bundle export declaration. */
+  readonly source: SourceRange;
   /** Compact row summary. */
   readonly summary: string;
 }
@@ -193,8 +197,8 @@ const ADMISSION_BUNDLE_ROW_FAMILY =
   new PagedRowFamily<FrameworkAdmissionBundleSummaryRow>({
     id: "framework.admission:bundles",
     rowLabel: "framework admission bundle row(s)",
-    evidenceForRow: evidenceForBundle,
-    continuationsForPage: bundleContinuations,
+    evidenceForRow: evidenceForAdmissionBundle,
+    continuationsForPage: admissionBundleContinuations,
   });
 
 const ADMISSION_MATERIALIZATION_ROW_FAMILY =
@@ -217,8 +221,8 @@ const ADMISSION_RELATIONSHIP_ROW_FAMILY =
   new PagedRowFamily<FrameworkAdmissionRelationshipRow>({
     id: "framework.admission:relationships",
     rowLabel: "framework admission relationship row(s)",
-    evidenceForRow: evidenceForRelationship,
-    continuationsForPage: relationshipContinuations,
+    evidenceForRow: frameworkAdmissionEvidenceForRelationship,
+    continuationsForPage: admissionRelationshipContinuations,
   });
 
 const ADMISSION_FLOW_ROW_FAMILY =
@@ -245,7 +249,7 @@ export function answerFrameworkAdmission(
   sourceProject: SourceProject,
 ): Answer<FrameworkAdmissionValue> {
   const projection = inquiry.projection ?? "summary";
-  const filters = filtersFromInquiry(inquiry);
+  const filters = readInquiryFilters(inquiry, frameworkAdmissionFiltersFromRecord);
   if (projection === "summary" && !hasExactAdmissionScope(filters)) {
     return createAnswer(
       inquiry,
@@ -275,13 +279,13 @@ export function answerFrameworkAdmission(
   const bundles = readFrameworkBundles(sourceProject, relationshipFilters);
   const relationships = bundles
     .flatMap((bundle) => relationshipsForBundle(bundle))
-    .filter((row) => relationshipProjectionRows(row, projection))
-    .filter((row) => relationshipMatches(row, relationshipFilters));
+    .filter((row) => admissionRelationshipMatchesProjection(row, projection))
+    .filter((row) => admissionRelationshipMatches(row, relationshipFilters));
   const bundleSummaries = bundleSummariesForRelationships(
     bundles,
     relationships,
   ).filter((row) => bundleMatches(row, relationshipFilters));
-  const limit = clampBudget(inquiry.budget?.rows, 80, 1_000);
+  const limit = rowLimit(inquiry);
   const offset = pageOffset(inquiry);
   const basis = [frameworkAdmissionBasis(sourceProject)];
 
@@ -477,14 +481,14 @@ export function answerFrameworkAdmission(
       value: valueSummary(bundleSummaries, relationships),
       basis,
       evidence: [
-        ...bundleSummaries.slice(0, 2).map(evidenceForBundle),
-        ...relationships.slice(0, 4).map(evidenceForRelationship),
+        ...bundleSummaries.slice(0, 2).map(evidenceForAdmissionBundle),
+        ...relationships.slice(0, 4).map(frameworkAdmissionEvidenceForRelationship),
       ],
       openSeams: openSeamsForRelationships(
         relationships.slice(0, evidenceLimit(inquiry)),
         [],
       ),
-      continuations: summaryContinuations(inquiry),
+      continuations: admissionSummaryContinuations(inquiry),
     },
   );
 }
@@ -502,7 +506,7 @@ function relationshipForAssociation(
   association: FrameworkBundleAssociationRow,
 ): FrameworkAdmissionRelationshipRow {
   const classification = classifyFrameworkAdmissionAssociation(association);
-  const from = endpointForAdmissionBundle(bundle, association.source);
+  const from = endpointForAdmissionBundle(bundle);
   const to = endpointForAdmissionAssociation(association);
   return {
     id: `framework-admission:${association.id}`,
@@ -532,7 +536,7 @@ function relationshipForAssociation(
   };
 }
 
-function relationshipProjectionRows(
+function admissionRelationshipMatchesProjection(
   row: FrameworkAdmissionRelationshipRow,
   projection: string,
 ): boolean {
@@ -584,7 +588,7 @@ function bundleSummariesForRelationships(
           relations: countBy(rows, (row) => row.relation),
           endpointKinds: countBy(rows, (row) => row.to.kind),
           associationKinds: countBy(rows, (row) => row.associationKind),
-          source: sourceRangeForBundleExport(bundle) ?? rows[0]?.source,
+          source: requiredSourceRangeForBundleExport(bundle),
           summary: `${bundle.packageId}:${bundle.exportEntry.exportName} admits ${rows.length} framework value(s).`,
         },
       ];
@@ -615,13 +619,6 @@ function valueSummary(
   };
 }
 
-function filtersFromInquiry(inquiry: Inquiry): FrameworkAdmissionFilters {
-  return {
-    ...filtersFromRecord(inquiry.subject),
-    ...filtersFromRecord(inquiry.filters),
-  };
-}
-
 function hasExactAdmissionScope(filters: FrameworkAdmissionFilters): boolean {
   return filters.packageId !== undefined || filters.exportName !== undefined;
 }
@@ -648,43 +645,38 @@ function isFlowProjection(projection: string): boolean {
     projection === "flow-nodes";
 }
 
-function filtersFromRecord(value: unknown): FrameworkAdmissionFilters {
-  if (value === null || typeof value !== "object") {
-    return {};
-  }
-  const source = value as Record<string, unknown>;
-  return {
-    ...stringFilter(source, "packageId"),
-    ...stringFilter(source, "exportName"),
-    ...stringFilter(source, "query"),
-    ...stringFilter(source, "relation"),
-    ...stringFilter(source, "mechanism"),
-    ...stringFilter(source, "phase"),
-    ...stringFilter(source, "associationKind"),
-    ...stringFilter(source, "targetName"),
-    ...stringFilter(source, "resourceKind"),
-    ...stringFilter(source, "key"),
-    ...stringFilter(source, "linkKind"),
-    ...stringFilter(source, "materializationKind"),
-    ...stringFilter(source, "matchBasis"),
-    ...stringFilter(source, "formationKind"),
-    ...stringFilter(source, "status"),
-    ...stringFilter(source, "slotName"),
-    ...stringFilter(source, "appTaskExecutionKind"),
-    ...stringFilter(source, "certainty"),
-    ...stringFilter(source, "corridor"),
-    ...stringFilter(source, "edgeKind"),
-    ...stringFilter(source, "nodeKind"),
-    ...stringFilter(source, "role"),
-  };
-}
+const frameworkAdmissionFilterKeys = [
+  "packageId",
+  "exportName",
+  "query",
+  "relation",
+  "mechanism",
+  "phase",
+  "associationKind",
+  "targetName",
+  "resourceKind",
+  "key",
+  "linkKind",
+  "materializationKind",
+  "matchBasis",
+  "formationKind",
+  "status",
+  "slotName",
+  "appTaskExecutionKind",
+  "certainty",
+  "corridor",
+  "edgeKind",
+  "nodeKind",
+  "role",
+] as const satisfies readonly (keyof FrameworkAdmissionFilters & string)[];
 
-function stringFilter(
-  source: Record<string, unknown>,
-  key: keyof FrameworkAdmissionFilters,
-): object {
-  const value = source[key];
-  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
+function frameworkAdmissionFiltersFromRecord(
+  value: unknown,
+): FrameworkAdmissionFilters {
+  return stringFiltersFromRecord<FrameworkAdmissionFilters>(
+    value,
+    frameworkAdmissionFilterKeys,
+  );
 }
 
 function bundleMatches(
@@ -702,7 +694,7 @@ function bundleMatches(
   );
 }
 
-function relationshipMatches(
+function admissionRelationshipMatches(
   row: FrameworkAdmissionRelationshipRow,
   filters: FrameworkAdmissionFilters,
 ): boolean {
@@ -737,7 +729,7 @@ function relationshipMatches(
   );
 }
 
-function evidenceForBundle(row: FrameworkAdmissionBundleSummaryRow): Evidence {
+function evidenceForAdmissionBundle(row: FrameworkAdmissionBundleSummaryRow): Evidence {
   return {
     id: row.id,
     kind: EvidenceKind.DiRegistration,
@@ -749,7 +741,7 @@ function evidenceForBundle(row: FrameworkAdmissionBundleSummaryRow): Evidence {
   };
 }
 
-function evidenceForRelationship(
+function frameworkAdmissionEvidenceForRelationship(
   row: FrameworkAdmissionRelationshipRow,
 ): Evidence {
   return {
@@ -902,7 +894,7 @@ function openSeamsForRelationships(
       id: `framework-admission:unknown:${row.bundleAssociationId}`,
       kind: OpenSeamKind.Unknown,
       summary: `${row.exportName} admits ${row.to.name}, but the association is not semantically classified yet.`,
-      evidence: evidence[index] ?? evidenceForRelationship(row),
+      evidence: evidence[index] ?? frameworkAdmissionEvidenceForRelationship(row),
       basis: frameworkAdmissionBasisSummary(),
       data: row,
     });
@@ -910,7 +902,7 @@ function openSeamsForRelationships(
   return seams;
 }
 
-function summaryContinuations(inquiry: Inquiry): readonly Continuation[] {
+function admissionSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
   return [
     projectionContinuation(
       inquiry,
@@ -1061,7 +1053,7 @@ function broadSummaryContinuations(
   ];
 }
 
-function bundleContinuations(
+function admissionBundleContinuations(
   inquiry: Inquiry,
   rows: readonly FrameworkAdmissionBundleSummaryRow[],
   nextOffset: number | undefined,
@@ -1092,7 +1084,7 @@ function bundleContinuations(
     ),
   );
   for (const [index, row] of rows.slice(0, 3).entries()) {
-    const evidence = evidenceForBundle(row);
+    const evidence = evidenceForAdmissionBundle(row);
     const builder = new FrameworkRowContinuationBuilder(
       inquiry,
       "framework.admission:bundles",
@@ -1456,7 +1448,7 @@ function worldFormationContinuations(
   return continuations;
 }
 
-function relationshipContinuations(
+function admissionRelationshipContinuations(
   inquiry: Inquiry,
   rows: readonly FrameworkAdmissionRelationshipRow[],
   nextOffset: number | undefined,
@@ -1484,7 +1476,7 @@ function relationshipContinuations(
     ),
   );
   for (const [index, row] of rows.slice(0, 3).entries()) {
-    const evidence = evidenceForRelationship(row);
+    const evidence = frameworkAdmissionEvidenceForRelationship(row);
     const builder = new FrameworkRowContinuationBuilder(
       inquiry,
       "framework.admission:relationships",

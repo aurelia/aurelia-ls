@@ -1,12 +1,15 @@
 import ts from "typescript";
 
 import {
+  EvaluationEffectCertainty,
   type EvaluationInvocationArgumentEffect,
   type EvaluationInvocationEffect,
 } from "../../evaluation/index.js";
 import {
   readTypeScriptCallSiteEntry,
   readTypeScriptExpressionFact,
+  requiredSourceFileIdentity,
+  sourceSpanForNode,
   type SourceProject,
   type TypeScriptCallSiteArgument,
   type TypeScriptExpressionFact,
@@ -31,7 +34,7 @@ import {
   targetNameFromResourceDefinitionCall,
 } from "./framework-resources.js";
 import {
-  externalFileIdentity,
+  concreteExportTarget,
   sourceRangeFromFileSpan,
 } from "./framework-support.js";
 import {
@@ -57,6 +60,31 @@ interface RegistrationExpressionFrame {
   readonly helperName: string | null;
 }
 
+interface RegistrationAssociationContext {
+  readonly sourceProject: SourceProject;
+  readonly classification: FrameworkBundleClassificationContext;
+  readonly row: FrameworkRegistryExportRow;
+  readonly effect: EvaluationInvocationEffect;
+}
+
+interface RegistrationExpressionVisit {
+  readonly context: RegistrationAssociationContext;
+  readonly argument: EvaluationInvocationArgumentEffect;
+  readonly sourceFile: ts.SourceFile;
+  readonly expression: ts.Expression;
+  readonly current: ts.Expression;
+  readonly expressionFact: TypeScriptExpressionFact;
+  readonly declarations: readonly ts.Declaration[];
+  readonly frame: RegistrationExpressionFrame;
+}
+
+interface ConfigurationFactoryMember {
+  readonly name: string;
+  readonly node: ts.Node;
+  readonly body: ts.Block;
+  readonly sourceFile: ts.SourceFile;
+}
+
 function registrationExpressionFrame(
   ...path: readonly string[]
 ): RegistrationExpressionFrame {
@@ -65,6 +93,15 @@ function registrationExpressionFrame(
     catalogName: null,
     helperName: null,
   };
+}
+
+function registrationAssociationContext(
+  sourceProject: SourceProject,
+  classification: FrameworkBundleClassificationContext,
+  row: FrameworkRegistryExportRow,
+  effect: EvaluationInvocationEffect,
+): RegistrationAssociationContext {
+  return { sourceProject, classification, row, effect };
 }
 
 function childRegistrationExpressionFrame(
@@ -107,25 +144,15 @@ export function associationsForBundleEffect(
   if (effect.memberName !== "register") {
     return [];
   }
-  const sourceFile =
-    sourceProject.readSourceFile(effect.callSite.file.repoPath) ??
-    sourceProject.readSourceFile(effect.callSite.file.absolutePath);
-  if (sourceFile === null) {
-    return effect.arguments.map((argument) =>
-      associationRow(
-        sourceProject,
-        row,
-        effect,
-        argument,
-        FrameworkBundleAssociationKind.UnknownRegistrationArgument,
-        {
-          targetName: visibleExpressionNameText(argument.expression.text),
-          expression: argument.expression,
-          sourceFile: null,
-        },
-      ),
-    );
-  }
+  const sourceFile = sourceProject.requiredSourceFileForIdentity(
+    effect.callSite.file,
+  );
+  const context = registrationAssociationContext(
+    sourceProject,
+    classification,
+    row,
+    effect,
+  );
   return effect.arguments.flatMap((argument) => {
     const expression = expressionForFact(sourceFile, argument.expression);
     return expression === null
@@ -144,16 +171,28 @@ export function associationsForBundleEffect(
           ),
         ]
       : associationsForRegistrationExpression(
-          sourceProject,
-          classification,
-          row,
-          effect,
+          context,
           argument,
           sourceFile,
           expression,
           registrationExpressionFrame(`arg${argument.index}`),
         );
   });
+}
+
+export function associationsForConfigurationFactoryMembers(
+  sourceProject: SourceProject,
+  classification: FrameworkBundleClassificationContext,
+  row: FrameworkRegistryExportRow,
+): readonly FrameworkBundleAssociationRow[] {
+  return configurationFactoryMembersForRow(sourceProject, row).flatMap((member) =>
+    associationsForConfigurationFactoryMember(
+      sourceProject,
+      classification,
+      row,
+      member,
+    ),
+  );
 }
 
 function associationsForRegisterFactoryEffect(
@@ -166,26 +205,9 @@ function associationsForRegisterFactoryEffect(
   if (keyArgument === undefined) {
     return [];
   }
-  const sourceFile =
-    sourceProject.readSourceFile(effect.callSite.file.repoPath) ??
-    sourceProject.readSourceFile(effect.callSite.file.absolutePath);
-  if (sourceFile === null) {
-    return [
-      associationRow(
-        sourceProject,
-        row,
-        effect,
-        keyArgument,
-        FrameworkBundleAssociationKind.FactoryRegistration,
-        {
-          targetName: visibleExpressionNameText(keyArgument.expression.text),
-          expression: keyArgument.expression,
-          sourceFile: null,
-          helperName: "registerFactory",
-        },
-      ),
-    ];
-  }
+  const sourceFile = sourceProject.requiredSourceFileForIdentity(
+    effect.callSite.file,
+  );
   const expression = expressionForFact(sourceFile, keyArgument.expression);
   if (expression === null) {
     return [
@@ -239,30 +261,55 @@ function associationsForRegisterFactoryEffect(
 }
 
 function associationsForRegistrationExpression(
-  sourceProject: SourceProject,
-  classification: FrameworkBundleClassificationContext,
-  row: FrameworkRegistryExportRow,
-  effect: EvaluationInvocationEffect,
+  context: RegistrationAssociationContext,
   argument: EvaluationInvocationArgumentEffect,
   sourceFile: ts.SourceFile,
   expression: ts.Expression,
   frame: RegistrationExpressionFrame,
 ): readonly FrameworkBundleAssociationRow[] {
   const current = unwrapExpression(expression);
-  classification.metrics.expressions += 1;
+  context.classification.metrics.expressions += 1;
   const expressionFactStartedAt = performance.now();
-  const expressionFact = readTypeScriptExpressionFact(
-    sourceProject,
+  const expressionFact = expressionFactForArgument(
+    context.sourceProject,
     sourceFile,
     current,
+    argument,
   );
-  classification.metrics.expressionFactMs +=
-    performance.now() - expressionFactStartedAt;
+  if (expressionFact !== argument.expression) {
+    context.classification.metrics.expressionFactMs +=
+      performance.now() - expressionFactStartedAt;
+  }
   const declarations = declarationsForExpressionSymbolCached(
-    sourceProject,
-    classification,
+    context.sourceProject,
+    context.classification,
     current,
   );
+  const visit: RegistrationExpressionVisit = {
+    context,
+    argument,
+    sourceFile,
+    expression,
+    current,
+    expressionFact,
+    declarations,
+    frame,
+  };
+  const { sourceProject, classification, row, effect } = context;
+  const inlineRegistryRows = associationsForInlineRegistryExpression(
+    sourceProject,
+    classification,
+    row,
+    effect,
+    argument,
+    sourceFile,
+    current,
+    frame,
+  );
+  if (inlineRegistryRows.length > 0) {
+    return inlineRegistryRows;
+  }
+
   const helperName = registrationHelperName(current);
   if (helperName !== null && ts.isCallExpression(current)) {
     const keyExpression =
@@ -282,11 +329,8 @@ function associationsForRegistrationExpression(
           )[0];
     classification.metrics.diMs += performance.now() - diStartedAt;
     return [
-      associationRow(
-        sourceProject,
-        row,
-        effect,
-        argument,
+      associationRowForVisit(
+        visit,
         diInterface === undefined
           ? FrameworkBundleAssociationKind.RegistrationHelper
           : FrameworkBundleAssociationKind.DiInterfaceRegistration,
@@ -295,10 +339,6 @@ function associationsForRegistrationExpression(
             keyExpression === null
               ? visibleExpressionName(current)
               : visibleExpressionName(keyExpression),
-          expression: expressionFact,
-          sourceFile,
-          path: frame.path,
-          catalogName: frame.catalogName,
           helperName,
           ...(diInterface === undefined ? {} : { diInterface }),
         },
@@ -320,11 +360,8 @@ function associationsForRegistrationExpression(
           )[0];
     classification.metrics.diMs += performance.now() - diStartedAt;
     return [
-      associationRow(
-        sourceProject,
-        row,
-        effect,
-        argument,
+      associationRowForVisit(
+        visit,
         FrameworkBundleAssociationKind.AppTaskRegistration,
         {
           targetName:
@@ -332,10 +369,6 @@ function associationsForRegistrationExpression(
             (keyExpression === null
               ? appTaskName
               : visibleExpressionName(keyExpression)),
-          expression: expressionFact,
-          sourceFile,
-          path: frame.path,
-          catalogName: frame.catalogName,
           helperName: appTaskName,
           ...(diInterface === undefined ? {} : { diInterface }),
         },
@@ -348,21 +381,13 @@ function associationsForRegistrationExpression(
     : null;
   if (inlineResourceKind !== null && ts.isCallExpression(current)) {
     return [
-      associationRow(
-        sourceProject,
-        row,
-        effect,
-        argument,
+      associationRowForVisit(
+        visit,
         FrameworkBundleAssociationKind.ResourceRegistration,
         {
           targetName:
             targetNameFromResourceDefinitionCall(sourceProject, current) ??
             visibleExpressionName(current),
-          expression: expressionFact,
-          sourceFile,
-          path: frame.path,
-          catalogName: frame.catalogName,
-          helperName: frame.helperName,
         },
       ),
     ];
@@ -377,19 +402,11 @@ function associationsForRegistrationExpression(
   );
   if (registryExportFromCall !== undefined) {
     return [
-      associationRow(
-        sourceProject,
-        row,
-        effect,
-        argument,
+      associationRowForVisit(
+        visit,
         FrameworkBundleAssociationKind.RegistryExportRegistration,
         {
           targetName: registryExportFromCall.exportEntry.exportName,
-          expression: expressionFact,
-          sourceFile,
-          path: frame.path,
-          catalogName: frame.catalogName,
-          helperName: frame.helperName,
           registryExport: registryExportFromCall,
         },
       ),
@@ -406,19 +423,12 @@ function associationsForRegistrationExpression(
   classification.metrics.arrayBindingMs += performance.now() - arrayStartedAt;
   if (arrayBinding !== null) {
     const catalogName = arrayBinding.name ?? visibleExpressionName(current);
-    const catalogRow = associationRow(
-      sourceProject,
-      row,
-      effect,
-      argument,
+    const catalogRow = associationRowForVisit(
+      visit,
       FrameworkBundleAssociationKind.RegistrationCatalog,
       {
         targetName: catalogName,
-        expression: expressionFact,
-        sourceFile,
-        path: frame.path,
         catalogName,
-        helperName: frame.helperName,
       },
     );
     const elementRows = arrayBinding.expression.elements.flatMap(
@@ -433,10 +443,7 @@ function associationsForRegistrationExpression(
           ts.isSpreadElement(element) ? ":spread" : ""
         }`;
         return associationsForRegistrationExpression(
-          sourceProject,
-          classification,
-          row,
-          effect,
+          context,
           registrationArgumentForExpression(
             sourceProject,
             arrayBinding.sourceFile,
@@ -453,20 +460,6 @@ function associationsForRegistrationExpression(
     return [catalogRow, ...elementRows];
   }
 
-  const inlineRegistryRows = associationsForInlineRegistryExpression(
-    sourceProject,
-    classification,
-    row,
-    effect,
-    argument,
-    sourceFile,
-    current,
-    frame,
-  );
-  if (inlineRegistryRows.length > 0) {
-    return inlineRegistryRows;
-  }
-
   const resourceStartedAt = performance.now();
   const resourceCarriers = resourceCarriersForExpression(
     sourceProject,
@@ -478,20 +471,12 @@ function associationsForRegistrationExpression(
   classification.metrics.resourceMs += performance.now() - resourceStartedAt;
   if (resourceCarriers.length > 0) {
     return resourceCarriers.map((resourceCarrier) =>
-      associationRow(
-        sourceProject,
-        row,
-        effect,
-        argument,
+      associationRowForVisit(
+        visit,
         FrameworkBundleAssociationKind.ResourceRegistration,
         {
           targetName:
             resourceCarrier.targetName ?? resourceCarrier.sourceExportName,
-          expression: expressionFact,
-          sourceFile,
-          path: frame.path,
-          catalogName: frame.catalogName,
-          helperName: frame.helperName,
           resourceCarrier,
         },
       ),
@@ -509,19 +494,11 @@ function associationsForRegistrationExpression(
   classification.metrics.diMs += performance.now() - diStartedAt;
   if (diInterface !== undefined) {
     return [
-      associationRow(
-        sourceProject,
-        row,
-        effect,
-        argument,
+      associationRowForVisit(
+        visit,
         FrameworkBundleAssociationKind.DiInterfaceRegistration,
         {
           targetName: diInterface.exportEntry.exportName,
-          expression: expressionFact,
-          sourceFile,
-          path: frame.path,
-          catalogName: frame.catalogName,
-          helperName: frame.helperName,
           diInterface,
         },
       ),
@@ -539,19 +516,11 @@ function associationsForRegistrationExpression(
   classification.metrics.registryMs += performance.now() - registryStartedAt;
   if (registryExport !== undefined) {
     return [
-      associationRow(
-        sourceProject,
-        row,
-        effect,
-        argument,
+      associationRowForVisit(
+        visit,
         FrameworkBundleAssociationKind.RegistryExportRegistration,
         {
           targetName: registryExport.exportEntry.exportName,
-          expression: expressionFact,
-          sourceFile,
-          path: frame.path,
-          catalogName: frame.catalogName,
-          helperName: frame.helperName,
           registryExport,
         },
       ),
@@ -564,10 +533,7 @@ function associationsForRegistrationExpression(
   );
   if (aliasExpression !== null) {
     return associationsForRegistrationExpression(
-      sourceProject,
-      classification,
-      row,
-      effect,
+      context,
       registrationArgumentForExpression(
         sourceProject,
         aliasExpression.getSourceFile(),
@@ -586,10 +552,7 @@ function associationsForRegistrationExpression(
   if (ts.isConditionalExpression(current)) {
     return [
       ...associationsForRegistrationExpression(
-        sourceProject,
-        classification,
-        row,
-        effect,
+        context,
         registrationArgumentForExpression(
           sourceProject,
           sourceFile,
@@ -601,10 +564,7 @@ function associationsForRegistrationExpression(
         childRegistrationExpressionFrame(frame, "conditional:true"),
       ),
       ...associationsForRegistrationExpression(
-        sourceProject,
-        classification,
-        row,
-        effect,
+        context,
         registrationArgumentForExpression(
           sourceProject,
           sourceFile,
@@ -620,24 +580,80 @@ function associationsForRegistrationExpression(
 
   const targetName = visibleExpressionName(current);
   return [
-    associationRow(
-      sourceProject,
-      row,
-      effect,
-      argument,
+    associationRowForVisit(
+      visit,
       targetName === null
         ? FrameworkBundleAssociationKind.UnknownRegistrationArgument
         : FrameworkBundleAssociationKind.RegistrationArgument,
       {
         targetName,
-        expression: expressionFact,
-        sourceFile,
-        path: frame.path,
-        catalogName: frame.catalogName,
-        helperName: frame.helperName,
       },
     ),
   ];
+}
+
+function expressionFactForArgument(
+  sourceProject: SourceProject,
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  argument: EvaluationInvocationArgumentEffect,
+): TypeScriptExpressionFact {
+  const span = argument.expression.span;
+  if (
+    span.start === expression.getStart(sourceFile) &&
+    span.end === expression.getEnd()
+  ) {
+    return argument.expression;
+  }
+  return readTypeScriptExpressionFact(sourceProject, sourceFile, expression);
+}
+
+function associationRowForVisit(
+  visit: RegistrationExpressionVisit,
+  associationKind: FrameworkBundleAssociationKind,
+  values: {
+    readonly targetName: string | null;
+    readonly expression?: TypeScriptExpressionFact;
+    readonly sourceFile?: ts.SourceFile | null;
+    readonly path?: readonly string[];
+    readonly catalogName?: string | null;
+    readonly helperName?: string | null;
+    readonly diInterface?: FrameworkDiInterfaceExportRow;
+    readonly resourceCarrier?: FrameworkResourceCarrierRow;
+    readonly registryExport?: FrameworkRegistryExportRow;
+  },
+): FrameworkBundleAssociationRow {
+  const sourceFile = Object.prototype.hasOwnProperty.call(values, "sourceFile")
+    ? values.sourceFile ?? null
+    : visit.sourceFile;
+  return associationRow(
+    visit.context.sourceProject,
+    visit.context.row,
+    visit.context.effect,
+    visit.argument,
+    associationKind,
+    {
+      targetName: values.targetName,
+      expression: values.expression ?? visit.expressionFact,
+      sourceFile,
+      path: values.path ?? visit.frame.path,
+      catalogName: "catalogName" in values
+        ? values.catalogName
+        : visit.frame.catalogName,
+      helperName: "helperName" in values
+        ? values.helperName
+        : visit.frame.helperName,
+      ...(values.diInterface === undefined
+        ? {}
+        : { diInterface: values.diInterface }),
+      ...(values.resourceCarrier === undefined
+        ? {}
+        : { resourceCarrier: values.resourceCarrier }),
+      ...(values.registryExport === undefined
+        ? {}
+        : { registryExport: values.registryExport }),
+    },
+  );
 }
 
 function associationsForInlineRegistryExpression(
@@ -659,11 +675,17 @@ function associationsForInlineRegistryExpression(
     sourceFile,
     current,
   );
-  if (factory?.body === undefined) {
+  if (factory?.body === undefined || !ts.isBlock(factory.body)) {
     return [];
   }
   const factoryName =
     factory.name?.text ?? visibleExpressionName(current) ?? "factory";
+  const context = registrationAssociationContext(
+    sourceProject,
+    classification,
+    row,
+    outerEffect,
+  );
   const rows: FrameworkBundleAssociationRow[] = [];
   for (const [returnIndex, returned] of returnExpressions(
     factory.body,
@@ -680,68 +702,39 @@ function associationsForInlineRegistryExpression(
       if (nestedEffect === null) {
         continue;
       }
-      if (nestedEffect.memberName === "registerFactory") {
-        rows.push(
-          ...associationsForRegisterFactoryEffect(
-            sourceProject,
-            classification,
-            row,
-            nestedEffect,
-          ),
-        );
-        continue;
-      }
-      for (const nestedArgument of nestedEffect.arguments) {
-        const nestedExpression = expressionForFact(
+      rows.push(
+        ...associationsForSyntheticRegisterCall(
+          sourceProject,
+          classification,
+          row,
+          nestedEffect,
           sourceFile,
-          nestedArgument.expression,
-        );
-        if (nestedExpression === null) {
-          rows.push(
-            associationRow(
-              sourceProject,
-              row,
-              nestedEffect,
-              nestedArgument,
-              FrameworkBundleAssociationKind.UnknownRegistrationArgument,
-              {
-                targetName: visibleExpressionNameText(
-                  nestedArgument.expression.text,
-                ),
-                expression: nestedArgument.expression,
-                sourceFile,
-                path: childRegistrationExpressionFrame(
-                  frame,
-                  `${factoryName}.register`,
-                  `arg${nestedArgument.index}`,
-                ).path,
-                catalogName: frame.catalogName,
-                helperName: frame.helperName,
-              },
-            ),
-          );
-          continue;
-        }
-        rows.push(
-          ...associationsForRegistrationExpression(
+          registerCall,
+          childRegistrationExpressionFrame(frame, `${factoryName}.register`),
+          outerArgument.spread,
+        ),
+      );
+    }
+    if (registerCalls.length === 0) {
+      const returnedExpression = unwrapExpression(returned);
+      rows.push(
+        ...associationsForRegistrationExpression(
+          context,
+          registrationArgumentForExpression(
             sourceProject,
-            classification,
-            row,
-            nestedEffect,
-            registrationArgumentWithSpread(
-              nestedArgument,
-              outerArgument.spread || nestedArgument.spread,
-            ),
             sourceFile,
-            nestedExpression,
-            childRegistrationExpressionFrame(
-              frame,
-              `${factoryName}.register`,
-              `arg${nestedArgument.index}`,
-            ),
+            outerArgument,
+            returnedExpression,
+            outerArgument.spread,
           ),
-        );
-      }
+          sourceFile,
+          returnedExpression,
+          childRegistrationExpressionFrame(
+            frame,
+            `${factoryName}:return${returnIndex}`,
+          ),
+        ),
+      );
     }
   }
   if (rows.length === 0) {
@@ -770,6 +763,136 @@ function associationsForInlineRegistryExpression(
     ),
     ...rows,
   ];
+}
+
+function associationsForConfigurationFactoryMember(
+  sourceProject: SourceProject,
+  classification: FrameworkBundleClassificationContext,
+  row: FrameworkRegistryExportRow,
+  member: ConfigurationFactoryMember,
+): readonly FrameworkBundleAssociationRow[] {
+  const rows: FrameworkBundleAssociationRow[] = [];
+  for (const [returnIndex, returned] of returnExpressions(member.body).entries()) {
+    const registerCalls = registerCallsForReturnedRegistry(returned);
+    for (const [callIndex, registerCall] of registerCalls.entries()) {
+      const effect = syntheticEffectForConfigurationFactoryRegisterCall(
+        sourceProject,
+        row,
+        member,
+        registerCall,
+        `${returnIndex}:${callIndex}`,
+      );
+      if (effect === null) {
+        continue;
+      }
+      rows.push(
+        ...associationsForSyntheticRegisterCall(
+          sourceProject,
+          classification,
+          row,
+          effect,
+          member.sourceFile,
+          registerCall,
+          registrationExpressionFrame(
+            `${member.name}:return${returnIndex}`,
+            `register${callIndex}`,
+          ),
+          false,
+        ),
+      );
+    }
+  }
+  return rows;
+}
+
+function associationsForSyntheticRegisterCall(
+  sourceProject: SourceProject,
+  classification: FrameworkBundleClassificationContext,
+  row: FrameworkRegistryExportRow,
+  effect: EvaluationInvocationEffect,
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  frame: RegistrationExpressionFrame,
+  inheritedSpread: boolean,
+): readonly FrameworkBundleAssociationRow[] {
+  if (effect.memberName === "registerFactory") {
+    return associationsForRegisterFactoryEffect(
+      sourceProject,
+      classification,
+      row,
+      effect,
+    );
+  }
+
+  const context = registrationAssociationContext(
+    sourceProject,
+    classification,
+    row,
+    effect,
+  );
+  const receiverRegistration = registerReceiverRegistrationExpression(call);
+  if (receiverRegistration !== null) {
+    return associationsForRegistrationExpression(
+      context,
+      syntheticArgumentForExpression(
+        sourceProject,
+        sourceFile,
+        receiverRegistration,
+        -1,
+        false,
+      ),
+      sourceFile,
+      receiverRegistration,
+      childRegistrationExpressionFrame(frame, "receiver"),
+    );
+  }
+
+  const rows: FrameworkBundleAssociationRow[] = [];
+  for (const nestedArgument of effect.arguments) {
+    const nestedExpression = expressionForFact(
+      sourceFile,
+      nestedArgument.expression,
+    );
+    if (nestedExpression === null) {
+      rows.push(
+        associationRow(
+          sourceProject,
+          row,
+          effect,
+          nestedArgument,
+          FrameworkBundleAssociationKind.UnknownRegistrationArgument,
+          {
+            targetName: visibleExpressionNameText(nestedArgument.expression.text),
+            expression: nestedArgument.expression,
+            sourceFile,
+            path: childRegistrationExpressionFrame(
+              frame,
+              `arg${nestedArgument.index}`,
+            ).path,
+            catalogName: frame.catalogName,
+            helperName: frame.helperName,
+          },
+        ),
+      );
+      continue;
+    }
+    rows.push(
+      ...associationsForRegistrationExpression(
+        context,
+        registrationArgumentWithSpread(
+          nestedArgument,
+          inheritedSpread || nestedArgument.spread,
+        ),
+        sourceFile,
+        nestedExpression,
+        childRegistrationExpressionFrame(
+          frame,
+          `arg${nestedArgument.index}`,
+        ),
+      ),
+    );
+  }
+  return rows;
 }
 
 function registrationArgumentForExpression(
@@ -802,6 +925,21 @@ function syntheticInvocationArgument(
 ): EvaluationInvocationArgumentEffect {
   return {
     ...argument,
+    binding: null,
+  };
+}
+
+function syntheticArgumentForExpression(
+  sourceProject: SourceProject,
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression,
+  index: number,
+  spread: boolean,
+): EvaluationInvocationArgumentEffect {
+  return {
+    index,
+    spread,
+    expression: readTypeScriptExpressionFact(sourceProject, sourceFile, expression),
     binding: null,
   };
 }
@@ -850,6 +988,81 @@ function syntheticEffectForRegisterCall(
   };
 }
 
+function syntheticEffectForConfigurationFactoryRegisterCall(
+  sourceProject: SourceProject,
+  row: FrameworkRegistryExportRow,
+  member: ConfigurationFactoryMember,
+  call: ts.CallExpression,
+  key: string,
+): EvaluationInvocationEffect | null {
+  const callSite = readTypeScriptCallSiteEntry(
+    sourceProject,
+    member.sourceFile,
+    call,
+  );
+  if (callSite === null) {
+    return null;
+  }
+  const callee = unwrapExpression(call.expression);
+  const receiverExpression =
+    ts.isPropertyAccessExpression(callee) ||
+    ts.isElementAccessExpression(callee)
+      ? callee.expression
+      : null;
+  const receiver =
+    receiverExpression === null
+      ? null
+      : readTypeScriptExpressionFact(
+          sourceProject,
+          member.sourceFile,
+          receiverExpression,
+        );
+  const memberName = ts.isPropertyAccessExpression(callee)
+    ? callee.name.text
+    : ts.isElementAccessExpression(callee)
+    ? callee.argumentExpression?.getText(member.sourceFile) ?? null
+    : null;
+  const file = requiredSourceFileIdentity(sourceProject, member.sourceFile);
+  return {
+    id: `${row.id}:configuration-factory:${member.name}:${key}:${callSite.span.start}`,
+    sequence: callSite.span.start,
+    root: {
+      id: `${row.id}:configuration-factory:${member.name}`,
+      label: `${row.exportEntry.exportName}.${member.name}`,
+      memberName: member.name,
+      file,
+      span: sourceSpanForNode(member.sourceFile, member.node),
+      parameters: [],
+      captures: [],
+    },
+    certainty: EvaluationEffectCertainty.Potential,
+    controlPath: [`configuration-factory:${member.name}`, key],
+    callSite,
+    memberName,
+    receiver,
+    receiverBinding: null,
+    arguments: callSite.arguments.map(syntheticInvocationArgument),
+  };
+}
+
+function registerReceiverRegistrationExpression(
+  call: ts.CallExpression,
+): ts.Expression | null {
+  const callee = unwrapExpression(call.expression);
+  if (!ts.isPropertyAccessExpression(callee) || callee.name.text !== "register") {
+    return null;
+  }
+  const receiver = unwrapExpression(callee.expression);
+  if (!ts.isCallExpression(receiver)) {
+    return null;
+  }
+  return registrationHelperName(receiver) !== null ||
+    appTaskHelperName(receiver) !== null ||
+    resourceKindFromDefinitionCall(receiver) !== null
+    ? receiver
+    : null;
+}
+
 function registerCallsForReturnedRegistry(
   expression: ts.Expression,
 ): readonly ts.CallExpression[] {
@@ -887,6 +1100,147 @@ function registerCallsForReturnedRegistry(
   });
 }
 
+function configurationFactoryMembersForRow(
+  sourceProject: SourceProject,
+  row: FrameworkRegistryExportRow,
+): readonly ConfigurationFactoryMember[] {
+  const target = concreteExportTarget(row.exportEntry.targets);
+  if (target?.file === undefined || target.span === undefined) {
+    return [];
+  }
+  const sourceFile = sourceProject.requiredSourceFileForIdentity(target.file);
+  const declaration = declarationNodeForSpan(sourceFile, target.span);
+  if (declaration === null) {
+    return [];
+  }
+  if (ts.isVariableDeclaration(declaration)) {
+    const initializer =
+      declaration.initializer === undefined
+        ? null
+        : unwrapExpression(declaration.initializer);
+    return initializer !== null && ts.isObjectLiteralExpression(initializer)
+      ? configurationFactoryMembersForObjectLiteral(sourceFile, initializer)
+      : [];
+  }
+  if (ts.isClassDeclaration(declaration)) {
+    return configurationFactoryMembersForClass(sourceFile, declaration);
+  }
+  return [];
+}
+
+function declarationNodeForSpan(
+  sourceFile: ts.SourceFile,
+  span: { readonly start: number; readonly end: number },
+): ts.Node | null {
+  let match: ts.Node | null = null;
+  const visit = (node: ts.Node): void => {
+    if (match !== null) {
+      return;
+    }
+    if (
+      node.getStart(sourceFile) === span.start &&
+      node.getEnd() === span.end
+    ) {
+      match = node;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return match;
+}
+
+const configurationFactoryMemberNames = new Set([
+  "init",
+  "customize",
+  "withStore",
+  "withChild",
+  "optionsProvider",
+]);
+
+function configurationFactoryMembersForObjectLiteral(
+  sourceFile: ts.SourceFile,
+  literal: ts.ObjectLiteralExpression,
+): readonly ConfigurationFactoryMember[] {
+  return literal.properties.flatMap((property) => {
+    const name = propertyNameText(property.name);
+    if (name === null || !configurationFactoryMemberNames.has(name)) {
+      return [];
+    }
+    if (ts.isMethodDeclaration(property) && property.body !== undefined) {
+      const member: ConfigurationFactoryMember = {
+        name,
+        node: property,
+        body: property.body,
+        sourceFile,
+      };
+      return [member];
+    }
+    if (ts.isPropertyAssignment(property)) {
+      const initializer = unwrapExpression(property.initializer);
+      if (
+        (ts.isFunctionExpression(initializer) || ts.isArrowFunction(initializer)) &&
+        ts.isBlock(initializer.body)
+      ) {
+        const member: ConfigurationFactoryMember = {
+          name,
+          node: property,
+          body: initializer.body,
+          sourceFile,
+        };
+        return [member];
+      }
+    }
+    return [];
+  });
+}
+
+function configurationFactoryMembersForClass(
+  sourceFile: ts.SourceFile,
+  declaration: ts.ClassDeclaration,
+): readonly ConfigurationFactoryMember[] {
+  return declaration.members.flatMap((member) => {
+    if (
+      !ts.canHaveModifiers(member) ||
+      ts
+        .getModifiers(member)
+        ?.some((modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword) !== true ||
+      !("name" in member)
+    ) {
+      return [];
+    }
+    const name = propertyNameText(member.name);
+    if (name === null || !configurationFactoryMemberNames.has(name)) {
+      return [];
+    }
+    if (ts.isMethodDeclaration(member) && member.body !== undefined) {
+      const factoryMember: ConfigurationFactoryMember = {
+        name,
+        node: member,
+        body: member.body,
+        sourceFile,
+      };
+      return [factoryMember];
+    }
+    if (ts.isPropertyDeclaration(member) && member.initializer !== undefined) {
+      const initializer = unwrapExpression(member.initializer);
+      if (
+        (ts.isFunctionExpression(initializer) || ts.isArrowFunction(initializer)) &&
+        ts.isBlock(initializer.body)
+      ) {
+        const factoryMember: ConfigurationFactoryMember = {
+          name,
+          node: member,
+          body: initializer.body,
+          sourceFile,
+        };
+        return [factoryMember];
+      }
+    }
+    return [];
+  });
+}
+
 function associationRow(
   sourceProject: SourceProject,
   row: FrameworkRegistryExportRow,
@@ -908,10 +1262,7 @@ function associationRow(
   const source = sourceRangeFromFileSpan(
     values.sourceFile === null
       ? effect.callSite.file.repoPath
-      : (
-          sourceProject.sourceFileIdentity(values.sourceFile) ??
-          externalFileIdentity(sourceProject, values.sourceFile)
-        ).repoPath,
+      : requiredSourceFileIdentity(sourceProject, values.sourceFile).repoPath,
     values.expression.span,
   );
   return {

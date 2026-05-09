@@ -16,6 +16,7 @@ import {
   InquiryProjectionKind,
 } from './answer.js';
 import { KernelExactBasis } from './basis.js';
+import { uniqueValues } from './collections.js';
 import { KernelRecordInquiryLocus } from './locus.js';
 
 export class ProductDetailQuery {
@@ -93,7 +94,7 @@ function productDetailClaimHandles(
   store: KernelStore,
   product: MaterializedProduct,
 ): readonly ClaimHandle[] {
-  return unique([
+  return uniqueValues([
     ...store.readClaimsForSubject(product.handle),
     ...store.readClaimsForObject(product.handle),
   ]);
@@ -153,8 +154,4 @@ function productDetailContinuations(
         query,
       ),
     ];
-}
-
-function unique<TValue>(values: readonly TValue[]): readonly TValue[] {
-  return [...new Set(values)];
 }

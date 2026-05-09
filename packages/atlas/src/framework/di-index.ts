@@ -1,17 +1,23 @@
 import ts from "typescript";
 
+import { countBy } from "../collections.js";
 import {
-  AURELIA_FRAMEWORK_PACKAGE_IDS,
+  declarationName,
+  hasModifier,
+  propertyOrIdentifierName,
+  readAureliaFrameworkPackageNames,
   readTypeScriptCallSiteEntry,
   readTypeScriptExpressionFact,
+  requiredSourceFileIdentity,
+  sourceRangeForSourceFileNode,
   SourceProjectKeyedMemo,
   SourceProjectMemo,
   type SourceFileIdentity,
   type SourceProject,
-  type SourceSpan,
   type TypeScriptCallSiteEntry,
 } from "../source/index.js";
 import type { SourceRange } from "../inquiry/locus.js";
+import { isCreateInterfaceCall } from "./di-source.js";
 import {
   FrameworkDiResolverStrategy,
   FrameworkRelationshipClosure,
@@ -326,7 +332,7 @@ export function readFrameworkDiIndex(
   sourceProject: SourceProject,
 ): FrameworkDiIndex {
   return frameworkDiIndexMemo.read(sourceProject, () => {
-    const packageNames = readFrameworkPackageNames(sourceProject);
+    const packageNames = readAureliaFrameworkPackageNames(sourceProject);
     const payloads = [...packageNames.keys()].map((packageId) =>
       readFrameworkDiPackagePayload(
         sourceProject,
@@ -373,8 +379,8 @@ function scanFrameworkDiPackagePayload(
   const isKernel = packageId === "kernel";
 
   for (const sourceFile of sourceProject.ownedSourceFiles()) {
-    const file = sourceProject.sourceFileIdentity(sourceFile);
-    if (file?.packageId !== packageId) {
+    const file = requiredSourceFileIdentity(sourceProject, sourceFile);
+    if (file.packageId !== packageId) {
       continue;
     }
 
@@ -472,7 +478,7 @@ function createInterfaceKeyRow(
   if (callSite === null) {
     return null;
   }
-  const source = sourceRangeForNode(file.repoPath, sourceFile, call);
+  const source = sourceRangeForSourceFileNode(file.repoPath, sourceFile, call);
   const exportName = variable.name.text;
   const interfaceKey = createInterfaceFriendlyName(call, exportName);
   const endpoint = diKeyEndpoint(packageId, packageName, interfaceKey, source);
@@ -552,7 +558,7 @@ function createInterfaceBuilderAtoms(
     if (ts.isCallExpression(node)) {
       const strategy = resolverBuilderStrategy(node);
       if (strategy !== null) {
-        const source = sourceRangeForNode(file.repoPath, sourceFile, node);
+        const source = sourceRangeForSourceFileNode(file.repoPath, sourceFile, node);
         const callSite =
           readTypeScriptCallSiteEntry(sourceProject, sourceFile, node) ??
           undefined;
@@ -626,7 +632,7 @@ function createInterfaceBuilderProviderAtom(
   if (providerArgument === undefined) {
     return null;
   }
-  const source = sourceRangeForNode(file.repoPath, sourceFile, builderCall);
+  const source = sourceRangeForSourceFileNode(file.repoPath, sourceFile, builderCall);
   const callSite =
     readTypeScriptCallSiteEntry(sourceProject, sourceFile, builderCall) ??
     undefined;
@@ -644,7 +650,7 @@ function createInterfaceBuilderProviderAtom(
     packageId,
     packageName,
     from: keyEndpoint,
-    to: expressionEndpoint(
+    to: diExpressionEndpoint(
       sourceProject,
       sourceFile,
       file,
@@ -693,7 +699,7 @@ function relationshipAtomsForCall(
   if (classified === null) {
     return [];
   }
-  const source = sourceRangeForNode(file.repoPath, sourceFile, call);
+  const source = sourceRangeForSourceFileNode(file.repoPath, sourceFile, call);
   const callSite =
     readTypeScriptCallSiteEntry(sourceProject, sourceFile, call) ?? undefined;
   const atom: FrameworkRelationshipAtom = {
@@ -764,7 +770,7 @@ function implementationRegisterAtomForCall(
   if (keyArgument === undefined || owner?.name === undefined) {
     return null;
   }
-  const source = sourceRangeForNode(file.repoPath, sourceFile, call);
+  const source = sourceRangeForSourceFileNode(file.repoPath, sourceFile, call);
   const callSite =
     readTypeScriptCallSiteEntry(sourceProject, sourceFile, call) ?? undefined;
   const key = expressionDisplayName(sourceFile, keyArgument);
@@ -795,7 +801,7 @@ function implementationRegisterAtomForCall(
       name: provider,
       packageId,
       packageName,
-      source: sourceRangeForNode(file.repoPath, sourceFile, owner),
+      source: sourceRangeForSourceFileNode(file.repoPath, sourceFile, owner),
       expression: readTypeScriptExpressionFact(
         sourceProject,
         sourceFile,
@@ -819,11 +825,11 @@ function relationshipAtomForNew(
   packageName: string,
   node: ts.NewExpression,
 ): FrameworkRelationshipAtom | null {
-  const classified = classifyNewExpression(sourceFile, node);
+  const classified = classifyDiNewExpression(sourceFile, node);
   if (classified === null) {
     return null;
   }
-  const source = sourceRangeForNode(file.repoPath, sourceFile, node);
+  const source = sourceRangeForSourceFileNode(file.repoPath, sourceFile, node);
   const callSite =
     readTypeScriptCallSiteEntry(sourceProject, sourceFile, node) ?? undefined;
   return {
@@ -886,7 +892,7 @@ function relationshipAtomForBinaryExpression(
   ) {
     return null;
   }
-  const source = sourceRangeForNode(file.repoPath, sourceFile, node);
+  const source = sourceRangeForSourceFileNode(file.repoPath, sourceFile, node);
   const value = node.right.getText(sourceFile);
   return {
     id: `framework-di:${packageId}:${file.repoPath}:${node.getStart(
@@ -956,7 +962,7 @@ function registrationFactoryProviderAtomForCall(
   if (keyArgument === undefined || providerArgument === undefined) {
     return null;
   }
-  const source = sourceRangeForNode(file.repoPath, sourceFile, call);
+  const source = sourceRangeForSourceFileNode(file.repoPath, sourceFile, call);
   const callSite =
     readTypeScriptCallSiteEntry(sourceProject, sourceFile, call) ?? undefined;
   const key = expressionDisplayName(sourceFile, keyArgument);
@@ -973,7 +979,7 @@ function registrationFactoryProviderAtomForCall(
     relation,
     packageId,
     packageName,
-    from: expressionEndpoint(
+    from: diExpressionEndpoint(
       sourceProject,
       sourceFile,
       file,
@@ -981,7 +987,7 @@ function registrationFactoryProviderAtomForCall(
       packageName,
       keyArgument,
     ),
-    to: expressionEndpoint(
+    to: diExpressionEndpoint(
       sourceProject,
       sourceFile,
       file,
@@ -1007,7 +1013,9 @@ function classifyCall(
   call: ts.CallExpression,
   includeKernelInternals: boolean,
 ): FrameworkRelationshipClassification | null {
-  const calleeName = propertyOrIdentifierName(call.expression);
+  const calleeName =
+    propertyOrIdentifierName(call.expression, sourceFile) ??
+    call.expression.getText(sourceFile);
   const calleeText = call.expression.getText(sourceFile);
   const registrationStrategy = registrationFactoryStrategy(
     sourceProject,
@@ -1146,7 +1154,7 @@ function resolveCallClassification(
   };
 }
 
-function classifyNewExpression(
+function classifyDiNewExpression(
   sourceFile: ts.SourceFile,
   node: ts.NewExpression,
 ): FrameworkRelationshipClassification | null {
@@ -1237,7 +1245,9 @@ function isRegistrationFactoryExpression(
   sourceProject: SourceProject,
   expression: ts.Expression,
 ): boolean {
-  const calleeName = propertyOrIdentifierName(expression);
+  const calleeName =
+    propertyOrIdentifierName(expression, expression.getSourceFile()) ??
+    expression.getText(expression.getSourceFile());
   if (!isRegistrationFactoryName(calleeName)) {
     return false;
   }
@@ -1308,55 +1318,6 @@ function resolverBuilderStrategy(
   }
 }
 
-function isCreateInterfaceCall(
-  sourceProject: SourceProject,
-  call: ts.CallExpression,
-): boolean {
-  if (!returnsInterfaceSymbol(sourceProject, call)) {
-    return false;
-  }
-  return isCreateInterfaceExpression(sourceProject, call.expression);
-}
-
-function returnsInterfaceSymbol(
-  sourceProject: SourceProject,
-  call: ts.CallExpression,
-): boolean {
-  const signature = sourceProject.checker.getResolvedSignature(call);
-  const type =
-    signature === undefined
-      ? sourceProject.checker.getTypeAtLocation(call)
-      : sourceProject.checker.getReturnTypeOfSignature(signature);
-  return sourceProject.checker
-    .typeToString(type, call)
-    .includes("InterfaceSymbol");
-}
-
-function isCreateInterfaceExpression(
-  sourceProject: SourceProject,
-  expression: ts.Expression,
-): boolean {
-  if (
-    ts.isPropertyAccessExpression(expression) &&
-    expression.name.text === "createInterface"
-  ) {
-    return true;
-  }
-  if (ts.isIdentifier(expression) && expression.text === "createInterface") {
-    return true;
-  }
-  const symbol = resolvedSymbolAt(sourceProject, expression);
-  return symbol?.getDeclarations()?.some((declaration) => {
-    if (
-      ts.isVariableDeclaration(declaration) &&
-      declaration.initializer !== undefined
-    ) {
-      return isCreateInterfaceExpression(sourceProject, declaration.initializer);
-    }
-    return false;
-  }) === true;
-}
-
 function resolvedSymbolAt(
   sourceProject: SourceProject,
   expression: ts.Expression,
@@ -1422,13 +1383,6 @@ function isExportedVariableDeclaration(
   );
 }
 
-function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
-  return (
-    ts.canHaveModifiers(node) &&
-    ts.getModifiers(node)?.some((modifier) => modifier.kind === kind) === true
-  );
-}
-
 function enclosingVariableDeclaration(
   node: ts.Node,
 ): ts.VariableDeclaration | null {
@@ -1477,7 +1431,7 @@ function enclosingEndpoint(
       name,
       packageId,
       packageName,
-      source: sourceRangeForNode(file.repoPath, sourceFile, declaration),
+      source: sourceRangeForSourceFileNode(file.repoPath, sourceFile, declaration),
     };
   }
   return {
@@ -1485,7 +1439,7 @@ function enclosingEndpoint(
     name: packageId,
     packageId,
     packageName,
-    source: sourceRangeForNode(file.repoPath, sourceFile, sourceFile),
+    source: sourceRangeForSourceFileNode(file.repoPath, sourceFile, sourceFile),
     ...(nearestExpression(node) === null
       ? {}
       : {
@@ -1513,25 +1467,6 @@ function enclosingNamedDeclaration(node: ts.Node): ts.Declaration | null {
     current = current.parent;
   }
   return null;
-}
-
-function declarationName(node: ts.Declaration): string | null {
-  const name = (node as { readonly name?: ts.PropertyName | ts.BindingName })
-    .name;
-  if (name === undefined) {
-    return null;
-  }
-  if (
-    ts.isIdentifier(name) ||
-    ts.isStringLiteral(name) ||
-    ts.isNumericLiteral(name)
-  ) {
-    return name.text;
-  }
-  if (ts.isPrivateIdentifier(name)) {
-    return name.text;
-  }
-  return name.getText();
 }
 
 function nearestExpression(node: ts.Node): ts.Expression | null {
@@ -1588,7 +1523,7 @@ function diKeyEndpointForExpression(
         identity.packageId ?? fallbackPackageId,
         packageDefinition.packageName,
         key,
-        sourceRangeForNode(identity.repoPath, declarationFile, declaration),
+        sourceRangeForSourceFileNode(identity.repoPath, declarationFile, declaration),
       );
     }
   }
@@ -1596,11 +1531,11 @@ function diKeyEndpointForExpression(
     fallbackPackageId,
     fallbackPackageName,
     key,
-    sourceRangeForNode(file.repoPath, sourceFile, expression),
+    sourceRangeForSourceFileNode(file.repoPath, sourceFile, expression),
   );
 }
 
-function expressionEndpoint(
+function diExpressionEndpoint(
   sourceProject: SourceProject,
   sourceFile: ts.SourceFile,
   file: SourceFileIdentity,
@@ -1613,7 +1548,7 @@ function expressionEndpoint(
     name: expressionDisplayName(sourceFile, expression),
     packageId,
     packageName,
-    source: sourceRangeForNode(file.repoPath, sourceFile, expression),
+    source: sourceRangeForSourceFileNode(file.repoPath, sourceFile, expression),
     expression: readTypeScriptExpressionFact(
       sourceProject,
       sourceFile,
@@ -1640,16 +1575,6 @@ function expressionDisplayName(
     return expression.text;
   }
   return expression.getText(sourceFile).replace(/\s+/gu, " ").slice(0, 160);
-}
-
-function propertyOrIdentifierName(expression: ts.Expression): string {
-  if (ts.isIdentifier(expression)) {
-    return expression.text;
-  }
-  if (ts.isPropertyAccessExpression(expression)) {
-    return expression.name.text;
-  }
-  return expression.getText();
 }
 
 function keyAndValueFromArguments(
@@ -1744,55 +1669,6 @@ function summaryForRelationshipClassification(
   return `${classified.relation} through ${classified.mechanism} at ${site}`;
 }
 
-function sourceRangeForNode(
-  filePath: string,
-  sourceFile: ts.SourceFile,
-  node: ts.Node,
-): SourceRange {
-  return sourceRangeForSpan(filePath, sourceSpan(sourceFile, node));
-}
-
-function sourceRangeForSpan(filePath: string, span: SourceSpan): SourceRange {
-  return {
-    filePath: filePath.replace(/\\/gu, "/"),
-    start: {
-      line: span.startLine - 1,
-      character: span.startCharacter - 1,
-    },
-    end: {
-      line: span.endLine - 1,
-      character: span.endCharacter - 1,
-    },
-  };
-}
-
-function sourceSpan(sourceFile: ts.SourceFile, node: ts.Node): SourceSpan {
-  const start = node.getStart(sourceFile);
-  const end = node.getEnd();
-  const startPosition = sourceFile.getLineAndCharacterOfPosition(start);
-  const endPosition = sourceFile.getLineAndCharacterOfPosition(end);
-  return {
-    start,
-    end,
-    startLine: startPosition.line + 1,
-    startCharacter: startPosition.character + 1,
-    endLine: endPosition.line + 1,
-    endCharacter: endPosition.character + 1,
-  };
-}
-
-function readFrameworkPackageNames(
-  sourceProject: SourceProject,
-): ReadonlyMap<string, string> {
-  const admitted = new Set<string>(AURELIA_FRAMEWORK_PACKAGE_IDS);
-  return new Map(
-    sourceProject
-      .snapshot()
-      .summary.packages.filter((entry) => admitted.has(entry.id))
-      .map((entry) => [entry.id, entry.packageName]),
-  );
-}
-
 function uniqueDiKeys(
   rows: readonly FrameworkDiKeyRow[],
 ): readonly FrameworkDiKeyRow[] {
@@ -1846,19 +1722,5 @@ function compareRelationshipAtoms(
     left.source.filePath.localeCompare(right.source.filePath) ||
     left.source.start.line - right.source.start.line ||
     left.source.start.character - right.source.start.character
-  );
-}
-
-function countBy<TValue>(
-  rows: readonly TValue[],
-  keyFor: (row: TValue) => string,
-): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = Object.create(null) as Record<string, number>;
-  for (const row of rows) {
-    const key = keyFor(row);
-    counts[key] = (counts[key] ?? 0) + 1;
-  }
-  return Object.fromEntries(
-    Object.entries(counts).sort(([left], [right]) => left.localeCompare(right)),
   );
 }

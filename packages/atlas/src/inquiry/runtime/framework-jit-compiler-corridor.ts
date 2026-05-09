@@ -1,7 +1,7 @@
 import type { Inquiry } from "../inquiry.js";
 import { FrameworkAdmissionFlowCorridor } from "./framework-admission-flow.js";
 
-/** Admission root that currently forms the framework compiler world. */
+/** Default admission root used as the current JIT compiler corridor canary. */
 export const FRAMEWORK_JIT_COMPILER_ROOT_EXPORT = "StandardConfiguration";
 
 /** Framework actor that owns template compilation instruction production. */
@@ -10,10 +10,10 @@ export const FRAMEWORK_JIT_COMPILER_ACTOR = "TemplateCompiler";
 /** Framework package that declares TemplateCompiler. */
 export const FRAMEWORK_JIT_COMPILER_PACKAGE_ID = "template-compiler";
 
-/** DI key that materializes TemplateCompiler in StandardConfiguration. */
+/** DI key that materializes TemplateCompiler in the current default JIT corridor. */
 export const FRAMEWORK_JIT_COMPILER_KEY = "ITemplateCompiler";
 
-/** Build the StandardConfiguration JIT compiler corridor filters. */
+/** Build the default JIT compiler corridor filters. */
 export function frameworkJitCompilerFlowFilters(
   extra: Inquiry["filters"] = {},
 ): Inquiry["filters"] {

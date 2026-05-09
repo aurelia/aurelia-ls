@@ -12,12 +12,14 @@ resource lookup tables, resolver slots, and dependency availability.
 
 - Recognize `Registration.instance`, `singleton`, `transient`, `callback`, `cachedCallback`, `aliasTo`, and `defer`.
 - Recognize direct `container.register(...)` and `aurelia.register(...)` argument shapes.
+- Preserve configuration-owned implicit admissions such as the browser `aurelia` facade's default
+  `StandardConfiguration`.
 - Recognize `IRegistry` objects and `register(container, ...params)` methods without executing arbitrary code.
 - Recognize resource definition registration, static `$au` resource registration, resource aliases, and plain class
   self-registration.
 - Preserve key, registered value, resolver strategy, admission source, and field provenance as kernel-backed facts or
   products.
-- Emit open seams for dynamic keys, dynamic registered values, object maps, spreads, callback bodies, and unsupported
+- Emit open seams for dynamic keys, dynamic registered values, object maps, spreads, and unsupported
   registry shapes.
 
 ## Non-Responsibilities
@@ -54,11 +56,14 @@ That keeps registration analyzable before DI world construction exists.
   an observation; the later resolver/resource table rows are DI world products.
 - Key provenance is not always provider-key provenance. `Registration.defer(key, ...params)` references a registry
   lookup key and must not emit the same `registration.admits-key` claim as `Registration.singleton(key, value)`.
-- Known framework registration effects use explicit `FrameworkRegistrationKind` fields. Registry bodies and
-  framework-owned registration spreads are separate admission products; do not infer either from `localName`.
-  Local names are trace/debug labels only.
+- Known framework registration effects use explicit `FrameworkRegistrationKind` fields and capability mapping. Registry
+  bodies, framework-owned registration spreads, and facade-default admissions are separate products; do not infer any of
+  them from `localName`. Local names are trace/debug labels only.
 - Avoid generic value escape hatches. If key or registered-value shape matters, model it as a typed registration field
   with provenance or leave an open seam.
+- `Registration.callback(...)` and `Registration.cachedCallback(...)` are closed resolver admissions when the target key
+  and callback expression are known. The callback body is activation/dependency pressure for DI lookup inquiries, not a
+  registration-recognition seam.
 
 ## Implementation Shape
 
@@ -77,8 +82,25 @@ resolver, registry, or framework group. These products carry the same product ha
 `MaterializedProduct` envelope so callers can keep typed product indexes without smuggling product fields into the
 generic kernel product record.
 
+`framework-registration-manifest.ts` is the framework registration descriptor table. It maps known configuration
+exports, decomposed registration groups, chain methods, roles, and semantic capabilities such as runtime-html compiler
+services, default syntax, default resources, default renderers, i18n resource/syntax/renderer/service/task effects,
+router default components/resources, router option resolvers, router lifecycle tasks, and state
+resource/syntax/renderer/service/task effects, plus dialog service resolvers and the dialog settings-provider task.
+`StandardConfiguration` is one broad capability bundle and discovery canary, not the only way those capabilities can
+enter an app world.
+
 Runtime-shaped `Resolver`, `IRegistry`, and `ParameterizedRegistry` values live in `../di/`. Registration admissions
 may point at those products, but they are not themselves the runtime values.
+
+`IRegistry` bodies are connected later through `../configuration/registry-body-index.ts`. The index uses source-span
+containment between the registry value and the recognized `register(container)` body; it intentionally does not use
+local names as identity. Imported registry values work when the evaluator can point the value at an admitted source-file
+address in the owning module. Unadmitted or unresolved registry bodies remain open instead of borrowing spans from the
+importing file.
+Registry body interpretation and registry body effects are distinct. The index records that a body was recognized for
+an admission even if it emitted zero registration steps, and registration observation handles include project identity
+so the same linked source can be analyzed under several project frames without duplicate kernel records.
 
 `registration-kernel-emitter.ts` is the current kernel boundary. It turns admission observations into source spans,
 evidence, provenance, typed DI key identities, registration identities, registration claims, materialized-product

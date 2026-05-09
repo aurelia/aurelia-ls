@@ -2,7 +2,7 @@ import {
   SourceSpanRole,
   SourceSpanAddress,
 } from '../kernel/address.js';
-import { SemanticClaim } from '../kernel/claim.js';
+import { SemanticClaim, claimsForProduct } from '../kernel/claim.js';
 import {
   OpenSeam,
 } from '../kernel/open-seam.js';
@@ -38,7 +38,6 @@ import {
 } from '../kernel/store.js';
 import {
   KernelVocabulary,
-  type InstructionKindKey,
   type OpenSeamKindKey,
 } from '../kernel/vocabulary.js';
 import type {
@@ -128,24 +127,23 @@ import {
   type TemplateInstruction,
   type TemplateInstructionField,
 } from './instruction-ir.js';
+import { instructionKindKeyFor } from './instruction-vocabulary.js';
 import { TemplateProductDetails } from './product-details.js';
-export class BindingCommandLoweringInput {
-  constructor(
-    /** Store-local key for this binding-command lowering pass. */
-    readonly localKey: string,
-    /** Compiler unit that owns the HTML, syntax, classification, and parser publications. */
-    readonly compilationUnit: TemplateCompilationUnit,
-    /** Parsed HTML products whose command-bearing attributes are being lowered. */
-    readonly html: HtmlParseEmission,
-    /** Runtime AttrSyntax products produced from the HTML attributes. */
-    readonly attributeSyntax: AttributeSyntaxParseEmission,
-    /** Attribute classifications that selected binding commands. */
-    readonly attributeClassification: AttributeClassificationEmission,
-    /** Value-site products that identify command-owned values before command-specific parsing. */
-    readonly valueSites: TemplateValueSiteEmission,
-    /** Compiler world that supplies binding-command resolver, expression parser, attribute parser, and mapper services. */
-    readonly compilerWorld: TemplateCompilerWorldEmission,
-  ) {}
+export interface BindingCommandLoweringRequest {
+  /** Store-local key for this binding-command lowering pass. */
+  readonly localKey: string;
+  /** Compiler unit that owns the HTML, syntax, classification, and parser publications. */
+  readonly compilationUnit: TemplateCompilationUnit;
+  /** Parsed HTML products whose command-bearing attributes are being lowered. */
+  readonly html: HtmlParseEmission;
+  /** Runtime AttrSyntax products produced from the HTML attributes. */
+  readonly attributeSyntax: AttributeSyntaxParseEmission;
+  /** Attribute classifications that selected binding commands. */
+  readonly attributeClassification: AttributeClassificationEmission;
+  /** Value-site products that identify command-owned values before command-specific parsing. */
+  readonly valueSites: TemplateValueSiteEmission;
+  /** Compiler world that supplies binding-command resolver, expression parser, attribute parser, and mapper services. */
+  readonly compilerWorld: TemplateCompilerWorldEmission;
 }
 
 export class BindingCommandLoweringEmission {
@@ -341,12 +339,10 @@ class PublishedBindingCommandLowering {
   ) {}
 }
 
-class PublishedBindingCommandBuildInput {
-  constructor(
-    readonly input: BindingCommandBuildInput,
-    readonly records: readonly KernelStoreRecord[],
-    readonly claims: readonly SemanticClaim[],
-  ) {}
+interface PublishedBindingCommandBuild {
+  readonly input: BindingCommandBuildInput;
+  readonly records: readonly KernelStoreRecord[];
+  readonly claims: readonly SemanticClaim[];
 }
 
 class CommandParsePublication {
@@ -499,7 +495,7 @@ export class BindingCommandLoweringMaterializer {
     this.valueSitePublisher = new TemplateValueSitePublisher(store);
   }
 
-  lower(input: BindingCommandLoweringInput): BindingCommandLoweringEmission {
+  lower(input: BindingCommandLoweringRequest): BindingCommandLoweringEmission {
     const emission = this.recordsForLowering(input);
     if (emission.records.length > 0) {
       this.store.commit(new KernelStoreBatch(emission.records, `binding-command-lowering:${input.localKey}`));
@@ -535,7 +531,7 @@ export class BindingCommandLoweringMaterializer {
     }
   }
 
-  private recordsForLowering(input: BindingCommandLoweringInput): BindingCommandLoweringEmission {
+  private recordsForLowering(input: BindingCommandLoweringRequest): BindingCommandLoweringEmission {
     const source = this.recordsForSource(input);
     const records: KernelStoreRecord[] = [...source.records];
     const buildInputs: BindingCommandBuildInput[] = [];
@@ -710,7 +706,7 @@ export class BindingCommandLoweringMaterializer {
     syntax: AttributeSyntax | null,
     attribute: HtmlAttribute | null,
     expressionSite: TemplateValueSite | null,
-  ): PublishedBindingCommandBuildInput {
+  ): PublishedBindingCommandBuild {
     const handles = this.handlesForLocal(local);
     const buildInput = this.createBindingCommandBuildInput(handles, source, classification, syntax, attribute, expressionSite);
     const claims = [
@@ -722,11 +718,11 @@ export class BindingCommandLoweringMaterializer {
         source.provenanceHandle,
       ),
     ];
-    return new PublishedBindingCommandBuildInput(
-      buildInput,
-      this.recordsForBindingCommandBuildInput(source, classification, buildInput, claims),
+    return {
+      input: buildInput,
+      records: this.recordsForBindingCommandBuildInput(source, classification, buildInput, claims),
       claims,
-    );
+    };
   }
 
   private createBindingCommandBuildInput(
@@ -1544,11 +1540,11 @@ export class BindingCommandLoweringMaterializer {
       bindable,
     );
     const claim = this.multiBindingCommandBuildInputClaim(local, source, segment, input);
-    return new PublishedBindingCommandBuildInput(
+    return {
       input,
-      this.recordsForMultiBindingCommandBuildInput(input, syntax, segment, source, claim),
-      [claim],
-    );
+      records: this.recordsForMultiBindingCommandBuildInput(input, syntax, segment, source, claim),
+      claims: [claim],
+    };
   }
 
   private multiBindingCommandBuildInputHandles(local: string): {
@@ -2052,7 +2048,7 @@ export class BindingCommandLoweringMaterializer {
     );
   }
 
-  private recordsForSource(input: BindingCommandLoweringInput): BindingCommandLoweringSourceSet {
+  private recordsForSource(input: BindingCommandLoweringRequest): BindingCommandLoweringSourceSet {
     const evidenceHandle = this.store.handles.evidence(`binding-command-lowering:${input.localKey}`);
     const provenanceHandle = this.store.handles.provenance(`binding-command-lowering:${input.localKey}`);
     return new BindingCommandLoweringSourceSet(
@@ -2240,65 +2236,6 @@ function handleArray(handle: ProductHandle | null): readonly ProductHandle[] {
   return handle == null ? [] : [handle];
 }
 
-function instructionKindKeyFor(
-  kind: TemplateInstruction['instructionKind'],
-): InstructionKindKey {
-  switch (kind) {
-    case TemplateInstructionKind.HydrateElement:
-      return KernelVocabulary.Instruction.HydrateElement.key;
-    case TemplateInstructionKind.HydrateAttribute:
-      return KernelVocabulary.Instruction.HydrateAttribute.key;
-    case TemplateInstructionKind.HydrateTemplateController:
-      return KernelVocabulary.Instruction.HydrateTemplateController.key;
-    case TemplateInstructionKind.PropertyBinding:
-      return KernelVocabulary.Instruction.PropertyBinding.key;
-    case TemplateInstructionKind.Interpolation:
-      return KernelVocabulary.Instruction.Interpolation.key;
-    case TemplateInstructionKind.ListenerBinding:
-      return KernelVocabulary.Instruction.ListenerBinding.key;
-    case TemplateInstructionKind.IteratorBinding:
-      return KernelVocabulary.Instruction.IteratorBinding.key;
-    case TemplateInstructionKind.RefBinding:
-      return KernelVocabulary.Instruction.RefBinding.key;
-    case TemplateInstructionKind.LetBinding:
-      return KernelVocabulary.Instruction.LetBinding.key;
-    case TemplateInstructionKind.TextBinding:
-      return KernelVocabulary.Instruction.TextBinding.key;
-    case TemplateInstructionKind.AttributeBinding:
-      return KernelVocabulary.Instruction.AttributeBinding.key;
-    case TemplateInstructionKind.MultiAttr:
-      return KernelVocabulary.Instruction.MultiAttr.key;
-    case TemplateInstructionKind.SetProperty:
-      return KernelVocabulary.Instruction.SetProperty.key;
-    case TemplateInstructionKind.SetAttribute:
-      return KernelVocabulary.Instruction.SetAttribute.key;
-    case TemplateInstructionKind.SetClassAttribute:
-      return KernelVocabulary.Instruction.SetClassAttribute.key;
-    case TemplateInstructionKind.SetStyleAttribute:
-      return KernelVocabulary.Instruction.SetStyleAttribute.key;
-    case TemplateInstructionKind.StylePropertyBinding:
-      return KernelVocabulary.Instruction.StylePropertyBinding.key;
-    case TemplateInstructionKind.HydrateLetElement:
-      return KernelVocabulary.Instruction.HydrateLetElement.key;
-    case TemplateInstructionKind.SpreadTransferedBinding:
-      return KernelVocabulary.Instruction.SpreadTransferedBinding.key;
-    case TemplateInstructionKind.SpreadElementPropBinding:
-      return KernelVocabulary.Instruction.SpreadElementPropBinding.key;
-    case TemplateInstructionKind.SpreadValueBinding:
-      return KernelVocabulary.Instruction.SpreadValueBinding.key;
-    case TemplateInstructionKind.TranslationBinding:
-      return KernelVocabulary.Instruction.TranslationBinding.key;
-    case TemplateInstructionKind.TranslationBindBinding:
-      return KernelVocabulary.Instruction.TranslationBindBinding.key;
-    case TemplateInstructionKind.TranslationParametersBinding:
-      return KernelVocabulary.Instruction.TranslationParametersBinding.key;
-    case TemplateInstructionKind.StateBinding:
-      return KernelVocabulary.Instruction.StateBinding.key;
-    case TemplateInstructionKind.DispatchBinding:
-      return KernelVocabulary.Instruction.DispatchBinding.key;
-  }
-}
-
 function iteratorLocalNames(result: IteratorParseResult): readonly string[] {
   if (result.kind !== ExpressionParseResultKind.IteratorSuccess) {
     return [];
@@ -2383,16 +2320,6 @@ function missingInputSummary(
     return `Binding-command lowering could not resolve command '${syntax.command ?? '(unknown)'}'.`;
   }
   return 'Binding-command lowering could not close its required inputs.';
-}
-
-function claimsForProduct(
-  claims: readonly SemanticClaim[],
-  productHandle: ProductHandle,
-): readonly SemanticClaim[] {
-  return claims.filter((claim) =>
-    claim.subjectHandle === productHandle
-    || claim.objectHandle === productHandle
-  );
 }
 
 function encodeOpenSeamLocal(summary: string): string {

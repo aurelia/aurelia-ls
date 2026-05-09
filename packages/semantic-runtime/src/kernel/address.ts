@@ -15,6 +15,29 @@ export const enum SourceLanguage {
   Json = 'json',
 }
 
+export const enum SourceFileRole {
+  /** Source that can participate in the application semantic world. */
+  AppSource = 'app-source',
+  /** HTML template source owned by an app/resource or discovered as an external template. */
+  Template = 'template',
+  /** CSS/style source owned by an app/resource or build pipeline. */
+  Style = 'style',
+  /** Package manifest or package-level metadata source. */
+  PackageManifest = 'package-manifest',
+  /** Test, spec, or e2e source admitted for navigation but not app-world interpretation. */
+  TestSource = 'test-source',
+  /** Storybook/demo/example source admitted for pattern pressure but not app-world interpretation by default. */
+  ExampleSource = 'example-source',
+  /** Build, lint, test-runner, bundler, or workspace tooling configuration. */
+  ToolingConfig = 'tooling-config',
+  /** Type declaration source used by the checker but not evaluated as runtime code. */
+  Declaration = 'declaration',
+  /** Generated source that should stay visible without being treated as authored app code. */
+  Generated = 'generated',
+  /** Use when the host or discovery cannot classify the source role yet. */
+  Unknown = 'unknown',
+}
+
 export const enum SourceSpanRole {
   /** The best default jump target for a fact or record. */
   Primary = 'primary',
@@ -44,6 +67,8 @@ export class SourceFileAddress {
     readonly path: string,
     /** Source language used to pick parsers, projections, and display behavior. */
     readonly language: SourceLanguage = SourceLanguage.Unknown,
+    /** Coarse source role used to decide which semantic passes may treat the file as app code. */
+    readonly role: SourceFileRole = SourceFileRole.Unknown,
   ) {}
 }
 

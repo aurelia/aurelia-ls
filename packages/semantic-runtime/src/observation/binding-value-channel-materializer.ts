@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { splitWhitespace } from '../strings.js';
 import {
   arrayElementTypeFor,
   collectionElementTypeFor,
@@ -41,9 +42,6 @@ import {
   KernelVocabulary,
   type OpenSeamKindKey,
 } from '../kernel/vocabulary.js';
-import {
-  ExpressionParseResultKind,
-} from '../expression/parse-result-algebra.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import type { BindingScope } from '../configuration/scope.js';
 import {
@@ -51,8 +49,8 @@ import {
   CheckerExpressionTypeEvaluator,
 } from '../type-system/expression-type-evaluator.js';
 import {
-  CheckerSyntheticTypeProjectionInput,
   CheckerTypeProjector,
+  type CheckerSyntheticTypeProjectionRequest,
 } from '../type-system/checker-projector.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import {
@@ -94,6 +92,9 @@ import type { RuntimeRenderingEmission } from '../template/runtime-rendering-mat
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import type { TemplateExpressionParse } from '../template/value-site.js';
+import {
+  runtimeAcceptedBindingExpressionAstForParse,
+} from '../template/expression-parse-projection.js';
 import type {
   TemplateInstructionScopeApplication,
   TemplateScopeConstructionEmission,
@@ -185,6 +186,8 @@ type BindingValueExpression = {
   readonly valueType: CheckerTypeReference | null;
   readonly valueDomain: readonly string[];
 };
+
+type BindingSourceTypeReader = () => CheckerTypeReference | null;
 
 type BindingValueChannelContext = {
   readonly input: RuntimeBindingValueChannelMaterializationRequest;
@@ -278,11 +281,10 @@ export class RuntimeBindingValueChannelMaterializer {
     const records: KernelStoreRecord[] = [];
     const openSeams: OpenSeam[] = [];
     const local = `${input.localKey}:binding:${bindingIndex}:${binding.productHandle}:value-channel${target.localSuffix}`;
-    const sourceType = this.sourceTypeForBinding(
+    const readSourceType = this.sourceTypeReaderForBinding(
       binding,
       scope,
       context.evaluator,
-      `${local}:source-type`,
       target.targetAccess?.targetProperty ?? null,
     );
     const draft = this.valueChannelDraftForBinding(
@@ -291,7 +293,7 @@ export class RuntimeBindingValueChannelMaterializer {
       target.targetAccess,
       target.targetOperation,
       target.sourceOperation,
-      sourceType,
+      readSourceType,
       context,
     );
     const valueChannel = this.valueChannelForTarget(local, binding, target, draft, source);
@@ -405,13 +407,14 @@ export class RuntimeBindingValueChannelMaterializer {
     targetAccess: RuntimeBindingTargetAccess | null,
     targetOperation: RuntimeBindingTargetOperation | null,
     sourceOperation: RuntimeBindingSourceOperation | null,
-    sourceType: CheckerTypeReference | null,
+    readSourceType: BindingSourceTypeReader,
     context: BindingValueChannelContext,
   ): ValueChannelDraft {
     if (binding instanceof RefBinding) {
       return this.valueChannelDraftForSourceOperation(sourceOperation);
     }
     if (binding instanceof SpreadValueBinding && targetAccess == null) {
+      const sourceType = readSourceType();
       return {
         channelKind: RuntimeBindingValueChannelKind.Open,
         authority: RuntimeBindingValueChannelAuthority.Open,
@@ -422,7 +425,7 @@ export class RuntimeBindingValueChannelMaterializer {
       };
     }
     if (binding instanceof AttributeBinding || binding instanceof ContentBinding) {
-      return this.valueChannelDraftForTargetOperation(targetOperation, sourceType);
+      return this.valueChannelDraftForTargetOperation(targetOperation, readSourceType);
     }
     if (targetAccess == null) {
       return {
@@ -447,12 +450,12 @@ export class RuntimeBindingValueChannelMaterializer {
 
     switch (targetAccess.strategy) {
       case RuntimeBindingTargetAccessStrategy.ClassAttributeAccessor:
-        return this.classValueChannelDraft(binding, targetAccess, sourceType);
+        return this.classValueChannelDraft(binding, targetAccess, readSourceType);
       case RuntimeBindingTargetAccessStrategy.StyleAttributeAccessor:
-        return this.styleValueChannelDraft(binding, targetAccess, sourceType);
+        return this.styleValueChannelDraft(binding, targetAccess, readSourceType);
       case RuntimeBindingTargetAccessStrategy.AttributeAccessor:
       case RuntimeBindingTargetAccessStrategy.DataAttributeAccessor:
-        return this.attributeValueChannelDraft(sourceType, targetAccess);
+        return this.attributeValueChannelDraft(readSourceType, targetAccess);
       case RuntimeBindingTargetAccessStrategy.SelectValueObserver:
         if (!(binding instanceof PropertyBinding)) {
           return {
@@ -464,7 +467,7 @@ export class RuntimeBindingValueChannelMaterializer {
             openReason: 'SelectValueObserver value-channel materialization expected a runtime PropertyBinding product.',
           };
         }
-        return this.selectValueChannelDraft(local, binding, targetAccess, sourceType, context);
+        return this.selectValueChannelDraft(local, binding, targetAccess, readSourceType, context);
       case RuntimeBindingTargetAccessStrategy.CheckedObserver:
         if (!(binding instanceof PropertyBinding)) {
           return {
@@ -476,7 +479,7 @@ export class RuntimeBindingValueChannelMaterializer {
             openReason: 'CheckedObserver value-channel materialization expected a runtime PropertyBinding product.',
           };
         }
-        return this.checkedValueChannelDraft(local, binding, targetAccess, sourceType, context);
+        return this.checkedValueChannelDraft(local, binding, targetAccess, readSourceType, context);
       default:
         return {
           channelKind: RuntimeBindingValueChannelKind.RawProperty,
@@ -491,7 +494,7 @@ export class RuntimeBindingValueChannelMaterializer {
 
   private valueChannelDraftForTargetOperation(
     targetOperation: RuntimeBindingTargetOperation | null,
-    sourceType: CheckerTypeReference | null,
+    readSourceType: BindingSourceTypeReader,
   ): ValueChannelDraft {
     if (targetOperation == null) {
       return {
@@ -503,6 +506,7 @@ export class RuntimeBindingValueChannelMaterializer {
         openReason: 'Runtime binding did not carry a direct target-operation product for value-channel materialization.',
       };
     }
+    const sourceType = readSourceType();
     if (targetOperation.openReason != null) {
       return {
         channelKind: RuntimeBindingValueChannelKind.Open,
@@ -540,9 +544,9 @@ export class RuntimeBindingValueChannelMaterializer {
           openReason: null,
         };
       case RuntimeBindingTargetOperationKind.ClassListToggle:
-        return this.classToggleValueChannelDraft(targetOperation, sourceType);
+        return this.classToggleValueChannelDraft(targetOperation, readSourceType);
       case RuntimeBindingTargetOperationKind.StyleSetProperty:
-        return this.stylePropertyValueChannelDraft(targetOperation, sourceType);
+        return this.stylePropertyValueChannelDraft(targetOperation, readSourceType);
       case RuntimeBindingTargetOperationKind.AttributeSetOrRemove:
         return {
           channelKind: RuntimeBindingValueChannelKind.AttributeValue,
@@ -601,8 +605,9 @@ export class RuntimeBindingValueChannelMaterializer {
 
   private classToggleValueChannelDraft(
     targetOperation: RuntimeBindingTargetOperation,
-    sourceType: CheckerTypeReference | null,
+    readSourceType: BindingSourceTypeReader,
   ): ValueChannelDraft {
+    const sourceType = readSourceType();
     if (targetOperation.affectedNames.length === 0) {
       return {
         channelKind: RuntimeBindingValueChannelKind.ClassToggle,
@@ -627,8 +632,9 @@ export class RuntimeBindingValueChannelMaterializer {
 
   private stylePropertyValueChannelDraft(
     targetOperation: RuntimeBindingTargetOperation,
-    sourceType: CheckerTypeReference | null,
+    readSourceType: BindingSourceTypeReader,
   ): ValueChannelDraft {
+    const sourceType = readSourceType();
     return {
       channelKind: RuntimeBindingValueChannelKind.StylePropertyValue,
       authority: sourceType == null
@@ -644,8 +650,9 @@ export class RuntimeBindingValueChannelMaterializer {
   private classValueChannelDraft(
     binding: RuntimeValueChannelBinding,
     targetAccess: RuntimeBindingTargetAccess,
-    sourceType: CheckerTypeReference | null,
+    readSourceType: BindingSourceTypeReader,
   ): ValueChannelDraft {
+    const sourceType = readSourceType();
     if (binding instanceof AttributeBinding && binding.attr === 'class') {
       const classTokens = splitWhitespace(binding.target);
       if (classTokens.length === 0) {
@@ -684,8 +691,9 @@ export class RuntimeBindingValueChannelMaterializer {
   private styleValueChannelDraft(
     binding: RuntimeValueChannelBinding,
     targetAccess: RuntimeBindingTargetAccess,
-    sourceType: CheckerTypeReference | null,
+    readSourceType: BindingSourceTypeReader,
   ): ValueChannelDraft {
+    const sourceType = readSourceType();
     if (binding instanceof AttributeBinding && binding.attr === 'style') {
       const styleTarget = binding.target.trim();
       if (styleTarget.length > 0 && styleTarget !== 'style') {
@@ -724,9 +732,10 @@ export class RuntimeBindingValueChannelMaterializer {
   }
 
   private attributeValueChannelDraft(
-    sourceType: CheckerTypeReference | null,
+    readSourceType: BindingSourceTypeReader,
     targetAccess: RuntimeBindingTargetAccess,
   ): ValueChannelDraft {
+    const sourceType = readSourceType();
     return {
       channelKind: RuntimeBindingValueChannelKind.AttributeValue,
       authority: sourceType == null
@@ -743,7 +752,7 @@ export class RuntimeBindingValueChannelMaterializer {
     local: string,
     binding: PropertyBinding,
     targetAccess: RuntimeBindingTargetAccess,
-    sourceType: CheckerTypeReference | null,
+    readSourceType: BindingSourceTypeReader,
     context: BindingValueChannelContext,
   ): ValueChannelDraft {
     const select = this.htmlElementFor(targetAccess.targetNode);
@@ -771,7 +780,7 @@ export class RuntimeBindingValueChannelMaterializer {
       };
     }
     if (multiple.kind === 'multiple') {
-      return this.selectMultipleValueChannelDraft(local, binding, targetAccess, sourceType, context, options);
+      return this.selectMultipleValueChannelDraft(local, binding, targetAccess, readSourceType, context, options);
     }
 
     return this.selectSingleValueChannelDraft(local, binding, targetAccess, context, options);
@@ -781,7 +790,7 @@ export class RuntimeBindingValueChannelMaterializer {
     local: string,
     binding: PropertyBinding,
     targetAccess: RuntimeBindingTargetAccess,
-    sourceType: CheckerTypeReference | null,
+    readSourceType: BindingSourceTypeReader,
     context: BindingValueChannelContext,
     options: readonly HtmlElement[],
   ): ValueChannelDraft {
@@ -813,7 +822,7 @@ export class RuntimeBindingValueChannelMaterializer {
         openReason: 'SelectValueObserver did not expose any option value domain for the multi-select value channel.',
       };
     }
-    const sourceShape = this.selectMultipleSourceShape(sourceType);
+    const sourceShape = this.selectMultipleSourceShape(readSourceType());
     if (sourceShape.kind === 'open') {
       return {
         channelKind: RuntimeBindingValueChannelKind.SelectMultipleOptionValues,
@@ -875,7 +884,7 @@ export class RuntimeBindingValueChannelMaterializer {
     binding: PropertyBinding,
   ): boolean | null {
     const parse = this.readParse(binding.expressionProductHandle);
-    const ast = parse == null ? null : expressionAstForParse(parse);
+    const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
     return ast == null ? null : booleanLiteralForExpression(ast);
   }
 
@@ -947,7 +956,7 @@ export class RuntimeBindingValueChannelMaterializer {
     local: string,
     binding: PropertyBinding,
     targetAccess: RuntimeBindingTargetAccess,
-    sourceType: CheckerTypeReference | null,
+    readSourceType: BindingSourceTypeReader,
     context: BindingValueChannelContext,
   ): ValueChannelDraft {
     const input = this.htmlElementFor(targetAccess.targetNode);
@@ -963,9 +972,8 @@ export class RuntimeBindingValueChannelMaterializer {
     }
 
     const type = (this.attributeValue(input, 'type') ?? 'text').toLowerCase();
-    const sourceShape = this.checkedSourceShape(sourceType);
-    const elementValue = this.inputRuntimeValue(local, input, context);
     if (type === 'radio') {
+      const elementValue = this.inputRuntimeValue(local, input, context);
       if (elementValue.valueType == null && elementValue.valueDomain.length === 0) {
         return {
           channelKind: RuntimeBindingValueChannelKind.CheckedModel,
@@ -993,17 +1001,29 @@ export class RuntimeBindingValueChannelMaterializer {
       };
     }
 
-    if (type === 'checkbox' && !hasOptionModelSyntax(this.attributesFor(input)) && !this.hasAttribute(input, 'value')) {
-      return {
-        channelKind: RuntimeBindingValueChannelKind.CheckedBoolean,
-        authority: RuntimeBindingValueChannelAuthority.ObserverSemantics,
-        runtimeValueType: targetAccess.propertyType,
-        valueDomain: [],
-        isCollection: false,
-        openReason: null,
-      };
-    }
     if (type === 'checkbox') {
+      const sourceShape = this.checkedSourceShape(readSourceType());
+      if (sourceShape.kind === 'boolean' || sourceShape.kind === 'other') {
+        return {
+          channelKind: RuntimeBindingValueChannelKind.CheckedBoolean,
+          authority: RuntimeBindingValueChannelAuthority.ObserverSemantics,
+          runtimeValueType: targetAccess.propertyType,
+          valueDomain: [],
+          isCollection: false,
+          openReason: null,
+        };
+      }
+      if (sourceShape.kind === 'open') {
+        return {
+          channelKind: RuntimeBindingValueChannelKind.CheckedModel,
+          authority: RuntimeBindingValueChannelAuthority.Open,
+          runtimeValueType: targetAccess.propertyType,
+          valueDomain: [],
+          isCollection: null,
+          openReason: 'CheckedObserver checkbox mode depends on the bound source value shape; static evaluation did not close boolean, collection, or map mode.',
+        };
+      }
+      const elementValue = this.inputRuntimeValue(local, input, context);
       const valueDomain = elementValue.valueDomain;
       if (elementValue.valueType == null && valueDomain.length === 0) {
         return {
@@ -1013,16 +1033,6 @@ export class RuntimeBindingValueChannelMaterializer {
           valueDomain: [],
           isCollection: sourceShape.kind === 'collection' || sourceShape.kind === 'map' ? true : null,
           openReason: 'CheckedObserver checkbox value channel could not close the input model/value through static value or expression-backed binding.',
-        };
-      }
-      if (sourceShape.kind === 'boolean') {
-        return {
-          channelKind: RuntimeBindingValueChannelKind.CheckedBoolean,
-          authority: RuntimeBindingValueChannelAuthority.ObserverSemantics,
-          runtimeValueType: targetAccess.propertyType,
-          valueDomain: [],
-          isCollection: false,
-          openReason: null,
         };
       }
       if (sourceShape.kind === 'collection') {
@@ -1069,16 +1079,14 @@ export class RuntimeBindingValueChannelMaterializer {
     values: readonly string[],
     sourceAddressHandle: RuntimeBindingValueChannel['sourceAddressHandle'],
   ): CheckerTypeReference {
-    const shape = this.typeProjector.ensureSyntheticProjection(new CheckerSyntheticTypeProjectionInput(
-      local,
-      values.length > 1 ? CheckerTypeShapeKind.Union : CheckerTypeShapeKind.Primitive,
-      values.map((value) => quoteStringLiteral(value)).join(' | '),
-      [],
-      null,
-      null,
-      CheckerTypeProjectionOrigin.SyntheticTemplateType,
+    const shape = this.typeProjector.ensureSyntheticProjection({
+      localKey: local,
+      shapeKind: values.length > 1 ? CheckerTypeShapeKind.Union : CheckerTypeShapeKind.Primitive,
+      display: values.map((value) => quoteStringLiteral(value)).join(' | '),
+      members: [],
+      origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
       sourceAddressHandle,
-    ));
+    } satisfies CheckerSyntheticTypeProjectionRequest);
     return shape.toReference();
   }
 
@@ -1121,7 +1129,7 @@ export class RuntimeBindingValueChannelMaterializer {
   ): BindingValueExpression {
     const scope = context.instructionScopes.get(binding.instructionProductHandle) ?? null;
     const parse = this.readParse(binding.expressionProductHandle);
-    const ast = parse == null ? null : expressionAstForParse(parse);
+    const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
     if (scope == null || ast == null) {
       return {
         valueType: null,
@@ -1135,7 +1143,12 @@ export class RuntimeBindingValueChannelMaterializer {
         valueDomain: literalDomain,
       };
     }
-    const evaluation = context.evaluator.evaluateWithScope(ast, scope, local, binding.sourceAddressHandle);
+    const evaluation = context.evaluator.evaluateWithScope(
+      ast,
+      scope,
+      checkerExpressionTypeLocalKey(scope, binding.productHandle, binding.expressionProductHandle, 'value'),
+      binding.sourceAddressHandle,
+    );
     if (evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return {
         valueType: null,
@@ -1170,18 +1183,22 @@ export class RuntimeBindingValueChannelMaterializer {
     binding: RuntimeValueChannelBinding,
     scope: BindingScope | null,
     evaluator: CheckerExpressionTypeEvaluator,
-    local: string,
     targetProperty: string | null = null,
   ): CheckerTypeReference | null {
     if (scope == null) {
       return null;
     }
     const parse = this.readParse(expressionProductHandleForBinding(binding));
-    const ast = parse == null ? null : expressionAstForParse(parse);
+    const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
     if (ast == null) {
       return null;
     }
-    const evaluation = evaluator.evaluateWithScope(ast, scope, local, binding.sourceAddressHandle);
+    const evaluation = evaluator.evaluateWithScope(
+      ast,
+      scope,
+      checkerExpressionTypeLocalKey(scope, binding.productHandle, expressionProductHandleForBinding(binding), 'source'),
+      binding.sourceAddressHandle,
+    );
     if (evaluation.kind !== CheckerExpressionTypeEvaluationResultKind.Type) {
       return null;
     }
@@ -1189,6 +1206,23 @@ export class RuntimeBindingValueChannelMaterializer {
       return this.memberType(evaluation.typeReference, targetProperty);
     }
     return evaluation.typeReference;
+  }
+
+  private sourceTypeReaderForBinding(
+    binding: RuntimeValueChannelBinding,
+    scope: BindingScope | null,
+    evaluator: CheckerExpressionTypeEvaluator,
+    targetProperty: string | null = null,
+  ): BindingSourceTypeReader {
+    let evaluated = false;
+    let sourceType: CheckerTypeReference | null = null;
+    return () => {
+      if (!evaluated) {
+        sourceType = this.sourceTypeForBinding(binding, scope, evaluator, targetProperty);
+        evaluated = true;
+      }
+      return sourceType;
+    };
   }
 
   private memberType(
@@ -1210,11 +1244,6 @@ export class RuntimeBindingValueChannelMaterializer {
         kind: 'open',
       };
     }
-    if (isBooleanLike(carrier.type)) {
-      return {
-        kind: 'boolean',
-      };
-    }
     const collectionElementType = collectionElementTypeFor(carrier.checker, carrier.type);
     if (collectionElementType != null) {
       return {
@@ -1225,6 +1254,11 @@ export class RuntimeBindingValueChannelMaterializer {
     if (mapKeyType != null) {
       return {
         kind: 'map',
+      };
+    }
+    if (isBooleanLike(carrier.type)) {
+      return {
+        kind: 'boolean',
       };
     }
     return {
@@ -1356,26 +1390,25 @@ export class RuntimeBindingValueChannelMaterializer {
   }
 }
 
-function expressionAstForParse(parse: TemplateExpressionParse): ExpressionAstNode | null {
-  switch (parse.result.kind) {
-    case ExpressionParseResultKind.ExpressionSuccess:
-    case ExpressionParseResultKind.EmptyExpressionSuccess:
-    case ExpressionParseResultKind.OpaqueSuccess:
-      return parse.result.ast;
-    case ExpressionParseResultKind.IteratorSuccess:
-      return parse.result.ast.iterable;
-    case ExpressionParseResultKind.InterpolationSuccess:
-      return parse.result.ast;
-    default:
-      return null;
-  }
-}
-
 function expressionProductHandleForBinding(binding: RuntimeValueChannelBinding): ProductHandle | null {
   if (binding instanceof InterpolationBinding) {
     return binding.expressionProductHandles[0] ?? null;
   }
   return binding.expressionProductHandle;
+}
+
+function checkerExpressionTypeLocalKey(
+  scope: BindingScope,
+  bindingProductHandle: ProductHandle,
+  expressionProductHandle: ProductHandle | null,
+  role: string,
+): string {
+  return [
+    'checker-expression-type',
+    scope.productHandle,
+    expressionProductHandle ?? `binding:${bindingProductHandle}`,
+    role,
+  ].join(':');
 }
 
 function isRuntimeValueChannelBinding(binding: RuntimeBinding): binding is RuntimeValueChannelBinding {
@@ -1471,8 +1504,4 @@ function uniqueStrings(values: readonly string[]): readonly string[] {
 
 function quoteStringLiteral(value: string): string {
   return `'${value.replace(/\\/g, '\\\\').replace(/'/g, "\\'")}'`;
-}
-
-function splitWhitespace(value: string): readonly string[] {
-  return value.match(/\S+/g) ?? [];
 }

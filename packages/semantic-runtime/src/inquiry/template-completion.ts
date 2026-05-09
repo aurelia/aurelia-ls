@@ -71,6 +71,7 @@ import {
   InquiryProjectionKind,
 } from './answer.js';
 import { KernelExactBasis } from './basis.js';
+import { uniqueValues } from './collections.js';
 import { InquiryLocusKind, type InquiryLocus } from './locus.js';
 import type { SourceCursorInquiryLocus } from './locus.js';
 import {
@@ -227,17 +228,15 @@ export class TemplateCompletionQuery {
   }
 }
 
-export class TemplateCompletionCursorContextInput {
-  constructor(
-    /** Concrete source cursor inside a materialized template compilation emission. */
-    readonly locus: SourceCursorInquiryLocus,
-    /** Horizontal template compilation emission that owns HTML, syntax, value, render, and scope products. */
-    readonly resource: TemplateResourceRuntimeAnalysisEmission,
-    /** Page request copied into the resulting completion query. */
-    readonly page: InquiryPageRequest = new InquiryPageRequest(),
-    /** Projection copied into the resulting completion query. */
-    readonly projection: InquiryProjection = new InquiryProjection(InquiryProjectionKind.Compact),
-  ) {}
+export interface TemplateCompletionCursorContextRequest {
+  /** Concrete source cursor inside a materialized template compilation emission. */
+  readonly locus: SourceCursorInquiryLocus;
+  /** Horizontal template compilation emission that owns HTML, syntax, value, render, and scope products. */
+  readonly resource: TemplateResourceRuntimeAnalysisEmission;
+  /** Page request copied into the resulting completion query. */
+  readonly page?: InquiryPageRequest;
+  /** Projection copied into the resulting completion query. */
+  readonly projection?: InquiryProjection;
 }
 
 export class TemplateCompletionCursorContext {
@@ -276,8 +275,10 @@ interface TemplateCompletionCandidatePage {
 /** Resolve a materialized template cursor into the product-handle completion query shape. */
 export function templateCompletionQueryForCursor(
   store: KernelStore,
-  input: TemplateCompletionCursorContextInput,
+  input: TemplateCompletionCursorContextRequest,
 ): TemplateCompletionCursorContext {
+  const page = input.page ?? new InquiryPageRequest();
+  const projection = input.projection ?? new InquiryProjection(InquiryProjectionKind.Compact);
   const offset = input.locus.cursor.offset;
   const compilation = input.resource.compilation;
   if (offset == null) {
@@ -285,13 +286,13 @@ export function templateCompletionQueryForCursor(
       new TemplateCompletionQuery(
         input.locus,
         TemplateCompletionSiteKind.Unknown,
-        input.page,
+        page,
         null,
         compilation.compilerWorld.resourceScope.productHandle,
         null,
         null,
         null,
-        input.projection,
+        projection,
       ),
       null,
       null,
@@ -365,18 +366,18 @@ export function templateCompletionQueryForCursor(
     new TemplateCompletionQuery(
       input.locus,
       siteKind,
-      input.page,
+      page,
       bindingScope?.productHandle ?? null,
       compilation.compilerWorld.resourceScope.productHandle,
       selectedDefinitionProductHandle,
       siteKindUsesExpressionParse(siteKind) ? expressionParse?.productHandle ?? null : null,
       memberOwnerTypeProductHandle,
-      input.projection,
+      projection,
     ),
     htmlNode?.productHandle ?? null,
     htmlAttribute?.productHandle ?? null,
     valueSite?.productHandle ?? null,
-    unique(missingInputs),
+    uniqueValues(missingInputs),
   );
 }
 
@@ -496,7 +497,7 @@ function templateCompletionAnswer(
   page: TemplateCompletionCandidatePage,
 ): InquiryAnswer<TemplateCompletionResult, TemplateCompletionQuery> {
   const products = completionCandidateProducts(frame.store, page.rows);
-  const missingInputs = unique(frame.missingInputs);
+  const missingInputs = uniqueValues(frame.missingInputs);
   return new InquiryAnswer(
     outcomeForCompletion(page.rows, uniqueCandidates, missingInputs),
     frame.query.locus,
@@ -530,7 +531,7 @@ function completionCandidateProducts(
   store: KernelStore,
   rows: readonly TemplateCompletionCandidate[],
 ): readonly MaterializedProduct[] {
-  return unique(
+  return uniqueValues(
     rows
       .map((candidate) => candidate.productHandle)
       .filter((handle): handle is ProductHandle => handle != null),
@@ -543,7 +544,7 @@ function completionProductClaimHandles(
   store: KernelStore,
   products: readonly MaterializedProduct[],
 ): readonly ClaimHandle[] {
-  return unique(products.flatMap((product) => [
+  return uniqueValues(products.flatMap((product) => [
     ...store.readClaimsForSubject(product.handle),
     ...store.readClaimsForObject(product.handle),
   ]));
@@ -552,7 +553,7 @@ function completionProductClaimHandles(
 function completionProductProvenanceHandles(
   products: readonly MaterializedProduct[],
 ): readonly ProvenanceHandle[] {
-  return unique(products.map((product) => product.provenanceHandle));
+  return uniqueValues(products.map((product) => product.provenanceHandle));
 }
 
 function completionContinuations(
@@ -1912,8 +1913,4 @@ function definitionForElement(
     )
   ) ?? null;
   return resourceRow?.definitionProductHandle ?? resourceRow?.resourceProductHandle ?? null;
-}
-
-function unique<TValue>(values: readonly TValue[]): readonly TValue[] {
-  return [...new Set(values)];
 }

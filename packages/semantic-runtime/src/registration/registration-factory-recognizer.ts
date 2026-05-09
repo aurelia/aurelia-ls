@@ -89,14 +89,6 @@ function recognizeRegistrationFactoryCall(
     }
   }
 
-  if (shape.callbackBodyIsOpen && valueArgument != null) {
-    openSeams.push(new RegistrationRecognitionOpen(
-      KernelVocabulary.Registration.OpenCallbackBody.key,
-      `Registration.${factoryName}(...) supplies a callback body that registration recognition does not execute.`,
-      valueArgument,
-    ));
-  }
-
   const targetKey = keyArgument == null
     ? null
     : new RegistrationKeyObservation(readReferenceName(keyArgument), keyArgument);

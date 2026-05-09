@@ -2,6 +2,8 @@ import path from "node:path";
 
 import ts from "typescript";
 
+import { hasModifier } from "../source/index.js";
+
 export const enum EvaluationImportKind {
   /** Import declaration that only executes the target module. */
   SideEffect = "side-effect",
@@ -336,13 +338,6 @@ function bindingNames(name: ts.BindingName): readonly string[] {
     });
   }
   return [];
-}
-
-function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
-  return (
-    ts.canHaveModifiers(node) &&
-    ts.getModifiers(node)?.some((modifier) => modifier.kind === kind) === true
-  );
 }
 
 /** Return a module-key-like relative path with POSIX separators. */

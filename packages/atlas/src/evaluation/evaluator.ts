@@ -1,6 +1,9 @@
 import ts from "typescript";
 
-import type { SourceProject } from "../source/index.js";
+import {
+  isAssignmentOperator,
+  type SourceProject,
+} from "../source/index.js";
 import {
   BreakEvaluationCompletion,
   ContinueEvaluationCompletion,
@@ -1087,10 +1090,6 @@ function bindingKindForDeclarationList(list: ts.VariableDeclarationList): Evalua
     return EvaluationBindingKind.Let;
   }
   return EvaluationBindingKind.Var;
-}
-
-function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
-  return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
 }
 
 function primitiveComparableValue(value: EvaluationValue): string | number | boolean | null | undefined | symbol {

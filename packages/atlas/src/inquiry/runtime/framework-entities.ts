@@ -191,6 +191,16 @@ export interface FrameworkRegistryExportRow extends FrameworkPackageExportRow {
   readonly capabilities: readonly FrameworkExportCapability[];
 }
 
+/** Evaluator-visible registry/configuration export shape. */
+export const enum FrameworkBundleKind {
+  /** Export exposes register/customize/init-like configuration behavior. */
+  Configuration = "configuration",
+  /** Export is an array/catalog of registration values. */
+  RegistrationCatalog = "registration-catalog",
+  /** Export is a concrete registry with evaluator-visible register effects. */
+  Registry = "registry",
+}
+
 /** Exported Aurelia DI interface symbol discovered from createInterface call provenance. */
 export interface FrameworkDiInterfaceExportRow
   extends FrameworkPackageExportRow {
@@ -238,7 +248,7 @@ export interface FrameworkResourceCarrierRow {
   /** Exact carrier source range. */
   readonly source: SourceRange;
   /** Backing declaration/source-export range, which may differ from the exact resource carrier span. */
-  readonly declarationSource: SourceRange | null;
+  readonly declarationSource: SourceRange;
 }
 
 /** Public Aurelia framework package export that points at a resource source carrier. */
@@ -258,7 +268,7 @@ export interface FrameworkResourceExportRow extends FrameworkPackageExportRow {
   /** Exact carrier source range. */
   readonly source: SourceRange;
   /** Backing declaration/source-export range, which may differ from the exact resource carrier span. */
-  readonly declarationSource: SourceRange | null;
+  readonly declarationSource: SourceRange;
 }
 
 /** One evaluated association between a registry/configuration bundle and a registration argument. */
@@ -305,6 +315,10 @@ export interface FrameworkBundleAssociationRow {
 
 /** Registry/configuration package export with evaluator-derived registration associations. */
 export interface FrameworkBundleExportRow extends FrameworkRegistryExportRow {
+  /** Coarse source shape for this spendable registry/configuration export. */
+  readonly bundleKind: FrameworkBundleKind;
+  /** Number of array/catalog elements, when this row comes from an exported catalog. */
+  readonly catalogElementCount?: number;
   /** Number of evaluator effects observed while tracing the register member. */
   readonly effectCount: number;
   /** Normalized registration associations discovered from evaluator effects. */

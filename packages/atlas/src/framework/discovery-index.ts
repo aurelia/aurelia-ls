@@ -11,6 +11,7 @@ import {
   type TypeScriptCallHierarchyEdge,
   type TypeScriptCallSiteEntry,
 } from "../source/index.js";
+import { uniqueSortedStrings } from "../collections.js";
 import { FRAMEWORK_DISCOVERY_SEEDS, type FrameworkDiscoveryAnchor, type FrameworkFlowDefinition } from "./discovery-seeds.js";
 
 /** Resolution status for one framework discovery seed anchor. */
@@ -290,7 +291,7 @@ export function groupFrameworkFlowCallTargets(
         targetName: first.edge.to.name,
         targetPackageId: first.edge.to.file.packageId,
         edgeCount: edges.length,
-        anchorIds: uniqueStrings(edges.map((edge) => edge.flowSeed.anchorResolution.anchor.id)),
+        anchorIds: uniqueSortedStrings(edges.map((edge) => edge.flowSeed.anchorResolution.anchor.id)),
         edges,
       };
     })
@@ -546,10 +547,6 @@ function sourceRangeForFileSpan(filePath: string, span: SourceSpan) {
       character: span.endCharacter - 1,
     },
   };
-}
-
-function uniqueStrings(values: readonly string[]): readonly string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
 function compareCallTargets(left: FrameworkFlowCallTargetRow, right: FrameworkFlowCallTargetRow): number {

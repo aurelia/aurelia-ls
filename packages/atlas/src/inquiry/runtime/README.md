@@ -10,7 +10,8 @@ This is not a compatibility layer for old readers and not the default caller sur
 - [engine.ts](engine.ts) validates and answers inquiries against that world.
 - [api.ts](api.ts) exposes the in-memory inquiry API used inside the daemon.
 - [lenses.ts](lenses.ts) contains implemented in-memory lenses over static contracts.
-- [self-analysis.ts](self-analysis.ts) builds the source-backed substrate behind `atlas.self`. It indexes grouped
+- [self-analysis-contracts.ts](self-analysis-contracts.ts) owns the row contract vocabulary behind `atlas.self`.
+  [self-analysis.ts](self-analysis.ts) builds the source-backed substrate behind those rows. It indexes grouped
   string literals, structural row surfaces, relationship-axis surfaces, class/function declaration surfaces,
   mapper/parallel-axis pressure rows, lens implementation paths, projection branches, continuation objects,
   continuation helper calls, declared framework semantic routes, module dependencies, and substrate surface rows
@@ -38,7 +39,8 @@ This is not a compatibility layer for old readers and not the default caller sur
   `ts.structure`, and `ts.type` answers, including IDE primitives and read-only TypeScript edit plans.
   `ts.type:call-sites` supports exact callee and runtime-argument filters (`argumentText`, `argumentSymbolName`,
   `argumentFullyQualifiedName`) so higher semantic lenses can preserve call precision when they hand off to raw
-  TypeScript facts.
+  TypeScript facts. `ts.type:facts` uses `budget.facts` for target fact rows and `budget.members` for nested
+  checker-visible member rows; keep those separate from `budget.rows` and answer evidence limits.
   `ts.structure:document-symbols` supports exact query filtering and its source continuations use the whole symbol
   span, so callers can jump from a method/class row directly to the implementation body without opening files.
 - [bridge-lenses.ts](bridge-lenses.ts) adapts product bridge substrates such as `bridge.aulink` into exact inquiry
@@ -81,14 +83,20 @@ This is not a compatibility layer for old readers and not the default caller sur
   and `symbol-dependencies` spend the full symbol-backed memo, while row projections such as `functions`,
   `call-sites`, and `call-dependencies` use the lighter core memo and omit rollup counts that would pretend symbol
   rows had been built. `areas`, `modules`, `dependencies`, `area-dependencies`, `declarations`, `cycles`, and
-  `classes` use the no-call-site structure lane; `functions`, `call-sites`, and `call-dependencies` use the
-  call-site lane; symbol projections use the symbol lane. The `profile` projection accepts `includeCallSites` and
-  `includeSymbols` so future profiling can separate those costs. Use `profile` or
+  `classes` use the no-call-site structure lane; `functions` and `call-dependencies` use compact call-site topology;
+  exact `call-sites` additionally spends checker callee type/signature displays; symbol projections use the symbol
+  lane. The `profile` projection accepts `includeCallSites`, `includeCallDetails`, and `includeSymbols` so future
+  profiling can separate topology from expensive exact-call detail. Use `profile` or
   `pnpm --filter @aurelia-ls/atlas profile:product-architecture` before adding cache, warmup, or split points; the
-  current cold pressure tends to sit in checker call-site rows and checker symbol reference rows. Source-file,
+  current cold pressure tends to sit in exact-call checker detail and checker symbol reference rows. Source-file,
   source-range, symbol-with-file, semantic-runtime package, and semantic-runtime repo-area loci now scope rows the same
   way as an explicit `pathPrefix`, including exact participant-file filtering for `area-dependencies`, so
-  continuations and direct file probes do not need to rediscover the path filter.
+  continuations and direct file probes do not need to rediscover the path filter. Class rows also accept
+  `classNameSuffix` for envelope-shape questions such as zero-method `*Input` classes without mixing suffix matching
+  into a broader text query. Class rows expose `auLinkIds` plus `hasAuLink`/`auLinkId` filters so product-model classes
+  can be separated from ordinary pass-parameter envelopes. Class property counts use the shared TypeScript
+  member-surface substrate, so constructor parameter properties count as real property surfaces instead of making
+  constructor-property records look empty.
   Use this lens when semantic-runtime architecture or refactor pressure would otherwise require source spelunking; it
   is a visibility substrate, not an automated judgment about which dependencies are good or bad.
 - [framework-compiler-products.ts](framework-compiler-products.ts) owns compiler relationship atoms derived from both
@@ -117,6 +125,11 @@ This is not a compatibility layer for old readers and not the default caller sur
   `FrameworkRowContinuationBuilder` owns repeated row-local source, type-facts, call-site, and evaluator-effect
   inspection moves. Prefer it over hand-written `TsSource`/`TsType` continuation objects so Atlas can continue to
   inspect those moves through `atlas.self:continuations`.
+- [lens-filter-utils.ts](lens-filter-utils.ts) owns generic filter field copying for runtime lens adapters: string
+  filters, boolean filters, renamed string fields, and singleton count-record filters. Domain-specific
+  `filtersFromRecord` functions still choose their accepted field list, but they should not clone the raw mechanics.
+  Bridge support helpers such as `auLinkModelFilters` should make projection policy differences explicit, for example
+  whether a free-text query should be forwarded to the underlying auLink model.
 - [framework-route-catalog.ts](framework-route-catalog.ts) declares the current framework semantic endpoints and route
   specs. `atlas.self:semantic-routes` reads this catalog directly; `atlas.self:continuations` reads call sites that
   instantiate these specs. Add new route specs here when a semantic hop repeats across admission, rendering, lifecycle,
@@ -124,7 +137,9 @@ This is not a compatibility layer for old readers and not the default caller sur
 - [framework-composition-lenses.ts](framework-composition-lenses.ts) exposes `framework.composition`. It projects
   auLink anchors and framework relationship rows into the shared `SemanticClaim` answer algebra, so class/interface
   actors such as `Container`, `TemplateCompiler`, or `Controller` can be inspected as induced signed graphs rather than
-  as manual hops across bridge, DI, compiler, rendering, lifecycle, and observation projections.
+  as manual hops across bridge, DI, compiler, rendering, lifecycle, observation, and router projections. Structured
+  claim filters such as `family`, `relation`, `mechanism`, or `phase` are standalone narrowing filters; only actor or
+  query filters opt into text-term matching.
 - [framework-emulation-view.ts](framework-emulation-view.ts) derives `framework.composition:emulation` from existing
   framework substrates. It is a semantic-runtime obligation map, not a product implementation model: rows say which
   framework behavior must be covered by ECMAScript evaluation, a semantic-runtime emulator, template-controller
@@ -150,7 +165,7 @@ This is not a compatibility layer for old readers and not the default caller sur
   SCC-collapsed key dependency view. Do not treat arbitrary lookup arguments as closed DI keys; graph rows preserve
   those as `key-expression` nodes until a source/checker fact closes their identity.
 - [framework-materialization-lenses.ts](framework-materialization-lenses.ts) spends DI provider atoms and concrete
-  StandardConfiguration DI-world slots into first-pass materialization routes. It closes exact provider expressions and
+  configuration DI-world slots into first-pass materialization routes. It closes exact provider expressions and
   constructable/instance/alias seeds, while carrying callback-provider return/value closure as explicit evaluator seams.
   Callback provider routes now also spend evaluator invocation effects into exact container dependency rows for calls
   such as `handler.get(...)` and `handler.has(...)`; DI-world routes carry provider dependency rows from spent
@@ -166,9 +181,76 @@ This is not a compatibility layer for old readers and not the default caller sur
   claiming final container/template visibility. Its materialization, admission, and syntax-product route hops use the
   shared framework semantic route primitive. Use it when the question starts from "which resource is this and what
   evidence lanes does Atlas already know?" instead of from DI, admission, rendering, or lifecycle. Convergence evidence
-  uses the exact resource carrier span as its primary source, such as a static `$au` initializer, resource `define`
-  call, decorator, attribute-pattern create call, or renderer helper call. Rows also carry a separate declaration-source
-  continuation when the backing class/export header is a different span.
+  uses the exact resource definition carrier span as its primary source, such as a static `$au` initializer, resource
+  `define` call, decorator, attribute-pattern create call, or renderer helper call. Rows also carry a separate
+  declaration-source continuation when the backing class/export header is a different span, plus typed `sourceSites`
+  for backing declarations, bundle admissions, syntax products, and materialization sites. Use
+  `pressure:framework-resources` when provenance breadth is the pressure rather than a specific resource row.
+- [framework-router-lenses.ts](framework-router-lenses.ts) exposes `framework.router`. It is the first router grounding
+  map: rows stay source-backed and split router package pressure into an ordered route-config/navigation `flow`
+  projection, including route-recognizer state population and recognition rows, plus route-context, route-tree,
+  route-recognizer, viewport-agent, navigation, DI, resource, lifecycle surfaces, and normalized `relationships`.
+  Use it before modeling router semantics in semantic-runtime; if a needed row is missing, improve this Atlas lens
+  before inventing router behavior from app examples. The `flow-issues` projection compares the curated route-flow
+  descriptors to the materialized source rows and reports stale descriptors, duplicate sequences, or ambiguous
+  descriptor keys. Router rows that cross component/materialization boundaries expose declared semantic route
+  continuations into `framework.materialization:resource-instantiations`,
+  `framework.rendering:hydration-flow`, `framework.rendering:controller-creations`, and
+  `framework.lifecycle:controller-calls`, so router modeling can follow the same end-to-end route grammar as compiler
+  and rendering corridors.
+- `atlas.self:source-files` exposes Atlas source files with module shape (`barrel`, `catalog`, `contract`,
+  `implementation`, or `mixed`), line, statement, import, export, declaration, type/value declaration, large-literal,
+  area, local incoming edge, local outgoing edge, and cross-area outgoing edge counts. Use it before manually browsing
+  for oversized or highly coupled modules; `pressure:self` includes this projection as the first maintenance lane.
+- `workspace.architecture:profile` exposes package manifest/file-inventory, source scan, surface attribution, shape
+  inference, and rollup timings. Use it before adding caches or warmup to external-root workspace analysis; the phase
+  owner should be visible first. The finished workspace analysis is memoized per source epoch so follow-up package,
+  surface, summary, and profile reads in one daemon reuse the same scan.
+- `plugin.architecture` exposes public-plugin package topology and source-shape surfaces for the admitted
+  `aurelia2-plugins` packages. Summary, package, and surface projections return rollups for the filtered row set,
+  including surface-kind, surface-mechanism, bindable-mechanism, resource-mechanism, router-mechanism, and template
+  reference-mechanism distributions. Package and surface filters share one selected row set, so kind/mechanism filters
+  narrow package counts to packages that own matching surfaces. Use these aggregate maps before paging public plugin
+  rows; the lens is a pressure lane for framework-shaped patterns, not a declaration that plugin source is canonical app
+  style.
+- Source-backed architecture analyses should generally memoize their finished products per source epoch. Workspace,
+  public-plugin, framework-router, product-architecture, framework resource convergence, and Atlas self-analysis now
+  follow that rule so pagination, pressure scripts, and related projections do not repeatedly walk the same hot Program.
+- Workspace architecture keeps source-role pressure separate from semantic surface pressure and keeps package admission
+  role separate from Aurelia project shape. Origin stays on `admissionRole`, while `aureliaShape` is one of
+  `aurelia-app`, `aurelia-resource-library`, `aurelia-package`, or `non-aurelia`; use the shape filter for app-like
+  scope selection, not as a replacement for resource-library or general package pressure. Declarations, tests,
+  examples, generated files, and tooling config are counted by role, but only `app-source` files are deeply walked for
+  Aurelia imports, resources, configuration, DI, router, and template-reference surfaces.
+- Workspace route-config pressure exposes non-extractive facets in addition to mechanism counts. Facets include
+  carrier shape (`route` decorator, static `routes`, `getRouteConfig`, or static route property), route-object field
+  sets, field value-kind buckets such as identifier or dynamic import, and child-route array cardinality buckets. Do
+  not promote route literals, component names, or app route maps into durable docs; use these aggregate facets before
+  paging router rows from proprietary roots. When a facet count deserves source inspection, `workspace.architecture`
+  surface filters accept exact `facet` and `facetPrefix` values so callers can page only rows matching a clean-room
+  category such as `route-config.component.value-kind:dynamic-import-call`. Filtered package and surface projections
+  carry a filtered rollup for one selected row set, while the row payload itself remains paged. Surface filters narrow
+  package counts to packages that own matching surfaces, and free-text query matching crosses the package and surface
+  sides so a surface-only term does not erase the owning package rollup.
+- [aurelia-source-imports.ts](aurelia-source-imports.ts) centralizes source-file-local Aurelia package binding
+  admission for workspace and public-plugin architecture lenses. It covers ES imports plus literal CommonJS
+  `require(...)` destructuring/property/namespace bindings. Keep package/export import sets there when `aurelia`,
+  `@aurelia/kernel`, `@aurelia/runtime-html`, `@aurelia/runtime`, or `@aurelia/router` entrypoints grow new relevant
+  source-shape APIs. Router receiver type/initializer/value recognition also lives there because workspace and
+  public-plugin architecture share the same router import semantics. `self-check` parses the framework router public
+  index and fails if a public `@aurelia/router` export is not admitted here, so router export drift should be fixed in
+  the shared substrate rather than separately in workspace/plugin lenses.
+- [aurelia-bindable-carriers.ts](aurelia-bindable-carriers.ts) centralizes framework-shaped bindable metadata carriers
+  shared by workspace and public-plugin architecture lenses: `@bindable` decorator target/argument shape, static
+  `bindables`, and resource definition-object `bindables`.
+- [aurelia-template-references.ts](aurelia-template-references.ts) classifies HTML template references for architecture
+  lenses. It distinguishes HTML imports, dynamic imports, literal `require(...)`, and `template`/`templateUrl`
+  properties. Do not count arbitrary strings that merely end in `.html`; those are often URLs, glob patterns, extension
+  constants, or unrelated product data rather than framework template-loading evidence.
+- [aurelia-resource-conventions.ts](aurelia-resource-conventions.ts) mirrors the framework/plugin-conventions
+  class-name and companion-template resource naming rules for Atlas architecture lenses. Keep it aligned with the
+  semantic-runtime convention recognizer when resource pressure shows convention resources, and use it before treating
+  bindable-heavy public plugin packages as resource-empty.
 - [framework-compiler-lenses.ts](framework-compiler-lenses.ts) exposes `framework.compiler`. It projects
   binding-command `build(...)` and instruction-factory instruction production into compiler relationship atoms, then
   continues into rendering dispatch and controller creation rows for the produced instruction by instruction name so
@@ -275,6 +357,21 @@ This is not a compatibility layer for old readers and not the default caller sur
   The JIT corridor distinguishes compile-time `find`/definition lookup from `get`/`invoke` materialization pressure:
   custom elements, custom attributes, and template controllers stay visible as compiler definition lookups, while their
   view-model construction and hydration dependencies are outside this corridor.
+- `framework.discovery:bundles` is the broad bundle/configuration catalog. It intentionally separates
+  `configuration`, `registration-catalog`, and `registry` rows so `StandardConfiguration` stays a useful canary without
+  hiding decomposed runtime arrays such as `DefaultComponents`, `DefaultResources`, `DefaultRenderers`, or router
+  catalogs. Plain `InterfaceSymbol` registry objects remain in `di-interfaces`/`registry-exports`; they do not count
+  as spendable bundle rows. Bundle continuations can spend the exact selected `packageId`/`exportName` through
+  `framework.di:world` by passing `configurationPackageId` and `configurationExportName`.
+  Bundle discovery uses a syntactic candidate pass over implementation files before spending evaluator/effect-trace
+  work, so large external source roots do not force every public export through static evaluation. Keep this split:
+  candidate discovery answers shape (`configuration`, `registration-catalog`, `registry`), while admission/effect
+  tracing answers what the selected shape actually spends. Configuration factory members such as `init(...)` may return
+  an `IRegistry` object; bundle associations should inspect that returned registry body and local const/function
+  factories before falling back to helper-name classification.
+- Framework resource classification joins source-level `*.define(...)` carriers back to their target implementation
+  declarations by package/name. This covers patterns such as `BindingBehavior.define('x', X)` that live outside the
+  class body, without forcing every implementation class to look resource-shaped by convention.
 - `framework.di:dependencies` separates exact DI dependency edges from variable-carried key/type reads. Exact rows have
   a stable `dependencyKey` such as an `InterfaceSymbol` or module-level class; variable rows preserve
   `FrameworkDiVariableKeyRef` (`handlerInfo.type`, `comp`, `def.Type`, etc.) with checker type and source. Lenses and
@@ -286,8 +383,10 @@ This is not a compatibility layer for old readers and not the default caller sur
   hand unless a first-class binding/reactivity handoff substrate exists to own that taxonomy. Handoff interpretation is
   also depth-sensitive: root/controller-owned binding materialization may be deterministic, while bindings under
   template-controller synthetic views can remain speculative because the owning controller realization is speculative.
-- [framework-jit-compiler-corridor.ts](framework-jit-compiler-corridor.ts) names the StandardConfiguration /
-  TemplateCompiler corridor affordance shared by admission-flow and compiler continuations. The route catalog declares
+- [framework-jit-compiler-corridor.ts](framework-jit-compiler-corridor.ts) names the current StandardConfiguration /
+  TemplateCompiler corridor affordance shared by admission-flow and compiler continuations. This is a focused canary
+  corridor over the default runtime-html composition, not a claim that `StandardConfiguration` is the only admissible
+  bundle root. The route catalog declares
   both directions: JIT flow rollups can jump to TemplateCompiler instruction products, and compiler summaries or
   TemplateCompiler rows can jump back to the focused JIT flow slice. Rendering instruction dispatch/syntax rows can
   also navigate back to compiler instruction products, closing the compiler-to-rendering path without merging rendering

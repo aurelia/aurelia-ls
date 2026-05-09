@@ -1,4 +1,5 @@
 import { auLink } from '../kernel/au-link.js';
+import { splitWhitespace } from '../strings.js';
 import type {
   AddressHandle,
   IdentityHandle,
@@ -28,6 +29,7 @@ import {
   IteratorBindingInstruction,
   LetBindingInstruction,
   ListenerBindingInstruction,
+  MultiAttrInstruction,
   PropertyBindingInstruction,
   RefBindingInstruction,
   SetAttributeInstruction,
@@ -191,13 +193,11 @@ export const enum RuntimeRendererSpreadCompileState {
   Open = 'open',
 }
 
-export class RuntimeRendererSpreadCompileInput {
-  constructor(
-    readonly local: string,
-    readonly instruction: SpreadTransferedBindingInstruction,
-    readonly target: TemplateRenderTarget,
-    readonly targetController: RuntimeControllerFrame,
-  ) {}
+export interface RuntimeRendererSpreadCompileRequest {
+  readonly local: string;
+  readonly instruction: SpreadTransferedBindingInstruction;
+  readonly target: TemplateRenderTarget;
+  readonly targetController: RuntimeControllerFrame;
 }
 
 export class RuntimeRendererSpreadCompileResult {
@@ -256,7 +256,7 @@ export interface RuntimeRenderingRun {
 
   createChildController(input: RuntimeControllerCreationRequest): RuntimeControllerFrame | null;
 
-  compileSpread(input: RuntimeRendererSpreadCompileInput): RuntimeRendererSpreadCompileResult;
+  compileSpread(input: RuntimeRendererSpreadCompileRequest): RuntimeRendererSpreadCompileResult;
 
   recordOpenInstruction(local: string, summary: string, addressHandle: AddressHandle | null): void;
 
@@ -316,12 +316,12 @@ export class RuntimeRendererInvocation {
     localSuffix: string,
     instruction: SpreadTransferedBindingInstruction,
   ): RuntimeRendererSpreadCompileResult {
-    return this.run.compileSpread(new RuntimeRendererSpreadCompileInput(
-      `${this.local}:${localSuffix}`,
+    return this.run.compileSpread({
+      local: `${this.local}:${localSuffix}`,
       instruction,
-      this.target,
-      this.targetController,
-    ));
+      target: this.target,
+      targetController: this.targetController,
+    });
   }
 
   recordOpenInstruction(
@@ -495,9 +495,7 @@ export class CustomElementRenderer {
       LetBindingTargetContext.OverrideContext,
       null,
     );
-    input.instruction.bindableInstructionProductHandles.forEach((handle, index) => {
-      input.renderNestedInstructionByHandle(handle, `bindable:${index}`, owner, childController);
-    });
+    renderOwnedBindingInstructions(input, input.instruction.bindableInstructionProductHandles, 'bindable', owner, childController);
     return new RuntimeRendererRenderResult([], [], [childController]);
   }
 }
@@ -542,9 +540,7 @@ export class CustomAttributeRenderer {
       LetBindingTargetContext.OverrideContext,
       null,
     );
-    input.instruction.bindingInstructionProductHandles.forEach((handle, index) => {
-      input.renderNestedInstructionByHandle(handle, `property:${index}`, owner, childController);
-    });
+    renderOwnedBindingInstructions(input, input.instruction.bindingInstructionProductHandles, 'property', owner, childController);
     return new RuntimeRendererRenderResult([], [], [childController]);
   }
 }
@@ -589,11 +585,30 @@ export class TemplateControllerRenderer {
       LetBindingTargetContext.OverrideContext,
       null,
     );
-    input.instruction.bindingInstructionProductHandles.forEach((handle, index) => {
-      input.renderNestedInstructionByHandle(handle, `property:${index}`, owner, childController);
-    });
+    renderOwnedBindingInstructions(input, input.instruction.bindingInstructionProductHandles, 'property', owner, childController);
     return new RuntimeRendererRenderResult([], [], [childController]);
   }
+}
+
+function renderOwnedBindingInstructions(
+  input: RuntimeRendererInvocation,
+  handles: readonly ProductHandle[],
+  localPrefix: string,
+  owner: RuntimeRendererInstructionOwner,
+  childController: RuntimeControllerFrame,
+): void {
+  const iteratorTailHandles = new Set(handles.flatMap((handle) => {
+    const instruction = input.readInstruction(handle);
+    return instruction instanceof IteratorBindingInstruction
+      ? instruction.tailInstructionProductHandles
+      : [];
+  }));
+  handles.forEach((handle, index) => {
+    if (iteratorTailHandles.has(handle)) {
+      return;
+    }
+    input.renderNestedInstructionByHandle(handle, `${localPrefix}:${index}`, owner, childController);
+  });
 }
 
 @auLink('runtime-html:LetElementRenderer')
@@ -1333,10 +1348,6 @@ function affectedStyleNamesFromCssText(cssText: string): readonly string[] {
     .filter((name) => name.length > 0);
 }
 
-function splitWhitespace(value: string): readonly string[] {
-  return value.match(/\S+/g) ?? [];
-}
-
 function renderPropertyRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRendererRenderResult {
   const instruction = input.instruction;
   if (!(instruction instanceof PropertyBindingInstruction)
@@ -1352,6 +1363,7 @@ function renderPropertyRuntimeBinding(input: RuntimeRendererInvocation): Runtime
   const allocation = input.allocateBinding();
   let effect: IteratorBindingScopeEffect | null = null;
   if (instruction instanceof IteratorBindingInstruction) {
+    consumeIteratorTailInstructions(input, instruction);
     const effectAllocation = input.allocateScopeEffect('iterator-effect');
     effect = new IteratorBindingScopeEffect(
       effectAllocation.productHandle,
@@ -1411,6 +1423,31 @@ function renderPropertyRuntimeBinding(input: RuntimeRendererInvocation): Runtime
     ),
     effect == null ? [] : [effect],
   );
+}
+
+function consumeIteratorTailInstructions(
+  input: RuntimeRendererInvocation,
+  instruction: IteratorBindingInstruction,
+): void {
+  instruction.tailInstructionProductHandles.forEach((handle, index) => {
+    const tail = input.readInstruction(handle);
+    if (tail == null) {
+      input.recordOpenInstruction(
+        `iterator-tail:${index}:missing`,
+        `Iterator binding tail instruction '${handle}' could not be hydrated for runtime Rendering.`,
+        instruction.sourceAddressHandle,
+      );
+      return;
+    }
+    input.consumeInstruction(tail.productHandle);
+    if (!(tail instanceof MultiAttrInstruction)) {
+      input.recordOpenInstruction(
+        `iterator-tail:${index}:unexpected`,
+        `Iterator binding tail instruction '${handle}' was not a MultiAttrInstruction.`,
+        tail.sourceAddressHandle,
+      );
+    }
+  });
 }
 
 function renderAttributeRuntimeBinding(input: RuntimeRendererInvocation): RuntimeRendererRenderResult {

@@ -20,13 +20,41 @@ import {
   NavigationRelation,
   type NavigationRouteClaim,
 } from "../navigation.js";
-import type { SourceProject } from "../../source/index.js";
+import type {
+  AuLinkFilters,
+  SourceProject,
+} from "../../source/index.js";
 
 /** Default detail budget for bridge projections that expand from compact rows. */
 export const AULINK_MIRROR_DETAIL_BUDGET: Budget = {
   rows: 20,
   evidencePerSubject: 3,
 };
+
+export function auLinkModelFilters(
+  filters: {
+    readonly linkId?: string;
+    readonly packageId?: string;
+    readonly symbolName?: string;
+    readonly targetName?: string;
+    readonly filePath?: string;
+    readonly frameworkStatus?: string;
+    readonly query?: string;
+  },
+  options: { readonly includeQuery?: boolean } = {},
+): AuLinkFilters {
+  return {
+    ...(filters.linkId === undefined ? {} : { linkId: filters.linkId }),
+    ...(filters.packageId === undefined ? {} : { packageId: filters.packageId }),
+    ...(filters.symbolName === undefined ? {} : { symbolName: filters.symbolName }),
+    ...(filters.targetName === undefined ? {} : { targetName: filters.targetName }),
+    ...(filters.filePath === undefined ? {} : { filePath: filters.filePath }),
+    ...(filters.frameworkStatus === undefined ? {} : { frameworkStatus: filters.frameworkStatus }),
+    ...(options.includeQuery !== true || filters.query === undefined
+      ? {}
+      : { query: filters.query }),
+  };
+}
 
 /** True when a bridge inquiry is still at the unfiltered overview level. */
 export function isUnscopedBridgeInquiry(
@@ -253,7 +281,7 @@ export function auLinkBasis(sourceProject: SourceProject): Basis {
 }
 
 /** Basis for TypeScript checker-backed bridge reads. */
-export function checkerBasis(sourceProject: SourceProject): Basis {
+export function auLinkCheckerBasis(sourceProject: SourceProject): Basis {
   return {
     kind: BasisKind.TypeScriptChecker,
     closure: BasisClosure.Exact,

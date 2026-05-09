@@ -1,16 +1,21 @@
 import ts from "typescript";
 
-import { FrameworkExportCapability } from "../../framework/index.js";
+import {
+  FrameworkExportCapability,
+  isCreateInterfaceCall,
+} from "../../framework/index.js";
 import {
   AURELIA_FRAMEWORK_PACKAGE_IDS,
+  readAureliaFrameworkPackageNames,
   readExportNames,
   readExportSurface,
   readTypeScriptCallSiteEntry,
+  requiredSourceFileIdentity,
   SourceProjectKeyedMemo,
-  SourceProjectMemo,
   SourceDeclarationKind,
   SourceSelectorScheme,
   SourceTargetKind,
+  sourceSpanForNode,
   type SourceProject,
   type TypeScriptCallSiteEntry,
   type TypeScriptExportNameEntry,
@@ -22,7 +27,6 @@ import type {
   FrameworkRegistryExportRow,
 } from "./framework-entities.js";
 import type { FrameworkDiscoveryFilters } from "./framework-filters.js";
-import { externalFileIdentity, sourceSpan } from "./framework-support.js";
 import {
   callExpressionsIn,
   callReturnTypeText,
@@ -36,9 +40,6 @@ const diInterfaceRowsByPackage = new SourceProjectKeyedMemo<
 const diInterfaceRowsByExport = new SourceProjectKeyedMemo<
   string,
   readonly FrameworkDiInterfaceExportRow[]
->();
-const frameworkPackageNames = new SourceProjectMemo<
-  ReadonlyMap<string, string>
 >();
 const frameworkPackageExportRowsByFilter = new SourceProjectKeyedMemo<
   string,
@@ -68,17 +69,7 @@ export interface FrameworkPublicExportSurface {
 export function readFrameworkPackageNames(
   sourceProject: SourceProject,
 ): ReadonlyMap<string, string> {
-  return frameworkPackageNames.read(sourceProject, () => {
-    const admittedFrameworkPackageIds = new Set(AURELIA_FRAMEWORK_PACKAGE_IDS);
-    return new Map(
-      sourceProject
-        .snapshot()
-        .summary.packages.filter((entry) =>
-          admittedFrameworkPackageIds.has(entry.id as never),
-        )
-        .map((entry) => [entry.id, entry.packageName]),
-    );
-  });
+  return readAureliaFrameworkPackageNames(sourceProject);
 }
 
 export function frameworkPackageIdsForFilters(
@@ -438,11 +429,7 @@ export function scanFrameworkDiInterfacePackageRows(
     return [];
   }
   return sourceProject
-    .ownedSourceFiles()
-    .filter(
-      (sourceFile) =>
-        sourceProject.packageForFileName(sourceFile.fileName)?.id === packageId,
-    )
+    .ownedImplementationSourceFilesForPackage(packageId)
     .flatMap((sourceFile) =>
       exportedVariableDeclarations(sourceFile)
         .filter(
@@ -550,9 +537,6 @@ export function diInterfaceRowsForVariable(
   ) {
     return [];
   }
-  if (!containsCreateInterfaceText(declaration.initializer, sourceFile)) {
-    return [];
-  }
   const namedDeclaration = declaration as ts.VariableDeclaration & {
     readonly name: ts.Identifier;
   };
@@ -565,7 +549,7 @@ export function diInterfaceRowsForVariable(
   const checker = sourceProject.checker;
   const calls = callExpressionsIn(declaration.initializer);
   const createInterfaceCalls = calls
-    .filter((call) => isCreateInterfaceCall(checker, sourceFile, call))
+    .filter((call) => isCreateInterfaceCall(sourceProject, call))
     .map((call) => readTypeScriptCallSiteEntry(sourceProject, sourceFile, call))
     .filter(
       (callSite): callSite is TypeScriptCallSiteEntry => callSite !== null,
@@ -598,19 +582,6 @@ export function diInterfaceRowsForVariable(
   );
 }
 
-export function isCreateInterfaceCall(
-  checker: ts.TypeChecker,
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
-): boolean {
-  if (
-    !containsCreateInterfaceText(unwrapExpression(call.expression), sourceFile)
-  ) {
-    return false;
-  }
-  return callReturnTypeText(checker, call).includes("InterfaceSymbol");
-}
-
 export function isResolverBuilderCall(
   checker: ts.TypeChecker,
   call: ts.CallExpression,
@@ -630,13 +601,6 @@ export function isResolverBuilderCall(
     return false;
   }
   return callReturnTypeText(checker, call).includes("IResolver");
-}
-
-export function containsCreateInterfaceText(
-  node: ts.Node,
-  sourceFile: ts.SourceFile,
-): boolean {
-  return node.getText(sourceFile).toLowerCase().includes("createinterface");
 }
 
 export function interfaceKeyForCreateInterfaceCall(
@@ -659,11 +623,9 @@ export function exportSurfaceEntryForNamedDeclaration(
 ): TypeScriptExportSurfaceEntry {
   const checker = sourceProject.checker;
   const symbol = checker.getSymbolAtLocation(nameNode);
-  const targetFile =
-    sourceProject.sourceFileIdentity(sourceFile) ??
-    externalFileIdentity(sourceProject, sourceFile);
+  const targetFile = requiredSourceFileIdentity(sourceProject, sourceFile);
   const surfaceFile = publicExport?.surfaceFile ?? targetFile;
-  const span = sourceSpan(sourceFile, declaration);
+  const span = sourceSpanForNode(sourceFile, declaration);
   const localName = nameNode.getText(sourceFile);
   const exportName = publicExport?.exportName ?? localName;
   return {

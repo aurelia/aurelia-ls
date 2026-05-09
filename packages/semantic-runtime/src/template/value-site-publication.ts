@@ -2,7 +2,7 @@ import {
   SourceFileAddress,
   SourceSpanAddress,
 } from '../kernel/address.js';
-import { SemanticClaim } from '../kernel/claim.js';
+import { SemanticClaim, nullableClaim } from '../kernel/claim.js';
 import type {
   AddressHandle,
   IdentityHandle,
@@ -348,8 +348,4 @@ export class TemplateValueSitePublisher {
       baseSpan: sourceSpanFromBounds(address.start, address.end, file),
     };
   }
-}
-
-function nullableClaim(claim: SemanticClaim | null): readonly SemanticClaim[] {
-  return claim == null ? [] : [claim];
 }

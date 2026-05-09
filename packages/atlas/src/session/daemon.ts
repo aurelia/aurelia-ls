@@ -1,6 +1,7 @@
 #!/usr/bin/env node
 import { createServer, type Server, type Socket } from "node:net";
 
+import { parseFlagValueArgs } from "../cli-args.js";
 import { OutcomeKind } from "../inquiry/answer.js";
 import { LensId } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
@@ -15,6 +16,7 @@ import {
   writeInquirySessionManifest,
 } from "./manifest.js";
 import { resolveInquirySessionPaths } from "./paths.js";
+import { isProcessAlive } from "./process.js";
 import {
   INQUIRY_SESSION_MANIFEST_VERSION,
   InquirySessionMethod,
@@ -31,10 +33,13 @@ import {
   type InquirySessionWorldSummary,
 } from "./protocol.js";
 
-const args = parseArgs(process.argv.slice(2));
+const args = parseFlagValueArgs(
+  process.argv.slice(2),
+  "Invalid Atlas session argument",
+);
 const packageRoot = requireArg(args, "package-root");
 const paths = resolveInquirySessionPaths(packageRoot);
-const manifestPath = args.get("manifest") ?? paths.manifestPath;
+const manifestPath = requireArg(args, "manifest");
 const buildHash = requireArg(args, "build-hash");
 const idleTtlMs = readPositiveInteger(args.get("idle-ttl-ms"), 10 * 60 * 1000);
 const heartbeatIntervalMs = readPositiveInteger(
@@ -45,10 +50,12 @@ const sourceProject = createSourceProject({ repoRoot: paths.repoRoot });
 const api = createInMemoryApi({ sourceProject });
 const startedAtMs = Date.now();
 let lastRequestAtMs = startedAtMs;
+let activeRequestCount = 0;
 let endpoint: InquirySessionEndpoint | undefined;
 let server: Server | undefined;
 let shuttingDown = false;
 let manifestEstablished = false;
+let deferredShutdownReason: string | null = null;
 
 server = createServer((socket) => {
   wireSocket(socket);
@@ -68,7 +75,7 @@ server.listen(0, "127.0.0.1", () => {
 });
 
 const heartbeat = setInterval(() => {
-  if (Date.now() - lastRequestAtMs > idleTtlMs) {
+  if (activeRequestCount === 0 && Date.now() - lastRequestAtMs > idleTtlMs) {
     shutdown("idle timeout");
     return;
   }
@@ -122,6 +129,7 @@ async function handleLine(
   }
 
   lastRequestAtMs = Date.now();
+  activeRequestCount += 1;
   try {
     const result = await handleRequest(request);
     const response: InquirySessionResponse = {
@@ -136,6 +144,13 @@ async function handleLine(
         failure(request.id, "request-failed", errorSummary(error)),
       )}\n`,
     );
+  } finally {
+    activeRequestCount -= 1;
+    lastRequestAtMs = Date.now();
+    if (activeRequestCount === 0 && deferredShutdownReason !== null) {
+      const reason = deferredShutdownReason;
+      setTimeout(() => shutdown(reason), 0).unref();
+    }
   }
 }
 
@@ -231,6 +246,7 @@ function createStatus(): InquirySessionStatus {
     endpoint,
     uptimeMs: Date.now() - startedAtMs,
     idleMs: Date.now() - lastRequestAtMs,
+    activeRequestCount,
     world: createWorldSummary(),
     implementedLensIds: api.implementedLensIds,
   };
@@ -256,21 +272,24 @@ function refreshManifest(): void {
 
   const current = readInquirySessionManifest(manifestPath);
   if (current === undefined && manifestEstablished) {
-    process.exit(0);
+    shutdownWhenIdle("session manifest lease removed");
+    return;
   }
   if (
     current !== undefined &&
     current.pid !== process.pid &&
     isProcessAlive(current.pid)
   ) {
-    process.exit(0);
+    shutdownWhenIdle(`session manifest lease transferred to pid ${current.pid}`);
+    return;
   }
   if (
     current !== undefined &&
     current.pid === process.pid &&
     current.buildHash !== buildHash
   ) {
-    process.exit(0);
+    shutdownWhenIdle("session manifest build hash changed");
+    return;
   }
 
   const now = new Date().toISOString();
@@ -294,17 +313,16 @@ function refreshManifest(): void {
   manifestEstablished = true;
 }
 
-/** Return true when a manifest-owning process still appears to be alive. */
-function isProcessAlive(
-  /** Process id read from the current session manifest. */
-  pid: number,
-): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
+/** Shut down immediately when idle, or defer lease-loss shutdown until active work drains. */
+function shutdownWhenIdle(
+  /** Why this daemon should no longer serve new work. */
+  reason: string,
+): void {
+  if (activeRequestCount > 0) {
+    deferredShutdownReason ??= reason;
+    return;
   }
+  shutdown(reason);
 }
 
 /** Stop the server, remove the owned manifest, and exit. */
@@ -318,6 +336,11 @@ function shutdown(
   shuttingDown = true;
   clearInterval(heartbeat);
   removeInquirySessionManifest(manifestPath, process.pid);
+  try {
+    sourceProject.dispose();
+  } catch (error) {
+    console.error(`Atlas source project dispose failed: ${errorSummary(error)}`);
+  }
   server?.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 500).unref();
   console.error(`Atlas session shutting down: ${reason}`);
@@ -394,23 +417,6 @@ function readShutdownParams(
   }
   const reason = (params as { readonly reason?: unknown }).reason;
   return typeof reason === "string" ? { reason } : {};
-}
-
-/** Parse CLI flags in --key value form. */
-function parseArgs(
-  /** Raw argv tail. */
-  argv: readonly string[],
-): Map<string, string> {
-  const parsed = new Map<string, string>();
-  for (let i = 0; i < argv.length; i += 2) {
-    const key = argv[i];
-    const value = argv[i + 1];
-    if (key === undefined || !key.startsWith("--") || value === undefined) {
-      throw new Error(`Invalid Atlas session argument near '${key ?? ""}'.`);
-    }
-    parsed.set(key.slice(2), value);
-  }
-  return parsed;
 }
 
 /** Read a required CLI argument. */

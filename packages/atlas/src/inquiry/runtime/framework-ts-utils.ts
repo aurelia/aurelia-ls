@@ -6,9 +6,22 @@ import {
   type ModuleEvaluationResult,
 } from "../../evaluation/index.js";
 import {
+  isNestedExecutionBoundary,
+  objectLiteralProperty,
   SourceProjectKeyedMemo,
+  unwrapExpression,
   type SourceProject,
   type TypeScriptExpressionFact,
+} from "../../source/index.js";
+
+export {
+  hasStaticModifier,
+  isNestedExecutionBoundary,
+  localFunctionDeclarationForCall,
+  objectLiteralProperty,
+  propertyNameText,
+  returnExpressions,
+  unwrapExpression,
 } from "../../source/index.js";
 
 const moduleEvaluationByFile = new SourceProjectKeyedMemo<
@@ -120,19 +133,6 @@ export function newExpressionsIn(node: ts.Node): readonly ts.NewExpression[] {
   };
   visit(node);
   return expressions;
-}
-
-export function isNestedExecutionBoundary(node: ts.Node): boolean {
-  return (
-    ts.isFunctionDeclaration(node) ||
-    ts.isFunctionExpression(node) ||
-    ts.isArrowFunction(node) ||
-    ts.isMethodDeclaration(node) ||
-    ts.isConstructorDeclaration(node) ||
-    ts.isGetAccessorDeclaration(node) ||
-    ts.isSetAccessorDeclaration(node) ||
-    ts.isClassLike(node)
-  );
 }
 
 export function arrayLiteralForExpression(
@@ -282,48 +282,6 @@ export function variableInitializerForExpression(
     : unwrapExpression(declaration.initializer);
 }
 
-export function localFunctionDeclarationForCall(
-  sourceProject: SourceProject,
-  sourceFile: ts.SourceFile,
-  call: ts.CallExpression,
-): ts.FunctionDeclaration | null {
-  const expression = unwrapExpression(call.expression);
-  if (!ts.isIdentifier(expression)) {
-    return null;
-  }
-  const symbol = sourceProject.checker.getSymbolAtLocation(expression);
-  const declaration = symbol
-    ?.getDeclarations()
-    ?.find(
-      (candidate): candidate is ts.FunctionDeclaration =>
-        ts.isFunctionDeclaration(candidate) &&
-        candidate.body !== undefined &&
-        candidate.getSourceFile().fileName === sourceFile.fileName,
-    );
-  return declaration ?? null;
-}
-
-export function returnExpressions(body: ts.Block): readonly ts.Expression[] {
-  const expressions: ts.Expression[] = [];
-  const visit = (node: ts.Node): void => {
-    if (
-      ts.isFunctionDeclaration(node) ||
-      ts.isFunctionExpression(node) ||
-      ts.isArrowFunction(node) ||
-      ts.isClassLike(node)
-    ) {
-      return;
-    }
-    if (ts.isReturnStatement(node) && node.expression !== undefined) {
-      expressions.push(node.expression);
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(body);
-  return expressions;
-}
-
 export function isFunctionExpressionLike(
   node: ts.Node,
 ): node is ts.FunctionExpression | ts.ArrowFunction {
@@ -363,7 +321,7 @@ export function readStaticTypeNameProperty(
   propertyName: string,
 ): string | null {
   const current = unwrapExpression(expression);
-  const property = objectProperty(current, propertyName);
+  const property = objectLiteralProperty(current, propertyName);
   if (property !== null && ts.isPropertyAssignment(property)) {
     return readStaticStringLikeExpression(
       sourceProject,
@@ -382,6 +340,19 @@ export function readResourceName(
   if (ts.isStringLiteralLike(current)) {
     return current.text;
   }
+  if (ts.isIdentifier(current)) {
+    const initializer = localVariableInitializerForIdentifier(current);
+    if (initializer !== null) {
+      const localName = readStaticStringProperty(
+        sourceProject,
+        initializer,
+        "name",
+      );
+      if (localName !== null) {
+        return localName;
+      }
+    }
+  }
   return (
     readStaticStringProperty(sourceProject, expression, "name") ??
     readEvaluatedStringProperty(sourceProject, current, "name")
@@ -393,7 +364,10 @@ export function readStaticStringProperty(
   expression: ts.Expression,
   propertyName: string,
 ): string | null {
-  const property = objectProperty(unwrapExpression(expression), propertyName);
+  const property = objectLiteralProperty(
+    unwrapExpression(expression),
+    propertyName,
+  );
   if (property === null || !ts.isPropertyAssignment(property)) {
     return null;
   }
@@ -413,6 +387,22 @@ export function readStaticStringLikeExpression(
   if (ts.isStringLiteralLike(current)) {
     return current.text;
   }
+  if (ts.isIdentifier(current)) {
+    const initializer = localVariableInitializerForIdentifier(current);
+    if (initializer !== null) {
+      const local = readStaticStringLikeExpression(
+        sourceProject,
+        initializer,
+        allowIdentifierText,
+      );
+      if (local !== null) {
+        return local;
+      }
+    }
+    if (allowIdentifierText) {
+      return current.text;
+    }
+  }
   const constant = sourceProject.checker.getConstantValue(
     current as
       | ts.EnumMember
@@ -426,14 +416,17 @@ export function readStaticStringLikeExpression(
   if (type.isStringLiteral()) {
     return type.value;
   }
-  return allowIdentifierText && ts.isIdentifier(current) ? current.text : null;
+  return null;
 }
 
 export function readStaticBooleanProperty(
   expression: ts.Expression,
   propertyName: string,
 ): boolean | null {
-  const property = objectProperty(unwrapExpression(expression), propertyName);
+  const property = objectLiteralProperty(
+    unwrapExpression(expression),
+    propertyName,
+  );
   if (property === null || !ts.isPropertyAssignment(property)) {
     return null;
   }
@@ -452,7 +445,10 @@ export function readStaticStringArrayProperty(
   expression: ts.Expression,
   propertyName: string,
 ): readonly string[] {
-  const property = objectProperty(unwrapExpression(expression), propertyName);
+  const property = objectLiteralProperty(
+    unwrapExpression(expression),
+    propertyName,
+  );
   if (property === null || !ts.isPropertyAssignment(property)) {
     return [];
   }
@@ -527,46 +523,6 @@ export function readModuleEvaluation(
   });
 }
 
-export function objectProperty(
-  expression: ts.Expression,
-  propertyName: string,
-): ts.ObjectLiteralElementLike | null {
-  if (!ts.isObjectLiteralExpression(expression)) {
-    return null;
-  }
-  return (
-    expression.properties.find(
-      (property) => propertyNameText(property.name) === propertyName,
-    ) ?? null
-  );
-}
-
-export function propertyNameText(
-  name: ts.PropertyName | undefined,
-): string | null {
-  if (name === undefined) {
-    return null;
-  }
-  if (
-    ts.isIdentifier(name) ||
-    ts.isStringLiteralLike(name) ||
-    ts.isNumericLiteral(name)
-  ) {
-    return name.text;
-  }
-  return null;
-}
-
-export function hasStaticModifier(node: ts.Node): boolean {
-  return (
-    ts.canHaveModifiers(node) &&
-    ts
-      .getModifiers(node)
-      ?.some((modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword) ===
-      true
-  );
-}
-
 export function calleeTail(expression: ts.Expression): string | null {
   const current = unwrapExpression(expression);
   if (ts.isIdentifier(current)) {
@@ -623,18 +579,4 @@ export function callReturnTypeText(
       ? checker.getTypeAtLocation(call)
       : checker.getReturnTypeOfSignature(signature);
   return checker.typeToString(type, call);
-}
-
-export function unwrapExpression(expression: ts.Expression): ts.Expression {
-  let current = expression;
-  while (
-    ts.isAsExpression(current) ||
-    ts.isTypeAssertionExpression(current) ||
-    ts.isParenthesizedExpression(current) ||
-    ts.isNonNullExpression(current) ||
-    ts.isSatisfiesExpression(current)
-  ) {
-    current = current.expression;
-  }
-  return current;
 }

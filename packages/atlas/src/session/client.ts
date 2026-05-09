@@ -10,7 +10,12 @@ import type { InquiryRuntimeRequest } from "../inquiry/runtime/index.js";
 import type { InquirySurfaceMap } from "../inquiry/surface-map.js";
 import { computeSessionCompatibilityHash } from "./hash.js";
 import { readInquirySessionManifest, removeInquirySessionManifest } from "./manifest.js";
-import { resolveInquirySessionPaths, type InquirySessionPaths } from "./paths.js";
+import {
+  resolveInquirySessionPaths,
+  resolveInquirySessionProfilePaths,
+  type InquirySessionPaths,
+} from "./paths.js";
+import { isProcessAlive } from "./process.js";
 import {
   InquirySessionMethod,
   type InquirySessionFollowParams,
@@ -40,6 +45,7 @@ export const DEFAULT_SESSION_STARTUP_TIMEOUT_MS = 180_000;
 const STARTUP_LOCK_SCHEMA_VERSION = "atlas-session-startup-lock-v1" as const;
 
 const pendingEnsures = new Map<string, Promise<InquirySessionClient>>();
+const compatibilityHashCache = new Map<string, string>();
 
 /** Options shared by session connection and startup helpers. */
 export interface InquirySessionOptions {
@@ -67,6 +73,8 @@ interface ResolvedEnsureInquirySessionOptions {
   readonly paths: InquirySessionPaths;
   readonly manifestPath: string;
   readonly startupLockPath: string;
+  readonly stdoutPath: string;
+  readonly stderrPath: string;
   readonly buildHash: string;
   readonly requestTimeoutMs: number;
   readonly startupTimeoutMs: number;
@@ -149,14 +157,25 @@ export function ensureInquirySession(
   options: EnsureInquirySessionOptions = {},
 ): Promise<InquirySessionClient> {
   const paths = resolveInquirySessionPaths(options.packageRoot);
-  const manifestPath = options.manifestPath ?? paths.manifestPath;
-  const startupLockPath = manifestPath === paths.manifestPath ? paths.startupLockPath : `${manifestPath}.startup.lock.json`;
   const requestTimeoutMs = options.requestTimeoutMs ?? DEFAULT_SESSION_REQUEST_TIMEOUT_MS;
-  const buildHash = options.buildHash ?? computeSessionCompatibilityHash({ packageRoot: paths.packageRoot });
+  const buildHash = options.buildHash ?? cachedSessionCompatibilityHash(paths);
+  const profilePaths = resolveInquirySessionProfilePaths(paths, buildHash);
+  const manifestPath = options.manifestPath ?? profilePaths.manifestPath;
+  const startupLockPath = options.manifestPath === undefined
+    ? profilePaths.startupLockPath
+    : `${manifestPath}.startup.lock.json`;
+  const stdoutPath = options.manifestPath === undefined
+    ? profilePaths.stdoutPath
+    : `${manifestPath}.stdout.log`;
+  const stderrPath = options.manifestPath === undefined
+    ? profilePaths.stderrPath
+    : `${manifestPath}.stderr.log`;
   const resolved: ResolvedEnsureInquirySessionOptions = {
     paths,
     manifestPath,
     startupLockPath,
+    stdoutPath,
+    stderrPath,
     buildHash,
     requestTimeoutMs,
     startupTimeoutMs: options.startupTimeoutMs ?? DEFAULT_SESSION_STARTUP_TIMEOUT_MS,
@@ -193,6 +212,34 @@ export function ensureInquirySession(
   return promise;
 }
 
+/** Return the process-local compatibility hash for this package root and source-admission environment. */
+function cachedSessionCompatibilityHash(
+  /** Resolved session paths. */
+  paths: InquirySessionPaths,
+): string {
+  const cacheKey = sessionCompatibilityCacheKey(paths);
+  const cached = compatibilityHashCache.get(cacheKey);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const hash = computeSessionCompatibilityHash({ packageRoot: paths.packageRoot });
+  compatibilityHashCache.set(cacheKey, hash);
+  return hash;
+}
+
+/** Build the cache key for environment-sensitive source package admission. */
+function sessionCompatibilityCacheKey(
+  /** Resolved session paths. */
+  paths: InquirySessionPaths,
+): string {
+  return [
+    paths.packageRoot,
+    process.env.ATLAS_AURELIA_FRAMEWORK_ROOT ?? "",
+    process.env.ATLAS_AURELIA_PLUGIN_ROOT ?? "",
+    process.env.ATLAS_EXTERNAL_SOURCE_ROOTS ?? "",
+  ].join("\0");
+}
+
 async function ensureInquirySessionOnce(
   /** Fully resolved session startup options. */
   options: ResolvedEnsureInquirySessionOptions,
@@ -215,12 +262,14 @@ export async function connectExistingInquirySession(
   options: InquirySessionOptions = {},
 ): Promise<InquirySessionClient | undefined> {
   const paths = resolveInquirySessionPaths(options.packageRoot);
-  const manifestPath = options.manifestPath ?? paths.manifestPath;
+  const buildHash = options.buildHash ?? cachedSessionCompatibilityHash(paths);
+  const profilePaths = resolveInquirySessionProfilePaths(paths, buildHash);
+  const manifestPath = options.manifestPath ?? profilePaths.manifestPath;
   const probed = await probeManifestPath(manifestPath, options.requestTimeoutMs ?? DEFAULT_SESSION_REQUEST_TIMEOUT_MS);
   if (probed === undefined) {
     return undefined;
   }
-  if (options.buildHash !== undefined && probed.status.buildHash !== options.buildHash) {
+  if (probed.status.buildHash !== buildHash) {
     return undefined;
   }
   return probed.client;
@@ -297,6 +346,8 @@ async function startCompatibleSessionUnderLock(
     buildHash: options.buildHash,
     idleTtlMs: options.idleTtlMs,
     heartbeatIntervalMs: options.heartbeatIntervalMs,
+    stdoutPath: options.stdoutPath,
+    stderrPath: options.stderrPath,
   });
 
   return waitForCompatibleSession(options.manifestPath, options.buildHash, {
@@ -319,15 +370,20 @@ function startInquirySessionDaemon(
     readonly idleTtlMs: number;
     /** Manifest heartbeat interval. */
     readonly heartbeatIntervalMs: number;
+    /** Log file receiving daemon stdout. */
+    readonly stdoutPath: string;
+    /** Log file receiving daemon stderr. */
+    readonly stderrPath: string;
   },
 ): void {
   if (!existsSync(paths.daemonEntry)) {
     throw new Error(`Cannot start Atlas session because ${paths.daemonEntry} does not exist. Build the package first.`);
   }
 
-  mkdirSync(paths.sessionDir, { recursive: true });
-  const stdout = openSync(paths.stdoutPath, "a");
-  const stderr = openSync(paths.stderrPath, "a");
+  mkdirSync(dirname(options.stdoutPath), { recursive: true });
+  mkdirSync(dirname(options.stderrPath), { recursive: true });
+  const stdout = openSync(options.stdoutPath, "a");
+  const stderr = openSync(options.stderrPath, "a");
   const child = spawn(process.execPath, [
     paths.daemonEntry,
     "--manifest", options.manifestPath,
@@ -585,19 +641,6 @@ function isFileAlreadyExistsError(error: unknown): boolean {
     && error !== null
     && "code" in error
     && (error as { readonly code?: unknown }).code === "EEXIST";
-}
-
-/** Return true when a process id still appears to be alive. */
-function isProcessAlive(
-  /** Process id to probe. */
-  pid: number,
-): boolean {
-  try {
-    process.kill(pid, 0);
-    return true;
-  } catch {
-    return false;
-  }
 }
 
 /** Sleep for the requested interval while polling daemon startup. */

@@ -187,10 +187,10 @@ function renderFrameworkEmulationSymbolsMarkdown(
   md.push("");
   md.push(table(["owner/path", "admitted symbols", "kind(s)", "composition", "source lens"], nestedRegistrationGroups(rows).map((group) => [
     cleanName(group.key),
-    list(unique(group.rows.map((row) => row.targetName))),
-    list(unique(group.rows.map((row) => row.targetKind))),
-    list(uniqueRaw(group.rows.map(composition))),
-    list(uniqueRaw(group.rows.map(lens))),
+    list(uniqueCleanNames(group.rows.map((row) => row.targetName))),
+    list(uniqueCleanNames(group.rows.map((row) => row.targetKind))),
+    list(uniqueCleanStrings(group.rows.map(composition))),
+    list(uniqueCleanStrings(group.rows.map(lens))),
   ])));
 
   md.push("## createInterface Defaults And Anonymous Boundaries");
@@ -230,12 +230,12 @@ function renderFrameworkEmulationSymbolsMarkdown(
     "Every materialized DI key/provider pair currently visible from the evaluated framework world, excluding resource type/factory carrier rows. Resource discovery and resource instance lifetime are modeled separately below.",
   );
   md.push("");
-  md.push(table(["DI key", "provider(s)", "strategy/kind", "composition", "source"], groupBy(materializeRows, (row) => row.ownerName).map((group) => [
+  md.push(table(["DI key", "provider(s)", "strategy/kind", "composition", "source"], namedGroupsBy(materializeRows, (row) => row.ownerName).map((group) => [
     cleanName(group.key),
-    list(unique(group.rows.map((row) => row.targetName))),
-    list(unique(group.rows.map((row) => row.targetKind))),
-    list(uniqueRaw(group.rows.map(composition))),
-    list(uniqueRaw(group.rows.map((row) => sourceLoc(sourceProject, row))), 3),
+    list(uniqueCleanNames(group.rows.map((row) => row.targetName))),
+    list(uniqueCleanNames(group.rows.map((row) => row.targetKind))),
+    list(uniqueCleanStrings(group.rows.map(composition))),
+    list(uniqueCleanStrings(group.rows.map((row) => sourceLoc(sourceProject, row))), 3),
   ])));
 
   md.push("## Resource Catalog Slots And Instance Lifetime");
@@ -252,11 +252,11 @@ function renderFrameworkEmulationSymbolsMarkdown(
     "These are catalog lookups, not recursive construction dependencies. They matter for resource identity and compiler/hydration lookup, but should not be pulled as DI closure.",
   );
   md.push("");
-  md.push(table(["owner/provider", "resource kind(s)", "lookup target(s)", "source"], groupBy(resourceFindRows, (row) => row.ownerName).map((group) => [
+  md.push(table(["owner/provider", "resource kind(s)", "lookup target(s)", "source"], namedGroupsBy(resourceFindRows, (row) => row.ownerName).map((group) => [
     cleanName(group.key),
-    list(unique(group.rows.map((row) => row.targetName))),
-    list(unique(group.rows.map((row) => row.targetKind))),
-    list(uniqueRaw(group.rows.map((row) => sourceLoc(sourceProject, row))), 3),
+    list(uniqueCleanNames(group.rows.map((row) => row.targetName))),
+    list(uniqueCleanNames(group.rows.map((row) => row.targetKind))),
+    list(uniqueCleanStrings(group.rows.map((row) => sourceLoc(sourceProject, row))), 3),
   ])));
 
   md.push("## Construction Dependency Reads (`get`, `getAll`, `resolve`, `invoke`)");
@@ -265,13 +265,13 @@ function renderFrameworkEmulationSymbolsMarkdown(
     "These are the dependency reads that do affect construction/materialization pressure. They are intentionally separate from resource `find` reads.",
   );
   md.push("");
-  md.push(table(["owner/provider", "access", "dependency keys", "source"], groupBy(constructionDependencyRows, (row) => `${row.ownerName}::${row.targetKind}`).map((group) => {
+  md.push(table(["owner/provider", "access", "dependency keys", "source"], namedGroupsBy(constructionDependencyRows, (row) => `${row.ownerName}::${row.targetKind}`).map((group) => {
     const [owner = "", access = ""] = group.key.split("::");
     return [
       cleanName(owner),
       cleanName(access),
-      list(unique(group.rows.map((row) => row.targetName))),
-      list(uniqueRaw(group.rows.map((row) => sourceLoc(sourceProject, row))), 3),
+      list(uniqueCleanNames(group.rows.map((row) => row.targetName))),
+      list(uniqueCleanStrings(group.rows.map((row) => sourceLoc(sourceProject, row))), 3),
     ];
   })));
 
@@ -299,21 +299,21 @@ function renderFrameworkEmulationSymbolsMarkdown(
 
   md.push("## JIT Compiler Obligations");
   md.push("");
-  md.push(table(["compiler area", "rows", "operations / targets", "source lens"], groupBy(compilerRows, (row) => row.obligationKind).map((group) => [
+  md.push(table(["compiler area", "rows", "operations / targets", "source lens"], namedGroupsBy(compilerRows, (row) => row.obligationKind).map((group) => [
     cleanName(group.key),
     String(group.rows.length),
-    list(unique(group.rows.flatMap((row) => [row.ownerName, row.targetName]))),
-    list(uniqueRaw(group.rows.map(lens))),
+    list(uniqueCleanNames(group.rows.flatMap((row) => [row.ownerName, row.targetName]))),
+    list(uniqueCleanStrings(group.rows.map(lens))),
   ])));
 
   md.push("## Hydration And Rendering Boundary");
   md.push("");
-  md.push(table(["hydration target kind", "rows", "owners", "targets", "source lens"], groupBy(hydrationRows, (row) => row.targetKind).map((group) => [
+  md.push(table(["hydration target kind", "rows", "owners", "targets", "source lens"], namedGroupsBy(hydrationRows, (row) => row.targetKind).map((group) => [
     cleanName(group.key),
     String(group.rows.length),
-    list(unique(group.rows.map((row) => row.ownerName)), 40),
-    list(unique(group.rows.map((row) => row.targetName)), 60),
-    list(uniqueRaw(group.rows.map(lens))),
+    list(uniqueCleanNames(group.rows.map((row) => row.ownerName)), 40),
+    list(uniqueCleanNames(group.rows.map((row) => row.targetName)), 60),
+    list(uniqueCleanStrings(group.rows.map(lens))),
   ])));
 
   md.push("## Template Controller Virtualization");
@@ -333,30 +333,30 @@ function renderFrameworkEmulationSymbolsMarkdown(
     "These source-backed rows mark where Atlas can already see a boundary into binding, observer, accessor, and reactive behavior. The boundary is intentionally provisional and approximate: it is a navigation aid for semantic-runtime work, not a complete TypeChecker behavior graph. Handoff confidence is depth-sensitive: root/controller-owned binding materialization can be deterministic while bindings under template-controller-created synthetic views may be speculative because the owning controllers are speculative even when the compiled instructions are deterministic.",
   );
   md.push("");
-  md.push(table(["handoff owner/symbol", "status", "kind(s)", "targets / methods", "composition evidence"], groupBy(handoffRows, (row) => row.ownerName).map((group) => [
+  md.push(table(["handoff owner/symbol", "status", "kind(s)", "targets / methods", "composition evidence"], namedGroupsBy(handoffRows, (row) => row.ownerName).map((group) => [
     cleanName(group.key),
-    list(unique(group.rows.map((row) => row.interpretationStatus ?? "source-visible"))),
-    list(unique(group.rows.map((row) => `${row.obligationKind}:${row.targetKind}`))),
-    list(unique(group.rows.map((row) => row.targetName))),
-    list(uniqueRaw(group.rows.map(lens))),
+    list(uniqueCleanNames(group.rows.map((row) => row.interpretationStatus ?? "source-visible"))),
+    list(uniqueCleanNames(group.rows.map((row) => `${row.obligationKind}:${row.targetKind}`))),
+    list(uniqueCleanNames(group.rows.map((row) => row.targetName))),
+    list(uniqueCleanStrings(group.rows.map(lens))),
   ])));
 
   md.push("## Observer Catalog By Kind");
   md.push("");
-  md.push(table(["observer kind", "symbols"], groupBy(observers.flatMap((observer) =>
+  md.push(table(["observer kind", "symbols"], namedGroupsBy(observers.flatMap((observer) =>
     observer.observerKinds.map((kind) => ({ kind, observer }))
   ), (row) => row.kind).map((group) => [
     cleanName(group.key),
-    list(unique(group.rows.map(({ observer }) => observer.exportEntry.exportName))),
+    list(uniqueCleanNames(group.rows.map(({ observer }) => observer.exportEntry.exportName))),
   ])));
 
   md.push("## Observer Catalog By Capability");
   md.push("");
-  md.push(table(["capability", "symbols"], groupBy(observers.flatMap((observer) =>
+  md.push(table(["capability", "symbols"], namedGroupsBy(observers.flatMap((observer) =>
     observer.observerCapabilities.map((capability) => ({ capability, observer }))
   ), (row) => row.capability).map((group) => [
     cleanName(group.key),
-    list(unique(group.rows.map(({ observer }) => observer.exportEntry.exportName))),
+    list(uniqueCleanNames(group.rows.map(({ observer }) => observer.exportEntry.exportName))),
   ])));
 
   md.push("## Observer Symbols");
@@ -366,8 +366,8 @@ function renderFrameworkEmulationSymbolsMarkdown(
     .sort((left, right) => left.exportEntry.exportName.localeCompare(right.exportEntry.exportName))
     .map((observer) => [
       cleanName(observer.exportEntry.exportName),
-      list(unique(observer.observerKinds)),
-      list(unique(observer.observerCapabilities)),
+      list(uniqueCleanNames(observer.observerKinds)),
+      list(uniqueCleanNames(observer.observerCapabilities)),
       cleanName(observer.packageId),
     ])));
 
@@ -409,7 +409,7 @@ function directStandardConfigurationRows(
 function nestedRegistrationGroups(
   rows: readonly FrameworkEmulationObligationRow[],
 ): readonly NamedGroup<FrameworkEmulationObligationRow>[] {
-  return groupBy(
+  return namedGroupsBy(
     rowsFor(rows, "evaluate-registration").filter(
       (row) =>
         row.ownerName !== "runtime-html:StandardConfiguration" &&
@@ -493,11 +493,11 @@ function resourcePlacementRow(
 ): string[] {
   return [
     label,
-    String(unique(rows.map((row) => row.targetName)).length),
-    list(uniqueRaw(rows.map((row) => row.runtimeLifetime ?? ""))),
-    list(unique(rows.map((row) => row.targetName))),
-    list(uniqueRaw(rows.map(composition))),
-    list(uniqueRaw(rows.map((row) => row.packageId ?? packageOf(null, row)))),
+    String(uniqueCleanNames(rows.map((row) => row.targetName)).length),
+    list(uniqueCleanStrings(rows.map((row) => row.runtimeLifetime ?? ""))),
+    list(uniqueCleanNames(rows.map((row) => row.targetName))),
+    list(uniqueCleanStrings(rows.map(composition))),
+    list(uniqueCleanStrings(rows.map((row) => row.packageId ?? packageOf(null, row)))),
   ];
 }
 
@@ -507,7 +507,7 @@ function resourceLifetimeRows(
   const resourceRows = rows.filter(
     (row) => row.runtimeLifetime !== undefined,
   );
-  return groupBy(
+  return namedGroupsBy(
     resourceRows,
     (row) => `${row.targetKind}::${row.runtimeLifetime}`,
   ).map((group) => {
@@ -515,8 +515,8 @@ function resourceLifetimeRows(
     return [
       cleanName(kind),
       cleanName(lifetime),
-      list(unique(group.rows.map((row) => row.targetName)), 80),
-      list(uniqueRaw(group.rows.map(lens))),
+      list(uniqueCleanNames(group.rows.map((row) => row.targetName)), 80),
+      list(uniqueCleanStrings(group.rows.map(lens))),
     ];
   });
 }
@@ -553,7 +553,7 @@ function countText(counts: Readonly<Record<string, number>>): string {
     .join("<br>");
 }
 
-function groupBy<TRow>(
+function namedGroupsBy<TRow>(
   rows: readonly TRow[],
   keyForRow: (row: TRow) => string,
 ): readonly NamedGroup<TRow>[] {
@@ -572,11 +572,11 @@ function groupBy<TRow>(
     .sort((left, right) => left.key.localeCompare(right.key));
 }
 
-function unique(values: readonly unknown[]): readonly string[] {
-  return uniqueRaw(values.map(cleanName));
+function uniqueCleanNames(values: readonly unknown[]): readonly string[] {
+  return uniqueCleanStrings(values.map(cleanName));
 }
 
-function uniqueRaw(values: readonly unknown[]): readonly string[] {
+function uniqueCleanStrings(values: readonly unknown[]): readonly string[] {
   return [
     ...new Set(
       values

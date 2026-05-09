@@ -15,6 +15,12 @@ export const enum SubstrateId {
   ProductVocabulary = "product.vocabulary",
   /** Product-owned semantic-runtime source architecture substrate. */
   ProductArchitecture = "product.architecture",
+  /** Admitted workspace package topology and app integration source surfaces. */
+  WorkspaceArchitecture = "workspace.architecture",
+  /** Public Aurelia plugin source surfaces used as external app pressure. */
+  PluginArchitecture = "plugin.architecture",
+  /** Aurelia router framework source architecture. */
+  FrameworkRouter = "framework.router",
   /** Product-to-framework auLink anchors. */
   ProductAuLink = "product.aulink",
   /** Framework static evaluator substrate. */
@@ -167,6 +173,51 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
       EvidenceKind.MaintenanceSignal,
       EvidenceKind.SourceSpan,
       EvidenceKind.Symbol,
+    ],
+    dependsOn: [SubstrateId.TypeScriptProgram],
+  },
+  {
+    id: SubstrateId.WorkspaceArchitecture,
+    kind: SubstrateKind.Source,
+    trust: SubstrateTrust.Derived,
+    summary:
+      "Admitted workspace package topology, manifests, build-tool signals, Aurelia entrypoint signals, and Aurelia integration source surfaces derived from source files and the hot TypeScript Program.",
+    basisKinds: [BasisKind.TypeScriptProgram, BasisKind.SourceText],
+    produces: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.ResourceDefinition,
+      EvidenceKind.DiRegistration,
+      EvidenceKind.SourceSpan,
+    ],
+    dependsOn: [SubstrateId.TypeScriptProgram, SubstrateId.SourceFiles],
+  },
+  {
+    id: SubstrateId.PluginArchitecture,
+    kind: SubstrateKind.Framework,
+    trust: SubstrateTrust.Derived,
+    summary:
+      "Import/receiver-aware public Aurelia plugin package surfaces, resources, registries, DI registrations, AppTasks, router hooks, and template references derived from the hot TypeScript Program.",
+    basisKinds: [BasisKind.TypeScriptProgram],
+    produces: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.ResourceDefinition,
+      EvidenceKind.DiRegistration,
+      EvidenceKind.SourceSpan,
+    ],
+    dependsOn: [SubstrateId.TypeScriptProgram],
+  },
+  {
+    id: SubstrateId.FrameworkRouter,
+    kind: SubstrateKind.Framework,
+    trust: SubstrateTrust.Derived,
+    summary:
+      "Aurelia router and route-recognizer source architecture: ordered route-config/navigation flow, route-recognizer parser/state/endpoint/candidate mechanics, self-audit rows, normalized router relationships, route context, route tree, viewport-agent, DI, resource, and lifecycle surfaces derived from the hot TypeScript Program.",
+    basisKinds: [BasisKind.TypeScriptProgram],
+    produces: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.ResourceDefinition,
+      EvidenceKind.DiRegistration,
+      EvidenceKind.SourceSpan,
     ],
     dependsOn: [SubstrateId.TypeScriptProgram],
   },

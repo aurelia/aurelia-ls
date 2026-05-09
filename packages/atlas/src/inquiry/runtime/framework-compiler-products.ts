@@ -7,6 +7,7 @@ import {
   FrameworkSyntaxProducerKind,
   type FrameworkRelationshipEndpoint,
 } from "../../framework/index.js";
+import { uniqueValues } from "../../collections.js";
 import type { SourceProject } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 import type { FrameworkSyntaxProductRow } from "./framework-entities.js";
@@ -170,7 +171,7 @@ function compilerRelationshipsForAttributeClassificationRow(
   if (targets.length === 0) {
     return [];
   }
-  return unique(targets).map((target) => {
+  return uniqueValues(targets).map((target) => {
     const relation = attributeClassificationRelation(row, target);
     return {
       id: `${row.id}:compiler-relationship:${relation}:${target}`,
@@ -193,7 +194,7 @@ function compilerFlowTargets(row: FrameworkCompileFlowRow): readonly string[] {
   if (row.targetName === undefined) {
     return [];
   }
-  return unique(
+  return uniqueValues(
     row.targetName
       .split("/")
       .map((target) => target.trim())
@@ -298,10 +299,6 @@ function compilerTargetEndpoint(target: string): FrameworkRelationshipEndpoint {
     packageId: "template-compiler",
     packageName: "@aurelia/template-compiler",
   };
-}
-
-function unique(values: readonly string[]): readonly string[] {
-  return [...new Set(values)];
 }
 
 function compilerRelationshipMatches(

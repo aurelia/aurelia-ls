@@ -1,4 +1,7 @@
 import type {
+  AddressHandle,
+} from '../kernel/handles.js';
+import type {
   ProjectBootFrame,
   SourceFileAdmission,
 } from '../boot/frames.js';
@@ -10,6 +13,7 @@ import {
 import type { EvaluationModuleResolutionOpen } from '../evaluation/module-host.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 import {
   ConfigurationKernelEmission,
 } from './configuration-kernel-emitter.js';
@@ -21,6 +25,7 @@ import {
   type ConfigurationRecognitionResult,
 } from './configuration-recognition-pass.js';
 import type { ConfigurationSequenceObservation } from './configuration-observation.js';
+import { normalizeConfigurationSourceFileName } from './source-file-names.js';
 
 /** Configuration-recognition result for one boot-admitted source file. */
 export class ConfigurationRecognitionSourceResult {
@@ -71,14 +76,16 @@ export class ConfigurationRecognitionProjectPass {
     project: ProjectBootFrame,
     resources: ResourceDefinitionIndex | null = null,
     evaluation: StaticProjectEvaluationResult | null = null,
+    typeSystem: TypeSystemProject | null = null,
   ): ConfigurationRecognitionProjectResult {
     const projectEvaluation = evaluation ?? new StaticProjectEvaluationPass().evaluateAndEmit(store, project);
     const recognition = new ConfigurationRecognitionPass();
+    const sourceFileAddressHandlesByFileName = readSourceFileAddressHandlesByFileName(projectEvaluation);
     return new ConfigurationRecognitionProjectResult(
       project,
       projectEvaluation,
       projectEvaluation.sources.map((source) =>
-        this.recognizeSource(store, recognition, source, resources)
+        this.recognizeSource(store, recognition, source, resources, typeSystem, sourceFileAddressHandlesByFileName)
       ),
     );
   }
@@ -88,6 +95,8 @@ export class ConfigurationRecognitionProjectPass {
     recognition: ConfigurationRecognitionPass,
     source: StaticProjectEvaluationResult['sources'][number],
     resources: ResourceDefinitionIndex | null,
+    typeSystem: TypeSystemProject | null,
+    sourceFileAddressHandlesByFileName: ReadonlyMap<string, AddressHandle>,
   ): ConfigurationRecognitionSourceResult {
     if (!isEvaluatedProjectSource(source)) {
       return new ConfigurationRecognitionSourceResult(
@@ -102,8 +111,11 @@ export class ConfigurationRecognitionProjectPass {
       new ConfigurationRecognitionContext(
         source.sourceFile,
         source.moduleKey,
+        source.admission.projectKey,
         source.admission.addressHandle,
         source.evaluation,
+        typeSystem,
+        sourceFileAddressHandlesByFileName,
       ),
       resources,
     );
@@ -114,6 +126,19 @@ export class ConfigurationRecognitionProjectPass {
       source.unresolvedModules,
     );
   }
+}
+
+function readSourceFileAddressHandlesByFileName(
+  evaluation: StaticProjectEvaluationResult,
+): ReadonlyMap<string, AddressHandle> {
+  const result = new Map<string, AddressHandle>();
+  for (const source of evaluation.sources) {
+    if (source.sourceFile == null) {
+      continue;
+    }
+    result.set(normalizeConfigurationSourceFileName(source.sourceFile.fileName), source.admission.addressHandle);
+  }
+  return result;
 }
 
 function aggregateConfigurationEmission(

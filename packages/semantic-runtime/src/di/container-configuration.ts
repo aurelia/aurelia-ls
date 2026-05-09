@@ -18,17 +18,15 @@ export type ContainerConfigurationField =
   | 'defaultResolverPolicy'
   | 'source';
 
-export class ContainerConfigurationInput {
-  constructor(
-    /** Whether child containers copy parent resource resolver rows at construction. */
-    readonly inheritParentResources: boolean | null = null,
-    /** Modeled default resolver policy, when statically known. */
-    readonly defaultResolverPolicy: ContainerDefaultResolverPolicy | null = null,
-    /** Source address for the configuration object or factory expression. */
-    readonly sourceAddressHandle: AddressHandle | null = null,
-    /** Field-level provenance for configuration properties. */
-    readonly fieldProvenance: readonly FieldProvenance<ContainerConfigurationField>[] = [],
-  ) {}
+export interface ContainerConfigurationRequest {
+  /** Whether child containers copy parent resource resolver rows at construction. */
+  readonly inheritParentResources?: boolean | null;
+  /** Modeled default resolver policy, when statically known. */
+  readonly defaultResolverPolicy?: ContainerDefaultResolverPolicy | null;
+  /** Source address for the configuration object or factory expression. */
+  readonly sourceAddressHandle?: AddressHandle | null;
+  /** Field-level provenance for configuration properties. */
+  readonly fieldProvenance?: readonly FieldProvenance<ContainerConfigurationField>[];
 }
 
 /** Runtime-shaped container configuration value. */
@@ -52,7 +50,7 @@ export class ContainerConfiguration {
     readonly fieldProvenance: readonly FieldProvenance<ContainerConfigurationField>[] = [],
   ) {}
 
-  static from(input: ContainerConfiguration | ContainerConfigurationInput | null | undefined): ContainerConfiguration {
+  static from(input: ContainerConfiguration | ContainerConfigurationRequest | null | undefined): ContainerConfiguration {
     if (input == null || input === ContainerConfiguration.DEFAULT) {
       return ContainerConfiguration.DEFAULT;
     }
@@ -60,7 +58,7 @@ export class ContainerConfiguration {
       input.inheritParentResources ?? false,
       input.defaultResolverPolicy ?? ContainerDefaultResolverPolicy.Singleton,
       input.sourceAddressHandle,
-      input.fieldProvenance,
+      input.fieldProvenance ?? [],
     );
   }
 }

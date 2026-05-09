@@ -52,6 +52,20 @@ export interface FrameworkStructuralRelationshipRow {
   readonly summary: string;
 }
 
+export function frameworkStructuralRelationshipProjection(
+  family: FrameworkRelationshipFamily,
+): string {
+  switch (family) {
+    case FrameworkRelationshipFamily.Observation:
+      return "observers";
+    case FrameworkRelationshipFamily.Router:
+      return "router-entities";
+    case FrameworkRelationshipFamily.Rendering:
+    default:
+      return "rendering-structures";
+  }
+}
+
 /** Read observer, rendering-structure, and router entity relationships for mirrors/composition. */
 export function readFrameworkStructuralRelationships(
   sourceProject: SourceProject,

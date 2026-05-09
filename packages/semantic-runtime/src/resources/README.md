@@ -13,9 +13,18 @@ It recognizes source carriers that the Aurelia runtime turns into resources:
 
 The source-level pass expects an evaluated module environment. The project-level pass starts from boot admissions and
 uses the shared `evaluation` project pass before running the same recognizers over each admitted TS/JS
-module. Recognition should not grow its own import resolver.
+module. Recognition should not grow its own import resolver. When static evaluation links additional local source
+modules or assets, the project-level pass threads those linked admissions back into resource recognition so imported
+HTML templates can keep precise template-file provenance instead of falling back to the component TypeScript span.
 Generic expression and value reads belong in `evaluation`; resource field readers should only interpret Aurelia
 definition fields such as `type`, `name`, `aliases`, `pattern`, and `symbols`.
+
+Some resource carriers are produced by evaluated factory calls rather than direct module-level class syntax. For
+example, a package can export several constants whose initializers call a factory that declares and returns a decorated
+class with a resource name supplied by a function parameter. Resource recognition has an evaluated-class-binding lane
+for those cases: the source-level class pass does not claim nested factory-local classes as standalone resources, while
+the evaluated binding pass reads the returned class value with its captured evaluator environment and uses the exported
+binding as the public target. This keeps factory resources visible without inventing plugin-specific recognition rules.
 
 The output is deliberately before scope admission, DI/configuration reachability, inherited metadata merging, and
 template/compiler lowering. Recognition observations pair a source carrier with a definition header. Headers are
@@ -53,9 +62,12 @@ those handles plus the AST-bearing observations and emits `resource.definition` 
 aliases, simple static bindables, `@bindable` metadata, template-controller flags, capture/template shape, and thin
 resource definitions. Bindable definitions preserve the source address for the metadata entry or
 member declaration that produced them, because template attribute completion, go-to-definition, and later rename support
-need that narrower origin instead of only the owning resource definition. It records open seams for explicit metadata
-that is visible but not safely materialized yet, including dependencies, pre-lowered instructions, surrogates, and
-watches.
+need that narrower origin instead of only the owning resource definition. Member `@bindable(...)` still contributes the
+property as bindable when its optional config object stays open; checker-visible `set` properties become open setter
+metadata, and the unresolved config fields remain visible as seams instead of erasing the bindable. Dependency
+convergence first trusts evaluator-closed class/function values, then uses the TypeChecker as a fallback for identifier
+dependencies that are checker-visible constructable/callable values. It records open seams for explicit metadata that is
+visible but not safely materialized yet, including dependencies, pre-lowered instructions, surrogates, and watches.
 
 `product-details.ts` declares the typed detail slots that hydrate resource definition headers, built-in catalogs,
 configured catalog selections, and full definitions from product handles. This keeps resource inquiry and tooling

@@ -43,7 +43,7 @@ import {
 } from './container.js';
 import {
   ContainerConfiguration,
-  type ContainerConfigurationInput,
+  type ContainerConfigurationRequest,
 } from './container-configuration.js';
 import {
   ContainerResolverSlot,
@@ -73,7 +73,7 @@ export class ContainerChildMaterializationRequest {
     /** Contextual providers installed by the runtime hydration helper. */
     readonly contextResolvers: readonly ContainerContextResolverSlotRequest[] = [],
     /** Optional createChild configuration. Omit for runtime's default child-container path. */
-    readonly configuration: ContainerConfiguration | ContainerConfigurationInput | null = null,
+    readonly configuration: ContainerConfiguration | ContainerConfigurationRequest | null = null,
   ) {}
 }
 

@@ -1,5 +1,9 @@
 import ts from "typescript";
 
+import {
+  countBy,
+  uniqueSortedStrings,
+} from "../../collections.js";
 import type { TypeScriptEnumUsageIndex } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 
@@ -109,8 +113,8 @@ export function buildAtlasSelfStringRows(
   return [...byValue.entries()]
     .map(([value, rows]) => {
       const roles = countBy(rows, (row) => row.role);
-      const files = uniqueSorted(rows.map((row) => row.filePath));
-      const packageIds = uniqueSorted(rows.map((row) => row.packageId));
+      const files = uniqueSortedStrings(rows.map((row) => row.filePath));
+      const packageIds = uniqueSortedStrings(rows.map((row) => row.packageId));
       const declaredByEnumMembers = enumMembersByValue.get(value) ?? [];
       const reusedOutsideDeclaration = rows.some((row) =>
         isMagicStringRole(row.role),
@@ -311,20 +315,4 @@ function stableHash(value: string): string {
     hash = (hash * 33) ^ value.charCodeAt(index);
   }
   return (hash >>> 0).toString(16);
-}
-
-function uniqueSorted(values: readonly string[]): readonly string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
-}
-
-function countBy<TValue>(
-  rows: readonly TValue[],
-  key: (row: TValue) => string,
-): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = Object.create(null) as Record<string, number>;
-  for (const row of rows) {
-    const rowKey = key(row);
-    counts[rowKey] = (counts[rowKey] ?? 0) + 1;
-  }
-  return counts;
 }

@@ -3,7 +3,7 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import {
-  TemplateRenderingTargetInput,
+  type TemplateRenderingTargetPlan,
 } from './compiler-world.js';
 import {
   TemplateRenderTarget,
@@ -46,11 +46,11 @@ class SyntheticViewTargetGroup {
  */
 export function syntheticViewTargetInputs(
   input: SyntheticViewTargetInput,
-): readonly TemplateRenderingTargetInput[] {
+): readonly TemplateRenderingTargetPlan[] {
   return syntheticViewTargetGroups(input.instructions).map((group, index) => {
     const allocation = input.allocate(`${input.local}:target:${index}`);
-    return new TemplateRenderingTargetInput(
-      new TemplateRenderTarget(
+    return {
+      target: new TemplateRenderTarget(
         allocation.productHandle,
         allocation.identityHandle,
         group.targetKind,
@@ -59,9 +59,9 @@ export function syntheticViewTargetInputs(
         group.targetNode?.addressHandle ?? input.sequence.sourceAddressHandle,
         [],
       ),
-      input.sequence,
-      group.instructions,
-    );
+      sequence: input.sequence,
+      instructions: group.instructions,
+    };
   });
 }
 

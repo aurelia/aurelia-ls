@@ -4,21 +4,30 @@ import { performance } from "node:perf_hooks";
 import ts from "typescript";
 
 import {
+  groupBy,
+  uniqueSortedStrings,
+} from "../../collections.js";
+import {
+  calleeNameForExpression,
   canonicalSourceSymbolKey,
-  readTypeScriptCallSiteEntry,
+  classDeclarationSurface,
+  hasModifier,
+  propertyNameText,
+  readAuLinkModel,
+  requiredSourceFileIdentity,
   resolveAlias,
+  sourceReferenceForNode,
   SourcePackageId,
   SourceProjectKeyedMemo,
+  TypeScriptCallSiteKind,
   type SourceDeclarationRow,
   type SourceProject,
   type SourceSpan,
-  type TypeScriptCallSiteKind,
   type TypeScriptUsageRoleId,
   symbolForNode,
   usageRoleForIdentifier,
   usageText,
 } from "../../source/index.js";
-import type { SourceRange } from "../locus.js";
 
 /** Schema marker for the semantic-runtime architecture source model. */
 export const PRODUCT_ARCHITECTURE_ANALYSIS_VERSION =
@@ -324,13 +333,15 @@ export interface ProductArchitectureClassSurfaceRow {
   readonly staticMethods: readonly string[];
   /** Accessor names. */
   readonly accessors: readonly string[];
-  /** Property names. */
+  /** Property names, including constructor parameter properties. */
   readonly properties: readonly string[];
+  /** auLink ids decorating this product class, when any. */
+  readonly auLinkIds: readonly string[];
   /** Number of constructor declarations. */
   readonly constructorCount: number;
   /** Number of instance and static method declarations. */
   readonly methodCount: number;
-  /** Number of field/accessor/property declarations. */
+  /** Number of field/accessor/property declarations, including constructor parameter properties. */
   readonly propertyCount: number;
   /** Declaration span line count. */
   readonly lineCount: number;
@@ -405,8 +416,8 @@ export interface ProductArchitectureCallSiteRow {
   readonly calleeName: string;
   /** Callee expression text as written at the call site. */
   readonly calleeText: string;
-  /** Checker type display for the callee expression. */
-  readonly calleeType: string;
+  /** Checker type display for the callee expression, when exact call details were requested. */
+  readonly calleeType: string | null;
   /** Checker-visible callee symbol name when resolved. */
   readonly calleeSymbolName: string | null;
   /** Checker fully-qualified callee symbol key when resolved. */
@@ -609,6 +620,8 @@ export interface ProductArchitectureProfile {
   readonly analysis: ProductArchitectureAnalysis;
   /** True when checker-backed call-site and call dependency rows were included. */
   readonly includeCallSites: boolean;
+  /** True when call-site rows include expensive checker type/signature displays. */
+  readonly includeCallDetails: boolean;
   /** True when checker-backed identifier reference and symbol dependency rows were included. */
   readonly includeSymbols: boolean;
   /** Measured build phases in execution order. */
@@ -621,6 +634,8 @@ export interface ProductArchitectureProfile {
 export interface ProductArchitectureAnalysisOptions {
   /** Include checker-backed call-site rows, call dependency rows, and function call enrichment. */
   readonly includeCallSites?: boolean;
+  /** Include expensive call-site checker type/signature displays. */
+  readonly includeCallDetails?: boolean;
   /** Include checker-backed identifier reference and symbol dependency rows. */
   readonly includeSymbols?: boolean;
 }
@@ -652,9 +667,12 @@ const productArchitectureMemo =
 
 function productArchitectureMemoKey(
   includeCallSites: boolean,
+  includeCallDetails: boolean,
   includeSymbols: boolean,
 ): string {
   return `${includeCallSites ? "calls" : "no-calls"}:${
+    includeCallDetails ? "call-details" : "compact-calls"
+  }:${
     includeSymbols ? "symbols" : "no-symbols"
   }`;
 }
@@ -665,13 +683,19 @@ export function readProductArchitectureAnalysis(
   options: ProductArchitectureAnalysisOptions = {},
 ): ProductArchitectureAnalysis {
   const includeCallSites = options.includeCallSites ?? true;
+  const includeCallDetails = includeCallSites && (options.includeCallDetails ?? false);
   const includeSymbols = options.includeSymbols ?? true;
-  const memoKey = productArchitectureMemoKey(includeCallSites, includeSymbols);
+  const memoKey = productArchitectureMemoKey(
+    includeCallSites,
+    includeCallDetails,
+    includeSymbols,
+  );
   return productArchitectureMemo.read(sourceProject, memoKey, () =>
     buildProductArchitectureAnalysis(
       sourceProject,
       runProductArchitecturePhase,
       includeCallSites,
+      includeCallDetails,
       includeSymbols,
     ),
   );
@@ -683,6 +707,7 @@ export function profileProductArchitectureAnalysis(
   options: ProductArchitectureAnalysisOptions = {},
 ): ProductArchitectureProfile {
   const includeCallSites = options.includeCallSites ?? true;
+  const includeCallDetails = includeCallSites && (options.includeCallDetails ?? false);
   const includeSymbols = options.includeSymbols ?? true;
   const phases: ProductArchitecturePhaseProfile[] = [];
   const started = performance.now();
@@ -695,30 +720,14 @@ export function profileProductArchitectureAnalysis(
       count: countValue(value, count),
     });
     return value;
-  }, includeCallSites, includeSymbols);
+  }, includeCallSites, includeCallDetails, includeSymbols);
   return {
     analysis,
     includeCallSites,
+    includeCallDetails,
     includeSymbols,
     phases,
     totalMilliseconds: performance.now() - started,
-  };
-}
-
-/** Convert product architecture source coordinates into inquiry source ranges. */
-export function toInquirySourceRange(
-  source: ProductArchitectureSourceReference,
-): SourceRange {
-  return {
-    filePath: source.filePath,
-    start: {
-      line: source.startLine - 1,
-      character: source.startCharacter - 1,
-    },
-    end: {
-      line: source.endLine - 1,
-      character: source.endCharacter - 1,
-    },
   };
 }
 
@@ -726,6 +735,7 @@ function buildProductArchitectureAnalysis(
   sourceProject: SourceProject,
   phase: ProductArchitecturePhaseRunner = runProductArchitecturePhase,
   includeCallSites: boolean = true,
+  includeCallDetails: boolean = false,
   includeSymbols: boolean = true,
 ): ProductArchitectureAnalysis {
   const sourceFiles = phase(
@@ -744,7 +754,7 @@ function buildProductArchitectureAnalysis(
       sourceProject
         .topLevelDeclarationRows()
         .filter(isSemanticRuntimeSrcDeclaration)
-        .map(declarationKey),
+        .map(productArchitectureDeclarationKey),
     ),
     (value) => value.size,
   );
@@ -758,9 +768,14 @@ function buildProductArchitectureAnalysis(
     () => sourceFiles.flatMap((entry) => dependencyRows(sourceProject, entry)),
     rowCount,
   );
+  const auLinkClassIds = phase(
+    "auLink class anchors",
+    () => auLinkClassIdsByFileAndName(sourceProject),
+    (value) => value.size,
+  );
   const classSurfaces = phase(
     "class surface rows",
-    () => sourceFiles.flatMap(classSurfaceRows),
+    () => sourceFiles.flatMap((entry) => classSurfaceRows(entry, auLinkClassIds)),
     rowCount,
   );
   const rawFunctionSurfaces = phase(
@@ -771,7 +786,7 @@ function buildProductArchitectureAnalysis(
   const callSites = includeCallSites
     ? phase(
       "checker call-site rows",
-      () => callSiteRows(sourceProject, sourceFiles),
+      () => callSiteRows(sourceProject, sourceFiles, includeCallDetails),
       rowCount,
     )
     : [];
@@ -831,7 +846,7 @@ function buildProductArchitectureAnalysis(
 
   return {
     version: PRODUCT_ARCHITECTURE_ANALYSIS_VERSION,
-    rollup: rollup(
+    rollup: productArchitectureRollup(
       areas,
       modules,
       declarationRows,
@@ -885,9 +900,9 @@ function semanticRuntimeSourceFiles(
 ): readonly SemanticRuntimeSourceFile[] {
   const rows: SemanticRuntimeSourceFile[] = [];
   for (const sourceFile of sourceProject.ownedSourceFiles()) {
-    const identity = sourceProject.sourceFileIdentity(sourceFile);
+    const identity = requiredSourceFileIdentity(sourceProject, sourceFile);
     if (
-      identity?.packageId !== SourcePackageId.SemanticRuntime ||
+      identity.packageId !== SourcePackageId.SemanticRuntime ||
       !identity.repoPath.startsWith(semanticRuntimeSrcPrefix)
     ) {
       continue;
@@ -957,7 +972,7 @@ function dependencyRows(
       toArea: target.toArea,
       importKind: importKind(statement),
       crossesArea,
-      source: sourceReference(sourceProject, entry.sourceFile, statement),
+      source: sourceReferenceForNode(sourceProject, entry.sourceFile, statement),
       summary: dependencySummary(
         entry.area,
         moduleSpecifier,
@@ -992,11 +1007,19 @@ function resolveRelativeImport(
         toArea: areaForFilePath(identity.repoPath),
       };
     }
+    if (identity === null) {
+      return {
+        local: false,
+        resolved: true,
+        toFilePath: null,
+        toArea: "external",
+      };
+    }
     return {
       local: false,
       resolved: true,
-      toFilePath: identity?.repoPath ?? targetFile.fileName,
-      toArea: identity?.packageId ?? "external",
+      toFilePath: identity.repoPath,
+      toArea: identity.packageId ?? "external",
     };
   }
   return {
@@ -1116,7 +1139,7 @@ function areaRows(
     localDependencies.filter((row) => row.toArea !== null),
     (row) => row.toArea!,
   );
-  const areaNames = uniqueSorted([
+  const areaNames = uniqueSortedStrings([
     ...modules.map((row) => row.area),
     ...declarations.map((row) => row.area),
     ...localDependencies.map((row) => row.fromArea),
@@ -1177,11 +1200,11 @@ function areaDependencyRows(
       const first = sortedRows[0]!;
       const fromArea = first.fromArea;
       const toArea = first.toArea!;
-      const sourceFiles = uniqueSorted(rows.map((row) => row.fromFilePath));
-      const targetFiles = uniqueSorted(
+      const sourceFiles = uniqueSortedStrings(rows.map((row) => row.fromFilePath));
+      const targetFiles = uniqueSortedStrings(
         rows.flatMap((row) => row.toFilePath === null ? [] : [row.toFilePath]),
       );
-      const specifiers = uniqueSorted(rows.map((row) => row.moduleSpecifier));
+      const specifiers = uniqueSortedStrings(rows.map((row) => row.moduleSpecifier));
       const crossesArea = fromArea !== toArea;
       return {
         id: `product.arch:area-dependency:${fromArea}->${toArea}`,
@@ -1250,7 +1273,7 @@ function cycleRows(
         );
     })
     .map((component, index) => {
-      const filePaths = uniqueSorted(component);
+      const filePaths = uniqueSortedStrings(component);
       const fileSet = new Set(filePaths);
       const internalDependencies = dependencies.filter((row) =>
         row.local &&
@@ -1258,7 +1281,7 @@ function cycleRows(
         fileSet.has(row.fromFilePath) &&
         fileSet.has(row.toFilePath),
       );
-      const areas = uniqueSorted(
+      const areas = uniqueSortedStrings(
         filePaths.map((filePath) => moduleByPath.get(filePath)?.area ?? areaForFilePath(filePath)),
       );
       const runtimeDependencies = internalDependencies.filter(
@@ -1268,6 +1291,9 @@ function cycleRows(
         .map((filePath) => moduleByPath.get(filePath) ?? null)
         .find((row): row is ProductArchitectureModuleRow => row !== null);
       const source = firstModule?.source ?? internalDependencies[0]?.source;
+      if (source === undefined) {
+        throw new Error(`Import cycle ${filePaths.join("|")} has no source witness.`);
+      }
       return {
         id: `product.arch:cycle:${index}:${filePaths.join("|")}`,
         filePaths,
@@ -1286,16 +1312,10 @@ function cycleRows(
         ).length,
         runtimeCycle: hasImportCycle(filePaths, runtimeDependencies),
         crossesArea: areas.length > 1,
-        sampleModuleSpecifiers: uniqueSorted(
+        sampleModuleSpecifiers: uniqueSortedStrings(
           internalDependencies.map((row) => row.moduleSpecifier),
         ).slice(0, 12),
-        source: source ?? {
-          filePath: filePaths[0] ?? semanticRuntimeSrcPrefix,
-          startLine: 1,
-          startCharacter: 1,
-          endLine: 1,
-          endCharacter: 1,
-        },
+        source,
         summary: `${filePaths.length} semantic-runtime module(s) form an import cycle across ${areas.join(", ")} with ${internalDependencies.length} internal import(s).`,
       } satisfies ProductArchitectureCycleRow;
     })
@@ -1345,7 +1365,7 @@ function declarationRow(
     name,
     declarationKind: row.kind,
     exported: row.exported,
-    topLevel: topLevelDeclarationKeys.has(declarationKey(row)),
+    topLevel: topLevelDeclarationKeys.has(productArchitectureDeclarationKey(row)),
     symbolKey: row.symbolKey,
     filePath: row.file.repoPath,
     area: areaForFilePath(row.file.repoPath),
@@ -1355,13 +1375,47 @@ function declarationRow(
   };
 }
 
+function auLinkClassIdsByFileAndName(
+  sourceProject: SourceProject,
+): ReadonlyMap<string, readonly string[]> {
+  const idsByClass = new Map<string, string[]>();
+  for (const anchor of readAuLinkModel(sourceProject, {}).anchors) {
+    if (
+      anchor.target.kind !== "class" ||
+      anchor.target.name === null ||
+      anchor.target.file.packageId !== SourcePackageId.SemanticRuntime ||
+      !anchor.target.file.repoPath.startsWith(semanticRuntimeSrcPrefix)
+    ) {
+      continue;
+    }
+    const key = classSurfaceKey(anchor.target.file.repoPath, anchor.target.name);
+    const ids = idsByClass.get(key);
+    if (ids === undefined) {
+      idsByClass.set(key, [anchor.linkId]);
+    } else {
+      ids.push(anchor.linkId);
+    }
+  }
+  return new Map(
+    [...idsByClass.entries()].map(([key, ids]) => [
+      key,
+      uniqueSortedStrings(ids),
+    ]),
+  );
+}
+
+function classSurfaceKey(filePath: string, className: string): string {
+  return `${filePath}\u0000${className}`;
+}
+
 function classSurfaceRows(
   entry: SemanticRuntimeSourceFile,
+  auLinkClassIds: ReadonlyMap<string, readonly string[]>,
 ): readonly ProductArchitectureClassSurfaceRow[] {
   return entry.sourceFile.statements
     .filter(ts.isClassDeclaration)
     .filter((node) => node.name !== undefined)
-    .map((node) => classSurfaceForDeclaration(entry, node));
+    .map((node) => productClassSurfaceForDeclaration(entry, node, auLinkClassIds));
 }
 
 function functionSurfaceRows(
@@ -1370,7 +1424,7 @@ function functionSurfaceRows(
   const rows: ProductArchitectureFunctionSurfaceRow[] = [];
   for (const statement of entry.sourceFile.statements) {
     if (ts.isFunctionDeclaration(statement) && statement.name !== undefined) {
-      rows.push(functionSurfaceForFunctionDeclaration(entry, statement));
+      rows.push(productFunctionSurfaceForFunctionDeclaration(entry, statement));
       rows.push(
         ...localFunctionSurfaceRows(entry, statement, statement.name.text, null),
       );
@@ -1391,76 +1445,39 @@ function functionSurfaceRows(
   );
 }
 
-function classSurfaceForDeclaration(
+function productClassSurfaceForDeclaration(
   entry: SemanticRuntimeSourceFile,
   node: ts.ClassDeclaration,
+  auLinkClassIds: ReadonlyMap<string, readonly string[]>,
 ): ProductArchitectureClassSurfaceRow {
-  const className = node.name!.text;
-  const methods = uniqueSorted(
-    node.members
-      .filter(ts.isMethodDeclaration)
-      .filter((member) => !hasModifier(member, ts.SyntaxKind.StaticKeyword))
-      .flatMap((member) => memberNameText(member.name, entry.sourceFile) ?? []),
-  );
-  const staticMethods = uniqueSorted(
-    node.members
-      .filter(ts.isMethodDeclaration)
-      .filter((member) => hasModifier(member, ts.SyntaxKind.StaticKeyword))
-      .flatMap((member) => memberNameText(member.name, entry.sourceFile) ?? []),
-  );
-  const accessors = uniqueSorted(
-    node.members
-      .filter(
-        (
-          member,
-        ): member is ts.GetAccessorDeclaration | ts.SetAccessorDeclaration =>
-          ts.isGetAccessor(member) || ts.isSetAccessor(member),
-      )
-      .flatMap((member) => memberNameText(member.name, entry.sourceFile) ?? []),
-  );
-  const properties = uniqueSorted(
-    node.members
-      .filter(ts.isPropertyDeclaration)
-      .flatMap((member) => memberNameText(member.name, entry.sourceFile) ?? []),
-  );
+  const surface = classDeclarationSurface(node, entry.sourceFile);
   const source = sourceReferenceForEntryNode(entry, node);
   const lineCount = lineCountForSource(source);
-  const constructorCount = node.members.filter(
-    ts.isConstructorDeclaration,
-  ).length;
-  const methodCount = methods.length + staticMethods.length;
-  const propertyCount = properties.length + accessors.length;
+  const auLinkIds = auLinkClassIds.get(classSurfaceKey(entry.filePath, surface.name)) ?? [];
   return {
-    id: `product.arch:class:${entry.filePath}:${className}:${node.getStart(entry.sourceFile)}`,
-    name: className,
-    exported: hasModifier(node, ts.SyntaxKind.ExportKeyword),
-    abstract: hasModifier(node, ts.SyntaxKind.AbstractKeyword),
+    id: `product.arch:class:${entry.filePath}:${surface.name}:${node.getStart(entry.sourceFile)}`,
+    name: surface.name,
+    exported: surface.exported,
+    abstract: surface.abstract,
     filePath: entry.filePath,
     area: entry.area,
-    extendsType: heritageTypeTexts(
-      node,
-      ts.SyntaxKind.ExtendsKeyword,
-      entry.sourceFile,
-    )[0] ?? null,
-    implementsTypes: heritageTypeTexts(
-      node,
-      ts.SyntaxKind.ImplementsKeyword,
-      entry.sourceFile,
-    ),
-    methods,
-    staticMethods,
-    accessors,
-    properties,
-    constructorCount,
-    methodCount,
-    propertyCount,
+    extendsType: surface.extendsType,
+    implementsTypes: surface.implementsTypes,
+    methods: surface.methods,
+    staticMethods: surface.staticMethods,
+    accessors: surface.accessors,
+    properties: surface.properties,
+    auLinkIds,
+    constructorCount: surface.constructorCount,
+    methodCount: surface.methodCount,
+    propertyCount: surface.propertyCount,
     lineCount,
     source,
-    summary: `${className} spans ${lineCount} line(s), ${methodCount} method(s), ${propertyCount} property/accessor surface(s), and ${constructorCount} constructor declaration(s).`,
+    summary: `${surface.name} spans ${lineCount} line(s), ${surface.methodCount} method(s), ${surface.propertyCount} property/accessor surface(s), ${surface.constructorCount} constructor declaration(s), and ${auLinkIds.length} auLink anchor(s).`,
   };
 }
 
-function functionSurfaceForFunctionDeclaration(
+function productFunctionSurfaceForFunctionDeclaration(
   entry: SemanticRuntimeSourceFile,
   node: ts.FunctionDeclaration,
 ): ProductArchitectureFunctionSurfaceRow {
@@ -1540,7 +1557,7 @@ function functionSurfaceRowsForClassDeclaration(
       continue;
     }
     if (ts.isMethodDeclaration(member)) {
-      const memberName = memberNameText(member.name, entry.sourceFile);
+      const memberName = propertyNameText(member.name, entry.sourceFile);
       if (memberName === null) {
         continue;
       }
@@ -1561,7 +1578,7 @@ function functionSurfaceRowsForClassDeclaration(
       continue;
     }
     if (ts.isGetAccessor(member) || ts.isSetAccessor(member)) {
-      const memberName = memberNameText(member.name, entry.sourceFile);
+      const memberName = propertyNameText(member.name, entry.sourceFile);
       if (memberName === null) {
         continue;
       }
@@ -1587,7 +1604,7 @@ function functionSurfaceRowsForClassDeclaration(
       (ts.isArrowFunction(member.initializer) ||
         ts.isFunctionExpression(member.initializer))
     ) {
-      const memberName = memberNameText(member.name, entry.sourceFile);
+      const memberName = propertyNameText(member.name, entry.sourceFile);
       if (memberName === null) {
         continue;
       }
@@ -1742,9 +1759,18 @@ function enrichFunctionSurfaces(
 function callSiteRows(
   sourceProject: SourceProject,
   sourceFiles: readonly SemanticRuntimeSourceFile[],
+  includeCallDetails: boolean,
 ): readonly ProductArchitectureCallSiteRow[] {
+  const symbolResolution = new ProductArchitectureSymbolResolutionCache(sourceProject);
   return sourceFiles
-    .flatMap((entry) => callSiteRowsForEntry(sourceProject, entry))
+    .flatMap((entry) =>
+      callSiteRowsForEntry(
+        sourceProject,
+        entry,
+        symbolResolution,
+        includeCallDetails,
+      )
+    )
     .sort((left, right) =>
       left.fromFilePath.localeCompare(right.fromFilePath) ||
       left.source.startLine - right.source.startLine ||
@@ -1755,6 +1781,8 @@ function callSiteRows(
 function callSiteRowsForEntry(
   sourceProject: SourceProject,
   entry: SemanticRuntimeSourceFile,
+  symbolResolution: ProductArchitectureSymbolResolutionCache,
+  includeCallDetails: boolean,
 ): readonly ProductArchitectureCallSiteRow[] {
   const rows: ProductArchitectureCallSiteRow[] = [];
   const rootContext: SymbolReferenceVisitContext = {
@@ -1777,6 +1805,8 @@ function callSiteRowsForEntry(
         entry,
         node,
         nodeContext,
+        symbolResolution,
+        includeCallDetails,
       );
       if (row !== null) {
         rows.push(row);
@@ -1794,37 +1824,31 @@ function callSiteRowForExpression(
   entry: SemanticRuntimeSourceFile,
   expression: ts.CallExpression | ts.NewExpression,
   context: SymbolReferenceVisitContext,
+  symbolResolution: ProductArchitectureSymbolResolutionCache,
+  includeCallDetails: boolean,
 ): ProductArchitectureCallSiteRow | null {
-  const callSite = readTypeScriptCallSiteEntry(
+  const symbol = symbolForCallCallee(sourceProject.checker, expression.expression);
+  const resolved = symbol === null ? null : symbolResolution.read(symbol);
+  const callSite = lightweightCallSiteFact(
     sourceProject,
     entry.sourceFile,
     expression,
+    symbol,
+    includeCallDetails,
   );
-  if (callSite === null) {
-    return null;
-  }
-
-  const symbol = symbolForCallCallee(sourceProject.checker, expression.expression);
-  const symbolKey = symbol === null ? null : symbolKeyForResolvedSymbol(sourceProject, symbol);
-  const target = symbol === null ? null : targetDeclarationForSymbol(sourceProject, symbol);
+  const target = resolved?.target ?? null;
   const local = target?.identity.packageId === SourcePackageId.SemanticRuntime &&
     target.identity.repoPath.startsWith(semanticRuntimeSrcPrefix);
   const targetArea = local && target !== null
     ? areaForFilePath(target.identity.repoPath)
     : null;
   const crossesArea = local && targetArea !== entry.area;
-  const targetSource = target === null
-    ? null
-    : sourceReference(
-      sourceProject,
-      target.declaration.getSourceFile(),
-      target.declaration,
-    );
+  const targetSource = resolved?.targetSource ?? null;
   const source = sourceReferenceForEntryNode(entry, expression);
   const targetFilePath = target?.identity.repoPath ?? null;
   const targetPackageId = target?.identity.packageId ?? null;
-  const calleeSymbolName = symbol?.getName() ?? callSite.callee.symbolName;
-  const calleeSymbolKey = symbolKey ?? callSite.callee.fullyQualifiedName;
+  const calleeSymbolName = resolved?.symbolName ?? null;
+  const calleeSymbolKey = resolved?.symbolKey ?? null;
   return {
     id: `product.arch:call-site:${entry.filePath}:${expression.getStart(entry.sourceFile)}:${callSite.calleeName}`,
     callKind: callSite.kind,
@@ -1833,8 +1857,8 @@ function callSiteRowForExpression(
     className: context.className,
     functionName: context.functionName,
     calleeName: callSite.calleeName,
-    calleeText: callSite.callee.text,
-    calleeType: callSite.callee.type,
+    calleeText: callSite.calleeText,
+    calleeType: callSite.calleeType,
     calleeSymbolName,
     calleeSymbolKey,
     targetPackageId,
@@ -1860,6 +1884,50 @@ function callSiteRowForExpression(
   };
 }
 
+interface ProductArchitectureCallSiteFact {
+  readonly kind: TypeScriptCallSiteKind;
+  readonly calleeName: string;
+  readonly calleeText: string;
+  readonly calleeType: string | null;
+  readonly signature: string | null;
+  readonly typeArgumentCount: number;
+  readonly argumentCount: number;
+}
+
+function lightweightCallSiteFact(
+  sourceProject: SourceProject,
+  sourceFile: ts.SourceFile,
+  expression: ts.CallExpression | ts.NewExpression,
+  symbol: ts.Symbol | null,
+  includeCallDetails: boolean,
+): ProductArchitectureCallSiteFact {
+  const checker = sourceProject.checker;
+  const callee = expression.expression;
+  const signature = includeCallDetails
+    ? checker.getResolvedSignature(expression)
+    : undefined;
+  return {
+    kind: ts.isNewExpression(expression)
+      ? TypeScriptCallSiteKind.New
+      : TypeScriptCallSiteKind.Call,
+    calleeName:
+      calleeNameForExpression(
+        callee,
+        sourceFile,
+        symbol?.getName() ?? callee.getText(sourceFile),
+      ) ?? callee.getText(sourceFile),
+    calleeText: callee.getText(sourceFile),
+    calleeType: includeCallDetails
+      ? checker.typeToString(checker.getTypeAtLocation(callee), callee)
+      : null,
+    signature: signature === undefined
+      ? null
+      : checker.signatureToString(signature, expression),
+    typeArgumentCount: expression.typeArguments?.length ?? 0,
+    argumentCount: expression.arguments?.length ?? 0,
+  };
+}
+
 export function callDependencyRows(
   callSites: readonly ProductArchitectureCallSiteRow[],
 ): readonly ProductArchitectureCallDependencyRow[] {
@@ -1875,14 +1943,14 @@ export function callDependencyRows(
         left.calleeName.localeCompare(right.calleeName),
       );
       const first = sortedRows[0]!;
-      const calleeNames = uniqueSorted(rows.map((row) => row.calleeName));
-      const calleeTexts = uniqueSorted(rows.map((row) => row.calleeText));
-      const functionNames = uniqueSorted(
+      const calleeNames = uniqueSortedStrings(rows.map((row) => row.calleeName));
+      const calleeTexts = uniqueSortedStrings(rows.map((row) => row.calleeText));
+      const functionNames = uniqueSortedStrings(
         rows.flatMap((row) =>
           row.functionName === null ? [] : [row.functionName],
         ),
       );
-      const classNames = uniqueSorted(
+      const classNames = uniqueSortedStrings(
         rows.flatMap((row) =>
           row.className === null ? [] : [row.className],
         ),
@@ -1932,8 +2000,9 @@ function symbolReferenceRows(
   sourceProject: SourceProject,
   sourceFiles: readonly SemanticRuntimeSourceFile[],
 ): readonly ProductArchitectureSymbolReferenceRow[] {
+  const symbolResolution = new ProductArchitectureSymbolResolutionCache(sourceProject);
   return sourceFiles
-    .flatMap((entry) => symbolReferenceRowsForEntry(sourceProject, entry))
+    .flatMap((entry) => symbolReferenceRowsForEntry(sourceProject, entry, symbolResolution))
     .sort((left, right) =>
       left.fromFilePath.localeCompare(right.fromFilePath) ||
       left.source.startLine - right.source.startLine ||
@@ -1944,6 +2013,7 @@ function symbolReferenceRows(
 function symbolReferenceRowsForEntry(
   sourceProject: SourceProject,
   entry: SemanticRuntimeSourceFile,
+  symbolResolution: ProductArchitectureSymbolResolutionCache,
 ): readonly ProductArchitectureSymbolReferenceRow[] {
   const rows: ProductArchitectureSymbolReferenceRow[] = [];
   const rootContext: SymbolReferenceVisitContext = {
@@ -1966,6 +2036,7 @@ function symbolReferenceRowsForEntry(
         entry,
         node,
         nodeContext,
+        symbolResolution,
       );
       if (row !== null) {
         rows.push(row);
@@ -1983,6 +2054,7 @@ function symbolReferenceRowForIdentifier(
   entry: SemanticRuntimeSourceFile,
   identifier: ts.Identifier,
   context: SymbolReferenceVisitContext,
+  symbolResolution: ProductArchitectureSymbolResolutionCache,
 ): ProductArchitectureSymbolReferenceRow | null {
   const role = usageRoleForIdentifier(identifier);
   if (role === null) {
@@ -1992,7 +2064,8 @@ function symbolReferenceRowForIdentifier(
   if (symbol === null) {
     return null;
   }
-  const target = targetDeclarationForSymbol(sourceProject, symbol);
+  const resolved = symbolResolution.read(symbol);
+  const target = resolved.target;
   if (target === null) {
     return null;
   }
@@ -2000,32 +2073,26 @@ function symbolReferenceRowForIdentifier(
     target.identity.repoPath.startsWith(semanticRuntimeSrcPrefix);
   const targetArea = local ? areaForFilePath(target.identity.repoPath) : null;
   const crossesArea = local && targetArea !== entry.area;
-  const symbolKey = symbolKeyForResolvedSymbol(sourceProject, symbol);
   const text = usageText(identifier);
   const source = sourceReferenceForEntryNode(entry, identifier);
-  const targetSource = sourceReference(
-    sourceProject,
-    target.declaration.getSourceFile(),
-    target.declaration,
-  );
   return {
-    id: `product.arch:symbol-reference:${entry.filePath}:${identifier.getStart(entry.sourceFile)}:${symbolKey}`,
+    id: `product.arch:symbol-reference:${entry.filePath}:${identifier.getStart(entry.sourceFile)}:${resolved.symbolKey}`,
     fromFilePath: entry.filePath,
     fromArea: entry.area,
     className: context.className,
     functionName: context.functionName,
     usageRole: role,
     usageText: text,
-    symbolName: symbol.getName(),
-    symbolKey,
+    symbolName: resolved.symbolName,
+    symbolKey: resolved.symbolKey,
     targetPackageId: target.identity.packageId,
     targetFilePath: target.identity.repoPath,
     targetArea,
     local,
     crossesArea,
     source,
-    targetSource,
-    summary: `${entry.area} ${role} ${text} resolves to ${target.identity.packageId}:${symbol.getName()}${targetArea === null ? "" : ` in ${targetArea}`}.`,
+    targetSource: resolved.targetSource!,
+    summary: `${entry.area} ${role} ${text} resolves to ${target.identity.packageId}:${resolved.symbolName}${targetArea === null ? "" : ` in ${targetArea}`}.`,
   };
 }
 
@@ -2044,8 +2111,8 @@ function symbolDependencyRows(
         left.symbolName.localeCompare(right.symbolName),
       );
       const first = sortedRows[0]!;
-      const symbolNames = uniqueSorted(rows.map((row) => row.symbolName));
-      const functionNames = uniqueSorted(
+      const symbolNames = uniqueSortedStrings(rows.map((row) => row.symbolName));
+      const functionNames = uniqueSortedStrings(
         rows.flatMap((row) =>
           row.functionName === null ? [] : [row.functionName],
         ),
@@ -2124,7 +2191,7 @@ function functionNameForReferenceContext(
     return `${context.className ?? "anonymous"}.constructor`;
   }
   if (ts.isMethodDeclaration(node) || ts.isGetAccessor(node) || ts.isSetAccessor(node)) {
-    const name = memberNameText(node.name, sourceFile);
+    const name = propertyNameText(node.name, sourceFile);
     if (name === null) {
       return null;
     }
@@ -2139,7 +2206,7 @@ function functionNameForReferenceContext(
       return nestedFunctionName(context.functionName, parent.name.text);
     }
     if (ts.isPropertyDeclaration(parent)) {
-      const name = memberNameText(parent.name, sourceFile);
+      const name = propertyNameText(parent.name, sourceFile);
       if (name === null) {
         return null;
       }
@@ -2156,10 +2223,52 @@ function nestedFunctionName(
   return parentFunctionName === null ? localName : `${parentFunctionName}.${localName}`;
 }
 
+type ProductArchitectureTargetDeclaration = {
+  readonly declaration: ts.Declaration;
+  readonly identity: NonNullable<ReturnType<SourceProject["sourceFileIdentity"]>>;
+};
+
+interface ProductArchitectureResolvedSymbol {
+  readonly symbolName: string;
+  readonly symbolKey: string;
+  readonly target: ProductArchitectureTargetDeclaration | null;
+  readonly targetSource: ProductArchitectureSourceReference | null;
+}
+
+class ProductArchitectureSymbolResolutionCache {
+  readonly #values = new WeakMap<ts.Symbol, ProductArchitectureResolvedSymbol>();
+
+  constructor(
+    readonly sourceProject: SourceProject,
+  ) {}
+
+  read(symbol: ts.Symbol): ProductArchitectureResolvedSymbol {
+    const existing = this.#values.get(symbol);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const target = targetDeclarationForSymbol(this.sourceProject, symbol);
+    const resolved = {
+      symbolName: symbol.getName(),
+      symbolKey: symbolKeyForResolvedSymbol(this.sourceProject, symbol),
+      target,
+      targetSource: target === null
+        ? null
+        : sourceReferenceForNode(
+          this.sourceProject,
+          target.declaration.getSourceFile(),
+          target.declaration,
+        ),
+    } satisfies ProductArchitectureResolvedSymbol;
+    this.#values.set(symbol, resolved);
+    return resolved;
+  }
+}
+
 function targetDeclarationForSymbol(
   sourceProject: SourceProject,
   symbol: ts.Symbol,
-): { readonly declaration: ts.Declaration; readonly identity: NonNullable<ReturnType<SourceProject["sourceFileIdentity"]>> } | null {
+): ProductArchitectureTargetDeclaration | null {
   for (const declaration of symbol.declarations ?? []) {
     const identity = sourceProject.sourceFileIdentity(declaration.getSourceFile());
     if (identity !== null) {
@@ -2230,7 +2339,7 @@ function callDependencySummary(
   return `${first.fromFilePath} calls ${first.targetFilePath} through ${callCount} call-site row(s) across ${calleeNameCount} callee name(s).`;
 }
 
-function rollup(
+function productArchitectureRollup(
   areas: readonly ProductArchitectureAreaRow[],
   modules: readonly ProductArchitectureModuleRow[],
   declarations: readonly ProductArchitectureDeclarationRow[],
@@ -2312,25 +2421,6 @@ function dependencySummary(
   }.`;
 }
 
-function sourceReference(
-  sourceProject: SourceProject,
-  sourceFile: ts.SourceFile,
-  node: ts.Node,
-): ProductArchitectureSourceReference {
-  const identity = sourceProject.sourceFileIdentity(sourceFile);
-  const start = node.getStart(sourceFile);
-  const end = node.getEnd();
-  const startPosition = sourceFile.getLineAndCharacterOfPosition(start);
-  const endPosition = sourceFile.getLineAndCharacterOfPosition(end);
-  return {
-    filePath: identity?.repoPath ?? sourceFile.fileName,
-    startLine: startPosition.line + 1,
-    startCharacter: startPosition.character + 1,
-    endLine: endPosition.line + 1,
-    endCharacter: endPosition.character + 1,
-  };
-}
-
 function sourceReferenceForFile(
   entry: SemanticRuntimeSourceFile,
 ): ProductArchitectureSourceReference {
@@ -2380,44 +2470,8 @@ function lineCountForSource(source: ProductArchitectureSourceReference): number 
   return Math.max(1, source.endLine - source.startLine + 1);
 }
 
-function declarationKey(row: SourceDeclarationRow): string {
+function productArchitectureDeclarationKey(row: SourceDeclarationRow): string {
   return `${row.file.repoPath}:${row.kind}:${row.name ?? ""}:${row.span.start}`;
-}
-
-function heritageTypeTexts(
-  node: ts.ClassDeclaration,
-  token: ts.SyntaxKind.ExtendsKeyword | ts.SyntaxKind.ImplementsKeyword,
-  sourceFile: ts.SourceFile,
-): readonly string[] {
-  return uniqueSorted(
-    (node.heritageClauses ?? [])
-      .filter((clause) => clause.token === token)
-      .flatMap((clause) =>
-        clause.types.map((type) => type.expression.getText(sourceFile)),
-      ),
-  );
-}
-
-function memberNameText(
-  name: ts.PropertyName,
-  sourceFile: ts.SourceFile,
-): string | null {
-  if (
-    ts.isIdentifier(name) ||
-    ts.isStringLiteral(name) ||
-    ts.isNumericLiteral(name) ||
-    ts.isPrivateIdentifier(name)
-  ) {
-    return name.text;
-  }
-  return name.getText(sourceFile);
-}
-
-function hasModifier(
-  node: { readonly modifiers?: ts.NodeArray<ts.ModifierLike> },
-  kind: ts.SyntaxKind,
-): boolean {
-  return node.modifiers?.some((modifier) => modifier.kind === kind) ?? false;
 }
 
 function stronglyConnectedComponents(
@@ -2474,25 +2528,4 @@ function stronglyConnectedComponents(
     }
   }
   return components;
-}
-
-function groupBy<TValue, TKey>(
-  values: readonly TValue[],
-  keyForValue: (value: TValue) => TKey,
-): Map<TKey, TValue[]> {
-  const map = new Map<TKey, TValue[]>();
-  for (const value of values) {
-    const key = keyForValue(value);
-    const group = map.get(key);
-    if (group === undefined) {
-      map.set(key, [value]);
-    } else {
-      group.push(value);
-    }
-  }
-  return map;
-}
-
-function uniqueSorted(values: readonly string[]): readonly string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }

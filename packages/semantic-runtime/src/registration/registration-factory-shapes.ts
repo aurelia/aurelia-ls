@@ -24,7 +24,6 @@ export class RegistrationFactoryShape {
     readonly keyRole: RegistrationKeyRole,
     readonly keyArgumentIndex: number,
     readonly value: RegistrationFactoryValueShape | null,
-    readonly callbackBodyIsOpen: boolean,
   ) {}
 }
 
@@ -35,49 +34,42 @@ export const REGISTRATION_FACTORY_SHAPES = new Map<string, RegistrationFactorySh
     RegistrationKeyRole.AdmittedKey,
     0,
     registrationFactoryValue(RegistrationValueKind.Instance, 1, KernelVocabulary.Registration.OpenValueExpression.key),
-    false,
   )],
   ['singleton', new RegistrationFactoryShape(
     RegistrationStrategy.Singleton,
     RegistrationKeyRole.AdmittedKey,
     0,
     registrationFactoryValue(RegistrationValueKind.Constructable, 1, KernelVocabulary.Registration.OpenValueExpression.key),
-    false,
   )],
   ['transient', new RegistrationFactoryShape(
     RegistrationStrategy.Transient,
     RegistrationKeyRole.AdmittedKey,
     0,
     registrationFactoryValue(RegistrationValueKind.Constructable, 1, KernelVocabulary.Registration.OpenValueExpression.key),
-    false,
   )],
   ['callback', new RegistrationFactoryShape(
     RegistrationStrategy.Callback,
     RegistrationKeyRole.AdmittedKey,
     0,
     registrationFactoryValue(RegistrationValueKind.Callback, 1, KernelVocabulary.Registration.OpenValueExpression.key),
-    true,
   )],
   ['cachedCallback', new RegistrationFactoryShape(
     RegistrationStrategy.CachedCallback,
     RegistrationKeyRole.AdmittedKey,
     0,
     registrationFactoryValue(RegistrationValueKind.CachedCallback, 1, KernelVocabulary.Registration.OpenValueExpression.key),
-    true,
   )],
   ['aliasTo', new RegistrationFactoryShape(
     RegistrationStrategy.AliasTo,
     RegistrationKeyRole.AdmittedKey,
     1,
     registrationFactoryValue(RegistrationValueKind.AliasTarget, 0, KernelVocabulary.Registration.OpenAliasTarget.key),
-    false,
   )],
   ['defer', new RegistrationFactoryShape(
     RegistrationStrategy.Defer,
     RegistrationKeyRole.RegistryLookupKey,
     0,
     null,
-    false,
   )],
 ]);
 

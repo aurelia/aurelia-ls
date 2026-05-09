@@ -171,6 +171,7 @@ export interface OrientationSourceProjectGuide {
   readonly declarationCount: number;
   readonly topLevelDeclarationCount: number;
   readonly configDiagnosticCount: number;
+  /** Non-external package roots that are safe to expose in first-pass orientation. */
   readonly packageRoots: Record<string, string>;
 }
 
@@ -360,19 +361,67 @@ function orientationScripts(): readonly OrientationScriptGuide[] {
       id: "orient",
       command: "pnpm --filter @aurelia-ls/atlas orient",
       summary:
-        "Print this live orientation bundle through the auto-starting session API.",
+        "Print a compact live orientation through the auto-starting session API.",
+    },
+    {
+      id: "orient:json",
+      command: "pnpm --filter @aurelia-ls/atlas orient:json",
+      summary:
+        "Print the full request-shaped orientation bundle for tools that need machine-readable detail.",
     },
     {
       id: "pressure:self",
       command: "pnpm --filter @aurelia-ls/atlas pressure:self",
       summary:
-        "Print Atlas class, function, and high-axis-pressure rows before maintenance refactors.",
+        "Print compact Atlas source-file, class, function, duplicate-helper, and high-axis-pressure rows before maintenance refactors.",
+    },
+    {
+      id: "pressure:self:detail",
+      command: "pnpm --filter @aurelia-ls/atlas pressure:self:detail",
+      summary:
+        "Print the detailed Atlas self-pressure rows when compact output is not enough.",
     },
     {
       id: "pressure:product-architecture",
       command: "pnpm --filter @aurelia-ls/atlas pressure:product-architecture",
       summary:
-        "Print semantic-runtime structure pressure and call-backed function pressure before product cleanup passes.",
+        "Print compact semantic-runtime structure pressure and call-backed function pressure before product cleanup passes.",
+    },
+    {
+      id: "pressure:product-architecture:detail",
+      command: "pnpm --filter @aurelia-ls/atlas pressure:product-architecture:detail",
+      summary:
+        "Print the detailed semantic-runtime pressure rows when compact output is not enough.",
+    },
+    {
+      id: "pressure:framework-resources",
+      command: "pnpm --filter @aurelia-ls/atlas pressure:framework-resources",
+      summary:
+        "Print framework resource convergence, lane, and exact source-site role pressure.",
+    },
+    {
+      id: "pressure:framework-router",
+      command: "pnpm --filter @aurelia-ls/atlas pressure:framework-router",
+      summary:
+        "Print framework router flow, relationship-axis, and flow self-audit pressure.",
+    },
+    {
+      id: "pressure:plugin-architecture",
+      command: "pnpm --filter @aurelia-ls/atlas pressure:plugin-architecture",
+      summary:
+        "Print public Aurelia plugin package and source-surface aggregate pressure.",
+    },
+    {
+      id: "pressure:workspace-architecture",
+      command: "pnpm --filter @aurelia-ls/atlas pressure:workspace-architecture",
+      summary:
+        "Print clean-room workspace, external-root, and Aurelia source-surface aggregate pressure.",
+    },
+    {
+      id: "profile:workspace-architecture",
+      command: "pnpm --filter @aurelia-ls/atlas profile:workspace-architecture",
+      summary:
+        "Profile workspace architecture manifest/file-inventory, source scan, attribution, profile inference, and rollup phases.",
     },
     {
       id: "profile:product-architecture",
@@ -384,7 +433,7 @@ function orientationScripts(): readonly OrientationScriptGuide[] {
       id: "report:framework-emulation",
       command: "pnpm --filter @aurelia-ls/atlas report:framework-emulation",
       summary:
-        "Regenerate the deterministic StandardConfiguration/framework emulation Markdown report.",
+        "Regenerate the deterministic framework emulation Markdown report.",
     },
     {
       id: "self-check",
@@ -478,6 +527,42 @@ function orientationCapabilityMoves(): readonly OrientationCapabilityMove[] {
         locus: RepoRootLocus,
         projection: "summary",
         budget: { rows: 20, evidencePerSubject: 3 },
+      },
+    },
+    {
+      id: "framework.router",
+      family: "framework",
+      summary:
+        "Inspect router route-config/navigation flow, flow self-audit rows, normalized relationships, route-context, route-tree, viewport-agent, route-recognizer, DI, resource, lifecycle surfaces, and semantic route hops before semantic-runtime router modeling.",
+      ask: {
+        lens: LensId.FrameworkRouter,
+        locus: RepoRootLocus,
+        projection: "summary",
+        budget: { rows: 30, evidencePerSubject: 3 },
+      },
+    },
+    {
+      id: "workspace.architecture",
+      family: "repo",
+      summary:
+        "Inspect admitted package topology, Aurelia entrypoint signals, build-tool hints, resource/configuration surfaces, and external-root pressure.",
+      ask: {
+        lens: LensId.WorkspaceArchitecture,
+        locus: RepoRootLocus,
+        projection: "summary",
+        budget: { rows: 40, evidencePerSubject: 3 },
+      },
+    },
+    {
+      id: "plugin.architecture",
+      family: "framework",
+      summary:
+        "Inspect import/receiver-aware public Aurelia plugin packages, resources, registries, DI registrations, AppTasks, router hooks, resolve calls, and template references.",
+      ask: {
+        lens: LensId.PluginArchitecture,
+        locus: RepoRootLocus,
+        projection: "summary",
+        budget: { rows: 40, evidencePerSubject: 3 },
       },
     },
     {
@@ -638,10 +723,12 @@ function sourceProjectGuide(summary: SourceProjectSummary): OrientationSourcePro
     topLevelDeclarationCount: summary.topLevelDeclarationCount,
     configDiagnosticCount: summary.configDiagnosticCount,
     packageRoots: Object.fromEntries(
-      summary.packages.map((sourcePackage) => [
-        sourcePackage.id,
-        sourcePackage.rootPath,
-      ]),
+      summary.packages
+        .filter((sourcePackage) => !sourcePackage.external)
+        .map((sourcePackage) => [
+          sourcePackage.id,
+          sourcePackage.rootPath,
+        ]),
     ),
   };
 }

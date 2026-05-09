@@ -1,11 +1,23 @@
 import ts from "typescript";
 
+import {
+  countByMap,
+  groupBy,
+  uniqueByKey,
+  uniqueSortedStrings,
+} from "../collections.js";
 import type {
   SourceFileIdentity,
   SourceProject,
   SourceSpan,
 } from "./project.js";
 import { SourceProjectKeyedMemo } from "./memo.js";
+import {
+  hasModifier,
+  propertyNameText,
+  returnExpressions,
+  sourceSpanForNode,
+} from "./semantic-surface/index.js";
 
 /** Schema marker for the TypeScript enum usage source index. */
 export const TYPESCRIPT_ENUM_USAGE_INDEX_VERSION =
@@ -24,7 +36,8 @@ export type TypeScriptEnumUseRole =
   | "module-specifier"
   | "object-key"
   | "object-value"
-  | "return-expression";
+  | "return-expression"
+  | "type-reference";
 
 export type TypeScriptEnumTranslationCarrier =
   | "assignment"
@@ -49,6 +62,7 @@ export interface TypeScriptEnumMemberRow {
   readonly file: SourceFileIdentity;
   readonly span: SourceSpan;
   readonly referenceCount: number;
+  /** Raw literal occurrences that overlap this value in a checker-backed enum context. */
   readonly rawValueOccurrenceCount: number;
 }
 
@@ -96,7 +110,10 @@ export interface TypeScriptEnumValueOccurrenceRow {
   readonly valueKey: string;
   readonly role: TypeScriptEnumUseRole;
   readonly text: string;
+  /** All enum members with this raw value, before contextual narrowing. */
   readonly memberKeys: readonly string[];
+  /** Enum members whose declaring enum appears in the TypeChecker contextual type. */
+  readonly contextualMemberKeys: readonly string[];
   readonly file: SourceFileIdentity;
   readonly span: SourceSpan;
 }
@@ -238,12 +255,11 @@ class TypeScriptEnumUsageIndexBuilder {
     return this.#sourceProject
       .ownedSourceFiles()
       .flatMap((sourceFile) => {
-        const file = this.#sourceProject.sourceFileIdentity(sourceFile);
+        const file = this.#sourceProject.requiredSourceFileIdentity(sourceFile);
         const packageInfo = this.#sourceProject.packageForFileName(
           sourceFile.fileName,
         );
         if (
-          file === null ||
           file.packageId === null ||
           packageInfo === null ||
           (this.#packageId !== undefined && file.packageId !== this.#packageId)
@@ -274,7 +290,7 @@ class TypeScriptEnumUsageIndexBuilder {
     context: SourceFileContext,
     node: ts.EnumDeclaration,
   ): void {
-    const enumKey = declarationKey(context.file, node, context.sourceFile);
+    const enumKey = enumDeclarationKey(context.file, node, context.sourceFile);
     const members = this.#memberSeedsForEnum(context, enumKey, node);
     const declaration: EnumDeclarationSeed = {
       key: enumKey,
@@ -284,7 +300,7 @@ class TypeScriptEnumUsageIndexBuilder {
       exported: hasModifier(node, ts.SyntaxKind.ExportKeyword),
       constEnum: hasModifier(node, ts.SyntaxKind.ConstKeyword),
       file: context.file,
-      span: sourceSpan(context.sourceFile, node),
+      span: sourceSpanForNode(context.sourceFile, node),
       memberKeys: members.map((member) => member.key),
     };
     this.#declarations.push(declaration);
@@ -327,7 +343,7 @@ class TypeScriptEnumUsageIndexBuilder {
       } else if (typeof value === "string") {
         nextImplicitNumber = null;
       }
-      const key = declarationKey(context.file, member, context.sourceFile);
+      const key = enumDeclarationKey(context.file, member, context.sourceFile);
       members.push({
         key,
         enumKey,
@@ -338,7 +354,7 @@ class TypeScriptEnumUsageIndexBuilder {
         valueKind,
         valueKey: value === null ? null : enumValueKey(value),
         file: context.file,
-        span: sourceSpan(context.sourceFile, member),
+        span: sourceSpanForNode(context.sourceFile, member),
       });
     }
     return members;
@@ -372,8 +388,8 @@ class TypeScriptEnumUsageIndexBuilder {
           : containingClass;
       const nextFunction = functionLikeName(node, context.sourceFile) ?? containingFunction;
 
-      if (ts.isPropertyAccessExpression(node)) {
-        const member = this.#resolveMemberAccess(node, context.sourceFile);
+      if (ts.isPropertyAccessExpression(node) || ts.isQualifiedName(node)) {
+        const member = this.#resolveMemberReference(node, context.sourceFile);
         if (member !== null) {
           this.#references.push(
             this.#referenceRow(
@@ -414,12 +430,12 @@ class TypeScriptEnumUsageIndexBuilder {
 
   #referenceRow(
     context: SourceFileContext,
-    node: ts.PropertyAccessExpression,
+    node: ts.PropertyAccessExpression | ts.QualifiedName,
     member: EnumMemberSeed,
     containingFunction: string | null,
     containingClass: string | null,
   ): TypeScriptEnumMemberReferenceRow {
-    const span = sourceSpan(context.sourceFile, node);
+    const span = sourceSpanForNode(context.sourceFile, node);
     return {
       id: `typescript-enum-reference:${member.key}:${context.file.repoPath}:${span.start}:${span.end}`,
       packageId: context.file.packageId!,
@@ -449,7 +465,11 @@ class TypeScriptEnumUsageIndexBuilder {
     if (members === undefined) {
       return null;
     }
-    const span = sourceSpan(context.sourceFile, node);
+    const span = sourceSpanForNode(context.sourceFile, node);
+    const contextualMemberKeys = this.#contextualMemberKeysForLiteral(
+      node,
+      members,
+    );
     return {
       id: `typescript-enum-value:${valueKey}:${context.file.repoPath}:${span.start}:${span.end}`,
       packageId: context.file.packageId!,
@@ -458,10 +478,63 @@ class TypeScriptEnumUsageIndexBuilder {
       valueKey,
       role: useRoleForNode(node),
       text: node.getText(context.sourceFile),
-      memberKeys: uniqueSorted(members.map((member) => member.key)),
+      memberKeys: uniqueSortedStrings(members.map((member) => member.key)),
+      contextualMemberKeys,
       file: context.file,
       span,
     };
+  }
+
+  #contextualMemberKeysForLiteral(
+    node: ts.StringLiteral | ts.NoSubstitutionTemplateLiteral | ts.NumericLiteral,
+    members: readonly EnumMemberSeed[],
+  ): readonly string[] {
+    const contextualType = this.#checker.getContextualType(node);
+    if (contextualType === undefined) {
+      return [];
+    }
+    const enumNames = this.#enumNamesForType(contextualType);
+    if (enumNames.size === 0) {
+      return [];
+    }
+    return uniqueSortedStrings(
+      members
+        .filter((member) => enumNames.has(member.enumName))
+        .map((member) => member.key),
+    );
+  }
+
+  #enumNamesForType(
+    type: ts.Type,
+    depth = 0,
+  ): ReadonlySet<string> {
+    const names = new Set<string>();
+    if (depth > 6) {
+      return names;
+    }
+    if (type.isUnionOrIntersection()) {
+      for (const child of type.types) {
+        addAll(names, this.#enumNamesForType(child, depth + 1));
+      }
+    }
+    for (const symbol of [type.aliasSymbol, type.symbol]) {
+      if (symbol === undefined) {
+        continue;
+      }
+      for (const declaration of symbol.getDeclarations() ?? []) {
+        const enumName = enumNameForDeclaration(declaration);
+        if (enumName !== null && this.#enumNames.has(enumName)) {
+          names.add(enumName);
+        }
+      }
+    }
+    const typeText = this.#checker.typeToString(type);
+    for (const enumName of this.#enumNames) {
+      if (containsWord(typeText, enumName)) {
+        names.add(enumName);
+      }
+    }
+    return names;
   }
 
   #addInitializerTranslation(
@@ -512,10 +585,10 @@ class TypeScriptEnumUsageIndexBuilder {
           (member) => member.key,
         );
       }
-      const returnExpressions = clause.statements.flatMap((statement) =>
-        returnExpressionsInNode(statement),
+      const returnedExpressions = clause.statements.flatMap((statement) =>
+        returnExpressions(statement),
       );
-      for (const expression of returnExpressions) {
+      for (const expression of returnedExpressions) {
         this.#addTranslationEdges(
           context,
           "case-return",
@@ -524,7 +597,7 @@ class TypeScriptEnumUsageIndexBuilder {
           expression,
         );
       }
-      if (returnExpressions.length > 0) {
+      if (returnedExpressions.length > 0) {
         activeFromMembers = [];
       }
     }
@@ -556,7 +629,7 @@ class TypeScriptEnumUsageIndexBuilder {
         if (fromMember.key === toMember.key) {
           continue;
         }
-        const span = sourceSpan(context.sourceFile, node);
+        const span = sourceSpanForNode(context.sourceFile, node);
         const id = `typescript-enum-translation:${carrier}:${fromMember.key}:${toMember.key}:${context.file.repoPath}:${span.start}:${span.end}`;
         if (this.#translationEdges.has(id)) {
           continue;
@@ -589,7 +662,7 @@ class TypeScriptEnumUsageIndexBuilder {
     const members: EnumMemberSeed[] = [];
     const visit = (child: ts.Node): void => {
       if (ts.isPropertyAccessExpression(child)) {
-        const member = this.#resolveMemberAccess(child, sourceFile);
+        const member = this.#resolveMemberReference(child, sourceFile);
         if (member !== null) {
           members.push(member);
         }
@@ -648,28 +721,31 @@ class TypeScriptEnumUsageIndexBuilder {
   ): EnumMemberSeed | null {
     const expression = unwrapTranslationExpression(node);
     return ts.isPropertyAccessExpression(expression)
-      ? this.#resolveMemberAccess(expression, sourceFile)
+      ? this.#resolveMemberReference(expression, sourceFile)
       : null;
   }
 
-  #resolveMemberAccess(
-    node: ts.PropertyAccessExpression,
+  #resolveMemberReference(
+    node: ts.PropertyAccessExpression | ts.QualifiedName,
     sourceFile: ts.SourceFile,
   ): EnumMemberSeed | null {
-    const expressionText = node.expression.getText(sourceFile);
+    const expressionText = memberReferenceQualifierText(node, sourceFile);
+    const memberName = memberReferenceNameText(node);
     if (
       !this.#enumNames.has(expressionText) &&
-      !this.#memberNames.has(node.name.text)
+      !this.#memberNames.has(memberName)
     ) {
       return null;
     }
-    const symbol = this.#checker.getSymbolAtLocation(node.name);
+    const symbol = this.#checker.getSymbolAtLocation(
+      ts.isPropertyAccessExpression(node) ? node.name : node.right,
+    );
     const symbolMember = this.#memberForSymbol(symbol);
     if (symbolMember !== null) {
       return symbolMember;
     }
     const rows = this.#membersByQualifiedName.get(
-      `${expressionText}.${node.name.text}`,
+      `${expressionText}.${memberName}`,
     );
     return rows?.length === 1 ? rows[0]! : null;
   }
@@ -694,7 +770,7 @@ class TypeScriptEnumUsageIndexBuilder {
         continue;
       }
       const member = this.#membersByDeclarationKey.get(
-        declarationKey(file, enumMember, enumMember.getSourceFile()),
+        enumDeclarationKey(file, enumMember, enumMember.getSourceFile()),
       );
       if (member !== undefined) {
         return member;
@@ -710,30 +786,28 @@ class TypeScriptEnumUsageIndexBuilder {
     }
     return (
       this.#membersByDeclarationKey.get(
-        declarationKey(file, node, node.getSourceFile()),
+        enumDeclarationKey(file, node, node.getSourceFile()),
       ) ?? null
     );
   }
 
   #finalize(): TypeScriptEnumUsageIndex {
-    const referenceCounts = countBy(this.#references, (row) => row.memberKey);
-    const rawValueCounts = countBy(
+    const referenceCounts = countByMap(this.#references, (row) => row.memberKey);
+    const rawValueCounts = countContextualRawValueOccurrences(
       this.#valueOccurrences.filter((row) => isRawValueRole(row.role)),
-      (row) => row.valueKey,
     );
-    const translationInCounts = countBy(
+    const translationInCounts = countByMap(
       [...this.#translationEdges.values()],
       (row) => row.toMemberKey,
     );
-    const translationOutCounts = countBy(
+    const translationOutCounts = countByMap(
       [...this.#translationEdges.values()],
       (row) => row.fromMemberKey,
     );
     const members = this.#members.map((member) => ({
       ...member,
       referenceCount: referenceCounts.get(member.key) ?? 0,
-      rawValueOccurrenceCount:
-        member.valueKey === null ? 0 : rawValueCounts.get(member.valueKey) ?? 0,
+      rawValueOccurrenceCount: rawValueCounts.get(member.key) ?? 0,
     }));
     const membersByKey = new Map(members.map((member) => [member.key, member]));
     const declarations = this.#declarations
@@ -772,7 +846,7 @@ class TypeScriptEnumUsageIndexBuilder {
 
     return {
       version: TYPESCRIPT_ENUM_USAGE_INDEX_VERSION,
-      packageIds: uniqueSorted(declarations.map((row) => row.packageId)),
+      packageIds: uniqueSortedStrings(declarations.map((row) => row.packageId)),
       enumDeclarations: declarations,
       memberReferences: this.#references.sort(compareMemberReferences),
       valueOccurrences: this.#valueOccurrences.sort(compareValueOccurrences),
@@ -790,7 +864,7 @@ class TypeScriptEnumUsageIndexBuilder {
       members.filter((member) => member.valueKey !== null),
       (member) => member.valueKey!,
     );
-    const referencesByMemberKey = countBy(this.#references, (row) => row.memberKey);
+    const referencesByMemberKey = countByMap(this.#references, (row) => row.memberKey);
     const occurrencesByValueKey = groupBy(
       this.#valueOccurrences.filter((row) => isRawValueRole(row.role)),
       (row) => row.valueKey,
@@ -808,11 +882,11 @@ class TypeScriptEnumUsageIndexBuilder {
         valueKind: typeof value === "string" ? "string" : "number",
         valueKey,
         memberKeys: valueMembers.map((member) => member.key),
-        enumNames: uniqueSorted(valueMembers.map((member) => member.enumName)),
-        packageIds: uniqueSorted(valueMembers.map((member) => member.packageId)),
+        enumNames: uniqueSortedStrings(valueMembers.map((member) => member.enumName)),
+        packageIds: uniqueSortedStrings(valueMembers.map((member) => member.packageId)),
         memberReferenceCount: referenceCount,
         rawValueOccurrenceCount: occurrences.length,
-        sourceFiles: uniqueSorted(occurrences.map((row) => row.file.repoPath)),
+        sourceFiles: uniqueSortedStrings(occurrences.map((row) => row.file.repoPath)),
         ...(occurrences[0] === undefined
           ? {}
           : { firstOccurrence: occurrences[0] }),
@@ -895,6 +969,9 @@ function useRoleForNode(node: ts.Node): TypeScriptEnumUseRole {
     if (ts.isLiteralTypeNode(parent)) {
       return "literal-type";
     }
+    if (ts.isTypeReferenceNode(parent)) {
+      return "type-reference";
+    }
     if (ts.isCaseClause(parent) && parent.expression === current) {
       return "case-label";
     }
@@ -931,6 +1008,21 @@ function useRoleForNode(node: ts.Node): TypeScriptEnumUseRole {
   return "expression";
 }
 
+function memberReferenceQualifierText(
+  node: ts.PropertyAccessExpression | ts.QualifiedName,
+  sourceFile: ts.SourceFile,
+): string {
+  return ts.isPropertyAccessExpression(node)
+    ? node.expression.getText(sourceFile)
+    : node.left.getText(sourceFile);
+}
+
+function memberReferenceNameText(
+  node: ts.PropertyAccessExpression | ts.QualifiedName,
+): string {
+  return ts.isPropertyAccessExpression(node) ? node.name.text : node.right.text;
+}
+
 function isRawValueRole(role: TypeScriptEnumUseRole): boolean {
   return role !== "enum-member-initializer" && role !== "module-specifier";
 }
@@ -958,19 +1050,6 @@ function functionLikeName(
   return null;
 }
 
-function propertyNameText(
-  name: ts.PropertyName,
-  sourceFile: ts.SourceFile,
-): string | null {
-  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) {
-    return name.text;
-  }
-  if (ts.isComputedPropertyName(name)) {
-    return name.expression.getText(sourceFile);
-  }
-  return null;
-}
-
 function nearestEnumMemberDeclaration(node: ts.Declaration): ts.EnumMember | null {
   let current: ts.Node | undefined = node;
   while (current !== undefined) {
@@ -982,99 +1061,49 @@ function nearestEnumMemberDeclaration(node: ts.Declaration): ts.EnumMember | nul
   return null;
 }
 
-function returnExpressionsInNode(node: ts.Node): readonly ts.Expression[] {
-  const expressions: ts.Expression[] = [];
-  const visit = (child: ts.Node): void => {
-    if (child !== node && isNestedExecutionBoundary(child)) {
-      return;
-    }
-    if (ts.isReturnStatement(child) && child.expression !== undefined) {
-      expressions.push(child.expression);
-    }
-    ts.forEachChild(child, visit);
-  };
-  visit(node);
-  return expressions;
-}
-
-function isNestedExecutionBoundary(node: ts.Node): boolean {
-  return (
-    ts.isFunctionDeclaration(node) ||
-    ts.isFunctionExpression(node) ||
-    ts.isArrowFunction(node) ||
-    ts.isMethodDeclaration(node) ||
-    ts.isGetAccessorDeclaration(node) ||
-    ts.isSetAccessorDeclaration(node) ||
-    ts.isConstructorDeclaration(node)
-  );
-}
-
-function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
-  return (
-    ts.canHaveModifiers(node) &&
-    ts.getModifiers(node)?.some((modifier) => modifier.kind === kind) === true
-  );
-}
-
-function declarationKey(
+function enumDeclarationKey(
   file: SourceFileIdentity,
   node: ts.Node,
   sourceFile: ts.SourceFile,
 ): string {
-  const span = sourceSpan(sourceFile, node);
+  const span = sourceSpanForNode(sourceFile, node);
   return `${file.packageId ?? "external"}:${file.repoPath}:${span.start}:${span.end}`;
 }
 
-function sourceSpan(sourceFile: ts.SourceFile, node: ts.Node): SourceSpan {
-  const start = node.getStart(sourceFile);
-  const end = node.getEnd();
-  const startPosition = sourceFile.getLineAndCharacterOfPosition(start);
-  const endPosition = sourceFile.getLineAndCharacterOfPosition(end);
-  return {
-    start,
-    end,
-    startLine: startPosition.line + 1,
-    startCharacter: startPosition.character + 1,
-    endLine: endPosition.line + 1,
-    endCharacter: endPosition.character + 1,
-  };
-}
-
-function countBy<T>(
-  rows: readonly T[],
-  key: (row: T) => string,
+function countContextualRawValueOccurrences(
+  rows: readonly TypeScriptEnumValueOccurrenceRow[],
 ): ReadonlyMap<string, number> {
   const counts = new Map<string, number>();
   for (const row of rows) {
-    const id = key(row);
-    counts.set(id, (counts.get(id) ?? 0) + 1);
+    for (const memberKey of row.contextualMemberKeys) {
+      counts.set(memberKey, (counts.get(memberKey) ?? 0) + 1);
+    }
   }
   return counts;
 }
 
-function groupBy<T>(
-  rows: readonly T[],
-  key: (row: T) => string,
-): ReadonlyMap<string, readonly T[]> {
-  const groups = new Map<string, T[]>();
-  for (const row of rows) {
-    const id = key(row);
-    const group = groups.get(id) ?? [];
-    group.push(row);
-    groups.set(id, group);
+function addAll(target: Set<string>, source: Iterable<string>): void {
+  for (const value of source) {
+    target.add(value);
   }
-  return groups;
 }
 
-function uniqueByKey<T>(
-  rows: readonly T[],
-  key: (row: T) => string,
-): readonly T[] {
-  return [...new Map(rows.map((row) => [key(row), row])).values()];
+function enumNameForDeclaration(declaration: ts.Declaration): string | null {
+  if (ts.isEnumDeclaration(declaration)) {
+    return declaration.name.text;
+  }
+  if (ts.isEnumMember(declaration) && ts.isEnumDeclaration(declaration.parent)) {
+    return declaration.parent.name.text;
+  }
+  return null;
 }
 
-function uniqueSorted(values: readonly string[]): readonly string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
+function containsWord(text: string, word: string): boolean {
+  return new RegExp(`(^|[^A-Za-z0-9_$])${escapeRegExp(word)}($|[^A-Za-z0-9_$])`, "u").test(text);
+}
+
+function escapeRegExp(text: string): string {
+  return text.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function unwrapTranslationExpression(node: ts.Node): ts.Node {

@@ -216,7 +216,7 @@ export function evidenceForCallTarget(
   };
 }
 
-export function evidenceForCallSite(row: FrameworkFlowCallSiteRow): Evidence {
+export function evidenceForFrameworkFlowCallSite(row: FrameworkFlowCallSiteRow): Evidence {
   return {
     id: row.id,
     kind: EvidenceKind.CallSite,
@@ -319,7 +319,7 @@ export function evidenceForBundle(row: FrameworkBundleExportRow): Evidence {
     kind: EvidenceKind.DiRegistration,
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Strong,
-    summary: `${row.packageId}:${row.exportEntry.exportName} has ${row.associations.length} evaluated registration association(s) from ${row.effectCount} effect(s)`,
+    summary: `${row.packageId}:${row.exportEntry.exportName} is a ${row.bundleKind} bundle with ${row.associations.length} evaluated registration association(s) from ${row.effectCount} effect(s)`,
     ...(source === null ? {} : { source }),
     data: row,
   };

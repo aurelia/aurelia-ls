@@ -6,7 +6,6 @@ import {
   BasisKind,
   type Basis,
 } from "../basis.js";
-import { clampBudget } from "../budget.js";
 import {
   ContinuationKind,
   ContinuationPriority,
@@ -20,17 +19,19 @@ import {
 } from "../evidence.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
-import { LocusKind, RepoRootLocus } from "../locus.js";
+import { RepoRootLocus } from "../locus.js";
 import {
   NavigationPlane,
   NavigationRelation,
 } from "../navigation.js";
 import { PagedRowFamily } from "../paged-row-family.js";
-import { pageOffset } from "../paging.js";
-import type { SourceProject } from "../../source/index.js";
+import { evidenceLimit, pageOffset, rowLimit } from "../paging.js";
+import {
+  sourceRangeFromOneBasedReference,
+  type SourceProject,
+} from "../../source/index.js";
 import {
   readProductVocabularyAnalysis,
-  toInquirySourceRange,
   type ProductClaimGraphEdgeRow,
   type ProductClaimPredicateRow,
   type ProductClaimSignatureIssueRow,
@@ -38,6 +39,15 @@ import {
   type ProductVocabularyDefinitionRow,
   type ProductVocabularyUsageRow,
 } from "./product-vocabulary-analysis.js";
+import {
+  inquiryQueryMatches,
+  inquiryStringFilter,
+} from "./lens-filter-utils.js";
+import {
+  optionalNextPageContinuation,
+  sourceForRow,
+  sourceInspectionContinuations,
+} from "./lens-continuation-utils.js";
 
 export interface ProductVocabularyValue {
   readonly version: ProductVocabularyAnalysis["version"];
@@ -75,7 +85,7 @@ export function answerProductVocabulary(
         "vocabulary definition row(s)",
         filterDefinitions(analysis.definitions, inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), definitions: rows }),
+        (rows) => ({ ...productVocabularyBaseValue(analysis), definitions: rows }),
         evidenceForDefinition,
       );
     case "usage":
@@ -85,7 +95,7 @@ export function answerProductVocabulary(
         "vocabulary usage row(s)",
         filterUsages(analysis.usages, inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), usages: rows }),
+        (rows) => ({ ...productVocabularyBaseValue(analysis), usages: rows }),
         evidenceForUsage,
       );
     case "claim-schema":
@@ -95,7 +105,7 @@ export function answerProductVocabulary(
         "claim predicate schema row(s)",
         filterClaimPredicates(analysis.claimPredicates, inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), claimPredicates: rows }),
+        (rows) => ({ ...productVocabularyBaseValue(analysis), claimPredicates: rows }),
         evidenceForClaimPredicate,
       );
     case "claim-graph":
@@ -105,7 +115,7 @@ export function answerProductVocabulary(
         "claim schema product-adjacency edge(s)",
         filterClaimGraphEdges(analysis.claimGraphEdges, inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), claimGraphEdges: rows }),
+        (rows) => ({ ...productVocabularyBaseValue(analysis), claimGraphEdges: rows }),
         evidenceForClaimGraphEdge,
       );
     case "claim-issues":
@@ -115,7 +125,7 @@ export function answerProductVocabulary(
         "claim signature issue row(s)",
         filterClaimSignatureIssues(analysis.claimSignatureIssues, inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), claimSignatureIssues: rows }),
+        (rows) => ({ ...productVocabularyBaseValue(analysis), claimSignatureIssues: rows }),
         evidenceForClaimSignatureIssue,
       );
   }
@@ -134,12 +144,12 @@ function answerProductVocabularySummary(
     `Read ${analysis.rollup.definitionCount} vocabulary definition(s), ${analysis.rollup.usageCount} exact source usage(s), and ${analysis.rollup.claimGraphEdgeCount} claim-schema product edge(s).`,
     {
       value: {
-        ...baseValue(analysis),
+        ...productVocabularyBaseValue(analysis),
         claimSignatureIssues: topIssues,
       },
       basis,
       evidence: topIssues.slice(0, evidenceLimit(inquiry)).map(evidenceForClaimSignatureIssue),
-      continuations: summaryContinuations(inquiry),
+      continuations: productVocabularySummaryContinuations(inquiry),
     },
   );
 }
@@ -158,9 +168,14 @@ function answerProductVocabularyRows<TRow>(
     rowLabel,
     evidenceForRow: (row) => evidenceForRow(row),
     continuationsForPage: (inquiry, rows, nextOffset, limit) => [
-      ...nextPageContinuation(inquiry, nextOffset, limit),
-      ...rows.flatMap((row) => sourceContinuationsForRow(row)),
-      ...commonContinuations(inquiry),
+      ...optionalNextPageContinuation(inquiry, nextOffset, limit, {
+        id: "product.vocabulary:next-page",
+        rationale: "Continue product vocabulary rows.",
+        routeSummary: "Next product vocabulary row page.",
+        basis: [BasisKind.ProductVocabulary],
+      }),
+      ...rows.flatMap((row) => productVocabularySourceContinuations(row)),
+      ...productVocabularyContinuations(inquiry),
     ],
   });
   return rowFamily.answer({
@@ -173,7 +188,7 @@ function answerProductVocabularyRows<TRow>(
   });
 }
 
-function baseValue(analysis: ProductVocabularyAnalysis): ProductVocabularyValue {
+function productVocabularyBaseValue(analysis: ProductVocabularyAnalysis): ProductVocabularyValue {
   return {
     version: analysis.version,
     rollup: analysis.rollup,
@@ -201,11 +216,11 @@ function filterDefinitions(
   inquiry: Inquiry,
 ): readonly ProductVocabularyDefinitionRow[] {
   return rows.filter((row) =>
-    matches(row.slot, stringFilter(inquiry, "slot")) &&
-    matches(row.namespace, stringFilter(inquiry, "namespace")) &&
-    matches(row.memberName, stringFilter(inquiry, "memberName")) &&
-    matches(row.rootName, stringFilter(inquiry, "rootName")) &&
-    queryMatches(inquiry, [
+    matches(row.slot, inquiryStringFilter(inquiry, "slot")) &&
+    matches(row.namespace, inquiryStringFilter(inquiry, "namespace")) &&
+    matches(row.memberName, inquiryStringFilter(inquiry, "memberName")) &&
+    matches(row.rootName, inquiryStringFilter(inquiry, "rootName")) &&
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.key,
       row.summary,
@@ -221,12 +236,12 @@ function filterUsages(
   inquiry: Inquiry,
 ): readonly ProductVocabularyUsageRow[] {
   return rows.filter((row) =>
-    matches(row.rootName, stringFilter(inquiry, "rootName")) &&
-    matches(row.namespace, stringFilter(inquiry, "namespace")) &&
-    matches(row.memberName, stringFilter(inquiry, "memberName")) &&
-    matches(row.syntacticRole, stringFilter(inquiry, "role")) &&
-    matches(row.accessKind, stringFilter(inquiry, "accessKind")) &&
-    queryMatches(inquiry, [
+    matches(row.rootName, inquiryStringFilter(inquiry, "rootName")) &&
+    matches(row.namespace, inquiryStringFilter(inquiry, "namespace")) &&
+    matches(row.memberName, inquiryStringFilter(inquiry, "memberName")) &&
+    matches(row.syntacticRole, inquiryStringFilter(inquiry, "role")) &&
+    matches(row.accessKind, inquiryStringFilter(inquiry, "accessKind")) &&
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.accessPath,
       row.entryId ?? "",
@@ -240,18 +255,18 @@ function filterClaimPredicates(
   rows: readonly ProductClaimPredicateRow[],
   inquiry: Inquiry,
 ): readonly ProductClaimPredicateRow[] {
-  const endpointKind = stringFilter(inquiry, "endpointKind");
-  const productKind = stringFilter(inquiry, "productKind");
+  const endpointKind = inquiryStringFilter(inquiry, "endpointKind");
+  const productKind = inquiryStringFilter(inquiry, "productKind");
   return rows.filter((row) =>
-    matches(row.namespace, stringFilter(inquiry, "namespace")) &&
-    matches(row.memberName, stringFilter(inquiry, "memberName")) &&
+    matches(row.namespace, inquiryStringFilter(inquiry, "namespace")) &&
+    matches(row.memberName, inquiryStringFilter(inquiry, "memberName")) &&
     (endpointKind === undefined ||
       row.signature?.subject.endpointKinds.includes(endpointKind as never) === true ||
       row.signature?.object.endpointKinds.includes(endpointKind as never) === true) &&
     (productKind === undefined ||
       row.signature?.subject.productKindRefs.includes(productKind) === true ||
       row.signature?.object.productKindRefs.includes(productKind) === true) &&
-    queryMatches(inquiry, [
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.key,
       row.summary,
@@ -267,15 +282,15 @@ function filterClaimGraphEdges(
   rows: readonly ProductClaimGraphEdgeRow[],
   inquiry: Inquiry,
 ): readonly ProductClaimGraphEdgeRow[] {
-  const productKind = stringFilter(inquiry, "productKind");
+  const productKind = inquiryStringFilter(inquiry, "productKind");
   return rows.filter((row) =>
-    matches(row.predicateKey, stringFilter(inquiry, "predicateKey")) &&
+    matches(row.predicateKey, inquiryStringFilter(inquiry, "predicateKey")) &&
     (productKind === undefined ||
       row.subjectProductKindId === productKind ||
       row.subjectProductKindKey === productKind ||
       row.objectProductKindId === productKind ||
       row.objectProductKindKey === productKind) &&
-    queryMatches(inquiry, [
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.predicateId,
       row.predicateKey,
@@ -292,10 +307,10 @@ function filterClaimSignatureIssues(
   inquiry: Inquiry,
 ): readonly ProductClaimSignatureIssueRow[] {
   return rows.filter((row) =>
-    matches(row.kind, stringFilter(inquiry, "issueKind")) &&
-    matches(row.predicateKey, stringFilter(inquiry, "predicateKey")) &&
-    matches(row.productKindRef ?? "", stringFilter(inquiry, "productKind")) &&
-    queryMatches(inquiry, [
+    matches(row.kind, inquiryStringFilter(inquiry, "issueKind")) &&
+    matches(row.predicateKey, inquiryStringFilter(inquiry, "predicateKey")) &&
+    matches(row.productKindRef ?? "", inquiryStringFilter(inquiry, "productKind")) &&
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.kind,
       row.predicateId,
@@ -313,7 +328,7 @@ function evidenceForDefinition(row: ProductVocabularyDefinitionRow): Evidence {
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: `${row.slot} ${row.id}: ${row.summary}`,
-    source: toInquirySourceRange(row.source),
+    source: sourceRangeFromOneBasedReference(row.source),
     data: row,
   };
 }
@@ -325,7 +340,7 @@ function evidenceForUsage(row: ProductVocabularyUsageRow): Evidence {
     role: EvidenceRole.Support,
     confidence: EvidenceConfidence.Exact,
     summary: `${row.accessPath} used as ${row.accessKind}/${row.syntacticRole}.`,
-    source: toInquirySourceRange(row.source),
+    source: sourceRangeFromOneBasedReference(row.source),
     data: row,
   };
 }
@@ -337,7 +352,7 @@ function evidenceForClaimPredicate(row: ProductClaimPredicateRow): Evidence {
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: `Claim predicate ${row.key} exposes a directional signature.`,
-    source: toInquirySourceRange(row.source),
+    source: sourceRangeFromOneBasedReference(row.source),
     data: row,
   };
 }
@@ -350,7 +365,7 @@ function evidenceForClaimGraphEdge(row: ProductClaimGraphEdgeRow): Evidence {
     confidence: EvidenceConfidence.Exact,
     summary:
       `${row.predicateKey}: ${row.subjectProductKindKey} -> ${row.objectProductKindKey}.`,
-    source: toInquirySourceRange(row.source),
+    source: sourceRangeFromOneBasedReference(row.source),
     data: row,
   };
 }
@@ -362,46 +377,29 @@ function evidenceForClaimSignatureIssue(row: ProductClaimSignatureIssueRow): Evi
     role: EvidenceRole.Diagnostic,
     confidence: EvidenceConfidence.Exact,
     summary: row.summary,
-    source: toInquirySourceRange(row.source),
+    source: sourceRangeFromOneBasedReference(row.source),
     data: row,
   };
 }
 
-function sourceContinuationsForRow(row: unknown): readonly Continuation[] {
-  const source = rowSource(row);
-  if (source === undefined) {
-    return [];
-  }
-  return [
+function productVocabularySourceContinuations(row: unknown): readonly Continuation[] {
+  const source = sourceForRow<ProductClaimSignatureIssueRow["source"]>(row);
+  return sourceInspectionContinuations(
+    source === undefined ? undefined : sourceRangeFromOneBasedReference(source),
     {
-      id: `product.vocabulary:source:${source.filePath}:${source.startLine}:${source.startCharacter}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
+      ...(source === undefined
+        ? {}
+        : {
+            id: `product.vocabulary:source:${source.filePath}:${source.startLine}:${source.startCharacter}`,
+          }),
+      basis: [BasisKind.ProductVocabulary, BasisKind.SourceText],
       rationale: "Inspect the source behind this product-vocabulary row.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: { kind: LocusKind.SourceRange, range: toInquirySourceRange(source) },
-        projection: "text",
-      },
-      route: {
-        plane: NavigationPlane.Inspection,
-        relation: NavigationRelation.SourceFor,
-        basis: [BasisKind.ProductVocabulary, BasisKind.SourceText],
-        summary: "Source backing for a product-vocabulary row.",
-      },
+      routeSummary: "Source backing for a product-vocabulary row.",
     },
-  ];
+  );
 }
 
-function rowSource(row: unknown): ProductClaimSignatureIssueRow["source"] | undefined {
-  if (typeof row !== "object" || row === null) {
-    return undefined;
-  }
-  const candidate = row as { readonly source?: ProductClaimSignatureIssueRow["source"] };
-  return candidate.source;
-}
-
-function summaryContinuations(inquiry: Inquiry): readonly Continuation[] {
+function productVocabularySummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
   return [
     productVocabularyContinuation(
       inquiry,
@@ -434,7 +432,7 @@ function summaryContinuations(inquiry: Inquiry): readonly Continuation[] {
   ];
 }
 
-function commonContinuations(inquiry: Inquiry): readonly Continuation[] {
+function productVocabularyContinuations(inquiry: Inquiry): readonly Continuation[] {
   if (inquiry.projection === "summary") {
     return [];
   }
@@ -477,38 +475,6 @@ function productVocabularyContinuation(
   };
 }
 
-function nextPageContinuation(
-  inquiry: Inquiry,
-  nextOffset: number | undefined,
-  limit: number,
-): readonly Continuation[] {
-  if (nextOffset === undefined) {
-    return [];
-  }
-  return [
-    {
-      id: "product.vocabulary:next-page",
-      kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
-      rationale: "Continue product vocabulary rows.",
-      inquiry: {
-        lens: LensId.ProductVocabulary,
-        locus: inquiry.locus,
-        projection: inquiry.projection,
-        ...(inquiry.filters === undefined ? {} : { filters: inquiry.filters }),
-        ...(inquiry.budget === undefined ? {} : { budget: inquiry.budget }),
-        page: { size: limit, cursor: String(nextOffset) },
-      },
-      route: {
-        plane: NavigationPlane.Addressing,
-        relation: NavigationRelation.NextPageOf,
-        basis: [BasisKind.ProductVocabulary],
-        summary: "Next product vocabulary row page.",
-      },
-    },
-  ];
-}
-
 function productVocabularyBasis(sourceProject: SourceProject): readonly Basis[] {
   return [
     {
@@ -531,28 +497,6 @@ function productVocabularyBasis(sourceProject: SourceProject): readonly Basis[] 
   ];
 }
 
-function rowLimit(inquiry: Inquiry): number {
-  return clampBudget(inquiry.budget?.rows, 80, 500);
-}
-
-function evidenceLimit(inquiry: Inquiry): number {
-  return clampBudget(inquiry.budget?.evidencePerSubject, 5, 50);
-}
-
-function stringFilter(inquiry: Inquiry, id: string): string | undefined {
-  const value = inquiry.filters?.[id];
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
 function matches(value: string, expected: string | undefined): boolean {
   return expected === undefined || value === expected;
-}
-
-function queryMatches(inquiry: Inquiry, values: readonly string[]): boolean {
-  const query = stringFilter(inquiry, "query");
-  if (query === undefined) {
-    return true;
-  }
-  const normalized = query.toLowerCase();
-  return values.some((value) => value.toLowerCase().includes(normalized));
 }

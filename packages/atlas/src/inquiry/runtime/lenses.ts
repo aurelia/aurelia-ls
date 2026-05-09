@@ -1,12 +1,12 @@
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import {
+  atlasContractBasis as contractBasis,
   BasisAuthority,
   BasisClosure,
   BasisFreshness,
   BasisKind,
   type Basis,
 } from "../basis.js";
-import { clampBudget } from "../budget.js";
 import {
   ContinuationKind,
   ContinuationPriority,
@@ -29,7 +29,7 @@ import {
   type NavigationRouteClaim,
 } from "../navigation.js";
 import { PagedRowFamily } from "../paged-row-family.js";
-import { pageOffset } from "../paging.js";
+import { pageOffset, rowLimit } from "../paging.js";
 import { createSurfaceMap, type InquirySurfaceMap } from "../surface-map.js";
 import { RepoAreaStatus } from "../terrain.js";
 import type {
@@ -48,6 +48,7 @@ import {
   type AtlasSelfEnumRow,
   type AtlasSelfEnumValueSpaceRow,
   type AtlasSelfFunctionSurfaceRow,
+  type AtlasSelfSourceFileSurfaceRow,
   type AtlasSelfSubstrateSurfaceRow,
   type AtlasSelfModuleDependencyRow,
   type AtlasSelfProjectionBranchRow,
@@ -64,6 +65,17 @@ import {
   SelfContractReader,
   type SelfContractRow,
 } from "./self-contracts.js";
+import {
+  optionalNextPageContinuation,
+  sourceInspectionContinuation,
+} from "./lens-continuation-utils.js";
+import {
+  inquiryBooleanFilter,
+  inquiryBooleanFilterOrDefault,
+  inquiryLowerStringFilter,
+  inquiryNumberFilter,
+  inquiryStringFilter,
+} from "./lens-filter-utils.js";
 import type { InquiryWorld } from "./world.js";
 
 /** Summary returned by the repo.terrain runtime lens. */
@@ -124,6 +136,8 @@ export interface SelfValue {
   readonly classSurfaces?: readonly AtlasSelfClassSurfaceRow[];
   /** Function and method declaration surfaces discovered in Atlas source. */
   readonly functionSurfaces?: readonly AtlasSelfFunctionSurfaceRow[];
+  /** Source file module surfaces discovered in Atlas source. */
+  readonly sourceFileSurfaces?: readonly AtlasSelfSourceFileSurfaceRow[];
   /** Lens contract rows joined to runtime implementation paths. */
   readonly contracts?: readonly SelfContractRow[];
   /** Runtime projection branches observed in source. */
@@ -193,7 +207,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "areas",
           },
-          route: route(
+          route: atlasSelfRoute(
             NavigationPlane.Structure,
             NavigationRelation.ProjectionOf,
             [BasisKind.AtlasContract],
@@ -210,7 +224,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: route(
+          route: atlasSelfRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.AtlasContract],
@@ -227,7 +241,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: route(
+          route: atlasSelfRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptChecker],
@@ -245,7 +259,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: route(
+          route: atlasSelfRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptChecker],
@@ -263,7 +277,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: route(
+          route: atlasSelfRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptChecker, BasisKind.StaticEvaluator],
@@ -281,7 +295,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: route(
+          route: atlasSelfRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptChecker],
@@ -299,7 +313,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: route(
+          route: atlasSelfRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
@@ -316,7 +330,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: route(
+          route: atlasSelfRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptChecker],
@@ -333,7 +347,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: route(
+          route: atlasSelfRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptChecker],
@@ -351,7 +365,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: route(
+          route: atlasSelfRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptChecker],
@@ -368,11 +382,28 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: route(
+          route: atlasSelfRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptChecker],
             "Aurelia framework observation graph from observer entities through binding lookup and setup rows.",
+          ),
+        },
+        {
+          id: "repo.map:framework-router",
+          kind: ContinuationKind.SwitchLens,
+          priority: ContinuationPriority.Primary,
+          rationale: "Enter the Aurelia framework router architecture map.",
+          inquiry: {
+            lens: LensId.FrameworkRouter,
+            locus: RepoRootLocus,
+            projection: "summary",
+          },
+          route: atlasSelfRoute(
+            NavigationPlane.Semantic,
+            NavigationRelation.FrameworkFlowOf,
+            [BasisKind.TypeScriptProgram],
+            "Aurelia framework router, route-context, route-tree, viewport-agent, and route-recognizer source architecture.",
           ),
         },
         {
@@ -386,11 +417,47 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: route(
+          route: atlasSelfRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.AuLink, BasisKind.TypeScriptChecker],
             "Aurelia framework actor composition graph.",
+          ),
+        },
+        {
+          id: "repo.map:workspace-architecture",
+          kind: ContinuationKind.SwitchLens,
+          priority: ContinuationPriority.Primary,
+          rationale:
+            "Inspect admitted workspace package topology, Aurelia entrypoint signals, and Aurelia integration surfaces.",
+          inquiry: {
+            lens: LensId.WorkspaceArchitecture,
+            locus: RepoRootLocus,
+            projection: "summary",
+          },
+          route: atlasSelfRoute(
+            NavigationPlane.Structure,
+            NavigationRelation.ProjectionOf,
+            [BasisKind.TypeScriptProgram],
+            "Workspace topology and app-integration rows behind the surface map.",
+          ),
+        },
+        {
+          id: "repo.map:plugin-architecture",
+          kind: ContinuationKind.SwitchLens,
+          priority: ContinuationPriority.Primary,
+          rationale:
+            "Inspect public Aurelia plugin package surfaces that pressure app analysis.",
+          inquiry: {
+            lens: LensId.PluginArchitecture,
+            locus: RepoRootLocus,
+            projection: "summary",
+          },
+          route: atlasSelfRoute(
+            NavigationPlane.Semantic,
+            NavigationRelation.FrameworkFlowOf,
+            [BasisKind.TypeScriptProgram],
+            "Public Aurelia plugin framework-integration surfaces behind the surface map.",
           ),
         },
         {
@@ -404,7 +471,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: route(
+          route: atlasSelfRoute(
             NavigationPlane.Structure,
             NavigationRelation.ProjectionOf,
             [BasisKind.TypeScriptProgram],
@@ -421,7 +488,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: route(
+          route: atlasSelfRoute(
             NavigationPlane.Maintenance,
             NavigationRelation.DiagnosticsFor,
             [BasisKind.AtlasContract],
@@ -530,7 +597,7 @@ class AtlasSelfAnswerer {
       sourceProject,
       this.#unimplemented,
       this.#analysis,
-      booleanFilter(inquiry, "includeSourceProject", false),
+      inquiryBooleanFilterOrDefault(inquiry, "includeSourceProject", false),
     );
   }
 
@@ -636,6 +703,12 @@ class AtlasSelfAnswerer {
           this.#value,
           this.#analysis,
         );
+      case "source-files":
+        return answerSelfSourceFilesProjection(
+          this.#inquiry,
+          this.#value,
+          this.#analysis,
+        );
       case "functions":
         return answerSelfFunctionsProjection(
           this.#inquiry,
@@ -685,7 +758,7 @@ function answerSelfRecipesProjection(
     nextPageRationale: "Continue Atlas self-analysis recipe rows.",
     inspectionForRow: () => undefined,
     extraContinuationsForPage: (inquiry) => [
-      projectionContinuation(
+      atlasProjectionContinuation(
         inquiry,
         "atlas.self:summary",
         "summary",
@@ -1067,7 +1140,7 @@ function answerSelfModulesProjection(
   value: SelfValue,
   analysis: AtlasSelfAnalysis,
 ): Answer<SelfValue> {
-  const rows = filterModules(analysis.moduleDependencies, inquiry);
+  const rows = filterAtlasSelfModuleDependencies(analysis.moduleDependencies, inquiry);
   return answerSelfRowProjection(inquiry, {
     familyId: "atlas.self:modules",
     rows,
@@ -1300,7 +1373,7 @@ function answerSelfClassesProjection(
   value: SelfValue,
   analysis: AtlasSelfAnalysis,
 ): Answer<SelfValue> {
-  const rows = filterClassSurfaces(analysis.classSurfaces, inquiry);
+  const rows = filterAtlasSelfClassSurfaces(analysis.classSurfaces, inquiry);
   return answerSelfRowProjection(inquiry, {
     familyId: "atlas.self:classes",
     rows,
@@ -1308,7 +1381,7 @@ function answerSelfClassesProjection(
     rowNoun: "Atlas class surface row(s)",
     basisSummary:
       "Read class declarations, methods, fields, heritage, and constructor surfaces through the hot TypeScript Program.",
-    evidenceForRow: evidenceForClassSurface,
+    evidenceForRow: evidenceForAtlasSelfClassSurface,
     nextPageId: "atlas.self:classes:next-page",
     nextPageRationale: "Continue Atlas class surface rows.",
     inspectionForRow: (row) => ({
@@ -1319,12 +1392,36 @@ function answerSelfClassesProjection(
   });
 }
 
+function answerSelfSourceFilesProjection(
+  inquiry: Inquiry,
+  value: SelfValue,
+  analysis: AtlasSelfAnalysis,
+): Answer<SelfValue> {
+  const rows = filterSourceFileSurfaces(analysis.sourceFileSurfaces, inquiry);
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:source-files",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, sourceFileSurfaces: pageRows }),
+    rowNoun: "Atlas source file surface row(s)",
+    basisSummary:
+      "Read source file size, statement, import, export, and declaration pressure through the hot TypeScript Program.",
+    evidenceForRow: evidenceForSourceFileSurface,
+    nextPageId: "atlas.self:source-files:next-page",
+    nextPageRationale: "Continue Atlas source file surface rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect source file ${row.filePath}.`,
+    }),
+  });
+}
+
 function answerSelfFunctionsProjection(
   inquiry: Inquiry,
   value: SelfValue,
   analysis: AtlasSelfAnalysis,
 ): Answer<SelfValue> {
-  const rows = filterFunctionSurfaces(analysis.functionSurfaces, inquiry);
+  const rows = filterAtlasSelfFunctionSurfaces(analysis.functionSurfaces, inquiry);
   return answerSelfRowProjection(inquiry, {
     familyId: "atlas.self:functions",
     rows,
@@ -1332,7 +1429,7 @@ function answerSelfFunctionsProjection(
     rowNoun: "Atlas function surface row(s)",
     basisSummary:
       "Read top-level function and class-method declarations through the hot TypeScript Program.",
-    evidenceForRow: evidenceForFunctionSurface,
+    evidenceForRow: evidenceForAtlasSelfFunctionSurface,
     nextPageId: "atlas.self:functions:next-page",
     nextPageRationale: "Continue Atlas function surface rows.",
     inspectionForRow: (row) => ({
@@ -1392,115 +1489,115 @@ function answerSelfAxisPressureProjection(
 
 function selfSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
   return [
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:recipes",
       "recipes",
       "Use stored self-maintenance recipes when they fit the current architecture question.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:taxonomy",
       "taxonomy",
       "Inspect the compact source-backed Atlas self taxonomy rollup.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:contracts",
       "contracts",
       "Inspect lens contracts joined to runtime implementation paths.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:projections",
       "projections",
       "Inspect runtime projection branches and their owning lens paths.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:continuations",
       "continuations",
       "Inspect continuation object literals and route claims.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:semantic-routes",
       "semantic-routes",
       "Inspect declared framework semantic route topology.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:modules",
       "modules",
       "Inspect Atlas module dependency edges.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:substrate-surfaces",
       "substrate-surfaces",
       "Inspect substrate reader, builder, and schema surfaces.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:contract-strings",
       "contract-strings",
       "Inspect contract-bearing strings by class.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:enums",
       "enums",
       "Inspect enum axes and enum-member usage pressure.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:enum-references",
       "enum-references",
       "Inspect exact Enum.Member reference sites.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:enum-value-spaces",
       "enum-value-spaces",
       "Inspect enum member value spaces and raw literal overlap.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:enum-mappings",
       "enum-mappings",
       "Inspect exact enum-to-enum translation edges.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:strings",
       "strings",
       "Inspect grouped magic string literal pressure.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:relationship-surfaces",
       "relationship-surfaces",
       "Inspect relationship-like row surfaces and their axis fields.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:axis-pressure",
       "axis-pressure",
       "Inspect exact enum, mapper, stringly-field, and parallel-axis pressure rows.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:row-surfaces",
       "row-surfaces",
       "Inspect structural row/interface/type surfaces without treating every row as a relationship.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:classes",
       "classes",
       "Inspect class, method, field, heritage, and constructor surfaces.",
     ),
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:functions",
       "functions",
@@ -1516,7 +1613,7 @@ function selfSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
         locus: RepoRootLocus,
         projection: "summary",
       },
-      route: route(
+      route: atlasSelfRoute(
         NavigationPlane.Structure,
         NavigationRelation.ProjectionOf,
         [BasisKind.AtlasContract],
@@ -1539,27 +1636,28 @@ function selfRowContinuations(
   nextPageRationale: string,
 ): readonly Continuation[] {
   const continuations: Continuation[] = [];
-  if (nextOffset !== undefined) {
-    continuations.push(
-      nextPageContinuation(
-        inquiry,
-        nextPageId,
-        nextPageRationale,
-        nextOffset,
-        limit,
-      ),
-    );
-  }
+  continuations.push(
+    ...optionalNextPageContinuation(inquiry, nextOffset, limit, {
+      id: nextPageId,
+      rationale: nextPageRationale,
+      routeSummary: nextPageRationale,
+    }),
+  );
   for (const row of rows.filter((entry) => entry.source !== undefined).slice(0, 3)) {
     if (row.source === undefined) {
       continue;
     }
     continuations.push(
-      sourceInspectionContinuation(`${row.id}:source`, row.summary, row.source),
+      sourceInspectionContinuation(row.source, {
+        id: `${row.id}:source`,
+        rationale: row.summary,
+        routeSummary: "Inspect source behind Atlas self-analysis row.",
+        basis: [BasisKind.TypeScriptProgram],
+      }),
     );
   }
   continuations.push(
-    projectionContinuation(
+    atlasProjectionContinuation(
       inquiry,
       "atlas.self:taxonomy",
       "taxonomy",
@@ -1569,7 +1667,7 @@ function selfRowContinuations(
   return continuations;
 }
 
-function projectionContinuation(
+function atlasProjectionContinuation(
   inquiry: Inquiry,
   id: string,
   projection: string,
@@ -1585,7 +1683,7 @@ function projectionContinuation(
       projection,
       page: undefined,
     },
-    route: route(
+    route: atlasSelfRoute(
       NavigationPlane.Addressing,
       NavigationRelation.ProjectionOf,
       [BasisKind.TypeScriptProgram, BasisKind.AtlasContract],
@@ -1594,65 +1692,13 @@ function projectionContinuation(
   };
 }
 
-function nextPageContinuation(
-  inquiry: Inquiry,
-  id: string,
-  rationale: string,
-  nextOffset: number,
-  limit: number,
-): Continuation {
-  return {
-    id,
-    kind: ContinuationKind.NextPage,
-    priority: ContinuationPriority.Primary,
-    rationale,
-    inquiry: {
-      ...inquiry,
-      page: { size: limit, cursor: String(nextOffset) },
-    },
-    route: route(
-      NavigationPlane.Addressing,
-      NavigationRelation.NextPageOf,
-      [BasisKind.TypeScriptProgram],
-      rationale,
-    ),
-  };
-}
-
-function sourceInspectionContinuation(
-  id: string,
-  rationale: string,
-  source: SourceRange,
-): Continuation {
-  return {
-    id,
-    kind: ContinuationKind.InspectEvidence,
-    priority: ContinuationPriority.Secondary,
-    rationale,
-    inquiry: {
-      lens: LensId.TsSource,
-      locus: {
-        kind: LocusKind.SourceRange,
-        range: source,
-      },
-      projection: "text",
-    },
-    route: route(
-      NavigationPlane.Inspection,
-      NavigationRelation.SourceFor,
-      [BasisKind.TypeScriptProgram],
-      "Inspect source behind Atlas self-analysis row.",
-    ),
-  };
-}
-
 function filterEnums(
   rows: readonly AtlasSelfEnumRow[],
   inquiry: Inquiry,
 ): readonly AtlasSelfEnumRow[] {
-  const packageId = stringFilter(inquiry, "packageId");
-  const enumName = stringFilter(inquiry, "enumName");
-  const query = lowerStringFilter(inquiry, "query");
+  const packageId = inquiryStringFilter(inquiry, "packageId");
+  const enumName = inquiryStringFilter(inquiry, "enumName");
+  const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
     if (packageId !== undefined && row.packageId !== packageId) {
       return false;
@@ -1682,10 +1728,10 @@ function filterEnumReferences(
   rows: readonly AtlasSelfEnumReferenceRow[],
   inquiry: Inquiry,
 ): readonly AtlasSelfEnumReferenceRow[] {
-  const enumName = stringFilter(inquiry, "enumName");
-  const memberName = stringFilter(inquiry, "memberName");
-  const role = stringFilter(inquiry, "role");
-  const query = lowerStringFilter(inquiry, "query");
+  const enumName = inquiryStringFilter(inquiry, "enumName");
+  const memberName = inquiryStringFilter(inquiry, "memberName");
+  const role = inquiryStringFilter(inquiry, "role");
+  const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
     if (enumName !== undefined && row.enumName !== enumName) {
       return false;
@@ -1715,10 +1761,10 @@ function filterEnumValueSpaces(
   rows: readonly AtlasSelfEnumValueSpaceRow[],
   inquiry: Inquiry,
 ): readonly AtlasSelfEnumValueSpaceRow[] {
-  const enumName = stringFilter(inquiry, "enumName");
-  const memberName = stringFilter(inquiry, "memberName");
-  const value = stringFilter(inquiry, "value");
-  const query = lowerStringFilter(inquiry, "query");
+  const enumName = inquiryStringFilter(inquiry, "enumName");
+  const memberName = inquiryStringFilter(inquiry, "memberName");
+  const value = inquiryStringFilter(inquiry, "value");
+  const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
     if (enumName !== undefined && !row.enumNames.includes(enumName)) {
       return false;
@@ -1748,13 +1794,13 @@ function filterEnumMappings(
   rows: readonly AtlasSelfEnumMappingRow[],
   inquiry: Inquiry,
 ): readonly AtlasSelfEnumMappingRow[] {
-  const enumName = stringFilter(inquiry, "enumName");
-  const fromEnum = stringFilter(inquiry, "fromEnum");
-  const toEnum = stringFilter(inquiry, "toEnum");
-  const memberName = stringFilter(inquiry, "memberName");
-  const carrier = stringFilter(inquiry, "carrier");
-  const relation = stringFilter(inquiry, "enumRelation");
-  const query = lowerStringFilter(inquiry, "query");
+  const enumName = inquiryStringFilter(inquiry, "enumName");
+  const fromEnum = inquiryStringFilter(inquiry, "fromEnum");
+  const toEnum = inquiryStringFilter(inquiry, "toEnum");
+  const memberName = inquiryStringFilter(inquiry, "memberName");
+  const carrier = inquiryStringFilter(inquiry, "carrier");
+  const relation = inquiryStringFilter(inquiry, "enumRelation");
+  const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
     if (
       enumName !== undefined &&
@@ -1803,10 +1849,10 @@ function filterStrings(
   rows: readonly AtlasSelfStringLiteralRow[],
   inquiry: Inquiry,
 ): readonly AtlasSelfStringLiteralRow[] {
-  const packageId = stringFilter(inquiry, "packageId");
-  const role = stringFilter(inquiry, "stringRole");
-  const query = lowerStringFilter(inquiry, "query");
-  const magicOnly = booleanFilter(inquiry, "magicOnly", true);
+  const packageId = inquiryStringFilter(inquiry, "packageId");
+  const role = inquiryStringFilter(inquiry, "stringRole");
+  const query = inquiryLowerStringFilter(inquiry, "query");
+  const magicOnly = inquiryBooleanFilterOrDefault(inquiry, "magicOnly", true);
   return rows.filter((row) => {
     if (magicOnly && !row.reusedOutsideDeclaration) {
       return false;
@@ -1844,13 +1890,13 @@ function filterAxisPressure(
   rows: readonly AtlasSelfAxisPressureRow[],
   inquiry: Inquiry,
 ): readonly AtlasSelfAxisPressureRow[] {
-  const kind = stringFilter(inquiry, "kind");
-  const axis = stringFilter(inquiry, "axis");
-  const axisId = stringFilter(inquiry, "axisId");
-  const axisField = stringFilter(inquiry, "axisField");
-  const valueSpace = stringFilter(inquiry, "valueSpace");
-  const pressure = stringFilter(inquiry, "pressure");
-  const query = lowerStringFilter(inquiry, "query");
+  const kind = inquiryStringFilter(inquiry, "kind");
+  const axis = inquiryStringFilter(inquiry, "axis");
+  const axisId = inquiryStringFilter(inquiry, "axisId");
+  const axisField = inquiryStringFilter(inquiry, "axisField");
+  const valueSpace = inquiryStringFilter(inquiry, "valueSpace");
+  const pressure = inquiryStringFilter(inquiry, "pressure");
+  const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
     if (kind !== undefined && row.kind !== kind) {
       return false;
@@ -1892,12 +1938,12 @@ function filterRowSurfaces(
   rows: readonly AtlasSelfRowSurfaceRow[],
   inquiry: Inquiry,
 ): readonly AtlasSelfRowSurfaceRow[] {
-  const packageId = stringFilter(inquiry, "packageId");
-  const declarationKind = stringFilter(inquiry, "declarationKind");
-  const surfaceKind = stringFilter(inquiry, "surfaceKind");
-  const surfaceRole = stringFilter(inquiry, "surfaceRole");
-  const axis = stringFilter(inquiry, "axis");
-  const query = lowerStringFilter(inquiry, "query");
+  const packageId = inquiryStringFilter(inquiry, "packageId");
+  const declarationKind = inquiryStringFilter(inquiry, "declarationKind");
+  const surfaceKind = inquiryStringFilter(inquiry, "surfaceKind");
+  const surfaceRole = inquiryStringFilter(inquiry, "surfaceRole");
+  const axis = inquiryStringFilter(inquiry, "axis");
+  const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
     if (packageId !== undefined && row.packageId !== packageId) {
       return false;
@@ -1934,17 +1980,17 @@ function filterRowSurfaces(
   });
 }
 
-function filterClassSurfaces(
+function filterAtlasSelfClassSurfaces(
   rows: readonly AtlasSelfClassSurfaceRow[],
   inquiry: Inquiry,
 ): readonly AtlasSelfClassSurfaceRow[] {
-  const packageId = stringFilter(inquiry, "packageId");
-  const className = stringFilter(inquiry, "className");
-  const methodName = stringFilter(inquiry, "methodName");
-  const minLineCount = numberFilter(inquiry, "minLineCount");
-  const minMethodCount = numberFilter(inquiry, "minMethodCount");
-  const minPropertyCount = numberFilter(inquiry, "minPropertyCount");
-  const query = lowerStringFilter(inquiry, "query");
+  const packageId = inquiryStringFilter(inquiry, "packageId");
+  const className = inquiryStringFilter(inquiry, "className");
+  const methodName = inquiryStringFilter(inquiry, "methodName");
+  const minLineCount = inquiryNumberFilter(inquiry, "minLineCount");
+  const minMethodCount = inquiryNumberFilter(inquiry, "minMethodCount");
+  const minPropertyCount = inquiryNumberFilter(inquiry, "minPropertyCount");
+  const query = inquiryLowerStringFilter(inquiry, "query");
   const filtered = rows.filter((row) => {
     if (packageId !== undefined && row.packageId !== packageId) {
       return false;
@@ -1991,10 +2037,10 @@ function filterClassSurfaces(
       row.properties.some((property) => property.toLowerCase().includes(query))
     );
   });
-  return orderClassSurfaces(filtered, stringFilter(inquiry, "orderBy"));
+  return orderAtlasSelfClassSurfaces(filtered, inquiryStringFilter(inquiry, "orderBy"));
 }
 
-function orderClassSurfaces(
+function orderAtlasSelfClassSurfaces(
   rows: readonly AtlasSelfClassSurfaceRow[],
   orderBy: string | undefined,
 ): readonly AtlasSelfClassSurfaceRow[] {
@@ -2027,21 +2073,135 @@ function orderClassSurfaces(
   }
 }
 
-function filterFunctionSurfaces(
+function filterSourceFileSurfaces(
+  rows: readonly AtlasSelfSourceFileSurfaceRow[],
+  inquiry: Inquiry,
+): readonly AtlasSelfSourceFileSurfaceRow[] {
+  const packageId = inquiryStringFilter(inquiry, "packageId");
+  const area = inquiryStringFilter(inquiry, "area");
+  const moduleShape = inquiryStringFilter(inquiry, "moduleShape");
+  const minLineCount = inquiryNumberFilter(inquiry, "minLineCount");
+  const minOutgoingLocalImportCount = inquiryNumberFilter(
+    inquiry,
+    "minOutgoingLocalImportCount",
+  );
+  const minIncomingLocalImportCount = inquiryNumberFilter(
+    inquiry,
+    "minIncomingLocalImportCount",
+  );
+  const minCrossAreaOutgoingImportCount = inquiryNumberFilter(
+    inquiry,
+    "minCrossAreaOutgoingImportCount",
+  );
+  const query = inquiryLowerStringFilter(inquiry, "query");
+  const filtered = rows.filter((row) => {
+    if (packageId !== undefined && row.packageId !== packageId) {
+      return false;
+    }
+    if (area !== undefined && row.area !== area) {
+      return false;
+    }
+    if (moduleShape !== undefined && row.moduleShape !== moduleShape) {
+      return false;
+    }
+    if (minLineCount !== undefined && row.lineCount < minLineCount) {
+      return false;
+    }
+    if (
+      minOutgoingLocalImportCount !== undefined &&
+      row.outgoingLocalImportCount < minOutgoingLocalImportCount
+    ) {
+      return false;
+    }
+    if (
+      minIncomingLocalImportCount !== undefined &&
+      row.incomingLocalImportCount < minIncomingLocalImportCount
+    ) {
+      return false;
+    }
+    if (
+      minCrossAreaOutgoingImportCount !== undefined &&
+      row.crossAreaOutgoingImportCount < minCrossAreaOutgoingImportCount
+    ) {
+      return false;
+    }
+    if (query === undefined) {
+      return true;
+    }
+    return (
+      row.filePath.toLowerCase().includes(query) ||
+      row.area.toLowerCase().includes(query) ||
+      row.moduleShape.toLowerCase().includes(query) ||
+      row.summary.toLowerCase().includes(query)
+    );
+  });
+  return orderSourceFileSurfaces(filtered, inquiryStringFilter(inquiry, "orderBy"));
+}
+
+function orderSourceFileSurfaces(
+  rows: readonly AtlasSelfSourceFileSurfaceRow[],
+  orderBy: string | undefined,
+): readonly AtlasSelfSourceFileSurfaceRow[] {
+  switch (orderBy) {
+    case "size":
+    case "lineCount":
+      return [...rows].sort((left, right) =>
+        right.lineCount - left.lineCount ||
+        right.statementCount - left.statementCount ||
+        left.filePath.localeCompare(right.filePath),
+      );
+    case "importCount":
+      return [...rows].sort((left, right) =>
+        right.importCount - left.importCount ||
+        right.lineCount - left.lineCount ||
+        left.filePath.localeCompare(right.filePath),
+      );
+    case "exportCount":
+      return [...rows].sort((left, right) =>
+        right.exportCount - left.exportCount ||
+        right.lineCount - left.lineCount ||
+        left.filePath.localeCompare(right.filePath),
+      );
+    case "outgoingLocalImportCount":
+      return [...rows].sort((left, right) =>
+        right.outgoingLocalImportCount - left.outgoingLocalImportCount ||
+        right.lineCount - left.lineCount ||
+        left.filePath.localeCompare(right.filePath),
+      );
+    case "incomingLocalImportCount":
+      return [...rows].sort((left, right) =>
+        right.incomingLocalImportCount - left.incomingLocalImportCount ||
+        right.lineCount - left.lineCount ||
+        left.filePath.localeCompare(right.filePath),
+      );
+    case "crossAreaOutgoingImportCount":
+      return [...rows].sort((left, right) =>
+        right.crossAreaOutgoingImportCount - left.crossAreaOutgoingImportCount ||
+        right.lineCount - left.lineCount ||
+        left.filePath.localeCompare(right.filePath),
+      );
+    case undefined:
+    case "source":
+    default:
+      return rows;
+  }
+}
+
+function filterAtlasSelfFunctionSurfaces(
   rows: readonly AtlasSelfFunctionSurfaceRow[],
   inquiry: Inquiry,
 ): readonly AtlasSelfFunctionSurfaceRow[] {
-  const packageId = stringFilter(inquiry, "packageId");
-  const functionKind = stringFilter(inquiry, "functionKind");
-  const className = stringFilter(inquiry, "className");
-  const functionName = stringFilter(inquiry, "functionName");
-  const minLineCount = numberFilter(inquiry, "minLineCount");
-  const minCallCount = numberFilter(inquiry, "minCallCount");
-  const minUniqueCallTargetCount = numberFilter(
+  const packageId = inquiryStringFilter(inquiry, "packageId");
+  const functionKind = inquiryStringFilter(inquiry, "functionKind");
+  const className = inquiryStringFilter(inquiry, "className");
+  const functionName = inquiryStringFilter(inquiry, "functionName");
+  const minLineCount = inquiryNumberFilter(inquiry, "minLineCount");
+  const minCallCount = inquiryNumberFilter(inquiry, "minCallCount");
+  const minUniqueCallTargetCount = inquiryNumberFilter(
     inquiry,
     "minUniqueCallTargetCount",
   );
-  const query = lowerStringFilter(inquiry, "query");
+  const query = inquiryLowerStringFilter(inquiry, "query");
   const filtered = rows.filter((row) => {
     if (packageId !== undefined && row.packageId !== packageId) {
       return false;
@@ -2077,10 +2237,10 @@ function filterFunctionSurfaces(
       row.functionKind.toLowerCase().includes(query)
     );
   });
-  return orderFunctionSurfaces(filtered, stringFilter(inquiry, "orderBy"));
+  return orderAtlasSelfFunctionSurfaces(filtered, inquiryStringFilter(inquiry, "orderBy"));
 }
 
-function orderFunctionSurfaces(
+function orderAtlasSelfFunctionSurfaces(
   rows: readonly AtlasSelfFunctionSurfaceRow[],
   orderBy: string | undefined,
 ): readonly AtlasSelfFunctionSurfaceRow[] {
@@ -2123,10 +2283,10 @@ function filterContracts(
   rows: readonly SelfContractRow[],
   inquiry: Inquiry,
 ): readonly SelfContractRow[] {
-  const lensId = stringFilter(inquiry, "lensId");
-  const projection = stringFilter(inquiry, "projectionId");
-  const parameter = stringFilter(inquiry, "parameterId");
-  const query = lowerStringFilter(inquiry, "query");
+  const lensId = inquiryStringFilter(inquiry, "lensId");
+  const projection = inquiryStringFilter(inquiry, "projectionId");
+  const parameter = inquiryStringFilter(inquiry, "parameterId");
+  const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
     if (lensId !== undefined && row.lensId !== lensId) {
       return false;
@@ -2181,10 +2341,10 @@ function filterProjectionBranches(
   rows: readonly AtlasSelfProjectionBranchRow[],
   inquiry: Inquiry,
 ): readonly AtlasSelfProjectionBranchRow[] {
-  const lensId = stringFilter(inquiry, "lensId");
-  const projection = stringFilter(inquiry, "projectionId");
-  const functionName = stringFilter(inquiry, "functionName");
-  const query = lowerStringFilter(inquiry, "query");
+  const lensId = inquiryStringFilter(inquiry, "lensId");
+  const projection = inquiryStringFilter(inquiry, "projectionId");
+  const functionName = inquiryStringFilter(inquiry, "functionName");
+  const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
     if (lensId !== undefined && !row.lensIds.includes(lensId)) {
       return false;
@@ -2211,12 +2371,12 @@ function filterContinuations(
   rows: readonly AtlasSelfContinuationRow[],
   inquiry: Inquiry,
 ): readonly AtlasSelfContinuationRow[] {
-  const lensId = stringFilter(inquiry, "lensId");
-  const kind = stringFilter(inquiry, "kind");
-  const targetLens = stringFilter(inquiry, "targetLens");
-  const targetProjection = stringFilter(inquiry, "targetProjection");
-  const routeRelationMember = stringFilter(inquiry, "routeRelationMember");
-  const query = lowerStringFilter(inquiry, "query");
+  const lensId = inquiryStringFilter(inquiry, "lensId");
+  const kind = inquiryStringFilter(inquiry, "kind");
+  const targetLens = inquiryStringFilter(inquiry, "targetLens");
+  const targetProjection = inquiryStringFilter(inquiry, "targetProjection");
+  const routeRelationMember = inquiryStringFilter(inquiry, "routeRelationMember");
+  const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
     if (lensId !== undefined && !row.lensIds.includes(lensId)) {
       return false;
@@ -2259,13 +2419,13 @@ function filterSemanticRoutes(
   rows: readonly AtlasSelfSemanticRouteRow[],
   inquiry: Inquiry,
 ): readonly AtlasSelfSemanticRouteRow[] {
-  const semanticRouteId = stringFilter(inquiry, "semanticRouteId");
-  const navigationSpecId = stringFilter(inquiry, "navigationSpecId");
-  const targetEndpointId = stringFilter(inquiry, "targetEndpointId");
-  const targetLens = stringFilter(inquiry, "targetLens");
-  const targetProjection = stringFilter(inquiry, "targetProjection");
-  const relation = stringFilter(inquiry, "routeRelationMember");
-  const query = lowerStringFilter(inquiry, "query");
+  const semanticRouteId = inquiryStringFilter(inquiry, "semanticRouteId");
+  const navigationSpecId = inquiryStringFilter(inquiry, "navigationSpecId");
+  const targetEndpointId = inquiryStringFilter(inquiry, "targetEndpointId");
+  const targetLens = inquiryStringFilter(inquiry, "targetLens");
+  const targetProjection = inquiryStringFilter(inquiry, "targetProjection");
+  const relation = inquiryStringFilter(inquiry, "routeRelationMember");
+  const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
     if (
       semanticRouteId !== undefined &&
@@ -2294,7 +2454,11 @@ function filterSemanticRoutes(
     ) {
       return false;
     }
-    if (relation !== undefined && row.relation !== relation) {
+    if (
+      relation !== undefined &&
+      row.relation !== relation &&
+      row.relationMember !== relation
+    ) {
       return false;
     }
     if (query === undefined) {
@@ -2307,20 +2471,21 @@ function filterSemanticRoutes(
       row.targetLens.toLowerCase().includes(query) ||
       row.targetProjection.toLowerCase().includes(query) ||
       row.relation.toLowerCase().includes(query) ||
+      (row.relationMember?.toLowerCase().includes(query) ?? false) ||
       row.basis.some((entry) => entry.toLowerCase().includes(query)) ||
       row.summary.toLowerCase().includes(query)
     );
   });
 }
 
-function filterModules(
+function filterAtlasSelfModuleDependencies(
   rows: readonly AtlasSelfModuleDependencyRow[],
   inquiry: Inquiry,
 ): readonly AtlasSelfModuleDependencyRow[] {
-  const fromArea = stringFilter(inquiry, "fromArea");
-  const toArea = stringFilter(inquiry, "toArea");
-  const crossesArea = optionalBooleanFilter(inquiry, "crossesArea");
-  const query = lowerStringFilter(inquiry, "query");
+  const fromArea = inquiryStringFilter(inquiry, "fromArea");
+  const toArea = inquiryStringFilter(inquiry, "toArea");
+  const crossesArea = inquiryBooleanFilter(inquiry, "crossesArea");
+  const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
     if (fromArea !== undefined && row.fromArea !== fromArea) {
       return false;
@@ -2348,8 +2513,8 @@ function filterSubstrateSurfaces(
   rows: readonly AtlasSelfSubstrateSurfaceRow[],
   inquiry: Inquiry,
 ): readonly AtlasSelfSubstrateSurfaceRow[] {
-  const kind = stringFilter(inquiry, "kind");
-  const query = lowerStringFilter(inquiry, "query");
+  const kind = inquiryStringFilter(inquiry, "kind");
+  const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
     if (kind !== undefined && row.kind !== kind) {
       return false;
@@ -2370,8 +2535,8 @@ function filterContractStrings(
   rows: readonly AtlasSelfContractStringRow[],
   inquiry: Inquiry,
 ): readonly AtlasSelfContractStringRow[] {
-  const contractClass = stringFilter(inquiry, "class");
-  const query = lowerStringFilter(inquiry, "query");
+  const contractClass = inquiryStringFilter(inquiry, "class");
+  const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
     if (contractClass !== undefined && !row.classes.includes(contractClass)) {
       return false;
@@ -2645,7 +2810,7 @@ function evidenceForAxisPressure(row: AtlasSelfAxisPressureRow): Evidence {
   };
 }
 
-function evidenceForClassSurface(row: AtlasSelfClassSurfaceRow): Evidence {
+function evidenceForAtlasSelfClassSurface(row: AtlasSelfClassSurfaceRow): Evidence {
   return {
     id: `${row.id}:evidence`,
     kind: EvidenceKind.MaintenanceSignal,
@@ -2673,7 +2838,22 @@ function evidenceForClassSurface(row: AtlasSelfClassSurfaceRow): Evidence {
   };
 }
 
-function evidenceForFunctionSurface(
+function evidenceForSourceFileSurface(
+  row: AtlasSelfSourceFileSurfaceRow,
+): Evidence {
+  return {
+    id: `${row.id}:evidence`,
+    kind: EvidenceKind.MaintenanceSignal,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Exact,
+    summary: row.summary,
+    basis: selfSourceBasis("Source file surface discovery is AST-derived."),
+    source: row.source,
+    data: row,
+  };
+}
+
+function evidenceForAtlasSelfFunctionSurface(
   row: AtlasSelfFunctionSurfaceRow,
 ): Evidence {
   return {
@@ -2719,66 +2899,6 @@ function selfSourceBasis(summary: string) {
     summary,
     identity: "@aurelia-ls/atlas",
   };
-}
-
-function rowLimit(inquiry: Inquiry): number {
-  return clampBudget(inquiry.budget?.rows ?? inquiry.page?.size, 80, 1_000);
-}
-
-function stringFilter(inquiry: Inquiry, key: string): string | undefined {
-  const value = inquiry.filters?.[key];
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
-function lowerStringFilter(inquiry: Inquiry, key: string): string | undefined {
-  return stringFilter(inquiry, key)?.toLowerCase();
-}
-
-function numberFilter(inquiry: Inquiry, key: string): number | undefined {
-  const value = inquiry.filters?.[key];
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
-}
-
-function booleanFilter(
-  inquiry: Inquiry,
-  key: string,
-  defaultValue: boolean,
-): boolean {
-  const value = inquiry.filters?.[key];
-  if (typeof value === "boolean") {
-    return value;
-  }
-  if (value === "true") {
-    return true;
-  }
-  if (value === "false") {
-    return false;
-  }
-  return defaultValue;
-}
-
-function optionalBooleanFilter(
-  inquiry: Inquiry,
-  key: string,
-): boolean | undefined {
-  const value = inquiry.filters?.[key];
-  if (typeof value === "boolean") {
-    return value;
-  }
-  if (value === "true") {
-    return true;
-  }
-  if (value === "false") {
-    return false;
-  }
-  return undefined;
 }
 
 /** Build an unsupported answer for cataloged lenses without runtime implementation. */
@@ -2829,19 +2949,7 @@ export function answerUnimplementedLens(
   );
 }
 
-/** Shared exact Atlas contract basis for runtime lenses over static catalogs. */
-function contractBasis(summary: string) {
-  return {
-    kind: BasisKind.AtlasContract,
-    closure: BasisClosure.Exact,
-    authority: BasisAuthority.Contract,
-    freshness: BasisFreshness.Static,
-    summary,
-    identity: "@aurelia-ls/atlas",
-  };
-}
-
-function route(
+function atlasSelfRoute(
   plane: NavigationPlane,
   relation: NavigationRelation,
   basis: readonly BasisKind[],

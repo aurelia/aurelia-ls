@@ -272,6 +272,154 @@ export const KernelProductKinds = {
       'A deferred lifecycle task registered under IAppTask before AppRoot lifecycle emulation spends it.',
     ),
   },
+  Router: {
+
+    /** Product kind for RouterOptions after RouterConfiguration defaults and customize contributions converge. */
+    Options: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'router-options',
+      KernelVocabularySlot.ProductKind,
+      'RouterOptions after RouterConfiguration defaults and recognized customize option contributions converge.',
+    ),
+
+    /** Product kind for a source-backed router route configuration before recognizer population. */
+    RouteConfig: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'route-config',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed router route configuration before route-context and route-recognizer materialization.',
+    ),
+
+    /** Product kind for a runtime-shaped RouteConfigContext over one normalized RouteConfig. */
+    RouteConfigContext: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'route-config-context',
+      KernelVocabularySlot.ProductKind,
+      'A runtime-shaped RouteConfigContext that owns parent/root topology, child route processing, and a route recognizer.',
+    ),
+
+    /** Product kind for a runtime RouteContext over one route config context and component/container boundary. */
+    RouteContext: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'route-context',
+      KernelVocabularySlot.ProductKind,
+      'A runtime RouteContext that connects a RouteConfigContext to parent/root context, DI container, and hosting viewport agent.',
+    ),
+
+    /** Product kind for one routeable component input after source/resource convergence. */
+    RouteableComponent: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'routeable-component',
+      KernelVocabularySlot.ProductKind,
+      'A router RouteableComponent input converged from string, class, resource definition, promise, or navigation strategy source.',
+    ),
+
+    /** Product kind for the runtime au-viewport custom element instance semantics. */
+    Viewport: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'viewport',
+      KernelVocabularySlot.ProductKind,
+      'A runtime au-viewport instance with name, usedBy, default, fallback, and owning route context semantics.',
+    ),
+
+    /** Product kind for a ViewportAgent attached to an au-viewport and route context. */
+    ViewportAgent: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'viewport-agent',
+      KernelVocabularySlot.ProductKind,
+      'A ViewportAgent that mediates routed component controller activation for one au-viewport.',
+    ),
+
+    /** Product kind for a ComponentAgent created for a routed component. */
+    ComponentAgent: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'component-agent',
+      KernelVocabularySlot.ProductKind,
+      'A ComponentAgent that joins a routed component controller, route node, route context, and viewport agent.',
+    ),
+
+    /** Product kind for a RouteNode in the router's route tree. */
+    RouteNode: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'route-node',
+      KernelVocabularySlot.ProductKind,
+      'A RouteNode that joins a RouteContext to realized or synthetic route-tree state.',
+    ),
+
+    /** Product kind for the router's RouteTree state container. */
+    RouteTree: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'route-tree',
+      KernelVocabularySlot.ProductKind,
+      'A RouteTree that owns the current root RouteNode and later transition-compiled child nodes.',
+    ),
+
+    /** Product kind for a typed navigation instruction normalized by the router. */
+    TypedNavigationInstruction: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'typed-navigation-instruction',
+      KernelVocabularySlot.ProductKind,
+      'A TypedNavigationInstruction normalized from a router NavigationInstruction value.',
+    ),
+
+    /** Product kind for a ViewportInstruction before route-tree node compilation. */
+    ViewportInstruction: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'viewport-instruction',
+      KernelVocabularySlot.ProductKind,
+      'A ViewportInstruction that names a component/navigation instruction, viewport, params, children, and recognized route when known.',
+    ),
+
+    /** Product kind for a ViewportInstructionTree before route-tree node compilation. */
+    ViewportInstructionTree: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'viewport-instruction-tree',
+      KernelVocabularySlot.ProductKind,
+      'A ViewportInstructionTree created by Router, ContextRouter, load, href, or RouteContext before transition compilation.',
+    ),
+  },
+  RouteRecognizer: {
+
+    /** Product kind for the route-recognizer instance owned or inherited by a RouteConfigContext. */
+    RouteRecognizer: defineVocabulary(
+      KernelVocabularyNamespace.RouteRecognizer,
+      'route-recognizer',
+      KernelVocabularySlot.ProductKind,
+      'A RouteRecognizer state-graph owner used by RouteConfigContext for route registration and recognition.',
+    ),
+
+    /** Product kind for a parsed configurable route pattern before recognizer state graph population. */
+    ConfigurableRoute: defineVocabulary(
+      KernelVocabularyNamespace.RouteRecognizer,
+      'configurable-route',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed route-recognizer configurable route path parsed into parameter and segment facts before state graph population.',
+    ),
+
+    /** Product kind for a route-recognizer endpoint produced from one configurable route. */
+    Endpoint: defineVocabulary(
+      KernelVocabularyNamespace.RouteRecognizer,
+      'endpoint',
+      KernelVocabularySlot.ProductKind,
+      'A route-recognizer endpoint that joins a configurable route to parsed parameter facts and an optional residual endpoint.',
+    ),
+
+    /** Product kind for a route-recognizer state graph node. */
+    State: defineVocabulary(
+      KernelVocabularyNamespace.RouteRecognizer,
+      'state',
+      KernelVocabularySlot.ProductKind,
+      'A route-recognizer State node created while appending separator, static, dynamic, star, or residual path segments.',
+    ),
+
+    /** Product kind for a route-recognizer recognized route produced from a matched path. */
+    RecognizedRoute: defineVocabulary(
+      KernelVocabularyNamespace.RouteRecognizer,
+      'recognized-route',
+      KernelVocabularySlot.ProductKind,
+      'A RecognizedRoute produced by walking a RouteRecognizer state graph for a concrete navigation path.',
+    ),
+  },
   Compiler: {
 
     /** Product kind for a container-scoped compiler world. */

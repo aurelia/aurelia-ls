@@ -17,6 +17,8 @@ export const enum EvaluationBindingKind {
   Class = 'class',
   /** Binding introduced by an import declaration. */
   Import = 'import',
+  /** Synthetic CommonJS carrier (`exports` or `module`) materialized from authored CommonJS-shaped source. */
+  CommonJs = 'commonjs',
   /** Binding introduced by an evaluator-supported parameter. */
   Parameter = 'parameter',
 }

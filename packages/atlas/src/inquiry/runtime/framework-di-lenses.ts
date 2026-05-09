@@ -3,7 +3,7 @@ import {
   type FrameworkDiKeyRow,
 } from "../../framework/di-index.js";
 import {
-  readFrameworkStandardConfigurationDiWorld,
+  readFrameworkConfigurationDiWorld,
   type FrameworkDiDependencyRow,
   type FrameworkDiResolverSlot,
   type FrameworkDiResourceSlot,
@@ -24,7 +24,6 @@ import {
   BasisKind,
   type Basis,
 } from "../basis.js";
-import { clampBudget } from "../budget.js";
 import {
   ContinuationKind,
   ContinuationPriority,
@@ -42,7 +41,7 @@ import {
   NavigationPlane,
   NavigationRelation,
 } from "../navigation.js";
-import { pageOffset } from "../paging.js";
+import { pageOffset, rowLimit } from "../paging.js";
 import {
   FrameworkRowContinuationBuilder,
   nextPageContinuation,
@@ -57,6 +56,7 @@ import {
 import { evidenceForDiRelationship } from "./framework-evidence.js";
 import { PagedRowFamily } from "../paged-row-family.js";
 import { countBy, route } from "./framework-support.js";
+import { stringFiltersFromRecord } from "./lens-filter-utils.js";
 
 /** Value returned by framework.di. */
 export interface FrameworkDiValue {
@@ -78,12 +78,18 @@ export interface FrameworkDiValue {
   readonly relationships?: readonly FrameworkRelationshipAtom[];
   /** DI graph projection shaped after registration admission, container state, lookup, and materialization layers. */
   readonly diGraph?: FrameworkDiGraphValue;
-  /** StandardConfiguration DI world projection from booted source values. */
-  readonly standardConfigurationWorld?: FrameworkStandardConfigurationDiWorldValue;
+  /** Configuration or bundle DI world projection from booted source values. */
+  readonly configurationWorld?: FrameworkConfigurationDiWorldValue;
 }
 
 /** Value returned for framework.di world/dependency projections. */
-export interface FrameworkStandardConfigurationDiWorldValue {
+export interface FrameworkConfigurationDiWorldValue {
+  /** Package that owns the selected configuration or bundle export. */
+  readonly packageId: string;
+  /** Selected configuration or bundle export name. */
+  readonly exportName: string;
+  /** Stable owner label used by the abstract DI world. */
+  readonly owner: string;
   /** Number of configuration/registry admissions. */
   readonly admissionCount: number;
   /** Number of modeled resolver slots. */
@@ -119,6 +125,8 @@ interface FrameworkDiFilters {
   readonly nodeKind?: string;
   readonly edgeKind?: string;
   readonly dependencyKey?: string;
+  readonly configurationPackageId?: string;
+  readonly configurationExportName?: string;
   readonly query?: string;
 }
 
@@ -134,7 +142,7 @@ const DI_RELATIONSHIP_ROW_FAMILY =
     id: "framework.di:relationships",
     rowLabel: "framework DI relationship atom(s)",
     evidenceForRow: evidenceForDiRelationship,
-    continuationsForPage: relationshipContinuations,
+    continuationsForPage: diRelationshipContinuations,
   });
 
 const DI_GRAPH_EDGE_ROW_FAMILY = new PagedRowFamily<FrameworkDiGraphEdgeRow>({
@@ -160,14 +168,14 @@ export function answerFrameworkDi(
   sourceProject: SourceProject,
 ): Answer<FrameworkDiValue> {
   const projection = inquiry.projection ?? "summary";
-  const filters = filtersFromInquiry(inquiry);
+  const filters = frameworkDiFiltersFromInquiry(inquiry);
   const index = readFrameworkDiIndex(sourceProject);
   const keys = index.keys.filter((row) => diKeyMatches(row, filters));
-  const relationships = relationshipProjectionRows(
+  const relationships = diRelationshipProjectionRows(
     index.relationships,
     projection,
-  ).filter((row) => relationshipMatches(row, filters));
-  const limit = clampBudget(inquiry.budget?.rows, 80, 1_000);
+  ).filter((row) => diRelationshipMatches(row, filters));
+  const limit = rowLimit(inquiry);
   const offset = pageOffset(inquiry);
   const basis = [frameworkDiBasis(sourceProject)];
 
@@ -180,7 +188,13 @@ export function answerFrameworkDi(
       frameworkDiBasis(sourceProject),
       frameworkDiWorldBasis(sourceProject),
     ];
-    const world = readFrameworkStandardConfigurationDiWorld(sourceProject);
+    const worldPackageId = filters.configurationPackageId ?? "runtime-html";
+    const worldExportName = filters.configurationExportName ?? "StandardConfiguration";
+    const world = readFrameworkConfigurationDiWorld(
+      sourceProject,
+      worldPackageId,
+      worldExportName,
+    );
     const worldSlots = world.resolverSlots.filter((row) =>
       diWorldSlotMatches(row, filters),
     );
@@ -207,7 +221,7 @@ export function answerFrameworkDi(
         worldVariableDependencies.length === 0
         ? OutcomeKind.Miss
         : OutcomeKind.Hit,
-      `StandardConfiguration DI world has ${world.resolverSlots.length} resolver slot(s), ${world.resourceSlots.length} resource slot(s), ${world.dependencies.length} exact dependency edge(s), and ${world.variableDependencies.length} variable-carried dependency read(s).`,
+      `${world.configurationExport} DI world has ${world.resolverSlots.length} resolver slot(s), ${world.resourceSlots.length} resource slot(s), ${world.dependencies.length} exact dependency edge(s), and ${world.variableDependencies.length} variable-carried dependency read(s).`,
       {
         value: {
           version: index.version,
@@ -216,7 +230,10 @@ export function answerFrameworkDi(
           relations: countBy(relationships, (row) => row.relation),
           mechanisms: countBy(relationships, (row) => row.mechanism),
           phases: countBy(relationships, (row) => row.phase),
-          standardConfigurationWorld: {
+          configurationWorld: {
+            packageId: worldPackageId,
+            exportName: worldExportName,
+            owner: world.configurationExport,
             admissionCount: world.admissions.length,
             resolverSlotCount: world.resolverSlots.length,
             resourceSlotCount: world.resourceSlots.length,
@@ -361,7 +378,7 @@ export function answerFrameworkDi(
   );
 }
 
-function relationshipProjectionRows(
+function diRelationshipProjectionRows(
   rows: readonly FrameworkRelationshipAtom[],
   projection: string,
 ): readonly FrameworkRelationshipAtom[] {
@@ -409,39 +426,31 @@ function relationshipProjectionRows(
   }
 }
 
-function filtersFromInquiry(inquiry: Inquiry): FrameworkDiFilters {
+function frameworkDiFiltersFromInquiry(inquiry: Inquiry): FrameworkDiFilters {
   return {
-    ...filtersFromRecord(inquiry.subject),
-    ...filtersFromRecord(inquiry.filters),
+    ...frameworkDiFiltersFromRecord(inquiry.subject),
+    ...frameworkDiFiltersFromRecord(inquiry.filters),
   };
 }
 
-function filtersFromRecord(value: unknown): FrameworkDiFilters {
-  if (value === null || typeof value !== "object") {
-    return {};
-  }
-  const source = value as Record<string, unknown>;
-  return {
-    ...stringFilter(source, "packageId"),
-    ...stringFilter(source, "relation"),
-    ...stringFilter(source, "mechanism"),
-    ...stringFilter(source, "phase"),
-    ...stringFilter(source, "key"),
-    ...stringFilter(source, "strategy"),
-    ...stringFilter(source, "routeKind"),
-    ...stringFilter(source, "nodeKind"),
-    ...stringFilter(source, "edgeKind"),
-    ...stringFilter(source, "dependencyKey"),
-    ...stringFilter(source, "query"),
-  };
-}
+const frameworkDiFilterKeys = [
+  "packageId",
+  "relation",
+  "mechanism",
+  "phase",
+  "key",
+  "strategy",
+  "routeKind",
+  "nodeKind",
+  "edgeKind",
+  "dependencyKey",
+  "configurationPackageId",
+  "configurationExportName",
+  "query",
+] as const satisfies readonly (keyof FrameworkDiFilters & string)[];
 
-function stringFilter(
-  source: Record<string, unknown>,
-  key: keyof FrameworkDiFilters,
-): object {
-  const value = source[key];
-  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
+function frameworkDiFiltersFromRecord(value: unknown): FrameworkDiFilters {
+  return stringFiltersFromRecord<FrameworkDiFilters>(value, frameworkDiFilterKeys);
 }
 
 function diKeyMatches(
@@ -460,7 +469,7 @@ function diKeyMatches(
   );
 }
 
-function relationshipMatches(
+function diRelationshipMatches(
   row: FrameworkRelationshipAtom,
   filters: FrameworkDiFilters,
 ): boolean {
@@ -662,14 +671,14 @@ function diSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
       inquiry,
       "framework.di:world",
       "world",
-      "Inspect StandardConfiguration as a spent DI world derived from booted framework source values.",
+      "Inspect a selected configuration or bundle as a spent DI world derived from booted framework source values.",
       { basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker] },
     ),
     projectionContinuation(
       inquiry,
       "framework.di:dependencies",
       "dependencies",
-      "Inspect provider dependency edges discovered after spending StandardConfiguration registrations.",
+      "Inspect provider dependency edges discovered after spending the selected configuration or bundle registrations.",
       { basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker] },
     ),
     projectionContinuation(
@@ -695,7 +704,7 @@ function diWorldContinuations(inquiry: Inquiry): readonly Continuation[] {
       inquiry,
       "framework.di:world",
       "world",
-      "Inspect resolver and resource slots produced by StandardConfiguration spending.",
+      "Inspect resolver and resource slots produced by configuration or bundle spending.",
       { basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker] },
     ),
     projectionContinuation(
@@ -915,7 +924,7 @@ function graphComponentContinuations(
   return continuations;
 }
 
-function relationshipContinuations(
+function diRelationshipContinuations(
   inquiry: Inquiry,
   rows: readonly FrameworkRelationshipAtom[],
   nextOffset: number | undefined,

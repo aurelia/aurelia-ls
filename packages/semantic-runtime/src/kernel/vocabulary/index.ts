@@ -54,6 +54,13 @@ export const KernelVocabulary = {
     ...KernelProductKinds.Configuration,
     ...KernelClaimPredicates.Configuration,
   },
+  Router: {
+    ...KernelOpenSeamKinds.Router,
+    ...KernelProductKinds.Router,
+  },
+  RouteRecognizer: {
+    ...KernelProductKinds.RouteRecognizer,
+  },
   Compiler: {
     ...KernelOpenSeamKinds.Compiler,
     ...KernelBindingKinds.Compiler,

@@ -8,6 +8,9 @@ import type {
 } from "../../framework/index.js";
 import type { Inquiry } from "../inquiry.js";
 import type { FrameworkDiscoveryValue } from "./framework-entities.js";
+import { stringFilter } from "./lens-filter-utils.js";
+
+export { stringFilter } from "./lens-filter-utils.js";
 
 export interface FrameworkDiscoveryFilters {
   readonly domain?: string;
@@ -28,6 +31,7 @@ export interface FrameworkDiscoveryFilters {
   readonly memberName?: string;
   readonly resourceKind?: string;
   readonly resourceName?: string;
+  readonly bundleKind?: string;
   readonly resourceSiteKind?: string;
   readonly producerKind?: string;
   readonly productKind?: string;
@@ -99,6 +103,7 @@ export function filtersFromRecord(value: unknown): FrameworkDiscoveryFilters {
     ...stringFilter(source, "memberName"),
     ...stringFilter(source, "resourceKind"),
     ...stringFilter(source, "resourceName"),
+    ...stringFilter(source, "bundleKind"),
     ...stringFilter(source, "resourceSiteKind"),
     ...stringFilter(source, "producerKind"),
     ...stringFilter(source, "productKind"),
@@ -122,14 +127,6 @@ export function filtersFromRecord(value: unknown): FrameworkDiscoveryFilters {
     ...stringFilter(source, "renderingStructureKind"),
     ...stringFilter(source, "renderingCapability"),
   };
-}
-
-export function stringFilter(
-  source: Record<string, unknown>,
-  key: keyof FrameworkDiscoveryFilters,
-): object {
-  const value = source[key];
-  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
 }
 
 export function flowMatches(

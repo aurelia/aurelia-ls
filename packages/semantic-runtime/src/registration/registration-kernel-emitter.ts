@@ -3,7 +3,7 @@ import {
   SourceSpanAddress,
   SourceSpanRole,
 } from '../kernel/address.js';
-import { SemanticClaim } from '../kernel/claim.js';
+import { SemanticClaim, nullableClaim } from '../kernel/claim.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -40,7 +40,6 @@ import {
 } from '../kernel/store.js';
 import {
   recordsForSourceOpenSeams,
-  SourceOpenSeamInput,
 } from '../kernel/source-open-seam.js';
 import {
   KernelVocabulary,
@@ -72,6 +71,9 @@ import {
   RegistrationValueKind,
   RegistrationValueReference,
 } from './registration-reference.js';
+import {
+  isFrameworkRegistrationGroupKind,
+} from './framework-registration-manifest.js';
 
 export const enum RegistrationEmissionScope {
   /** Source-level registration recognition for inquiry or lower-level analysis. */
@@ -584,11 +586,12 @@ export class RegistrationKernelEmitter {
     observation: RegistrationValueObservation,
     handles: RegistrationValueHandles,
   ): readonly KernelStoreRecord[] {
+    const sourceFile = observation.node.getSourceFile();
     const records: KernelStoreRecord[] = [
       new SourceSpanAddress(
         handles.addressHandle,
-        context.sourceFileAddressHandle,
-        observation.node.getStart(context.sourceFile),
+        observation.sourceFileAddressHandle ?? context.sourceFileAddressHandle,
+        observation.node.getStart(sourceFile),
         observation.node.end,
         observation.isDeclaration ? SourceSpanRole.Name : SourceSpanRole.Value,
       ),
@@ -746,16 +749,16 @@ export class RegistrationKernelEmitter {
   } {
     return recordsForSourceOpenSeams(
       this.store,
-      seams.map((seam, index) => new SourceOpenSeamInput(
-        `registration-open:${local}:${seam.openKind}:${index}`,
-        seam.openKind,
-        seam.summary,
-        context.sourceFileAddressHandle,
-        seam.node.getStart(context.sourceFile),
-        seam.node.end,
-        [EvidenceRole.Diagnostic, EvidenceRole.Registration],
-        true,
-      )),
+      seams.map((seam, index) => ({
+        localKey: `registration-open:${local}:${seam.openKind}:${index}`,
+        openKind: seam.openKind,
+        summary: seam.summary,
+        sourceFileAddressHandle: context.sourceFileAddressHandle,
+        start: seam.node.getStart(context.sourceFile),
+        end: seam.node.end,
+        evidenceRoles: [EvidenceRole.Diagnostic, EvidenceRole.Registration],
+        includeProvenanceRecord: true,
+      })),
     );
   }
 }
@@ -812,25 +815,6 @@ function hasRegistrationOpen(
   openKind: OpenSeamKindKey,
 ): boolean {
   return seams.some((seam) => seam.openKind === openKind);
-}
-
-function nullableClaim(claim: SemanticClaim | null): readonly SemanticClaim[] {
-  return claim == null ? [] : [claim];
-}
-
-function isFrameworkRegistrationGroupKind(kind: FrameworkRegistrationKind): boolean {
-  switch (kind) {
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
-    case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage:
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
-      return true;
-    case FrameworkRegistrationKind.AppTask:
-    case FrameworkRegistrationKind.StandardConfiguration:
-    case FrameworkRegistrationKind.I18nConfiguration:
-    case FrameworkRegistrationKind.StateDefaultConfiguration:
-      return false;
-  }
 }
 
 function isResourceRegistrationReference(

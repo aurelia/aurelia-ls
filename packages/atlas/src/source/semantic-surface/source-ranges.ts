@@ -6,28 +6,23 @@ import type {
   SourceProject,
   SourceSpan,
 } from "../project.js";
+import type { SourceTargetRow } from "../typescript-contracts.js";
 
-export function sourceRangeForNode(
-  sourceProject: SourceProject,
-  node: ts.Node,
-): SourceRange | null {
-  const sourceFile = node.getSourceFile();
-  const file = sourceProject.sourceFileIdentity(sourceFile);
-  if (file === null) {
-    return null;
-  }
-  return sourceRangeFromFileSpan(file.repoPath, sourceSpanForNode(sourceFile, node));
+export interface OneBasedSourceReference {
+  readonly filePath: string;
+  readonly startLine: number;
+  readonly startCharacter: number;
+  readonly endLine: number;
+  readonly endCharacter: number;
 }
 
 export function requiredSourceRangeForNode(
   sourceProject: SourceProject,
   node: ts.Node,
 ): SourceRange {
-  const source = sourceRangeForNode(sourceProject, node);
-  if (source === null) {
-    throw new Error(`Node source is not admitted: ${node.getSourceFile().fileName}`);
-  }
-  return source;
+  const sourceFile = node.getSourceFile();
+  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
+  return sourceRangeFromFileSpan(file.repoPath, sourceSpanForNode(sourceFile, node));
 }
 
 export function sourceRangeFromFileSpan(
@@ -40,7 +35,7 @@ export function sourceRangeFromFileSpan(
   },
 ): SourceRange {
   return {
-    filePath,
+    filePath: filePath.replace(/\\/gu, "/"),
     start: {
       line: span.startLine - 1,
       character: span.startCharacter - 1,
@@ -48,6 +43,55 @@ export function sourceRangeFromFileSpan(
     end: {
       line: span.endLine - 1,
       character: span.endCharacter - 1,
+    },
+  };
+}
+
+export function sourceRangeForSourceFileNode(
+  filePath: string,
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+): SourceRange {
+  return sourceRangeFromFileSpan(filePath, sourceSpanForNode(sourceFile, node));
+}
+
+export function sourceRangeForTarget(
+  target: SourceTargetRow | undefined,
+): SourceRange | null {
+  if (target?.file === undefined || target.span === undefined) {
+    return null;
+  }
+  return sourceRangeFromFileSpan(target.file.repoPath, target.span);
+}
+
+export function sourceReferenceForNode(
+  sourceProject: SourceProject,
+  sourceFile: ts.SourceFile,
+  node: ts.Node,
+): OneBasedSourceReference {
+  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
+  const span = sourceSpanForNode(sourceFile, node);
+  return {
+    filePath: file.repoPath,
+    startLine: span.startLine,
+    startCharacter: span.startCharacter,
+    endLine: span.endLine,
+    endCharacter: span.endCharacter,
+  };
+}
+
+export function sourceRangeFromOneBasedReference(
+  source: OneBasedSourceReference,
+): SourceRange {
+  return {
+    filePath: source.filePath,
+    start: {
+      line: source.startLine - 1,
+      character: source.startCharacter - 1,
+    },
+    end: {
+      line: source.endLine - 1,
+      character: source.endCharacter - 1,
     },
   };
 }
@@ -80,9 +124,9 @@ export function sourceRangeKey(source: SourceRange): string {
   ].join(":");
 }
 
-export function sourceFileIdentityForNode(
+export function requiredSourceFileIdentity(
   sourceProject: SourceProject,
-  node: ts.Node,
-): SourceFileIdentity | null {
-  return sourceProject.sourceFileIdentity(node.getSourceFile());
+  sourceFile: ts.SourceFile,
+): SourceFileIdentity {
+  return sourceProject.requiredSourceFileIdentity(sourceFile);
 }

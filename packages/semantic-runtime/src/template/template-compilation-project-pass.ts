@@ -1,29 +1,45 @@
+import { performance } from 'node:perf_hooks';
+
 import type { AureliaAppWorldEmission } from '../configuration/app-world-composer.js';
+import {
+  DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
+  type SemanticAppAnalysisDepth,
+} from '../configuration/app-analysis.js';
+import type { RouteConfigContextMaterializationProjectResult } from '../router/route-context-materialization.js';
+import type { RouteableComponentReference } from '../router/model.js';
 import {
   CustomElementDefinition,
   CustomElementTemplateKind,
 } from '../resources/custom-element-definition.js';
+import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
-  AttributeClassificationInput,
   AttributeClassificationMaterializer,
   type AttributeClassificationEmission,
+  type AttributeClassificationRequest,
 } from './attribute-classification-materializer.js';
 import {
-  AttributeSyntaxParseInput,
   AttributeSyntaxMaterializer,
   type AttributeSyntaxParseEmission,
+  type AttributeSyntaxParseRequest,
 } from './attribute-syntax-materializer.js';
-import type {
+import {
+  TemplateCompilerWorldConstructionRequest,
   TemplateCompilerWorldEmission,
+  TemplateCompilerWorldMaterializer,
 } from './compiler-world-materializer.js';
 import {
   TemplateCompilerCompileRequest,
+  TemplateCompilerWorldKind,
   type TemplateCompilerCompileHost,
   type TemplateCompilerService,
 } from './compiler-world.js';
+import {
+  TemplateResourceVisibilityKind,
+  type TemplateVisibleResource,
+} from './compiler-world-reference.js';
 import {
   TemplateCompilationUnitConstructionRequest,
   TemplateCompilationUnitMaterializer,
@@ -35,24 +51,24 @@ import {
   TemplateSourceOwnerReference,
 } from './compilation-unit.js';
 import {
-  HtmlParseInput,
   HtmlParseMaterializer,
   type HtmlParseEmission,
+  type HtmlParseRequest,
 } from './html-parse-materializer.js';
 import {
-  TemplateValueSiteInput,
   TemplateValueSiteMaterializer,
   type TemplateValueSiteEmission,
+  type TemplateValueSiteRequest,
 } from './value-site-materializer.js';
 import {
-  BindingCommandLoweringInput,
   BindingCommandLoweringMaterializer,
   type BindingCommandLoweringEmission,
+  type BindingCommandLoweringRequest,
 } from './binding-command-lowering-materializer.js';
 import {
-  CompiledTemplateMaterializationInput,
   CompiledTemplateMaterializer,
   type CompiledTemplateEmission,
+  type CompiledTemplateMaterializationRequest,
 } from './compiled-template-materializer.js';
 import {
   TemplateRuntimeAnalysisMaterializer,
@@ -63,6 +79,11 @@ import {
   TemplateRuntimeAnalysisProjectContext,
   TemplateRuntimeAnalysisResource,
 } from './template-runtime-analysis-context.js';
+import {
+  directDependencyDefinitions,
+  mergeVisibleResourceScopes,
+  visibleResourceForDefinition,
+} from './resource-scope-builder.js';
 
 /** Front-door template products produced for one compiler-visible custom element definition. */
 export class TemplateResourceCompilationEmission {
@@ -100,13 +121,47 @@ export class TemplateResourceRuntimeAnalysisEmission {
   ) {}
 }
 
+export type TemplateCompilationProjectPhaseName =
+  | 'component-compiler-world'
+  | 'compilation-unit'
+  | 'html-parse'
+  | 'attribute-syntax'
+  | 'attribute-classification'
+  | 'value-sites'
+  | 'binding-command-lowering'
+  | 'compiled-template'
+  | 'runtime-analysis';
+
+export interface TemplateCompilationProjectPhaseTiming {
+  readonly name: TemplateCompilationProjectPhaseName;
+  readonly milliseconds: number;
+}
+
+export interface TemplateCompilationProjectProfile {
+  readonly totalMilliseconds: number;
+  readonly phases: readonly TemplateCompilationProjectPhaseTiming[];
+}
+
+export interface TemplateCompilationProjectOptions {
+  readonly runtimeAnalysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
+}
+
 /** Template compilation-front-door result for one app-world composition. */
 export class TemplateCompilationProjectEmission {
+  get compilerWorlds(): readonly TemplateCompilerWorldEmission[] {
+    return uniqueCompilerWorlds([
+      ...this.appWorld.compilerWorlds,
+      ...this.resources.map((resource) => resource.compilation.compilerWorld),
+    ]);
+  }
+
   constructor(
     /** App-world composition that supplied compiler worlds. */
     readonly appWorld: AureliaAppWorldEmission,
     /** Per-resource template compilation plus runtime/checker analysis emissions. */
     readonly resources: readonly TemplateResourceRuntimeAnalysisEmission[],
+    /** Nested timing profile for template front-door and runtime-analysis pressure. */
+    readonly profile: TemplateCompilationProjectProfile,
   ) {}
 }
 
@@ -120,6 +175,7 @@ export class TemplateCompilationProjectEmission {
  * that exposed them.
  */
 export class TemplateCompilationProjectPass {
+  private readonly compilerWorldMaterializer: TemplateCompilerWorldMaterializer;
   private readonly unitMaterializer: TemplateCompilationUnitMaterializer;
   private readonly htmlParser: HtmlParseMaterializer;
   private readonly attributeSyntax: AttributeSyntaxMaterializer;
@@ -133,6 +189,7 @@ export class TemplateCompilationProjectPass {
     /** Hot analysis store shared by child materializers. */
     readonly store: KernelStore,
   ) {
+    this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(store);
     this.unitMaterializer = new TemplateCompilationUnitMaterializer(store);
     this.htmlParser = new HtmlParseMaterializer(store);
     this.attributeSyntax = new AttributeSyntaxMaterializer(store);
@@ -146,24 +203,65 @@ export class TemplateCompilationProjectPass {
   compile(
     appWorld: AureliaAppWorldEmission,
     typeSystem: TypeSystemProject | null = null,
+    resourceDefinitions: ResourceDefinitionIndex | null = null,
+    routeContexts: RouteConfigContextMaterializationProjectResult | null = null,
+    options: TemplateCompilationProjectOptions = {},
   ): TemplateCompilationProjectEmission {
+    const started = performance.now();
+    const phases: TemplateCompilationProjectPhaseTiming[] = [];
+    const runtimeAnalysisDepth = options.runtimeAnalysisDepth ?? DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH;
     const compilations: TemplateResourceCompilationEmission[] = [];
 
     appWorld.compilerWorlds.forEach((compilerWorld, worldIndex) => {
-      compilerWorld.resourceScope.resources.forEach((visibleResource, resourceIndex) => {
-        const definition = visibleResource.definition;
+      const tasks = [
+        ...initialCompilationTasks(compilerWorld),
+        ...routeableCompilationTasks(compilerWorld, routeContexts, resourceDefinitions),
+      ];
+      const seen = new Set<string>();
+
+      for (let resourceIndex = 0; resourceIndex < tasks.length; resourceIndex += 1) {
+        const task = tasks[resourceIndex]!;
+        const definition = task.visibleResource.definition;
         if (!(definition instanceof CustomElementDefinition)) {
-          return;
+          continue;
         }
+        const compilationKey = templateResourceCompilationKey(definition);
+        if (seen.has(compilationKey)) {
+          continue;
+        }
+        seen.add(compilationKey);
+
         const localKey = templateResourceCompilationLocalKey(worldIndex, resourceIndex, definition);
-        const result = compilerWorld.templateCompiler.compile(
+        const compilationWorld = measureTemplateCompilationPhase(
+          phases,
+          'component-compiler-world',
+          () => this.compilerWorldForDefinition(
+            task.compilerWorld,
+            definition,
+            localKey,
+            resourceDefinitions,
+          ),
+        );
+        const result = compilationWorld.templateCompiler.compile(
           new TemplateCompilerCompileRequest(localKey, definition),
-          new ProjectTemplateCompilerHost(this, compilerWorld, typeSystem),
+          new ProjectTemplateCompilerHost(this, compilationWorld, typeSystem, phases),
         );
         if (result.output != null) {
           compilations.push(result.output);
         }
-      });
+
+        for (const dependency of directDependencyDefinitions(definition, resourceDefinitions)) {
+          const visibleResource = visibleResourceForDefinition(
+            dependency,
+            TemplateResourceVisibilityKind.Local,
+            dependency.sourceAddressHandle ?? definition.sourceAddressHandle,
+          );
+          if (visibleResource == null) {
+            continue;
+          }
+          tasks.push(new TemplateCompilationTask(compilationWorld, visibleResource));
+        }
+      }
     });
 
     const projectContext = new TemplateRuntimeAnalysisProjectContext(compilations.flatMap((compilation) =>
@@ -177,11 +275,62 @@ export class TemplateCompilationProjectPass {
     const resources = compilations.map((compilation) =>
       new TemplateResourceRuntimeAnalysisEmission(
         compilation,
-        this.analyzeResource(compilation, projectContext, typeSystem),
+        measureTemplateCompilationPhase(
+          phases,
+          'runtime-analysis',
+          () => this.analyzeResource(compilation, projectContext, typeSystem, runtimeAnalysisDepth),
+        ),
       )
     );
 
-    return new TemplateCompilationProjectEmission(appWorld, resources);
+    const profile: TemplateCompilationProjectProfile = {
+      totalMilliseconds: performance.now() - started,
+      phases,
+    };
+
+    return new TemplateCompilationProjectEmission(appWorld, resources, profile);
+  }
+
+  private compilerWorldForDefinition(
+    parentCompilerWorld: TemplateCompilerWorldEmission,
+    definition: CustomElementDefinition,
+    localKey: string,
+    resourceDefinitions: ResourceDefinitionIndex | null,
+  ): TemplateCompilerWorldEmission {
+    const localDependencies = directDependencyDefinitions(definition, resourceDefinitions)
+      .map((dependency) =>
+        visibleResourceForDefinition(
+          dependency,
+          TemplateResourceVisibilityKind.Local,
+          dependency.sourceAddressHandle ?? definition.sourceAddressHandle,
+        )
+      )
+      .filter((resource): resource is TemplateVisibleResource => resource != null);
+
+    if (localDependencies.length === 0) {
+      return parentCompilerWorld;
+    }
+
+    const resources = mergeVisibleResourceScopes(
+      localDependencies,
+      parentCompilerWorld.resourceScope.resources,
+    );
+    if (sameResourceScope(resources, parentCompilerWorld.resourceScope.resources)) {
+      return parentCompilerWorld;
+    }
+
+    return this.compilerWorldMaterializer.construct(new TemplateCompilerWorldConstructionRequest(
+      `${localKey}:component-world`,
+      TemplateCompilerWorldKind.Component,
+      parentCompilerWorld.container,
+      null,
+      resources,
+      parentCompilerWorld.attributePatterns,
+      parentCompilerWorld.bindingCommands,
+      parentCompilerWorld.runtimeRenderers,
+      TemplateResourceVisibilityKind.Configured,
+      definition.sourceAddressHandle,
+    ));
   }
 
   compileResource(
@@ -189,6 +338,7 @@ export class TemplateCompilationProjectPass {
     definition: CustomElementDefinition,
     localKey: string,
     typeSystem: TypeSystemProject | null,
+    phases: TemplateCompilationProjectPhaseTiming[] | null = null,
   ): TemplateResourceCompilationEmission | null {
     const sourceKind = templateSourceKind(definition);
     if (sourceKind == null) {
@@ -203,62 +353,76 @@ export class TemplateCompilationProjectPass {
       definition.sourceAddressHandle,
     );
     const sourceAddressHandle = definition.template?.addressHandle ?? definition.sourceAddressHandle;
-    const unit = this.unitMaterializer.construct(new TemplateCompilationUnitConstructionRequest(
-      localKey,
-      TemplateCompilationUnitKind.CustomElement,
-      compilerWorld,
-      owner,
-      sourceKind,
-      definition.template?.markup ?? null,
-      sourceAddressHandle,
-      definition.template?.sourceMap ?? null,
-    ));
-    const html = this.htmlParser.parse(new HtmlParseInput(
-      localKey,
-      unit.templateSource,
-      unit.compilationUnit,
-      unit.parseContext,
-    ));
-    const attributeSyntax = this.attributeSyntax.parse(new AttributeSyntaxParseInput(
-      localKey,
-      unit.compilationUnit,
-      html,
-      compilerWorld,
-    ));
-    const attributeClassification = this.attributeClassification.classify(new AttributeClassificationInput(
-      localKey,
-      unit.compilationUnit,
-      html,
-      attributeSyntax,
-      compilerWorld,
-    ));
-    const valueSites = this.valueSites.materialize(new TemplateValueSiteInput(
-      localKey,
-      unit.compilationUnit,
-      html,
-      attributeSyntax,
-      attributeClassification,
-      compilerWorld,
-    ));
-    const bindingCommandLowering = this.bindingCommandLowering.lower(new BindingCommandLoweringInput(
-      localKey,
-      unit.compilationUnit,
-      html,
-      attributeSyntax,
-      attributeClassification,
-      valueSites,
-      compilerWorld,
-    ));
-    const compiledTemplate = this.compiledTemplate.materialize(new CompiledTemplateMaterializationInput(
-      localKey,
-      unit.compilationUnit,
-      html,
-      attributeSyntax,
-      attributeClassification,
-      valueSites,
-      bindingCommandLowering,
-      compilerWorld,
-    ));
+    const unit = measureTemplateCompilationPhase(phases, 'compilation-unit', () =>
+      this.unitMaterializer.construct(new TemplateCompilationUnitConstructionRequest(
+        localKey,
+        TemplateCompilationUnitKind.CustomElement,
+        compilerWorld,
+        owner,
+        sourceKind,
+        definition.template?.markup ?? null,
+        sourceAddressHandle,
+        definition.template?.sourceMap ?? null,
+      ))
+    );
+    const html = measureTemplateCompilationPhase(phases, 'html-parse', () =>
+      this.htmlParser.parse({
+        localKey,
+        templateSource: unit.templateSource,
+        compilationUnit: unit.compilationUnit,
+        parseContext: unit.parseContext,
+      } satisfies HtmlParseRequest)
+    );
+    const attributeSyntax = measureTemplateCompilationPhase(phases, 'attribute-syntax', () =>
+      this.attributeSyntax.parse({
+        localKey,
+        compilationUnit: unit.compilationUnit,
+        html,
+        compilerWorld,
+      } satisfies AttributeSyntaxParseRequest)
+    );
+    const attributeClassification = measureTemplateCompilationPhase(phases, 'attribute-classification', () =>
+      this.attributeClassification.classify({
+        localKey,
+        compilationUnit: unit.compilationUnit,
+        html,
+        attributeSyntax,
+        compilerWorld,
+      } satisfies AttributeClassificationRequest)
+    );
+    const valueSites = measureTemplateCompilationPhase(phases, 'value-sites', () =>
+      this.valueSites.materialize({
+        localKey,
+        compilationUnit: unit.compilationUnit,
+        html,
+        attributeSyntax,
+        attributeClassification,
+        compilerWorld,
+      } satisfies TemplateValueSiteRequest)
+    );
+    const bindingCommandLowering = measureTemplateCompilationPhase(phases, 'binding-command-lowering', () =>
+      this.bindingCommandLowering.lower({
+        localKey,
+        compilationUnit: unit.compilationUnit,
+        html,
+        attributeSyntax,
+        attributeClassification,
+        valueSites,
+        compilerWorld,
+      } satisfies BindingCommandLoweringRequest)
+    );
+    const compiledTemplate = measureTemplateCompilationPhase(phases, 'compiled-template', () =>
+      this.compiledTemplate.materialize({
+        localKey,
+        compilationUnit: unit.compilationUnit,
+        html,
+        attributeSyntax,
+        attributeClassification,
+        valueSites,
+        bindingCommandLowering,
+        compilerWorld,
+      } satisfies CompiledTemplateMaterializationRequest)
+    );
     return new TemplateResourceCompilationEmission(
       localKey,
       compilerWorld,
@@ -277,6 +441,7 @@ export class TemplateCompilationProjectPass {
     compilation: TemplateResourceCompilationEmission,
     projectContext: TemplateRuntimeAnalysisProjectContext,
     typeSystem: TypeSystemProject | null,
+    analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` = DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
   ): TemplateRuntimeAnalysisEmission {
     return this.runtimeAnalysis.materialize(new TemplateRuntimeAnalysisRequest(
       compilation.localKey,
@@ -286,6 +451,7 @@ export class TemplateCompilationProjectPass {
       compilation.compilerWorld,
       projectContext,
       typeSystem,
+      analysisDepth,
     ));
   }
 }
@@ -295,6 +461,7 @@ class ProjectTemplateCompilerHost implements TemplateCompilerCompileHost<Templat
     private readonly pass: TemplateCompilationProjectPass,
     private readonly compilerWorld: TemplateCompilerWorldEmission,
     private readonly typeSystem: TypeSystemProject | null,
+    private readonly phases: TemplateCompilationProjectPhaseTiming[] | null,
   ) {}
 
   compile(
@@ -306,8 +473,91 @@ class ProjectTemplateCompilerHost implements TemplateCompilerCompileHost<Templat
       request.definition,
       request.localKey,
       this.typeSystem,
+      this.phases,
     );
   }
+}
+
+class TemplateCompilationTask {
+  constructor(
+    readonly compilerWorld: TemplateCompilerWorldEmission,
+    readonly visibleResource: TemplateVisibleResource,
+  ) {}
+}
+
+function initialCompilationTasks(
+  compilerWorld: TemplateCompilerWorldEmission,
+): TemplateCompilationTask[] {
+  return compilerWorld.resourceScope.resources.map((visibleResource) =>
+    new TemplateCompilationTask(compilerWorld, visibleResource)
+  );
+}
+
+function routeableCompilationTasks(
+  compilerWorld: TemplateCompilerWorldEmission,
+  routeContexts: RouteConfigContextMaterializationProjectResult | null,
+  resourceDefinitions: ResourceDefinitionIndex | null,
+): TemplateCompilationTask[] {
+  if (routeContexts == null || resourceDefinitions == null) {
+    return [];
+  }
+  const tasks: TemplateCompilationTask[] = [];
+  const seen = new Set<string>();
+  for (const routeConfig of routeContexts.readRouteConfigs()) {
+    for (const routeable of [routeConfig.component, routeConfig.fallback]) {
+      const visibleResource = visibleRouteableResource(routeable, resourceDefinitions);
+      const productHandle = visibleResource?.resourceProductHandle ?? null;
+      if (visibleResource == null || productHandle == null || seen.has(productHandle)) {
+        continue;
+      }
+      seen.add(productHandle);
+      tasks.push(new TemplateCompilationTask(compilerWorld, visibleResource));
+    }
+  }
+  return tasks;
+}
+
+function visibleRouteableResource(
+  routeable: RouteableComponentReference | null,
+  resourceDefinitions: ResourceDefinitionIndex,
+): TemplateVisibleResource | null {
+  const definition = resourceDefinitions.lookupByProduct(routeable?.resolvedProductHandle ?? null);
+  if (!(definition instanceof CustomElementDefinition)) {
+    return null;
+  }
+  return visibleResourceForDefinition(
+    definition,
+    TemplateResourceVisibilityKind.Routeable,
+    routeable?.sourceAddressHandle ?? definition.sourceAddressHandle,
+  );
+}
+
+function sameResourceScope(
+  left: readonly TemplateVisibleResource[],
+  right: readonly TemplateVisibleResource[],
+): boolean {
+  return left.length === right.length
+    && left.every((resource, index) =>
+      resource.resourceProductHandle === right[index]?.resourceProductHandle
+      && resource.definitionProductHandle === right[index]?.definitionProductHandle
+      && resource.resourceKind === right[index]?.resourceKind
+      && resource.name === right[index]?.name
+    );
+}
+
+function uniqueCompilerWorlds(
+  compilerWorlds: readonly TemplateCompilerWorldEmission[],
+): readonly TemplateCompilerWorldEmission[] {
+  const seen = new Set<string>();
+  const result: TemplateCompilerWorldEmission[] = [];
+  for (const compilerWorld of compilerWorlds) {
+    if (seen.has(compilerWorld.world.productHandle)) {
+      continue;
+    }
+    seen.add(compilerWorld.world.productHandle);
+    result.push(compilerWorld);
+  }
+  return result;
 }
 
 function templateSourceKind(definition: CustomElementDefinition): TemplateSourceKind | null {
@@ -328,6 +578,12 @@ function templateSourceKind(definition: CustomElementDefinition): TemplateSource
   }
 }
 
+function templateResourceCompilationKey(
+  definition: CustomElementDefinition,
+): string {
+  return definition.productHandle ?? `${definition.key}:${definition.name}`;
+}
+
 function templateResourceCompilationLocalKey(
   worldIndex: number,
   resourceIndex: number,
@@ -339,4 +595,18 @@ function templateResourceCompilationLocalKey(
     String(resourceIndex),
     definition.productHandle ?? definition.key,
   ].join(':');
+}
+
+function measureTemplateCompilationPhase<TValue>(
+  phases: TemplateCompilationProjectPhaseTiming[] | null,
+  name: TemplateCompilationProjectPhaseName,
+  read: () => TValue,
+): TValue {
+  const started = performance.now();
+  const value = read();
+  phases?.push({
+    name,
+    milliseconds: performance.now() - started,
+  });
+  return value;
 }

@@ -22,10 +22,11 @@ import type {
 } from "../../source/index.js";
 import {
   readTypeScriptCallSiteEntry,
+  requiredSourceFileIdentity,
+  sourceRangeForSourceFileNode,
   SourceProjectMemo,
 } from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
-import { clampBudget } from "../budget.js";
 import {
   ContinuationPriority,
   type Continuation,
@@ -39,7 +40,7 @@ import {
 import type { Inquiry } from "../inquiry.js";
 import type { SourceRange } from "../locus.js";
 import { PagedRowFamily } from "../paged-row-family.js";
-import { pageOffset } from "../paging.js";
+import { pageOffset, rowLimit } from "../paging.js";
 import {
   FrameworkBindingEffectKind,
   type FrameworkBindingEffectRow,
@@ -48,6 +49,7 @@ import {
   filtersFromInquiry,
   type FrameworkDiscoveryFilters,
 } from "./framework-filters.js";
+import { stringFilter } from "./lens-filter-utils.js";
 import { readFrameworkBindingEffects } from "./framework-rendering-graph.js";
 import {
   readFrameworkResourceInstantiationRows,
@@ -59,8 +61,6 @@ import {
   countBy,
   sourceIndexBasis,
   sourceRangeForCallSiteEntry,
-  sourceRangeFromFileSpan,
-  sourceSpan,
 } from "./framework-support.js";
 import {
   calleeTail,
@@ -271,8 +271,8 @@ const LIFECYCLE_BINDING_EFFECT_ROW_FAMILY =
   new PagedRowFamily<FrameworkBindingEffectRow>({
     id: "framework.lifecycle:binding-effects",
     rowLabel: "framework lifecycle binding effect row(s)",
-    evidenceForRow: evidenceForBindingEffect,
-    continuationsForPage: bindingEffectContinuations,
+    evidenceForRow: evidenceForLifecycleBindingEffect,
+    continuationsForPage: lifecycleBindingEffectContinuations,
   });
 
 const LIFECYCLE_RESOURCE_SITE_ROW_FAMILY =
@@ -304,7 +304,7 @@ const LIFECYCLE_RELATIONSHIP_ROW_FAMILY =
     id: "framework.lifecycle:relationships",
     rowLabel: "framework lifecycle relationship row(s)",
     evidenceForRow: evidenceForLifecycleRelationship,
-    continuationsForPage: relationshipContinuations,
+    continuationsForPage: lifecycleRelationshipContinuations,
   });
 
 /** Answer framework.lifecycle inquiries from controller, binding, and resource lifecycle substrates. */
@@ -338,13 +338,13 @@ export function answerFrameworkLifecycle(
   const relationships = [
     ...controllerMethods.map(controllerMethodRelationship),
     ...controllerCalls.map(controllerCallRelationship),
-    ...bindingEffects.map(bindingEffectRelationship),
+    ...bindingEffects.map(lifecycleBindingEffectRelationship),
     ...resourceSites.map(resourceSiteRelationship),
     ...appTaskExecutions.map(appTaskExecutionRelationship),
     ...hookDispatches.map(hookDispatchRelationship),
   ].filter((row) => lifecycleRelationshipMatches(row, filters));
 
-  const limit = clampBudget(inquiry.budget?.rows, 80, 1_000);
+  const limit = rowLimit(inquiry);
   const offset = pageOffset(inquiry);
   const baseValue = lifecycleBaseValue(
     controllerMethods,
@@ -491,7 +491,7 @@ export function readFrameworkLifecycleRelationships(
   return [
     ...controllerMethods.map(controllerMethodRelationship),
     ...controllerCalls.map(controllerCallRelationship),
-    ...bindingEffects.map(bindingEffectRelationship),
+    ...bindingEffects.map(lifecycleBindingEffectRelationship),
     ...resourceSites.map(resourceSiteRelationship),
     ...appTaskExecutions.map(appTaskExecutionRelationship),
     ...hookDispatches.map(hookDispatchRelationship),
@@ -538,8 +538,7 @@ function readControllerLifecycle(sourceProject: SourceProject): {
       .ownedSourceFiles()
       .filter((sourceFile) =>
         normalizePath(
-          sourceProject.sourceFileIdentity(sourceFile)?.repoPath ??
-            sourceFile.fileName,
+          requiredSourceFileIdentity(sourceProject, sourceFile).repoPath,
         ).endsWith("runtime-html/src/templating/controller.ts"),
       )
       .flatMap((sourceFile) =>
@@ -559,9 +558,9 @@ function controllerLifecycleForSourceFile(
   readonly methods: readonly FrameworkLifecycleControllerMethodRow[];
   readonly calls: readonly FrameworkLifecycleControllerCallRow[];
 }[] {
-  const file = sourceProject.sourceFileIdentity(sourceFile);
+  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
   const packageInfo = sourceProject.packageForFileName(sourceFile.fileName);
-  if (file === null || packageInfo === null || file.packageId === null) {
+  if (packageInfo === null || file.packageId === null) {
     return [];
   }
   return sourceFile.statements
@@ -605,10 +604,7 @@ function controllerLifecycleForClass(
     if (lifecycleStage === null) {
       continue;
     }
-    const methodSource = sourceRangeFromFileSpan(
-      file.repoPath,
-      sourceSpan(sourceFile, member),
-    );
+    const methodSource = sourceRangeForSourceFileNode(file.repoPath, sourceFile, member);
     methods.push({
       id: `framework-lifecycle:controller-method:${methodName}`,
       participantKind: FrameworkLifecycleParticipantKind.Controller,
@@ -797,8 +793,7 @@ export function readLifecycleAppTaskExecutions(
       .ownedSourceFiles()
       .filter((sourceFile) =>
         normalizePath(
-          sourceProject.sourceFileIdentity(sourceFile)?.repoPath ??
-            sourceFile.fileName,
+          requiredSourceFileIdentity(sourceProject, sourceFile).repoPath,
         ).endsWith("runtime-html/src/app-root.ts"),
       )
       .flatMap((sourceFile) =>
@@ -812,9 +807,9 @@ function appTaskExecutionsForSourceFile(
   sourceProject: SourceProject,
   sourceFile: ts.SourceFile,
 ): readonly FrameworkLifecycleAppTaskExecutionRow[] {
-  const file = sourceProject.sourceFileIdentity(sourceFile);
+  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
   const packageInfo = sourceProject.packageForFileName(sourceFile.fileName);
-  if (file === null || packageInfo === null || file.packageId === null) {
+  if (packageInfo === null || file.packageId === null) {
     return [];
   }
   return sourceFile.statements
@@ -1023,7 +1018,7 @@ function appTaskExecutionRow(input: {
 }): FrameworkLifecycleAppTaskExecutionRow {
   const source =
     input.callSite === undefined
-      ? sourceRangeFromFileSpan(input.file.repoPath, sourceSpan(input.sourceFile, input.node))
+      ? sourceRangeForSourceFileNode(input.file.repoPath, input.sourceFile, input.node)
       : sourceRangeForCallSiteEntry(input.callSite);
   return {
     id: `framework-lifecycle:app-task:${input.methodName}:${input.node.getStart(
@@ -1086,8 +1081,7 @@ function readLifecycleHookDispatches(
       .ownedSourceFiles()
       .filter((sourceFile) =>
         normalizePath(
-          sourceProject.sourceFileIdentity(sourceFile)?.repoPath ??
-            sourceFile.fileName,
+          requiredSourceFileIdentity(sourceProject, sourceFile).repoPath,
         ).endsWith("runtime-html/src/templating/controller.ts"),
       )
       .flatMap((sourceFile) =>
@@ -1101,9 +1095,9 @@ function hookDispatchesForSourceFile(
   sourceProject: SourceProject,
   sourceFile: ts.SourceFile,
 ): readonly FrameworkLifecycleHookDispatchRow[] {
-  const file = sourceProject.sourceFileIdentity(sourceFile);
+  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
   const packageInfo = sourceProject.packageForFileName(sourceFile.fileName);
-  if (file === null || packageInfo === null || file.packageId === null) {
+  if (packageInfo === null || file.packageId === null) {
     return [];
   }
   const rows: FrameworkLifecycleHookDispatchRow[] = [];
@@ -1405,7 +1399,7 @@ function controllerMethodRelationship(
     lifecycleStage: row.lifecycleStage,
     packageId: row.packageId,
     packageName: row.packageName,
-    from: methodEndpoint(row.className, row.methodName, row),
+    from: lifecycleMethodEndpoint(row.className, row.methodName, row),
     to: conceptEndpoint(row.lifecycleStage, row),
     source: row.source,
     sourceRowId: row.id,
@@ -1426,7 +1420,7 @@ function controllerCallRelationship(
     lifecycleStage: row.lifecycleStage,
     packageId: row.packageId,
     packageName: row.packageName,
-    from: methodEndpoint(row.className, row.methodName, row),
+    from: lifecycleMethodEndpoint(row.className, row.methodName, row),
     to: {
       kind: FrameworkRelationshipEndpointKind.CallSite,
       name: row.calleeName,
@@ -1441,7 +1435,7 @@ function controllerCallRelationship(
   };
 }
 
-function bindingEffectRelationship(
+function lifecycleBindingEffectRelationship(
   row: FrameworkBindingEffectRow,
 ): FrameworkLifecycleRelationshipRow {
   return {
@@ -1521,7 +1515,7 @@ function appTaskExecutionRelationship(
     lifecycleStage: row.lifecycleStage,
     packageId: row.packageId,
     packageName: row.packageName,
-    from: methodEndpoint(row.className, row.methodName, row),
+    from: lifecycleMethodEndpoint(row.className, row.methodName, row),
     to: row.target,
     source: row.source,
     sourceRowId: row.id,
@@ -1628,7 +1622,7 @@ function phaseForLifecycleStage(stage: string): FrameworkRelationshipPhase {
   }
 }
 
-function methodEndpoint(
+function lifecycleMethodEndpoint(
   className: string,
   methodName: string,
   row: {
@@ -1692,14 +1686,6 @@ function lifecycleAxisFiltersFromRecord(
     ...stringFilter(source, "mechanism"),
     ...stringFilter(source, "phase"),
   };
-}
-
-function stringFilter(
-  source: Record<string, unknown>,
-  key: keyof FrameworkLifecycleFilters,
-): object {
-  const value = source[key];
-  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
 }
 
 function controllerMethodMatches(
@@ -1856,7 +1842,7 @@ function evidenceForControllerCall(
   return lifecycleEvidence(row.id, row.summary, row.source, row);
 }
 
-function evidenceForBindingEffect(row: FrameworkBindingEffectRow): Evidence {
+function evidenceForLifecycleBindingEffect(row: FrameworkBindingEffectRow): Evidence {
   return lifecycleEvidence(row.id, bindingEffectSummary(row), row.source, row);
 }
 
@@ -2034,7 +2020,7 @@ function childControllerActivationContinuations(
     });
 }
 
-function bindingEffectContinuations(
+function lifecycleBindingEffectContinuations(
   inquiry: Inquiry,
   rows: readonly FrameworkBindingEffectRow[],
   nextOffset: number | undefined,
@@ -2177,7 +2163,7 @@ function hookDispatchContinuations(
   ];
 }
 
-function relationshipContinuations(
+function lifecycleRelationshipContinuations(
   inquiry: Inquiry,
   rows: readonly FrameworkLifecycleRelationshipRow[],
   nextOffset: number | undefined,

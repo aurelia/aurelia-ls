@@ -14,12 +14,15 @@ import type { ResourceDefinitionIndex } from '../resources/resource-definition-i
 import {
   readRuntimeResourceKey,
   ResourceDefinitionKind,
-  runtimeResourceKeyForKind,
 } from '../resources/resource-kind.js';
 import {
   TemplateResourceVisibilityKind,
   TemplateVisibleResource,
 } from '../template/compiler-world-reference.js';
+import {
+  addVisibleDefinitionResource,
+  directDependencyDefinitions,
+} from '../template/resource-scope-builder.js';
 import type { AppRoot } from './app-root.js';
 
 /**
@@ -44,7 +47,7 @@ export class AppWorldResourceVisibilityComposer {
       appRoot,
     );
     frame.addContainerResources();
-    frame.addRootAndDependencyResources();
+    frame.addRootAndDirectDependencyResources();
     return frame.toResources();
   }
 }
@@ -71,12 +74,12 @@ class AppWorldResourceVisibilityFrame {
     }
   }
 
-  addRootAndDependencyResources(): void {
+  addRootAndDirectDependencyResources(): void {
     const rootDefinition = rootComponentDefinition(this.appRoot, this.resourceDefinitions);
     if (rootDefinition == null || !this.addRootDefinition(rootDefinition)) {
       return;
     }
-    for (const dependency of dependencyDefinitions(rootDefinition, this.resourceDefinitions)) {
+    for (const dependency of directDependencyDefinitions(rootDefinition, this.resourceDefinitions)) {
       this.addDefinitionResource(
         dependency,
         TemplateResourceVisibilityKind.Local,
@@ -223,75 +226,6 @@ function rootComponentDefinition(
   }
 
   return definition;
-}
-
-function addVisibleDefinitionResource(
-  resources: TemplateVisibleResource[],
-  seenLookupKeys: Set<string>,
-  seenResourceProducts: Set<ProductHandle>,
-  definition: FullResourceDefinition,
-  visibilityKind: TemplateResourceVisibilityKind,
-  fallbackSourceAddressHandle: TemplateVisibleResource['sourceAddressHandle'],
-  position: 'front' | 'back' = 'back',
-): boolean {
-  if (definition.productHandle == null || definition.type === ResourceDefinitionKind.AttributePattern) {
-    return false;
-  }
-  const resourceKey = runtimeResourceKeyForKind(definition.type, definition.name);
-  if (
-    (resourceKey != null && seenLookupKeys.has(resourceKey))
-    || seenResourceProducts.has(definition.productHandle)
-  ) {
-    return false;
-  }
-  if (resourceKey != null) {
-    seenLookupKeys.add(resourceKey);
-  }
-  seenResourceProducts.add(definition.productHandle);
-  const resource = new TemplateVisibleResource(
-    definition.type,
-    definition.name,
-    definition.aliases.map((alias) => alias.name),
-    definition.productHandle,
-    definition.identityHandle,
-    definition.productHandle,
-    definition,
-    visibilityKind,
-    definition.sourceAddressHandle ?? fallbackSourceAddressHandle,
-  );
-  if (position === 'front') {
-    resources.unshift(resource);
-  } else {
-    resources.push(resource);
-  }
-  return true;
-}
-
-function dependencyDefinitions(
-  rootDefinition: CustomElementDefinition,
-  resourceDefinitions: ResourceDefinitionIndex | null,
-): readonly FullResourceDefinition[] {
-  if (resourceDefinitions == null) {
-    return [];
-  }
-  const definitions: FullResourceDefinition[] = [];
-  const seen = new Set<ProductHandle>();
-  const visit = (definition: FullResourceDefinition): void => {
-    if (!(definition instanceof CustomElementDefinition)) {
-      return;
-    }
-    for (const dependency of definition.dependencies) {
-      const dependencyDefinition = resourceDefinitions.lookupByDependencyReference(dependency);
-      if (dependencyDefinition?.productHandle == null || seen.has(dependencyDefinition.productHandle)) {
-        continue;
-      }
-      seen.add(dependencyDefinition.productHandle);
-      definitions.push(dependencyDefinition);
-      visit(dependencyDefinition);
-    }
-  };
-  visit(rootDefinition);
-  return definitions;
 }
 
 function visibleResourceSlotsForContainer(

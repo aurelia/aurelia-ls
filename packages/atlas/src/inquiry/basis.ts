@@ -125,3 +125,30 @@ export const AtlasContractBasis: Basis = {
   summary: "Answered from Atlas static contracts.",
   identity: "@aurelia-ls/atlas",
 };
+
+/** Create an exact Atlas contract basis with a caller-specific summary. */
+export function atlasContractBasis(
+  /** Compact grounded explanation for this answer. */
+  summary: string,
+): Basis {
+  return {
+    ...AtlasContractBasis,
+    summary,
+  };
+}
+
+/** Create an exact live source-text basis for a current source project identity. */
+export function sourceTextBasis(
+  /** Stable source project identity. */
+  identity: string,
+  /** Compact grounded explanation for this answer. */
+  summary: string,
+): Basis {
+  return {
+    kind: BasisKind.SourceText,
+    closure: BasisClosure.Exact,
+    freshness: BasisFreshness.Live,
+    summary,
+    identity,
+  };
+}

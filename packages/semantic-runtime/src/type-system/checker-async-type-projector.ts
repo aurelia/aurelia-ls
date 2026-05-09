@@ -2,9 +2,9 @@ import ts from 'typescript';
 import type { AddressHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
-  CheckerSyntheticTypeProjectionInput,
-  CheckerTypeProjectionInput,
   CheckerTypeProjector,
+  type CheckerSyntheticTypeProjectionRequest,
+  type CheckerTypeProjectionRequest,
 } from './checker-projector.js';
 import { TypeSystemProductDetails } from './product-details.js';
 import {
@@ -42,16 +42,14 @@ export class CheckerAsyncTypeProjector {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeReference {
-    return this.projector.ensureSyntheticProjection(new CheckerSyntheticTypeProjectionInput(
+    return this.projector.ensureSyntheticProjection({
       localKey,
-      CheckerTypeShapeKind.Unknown,
-      'unknown',
-      [],
-      null,
-      null,
-      CheckerTypeProjectionOrigin.SyntheticTemplateType,
+      shapeKind: CheckerTypeShapeKind.Unknown,
+      display: 'unknown',
+      members: [],
+      origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
       sourceAddressHandle,
-    )).toReference();
+    } satisfies CheckerSyntheticTypeProjectionRequest).toReference();
   }
 
   private carrierForReference(reference: CheckerTypeReference): CheckerTypeCarrierInput | null {
@@ -76,16 +74,15 @@ export class CheckerAsyncTypeProjector {
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeReference {
     const sourceNode = carrier.declarations[0] ?? null;
-    return this.projector.ensureProjection(new CheckerTypeProjectionInput(
+    return this.projector.ensureProjection({
       localKey,
-      carrier.checker,
+      checker: carrier.checker,
       type,
-      CheckerTypeProjectionOrigin.SyntheticTemplateType,
+      origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
       sourceNode,
       sourceAddressHandle,
-      null,
-      carrier.checker.typeToString(type, sourceNode ?? undefined),
-    )).toReference();
+      display: carrier.checker.typeToString(type, sourceNode ?? undefined),
+    } satisfies CheckerTypeProjectionRequest).toReference();
   }
 }
 

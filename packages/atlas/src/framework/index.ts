@@ -4,6 +4,7 @@ export * from "./api-usage.js";
 export * from "./discovery-index.js";
 export * from "./discovery-seeds.js";
 export * from "./di-index.js";
+export * from "./di-source.js";
 export * from "./di-world.js";
 export * from "./lifecycle.js";
 export * from "./materialization.js";

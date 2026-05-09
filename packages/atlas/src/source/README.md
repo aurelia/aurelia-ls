@@ -7,18 +7,58 @@ runtime exports.
 
 ## Responsibilities
 
-- Admit `packages/atlas`, `packages/semantic-runtime`, and the `aurelia` framework submodule packages through
-  their tsconfigs for TypeChecker-first internal and framework analysis.
+- Admit `packages/atlas`, `packages/semantic-runtime`, the `aurelia` framework submodule packages, and public
+  `aurelia2-plugins` workspace packages when that submodule is present through their tsconfigs for TypeChecker-first
+  internal, framework, and plugin-pressure analysis.
+- Optionally admit external authored source packages through `ATLAS_EXTERNAL_SOURCE_ROOTS`. This is an environment
+  hook for clean-room pressure runs, not a checked-in project list: Atlas scans package roots with `package.json` and
+  `tsconfig.json`, skips dependency/build directories, and keeps external paths outside durable repo docs.
+- Keep source epoch identities non-extractive. `SourceProject.identity()` reports package/admission counts, not package
+  ids or external package names, so daemon status and source-host profile logs can stay useful during clean-room runs
+  without recording proprietary structure.
 - Keep a hot TypeScript `Program`, `TypeChecker`, LanguageService, file index, declaration index, and top-level
-  declaration index in the daemon process.
+  declaration index in the daemon process. `SourceProject` is an immutable source epoch: it materializes the
+  LanguageService `Program` and `TypeChecker` once during construction, then returns those fixed objects from its
+  getters. Do not re-ask the LanguageService for a current program unless Atlas grows an explicit source-editing epoch.
+- Keep TypeScript host filesystem answers in [project-file-cache.ts](project-file-cache.ts). That cache owns script
+  versions, snapshots, host reads, existence checks, directory checks, and realpath answers for the immutable source
+  epoch; `SourceProject` should coordinate it, not absorb its implementation details.
 - Normalize file, span, declaration, symbol, and package identities into source-level records.
-- Treat `SourceProject` as a source epoch: script versions, script snapshots, and normalized file keys are cached for
-  that epoch so TypeScript up-to-date checks and Atlas indexes do not repeatedly hit filesystem stat/path work.
+- Treat source identity as a real invariant. Lenses that walk admitted source should use
+  `SourceProject.requiredSourceFileIdentity(...)`; call sites that already hold a `SourceFileIdentity` should use
+  `SourceProject.requiredSourceFileForIdentity(...)` to recover the source file. Semantic-surface source-range helpers
+  delegate to the same project primitives. `SourceProject` issues identities for every current TypeScript Program file;
+  files outside an admitted package carry `packageId: null`, so TypeScript LanguageService adapters do not need to
+  synthesize source identities from paths when tsserver returns lib or external files. LanguageService edit plans can
+  still name transient new-file paths, but those should be explicit edit targets rather than source-file fallbacks.
+- Attribute files to the most-specific admitted package root so nested monorepo packages are not swallowed by a parent
+  workspace package.
+- Preserve package admission role strongly enough that higher lenses such as `workspace.architecture` can distinguish
+  external authored packages from public plugin packages and framework packages before inferring the separate Aurelia
+  shape axis (`aurelia-app`, `aurelia-resource-library`, `aurelia-package`, or `non-aurelia`).
+- Let workspace-level lenses project conservative source roles over admitted files. Source roles are pressure axes for
+  app-source/test/tooling/declaration/generated separation; they are not a substitute for package ownership or Aurelia
+  runtime semantics.
+- Let architecture lenses recognize source-surface signals from explicit framework shapes before falling back to broad
+  text shapes. For example, router surfaces should come from `@aurelia/router` imports, route decorators, static route
+  config fields and nested child route objects on route-bearing classes, `getRouteConfig` hooks, or receiver bindings
+  proven from router imports, type annotations, or `resolve(IRouter)`-style calls rather than a generic `.load(...)`
+  method name.
+- Treat `SourceProject` as a source epoch: script versions, script snapshots, TypeScript host `readFile`/`fileExists`/
+  `directoryExists`/`realpath` answers, and normalized file keys are cached for that epoch so TypeScript up-to-date
+  checks, module resolution, and Atlas indexes do not repeatedly hit filesystem stat/path work. Set
+  `ATLAS_PROFILE_SOURCE_HOST=1` to print per-epoch host cache counters when the daemon shuts down.
+- Keep both "owned files" and "owned implementation files" available by package. Generated declaration files remain
+  useful for public checker surfaces, but framework/resource/bundle scans that need bodies should use implementation
+  files so declaration output does not steal source spans or erase method bodies.
 - Use [memo.ts](memo.ts) for source-epoch memoization. `SourceProjectMemo` owns one derived value per source epoch;
   `SourceProjectKeyedMemo` owns keyed derived rows per source epoch. Keep this as hot in-memory memoization near the
   owning reader, not persisted cache policy.
 - Resolve exact TypeScript selectors into current-epoch source targets, then project serializable source, structure, and
   checker-fact rows for Atlas lenses.
+- Keep the source-read contract in [typescript-contracts.ts](typescript-contracts.ts). That file is the public selector,
+  target, row, and option vocabulary; [typescript.ts](typescript.ts) should stay focused on resolving those contracts
+  against the current TypeScript Program epoch.
 - Expose IDE-shaped TypeScript LanguageService primitives: document symbols, quick info, signature help, references with
   exact syntactic roles, definitions, implementations, call hierarchy, highlights, diagnostics, rename locations,
   refactor affordances, code fixes, refactor edit plans, organize-import edit plans, and file-rename edit plans.
@@ -50,5 +90,5 @@ runtime exports.
 
 This substrate should remain less clever than the lenses above it. Its job is to pay compiler and indexing cost during
 daemon boot, then make source facts addressable cheaply. Internal package semantics should prefer explicit types and
-TypeChecker projection. Framework analysis can spend this same source project as basis, but evaluator closure belongs to
-the framework-facing evaluation substrate rather than this source map.
+TypeChecker projection. Framework and public plugin analysis can spend this same source project as basis, but evaluator
+closure belongs to the framework-facing evaluation substrate rather than this source map.

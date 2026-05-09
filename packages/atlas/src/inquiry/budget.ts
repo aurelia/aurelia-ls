@@ -6,6 +6,8 @@ export interface Budget {
   readonly groups?: number;
   /** Fact limit for normalized fact projections. */
   readonly facts?: number;
+  /** Member/detail row limit for nested type or shape projections. */
+  readonly members?: number;
   /** Route limit for path, corridor, or graph-route projections. */
   readonly routes?: number;
   /** Evidence rows retained per subject before continuations should broaden. */

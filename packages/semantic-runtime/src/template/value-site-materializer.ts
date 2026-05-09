@@ -47,21 +47,19 @@ import {
 } from './value-site-publication.js';
 import { TemplateProductDetails } from './product-details.js';
 
-export class TemplateValueSiteInput {
-  constructor(
-    /** Store-local key for this value-site pass. */
-    readonly localKey: string,
-    /** Compiler unit that owns the parsed HTML and attribute products. */
-    readonly compilationUnit: TemplateCompilationUnit,
-    /** Parsed HTML products whose text/attribute values may contain expressions. */
-    readonly html: HtmlParseEmission,
-    /** Runtime AttrSyntax products that feed attribute classification and value-site selection. */
-    readonly attributeSyntax: AttributeSyntaxParseEmission,
-    /** Runtime-shaped attribute classifications that decide attribute-value ownership. */
-    readonly attributeClassification: AttributeClassificationEmission,
-    /** Compiler world that supplies the expression parser service and future command execution context. */
-    readonly compilerWorld: TemplateCompilerWorldEmission,
-  ) {}
+export interface TemplateValueSiteRequest {
+  /** Store-local key for this value-site pass. */
+  readonly localKey: string;
+  /** Compiler unit that owns the parsed HTML and attribute products. */
+  readonly compilationUnit: TemplateCompilationUnit;
+  /** Parsed HTML products whose text/attribute values may contain expressions. */
+  readonly html: HtmlParseEmission;
+  /** Runtime AttrSyntax products that feed attribute classification and value-site selection. */
+  readonly attributeSyntax: AttributeSyntaxParseEmission;
+  /** Runtime-shaped attribute classifications that decide attribute-value ownership. */
+  readonly attributeClassification: AttributeClassificationEmission;
+  /** Compiler world that supplies the expression parser service and future command execution context. */
+  readonly compilerWorld: TemplateCompilerWorldEmission;
 }
 
 export class TemplateValueSiteEmission {
@@ -114,7 +112,7 @@ export class TemplateValueSiteMaterializer {
     this.valueSitePublisher = new TemplateValueSitePublisher(store);
   }
 
-  materialize(input: TemplateValueSiteInput): TemplateValueSiteEmission {
+  materialize(input: TemplateValueSiteRequest): TemplateValueSiteEmission {
     const emission = this.recordsForValueSites(input);
     if (emission.records.length > 0) {
       this.store.commit(new KernelStoreBatch(emission.records, `template-value-site:${input.localKey}`));
@@ -128,7 +126,7 @@ export class TemplateValueSiteMaterializer {
     return emission;
   }
 
-  private recordsForValueSites(input: TemplateValueSiteInput): TemplateValueSiteEmission {
+  private recordsForValueSites(input: TemplateValueSiteRequest): TemplateValueSiteEmission {
     const source = this.recordsForSource(input);
     const records: KernelStoreRecord[] = [...source.records];
     const sites: TemplateValueSite[] = [];
@@ -163,7 +161,7 @@ export class TemplateValueSiteMaterializer {
   }
 
   private recordsForValueSite(
-    input: TemplateValueSiteInput,
+    input: TemplateValueSiteRequest,
     source: TemplateValueSiteSourceSet,
     pending: PendingValueSite,
     index: number,
@@ -197,7 +195,7 @@ export class TemplateValueSiteMaterializer {
     );
   }
 
-  private recordsForSource(input: TemplateValueSiteInput): TemplateValueSiteSourceSet {
+  private recordsForSource(input: TemplateValueSiteRequest): TemplateValueSiteSourceSet {
     const evidenceHandle = this.store.handles.evidence(`template-value-site:${input.localKey}`);
     const provenanceHandle = this.store.handles.provenance(`template-value-site:${input.localKey}`);
     return new TemplateValueSiteSourceSet(

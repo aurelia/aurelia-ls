@@ -1,4 +1,9 @@
 import {
+  FrameworkRelationshipClosure,
+  FrameworkRelationshipEvidenceBasis,
+  FrameworkRelationshipFamily,
+  FrameworkRelationshipMechanism,
+  FrameworkRelationshipPhase,
   FrameworkRelationshipRelation,
   type FrameworkRelationshipEndpoint,
 } from "../../framework/relationships.js";
@@ -16,7 +21,6 @@ import {
   BasisKind,
   type Basis,
 } from "../basis.js";
-import { clampBudget } from "../budget.js";
 import type { Continuation } from "../continuation.js";
 import {
   SEMANTIC_COMPOSITION_SCHEMA_VERSION,
@@ -35,7 +39,7 @@ import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
 import type { SourceRange } from "../locus.js";
 import { PagedRowFamily } from "../paged-row-family.js";
-import { pageOffset } from "../paging.js";
+import { pageOffset, rowLimit } from "../paging.js";
 import {
   FrameworkRowContinuationBuilder,
   nextPageContinuation,
@@ -43,7 +47,10 @@ import {
 } from "./framework-continuation-core.js";
 import { readFrameworkCompilerRelationships } from "./framework-compiler-lenses.js";
 import { readFrameworkExpressionRelationships } from "./framework-expression-relationships.js";
-import { readFrameworkStructuralRelationships } from "./framework-structural-relationships.js";
+import {
+  frameworkStructuralRelationshipProjection,
+  readFrameworkStructuralRelationships,
+} from "./framework-structural-relationships.js";
 import {
   frameworkEmulationValue,
   readFrameworkEmulationObligations,
@@ -52,6 +59,7 @@ import {
   type FrameworkEmulationViewValue,
 } from "./framework-emulation-view.js";
 import { type FrameworkDiscoveryFilters } from "./framework-filters.js";
+import { stringFiltersFromRecord } from "./lens-filter-utils.js";
 import {
   type FrameworkLifecycleFilters,
   readFrameworkLifecycleRelationships,
@@ -61,6 +69,8 @@ import {
   readFrameworkObservationRelationships,
   type FrameworkObservationFilters,
 } from "./framework-observation-lenses.js";
+import { readFrameworkRouterAnalysis } from "./framework-router-analysis.js";
+import { routerRelationshipsFromFlowRows } from "./framework-router-relationships.js";
 import {
   readFrameworkRenderingRelationships,
   type FrameworkRenderingRelationshipFilters,
@@ -95,18 +105,18 @@ interface FrameworkCompositionFilters extends FrameworkDiscoveryFilters {
 
 interface RelationshipClaimDraft {
   readonly id: string;
-  readonly family?: string;
-  readonly relation: string;
-  readonly mechanism?: string;
-  readonly phase?: string;
+  readonly family?: FrameworkRelationshipFamily;
+  readonly relation: FrameworkRelationshipRelation;
+  readonly mechanism?: FrameworkRelationshipMechanism;
+  readonly phase?: FrameworkRelationshipPhase;
   readonly packageId?: string;
   readonly packageName?: string;
   readonly from: FrameworkRelationshipEndpoint;
   readonly to: FrameworkRelationshipEndpoint;
   readonly source?: SourceRange;
   readonly sourceRowId?: string;
-  readonly evidenceBasis?: string;
-  readonly closure?: string;
+  readonly evidenceBasis?: FrameworkRelationshipEvidenceBasis;
+  readonly closure?: FrameworkRelationshipClosure;
   readonly summary: string;
 }
 
@@ -139,11 +149,7 @@ export function answerFrameworkComposition(
 ): Answer<SemanticCompositionValue | FrameworkEmulationViewValue> {
   const projection = inquiry.projection ?? "summary";
   const filters = compositionFiltersFromInquiry(inquiry);
-  const limit = clampBudget(
-    inquiry.budget?.rows,
-    projection === "emulation" ? 12 : 80,
-    1_000,
-  );
+  const limit = rowLimit(inquiry);
   const offset = pageOffset(inquiry);
   const basis = compositionBasis(sourceProject);
 
@@ -257,7 +263,7 @@ function readFrameworkCompositionClaims(
       readerFilters,
     ).relationships.map((row) =>
       claimFromRelationship(
-        relationshipDraft(row, "materialization"),
+        relationshipDraft(row, FrameworkRelationshipFamily.Materialization),
         LensId.FrameworkMaterialization,
         "relationships",
         [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
@@ -266,7 +272,7 @@ function readFrameworkCompositionClaims(
     ...readFrameworkCompilerRelationships(sourceProject, readerFilters).map(
       (row) =>
         claimFromRelationship(
-          relationshipDraft(row, "compiler"),
+          relationshipDraft(row, FrameworkRelationshipFamily.Compiler),
           LensId.FrameworkCompiler,
           "relationships",
           [BasisKind.TypeScriptChecker],
@@ -275,7 +281,7 @@ function readFrameworkCompositionClaims(
     ...readFrameworkExpressionRelationships(sourceProject, readerFilters).map(
       (row) =>
         claimFromRelationship(
-          relationshipDraft(row, "expression"),
+          relationshipDraft(row, FrameworkRelationshipFamily.Expression),
           LensId.FrameworkDiscovery,
           "expression-entities",
           [BasisKind.TypeScriptChecker],
@@ -286,9 +292,20 @@ function readFrameworkCompositionClaims(
         claimFromRelationship(
           relationshipDraft(row, row.family),
           LensId.FrameworkDiscovery,
-          structuralRelationshipProjection(row.family),
+          frameworkStructuralRelationshipProjection(row.family),
           [BasisKind.TypeScriptChecker],
         ),
+    ),
+    ...routerRelationshipsFromFlowRows(
+      readFrameworkRouterAnalysis(sourceProject).flows,
+      readerFilters,
+    ).map((row) =>
+      claimFromRelationship(
+        relationshipDraft(row, FrameworkRelationshipFamily.Router),
+        LensId.FrameworkRouter,
+        "relationships",
+        [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+      ),
     ),
     ...readFrameworkRenderingRelationships(
       sourceProject,
@@ -301,7 +318,7 @@ function readFrameworkCompositionClaims(
       )
       .map((row) =>
         claimFromRelationship(
-          relationshipDraft(row, "rendering"),
+          relationshipDraft(row, FrameworkRelationshipFamily.Rendering),
           LensId.FrameworkRendering,
           "relationships",
           [BasisKind.SourceText, BasisKind.TypeScriptChecker],
@@ -312,7 +329,7 @@ function readFrameworkCompositionClaims(
       readerFilters as FrameworkLifecycleFilters,
     ).map((row) =>
       claimFromRelationship(
-        relationshipDraft(row, "lifecycle"),
+        relationshipDraft(row, FrameworkRelationshipFamily.Lifecycle),
         LensId.FrameworkLifecycle,
         "relationships",
         [BasisKind.SourceText, BasisKind.TypeScriptChecker],
@@ -323,7 +340,7 @@ function readFrameworkCompositionClaims(
       readerFilters as FrameworkObservationFilters,
     ).map((row) =>
       claimFromRelationship(
-        relationshipDraft(row, "observation"),
+        relationshipDraft(row, FrameworkRelationshipFamily.Observation),
         LensId.FrameworkObservation,
         "relationships",
         [BasisKind.SourceText, BasisKind.TypeScriptChecker],
@@ -355,24 +372,12 @@ function readerFiltersForComposition(
 
 function relationshipDraft(
   row: RelationshipClaimDraft,
-  family: string,
+  family: FrameworkRelationshipFamily,
 ): RelationshipClaimDraft {
   return {
     ...row,
     family: row.family ?? family,
   };
-}
-
-function structuralRelationshipProjection(family: string): string {
-  switch (family) {
-    case "observation":
-      return "observers";
-    case "router":
-      return "router-entities";
-    case "rendering":
-    default:
-      return "rendering-structures";
-  }
 }
 
 function claimFromRelationship(
@@ -586,15 +591,28 @@ function compositionQueryTerms(
     filters.symbolName,
     filters.query,
   ].filter((term): term is string => term !== undefined && term.length > 0);
-  return terms.length === 0 ? DEFAULT_FRAMEWORK_ACTOR_NAMES : terms;
+  if (terms.length > 0) {
+    return terms;
+  }
+  return hasStructuredCompositionFilter(filters) ? [] : DEFAULT_FRAMEWORK_ACTOR_NAMES;
+}
+
+function hasStructuredCompositionFilter(filters: FrameworkCompositionFilters): boolean {
+  return filters.packageId !== undefined ||
+    filters.family !== undefined ||
+    filters.predicate !== undefined ||
+    filters.relation !== undefined ||
+    filters.mechanism !== undefined ||
+    filters.phase !== undefined ||
+    filters.targetName !== undefined;
 }
 
 function compositionFiltersFromInquiry(
   inquiry: Inquiry,
 ): FrameworkCompositionFilters {
   return {
-    ...filtersFromRecord(inquiry.subject),
-    ...filtersFromRecord(inquiry.filters),
+    ...frameworkCompositionFiltersFromRecord(inquiry.subject),
+    ...frameworkCompositionFiltersFromRecord(inquiry.filters),
   };
 }
 
@@ -602,43 +620,47 @@ function emulationFiltersFromInquiry(
   inquiry: Inquiry,
 ): FrameworkEmulationFilters {
   return {
-    ...filtersFromRecord(inquiry.subject),
-    ...filtersFromRecord(inquiry.filters),
+    ...frameworkCompositionFiltersFromRecord(inquiry.subject),
+    ...frameworkCompositionFiltersFromRecord(inquiry.filters),
     ...emulationOnlyFiltersFromRecord(inquiry.subject),
     ...emulationOnlyFiltersFromRecord(inquiry.filters),
   };
 }
 
-function filtersFromRecord(value: unknown): FrameworkCompositionFilters {
-  if (value === null || typeof value !== "object") {
-    return {};
-  }
-  const source = value as Record<string, unknown>;
-  return {
-    ...stringFilter(source, "packageId"),
-    ...stringFilter(source, "symbolName"),
-    ...stringFilter(source, "actorName"),
-    ...stringFilter(source, "family"),
-    ...stringFilter(source, "predicate"),
-    ...stringFilter(source, "relation"),
-    ...stringFilter(source, "mechanism"),
-    ...stringFilter(source, "phase"),
-    ...stringFilter(source, "query"),
-  };
+const frameworkCompositionFilterKeys = [
+  "packageId",
+  "symbolName",
+  "actorName",
+  "family",
+  "predicate",
+  "relation",
+  "mechanism",
+  "phase",
+  "query",
+] as const satisfies readonly (keyof FrameworkCompositionFilters & string)[];
+
+function frameworkCompositionFiltersFromRecord(
+  value: unknown,
+): FrameworkCompositionFilters {
+  return stringFiltersFromRecord<FrameworkCompositionFilters>(
+    value,
+    frameworkCompositionFilterKeys,
+  );
 }
 
 function emulationOnlyFiltersFromRecord(value: unknown): FrameworkEmulationFilters {
-  if (value === null || typeof value !== "object") {
-    return {};
-  }
-  const source = value as Record<string, unknown>;
-  return {
-    ...stringFilter(source, "emulationLayer"),
-    ...stringFilter(source, "emulationMode"),
-    ...stringFilter(source, "obligationKind"),
-    ...stringFilter(source, "targetName"),
-  };
+  return stringFiltersFromRecord<FrameworkEmulationFilters>(
+    value,
+    frameworkEmulationFilterKeys,
+  );
 }
+
+const frameworkEmulationFilterKeys = [
+  "emulationLayer",
+  "emulationMode",
+  "obligationKind",
+  "targetName",
+] as const satisfies readonly (keyof FrameworkEmulationFilters & string)[];
 
 function isEmulationOverviewInquiry(
   inquiry: Inquiry,
@@ -655,14 +677,6 @@ function isEmulationOverviewInquiry(
     filters.obligationKind === undefined &&
     filters.targetName === undefined
   );
-}
-
-function stringFilter(
-  source: Record<string, unknown>,
-  key: keyof FrameworkCompositionFilters,
-): object {
-  const value = source[key];
-  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
 }
 
 function evidenceForActor(row: SemanticActorRow): Evidence {

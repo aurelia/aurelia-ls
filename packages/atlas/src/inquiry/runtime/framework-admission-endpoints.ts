@@ -8,8 +8,8 @@ import {
 import type { SourceTargetRow } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 import {
+  requiredSourceRangeForTarget,
   sourceRangeForCallSiteEntry,
-  sourceRangeForTarget,
 } from "./framework-support.js";
 import type {
   FrameworkBundleAssociationRow,
@@ -32,14 +32,13 @@ const expressionEndpointKindByAssociationKind: Partial<
 /** Build the source endpoint for a configuration/bundle export admitting values. */
 export function endpointForAdmissionBundle(
   bundle: FrameworkBundleExportRow,
-  fallbackSource: SourceRange,
 ): FrameworkRelationshipEndpoint {
   return {
     kind: FrameworkRelationshipEndpointKind.ConfigurationExport,
     name: bundle.exportEntry.exportName,
     packageId: bundle.packageId,
     packageName: bundle.packageName,
-    source: sourceRangeForBundleExport(bundle) ?? fallbackSource,
+    source: requiredSourceRangeForBundleExport(bundle),
   };
 }
 
@@ -77,19 +76,20 @@ export function endpointForAdmissionAssociation(
       name: association.registryExport.exportEntry.exportName,
       packageId: association.registryExport.packageId,
       packageName: association.registryExport.packageName,
-      source:
-        sourceRangeForBundleExport(association.registryExport) ??
-        association.source,
+      source: requiredSourceRangeForBundleExport(association.registryExport),
     };
   }
-  return expressionEndpoint(endpointKindForAssociation(association), association);
+  return admissionExpressionEndpoint(endpointKindForAssociation(association), association);
 }
 
-/** Best source range for a bundle export declaration. */
-export function sourceRangeForBundleExport(row: {
+/** Exact source range for a bundle export declaration. */
+export function requiredSourceRangeForBundleExport(row: {
   readonly exportEntry: { readonly targets: readonly SourceTargetRow[] };
-}): SourceRange | null {
-  return sourceRangeForTarget(row.exportEntry.targets[0]);
+}): SourceRange {
+  return requiredSourceRangeForTarget(
+    row.exportEntry.targets[0],
+    "Framework bundle export is missing a source-backed target.",
+  );
 }
 
 function endpointKindForAssociation(
@@ -99,7 +99,7 @@ function endpointKindForAssociation(
     FrameworkRelationshipEndpointKind.RegistrationArgument;
 }
 
-function expressionEndpoint(
+function admissionExpressionEndpoint(
   kind: FrameworkRelationshipEndpointKind,
   association: FrameworkBundleAssociationRow,
 ): FrameworkRelationshipEndpoint {

@@ -92,12 +92,27 @@ kernel records.
 configuration recognition, installs each modeled container's built-in `IContainer` self resolver, then spends
 configuration-owned registration admissions against the sequence's root container.
 
+Plugin, builder, and registry-body sequences can exist in a project without being attached to an app root. DI world
+construction skips those unattached sequences instead of emitting missing-container seams; the seam is reserved for
+app-owned configuration sequences that should have produced a root container but did not.
+
 The current spending path is intentionally narrow but end-to-end:
 
 - resolver-producing admissions with closed admitted keys become runtime-shaped `Resolver` products and
   `ContainerResolverSlot` products;
+- callback and cached-callback resolver admissions are closed at registration time. Their callback bodies are not
+  executed while constructing the container world; a later activation/dependency inquiry should inspect those bodies if
+  it needs service-locator reads or produced-value flow.
 - known framework resource catalog admissions become `ContainerResourceSlot` products keyed by
   `au:resource:<type>:<name>`, including alias keys such as `hide` for `show`;
+- i18n framework effects spend into resource headers, translation syntax/renderers, resolver slots for
+  `I18nInitOptions`, `II18nextWrapper`, and `I18N`, plus the activating AppTask that observes `I18N.initPromise`;
+- router framework effects spend into concrete resolver slots for `IBaseHref`, `IRouterOptions`, `RouterOptions`, and
+  `IRouter`, plus deferred AppTask products for the creating/hydrated/activated/deactivated lifecycle hooks exposed by
+  `RouterConfiguration`;
+- state framework effects spend into the `state` resource/syntax/renderer catalogs, an `IStoreRegistry` resolver slot,
+  and the creating AppTask that receives `IContainer`; the default `Store`/`IStore` instance registration stays inside
+  that deferred task callback rather than being pre-installed into the configuration-time container world;
 - every spent admission produces a `ContainerRegistrationOperation` product and a `di.accepts-registration` claim;
 - registration operations point at their emitted resolver, registry, and slot products through `di.produces-product`
   claims;

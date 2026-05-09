@@ -1,5 +1,12 @@
 import ts from "typescript";
 
+import {
+  countBy,
+  groupBy,
+  pushMapSetValue,
+  pushMapValue,
+  uniqueByKey,
+} from "../collections.js";
 import type { SourceRange } from "../inquiry/locus.js";
 import {
   AURELIA_FRAMEWORK_PACKAGE_IDS,
@@ -9,11 +16,12 @@ import {
   isPackageIndexSource,
   memberSurfacesForDeclaration,
   resolveAlias,
+  requiredSourceFileIdentity,
+  requiredSourceRangeForNode,
   SourceProjectMemo,
   sourceDeclarationForDeclarationFileMirror,
   type SourceFileIdentity,
   type SourceProject,
-  sourceRangeForNode,
   sourceRangeKey,
   symbolForDeclaration,
   symbolForExpression,
@@ -401,10 +409,7 @@ class AureliaApiUsageIndexBuilder {
       this.#sourceProject,
       input.declaration,
     );
-    const source = sourceRangeForNode(this.#sourceProject, sourceDeclaration);
-    if (source === null) {
-      return;
-    }
+    const source = requiredSourceRangeForNode(this.#sourceProject, sourceDeclaration);
     const declarationPackage = this.#sourceProject.packageForFileName(sourceDeclaration.getSourceFile().fileName);
     if (declarationPackage === null || !this.#frameworkPackageIds.has(declarationPackage.id)) {
       return;
@@ -439,19 +444,19 @@ class AureliaApiUsageIndexBuilder {
     this.#facetById.set(facet.id, facet);
     this.#union.add(facet.id);
     for (const facetSymbol of symbols) {
-      mapPush(this.#facetsBySymbol, facetSymbol, facet);
+      pushMapValue(this.#facetsBySymbol, facetSymbol, facet);
       const key = symbolKeyForSymbol(this.#checker, facetSymbol);
       if (key !== null) {
-        mapPush(this.#facetsBySymbolKey, canonicalSourceSymbolKey(key), facet);
+        pushMapValue(this.#facetsBySymbolKey, canonicalSourceSymbolKey(key), facet);
       }
     }
-    mapPush(this.#facetsByExport, `${facet.packageId}:${facet.exportName}`, facet);
-    mapPush(this.#facetsByDeclaration, sourceRangeKey(source), facet);
+    pushMapValue(this.#facetsByExport, `${facet.packageId}:${facet.exportName}`, facet);
+    pushMapValue(this.#facetsByDeclaration, sourceRangeKey(source), facet);
   }
 
   #collectSameDeclarationEdges(): void {
     for (const facets of this.#facetsByDeclaration.values()) {
-      const sorted = uniqueById(facets).sort(compareMutableFacets);
+      const sorted = uniqueByKey(facets, (facet) => facet.id).sort(compareMutableFacets);
       const first = sorted[0];
       if (first === undefined) {
         continue;
@@ -478,7 +483,7 @@ class AureliaApiUsageIndexBuilder {
   #collectSameSymbolEdges(): void {
     for (const facets of this.#facetsBySymbol.values()) {
       const facetsByLocalName = groupBy(
-        uniqueById(facets),
+        uniqueByKey(facets, (facet) => facet.id),
         (facet) => facet.localName,
       );
       for (const sameNameFacets of facetsByLocalName.values()) {
@@ -497,10 +502,7 @@ class AureliaApiUsageIndexBuilder {
   #collectMemberDeclarations(): void {
     for (const facet of this.#facets) {
       for (const member of memberSurfacesForDeclaration(facet.declaration)) {
-        const source = sourceRangeForNode(this.#sourceProject, member.node);
-        if (source === null) {
-          continue;
-        }
+        const source = requiredSourceRangeForNode(this.#sourceProject, member.node);
         const symbol = symbolForDeclaration(this.#checker, member.node);
         const row: RawMemberDeclaration = {
           facetId: facet.id,
@@ -515,10 +517,10 @@ class AureliaApiUsageIndexBuilder {
         };
         this.#memberDeclarations.push(row);
         if (symbol !== null) {
-          mapPush(this.#memberDeclarationsBySymbol, symbol, row);
+          pushMapValue(this.#memberDeclarationsBySymbol, symbol, row);
           const key = symbolKeyForSymbol(this.#checker, symbol);
           if (key !== null) {
-            mapPush(this.#memberDeclarationsBySymbolKey, canonicalSourceSymbolKey(key), row);
+            pushMapValue(this.#memberDeclarationsBySymbolKey, canonicalSourceSymbolKey(key), row);
           }
         }
       }
@@ -558,7 +560,7 @@ class AureliaApiUsageIndexBuilder {
     for (const clause of declaration.heritageClauses ?? []) {
       for (const type of clause.types) {
         const target = this.#facetForExpression(type.expression);
-        const source = sourceRangeForNode(this.#sourceProject, type);
+        const source = requiredSourceRangeForNode(this.#sourceProject, type);
         const relation =
           ts.isClassDeclaration(declaration) && clause.token === ts.SyntaxKind.ImplementsKeyword
             ? "class-implements-interface"
@@ -573,7 +575,7 @@ class AureliaApiUsageIndexBuilder {
               ts.isClassDeclaration(target.declaration)
             ? "interface-extends-class"
             : null;
-        if (target !== null && source !== null) {
+        if (target !== null) {
           if (relation !== null) {
             edges.push({ relation, target, source });
           }
@@ -654,7 +656,7 @@ class AureliaApiUsageIndexBuilder {
   #buildSubjects(): AureliaApiSubjectRow[] {
     const facetsByRoot = new Map<string, MutableFacet[]>();
     for (const facet of this.#facets) {
-      mapPush(facetsByRoot, this.#union.find(facet.id), facet);
+      pushMapValue(facetsByRoot, this.#union.find(facet.id), facet);
     }
 
     const subjectIds = new Set<string>();
@@ -708,7 +710,7 @@ class AureliaApiUsageIndexBuilder {
       if (facet === undefined || facet.subjectId.length === 0) {
         continue;
       }
-      mapPush(
+      pushMapValue(
         declarationsBySlot,
         `${facet.subjectId}:${member.name}:${member.slotKind}`,
         member,
@@ -763,10 +765,7 @@ class AureliaApiUsageIndexBuilder {
       if (sourceFile.isDeclarationFile) {
         continue;
       }
-      const fileIdentity = this.#sourceProject.sourceFileIdentity(sourceFile);
-      if (fileIdentity === null) {
-        continue;
-      }
+      const fileIdentity = requiredSourceFileIdentity(this.#sourceProject, sourceFile);
       const consumerPackage = this.#sourceProject.packageForFileName(sourceFile.fileName);
       visitNode(sourceFile, (node) => {
         if (ts.isIdentifier(node)) {
@@ -792,10 +791,7 @@ class AureliaApiUsageIndexBuilder {
     if (symbol === null) {
       return;
     }
-    const source = sourceRangeForNode(this.#sourceProject, identifier);
-    if (source === null) {
-      return;
-    }
+    const source = requiredSourceRangeForNode(this.#sourceProject, identifier);
     const text = usageText(identifier);
     const owner = usageOwnerForNode(this.#sourceProject, identifier);
     const call = usageCallForIdentifier(this.#checker, identifier);
@@ -803,10 +799,10 @@ class AureliaApiUsageIndexBuilder {
     const canonicalSymbolKey =
       symbolKey === null ? null : canonicalSourceSymbolKey(symbolKey);
 
-    const facets = uniqueById([
+    const facets = uniqueByKey([
       ...(this.#facetsBySymbol.get(symbol) ?? []),
       ...(canonicalSymbolKey === null ? [] : this.#facetsBySymbolKey.get(canonicalSymbolKey) ?? []),
-    ]);
+    ], (facet) => facet.id);
     for (const facet of facets) {
       if (this.#isFacetDeclarationName(facet, source)) {
         continue;
@@ -938,9 +934,9 @@ class AureliaApiUsageIndexBuilder {
       if (from === undefined || to === undefined || from === to) {
         continue;
       }
-      setAdd(shapeTargetsBySubject, from, to);
+      pushMapSetValue(shapeTargetsBySubject, from, to);
       if (edge.relation === "class-implements-interface") {
-        setAdd(directTargetsBySubject, from, to);
+        pushMapSetValue(directTargetsBySubject, from, to);
       }
     }
     const memberSlotsBySubject = groupBy(memberSlots, (slot) => slot.subjectId);
@@ -1056,54 +1052,6 @@ function uniqueRawMemberDeclarations(
   return unique;
 }
 
-function countBy<TValue>(
-  rows: readonly TValue[],
-  keyFor: (row: TValue) => string,
-): Readonly<Record<string, number>> {
-  const counts = new Map<string, number>();
-  for (const row of rows) {
-    const key = keyFor(row);
-    counts.set(key, (counts.get(key) ?? 0) + 1);
-  }
-  return Object.fromEntries([...counts].sort(([left], [right]) => left.localeCompare(right)));
-}
-
-function groupBy<TValue>(
-  rows: readonly TValue[],
-  keyFor: (row: TValue) => string,
-): ReadonlyMap<string, readonly TValue[]> {
-  const grouped = new Map<string, TValue[]>();
-  for (const row of rows) {
-    mapPush(grouped, keyFor(row), row);
-  }
-  return grouped;
-}
-
-function mapPush<TKey, TValue>(
-  map: Map<TKey, TValue[]>,
-  key: TKey,
-  value: TValue,
-): void {
-  const existing = map.get(key);
-  if (existing === undefined) {
-    map.set(key, [value]);
-  } else {
-    existing.push(value);
-  }
-}
-
-function setAdd<TKey, TValue>(
-  map: Map<TKey, Set<TValue>>,
-  key: TKey,
-  value: TValue,
-): void {
-  const existing = map.get(key);
-  if (existing === undefined) {
-    map.set(key, new Set([value]));
-  } else {
-    existing.add(value);
-  }
-}
 
 function reachableSubjectIds(
   rootId: string,
@@ -1148,16 +1096,6 @@ function expressionNameText(expression: ts.Expression): string | null {
     return expression.argumentExpression.text;
   }
   return null;
-}
-
-function uniqueById<TValue extends { readonly id: string }>(
-  values: readonly TValue[],
-): TValue[] {
-  const byId = new Map<string, TValue>();
-  for (const value of values) {
-    byId.set(value.id, value);
-  }
-  return [...byId.values()];
 }
 
 function compareMutableFacets(left: MutableFacet, right: MutableFacet): number {

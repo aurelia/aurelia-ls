@@ -15,6 +15,8 @@ import type {
 } from "../../source/index.js";
 import {
   readTypeScriptCallSiteEntry,
+  requiredSourceFileIdentity,
+  sourceRangeForSourceFileNode,
   SourceProjectKeyedMemo,
   SourceProjectMemo,
 } from "../../source/index.js";
@@ -22,11 +24,7 @@ import type { SourceRange } from "../locus.js";
 import type { FrameworkObserverEntityRow } from "./framework-entities.js";
 import type { FrameworkDiscoveryFilters } from "./framework-filters.js";
 import { readFrameworkObserverEntities } from "./framework-observer-entities.js";
-import {
-  externalFileIdentity,
-  sourceRangeFromFileSpan,
-  sourceSpan,
-} from "./framework-support.js";
+import { sourceRangeFromFileSpan } from "./framework-support.js";
 import {
   isNestedExecutionBoundary,
   propertyNameText,
@@ -246,6 +244,29 @@ interface SiteClassification {
   readonly targetKind: FrameworkRelationshipEndpointKind;
 }
 
+interface ObservationCallContext {
+  readonly executable: ObservationExecutable;
+  readonly sourceFile: ts.SourceFile;
+  readonly node: ts.CallExpression;
+  readonly callText: string;
+  readonly calleeName: string;
+  readonly calleeText: string;
+  readonly receiverText: string | null;
+}
+
+interface ObservationCallClassification {
+  readonly surfaceKind?: FrameworkObservationSurfaceKind;
+  readonly calleeName?: string | readonly string[];
+  readonly calleeText?: string;
+  readonly receiverText?: string;
+  readonly calleeTextIncludes?: string;
+  readonly callTextIncludes?: string;
+  readonly callTextStartsWith?: string;
+  readonly receiverTextIncludes?: string;
+  readonly when?: (context: ObservationCallContext) => boolean;
+  readonly classify: (context: ObservationCallContext) => SiteClassification;
+}
+
 const returnExpressionClassifications = new Map<string, SiteClassification>([
   [
     "propertyAccessor",
@@ -399,6 +420,662 @@ const newExpressionClassifications = new Map<string, SiteClassification>([
     ),
   ],
 ]);
+
+// Ordered to mirror the previous branch order: generic watcher/effect classifiers
+// run first, then observer/dirty-check sites before collection helpers, then the
+// broad observer-locator/connectable fallbacks.
+const preCollectionCallClassifications: readonly ObservationCallClassification[] =
+  [
+    {
+      calleeTextIncludes: "_nodeObserverLocator.handles",
+      classify: () =>
+        lookupSite(
+          FrameworkObservationFlowSiteKind.NodeLocatorHandles,
+          FrameworkRelationshipMechanism.ObserverLocator,
+          "INodeObserverLocator.handles",
+          FrameworkRelationshipRelation.DelegatesLookup,
+        ),
+    },
+    {
+      calleeTextIncludes: "_nodeObserverLocator.getObserver",
+      classify: () =>
+        lookupSite(
+          FrameworkObservationFlowSiteKind.NodeLocatorObserver,
+          FrameworkRelationshipMechanism.ObserverLocator,
+          "INodeObserverLocator.getObserver",
+          FrameworkRelationshipRelation.DelegatesLookup,
+        ),
+    },
+    {
+      calleeTextIncludes: "_nodeObserverLocator.getAccessor",
+      classify: () =>
+        lookupSite(
+          FrameworkObservationFlowSiteKind.NodeLocatorAccessor,
+          FrameworkRelationshipMechanism.ObserverLocator,
+          "INodeObserverLocator.getAccessor",
+          FrameworkRelationshipRelation.DelegatesLookup,
+        ),
+    },
+    {
+      calleeName: "getObserverLookup",
+      classify: ({ node }) => {
+        const cacheWrite = isObserverCacheWrite(node);
+        return lookupSite(
+          cacheWrite
+            ? FrameworkObservationFlowSiteKind.ObserverCacheWrite
+            : FrameworkObservationFlowSiteKind.ObserverCacheRead,
+          FrameworkRelationshipMechanism.ObserverCache,
+          "observer lookup cache",
+          cacheWrite
+            ? FrameworkRelationshipRelation.ConfiguresObservation
+            : FrameworkRelationshipRelation.LooksUpObserver,
+          FrameworkRelationshipEndpointKind.Concept,
+        );
+      },
+    },
+    {
+      calleeTextIncludes: "_dirtyChecker.createProperty",
+      classify: () =>
+        dirtySite(
+          FrameworkObservationFlowSiteKind.DirtyCheckProperty,
+          "IDirtyChecker.createProperty",
+          FrameworkRelationshipRelation.ConstructsInstance,
+        ),
+    },
+    {
+      calleeName: "addProperty",
+      receiverTextIncludes: "_dirtyChecker",
+      classify: () =>
+        dirtySite(
+          FrameworkObservationFlowSiteKind.DirtyCheckTrack,
+          "IDirtyChecker.addProperty",
+          FrameworkRelationshipRelation.ConfiguresObservation,
+          FrameworkRelationshipEndpointKind.Concept,
+        ),
+    },
+    {
+      calleeName: "removeProperty",
+      receiverTextIncludes: "_dirtyChecker",
+      classify: () =>
+        dirtySite(
+          FrameworkObservationFlowSiteKind.DirtyCheckUntrack,
+          "IDirtyChecker.removeProperty",
+          FrameworkRelationshipRelation.ConfiguresObservation,
+          FrameworkRelationshipEndpointKind.Concept,
+        ),
+    },
+    {
+      calleeName: "queueRecurringTask",
+      classify: () =>
+        dirtySite(
+          FrameworkObservationFlowSiteKind.DirtyCheckSchedule,
+          "queueRecurringTask",
+          FrameworkRelationshipRelation.ConfiguresObservation,
+          FrameworkRelationshipEndpointKind.Concept,
+        ),
+    },
+    {
+      calleeName: "notify",
+      receiverTextIncludes: "subs",
+      classify: () =>
+        dirtySite(
+          FrameworkObservationFlowSiteKind.DirtyCheckFlush,
+          "subscriber notification",
+          FrameworkRelationshipRelation.ConfiguresObservation,
+          FrameworkRelationshipEndpointKind.Concept,
+        ),
+    },
+  ];
+
+const postCollectionCallClassifications: readonly ObservationCallClassification[] =
+  [
+    {
+      calleeName: "getComputedObserver",
+      classify: () =>
+        locatorSite(
+          FrameworkObservationFlowSiteKind.ComputedObserver,
+          "ObserverLocator.getComputedObserver",
+          FrameworkRelationshipRelation.ConstructsInstance,
+        ),
+    },
+    {
+      calleeName: "getExpressionObserver",
+      classify: () =>
+        locatorSite(
+          FrameworkObservationFlowSiteKind.ExpressionObserver,
+          "IObserverLocator.getExpressionObserver",
+          FrameworkRelationshipRelation.LooksUpObserver,
+        ),
+    },
+    {
+      calleeName: "getObserver",
+      calleeTextIncludes: "adapter.",
+      classify: () =>
+        locatorSite(
+          FrameworkObservationFlowSiteKind.AdapterObserver,
+          "IObjectObservationAdapter.getObserver",
+          FrameworkRelationshipRelation.DelegatesLookup,
+        ),
+    },
+    {
+      calleeName: "getObserver",
+      calleeTextIncludes: "pd.get",
+      classify: () =>
+        locatorSite(
+          FrameworkObservationFlowSiteKind.GetterObserver,
+          "ObservableGetter.getObserver",
+          FrameworkRelationshipRelation.DelegatesLookup,
+        ),
+    },
+    {
+      surfaceKind: FrameworkObservationSurfaceKind.NodeObserverLocator,
+      calleeName: "getObserver",
+      receiverText: "this",
+      classify: () =>
+        nodeSite(
+          FrameworkObservationFlowSiteKind.NodeAccessorOverride,
+          "NodeObserverLocator.getObserver",
+          FrameworkRelationshipRelation.DelegatesLookup,
+          FrameworkRelationshipEndpointKind.Concept,
+        ),
+    },
+    {
+      calleeName: ["useConfig", "useConfigGlobal"],
+      receiverText: "this",
+      classify: ({ calleeName }) =>
+        nodeSite(
+          FrameworkObservationFlowSiteKind.NodeObserverConfig,
+          `NodeObserverLocator.${calleeName}`,
+          FrameworkRelationshipRelation.ConfiguresObservation,
+          FrameworkRelationshipEndpointKind.Concept,
+        ),
+    },
+    {
+      calleeName: ["overrideAccessor", "overrideAccessorGlobal"],
+      receiverText: "this",
+      classify: ({ calleeName }) =>
+        nodeSite(
+          FrameworkObservationFlowSiteKind.NodeAccessorOverride,
+          `NodeObserverLocator.${calleeName}`,
+          FrameworkRelationshipRelation.ConfiguresObservation,
+          FrameworkRelationshipEndpointKind.Concept,
+        ),
+    },
+    {
+      calleeName: "forNs",
+      calleeTextIncludes: "AttributeNSAccessor",
+      classify: () =>
+        nodeSite(
+          FrameworkObservationFlowSiteKind.NodeAccessor,
+          "AttributeNSAccessor.forNs",
+          FrameworkRelationshipRelation.LooksUpObserver,
+        ),
+    },
+    {
+      calleeName: "add",
+      receiverText: "this.obs",
+      classify: () =>
+        connectableSite(
+          FrameworkObservationFlowSiteKind.ConnectableSubscribe,
+          "BindingObserverRecord.add",
+          FrameworkRelationshipRelation.ConfiguresObservation,
+          FrameworkRelationshipEndpointKind.Concept,
+        ),
+    },
+    {
+      calleeName: "subscribe",
+      classify: ({ receiverText }) =>
+        connectableSite(
+          FrameworkObservationFlowSiteKind.ConnectableSubscribe,
+          receiverText === null ? "subscribe" : `${receiverText}.subscribe`,
+          FrameworkRelationshipRelation.ConfiguresObservation,
+          FrameworkRelationshipEndpointKind.Concept,
+        ),
+    },
+    {
+      calleeName: "unsubscribe",
+      classify: ({ receiverText }) =>
+        connectableSite(
+          FrameworkObservationFlowSiteKind.ConnectableUnsubscribe,
+          receiverText === null ? "unsubscribe" : `${receiverText}.unsubscribe`,
+          FrameworkRelationshipRelation.ConfiguresObservation,
+          FrameworkRelationshipEndpointKind.Concept,
+        ),
+    },
+    {
+      calleeName: "getObserver",
+      classify: ({ receiverText }) =>
+        locatorSite(
+          FrameworkObservationFlowSiteKind.ObserverLocatorObserver,
+          observerLocatorApiTarget(receiverText, "getObserver"),
+          FrameworkRelationshipRelation.LooksUpObserver,
+        ),
+    },
+    {
+      calleeName: "getAccessor",
+      classify: ({ receiverText }) =>
+        locatorSite(
+          FrameworkObservationFlowSiteKind.ObserverLocatorAccessor,
+          observerLocatorApiTarget(receiverText, "getAccessor"),
+          FrameworkRelationshipRelation.LooksUpObserver,
+        ),
+    },
+  ];
+
+const watcherCallClassifications: readonly ObservationCallClassification[] = [
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.WatchRegistry,
+    calleeName: "get",
+    receiverText: "watches",
+    classify: () =>
+      watchRegistrySite(
+        FrameworkObservationFlowSiteKind.WatchDefinitionRead,
+        "Watch registry WeakMap.get",
+        FrameworkRelationshipRelation.ReadsWatchDefinition,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.WatchRegistry,
+    calleeName: "set",
+    receiverText: "watches",
+    classify: () =>
+      watchRegistrySite(
+        FrameworkObservationFlowSiteKind.WatchDefinitionStore,
+        "Watch registry WeakMap.set",
+        FrameworkRelationshipRelation.StoresWatchDefinition,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.WatchRegistry,
+    calleeName: "push",
+    receiverText: "defs",
+    classify: () =>
+      watchRegistrySite(
+        FrameworkObservationFlowSiteKind.WatchDefinitionStore,
+        "Watch registry definition array",
+        FrameworkRelationshipRelation.StoresWatchDefinition,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.ResourceWatchMetadata,
+    calleeName: "mergeArrays",
+    callTextIncludes: "watches",
+    classify: () =>
+      watchMetadataSite(
+        FrameworkObservationFlowSiteKind.ResourceWatchDefinitionMerge,
+        "resource definition watch metadata",
+        FrameworkRelationshipRelation.ReadsWatchDefinition,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.ResourceWatchMetadata,
+    calleeText: "Watch.getDefinitions",
+    classify: () =>
+      watchMetadataSite(
+        FrameworkObservationFlowSiteKind.WatchDefinitionRead,
+        "Watch.getDefinitions",
+        FrameworkRelationshipRelation.ReadsWatchDefinition,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.WatchDecorator,
+    calleeText: "Watch.add",
+    classify: () =>
+      watchDecoratorSite(
+        FrameworkObservationFlowSiteKind.WatchDefinitionStore,
+        "Watch.add",
+        FrameworkRelationshipRelation.StoresWatchDefinition,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.WatcherSetup,
+    calleeText: "Watch.getDefinitions",
+    classify: () =>
+      watcherSite(
+        FrameworkObservationFlowSiteKind.WatchDefinitionRead,
+        "Watch.getDefinitions",
+        FrameworkRelationshipRelation.ReadsWatchDefinition,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.WatchDecorator,
+    calleeName: "push",
+    callTextIncludes: ".watches.push",
+    classify: () =>
+      watchDecoratorSite(
+        FrameworkObservationFlowSiteKind.WatchDefinitionStore,
+        "resource definition watches",
+        FrameworkRelationshipRelation.StoresWatchDefinition,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.WatcherSetup,
+    calleeText: "Reflect.get",
+    classify: () =>
+      watcherSite(
+        FrameworkObservationFlowSiteKind.WatchCallbackResolve,
+        "watch callback method",
+        FrameworkRelationshipRelation.ReadsWatchDefinition,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.WatcherSetup,
+    calleeName: "isFunction",
+    callTextIncludes: "expression",
+    classify: () =>
+      watcherSite(
+        FrameworkObservationFlowSiteKind.WatchExpressionBranch,
+        "watch expression kind",
+        FrameworkRelationshipRelation.ReadsWatchDefinition,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.WatcherSetup,
+    calleeName: "parse",
+    receiverTextIncludes: "expressionParser",
+    classify: () =>
+      watcherSite(
+        FrameworkObservationFlowSiteKind.WatchExpressionParse,
+        "IExpressionParser.parse",
+        FrameworkRelationshipRelation.ParsesExpression,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.WatcherSetup,
+    calleeName: "getAccessScopeAst",
+    classify: () =>
+      watcherSite(
+        FrameworkObservationFlowSiteKind.WatchAccessScopeAst,
+        "AccessScopeExpression",
+        FrameworkRelationshipRelation.ParsesExpression,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.WatcherSetup,
+    calleeName: "addBinding",
+    callTextIncludes: "Watcher",
+    classify: ({ callText }) =>
+      watcherSite(
+        callText.includes("ComputedWatcher")
+          ? FrameworkObservationFlowSiteKind.ComputedWatcher
+          : FrameworkObservationFlowSiteKind.ExpressionWatcher,
+        "Controller.addBinding",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.Watcher,
+    calleeName: "queueTask",
+    classify: () =>
+      watcherSite(
+        FrameworkObservationFlowSiteKind.WatcherQueue,
+        "queueTask",
+        FrameworkRelationshipRelation.SchedulesEffect,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.Watcher,
+    calleeName: "enter",
+    classify: () =>
+      watcherSite(
+        FrameworkObservationFlowSiteKind.WatcherDependencyEnter,
+        "ConnectableSwitcher.enter",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.Watcher,
+    calleeName: "exit",
+    classify: () =>
+      watcherSite(
+        FrameworkObservationFlowSiteKind.WatcherDependencyExit,
+        "ConnectableSwitcher.exit",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.Watcher,
+    calleeName: "astEvaluate",
+    classify: () =>
+      watcherSite(
+        FrameworkObservationFlowSiteKind.WatcherCompute,
+        "astEvaluate",
+        FrameworkRelationshipRelation.EvaluatesExpression,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.Watcher,
+    calleeName: "compute",
+    receiverText: "this",
+    classify: () =>
+      watcherSite(
+        FrameworkObservationFlowSiteKind.WatcherCompute,
+        "ComputedWatcher.compute",
+        FrameworkRelationshipRelation.EvaluatesExpression,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.Watcher,
+    calleeName: "call",
+    receiverText: "this.$get",
+    classify: () =>
+      watcherSite(
+        FrameworkObservationFlowSiteKind.WatcherCompute,
+        "dependency collection function",
+        FrameworkRelationshipRelation.EvaluatesExpression,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.Watcher,
+    calleeName: "call",
+    receiverText: "this._callback",
+    classify: () =>
+      watcherSite(
+        FrameworkObservationFlowSiteKind.WatcherCallbackInvoke,
+        "IWatcherCallback",
+        FrameworkRelationshipRelation.InvokesCallback,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.Watcher,
+    calleeName: ["clear", "clearAll"],
+    receiverText: "this.obs",
+    classify: ({ calleeName }) =>
+      watcherSite(
+        FrameworkObservationFlowSiteKind.WatcherDependencyClear,
+        `observer record ${calleeName}`,
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.SlotWatcher,
+    calleeName: "subscribe",
+    receiverText: "slot",
+    classify: () =>
+      watcherSite(
+        FrameworkObservationFlowSiteKind.SlotWatcherSubscribe,
+        "IAuSlot.subscribe",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.SlotWatcher,
+    calleeName: "unsubscribe",
+    receiverText: "slot",
+    classify: () =>
+      watcherSite(
+        FrameworkObservationFlowSiteKind.SlotWatcherUnsubscribe,
+        "IAuSlot.unsubscribe",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    surfaceKind: FrameworkObservationSurfaceKind.SlotWatcher,
+    calleeName: "notify",
+    receiverText: "this.subs",
+    classify: () =>
+      watcherSite(
+        FrameworkObservationFlowSiteKind.SlotWatcher,
+        "slot watcher subscribers",
+        FrameworkRelationshipRelation.InvokesCallback,
+      ),
+  },
+];
+
+const effectCallClassifications: readonly ObservationCallClassification[] = [
+  {
+    calleeName: "run",
+    receiverText: "effect",
+    classify: () =>
+      effectSite(
+        FrameworkObservationFlowSiteKind.EffectRunner,
+        "IEffect.run",
+        FrameworkRelationshipRelation.SchedulesEffect,
+      ),
+  },
+  {
+    calleeName: "isString",
+    callTextIncludes: "expressionOrGetter",
+    classify: () =>
+      effectSite(
+        FrameworkObservationFlowSiteKind.EffectWatchExpression,
+        "watch expression kind",
+        FrameworkRelationshipRelation.ReadsWatchDefinition,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    calleeName: "getExpressionObserver",
+    classify: ({ receiverText }) =>
+      effectSite(
+        FrameworkObservationFlowSiteKind.EffectWatchExpression,
+        receiverText === null
+          ? "IObserverLocator.getExpressionObserver"
+          : `${receiverText}.getExpressionObserver`,
+        FrameworkRelationshipRelation.LooksUpObserver,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    calleeName: "getObserver",
+    classify: ({ receiverText }) =>
+      effectSite(
+        FrameworkObservationFlowSiteKind.EffectWatchGetter,
+        receiverText === null
+          ? "IObserverLocator.getObserver"
+          : `${receiverText}.getObserver`,
+        FrameworkRelationshipRelation.LooksUpObserver,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    calleeName: "subscribe",
+    receiverText: "observer",
+    classify: () =>
+      effectSite(
+        FrameworkObservationFlowSiteKind.EffectSubscribe,
+        "observer.subscribe",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+      ),
+  },
+  {
+    calleeName: "unsubscribe",
+    receiverText: "observer",
+    classify: () =>
+      effectSite(
+        FrameworkObservationFlowSiteKind.EffectStop,
+        "observer.unsubscribe",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+      ),
+  },
+  {
+    calleeName: "enterConnectable",
+    classify: () =>
+      effectSite(
+        FrameworkObservationFlowSiteKind.EffectDependencyEnter,
+        "enterConnectable",
+        FrameworkRelationshipRelation.CollectsDependency,
+      ),
+  },
+  {
+    calleeName: "exitConnectable",
+    classify: () =>
+      effectSite(
+        FrameworkObservationFlowSiteKind.EffectDependencyExit,
+        "exitConnectable",
+        FrameworkRelationshipRelation.CollectsDependency,
+      ),
+  },
+  {
+    calleeName: ["clear", "clearAll"],
+    receiverText: "this.obs",
+    classify: ({ calleeName }) =>
+      effectSite(
+        FrameworkObservationFlowSiteKind.WatcherDependencyClear,
+        `observer record ${calleeName}`,
+        FrameworkRelationshipRelation.CollectsDependency,
+      ),
+  },
+  {
+    calleeName: "fn",
+    classify: () =>
+      effectSite(
+        FrameworkObservationFlowSiteKind.EffectRunner,
+        "EffectRunFunc",
+        FrameworkRelationshipRelation.InvokesCallback,
+      ),
+  },
+  {
+    callTextStartsWith: "this.fn(",
+    classify: () =>
+      effectSite(
+        FrameworkObservationFlowSiteKind.EffectRunner,
+        "EffectRunFunc",
+        FrameworkRelationshipRelation.InvokesCallback,
+      ),
+  },
+  {
+    calleeName: "callback",
+    classify: () =>
+      effectSite(
+        FrameworkObservationFlowSiteKind.WatcherCallbackInvoke,
+        "watch callback",
+        FrameworkRelationshipRelation.InvokesCallback,
+      ),
+  },
+  {
+    callTextIncludes: "cleanupTask?.",
+    classify: () =>
+      effectSite(
+        FrameworkObservationFlowSiteKind.EffectCleanup,
+        "effect cleanup callback",
+        FrameworkRelationshipRelation.InvokesCallback,
+      ),
+  },
+  {
+    callTextIncludes: "_cleanupTask?.",
+    classify: () =>
+      effectSite(
+        FrameworkObservationFlowSiteKind.EffectCleanup,
+        "effect cleanup callback",
+        FrameworkRelationshipRelation.InvokesCallback,
+      ),
+  },
+];
 
 const observationInternalsMemo =
   new SourceProjectMemo<ObservationInternalsIndex>();
@@ -619,9 +1296,7 @@ function observationInternalsForSourceFile(
   readonly methods: readonly FrameworkObservationSurfaceMethodRow[];
   readonly sites: readonly FrameworkObservationFlowSiteRow[];
 }[] {
-  const file =
-    sourceProject.sourceFileIdentity(sourceFile) ??
-    externalFileIdentity(sourceProject, sourceFile);
+  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
   const packageInfo = sourceProject.packageForFileName(sourceFile.fileName);
   if (
     file.packageId === null ||
@@ -915,10 +1590,7 @@ function executable(
     ownerName,
     methodName,
     body,
-    methodSource: sourceRangeFromFileSpan(
-      file.repoPath,
-      sourceSpan(sourceFile, node),
-    ),
+    methodSource: sourceRangeForSourceFileNode(file.repoPath, sourceFile, node),
   };
 }
 
@@ -1050,9 +1722,10 @@ function flowSiteForReturn(
     executable,
     classification,
     node.getText(executable.sourceFile),
-    sourceRangeFromFileSpan(
+    sourceRangeForSourceFileNode(
       executable.file.repoPath,
-      sourceSpan(executable.sourceFile, node),
+      executable.sourceFile,
+      node,
     ),
   );
 }
@@ -1069,9 +1742,10 @@ function flowSiteForPropertyAccess(
     executable,
     classification,
     node.getText(executable.sourceFile),
-    sourceRangeFromFileSpan(
+    sourceRangeForSourceFileNode(
       executable.file.repoPath,
-      sourceSpan(executable.sourceFile, node),
+      executable.sourceFile,
+      node,
     ),
   );
 }
@@ -1083,7 +1757,7 @@ function flowSiteRow(
   source: SourceRange,
   callSite?: TypeScriptCallSiteEntry,
 ): FrameworkObservationFlowSiteRow {
-  const from = methodEndpoint(executable);
+  const from = observationMethodEndpoint(executable);
   const to = targetEndpoint(
     classification.targetName,
     executable,
@@ -1120,116 +1794,34 @@ function classifyCallLike(
   callSite: TypeScriptCallSiteEntry,
 ): SiteClassification | null {
   if (ts.isNewExpression(node)) {
-    return classifyNewExpression(executable, sourceFile, node, callSite);
+    return classifyObservationNewExpression(executable, sourceFile, node, callSite);
   }
   const expression = unwrapExpression(node.expression);
-  const calleeName = callSite.calleeName;
-  const calleeText = node.expression.getText(sourceFile);
-  const receiverText = propertyAccessReceiverText(sourceFile, expression);
-
-  const watchClassification = classifyWatcherCall(
+  const context: ObservationCallContext = {
     executable,
     sourceFile,
     node,
-    calleeName,
-    calleeText,
-    receiverText,
-  );
+    callText: node.getText(sourceFile),
+    calleeName: callSite.calleeName,
+    calleeText: node.expression.getText(sourceFile),
+    receiverText: propertyAccessReceiverText(sourceFile, expression),
+  };
+
+  const watchClassification = classifyWatcherCall(context);
   if (watchClassification !== null) {
     return watchClassification;
   }
-  const effectClassification = classifyEffectCall(
-    executable,
-    sourceFile,
-    node,
-    calleeName,
-    receiverText,
-  );
+  const effectClassification = classifyEffectCall(context);
   if (effectClassification !== null) {
     return effectClassification;
   }
 
-  if (calleeText.includes("_nodeObserverLocator.handles")) {
-    return lookupSite(
-      FrameworkObservationFlowSiteKind.NodeLocatorHandles,
-      FrameworkRelationshipMechanism.ObserverLocator,
-      "INodeObserverLocator.handles",
-      FrameworkRelationshipRelation.DelegatesLookup,
-    );
-  }
-  if (calleeText.includes("_nodeObserverLocator.getObserver")) {
-    return lookupSite(
-      FrameworkObservationFlowSiteKind.NodeLocatorObserver,
-      FrameworkRelationshipMechanism.ObserverLocator,
-      "INodeObserverLocator.getObserver",
-      FrameworkRelationshipRelation.DelegatesLookup,
-    );
-  }
-  if (calleeText.includes("_nodeObserverLocator.getAccessor")) {
-    return lookupSite(
-      FrameworkObservationFlowSiteKind.NodeLocatorAccessor,
-      FrameworkRelationshipMechanism.ObserverLocator,
-      "INodeObserverLocator.getAccessor",
-      FrameworkRelationshipRelation.DelegatesLookup,
-    );
-  }
-  if (calleeName === "getObserverLookup") {
-    return lookupSite(
-      isObserverCacheWrite(node)
-        ? FrameworkObservationFlowSiteKind.ObserverCacheWrite
-        : FrameworkObservationFlowSiteKind.ObserverCacheRead,
-      FrameworkRelationshipMechanism.ObserverCache,
-      "observer lookup cache",
-      isObserverCacheWrite(node)
-        ? FrameworkRelationshipRelation.ConfiguresObservation
-        : FrameworkRelationshipRelation.LooksUpObserver,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (calleeText.includes("_dirtyChecker.createProperty")) {
-    return dirtySite(
-      FrameworkObservationFlowSiteKind.DirtyCheckProperty,
-      "IDirtyChecker.createProperty",
-      FrameworkRelationshipRelation.ConstructsInstance,
-    );
-  }
-  if (
-    receiverText?.includes("_dirtyChecker") === true &&
-    calleeName === "addProperty"
-  ) {
-    return dirtySite(
-      FrameworkObservationFlowSiteKind.DirtyCheckTrack,
-      "IDirtyChecker.addProperty",
-      FrameworkRelationshipRelation.ConfiguresObservation,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (
-    receiverText?.includes("_dirtyChecker") === true &&
-    calleeName === "removeProperty"
-  ) {
-    return dirtySite(
-      FrameworkObservationFlowSiteKind.DirtyCheckUntrack,
-      "IDirtyChecker.removeProperty",
-      FrameworkRelationshipRelation.ConfiguresObservation,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (calleeName === "queueRecurringTask") {
-    return dirtySite(
-      FrameworkObservationFlowSiteKind.DirtyCheckSchedule,
-      "queueRecurringTask",
-      FrameworkRelationshipRelation.ConfiguresObservation,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (calleeName === "notify" && receiverText?.includes("subs") === true) {
-    return dirtySite(
-      FrameworkObservationFlowSiteKind.DirtyCheckFlush,
-      "subscriber notification",
-      FrameworkRelationshipRelation.ConfiguresObservation,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
+  const preCollectionClassification = classifyObservationCall(
+    preCollectionCallClassifications,
+    context,
+  );
+  if (preCollectionClassification !== null) {
+    return preCollectionClassification;
   }
   const collectionClassification = classifyCollectionCall(
     sourceFile,
@@ -1239,114 +1831,64 @@ function classifyCallLike(
   if (collectionClassification !== null) {
     return collectionClassification;
   }
-  if (calleeName === "getComputedObserver") {
-    return locatorSite(
-      FrameworkObservationFlowSiteKind.ComputedObserver,
-      "ObserverLocator.getComputedObserver",
-      FrameworkRelationshipRelation.ConstructsInstance,
-    );
-  }
-  if (calleeName === "getExpressionObserver") {
-    return locatorSite(
-      FrameworkObservationFlowSiteKind.ExpressionObserver,
-      "IObserverLocator.getExpressionObserver",
-      FrameworkRelationshipRelation.LooksUpObserver,
-    );
-  }
-  if (calleeName === "getObserver" && calleeText.includes("adapter.")) {
-    return locatorSite(
-      FrameworkObservationFlowSiteKind.AdapterObserver,
-      "IObjectObservationAdapter.getObserver",
-      FrameworkRelationshipRelation.DelegatesLookup,
-    );
-  }
-  if (calleeName === "getObserver" && calleeText.includes("pd.get")) {
-    return locatorSite(
-      FrameworkObservationFlowSiteKind.GetterObserver,
-      "ObservableGetter.getObserver",
-      FrameworkRelationshipRelation.DelegatesLookup,
-    );
-  }
-  if (
-    executable.surfaceKind === FrameworkObservationSurfaceKind.NodeObserverLocator &&
-    calleeName === "getObserver" &&
-    receiverText === "this"
-  ) {
-    return nodeSite(
-      FrameworkObservationFlowSiteKind.NodeAccessorOverride,
-      "NodeObserverLocator.getObserver",
-      FrameworkRelationshipRelation.DelegatesLookup,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (
-    ["useConfig", "useConfigGlobal"].includes(calleeName) &&
-    receiverText === "this"
-  ) {
-    return nodeSite(
-      FrameworkObservationFlowSiteKind.NodeObserverConfig,
-      `NodeObserverLocator.${calleeName}`,
-      FrameworkRelationshipRelation.ConfiguresObservation,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (
-    ["overrideAccessor", "overrideAccessorGlobal"].includes(calleeName) &&
-    receiverText === "this"
-  ) {
-    return nodeSite(
-      FrameworkObservationFlowSiteKind.NodeAccessorOverride,
-      `NodeObserverLocator.${calleeName}`,
-      FrameworkRelationshipRelation.ConfiguresObservation,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (calleeName === "forNs" && calleeText.includes("AttributeNSAccessor")) {
-    return nodeSite(
-      FrameworkObservationFlowSiteKind.NodeAccessor,
-      "AttributeNSAccessor.forNs",
-      FrameworkRelationshipRelation.LooksUpObserver,
-    );
-  }
-  if (calleeName === "add" && receiverText === "this.obs") {
-    return connectableSite(
-      FrameworkObservationFlowSiteKind.ConnectableSubscribe,
-      "BindingObserverRecord.add",
-      FrameworkRelationshipRelation.ConfiguresObservation,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (calleeName === "subscribe") {
-    return connectableSite(
-      FrameworkObservationFlowSiteKind.ConnectableSubscribe,
-      receiverText === null ? "subscribe" : `${receiverText}.subscribe`,
-      FrameworkRelationshipRelation.ConfiguresObservation,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (calleeName === "unsubscribe") {
-    return connectableSite(
-      FrameworkObservationFlowSiteKind.ConnectableUnsubscribe,
-      receiverText === null ? "unsubscribe" : `${receiverText}.unsubscribe`,
-      FrameworkRelationshipRelation.ConfiguresObservation,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (calleeName === "getObserver") {
-    return locatorSite(
-      FrameworkObservationFlowSiteKind.ObserverLocatorObserver,
-      observerLocatorApiTarget(receiverText, "getObserver"),
-      FrameworkRelationshipRelation.LooksUpObserver,
-    );
-  }
-  if (calleeName === "getAccessor") {
-    return locatorSite(
-      FrameworkObservationFlowSiteKind.ObserverLocatorAccessor,
-      observerLocatorApiTarget(receiverText, "getAccessor"),
-      FrameworkRelationshipRelation.LooksUpObserver,
-    );
+  return classifyObservationCall(postCollectionCallClassifications, context);
+}
+
+function classifyObservationCall(
+  classifications: readonly ObservationCallClassification[],
+  context: ObservationCallContext,
+): SiteClassification | null {
+  for (const classification of classifications) {
+    if (matchesObservationCall(classification, context)) {
+      return classification.classify(context);
+    }
   }
   return null;
+}
+
+function matchesObservationCall(
+  classification: ObservationCallClassification,
+  context: ObservationCallContext,
+): boolean {
+  return (
+    (classification.surfaceKind === undefined ||
+      classification.surfaceKind === context.executable.surfaceKind) &&
+    matchesOptionalText(classification.calleeName, context.calleeName) &&
+    matchesOptionalText(classification.calleeText, context.calleeText) &&
+    matchesOptionalText(classification.receiverText, context.receiverText) &&
+    matchesOptionalIncludes(
+      classification.calleeTextIncludes,
+      context.calleeText,
+    ) &&
+    matchesOptionalIncludes(classification.callTextIncludes, context.callText) &&
+    matchesOptionalIncludes(
+      classification.receiverTextIncludes,
+      context.receiverText,
+    ) &&
+    (classification.callTextStartsWith === undefined ||
+      context.callText.startsWith(classification.callTextStartsWith)) &&
+    (classification.when === undefined || classification.when(context))
+  );
+}
+
+function matchesOptionalText(
+  expected: string | readonly string[] | undefined,
+  actual: string | null,
+): boolean {
+  if (expected === undefined) {
+    return true;
+  }
+  if (actual === null) {
+    return false;
+  }
+  return Array.isArray(expected) ? expected.includes(actual) : expected === actual;
+}
+
+function matchesOptionalIncludes(
+  needle: string | undefined,
+  haystack: string | null,
+): boolean {
+  return needle === undefined || haystack?.includes(needle) === true;
 }
 
 function observerLocatorApiTarget(
@@ -1365,359 +1907,24 @@ function observerLocatorApiTarget(
 }
 
 function classifyWatcherCall(
-  executable: ObservationExecutable,
-  sourceFile: ts.SourceFile,
-  node: ts.CallExpression,
-  calleeName: string,
-  calleeText: string,
-  receiverText: string | null,
+  context: ObservationCallContext,
 ): SiteClassification | null {
-  const callText = node.getText(sourceFile);
-  const surfaceKind = executable.surfaceKind;
-  const isWatchDecorator =
-    surfaceKind === FrameworkObservationSurfaceKind.WatchDecorator;
-  const isWatchRegistry =
-    surfaceKind === FrameworkObservationSurfaceKind.WatchRegistry;
-  const isResourceWatchMetadata =
-    surfaceKind === FrameworkObservationSurfaceKind.ResourceWatchMetadata;
-  const isWatcherSetup =
-    surfaceKind === FrameworkObservationSurfaceKind.WatcherSetup;
-  const isWatcher = surfaceKind === FrameworkObservationSurfaceKind.Watcher;
-  const isSlotWatcher =
-    surfaceKind === FrameworkObservationSurfaceKind.SlotWatcher;
-
-  if (isWatchRegistry && calleeName === "get" && receiverText === "watches") {
-    return watchRegistrySite(
-      FrameworkObservationFlowSiteKind.WatchDefinitionRead,
-      "Watch registry WeakMap.get",
-      FrameworkRelationshipRelation.ReadsWatchDefinition,
-    );
-  }
-  if (isWatchRegistry && calleeName === "set" && receiverText === "watches") {
-    return watchRegistrySite(
-      FrameworkObservationFlowSiteKind.WatchDefinitionStore,
-      "Watch registry WeakMap.set",
-      FrameworkRelationshipRelation.StoresWatchDefinition,
-    );
-  }
-  if (isWatchRegistry && calleeName === "push" && receiverText === "defs") {
-    return watchRegistrySite(
-      FrameworkObservationFlowSiteKind.WatchDefinitionStore,
-      "Watch registry definition array",
-      FrameworkRelationshipRelation.StoresWatchDefinition,
-    );
-  }
-  if (
-    isResourceWatchMetadata &&
-    calleeName === "mergeArrays" &&
-    callText.includes("watches")
-  ) {
-    return watchMetadataSite(
-      FrameworkObservationFlowSiteKind.ResourceWatchDefinitionMerge,
-      "resource definition watch metadata",
-      FrameworkRelationshipRelation.ReadsWatchDefinition,
-    );
-  }
-  if (isResourceWatchMetadata && calleeText === "Watch.getDefinitions") {
-    return watchMetadataSite(
-      FrameworkObservationFlowSiteKind.WatchDefinitionRead,
-      "Watch.getDefinitions",
-      FrameworkRelationshipRelation.ReadsWatchDefinition,
-    );
-  }
-  if (isWatchDecorator && calleeText === "Watch.add") {
-    return watchDecoratorSite(
-      FrameworkObservationFlowSiteKind.WatchDefinitionStore,
-      "Watch.add",
-      FrameworkRelationshipRelation.StoresWatchDefinition,
-    );
-  }
-  if (isWatcherSetup && calleeText === "Watch.getDefinitions") {
-    return watcherSite(
-      FrameworkObservationFlowSiteKind.WatchDefinitionRead,
-      "Watch.getDefinitions",
-      FrameworkRelationshipRelation.ReadsWatchDefinition,
-    );
-  }
-  if (
-    isWatchDecorator &&
-    calleeName === "push" &&
-    callText.includes(".watches.push")
-  ) {
-    return watchDecoratorSite(
-      FrameworkObservationFlowSiteKind.WatchDefinitionStore,
-      "resource definition watches",
-      FrameworkRelationshipRelation.StoresWatchDefinition,
-    );
-  }
-  if (isWatcherSetup && calleeText === "Reflect.get") {
-    return watcherSite(
-      FrameworkObservationFlowSiteKind.WatchCallbackResolve,
-      "watch callback method",
-      FrameworkRelationshipRelation.ReadsWatchDefinition,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (
-    isWatcherSetup &&
-    calleeName === "isFunction" &&
-    callText.includes("expression")
-  ) {
-    return watcherSite(
-      FrameworkObservationFlowSiteKind.WatchExpressionBranch,
-      "watch expression kind",
-      FrameworkRelationshipRelation.ReadsWatchDefinition,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (
-    isWatcherSetup &&
-    calleeName === "parse" &&
-    receiverText !== null &&
-    receiverText.includes("expressionParser")
-  ) {
-    return watcherSite(
-      FrameworkObservationFlowSiteKind.WatchExpressionParse,
-      "IExpressionParser.parse",
-      FrameworkRelationshipRelation.ParsesExpression,
-      FrameworkRelationshipEndpointKind.Expression,
-    );
-  }
-  if (isWatcherSetup && calleeName === "getAccessScopeAst") {
-    return watcherSite(
-      FrameworkObservationFlowSiteKind.WatchAccessScopeAst,
-      "AccessScopeExpression",
-      FrameworkRelationshipRelation.ParsesExpression,
-      FrameworkRelationshipEndpointKind.Expression,
-    );
-  }
-  if (
-    isWatcherSetup &&
-    calleeName === "addBinding" &&
-    callText.includes("Watcher")
-  ) {
-    return watcherSite(
-      callText.includes("ComputedWatcher")
-        ? FrameworkObservationFlowSiteKind.ComputedWatcher
-        : FrameworkObservationFlowSiteKind.ExpressionWatcher,
-      "Controller.addBinding",
-      FrameworkRelationshipRelation.ConfiguresObservation,
-    );
-  }
-  if (isWatcher && calleeName === "queueTask") {
-    return watcherSite(
-      FrameworkObservationFlowSiteKind.WatcherQueue,
-      "queueTask",
-      FrameworkRelationshipRelation.SchedulesEffect,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (isWatcher && calleeName === "enter") {
-    return watcherSite(
-      FrameworkObservationFlowSiteKind.WatcherDependencyEnter,
-      "ConnectableSwitcher.enter",
-      FrameworkRelationshipRelation.CollectsDependency,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (isWatcher && calleeName === "exit") {
-    return watcherSite(
-      FrameworkObservationFlowSiteKind.WatcherDependencyExit,
-      "ConnectableSwitcher.exit",
-      FrameworkRelationshipRelation.CollectsDependency,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (isWatcher && calleeName === "astEvaluate") {
-    return watcherSite(
-      FrameworkObservationFlowSiteKind.WatcherCompute,
-      "astEvaluate",
-      FrameworkRelationshipRelation.EvaluatesExpression,
-      FrameworkRelationshipEndpointKind.Expression,
-    );
-  }
-  if (isWatcher && calleeName === "compute" && receiverText === "this") {
-    return watcherSite(
-      FrameworkObservationFlowSiteKind.WatcherCompute,
-      "ComputedWatcher.compute",
-      FrameworkRelationshipRelation.EvaluatesExpression,
-      FrameworkRelationshipEndpointKind.Expression,
-    );
-  }
-  if (isWatcher && calleeName === "call" && receiverText === "this.$get") {
-    return watcherSite(
-      FrameworkObservationFlowSiteKind.WatcherCompute,
-      "dependency collection function",
-      FrameworkRelationshipRelation.EvaluatesExpression,
-      FrameworkRelationshipEndpointKind.Expression,
-    );
-  }
-  if (
-    isWatcher &&
-    calleeName === "call" &&
-    receiverText === "this._callback"
-  ) {
-    return watcherSite(
-      FrameworkObservationFlowSiteKind.WatcherCallbackInvoke,
-      "IWatcherCallback",
-      FrameworkRelationshipRelation.InvokesCallback,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (
-    isWatcher &&
-    ["clear", "clearAll"].includes(calleeName) &&
-    receiverText === "this.obs"
-  ) {
-    return watcherSite(
-      FrameworkObservationFlowSiteKind.WatcherDependencyClear,
-      `observer record ${calleeName}`,
-      FrameworkRelationshipRelation.CollectsDependency,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (isSlotWatcher && calleeName === "subscribe" && receiverText === "slot") {
-    return watcherSite(
-      FrameworkObservationFlowSiteKind.SlotWatcherSubscribe,
-      "IAuSlot.subscribe",
-      FrameworkRelationshipRelation.ConfiguresObservation,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (
-    isSlotWatcher &&
-    calleeName === "unsubscribe" &&
-    receiverText === "slot"
-  ) {
-    return watcherSite(
-      FrameworkObservationFlowSiteKind.SlotWatcherUnsubscribe,
-      "IAuSlot.unsubscribe",
-      FrameworkRelationshipRelation.ConfiguresObservation,
-      FrameworkRelationshipEndpointKind.Concept,
-    );
-  }
-  if (isSlotWatcher && calleeName === "notify" && receiverText === "this.subs") {
-    return watcherSite(
-      FrameworkObservationFlowSiteKind.SlotWatcher,
-      "slot watcher subscribers",
-      FrameworkRelationshipRelation.InvokesCallback,
-    );
-  }
-  return null;
+  return classifyObservationCall(watcherCallClassifications, context);
 }
 
 function classifyEffectCall(
-  executable: ObservationExecutable,
-  sourceFile: ts.SourceFile,
-  node: ts.CallExpression,
-  calleeName: string,
-  receiverText: string | null,
+  context: ObservationCallContext,
 ): SiteClassification | null {
-  const callText = node.getText(sourceFile);
   if (
-    executable.surfaceKind !== FrameworkObservationSurfaceKind.Effect &&
-    !callText.includes("observer.")
+    context.executable.surfaceKind !== FrameworkObservationSurfaceKind.Effect &&
+    !context.callText.includes("observer.")
   ) {
     return null;
   }
-  if (calleeName === "run" && receiverText === "effect") {
-    return effectSite(
-      FrameworkObservationFlowSiteKind.EffectRunner,
-      "IEffect.run",
-      FrameworkRelationshipRelation.SchedulesEffect,
-    );
-  }
-  if (calleeName === "isString" && callText.includes("expressionOrGetter")) {
-    return effectSite(
-      FrameworkObservationFlowSiteKind.EffectWatchExpression,
-      "watch expression kind",
-      FrameworkRelationshipRelation.ReadsWatchDefinition,
-      FrameworkRelationshipEndpointKind.Expression,
-    );
-  }
-  if (calleeName === "getExpressionObserver") {
-    return effectSite(
-      FrameworkObservationFlowSiteKind.EffectWatchExpression,
-      receiverText === null
-        ? "IObserverLocator.getExpressionObserver"
-        : `${receiverText}.getExpressionObserver`,
-      FrameworkRelationshipRelation.LooksUpObserver,
-      FrameworkRelationshipEndpointKind.Expression,
-    );
-  }
-  if (calleeName === "getObserver") {
-    return effectSite(
-      FrameworkObservationFlowSiteKind.EffectWatchGetter,
-      receiverText === null
-        ? "IObserverLocator.getObserver"
-        : `${receiverText}.getObserver`,
-      FrameworkRelationshipRelation.LooksUpObserver,
-      FrameworkRelationshipEndpointKind.Expression,
-    );
-  }
-  if (calleeName === "subscribe" && receiverText === "observer") {
-    return effectSite(
-      FrameworkObservationFlowSiteKind.EffectSubscribe,
-      "observer.subscribe",
-      FrameworkRelationshipRelation.ConfiguresObservation,
-    );
-  }
-  if (calleeName === "unsubscribe" && receiverText === "observer") {
-    return effectSite(
-      FrameworkObservationFlowSiteKind.EffectStop,
-      "observer.unsubscribe",
-      FrameworkRelationshipRelation.ConfiguresObservation,
-    );
-  }
-  if (calleeName === "enterConnectable") {
-    return effectSite(
-      FrameworkObservationFlowSiteKind.EffectDependencyEnter,
-      "enterConnectable",
-      FrameworkRelationshipRelation.CollectsDependency,
-    );
-  }
-  if (calleeName === "exitConnectable") {
-    return effectSite(
-      FrameworkObservationFlowSiteKind.EffectDependencyExit,
-      "exitConnectable",
-      FrameworkRelationshipRelation.CollectsDependency,
-    );
-  }
-  if (
-    ["clear", "clearAll"].includes(calleeName) &&
-    receiverText === "this.obs"
-  ) {
-    return effectSite(
-      FrameworkObservationFlowSiteKind.WatcherDependencyClear,
-      `observer record ${calleeName}`,
-      FrameworkRelationshipRelation.CollectsDependency,
-    );
-  }
-  if (calleeName === "fn" || callText.startsWith("this.fn(")) {
-    return effectSite(
-      FrameworkObservationFlowSiteKind.EffectRunner,
-      "EffectRunFunc",
-      FrameworkRelationshipRelation.InvokesCallback,
-    );
-  }
-  if (calleeName === "callback") {
-    return effectSite(
-      FrameworkObservationFlowSiteKind.WatcherCallbackInvoke,
-      "watch callback",
-      FrameworkRelationshipRelation.InvokesCallback,
-    );
-  }
-  if (callText.includes("cleanupTask?.") || callText.includes("_cleanupTask?.")) {
-    return effectSite(
-      FrameworkObservationFlowSiteKind.EffectCleanup,
-      "effect cleanup callback",
-      FrameworkRelationshipRelation.InvokesCallback,
-    );
-  }
-  return null;
+  return classifyObservationCall(effectCallClassifications, context);
 }
 
-function classifyNewExpression(
+function classifyObservationNewExpression(
   executable: ObservationExecutable,
   sourceFile: ts.SourceFile,
   node: ts.NewExpression,
@@ -2018,7 +2225,7 @@ function lookupSite(
   return { siteKind, relation, mechanism, targetName, targetKind };
 }
 
-function methodEndpoint(
+function observationMethodEndpoint(
   executable: ObservationExecutable,
 ): FrameworkRelationshipEndpoint {
   return {

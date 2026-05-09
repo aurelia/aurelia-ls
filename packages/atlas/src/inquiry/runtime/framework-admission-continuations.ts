@@ -293,7 +293,7 @@ export class FrameworkAdmissionContinuationPlanner {
 export const frameworkAdmissionContinuationPlanner =
   new FrameworkAdmissionContinuationPlanner();
 
-function appTaskSlotName(row: FrameworkAdmissionRelationshipRow): string | null {
+export function appTaskSlotName(row: FrameworkAdmissionRelationshipRow): string | null {
   if (row.helperName?.startsWith("AppTask.") !== true) {
     return null;
   }

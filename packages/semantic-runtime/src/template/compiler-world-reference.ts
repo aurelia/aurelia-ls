@@ -36,6 +36,8 @@ export const enum TemplateResourceVisibilityKind {
   Configured = 'configured',
   /** Resource is the root component supplied to Aurelia.app(...). */
   AppRoot = 'app-root',
+  /** Resource is reached through a router RouteableComponent/RouteConfig handoff. */
+  Routeable = 'routeable',
   /** Visibility is known to be requested but the container path is open. */
   Open = 'open',
 }

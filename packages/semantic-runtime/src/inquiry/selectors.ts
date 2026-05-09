@@ -1,4 +1,3 @@
-import type { SourceFileAddress } from '../kernel/address.js';
 import type { KernelRecordHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
@@ -19,6 +18,10 @@ import {
   WorkspaceInquiryLocus,
   type InquiryLocus,
 } from './locus.js';
+import {
+  isSourceFileAddress,
+  sourceFilePathMatches,
+} from './source-file-addresses.js';
 
 export const enum InquirySelectorKind {
   Workspace = 'workspace',
@@ -67,19 +70,6 @@ export class KernelRecordSelector {
   constructor(readonly handle: KernelRecordHandle) {}
 }
 
-function isSourceFileAddress(address: { readonly kind: string }): address is SourceFileAddress {
-  return address.kind === 'source-file-address';
-}
-
-function normalizePath(path: string): string {
-  return path.replace(/\\/g, '/');
-}
-
-function sourceFileMatches(address: SourceFileAddress, filePath: string): boolean {
-  const normalized = normalizePath(filePath);
-  return address.path === normalized || address.path.endsWith(`/${normalized}`);
-}
-
 /** Resolve a host/query selector into the narrowest kernel-aware inquiry locus currently available. */
 export function resolveInquirySelector(
   store: KernelStore,
@@ -116,7 +106,7 @@ function resolveSourceFileSelector(
 ): InquiryAnswer<InquiryLocus, InquirySelector> {
   const matches = store.readAddresses()
     .filter(isSourceFileAddress)
-    .filter((address) => sourceFileMatches(address, selector.filePath));
+    .filter((address) => sourceFilePathMatches(address, selector.filePath));
 
   if (matches.length === 0) {
     return miss(

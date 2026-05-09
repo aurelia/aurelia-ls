@@ -15,6 +15,8 @@ file, cursor, range, or known kernel handle and needs a truthful answer plus a n
 - Carry answer basis, projection lanes, expansions, evidence handles, provenance handles, claim handles, open seams,
   page state, and continuations.
 - Resolve host selectors into the narrowest currently known inquiry locus.
+- Share answer-assembly helpers such as source-file-address narrowing and ordered de-duplication through the inquiry
+  helper modules so answer surfaces do not grow private copies of the same selector vocabulary.
 - Expand materialized products through typed product-detail slots when a consumer asks for detail rather than handles.
 - Answer template/expression completion from already-materialized parser, scope, resource, and definition details.
 - Keep confidence, ranking, actionability, and UI/AI policy above the kernel.

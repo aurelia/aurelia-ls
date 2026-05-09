@@ -71,10 +71,9 @@ import type {
   RuntimeBindingRenderContext,
   RuntimeRenderingEmission,
 } from './runtime-rendering-materializer.js';
-import {
-  RuntimeControllerBindInput,
-  type RuntimeControllerBindHost,
-  type RuntimeControllerFrame,
+import type {
+  RuntimeControllerBindHost,
+  RuntimeControllerFrame,
 } from './runtime-controller.js';
 import type { TemplateScopeConstructionEmission } from './template-controller-scope-materializer.js';
 import {
@@ -82,17 +81,15 @@ import {
   HydrateElementInstruction,
 } from './instruction-ir.js';
 
-export class RuntimeControllerBindMaterializationInput {
-  constructor(
-    /** Store-local key shared with the template compilation pass. */
-    readonly localKey: string,
-    /** Runtime bindings and render contexts produced by renderer dispatch. */
-    readonly runtimeRendering: RuntimeRenderingEmission,
-    /** Checker-backed scopes available to binding.bind source observation. */
-    readonly scopes: TemplateScopeConstructionEmission,
-    /** Current TypeChecker epoch used by ObserverLocator lookup, when available. */
-    readonly typeSystem: TypeSystemProject | null = null,
-  ) {}
+export interface RuntimeControllerBindMaterializationRequest {
+  /** Store-local key shared with the template compilation pass. */
+  readonly localKey: string;
+  /** Runtime bindings and render contexts produced by renderer dispatch. */
+  readonly runtimeRendering: RuntimeRenderingEmission;
+  /** Checker-backed scopes available to binding.bind source observation. */
+  readonly scopes: TemplateScopeConstructionEmission;
+  /** Current TypeChecker epoch used by ObserverLocator lookup, when available. */
+  readonly typeSystem: TypeSystemProject | null;
 }
 
 export class RuntimeControllerBindEmission {
@@ -199,7 +196,7 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
 
   constructor(
     private readonly materializer: RuntimeControllerBindMaterializer,
-    private readonly input: RuntimeControllerBindMaterializationInput,
+    private readonly input: RuntimeControllerBindMaterializationRequest,
     private readonly source: RuntimeControllerBindSourceSet,
     private readonly records: KernelStoreRecord[],
     private readonly claims: SemanticClaim[],
@@ -278,7 +275,7 @@ export class RuntimeControllerBindMaterializer {
     this.observerLocator = new ObserverLocator(store);
   }
 
-  materialize(input: RuntimeControllerBindMaterializationInput): RuntimeControllerBindEmission {
+  materialize(input: RuntimeControllerBindMaterializationRequest): RuntimeControllerBindEmission {
     const emission = this.recordsForControllerBind(input);
     if (emission.records.length > 0) {
       this.store.commit(new KernelStoreBatch(emission.records, `runtime-controller-bind:${input.localKey}`));
@@ -313,7 +310,7 @@ export class RuntimeControllerBindMaterializer {
     }
   }
 
-  private recordsForControllerBind(input: RuntimeControllerBindMaterializationInput): RuntimeControllerBindEmission {
+  private recordsForControllerBind(input: RuntimeControllerBindMaterializationRequest): RuntimeControllerBindEmission {
     const records: KernelStoreRecord[] = [];
     const targetAccesses: RuntimeBindingTargetAccess[] = [];
     const targetOperations: RuntimeBindingTargetOperation[] = [];
@@ -335,10 +332,10 @@ export class RuntimeControllerBindMaterializer {
     );
 
     for (const controller of input.runtimeRendering.controllers) {
-      controller.bind(new RuntimeControllerBindInput(
-        `${input.localKey}:controller:${controller.productHandle}`,
+      controller.bind({
+        localKey: `${input.localKey}:controller:${controller.productHandle}`,
         host,
-      ));
+      });
     }
 
     records.push(...claims);
@@ -346,7 +343,7 @@ export class RuntimeControllerBindMaterializer {
   }
 
   materializeTargetAccess(
-    input: RuntimeControllerBindMaterializationInput,
+    input: RuntimeControllerBindMaterializationRequest,
     request: RuntimeBindingTargetAccessRequest,
     targetController: RuntimeControllerFrame | null,
     source: RuntimeControllerBindSourceSet,
@@ -408,7 +405,7 @@ export class RuntimeControllerBindMaterializer {
   }
 
   materializeSourceOperation(
-    input: RuntimeControllerBindMaterializationInput,
+    input: RuntimeControllerBindMaterializationRequest,
     request: RuntimeBindingSourceOperationRequest,
     targetController: RuntimeControllerFrame | null,
     source: RuntimeControllerBindSourceSet,
@@ -448,7 +445,7 @@ export class RuntimeControllerBindMaterializer {
   }
 
   private targetAccessLookupInput(
-    input: RuntimeControllerBindMaterializationInput,
+    input: RuntimeControllerBindMaterializationRequest,
     request: RuntimeBindingTargetAccessRequest,
     target: RuntimeBindingTarget,
   ): ObserverLocatorLookupInput {
@@ -854,7 +851,7 @@ export class RuntimeControllerBindMaterializer {
   }
 
   sourceOperationTarget(
-    input: RuntimeControllerBindMaterializationInput,
+    input: RuntimeControllerBindMaterializationRequest,
     binding: RuntimeBinding,
     refTargetName: string,
     targetController: RuntimeControllerFrame | null,
@@ -880,7 +877,7 @@ export class RuntimeControllerBindMaterializer {
   }
 
   private refElementTarget(
-    input: RuntimeControllerBindMaterializationInput,
+    input: RuntimeControllerBindMaterializationRequest,
     binding: RefBinding,
   ): RuntimeBindingSourceOperationTarget {
     const element = this.htmlElementFor(binding.node);
@@ -908,7 +905,7 @@ export class RuntimeControllerBindMaterializer {
   }
 
   private refControllerTarget(
-    input: RuntimeControllerBindMaterializationInput,
+    input: RuntimeControllerBindMaterializationRequest,
     binding: RefBinding,
     targetController: RuntimeControllerFrame | null,
   ): RuntimeBindingSourceOperationTarget {
@@ -929,7 +926,7 @@ export class RuntimeControllerBindMaterializer {
   }
 
   private refComponentTarget(
-    input: RuntimeControllerBindMaterializationInput,
+    input: RuntimeControllerBindMaterializationRequest,
     binding: RefBinding,
     elementName: string | null,
     targetController: RuntimeControllerFrame | null,
@@ -954,7 +951,7 @@ export class RuntimeControllerBindMaterializer {
   }
 
   private refNamedControllerTarget(
-    input: RuntimeControllerBindMaterializationInput,
+    input: RuntimeControllerBindMaterializationRequest,
     binding: RefBinding,
     targetName: string,
     targetController: RuntimeControllerFrame | null,
@@ -973,7 +970,7 @@ export class RuntimeControllerBindMaterializer {
   }
 
   private elementControllerForBinding(
-    input: RuntimeControllerBindMaterializationInput,
+    input: RuntimeControllerBindMaterializationRequest,
     binding: RefBinding,
     elementName: string | null,
   ): RuntimeControllerFrame | null {
@@ -996,7 +993,7 @@ export class RuntimeControllerBindMaterializer {
   }
 
   private attributeControllerForBinding(
-    input: RuntimeControllerBindMaterializationInput,
+    input: RuntimeControllerBindMaterializationRequest,
     binding: RefBinding,
     attributeName: string,
   ): RuntimeControllerFrame | null {

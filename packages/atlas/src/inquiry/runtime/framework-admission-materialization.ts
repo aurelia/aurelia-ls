@@ -1,4 +1,5 @@
 import type { FrameworkAdmissionRelationshipRow } from "../../framework/admission.js";
+import { uniqueSortedStrings } from "../../collections.js";
 import {
   FrameworkAdmissionMaterializationLinkKind,
   FrameworkAdmissionMaterializationMatchBasis,
@@ -13,7 +14,10 @@ import {
   type FrameworkRelationshipEndpoint,
 } from "../../framework/relationships.js";
 import { FrameworkResourceInstantiationKind } from "../../framework/resources.js";
-import type { SourceProject } from "../../source/index.js";
+import {
+  sourceRangeKey,
+  type SourceProject,
+} from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 import {
   readFrameworkMaterializationIndex,
@@ -197,14 +201,14 @@ function diMaterializationRelations(
 ): readonly FrameworkRelationshipRelation[] {
   return [
     FrameworkRelationshipRelation.InstantiatesKey,
-    ...unique(instantiation.constructionSites.map((site) => site.relation)),
+    ...uniqueSortedStrings(instantiation.constructionSites.map((site) => site.relation)),
   ];
 }
 
 function diMaterializationMechanisms(
   instantiation: FrameworkMaterializationInstantiationRow,
 ): readonly FrameworkRelationshipMechanism[] {
-  return unique(instantiation.constructionSites.map((site) => site.mechanism));
+  return uniqueSortedStrings(instantiation.constructionSites.map((site) => site.mechanism));
 }
 
 function diMaterializationPhases(): readonly FrameworkRelationshipPhase[] {
@@ -233,14 +237,14 @@ function resourceLinkForInstantiation(
   if (matchBasis === null) {
     return [];
   }
-  const siteKinds = unique(resource.materializationSites.map((site) => site.siteKind));
-  const relations = unique(
+  const siteKinds = uniqueSortedStrings(resource.materializationSites.map((site) => site.siteKind));
+  const relations = uniqueSortedStrings(
     resource.materializationSites.map((site) => site.relation),
   );
-  const mechanisms = unique(
+  const mechanisms = uniqueSortedStrings(
     resource.materializationSites.map((site) => site.mechanism),
   );
-  const phases = unique(resource.materializationSites.map((site) => site.phase));
+  const phases = uniqueSortedStrings(resource.materializationSites.map((site) => site.phase));
   return [
     {
       id: `${relationship.id}:materialization:${resource.id}`,
@@ -337,12 +341,4 @@ function linkMatches(
       row.materializedTarget.name.includes(filters.query) ||
       row.materializationSiteKinds.some((kind) => kind.includes(filters.query!)))
   );
-}
-
-function sourceRangeKey(range: SourceRange): string {
-  return `${range.filePath}:${range.start.line}:${range.start.character}:${range.end.line}:${range.end.character}`;
-}
-
-function unique<TValue extends string>(values: readonly TValue[]): readonly TValue[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }

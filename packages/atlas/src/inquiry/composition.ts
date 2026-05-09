@@ -23,18 +23,30 @@ export interface SemanticEntityRef {
   readonly aliases?: readonly string[];
 }
 
+/** Answer-level claim family; source substrates may use framework, product, bridge, or app-specific families. */
+export type SemanticClaimFamily = string;
+
+/** Answer-level claim mechanism; source substrates may map this from their own mechanism vocabulary. */
+export type SemanticClaimMechanism = string;
+
+/** Answer-level claim phase; source substrates may map this from their own phase vocabulary. */
+export type SemanticClaimPhase = string;
+
+/** Answer-level claim closure; source substrates may map this from their own closure/status vocabulary. */
+export type SemanticClaimClosure = string;
+
 /** One signed semantic claim in an answer-level composition graph. */
 export interface SemanticClaim {
   /** Stable claim id in the current source basis. */
   readonly id: string;
   /** Broad domain family that owns this claim, such as di, rendering, lifecycle, bridge, or product. */
-  readonly family: string;
+  readonly family: SemanticClaimFamily;
   /** Signed predicate asserted from subject to object. */
   readonly predicate: string;
   /** Source/runtime mechanism, when the producing substrate has one. */
-  readonly mechanism?: string;
+  readonly mechanism?: SemanticClaimMechanism;
   /** Semantic or runtime phase, when the producing substrate has one. */
-  readonly phase?: string;
+  readonly phase?: SemanticClaimPhase;
   /** Package id that owns the source evidence for the claim. */
   readonly packageId?: string;
   /** Package name that owns the source evidence for the claim. */
@@ -50,7 +62,7 @@ export interface SemanticClaim {
   /** Basis kinds that support the claim. */
   readonly basis: readonly BasisKind[];
   /** Closure/evidence class from the source substrate, when available. */
-  readonly closure?: string;
+  readonly closure?: SemanticClaimClosure;
   /** Exact source evidence for the claim. */
   readonly source?: SourceRange;
   /** Source row id before answer-level normalization. */

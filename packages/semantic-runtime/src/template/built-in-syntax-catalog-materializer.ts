@@ -2,6 +2,7 @@ import {
   ExternalAddress,
   SourceSpanAddress,
 } from '../kernel/address.js';
+import { uniqueByKey } from '../collections.js';
 import { SemanticClaim } from '../kernel/claim.js';
 import {
   EvidenceKind,
@@ -39,6 +40,10 @@ import {
   type RegistrationAdmissionProduct,
 } from '../registration/registration-admission.js';
 import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
+import {
+  FrameworkRegistrationCapability,
+  frameworkRegistrationCapabilitiesForKind,
+} from '../registration/framework-registration-manifest.js';
 import { ResourceTargetReference } from '../resources/resource-reference.js';
 import {
   AttributePatternExecutable,
@@ -756,7 +761,10 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
   private catalogEmissionForRequests(
     selectionRequests: readonly ConfiguredSyntaxCatalogRequest[],
   ): BuiltInSyntaxCatalogEmission {
-    const catalogInputs = uniqueCatalogInputs(selectionRequests.flatMap((request) => request.catalogInputs));
+    const catalogInputs = uniqueByKey(
+      selectionRequests.flatMap((request) => request.catalogInputs),
+      syntaxCatalogInputKey,
+    );
     return this.catalogMaterializer.materialize(catalogInputs);
   }
 
@@ -789,7 +797,7 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
     catalogsByKey: ReadonlyMap<string, BuiltInSyntaxCatalog>,
   ): readonly BuiltInSyntaxCatalog[] {
     return request.catalogInputs
-      .map((catalogInput) => catalogsByKey.get(catalogInputKey(catalogInput)) ?? null)
+      .map((catalogInput) => catalogsByKey.get(syntaxCatalogInputKey(catalogInput)) ?? null)
       .filter((catalog): catalog is BuiltInSyntaxCatalog => catalog != null);
   }
 
@@ -967,28 +975,46 @@ function catalogInputsForAdmission(
   configuration: ConfigurationKernelEmission,
   store: KernelStore,
 ): readonly BuiltInSyntaxCatalogInput[] {
-  switch (frameworkKind) {
-    case FrameworkRegistrationKind.StandardConfiguration:
-      return [
-        RuntimeHtmlBuiltInSyntaxCatalogs.DefaultBindingSyntax,
-        RuntimeHtmlBuiltInSyntaxCatalogs.DefaultBindingLanguage,
-        RuntimeHtmlBuiltInSyntaxCatalogs.PromiseTemplateControllerSyntax,
-      ];
-    case FrameworkRegistrationKind.I18nConfiguration:
-      return [i18nTranslationSyntaxCatalogInput(readI18nTranslationAttributeAliases(admission, configuration, store))];
-    case FrameworkRegistrationKind.StateDefaultConfiguration:
-      return [ExtensionBuiltInSyntaxCatalogs.StateSyntax];
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
-      return [RuntimeHtmlBuiltInSyntaxCatalogs.DefaultBindingSyntax];
-    case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:
-      return [RuntimeHtmlBuiltInSyntaxCatalogs.ShortHandBindingSyntax];
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage:
-      return [RuntimeHtmlBuiltInSyntaxCatalogs.DefaultBindingLanguage];
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
-      return [RuntimeHtmlBuiltInSyntaxCatalogs.PromiseTemplateControllerSyntax];
-    case FrameworkRegistrationKind.AppTask:
-      return [];
+  const inputs: BuiltInSyntaxCatalogInput[] = [];
+  for (const capability of frameworkRegistrationCapabilitiesForKind(frameworkKind)) {
+    switch (capability) {
+      case FrameworkRegistrationCapability.RuntimeHtmlDefaultBindingSyntax:
+        inputs.push(RuntimeHtmlBuiltInSyntaxCatalogs.DefaultBindingSyntax);
+        break;
+      case FrameworkRegistrationCapability.RuntimeHtmlShortHandBindingSyntax:
+        inputs.push(RuntimeHtmlBuiltInSyntaxCatalogs.ShortHandBindingSyntax);
+        break;
+      case FrameworkRegistrationCapability.RuntimeHtmlDefaultBindingLanguage:
+        inputs.push(RuntimeHtmlBuiltInSyntaxCatalogs.DefaultBindingLanguage);
+        break;
+      case FrameworkRegistrationCapability.RuntimeHtmlDefaultResources:
+        inputs.push(RuntimeHtmlBuiltInSyntaxCatalogs.PromiseTemplateControllerSyntax);
+        break;
+      case FrameworkRegistrationCapability.I18nTranslationSyntax:
+        inputs.push(i18nTranslationSyntaxCatalogInput(readI18nTranslationAttributeAliases(admission, configuration, store)));
+        break;
+      case FrameworkRegistrationCapability.StateBindingSyntax:
+        inputs.push(ExtensionBuiltInSyntaxCatalogs.StateSyntax);
+        break;
+      case FrameworkRegistrationCapability.RuntimeHtmlCompilerServices:
+      case FrameworkRegistrationCapability.RuntimeHtmlDefaultRenderers:
+      case FrameworkRegistrationCapability.I18nDefaultResources:
+      case FrameworkRegistrationCapability.I18nTranslationRenderers:
+      case FrameworkRegistrationCapability.I18nServiceResolvers:
+      case FrameworkRegistrationCapability.I18nLifecycleTasks:
+      case FrameworkRegistrationCapability.RouterDefaultComponents:
+      case FrameworkRegistrationCapability.RouterDefaultResources:
+      case FrameworkRegistrationCapability.RouterConfigurationResolvers:
+      case FrameworkRegistrationCapability.RouterLifecycleTasks:
+      case FrameworkRegistrationCapability.StateDefaultResources:
+      case FrameworkRegistrationCapability.StateRuntimeRenderers:
+      case FrameworkRegistrationCapability.StateStoreResolvers:
+      case FrameworkRegistrationCapability.StateStoreTasks:
+      case FrameworkRegistrationCapability.AppTask:
+        break;
+    }
   }
+  return inputs;
 }
 
 function readI18nTranslationAttributeAliases(
@@ -1081,23 +1107,7 @@ function encodeCatalogVariantPart(part: string): string {
   return encodeURIComponent(part).replace(/%/g, '~');
 }
 
-function uniqueCatalogInputs(
-  inputs: readonly BuiltInSyntaxCatalogInput[],
-): readonly BuiltInSyntaxCatalogInput[] {
-  const seen = new Set<string>();
-  const result: BuiltInSyntaxCatalogInput[] = [];
-  for (const input of inputs) {
-    const key = catalogInputKey(input);
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    result.push(input);
-  }
-  return result;
-}
-
-function catalogInputKey(input: BuiltInSyntaxCatalogInput): string {
+function syntaxCatalogInputKey(input: BuiltInSyntaxCatalogInput): string {
   return `${input.packageId}:${input.group}:${input.variantKey ?? 'default'}`;
 }
 
@@ -1133,10 +1143,20 @@ function summaryForFrameworkKind(frameworkKind: FrameworkRegistrationKind): stri
   switch (frameworkKind) {
     case FrameworkRegistrationKind.StandardConfiguration:
       return 'RuntimeHtml StandardConfiguration admitted framework template syntax catalogs.';
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultComponents:
+      return 'RuntimeHtml DefaultComponents admitted compiler services but no template syntax catalogs.';
     case FrameworkRegistrationKind.I18nConfiguration:
       return 'I18nConfiguration admitted translation template syntax catalogs.';
+    case FrameworkRegistrationKind.RouterConfiguration:
+      return 'RouterConfiguration admitted no template syntax catalogs in the current materializer.';
+    case FrameworkRegistrationKind.RouterDefaultComponents:
+      return 'Router DefaultComponents admitted router services but no template syntax catalogs.';
+    case FrameworkRegistrationKind.RouterDefaultResources:
+      return 'Router DefaultResources admitted resources but no template syntax catalogs.';
     case FrameworkRegistrationKind.StateDefaultConfiguration:
       return 'StateDefaultConfiguration admitted state template syntax catalogs.';
+    case FrameworkRegistrationKind.DialogConfiguration:
+      return 'DialogConfiguration admitted dialog services but no template syntax catalogs.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
       return 'RuntimeHtml DefaultBindingSyntax spread admitted framework attribute-pattern syntax.';
     case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:
@@ -1145,6 +1165,8 @@ function summaryForFrameworkKind(frameworkKind: FrameworkRegistrationKind): stri
       return 'RuntimeHtml DefaultBindingLanguage spread admitted framework binding-command syntax.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
       return 'RuntimeHtml DefaultResources spread admitted promise template-controller syntax; remaining resource effects stay outside this catalog.';
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultRenderers:
+      return 'RuntimeHtml DefaultRenderers admitted renderers but no template syntax catalogs.';
     case FrameworkRegistrationKind.AppTask:
       return 'AppTask registry does not admit template syntax catalogs.';
   }

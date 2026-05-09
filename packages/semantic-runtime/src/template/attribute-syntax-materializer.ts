@@ -37,17 +37,15 @@ import type { HtmlAttribute } from './html-ir.js';
 import type { HtmlParseEmission } from './html-parse-materializer.js';
 import { TemplateProductDetails } from './product-details.js';
 
-export class AttributeSyntaxParseInput {
-  constructor(
-    /** Store-local key for this attribute-syntax parse pass. */
-    readonly localKey: string,
-    /** Compiler unit that owns the HTML parse. */
-    readonly compilationUnit: TemplateCompilationUnit,
-    /** Parsed HTML products whose attributes should be interpreted. */
-    readonly html: HtmlParseEmission,
-    /** Compiler world that supplies the runtime-shaped attribute parser service. */
-    readonly compilerWorld: TemplateCompilerWorldEmission,
-  ) {}
+export interface AttributeSyntaxParseRequest {
+  /** Store-local key for this attribute-syntax parse pass. */
+  readonly localKey: string;
+  /** Compiler unit that owns the HTML parse. */
+  readonly compilationUnit: TemplateCompilationUnit;
+  /** Parsed HTML products whose attributes should be interpreted. */
+  readonly html: HtmlParseEmission;
+  /** Compiler world that supplies the runtime-shaped attribute parser service. */
+  readonly compilerWorld: TemplateCompilerWorldEmission;
 }
 
 export class AttributeSyntaxParseEmission {
@@ -79,7 +77,7 @@ export class AttributeSyntaxMaterializer {
     readonly store: KernelStore,
   ) {}
 
-  parse(input: AttributeSyntaxParseInput): AttributeSyntaxParseEmission {
+  parse(input: AttributeSyntaxParseRequest): AttributeSyntaxParseEmission {
     const emission = this.recordsForParse(input);
     if (emission.records.length > 0) {
       this.store.commit(new KernelStoreBatch(emission.records, `attribute-syntax:${input.localKey}`));
@@ -90,7 +88,7 @@ export class AttributeSyntaxMaterializer {
     return emission;
   }
 
-  private recordsForParse(input: AttributeSyntaxParseInput): AttributeSyntaxParseEmission {
+  private recordsForParse(input: AttributeSyntaxParseRequest): AttributeSyntaxParseEmission {
     const source = this.recordsForSource(input);
     const records: KernelStoreRecord[] = [...source.records];
     const syntaxes: AttributeSyntax[] = [];
@@ -126,7 +124,7 @@ export class AttributeSyntaxMaterializer {
   private publishAttributeSyntax(
     local: string,
     source: AttributeSyntaxSourceSet,
-    input: AttributeSyntaxParseInput,
+    input: AttributeSyntaxParseRequest,
     executionHost: BuiltInAttributeParserExecutionHost,
     attribute: HtmlAttribute,
   ): AttributeSyntaxPublication {
@@ -223,7 +221,7 @@ export class AttributeSyntaxMaterializer {
     ];
   }
 
-  private recordsForSource(input: AttributeSyntaxParseInput): AttributeSyntaxSourceSet {
+  private recordsForSource(input: AttributeSyntaxParseRequest): AttributeSyntaxSourceSet {
     const evidenceHandle = this.store.handles.evidence(`attribute-syntax:${input.localKey}`);
     const provenanceHandle = this.store.handles.provenance(`attribute-syntax:${input.localKey}`);
     return new AttributeSyntaxSourceSet(

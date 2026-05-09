@@ -6,7 +6,6 @@ import {
 import type { SourceProject } from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import { BasisKind } from "../basis.js";
-import { clampBudget } from "../budget.js";
 import {
   ContinuationPriority,
   type Continuation,
@@ -23,6 +22,7 @@ import { PagedRowFamily } from "../paged-row-family.js";
 import {
   evidenceLimit,
   pageOffset,
+  rowLimit,
 } from "../paging.js";
 import { LensId } from "../lens.js";
 import {
@@ -125,7 +125,7 @@ export function answerFrameworkCompiler(
 ): Answer<FrameworkCompilerValue> {
   const projection = inquiry.projection ?? "summary";
   const filters = compilerFiltersFromInquiry(inquiry);
-  const limit = clampBudget(inquiry.budget?.rows, 80, 1_000);
+  const limit = rowLimit(inquiry);
   const offset = pageOffset(inquiry);
   const instructionProducts = readFrameworkCompilerInstructionProducts(
     sourceProject,
@@ -211,7 +211,7 @@ export function answerFrameworkCompiler(
               targetName: FRAMEWORK_JIT_COMPILER_ACTOR,
             }),
             rationale:
-              "Place TemplateCompiler instruction production back into the StandardConfiguration JIT compiler flow corridor.",
+              "Place TemplateCompiler instruction production back into the default JIT compiler flow corridor.",
           },
         ),
         FrameworkSemanticRoutes.CompilerToRenderingHydrationFlow.continuation(
@@ -780,7 +780,7 @@ function pushJitCompilerFlowContinuation(
           targetName: FRAMEWORK_JIT_COMPILER_ACTOR,
         }),
         rationale:
-          "Place this TemplateCompiler instruction-production row back into the StandardConfiguration JIT compiler flow corridor.",
+          "Place this TemplateCompiler instruction-production row back into the default JIT compiler flow corridor.",
       },
     ),
   );

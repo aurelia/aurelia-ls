@@ -148,9 +148,9 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
           ],
         },
         {
-          id: "standard-configuration-admission",
+          id: "configuration-admission-canary",
           purpose:
-            "See the evaluated StandardConfiguration bundle and what it admits into registration.",
+            "See a broad evaluated configuration canary and what it admits into registration.",
           ask: {
             lens: LensId.FrameworkAdmission,
             locus: RepoRootLocus,
@@ -184,7 +184,7 @@ export const FRAMEWORK_DISCOVERY_RECIPES: readonly FrameworkDiscoveryRecipeRow[]
       calibrationNotes: [
         "Aurelia class facts may include declaration-file and source-file evidence; prefer the source-file continuation for implementation reading.",
         "File-scoped TypeScript call-site reads are much cheaper and more useful than broad package-wide call scans.",
-        "Admission bundle rows are evaluator-backed; use them to avoid hard-coding the meaning of StandardConfiguration.",
+        "Admission bundle rows are evaluator-backed; use them to avoid hard-coding the meaning of one configuration export.",
       ],
     },
     {

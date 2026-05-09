@@ -1,6 +1,6 @@
 import ts from "typescript";
 
-import { declarationNameNode } from "./declarations.js";
+import { declarationNameNode } from "./ast.js";
 
 export function symbolForDeclaration(
   checker: ts.TypeChecker,
@@ -26,6 +26,22 @@ export function symbolForExpression(
   expression: ts.Expression,
 ): ts.Symbol | null {
   return symbolForNode(checker, expression);
+}
+
+export function symbolForExpressionName(
+  checker: ts.TypeChecker,
+  expression: ts.Expression,
+): ts.Symbol | null {
+  const symbolNode = ts.isPropertyAccessExpression(expression)
+    ? expression.name
+    : ts.isElementAccessExpression(expression) &&
+        expression.argumentExpression !== undefined
+      ? expression.argumentExpression
+    : expression;
+  const symbol =
+    checker.getSymbolAtLocation(symbolNode) ??
+    checker.getSymbolAtLocation(expression);
+  return symbol === undefined ? null : resolveAlias(checker, symbol);
 }
 
 export function resolveAlias(

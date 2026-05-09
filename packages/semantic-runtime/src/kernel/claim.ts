@@ -28,3 +28,17 @@ export class SemanticClaim {
     readonly provenanceHandle: ProvenanceHandle,
   ) {}
 }
+
+export function claimsForProduct(
+  claims: readonly SemanticClaim[],
+  productHandle: ProductHandle,
+): readonly SemanticClaim[] {
+  return claims.filter((claim) =>
+    claim.subjectHandle === productHandle
+    || claim.objectHandle === productHandle
+  );
+}
+
+export function nullableClaim(claim: SemanticClaim | null): readonly SemanticClaim[] {
+  return claim == null ? [] : [claim];
+}

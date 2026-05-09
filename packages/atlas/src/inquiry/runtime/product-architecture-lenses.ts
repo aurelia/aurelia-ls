@@ -6,7 +6,6 @@ import {
   BasisKind,
   type Basis,
 } from "../basis.js";
-import { clampBudget } from "../budget.js";
 import {
   ContinuationKind,
   ContinuationPriority,
@@ -26,13 +25,15 @@ import {
   NavigationRelation,
 } from "../navigation.js";
 import { PagedRowFamily } from "../paged-row-family.js";
-import { pageOffset } from "../paging.js";
-import type { SourceProject } from "../../source/index.js";
+import { evidenceLimit, pageOffset, rowLimit } from "../paging.js";
+import {
+  sourceRangeFromOneBasedReference,
+  type SourceProject,
+} from "../../source/index.js";
 import {
   callDependencyRows,
   profileProductArchitectureAnalysis,
   readProductArchitectureAnalysis,
-  toInquirySourceRange,
   type ProductArchitectureAnalysis,
   type ProductArchitectureAreaDependencyRow,
   type ProductArchitectureAreaRow,
@@ -49,6 +50,17 @@ import {
   type ProductArchitectureSymbolDependencyRow,
   type ProductArchitectureSymbolReferenceRow,
 } from "./product-architecture-analysis.js";
+import {
+  inquiryBooleanFilter,
+  inquiryQueryMatches,
+  inquiryNumberFilter,
+  inquiryStringFilter,
+} from "./lens-filter-utils.js";
+import {
+  optionalNextPageContinuation,
+  sourceForRow,
+  sourceInspectionContinuations,
+} from "./lens-continuation-utils.js";
 
 /** Value returned by the product.architecture lens. */
 export interface ProductArchitectureValue {
@@ -84,6 +96,8 @@ export interface ProductArchitectureValue {
   readonly profile?: {
     /** True when checker-backed call-site and call dependency rows were included. */
     readonly includeCallSites: boolean;
+    /** True when call-site rows include expensive checker type/signature displays. */
+    readonly includeCallDetails: boolean;
     /** True when checker-backed identifier reference and symbol dependency rows were included. */
     readonly includeSymbols: boolean;
     readonly totalMilliseconds: number;
@@ -120,6 +134,7 @@ export function answerProductArchitecture(
 
   const analysis = readProductArchitectureAnalysis(sourceProject, {
     includeCallSites: productArchitectureProjectionNeedsCallSites(projection),
+    includeCallDetails: productArchitectureProjectionNeedsCallDetails(projection),
     includeSymbols: productArchitectureProjectionNeedsSymbols(projection),
   });
 
@@ -133,7 +148,7 @@ export function answerProductArchitecture(
         "semantic-runtime area row(s)",
         filterAreas(analysis.areas, inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), areas: rows }),
+        (rows) => ({ ...productArchitectureBaseValue(analysis), areas: rows }),
         evidenceForArea,
       );
     case "modules":
@@ -143,7 +158,7 @@ export function answerProductArchitecture(
         "semantic-runtime module row(s)",
         filterModules(analysis.modules, inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), modules: rows }),
+        (rows) => ({ ...productArchitectureBaseValue(analysis), modules: rows }),
         evidenceForModule,
       );
     case "dependencies":
@@ -153,7 +168,7 @@ export function answerProductArchitecture(
         "semantic-runtime dependency row(s)",
         filterDependencies(analysis.dependencies, inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), dependencies: rows }),
+        (rows) => ({ ...productArchitectureBaseValue(analysis), dependencies: rows }),
         evidenceForDependency,
       );
     case "area-dependencies":
@@ -163,7 +178,7 @@ export function answerProductArchitecture(
         "semantic-runtime area dependency row(s)",
         filterAreaDependencies(analysis.areaDependencies, inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), areaDependencies: rows }),
+        (rows) => ({ ...productArchitectureBaseValue(analysis), areaDependencies: rows }),
         evidenceForAreaDependency,
       );
     case "declarations":
@@ -173,7 +188,7 @@ export function answerProductArchitecture(
         "semantic-runtime declaration row(s)",
         filterDeclarations(analysis.declarations, inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), declarations: rows }),
+        (rows) => ({ ...productArchitectureBaseValue(analysis), declarations: rows }),
         evidenceForDeclaration,
       );
     case "cycles":
@@ -183,7 +198,7 @@ export function answerProductArchitecture(
         "semantic-runtime import cycle row(s)",
         filterCycles(analysis.cycles, inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), cycles: rows }),
+        (rows) => ({ ...productArchitectureBaseValue(analysis), cycles: rows }),
         evidenceForCycle,
       );
     case "classes":
@@ -193,7 +208,7 @@ export function answerProductArchitecture(
         "semantic-runtime class surface row(s)",
         filterClassSurfaces(analysis.classSurfaces, inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), classSurfaces: rows }),
+        (rows) => ({ ...productArchitectureBaseValue(analysis), classSurfaces: rows }),
         evidenceForClassSurface,
       );
     case "functions":
@@ -203,7 +218,7 @@ export function answerProductArchitecture(
         "semantic-runtime function surface row(s)",
         filterFunctionSurfaces(analysis.functionSurfaces, inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), functionSurfaces: rows }),
+        (rows) => ({ ...productArchitectureBaseValue(analysis), functionSurfaces: rows }),
         evidenceForFunctionSurface,
       );
     case "call-sites":
@@ -213,8 +228,8 @@ export function answerProductArchitecture(
         "semantic-runtime call-site row(s)",
         filterCallSites(analysis.callSites, inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), callSites: rows }),
-        evidenceForCallSite,
+        (rows) => ({ ...productArchitectureBaseValue(analysis), callSites: rows }),
+        productArchitectureEvidenceForCallSite,
       );
     case "call-dependencies":
       return answerProductArchitectureRows(
@@ -223,7 +238,7 @@ export function answerProductArchitecture(
         "semantic-runtime call dependency row(s)",
         filterCallDependencies(callDependenciesForInquiry(analysis, inquiry), inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), callDependencies: rows }),
+        (rows) => ({ ...productArchitectureBaseValue(analysis), callDependencies: rows }),
         evidenceForCallDependency,
       );
     case "symbol-references":
@@ -233,7 +248,7 @@ export function answerProductArchitecture(
         "semantic-runtime checker-backed symbol reference row(s)",
         filterSymbolReferences(analysis.symbolReferences, inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), symbolReferences: rows }),
+        (rows) => ({ ...productArchitectureBaseValue(analysis), symbolReferences: rows }),
         evidenceForSymbolReference,
       );
     case "symbol-dependencies":
@@ -243,7 +258,7 @@ export function answerProductArchitecture(
         "semantic-runtime checker-backed symbol dependency row(s)",
         filterSymbolDependencies(analysis.symbolDependencies, inquiry),
         basis,
-        (rows) => ({ ...baseValue(analysis), symbolDependencies: rows }),
+        (rows) => ({ ...productArchitectureBaseValue(analysis), symbolDependencies: rows }),
         evidenceForSymbolDependency,
       );
   }
@@ -293,7 +308,7 @@ function answerProductArchitectureSummary(
     `Read ${analysis.rollup.sourceFileCount} semantic-runtime source file(s), ${analysis.rollup.declarationCount} declaration(s), ${analysis.rollup.functionSurfaceCount} function surface(s), ${analysis.rollup.callSiteCount} call-site row(s), ${analysis.rollup.symbolReferenceCount} checker-backed symbol reference(s), ${analysis.rollup.cycleCount} import cycle(s), and ${analysis.rollup.crossAreaDependencyCount} cross-area import(s).`,
     {
       value: {
-        ...baseValue(analysis, true),
+        ...productArchitectureBaseValue(analysis, true),
         areas: filterAreas(analysis.areas, inquiry),
         modules: largeModules,
         functionSurfaces: largeFunctions,
@@ -323,7 +338,7 @@ function answerProductArchitectureSummary(
           .slice(0, evidenceLimit(inquiry))
           .map(evidenceForDependency),
       ],
-      continuations: summaryContinuations(inquiry),
+      continuations: productArchitectureSummaryContinuations(inquiry),
     },
   );
 }
@@ -333,10 +348,12 @@ function answerProductArchitectureProfile(
   sourceProject: SourceProject,
   basis: readonly Basis[],
 ): Answer<ProductArchitectureValue> {
-  const includeCallSites = booleanFilter(inquiry, "includeCallSites") ?? true;
-  const includeSymbols = booleanFilter(inquiry, "includeSymbols") ?? true;
+  const includeCallSites = inquiryBooleanFilter(inquiry, "includeCallSites") ?? true;
+  const includeCallDetails = inquiryBooleanFilter(inquiry, "includeCallDetails") ?? false;
+  const includeSymbols = inquiryBooleanFilter(inquiry, "includeSymbols") ?? true;
   const profile = profileProductArchitectureAnalysis(sourceProject, {
     includeCallSites,
+    includeCallDetails,
     includeSymbols,
   });
   const slowestPhases = [...profile.phases]
@@ -345,6 +362,7 @@ function answerProductArchitectureProfile(
   const slowest = slowestPhases[0] ?? null;
   const lane = productArchitectureProfileLaneName(
     profile.includeCallSites,
+    profile.includeCallDetails,
     profile.includeSymbols,
   );
   return createAnswer(
@@ -353,9 +371,10 @@ function answerProductArchitectureProfile(
     `Profiled ${lane} product.architecture cold analysis in ${profile.totalMilliseconds.toFixed(1)}ms${slowest === null ? "" : `; slowest phase was ${slowest.phase} at ${slowest.milliseconds.toFixed(1)}ms`}.`,
     {
       value: {
-        ...baseValue(profile.analysis, true),
+        ...productArchitectureBaseValue(profile.analysis, true),
         profile: {
           includeCallSites: profile.includeCallSites,
+          includeCallDetails: profile.includeCallDetails,
           includeSymbols: profile.includeSymbols,
           totalMilliseconds: profile.totalMilliseconds,
           phases: profile.phases,
@@ -363,7 +382,7 @@ function answerProductArchitectureProfile(
       },
       basis,
       evidence: slowestPhases.map(evidenceForPhaseProfile),
-      continuations: commonContinuations(inquiry),
+      continuations: productArchitectureContinuations(inquiry),
     },
   );
 }
@@ -382,9 +401,14 @@ function answerProductArchitectureRows<TRow>(
     rowLabel,
     evidenceForRow: (row) => evidenceForRow(row),
     continuationsForPage: (inquiry, rows, nextOffset, limit) => [
-      ...nextPageContinuation(inquiry, nextOffset, limit),
-      ...rows.flatMap((row) => sourceContinuationsForRow(row)),
-      ...commonContinuations(inquiry),
+      ...optionalNextPageContinuation(inquiry, nextOffset, limit, {
+        id: "product.architecture:next-page",
+        rationale: "Continue semantic-runtime architecture rows.",
+        routeSummary: "Next semantic-runtime architecture row page.",
+        basis: [BasisKind.TypeScriptProgram],
+      }),
+      ...rows.flatMap((row) => productArchitectureSourceContinuations(row)),
+      ...productArchitectureContinuations(inquiry),
     ],
   });
   return rowFamily.answer({
@@ -397,7 +421,7 @@ function answerProductArchitectureRows<TRow>(
   });
 }
 
-function baseValue(
+function productArchitectureBaseValue(
   analysis: ProductArchitectureAnalysis,
   includeRollup: boolean = false,
 ): ProductArchitectureValue {
@@ -450,15 +474,22 @@ function productArchitectureProjectionNeedsCallSites(
     projection === "call-dependencies";
 }
 
+function productArchitectureProjectionNeedsCallDetails(
+  projection: ProductArchitectureProjection,
+): boolean {
+  return projection === "call-sites";
+}
+
 function productArchitectureProfileLaneName(
   includeCallSites: boolean,
+  includeCallDetails: boolean,
   includeSymbols: boolean,
 ): string {
   if (includeCallSites && includeSymbols) {
-    return "full";
+    return includeCallDetails ? "full exact-call" : "full compact-call";
   }
   if (includeCallSites) {
-    return "core";
+    return includeCallDetails ? "core exact-call" : "core compact-call";
   }
   if (includeSymbols) {
     return "symbol";
@@ -471,8 +502,8 @@ function filterAreas(
   inquiry: Inquiry,
 ): readonly ProductArchitectureAreaRow[] {
   return rows.filter((row) =>
-    matches(row.area, stringFilter(inquiry, "area")) &&
-    queryMatches(inquiry, [
+    matches(row.area, inquiryStringFilter(inquiry, "area")) &&
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.area,
       row.sourceRoot,
@@ -487,20 +518,20 @@ function filterModules(
 ): readonly ProductArchitectureModuleRow[] {
   const pathPrefix = pathPrefixFilter(inquiry);
   const filtered = rows.filter((row) =>
-    matches(row.area, stringFilter(inquiry, "area")) &&
-    matches(row.filePath, stringFilter(inquiry, "filePath")) &&
+    matches(row.area, inquiryStringFilter(inquiry, "area")) &&
+    matches(row.filePath, inquiryStringFilter(inquiry, "filePath")) &&
     matchesPathPrefix(row.filePath, pathPrefix) &&
-    atLeast(row.lineCount, numberFilter(inquiry, "minLineCount")) &&
+    atLeast(row.lineCount, inquiryNumberFilter(inquiry, "minLineCount")) &&
     atLeast(
       row.functionSurfaceCount,
-      numberFilter(inquiry, "minFunctionSurfaceCount"),
+      inquiryNumberFilter(inquiry, "minFunctionSurfaceCount"),
     ) &&
-    atLeast(row.largeFunctionCount, numberFilter(inquiry, "minLargeFunctionCount")) &&
+    atLeast(row.largeFunctionCount, inquiryNumberFilter(inquiry, "minLargeFunctionCount")) &&
     atLeast(
       row.maxFunctionLineCount,
-      numberFilter(inquiry, "minMaxFunctionLineCount"),
+      inquiryNumberFilter(inquiry, "minMaxFunctionLineCount"),
     ) &&
-    queryMatches(inquiry, [
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.area,
       row.filePath,
@@ -508,7 +539,7 @@ function filterModules(
       ...row.exportedNames,
     ]),
   );
-  return orderModules(filtered, stringFilter(inquiry, "orderBy"));
+  return orderModules(filtered, inquiryStringFilter(inquiry, "orderBy"));
 }
 
 function filterDependencies(
@@ -517,17 +548,17 @@ function filterDependencies(
 ): readonly ProductArchitectureDependencyRow[] {
   const pathPrefix = pathPrefixFilter(inquiry);
   return rows.filter((row) =>
-    matches(row.fromFilePath, stringFilter(inquiry, "fromFilePath")) &&
-    matches(row.toFilePath ?? "", stringFilter(inquiry, "toFilePath")) &&
+    matches(row.fromFilePath, inquiryStringFilter(inquiry, "fromFilePath")) &&
+    matches(row.toFilePath ?? "", inquiryStringFilter(inquiry, "toFilePath")) &&
     matchesPathPrefix(row.fromFilePath, pathPrefix) &&
-    matches(row.fromArea, stringFilter(inquiry, "fromArea")) &&
-    matches(row.toArea ?? "", stringFilter(inquiry, "toArea")) &&
-    matches(row.importKind, stringFilter(inquiry, "importKind")) &&
-    matchesBoolean(row.local, booleanFilter(inquiry, "local")) &&
-    matchesBoolean(row.relative, booleanFilter(inquiry, "relative")) &&
-    matchesBoolean(row.resolved, booleanFilter(inquiry, "resolved")) &&
-    matchesBoolean(row.crossesArea, booleanFilter(inquiry, "crossesArea")) &&
-    queryMatches(inquiry, [
+    matches(row.fromArea, inquiryStringFilter(inquiry, "fromArea")) &&
+    matches(row.toArea ?? "", inquiryStringFilter(inquiry, "toArea")) &&
+    matches(row.importKind, inquiryStringFilter(inquiry, "importKind")) &&
+    matchesBoolean(row.local, inquiryBooleanFilter(inquiry, "local")) &&
+    matchesBoolean(row.relative, inquiryBooleanFilter(inquiry, "relative")) &&
+    matchesBoolean(row.resolved, inquiryBooleanFilter(inquiry, "resolved")) &&
+    matchesBoolean(row.crossesArea, inquiryBooleanFilter(inquiry, "crossesArea")) &&
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.fromFilePath,
       row.fromArea,
@@ -545,8 +576,8 @@ function filterAreaDependencies(
 ): readonly ProductArchitectureAreaDependencyRow[] {
   const pathPrefix = pathPrefixFilter(inquiry);
   return rows.filter((row) =>
-    matches(row.fromArea, stringFilter(inquiry, "fromArea")) &&
-    matches(row.toArea, stringFilter(inquiry, "toArea")) &&
+    matches(row.fromArea, inquiryStringFilter(inquiry, "fromArea")) &&
+    matches(row.toArea, inquiryStringFilter(inquiry, "toArea")) &&
     (pathPrefix === undefined ||
       row.fromFilePaths.some((filePath) =>
         matchesPathPrefix(filePath, pathPrefix)
@@ -554,8 +585,8 @@ function filterAreaDependencies(
       row.toFilePaths.some((filePath) =>
         matchesPathPrefix(filePath, pathPrefix)
       )) &&
-    matchesBoolean(row.crossesArea, booleanFilter(inquiry, "crossesArea")) &&
-    queryMatches(inquiry, [
+    matchesBoolean(row.crossesArea, inquiryBooleanFilter(inquiry, "crossesArea")) &&
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.fromArea,
       row.toArea,
@@ -575,13 +606,13 @@ function filterDeclarations(
 ): readonly ProductArchitectureDeclarationRow[] {
   const pathPrefix = pathPrefixFilter(inquiry);
   const filtered = rows.filter((row) =>
-    matches(row.area, stringFilter(inquiry, "area")) &&
-    matches(row.filePath, stringFilter(inquiry, "filePath")) &&
+    matches(row.area, inquiryStringFilter(inquiry, "area")) &&
+    matches(row.filePath, inquiryStringFilter(inquiry, "filePath")) &&
     matchesPathPrefix(row.filePath, pathPrefix) &&
-    matches(row.declarationKind, stringFilter(inquiry, "declarationKind")) &&
-    matchesBoolean(row.exported, booleanFilter(inquiry, "exported")) &&
-    matchesBoolean(row.topLevel, booleanFilter(inquiry, "topLevel")) &&
-    queryMatches(inquiry, [
+    matches(row.declarationKind, inquiryStringFilter(inquiry, "declarationKind")) &&
+    matchesBoolean(row.exported, inquiryBooleanFilter(inquiry, "exported")) &&
+    matchesBoolean(row.topLevel, inquiryBooleanFilter(inquiry, "topLevel")) &&
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.area,
       row.filePath,
@@ -591,7 +622,7 @@ function filterDeclarations(
       row.summary,
     ]),
   );
-  return orderDeclarations(filtered, stringFilter(inquiry, "orderBy"));
+  return orderDeclarations(filtered, inquiryStringFilter(inquiry, "orderBy"));
 }
 
 function filterCycles(
@@ -600,15 +631,15 @@ function filterCycles(
 ): readonly ProductArchitectureCycleRow[] {
   const pathPrefix = pathPrefixFilter(inquiry);
   const filtered = rows.filter((row) =>
-    (stringFilter(inquiry, "area") === undefined ||
-      row.areas.includes(stringFilter(inquiry, "area")!)) &&
-    (stringFilter(inquiry, "filePath") === undefined ||
-      row.filePaths.includes(stringFilter(inquiry, "filePath")!)) &&
+    (inquiryStringFilter(inquiry, "area") === undefined ||
+      row.areas.includes(inquiryStringFilter(inquiry, "area")!)) &&
+    (inquiryStringFilter(inquiry, "filePath") === undefined ||
+      row.filePaths.includes(inquiryStringFilter(inquiry, "filePath")!)) &&
     (pathPrefix === undefined ||
       row.filePaths.some((filePath) => matchesPathPrefix(filePath, pathPrefix))) &&
-    matchesBoolean(row.runtimeCycle, booleanFilter(inquiry, "runtimeCycle")) &&
-    matchesBoolean(row.crossesArea, booleanFilter(inquiry, "crossesArea")) &&
-    queryMatches(inquiry, [
+    matchesBoolean(row.runtimeCycle, inquiryBooleanFilter(inquiry, "runtimeCycle")) &&
+    matchesBoolean(row.crossesArea, inquiryBooleanFilter(inquiry, "crossesArea")) &&
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.summary,
       ...row.areas,
@@ -616,29 +647,34 @@ function filterCycles(
       ...row.sampleModuleSpecifiers,
     ]),
   );
-  return orderCycles(filtered, stringFilter(inquiry, "orderBy"));
+  return orderCycles(filtered, inquiryStringFilter(inquiry, "orderBy"));
 }
 
 function filterClassSurfaces(
   rows: readonly ProductArchitectureClassSurfaceRow[],
   inquiry: Inquiry,
 ): readonly ProductArchitectureClassSurfaceRow[] {
-  const className = stringFilter(inquiry, "className");
-  const methodName = stringFilter(inquiry, "methodName");
+  const className = inquiryStringFilter(inquiry, "className");
+  const classNameSuffix = inquiryStringFilter(inquiry, "classNameSuffix");
+  const methodName = inquiryStringFilter(inquiry, "methodName");
+  const auLinkId = inquiryStringFilter(inquiry, "auLinkId");
   const pathPrefix = pathPrefixFilter(inquiry);
   const filtered = rows.filter((row) =>
-    matches(row.area, stringFilter(inquiry, "area")) &&
-    matches(row.filePath, stringFilter(inquiry, "filePath")) &&
+    matches(row.area, inquiryStringFilter(inquiry, "area")) &&
+    matches(row.filePath, inquiryStringFilter(inquiry, "filePath")) &&
     matchesPathPrefix(row.filePath, pathPrefix) &&
     matches(row.name, className) &&
-    matchesBoolean(row.exported, booleanFilter(inquiry, "exported")) &&
-    atLeast(row.lineCount, numberFilter(inquiry, "minLineCount")) &&
-    atLeast(row.methodCount, numberFilter(inquiry, "minMethodCount")) &&
-    atLeast(row.propertyCount, numberFilter(inquiry, "minPropertyCount")) &&
+    (classNameSuffix === undefined || row.name.endsWith(classNameSuffix)) &&
+    matchesBoolean(row.exported, inquiryBooleanFilter(inquiry, "exported")) &&
+    matchesBoolean(row.auLinkIds.length > 0, inquiryBooleanFilter(inquiry, "hasAuLink")) &&
+    matchesAny(row.auLinkIds, auLinkId) &&
+    atLeast(row.lineCount, inquiryNumberFilter(inquiry, "minLineCount")) &&
+    atLeast(row.methodCount, inquiryNumberFilter(inquiry, "minMethodCount")) &&
+    atLeast(row.propertyCount, inquiryNumberFilter(inquiry, "minPropertyCount")) &&
     (methodName === undefined ||
       row.methods.includes(methodName) ||
       row.staticMethods.includes(methodName)) &&
-    queryMatches(inquiry, [
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.area,
       row.filePath,
@@ -650,9 +686,10 @@ function filterClassSurfaces(
       ...row.staticMethods,
       ...row.accessors,
       ...row.properties,
+      ...row.auLinkIds,
     ]),
   );
-  return orderClassSurfaces(filtered, stringFilter(inquiry, "orderBy"));
+  return orderClassSurfaces(filtered, inquiryStringFilter(inquiry, "orderBy"));
 }
 
 function filterFunctionSurfaces(
@@ -661,30 +698,30 @@ function filterFunctionSurfaces(
 ): readonly ProductArchitectureFunctionSurfaceRow[] {
   const pathPrefix = pathPrefixFilter(inquiry);
   const filtered = rows.filter((row) =>
-    matches(row.area, stringFilter(inquiry, "area")) &&
-    matches(row.filePath, stringFilter(inquiry, "filePath")) &&
+    matches(row.area, inquiryStringFilter(inquiry, "area")) &&
+    matches(row.filePath, inquiryStringFilter(inquiry, "filePath")) &&
     matchesPathPrefix(row.filePath, pathPrefix) &&
-    matches(row.functionKind, stringFilter(inquiry, "functionKind")) &&
-    matches(row.className ?? "", stringFilter(inquiry, "className")) &&
+    matches(row.functionKind, inquiryStringFilter(inquiry, "functionKind")) &&
+    matches(row.className ?? "", inquiryStringFilter(inquiry, "className")) &&
     matches(
       row.parentFunctionName ?? "",
-      stringFilter(inquiry, "parentFunctionName"),
+      inquiryStringFilter(inquiry, "parentFunctionName"),
     ) &&
-    matches(row.name, stringFilter(inquiry, "functionName")) &&
-    matchesBoolean(row.exported, booleanFilter(inquiry, "exported")) &&
-    matchesBoolean(row.static, booleanFilter(inquiry, "static")) &&
-    matchesBoolean(row.async, booleanFilter(inquiry, "async")) &&
-    atLeast(row.lineCount, numberFilter(inquiry, "minLineCount")) &&
-    atLeast(row.callSiteCount, numberFilter(inquiry, "minCallSiteCount")) &&
+    matches(row.name, inquiryStringFilter(inquiry, "functionName")) &&
+    matchesBoolean(row.exported, inquiryBooleanFilter(inquiry, "exported")) &&
+    matchesBoolean(row.static, inquiryBooleanFilter(inquiry, "static")) &&
+    matchesBoolean(row.async, inquiryBooleanFilter(inquiry, "async")) &&
+    atLeast(row.lineCount, inquiryNumberFilter(inquiry, "minLineCount")) &&
+    atLeast(row.callSiteCount, inquiryNumberFilter(inquiry, "minCallSiteCount")) &&
     atLeast(
       row.distinctCalleeCount,
-      numberFilter(inquiry, "minDistinctCalleeCount"),
+      inquiryNumberFilter(inquiry, "minDistinctCalleeCount"),
     ) &&
     atLeast(
       row.crossAreaCallSiteCount,
-      numberFilter(inquiry, "minCrossAreaCallSiteCount"),
+      inquiryNumberFilter(inquiry, "minCrossAreaCallSiteCount"),
     ) &&
-    queryMatches(inquiry, [
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.area,
       row.filePath,
@@ -695,7 +732,7 @@ function filterFunctionSurfaces(
       row.summary,
     ]),
   );
-  return orderFunctionSurfaces(filtered, stringFilter(inquiry, "orderBy"));
+  return orderFunctionSurfaces(filtered, inquiryStringFilter(inquiry, "orderBy"));
 }
 
 function filterCallSites(
@@ -704,22 +741,22 @@ function filterCallSites(
 ): readonly ProductArchitectureCallSiteRow[] {
   const pathPrefix = pathPrefixFilter(inquiry);
   const filtered = rows.filter((row) =>
-    matches(row.fromFilePath, stringFilter(inquiry, "fromFilePath")) &&
-    matches(row.targetFilePath ?? "", stringFilter(inquiry, "toFilePath")) &&
+    matches(row.fromFilePath, inquiryStringFilter(inquiry, "fromFilePath")) &&
+    matches(row.targetFilePath ?? "", inquiryStringFilter(inquiry, "toFilePath")) &&
     matchesPathPrefix(row.fromFilePath, pathPrefix) &&
-    matches(row.fromArea, stringFilter(inquiry, "fromArea")) &&
-    matches(row.targetArea ?? "", stringFilter(inquiry, "toArea")) &&
-    matches(row.targetPackageId ?? "", stringFilter(inquiry, "targetPackageId")) &&
-    matches(row.callKind, stringFilter(inquiry, "callKind")) &&
-    matches(row.calleeName, stringFilter(inquiry, "calleeName")) &&
-    matches(row.calleeSymbolName ?? "", stringFilter(inquiry, "calleeSymbolName")) &&
-    matches(row.calleeSymbolKey ?? "", stringFilter(inquiry, "calleeSymbolKey")) &&
-    matches(row.className ?? "", stringFilter(inquiry, "className")) &&
-    matches(row.functionName ?? "", stringFilter(inquiry, "functionName")) &&
-    matchesBoolean(row.resolved, booleanFilter(inquiry, "resolved")) &&
-    matchesBoolean(row.local, booleanFilter(inquiry, "local")) &&
-    matchesBoolean(row.crossesArea, booleanFilter(inquiry, "crossesArea")) &&
-    queryMatches(inquiry, [
+    matches(row.fromArea, inquiryStringFilter(inquiry, "fromArea")) &&
+    matches(row.targetArea ?? "", inquiryStringFilter(inquiry, "toArea")) &&
+    matches(row.targetPackageId ?? "", inquiryStringFilter(inquiry, "targetPackageId")) &&
+    matches(row.callKind, inquiryStringFilter(inquiry, "callKind")) &&
+    matches(row.calleeName, inquiryStringFilter(inquiry, "calleeName")) &&
+    matches(row.calleeSymbolName ?? "", inquiryStringFilter(inquiry, "calleeSymbolName")) &&
+    matches(row.calleeSymbolKey ?? "", inquiryStringFilter(inquiry, "calleeSymbolKey")) &&
+    matches(row.className ?? "", inquiryStringFilter(inquiry, "className")) &&
+    matches(row.functionName ?? "", inquiryStringFilter(inquiry, "functionName")) &&
+    matchesBoolean(row.resolved, inquiryBooleanFilter(inquiry, "resolved")) &&
+    matchesBoolean(row.local, inquiryBooleanFilter(inquiry, "local")) &&
+    matchesBoolean(row.crossesArea, inquiryBooleanFilter(inquiry, "crossesArea")) &&
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.fromFilePath,
       row.fromArea,
@@ -728,7 +765,7 @@ function filterCallSites(
       row.callKind,
       row.calleeName,
       row.calleeText,
-      row.calleeType,
+      row.calleeType ?? "",
       row.calleeSymbolName ?? "",
       row.calleeSymbolKey ?? "",
       row.targetPackageId ?? "",
@@ -738,15 +775,15 @@ function filterCallSites(
       row.summary,
     ]),
   );
-  return orderCallSites(filtered, stringFilter(inquiry, "orderBy"));
+  return orderCallSites(filtered, inquiryStringFilter(inquiry, "orderBy"));
 }
 
 function callDependenciesForInquiry(
   analysis: ProductArchitectureAnalysis,
   inquiry: Inquiry,
 ): readonly ProductArchitectureCallDependencyRow[] {
-  const className = stringFilter(inquiry, "className");
-  const functionName = stringFilter(inquiry, "functionName");
+  const className = inquiryStringFilter(inquiry, "className");
+  const functionName = inquiryStringFilter(inquiry, "functionName");
   if (className === undefined && functionName === undefined) {
     return analysis.callDependencies;
   }
@@ -762,18 +799,18 @@ function filterCallDependencies(
 ): readonly ProductArchitectureCallDependencyRow[] {
   const pathPrefix = pathPrefixFilter(inquiry);
   const filtered = rows.filter((row) =>
-    matches(row.fromFilePath, stringFilter(inquiry, "fromFilePath")) &&
-    matches(row.targetFilePath ?? "", stringFilter(inquiry, "toFilePath")) &&
+    matches(row.fromFilePath, inquiryStringFilter(inquiry, "fromFilePath")) &&
+    matches(row.targetFilePath ?? "", inquiryStringFilter(inquiry, "toFilePath")) &&
     matchesPathPrefix(row.fromFilePath, pathPrefix) &&
-    matches(row.fromArea, stringFilter(inquiry, "fromArea")) &&
-    matches(row.targetArea ?? "", stringFilter(inquiry, "toArea")) &&
-    matches(row.targetPackageId ?? "", stringFilter(inquiry, "targetPackageId")) &&
-    matchesAny(row.classNames, stringFilter(inquiry, "className")) &&
-    matchesAny(row.functionNames, stringFilter(inquiry, "functionName")) &&
-    matchesBoolean(row.resolved, booleanFilter(inquiry, "resolved")) &&
-    matchesBoolean(row.local, booleanFilter(inquiry, "local")) &&
-    matchesBoolean(row.crossesArea, booleanFilter(inquiry, "crossesArea")) &&
-    queryMatches(inquiry, [
+    matches(row.fromArea, inquiryStringFilter(inquiry, "fromArea")) &&
+    matches(row.targetArea ?? "", inquiryStringFilter(inquiry, "toArea")) &&
+    matches(row.targetPackageId ?? "", inquiryStringFilter(inquiry, "targetPackageId")) &&
+    matchesAny(row.classNames, inquiryStringFilter(inquiry, "className")) &&
+    matchesAny(row.functionNames, inquiryStringFilter(inquiry, "functionName")) &&
+    matchesBoolean(row.resolved, inquiryBooleanFilter(inquiry, "resolved")) &&
+    matchesBoolean(row.local, inquiryBooleanFilter(inquiry, "local")) &&
+    matchesBoolean(row.crossesArea, inquiryBooleanFilter(inquiry, "crossesArea")) &&
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.fromFilePath,
       row.fromArea,
@@ -788,7 +825,7 @@ function filterCallDependencies(
       ...row.sampleFunctionNames,
     ]),
   );
-  return orderCallDependencies(filtered, stringFilter(inquiry, "orderBy"));
+  return orderCallDependencies(filtered, inquiryStringFilter(inquiry, "orderBy"));
 }
 
 function filterSymbolReferences(
@@ -797,21 +834,21 @@ function filterSymbolReferences(
 ): readonly ProductArchitectureSymbolReferenceRow[] {
   const pathPrefix = pathPrefixFilter(inquiry);
   const filtered = rows.filter((row) =>
-    matches(row.fromFilePath, stringFilter(inquiry, "fromFilePath")) &&
-    matches(row.targetFilePath, stringFilter(inquiry, "toFilePath")) &&
+    matches(row.fromFilePath, inquiryStringFilter(inquiry, "fromFilePath")) &&
+    matches(row.targetFilePath, inquiryStringFilter(inquiry, "toFilePath")) &&
     matchesPathPrefix(row.fromFilePath, pathPrefix) &&
-    matches(row.fromArea, stringFilter(inquiry, "fromArea")) &&
-    matches(row.targetArea ?? "", stringFilter(inquiry, "toArea")) &&
-    matches(row.targetPackageId ?? "", stringFilter(inquiry, "targetPackageId")) &&
-    matches(row.usageRole, stringFilter(inquiry, "usageRole")) &&
-    matchesUsageFamily(row.usageRole, stringFilter(inquiry, "usageFamily")) &&
-    matches(row.symbolName, stringFilter(inquiry, "symbolName")) &&
-    matches(row.symbolKey, stringFilter(inquiry, "symbolKey")) &&
-    matches(row.className ?? "", stringFilter(inquiry, "className")) &&
-    matches(row.functionName ?? "", stringFilter(inquiry, "functionName")) &&
-    matchesBoolean(row.local, booleanFilter(inquiry, "local")) &&
-    matchesBoolean(row.crossesArea, booleanFilter(inquiry, "crossesArea")) &&
-    queryMatches(inquiry, [
+    matches(row.fromArea, inquiryStringFilter(inquiry, "fromArea")) &&
+    matches(row.targetArea ?? "", inquiryStringFilter(inquiry, "toArea")) &&
+    matches(row.targetPackageId ?? "", inquiryStringFilter(inquiry, "targetPackageId")) &&
+    matches(row.usageRole, inquiryStringFilter(inquiry, "usageRole")) &&
+    matchesUsageFamily(row.usageRole, inquiryStringFilter(inquiry, "usageFamily")) &&
+    matches(row.symbolName, inquiryStringFilter(inquiry, "symbolName")) &&
+    matches(row.symbolKey, inquiryStringFilter(inquiry, "symbolKey")) &&
+    matches(row.className ?? "", inquiryStringFilter(inquiry, "className")) &&
+    matches(row.functionName ?? "", inquiryStringFilter(inquiry, "functionName")) &&
+    matchesBoolean(row.local, inquiryBooleanFilter(inquiry, "local")) &&
+    matchesBoolean(row.crossesArea, inquiryBooleanFilter(inquiry, "crossesArea")) &&
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.fromFilePath,
       row.fromArea,
@@ -827,7 +864,7 @@ function filterSymbolReferences(
       row.summary,
     ]),
   );
-  return orderSymbolReferences(filtered, stringFilter(inquiry, "orderBy"));
+  return orderSymbolReferences(filtered, inquiryStringFilter(inquiry, "orderBy"));
 }
 
 function filterSymbolDependencies(
@@ -836,19 +873,19 @@ function filterSymbolDependencies(
 ): readonly ProductArchitectureSymbolDependencyRow[] {
   const pathPrefix = pathPrefixFilter(inquiry);
   const filtered = rows.filter((row) =>
-    matches(row.fromFilePath, stringFilter(inquiry, "fromFilePath")) &&
-    matches(row.targetFilePath, stringFilter(inquiry, "toFilePath")) &&
+    matches(row.fromFilePath, inquiryStringFilter(inquiry, "fromFilePath")) &&
+    matches(row.targetFilePath, inquiryStringFilter(inquiry, "toFilePath")) &&
     matchesPathPrefix(row.fromFilePath, pathPrefix) &&
-    matches(row.fromArea, stringFilter(inquiry, "fromArea")) &&
-    matches(row.targetArea ?? "", stringFilter(inquiry, "toArea")) &&
-    matches(row.targetPackageId ?? "", stringFilter(inquiry, "targetPackageId")) &&
+    matches(row.fromArea, inquiryStringFilter(inquiry, "fromArea")) &&
+    matches(row.targetArea ?? "", inquiryStringFilter(inquiry, "toArea")) &&
+    matches(row.targetPackageId ?? "", inquiryStringFilter(inquiry, "targetPackageId")) &&
     matchesSymbolDependencyUsageFamily(
       row,
-      stringFilter(inquiry, "usageFamily"),
+      inquiryStringFilter(inquiry, "usageFamily"),
     ) &&
-    matchesBoolean(row.local, booleanFilter(inquiry, "local")) &&
-    matchesBoolean(row.crossesArea, booleanFilter(inquiry, "crossesArea")) &&
-    queryMatches(inquiry, [
+    matchesBoolean(row.local, inquiryBooleanFilter(inquiry, "local")) &&
+    matchesBoolean(row.crossesArea, inquiryBooleanFilter(inquiry, "crossesArea")) &&
+    inquiryQueryMatches(inquiry, [
       row.id,
       row.fromFilePath,
       row.fromArea,
@@ -860,7 +897,7 @@ function filterSymbolDependencies(
       ...row.sampleFunctionNames,
     ]),
   );
-  return orderSymbolDependencies(filtered, stringFilter(inquiry, "orderBy"));
+  return orderSymbolDependencies(filtered, inquiryStringFilter(inquiry, "orderBy"));
 }
 
 function evidenceForArea(row: ProductArchitectureAreaRow): Evidence {
@@ -881,7 +918,7 @@ function evidenceForModule(row: ProductArchitectureModuleRow): Evidence {
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: row.summary,
-    source: toInquirySourceRange(row.source),
+    source: sourceRangeFromOneBasedReference(row.source),
     data: row,
   };
 }
@@ -893,7 +930,7 @@ function evidenceForDependency(row: ProductArchitectureDependencyRow): Evidence 
     role: row.resolved ? EvidenceRole.Support : EvidenceRole.Diagnostic,
     confidence: EvidenceConfidence.Exact,
     summary: row.summary,
-    source: toInquirySourceRange(row.source),
+    source: sourceRangeFromOneBasedReference(row.source),
     data: row,
   };
 }
@@ -907,7 +944,7 @@ function evidenceForAreaDependency(
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: row.summary,
-    source: toInquirySourceRange(row.source),
+    source: sourceRangeFromOneBasedReference(row.source),
     data: row,
   };
 }
@@ -921,7 +958,7 @@ function evidenceForDeclaration(
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: row.summary,
-    source: toInquirySourceRange(row.source),
+    source: sourceRangeFromOneBasedReference(row.source),
     data: row,
   };
 }
@@ -933,7 +970,7 @@ function evidenceForCycle(row: ProductArchitectureCycleRow): Evidence {
     role: EvidenceRole.Diagnostic,
     confidence: EvidenceConfidence.Exact,
     summary: row.summary,
-    source: toInquirySourceRange(row.source),
+    source: sourceRangeFromOneBasedReference(row.source),
     data: row,
   };
 }
@@ -947,7 +984,7 @@ function evidenceForClassSurface(
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: row.summary,
-    source: toInquirySourceRange(row.source),
+    source: sourceRangeFromOneBasedReference(row.source),
     data: row,
   };
 }
@@ -961,12 +998,12 @@ function evidenceForFunctionSurface(
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: row.summary,
-    source: toInquirySourceRange(row.source),
+    source: sourceRangeFromOneBasedReference(row.source),
     data: row,
   };
 }
 
-function evidenceForCallSite(
+function productArchitectureEvidenceForCallSite(
   row: ProductArchitectureCallSiteRow,
 ): Evidence {
   return {
@@ -975,7 +1012,7 @@ function evidenceForCallSite(
     role: EvidenceRole.Support,
     confidence: EvidenceConfidence.Exact,
     summary: row.summary,
-    source: toInquirySourceRange(row.source),
+    source: sourceRangeFromOneBasedReference(row.source),
     data: row,
   };
 }
@@ -989,7 +1026,7 @@ function evidenceForCallDependency(
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: row.summary,
-    source: toInquirySourceRange(row.source),
+    source: sourceRangeFromOneBasedReference(row.source),
     data: row,
   };
 }
@@ -1003,7 +1040,7 @@ function evidenceForSymbolReference(
     role: EvidenceRole.Support,
     confidence: EvidenceConfidence.Exact,
     summary: row.summary,
-    source: toInquirySourceRange(row.source),
+    source: sourceRangeFromOneBasedReference(row.source),
     data: row,
   };
 }
@@ -1017,7 +1054,7 @@ function evidenceForSymbolDependency(
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: row.summary,
-    source: toInquirySourceRange(row.source),
+    source: sourceRangeFromOneBasedReference(row.source),
     data: row,
   };
 }
@@ -1033,7 +1070,7 @@ function evidenceForPhaseProfile(row: ProductArchitecturePhaseProfile): Evidence
   };
 }
 
-function summaryContinuations(inquiry: Inquiry): readonly Continuation[] {
+function productArchitectureSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
   return [
     productArchitectureContinuation(
       inquiry,
@@ -1129,7 +1166,7 @@ function summaryContinuations(inquiry: Inquiry): readonly Continuation[] {
   ];
 }
 
-function commonContinuations(inquiry: Inquiry): readonly Continuation[] {
+function productArchitectureContinuations(inquiry: Inquiry): readonly Continuation[] {
   if (inquiry.projection === "summary") {
     return [];
   }
@@ -1144,33 +1181,21 @@ function commonContinuations(inquiry: Inquiry): readonly Continuation[] {
   ];
 }
 
-function sourceContinuationsForRow(row: unknown): readonly Continuation[] {
-  const source = rowSource(row);
-  if (source === undefined) {
-    return [];
-  }
-  return [
+function productArchitectureSourceContinuations(row: unknown): readonly Continuation[] {
+  const source = sourceForRow<ProductArchitectureSourceReference>(row);
+  return sourceInspectionContinuations(
+    source === undefined ? undefined : sourceRangeFromOneBasedReference(source),
     {
-      id: `product.architecture:source:${source.filePath}:${source.startLine}:${source.startCharacter}`,
-      kind: ContinuationKind.InspectEvidence,
-      priority: ContinuationPriority.Secondary,
+      ...(source === undefined
+        ? {}
+        : {
+            id: `product.architecture:source:${source.filePath}:${source.startLine}:${source.startCharacter}`,
+          }),
+      basis: [BasisKind.TypeScriptProgram, BasisKind.SourceText],
       rationale: "Inspect the source behind this semantic-runtime architecture row.",
-      inquiry: {
-        lens: LensId.TsSource,
-        locus: {
-          kind: LocusKind.SourceRange,
-          range: toInquirySourceRange(source),
-        },
-        projection: "text",
-      },
-      route: {
-        plane: NavigationPlane.Inspection,
-        relation: NavigationRelation.SourceFor,
-        basis: [BasisKind.TypeScriptProgram, BasisKind.SourceText],
-        summary: "Source backing for a product architecture row.",
-      },
+      routeSummary: "Source backing for a product architecture row.",
     },
-  ];
+  );
 }
 
 function productArchitectureContinuation(
@@ -1201,38 +1226,6 @@ function productArchitectureContinuation(
   };
 }
 
-function nextPageContinuation(
-  inquiry: Inquiry,
-  nextOffset: number | undefined,
-  limit: number,
-): readonly Continuation[] {
-  if (nextOffset === undefined) {
-    return [];
-  }
-  return [
-    {
-      id: "product.architecture:next-page",
-      kind: ContinuationKind.NextPage,
-      priority: ContinuationPriority.Primary,
-      rationale: "Continue semantic-runtime architecture rows.",
-      inquiry: {
-        lens: LensId.ProductArchitecture,
-        locus: inquiry.locus,
-        projection: inquiry.projection,
-        ...(inquiry.filters === undefined ? {} : { filters: inquiry.filters }),
-        ...(inquiry.budget === undefined ? {} : { budget: inquiry.budget }),
-        page: { size: limit, cursor: String(nextOffset) },
-      },
-      route: {
-        plane: NavigationPlane.Addressing,
-        relation: NavigationRelation.NextPageOf,
-        basis: [BasisKind.TypeScriptProgram],
-        summary: "Next semantic-runtime architecture row page.",
-      },
-    },
-  ];
-}
-
 function productArchitectureBasis(sourceProject: SourceProject): readonly Basis[] {
   return [
     {
@@ -1245,57 +1238,6 @@ function productArchitectureBasis(sourceProject: SourceProject): readonly Basis[
       identity: sourceProject.summary().identity,
     },
   ];
-}
-
-function rowSource(
-  row: unknown,
-): ProductArchitectureSourceReference | undefined {
-  if (typeof row !== "object" || row === null) {
-    return undefined;
-  }
-  const candidate = row as {
-    readonly source?: ProductArchitectureSourceReference;
-  };
-  return candidate.source;
-}
-
-function rowLimit(inquiry: Inquiry): number {
-  return clampBudget(inquiry.budget?.rows, 80, 500);
-}
-
-function evidenceLimit(inquiry: Inquiry): number {
-  return clampBudget(inquiry.budget?.evidencePerSubject, 5, 50);
-}
-
-function stringFilter(inquiry: Inquiry, id: string): string | undefined {
-  const value = inquiry.filters?.[id];
-  return typeof value === "string" && value.length > 0 ? value : undefined;
-}
-
-function booleanFilter(inquiry: Inquiry, id: string): boolean | undefined {
-  const value = inquiry.filters?.[id];
-  if (typeof value === "boolean") {
-    return value;
-  }
-  if (value === "true") {
-    return true;
-  }
-  if (value === "false") {
-    return false;
-  }
-  return undefined;
-}
-
-function numberFilter(inquiry: Inquiry, id: string): number | undefined {
-  const value = inquiry.filters?.[id];
-  if (typeof value === "number" && Number.isFinite(value)) {
-    return value;
-  }
-  if (typeof value === "string" && value.trim().length > 0) {
-    const parsed = Number(value);
-    return Number.isFinite(parsed) ? parsed : undefined;
-  }
-  return undefined;
 }
 
 function matches(value: string, expected: string | undefined): boolean {
@@ -1311,7 +1253,7 @@ function matchesAny(values: readonly string[], expected: string | undefined): bo
 }
 
 function pathPrefixFilter(inquiry: Inquiry): string | undefined {
-  const explicit = stringFilter(inquiry, "pathPrefix");
+  const explicit = inquiryStringFilter(inquiry, "pathPrefix");
   if (explicit !== undefined) {
     return explicit;
   }
@@ -1751,13 +1693,4 @@ function orderSymbolDependencies(
     default:
       return rows;
   }
-}
-
-function queryMatches(inquiry: Inquiry, values: readonly string[]): boolean {
-  const query = stringFilter(inquiry, "query");
-  if (query === undefined) {
-    return true;
-  }
-  const normalized = query.toLowerCase();
-  return values.some((value) => value.toLowerCase().includes(normalized));
 }

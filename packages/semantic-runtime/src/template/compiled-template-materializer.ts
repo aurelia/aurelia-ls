@@ -1,4 +1,4 @@
-import { SemanticClaim } from '../kernel/claim.js';
+import { SemanticClaim, claimsForProduct } from '../kernel/claim.js';
 import {
   OpenSeam,
 } from '../kernel/open-seam.js';
@@ -34,12 +34,12 @@ import {
 } from '../kernel/store.js';
 import {
   KernelVocabulary,
-  type InstructionKindKey,
   type OpenSeamKindKey,
 } from '../kernel/vocabulary.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
+import { camelCaseAttributeName } from './attribute-mapper.js';
 import type {
   AttributeClassificationEmission,
 } from './attribute-classification-materializer.js';
@@ -87,6 +87,7 @@ import {
   type TemplateInstructionField,
   type TemplateInstruction,
 } from './instruction-ir.js';
+import { instructionKindKeyFor } from './instruction-vocabulary.js';
 import type { BindingCommandLoweringEmission } from './binding-command-lowering-materializer.js';
 import type { TemplateValueSiteEmission } from './value-site-materializer.js';
 import {
@@ -96,25 +97,23 @@ import {
 } from './value-site.js';
 import { TemplateProductDetails } from './product-details.js';
 
-export class CompiledTemplateMaterializationInput {
-  constructor(
-    /** Store-local key for this compiled-template pass. */
-    readonly localKey: string,
-    /** Compiler unit that owns the authored HTML and compiler context. */
-    readonly compilationUnit: TemplateCompilationUnit,
-    /** Authored HTML parse result before compiler DOM transformation. */
-    readonly html: HtmlParseEmission,
-    /** Runtime AttrSyntax products produced from authored attributes. */
-    readonly attributeSyntax: AttributeSyntaxParseEmission,
-    /** Attribute classifications that selected resource/bindable/command lanes. */
-    readonly attributeClassification: AttributeClassificationEmission,
-    /** Value sites that reveal text interpolation and other non-command compiler work still needing rows. */
-    readonly valueSites: TemplateValueSiteEmission,
-    /** Binding-command lowering products that already emitted concrete instruction models. */
-    readonly bindingCommandLowering: BindingCommandLoweringEmission,
-    /** Compiler world that supplies runtime-shaped resource and command lookup services. */
-    readonly compilerWorld: TemplateCompilerWorldEmission,
-  ) {}
+export interface CompiledTemplateMaterializationRequest {
+  /** Store-local key for this compiled-template pass. */
+  readonly localKey: string;
+  /** Compiler unit that owns the authored HTML and compiler context. */
+  readonly compilationUnit: TemplateCompilationUnit;
+  /** Authored HTML parse result before compiler DOM transformation. */
+  readonly html: HtmlParseEmission;
+  /** Runtime AttrSyntax products produced from authored attributes. */
+  readonly attributeSyntax: AttributeSyntaxParseEmission;
+  /** Attribute classifications that selected resource/bindable/command lanes. */
+  readonly attributeClassification: AttributeClassificationEmission;
+  /** Value sites that reveal text interpolation and other non-command compiler work still needing rows. */
+  readonly valueSites: TemplateValueSiteEmission;
+  /** Binding-command lowering products that already emitted concrete instruction models. */
+  readonly bindingCommandLowering: BindingCommandLoweringEmission;
+  /** Compiler world that supplies runtime-shaped resource and command lookup services. */
+  readonly compilerWorld: TemplateCompilerWorldEmission;
 }
 
 export class CompiledTemplateEmission {
@@ -244,6 +243,7 @@ class ElementInstructionParts {
     readonly bindableInstructions: readonly TemplateInstruction[],
     readonly capturedSyntaxProductHandles: readonly ProductHandle[],
     readonly hasProcessContentHook: boolean,
+    readonly hasOpenProcessContentHook: boolean,
   ) {}
 }
 
@@ -258,7 +258,7 @@ class CompiledTemplateAssemblyIndexes {
   readonly textValueSiteByNode: ReadonlyMap<ProductHandle, TemplateValueSite>;
   readonly ownersByElement: ReadonlyMap<ProductHandle, OwnerElement>;
 
-  constructor(readonly input: CompiledTemplateMaterializationInput) {
+  constructor(readonly input: CompiledTemplateMaterializationRequest) {
     this.nodesByProduct = new Map(input.html.nodes.map((node) => [node.productHandle, node]));
     this.attributesByProduct = new Map(input.html.attributes.map((attribute) => [attribute.productHandle, attribute]));
     this.syntaxByProduct = new Map(input.attributeSyntax.syntaxes.map((syntax) => [syntax.productHandle, syntax]));
@@ -289,7 +289,7 @@ class CompiledTemplateAssemblyState {
 
   constructor(
     readonly store: KernelStore,
-    readonly input: CompiledTemplateMaterializationInput,
+    readonly input: CompiledTemplateMaterializationRequest,
     readonly source: CompiledTemplateSourceSet,
   ) {}
 
@@ -406,7 +406,7 @@ class CompiledTemplateAssemblyState {
 
 class CompiledTemplateInstructionFactory {
   constructor(
-    readonly input: CompiledTemplateMaterializationInput,
+    readonly input: CompiledTemplateMaterializationRequest,
     readonly assemblyState: CompiledTemplateAssemblyState,
     readonly indexes: CompiledTemplateAssemblyIndexes,
   ) {}
@@ -483,7 +483,7 @@ class CompiledTemplateInstructionFactory {
       ? classification.resource.definition
       : null;
     const target = lane === 'plain'
-      ? this.input.compilerWorld.attributeMapper.map(node, syntax.target) ?? camelCase(syntax.target)
+      ? this.input.compilerWorld.attributeMapper.map(node, syntax.target) ?? camelCaseAttributeName(syntax.target)
       : bindable?.definition.name ?? customAttributeDefinition?.defaultProperty ?? syntax.target;
     const addressHandle = attribute.valueAddressHandle ?? attribute.sourceAddressHandle;
     if (parse == null || parse.resultKind === ExpressionParseResultKind.InterpolationAbsent) {
@@ -640,7 +640,7 @@ class CompiledTemplateInstructionFactory {
 
 class CompiledTemplateInstructionTraversal {
   constructor(
-    readonly input: CompiledTemplateMaterializationInput,
+    readonly input: CompiledTemplateMaterializationRequest,
     readonly assemblyState: CompiledTemplateAssemblyState,
     readonly instructionFactory: CompiledTemplateInstructionFactory,
     readonly indexes: CompiledTemplateAssemblyIndexes,
@@ -805,7 +805,7 @@ class CompiledTemplateInstructionTraversal {
       ...parts.plainInstructions,
     ];
     const shouldCompileChildren = elementDefinition == null
-      || (!elementDefinition.containerless && !hasAttribute(owner, 'containerless') && !parts.hasProcessContentHook);
+      || (!elementDefinition.containerless && !hasAttribute(owner, 'containerless') && !parts.hasOpenProcessContentHook);
 
     if (parts.templateControllerInstructions.length > 0) {
       const innermostInstructions: TemplateInstruction[] = [...directRow];
@@ -861,8 +861,9 @@ class CompiledTemplateInstructionTraversal {
     const bindableInstructions: TemplateInstruction[] = [];
     const capturedSyntaxProductHandles: ProductHandle[] = [];
     const hasProcessContentHook = elementDefinition?.processContent != null;
+    const hasOpenProcessContentHook = hasProcessContentHook && !this.isKnownTransparentProcessContent(node, elementDefinition);
 
-    if (hasProcessContentHook) {
+    if (hasOpenProcessContentHook) {
       this.assemblyState.addOpenSeam(
         `process-content:${node.productHandle}`,
         `Custom element '${elementDefinition.name}' has a processContent hook; child DOM compilation is held open because the hook may mutate, remove, or decline compilation of the authored content.`,
@@ -957,7 +958,42 @@ class CompiledTemplateInstructionTraversal {
       bindableInstructions,
       capturedSyntaxProductHandles,
       hasProcessContentHook,
+      hasOpenProcessContentHook,
     );
+  }
+
+  private isKnownTransparentProcessContent(
+    node: HtmlElement,
+    elementDefinition: CustomElementDefinition | null,
+  ): boolean {
+    if (elementDefinition?.name !== 'au-slot') {
+      return false;
+    }
+    return !this.hasDescendantAttribute(node, 'au-slot');
+  }
+
+  private hasDescendantAttribute(node: HtmlElement, attributeName: string): boolean {
+    for (const childReference of node.children) {
+      const child = childReference.productHandle == null
+        ? null
+        : this.indexes.nodesByProduct.get(childReference.productHandle) ?? null;
+      if (!(child instanceof HtmlElement)) {
+        continue;
+      }
+      if (this.elementHasAttribute(child, attributeName) || this.hasDescendantAttribute(child, attributeName)) {
+        return true;
+      }
+    }
+    return false;
+  }
+
+  private elementHasAttribute(node: HtmlElement, attributeName: string): boolean {
+    return node.attributes.some((reference) => {
+      const attribute = reference.productHandle == null
+        ? null
+        : this.indexes.attributesByProduct.get(reference.productHandle) ?? null;
+      return attribute?.rawName === attributeName;
+    });
   }
 
   private letBindingInstructionsForElement(node: HtmlElement): readonly LetBindingInstruction[] {
@@ -996,7 +1032,7 @@ class CompiledTemplateInstructionTraversal {
           identityHandle,
           node.toReference(),
           attribute.toReference(),
-          camelCase(syntax.target),
+          camelCaseAttributeName(syntax.target),
           expressionHandle,
           attribute.valueAddressHandle ?? attribute.sourceAddressHandle,
           this.assemblyState.fieldProvenance<TemplateInstructionField>(['node', 'attribute', 'target', 'expression', 'source']),
@@ -1017,21 +1053,44 @@ class CompiledTemplateInstructionTraversal {
       const commandBuilt = this.indexes.commandInstructions.get(classification.productHandle) ?? [];
       if (commandBuilt.length > 0) {
         commandBuilt.forEach((instruction) => this.assemblyState.addExistingInstruction(instruction));
-        result.push(...commandBuilt);
+      }
+      if (syntax != null && isInvalidSurrogateAttributeTarget(syntax.target)) {
+        this.assemblyState.addOpenSeam(
+          `surrogate-invalid-attribute:${classification.productHandle}`,
+          `Root template surrogate attribute '${syntax.target}' is invalid in Aurelia and is not lowered into host instructions.`,
+          classification.sourceAddressHandle,
+        );
         continue;
       }
       switch (classification.classificationKind) {
+        case AttributeClassificationKind.CustomAttribute: {
+          const props = commandBuilt.length > 0
+            ? commandBuilt
+            : nullableInstruction(this.instructionFactory.valueInstructionForClassification(
+              classification,
+              syntax,
+              attribute,
+              node,
+              'custom-attribute',
+            ));
+          result.push(this.instructionFactory.createHydrateAttributeInstruction(classification, syntax, attribute, node, props));
+          break;
+        }
         case AttributeClassificationKind.Plain: {
-          const instruction = this.instructionFactory.valueInstructionForClassification(
-            classification,
-            syntax,
-            attribute,
-            node,
-            'plain',
-            true,
-          );
-          if (instruction != null) {
-            result.push(instruction);
+          if (commandBuilt.length > 0) {
+            result.push(...commandBuilt);
+          } else {
+            const instruction = this.instructionFactory.valueInstructionForClassification(
+              classification,
+              syntax,
+              attribute,
+              node,
+              'plain',
+              true,
+            );
+            if (instruction != null) {
+              result.push(instruction);
+            }
           }
           break;
         }
@@ -1048,7 +1107,6 @@ class CompiledTemplateInstructionTraversal {
           break;
         case AttributeClassificationKind.Bindable:
         case AttributeClassificationKind.Spread:
-        case AttributeClassificationKind.CustomAttribute:
         case AttributeClassificationKind.Captured:
         case AttributeClassificationKind.CompilerControl:
         case AttributeClassificationKind.Open:
@@ -1071,7 +1129,7 @@ export class CompiledTemplateMaterializer {
     readonly store: KernelStore,
   ) {}
 
-  materialize(input: CompiledTemplateMaterializationInput): CompiledTemplateEmission {
+  materialize(input: CompiledTemplateMaterializationRequest): CompiledTemplateEmission {
     const emission = this.recordsForCompiledTemplate(input);
     if (emission.records.length > 0) {
       this.store.commit(new KernelStoreBatch(emission.records, `compiled-template:${input.localKey}`));
@@ -1097,7 +1155,7 @@ export class CompiledTemplateMaterializer {
     }
   }
 
-  private recordsForCompiledTemplate(input: CompiledTemplateMaterializationInput): CompiledTemplateEmission {
+  private recordsForCompiledTemplate(input: CompiledTemplateMaterializationRequest): CompiledTemplateEmission {
     const source = this.recordsForSource(input);
     const handles = this.compiledTemplateHandles(input);
     const assembly = this.assembleInstructions(input, source);
@@ -1145,7 +1203,7 @@ export class CompiledTemplateMaterializer {
   }
 
   private compiledTemplateHandles(
-    input: CompiledTemplateMaterializationInput,
+    input: CompiledTemplateMaterializationRequest,
   ): CompiledTemplateHandles {
     const local = `compiled-template:${input.localKey}`;
     return new CompiledTemplateHandles(
@@ -1156,7 +1214,7 @@ export class CompiledTemplateMaterializer {
   }
 
   private publishCompiledTemplateSequences(
-    input: CompiledTemplateMaterializationInput,
+    input: CompiledTemplateMaterializationRequest,
     handles: CompiledTemplateHandles,
     assembly: CompiledTemplateAssembly,
     source: CompiledTemplateSourceSet,
@@ -1219,7 +1277,7 @@ export class CompiledTemplateMaterializer {
   }
 
   private compileClaimForTemplate(
-    input: CompiledTemplateMaterializationInput,
+    input: CompiledTemplateMaterializationRequest,
     handles: CompiledTemplateHandles,
     source: CompiledTemplateSourceSet,
   ): SemanticClaim {
@@ -1233,7 +1291,7 @@ export class CompiledTemplateMaterializer {
   }
 
   private createCompiledTemplate(
-    input: CompiledTemplateMaterializationInput,
+    input: CompiledTemplateMaterializationRequest,
     handles: CompiledTemplateHandles,
     state: CompiledTemplateState,
     sequences: CompiledTemplateSequencePublications,
@@ -1258,7 +1316,7 @@ export class CompiledTemplateMaterializer {
   }
 
   private recordsForCompiledTemplatePublication(
-    input: CompiledTemplateMaterializationInput,
+    input: CompiledTemplateMaterializationRequest,
     handles: CompiledTemplateHandles,
     compiledTemplate: CompiledTemplate,
     sequences: CompiledTemplateSequencePublications,
@@ -1277,7 +1335,7 @@ export class CompiledTemplateMaterializer {
   }
 
   private compiledTemplateIdentity(
-    input: CompiledTemplateMaterializationInput,
+    input: CompiledTemplateMaterializationRequest,
     handles: CompiledTemplateHandles,
     compiledTemplate: CompiledTemplate,
   ): CompilerIdentity {
@@ -1681,7 +1739,7 @@ export class CompiledTemplateMaterializer {
   }
 
   private assembleInstructions(
-    input: CompiledTemplateMaterializationInput,
+    input: CompiledTemplateMaterializationRequest,
     source: CompiledTemplateSourceSet,
   ): CompiledTemplateAssembly {
     const assemblyState = new CompiledTemplateAssemblyState(this.store, input, source);
@@ -1700,7 +1758,7 @@ export class CompiledTemplateMaterializer {
     return assemblyState.toAssembly();
   }
 
-  private recordsForSource(input: CompiledTemplateMaterializationInput): CompiledTemplateSourceSet {
+  private recordsForSource(input: CompiledTemplateMaterializationRequest): CompiledTemplateSourceSet {
     const evidenceHandle = this.store.handles.evidence(`compiled-template:${input.localKey}`);
     const provenanceHandle = this.store.handles.provenance(`compiled-template:${input.localKey}`);
     return new CompiledTemplateSourceSet(
@@ -1744,7 +1802,7 @@ function classificationsByOwnerProduct(
 }
 
 function commandInstructionsByClassification(
-  input: CompiledTemplateMaterializationInput,
+  input: CompiledTemplateMaterializationRequest,
 ): ReadonlyMap<ProductHandle, readonly TemplateInstruction[]> {
   const buildInputByProduct = new Map(input.bindingCommandLowering.buildInputs.map((buildInput) => [buildInput.productHandle, buildInput]));
   const instructionByProduct = new Map(input.bindingCommandLowering.instructions.map((instruction) => [instruction.productHandle, instruction]));
@@ -1799,7 +1857,7 @@ function commandInstructionsByClassification(
 }
 
 function expressionParsesBySite(
-  input: CompiledTemplateMaterializationInput,
+  input: CompiledTemplateMaterializationRequest,
 ): ReadonlyMap<ProductHandle, TemplateExpressionParse> {
   return new Map([
     ...input.valueSites.parses,
@@ -1808,7 +1866,7 @@ function expressionParsesBySite(
 }
 
 function valueSitesByClassification(
-  input: CompiledTemplateMaterializationInput,
+  input: CompiledTemplateMaterializationRequest,
 ): ReadonlyMap<ProductHandle, TemplateValueSite> {
   const result = new Map<ProductHandle, TemplateValueSite>();
   for (const site of [
@@ -1873,18 +1931,26 @@ function hasAttribute(
   return owner?.attributes.some((attribute) => attribute.rawName.toLowerCase() === name) ?? false;
 }
 
+function isInvalidSurrogateAttributeTarget(target: string): boolean {
+  switch (target.toLowerCase()) {
+    case 'id':
+    case 'name':
+    case 'au-slot':
+    case 'as-element':
+      return true;
+    default:
+      return false;
+  }
+}
+
 function nullableInstruction(
   instruction: TemplateInstruction | null,
 ): readonly TemplateInstruction[] {
   return instruction == null ? [] : [instruction];
 }
 
-function camelCase(value: string): string {
-  return value.replace(/-([a-z])/g, (_, ch: string) => ch.toUpperCase());
-}
-
 function resolvedInstructionResourceProductHandle(
-  input: CompiledTemplateMaterializationInput,
+  input: CompiledTemplateMaterializationRequest,
   classification: AttributeClassification,
 ): ProductHandle | null {
   return input.compilerWorld.templateCompiler.resolveResources
@@ -1946,75 +2012,4 @@ function compiledTemplatePublicationProductHandles(
     ...sequences.instructionSequences.map((sequence) => sequence.productHandle),
     ...createdInstructions.map((instruction) => instruction.productHandle),
   ];
-}
-
-function instructionKindKeyFor(
-  kind: TemplateInstructionKind,
-): InstructionKindKey {
-  switch (kind) {
-    case TemplateInstructionKind.HydrateElement:
-      return KernelVocabulary.Instruction.HydrateElement.key;
-    case TemplateInstructionKind.HydrateAttribute:
-      return KernelVocabulary.Instruction.HydrateAttribute.key;
-    case TemplateInstructionKind.HydrateTemplateController:
-      return KernelVocabulary.Instruction.HydrateTemplateController.key;
-    case TemplateInstructionKind.PropertyBinding:
-      return KernelVocabulary.Instruction.PropertyBinding.key;
-    case TemplateInstructionKind.Interpolation:
-      return KernelVocabulary.Instruction.Interpolation.key;
-    case TemplateInstructionKind.ListenerBinding:
-      return KernelVocabulary.Instruction.ListenerBinding.key;
-    case TemplateInstructionKind.IteratorBinding:
-      return KernelVocabulary.Instruction.IteratorBinding.key;
-    case TemplateInstructionKind.RefBinding:
-      return KernelVocabulary.Instruction.RefBinding.key;
-    case TemplateInstructionKind.LetBinding:
-      return KernelVocabulary.Instruction.LetBinding.key;
-    case TemplateInstructionKind.TextBinding:
-      return KernelVocabulary.Instruction.TextBinding.key;
-    case TemplateInstructionKind.AttributeBinding:
-      return KernelVocabulary.Instruction.AttributeBinding.key;
-    case TemplateInstructionKind.MultiAttr:
-      return KernelVocabulary.Instruction.MultiAttr.key;
-    case TemplateInstructionKind.SetProperty:
-      return KernelVocabulary.Instruction.SetProperty.key;
-    case TemplateInstructionKind.SetAttribute:
-      return KernelVocabulary.Instruction.SetAttribute.key;
-    case TemplateInstructionKind.SetClassAttribute:
-      return KernelVocabulary.Instruction.SetClassAttribute.key;
-    case TemplateInstructionKind.SetStyleAttribute:
-      return KernelVocabulary.Instruction.SetStyleAttribute.key;
-    case TemplateInstructionKind.StylePropertyBinding:
-      return KernelVocabulary.Instruction.StylePropertyBinding.key;
-    case TemplateInstructionKind.HydrateLetElement:
-      return KernelVocabulary.Instruction.HydrateLetElement.key;
-    case TemplateInstructionKind.SpreadTransferedBinding:
-      return KernelVocabulary.Instruction.SpreadTransferedBinding.key;
-    case TemplateInstructionKind.SpreadElementPropBinding:
-      return KernelVocabulary.Instruction.SpreadElementPropBinding.key;
-    case TemplateInstructionKind.SpreadValueBinding:
-      return KernelVocabulary.Instruction.SpreadValueBinding.key;
-    case TemplateInstructionKind.TranslationBinding:
-      return KernelVocabulary.Instruction.TranslationBinding.key;
-    case TemplateInstructionKind.TranslationBindBinding:
-      return KernelVocabulary.Instruction.TranslationBindBinding.key;
-    case TemplateInstructionKind.TranslationParametersBinding:
-      return KernelVocabulary.Instruction.TranslationParametersBinding.key;
-    case TemplateInstructionKind.StateBinding:
-      return KernelVocabulary.Instruction.StateBinding.key;
-    case TemplateInstructionKind.DispatchBinding:
-      return KernelVocabulary.Instruction.DispatchBinding.key;
-    case TemplateInstructionKind.Open:
-      throw new Error('Open instruction kind is a seam kind and cannot be materialized as an instruction product.');
-  }
-}
-
-function claimsForProduct(
-  claims: readonly SemanticClaim[],
-  product: ProductHandle,
-): readonly SemanticClaim[] {
-  return claims.filter((claim) =>
-    claim.subjectHandle === product
-    || claim.objectHandle === product
-  );
 }

@@ -1,5 +1,10 @@
 import ts from "typescript";
 
+import {
+  hasModifier,
+  propertyNameText,
+} from "./ast.js";
+
 /** Normalized TypeScript member slot kind across class, interface, and type-literal declarations. */
 export type TypeScriptMemberSlotKindId =
   | "constructor"
@@ -37,6 +42,77 @@ export interface TypeScriptMemberSurface {
   readonly slotKind: TypeScriptMemberSlotKindId;
   readonly declarationKind: TypeScriptMemberDeclarationKindId;
   readonly accessKind: TypeScriptMemberAccessKindId;
+}
+
+export interface TypeScriptClassDeclarationSurface {
+  readonly name: string;
+  readonly exported: boolean;
+  readonly abstract: boolean;
+  readonly extendsType: string | null;
+  readonly implementsTypes: readonly string[];
+  readonly methods: readonly string[];
+  readonly staticMethods: readonly string[];
+  readonly accessors: readonly string[];
+  readonly properties: readonly string[];
+  readonly constructorCount: number;
+  readonly methodCount: number;
+  readonly propertyCount: number;
+}
+
+export function classDeclarationSurface(
+  declaration: ts.ClassDeclaration,
+  sourceFile: ts.SourceFile = declaration.getSourceFile(),
+): TypeScriptClassDeclarationSurface {
+  const memberSurfaces = memberSurfacesForDeclaration(declaration);
+  const methods = uniqueSortedStrings(
+    declaration.members
+      .filter(ts.isMethodDeclaration)
+      .filter((member) => !hasModifier(member, ts.SyntaxKind.StaticKeyword))
+      .flatMap((member) => propertyNameText(member.name, sourceFile) ?? []),
+  );
+  const staticMethods = uniqueSortedStrings(
+    declaration.members
+      .filter(ts.isMethodDeclaration)
+      .filter((member) => hasModifier(member, ts.SyntaxKind.StaticKeyword))
+      .flatMap((member) => propertyNameText(member.name, sourceFile) ?? []),
+  );
+  const accessors = uniqueSortedStrings(
+    memberSurfaces
+      .filter((member) => member.slotKind === TypeScriptMemberSlotKind.Accessor)
+      .map((member) => member.name),
+  );
+  const properties = uniqueSortedStrings(
+    memberSurfaces
+      .filter((member) => member.slotKind === TypeScriptMemberSlotKind.Property)
+      .map((member) => member.name),
+  );
+  const constructorCount = declaration.members.filter(
+    ts.isConstructorDeclaration,
+  ).length;
+  const methodCount = methods.length + staticMethods.length;
+  const propertyCount = properties.length + accessors.length;
+  return {
+    name: declaration.name?.text ?? "<anonymous>",
+    exported: hasModifier(declaration, ts.SyntaxKind.ExportKeyword),
+    abstract: hasModifier(declaration, ts.SyntaxKind.AbstractKeyword),
+    extendsType: heritageTypeTexts(
+      declaration,
+      ts.SyntaxKind.ExtendsKeyword,
+      sourceFile,
+    )[0] ?? null,
+    implementsTypes: heritageTypeTexts(
+      declaration,
+      ts.SyntaxKind.ImplementsKeyword,
+      sourceFile,
+    ),
+    methods,
+    staticMethods,
+    accessors,
+    properties,
+    constructorCount,
+    methodCount,
+    propertyCount,
+  };
 }
 
 export function memberSurfacesForDeclaration(
@@ -94,8 +170,24 @@ export function memberName(member: ts.Node): string | null {
   if (ts.isCallSignatureDeclaration(member)) {
     return "<call>";
   }
-  const name = (member as { readonly name?: ts.Node }).name;
-  return name === undefined ? null : name.getText(member.getSourceFile());
+  return propertyNameText(
+    (member as { readonly name?: ts.PropertyName }).name,
+    member.getSourceFile(),
+  );
+}
+
+export function heritageTypeTexts(
+  node: ts.ClassDeclaration | ts.ClassExpression | ts.InterfaceDeclaration,
+  token: ts.SyntaxKind.ExtendsKeyword | ts.SyntaxKind.ImplementsKeyword,
+  sourceFile: ts.SourceFile = node.getSourceFile(),
+): readonly string[] {
+  return uniqueSortedStrings(
+    (node.heritageClauses ?? [])
+      .filter((clause) => clause.token === token)
+      .flatMap((clause) =>
+        clause.types.map((type) => type.expression.getText(sourceFile)),
+      ),
+  );
 }
 
 export function memberSlotKindForDeclaration(
@@ -156,4 +248,8 @@ export function isParameterProperty(parameter: ts.ParameterDeclaration): boolean
     (flags & ts.ModifierFlags.Protected) !== 0 ||
     (flags & ts.ModifierFlags.Readonly) !== 0
   );
+}
+
+function uniqueSortedStrings(values: readonly string[]): readonly string[] {
+  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }

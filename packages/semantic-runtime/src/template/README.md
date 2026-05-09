@@ -56,6 +56,11 @@ classification, expression parsing, and instruction lowering converge on the sam
   transfer ownership away from the parser for binding-command values and secondary grammars that need command/compiler
   preprocessing first. Direct spread values are parser-owned here as `SpreadValue` sites so `...$bindables="source"`
   and shorthand `...source` lower through expression products instead of becoming static attributes.
+- `expression-parse-projection.ts` owns the template/runtime projection from parser publications to expression ASTs.
+  Keep this distinct from the parser's publication algebra: authoring-strict companion/frontier results can remain
+  visible on parse products while runtime-shaped consumers ask whether Aurelia itself would accept a binding expression
+  lane. A final interpolation hole whose body is complete but whose `}` is missing is one such case: parser state remains
+  companion/frontier, while binding data-flow can still spend the runtime-accepted interpolation expression.
 - `binding-command-execution.ts` models runtime binding-command executables, resolver state, command build inputs, and
   lowering results. Custom command bodies can stay opaque while still preserving the exact command/input boundary.
 - `binding-command-lowering-materializer.ts` spends command-bearing attribute classifications and custom-attribute

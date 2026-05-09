@@ -1,16 +1,25 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, readFileSync, readdirSync, statSync } from "node:fs";
 import path from "node:path";
 
 import ts from "typescript";
 
 import {
+  findRepoRoot,
+  isPathWithin,
   repoPathIdentity,
   repoRelativePath,
+  normalizeFileKey,
   resolveRepoPath,
   toPosixPath,
   type RepoPathIdentity,
   type RepoRelativePath,
 } from "./path.js";
+import { SourceProjectFileCache } from "./project-file-cache.js";
+import {
+  declarationNameNode,
+  isExportedDeclaration,
+} from "./semantic-surface/ast.js";
+import { sourceSpanForNode } from "./semantic-surface/source-ranges.js";
 
 /** Stable id for a source package admitted into the hot TypeScript world. */
 export const enum SourcePackageId {
@@ -46,6 +55,28 @@ export const AURELIA_FRAMEWORK_PACKAGE_IDS = [
 /** Stable id for one Aurelia framework package admitted into Atlas. */
 export type AureliaFrameworkPackageId =
   (typeof AURELIA_FRAMEWORK_PACKAGE_IDS)[number];
+
+/** Prefix for public Aurelia plugin package ids admitted from the optional plugins submodule. */
+export const AURELIA_PLUGIN_PACKAGE_ID_PREFIX = "aurelia2-plugin:";
+
+/** Prefix for environment-admitted external source packages. */
+export const EXTERNAL_SOURCE_PACKAGE_ID_PREFIX = "external:";
+
+const EXTERNAL_SOURCE_ROOTS_ENV = "ATLAS_EXTERNAL_SOURCE_ROOTS";
+
+const EXTERNAL_SOURCE_EXCLUDED_DIRECTORIES = new Set([
+  ".aurelia-artifacts",
+  ".git",
+  "coverage",
+  "dist",
+  "node_modules",
+  "out",
+]);
+
+const aureliaFrameworkPackageNamesByProject = new WeakMap<
+  SourceProject,
+  ReadonlyMap<string, string>
+>();
 
 /** Source snapshot implementation owned by this package. */
 export const enum SourceSnapshotKind {
@@ -113,7 +144,7 @@ export interface SourceSpan {
   readonly endCharacter: number;
 }
 
-/** Source file identity after package admission. */
+/** Source file identity inside the current TypeScript Program. */
 export interface SourceFileIdentity extends RepoPathIdentity {
   /** Package that owns this source file, null for reachable external or library files. */
   readonly packageId: string | null;
@@ -135,6 +166,8 @@ export interface SourcePackageSummary {
   readonly rootFileCount: number;
   /** Number of Program source files currently owned by this package. */
   readonly sourceFileCount: number;
+  /** Number of owned implementation source files, excluding declaration files. */
+  readonly implementationSourceFileCount: number;
 }
 
 /** Compact source substrate summary suitable for daemon status and orientation. */
@@ -187,26 +220,11 @@ export interface SourceDeclarationRow {
   readonly exported: boolean;
 }
 
-/** Process-local normalized path keys shared by source substrate indexes. */
-class NormalizedFileKeyCache {
-  readonly #keys = new Map<string, string>();
-
-  normalize(fileName: string): string {
-    const cached = this.#keys.get(fileName);
-    if (cached !== undefined) {
-      return cached;
-    }
-    const normalized = toPosixPath(path.resolve(fileName)).toLowerCase();
-    this.#keys.set(fileName, normalized);
-    return normalized;
-  }
-}
-
-const normalizedFileKeys = new NormalizedFileKeyCache();
-
 /** Hot TypeScript source world shared by source, checker, and TypeChecker-driven semantic lenses. */
 export class SourceProject {
   readonly #languageService: ts.LanguageService;
+  readonly #program: ts.Program;
+  readonly #checker: ts.TypeChecker;
   readonly #packageDefinitions: readonly ResolvedSourcePackageDefinition[];
   readonly #rootFileNames: readonly string[];
   readonly #configDiagnostics: readonly ts.Diagnostic[];
@@ -233,23 +251,19 @@ export class SourceProject {
     this.#languageService = ts.createLanguageService(
       this.createLanguageServiceHost(),
     );
-    this.#index = this.createIndex(this.program);
+    this.#program = this.materializeProgram();
+    this.#checker = this.#program.getTypeChecker();
+    this.#index = this.createIndex(this.#program);
   }
 
   /** Current TypeScript Program, materialized by the LanguageService. */
   get program(): ts.Program {
-    const program = this.#languageService.getProgram();
-    if (program === undefined) {
-      throw new Error(
-        "Source project could not materialize a TypeScript Program.",
-      );
-    }
-    return program;
+    return this.#program;
   }
 
   /** Current TypeChecker owned by the current Program epoch. */
   get checker(): ts.TypeChecker {
-    return this.program.getTypeChecker();
+    return this.#checker;
   }
 
   /** Current TypeScript LanguageService used for IDE-like reference machinery. */
@@ -278,6 +292,9 @@ export class SourceProject {
           index.packageByFileKey.get(normalizeFileKey(sourceFile.fileName))
             ?.id === definition.id,
       ).length;
+      const implementationSourceFileCount =
+        index.ownedImplementationSourceFilesByPackage.get(definition.id)
+          ?.length ?? 0;
       return {
         id: definition.id,
         packageName: definition.packageName,
@@ -286,6 +303,7 @@ export class SourceProject {
         external: definition.external,
         rootFileCount: definition.rootFileNames.length,
         sourceFileCount,
+        implementationSourceFileCount,
       };
     });
 
@@ -308,6 +326,25 @@ export class SourceProject {
     return this.currentIndex().ownedSourceFiles;
   }
 
+  /** Return source files owned by one admitted package without scanning every package file. */
+  ownedSourceFilesForPackage(
+    /** Stable package id to read. */
+    packageId: string,
+  ): readonly ts.SourceFile[] {
+    return this.currentIndex().ownedSourceFilesByPackage.get(packageId) ?? [];
+  }
+
+  /** Return implementation source files owned by one admitted package without declaration files. */
+  ownedImplementationSourceFilesForPackage(
+    /** Stable package id to read. */
+    packageId: string,
+  ): readonly ts.SourceFile[] {
+    return (
+      this.currentIndex().ownedImplementationSourceFilesByPackage.get(packageId) ??
+      []
+    );
+  }
+
   /** Read a source file by repository-relative or absolute path. */
   readSourceFile(
     /** Repository-relative or absolute file path. */
@@ -318,6 +355,18 @@ export class SourceProject {
       : resolveRepoPath(this.repoRoot, filePath);
     const normalized = normalizeFileKey(absolutePath);
     return this.currentIndex().sourceFileByKey.get(normalized) ?? null;
+  }
+
+  /** Read a source file by a stable source identity, failing if the identity is stale or not admitted. */
+  requiredSourceFileForIdentity(
+    /** Stable identity previously issued by this source project. */
+    identity: SourceFileIdentity,
+  ): ts.SourceFile {
+    const sourceFile = this.readSourceFile(identity.absolutePath);
+    if (sourceFile === null) {
+      throw new Error(`Source file identity is not admitted: ${identity.absolutePath}`);
+    }
+    return sourceFile;
   }
 
   /** Return declaration rows for source files owned by admitted packages. */
@@ -342,7 +391,7 @@ export class SourceProject {
     );
   }
 
-  /** Return stable file identity for a TypeScript source file. */
+  /** Return stable file identity for a TypeScript source file in the current Program. */
   sourceFileIdentity(
     /** Source file to identify. */
     sourceFile: ts.SourceFile,
@@ -354,8 +403,29 @@ export class SourceProject {
     );
   }
 
+  /** Return stable file identity for a TypeScript source file that must be in the current Program. */
+  requiredSourceFileIdentity(
+    /** Source file expected to be indexed by this source project. */
+    sourceFile: ts.SourceFile,
+  ): SourceFileIdentity {
+    const identity = this.sourceFileIdentity(sourceFile);
+    if (identity === null) {
+      throw new Error(`Source file is not in the current SourceProject Program: ${sourceFile.fileName}`);
+    }
+    return identity;
+  }
+
   /** Release TypeScript semantic caches held by the language service. */
   dispose(): void {
+    if (process.env.ATLAS_PROFILE_SOURCE_HOST === "1") {
+      console.error(
+        JSON.stringify({
+          event: "atlas.source.host-cache.profile",
+          identity: this.identity(),
+          ...this.#fileCache.profile(),
+        }),
+      );
+    }
     this.#languageService.dispose();
   }
 
@@ -367,28 +437,81 @@ export class SourceProject {
       getScriptSnapshot: (fileName) => this.#fileCache.scriptSnapshot(fileName),
       getCurrentDirectory: () => this.repoRoot,
       getDefaultLibFileName: (options) => ts.getDefaultLibFilePath(options),
-      readFile: ts.sys.readFile,
-      fileExists: ts.sys.fileExists,
-      directoryExists: ts.sys.directoryExists,
-      readDirectory: ts.sys.readDirectory,
-      getDirectories: ts.sys.getDirectories,
-      realpath: ts.sys.realpath,
+      readFile: (fileName) => this.#fileCache.readFile(fileName),
+      fileExists: (fileName) => this.#fileCache.fileExists(fileName),
+      directoryExists: (directoryName) =>
+        this.#fileCache.directoryExists(directoryName),
+      readDirectory: (
+        rootDir,
+        extensions,
+        excludes,
+        includes,
+        depth,
+      ) =>
+        this.#fileCache.readDirectory(
+          rootDir,
+          extensions,
+          excludes,
+          includes,
+          depth,
+        ),
+      getDirectories: (directoryName) =>
+        this.#fileCache.getDirectories(directoryName),
+      realpath:
+        ts.sys.realpath === undefined
+          ? undefined
+          : (fileName) => this.#fileCache.realpath(fileName),
     };
   }
 
   private identity(): string {
-    return `working-tree:${this.#packageDefinitions
-      .map((definition) => definition.id)
-      .join("+")}`;
+    const localPackageCount = this.#packageDefinitions.filter((definition) =>
+      definition.id === SourcePackageId.Atlas ||
+      definition.id === SourcePackageId.SemanticRuntime
+    ).length;
+    const frameworkPackageCount = this.#packageDefinitions.filter((definition) =>
+      (AURELIA_FRAMEWORK_PACKAGE_IDS as readonly string[]).includes(definition.id)
+    ).length;
+    const publicPluginPackageCount = this.#packageDefinitions.filter((definition) =>
+      definition.id.startsWith(AURELIA_PLUGIN_PACKAGE_ID_PREFIX)
+    ).length;
+    const externalPackageCount = this.#packageDefinitions.filter((definition) =>
+      definition.id.startsWith(EXTERNAL_SOURCE_PACKAGE_ID_PREFIX)
+    ).length;
+    const otherPackageCount =
+      this.#packageDefinitions.length -
+      localPackageCount -
+      frameworkPackageCount -
+      publicPluginPackageCount -
+      externalPackageCount;
+    return [
+      "working-tree",
+      `packages=${this.#packageDefinitions.length}`,
+      `local=${localPackageCount}`,
+      `framework=${frameworkPackageCount}`,
+      `public-plugin=${publicPluginPackageCount}`,
+      `external=${externalPackageCount}`,
+      `other=${otherPackageCount}`,
+    ].join(";");
   }
 
   private currentIndex(): SourceProjectIndex {
     if (this.#index !== undefined) {
       return this.#index;
     }
-    const program = this.program;
+    const program = this.#program;
     this.#index = this.createIndex(program);
     return this.#index;
+  }
+
+  private materializeProgram(): ts.Program {
+    const program = this.#languageService.getProgram();
+    if (program === undefined) {
+      throw new Error(
+        "Source project could not materialize a TypeScript Program.",
+      );
+    }
+    return program;
   }
 
   private createIndex(program: ts.Program): SourceProjectIndex {
@@ -398,6 +521,11 @@ export class SourceProject {
     const packageByFileKey = new Map<string, ResolvedSourcePackageDefinition>();
     const identityByFileKey = new Map<string, SourceFileIdentity>();
     const ownedSourceFiles: ts.SourceFile[] = [];
+    const ownedSourceFilesByPackage = new Map<string, ts.SourceFile[]>();
+    const ownedImplementationSourceFilesByPackage = new Map<
+      string,
+      ts.SourceFile[]
+    >();
     const declarationRows: SourceDeclarationRow[] = [];
     const topLevelDeclarationRows: SourceDeclarationRow[] = [];
 
@@ -408,17 +536,35 @@ export class SourceProject {
         this.#packageDefinitions,
         sourceFile.fileName,
       );
-      if (packageDefinition === null) {
-        continue;
-      }
       const identity = sourceFileIdentityFor(
         this.repoRoot,
         sourceFile.fileName,
-        packageDefinition,
+        packageDefinition?.id ?? null,
       );
-      packageByFileKey.set(fileKey, packageDefinition);
       identityByFileKey.set(fileKey, identity);
+      if (packageDefinition === null) {
+        continue;
+      }
+      packageByFileKey.set(fileKey, packageDefinition);
       ownedSourceFiles.push(sourceFile);
+      let packageFiles = ownedSourceFilesByPackage.get(packageDefinition.id);
+      if (packageFiles === undefined) {
+        packageFiles = [];
+        ownedSourceFilesByPackage.set(packageDefinition.id, packageFiles);
+      }
+      packageFiles.push(sourceFile);
+      if (!sourceFile.isDeclarationFile) {
+        let implementationPackageFiles =
+          ownedImplementationSourceFilesByPackage.get(packageDefinition.id);
+        if (implementationPackageFiles === undefined) {
+          implementationPackageFiles = [];
+          ownedImplementationSourceFilesByPackage.set(
+            packageDefinition.id,
+            implementationPackageFiles,
+          );
+        }
+        implementationPackageFiles.push(sourceFile);
+      }
 
       visitSourceDeclarations(sourceFile, (node, kind, nameNode) => {
         declarationRows.push(
@@ -433,7 +579,7 @@ export class SourceProject {
         );
       });
       for (const node of topLevelSourceDeclarations(sourceFile)) {
-        const kind = declarationKind(node);
+        const kind = sourceDeclarationKindForNode(node);
         if (kind === null) {
           continue;
         }
@@ -453,6 +599,16 @@ export class SourceProject {
     ownedSourceFiles.sort((left, right) =>
       left.fileName.localeCompare(right.fileName),
     );
+    for (const packageFiles of ownedSourceFilesByPackage.values()) {
+      packageFiles.sort((left, right) =>
+        left.fileName.localeCompare(right.fileName),
+      );
+    }
+    for (const packageFiles of ownedImplementationSourceFilesByPackage.values()) {
+      packageFiles.sort((left, right) =>
+        left.fileName.localeCompare(right.fileName),
+      );
+    }
     declarationRows.sort(compareDeclarationRows);
     topLevelDeclarationRows.sort(compareDeclarationRows);
 
@@ -460,6 +616,8 @@ export class SourceProject {
       program,
       programSourceFiles,
       ownedSourceFiles,
+      ownedSourceFilesByPackage,
+      ownedImplementationSourceFilesByPackage,
       sourceFileByKey,
       packageByFileKey,
       identityByFileKey,
@@ -469,55 +627,15 @@ export class SourceProject {
   }
 }
 
-/** Per-source-project file facts used by the TypeScript LanguageService host. */
-class SourceProjectFileCache {
-  readonly #scriptVersions = new Map<string, string>();
-  readonly #scriptSnapshots = new Map<string, ts.IScriptSnapshot | undefined>();
-
-  /** Return the stable file version for this SourceProject epoch. */
-  scriptVersion(fileName: string): string {
-    const fileKey = normalizeFileKey(fileName);
-    const cached = this.#scriptVersions.get(fileKey);
-    if (cached !== undefined) {
-      return cached;
-    }
-    const version = this.#readScriptVersion(fileName);
-    this.#scriptVersions.set(fileKey, version);
-    return version;
-  }
-
-  /** Return the cached script text for this SourceProject epoch. */
-  scriptSnapshot(fileName: string): ts.IScriptSnapshot | undefined {
-    const fileKey = normalizeFileKey(fileName);
-    if (this.#scriptSnapshots.has(fileKey)) {
-      return this.#scriptSnapshots.get(fileKey);
-    }
-    const snapshot = this.#readScriptSnapshot(fileName);
-    this.#scriptSnapshots.set(fileKey, snapshot);
-    return snapshot;
-  }
-
-  #readScriptVersion(fileName: string): string {
-    try {
-      return String(statSync(fileName).mtimeMs);
-    } catch {
-      return "0";
-    }
-  }
-
-  #readScriptSnapshot(fileName: string): ts.IScriptSnapshot | undefined {
-    try {
-      return ts.ScriptSnapshot.fromString(readFileSync(fileName, "utf8"));
-    } catch {
-      return undefined;
-    }
-  }
-}
-
 interface SourceProjectIndex {
   readonly program: ts.Program;
   readonly programSourceFiles: readonly ts.SourceFile[];
   readonly ownedSourceFiles: readonly ts.SourceFile[];
+  readonly ownedSourceFilesByPackage: ReadonlyMap<string, readonly ts.SourceFile[]>;
+  readonly ownedImplementationSourceFilesByPackage: ReadonlyMap<
+    string,
+    readonly ts.SourceFile[]
+  >;
   readonly sourceFileByKey: ReadonlyMap<string, ts.SourceFile>;
   readonly packageByFileKey: ReadonlyMap<
     string,
@@ -542,7 +660,7 @@ export function createSourceProject(
   const packageConfigs = resolvedPackages.map((definition) =>
     readPackageConfig(definition),
   );
-  const rootFileNames = uniqueSorted(
+  const rootFileNames = uniqueSortedResolvedPaths(
     packageConfigs.flatMap((config) => config.rootFileNames),
   );
   const configDiagnostics = packageConfigs.flatMap(
@@ -560,6 +678,26 @@ export function createSourceProject(
     compilerOptions,
     configDiagnostics,
   );
+}
+
+/** Return admitted Aurelia framework package ids and package names for this source project. */
+export function readAureliaFrameworkPackageNames(
+  /** Hot source project that owns the current Program epoch. */
+  sourceProject: SourceProject,
+): ReadonlyMap<string, string> {
+  const cached = aureliaFrameworkPackageNamesByProject.get(sourceProject);
+  if (cached !== undefined) {
+    return cached;
+  }
+  const admitted = new Set<string>(AURELIA_FRAMEWORK_PACKAGE_IDS);
+  const packageNames = new Map(
+    sourceProject
+      .snapshot()
+      .summary.packages.filter((entry) => admitted.has(entry.id))
+      .map((entry) => [entry.id, entry.packageName]),
+  );
+  aureliaFrameworkPackageNamesByProject.set(sourceProject, packageNames);
+  return packageNames;
 }
 
 /** Return the default source packages Atlas should keep hot for this repo. */
@@ -584,6 +722,8 @@ export function defaultSourcePackageDefinitions(
   return [
     ...localPackages,
     ...defaultAureliaFrameworkPackageDefinitions(repoRoot),
+    ...defaultAureliaPluginPackageDefinitions(repoRoot),
+    ...defaultExternalSourcePackageDefinitions(repoRoot),
   ];
 }
 
@@ -655,29 +795,37 @@ function packageForFileNameFromDefinitions(
   fileName: string,
 ): ResolvedSourcePackageDefinition | null {
   const normalized = normalizeFileKey(fileName);
-  return (
-    definitions.find((definition) =>
-      normalized.startsWith(`${definition.rootFileKey}/`),
-    ) ?? null
-  );
+  let match: ResolvedSourcePackageDefinition | null = null;
+  for (const definition of definitions) {
+    if (
+      normalized !== definition.rootFileKey &&
+      !normalized.startsWith(`${definition.rootFileKey}/`)
+    ) {
+      continue;
+    }
+    if (match === null || definition.rootFileKey.length > match.rootFileKey.length) {
+      match = definition;
+    }
+  }
+  return match;
 }
 
 function sourceFileIdentityFor(
   repoRoot: string,
   fileName: string,
-  packageDefinition: ResolvedSourcePackageDefinition,
+  packageId: string | null,
 ): SourceFileIdentity {
   const identity = repoPathIdentity(repoRoot, fileName);
   if (identity !== null) {
     return {
       ...identity,
-      packageId: packageDefinition.id,
+      packageId,
     };
   }
   return {
     absolutePath: path.resolve(fileName),
     repoPath: toPosixPath(path.resolve(fileName)) as RepoRelativePath,
-    packageId: packageDefinition.id,
+    packageId,
   };
 }
 
@@ -693,7 +841,7 @@ function declarationRowFor(
     kind,
     name: nameNode?.getText(sourceFile) ?? null,
     file,
-    span: sourceSpan(sourceFile, node),
+    span: sourceSpanForNode(sourceFile, node),
     symbolKey: symbolKeyForDeclaration(checker, nameNode ?? node),
     exported: isExportedDeclaration(node),
   };
@@ -704,7 +852,7 @@ function topLevelSourceDeclarations(
 ): readonly ts.Node[] {
   const declarations: ts.Node[] = [];
   for (const statement of sourceFile.statements) {
-    if (declarationKind(statement) !== null) {
+    if (sourceDeclarationKindForNode(statement) !== null) {
       declarations.push(statement);
       continue;
     }
@@ -756,10 +904,175 @@ function frameworkRootSourcePathIfPresent(
   return repoRelativePath(repoRoot, absolutePath) ?? absolutePath;
 }
 
+function defaultAureliaPluginPackageDefinitions(
+  repoRoot: string,
+): readonly SourcePackageDefinition[] {
+  const pluginRoot = findAureliaPluginRootSourcePath(repoRoot);
+  if (pluginRoot === null) {
+    return [];
+  }
+  const packagesRoot = resolveSourcePath(
+    repoRoot,
+    path.posix.join(pluginRoot, "packages"),
+  );
+  const packageDirs = safeReadDirectory(packagesRoot)
+    .filter((entry) =>
+      existsSync(path.join(packagesRoot, entry, "tsconfig.json")),
+    )
+    .sort((left, right) => left.localeCompare(right));
+
+  return packageDirs.map((dir) => {
+    const rootPath = path.posix.join(pluginRoot, "packages", dir);
+    return {
+      id: `${AURELIA_PLUGIN_PACKAGE_ID_PREFIX}${dir}`,
+      packageName:
+        readPackageName(path.join(packagesRoot, dir, "package.json")) ?? dir,
+      rootPath,
+      tsconfigPath: path.posix.join(rootPath, "tsconfig.json"),
+    };
+  });
+}
+
+function findAureliaPluginRootSourcePath(repoRoot: string): string | null {
+  const configured = process.env.ATLAS_AURELIA_PLUGIN_ROOT;
+  if (configured !== undefined && configured.length > 0) {
+    return pluginRootSourcePathIfPresent(repoRoot, configured);
+  }
+  return pluginRootSourcePathIfPresent(repoRoot, "aurelia2-plugins");
+}
+
+function pluginRootSourcePathIfPresent(
+  repoRoot: string,
+  sourcePath: string,
+): string | null {
+  const absolutePath = resolveSourcePath(repoRoot, sourcePath);
+  if (!existsSync(path.join(absolutePath, "packages"))) {
+    return null;
+  }
+  return repoRelativePath(repoRoot, absolutePath) ?? absolutePath;
+}
+
+function defaultExternalSourcePackageDefinitions(
+  repoRoot: string,
+): readonly SourcePackageDefinition[] {
+  const roots = configuredExternalSourceRoots(repoRoot);
+  return roots.flatMap((root, index) =>
+    discoverExternalSourcePackageDefinitions(repoRoot, root, index),
+  );
+}
+
+function configuredExternalSourceRoots(repoRoot: string): readonly string[] {
+  const configured = process.env[EXTERNAL_SOURCE_ROOTS_ENV];
+  if (configured === undefined || configured.trim().length === 0) {
+    return [];
+  }
+  return parseExternalSourceRoots(configured)
+    .map((entry) => resolveSourcePath(repoRoot, entry))
+    .filter((entry, index, entries) => existsSync(entry) && entries.indexOf(entry) === index);
+}
+
+function parseExternalSourceRoots(configured: string): readonly string[] {
+  const trimmed = configured.trim();
+  if (trimmed.startsWith("[")) {
+    try {
+      const parsed = JSON.parse(trimmed) as unknown;
+      return Array.isArray(parsed)
+        ? parsed.filter((entry): entry is string => typeof entry === "string")
+        : [];
+    } catch {
+      return [];
+    }
+  }
+  return trimmed
+    .split(";")
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function discoverExternalSourcePackageDefinitions(
+  repoRoot: string,
+  externalRoot: string,
+  rootIndex: number,
+): readonly SourcePackageDefinition[] {
+  const packageRoots = discoverPackageRoots(externalRoot);
+  return packageRoots.map((packageRoot, packageIndex) => {
+    const packageName =
+      readPackageName(path.join(packageRoot, "package.json")) ??
+      path.basename(packageRoot);
+    const id = `${EXTERNAL_SOURCE_PACKAGE_ID_PREFIX}${rootIndex}:${packageIndex}:${sourcePackageIdSlug(packageName)}`;
+    return {
+      id,
+      packageName,
+      rootPath: repoRelativePath(repoRoot, packageRoot) ?? packageRoot,
+      tsconfigPath:
+        repoRelativePath(repoRoot, path.join(packageRoot, "tsconfig.json")) ??
+        path.join(packageRoot, "tsconfig.json"),
+    };
+  });
+}
+
+function discoverPackageRoots(
+  root: string,
+): readonly string[] {
+  const roots: string[] = [];
+  const visit = (directory: string, depth: number): void => {
+    if (depth > 6) {
+      return;
+    }
+    if (
+      existsSync(path.join(directory, "package.json")) &&
+      existsSync(path.join(directory, "tsconfig.json"))
+    ) {
+      roots.push(directory);
+    }
+    for (const entry of safeReadDirectory(directory)) {
+      if (
+        entry.startsWith(".") ||
+        EXTERNAL_SOURCE_EXCLUDED_DIRECTORIES.has(entry)
+      ) {
+        continue;
+      }
+      visit(path.join(directory, entry), depth + 1);
+    }
+  };
+  visit(root, 0);
+  return roots.sort((left, right) => left.localeCompare(right));
+}
+
+function sourcePackageIdSlug(value: string): string {
+  return value
+    .toLowerCase()
+    .replace(/^@/, "")
+    .replace(/[^a-z0-9]+/g, "-")
+    .replace(/^-+|-+$/g, "")
+    .slice(0, 80) || "package";
+}
+
 function resolveSourcePath(repoRoot: string, sourcePath: string): string {
   return path.isAbsolute(sourcePath)
     ? path.resolve(sourcePath)
     : resolveRepoPath(repoRoot, sourcePath);
+}
+
+function safeReadDirectory(dir: string): readonly string[] {
+  try {
+    return readdirSync(dir).filter((entry) =>
+      statSync(path.join(dir, entry)).isDirectory(),
+    );
+  } catch {
+    return [];
+  }
+}
+
+function readPackageName(packageJsonPath: string): string | null {
+  try {
+    const parsed = JSON.parse(readFileSync(packageJsonPath, "utf8")) as {
+      readonly name?: unknown;
+    };
+    return typeof parsed.name === "string" ? parsed.name : null;
+  } catch {
+    return null;
+  }
 }
 
 function compilerOptionsForProject(
@@ -796,46 +1109,6 @@ function defaultCompilerOptions(): ts.CompilerOptions {
   };
 }
 
-function isPathWithin(fileName: string, rootPath: string): boolean {
-  const relativePath = path.relative(
-    path.resolve(rootPath),
-    path.resolve(fileName),
-  );
-  return (
-    relativePath === "" ||
-    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
-  );
-}
-
-function findRepoRoot(): string {
-  let current = path.resolve(process.cwd());
-  while (true) {
-    if (existsSync(path.join(current, "pnpm-workspace.yaml"))) {
-      return current;
-    }
-    const parent = path.dirname(current);
-    if (parent === current) {
-      throw new Error(`Could not find repo root from ${process.cwd()}.`);
-    }
-    current = parent;
-  }
-}
-
-function sourceSpan(sourceFile: ts.SourceFile, node: ts.Node): SourceSpan {
-  const start = node.getStart(sourceFile);
-  const end = node.getEnd();
-  const startPosition = sourceFile.getLineAndCharacterOfPosition(start);
-  const endPosition = sourceFile.getLineAndCharacterOfPosition(end);
-  return {
-    start,
-    end,
-    startLine: startPosition.line + 1,
-    startCharacter: startPosition.character + 1,
-    endLine: endPosition.line + 1,
-    endCharacter: endPosition.character + 1,
-  };
-}
-
 function visitSourceDeclarations(
   node: ts.Node,
   visit: (
@@ -844,14 +1117,14 @@ function visitSourceDeclarations(
     nameNode: ts.Node | undefined,
   ) => void,
 ): void {
-  const declaration = declarationKind(node);
+  const declaration = sourceDeclarationKindForNode(node);
   if (declaration !== null) {
     visit(node, declaration, declarationNameNode(node));
   }
   ts.forEachChild(node, (child) => visitSourceDeclarations(child, visit));
 }
 
-function declarationKind(node: ts.Node): SourceDeclarationKind | null {
+export function sourceDeclarationKindForNode(node: ts.Node): SourceDeclarationKind | null {
   if (ts.isClassDeclaration(node)) {
     return SourceDeclarationKind.Class;
   }
@@ -885,28 +1158,6 @@ function declarationKind(node: ts.Node): SourceDeclarationKind | null {
   return null;
 }
 
-function declarationNameNode(node: ts.Node): ts.Node | undefined {
-  if ("name" in node) {
-    const named = node as { readonly name?: ts.Node | null };
-    return named.name ?? undefined;
-  }
-  return undefined;
-}
-
-function isExportedDeclaration(node: ts.Node): boolean {
-  const target = ts.isVariableDeclaration(node) ? node.parent.parent : node;
-  return (
-    ts.canHaveModifiers(target) &&
-    ts
-      .getModifiers(target)
-      ?.some(
-        (modifier) =>
-          modifier.kind === ts.SyntaxKind.ExportKeyword ||
-          modifier.kind === ts.SyntaxKind.DefaultKeyword,
-      ) === true
-  );
-}
-
 function symbolKeyForDeclaration(
   checker: ts.TypeChecker,
   node: ts.Node,
@@ -918,7 +1169,7 @@ function symbolKeyForDeclaration(
   return checker.getFullyQualifiedName(symbol);
 }
 
-function uniqueSorted(values: readonly string[]): readonly string[] {
+function uniqueSortedResolvedPaths(values: readonly string[]): readonly string[] {
   return [...new Set(values.map((value) => path.resolve(value)))].sort(
     (left, right) => left.localeCompare(right),
   );
@@ -934,8 +1185,4 @@ function compareDeclarationRows(
     left.kind.localeCompare(right.kind) ||
     (left.name ?? "").localeCompare(right.name ?? "")
   );
-}
-
-function normalizeFileKey(fileName: string): string {
-  return normalizedFileKeys.normalize(fileName);
 }

@@ -2,9 +2,14 @@ import { mkdirSync, writeFileSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { fileURLToPath } from "node:url";
 
+import { parseFlagValueArgs } from "../cli-args.js";
 import { createApi } from "../session/index.js";
 
-const args = parseArgs(process.argv.slice(2));
+const args = parseFlagValueArgs(
+  process.argv.slice(2),
+  "Invalid framework emulation report argument",
+  "Use --out <path>.",
+);
 const defaultOutPath = fileURLToPath(
   new URL("../../workbench/emulation-symbols.md", import.meta.url),
 );
@@ -29,16 +34,3 @@ console.log(
     2,
   ),
 );
-
-function parseArgs(argv: readonly string[]): ReadonlyMap<string, string> {
-  const parsed = new Map<string, string>();
-  for (let index = 0; index < argv.length; index += 2) {
-    const key = argv[index];
-    const value = argv[index + 1];
-    if (key === undefined || !key.startsWith("--") || value === undefined) {
-      throw new Error(`Invalid argument near '${key ?? ""}'. Use --out <path>.`);
-    }
-    parsed.set(key.slice(2), value);
-  }
-  return parsed;
-}

@@ -10,6 +10,9 @@ This folder contains the in-repo Atlas implementation.
 - [framework](framework/README.md) owns Aurelia-specific framework substrates and indexes.
 - [session](session/README.md) hosts the inquiry API in a durable local daemon.
 - [scripts](scripts/README.md) runs package-local verification and maintenance checks.
+- [collections.ts](collections.ts) owns boring collection mechanics shared across substrates: stable counts, grouping,
+  map-of-array/map-of-set insertion, and first/latest keyed de-duplication. Use it instead of cloning local `groupBy`,
+  `uniqueBy`, or `setAdd` helpers.
 
 The dependency direction should stay boring: framework, session, and scripts may depend on inquiry contracts and runtime APIs, while inquiry contracts should not depend on daemon lifecycle, framework discovery, or script behavior.
 

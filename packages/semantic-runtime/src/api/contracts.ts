@@ -1,4 +1,13 @@
-import type { BootProjectInput } from '../boot/frames.js';
+import type {
+  BootProjectDiscoveryMode,
+  BootProjectInput,
+} from '../boot/frames.js';
+import type {
+  SemanticProjectAureliaDependencyScope,
+  SemanticProjectAureliaSourceSignalKind,
+  SemanticProjectShapeKind,
+} from '../boot/project-shape.js';
+import type { SemanticAppAnalysisDepth } from '../configuration/app-analysis.js';
 import type { ControllerPhase } from '../configuration/controller.js';
 import type {
   AddressHandle,
@@ -8,10 +17,21 @@ import type {
 } from '../kernel/handles.js';
 import type { OpenSeam } from '../kernel/open-seam.js';
 import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import type {
+  BindableBindingMode,
+  BindableSetterKind,
+} from '../resources/bindable-definition.js';
+import type {
+  CustomElementCaptureKind,
+  CustomElementTemplateKind,
+  ShadowRootMode,
+} from '../resources/custom-element-definition.js';
+import type { CustomAttributeContainerStrategy } from '../resources/custom-attribute-definition.js';
 import type { TemplateResourceVisibilityKind } from '../template/compiler-world-reference.js';
 import type { TemplateInstructionKind } from '../template/instruction-ir.js';
 import type {
   RuntimeBindingDataFlowDirection,
+  RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceKind,
   RuntimeBindingValueChannelAuthority,
   RuntimeBindingValueChannelKind,
@@ -35,10 +55,21 @@ import type {
   RuntimeControllerReadinessKind,
 } from '../template/runtime-controller.js';
 import type { RuntimeRendererKind } from '../template/runtime-renderer-reference.js';
+import type { TemplateExpressionParseState } from '../template/value-site.js';
+import type { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import type {
   BuiltInTemplateControllerChildViewCardinality,
   BuiltInTemplateControllerFlowKind,
 } from '../template/template-controller-semantics.js';
+import type {
+  NavigationInstructionKind,
+  RouteableComponentKind,
+  RouteConfigKind,
+  RouteRecognizerModelKind,
+  RouteRecognizerSegmentKind,
+  RouteRecognizerStateKind,
+  RouterModelKind,
+} from '../router/model.js';
 import type { SemanticSourceReference } from './source-reference.js';
 
 export const SEMANTIC_RUNTIME_API_VERSION = '0.1' as const;
@@ -53,8 +84,25 @@ export const enum SemanticRuntimeAnswerOutcome {
 export const enum SemanticAppQueryKind {
   Summary = 'summary',
   SourceFiles = 'source-files',
+  UnresolvedModules = 'unresolved-modules',
   OpenSeams = 'open-seams',
   AppTopology = 'app-topology',
+  RouterOptions = 'router-options',
+  Routes = 'routes',
+  RouteContexts = 'route-contexts',
+  RoutePatterns = 'route-patterns',
+  RouteEndpoints = 'route-endpoints',
+  RouteRecognizerStates = 'route-recognizer-states',
+  RecognizedRoutes = 'recognized-routes',
+  TypedNavigationInstructions = 'typed-navigation-instructions',
+  ViewportInstructions = 'viewport-instructions',
+  ViewportInstructionTrees = 'viewport-instruction-trees',
+  RouteTrees = 'route-trees',
+  RouteNodes = 'route-nodes',
+  RouterViewports = 'router-viewports',
+  ViewportAgents = 'viewport-agents',
+  ComponentAgents = 'component-agents',
+  ResourceDefinitions = 'resource-definitions',
   ResourceVisibility = 'resource-visibility',
   TemplateCompilations = 'template-compilations',
   RuntimeControllers = 'runtime-controllers',
@@ -77,6 +125,7 @@ export interface SemanticRuntimeProjectInput {
   readonly rootDir: string;
   readonly projectKey?: string;
   readonly sourceFiles?: BootProjectInput['sourceFiles'];
+  readonly sourceDiscoveryOptions?: BootProjectInput['sourceDiscoveryOptions'];
 }
 
 export interface SemanticRuntimeOptions {
@@ -84,13 +133,17 @@ export interface SemanticRuntimeOptions {
   readonly workspaceRoot: string;
   /** Store-local key. Omit to derive one from the workspace root. */
   readonly storeKey?: string;
-  /** Projects to boot. Omit to analyze the workspace root as one project. */
+  /** Projects to boot. Omit to use the configured project-discovery strategy. */
   readonly projects?: readonly SemanticRuntimeProjectInput[];
+  /** Project discovery strategy used when projects are omitted. */
+  readonly projectDiscovery?: BootProjectDiscoveryMode | `${BootProjectDiscoveryMode}`;
 }
 
 export interface OpenSemanticAppOptions {
   /** Project key selected from the booted workspace. Omit to use the first project. */
   readonly projectKey?: string | null;
+  /** Runtime/checker product depth requested for this app-world emission. Omit for full binding observation. */
+  readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null;
 }
 
 export interface SemanticRuntimePageInput {
@@ -130,17 +183,56 @@ export interface SemanticProjectSummary {
   readonly projectKey: string;
   readonly rootDir: string;
   readonly sourceFiles: number;
+  readonly sourceRoles: readonly SemanticSourceRoleCount[];
+  readonly hasLikelyEntrypointSource: boolean;
+  readonly shapeKind: SemanticProjectShapeKind | `${SemanticProjectShapeKind}`;
+  readonly aureliaDependencyScopes: readonly SemanticProjectAureliaDependencyScopeCount[];
+  readonly aureliaSourceSignals: readonly SemanticProjectAureliaSourceSignalCount[];
+}
+
+export interface SemanticSourceRoleCount {
+  readonly role: string;
+  readonly count: number;
+}
+
+export interface SemanticProjectAureliaDependencyScopeCount {
+  readonly scope: SemanticProjectAureliaDependencyScope | `${SemanticProjectAureliaDependencyScope}`;
+  readonly count: number;
+}
+
+export interface SemanticProjectAureliaSourceSignalCount {
+  readonly signal: SemanticProjectAureliaSourceSignalKind | `${SemanticProjectAureliaSourceSignalKind}`;
+  readonly count: number;
 }
 
 export interface SemanticAppSummary {
+  readonly analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
   readonly projectKey: string;
   readonly rootDir: string;
   readonly sourceFiles: number;
   readonly evaluatedSources: number;
   readonly unresolvedModuleEdges: number;
   readonly resourceDefinitions: number;
+  readonly routerOptions: number;
+  readonly routeConfigs: number;
+  readonly routeConfigContexts: number;
+  readonly routeContexts: number;
+  readonly routeRecognizers: number;
+  readonly routePatterns: number;
+  readonly routeEndpoints: number;
+  readonly routeRecognizerStates: number;
+  readonly recognizedRoutes: number;
+  readonly typedNavigationInstructions: number;
+  readonly viewportInstructions: number;
+  readonly viewportInstructionTrees: number;
+  readonly routeTrees: number;
+  readonly routeNodes: number;
+  readonly routerViewports: number;
+  readonly viewportAgents: number;
+  readonly componentAgents: number;
   readonly configurationSequences: number;
   readonly configurationSteps: number;
+  readonly appTasks: number;
   readonly appRoots: number;
   readonly registrationAdmissions: number;
   readonly containers: number;
@@ -164,6 +256,8 @@ export interface SemanticAppSummary {
   readonly runtimeBindingSourceOperations: number;
   readonly runtimeBindingValueChannels: number;
   readonly runtimeBindingDataFlows: number;
+  readonly runtimeBindingDataFlowSourceTypeGaps: number;
+  readonly runtimeBindingDataFlowSourceAssignmentGaps: number;
   readonly bindingScopes: number;
   readonly kernelProducts: number;
   readonly kernelClaims: number;
@@ -174,6 +268,7 @@ export interface SemanticSourceFileRow {
   readonly projectKey: string;
   readonly path: string;
   readonly language: string;
+  readonly role: string;
   readonly handles?: {
     readonly addressHandle: AddressHandle;
   };
@@ -181,6 +276,16 @@ export interface SemanticSourceFileRow {
 
 export interface SemanticSourceFilesResult {
   readonly rows: readonly SemanticSourceFileRow[];
+}
+
+export interface SemanticUnresolvedModuleRow {
+  readonly fromModuleKey: string;
+  readonly moduleSpecifier: string;
+  readonly source: SemanticSourceReference;
+}
+
+export interface SemanticUnresolvedModulesResult {
+  readonly rows: readonly SemanticUnresolvedModuleRow[];
 }
 
 export interface SemanticOpenSeamRow {
@@ -195,6 +300,582 @@ export interface SemanticOpenSeamRow {
 
 export interface SemanticOpenSeamsResult {
   readonly rows: readonly SemanticOpenSeamRow[];
+}
+
+export interface SemanticResourceDefinitionBindableRow {
+  readonly name: string;
+  readonly attribute: string;
+  readonly callback: string;
+  readonly mode: BindableBindingMode | `${BindableBindingMode}`;
+  readonly setterKind: BindableSetterKind | `${BindableSetterKind}`;
+  readonly source: SemanticSourceReference | null;
+}
+
+export interface SemanticResourceDefinitionDependencyRow {
+  readonly keyName: string | null;
+  readonly hasIdentity: boolean;
+}
+
+export interface SemanticResourceDefinitionTemplateRow {
+  readonly kind: CustomElementTemplateKind | `${CustomElementTemplateKind}`;
+  readonly hasMarkup: boolean;
+  readonly source: SemanticSourceReference | null;
+}
+
+export interface SemanticResourceDefinitionPatternRow {
+  readonly pattern: string;
+  readonly symbols: string;
+  readonly source: SemanticSourceReference | null;
+}
+
+export interface SemanticResourceDefinitionRow {
+  readonly projectKey: string;
+  readonly resourceKind: ResourceDefinitionKind;
+  readonly name: string | null;
+  readonly aliases: readonly string[];
+  readonly key: string | null;
+  readonly targetName: string | null;
+  readonly captureKind: CustomElementCaptureKind | `${CustomElementCaptureKind}` | null;
+  readonly template: SemanticResourceDefinitionTemplateRow | null;
+  readonly bindables: readonly SemanticResourceDefinitionBindableRow[];
+  readonly dependencies: readonly SemanticResourceDefinitionDependencyRow[];
+  readonly isTemplateController: boolean | null;
+  readonly containerStrategy: CustomAttributeContainerStrategy | `${CustomAttributeContainerStrategy}` | null;
+  readonly defaultProperty: string | null;
+  readonly containerless: boolean | null;
+  readonly shadowMode: ShadowRootMode | `${ShadowRootMode}` | null;
+  readonly hasSlots: boolean | null;
+  readonly needsCompile: boolean | null;
+  readonly patterns: readonly SemanticResourceDefinitionPatternRow[];
+  readonly source: SemanticSourceReference | null;
+  readonly targetSource: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly definitionProductHandle: ProductHandle | null;
+    readonly identityHandle: IdentityHandle | null;
+    readonly targetIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly targetAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticResourceDefinitionsResult {
+  readonly rows: readonly SemanticResourceDefinitionRow[];
+}
+
+export interface SemanticRouteConfigComponentRow {
+  readonly componentKind: RouteableComponentKind | `${RouteableComponentKind}`;
+  readonly name: string | null;
+  readonly resolved: boolean;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle | null;
+    readonly identityHandle: IdentityHandle | null;
+    readonly resolvedProductHandle: ProductHandle | null;
+    readonly resolvedIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRouterOptionsRow {
+  readonly projectKey: string;
+  readonly basePath: string | null;
+  readonly useUrlFragmentHash: boolean | null;
+  readonly useHref: boolean | null;
+  readonly historyStrategy: string | null;
+  readonly useNavigationModel: boolean | null;
+  readonly activeClass: string | null;
+  readonly restorePreviousRouteTreeOnError: boolean | null;
+  readonly treatQueryAsParameters: boolean | null;
+  readonly useEagerLoading: boolean | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRouterOptionsResult {
+  readonly rows: readonly SemanticRouterOptionsRow[];
+}
+
+export interface SemanticRouteConfigRow {
+  readonly projectKey: string;
+  readonly routeKind: RouteConfigKind | `${RouteConfigKind}`;
+  readonly id: string | null;
+  readonly paths: readonly string[];
+  readonly title: string | null;
+  readonly component: SemanticRouteConfigComponentRow | null;
+  readonly redirectTo: string | null;
+  readonly caseSensitive: boolean | null;
+  readonly transitionPlan: string | null;
+  readonly viewport: string | null;
+  readonly hasData: boolean | null;
+  readonly childRouteCount: number;
+  readonly fallback: SemanticRouteConfigComponentRow | null;
+  readonly nav: boolean | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRouteConfigsResult {
+  readonly rows: readonly SemanticRouteConfigRow[];
+}
+
+export interface SemanticRouteContextRow {
+  readonly projectKey: string;
+  readonly label: string | null;
+  readonly parentLabel: string | null;
+  readonly rootLabel: string | null;
+  readonly routeConfigContext: {
+    readonly label: string | null;
+    readonly source: SemanticSourceReference | null;
+  };
+  readonly hasContainer: boolean;
+  readonly hasViewportAgent: boolean;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly parentIdentityHandle: IdentityHandle | null;
+    readonly rootIdentityHandle: IdentityHandle | null;
+    readonly routeConfigContextProductHandle: ProductHandle | null;
+    readonly routeConfigContextIdentityHandle: IdentityHandle | null;
+    readonly containerProductHandle: ProductHandle | null;
+    readonly containerIdentityHandle: IdentityHandle | null;
+    readonly viewportAgentProductHandle: ProductHandle | null;
+    readonly viewportAgentIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRouteContextsResult {
+  readonly rows: readonly SemanticRouteContextRow[];
+}
+
+export interface SemanticRouterViewportRow {
+  readonly projectKey: string;
+  readonly name: string;
+  readonly routeContext: {
+    readonly label: string | null;
+    readonly source: SemanticSourceReference | null;
+  } | null;
+  readonly usedBy: readonly string[];
+  readonly defaultComponent: string | null;
+  readonly fallback: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly routeContextProductHandle: ProductHandle | null;
+    readonly routeContextIdentityHandle: IdentityHandle | null;
+    readonly controllerProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRouterViewportsResult {
+  readonly rows: readonly SemanticRouterViewportRow[];
+}
+
+export interface SemanticViewportAgentRow {
+  readonly projectKey: string;
+  readonly viewport: {
+    readonly name: string | null;
+    readonly source: SemanticSourceReference | null;
+  };
+  readonly routeContext: {
+    readonly label: string | null;
+    readonly source: SemanticSourceReference | null;
+  } | null;
+  readonly hasHostController: boolean;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly viewportProductHandle: ProductHandle | null;
+    readonly viewportIdentityHandle: IdentityHandle | null;
+    readonly routeContextProductHandle: ProductHandle | null;
+    readonly routeContextIdentityHandle: IdentityHandle | null;
+    readonly hostControllerProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticViewportAgentsResult {
+  readonly rows: readonly SemanticViewportAgentRow[];
+}
+
+export interface SemanticComponentAgentRow {
+  readonly projectKey: string;
+  readonly routeContext: {
+    readonly label: string | null;
+    readonly source: SemanticSourceReference | null;
+  };
+  readonly routeNode: SemanticRouterProductReferenceRow;
+  readonly viewportAgent: SemanticRouterProductReferenceRow | null;
+  readonly hasController: boolean;
+  readonly component: SemanticRouteConfigComponentRow | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly routeContextProductHandle: ProductHandle | null;
+    readonly routeContextIdentityHandle: IdentityHandle | null;
+    readonly routeNodeProductHandle: ProductHandle | null;
+    readonly routeNodeIdentityHandle: IdentityHandle | null;
+    readonly viewportAgentProductHandle: ProductHandle | null;
+    readonly viewportAgentIdentityHandle: IdentityHandle | null;
+    readonly controllerProductHandle: ProductHandle | null;
+    readonly componentProductHandle: ProductHandle | null;
+    readonly componentIdentityHandle: IdentityHandle | null;
+    readonly componentResolvedProductHandle: ProductHandle | null;
+    readonly componentResolvedIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticComponentAgentsResult {
+  readonly rows: readonly SemanticComponentAgentRow[];
+}
+
+export interface SemanticRouterProductReferenceRow {
+  readonly routerKind: RouterModelKind | `${RouterModelKind}`;
+  readonly label: string | null;
+  readonly source: SemanticSourceReference | null;
+}
+
+export interface SemanticRouteRecognizerReferenceRow {
+  readonly recognizerKind: RouteRecognizerModelKind | `${RouteRecognizerModelKind}`;
+  readonly label: string | null;
+  readonly source: SemanticSourceReference | null;
+}
+
+export interface SemanticTypedNavigationInstructionRow {
+  readonly projectKey: string;
+  readonly instructionKind: NavigationInstructionKind | `${NavigationInstructionKind}`;
+  readonly value: string | null;
+  readonly component: SemanticRouterProductReferenceRow | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly componentProductHandle: ProductHandle | null;
+    readonly componentIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTypedNavigationInstructionsResult {
+  readonly rows: readonly SemanticTypedNavigationInstructionRow[];
+}
+
+export interface SemanticViewportInstructionComponentRow extends SemanticRouterProductReferenceRow {
+  readonly instructionKind: NavigationInstructionKind | `${NavigationInstructionKind}` | null;
+  readonly value: string | null;
+}
+
+export interface SemanticViewportInstructionRow {
+  readonly projectKey: string;
+  readonly component: SemanticViewportInstructionComponentRow | null;
+  readonly viewport: string | null;
+  readonly childCount: number;
+  readonly hasParameters: boolean;
+  readonly parameterCount: number;
+  readonly open: number;
+  readonly close: number;
+  readonly recognizedRoute: SemanticRouteRecognizerReferenceRow | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly componentProductHandle: ProductHandle | null;
+    readonly componentIdentityHandle: IdentityHandle | null;
+    readonly parametersProductHandle: ProductHandle | null;
+    readonly recognizedRouteProductHandle: ProductHandle | null;
+    readonly recognizedRouteIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticViewportInstructionsResult {
+  readonly rows: readonly SemanticViewportInstructionRow[];
+}
+
+export interface SemanticViewportInstructionTreeRow {
+  readonly projectKey: string;
+  readonly routeContext: {
+    readonly label: string | null;
+    readonly source: SemanticSourceReference | null;
+  } | null;
+  readonly instructionCount: number;
+  readonly hasOptions: boolean;
+  readonly isAbsolute: boolean;
+  readonly queryParamCount: number;
+  readonly fragment: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly routeContextProductHandle: ProductHandle | null;
+    readonly routeContextIdentityHandle: IdentityHandle | null;
+    readonly instructionProductHandles: readonly ProductHandle[];
+    readonly instructionIdentityHandles: readonly IdentityHandle[];
+    readonly optionsProductHandle: ProductHandle | null;
+    readonly optionsIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticViewportInstructionTreesResult {
+  readonly rows: readonly SemanticViewportInstructionTreeRow[];
+}
+
+export interface SemanticRouteTreeRow {
+  readonly projectKey: string;
+  readonly rootNodeLabel: string | null;
+  readonly instructionTree: SemanticRouterProductReferenceRow | null;
+  readonly hasOptions: boolean;
+  readonly nodeCount: number;
+  readonly queryParamCount: number;
+  readonly fragment: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly rootNodeProductHandle: ProductHandle | null;
+    readonly rootNodeIdentityHandle: IdentityHandle | null;
+    readonly instructionTreeProductHandle: ProductHandle | null;
+    readonly instructionTreeIdentityHandle: IdentityHandle | null;
+    readonly optionsProductHandle: ProductHandle | null;
+    readonly optionsIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRouteTreesResult {
+  readonly rows: readonly SemanticRouteTreeRow[];
+}
+
+export interface SemanticRouteNodeRow {
+  readonly projectKey: string;
+  readonly path: string;
+  readonly finalPath: string;
+  readonly childCount: number;
+  readonly instruction: SemanticRouterProductReferenceRow | null;
+  readonly originalInstruction: SemanticRouterProductReferenceRow | null;
+  readonly recognizedRoute: SemanticRouteRecognizerReferenceRow | null;
+  readonly parameterCount: number;
+  readonly queryParamCount: number;
+  readonly fragment: string | null;
+  readonly hasData: boolean | null;
+  readonly viewport: string | null;
+  readonly residueInstructionCount: number;
+  readonly routeContext: {
+    readonly label: string | null;
+    readonly source: SemanticSourceReference | null;
+  };
+  readonly routeConfig: {
+    readonly routeKind: RouteConfigKind | `${RouteConfigKind}`;
+    readonly id: string | null;
+    readonly source: SemanticSourceReference | null;
+  } | null;
+  readonly parentLabel: string | null;
+  readonly componentName: string | null;
+  readonly title: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly routeContextProductHandle: ProductHandle | null;
+    readonly routeContextIdentityHandle: IdentityHandle | null;
+    readonly routeConfigProductHandle: ProductHandle | null;
+    readonly routeConfigIdentityHandle: IdentityHandle | null;
+    readonly parentProductHandle: ProductHandle | null;
+    readonly parentIdentityHandle: IdentityHandle | null;
+    readonly instructionProductHandle: ProductHandle | null;
+    readonly instructionIdentityHandle: IdentityHandle | null;
+    readonly originalInstructionProductHandle: ProductHandle | null;
+    readonly originalInstructionIdentityHandle: IdentityHandle | null;
+    readonly recognizedRouteProductHandle: ProductHandle | null;
+    readonly recognizedRouteIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRouteNodesResult {
+  readonly rows: readonly SemanticRouteNodeRow[];
+}
+
+export interface SemanticRoutePatternSegmentRow {
+  readonly segmentKind: RouteRecognizerSegmentKind | `${RouteRecognizerSegmentKind}`;
+  readonly raw: string;
+  readonly value: string | null;
+  readonly name: string | null;
+  readonly optional: boolean | null;
+  readonly pattern: string | null;
+  readonly caseSensitive: boolean | null;
+}
+
+export interface SemanticRoutePatternParameterRow {
+  readonly name: string;
+  readonly isOptional: boolean;
+  readonly isStar: boolean;
+  readonly pattern: string | null;
+}
+
+export interface SemanticRoutePatternRow {
+  readonly projectKey: string;
+  readonly parentPath: string | null;
+  readonly path: string;
+  readonly recognizerPath: string;
+  readonly caseSensitive: boolean;
+  readonly segmentCount: number;
+  readonly parameterCount: number;
+  readonly segments: readonly SemanticRoutePatternSegmentRow[];
+  readonly parameters: readonly SemanticRoutePatternParameterRow[];
+  readonly routeConfig: {
+    readonly routeKind: RouteConfigKind | `${RouteConfigKind}`;
+    readonly id: string | null;
+    readonly source: SemanticSourceReference | null;
+  };
+  readonly routeConfigContext: {
+    readonly label: string | null;
+    readonly source: SemanticSourceReference | null;
+  };
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly routeConfigContextProductHandle: ProductHandle | null;
+    readonly routeConfigContextIdentityHandle: IdentityHandle | null;
+    readonly recognizerProductHandle: ProductHandle | null;
+    readonly recognizerIdentityHandle: IdentityHandle | null;
+    readonly routeConfigProductHandle: ProductHandle | null;
+    readonly routeConfigIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRoutePatternsResult {
+  readonly rows: readonly SemanticRoutePatternRow[];
+}
+
+export interface SemanticRouteEndpointRow {
+  readonly projectKey: string;
+  readonly path: string;
+  readonly isResidual: boolean;
+  readonly parameterCount: number;
+  readonly parameters: readonly SemanticRoutePatternParameterRow[];
+  readonly configurableRoute: {
+    readonly path: string;
+    readonly source: SemanticSourceReference | null;
+  };
+  readonly routeConfigContext: {
+    readonly label: string | null;
+    readonly source: SemanticSourceReference | null;
+  };
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly configurableRouteProductHandle: ProductHandle | null;
+    readonly configurableRouteIdentityHandle: IdentityHandle | null;
+    readonly routeConfigContextProductHandle: ProductHandle | null;
+    readonly routeConfigContextIdentityHandle: IdentityHandle | null;
+    readonly recognizerProductHandle: ProductHandle | null;
+    readonly recognizerIdentityHandle: IdentityHandle | null;
+    readonly primaryEndpointProductHandle: ProductHandle | null;
+    readonly primaryEndpointIdentityHandle: IdentityHandle | null;
+    readonly residualEndpointProductHandle: ProductHandle | null;
+    readonly residualEndpointIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRouteEndpointsResult {
+  readonly rows: readonly SemanticRouteEndpointRow[];
+}
+
+export interface SemanticRouteRecognizerStateRow {
+  readonly projectKey: string;
+  readonly stateKind: RouteRecognizerStateKind | `${RouteRecognizerStateKind}`;
+  readonly value: string;
+  readonly length: number;
+  readonly segmentName: string | null;
+  readonly hasPattern: boolean;
+  readonly isSeparator: boolean;
+  readonly isDynamic: boolean;
+  readonly isOptional: boolean;
+  readonly isConstrained: boolean;
+  readonly previousLabel: string | null;
+  readonly nextCount: number;
+  readonly endpoint: {
+    readonly path: string;
+    readonly isResidual: boolean;
+    readonly source: SemanticSourceReference | null;
+  } | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly previousStateProductHandle: ProductHandle | null;
+    readonly previousStateIdentityHandle: IdentityHandle | null;
+    readonly nextStateProductHandles: readonly ProductHandle[];
+    readonly nextStateIdentityHandles: readonly IdentityHandle[];
+    readonly endpointProductHandle: ProductHandle | null;
+    readonly endpointIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRouteRecognizerStatesResult {
+  readonly rows: readonly SemanticRouteRecognizerStateRow[];
+}
+
+export interface SemanticRecognizedRouteRow {
+  readonly projectKey: string;
+  readonly path: string;
+  readonly residue: string | null;
+  readonly hasResidue: boolean;
+  readonly parameterCount: number;
+  readonly redirectDepth: number;
+  readonly recognizer: SemanticRouteRecognizerReferenceRow;
+  readonly viewportInstruction: SemanticRouterProductReferenceRow;
+  readonly viewportInstructionTree: SemanticRouterProductReferenceRow;
+  readonly routeContext: {
+    readonly label: string | null;
+    readonly source: SemanticSourceReference | null;
+  } | null;
+  readonly endpoint: {
+    readonly path: string | null;
+    readonly isResidual: boolean | null;
+    readonly source: SemanticSourceReference | null;
+  };
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly recognizerProductHandle: ProductHandle | null;
+    readonly recognizerIdentityHandle: IdentityHandle | null;
+    readonly viewportInstructionProductHandle: ProductHandle | null;
+    readonly viewportInstructionIdentityHandle: IdentityHandle | null;
+    readonly viewportInstructionTreeProductHandle: ProductHandle | null;
+    readonly viewportInstructionTreeIdentityHandle: IdentityHandle | null;
+    readonly routeContextProductHandle: ProductHandle | null;
+    readonly routeContextIdentityHandle: IdentityHandle | null;
+    readonly endpointProductHandle: ProductHandle | null;
+    readonly endpointIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRecognizedRoutesResult {
+  readonly rows: readonly SemanticRecognizedRouteRow[];
 }
 
 export interface SemanticResourceVisibilityRow {
@@ -217,6 +898,7 @@ export interface SemanticResourceVisibilityResult {
 }
 
 export interface SemanticTemplateCompilationRow {
+  readonly analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
   readonly definitionName: string;
   readonly compilerWorld: string;
   readonly templateSourceKind: string;
@@ -453,9 +1135,12 @@ export interface SemanticBindingDataFlowRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
   readonly direction: RuntimeBindingDataFlowDirection | `${RuntimeBindingDataFlowDirection}`;
+  readonly expressionParseState: TemplateExpressionParseState | `${TemplateExpressionParseState}` | null;
+  readonly expressionParseResultKind: ExpressionParseResultKind | `${ExpressionParseResultKind}` | null;
   readonly sourceKind: RuntimeBindingDataFlowSourceKind | `${RuntimeBindingDataFlowSourceKind}`;
   readonly sourceName: string | null;
   readonly sourceType: string | null;
+  readonly sourceTypeOpenReason: string | null;
   readonly targetProperty: string | null;
   readonly targetOperationKind: RuntimeBindingTargetOperationKind | `${RuntimeBindingTargetOperationKind}` | null;
   readonly sourceOperationKind: RuntimeBindingSourceOperationKind | `${RuntimeBindingSourceOperationKind}` | null;
@@ -463,6 +1148,8 @@ export interface SemanticBindingDataFlowRow {
   readonly targetValueType: string | null;
   readonly valueChannelKind: RuntimeBindingValueChannelKind | `${RuntimeBindingValueChannelKind}` | null;
   readonly sourceWritable: boolean | null;
+  readonly sourceAssignmentKind: RuntimeBindingDataFlowSourceAssignmentKind | `${RuntimeBindingDataFlowSourceAssignmentKind}` | null;
+  readonly sourceAssignmentReason: string | null;
   readonly sourceToTargetAssignable: boolean | null;
   readonly targetToSourceAssignable: boolean | null;
   readonly openReason: string | null;

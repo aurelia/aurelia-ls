@@ -1,6 +1,7 @@
 import type ts from 'typescript';
 import type { OpenSeamKindKey } from '../kernel/vocabulary.js';
 import type { RegistrationAdmissionObservation } from '../registration/registration-observation.js';
+import type { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import type { AppTaskCallbackKind, AppTaskSlot } from './app-task.js';
 import type {
   ConfigurationOptionContributionKind,
@@ -24,6 +25,8 @@ export const enum ConfigurationCarrierKind {
   AureliaRegisterCall = 'aurelia-register-call',
   /** Direct container registration call such as `container.register(...)`. */
   ContainerRegisterCall = 'container-register-call',
+  /** Registration call inside an `IRegistry.register(container, ...)` body. */
+  RegistryRegisterMethod = 'registry-register-method',
   /** AppTask slot factory call such as `AppTask.creating(...)`. */
   AppTaskFactoryCall = 'app-task-factory-call',
   /** Configuration customization call such as `StandardConfiguration.customize(...)`. */
@@ -127,6 +130,8 @@ export class ConfigurationOptionContributionObservation {
   constructor(
     /** Source lane that produced the contribution. */
     readonly contributionKind: ConfigurationOptionContributionKind,
+    /** Framework configuration object that owns this option path, when recognized from the receiver. */
+    readonly configurationKind: FrameworkRegistrationKind | null,
     /** Runtime option path, such as `coercingOptions.enableCoercion`. */
     readonly optionPath: readonly string[],
     /** Observed value for the option path. */

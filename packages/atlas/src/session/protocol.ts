@@ -146,6 +146,8 @@ export interface InquirySessionStatus {
   readonly uptimeMs: number;
   /** Milliseconds since the most recent handled request. */
   readonly idleMs: number;
+  /** Number of protocol requests currently executing inside the daemon. */
+  readonly activeRequestCount: number;
   /** World summary exposed for cheap session inspection. */
   readonly world: InquirySessionWorldSummary;
   /** Runtime-implemented lens ids in this daemon. */

@@ -35,6 +35,7 @@ export type EvaluationOpenSeamKind =
 /** Evaluator-local unresolved point; kernel projection happens through evaluation/kernel-emitter.ts. */
 export class EvaluationOpenSeam {
   readonly kind = 'evaluation-open-seam' as const;
+  readonly sourceFile: ts.SourceFile;
 
   constructor(
     /** Machine-readable evaluator seam category. */
@@ -45,5 +46,7 @@ export class EvaluationOpenSeam {
     readonly node: ts.Node,
     /** Module key whose evaluation produced the seam. */
     readonly moduleKey: string,
-  ) {}
+  ) {
+    this.sourceFile = node.getSourceFile();
+  }
 }

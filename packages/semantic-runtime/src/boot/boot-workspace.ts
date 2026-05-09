@@ -3,7 +3,10 @@ import {
   isAbsolute,
   relative,
 } from 'node:path';
-import { SourceFileAddress } from '../kernel/address.js';
+import {
+  SourceFileAddress,
+  type SourceFileRole,
+} from '../kernel/address.js';
 import { EvidenceKind, EvidenceRecord, EvidenceRole } from '../kernel/evidence.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import { KernelStore, KernelStoreBatch } from '../kernel/store.js';
@@ -11,13 +14,16 @@ import {
   ProjectBootFrame,
   SourceFileAdmission,
   WorkspaceBootFrame,
+  BootProjectDiscoveryMode,
   type BootProjectInput,
   type BootSourceFileInput,
   type BootWorkspaceInput,
   type SourceDiscoveryResult,
 } from './frames.js';
+import { discoverBootProjects } from './project-discovery.js';
 import {
   discoverSourceFiles,
+  inferSourceFileRole,
   inferSourceLanguage,
 } from './source-discovery.js';
 
@@ -50,6 +56,7 @@ class SourceFileAdmissionPaths {
     readonly projectPath: string,
     readonly workspacePath: string,
     readonly language: ReturnType<typeof inferSourceLanguage>,
+    readonly role: SourceFileRole,
   ) {}
 }
 
@@ -65,7 +72,11 @@ class SourceFileAdmissionHandles {
 export function bootWorkspace(input: BootWorkspaceInput): WorkspaceBootFrame {
   const workspaceKey = input.storeKey ?? `workspace:${input.rootDir}`;
   const store = input.store ?? new KernelStore(workspaceKey);
-  const projects = (input.projects ?? [{ rootDir: input.rootDir }])
+  const projectInputs = input.projects ?? discoverBootProjects(
+    input.rootDir,
+    input.projectDiscovery ?? BootProjectDiscoveryMode.PackageTsconfig,
+  );
+  const projects = projectInputs
     .map((project) => bootProject(store, input.rootDir, project));
 
   return new WorkspaceBootFrame(input.rootDir, workspaceKey, store, projects);
@@ -79,14 +90,14 @@ export function bootProject(
 ): ProjectBootFrame {
   const projectKey = input.projectKey ?? defaultProjectKey(input.rootDir);
   const discovery: SourceDiscoveryResult | null = input.sourceFiles == null
-    ? discoverSourceFiles(input.rootDir)
+    ? discoverSourceFiles(input.rootDir, input.sourceDiscoveryOptions)
     : null;
   const sources = input.sourceFiles ?? discovery?.sourceFiles ?? [];
   const admissions = sources.map((source) =>
     admitSourceFile(store, workspaceRootDir, input.rootDir, projectKey, source)
   );
 
-  return new ProjectBootFrame(input.rootDir, projectKey, admissions, discovery);
+  return new ProjectBootFrame(workspaceRootDir, input.rootDir, projectKey, admissions, discovery);
 }
 
 /** Admit one source file as an address plus evidence/provenance records. */
@@ -108,6 +119,7 @@ export function admitSourceFile(
     projectKey,
     paths.projectPath,
     paths.language,
+    paths.role,
     handles.addressHandle,
     handles.evidenceHandle,
     handles.provenanceHandle,
@@ -121,10 +133,11 @@ function sourceFileAdmissionPaths(
 ): SourceFileAdmissionPaths {
   const projectPath = normalizePathForProject(projectRootDir, source.path);
   const language = source.language ?? inferSourceLanguage(projectPath);
+  const role = source.role ?? inferSourceFileRole(projectPath);
   const workspacePath = normalizePathForProject(workspaceRootDir, isAbsolute(source.path)
     ? source.path
     : join(projectRootDir, projectPath));
-  return new SourceFileAdmissionPaths(projectPath, workspacePath, language);
+  return new SourceFileAdmissionPaths(projectPath, workspacePath, language, role);
 }
 
 function sourceFileAdmissionHandles(
@@ -151,12 +164,13 @@ function recordsForSourceFileAdmission(
       projectKey,
       paths.workspacePath,
       paths.language,
+      paths.role,
     ),
     new EvidenceRecord(
       handles.evidenceHandle,
       EvidenceKind.SourceObservation,
       [EvidenceRole.Admission],
-      source.note ?? 'Source file admitted during boot.',
+      source.note ?? `Source file admitted during boot as ${paths.role}.`,
       handles.addressHandle,
     ),
     new ProvenanceRecord(

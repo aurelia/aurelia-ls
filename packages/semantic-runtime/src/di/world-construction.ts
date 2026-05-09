@@ -14,6 +14,7 @@ import type {
   ParameterizedRegistry,
   RegistryValue,
 } from './registry.js';
+import type { AppTaskDefinition } from '../configuration/app-task.js';
 
 /** Result of spending configuration-owned registrations into abstract DI container state. */
 export class DiWorldConstructionEmission {
@@ -34,6 +35,8 @@ export class DiWorldConstructionEmission {
     readonly selfResolverSlots: readonly ContainerSelfResolverSlot[],
     /** Container-owned resource slots produced during spending. */
     readonly resourceSlots: readonly ContainerResourceSlot[],
+    /** Framework-owned lifecycle AppTasks surfaced while spending framework registrations. */
+    readonly appTasks: readonly AppTaskDefinition[],
     /** Open seams left by registration spending. */
     readonly openSeams: readonly OpenSeam[],
     /** Kernel records committed for these DI products and seams. */

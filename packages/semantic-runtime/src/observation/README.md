@@ -32,8 +32,15 @@ static type surfaces rather than hydrated runtime values.
 - `binding-data-flow-materializer.ts` consumes target-access or target-operation products plus instruction `Scope`
   applications after template scope construction. It materializes flow rows for property bindings, attribute bindings,
   and interpolations with direction, source expression lane, source and target property type displays, source
-  writability, TypeChecker assignability checks in each active direction, and a row-local open reason when the flow
-  cannot be closed honestly.
+  writability, TypeChecker assignability checks in each active direction, and a row-local open reason when the runtime
+  data-flow itself cannot be closed honestly. TypeChecker source-expression gaps, such as a missing projected
+  view-model member, stay on the data-flow row as `sourceTypeOpenReason` instead of becoming a binding open seam.
+  It asks the template parse-projection layer for runtime-accepted expression ASTs, so authoring-strict companion
+  parses remain visible without forcing closed Aurelia runtime data-flow to reopen.
+- `binding-source-value-evaluator.ts` is the value-side companion to TypeChecker data flow. It evaluates Aurelia
+  binding-source ASTs against modeled `Scope` slots and the shared static ECMAScript evaluator, including guarded local
+  class getter reads. Consumers such as router resources can ask for a static source value without moving binding lookup
+  or getter execution into router-specific code. Host-dependent values stay open with evaluator reasons.
 - `binding-value-channel-materializer.ts` sits between target-side products and data flow. It captures the value shape an
   observer/accessor or direct operation actually transports. Closed observer-specific slices include static
   single-select option domains, such as `select.value` carrying `'ship' | 'pickup'` instead of raw DOM `string`, plain
@@ -75,6 +82,9 @@ array sources, while dynamic `multiple.bind` stays open until its value is close
 checkbox boolean flow, radio values, and checkbox values for array/set membership sources using static attributes or
 expression-backed `model/value` bindings. Map key/value flow, custom matcher semantics, and non-literal dynamic element
 values remain explicit pressure.
+The checkbox branch must decide from the bound source shape before demanding an element model/value: boolean-like and
+non-collection sources use the checked boolean channel, while collection/map-like sources need the element value channel
+for membership semantics.
 
 The template compiler interaction matters here. Aurelia reorders `checked` with `model`/`value`/`matcher` instructions
 for order-sensitive inputs, and this substrate consumes the resulting lowered sibling `PropertyBinding` products rather

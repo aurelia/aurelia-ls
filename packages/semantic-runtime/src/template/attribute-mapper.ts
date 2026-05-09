@@ -33,6 +33,10 @@ export function mapAttribute(
     ?? (isDataAttribute(element, attr) ? attr : null);
 }
 
+export function camelCaseAttributeName(value: string): string {
+  return value.replace(/-([a-z])/g, (_match, char: string) => char.toUpperCase());
+}
+
 export function shouldDefaultToTwoWay(
   owner: TemplateAttributeMapperNode,
   attr: string,

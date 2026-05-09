@@ -19,17 +19,15 @@ import type {
 } from './store.js';
 import type { OpenSeamKindKey } from './vocabulary.js';
 
-export class SourceOpenSeamInput {
-  constructor(
-    readonly localKey: string,
-    readonly openKind: OpenSeamKindKey,
-    readonly summary: string,
-    readonly sourceFileAddressHandle: AddressHandle,
-    readonly start: number,
-    readonly end: number,
-    readonly evidenceRoles: readonly EvidenceRole[],
-    readonly includeProvenanceRecord: boolean = false,
-  ) {}
+export interface SourceOpenSeamInput {
+  readonly localKey: string;
+  readonly openKind: OpenSeamKindKey;
+  readonly summary: string;
+  readonly sourceFileAddressHandle: AddressHandle;
+  readonly start: number;
+  readonly end: number;
+  readonly evidenceRoles: readonly EvidenceRole[];
+  readonly includeProvenanceRecord?: boolean;
 }
 
 export class SourceOpenSeamEmission {

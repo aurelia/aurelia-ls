@@ -1,4 +1,4 @@
-import { readFrameworkStandardConfigurationDiWorld } from "../../framework/di-world.js";
+import { readFrameworkConfigurationDiWorld } from "../../framework/di-world.js";
 import type { SourceProject } from "../../source/index.js";
 import { BasisKind } from "../basis.js";
 import type { Inquiry } from "../inquiry.js";
@@ -159,7 +159,7 @@ function withInterpretationStatus(
 function diWorldObligations(
   sourceProject: SourceProject,
 ): readonly FrameworkEmulationObligationRow[] {
-  const world = readFrameworkStandardConfigurationDiWorld(sourceProject);
+  const world = readFrameworkConfigurationDiWorld(sourceProject);
   return [
     ...world.admissions.map((row): FrameworkEmulationObligationRow => ({
       id: `framework-emulation:di-admission:${row.id}`,
@@ -285,7 +285,7 @@ function resourceObligations(
         targetName: row.targetName ?? row.sourceExportName,
       },
       basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
-      source: row.source,
+      source: row.definitionSource,
       sourceRowId: row.id,
       summary: `Semantic-runtime needs a ${modeForResourceKind(row.resourceKind)} row for ${row.resourceKind} ${row.targetName ?? row.sourceExportName} with ${row.instanceLifetime} instance lifetime.`,
     }),

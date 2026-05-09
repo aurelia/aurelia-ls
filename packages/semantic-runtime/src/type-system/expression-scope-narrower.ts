@@ -16,9 +16,9 @@ import type {
   KernelStore,
 } from '../kernel/store.js';
 import {
-  CheckerSyntheticTypeProjectionInput,
-  CheckerTypeProjectionInput,
   CheckerTypeProjector,
+  type CheckerSyntheticTypeProjectionRequest,
+  type CheckerTypeProjectionRequest,
 } from './checker-projector.js';
 import {
   CheckerTypeProjectionOrigin,
@@ -32,14 +32,12 @@ export const enum CheckerExpressionScopeNarrowingPolarity {
   Falsy = 'falsy',
 }
 
-export class CheckerExpressionScopeNarrowingInput {
-  constructor(
-    readonly localKey: string,
-    readonly expression: ExpressionAstNode,
-    readonly scope: BindingScope,
-    readonly polarity: CheckerExpressionScopeNarrowingPolarity,
-    readonly sourceAddressHandle: AddressHandle | null,
-  ) {}
+export interface CheckerExpressionScopeNarrowingRequest {
+  readonly localKey: string;
+  readonly expression: ExpressionAstNode;
+  readonly scope: BindingScope;
+  readonly polarity: CheckerExpressionScopeNarrowingPolarity;
+  readonly sourceAddressHandle: AddressHandle | null;
 }
 
 export class CheckerExpressionScopeNarrowingResult {
@@ -60,7 +58,7 @@ export class CheckerExpressionScopeNarrower {
     readonly projector: CheckerTypeProjector,
   ) {}
 
-  narrow(input: CheckerExpressionScopeNarrowingInput): CheckerExpressionScopeNarrowingResult | null {
+  narrow(input: CheckerExpressionScopeNarrowingRequest): CheckerExpressionScopeNarrowingResult | null {
     const result = this.narrowExpression(
       input.expression,
       input.scope,
@@ -182,16 +180,16 @@ export class CheckerExpressionScopeNarrower {
     }
 
     const sourceNode = member.carrier.declarations[0] ?? null;
-    return this.projector.ensureProjection(new CheckerTypeProjectionInput(
-      `${localKey}:projected-type`,
-      member.carrier.checker,
-      member.carrier.valueType,
-      CheckerTypeProjectionOrigin.TypeChecker,
+    return this.projector.ensureProjection({
+      localKey: `${localKey}:projected-type`,
+      checker: member.carrier.checker,
+      type: member.carrier.valueType,
+      origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceNode,
-      slot.sourceAddressHandle ?? member.sourceAddressHandle,
-      member.identityHandle,
-      reference.display ?? member.valueType?.display ?? null,
-    )).toReference();
+      sourceAddressHandle: slot.sourceAddressHandle ?? member.sourceAddressHandle,
+      ownerIdentityHandle: member.identityHandle,
+      display: reference.display ?? member.valueType?.display ?? null,
+    } satisfies CheckerTypeProjectionRequest).toReference();
   }
 
   private truthyTypeReference(
@@ -238,16 +236,14 @@ export class CheckerExpressionScopeNarrower {
     const references = falsyTypes.map((type, index) =>
       this.projectType(carrier, type, `${localKey}:part:${index}`, sourceAddressHandle)
     );
-    return this.projector.ensureSyntheticProjection(new CheckerSyntheticTypeProjectionInput(
+    return this.projector.ensureSyntheticProjection({
       localKey,
-      CheckerTypeShapeKind.Union,
-      references.map((part) => part.display ?? 'unknown').join(' | '),
-      [],
-      null,
-      null,
-      CheckerTypeProjectionOrigin.SyntheticTemplateType,
+      shapeKind: CheckerTypeShapeKind.Union,
+      display: references.map((part) => part.display ?? 'unknown').join(' | '),
+      members: [],
+      origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
       sourceAddressHandle,
-    )).toReference();
+    } satisfies CheckerSyntheticTypeProjectionRequest).toReference();
   }
 
   private carrierForReference(reference: CheckerTypeReference): CheckerTypeCarrierInput | null {
@@ -272,16 +268,15 @@ export class CheckerExpressionScopeNarrower {
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeReference {
     const sourceNode = carrier.declarations[0] ?? null;
-    return this.projector.ensureProjection(new CheckerTypeProjectionInput(
+    return this.projector.ensureProjection({
       localKey,
-      carrier.checker,
+      checker: carrier.checker,
       type,
-      CheckerTypeProjectionOrigin.SyntheticTemplateType,
+      origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
       sourceNode,
       sourceAddressHandle,
-      null,
-      carrier.checker.typeToString(type, sourceNode ?? undefined),
-    )).toReference();
+      display: carrier.checker.typeToString(type, sourceNode ?? undefined),
+    } satisfies CheckerTypeProjectionRequest).toReference();
   }
 }
 

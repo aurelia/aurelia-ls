@@ -368,19 +368,17 @@ export class AttributeParserMatchedPattern {
   }
 }
 
-/** Host input for executing the handler part of runtime IAttributeParser.parse. */
-export class AttributeParserHandlerExecutionInput {
-  constructor(
-    readonly rawName: string,
-    readonly rawValue: string,
-    readonly interpretation: AttributePatternInterpretation,
-    readonly matchedPattern: AttributeParserMatchedPattern,
-  ) {}
+/** Host request for executing the handler part of runtime IAttributeParser.parse. */
+export interface AttributeParserHandlerExecutionRequest {
+  readonly rawName: string;
+  readonly rawValue: string;
+  readonly interpretation: AttributePatternInterpretation;
+  readonly matchedPattern: AttributeParserMatchedPattern;
 }
 
 /** Product host that performs the handler invocation part of runtime IAttributeParser.parse. */
 export interface AttributeParserExecutionHost {
-  execute(input: AttributeParserHandlerExecutionInput): AttributePatternExecutionResult | null;
+  execute(input: AttributeParserHandlerExecutionRequest): AttributePatternExecutionResult | null;
 }
 
 /** Runtime-shaped IAttributeParser.parse result before kernel product allocation. */
@@ -617,12 +615,12 @@ export class AttributeParserService {
       );
     }
 
-    const execution = host.execute(new AttributeParserHandlerExecutionInput(
+    const execution = host.execute({
       rawName,
       rawValue,
       interpretation,
       matchedPattern,
-    ));
+    });
     return new AttributeParserParseResult(
       interpretation,
       matchedPattern,

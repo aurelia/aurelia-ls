@@ -1,4 +1,4 @@
-import { SemanticClaim } from '../kernel/claim.js';
+import { SemanticClaim, claimsForProduct, nullableClaim } from '../kernel/claim.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -519,18 +519,4 @@ export class BindingScopeMaterializer {
   private isScopeEffectProduct(productHandle: ProductHandle): boolean {
     return this.store.readProduct(productHandle)?.productKindKey === KernelVocabulary.Binding.ScopeEffect.key;
   }
-}
-
-function claimsForProduct(
-  claims: readonly SemanticClaim[],
-  productHandle: ProductHandle,
-): readonly SemanticClaim[] {
-  return claims.filter((claim) =>
-    claim.subjectHandle === productHandle
-    || claim.objectHandle === productHandle
-  );
-}
-
-function nullableClaim(claim: SemanticClaim | null): readonly SemanticClaim[] {
-  return claim == null ? [] : [claim];
 }

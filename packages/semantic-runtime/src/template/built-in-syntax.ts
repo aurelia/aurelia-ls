@@ -18,6 +18,7 @@ import {
   type BindingCommandBuildContext,
   type BindingCommandBuildInfo,
 } from './binding-command-execution.js';
+import { camelCaseAttributeName } from './attribute-mapper.js';
 import { BindingCommandExecutableReference } from './binding-command-reference.js';
 import {
   AttributeBindingInstruction,
@@ -38,10 +39,6 @@ import {
 } from './instruction-ir.js';
 
 const bindingCommandKey = (name: string): string => `au:resource:binding-command:${name}`;
-
-function camelCase(value: string): string {
-  return value.replace(/-([a-z])/g, (_match, char: string) => char.toUpperCase());
-}
 
 function bindingCommandReference(
   command: {
@@ -84,7 +81,7 @@ function allocateInstruction(
 
 function expressionValueOrTargetCamelCase(info: BindingCommandBuildInfo): string {
   return info.syntax.rawValue === ''
-    ? camelCase(info.syntax.target)
+    ? camelCaseAttributeName(info.syntax.target)
     : info.syntax.rawValue;
 }
 
@@ -93,13 +90,13 @@ function targetForPropertyBinding(
   context: BindingCommandBuildContext,
 ): string {
   return info.bindable == null
-    ? context.mapAttribute(info.node, info.syntax.target) ?? camelCase(info.syntax.target)
+    ? context.mapAttribute(info.node, info.syntax.target) ?? camelCaseAttributeName(info.syntax.target)
     : info.bindable.name;
 }
 
 function targetForIteratorBinding(info: BindingCommandBuildInfo): string {
   return info.bindable == null
-    ? camelCase(info.syntax.target)
+    ? camelCaseAttributeName(info.syntax.target)
     : info.bindable.name;
 }
 

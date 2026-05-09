@@ -12,7 +12,6 @@ import {
 } from "../../framework/index.js";
 import type { SourceProject } from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
-import { clampBudget } from "../budget.js";
 import {
   ContinuationKind,
   ContinuationPriority,
@@ -22,12 +21,13 @@ import type { Inquiry } from "../inquiry.js";
 import {
   evidenceLimit,
   pageOffset,
+  rowLimit,
 } from "../paging.js";
 import { readFrameworkBundles } from "./framework-bundles.js";
 import { nextPageContinuation } from "./framework-continuation-core.js";
 import {
   appTaskEntityContinuations,
-  bundleContinuations,
+  frameworkCatalogBundleContinuations,
   diInterfaceContinuations,
   expressionEntityContinuations,
   observerEntityContinuations,
@@ -38,16 +38,16 @@ import {
   routerEntityContinuations,
 } from "./framework-catalog-continuations.js";
 import {
-  anchorContinuations,
   callEdgeContinuations,
   callSiteContinuations,
   callTargetContinuations,
   flowContinuations,
+  frameworkFlowAnchorContinuations,
   flowSeedContinuations,
 } from "./framework-flow-continuations.js";
 import {
+  frameworkSummaryContinuations,
   openQuestionContinuations,
-  summaryContinuations,
 } from "./framework-summary-continuations.js";
 import type {
   FrameworkAppTaskEntityRow,
@@ -75,7 +75,7 @@ import {
   evidenceForAppTaskEntity,
   evidenceForBundle,
   evidenceForCallEdge,
-  evidenceForCallSite,
+  evidenceForFrameworkFlowCallSite,
   evidenceForCallTarget,
   evidenceForDiInterface,
   evidenceForExpressionEntity,
@@ -149,7 +149,7 @@ class FrameworkDiscoveryQueryContext {
       flowSeedMatches(row, this.filters),
     );
     this.anchorResolution = anchorResolutionForRollup(this.seedIndex.rollup);
-    this.limit = clampBudget(inquiry.budget?.rows, 80, 1_000);
+    this.limit = rowLimit(inquiry);
     this.offset = pageOffset(inquiry);
   }
 }
@@ -176,7 +176,7 @@ const ANCHOR_ROW_FAMILY =
     id: "framework.discovery:anchors",
     rowLabel: "framework seed anchor(s)",
     evidenceForRow: evidenceForAnchorResolution,
-    continuationsForPage: anchorContinuations,
+    continuationsForPage: frameworkFlowAnchorContinuations,
   });
 
 const FLOW_SEED_ROW_FAMILY =
@@ -199,7 +199,7 @@ const CALL_SITE_ROW_FAMILY =
   new PagedRowFamily<FrameworkFlowCallSiteRow>({
     id: "framework.discovery:call-sites",
     rowLabel: "framework flow call-site row(s)",
-    evidenceForRow: evidenceForCallSite,
+    evidenceForRow: evidenceForFrameworkFlowCallSite,
     continuationsForPage: callSiteContinuations,
   });
 
@@ -256,7 +256,7 @@ const BUNDLE_ROW_FAMILY =
     id: "framework.discovery:bundles",
     rowLabel: "Aurelia framework bundle row(s)",
     evidenceForRow: evidenceForBundle,
-    continuationsForPage: bundleContinuations,
+    continuationsForPage: frameworkCatalogBundleContinuations,
   });
 
 const OBSERVER_ROW_FAMILY =
@@ -660,7 +660,7 @@ class FrameworkDiscoveryAnswerer {
             .slice(0, Math.max(1, Math.ceil(evidenceLimit(inquiry) / 2)))
             .map(evidenceForAnchorResolution),
         ],
-        continuations: summaryContinuations(inquiry),
+        continuations: frameworkSummaryContinuations(inquiry),
       },
     );
   }

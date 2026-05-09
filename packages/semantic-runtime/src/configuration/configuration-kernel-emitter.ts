@@ -69,6 +69,7 @@ import {
   type RegistrationAdmissionProduct,
 } from '../registration/registration-admission.js';
 import {
+  FrameworkRegistrationKind,
   RegistrationKeyReference,
   RegistrationValueKind,
 } from '../registration/registration-reference.js';
@@ -1219,11 +1220,13 @@ export class ConfigurationKernelEmitter {
       handles.productHandle,
       handles.identityHandle,
       observation.contributionKind,
+      observation.configurationKind,
       observation.optionPath,
       value.value,
       source.addressHandle,
       compactFieldProvenance<ConfigurationOptionField>([
         new FieldProvenance('contributionKind', source.provenanceHandle),
+        observation.configurationKind == null ? null : new FieldProvenance('configurationKind', source.provenanceHandle),
         new FieldProvenance('optionPath', source.provenanceHandle),
         new FieldProvenance('value', value.provenanceHandle ?? source.provenanceHandle),
         new FieldProvenance('source', source.provenanceHandle),
@@ -1829,7 +1832,7 @@ function enrichAppTaskRegistration(
       observation.registeredValue.node,
       observation.registeredValue.isDeclaration,
       appTask.task.productHandle,
-      observation.registeredValue.frameworkKind,
+      FrameworkRegistrationKind.AppTask,
     ),
     observation.registryParameters,
     observation.openSeams,
@@ -1898,5 +1901,5 @@ function observationLocalKey(
   node: ts.Node,
   index: number,
 ): string {
-  return `${context.moduleKey}:${node.getStart(context.sourceFile)}:${node.end}:${index}`;
+  return `${context.projectKey}:${context.moduleKey}:${node.getStart(context.sourceFile)}:${node.end}:${index}`;
 }

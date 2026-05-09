@@ -3,7 +3,7 @@ import {
   SourceSpanRole,
   TemplateNodeAddress,
 } from '../kernel/address.js';
-import { SemanticClaim } from '../kernel/claim.js';
+import { SemanticClaim, claimsForProduct } from '../kernel/claim.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -66,17 +66,15 @@ import {
 } from './parse-context.js';
 import { TemplateProductDetails } from './product-details.js';
 
-export class HtmlParseInput {
-  constructor(
-    /** Store-local key for the parsed HTML document. */
-    readonly localKey: string,
-    /** Authored template source to parse. */
-    readonly templateSource: TemplateSource,
-    /** Compiler-front-door unit that owns the parse. */
-    readonly compilationUnit: TemplateCompilationUnit,
-    /** Inquiry pressure for recovery/frontier preservation. */
-    readonly parseContext: TemplateParseContext,
-  ) {}
+export interface HtmlParseRequest {
+  /** Store-local key for the parsed HTML document. */
+  readonly localKey: string;
+  /** Authored template source to parse. */
+  readonly templateSource: TemplateSource;
+  /** Compiler-front-door unit that owns the parse. */
+  readonly compilationUnit: TemplateCompilationUnit;
+  /** Inquiry pressure for recovery/frontier preservation. */
+  readonly parseContext: TemplateParseContext;
 }
 
 export class HtmlParseEmission {
@@ -196,7 +194,7 @@ export class HtmlParseMaterializer {
     readonly store: KernelStore,
   ) {}
 
-  parse(input: HtmlParseInput): HtmlParseEmission {
+  parse(input: HtmlParseRequest): HtmlParseEmission {
     const emission = this.recordsForParse(input);
     if (emission.records.length > 0) {
       this.store.commit(new KernelStoreBatch(emission.records, `html-parse:${input.localKey}`));
@@ -215,7 +213,7 @@ export class HtmlParseMaterializer {
     }
   }
 
-  private recordsForParse(input: HtmlParseInput): HtmlParseEmission {
+  private recordsForParse(input: HtmlParseRequest): HtmlParseEmission {
     const source = this.recordsForSource(input);
     const state = new HtmlMaterializationState(input.localKey, input.templateSource, source, this.store);
     state.records.push(...source.records);
@@ -242,7 +240,7 @@ export class HtmlParseMaterializer {
     );
   }
 
-  private parseDocumentDraft(input: HtmlParseInput): ParsedHtmlDocumentDraft {
+  private parseDocumentDraft(input: HtmlParseRequest): ParsedHtmlDocumentDraft {
     if (input.templateSource.markup == null) {
       return new ParsedHtmlDocumentDraft(
         [],
@@ -252,7 +250,7 @@ export class HtmlParseMaterializer {
     return new HtmlScanner(input.templateSource.markup, input.parseContext.recoveryPolicy).parseDocument();
   }
 
-  private documentHandles(input: HtmlParseInput): HtmlDocumentHandles {
+  private documentHandles(input: HtmlParseRequest): HtmlDocumentHandles {
     return new HtmlDocumentHandles(
       this.store.handles.product(`html-document:${input.localKey}`),
       this.store.handles.identity(`html-document:${input.localKey}`),
@@ -289,7 +287,7 @@ export class HtmlParseMaterializer {
   }
 
   private sourceClaimForDocument(
-    input: HtmlParseInput,
+    input: HtmlParseRequest,
     source: HtmlParseSourceSet,
     document: HtmlDocument,
   ): SemanticClaim {
@@ -303,7 +301,7 @@ export class HtmlParseMaterializer {
   }
 
   private recordsForDocument(
-    input: HtmlParseInput,
+    input: HtmlParseRequest,
     state: HtmlMaterializationState,
     document: HtmlDocument,
     sourceClaim: SemanticClaim,
@@ -338,7 +336,7 @@ export class HtmlParseMaterializer {
     ];
   }
 
-  private recordsForSource(input: HtmlParseInput): HtmlParseSourceSet {
+  private recordsForSource(input: HtmlParseRequest): HtmlParseSourceSet {
     const evidenceHandle = this.store.handles.evidence(`html-parse:${input.localKey}`);
     const provenanceHandle = this.store.handles.provenance(`html-parse:${input.localKey}`);
     const records: KernelStoreRecord[] = [
@@ -358,7 +356,7 @@ export class HtmlParseMaterializer {
   }
 
   private materializeNode(
-    input: HtmlParseInput,
+    input: HtmlParseRequest,
     state: HtmlMaterializationState,
     draft: ParsedHtmlNodeDraft,
     parentProductHandle: ProductHandle,
@@ -370,7 +368,7 @@ export class HtmlParseMaterializer {
   }
 
   private materializeNodeFrame(
-    input: HtmlParseInput,
+    input: HtmlParseRequest,
     state: HtmlMaterializationState,
     draft: ParsedHtmlNodeDraft,
   ): HtmlNodeMaterializationFrame {
@@ -393,7 +391,7 @@ export class HtmlParseMaterializer {
   }
 
   private htmlNodeForDraft(
-    input: HtmlParseInput,
+    input: HtmlParseRequest,
     state: HtmlMaterializationState,
     draft: ParsedHtmlNodeDraft,
     frame: HtmlNodeMaterializationFrame,
@@ -427,7 +425,7 @@ export class HtmlParseMaterializer {
   }
 
   private htmlElementForDraft(
-    input: HtmlParseInput,
+    input: HtmlParseRequest,
     state: HtmlMaterializationState,
     draft: ParsedHtmlNodeDraft,
     frame: HtmlNodeMaterializationFrame,
@@ -513,7 +511,7 @@ export class HtmlParseMaterializer {
   }
 
   private materializeAttribute(
-    input: HtmlParseInput,
+    input: HtmlParseRequest,
     state: HtmlMaterializationState,
     draft: ParsedHtmlAttributeDraft,
     parentProductHandle: ProductHandle,
@@ -527,7 +525,7 @@ export class HtmlParseMaterializer {
   }
 
   private materializeAttributeFrame(
-    input: HtmlParseInput,
+    input: HtmlParseRequest,
     state: HtmlMaterializationState,
     draft: ParsedHtmlAttributeDraft,
     pathKey: string,
@@ -1075,14 +1073,4 @@ function nodeKey(draft: ParsedHtmlNodeDraft, sourceAddressHandle: AddressHandle 
   return sourceAddressHandle == null
     ? `${name}:path:${draft.path.join('.')}`
     : `${name}:source:${draft.start}-${draft.end}`;
-}
-
-function claimsForProduct(
-  claims: readonly SemanticClaim[],
-  productHandle: ProductHandle,
-): readonly SemanticClaim[] {
-  return claims.filter((claim) =>
-    claim.subjectHandle === productHandle
-    || claim.objectHandle === productHandle
-  );
 }

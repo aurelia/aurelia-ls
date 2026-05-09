@@ -13,6 +13,8 @@ export const enum BuiltInResourcePackage {
   RuntimeHtml = 'runtime-html',
   /** I18n package. */
   I18n = 'i18n',
+  /** Router package. */
+  Router = 'router',
   /** State package. */
   State = 'state',
 }
@@ -691,6 +693,9 @@ export type BuiltInResource =
   | I18nNumberFormatBindingBehaviorResource
   | I18nRelativeTimeValueConverterResource
   | I18nRelativeTimeBindingBehaviorResource
+  | RouterLoadCustomAttributeResource
+  | RouterHrefCustomAttributeResource
+  | RouterViewportCustomElementResource
   | StateBindingBehaviorResource;
 
 export interface BuiltInResourceCatalogInput {
@@ -787,6 +792,69 @@ export const I18nBuiltInResourceCatalogs = {
       new I18nNumberFormatBindingBehaviorResource(),
       new I18nRelativeTimeValueConverterResource(),
       new I18nRelativeTimeBindingBehaviorResource(),
+    ],
+  },
+} as const satisfies Record<string, BuiltInResourceCatalogInput>;
+
+@auLink('router:LoadCustomAttribute')
+export class RouterLoadCustomAttributeResource {
+  readonly targetName = 'LoadCustomAttribute';
+  readonly resourceKind = ResourceDefinitionKind.CustomAttribute;
+  readonly name = 'load';
+  readonly aliases: readonly string[] = [];
+  readonly packageId = BuiltInResourcePackage.Router;
+  readonly group = BuiltInResourceGroup.DefaultResources;
+
+  constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    readonly fieldProvenance: readonly FieldProvenance<BuiltInResourceField>[] = [],
+  ) {}
+}
+
+@auLink('router:HrefCustomAttribute')
+export class RouterHrefCustomAttributeResource {
+  readonly targetName = 'HrefCustomAttribute';
+  readonly resourceKind = ResourceDefinitionKind.CustomAttribute;
+  readonly name = 'href';
+  readonly aliases: readonly string[] = [];
+  readonly packageId = BuiltInResourcePackage.Router;
+  readonly group = BuiltInResourceGroup.DefaultResources;
+
+  constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    readonly fieldProvenance: readonly FieldProvenance<BuiltInResourceField>[] = [],
+  ) {}
+}
+
+@auLink('router:ViewportCustomElement')
+export class RouterViewportCustomElementResource {
+  readonly targetName = 'ViewportCustomElement';
+  readonly resourceKind = ResourceDefinitionKind.CustomElement;
+  readonly name = 'au-viewport';
+  readonly aliases: readonly string[] = [];
+  readonly packageId = BuiltInResourcePackage.Router;
+  readonly group = BuiltInResourceGroup.DefaultResources;
+
+  constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    readonly fieldProvenance: readonly FieldProvenance<BuiltInResourceField>[] = [],
+  ) {}
+}
+
+export const RouterBuiltInResourceCatalogs = {
+  DefaultResources: {
+    packageId: BuiltInResourcePackage.Router,
+    group: BuiltInResourceGroup.DefaultResources,
+    resources: [
+      new RouterLoadCustomAttributeResource(),
+      new RouterHrefCustomAttributeResource(),
+      new RouterViewportCustomElementResource(),
     ],
   },
 } as const satisfies Record<string, BuiltInResourceCatalogInput>;

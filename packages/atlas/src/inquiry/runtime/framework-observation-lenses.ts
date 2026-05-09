@@ -4,7 +4,6 @@ import {
 } from "../../framework/relationships.js";
 import type { SourceProject } from "../../source/index.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
-import { clampBudget } from "../budget.js";
 import {
   ContinuationPriority,
   type Continuation,
@@ -19,7 +18,7 @@ import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
 import { RepoRootLocus, type SourceRange } from "../locus.js";
 import { PagedRowFamily } from "../paged-row-family.js";
-import { pageOffset } from "../paging.js";
+import { pageOffset, rowLimit } from "../paging.js";
 import {
   FrameworkBindingEffectKind,
   type FrameworkBindingEffectRow,
@@ -52,6 +51,7 @@ import {
   sourceIndexBasis,
   sourceRangeFromFileSpan,
 } from "./framework-support.js";
+import { evidenceForObserverEntity } from "./framework-evidence.js";
 import {
   FrameworkRowContinuationBuilder,
   FrameworkSemanticRouteBuilder,
@@ -59,6 +59,7 @@ import {
   projectionContinuation,
 } from "./framework-continuation-core.js";
 import { FrameworkSemanticRoutes } from "./framework-route-catalog.js";
+import { stringFilter } from "./lens-filter-utils.js";
 
 /** Value returned by framework.observation. */
 export interface FrameworkObservationValue {
@@ -133,8 +134,8 @@ const OBSERVATION_BINDING_SETUP_ROW_FAMILY =
   new PagedRowFamily<FrameworkBindingSetupRow>({
     id: "framework.observation:binding-setups",
     rowLabel: "framework binding observation setup row(s)",
-    evidenceForRow: evidenceForBindingSetup,
-    continuationsForPage: bindingSetupContinuations,
+    evidenceForRow: evidenceForObservationBindingSetup,
+    continuationsForPage: observationBindingSetupContinuations,
   });
 
 const OBSERVATION_SURFACE_METHOD_ROW_FAMILY =
@@ -166,7 +167,7 @@ const OBSERVATION_RELATIONSHIP_ROW_FAMILY =
     id: "framework.observation:relationships",
     rowLabel: "framework observation relationship row(s)",
     evidenceForRow: evidenceForObservationRelationship,
-    continuationsForPage: relationshipContinuations,
+    continuationsForPage: observationRelationshipContinuations,
   });
 
 /** Answer framework.observation inquiries from observer entities and binding observer rows. */
@@ -176,7 +177,7 @@ export function answerFrameworkObservation(
 ): Answer<FrameworkObservationValue> {
   const projection = inquiry.projection ?? "summary";
   const filters = observationFiltersFromInquiry(inquiry);
-  const limit = clampBudget(inquiry.budget?.rows, 80, 1_000);
+  const limit = rowLimit(inquiry);
   const offset = pageOffset(inquiry);
 
   switch (projection) {
@@ -333,7 +334,7 @@ export function answerFrameworkObservation(
             ...flowEntityLinks.slice(0, 2).map(evidenceForFlowEntityLink),
             ...relationships.slice(0, 2).map(evidenceForObservationRelationship),
           ],
-          continuations: summaryContinuations(inquiry),
+          continuations: observationSummaryContinuations(inquiry),
         },
       );
     }
@@ -556,27 +557,6 @@ function axisFiltersFromRecord(value: unknown): FrameworkObservationFilters {
   };
 }
 
-function stringFilter(
-  source: Record<string, unknown>,
-  key: keyof FrameworkObservationFilters,
-): object {
-  const value = source[key];
-  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
-}
-
-function evidenceForObserverEntity(row: FrameworkObserverEntityRow): Evidence {
-  const source = sourceForObserverEntity(row);
-  return {
-    id: row.id,
-    kind: EvidenceKind.TypeFact,
-    role: EvidenceRole.Subject,
-    confidence: EvidenceConfidence.Strong,
-    summary: `${row.packageId}:${row.exportEntry.exportName} observer roles [${row.observerKinds.join(", ")}].`,
-    ...(source === undefined ? {} : { source }),
-    data: row,
-  };
-}
-
 function evidenceForBindingLookup(row: FrameworkBindingEffectRow): Evidence {
   return {
     id: row.id,
@@ -589,7 +569,7 @@ function evidenceForBindingLookup(row: FrameworkBindingEffectRow): Evidence {
   };
 }
 
-function evidenceForBindingSetup(row: FrameworkBindingSetupRow): Evidence {
+function evidenceForObservationBindingSetup(row: FrameworkBindingSetupRow): Evidence {
   return {
     id: row.id,
     kind: EvidenceKind.TypeFact,
@@ -658,7 +638,7 @@ function evidenceForObservationRelationship(
   };
 }
 
-function summaryContinuations(inquiry: Inquiry): readonly Continuation[] {
+function observationSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
   return [
     projectionContinuation(
       inquiry,
@@ -785,7 +765,7 @@ function bindingLookupContinuations(
   ];
 }
 
-function bindingSetupContinuations(
+function observationBindingSetupContinuations(
   inquiry: Inquiry,
   rows: readonly FrameworkBindingSetupRow[],
   nextOffset: number | undefined,
@@ -912,7 +892,7 @@ function flowEntityLinkContinuations(
   return continuations;
 }
 
-function relationshipContinuations(
+function observationRelationshipContinuations(
   inquiry: Inquiry,
   rows: readonly FrameworkObservationRelationshipRow[],
   nextOffset: number | undefined,

@@ -1,19 +1,21 @@
-import path from "node:path";
-
 import ts from "typescript";
 
 import type { SourceRange } from "../inquiry/locus.js";
 import {
-  repoRelativePath,
-  toPosixPath,
-  type RepoRelativePath,
-} from "../source/path.js";
-import {
+  requiredSourceFileIdentity,
   readTypeScriptCallSiteEntry,
   readTypeScriptExpressionFact,
   resolveSourceSelector,
+  isAssignmentOperator,
+  localFunctionDeclarationForCall,
+  propertyNameText,
+  returnExpressions,
+  sourceRangeFromFileSpan,
+  sourceSpanForNode,
+  unwrapExpression,
   type ResolvedSourceTarget,
   type SourceFileIdentity,
+  type LocalFunctionDeclaration,
   type SourceProject,
   type SourceSelector,
   type SourceSelectorResolution,
@@ -411,8 +413,8 @@ function effectRootForCandidate(project: SourceProject, candidate: TraceRootCand
   const parameters = candidate.node.parameters
     .map((parameter, index) => parameterBinding(project, candidate.sourceFile, parameter, index))
     .filter((binding): binding is EvaluationTraceBinding => binding !== null);
-  const file = fileIdentity(project, candidate.sourceFile);
-  const span = sourceSpan(candidate.sourceFile, candidate.node);
+  const file = requiredSourceFileIdentity(project, candidate.sourceFile);
+  const span = sourceSpanForNode(candidate.sourceFile, candidate.node);
   return {
     id: `effect-root:${file.repoPath}:${span.start}:${span.end}:${candidate.memberName ?? "body"}`,
     label: candidate.label,
@@ -438,7 +440,7 @@ function scopeForRoot(project: SourceProject, sourceFile: ts.SourceFile, root: E
       name: "this",
       origin: EvaluationTraceBindingOrigin.This,
       file: root.file,
-      span: sourceSpan(sourceFile, name),
+      span: sourceSpanForNode(sourceFile, name),
       expression: readTypeScriptExpressionFact(project, sourceFile, name as ts.Expression),
     });
   }
@@ -684,7 +686,7 @@ function traceLocalFunctionCall(
   if (declaration?.body === undefined) {
     return;
   }
-  const declarationSpan = sourceSpan(context.sourceFile, declaration);
+  const declarationSpan = sourceSpanForNode(context.sourceFile, declaration);
   const declarationKey = `${context.sourceFile.fileName}:${declarationSpan.start}:${declarationSpan.end}`;
   if (context.callStack.includes(declarationKey)) {
     open(context, EvaluationOpenKind.DynamicCall, "Recursive local function call was not expanded during static effect tracing.", call, controlPath);
@@ -936,7 +938,7 @@ function parameterBinding(project: SourceProject, sourceFile: ts.SourceFile, par
 function capturedParameterBindings(
   project: SourceProject,
   sourceFile: ts.SourceFile,
-  declaration: ts.FunctionDeclaration,
+  declaration: LocalFunctionDeclaration,
   call: ts.CallExpression,
 ): readonly EvaluationTraceBinding[] {
   return declaration.parameters
@@ -978,8 +980,8 @@ function bindingFromName(
   return {
     name: name.text,
     origin,
-    file: fileIdentity(project, sourceFile),
-    span: sourceSpan(sourceFile, name),
+    file: requiredSourceFileIdentity(project, sourceFile),
+    span: sourceSpanForNode(sourceFile, name),
     expression: extra.expression ?? readTypeScriptExpressionFact(project, sourceFile, name),
     ...extra,
   };
@@ -1010,8 +1012,8 @@ function open(
   node: ts.Node,
   _controlPath: readonly string[],
 ): void {
-  const file = fileIdentity(context.project, context.sourceFile);
-  const span = sourceSpan(context.sourceFile, node);
+  const file = requiredSourceFileIdentity(context.project, context.sourceFile);
+  const span = sourceSpanForNode(context.sourceFile, node);
   context.openSeams.push({
     id: `effect-open:${file.repoPath}:${span.start}:${span.end}:${openKind}:${context.openSeams.length}`,
     openKind,
@@ -1025,12 +1027,12 @@ function open(
 function uniqueRootCandidates(candidates: readonly TraceRootCandidate[]): readonly TraceRootCandidate[] {
   const byKey = new Map<string, TraceRootCandidate>();
   for (const candidate of candidates) {
-    const span = sourceSpan(candidate.sourceFile, candidate.node);
+    const span = sourceSpanForNode(candidate.sourceFile, candidate.node);
     byKey.set(`${candidate.sourceFile.fileName}:${span.start}:${span.end}:${candidate.memberName ?? ""}`, candidate);
   }
   return [...byKey.values()].sort((left, right) =>
     left.sourceFile.fileName.localeCompare(right.sourceFile.fileName)
-    || sourceSpan(left.sourceFile, left.node).start - sourceSpan(right.sourceFile, right.node).start
+    || sourceSpanForNode(left.sourceFile, left.node).start - sourceSpanForNode(right.sourceFile, right.node).start
   );
 }
 
@@ -1042,36 +1044,6 @@ function isTraceFunctionLike(node: ts.Node): node is TraceFunctionLike {
     || ts.isConstructorDeclaration(node)
     || ts.isGetAccessorDeclaration(node)
     || ts.isSetAccessorDeclaration(node);
-}
-
-function localFunctionDeclarationForCall(project: SourceProject, sourceFile: ts.SourceFile, call: ts.CallExpression): ts.FunctionDeclaration | null {
-  const expression = unwrapExpression(call.expression);
-  if (!ts.isIdentifier(expression)) {
-    return null;
-  }
-  const symbol = project.checker.getSymbolAtLocation(expression);
-  const declaration = symbol?.getDeclarations()?.find((candidate): candidate is ts.FunctionDeclaration =>
-    ts.isFunctionDeclaration(candidate)
-    && candidate.body !== undefined
-    && candidate.getSourceFile().fileName === sourceFile.fileName
-  );
-  return declaration ?? null;
-}
-
-function returnExpressions(body: ts.Block): readonly ts.Expression[] {
-  const expressions: ts.Expression[] = [];
-  const visit = (node: ts.Node): void => {
-    if (ts.isFunctionDeclaration(node) || ts.isFunctionExpression(node) || ts.isArrowFunction(node) || ts.isClassLike(node)) {
-      return;
-    }
-    if (ts.isReturnStatement(node) && node.expression !== undefined) {
-      expressions.push(node.expression);
-      return;
-    }
-    ts.forEachChild(node, visit);
-  };
-  visit(body);
-  return expressions;
 }
 
 function labelForFunctionLike(node: TraceFunctionLike): string {
@@ -1092,62 +1064,6 @@ function memberNameForFunctionLike(node: TraceFunctionLike): string | null {
   return null;
 }
 
-function propertyNameText(name: ts.PropertyName): string | null {
-  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name) || ts.isPrivateIdentifier(name)) {
-    return name.text;
-  }
-  if (ts.isComputedPropertyName(name)) {
-    const expression = unwrapExpression(name.expression);
-    return ts.isStringLiteralLike(expression) || ts.isNumericLiteral(expression) ? expression.text : null;
-  }
-  return null;
-}
-
-function unwrapExpression(expression: ts.Expression): ts.Expression {
-  let current = expression;
-  while (
-    ts.isAsExpression(current)
-    || ts.isTypeAssertionExpression(current)
-    || ts.isParenthesizedExpression(current)
-    || ts.isNonNullExpression(current)
-    || ts.isSatisfiesExpression(current)
-  ) {
-    current = current.expression;
-  }
-  return current;
-}
-
-function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
-  return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
-}
-
-function sourceSpan(sourceFile: ts.SourceFile, node: ts.Node): SourceSpan {
-  const start = node.getStart(sourceFile);
-  const end = node.getEnd();
-  const startPosition = sourceFile.getLineAndCharacterOfPosition(start);
-  const endPosition = sourceFile.getLineAndCharacterOfPosition(end);
-  return {
-    start,
-    end,
-    startLine: startPosition.line + 1,
-    startCharacter: startPosition.character + 1,
-    endLine: endPosition.line + 1,
-    endCharacter: endPosition.character + 1,
-  };
-}
-
-function fileIdentity(project: SourceProject, sourceFile: ts.SourceFile): SourceFileIdentity {
-  const known = project.sourceFileIdentity(sourceFile);
-  if (known !== null) {
-    return known;
-  }
-  return {
-    absolutePath: path.resolve(sourceFile.fileName),
-    repoPath: (repoRelativePath(project.repoRoot, sourceFile.fileName) ?? toPosixPath(sourceFile.fileName)) as RepoRelativePath,
-    packageId: project.packageForFileName(sourceFile.fileName)?.id ?? null,
-  };
-}
-
 /** Convert an effect row source span to an inquiry source range. */
 export function sourceRangeForEvaluationEffect(effect: EvaluationInvocationEffect): SourceRange {
   return sourceRangeFromFileSpan(effect.callSite.file.repoPath, effect.callSite.span);
@@ -1156,18 +1072,4 @@ export function sourceRangeForEvaluationEffect(effect: EvaluationInvocationEffec
 /** Convert an effect seam source span to an inquiry source range. */
 export function sourceRangeForEvaluationOpenSeam(seam: EvaluationEffectOpenSeam): SourceRange {
   return sourceRangeFromFileSpan(seam.file.repoPath, seam.span);
-}
-
-function sourceRangeFromFileSpan(filePath: string, span: SourceSpan): SourceRange {
-  return {
-    filePath,
-    start: {
-      line: span.startLine - 1,
-      character: span.startCharacter - 1,
-    },
-    end: {
-      line: span.endLine - 1,
-      character: span.endCharacter - 1,
-    },
-  };
 }

@@ -1,4 +1,7 @@
-import type { SemanticAddress } from './address.js';
+import type {
+  SemanticAddress,
+  SourceFileAddress,
+} from './address.js';
 import type { SemanticClaim } from './claim.js';
 import type { SemanticIdentity } from './identity.js';
 import type { MaterializationRecord, MaterializedProduct } from './materialization.js';
@@ -93,6 +96,7 @@ export class KernelStore {
   private readonly openSeams = new Map<OpenSeamHandle, OpenSeam>();
   private readonly products = new Map<ProductHandle, MaterializedProduct>();
   private readonly materializations = new Map<MaterializationHandle, MaterializationRecord>();
+  private readonly sourceFileAddressesByPath = new Map<string, Set<AddressHandle>>();
   private readonly productsByKind = new Map<ProductKindKey, Set<ProductHandle>>();
   private readonly evidenceByAddress = new Map<AddressHandle, Set<EvidenceHandle>>();
   private readonly evidenceByIdentity = new Map<IdentityHandle, Set<EvidenceHandle>>();
@@ -187,6 +191,24 @@ export class KernelStore {
     return [...this.addresses.values()];
   }
 
+  readSourceFileAddressesByFileName(fileName: string): readonly SourceFileAddress[] {
+    const matches = new Map<AddressHandle, SourceFileAddress>();
+    for (const candidate of sourcePathSuffixes(fileName)) {
+      for (const handle of this.sourceFileAddressesByPath.get(candidate) ?? []) {
+        const address = this.addresses.get(handle);
+        if (address?.kind === 'source-file-address') {
+          matches.set(handle, address);
+        }
+      }
+    }
+    return [...matches.values()]
+      .sort((left, right) => right.path.length - left.path.length);
+  }
+
+  readBestSourceFileAddressForFileName(fileName: string): SourceFileAddress | null {
+    return this.readSourceFileAddressesByFileName(fileName)[0] ?? null;
+  }
+
   readIdentities(): readonly SemanticIdentity[] {
     return [...this.identities.values()];
   }
@@ -267,6 +289,8 @@ export class KernelStore {
         case 'di-product-identity':
         case 'registration-identity':
         case 'configuration-identity':
+        case 'router-identity':
+        case 'route-recognizer-identity':
         case 'compiler-identity':
         case 'template-identity':
         case 'template-node-identity':
@@ -393,6 +417,9 @@ export class KernelStore {
       case 'generated-address':
       case 'external-address':
         this.addresses.set(record.handle, record);
+        if (record.kind === 'source-file-address') {
+          addToSet(this.sourceFileAddressesByPath, normalizeSourcePath(record.path), record.handle);
+        }
         return;
       case 'typescript-declaration-identity':
       case 'aurelia-resource-identity':
@@ -402,6 +429,8 @@ export class KernelStore {
       case 'di-product-identity':
       case 'registration-identity':
       case 'configuration-identity':
+      case 'router-identity':
+      case 'route-recognizer-identity':
       case 'compiler-identity':
       case 'template-identity':
       case 'template-node-identity':
@@ -443,4 +472,18 @@ export class KernelStore {
         return;
     }
   }
+}
+
+function normalizeSourcePath(fileName: string): string {
+  return fileName.replace(/\\/g, '/');
+}
+
+function sourcePathSuffixes(fileName: string): readonly string[] {
+  const normalized = normalizeSourcePath(fileName);
+  const parts = normalized.split('/').filter((part) => part.length > 0);
+  const suffixes = new Set<string>([normalized]);
+  for (let index = 0; index < parts.length; index++) {
+    suffixes.add(parts.slice(index).join('/'));
+  }
+  return [...suffixes];
 }

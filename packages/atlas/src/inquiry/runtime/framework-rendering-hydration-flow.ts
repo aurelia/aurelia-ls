@@ -1,6 +1,9 @@
 import ts from "typescript";
 
 import {
+  deepestNodeContainingText,
+  requiredSourceFileIdentity,
+  sourceRangeForSourceFileNode,
   SourceProjectMemo,
   type SourceProject,
 } from "../../source/index.js";
@@ -10,10 +13,6 @@ import type { FrameworkDiscoveryFilters } from "./framework-filters.js";
 import { readFrameworkPackageNames } from "./framework-package-exports.js";
 import { readFrameworkBindingAdmissions } from "./framework-rendering-bindings.js";
 import { rendererClassExpression } from "./framework-rendering-inspection.js";
-import {
-  sourceRangeFromFileSpan,
-  sourceSpan,
-} from "./framework-support.js";
 import { propertyNameText, unwrapExpression } from "./framework-ts-utils.js";
 
 /** Coarse runtime stage in the hydration/rendering corridor. */
@@ -199,7 +198,7 @@ function appRootRows(
       "app-root",
       "AppRoot",
       "constructor",
-      nodeContaining(ctor.body, "_runAppTasks('creating')") ?? ctor,
+      hydrationFlowNodeContaining(ctor.body, "_runAppTasks('creating')") ?? ctor,
       "creating",
       "Run creating AppTasks before root controller construction starts.",
     ),
@@ -210,7 +209,7 @@ function appRootRows(
       "view-model",
       "AppRoot",
       "constructor",
-      nodeContaining(ctor.body, "childCtn.invoke(component)") ?? ctor,
+      hydrationFlowNodeContaining(ctor.body, "childCtn.invoke(component)") ?? ctor,
       "component",
       "Materialize the root component through the child container when the component is a constructor.",
     ),
@@ -221,7 +220,7 @@ function appRootRows(
       "custom-element",
       "AppRoot",
       "constructor",
-      nodeContaining(ctor.body, "Controller.$el") ?? ctor,
+      hydrationFlowNodeContaining(ctor.body, "Controller.$el") ?? ctor,
       "Controller.$el",
       "Create the root custom-element controller with a hydration instruction that delays child hydration.",
     ),
@@ -232,7 +231,7 @@ function appRootRows(
       "custom-element",
       "AppRoot",
       "constructor",
-      nodeContaining(ctor.body, "controller._hydrateCustomElement") ?? ctor,
+      hydrationFlowNodeContaining(ctor.body, "controller._hydrateCustomElement") ?? ctor,
       "Controller._hydrateCustomElement",
       "Initialize root custom-element controller state before hydrating/compiling children.",
     ),
@@ -243,7 +242,7 @@ function appRootRows(
       "app-root",
       "AppRoot",
       "constructor",
-      nodeContaining(ctor.body, "_runAppTasks('hydrating')") ?? ctor,
+      hydrationFlowNodeContaining(ctor.body, "_runAppTasks('hydrating')") ?? ctor,
       "hydrating",
       "Run hydrating AppTasks between root controller setup and view compilation.",
       false,
@@ -255,7 +254,7 @@ function appRootRows(
       "compiled-definition",
       "AppRoot",
       "constructor",
-      nodeContaining(ctor.body, "controller._hydrate()") ?? ctor,
+      hydrationFlowNodeContaining(ctor.body, "controller._hydrate()") ?? ctor,
       "Controller._hydrate",
       "Compile the root custom-element definition and materialize its node sequence.",
     ),
@@ -266,7 +265,7 @@ function appRootRows(
       "app-root",
       "AppRoot",
       "constructor",
-      nodeContaining(ctor.body, "_runAppTasks('hydrated')") ?? ctor,
+      hydrationFlowNodeContaining(ctor.body, "_runAppTasks('hydrated')") ?? ctor,
       "hydrated",
       "Run hydrated AppTasks after root compilation and before child rendering.",
       false,
@@ -278,7 +277,7 @@ function appRootRows(
       "instruction",
       "AppRoot",
       "constructor",
-      nodeContaining(ctor.body, "controller._hydrateChildren") ?? ctor,
+      hydrationFlowNodeContaining(ctor.body, "controller._hydrateChildren") ?? ctor,
       "Controller._hydrateChildren",
       "Render compiled root instruction rows into DOM targets after hydration tasks complete.",
     ),
@@ -627,7 +626,7 @@ function renderingRows(
         "renderer-table",
         "Rendering",
         "renderers",
-        nodeContaining(rendererAccessor.body, "getAll(IRenderer") ??
+        hydrationFlowNodeContaining(rendererAccessor.body, "getAll(IRenderer") ??
           rendererAccessor,
         "IRenderer",
         "Materialize the renderer dispatch table from all registered IRenderer implementations.",
@@ -747,7 +746,7 @@ function rendererRows(
         "renderer",
         "renderer",
         "renderer",
-        nodeContaining(decorator.body, "singletonRegistration(IRenderer") ??
+        hydrationFlowNodeContaining(decorator.body, "singletonRegistration(IRenderer") ??
           decorator,
         "IRenderer",
         "Renderer helper registers renderer classes as singleton IRenderer implementations.",
@@ -1050,7 +1049,7 @@ function methodRows(
       spec.targetKind,
       basis.classDeclaration.name?.text ?? "<anonymous>",
       methodName,
-      nodeContaining(body, spec.needle) ?? member,
+      hydrationFlowNodeContaining(body, spec.needle) ?? member,
       spec.targetName,
       spec.summary,
       spec.overview ?? false,
@@ -1083,7 +1082,7 @@ function rendererMethodRows(
       spec.targetKind,
       rendererName,
       "render",
-      nodeContaining(body, spec.needle) ?? renderMethod,
+      hydrationFlowNodeContaining(body, spec.needle) ?? renderMethod,
       spec.targetName,
       spec.summary,
       spec.overview ?? false,
@@ -1140,7 +1139,7 @@ function hydrationRow(
   summary: string,
   overview = true,
 ): FrameworkHydrationFlowRow {
-  const source = sourceRangeForNode(basis, node);
+  const source = sourceRangeForBasisNode(basis, node);
   return {
     id: `framework-hydration-flow:${ownerName}:${methodName}:${stage}:${operation}:${targetKind}:${source.start.line}:${source.start.character}`,
     packageId: basis.packageId,
@@ -1157,20 +1156,8 @@ function hydrationRow(
   };
 }
 
-function nodeContaining(root: ts.Node, text: string): ts.Node | null {
-  let match: ts.Node | null = null;
-  const sourceFile = root.getSourceFile();
-  const visit = (node: ts.Node): void => {
-    if (!node.getFullText(sourceFile).includes(text)) {
-      return;
-    }
-    ts.forEachChild(node, visit);
-    if (match === null && isHydrationFlowSourceCandidate(node)) {
-      match = node;
-    }
-  };
-  visit(root);
-  return match;
+function hydrationFlowNodeContaining(root: ts.Node, text: string): ts.Node | null {
+  return deepestNodeContainingText(root, text, isHydrationFlowSourceCandidate);
 }
 
 function isHydrationFlowSourceCandidate(node: ts.Node): boolean {
@@ -1186,11 +1173,9 @@ function isHydrationFlowSourceCandidate(node: ts.Node): boolean {
   );
 }
 
-function sourceRangeForNode(basis: FileBasis, node: ts.Node): SourceRange {
-  const filePath =
-    basis.sourceProject.sourceFileIdentity(basis.sourceFile)?.repoPath ??
-    basis.sourceFile.fileName.replaceAll("\\", "/");
-  return sourceRangeFromFileSpan(filePath, sourceSpan(basis.sourceFile, node));
+function sourceRangeForBasisNode(basis: FileBasis, node: ts.Node): SourceRange {
+  const file = requiredSourceFileIdentity(basis.sourceProject, basis.sourceFile);
+  return sourceRangeForSourceFileNode(file.repoPath, basis.sourceFile, node);
 }
 
 function shouldUseHydrationOverview(

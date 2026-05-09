@@ -1,5 +1,8 @@
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import type { KernelStore } from '../kernel/store.js';
+import { TemplateProductDetails } from '../template/product-details.js';
+import type { RuntimeBindingDataFlow } from '../observation/runtime-binding-observation.js';
+import type { TemplateExpressionParse } from '../template/value-site.js';
 import {
   describeAddress,
 } from './source-reference.js';
@@ -177,47 +180,73 @@ export function readBindingDataFlowRows(
 ): readonly SemanticBindingDataFlowRow[] {
   return emission.templates.resources
     .flatMap((resource): readonly SemanticBindingDataFlowRow[] =>
-      resource.runtimeAnalysis.bindingDataFlow.dataFlows.map((dataFlow) => ({
-        definitionName: resource.compilation.definition.name,
-        bindingKind: dataFlow.binding.bindingKind,
-        direction: dataFlow.direction,
-        sourceKind: dataFlow.sourceKind,
-        sourceName: dataFlow.sourceName,
-        sourceType: dataFlow.sourceType?.display ?? null,
-        targetProperty: dataFlow.targetAccess?.targetProperty
-          ?? dataFlow.targetOperation?.targetProperty
-          ?? dataFlow.sourceOperation?.targetName
-          ?? null,
-        targetOperationKind: dataFlow.targetOperation?.operationKind ?? null,
-        sourceOperationKind: dataFlow.sourceOperation?.operationKind ?? null,
-        targetPropertyType: dataFlow.targetPropertyType?.display ?? null,
-        targetValueType: dataFlow.targetValueType?.display ?? null,
-        valueChannelKind: dataFlow.valueChannel?.channelKind ?? null,
-        sourceWritable: dataFlow.sourceWritable,
-        sourceToTargetAssignable: dataFlow.sourceToTargetAssignable,
-        targetToSourceAssignable: dataFlow.targetToSourceAssignable,
-        openReason: dataFlow.openReason,
-        source: describeAddress(store, dataFlow.sourceAddressHandle),
-        ...(handles ? {
-          handles: {
-            bindingProductHandle: dataFlow.binding.productHandle,
-            dataFlowProductHandle: dataFlow.productHandle,
-            targetAccessProductHandle: dataFlow.targetAccess?.productHandle ?? null,
-            targetOperationProductHandle: dataFlow.targetOperation?.productHandle ?? null,
-            sourceOperationProductHandle: dataFlow.sourceOperation?.productHandle ?? null,
-            valueChannelProductHandle: dataFlow.valueChannel?.productHandle ?? null,
-            expressionProductHandle: dataFlow.expressionProductHandle,
-            bindingScopeProductHandle: dataFlow.bindingScope?.productHandle ?? null,
-            sourceTypeProductHandle: dataFlow.sourceType?.productHandle ?? null,
-            targetPropertyTypeProductHandle: dataFlow.targetPropertyType?.productHandle ?? null,
-            targetValueTypeProductHandle: dataFlow.targetValueType?.productHandle ?? null,
-            sourceAddressHandle: dataFlow.sourceAddressHandle,
-          },
-        } : {}),
-      }))
+      resource.runtimeAnalysis.bindingDataFlow.dataFlows.map((dataFlow) =>
+        bindingDataFlowRow(resource.compilation.definition.name, dataFlow, store, handles)
+      )
     )
     .sort((left, right) =>
       `${left.definitionName}:${left.sourceName ?? ''}:${left.direction}:${left.targetProperty ?? ''}`
         .localeCompare(`${right.definitionName}:${right.sourceName ?? ''}:${right.direction}:${right.targetProperty ?? ''}`)
     );
+}
+
+function bindingDataFlowRow(
+  definitionName: string,
+  dataFlow: RuntimeBindingDataFlow,
+  store: KernelStore,
+  handles: boolean,
+): SemanticBindingDataFlowRow {
+  const parse = expressionParseForDataFlow(store, dataFlow);
+  return {
+    definitionName,
+    bindingKind: dataFlow.binding.bindingKind,
+    direction: dataFlow.direction,
+    expressionParseState: parse?.state ?? null,
+    expressionParseResultKind: parse?.resultKind ?? null,
+    sourceKind: dataFlow.sourceKind,
+    sourceName: dataFlow.sourceName,
+    sourceType: dataFlow.sourceType?.display ?? null,
+    sourceTypeOpenReason: dataFlow.sourceTypeOpenReason,
+    targetProperty: dataFlow.targetAccess?.targetProperty
+      ?? dataFlow.targetOperation?.targetProperty
+      ?? dataFlow.sourceOperation?.targetName
+      ?? null,
+    targetOperationKind: dataFlow.targetOperation?.operationKind ?? null,
+    sourceOperationKind: dataFlow.sourceOperation?.operationKind ?? null,
+    targetPropertyType: dataFlow.targetPropertyType?.display ?? null,
+    targetValueType: dataFlow.targetValueType?.display ?? null,
+    valueChannelKind: dataFlow.valueChannel?.channelKind ?? null,
+    sourceWritable: dataFlow.sourceWritable,
+    sourceAssignmentKind: dataFlow.sourceAssignmentKind,
+    sourceAssignmentReason: dataFlow.sourceAssignmentReason,
+    sourceToTargetAssignable: dataFlow.sourceToTargetAssignable,
+    targetToSourceAssignable: dataFlow.targetToSourceAssignable,
+    openReason: dataFlow.openReason,
+    source: describeAddress(store, dataFlow.sourceAddressHandle),
+    ...(handles ? {
+      handles: {
+        bindingProductHandle: dataFlow.binding.productHandle,
+        dataFlowProductHandle: dataFlow.productHandle,
+        targetAccessProductHandle: dataFlow.targetAccess?.productHandle ?? null,
+        targetOperationProductHandle: dataFlow.targetOperation?.productHandle ?? null,
+        sourceOperationProductHandle: dataFlow.sourceOperation?.productHandle ?? null,
+        valueChannelProductHandle: dataFlow.valueChannel?.productHandle ?? null,
+        expressionProductHandle: dataFlow.expressionProductHandle,
+        bindingScopeProductHandle: dataFlow.bindingScope?.productHandle ?? null,
+        sourceTypeProductHandle: dataFlow.sourceType?.productHandle ?? null,
+        targetPropertyTypeProductHandle: dataFlow.targetPropertyType?.productHandle ?? null,
+        targetValueTypeProductHandle: dataFlow.targetValueType?.productHandle ?? null,
+        sourceAddressHandle: dataFlow.sourceAddressHandle,
+      },
+    } : {}),
+  };
+}
+
+function expressionParseForDataFlow(
+  store: KernelStore,
+  dataFlow: RuntimeBindingDataFlow,
+): TemplateExpressionParse | null {
+  return dataFlow.expressionProductHandle == null
+    ? null
+    : store.productDetails.read(TemplateProductDetails.ExpressionParse, dataFlow.expressionProductHandle);
 }

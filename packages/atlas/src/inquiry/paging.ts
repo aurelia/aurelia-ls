@@ -45,6 +45,10 @@ export function pageOffset(inquiry: Inquiry): number {
   return Number.isSafeInteger(parsed) && parsed >= 0 ? parsed : 0;
 }
 
+export function rowLimit(inquiry: Inquiry): number {
+  return clampBudget(inquiry.page?.size ?? inquiry.budget?.rows, 80, 1_000);
+}
+
 export function evidenceLimit(inquiry: Inquiry): number {
   return clampBudget(inquiry.budget?.evidencePerSubject, 5, 20);
 }

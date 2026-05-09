@@ -6,7 +6,8 @@ export type PackageId =
   | 'expression-parser'
   | 'i18n'
   | 'state'
-  | 'router';
+  | 'router'
+  | 'route-recognizer';
 
 /**
  * Pure marker decorator that lets Atlas correlate new analysis substrate boundaries with the Aurelia runtime.
@@ -241,16 +242,28 @@ export function auLink(id: 'router:CurrentRoute'): ClassDecorator;
 export function auLink(id: 'router:IRouteContext'): ClassDecorator;
 export function auLink(id: 'router:RouteContext'): ClassDecorator;
 export function auLink(id: 'router:RouteConfigContext'): ClassDecorator;
-export function auLink(id: 'router:IRouteConfig'): ClassDecorator;
-export function auLink(id: 'router:IChildRouteConfig'): ClassDecorator;
+export function auLink(id: 'router:RouteConfig'): ClassDecorator;
+export function auLink(id: 'router:RouteableComponent'): ClassDecorator;
 export function auLink(id: 'router:RouteNode'): ClassDecorator;
 export function auLink(id: 'router:RouteTree'): ClassDecorator;
 export function auLink(id: 'router:ViewportInstruction'): ClassDecorator;
 export function auLink(id: 'router:ViewportInstructionTree'): ClassDecorator;
 export function auLink(id: 'router:TypedNavigationInstruction'): ClassDecorator;
+export function auLink(id: 'router:ViewportRequest'): ClassDecorator;
+export function auLink(id: 'router:ViewportAgent'): ClassDecorator;
+export function auLink(id: 'router:ComponentAgent'): ClassDecorator;
 export function auLink(id: 'router:HrefCustomAttribute'): ClassDecorator;
 export function auLink(id: 'router:LoadCustomAttribute'): ClassDecorator;
 export function auLink(id: 'router:ViewportCustomElement'): ClassDecorator;
+export function auLink(id: 'route-recognizer:RouteRecognizer'): ClassDecorator;
+export function auLink(id: 'route-recognizer:ConfigurableRoute'): ClassDecorator;
+export function auLink(id: 'route-recognizer:Endpoint'): ClassDecorator;
+export function auLink(id: 'route-recognizer:State'): ClassDecorator;
+export function auLink(id: 'route-recognizer:RecognizedRoute'): ClassDecorator;
+export function auLink(id: 'route-recognizer:Parameter'): ClassDecorator;
+export function auLink(id: 'route-recognizer:StaticSegment'): ClassDecorator;
+export function auLink(id: 'route-recognizer:DynamicSegment'): ClassDecorator;
+export function auLink(id: 'route-recognizer:StarSegment'): ClassDecorator;
 export function auLink(_id: `${PackageId}:${string}`): ClassDecorator {
   return function <TFunction extends Function>(_target: TFunction): void {
     // Marker only.

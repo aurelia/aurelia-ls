@@ -15,7 +15,7 @@ export function stringLiteralValuesForType(type: ts.Type): readonly string[] | n
 
 /** True when the checker type is assignable to a boolean-like primitive lane. */
 export function isBooleanLike(type: ts.Type): boolean {
-  return (type.flags & ts.TypeFlags.BooleanLike) !== 0;
+  return typeParts(type).some((part) => (part.flags & ts.TypeFlags.BooleanLike) !== 0);
 }
 
 /** Return the element type for Array, tuple, Set, or ReadonlySet shapes. */
@@ -27,9 +27,14 @@ export function collectionElementTypeFor(
   if (arrayElementType != null) {
     return arrayElementType;
   }
-  const name = namedTypeSymbolName(type);
-  if (name === 'Set' || name === 'ReadonlySet') {
-    return typeReferenceArguments(checker, type)[0] ?? null;
+  const elementTypes = typeParts(type).flatMap((part) => {
+    const name = namedTypeSymbolName(part);
+    return name === 'Set' || name === 'ReadonlySet'
+      ? [typeReferenceArguments(checker, part)[0] ?? null]
+      : [];
+  }).filter((part): part is ts.Type => part != null);
+  if (elementTypes.length > 0) {
+    return elementTypes[0]!;
   }
   return null;
 }
@@ -39,8 +44,13 @@ export function arrayElementTypeFor(
   checker: ts.TypeChecker,
   type: ts.Type,
 ): ts.Type | null {
-  if (checker.isArrayType(type) || checker.isTupleType(type)) {
-    return checker.getIndexTypeOfType(type, ts.IndexKind.Number) ?? null;
+  const elementTypes = typeParts(type).flatMap((part) =>
+    checker.isArrayType(part) || checker.isTupleType(part)
+      ? [checker.getIndexTypeOfType(part, ts.IndexKind.Number) ?? null]
+      : []
+  ).filter((part): part is ts.Type => part != null);
+  if (elementTypes.length > 0) {
+    return elementTypes[0]!;
   }
   return null;
 }
@@ -50,11 +60,16 @@ export function mapKeyTypeFor(
   checker: ts.TypeChecker,
   type: ts.Type,
 ): ts.Type | null {
-  const name = namedTypeSymbolName(type);
-  if (name !== 'Map' && name !== 'ReadonlyMap') {
-    return null;
+  const keyTypes = typeParts(type).flatMap((part) => {
+    const name = namedTypeSymbolName(part);
+    return name === 'Map' || name === 'ReadonlyMap'
+      ? [typeReferenceArguments(checker, part)[0] ?? null]
+      : [];
+  }).filter((part): part is ts.Type => part != null);
+  if (keyTypes.length > 0) {
+    return keyTypes[0]!;
   }
-  return typeReferenceArguments(checker, type)[0] ?? null;
+  return null;
 }
 
 /** Return type-reference arguments when the checker type carries them. */
@@ -72,4 +87,8 @@ export function namedTypeSymbolName(type: ts.Type): string | null {
   return type.aliasSymbol?.getName()
     ?? type.symbol?.getName()
     ?? null;
+}
+
+function typeParts(type: ts.Type): readonly ts.Type[] {
+  return type.isUnion() ? type.types : [type];
 }

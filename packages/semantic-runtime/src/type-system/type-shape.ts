@@ -1,4 +1,4 @@
-import type ts from 'typescript';
+import ts from 'typescript';
 import type {
   AddressHandle,
   IdentityHandle,
@@ -20,7 +20,9 @@ export const enum CheckerTypeProjectionOrigin {
 }
 
 export const enum CheckerTypeShapeKind {
+  Any = 'any',
   Unknown = 'unknown',
+  Never = 'never',
   Primitive = 'primitive',
   Object = 'object',
   Class = 'class',
@@ -29,6 +31,7 @@ export const enum CheckerTypeShapeKind {
   Union = 'union',
   Intersection = 'intersection',
   TypeParameter = 'type-parameter',
+  Unclassified = 'unclassified',
 }
 
 export const enum CheckerTypeMemberKind {
@@ -39,6 +42,63 @@ export const enum CheckerTypeMemberKind {
   Constructor = 'constructor',
   CallSignature = 'call-signature',
   IndexSignature = 'index-signature',
+}
+
+export function classifyCheckerTypeShape(
+  type: ts.Type,
+  symbol: ts.Symbol | null = type.symbol ?? null,
+): CheckerTypeShapeKind {
+  if ((type.flags & ts.TypeFlags.Any) !== 0) {
+    return CheckerTypeShapeKind.Any;
+  }
+  if ((type.flags & ts.TypeFlags.Unknown) !== 0) {
+    return CheckerTypeShapeKind.Unknown;
+  }
+  if ((type.flags & ts.TypeFlags.Never) !== 0) {
+    return CheckerTypeShapeKind.Never;
+  }
+  if (type.isUnion()) {
+    return CheckerTypeShapeKind.Union;
+  }
+  if (type.isIntersection()) {
+    return CheckerTypeShapeKind.Intersection;
+  }
+  if ((type.flags & ts.TypeFlags.TypeParameter) !== 0) {
+    return CheckerTypeShapeKind.TypeParameter;
+  }
+  if ((type.flags & primitiveCheckerTypeFlags()) !== 0) {
+    return CheckerTypeShapeKind.Primitive;
+  }
+
+  const declarations = declarationsForTypeShapeSymbol(symbol);
+  if (declarations.some((declaration) => ts.isClassDeclaration(declaration) || ts.isClassExpression(declaration))) {
+    return CheckerTypeShapeKind.Class;
+  }
+  if (declarations.some((declaration) => ts.isInterfaceDeclaration(declaration))) {
+    return CheckerTypeShapeKind.Interface;
+  }
+  if (type.getCallSignatures().length > 0) {
+    return CheckerTypeShapeKind.Function;
+  }
+  if ((type.flags & ts.TypeFlags.Object) !== 0) {
+    return CheckerTypeShapeKind.Object;
+  }
+  return CheckerTypeShapeKind.Unclassified;
+}
+
+function primitiveCheckerTypeFlags(): ts.TypeFlags {
+  return ts.TypeFlags.StringLike
+    | ts.TypeFlags.NumberLike
+    | ts.TypeFlags.BooleanLike
+    | ts.TypeFlags.BigIntLike
+    | ts.TypeFlags.Null
+    | ts.TypeFlags.Undefined
+    | ts.TypeFlags.Void
+    | ts.TypeFlags.ESSymbolLike;
+}
+
+function declarationsForTypeShapeSymbol(symbol: ts.Symbol | null): readonly ts.Declaration[] {
+  return symbol?.declarations ?? [];
 }
 
 export type CheckerTypeShapeField =

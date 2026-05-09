@@ -1,5 +1,8 @@
 import type ts from 'typescript';
-import type { ProductHandle } from '../kernel/handles.js';
+import type {
+  AddressHandle,
+  ProductHandle,
+} from '../kernel/handles.js';
 import type { OpenSeamKindKey } from '../kernel/vocabulary.js';
 import type {
   RegistrationAdmissionKind,
@@ -18,6 +21,8 @@ export const enum RegistrationCarrierKind {
   ContainerRegisterCall = 'container-register-call',
   /** Call to `aurelia.register(...)`. */
   AureliaRegisterCall = 'aurelia-register-call',
+  /** Implicit registration performed by the browser `aurelia` facade's default constructor/container. */
+  AureliaFacadeDefault = 'aurelia-facade-default',
   /** Body or declaration of an `IRegistry.register(container, ...params)` method. */
   RegistryRegisterMethod = 'registry-register-method',
   /** Runtime resource definition registration path. */
@@ -55,6 +60,8 @@ export class RegistrationValueObservation {
     readonly productHandle: ProductHandle | null = null,
     /** Known framework registration effect package, when the source value is recognized. */
     readonly frameworkKind: FrameworkRegistrationKind | null = null,
+    /** Source-file address when the value node belongs to another admitted module. */
+    readonly sourceFileAddressHandle: AddressHandle | null = null,
   ) {}
 }
 

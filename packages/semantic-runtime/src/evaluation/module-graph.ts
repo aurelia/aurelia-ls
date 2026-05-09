@@ -1,5 +1,6 @@
 import path from 'node:path';
 import ts from 'typescript';
+import { hasModifier } from './ts-syntax.js';
 
 export const enum EvaluationImportKind {
   /** Import declaration that only executes the target module. */
@@ -10,6 +11,10 @@ export const enum EvaluationImportKind {
   Named = 'named',
   /** Namespace import binding. */
   Namespace = 'namespace',
+  /** CommonJS `require("...")` edge discovered in executable source. */
+  CommonJsRequire = 'commonjs-require',
+  /** Dynamic `import("...")` edge discovered in executable source. */
+  DynamicImport = 'dynamic-import',
 }
 
 export const enum EvaluationExportKind {
@@ -36,8 +41,8 @@ export class EvaluationImportEntry {
     readonly localName: string | null,
     /** Exported name imported from the target module, when one applies. */
     readonly exportName: string | null,
-    /** Import declaration node. */
-    readonly node: ts.ImportDeclaration,
+    /** Import declaration or `require(...)` call node. */
+    readonly node: ts.ImportDeclaration | ts.CallExpression,
   ) {}
 }
 
@@ -137,7 +142,11 @@ export function readEvaluationModuleRecord(
     exports.push(...readLocalExportEntries(statement));
   }
 
-  return new EvaluationModuleRecord(moduleKey, sourceFile, imports, exports);
+  return new EvaluationModuleRecord(moduleKey, sourceFile, [
+    ...imports,
+    ...readCommonJsRequireEntries(sourceFile),
+    ...readDynamicImportEntries(sourceFile),
+  ], exports);
 }
 
 /** Normalize module keys for graph lookups and emitted diagnostics. */
@@ -198,6 +207,59 @@ function readImportEntries(statement: ts.ImportDeclaration): readonly Evaluation
       statement,
     ));
   }
+  return entries;
+}
+
+function readCommonJsRequireEntries(sourceFile: ts.SourceFile): readonly EvaluationImportEntry[] {
+  const entries: EvaluationImportEntry[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node)
+      && ts.isIdentifier(node.expression)
+      && node.expression.text === 'require'
+      && node.arguments.length > 0
+    ) {
+      const specifier = node.arguments[0];
+      if (specifier != null && ts.isStringLiteralLike(specifier)) {
+        entries.push(new EvaluationImportEntry(
+          EvaluationImportKind.CommonJsRequire,
+          specifier.text,
+          null,
+          null,
+          node,
+        ));
+      }
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(sourceFile, visit);
+  return entries;
+}
+
+function readDynamicImportEntries(sourceFile: ts.SourceFile): readonly EvaluationImportEntry[] {
+  const entries: EvaluationImportEntry[] = [];
+  const visit = (node: ts.Node): void => {
+    if (
+      ts.isCallExpression(node)
+      && node.expression.kind === ts.SyntaxKind.ImportKeyword
+      && node.arguments.length > 0
+    ) {
+      const specifier = node.arguments[0];
+      if (specifier != null && ts.isStringLiteralLike(specifier)) {
+        entries.push(new EvaluationImportEntry(
+          EvaluationImportKind.DynamicImport,
+          specifier.text,
+          null,
+          null,
+          node,
+        ));
+      }
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  ts.forEachChild(sourceFile, visit);
   return entries;
 }
 
@@ -295,12 +357,6 @@ function readDeclarationName(statement: ts.Statement): string | null {
     return statement.name.text;
   }
   return null;
-}
-
-function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
-  return ts.canHaveModifiers(node)
-    ? ts.getModifiers(node)?.some((modifier) => modifier.kind === kind) ?? false
-    : false;
 }
 
 /** Resolve a relative module key against the importing module key without touching the file system. */

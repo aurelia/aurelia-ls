@@ -97,6 +97,11 @@ export class CompletedInputParserState {
     this.lastTokenEnd = end;
   }
 
+  advanceScannerTo(end: number): void {
+    this.scanner.reset(end);
+    this.lastTokenEnd = end;
+  }
+
   span(start: number, end: number): SourceSpan {
     const local = sourceSpanFromBounds(start, end, this.baseSpan?.file ?? null);
     if (!this.baseSpan) return local;

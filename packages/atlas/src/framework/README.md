@@ -10,7 +10,7 @@ these substrates into inquiry answers; they should not recreate framework taxono
 
 - Resolve framework package imports to Aurelia `src/` modules, not generated declaration files.
 - Keep seed handles and catalog entrypoints for framework packages, exports, resources, DI keys, and high-salience actors.
-- Build relationship atoms for DI, admission, materialization, lifecycle, rendering, observation, and compiler routes.
+- Build relationship atoms for DI, admission, materialization, lifecycle, rendering, observation, compiler, and router routes.
 - Spend evaluated configuration and registry values into world-formation, DI, resource, renderer, AppTask, and catalog
   facts without treating admission as container execution.
 - Preserve resource definition, resource instance lifetime, variable-carried DI keys, and TypeChecker handoff boundaries
@@ -26,8 +26,8 @@ these substrates into inquiry answers; they should not recreate framework taxono
   basis, closure, endpoint kind, and source endpoints.
 - [di-index.ts](di-index.ts) discovers DI keys, registration/provider/alias targets, lookup/materialization mechanics,
   resolver slots, and source-backed DI relationship atoms.
-- [di-world.ts](di-world.ts) spends booted configuration and registry values into an abstract container world, including
-  resolver/resource slots, provider dependency reads, and variable-carried key reads.
+- [di-world.ts](di-world.ts) spends booted configuration, bundle-array, and registry values into an abstract container
+  world, including resolver/resource slots, provider dependency reads, and variable-carried key reads.
 - [materialization.ts](materialization.ts) names DI provider route/runtime-existence interpretation and provider
   identity. Resource runtime policy stays in [resources.ts](resources.ts).
 - [admission.ts](admission.ts) and [admission-world.ts](admission-world.ts) own configuration/bundle admission axes,
@@ -58,8 +58,12 @@ files as substrates:
 - `framework.lifecycle` owns controller, binding, resource, AppTask, and hook lifecycle rows.
 - `framework.observation` owns observer/reactivity entity rows, binding lookup/setup, observer-locator internals, and
   observation relationships.
-- `framework.composition` composes high-salience actors and relationship rows into signed claims and semantic-runtime
-  emulation obligations.
+- `framework.router` owns route-config/navigation flow, flow self-audit rows, route-recognizer population/recognition,
+  route-tree/context rows, viewport resources, and normalized router relationships. Router rows declare route hops into
+  resource materialization, rendering hydration/controller creation, and lifecycle rows instead of leaving those
+  cross-framework boundaries as ad hoc lens switches.
+- `framework.composition` composes high-salience actors and DI/materialization/compiler/expression/rendering/lifecycle/
+  observation/router relationship rows into signed claims and semantic-runtime emulation obligations.
 
 ## Rules
 

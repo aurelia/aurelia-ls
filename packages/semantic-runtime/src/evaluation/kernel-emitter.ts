@@ -29,6 +29,13 @@ import {
 import type { StaticModuleEvaluationResult } from './evaluator.js';
 import { EvaluationOpenSeam } from './seams.js';
 
+export interface EvaluationOpenSeamSource {
+  readonly sourceFile: ts.SourceFile;
+  readonly sourceFileAddressHandle: AddressHandle;
+}
+
+export type EvaluationOpenSeamSourceResolver = (seam: EvaluationOpenSeam) => EvaluationOpenSeamSource;
+
 interface EvaluationOpenSeamHandles {
   readonly spanHandle: AddressHandle;
   readonly evidenceHandle: EvidenceHandle;
@@ -45,13 +52,13 @@ export class EvaluationKernelEmitter {
 
   /** Emit source spans, evidence, provenance, and open seams for one module evaluation result. */
   emitOpenSeams(
-    sourceFile: ts.SourceFile,
-    sourceFileAddressHandle: AddressHandle,
     result: StaticModuleEvaluationResult,
+    resolveSource: EvaluationOpenSeamSourceResolver,
   ): void {
     const records: KernelStoreRecord[] = [];
     result.openSeams.forEach((seam, index) => {
-      records.push(...this.recordsForOpenSeam(sourceFile, sourceFileAddressHandle, result.moduleKey, seam, index));
+      const source = resolveSource(seam);
+      records.push(...this.recordsForOpenSeam(source.sourceFile, source.sourceFileAddressHandle, result.moduleKey, seam, index));
     });
     const newRecords = records.filter((record) => this.store.read(record.handle as KernelRecordHandle) == null);
     if (newRecords.length === 0) {

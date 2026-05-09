@@ -8,6 +8,7 @@ import type { ApplicationFileRole } from '../application/index.js';
 import { BindableBindingMode } from '../resources/bindable-definition.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type { TemplateCompilerWorldEmission } from '../template/compiler-world-materializer.js';
+import type { RouteConfigModel } from '../router/model.js';
 import { compilerWorldLabel, describeAddress, type SemanticSourceReference } from './source-reference.js';
 
 export interface SemanticApplicationBindableRow {
@@ -97,12 +98,22 @@ export interface SemanticApplicationFileRow {
   readonly source: SemanticSourceReference | null;
 }
 
+export interface SemanticApplicationRouteRow {
+  readonly id: string | null;
+  readonly paths: readonly string[];
+  readonly routeKind: string;
+  readonly componentName: string | null;
+  readonly childRouteCount: number;
+  readonly source: SemanticSourceReference | null;
+}
+
 export interface SemanticApplicationTopologyResult {
   readonly projectKey: string;
   readonly rootDir: string;
   readonly files: readonly SemanticApplicationFileRow[];
   readonly appRoots: readonly SemanticApplicationRootRow[];
   readonly components: readonly SemanticApplicationComponentRow[];
+  readonly routes: readonly SemanticApplicationRouteRow[];
 }
 
 export function readSemanticApplicationTopology(
@@ -115,13 +126,15 @@ export function readSemanticApplicationTopology(
     applicationRootRow(store, emission, configuration, appRoot, handles)
   );
   const components = applicationComponentRows(store, emission, handles);
-  const files = applicationFileRows(store, emission, appRoots, components);
+  const routes = applicationRouteRows(store, emission);
+  const files = applicationFileRows(store, emission, appRoots, components, routes);
   return {
     projectKey: emission.project.projectKey,
     rootDir: emission.project.rootDir,
     files,
     appRoots,
     components,
+    routes,
   };
 }
 
@@ -306,6 +319,7 @@ function applicationFileRows(
   emission: AureliaAppWorldProjectEmission,
   appRoots: readonly SemanticApplicationRootRow[],
   components: readonly SemanticApplicationComponentRow[],
+  routes: readonly SemanticApplicationRouteRow[],
 ): readonly SemanticApplicationFileRow[] {
   const files = new Map<string, {
     source: SemanticSourceReference | null;
@@ -335,6 +349,9 @@ function applicationFileRows(
     addRole(component.source, 'component-source');
     addRole(component.template?.source ?? null, 'component-template');
   }
+  for (const route of routes) {
+    addRole(route.source, 'route-source');
+  }
   for (const source of emission.project.sourceFiles) {
     const role = supportFileRoleForPath(source.path);
     if (role == null) {
@@ -350,6 +367,32 @@ function applicationFileRows(
       source: file.source,
     }))
     .sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function applicationRouteRows(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+): readonly SemanticApplicationRouteRow[] {
+  return emission.routes.readRouteConfigs()
+    .map((routeConfig) => applicationRouteRow(store, routeConfig))
+    .sort((left, right) =>
+      `${left.routeKind}:${left.id ?? ''}:${left.paths.join('|')}:${left.source?.label ?? ''}`
+        .localeCompare(`${right.routeKind}:${right.id ?? ''}:${right.paths.join('|')}:${right.source?.label ?? ''}`)
+    );
+}
+
+function applicationRouteRow(
+  store: KernelStore,
+  routeConfig: RouteConfigModel,
+): SemanticApplicationRouteRow {
+  return {
+    id: routeConfig.id,
+    paths: routeConfig.paths,
+    routeKind: routeConfig.routeKind,
+    componentName: routeConfig.component?.localName ?? null,
+    childRouteCount: routeConfig.childRoutes.length,
+    source: describeAddress(store, routeConfig.sourceAddressHandle),
+  };
 }
 
 function supportFileRoleForPath(path: string): ApplicationFileRole | null {

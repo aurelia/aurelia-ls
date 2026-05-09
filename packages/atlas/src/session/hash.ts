@@ -4,6 +4,7 @@ import { dirname, extname, join, relative, resolve } from "node:path";
 
 import ts from "typescript";
 
+import { isPathWithin } from "../source/path.js";
 import { defaultSourcePackageDefinitions } from "../source/project.js";
 
 /** Options for computing the daemon-compatible build hash. */
@@ -110,7 +111,9 @@ function rootFileNamesForTsconfig(
 ): readonly string[] {
   const read = ts.readConfigFile(tsconfigPath, ts.sys.readFile);
   if (read.error !== undefined) {
-    return walkFiles(rootPath).filter(isSourceEpochFile);
+    throw new Error(
+      `Cannot compute atlas source epoch hash for ${tsconfigPath}: ${formatDiagnostic(read.error)}`,
+    );
   }
   const parsed = ts.parseJsonConfigFileContent(
     read.config,
@@ -161,21 +164,9 @@ function isBuildHashFile(
   return ext === ".js" || ext === ".ts" || ext === ".json";
 }
 
-/** True when a fallback source-epoch walk should include the file. */
-function isSourceEpochFile(
-  /** Candidate file path. */
-  file: string,
-): boolean {
-  const ext = extname(file);
-  return ext === ".ts" || ext === ".tsx" || ext === ".json";
-}
-
-function isPathWithin(
-  /** Candidate absolute path. */
-  file: string,
-  /** Root absolute path. */
-  root: string,
-): boolean {
-  const rel = relative(root, file);
-  return rel.length === 0 || (!rel.startsWith("..") && !rel.startsWith("/") && !rel.startsWith("\\"));
+function formatDiagnostic(
+  /** TypeScript diagnostic to flatten for error text. */
+  diagnostic: ts.Diagnostic,
+): string {
+  return ts.flattenDiagnosticMessageText(diagnostic.messageText, "\n");
 }

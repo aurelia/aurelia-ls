@@ -115,6 +115,10 @@ export const enum KernelVocabularyNamespace {
   Registration = 'registration',
   /** Vocabulary about app and plugin configuration flow. */
   Configuration = 'configuration',
+  /** Vocabulary about router configuration, route contexts, and navigation products. */
+  Router = 'router',
+  /** Vocabulary about route-recognizer path grammar and recognition products. */
+  RouteRecognizer = 'route-recognizer',
   /** Vocabulary about template compiler services, scopes, syntax, and lowering. */
   Compiler = 'compiler',
   /** Vocabulary about template references and scope. */

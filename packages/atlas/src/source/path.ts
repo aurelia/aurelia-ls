@@ -1,3 +1,4 @@
+import { existsSync } from "node:fs";
 import path from "node:path";
 
 declare const repoRelativePathBrand: unique symbol;
@@ -13,6 +14,23 @@ export interface RepoPathIdentity {
   readonly repoPath: RepoRelativePath;
 }
 
+/** Process-local normalized path keys shared by source substrate indexes. */
+class NormalizedFileKeyCache {
+  readonly #keys = new Map<string, string>();
+
+  normalize(fileName: string): string {
+    const cached = this.#keys.get(fileName);
+    if (cached !== undefined) {
+      return cached;
+    }
+    const normalized = toPosixPath(path.resolve(fileName)).toLowerCase();
+    this.#keys.set(fileName, normalized);
+    return normalized;
+  }
+}
+
+const normalizedFileKeys = new NormalizedFileKeyCache();
+
 /** Convert path separators to forward slashes for stable source identities. */
 export function toPosixPath(
   /** Path text that may contain platform separators. */
@@ -27,6 +45,41 @@ export function normalizeAbsolutePath(
   filePath: string,
 ): string {
   return path.resolve(filePath);
+}
+
+/** Return true when a path resolves inside another path. */
+export function isPathWithin(
+  /** Candidate absolute or relative path. */
+  filePath: string,
+  /** Root absolute or relative path. */
+  rootPath: string,
+): boolean {
+  const relativePath = path.relative(
+    path.resolve(rootPath),
+    path.resolve(filePath),
+  );
+  return (
+    relativePath === "" ||
+    (!relativePath.startsWith("..") && !path.isAbsolute(relativePath))
+  );
+}
+
+/** Walk upward from a directory until the repository workspace marker is found. */
+export function findRepoRoot(
+  /** Directory to start from. */
+  startDirectory: string = process.cwd(),
+): string {
+  let current = path.resolve(startDirectory);
+  while (true) {
+    if (existsSync(path.join(current, "pnpm-workspace.yaml"))) {
+      return current;
+    }
+    const parent = path.dirname(current);
+    if (parent === current) {
+      throw new Error(`Could not find repo root from ${startDirectory}.`);
+    }
+    current = parent;
+  }
 }
 
 /** Resolve a repository-relative path against the repository root. */
@@ -68,4 +121,12 @@ export function repoPathIdentity(
   const absolutePath = normalizeAbsolutePath(filePath);
   const repoPath = repoRelativePath(repoRoot, absolutePath);
   return repoPath === null ? null : { absolutePath, repoPath };
+}
+
+/** Return a case-insensitive absolute path key for source-project maps. */
+export function normalizeFileKey(
+  /** Absolute or relative source file path. */
+  fileName: string,
+): string {
+  return normalizedFileKeys.normalize(fileName);
 }

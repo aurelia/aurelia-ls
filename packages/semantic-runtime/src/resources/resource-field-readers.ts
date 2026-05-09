@@ -1,5 +1,6 @@
 import ts from 'typescript';
 import {
+  hasStaticModifier,
   readCallCalleeText,
   readPropertyName,
   unwrapExpression,
@@ -207,7 +208,7 @@ function readAttributePatternArray(
   reader: StaticEvaluationExpressionReader,
 ): AttributePatternEntriesRead {
   const patterns: AttributePatternObservation[] = [];
-  let open = value.mayHaveUnknownElements;
+  let open = value.mayHaveUnknownElements || value.mayHaveUnknownOrder;
   for (const element of value.elements) {
     const entry = readAttributePatternArrayElement(element, sourceExpression, reader);
     open ||= entry.open;
@@ -313,14 +314,6 @@ export function isAttributePatternCreateCall(
     return false;
   }
   return readCallCalleeText(expression.expression)?.split('.').at(-1) === 'AttributePattern';
-}
-
-function hasStaticModifier(
-  node: ts.Node,
-): boolean {
-  return ts.canHaveModifiers(node)
-    ? ts.getModifiers(node)?.some((modifier) => modifier.kind === ts.SyntaxKind.StaticKeyword) === true
-    : false;
 }
 
 function summaryWithEvaluationSeams(

@@ -1,6 +1,7 @@
 import {
   ExternalAddress,
 } from '../kernel/address.js';
+import { uniqueByKey } from '../collections.js';
 import { SemanticClaim } from '../kernel/claim.js';
 import {
   EvidenceKind,
@@ -40,6 +41,10 @@ import {
 } from '../registration/registration-admission.js';
 import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
 import {
+  FrameworkRegistrationCapability,
+  frameworkRegistrationCapabilitiesForKind,
+} from '../registration/framework-registration-manifest.js';
+import {
   BuiltInResourceCatalog,
   type BuiltInResourceCatalogField,
   type BuiltInResourceCatalogInput,
@@ -47,6 +52,7 @@ import {
   type ConfiguredBuiltInResourceCatalogSelectionField,
   I18nBuiltInResourceCatalogs,
   RuntimeHtmlBuiltInResourceCatalogs,
+  RouterBuiltInResourceCatalogs,
   StateBuiltInResourceCatalogs,
   type BuiltInResource,
   type BuiltInResourceField,
@@ -649,7 +655,10 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
   private catalogEmissionForRequests(
     selectionRequests: readonly ConfiguredResourceCatalogRequest[],
   ): BuiltInResourceCatalogEmission {
-    const catalogInputs = uniqueCatalogInputs(selectionRequests.flatMap((request) => request.catalogInputs));
+    const catalogInputs = uniqueByKey(
+      selectionRequests.flatMap((request) => request.catalogInputs),
+      resourceCatalogInputKey,
+    );
     return this.catalogMaterializer.materialize(catalogInputs);
   }
 
@@ -682,7 +691,7 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
     catalogsByKey: ReadonlyMap<string, BuiltInResourceCatalog>,
   ): readonly BuiltInResourceCatalog[] {
     return request.catalogInputs
-      .map((catalogInput) => catalogsByKey.get(catalogInputKey(catalogInput)) ?? null)
+      .map((catalogInput) => catalogsByKey.get(resourceCatalogInputKey(catalogInput)) ?? null)
       .filter((catalog): catalog is BuiltInResourceCatalog => catalog != null);
   }
 
@@ -856,39 +865,45 @@ function readConfiguredResourceCatalogRequests(
 function catalogInputsForFrameworkKind(
   frameworkKind: FrameworkRegistrationKind,
 ): readonly BuiltInResourceCatalogInput[] {
-  switch (frameworkKind) {
-    case FrameworkRegistrationKind.StandardConfiguration:
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
-      return [RuntimeHtmlBuiltInResourceCatalogs.DefaultResources];
-    case FrameworkRegistrationKind.I18nConfiguration:
-      return [I18nBuiltInResourceCatalogs.DefaultResources];
-    case FrameworkRegistrationKind.StateDefaultConfiguration:
-      return [StateBuiltInResourceCatalogs.DefaultResources];
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
-    case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:
-    case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage:
-    case FrameworkRegistrationKind.AppTask:
-      return [];
-  }
-}
-
-function uniqueCatalogInputs(
-  inputs: readonly BuiltInResourceCatalogInput[],
-): readonly BuiltInResourceCatalogInput[] {
-  const seen = new Set<string>();
-  const result: BuiltInResourceCatalogInput[] = [];
-  for (const input of inputs) {
-    const key = catalogInputKey(input);
-    if (seen.has(key)) {
-      continue;
+  const inputs: BuiltInResourceCatalogInput[] = [];
+  for (const capability of frameworkRegistrationCapabilitiesForKind(frameworkKind)) {
+    switch (capability) {
+      case FrameworkRegistrationCapability.RuntimeHtmlDefaultResources:
+        inputs.push(RuntimeHtmlBuiltInResourceCatalogs.DefaultResources);
+        break;
+      case FrameworkRegistrationCapability.I18nDefaultResources:
+        inputs.push(I18nBuiltInResourceCatalogs.DefaultResources);
+        break;
+      case FrameworkRegistrationCapability.RouterDefaultResources:
+        inputs.push(RouterBuiltInResourceCatalogs.DefaultResources);
+        break;
+      case FrameworkRegistrationCapability.StateDefaultResources:
+        inputs.push(StateBuiltInResourceCatalogs.DefaultResources);
+        break;
+      case FrameworkRegistrationCapability.RuntimeHtmlCompilerServices:
+      case FrameworkRegistrationCapability.RuntimeHtmlDefaultBindingSyntax:
+      case FrameworkRegistrationCapability.RuntimeHtmlShortHandBindingSyntax:
+      case FrameworkRegistrationCapability.RuntimeHtmlDefaultBindingLanguage:
+      case FrameworkRegistrationCapability.RuntimeHtmlDefaultRenderers:
+      case FrameworkRegistrationCapability.I18nTranslationSyntax:
+      case FrameworkRegistrationCapability.I18nTranslationRenderers:
+      case FrameworkRegistrationCapability.I18nServiceResolvers:
+      case FrameworkRegistrationCapability.I18nLifecycleTasks:
+      case FrameworkRegistrationCapability.RouterDefaultComponents:
+      case FrameworkRegistrationCapability.RouterConfigurationResolvers:
+      case FrameworkRegistrationCapability.RouterLifecycleTasks:
+      case FrameworkRegistrationCapability.StateBindingSyntax:
+      case FrameworkRegistrationCapability.StateRuntimeRenderers:
+      case FrameworkRegistrationCapability.StateStoreResolvers:
+      case FrameworkRegistrationCapability.StateStoreTasks:
+      case FrameworkRegistrationCapability.AppTask:
+        break;
     }
-    seen.add(key);
-    result.push(input);
   }
-  return result;
+  return inputs;
 }
 
-function catalogInputKey(input: BuiltInResourceCatalogInput): string {
+function resourceCatalogInputKey(input: BuiltInResourceCatalogInput): string {
   return `${input.packageId}:${input.group}`;
 }
 
@@ -912,16 +927,28 @@ function summaryForFrameworkKind(frameworkKind: FrameworkRegistrationKind): stri
   switch (frameworkKind) {
     case FrameworkRegistrationKind.StandardConfiguration:
       return 'RuntimeHtml StandardConfiguration admitted framework default resource headers.';
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultComponents:
+      return 'RuntimeHtml DefaultComponents admitted compiler services but no resource headers.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultResources:
       return 'RuntimeHtml DefaultResources spread admitted framework default resource headers.';
     case FrameworkRegistrationKind.I18nConfiguration:
       return 'I18nConfiguration admitted i18n value-converter and binding-behavior resource headers.';
+    case FrameworkRegistrationKind.RouterConfiguration:
+      return 'RouterConfiguration admitted router custom-attribute and viewport resource headers.';
+    case FrameworkRegistrationKind.RouterDefaultComponents:
+      return 'Router DefaultComponents admitted router services but no resource headers.';
+    case FrameworkRegistrationKind.RouterDefaultResources:
+      return 'Router DefaultResources spread admitted router custom-attribute and viewport resource headers.';
     case FrameworkRegistrationKind.StateDefaultConfiguration:
       return 'StateDefaultConfiguration admitted state binding-behavior resource headers.';
+    case FrameworkRegistrationKind.DialogConfiguration:
+      return 'DialogConfiguration admitted dialog services but no resource headers.';
     case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingSyntax:
     case FrameworkRegistrationKind.RuntimeHtmlShortHandBindingSyntax:
     case FrameworkRegistrationKind.RuntimeHtmlDefaultBindingLanguage:
       return 'RuntimeHtml syntax-only registration group did not admit resource headers.';
+    case FrameworkRegistrationKind.RuntimeHtmlDefaultRenderers:
+      return 'RuntimeHtml DefaultRenderers admitted renderers but no resource headers.';
     case FrameworkRegistrationKind.AppTask:
       return 'AppTask registry does not admit resource catalogs.';
   }
@@ -1010,7 +1037,7 @@ function materializeBuiltInResourceDefinition(
         key,
         resource.resourceKind === ResourceDefinitionKind.TemplateController,
         builtInAttributeBindables(resource.targetName, source),
-        false,
+        builtInNoMultiBindings(resource.targetName),
         [],
         [],
         CustomAttributeContainerStrategy.Reuse,
@@ -1066,6 +1093,13 @@ function builtInElementBindables(
         { name: 'expose' },
         { name: 'slotchange' },
       ]);
+    case 'ViewportCustomElement':
+      return bindables(source, [
+        { name: 'name' },
+        { name: 'usedBy' },
+        { name: 'default' },
+        { name: 'fallback' },
+      ]);
     default:
       return [];
   }
@@ -1118,6 +1152,16 @@ function builtInAttributeBindables(
       ]);
     case 'Focus':
       return bindables(source, [{ name: 'value', mode: BindableBindingMode.TwoWay }]);
+    case 'LoadCustomAttribute':
+      return bindables(source, [
+        { name: 'route' },
+        { name: 'params' },
+        { name: 'attribute' },
+        { name: 'active', mode: BindableBindingMode.FromView },
+        { name: 'context' },
+      ]);
+    case 'HrefCustomAttribute':
+      return bindables(source, [{ name: 'value' }]);
     case 'Else':
     default:
       return [];
@@ -1130,8 +1174,19 @@ function builtInDefaultProperty(targetName: string): string {
       return 'items';
     case 'Portal':
       return 'target';
+    case 'LoadCustomAttribute':
+      return 'route';
     default:
       return 'value';
+  }
+}
+
+function builtInNoMultiBindings(targetName: string): boolean {
+  switch (targetName) {
+    case 'HrefCustomAttribute':
+      return true;
+    default:
+      return false;
   }
 }
 

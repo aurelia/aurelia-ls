@@ -200,6 +200,18 @@ export const FrameworkRouteEndpoints = {
     projection: "syntax-products",
     summary: "Rendering syntax product rows.",
   }),
+  RouterFlow: new FrameworkRouteEndpoint({
+    id: "framework.endpoint.router.flow",
+    lens: LensId.FrameworkRouter,
+    projection: "flow",
+    summary: "Ordered router route-configuration and navigation flow rows.",
+  }),
+  RouterRelationships: new FrameworkRouteEndpoint({
+    id: "framework.endpoint.router.relationships",
+    lens: LensId.FrameworkRouter,
+    projection: "relationships",
+    summary: "Normalized router relationship rows.",
+  }),
 } as const;
 
 /** Declared framework semantic route topology. */
@@ -277,7 +289,7 @@ export const FrameworkSemanticRoutes = {
     relation: NavigationRelation.FrameworkFlowOf,
     basis: ADMISSION_BASIS,
     summary:
-      "Compiler rows can navigate back to the StandardConfiguration JIT compiler flow corridor.",
+      "Compiler rows can navigate back to the default JIT compiler flow corridor.",
   }),
   CompilerToRenderingControllerCreations: new FrameworkSemanticRouteSpec({
     id: "framework.route.compiler.rendering-controller-creations",
@@ -502,6 +514,51 @@ export const FrameworkSemanticRoutes = {
     relation: NavigationRelation.FrameworkFlowOf,
     basis: SOURCE_CHECKER_BASIS,
     summary: "Rendering relationship rows can navigate to syntax product rows.",
+  }),
+  RouterToRenderingControllerCreations: new FrameworkSemanticRouteSpec({
+    id: "framework.route.router.rendering-controller-creations",
+    navigationSpecId: "framework.flow",
+    target: FrameworkRouteEndpoints.RenderingControllerCreations,
+    relation: NavigationRelation.FrameworkFlowOf,
+    basis: SOURCE_CHECKER_BASIS,
+    summary:
+      "Router route-context and component-agent rows can navigate to renderer child-controller creation rows.",
+  }),
+  RouterToRenderingHydrationFlow: new FrameworkSemanticRouteSpec({
+    id: "framework.route.router.rendering-hydration-flow",
+    navigationSpecId: "framework.flow",
+    target: FrameworkRouteEndpoints.RenderingHydrationFlow,
+    relation: NavigationRelation.FrameworkFlowOf,
+    basis: SOURCE_CHECKER_BASIS,
+    summary:
+      "Router route-tree, viewport, and component-agent rows can navigate to the hydration/runtime rendering corridor they feed.",
+  }),
+  RouterToLifecycleControllerCalls: new FrameworkSemanticRouteSpec({
+    id: "framework.route.router.lifecycle-controller-calls",
+    navigationSpecId: "framework.flow",
+    target: FrameworkRouteEndpoints.LifecycleControllerCalls,
+    relation: NavigationRelation.FrameworkFlowOf,
+    basis: SOURCE_CHECKER_BASIS,
+    summary:
+      "Router component lifecycle rows can navigate to controller lifecycle call rows.",
+  }),
+  RouterToMaterializationResourceInstantiations: new FrameworkSemanticRouteSpec({
+    id: "framework.route.router.materialization-resource-instantiations",
+    navigationSpecId: "framework.flow",
+    target: FrameworkRouteEndpoints.MaterializationResourceInstantiations,
+    relation: NavigationRelation.FrameworkFlowOf,
+    basis: SOURCE_CHECKER_BASIS,
+    summary:
+      "Router routeable component resolution can navigate to resource materialization rows.",
+  }),
+  RenderingToRouterRelationships: new FrameworkSemanticRouteSpec({
+    id: "framework.route.rendering.router-relationships",
+    navigationSpecId: "semantic.provenance",
+    target: FrameworkRouteEndpoints.RouterRelationships,
+    relation: NavigationRelation.ProvenanceOf,
+    basis: SOURCE_CHECKER_BASIS,
+    summary:
+      "Rendering child-controller and hydration rows can navigate back to router relationship rows when routed components are the source of pressure.",
   }),
   ResourceToAdmissionWorldFormation: new FrameworkSemanticRouteSpec({
     id: "framework.route.resource.admission-world-formation",

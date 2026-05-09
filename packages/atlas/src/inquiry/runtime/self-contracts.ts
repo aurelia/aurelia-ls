@@ -1,7 +1,8 @@
+import { uniqueSortedStrings } from "../../collections.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId, LensStage, type LensSpec } from "../lens.js";
 import { RepoRootLocus, type SourceRange } from "../locus.js";
-import type { AtlasSelfAnalysis } from "./self-analysis.js";
+import type { AtlasSelfAnalysis } from "./self-analysis-contracts.js";
 
 /** Design dimension a contract coherence fact asks the caller to interpret. */
 export type SelfContractCoherenceDimension =
@@ -100,7 +101,7 @@ export class SelfContractReader {
     const declaredProjectionIds = lens.projections.map(
       (projection) => projection.id,
     );
-    const observedProjectionIds = uniqueSorted(
+    const observedProjectionIds = uniqueSortedStrings(
       this.#analysis.projectionBranches
         .filter((row) => row.lensIds.includes(lens.id))
         .map((row) => row.projection),
@@ -301,13 +302,9 @@ function coherenceFactSummary(
   if (facts.length === 0) {
     return "no contract coherence facts";
   }
-  return `${facts.length} contract coherence fact(s) across ${uniqueSorted(
+  return `${facts.length} contract coherence fact(s) across ${uniqueSortedStrings(
     facts.map((fact) => fact.dimension),
   ).join(", ")}`;
-}
-
-function uniqueSorted(values: readonly string[]): readonly string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
 
 function duplicateSorted(values: readonly string[]): readonly string[] {
@@ -320,5 +317,5 @@ function duplicateSorted(values: readonly string[]): readonly string[] {
       seen.add(value);
     }
   }
-  return uniqueSorted([...duplicates]);
+  return uniqueSortedStrings([...duplicates]);
 }

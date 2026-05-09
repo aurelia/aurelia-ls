@@ -36,14 +36,14 @@ import { CustomElementDefinition } from '../resources/custom-element-definition.
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
-  CheckerTypeProjectionInput,
   CheckerTypeProjector,
+  type CheckerTypeProjectionRequest,
 } from '../type-system/checker-projector.js';
 import { CheckerAsyncTypeProjector } from '../type-system/checker-async-type-projector.js';
 import {
   CheckerExpressionScopeNarrower,
-  CheckerExpressionScopeNarrowingInput,
   CheckerExpressionScopeNarrowingPolarity,
+  type CheckerExpressionScopeNarrowingRequest,
 } from '../type-system/expression-scope-narrower.js';
 import {
   CheckerBindingPatternLocalType,
@@ -84,22 +84,23 @@ import {
   LetBindingTargetContext,
 } from './runtime-binding.js';
 import type { TemplateExpressionParse } from './value-site.js';
+import {
+  completedTemplateExpressionAstForParse,
+} from './expression-parse-projection.js';
 
-export class TemplateScopeConstructionInput {
-  constructor(
-    /** Store-local key shared with the template compilation pass. */
-    readonly localKey: string,
-    /** Custom element definition whose view-model owns the root template scope. */
-    readonly definition: CustomElementDefinition,
-    /** Compiled-template rows whose instructions and targets describe the render frontier. */
-    readonly compiledTemplate: CompiledTemplateEmission,
-    /** Runtime binding instances and scope effects emulated from renderer semantics. */
-    readonly runtimeBindings: RuntimeRenderingEmission,
-    /** Current TypeChecker epoch, if resource recognition supplied one. */
-    readonly typeSystem: TypeSystemProject | null = null,
-    /** Compiler resource scope visible to expression semantics such as value converters. */
-    readonly resourceScope: TemplateResourceScope | null = null,
-  ) {}
+export interface TemplateScopeConstructionRequest {
+  /** Store-local key shared with the template compilation pass. */
+  readonly localKey: string;
+  /** Custom element definition whose view-model owns the root template scope. */
+  readonly definition: CustomElementDefinition;
+  /** Compiled-template rows whose instructions and targets describe the render frontier. */
+  readonly compiledTemplate: CompiledTemplateEmission;
+  /** Runtime binding instances and scope effects emulated from renderer semantics. */
+  readonly runtimeBindings: RuntimeRenderingEmission;
+  /** Current TypeChecker epoch, if resource recognition supplied one. */
+  readonly typeSystem: TypeSystemProject | null;
+  /** Compiler resource scope visible to expression semantics such as value converters. */
+  readonly resourceScope: TemplateResourceScope | null;
 }
 
 export class TemplateScopeConstructionEmission {
@@ -218,7 +219,7 @@ class TemplateScopeConstructionFrame {
   currentScope: BindingScope;
 
   private constructor(
-    readonly input: TemplateScopeConstructionInput,
+    readonly input: TemplateScopeConstructionRequest,
     readonly root: BindingScopeConstructionEmission,
     private readonly sequencesByProduct: ReadonlyMap<ProductHandle, TemplateInstructionSequence>,
     private readonly instructionsByProduct: ReadonlyMap<ProductHandle, TemplateInstruction>,
@@ -228,7 +229,7 @@ class TemplateScopeConstructionFrame {
   }
 
   static create(
-    input: TemplateScopeConstructionInput,
+    input: TemplateScopeConstructionRequest,
     root: BindingScopeConstructionEmission,
   ): TemplateScopeConstructionFrame {
     return new TemplateScopeConstructionFrame(
@@ -316,7 +317,7 @@ export class TemplateControllerScopeMaterializer {
     this.scopeNarrower = new CheckerExpressionScopeNarrower(store, this.typeProjector);
   }
 
-  construct(input: TemplateScopeConstructionInput): TemplateScopeConstructionEmission {
+  construct(input: TemplateScopeConstructionRequest): TemplateScopeConstructionEmission {
     const root = this.constructRootScope(input);
     input.runtimeBindings.rootController.attachScope(root.scope.toReference());
     const frame = TemplateScopeConstructionFrame.create(input, root);
@@ -327,6 +328,7 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private constructRenderTargets(frame: TemplateScopeConstructionFrame): void {
+    this.constructSurrogateSequence(frame);
     frame.input.compiledTemplate.renderTargets.forEach((target, targetIndex) => {
       const sequence = frame.readSequence(target.instructionSequenceProductHandle);
       if (sequence == null) {
@@ -339,6 +341,19 @@ export class TemplateControllerScopeMaterializer {
         `target:${targetIndex}`,
       );
     });
+  }
+
+  private constructSurrogateSequence(frame: TemplateScopeConstructionFrame): void {
+    const sequence = frame.input.compiledTemplate.compiledTemplate.surrogateSequence;
+    if (sequence == null) {
+      return;
+    }
+    frame.currentScope = this.constructInstructionSequence(
+      frame,
+      frame.currentScope,
+      sequence,
+      'surrogate',
+    );
   }
 
   private captureDynamicInstructionScopes(frame: TemplateScopeConstructionFrame): void {
@@ -459,7 +474,7 @@ export class TemplateControllerScopeMaterializer {
     return currentScope;
   }
 
-  private constructRootScope(input: TemplateScopeConstructionInput): BindingScopeConstructionEmission {
+  private constructRootScope(input: TemplateScopeConstructionRequest): BindingScopeConstructionEmission {
     return this.scopeMaterializer.construct(DryCustomElementController.createBindingScopeInput({
       localKey: `${input.localKey}:scope:root`,
       ownerProductHandle: input.runtimeBindings.rootController.productHandle,
@@ -548,7 +563,7 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private constructChildElementScope(
-    input: TemplateScopeConstructionInput,
+    input: TemplateScopeConstructionRequest,
     parent: BindingScope,
     instruction: HydrateElementInstruction,
     localSuffix: string,
@@ -707,7 +722,7 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private constructIfNarrowedScope(
-    input: TemplateScopeConstructionInput,
+    input: TemplateScopeConstructionRequest,
     parent: BindingScope,
     conditionInstruction: HydrateTemplateControllerInstruction,
     ownerInstruction: HydrateTemplateControllerInstruction,
@@ -716,16 +731,16 @@ export class TemplateControllerScopeMaterializer {
     localSuffix: string,
   ): BindingScopeConstructionEmission | null {
     const parse = this.readParse(templateControllerValueExpressionProductHandle(this.store, conditionInstruction));
-    const ast = parse == null ? null : expressionAstForParse(parse);
+    const ast = parse == null ? null : completedTemplateExpressionAstForParse(parse);
     const narrowing = ast == null
       ? null
-      : this.scopeNarrower.narrow(new CheckerExpressionScopeNarrowingInput(
-        `${input.localKey}:scope:template-controller:${localSuffix}`,
-        ast,
-        parent,
+      : this.scopeNarrower.narrow({
+        localKey: `${input.localKey}:scope:template-controller:${localSuffix}`,
+        expression: ast,
+        scope: parent,
         polarity,
-        ownerInstruction.sourceAddressHandle,
-      ));
+        sourceAddressHandle: ownerInstruction.sourceAddressHandle,
+      } satisfies CheckerExpressionScopeNarrowingRequest);
     if (narrowing == null) {
       return null;
     }
@@ -741,7 +756,7 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private constructPromiseResultScope(
-    input: TemplateScopeConstructionInput,
+    input: TemplateScopeConstructionRequest,
     parent: BindingScope,
     instruction: HydrateTemplateControllerInstruction,
     controller: RuntimeControllerFrame | null,
@@ -781,7 +796,7 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private promiseFulfilledValueType(
-    input: TemplateScopeConstructionInput,
+    input: TemplateScopeConstructionRequest,
     promiseState: TemplateControllerPromiseState,
     localSuffix: string,
   ): CheckerTypeReference | null {
@@ -803,7 +818,7 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private constructWithTemplateControllerScope(
-    input: TemplateScopeConstructionInput,
+    input: TemplateScopeConstructionRequest,
     parent: BindingScope,
     instruction: HydrateTemplateControllerInstruction,
     controller: RuntimeControllerFrame | null,
@@ -820,7 +835,7 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private constructObjectTemplateControllerScope(
-    input: TemplateScopeConstructionInput,
+    input: TemplateScopeConstructionRequest,
     parent: BindingScope,
     instruction: HydrateTemplateControllerInstruction,
     controller: RuntimeControllerFrame | null,
@@ -875,7 +890,7 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private constructIteratorScope(
-    input: TemplateScopeConstructionInput,
+    input: TemplateScopeConstructionRequest,
     parent: BindingScope,
     effect: IteratorBindingScopeEffect,
     localSuffix: string,
@@ -903,7 +918,7 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private constructLetElementScope(
-    input: TemplateScopeConstructionInput,
+    input: TemplateScopeConstructionRequest,
     parent: BindingScope,
     instruction: HydrateLetElementInstruction,
     localSuffix: string,
@@ -917,7 +932,7 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private constructLetScope(
-    input: TemplateScopeConstructionInput,
+    input: TemplateScopeConstructionRequest,
     parent: BindingScope,
     effects: readonly LetBindingScopeEffect[],
     localSuffix: string,
@@ -942,7 +957,7 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private letSlot(
-    input: TemplateScopeConstructionInput,
+    input: TemplateScopeConstructionRequest,
     parent: BindingScope,
     effect: LetBindingScopeEffect,
   ): BindingContextSlotDraft {
@@ -956,7 +971,7 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private iteratorElementType(
-    input: TemplateScopeConstructionInput,
+    input: TemplateScopeConstructionRequest,
     parent: BindingScope,
     effect: IteratorBindingScopeEffect,
     localSuffix: string,
@@ -977,7 +992,7 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private iteratorLocalTypes(
-    input: TemplateScopeConstructionInput,
+    input: TemplateScopeConstructionRequest,
     parent: BindingScope,
     effect: IteratorBindingScopeEffect,
     localSuffix: string,
@@ -999,12 +1014,12 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private letTargetType(
-    input: TemplateScopeConstructionInput,
+    input: TemplateScopeConstructionRequest,
     parent: BindingScope,
     effect: LetBindingScopeEffect,
   ): CheckerTypeReference | null {
     const parse = this.readParse(effect.expressionProductHandle);
-    const ast = parse == null ? null : expressionAstForParse(parse);
+    const ast = parse == null ? null : completedTemplateExpressionAstForParse(parse);
     if (ast == null) {
       return null;
     }
@@ -1020,13 +1035,13 @@ export class TemplateControllerScopeMaterializer {
   }
 
   private templateControllerValueType(
-    input: TemplateScopeConstructionInput,
+    input: TemplateScopeConstructionRequest,
     parent: BindingScope,
     instruction: HydrateTemplateControllerInstruction,
     localSuffix: string,
   ): CheckerTypeReference | null {
     const parse = this.readParse(templateControllerValueExpressionProductHandle(this.store, instruction));
-    const ast = parse == null ? null : expressionAstForParse(parse);
+    const ast = parse == null ? null : completedTemplateExpressionAstForParse(parse);
     if (ast == null) {
       return null;
     }
@@ -1047,11 +1062,11 @@ export class TemplateControllerScopeMaterializer {
       : this.store.productDetails.read(TemplateProductDetails.ExpressionParse, productHandle);
   }
 
-  private typeEvaluator(input: TemplateScopeConstructionInput): CheckerExpressionTypeEvaluator {
+  private typeEvaluator(input: TemplateScopeConstructionRequest): CheckerExpressionTypeEvaluator {
     return new CheckerExpressionTypeEvaluator(this.store, this.typeProjector, input.resourceScope);
   }
 
-  private registerControllerDetails(input: TemplateScopeConstructionInput): void {
+  private registerControllerDetails(input: TemplateScopeConstructionRequest): void {
     for (const controller of input.runtimeBindings.controllers) {
       this.store.productDetails.addIfAbsent(
         ConfigurationProductDetails.Controller,
@@ -1132,18 +1147,6 @@ export class TemplateControllerScopeMaterializer {
   }
 }
 
-function expressionAstForParse(parse: TemplateExpressionParse): ExpressionAstNode | null {
-  switch (parse.result.kind) {
-    case ExpressionParseResultKind.ExpressionSuccess:
-    case ExpressionParseResultKind.EmptyExpressionSuccess:
-    case ExpressionParseResultKind.InterpolationSuccess:
-    case ExpressionParseResultKind.OpaqueSuccess:
-      return parse.result.ast;
-    default:
-      return null;
-  }
-}
-
 function ownedBindingInstructionProductHandles(
   instruction: TemplateInstruction,
 ): readonly ProductHandle[] {
@@ -1189,7 +1192,7 @@ function templateControllerValueTarget(
   const parse = productHandle == null
     ? null
     : store.productDetails.read(TemplateProductDetails.ExpressionParse, productHandle);
-  const expression = parse == null ? null : expressionAstForParse(parse);
+  const expression = parse == null ? null : completedTemplateExpressionAstForParse(parse);
   const name = expression == null ? null : accessScopeTargetName(expression);
   return name == null
     ? null
@@ -1241,7 +1244,7 @@ function uniqueTemplateControllerLinks(
 }
 
 function repeatOverrideSlots(
-  input: TemplateScopeConstructionInput,
+  input: TemplateScopeConstructionRequest,
   projector: CheckerTypeProjector,
   sourceAddressHandle: AddressHandle | null,
   elementType: CheckerTypeReference | null,
@@ -1266,7 +1269,7 @@ function elementTypeForFlattenedIteratorName(
 }
 
 function primitiveReference(
-  input: TemplateScopeConstructionInput,
+  input: TemplateScopeConstructionRequest,
   projector: CheckerTypeProjector,
   primitive: 'number' | 'boolean',
   name: string,
@@ -1277,14 +1280,12 @@ function primitiveReference(
   }
   const checker = input.typeSystem.checker;
   const type = primitive === 'number' ? checker.getNumberType() : checker.getBooleanType();
-  return projector.ensureProjection(new CheckerTypeProjectionInput(
-    `${input.localKey}:scope:repeat-context:${name}`,
+  return projector.ensureProjection({
+    localKey: `${input.localKey}:scope:repeat-context:${name}`,
     checker,
     type,
-    CheckerTypeProjectionOrigin.SyntheticTemplateType,
-    null,
+    origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
     sourceAddressHandle,
-    null,
-    primitive,
-  )).toReference();
+    display: primitive,
+  } satisfies CheckerTypeProjectionRequest).toReference();
 }

@@ -42,8 +42,18 @@ export const enum FrameworkRegistrationKind {
   StandardConfiguration = 'standard-configuration',
   /** I18n plugin configuration registry. */
   I18nConfiguration = 'i18n-configuration',
+  /** Router plugin configuration registry. */
+  RouterConfiguration = 'router-configuration',
+  /** Router DefaultComponents registration group. */
+  RouterDefaultComponents = 'router.default-components',
+  /** Router DefaultResources registration group. */
+  RouterDefaultResources = 'router.default-resources',
   /** State plugin default configuration registry. */
   StateDefaultConfiguration = 'state-default-configuration',
+  /** Dialog plugin configuration registry. */
+  DialogConfiguration = 'dialog-configuration',
+  /** RuntimeHtml DefaultComponents registration group. */
+  RuntimeHtmlDefaultComponents = 'runtime-html.default-components',
   /** RuntimeHtml DefaultBindingSyntax registration group. */
   RuntimeHtmlDefaultBindingSyntax = 'runtime-html.default-binding-syntax',
   /** RuntimeHtml ShortHandBindingSyntax registration group. */
@@ -52,6 +62,8 @@ export const enum FrameworkRegistrationKind {
   RuntimeHtmlDefaultBindingLanguage = 'runtime-html.default-binding-language',
   /** RuntimeHtml DefaultResources registration group. */
   RuntimeHtmlDefaultResources = 'runtime-html.default-resources',
+  /** RuntimeHtml DefaultRenderers registration group. */
+  RuntimeHtmlDefaultRenderers = 'runtime-html.default-renderers',
 }
 
 /** Source-level reference to the DI key offered by a registration admission. */

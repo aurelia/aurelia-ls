@@ -59,6 +59,13 @@ export const enum RuntimeBindingDataFlowSourceKind {
   Open = 'open',
 }
 
+export const enum RuntimeBindingDataFlowSourceAssignmentKind {
+  RuntimeAssignable = 'runtime-assignable',
+  RuntimeAssignableWithTypeScriptStrictness = 'runtime-assignable-with-typescript-strictness',
+  RuntimeUnassignable = 'runtime-unassignable',
+  Open = 'open',
+}
+
 export type RuntimeBindingDataFlowField =
   | 'binding'
   | 'targetAccess'
@@ -71,9 +78,12 @@ export type RuntimeBindingDataFlowField =
   | 'sourceKind'
   | 'sourceName'
   | 'sourceType'
+  | 'sourceTypeOpenReason'
   | 'targetPropertyType'
   | 'targetValueType'
   | 'sourceWritable'
+  | 'sourceAssignmentKind'
+  | 'sourceAssignmentReason'
   | 'sourceToTargetAssignable'
   | 'targetToSourceAssignable'
   | 'openReason'
@@ -159,9 +169,12 @@ export class RuntimeBindingDataFlow {
     readonly sourceKind: RuntimeBindingDataFlowSourceKind,
     readonly sourceName: string | null,
     readonly sourceType: CheckerTypeReference | null,
+    readonly sourceTypeOpenReason: string | null,
     readonly targetPropertyType: CheckerTypeReference | null,
     readonly targetValueType: CheckerTypeReference | null,
     readonly sourceWritable: boolean | null,
+    readonly sourceAssignmentKind: RuntimeBindingDataFlowSourceAssignmentKind | null,
+    readonly sourceAssignmentReason: string | null,
     readonly sourceToTargetAssignable: boolean | null,
     readonly targetToSourceAssignable: boolean | null,
     readonly openReason: string | null,

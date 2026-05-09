@@ -1,5 +1,6 @@
 import {
   FrameworkRelationshipMechanism,
+  FrameworkRelationshipPhase,
   FrameworkRelationshipRelation,
   type FrameworkRelationshipEndpointKind,
 } from "../../framework/relationships.js";
@@ -57,7 +58,7 @@ export interface FrameworkRenderConsequenceRow {
   /** Runtime/source mechanism that produced the consequence. */
   readonly mechanism: FrameworkRelationshipMechanism;
   /** Rendering/hydration/binding/lifecycle/observation phase. */
-  readonly phase: string;
+  readonly phase: FrameworkRelationshipPhase;
   /** Source-side actor, usually a renderer, binding, syntax producer, or instruction concept. */
   readonly actorName: string;
   /** Source-side actor endpoint kind. */

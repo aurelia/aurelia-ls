@@ -1,4 +1,4 @@
-import { SemanticClaim } from '../kernel/claim.js';
+import { SemanticClaim, claimsForProduct } from '../kernel/claim.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -54,19 +54,17 @@ import {
 import type { HtmlParseEmission } from './html-parse-materializer.js';
 import { TemplateProductDetails } from './product-details.js';
 
-export class AttributeClassificationInput {
-  constructor(
-    /** Store-local key for this classification pass. */
-    readonly localKey: string,
-    /** Compiler unit that owns the HTML and AttrSyntax products. */
-    readonly compilationUnit: TemplateCompilationUnit,
-    /** Parsed HTML products whose attributes are being classified. */
-    readonly html: HtmlParseEmission,
-    /** Runtime AttrSyntax products produced from the HTML attributes. */
-    readonly attributeSyntax: AttributeSyntaxParseEmission,
-    /** Compiler world that supplies resource resolver and binding-command resolver services. */
-    readonly compilerWorld: TemplateCompilerWorldEmission,
-  ) {}
+export interface AttributeClassificationRequest {
+  /** Store-local key for this classification pass. */
+  readonly localKey: string;
+  /** Compiler unit that owns the HTML and AttrSyntax products. */
+  readonly compilationUnit: TemplateCompilationUnit;
+  /** Parsed HTML products whose attributes are being classified. */
+  readonly html: HtmlParseEmission;
+  /** Runtime AttrSyntax products produced from the HTML attributes. */
+  readonly attributeSyntax: AttributeSyntaxParseEmission;
+  /** Compiler world that supplies resource resolver and binding-command resolver services. */
+  readonly compilerWorld: TemplateCompilerWorldEmission;
 }
 
 export class AttributeClassificationEmission {
@@ -116,7 +114,7 @@ export class AttributeClassificationMaterializer {
     readonly store: KernelStore,
   ) {}
 
-  classify(input: AttributeClassificationInput): AttributeClassificationEmission {
+  classify(input: AttributeClassificationRequest): AttributeClassificationEmission {
     const emission = this.recordsForClassification(input);
     if (emission.records.length > 0) {
       this.store.commit(new KernelStoreBatch(emission.records, `attribute-classification:${input.localKey}`));
@@ -131,7 +129,7 @@ export class AttributeClassificationMaterializer {
     return emission;
   }
 
-  private recordsForClassification(input: AttributeClassificationInput): AttributeClassificationEmission {
+  private recordsForClassification(input: AttributeClassificationRequest): AttributeClassificationEmission {
     const source = this.recordsForSource(input);
     const records: KernelStoreRecord[] = [...source.records];
     const classifications: AttributeClassification[] = [];
@@ -280,7 +278,7 @@ export class AttributeClassificationMaterializer {
     ];
   }
 
-  private recordsForSource(input: AttributeClassificationInput): AttributeClassificationSourceSet {
+  private recordsForSource(input: AttributeClassificationRequest): AttributeClassificationSourceSet {
     const evidenceHandle = this.store.handles.evidence(`attribute-classification:${input.localKey}`);
     const provenanceHandle = this.store.handles.provenance(`attribute-classification:${input.localKey}`);
     return new AttributeClassificationSourceSet(
@@ -514,14 +512,4 @@ function openDecision(
   bindingCommand: AttributeClassification['bindingCommand'] = null,
 ): ClassificationDecision {
   return new ClassificationDecision(AttributeClassificationKind.Open, null, null, bindingCommand, null);
-}
-
-function claimsForProduct(
-  claims: readonly SemanticClaim[],
-  productHandle: ProductHandle,
-): readonly SemanticClaim[] {
-  return claims.filter((claim) =>
-    claim.subjectHandle === productHandle
-    || claim.objectHandle === productHandle
-  );
 }

@@ -9,7 +9,10 @@ import {
   FrameworkResourceDefinitionKind,
   FrameworkResourceInstantiationKind,
 } from "../../framework/resources.js";
-import type { SourceProject } from "../../source/index.js";
+import {
+  sourceRangeKey,
+  type SourceProject,
+} from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 import type { FrameworkDiscoveryFilters } from "./framework-filters.js";
 import { readFrameworkBundles } from "./framework-bundles.js";
@@ -306,7 +309,10 @@ class FrameworkAdmissionFlowBuilder {
         ? {}
         : { resourceKind: filters.resourceKind }),
     })) {
-      this.#resourceRowsBySource.set(sourceRangeKey(row.source), row);
+      this.#resourceRowsBySource.set(sourceRangeKey(row.definitionSource), row);
+      if (row.declarationSource !== null) {
+        this.#resourceRowsBySource.set(sourceRangeKey(row.declarationSource), row);
+      }
     }
   }
 
@@ -330,7 +336,7 @@ class FrameworkAdmissionFlowBuilder {
     if (this.filters.corridor === FrameworkAdmissionFlowCorridor.JitCompiler) {
       this.addJitCompilerEdges();
     }
-    const allNodes = [...this.#nodes.values()].sort(compareNodes);
+    const allNodes = [...this.#nodes.values()].sort(compareAdmissionFlowNodes);
     const allNodesById = new Map(allNodes.map((node) => [node.id, node]));
     const corridorEdges = flowCorridorEdges(
       [...this.#edges.values()],
@@ -338,8 +344,8 @@ class FrameworkAdmissionFlowBuilder {
       this.filters.corridor,
     );
     const edges = corridorEdges
-      .filter((edge) => edgeMatches(edge, this.filters, allNodesById))
-      .sort(compareEdges);
+      .filter((edge) => admissionFlowEdgeMatches(edge, this.filters, allNodesById))
+      .sort(compareAdmissionFlowEdges);
     const retainedNodeIds = new Set(
       edges.flatMap((edge) => [edge.fromNodeId, edge.toNodeId]),
     );
@@ -418,7 +424,7 @@ class FrameworkAdmissionFlowBuilder {
     const from = this.nodeForEndpoint(relationship.to, "resource");
     const role = resourceRole(resource);
     const to = this.addNode({
-      id: nodeId("world-role", undefined, role),
+      id: admissionFlowNodeId("world-role", undefined, role),
       kind: "world-role",
       name: role,
       summary: `${role} resource role.`,
@@ -434,7 +440,7 @@ class FrameworkAdmissionFlowBuilder {
       toName: to.name,
       packageId: resource.packageId,
       packageName: resource.packageName,
-      source: resource.source,
+      source: resource.definitionSource,
       sourceRowId: resource.id,
       admissionRelationshipId: relationship.id,
       resourceKind: resource.resourceKind,
@@ -648,7 +654,7 @@ class FrameworkAdmissionFlowBuilder {
       }
       const instructionName = relationship.to.name;
       const to = this.addNode({
-        id: nodeId(
+        id: admissionFlowNodeId(
           "compiler-instruction",
           relationship.packageId,
           instructionName,
@@ -699,7 +705,7 @@ class FrameworkAdmissionFlowBuilder {
     route: FrameworkMaterializationRouteRow,
   ): FrameworkAdmissionFlowNodeRow {
     return this.addNode({
-      id: nodeId("provider", route.packageId, route.providerIdentity.id),
+      id: admissionFlowNodeId("provider", route.packageId, route.providerIdentity.id),
       kind: "provider",
       name: route.providerIdentity.name,
       packageId: route.packageId,
@@ -716,7 +722,7 @@ class FrameworkAdmissionFlowBuilder {
     const nodePackageId =
       fallbackKind === "di-key" ? undefined : endpoint.packageId;
     return this.addNode({
-      id: nodeId(fallbackKind, nodePackageId, endpoint.name),
+      id: admissionFlowNodeId(fallbackKind, nodePackageId, endpoint.name),
       kind: fallbackKind,
       name: endpoint.name,
       ...(endpoint.packageId === undefined
@@ -1149,7 +1155,7 @@ function flowValue(
   };
 }
 
-function edgeMatches(
+function admissionFlowEdgeMatches(
   edge: FrameworkAdmissionFlowEdgeRow,
   filters: FrameworkAdmissionFlowFilters,
   nodesById: ReadonlyMap<string, FrameworkAdmissionFlowNodeRow>,
@@ -1215,7 +1221,7 @@ function edgeMatches(
   );
 }
 
-function nodeId(
+function admissionFlowNodeId(
   kind: FrameworkAdmissionFlowNodeKind,
   packageId: string | undefined,
   name: string,
@@ -1223,11 +1229,7 @@ function nodeId(
   return `framework-admission-flow:${kind}:${packageId ?? "repo"}:${name}`;
 }
 
-function sourceRangeKey(range: SourceRange): string {
-  return `${range.filePath}:${range.start.line}:${range.start.character}:${range.end.line}:${range.end.character}`;
-}
-
-function compareNodes(
+function compareAdmissionFlowNodes(
   left: FrameworkAdmissionFlowNodeRow,
   right: FrameworkAdmissionFlowNodeRow,
 ): number {
@@ -1238,7 +1240,7 @@ function compareNodes(
   );
 }
 
-function compareEdges(
+function compareAdmissionFlowEdges(
   left: FrameworkAdmissionFlowEdgeRow,
   right: FrameworkAdmissionFlowEdgeRow,
 ): number {

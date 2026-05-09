@@ -9,6 +9,10 @@ import {
   type SourceSpan,
 } from "./project.js";
 import { SourceProjectMemo } from "./memo.js";
+import {
+  sourceRangeFromFileSpan,
+  sourceSpanForNode,
+} from "./semantic-surface/source-ranges.js";
 
 const AU_LINK_SOURCE_FILE = "packages/semantic-runtime/src/kernel/au-link.ts";
 const auLinkMemo = new SourceProjectMemo<AuLinkIndex>();
@@ -258,7 +262,9 @@ export function readAuLinkModel(
   const index = auLinkIndex(project);
   const { catalog, anchors, gaps, frameworkTargetsByLinkId } = index;
   const filteredCatalog = catalog.filter((entry) => catalogMatches(entry, filters));
-  const filteredAnchors = anchors.filter((anchor) => anchorMatches(anchor, filters));
+  const filteredAnchors = anchors.filter((anchor) =>
+    auLinkAnchorMatches(anchor, filters),
+  );
   const filteredGaps = gaps.filter((gap) => gapMatches(gap, filters));
   const frameworkTargets = targetRowsForFilters(project, frameworkTargetsByLinkId, filters, filteredCatalog, filteredAnchors, filteredGaps);
 
@@ -342,8 +348,8 @@ function collectAuLinkCatalog(
 ): readonly AuLinkCatalogEntry[] {
   const entries: AuLinkCatalogEntry[] = [];
   for (const sourceFile of project.ownedSourceFiles()) {
-    const file = project.sourceFileIdentity(sourceFile);
-    if (file === null || file.packageId !== SourcePackageId.SemanticRuntime || file.repoPath !== AU_LINK_SOURCE_FILE) {
+    const file = project.requiredSourceFileIdentity(sourceFile);
+    if (file.packageId !== SourcePackageId.SemanticRuntime || file.repoPath !== AU_LINK_SOURCE_FILE) {
       continue;
     }
     visit(sourceFile, (node) => {
@@ -360,7 +366,7 @@ function collectAuLinkCatalog(
         id: `aulink-catalog:${id}`,
         ...parts,
         file,
-        span: sourceSpan(sourceFile, node),
+        span: sourceSpanForNode(sourceFile, node),
         frameworkTarget: frameworkTargetForParts(context, parts, frameworkTargetsByLinkId),
       });
     });
@@ -376,8 +382,8 @@ function collectAuLinkAnchors(
   const anchors: AuLinkAnchorRow[] = [];
   const symbolKeysByDeclaration = semanticRuntimeDeclarationSymbolKeys(project);
   for (const sourceFile of project.ownedSourceFiles()) {
-    const file = project.sourceFileIdentity(sourceFile);
-    if (file === null || file.packageId !== SourcePackageId.SemanticRuntime) {
+    const file = project.requiredSourceFileIdentity(sourceFile);
+    if (file.packageId !== SourcePackageId.SemanticRuntime) {
       continue;
     }
     const markerNames = auLinkMarkerNames(sourceFile);
@@ -399,12 +405,12 @@ function collectAuLinkAnchors(
           id: `aulink-anchor:${id}:${file.repoPath}:${decorator.getStart(sourceFile)}:${decorator.getEnd()}`,
           ...parts,
           file,
-          decoratorSpan: sourceSpan(sourceFile, decorator),
+          decoratorSpan: sourceSpanForNode(sourceFile, decorator),
           target: {
             name,
             kind: SourceDeclarationKind.Class,
             file,
-            span: sourceSpan(sourceFile, node),
+            span: sourceSpanForNode(sourceFile, node),
             symbolKey: sourceDeclarationSymbolKey(symbolKeysByDeclaration, file, node),
           },
           frameworkTarget: frameworkTargetForParts(context, parts, frameworkTargetsByLinkId),
@@ -778,7 +784,7 @@ function isAuLinkModuleSpecifier(specifier: string | null): boolean {
 function semanticRuntimeDeclarationSymbolKeys(project: SourceProject): ReadonlyMap<string, string | null> {
   const rows = project.declarationRows()
     .filter((row) => row.file.packageId === SourcePackageId.SemanticRuntime);
-  return new Map(rows.map((row) => [declarationKey(row.file, row.span), row.symbolKey]));
+  return new Map(rows.map((row) => [semanticRuntimeDeclarationKey(row.file, row.span), row.symbolKey]));
 }
 
 function sourceDeclarationSymbolKey(
@@ -792,7 +798,7 @@ function sourceDeclarationSymbolKey(
   return symbolKeysByDeclaration.get(`${file.repoPath}:${start}:${end}`) ?? null;
 }
 
-function declarationKey(file: SourceFileIdentity, span: SourceSpan): string {
+function semanticRuntimeDeclarationKey(file: SourceFileIdentity, span: SourceSpan): string {
   return `${file.repoPath}:${span.start}:${span.end}`;
 }
 
@@ -830,7 +836,7 @@ function catalogMatches(entry: AuLinkCatalogEntry, filters: AuLinkFilters): bool
     && (filters.query === undefined || catalogContains(entry, filters.query));
 }
 
-function anchorMatches(anchor: AuLinkAnchorRow, filters: AuLinkFilters): boolean {
+function auLinkAnchorMatches(anchor: AuLinkAnchorRow, filters: AuLinkFilters): boolean {
   return idMatches(anchor, filters)
     && targetMatches(anchor.frameworkTarget, filters)
     && (filters.targetName === undefined || anchor.target.name === filters.targetName)
@@ -1003,34 +1009,7 @@ function uniqueCatalogEntries(entries: readonly AuLinkCatalogEntry[]): readonly 
 }
 
 function sourceRangeForSpan(file: SourceFileIdentity, span: SourceSpan): SourceRange {
-  return {
-    filePath: file.repoPath,
-    start: {
-      line: span.startLine - 1,
-      character: span.startCharacter - 1,
-    },
-    end: {
-      line: span.endLine - 1,
-      character: span.endCharacter - 1,
-    },
-  };
-}
-
-function sourceSpan(sourceFile: ts.SourceFile, node: ts.Node): SourceSpan {
-  return sourceSpanFromOffsets(sourceFile, node.getStart(sourceFile), node.getEnd());
-}
-
-function sourceSpanFromOffsets(sourceFile: ts.SourceFile, start: number, end: number): SourceSpan {
-  const startPosition = sourceFile.getLineAndCharacterOfPosition(start);
-  const endPosition = sourceFile.getLineAndCharacterOfPosition(end);
-  return {
-    start,
-    end,
-    startLine: startPosition.line + 1,
-    startCharacter: startPosition.character + 1,
-    endLine: endPosition.line + 1,
-    endCharacter: endPosition.character + 1,
-  };
+  return sourceRangeFromFileSpan(file.repoPath, span);
 }
 
 function compareCatalogEntries(left: AuLinkCatalogEntry, right: AuLinkCatalogEntry): number {

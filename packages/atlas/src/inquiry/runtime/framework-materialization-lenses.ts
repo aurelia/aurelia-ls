@@ -8,11 +8,12 @@ import {
 } from "../../evaluation/index.js";
 import { readFrameworkDiIndex } from "../../framework/di-index.js";
 import {
-  readFrameworkStandardConfigurationDiWorld,
+  readFrameworkConfigurationDiWorld,
   type FrameworkDiDependencyAccess,
   type FrameworkDiDependencyRow,
   type FrameworkDiResolverSlot,
   type FrameworkDiValueRef,
+  type FrameworkDiWorld,
 } from "../../framework/di-world.js";
 import {
   FrameworkMaterializationProviderIdentity,
@@ -31,9 +32,9 @@ import {
 } from "../../framework/relationships.js";
 import {
   SourceProjectKeyedMemo,
+  sourceRangeFromFileSpan,
   sourceSelectorForRange,
   type SourceProject,
-  type SourceSpan,
   type TypeScriptCallSiteEntry,
   type TypeScriptExpressionFact,
 } from "../../source/index.js";
@@ -45,7 +46,6 @@ import {
   BasisKind,
   type Basis,
 } from "../basis.js";
-import { clampBudget } from "../budget.js";
 import {
   ContinuationKind,
   ContinuationPriority,
@@ -65,6 +65,7 @@ import type { SourceRange } from "../locus.js";
 import {
   evidenceLimit,
   pageOffset,
+  rowLimit,
 } from "../paging.js";
 import {
   NavigationPlane,
@@ -84,6 +85,7 @@ import {
   countBy,
   route,
 } from "./framework-support.js";
+import { stringFiltersFromRecord } from "./lens-filter-utils.js";
 
 const CHECKER_PROJECTION_BASIS = [BasisKind.TypeScriptChecker] as const;
 
@@ -431,7 +433,7 @@ const MATERIALIZATION_DEPENDENCY_ROW_FAMILY =
   new PagedRowFamily<FrameworkMaterializationDependencyRow>({
     id: "framework.materialization:dependencies",
     rowLabel: "framework materialization dependency row(s)",
-    evidenceForRow: evidenceForDependency,
+    evidenceForRow: evidenceForMaterializationDependency,
     continuationsForPage: dependencyContinuations,
   });
 
@@ -439,8 +441,8 @@ const MATERIALIZATION_RELATIONSHIP_ROW_FAMILY =
   new PagedRowFamily<FrameworkMaterializationRelationshipRow>({
     id: "framework.materialization:relationships",
     rowLabel: "framework materialization relationship row(s)",
-    evidenceForRow: evidenceForRelationship,
-    continuationsForPage: relationshipContinuations,
+    evidenceForRow: frameworkMaterializationEvidenceForRelationship,
+    continuationsForPage: materializationRelationshipContinuations,
   });
 
 const MATERIALIZATION_INSTANTIATION_ROW_FAMILY =
@@ -475,7 +477,7 @@ export function readFrameworkMaterializationIndex(
   filters: FrameworkMaterializationFilters = {},
 ): FrameworkMaterializationIndex {
   const diIndex = readFrameworkDiIndex(sourceProject);
-  const world = readFrameworkStandardConfigurationDiWorld(sourceProject);
+  const world = readFrameworkConfigurationDiWorld(sourceProject);
   const routes = uniqueMaterializationRoutes([
     ...diIndex.relationships
       .filter(isProviderSeedAtom)
@@ -483,7 +485,7 @@ export function readFrameworkMaterializationIndex(
       .map((row) => routeForProviderSeed(sourceProject, row)),
     ...world.resolverSlots
       .filter((slot) => slot.role !== "resource-type-factory")
-      .map((slot) => routeForStandardConfigurationSlot(sourceProject, world, slot))
+      .map((slot) => routeForConfigurationWorldSlot(sourceProject, world, slot))
       .filter((row): row is FrameworkMaterializationRouteRow => row !== null),
   ]).filter((row) => routeMatches(row, filters));
   const constructionAtoms = diIndex.relationships.filter(isConstructionSiteAtom);
@@ -492,7 +494,7 @@ export function readFrameworkMaterializationIndex(
     .filter((row) => dependencyMatches(row, filters));
   const relationships = routes
     .flatMap(relationshipsForRoute)
-    .filter((row) => relationshipMatches(row, filters));
+    .filter((row) => materializationRelationshipMatches(row, filters));
   const instantiations = routes
     .map((row) => instantiationForRoute(row, constructionAtoms))
     .filter((row) => instantiationMatches(row, filters));
@@ -517,7 +519,7 @@ export function answerFrameworkMaterialization(
   sourceProject: SourceProject,
 ): Answer<FrameworkMaterializationValue> {
   const projection = inquiry.projection ?? "summary";
-  const filters = filtersFromInquiry(inquiry);
+  const filters = frameworkMaterializationFiltersFromInquiry(inquiry);
   const index = readFrameworkMaterializationIndex(sourceProject, filters);
   const {
     routes,
@@ -526,7 +528,7 @@ export function answerFrameworkMaterialization(
     instantiations,
     resourceInstantiations,
   } = index;
-  const limit = clampBudget(inquiry.budget?.rows, 80, 1_000);
+  const limit = rowLimit(inquiry);
   const offset = pageOffset(inquiry);
   const basis = [frameworkMaterializationBasis(sourceProject)];
 
@@ -631,7 +633,7 @@ export function answerFrameworkMaterialization(
       basis,
       evidence,
       openSeams,
-      continuations: summaryContinuations(inquiry),
+      continuations: materializationSummaryContinuations(inquiry),
     },
   );
 }
@@ -730,7 +732,7 @@ function routeForProviderSeed(
     ...(route.tracesCallbackDependencies
       ? dependencyRowsForProviderSeed(sourceProject, row, id)
       : []),
-    ...dependencyRowsFromStandardConfigurationDiWorld(sourceProject, row, id),
+    ...dependencyRowsFromConfigurationDiWorld(sourceProject, row, id),
   ];
   return {
     id,
@@ -758,9 +760,9 @@ function routeForProviderSeed(
   };
 }
 
-function routeForStandardConfigurationSlot(
+function routeForConfigurationWorldSlot(
   sourceProject: SourceProject,
-  world: ReturnType<typeof readFrameworkStandardConfigurationDiWorld>,
+  world: FrameworkDiWorld,
   slot: FrameworkDiResolverSlot,
 ): FrameworkMaterializationRouteRow | null {
   const source = slot.source ?? slot.provider.source ?? slot.key.source;
@@ -825,13 +827,13 @@ function routeForStandardConfigurationSlot(
   };
 }
 
-function dependencyRowsFromStandardConfigurationDiWorld(
+function dependencyRowsFromConfigurationDiWorld(
   sourceProject: SourceProject,
   row: FrameworkRelationshipAtom,
   routeId: string,
 ): readonly FrameworkMaterializationDependencyRow[] {
   const key = row.key ?? row.from.name;
-  return readFrameworkStandardConfigurationDiWorld(sourceProject)
+  return readFrameworkConfigurationDiWorld(sourceProject)
     .readDependenciesForRoute(key, row.to.name)
     .map((dependency, index) =>
       dependencyRowForDiWorldDependency(
@@ -1209,7 +1211,7 @@ function dependencyRowForEffect(
     firstArgument.expression.symbolName ?? firstArgument.expression.text;
   const policy = dependencyPolicyForEffect(effect);
   const source = sourceRangeForEvaluationEffect(effect);
-  const argumentSource = sourceRangeForSpan(
+  const argumentSource = sourceRangeFromFileSpan(
     effect.callSite.file.repoPath,
     firstArgument.expression.span,
   );
@@ -1306,41 +1308,38 @@ function isContainerReceiverEffect(
   );
 }
 
-function filtersFromInquiry(inquiry: Inquiry): FrameworkMaterializationFilters {
+function frameworkMaterializationFiltersFromInquiry(
+  inquiry: Inquiry,
+): FrameworkMaterializationFilters {
   return {
-    ...filtersFromRecord(inquiry.subject),
-    ...filtersFromRecord(inquiry.filters),
+    ...frameworkMaterializationFiltersFromRecord(inquiry.subject),
+    ...frameworkMaterializationFiltersFromRecord(inquiry.filters),
   };
 }
 
-function filtersFromRecord(value: unknown): FrameworkMaterializationFilters {
-  if (value === null || typeof value !== "object") {
-    return {};
-  }
-  const source = value as Record<string, unknown>;
-  return {
-    ...stringFilter(source, "packageId"),
-    ...stringFilter(source, "key"),
-    ...stringFilter(source, "strategy"),
-    ...stringFilter(source, "routeKind"),
-    ...stringFilter(source, "relation"),
-    ...stringFilter(source, "resourceKind"),
-    ...stringFilter(source, "resourceName"),
-    ...stringFilter(source, "resourceSiteKind"),
-    ...stringFilter(source, "dependencyKey"),
-    ...stringFilter(source, "dependencyAccess"),
-    ...stringFilter(source, "dependencyPolicy"),
-    ...stringFilter(source, "certainty"),
-    ...stringFilter(source, "query"),
-  };
-}
+const frameworkMaterializationFilterKeys = [
+  "packageId",
+  "key",
+  "strategy",
+  "routeKind",
+  "relation",
+  "resourceKind",
+  "resourceName",
+  "resourceSiteKind",
+  "dependencyKey",
+  "dependencyAccess",
+  "dependencyPolicy",
+  "certainty",
+  "query",
+] as const satisfies readonly (keyof FrameworkMaterializationFilters & string)[];
 
-function stringFilter(
-  source: Record<string, unknown>,
-  key: keyof FrameworkMaterializationFilters,
-): object {
-  const value = source[key];
-  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
+function frameworkMaterializationFiltersFromRecord(
+  value: unknown,
+): FrameworkMaterializationFilters {
+  return stringFiltersFromRecord<FrameworkMaterializationFilters>(
+    value,
+    frameworkMaterializationFilterKeys,
+  );
 }
 
 function routeMatches(
@@ -1433,7 +1432,7 @@ function dependencyMatches(
   );
 }
 
-function relationshipMatches(
+function materializationRelationshipMatches(
   row: FrameworkMaterializationRelationshipRow,
   filters: FrameworkMaterializationFilters,
 ): boolean {
@@ -1480,7 +1479,7 @@ function evidenceForRoute(row: FrameworkMaterializationRouteRow): Evidence {
   };
 }
 
-function evidenceForDependency(
+function evidenceForMaterializationDependency(
   row: FrameworkMaterializationDependencyRow,
 ): Evidence {
   return {
@@ -1494,7 +1493,7 @@ function evidenceForDependency(
   };
 }
 
-function evidenceForRelationship(
+function frameworkMaterializationEvidenceForRelationship(
   row: FrameworkMaterializationRelationshipRow,
 ): Evidence {
   return {
@@ -1580,7 +1579,7 @@ function callbackOpenSeam(
   };
 }
 
-function summaryContinuations(inquiry: Inquiry): readonly Continuation[] {
+function materializationSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
   return [
     projectionContinuation(
       inquiry,
@@ -1738,7 +1737,7 @@ function routeContinuations(
   return continuations;
 }
 
-function relationshipContinuations(
+function materializationRelationshipContinuations(
   inquiry: Inquiry,
   rows: readonly FrameworkMaterializationRelationshipRow[],
   nextOffset: number | undefined,
@@ -1757,7 +1756,7 @@ function relationshipContinuations(
     );
   }
   for (const [index, row] of rows.slice(0, 5).entries()) {
-    const evidence = evidenceForRelationship(row);
+    const evidence = frameworkMaterializationEvidenceForRelationship(row);
     const builder = new FrameworkRowContinuationBuilder(
       inquiry,
       "framework.materialization:relationships",
@@ -1956,7 +1955,7 @@ function dependencyContinuations(
     );
   }
   for (const [index, row] of rows.slice(0, 5).entries()) {
-    const evidence = evidenceForDependency(row);
+    const evidence = evidenceForMaterializationDependency(row);
     const builder = new FrameworkRowContinuationBuilder(
       inquiry,
       "framework.materialization:dependencies",
@@ -1979,20 +1978,6 @@ function dependencyContinuations(
     );
   }
   return continuations;
-}
-
-function sourceRangeForSpan(filePath: string, span: SourceSpan): SourceRange {
-  return {
-    filePath,
-    start: {
-      line: span.startLine - 1,
-      character: span.startCharacter - 1,
-    },
-    end: {
-      line: span.endLine - 1,
-      character: span.endCharacter - 1,
-    },
-  };
 }
 
 function frameworkMaterializationBasis(sourceProject: SourceProject): Basis {

@@ -1,8 +1,6 @@
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import {
-  BasisAuthority,
-  BasisClosure,
-  BasisFreshness,
+  atlasContractBasis as contractBasis,
   BasisKind,
 } from "../basis.js";
 import {
@@ -44,6 +42,9 @@ import { answerFrameworkObservation } from "./framework-observation-lenses.js";
 import { answerFrameworkResources } from "./framework-resource-lenses.js";
 import { answerProductVocabulary } from "./product-vocabulary-lenses.js";
 import { answerProductArchitecture } from "./product-architecture-lenses.js";
+import { answerWorkspaceArchitecture } from "./workspace-architecture-lenses.js";
+import { answerPluginArchitecture } from "./plugin-architecture-lenses.js";
+import { answerFrameworkRouter } from "./framework-router-lenses.js";
 import type { InquiryWorld } from "./world.js";
 
 /** Hot substrate context shared by runtime lens implementations. */
@@ -82,6 +83,8 @@ export class InquiryEngine {
     LensId.TsType,
     LensId.ProductVocabulary,
     LensId.ProductArchitecture,
+    LensId.WorkspaceArchitecture,
+    LensId.PluginArchitecture,
     LensId.BridgeAuLink,
     LensId.FrameworkDiscovery,
     LensId.FrameworkApi,
@@ -93,6 +96,7 @@ export class InquiryEngine {
     LensId.FrameworkMaterialization,
     LensId.FrameworkLifecycle,
     LensId.FrameworkObservation,
+    LensId.FrameworkRouter,
     LensId.FrameworkAdmission,
     LensId.FrameworkComposition,
   ]);
@@ -158,6 +162,16 @@ export class InquiryEngine {
           normalized.inquiry,
           this.substrates.sourceProject,
         );
+      case LensId.WorkspaceArchitecture:
+        return answerWorkspaceArchitecture(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
+      case LensId.PluginArchitecture:
+        return answerPluginArchitecture(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
       case LensId.BridgeAuLink:
         return answerBridgeAuLink(
           normalized.inquiry,
@@ -210,6 +224,11 @@ export class InquiryEngine {
         );
       case LensId.FrameworkObservation:
         return answerFrameworkObservation(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
+      case LensId.FrameworkRouter:
+        return answerFrameworkRouter(
           normalized.inquiry,
           this.substrates.sourceProject,
         );
@@ -483,6 +502,7 @@ function normalizeBudget(value: unknown): Budget | undefined {
     ...numericBudgetLane(source, "rows"),
     ...numericBudgetLane(source, "groups"),
     ...numericBudgetLane(source, "facts"),
+    ...numericBudgetLane(source, "members"),
     ...numericBudgetLane(source, "routes"),
     ...numericBudgetLane(source, "evidencePerSubject"),
     ...numericBudgetLane(source, "depth"),
@@ -515,18 +535,6 @@ function numericBudgetLane<TKey extends keyof Budget>(
   return typeof value === "number" && Number.isFinite(value)
     ? ({ [key]: value } as Pick<Budget, TKey>)
     : {};
-}
-
-/** Shared exact Atlas contract basis for engine-level validation answers. */
-function contractBasis(summary: string) {
-  return {
-    kind: BasisKind.AtlasContract,
-    closure: BasisClosure.Exact,
-    authority: BasisAuthority.Contract,
-    freshness: BasisFreshness.Static,
-    summary,
-    identity: "@aurelia-ls/atlas",
-  };
 }
 
 /** Continuation back to the surface map. */

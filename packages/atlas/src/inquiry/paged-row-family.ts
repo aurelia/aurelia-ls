@@ -1,7 +1,11 @@
 import { OutcomeKind, createAnswer, type Answer } from "./answer.js";
 import type { Basis } from "./basis.js";
 import type { Continuation } from "./continuation.js";
-import type { Evidence, OpenSeam } from "./evidence.js";
+import {
+  evidenceArray,
+  type Evidence,
+  type OpenSeam,
+} from "./evidence.js";
 import type { Inquiry } from "./inquiry.js";
 import {
   evidenceLimit,
@@ -108,11 +112,4 @@ export class PagedRowFamily<TRow> {
       ),
     });
   }
-}
-
-function evidenceArray(evidence: RowEvidence): readonly Evidence[] {
-  if (Array.isArray(evidence)) {
-    return evidence as readonly Evidence[];
-  }
-  return [evidence as Evidence];
 }

@@ -3,6 +3,8 @@ import ts from "typescript";
 import {
   readTypeScriptCallSiteEntry,
   readTypeScriptExpressionFact,
+  requiredSourceFileIdentity,
+  sourceRangeForSourceFileNode,
   SourceProjectKeyedMemo,
   SourceDeclarationKind,
   type SourceProject,
@@ -33,11 +35,6 @@ import {
   sourceFileProducerName,
 } from "./framework-rendering-inspection.js";
 import { readFrameworkSyntaxProducts } from "./framework-rendering-syntax.js";
-import {
-  externalFileIdentity,
-  sourceRangeFromFileSpan,
-  sourceSpan,
-} from "./framework-support.js";
 import { uniqueById } from "./framework-symbols.js";
 import {
   callExpressionsIn,
@@ -620,12 +617,10 @@ export function bindingSetupRow(
     return null;
   }
   const firstArgument = call.arguments[0];
-  const file =
-    sourceProject.sourceFileIdentity(sourceFile) ??
-    externalFileIdentity(sourceProject, sourceFile);
-  const span = sourceSpan(sourceFile, call);
+  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
+  const span = call.getStart(sourceFile);
   return {
-    id: `framework-binding-setup:${packageId}:${bindingName}:${setupKind}:${span.start}`,
+    id: `framework-binding-setup:${packageId}:${bindingName}:${setupKind}:${span}`,
     packageId,
     packageName,
     producerName,
@@ -648,7 +643,7 @@ export function bindingSetupRow(
           ),
         }),
     callSite,
-    source: sourceRangeFromFileSpan(file.repoPath, span),
+    source: sourceRangeForSourceFileNode(file.repoPath, sourceFile, call),
   };
 }
 
@@ -696,12 +691,10 @@ export function bindingEffectRow(
   expression: ts.Expression,
   callSite?: TypeScriptCallSiteEntry,
 ): FrameworkBindingEffectRow {
-  const file =
-    sourceProject.sourceFileIdentity(sourceFile) ??
-    externalFileIdentity(sourceProject, sourceFile);
-  const span = sourceSpan(sourceFile, expression);
+  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
+  const span = expression.getStart(sourceFile);
   return {
-    id: `framework-binding-effect:${packageId}:${bindingName}:${methodName}:${effectKind}:${span.start}`,
+    id: `framework-binding-effect:${packageId}:${bindingName}:${methodName}:${effectKind}:${span}`,
     packageId,
     packageName,
     bindingName,
@@ -714,7 +707,7 @@ export function bindingEffectRow(
       expression,
     ),
     ...(callSite === undefined ? {} : { callSite }),
-    source: sourceRangeFromFileSpan(file.repoPath, span),
+    source: sourceRangeForSourceFileNode(file.repoPath, sourceFile, expression),
   };
 }
 
@@ -749,20 +742,18 @@ export function bindingProductRow(
   constructionProducts: readonly FrameworkSyntaxProductRow[],
   bindingAdmissions: readonly FrameworkBindingAdmissionRow[],
 ): FrameworkBindingProductRow {
-  const file =
-    sourceProject.sourceFileIdentity(sourceFile) ??
-    externalFileIdentity(sourceProject, sourceFile);
-  const span = sourceSpan(sourceFile, declaration);
+  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
+  const span = declaration.getStart(sourceFile);
   const bindingName = declaration.name.text;
   const constructorParameters = bindingConstructorParameters(declaration);
   const methodNames = bindingMethodNames(declaration);
   return {
-    id: `framework-binding-product:${packageId}:${bindingName}:${span.start}`,
+    id: `framework-binding-product:${packageId}:${bindingName}:${span}`,
     packageId,
     packageName,
     bindingName,
     declarationKind: SourceDeclarationKind.Class,
-    source: sourceRangeFromFileSpan(file.repoPath, span),
+    source: sourceRangeForSourceFileNode(file.repoPath, sourceFile, declaration),
     constructionProducts: constructionProducts.filter(
       (product) => product.bindingName === bindingName,
     ),
@@ -877,14 +868,12 @@ export function bindingAdmissionRow(
   if (callSite === null) {
     return null;
   }
-  const file =
-    sourceProject.sourceFileIdentity(sourceFile) ??
-    externalFileIdentity(sourceProject, sourceFile);
-  const span = sourceSpan(sourceFile, call);
+  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
+  const span = call.getStart(sourceFile);
   const controllerExpression =
     addBindingControllerExpression(sourceFile, call) ?? "unknown";
   return {
-    id: `framework-binding-admission:${packageId}:${admission.bindingName}:${span.start}`,
+    id: `framework-binding-admission:${packageId}:${admission.bindingName}:${span}`,
     packageId,
     packageName,
     producerName,
@@ -897,7 +886,7 @@ export function bindingAdmissionRow(
       admission.expression.getSourceFile(),
       unwrapExpression(admission.expression),
     ),
-    source: sourceRangeFromFileSpan(file.repoPath, span),
+    source: sourceRangeForSourceFileNode(file.repoPath, sourceFile, call),
     constructionProducts: constructionProducts.filter(
       (product) => product.bindingName === admission.bindingName,
     ),

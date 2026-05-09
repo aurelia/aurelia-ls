@@ -30,6 +30,8 @@ export class ResourceDependencyReference {
   constructor(
     readonly identityHandle: IdentityHandle | null,
     readonly keyName: string | null = null,
+    readonly moduleKey: string | null = null,
+    readonly localName: string | null = null,
   ) {}
 }
 

@@ -86,6 +86,9 @@ open seams, or inquiry answers.
 - `interpolation-parser.ts`
   Interpolation-specific scanning, ordered-hole ownership, and interpolation
   companion publication.
+- `expression-boundary-scanner.ts`
+  Template-aware `${...}` delimiter lookahead shared by HTML interpolation and
+  JavaScript template-literal parsing.
 
 ## Completed-Input Corridors
 
@@ -111,6 +114,15 @@ state, with special corridors split out by ownership:
 If another parser feature arrives, the first question should be "which corridor
 owns this?" rather than "which giant parser method do we patch?"
 
+Interpolation uses a template-aware boundary lookahead before it invokes the
+completed-input parser. The interpolation layer detects authored `${` starts,
+uses `expression-boundary-scanner.ts` to find the matching top-level `}` across
+strings, comments, object literals, and nested template-literal holes, and then
+hands the completed-input parser only the expression slice it owns. The same
+lookahead is shared by `completed-input-template-corridor.ts`, so HTML
+interpolation and JavaScript template literals agree on `${...}` delimiter
+truth without asking EOF to stand in for a maybe-closed hole.
+
 ## Important Provisional Decisions
 
 - The parser has been trimmed away from caller-side selection and non-owning
@@ -130,6 +142,16 @@ owns this?" rather than "which giant parser method do we patch?"
   need richer interpolation scanner residue, add a dedicated scan-state carrier
   beside the current hole carriers instead of overloading the existing
   boundary-state objects.
+- Aurelia's runtime parser can accept a final interpolation hole at EOF. The
+  semantic-runtime parser keeps that framework behavior visible as pressure but
+  publishes a successful expression with a missing interpolation `}` as an
+  interpolation frontier. That gives authoring tools honest incomplete-input
+  truth while preserving the parsed expression subtree.
+- Runtime/compiler consumers that need Aurelia-accepted expression semantics
+  should not weaken the parser publication to get it. The template layer owns
+  that projection in `../template/expression-parse-projection.ts`, so the parse
+  product can keep a companion/frontier state while binding data-flow still
+  spends the runtime-accepted expression lane.
 - Cursor-aware interpolation does not create a second AST family. It uses the caller's active offset to choose the
   active companion hole while preserving the same ordered closed/suppressed hole model.
 - `parse()` still defaults to `IsProperty`. If later callers need a true

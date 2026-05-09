@@ -3,6 +3,8 @@ import ts from "typescript";
 import { FrameworkResourceDefinitionKind } from "../../framework/index.js";
 import {
   readTypeScriptCallSiteEntry,
+  requiredSourceFileIdentity,
+  sourceRangeForSourceFileNode,
   SourceProjectMemo,
   type SourceProject,
   type TypeScriptCallSiteEntry,
@@ -20,10 +22,6 @@ import {
   rendererClassExpression,
   rendererTargetExpression,
 } from "./framework-rendering-inspection.js";
-import {
-  sourceRangeFromFileSpan,
-  sourceSpan,
-} from "./framework-support.js";
 import {
   calleeTail,
   callExpressionsIn,
@@ -187,7 +185,7 @@ function controllerCreationForDeclaration(
       recursiveDispatchCalls,
       linkCall,
       hydrationSteps,
-      source: sourceRangeForNode(sourceProject, sourceFile, renderMethod),
+      source: sourceRangeForAdmittedFileNode(sourceProject, sourceFile, renderMethod),
       summary: `${rendererName} creates ${resourceKind} child controller ${childControllerExpression} and admits it to ${parentControllerExpression}.`,
     },
   ];
@@ -310,15 +308,13 @@ function resourceKindForRenderer(
   return FrameworkResourceDefinitionKind.CustomElement;
 }
 
-function sourceRangeForNode(
+function sourceRangeForAdmittedFileNode(
   sourceProject: SourceProject,
   sourceFile: ts.SourceFile,
   node: ts.Node,
 ): SourceRange {
-  const filePath =
-    sourceProject.sourceFileIdentity(sourceFile)?.repoPath ??
-    sourceFile.fileName.replaceAll("\\", "/");
-  return sourceRangeFromFileSpan(filePath, sourceSpan(sourceFile, node));
+  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
+  return sourceRangeForSourceFileNode(file.repoPath, sourceFile, node);
 }
 
 function controllerCreationMatches(

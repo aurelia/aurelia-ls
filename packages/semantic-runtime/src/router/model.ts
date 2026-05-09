@@ -18,18 +18,16 @@ export const enum RouterModelKind {
   RouteContext = 'route-context',
   RouteConfigContext = 'route-config-context',
   RouteConfig = 'route-config',
+  RouteableComponent = 'routeable-component',
+  Viewport = 'viewport',
+  ViewportAgent = 'viewport-agent',
+  ComponentAgent = 'component-agent',
   RouteNode = 'route-node',
   RouteTree = 'route-tree',
+  ViewportRequest = 'viewport-request',
   ViewportInstruction = 'viewport-instruction',
   ViewportInstructionTree = 'viewport-instruction-tree',
   NavigationInstruction = 'navigation-instruction',
-  BuiltInResource = 'built-in-resource',
-}
-
-export const enum RouterBuiltInResourceKind {
-  ViewportCustomElement = 'viewport-custom-element',
-  LoadCustomAttribute = 'load-custom-attribute',
-  HrefCustomAttribute = 'href-custom-attribute',
 }
 
 export const enum RouterServiceTokenKind {
@@ -55,6 +53,43 @@ export const enum NavigationInstructionKind {
   RouteViewModel = 'route-view-model',
   NavigationStrategy = 'navigation-strategy',
   Unknown = 'unknown',
+}
+
+export const enum RouteableComponentKind {
+  CustomElementName = 'custom-element-name',
+  ClassReference = 'class-reference',
+  ResourceDefinition = 'resource-definition',
+  Promise = 'promise',
+  NavigationStrategy = 'navigation-strategy',
+  Open = 'open',
+}
+
+export const enum RouteRecognizerModelKind {
+  RouteRecognizer = 'route-recognizer',
+  ConfigurableRoute = 'configurable-route',
+  Endpoint = 'endpoint',
+  State = 'state',
+  RecognizedRoute = 'recognized-route',
+}
+
+export const enum RouteRecognizerSegmentKind {
+  Static = 'static',
+  Dynamic = 'dynamic',
+  Star = 'star',
+  Residue = 'residue',
+}
+
+export const enum RouteRecognizerStateKind {
+  Separator = 'separator',
+  Static = 'static',
+  Dynamic = 'dynamic',
+  Star = 'star',
+  Residue = 'residue',
+}
+
+export const enum RouteRecognizerOwnershipKind {
+  Own = 'own',
+  InheritedFromParent = 'inherited-from-parent',
 }
 
 export type RouterField =
@@ -96,14 +131,152 @@ export type RouteConfigField =
   | 'nav'
   | 'source';
 
+export type RouteableComponentField =
+  | 'componentKind'
+  | 'resolvedResource'
+  | 'source';
+
+export type RouteConfigContextField =
+  | 'parent'
+  | 'root'
+  | 'config'
+  | 'recognizer'
+  | 'childRoutes'
+  | 'depth'
+  | 'friendlyPath'
+  | 'childRoutesConfigured'
+  | 'source';
+
+export type RouteContextField =
+  | 'parent'
+  | 'root'
+  | 'container'
+  | 'router'
+  | 'routeConfigContext'
+  | 'viewportAgent'
+  | 'source';
+
+export type RouteNodeField =
+  | 'routeContext'
+  | 'config'
+  | 'parent'
+  | 'children'
+  | 'instruction'
+  | 'originalInstruction'
+  | 'recognizedRoute'
+  | 'params'
+  | 'queryParams'
+  | 'fragment'
+  | 'data'
+  | 'viewport'
+  | 'residue'
+  | 'path'
+  | 'finalPath'
+  | 'component'
+  | 'title'
+  | 'source';
+
+export type RouteTreeField =
+  | 'rootNode'
+  | 'instructionTree'
+  | 'options'
+  | 'nodeCount'
+  | 'queryParamCount'
+  | 'fragment'
+  | 'source';
+
+export type ConfigurableRouteField =
+  | 'recognizer'
+  | 'routeConfigContext'
+  | 'routeConfig'
+  | 'parentPath'
+  | 'path'
+  | 'caseSensitive'
+  | 'segments'
+  | 'parameters'
+  | 'source';
+
+export type RouteRecognizerField =
+  | 'recognizer'
+  | 'routeConfigContext'
+  | 'ownership'
+  | 'configurableRoute'
+  | 'path'
+  | 'isResidual'
+  | 'parameters'
+  | 'primaryEndpoint'
+  | 'residualEndpoint'
+  | 'previousState'
+  | 'nextStates'
+  | 'endpoint'
+  | 'stateKind'
+  | 'segmentName'
+  | 'pattern'
+  | 'value'
+  | 'length'
+  | 'isSeparator'
+  | 'isDynamic'
+  | 'isOptional'
+  | 'isConstrained'
+  | 'recognizedPath'
+  | 'residue'
+  | 'parameterCount'
+  | 'redirectDepth'
+  | 'viewportInstruction'
+  | 'viewportInstructionTree'
+  | 'source';
+
+export type ViewportField =
+  | 'routeContext'
+  | 'controller'
+  | 'name'
+  | 'usedBy'
+  | 'default'
+  | 'fallback'
+  | 'source';
+
+export type ViewportAgentField =
+  | 'viewport'
+  | 'routeContext'
+  | 'hostController'
+  | 'source';
+
+export type ComponentAgentField =
+  | 'routeContext'
+  | 'routeNode'
+  | 'viewportAgent'
+  | 'controller'
+  | 'component'
+  | 'source';
+
 export type RouterInstructionField =
+  | 'instructionKind'
+  | 'value'
+  | 'routeContext'
   | 'component'
   | 'viewport'
   | 'parameters'
+  | 'parameterCount'
   | 'children'
+  | 'open'
+  | 'close'
   | 'options'
+  | 'isAbsolute'
+  | 'queryParamCount'
+  | 'fragment'
   | 'recognizedRoute'
   | 'source';
+
+/** Runtime ViewportRequest used by RouteContext._resolveViewportAgent before RouteContext creation. */
+@auLink('router:ViewportRequest')
+export class ViewportRequestModel {
+  readonly routerKind = RouterModelKind.ViewportRequest;
+
+  constructor(
+    readonly viewportName: string,
+    readonly componentName: string,
+  ) {}
+}
 
 /** Reference to a modeled router product without expanding route trees or instructions. */
 export class RouterReference {
@@ -398,15 +571,19 @@ export class RouteContextModel {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
-    readonly container: ContainerReference,
-    readonly router: RouterReference,
+    readonly parent: RouterReference | null,
+    readonly root: RouterReference,
+    readonly container: ContainerReference | null,
+    readonly router: RouterReference | null,
     readonly routeConfigContext: RouterReference | null,
+    readonly viewportAgent: RouterReference | null,
+    readonly localName: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<RouterField>[] = [],
+    readonly fieldProvenance: readonly FieldProvenance<RouteContextField>[] = [],
   ) {}
 
   toReference(): RouterReference {
-    return new RouterReference(this.productHandle, this.identityHandle, this.routerKind, this.sourceAddressHandle, null);
+    return new RouterReference(this.productHandle, this.identityHandle, this.routerKind, this.sourceAddressHandle, this.localName);
   }
 }
 
@@ -418,14 +595,56 @@ export class RouteConfigContextModel {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
-    readonly routeContext: RouterReference,
-    readonly routeConfigs: readonly RouteConfigReference[],
+    readonly parent: RouterReference | null,
+    readonly root: RouterReference,
+    readonly config: RouteConfigReference,
+    readonly recognizer: RouteRecognizerReference,
+    readonly childRoutes: readonly RouteConfigReference[],
+    readonly depth: number,
+    readonly friendlyPath: string,
+    readonly childRoutesConfigured: boolean | null,
     readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<RouterField>[] = [],
+    readonly fieldProvenance: readonly FieldProvenance<RouteConfigContextField>[] = [],
   ) {}
 
   toReference(): RouterReference {
-    return new RouterReference(this.productHandle, this.identityHandle, this.routerKind, this.sourceAddressHandle, null);
+    return new RouterReference(this.productHandle, this.identityHandle, this.routerKind, this.sourceAddressHandle, this.friendlyPath);
+  }
+}
+
+/** Reference to a route-recognizer product without expanding state graphs or endpoints. */
+export class RouteRecognizerReference {
+  constructor(
+    readonly productHandle: ProductHandle | null,
+    readonly identityHandle: IdentityHandle | null,
+    readonly recognizerKind: RouteRecognizerModelKind,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly localName: string | null,
+  ) {}
+}
+
+/** Runtime RouteRecognizer model owned by or inherited into a RouteConfigContext. */
+@auLink('route-recognizer:RouteRecognizer')
+export class RouteRecognizerModel {
+  readonly recognizerKind = RouteRecognizerModelKind.RouteRecognizer;
+
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly routeConfigContext: RouterReference,
+    readonly ownership: RouteRecognizerOwnershipKind,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<RouteRecognizerField>[] = [],
+  ) {}
+
+  toReference(): RouteRecognizerReference {
+    return new RouteRecognizerReference(
+      this.productHandle,
+      this.identityHandle,
+      this.recognizerKind,
+      this.sourceAddressHandle,
+      null,
+    );
   }
 }
 
@@ -440,8 +659,305 @@ export class RouteConfigReference {
   ) {}
 }
 
-/** Runtime IRouteConfig model preserving authored route metadata and child route references. */
-@auLink('router:IRouteConfig')
+/** Source-level routeable component reference before route-context resolution turns it into a component agent. */
+export class RouteableComponentReference {
+  constructor(
+    readonly productHandle: ProductHandle | null,
+    readonly identityHandle: IdentityHandle | null,
+    readonly componentKind: RouteableComponentKind,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly localName: string | null,
+    readonly resolvedProductHandle: ProductHandle | null = null,
+    readonly resolvedIdentityHandle: IdentityHandle | null = null,
+  ) {}
+}
+
+/** Converged router RouteableComponent source input before RouteConfigContext resolves it into a component definition. */
+@auLink('router:RouteableComponent')
+export class RouteableComponentModel {
+  readonly routerKind = RouterModelKind.RouteableComponent;
+
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly componentKind: RouteableComponentKind,
+    readonly resolvedProductHandle: ProductHandle | null,
+    readonly resolvedIdentityHandle: IdentityHandle | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly localName: string | null,
+    readonly fieldProvenance: readonly FieldProvenance<RouteableComponentField>[] = [],
+  ) {}
+
+  toReference(): RouteableComponentReference {
+    return new RouteableComponentReference(
+      this.productHandle,
+      this.identityHandle,
+      this.componentKind,
+      this.sourceAddressHandle,
+      this.localName,
+      this.resolvedProductHandle,
+      this.resolvedIdentityHandle,
+    );
+  }
+}
+
+/** Parsed route-recognizer parameter fact produced from one authored path segment. */
+@auLink('route-recognizer:Parameter')
+export class ParameterModel {
+  constructor(
+    readonly name: string,
+    readonly isOptional: boolean,
+    readonly isStar: boolean,
+    readonly pattern: string | null,
+  ) {}
+}
+
+/** Parsed static path segment before StaticSegment.appendTo(...) materializes state transitions. */
+@auLink('route-recognizer:StaticSegment')
+export class StaticSegmentModel {
+  readonly segmentKind = RouteRecognizerSegmentKind.Static;
+  readonly name = null;
+  readonly optional = null;
+  readonly pattern = null;
+
+  constructor(
+    readonly raw: string,
+    readonly value: string,
+    readonly caseSensitive: boolean,
+  ) {}
+}
+
+/** Parsed dynamic parameter segment before DynamicSegment.appendTo(...) materializes a state transition. */
+@auLink('route-recognizer:DynamicSegment')
+export class DynamicSegmentModel {
+  readonly segmentKind = RouteRecognizerSegmentKind.Dynamic;
+  readonly value = null;
+  readonly caseSensitive = null;
+
+  constructor(
+    readonly raw: string,
+    readonly name: string,
+    readonly optional: boolean,
+    readonly pattern: string | null,
+  ) {}
+}
+
+/** Parsed star or residual segment before StarSegment.appendTo(...) materializes a state transition. */
+@auLink('route-recognizer:StarSegment')
+export class StarSegmentModel {
+  readonly value = null;
+  readonly optional = false;
+  readonly pattern = null;
+  readonly caseSensitive = null;
+
+  constructor(
+    readonly segmentKind: RouteRecognizerSegmentKind.Star | RouteRecognizerSegmentKind.Residue,
+    readonly raw: string,
+    readonly name: string,
+  ) {}
+}
+
+export type RouteRecognizerSegmentModel =
+  | StaticSegmentModel
+  | DynamicSegmentModel
+  | StarSegmentModel;
+
+/** Source-backed ConfigurableRoute path before RouteRecognizer.$add(...) builds endpoint/state products. */
+@auLink('route-recognizer:ConfigurableRoute')
+export class ConfigurableRouteModel {
+  readonly recognizerKind = RouteRecognizerModelKind.ConfigurableRoute;
+
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly recognizer: RouteRecognizerReference,
+    readonly routeConfigContext: RouterReference,
+    readonly routeConfig: RouteConfigReference,
+    readonly parentPath: string | null,
+    readonly path: string,
+    readonly caseSensitive: boolean,
+    readonly segments: readonly RouteRecognizerSegmentModel[],
+    readonly parameters: readonly ParameterModel[],
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<ConfigurableRouteField>[] = [],
+  ) {}
+
+  toReference(): RouteRecognizerReference {
+    return new RouteRecognizerReference(
+      this.productHandle,
+      this.identityHandle,
+      this.recognizerKind,
+      this.sourceAddressHandle,
+      this.path,
+    );
+  }
+}
+
+/** Route-recognizer Endpoint model created from one configurable route. */
+@auLink('route-recognizer:Endpoint')
+export class EndpointModel {
+  readonly recognizerKind = RouteRecognizerModelKind.Endpoint;
+
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly recognizer: RouteRecognizerReference,
+    readonly configurableRoute: RouteRecognizerReference,
+    readonly path: string,
+    readonly isResidual: boolean,
+    readonly parameters: readonly ParameterModel[],
+    readonly primaryEndpoint: RouteRecognizerReference | null,
+    readonly residualEndpoint: RouteRecognizerReference | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<RouteRecognizerField>[] = [],
+  ) {}
+
+  toReference(): RouteRecognizerReference {
+    return new RouteRecognizerReference(
+      this.productHandle,
+      this.identityHandle,
+      this.recognizerKind,
+      this.sourceAddressHandle,
+      this.path,
+    );
+  }
+}
+
+/** Route-recognizer State node created while RouteRecognizer.$add(...) appends path segments. */
+@auLink('route-recognizer:State')
+export class StateModel {
+  readonly recognizerKind = RouteRecognizerModelKind.State;
+
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly recognizer: RouteRecognizerReference,
+    readonly previousState: RouteRecognizerReference | null,
+    readonly nextStates: readonly RouteRecognizerReference[],
+    readonly endpoint: RouteRecognizerReference | null,
+    readonly stateKind: RouteRecognizerStateKind,
+    readonly segmentName: string | null,
+    readonly pattern: string | null,
+    readonly value: string,
+    readonly length: number,
+    readonly isSeparator: boolean,
+    readonly isDynamic: boolean,
+    readonly isOptional: boolean,
+    readonly isConstrained: boolean,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<RouteRecognizerField>[] = [],
+  ) {}
+
+  toReference(): RouteRecognizerReference {
+    return new RouteRecognizerReference(
+      this.productHandle,
+      this.identityHandle,
+      this.recognizerKind,
+      this.sourceAddressHandle,
+      `${this.stateKind}:${this.value}:${this.length}`,
+    );
+  }
+}
+
+/** Route-recognizer RecognizedRoute produced from a concrete navigation path. */
+@auLink('route-recognizer:RecognizedRoute')
+export class RecognizedRouteModel {
+  readonly recognizerKind = RouteRecognizerModelKind.RecognizedRoute;
+
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly recognizer: RouteRecognizerReference,
+    readonly endpoint: RouteRecognizerReference,
+    readonly viewportInstruction: RouterReference,
+    readonly viewportInstructionTree: RouterReference,
+    readonly routeContext: RouterReference | null,
+    readonly path: string,
+    readonly residue: string | null,
+    readonly parameterCount: number,
+    readonly redirectDepth: number,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<RouteRecognizerField>[] = [],
+  ) {}
+
+  toReference(): RouteRecognizerReference {
+    return new RouteRecognizerReference(
+      this.productHandle,
+      this.identityHandle,
+      this.recognizerKind,
+      this.sourceAddressHandle,
+      this.path,
+    );
+  }
+}
+
+/** Runtime au-viewport custom element instance semantics discovered from template/controller hydration. */
+@auLink('router:ViewportCustomElement')
+export class ViewportCustomElementModel {
+  readonly routerKind = RouterModelKind.Viewport;
+
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly routeContext: RouterReference | null,
+    readonly controllerProductHandle: ProductHandle | null,
+    readonly name: string,
+    readonly usedBy: readonly string[],
+    readonly defaultComponent: string | null,
+    readonly fallback: string | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<ViewportField>[] = [],
+  ) {}
+
+  toReference(): RouterReference {
+    return new RouterReference(this.productHandle, this.identityHandle, this.routerKind, this.sourceAddressHandle, this.name);
+  }
+}
+
+/** Runtime ViewportAgent created when au-viewport.hydrated registers itself with the active RouteContext. */
+@auLink('router:ViewportAgent')
+export class ViewportAgentModel {
+  readonly routerKind = RouterModelKind.ViewportAgent;
+
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly viewport: RouterReference,
+    readonly routeContext: RouterReference | null,
+    readonly hostControllerProductHandle: ProductHandle | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<ViewportAgentField>[] = [],
+  ) {}
+
+  toReference(): RouterReference {
+    return new RouterReference(this.productHandle, this.identityHandle, this.routerKind, this.sourceAddressHandle, null);
+  }
+}
+
+/** Runtime ComponentAgent created when a routed component is loaded into a viewport. */
+@auLink('router:ComponentAgent')
+export class ComponentAgentModel {
+  readonly routerKind = RouterModelKind.ComponentAgent;
+
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly routeContext: RouterReference,
+    readonly routeNode: RouterReference,
+    readonly viewportAgent: RouterReference | null,
+    readonly controllerProductHandle: ProductHandle | null,
+    readonly component: RouteableComponentReference | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<ComponentAgentField>[] = [],
+  ) {}
+
+  toReference(): RouterReference {
+    return new RouterReference(this.productHandle, this.identityHandle, this.routerKind, this.sourceAddressHandle, this.routeContext.localName);
+  }
+}
+
+/** Runtime RouteConfig model preserving normalized route metadata and child route references. */
+@auLink('router:RouteConfig')
 export class RouteConfigModel {
   readonly routerKind = RouterModelKind.RouteConfig;
 
@@ -452,41 +968,17 @@ export class RouteConfigModel {
     readonly id: string | null,
     readonly paths: readonly string[],
     readonly title: string | null,
-    readonly component: RouterReference | null,
+    readonly component: RouteableComponentReference | null,
     readonly redirectTo: string | null,
     readonly caseSensitive: boolean | null,
     readonly transitionPlan: string | null,
     readonly viewport: string | null,
+    readonly hasData: boolean | null,
     readonly childRoutes: readonly RouteConfigReference[],
+    readonly fallback: RouteableComponentReference | null,
+    readonly nav: boolean | null,
     readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<RouteConfigField>[] = [],
-  ) {}
-
-  toReference(): RouteConfigReference {
-    return new RouteConfigReference(
-      this.productHandle,
-      this.identityHandle,
-      this.routeKind,
-      this.sourceAddressHandle,
-      this.id,
-    );
-  }
-}
-
-/** Runtime IChildRouteConfig model with a required component. */
-@auLink('router:IChildRouteConfig')
-export class ChildRouteConfigModel {
-  readonly routerKind = RouterModelKind.RouteConfig;
-  readonly routeKind = RouteConfigKind.ChildRoute;
-
-  constructor(
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
-    readonly id: string | null,
-    readonly paths: readonly string[],
-    readonly component: RouterReference,
-    readonly childRoutes: readonly RouteConfigReference[],
-    readonly sourceAddressHandle: AddressHandle | null,
+    readonly pathSourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RouteConfigField>[] = [],
   ) {}
 
@@ -509,15 +1001,29 @@ export class RouteNodeModel {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
+    readonly routeContext: RouterReference,
     readonly config: RouteConfigReference | null,
     readonly parent: RouterReference | null,
     readonly children: readonly RouterReference[],
+    readonly instruction: RouterReference | null,
+    readonly originalInstruction: RouterReference | null,
+    readonly recognizedRoute: RouteRecognizerReference | null,
+    readonly parameterCount: number,
+    readonly queryParamCount: number,
+    readonly fragment: string | null,
+    readonly hasData: boolean | null,
+    readonly viewport: string | null,
+    readonly residueInstructionCount: number,
+    readonly path: string,
+    readonly finalPath: string,
+    readonly component: RouteableComponentReference | null,
+    readonly title: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<RouterField>[] = [],
+    readonly fieldProvenance: readonly FieldProvenance<RouteNodeField>[] = [],
   ) {}
 
   toReference(): RouterReference {
-    return new RouterReference(this.productHandle, this.identityHandle, this.routerKind, this.sourceAddressHandle, null);
+    return new RouterReference(this.productHandle, this.identityHandle, this.routerKind, this.sourceAddressHandle, this.routeContext.localName);
   }
 }
 
@@ -530,8 +1036,13 @@ export class RouteTreeModel {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly rootNode: RouterReference | null,
+    readonly instructionTree: RouterReference | null,
+    readonly options: RouterOptionsReference | null,
+    readonly nodeCount: number,
+    readonly queryParamCount: number,
+    readonly fragment: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<RouterField>[] = [],
+    readonly fieldProvenance: readonly FieldProvenance<RouteTreeField>[] = [],
   ) {}
 
   toReference(): RouterReference {
@@ -550,7 +1061,11 @@ export class ViewportInstructionModel {
     readonly component: RouterReference | null,
     readonly viewport: string | null,
     readonly parametersProductHandle: ProductHandle | null,
+    readonly parameterCount: number,
     readonly children: readonly RouterReference[],
+    readonly open: number,
+    readonly close: number,
+    readonly recognizedRoute: RouteRecognizerReference | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RouterInstructionField>[] = [],
   ) {}
@@ -568,8 +1083,12 @@ export class ViewportInstructionTreeModel {
   constructor(
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
+    readonly routeContext: RouterReference | null,
     readonly instructions: readonly RouterReference[],
     readonly options: RouterOptionsReference | null,
+    readonly isAbsolute: boolean,
+    readonly queryParamCount: number,
+    readonly fragment: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RouterInstructionField>[] = [],
   ) {}
@@ -588,6 +1107,7 @@ export class TypedNavigationInstructionModel {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly instructionKind: NavigationInstructionKind,
+    readonly value: string | null,
     readonly component: RouterReference | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RouterInstructionField>[] = [],
@@ -596,46 +1116,4 @@ export class TypedNavigationInstructionModel {
   toReference(): RouterReference {
     return new RouterReference(this.productHandle, this.identityHandle, this.routerKind, this.sourceAddressHandle, null);
   }
-}
-
-/** Router Viewport custom element, modeled as a router-owned built-in resource anchor. */
-@auLink('router:ViewportCustomElement')
-export class RouterViewportCustomElementResource {
-  readonly routerKind = RouterModelKind.BuiltInResource;
-  readonly resourceKind = RouterBuiltInResourceKind.ViewportCustomElement;
-
-  constructor(
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
-    readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<RouterField>[] = [],
-  ) {}
-}
-
-/** Router load custom attribute, modeled as a router-owned built-in resource anchor. */
-@auLink('router:LoadCustomAttribute')
-export class RouterLoadCustomAttributeResource {
-  readonly routerKind = RouterModelKind.BuiltInResource;
-  readonly resourceKind = RouterBuiltInResourceKind.LoadCustomAttribute;
-
-  constructor(
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
-    readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<RouterField>[] = [],
-  ) {}
-}
-
-/** Router href custom attribute, modeled as a router-owned built-in resource anchor. */
-@auLink('router:HrefCustomAttribute')
-export class RouterHrefCustomAttributeResource {
-  readonly routerKind = RouterModelKind.BuiltInResource;
-  readonly resourceKind = RouterBuiltInResourceKind.HrefCustomAttribute;
-
-  constructor(
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
-    readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<RouterField>[] = [],
-  ) {}
 }

@@ -8,6 +8,7 @@ import { createApi } from "../session/index.js";
 interface ProductArchitectureProfileValue {
   readonly profile?: {
     readonly includeCallSites: boolean;
+    readonly includeCallDetails: boolean;
     readonly includeSymbols: boolean;
     readonly totalMilliseconds: number;
     readonly phases: readonly {
@@ -20,17 +21,30 @@ interface ProductArchitectureProfileValue {
 
 const api = createApi({ idleTtlMs: 120_000, requestTimeoutMs: 180_000 });
 
+const warmupStarted = performance.now();
+await api.status();
+const warmupMilliseconds = performance.now() - warmupStarted;
+console.log(`product.architecture profile session warmup: ${warmupMilliseconds.toFixed(1)}ms startup/status`);
+console.log("");
+
 for (const lane of [
   { includeCallSites: false, includeSymbols: false },
   { includeCallSites: true, includeSymbols: false },
+  { includeCallSites: true, includeCallDetails: true, includeSymbols: false },
   { includeCallSites: false, includeSymbols: true },
   { includeCallSites: true, includeSymbols: true },
+  { includeCallSites: true, includeCallDetails: true, includeSymbols: true },
 ]) {
-  await printProfile(lane.includeCallSites, lane.includeSymbols);
+  await printProfile(
+    lane.includeCallSites,
+    lane.includeCallDetails ?? false,
+    lane.includeSymbols,
+  );
 }
 
 async function printProfile(
   includeCallSites: boolean,
+  includeCallDetails: boolean,
   includeSymbols: boolean,
 ): Promise<void> {
   const started = performance.now();
@@ -38,7 +52,7 @@ async function printProfile(
     lens: LensId.ProductArchitecture,
     locus: RepoRootLocus,
     projection: "profile",
-    filters: { includeCallSites, includeSymbols },
+    filters: { includeCallSites, includeCallDetails, includeSymbols },
     budget: { evidencePerSubject: 20 },
   });
 
@@ -56,11 +70,12 @@ async function printProfile(
     .sort((left, right) => right.milliseconds - left.milliseconds);
   const label = profileLaneName(
     profile.includeCallSites,
+    profile.includeCallDetails,
     profile.includeSymbols,
   );
 
   console.log(
-    `product.architecture ${label} profile: ${profile.totalMilliseconds.toFixed(1)}ms analysis, ${(performance.now() - started).toFixed(1)}ms request`,
+    `product.architecture ${label} profile: ${profile.totalMilliseconds.toFixed(1)}ms analysis, ${(performance.now() - started).toFixed(1)}ms warm request`,
   );
 
   for (const row of phases) {
@@ -72,13 +87,14 @@ async function printProfile(
 
 function profileLaneName(
   includeCallSites: boolean,
+  includeCallDetails: boolean,
   includeSymbols: boolean,
 ): string {
   if (includeCallSites && includeSymbols) {
-    return "full";
+    return includeCallDetails ? "full exact-call" : "full compact-call";
   }
   if (includeCallSites) {
-    return "core";
+    return includeCallDetails ? "core exact-call" : "core compact-call";
   }
   if (includeSymbols) {
     return "symbol";

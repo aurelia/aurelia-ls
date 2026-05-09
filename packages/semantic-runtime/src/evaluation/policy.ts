@@ -6,12 +6,10 @@ export const enum StaticEvaluationExpressionStatementDisposition {
   ExternallyOwned = 'externally-owned',
 }
 
-export class StaticEvaluationExpressionStatementPolicyInput {
-  constructor(
-    readonly expression: ts.Expression,
-    readonly environment: ModuleEnvironmentRecord,
-    readonly moduleKey: string,
-  ) {}
+export interface StaticEvaluationExpressionStatementPolicyInput {
+  readonly expression: ts.Expression;
+  readonly environment: ModuleEnvironmentRecord;
+  readonly moduleKey: string;
 }
 
 export type StaticEvaluationExpressionStatementPolicy = (
@@ -28,7 +26,7 @@ export class StaticEvaluationPolicy {
     environment: ModuleEnvironmentRecord,
     moduleKey: string,
   ): StaticEvaluationExpressionStatementDisposition {
-    const input = new StaticEvaluationExpressionStatementPolicyInput(expression, environment, moduleKey);
+    const input: StaticEvaluationExpressionStatementPolicyInput = { expression, environment, moduleKey };
     for (const policy of this.expressionStatementPolicies) {
       const disposition = policy(input);
       if (disposition != null) {

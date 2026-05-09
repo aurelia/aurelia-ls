@@ -2,7 +2,11 @@ import ts from "typescript";
 
 import type { SourceRange } from "../../inquiry/locus.js";
 import type { SourceProject } from "../project.js";
-import { sourceRangeForNode } from "./source-ranges.js";
+import {
+  requiredSourceFileIdentity,
+  requiredSourceRangeForNode,
+} from "./source-ranges.js";
+import { declarationNameNode, propertyNameNodeText } from "./ast.js";
 
 export const TYPE_SCRIPT_USAGE_OWNER_KINDS = [
   "class",
@@ -98,13 +102,13 @@ export function hasExportModifier(node: ts.Node): boolean {
 
 export function declarationName(declaration: ts.Declaration): string | null {
   const name = declarationNameNode(declaration);
-  return name === undefined ? null : name.getText(declaration.getSourceFile());
-}
-
-export function declarationNameNode(declaration: ts.Declaration): ts.Node | undefined {
-  return "name" in declaration
-    ? (declaration as { readonly name?: ts.Node | null }).name ?? undefined
-    : undefined;
+  if (name === undefined) {
+    return null;
+  }
+  return (
+    propertyNameNodeText(name, declaration.getSourceFile()) ??
+    name.getText(declaration.getSourceFile())
+  );
 }
 
 export function declarationShapeKind(declaration: ts.Declaration): string {
@@ -148,10 +152,10 @@ export function usageOwnerForNode(
     current = current.parent;
   }
 
-  const identity = sourceProject.sourceFileIdentity(sourceFile);
+  const identity = requiredSourceFileIdentity(sourceProject, sourceFile);
   return {
     ownerKind: "source-file",
-    ownerName: identity?.repoPath ?? sourceFile.fileName,
+    ownerName: identity.repoPath,
   };
 }
 
@@ -162,14 +166,14 @@ function usageOwnerFromDeclaration(
 ): TypeScriptUsageOwner {
   const ownerKind = usageOwnerKind(declaration);
   const ownerName = declarationName(declaration) ?? "<anonymous>";
-  const ownerSource = sourceRangeForNode(sourceProject, declaration) ?? undefined;
+  const ownerSource = requiredSourceRangeForNode(sourceProject, declaration);
   const member = memberDeclaration === undefined
     ? undefined
     : usageOwnerMember(memberDeclaration, sourceProject);
   return {
     ownerKind,
     ownerName,
-    ...(ownerSource === undefined ? {} : { ownerSource }),
+    ownerSource,
     ...(member === undefined ? {} : member),
   };
 }
@@ -185,12 +189,10 @@ function usageOwnerMember(
   const ownerMemberName = ts.isConstructorDeclaration(declaration)
     ? "constructor"
     : declarationName(declaration) ?? "<anonymous>";
-  const ownerMemberSource =
-    sourceRangeForNode(sourceProject, declaration) ?? undefined;
   return {
     ownerMemberKind,
     ownerMemberName,
-    ...(ownerMemberSource === undefined ? {} : { ownerMemberSource }),
+    ownerMemberSource: requiredSourceRangeForNode(sourceProject, declaration),
   };
 }
 

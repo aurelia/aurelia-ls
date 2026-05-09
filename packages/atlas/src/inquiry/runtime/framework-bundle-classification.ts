@@ -23,7 +23,7 @@ import {
   resourceCarriersForVariable,
 } from "./framework-resources.js";
 import {
-  declarationKey,
+  frameworkDeclarationKey,
   declarationNameText,
   declarationsForExpressionSymbol,
   memberNamesForValueName,
@@ -259,7 +259,7 @@ function rowsForDeclarations<TRow extends { readonly id: string }>(
 ): readonly TRow[] {
   return uniqueById(
     declarations.flatMap((declaration) => {
-      const key = declarationKey(declaration);
+      const key = frameworkDeclarationKey(declaration);
       return key === null ? [] : index.get(key) ?? [];
     }),
   );
@@ -272,7 +272,7 @@ function resourceCarriersForDeclarations(
 ): readonly FrameworkResourceCarrierRow[] {
   const direct = uniqueById(
     declarations.flatMap((declaration) => {
-      const key = declarationKey(declaration);
+      const key = frameworkDeclarationKey(declaration);
       const cached =
         key === null
           ? undefined
@@ -324,6 +324,13 @@ function resourceCarriersForDeclarations(
   if (direct.length > 0) {
     return direct;
   }
+  if (
+    !declarations.some((declaration) =>
+      resourceDeclarationNeedsPackageNameFallback(declaration),
+    )
+  ) {
+    return [];
+  }
   return uniqueById(
     namedPackageDeclarationKeys(
       sourceProject,
@@ -344,6 +351,12 @@ function resourceCarriersForDeclarations(
   );
 }
 
+function resourceDeclarationNeedsPackageNameFallback(
+  declaration: ts.Declaration,
+): boolean {
+  return declarationNameText(declaration) !== null;
+}
+
 function diInterfacesForDeclarations(
   sourceProject: SourceProject,
   classification: FrameworkBundleClassificationContext,
@@ -351,7 +364,7 @@ function diInterfacesForDeclarations(
 ): readonly FrameworkDiInterfaceExportRow[] {
   const direct = uniqueById(
     declarations.flatMap((declaration) => {
-      const key = declarationKey(declaration);
+      const key = frameworkDeclarationKey(declaration);
       const cached =
         key === null
           ? undefined
@@ -410,7 +423,7 @@ function registryExportsForDeclarations(
 ): readonly FrameworkRegistryExportRow[] {
   return uniqueById(
     declarations.flatMap((declaration) => {
-      const key = declarationKey(declaration);
+      const key = frameworkDeclarationKey(declaration);
       const cached =
         key === null
           ? undefined

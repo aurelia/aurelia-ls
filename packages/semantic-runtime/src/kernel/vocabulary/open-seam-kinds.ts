@@ -210,14 +210,6 @@ export const KernelOpenSeamKinds = {
       'Registration recognition could not classify the registration strategy.',
     ),
 
-    /** Registration recognition saw a callback whose body is intentionally not executed here. */
-    OpenCallbackBody: defineVocabulary(
-      KernelVocabularyNamespace.Registration,
-      'open-callback-body',
-      KernelVocabularySlot.OpenSeamKind,
-      'Registration recognition saw a callback whose body must remain for later evaluation or DI world construction.',
-    ),
-
     /** Registration recognition saw a spread argument or spread member that could not close. */
     OpenSpread: defineVocabulary(
       KernelVocabularyNamespace.Registration,
@@ -259,6 +251,15 @@ export const KernelOpenSeamKinds = {
       'Configuration recognition saw a callback whose body must stay available to later evaluation or DI spending.',
     ),
 
+  },
+  Router: {
+    /** Router instruction materialization could not close a NavigationInstruction or related option without guessing. */
+    OpenInstruction: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'open-instruction',
+      KernelVocabularySlot.OpenSeamKind,
+      'Router instruction materialization could not close a NavigationInstruction, params, context, or href classification without guessing.',
+    ),
   },
   Compiler: {
     /** Executable command or pattern body stayed opaque. */

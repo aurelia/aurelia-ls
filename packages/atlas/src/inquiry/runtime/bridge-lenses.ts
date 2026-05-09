@@ -6,7 +6,6 @@ import {
   BasisKind,
   type Basis,
 } from "../basis.js";
-import { clampBudget } from "../budget.js";
 import {
   ContinuationKind,
   ContinuationPriority,
@@ -28,6 +27,7 @@ import { PagedRowFamily } from "../paged-row-family.js";
 import {
   evidenceLimit,
   pageOffset,
+  rowLimit,
 } from "../paging.js";
 import {
   AuLinkGapKind,
@@ -61,7 +61,7 @@ export type { AuLinkUsageComparisonSummaryRow } from "./bridge-aulink-usage-lens
 import {
   AULINK_MIRROR_DETAIL_BUDGET,
   auLinkBasis,
-  checkerBasis,
+  auLinkCheckerBasis,
   frameworkBasis,
   isUnscopedBridgeInquiry,
   mirrorProjectionContinuation,
@@ -74,6 +74,7 @@ import {
   sourceRoute,
   typeFactsRoute,
 } from "./bridge-aulink-lens-support.js";
+import { booleanField, stringField } from "./lens-filter-utils.js";
 
 /** Value returned by the bridge.aulink runtime lens. */
 export interface BridgeAuLinkValue extends BridgeAuLinkUsageValue {
@@ -99,7 +100,7 @@ const AULINK_ANCHOR_ROW_FAMILY = new PagedRowFamily<AuLinkAnchorRow>({
   id: "bridge.aulink:anchors",
   rowLabel: "auLink anchor row(s)",
   evidenceForRow: evidenceForAnchor,
-  continuationsForPage: anchorContinuations,
+  continuationsForPage: auLinkAnchorContinuations,
 });
 
 const AULINK_GAP_ROW_FAMILY = new PagedRowFamily<AuLinkGapRow>({
@@ -149,9 +150,9 @@ export function answerBridgeAuLink(
   sourceProject: SourceProject,
 ): Answer<BridgeAuLinkValue> {
   const projection = inquiry.projection ?? "summary";
-  const filters = filtersFromInquiry(inquiry);
+  const filters = auLinkMirrorFiltersFromInquiry(inquiry);
   const model = readAuLinkModel(sourceProject, filters);
-  const limit = clampBudget(inquiry.budget?.rows, 80, 1_000);
+  const limit = rowLimit(inquiry);
   const offset = pageOffset(inquiry);
 
   if (projection === "anchors") {
@@ -160,7 +161,7 @@ export function answerBridgeAuLink(
       rows: model.anchors,
       limit,
       offset,
-      basis: [auLinkBasis(sourceProject), checkerBasis(sourceProject)],
+      basis: [auLinkBasis(sourceProject), auLinkCheckerBasis(sourceProject)],
       value: (page) => ({
         filters,
         rollup: model.rollup,
@@ -177,7 +178,7 @@ export function answerBridgeAuLink(
       rows: model.gaps,
       limit,
       offset,
-      basis: [auLinkBasis(sourceProject), checkerBasis(sourceProject)],
+      basis: [auLinkBasis(sourceProject), auLinkCheckerBasis(sourceProject)],
       value: (page) => ({
         filters,
         rollup: model.rollup,
@@ -196,7 +197,7 @@ export function answerBridgeAuLink(
       offset,
       basis: [
         auLinkBasis(sourceProject),
-        checkerBasis(sourceProject),
+        auLinkCheckerBasis(sourceProject),
         frameworkBasis(sourceProject),
       ],
       value: (page) => ({
@@ -351,31 +352,31 @@ export function answerBridgeAuLink(
       : OutcomeKind.Hit;
   return createAnswer(inquiry, outcome, summaryForRollup(model.rollup), {
     value,
-    basis: [auLinkBasis(sourceProject), checkerBasis(sourceProject)],
+    basis: [auLinkBasis(sourceProject), auLinkCheckerBasis(sourceProject)],
     evidence: summaryEvidence(model, inquiry),
     openSeams: model.gaps.slice(0, evidenceLimit(inquiry)).map(openSeamForGap),
-    continuations: summaryContinuations(inquiry, filters, model),
+    continuations: auLinkSummaryContinuations(inquiry, filters, model),
   });
 }
 
-function filtersFromInquiry(inquiry: Inquiry): AuLinkMirrorFilters {
+function auLinkMirrorFiltersFromInquiry(inquiry: Inquiry): AuLinkMirrorFilters {
   return {
-    ...filtersFromSubject(inquiry.subject),
-    ...filtersFromRecord(inquiry.filters),
+    ...auLinkMirrorFiltersFromSubject(inquiry.subject),
+    ...auLinkMirrorFiltersFromRecord(inquiry.filters),
   };
 }
 
-function filtersFromSubject(subject: unknown): AuLinkMirrorFilters {
+function auLinkMirrorFiltersFromSubject(subject: unknown): AuLinkMirrorFilters {
   if (typeof subject === "string" && subject.includes(":")) {
     return { linkId: subject };
   }
   if (subject !== null && typeof subject === "object") {
-    return filtersFromRecord(subject as Record<string, unknown>);
+    return auLinkMirrorFiltersFromRecord(subject as Record<string, unknown>);
   }
   return {};
 }
 
-function filtersFromRecord(
+function auLinkMirrorFiltersFromRecord(
   source: Record<string, unknown> | undefined,
 ): AuLinkMirrorFilters {
   if (source === undefined) {
@@ -425,31 +426,6 @@ function filtersFromRecord(
   };
 }
 
-function stringField(
-  source: Record<string, unknown>,
-  key: keyof AuLinkMirrorFilters,
-): object {
-  const value = source[key];
-  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
-}
-
-function booleanField(
-  source: Record<string, unknown>,
-  key: keyof AuLinkMirrorFilters,
-): object {
-  const value = source[key];
-  if (typeof value === "boolean") {
-    return { [key]: value };
-  }
-  if (value === "true") {
-    return { [key]: true };
-  }
-  if (value === "false") {
-    return { [key]: false };
-  }
-  return {};
-}
-
 function summaryForRollup(rollup: AuLinkRollup): string {
   return `Read ${rollup.anchors} auLink anchor(s), ${rollup.catalogEntries} catalog entrie(s), ${rollup.gaps} gap row(s), and ${rollup.resolvedFrameworkTargets} resolved framework target(s).`;
 }
@@ -469,7 +445,7 @@ function summaryEvidence(
   ];
 }
 
-function summaryContinuations(
+function auLinkSummaryContinuations(
   inquiry: Inquiry,
   filters: AuLinkMirrorFilters,
   model: AuLinkModel,
@@ -603,7 +579,7 @@ function summaryContinuations(
   const firstAnchor = model.anchors[0];
   if (firstAnchor !== undefined) {
     continuations.push(
-      sourceContinuation(
+      auLinkSourceContinuation(
         "bridge.aulink:source:0",
         "Inspect the source behind the first auLink anchor.",
         firstAnchor,
@@ -614,7 +590,7 @@ function summaryContinuations(
   return continuations;
 }
 
-function anchorContinuations(
+function auLinkAnchorContinuations(
   inquiry: Inquiry,
   anchors: readonly AuLinkAnchorRow[],
   nextOffset: number | undefined,
@@ -702,7 +678,7 @@ function anchorContinuations(
   });
   for (const [index, anchor] of anchors.slice(0, 3).entries()) {
     continuations.push(
-      sourceContinuation(
+      auLinkSourceContinuation(
         `bridge.aulink:anchors:source:${index}`,
         "Inspect the decorator source for this auLink anchor.",
         anchor,
@@ -879,7 +855,7 @@ function gapContinuations(
   return continuations;
 }
 
-function sourceContinuation(
+function auLinkSourceContinuation(
   id: string,
   rationale: string,
   anchor: AuLinkAnchorRow,
@@ -1136,7 +1112,7 @@ function handleForFrameworkTarget(
 function mirrorBasis(sourceProject: SourceProject): readonly Basis[] {
   return [
     auLinkBasis(sourceProject),
-    checkerBasis(sourceProject),
+    auLinkCheckerBasis(sourceProject),
     frameworkBasis(sourceProject),
     {
       kind: BasisKind.StaticEvaluator,

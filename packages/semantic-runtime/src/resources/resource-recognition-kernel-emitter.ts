@@ -40,12 +40,11 @@ import {
 } from '../kernel/store.js';
 import {
   recordsForSourceOpenSeams,
-  SourceOpenSeamInput,
 } from '../kernel/source-open-seam.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
-  CheckerTypeProjectionInput,
   CheckerTypeProjector,
+  type CheckerTypeProjectionRequest,
 } from '../type-system/checker-projector.js';
 import {
   CheckerTypeProjectionOrigin,
@@ -659,16 +658,16 @@ export class ResourceRecognitionKernelEmitter {
   } {
     return recordsForSourceOpenSeams(
       this.store,
-      seams.map((seam, index) => new SourceOpenSeamInput(
-        `resource-open:${local}:${seam.openKind}:${index}`,
-        seam.openKind,
-        seam.summary,
-        context.sourceFileAddressHandle,
-        seam.node.getStart(context.sourceFile),
-        seam.node.end,
-        [EvidenceRole.Diagnostic],
-        true,
-      )),
+      seams.map((seam, index) => ({
+        localKey: `resource-open:${local}:${seam.openKind}:${index}`,
+        openKind: seam.openKind,
+        summary: seam.summary,
+        sourceFileAddressHandle: context.sourceFileAddressHandle,
+        start: seam.node.getStart(context.sourceFile),
+        end: seam.node.end,
+        evidenceRoles: [EvidenceRole.Diagnostic],
+        includeProvenanceRecord: true,
+      })),
     );
   }
 }
@@ -714,7 +713,7 @@ function observationLocalKey(
   node: ts.Node,
   index: number,
 ): string {
-  return `${context.moduleKey}:${node.getStart(context.sourceFile)}:${node.end}:${index}`;
+  return `${context.projectKey}:${context.moduleKey}:${node.getStart(context.sourceFile)}:${node.end}:${index}`;
 }
 
 function projectTargetType(
@@ -730,15 +729,15 @@ function projectTargetType(
   if (type == null) {
     return null;
   }
-  const typeShape = new CheckerTypeProjector(store).ensureProjection(new CheckerTypeProjectionInput(
-    `resource-target:${local}:runtime-type`,
-    typeSystem.checker,
+  const typeShape = new CheckerTypeProjector(store).ensureProjection({
+    localKey: `resource-target:${local}:runtime-type`,
+    checker: typeSystem.checker,
     type,
-    CheckerTypeProjectionOrigin.TypeChecker,
-    node,
+    origin: CheckerTypeProjectionOrigin.TypeChecker,
+    sourceNode: node,
     sourceAddressHandle,
     ownerIdentityHandle,
     display,
-  ));
+  } satisfies CheckerTypeProjectionRequest);
   return typeShape.toReference();
 }

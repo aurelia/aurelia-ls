@@ -9,6 +9,7 @@ import {
   ExpressionCompanionFrameKind,
   ExpressionExpectedContinuationClass,
   ExpressionFrontierKind,
+  ExpressionParseResultKind,
   ExpressionSuccess,
 } from "./parse-result-algebra.js";
 import type {
@@ -217,6 +218,23 @@ export class CompletedInputParser {
     // surface. If later tooling needs command-specific restrictions or more
     // faithful function-entry semantics, split that at the entry-family
     // boundary rather than forking the grammar opportunistically mid-parse.
+    const result = this.parsePropertyLikeBody(entryFamily);
+    if (result.kind === ExpressionParseResultKind.CompleteInputParseError) {
+      return result;
+    }
+
+    const eof = this.state.peekToken();
+    if (eof.type !== TokenType.EOF) {
+      return CompletedInputPublication.toParseError(
+        entryFamily,
+        this.state.hardError("Unexpected token after end of expression", eof),
+      );
+    }
+
+    return result;
+  }
+
+  private parsePropertyLikeBody(entryFamily: PropertyLikeEntryFamily): PropertyLikeParseResult {
     const first = this.state.peekToken();
     if (first.type === TokenType.EOF) {
       const ast = new PrimitiveLiteralExpression(this.state.span(0, 0), '') as EmptyExpressionAst;
@@ -230,14 +248,6 @@ export class CompletedInputParser {
     const withTails = this.parseTails(core);
     if (isParseFailure(withTails)) {
       return CompletedInputPublication.toPropertyLikeResult(entryFamily, withTails);
-    }
-
-    const eof = this.state.peekToken();
-    if (eof.type !== TokenType.EOF) {
-      return CompletedInputPublication.toParseError(
-        entryFamily,
-        this.state.hardError("Unexpected token after end of expression", eof),
-      );
     }
 
     if (this.state.retainedFailure) {

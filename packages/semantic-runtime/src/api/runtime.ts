@@ -1,11 +1,23 @@
 import path from 'node:path';
+import type ts from 'typescript';
 import type { BootProjectInput, ProjectBootFrame, WorkspaceBootFrame } from '../boot/frames.js';
 import { bootWorkspace } from '../boot/boot-workspace.js';
+import {
+  readSemanticProjectShape,
+  SemanticProjectShapeKind,
+  type SemanticProjectShape,
+} from '../boot/project-shape.js';
+import { SourceFileRole } from '../kernel/address.js';
 import { answerAdmittedSources, AdmittedSourcesQuery } from '../inquiry/source-files.js';
 import { InquiryOutcomeKind } from '../inquiry/answer.js';
 import { InquiryPageRequest } from '../inquiry/page.js';
 import { KernelStore } from '../kernel/store.js';
 import { AureliaAppWorldProjectEmission, AureliaAppWorldProjectPass } from '../configuration/app-world-project-pass.js';
+import {
+  SemanticAppAnalysisDepth,
+  normalizeSemanticAppAnalysisDepth,
+  semanticAppAnalysisDepthSatisfies,
+} from '../configuration/app-analysis.js';
 import type { TemplateCompilerWorldEmission } from '../template/compiler-world-materializer.js';
 import {
   readSemanticApplicationTopology,
@@ -22,8 +34,32 @@ import {
   readRuntimeControllerRows,
 } from './controller-projections.js';
 import {
+  readAppOpenSeams,
+} from './open-seam-projections.js';
+import {
+  readResourceDefinitionRows,
+} from './resource-projections.js';
+import {
+  readRouterOptionsRows,
+  readComponentAgentRows,
+  readRouteConfigRows,
+  readRouteContextRows,
+  readRouteEndpointRows,
+  readRouteNodeRows,
+  readRoutePatternRows,
+  readRecognizedRouteRows,
+  readRouteRecognizerStateRows,
+  readRouteTreeRows,
+  readRouterViewportRows,
+  readTypedNavigationInstructionRows,
+  readViewportAgentRows,
+  readViewportInstructionRows,
+  readViewportInstructionTreeRows,
+} from './route-projections.js';
+import {
   compilerWorldLabel,
   describeAddress,
+  type SemanticSourceReference,
 } from './source-reference.js';
 import {
   SEMANTIC_RUNTIME_API_VERSION,
@@ -38,18 +74,37 @@ import {
   type SemanticBindingTargetAccessResult,
   type SemanticBindingTargetOperationResult,
   type SemanticBindingValueChannelResult,
+  type SemanticComponentAgentsResult,
   type SemanticOpenSeamRow,
   type SemanticOpenSeamsResult,
+  type SemanticResourceDefinitionsResult,
   type SemanticResourceVisibilityResult,
   type SemanticResourceVisibilityRow,
+  type SemanticRecognizedRoutesResult,
+  type SemanticRouterOptionsResult,
+  type SemanticRouteConfigsResult,
+  type SemanticRouteContextsResult,
+  type SemanticRouteEndpointsResult,
+  type SemanticRouteNodesResult,
+  type SemanticRoutePatternsResult,
+  type SemanticRouteRecognizerStatesResult,
+  type SemanticRouteTreesResult,
+  type SemanticRouterViewportsResult,
   type SemanticRuntimeAnswer,
   type SemanticRuntimeControllerResult,
   type SemanticRuntimeOptions,
   type SemanticRuntimePageInput,
   type SemanticRuntimePageResult,
   type SemanticRuntimeSummary,
+  type SemanticSourceRoleCount,
   type SemanticSourceFileRow,
   type SemanticSourceFilesResult,
+  type SemanticTypedNavigationInstructionsResult,
+  type SemanticUnresolvedModuleRow,
+  type SemanticUnresolvedModulesResult,
+  type SemanticViewportAgentsResult,
+  type SemanticViewportInstructionsResult,
+  type SemanticViewportInstructionTreesResult,
   type SemanticTargetOperationResult,
   type SemanticTemplateCompilationResult,
   type SemanticTemplateCompilationRow,
@@ -64,7 +119,8 @@ export async function createSemanticRuntime(
 
 /** Booted workspace facade. It owns source admission and app-world opening. */
 export class SemanticRuntime {
-  private readonly appsByProjectKey = new Map<string, SemanticApp>();
+  private readonly appsByCacheKey = new Map<string, SemanticApp>();
+  private readonly projectShapesByProjectKey = new Map<string, SemanticProjectShape>();
 
   private constructor(
     readonly workspace: WorkspaceBootFrame,
@@ -80,6 +136,7 @@ export class SemanticRuntime {
       rootDir: workspaceRoot,
       storeKey: options.storeKey,
       projects,
+      projectDiscovery: options.projectDiscovery,
     });
     return new SemanticRuntime(workspace);
   }
@@ -88,11 +145,19 @@ export class SemanticRuntime {
     const value: SemanticRuntimeSummary = {
       workspaceRoot: this.workspace.rootDir,
       workspaceKey: this.workspace.workspaceKey,
-      projects: this.workspace.projects.map((project) => ({
-        projectKey: project.projectKey,
-        rootDir: project.rootDir,
-        sourceFiles: project.sourceFiles.length,
-      })),
+      projects: this.workspace.projects.map((project) => {
+        const shape = this.readProjectShape(project);
+        return {
+          projectKey: project.projectKey,
+          rootDir: project.rootDir,
+          sourceFiles: project.sourceFiles.length,
+          sourceRoles: sourceRoleCounts(project),
+          hasLikelyEntrypointSource: hasLikelyEntrypointSource(project),
+          shapeKind: shape.shapeKind,
+          aureliaDependencyScopes: shape.aureliaDependencyScopes,
+          aureliaSourceSignals: shape.aureliaSourceSignals,
+        };
+      }),
     };
     return answer(
       SemanticRuntimeAnswerOutcome.Hit,
@@ -102,15 +167,82 @@ export class SemanticRuntime {
   }
 
   async openApp(options: OpenSemanticAppOptions = {}): Promise<SemanticApp> {
-    const project = selectProject(this.workspace.projects, options.projectKey ?? null);
-    const existing = this.appsByProjectKey.get(project.projectKey);
+    const analysisDepth = normalizeSemanticAppAnalysisDepth(options.analysisDepth);
+    if (options.projectKey == null) {
+      return this.openDefaultApp(analysisDepth);
+    }
+    return this.openProjectApp(selectProject(this.workspace.projects, options.projectKey), analysisDepth);
+  }
+
+  private openDefaultApp(analysisDepth: SemanticAppAnalysisDepth): SemanticApp {
+    return this.openProjectApp(this.selectDefaultProject(), analysisDepth);
+  }
+
+  private openProjectApp(
+    project: ProjectBootFrame,
+    analysisDepth: SemanticAppAnalysisDepth,
+  ): SemanticApp {
+    const existing = this.readCachedApp(project.projectKey, analysisDepth);
     if (existing != null) {
       return existing;
     }
-    const emission = new AureliaAppWorldProjectPass().constructAndEmit(this.workspace.store, project);
+    const emission = new AureliaAppWorldProjectPass().constructAndEmit(this.workspace.store, project, { analysisDepth });
     const app = new SemanticApp(this, project, emission);
-    this.appsByProjectKey.set(project.projectKey, app);
+    this.appsByCacheKey.set(appCacheKey(project.projectKey, analysisDepth), app);
     return app;
+  }
+
+  private readCachedApp(
+    projectKey: string,
+    requestedDepth: SemanticAppAnalysisDepth,
+  ): SemanticApp | null {
+    const exact = this.appsByCacheKey.get(appCacheKey(projectKey, requestedDepth));
+    if (exact != null) {
+      return exact;
+    }
+    for (const app of this.appsByCacheKey.values()) {
+      if (
+        app.project.projectKey === projectKey
+        && semanticAppAnalysisDepthSatisfies(app.emission.analysisDepth, requestedDepth)
+      ) {
+        return app;
+      }
+    }
+    return null;
+  }
+
+  private readProjectShape(project: ProjectBootFrame): SemanticProjectShape {
+    const existing = this.projectShapesByProjectKey.get(project.projectKey);
+    if (existing != null) {
+      return existing;
+    }
+    const shape = readSemanticProjectShape(project);
+    this.projectShapesByProjectKey.set(project.projectKey, shape);
+    return shape;
+  }
+
+  private selectDefaultProject(): ProjectBootFrame {
+    const aureliaAppProject = this.workspace.projects.find((project) =>
+      this.readProjectShape(project).shapeKind === SemanticProjectShapeKind.AureliaApp
+    );
+    if (aureliaAppProject != null) {
+      return aureliaAppProject;
+    }
+    const entrypointProject = this.workspace.projects.find(hasLikelyEntrypointSource);
+    if (entrypointProject != null) {
+      return entrypointProject;
+    }
+    const appSourceProject = this.workspace.projects.find((project) =>
+      project.sourceFiles.some((source) => source.role === SourceFileRole.AppSource)
+    );
+    if (appSourceProject != null) {
+      return appSourceProject;
+    }
+    const project = this.workspace.projects[0];
+    if (project == null) {
+      throw new Error('Cannot open semantic app: workspace did not boot any projects.');
+    }
+    return project;
   }
 }
 
@@ -128,10 +260,44 @@ export class SemanticApp {
         return this.summary();
       case SemanticAppQueryKind.SourceFiles:
         return this.sourceFiles(query.page, query.detail);
+      case SemanticAppQueryKind.UnresolvedModules:
+        return this.unresolvedModules(query.page);
       case SemanticAppQueryKind.OpenSeams:
         return this.openSeams(query.page, query.detail);
       case SemanticAppQueryKind.AppTopology:
         return this.appTopology(query.detail);
+      case SemanticAppQueryKind.RouterOptions:
+        return this.routerOptions(query.page, query.detail);
+      case SemanticAppQueryKind.Routes:
+        return this.routes(query.page, query.detail);
+      case SemanticAppQueryKind.RouteContexts:
+        return this.routeContexts(query.page, query.detail);
+      case SemanticAppQueryKind.RoutePatterns:
+        return this.routePatterns(query.page, query.detail);
+      case SemanticAppQueryKind.RouteEndpoints:
+        return this.routeEndpoints(query.page, query.detail);
+      case SemanticAppQueryKind.RouteRecognizerStates:
+        return this.routeRecognizerStates(query.page, query.detail);
+      case SemanticAppQueryKind.RecognizedRoutes:
+        return this.recognizedRoutes(query.page, query.detail);
+      case SemanticAppQueryKind.TypedNavigationInstructions:
+        return this.typedNavigationInstructions(query.page, query.detail);
+      case SemanticAppQueryKind.ViewportInstructions:
+        return this.viewportInstructions(query.page, query.detail);
+      case SemanticAppQueryKind.ViewportInstructionTrees:
+        return this.viewportInstructionTrees(query.page, query.detail);
+      case SemanticAppQueryKind.RouteTrees:
+        return this.routeTrees(query.page, query.detail);
+      case SemanticAppQueryKind.RouteNodes:
+        return this.routeNodes(query.page, query.detail);
+      case SemanticAppQueryKind.RouterViewports:
+        return this.routerViewports(query.page, query.detail);
+      case SemanticAppQueryKind.ViewportAgents:
+        return this.viewportAgents(query.page, query.detail);
+      case SemanticAppQueryKind.ComponentAgents:
+        return this.componentAgents(query.page, query.detail);
+      case SemanticAppQueryKind.ResourceDefinitions:
+        return this.resourceDefinitions(query.page, query.detail);
       case SemanticAppQueryKind.ResourceVisibility:
         return this.resourceVisibility(query.page, query.detail);
       case SemanticAppQueryKind.TemplateCompilations:
@@ -163,7 +329,7 @@ export class SemanticApp {
     const value = appSummary(this.project, this.emission, this.runtime.workspace.store);
     return answer(
       SemanticRuntimeAnswerOutcome.Hit,
-      `Opened semantic app '${value.projectKey}' with ${value.appRoots} app root(s), ${value.compilerWorlds} compiler world(s), and ${value.compiledResources} compiled resource template(s).`,
+      `Opened semantic app '${value.projectKey}' with ${value.appRoots} app root(s), ${value.routeConfigs} route config(s), ${value.routePatterns} route pattern(s), ${value.routeEndpoints} route endpoint(s), ${value.compilerWorlds} compiler world(s), and ${value.compiledResources} compiled resource template(s).`,
       value,
     );
   }
@@ -182,6 +348,7 @@ export class SemanticApp {
       projectKey: source.projectKey,
       path: source.path,
       language: source.language,
+      role: source.role,
       ...(handles ? { handles: { addressHandle: source.addressHandle } } : {}),
     }));
     return answer(
@@ -198,12 +365,33 @@ export class SemanticApp {
     );
   }
 
+  unresolvedModules(
+    page?: SemanticRuntimePageInput,
+  ): SemanticRuntimeAnswer<SemanticUnresolvedModulesResult> {
+    const rows = this.emission.evaluation.readUnresolvedModules()
+      .map((edge): SemanticUnresolvedModuleRow => ({
+        fromModuleKey: edge.fromModuleKey,
+        moduleSpecifier: edge.moduleSpecifier,
+        source: sourceReferenceForNode(edge.node),
+      }))
+      .sort((left, right) =>
+        `${left.fromModuleKey}:${left.moduleSpecifier}`.localeCompare(`${right.fromModuleKey}:${right.moduleSpecifier}`)
+      );
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} unresolved module edge(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
   openSeams(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticOpenSeamsResult> {
     const handles = includeHandles(detail);
-    const rows = this.runtime.workspace.store.readOpenSeams()
+    const rows = readAppOpenSeams(this.emission, this.runtime.workspace.store)
       .map((seam): SemanticOpenSeamRow => ({
         seamKindKey: seam.seamKindKey,
         summary: seam.summary,
@@ -218,9 +406,9 @@ export class SemanticApp {
       .sort((left, right) =>
         `${left.seamKindKey}:${left.summary}`.localeCompare(`${right.seamKindKey}:${right.summary}`)
       );
-    const paged = pageRows(rows, page, (row) => `${row.seamKindKey}:${row.source?.label ?? ''}:${row.summary}`);
+    const paged = pageRows(rows, page);
     return answer(
-      paged.rows.length === rows.length ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+      outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} open semantic seam(s).`,
       { rows: paged.rows },
       paged.page,
@@ -234,8 +422,232 @@ export class SemanticApp {
     const value = readSemanticApplicationTopology(this.runtime.workspace.store, this.emission, handles);
     return answer(
       SemanticRuntimeAnswerOutcome.Hit,
-      `Recovered ${value.appRoots.length} app root(s), ${value.components.length} component(s), and ${value.files.length} roleful app file(s).`,
+      `Recovered ${value.appRoots.length} app root(s), ${value.components.length} component(s), ${value.routes.length} route config(s), and ${value.files.length} roleful app file(s).`,
       value,
+    );
+  }
+
+  resourceDefinitions(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticResourceDefinitionsResult> {
+    const rows = readResourceDefinitionRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} recognized resource definition row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  routerOptions(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticRouterOptionsResult> {
+    const rows = readRouterOptionsRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} router options row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  routes(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticRouteConfigsResult> {
+    const rows = readRouteConfigRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} source-backed router route config row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  routeContexts(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticRouteContextsResult> {
+    const rows = readRouteContextRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} runtime RouteContext row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  routePatterns(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticRoutePatternsResult> {
+    const rows = readRoutePatternRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} route-recognizer configurable route pattern row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  routeEndpoints(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticRouteEndpointsResult> {
+    const rows = readRouteEndpointRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} route-recognizer endpoint row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  routeRecognizerStates(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticRouteRecognizerStatesResult> {
+    const rows = readRouteRecognizerStateRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} route-recognizer State row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  recognizedRoutes(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticRecognizedRoutesResult> {
+    const rows = readRecognizedRouteRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} route-recognizer RecognizedRoute row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  typedNavigationInstructions(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticTypedNavigationInstructionsResult> {
+    const rows = readTypedNavigationInstructionRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} TypedNavigationInstruction row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  viewportInstructions(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticViewportInstructionsResult> {
+    const rows = readViewportInstructionRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} ViewportInstruction row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  viewportInstructionTrees(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticViewportInstructionTreesResult> {
+    const rows = readViewportInstructionTreeRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} ViewportInstructionTree row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  routeTrees(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticRouteTreesResult> {
+    const rows = readRouteTreeRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} RouteTree row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  routeNodes(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticRouteNodesResult> {
+    const rows = readRouteNodeRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} RouteNode row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  routerViewports(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticRouterViewportsResult> {
+    const rows = readRouterViewportRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} router viewport row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  viewportAgents(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticViewportAgentsResult> {
+    const rows = readViewportAgentRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} ViewportAgent row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  componentAgents(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticComponentAgentsResult> {
+    const rows = readComponentAgentRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} ComponentAgent handoff row(s).`,
+      { rows: paged.rows },
+      paged.page,
     );
   }
 
@@ -244,7 +656,7 @@ export class SemanticApp {
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticResourceVisibilityResult> {
     const handles = includeHandles(detail);
-    const rows = this.emission.appWorld.compilerWorlds
+    const rows = this.emission.templates.compilerWorlds
       .flatMap((compilerWorld): readonly SemanticResourceVisibilityRow[] =>
         [
           ...compilerWorld.resourceScope.resources,
@@ -270,11 +682,9 @@ export class SemanticApp {
         `${left.resourceKind}:${left.name}:${left.compilerWorld}`
           .localeCompare(`${right.resourceKind}:${right.name}:${right.compilerWorld}`)
       );
-    const paged = pageRows(rows, page, (row) =>
-      `${row.compilerWorld}:${row.resourceKind}:${row.name}`
-    );
+    const paged = pageRows(rows, page);
     return answer(
-      paged.rows.length === rows.length ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+      outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} compiler-visible resource row(s).`,
       { rows: paged.rows },
       paged.page,
@@ -288,6 +698,7 @@ export class SemanticApp {
     const handles = includeHandles(detail);
     const rows = this.emission.templates.resources
       .map((resource): SemanticTemplateCompilationRow => ({
+        analysisDepth: resource.runtimeAnalysis.analysisDepth,
         definitionName: resource.compilation.definition.name,
         compilerWorld: compilerWorldLabel(this.runtime.workspace.store, resource.compilation.compilerWorld),
         templateSourceKind: resource.compilation.unit.templateSource.sourceKind,
@@ -335,11 +746,9 @@ export class SemanticApp {
         } : {}),
       }))
       .sort((left, right) => left.definitionName.localeCompare(right.definitionName));
-    const paged = pageRows(rows, page, (row) =>
-      `${row.compilerWorld}:${row.definitionName}`
-    );
+    const paged = pageRows(rows, page);
     return answer(
-      paged.rows.length === rows.length ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+      outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} compiled template row(s).`,
       { rows: paged.rows },
       paged.page,
@@ -351,11 +760,9 @@ export class SemanticApp {
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticRuntimeControllerResult> {
     const rows = readRuntimeControllerRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
-    const paged = pageRows(rows, page, (row) =>
-      `${row.renderingDefinitionName}:${row.parentControllerName ?? ''}:${row.controllerName ?? ''}:${row.creationKind}:${row.hydrationHandoffKind}`
-    );
+    const paged = pageRows(rows, page);
     return answer(
-      paged.rows.length === rows.length ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+      outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} runtime controller hydration row(s).`,
       { rows: paged.rows },
       paged.page,
@@ -366,12 +773,18 @@ export class SemanticApp {
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticBindingTargetAccessResult> {
-    const rows = readBindingTargetAccessRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
-    const paged = pageRows(rows, page, (row) =>
-      `${row.definitionName}:${row.targetProperty}:${row.lookup}:${row.strategy}:${row.source?.label ?? ''}`
+    const unsupported = this.requireAnalysisDepth(
+      SemanticAppAnalysisDepth.BindingTargets,
+      'runtime binding target-access rows',
+      { rows: [] } satisfies SemanticBindingTargetAccessResult,
     );
+    if (unsupported != null) {
+      return unsupported;
+    }
+    const rows = readBindingTargetAccessRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
     return answer(
-      paged.rows.length === rows.length ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+      outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} runtime binding target-access row(s).`,
       { rows: paged.rows },
       paged.page,
@@ -382,12 +795,18 @@ export class SemanticApp {
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticTargetOperationResult> {
-    const rows = readTargetOperationRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
-    const paged = pageRows(rows, page, (row) =>
-      `${row.definitionName}:${row.ownerKind}:${row.targetAttribute}:${row.targetProperty}:${row.operationKind}:${row.source?.label ?? ''}`
+    const unsupported = this.requireAnalysisDepth(
+      SemanticAppAnalysisDepth.BindingTargets,
+      'combined runtime target-operation rows',
+      { rows: [] } satisfies SemanticTargetOperationResult,
     );
+    if (unsupported != null) {
+      return unsupported;
+    }
+    const rows = readTargetOperationRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
     return answer(
-      paged.rows.length === rows.length ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+      outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} runtime target-operation row(s).`,
       { rows: paged.rows },
       paged.page,
@@ -405,12 +824,18 @@ export class SemanticApp {
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticBindingSourceOperationResult> {
-    const rows = readBindingSourceOperationRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
-    const paged = pageRows(rows, page, (row) =>
-      `${row.definitionName}:${row.targetName}:${row.operationKind}:${row.source?.label ?? ''}`
+    const unsupported = this.requireAnalysisDepth(
+      SemanticAppAnalysisDepth.BindingTargets,
+      'runtime binding source-operation rows',
+      { rows: [] } satisfies SemanticBindingSourceOperationResult,
     );
+    if (unsupported != null) {
+      return unsupported;
+    }
+    const rows = readBindingSourceOperationRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
     return answer(
-      paged.rows.length === rows.length ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+      outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} runtime binding source-operation row(s).`,
       { rows: paged.rows },
       paged.page,
@@ -421,12 +846,18 @@ export class SemanticApp {
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticBindingValueChannelResult> {
-    const rows = readBindingValueChannelRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
-    const paged = pageRows(rows, page, (row) =>
-      `${row.definitionName}:${row.targetProperty ?? ''}:${row.channelKind}:${row.source?.label ?? ''}`
+    const unsupported = this.requireAnalysisDepth(
+      SemanticAppAnalysisDepth.BindingObservation,
+      'runtime binding value-channel rows',
+      { rows: [] } satisfies SemanticBindingValueChannelResult,
     );
+    if (unsupported != null) {
+      return unsupported;
+    }
+    const rows = readBindingValueChannelRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
     return answer(
-      paged.rows.length === rows.length ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+      outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} runtime binding value-channel row(s).`,
       { rows: paged.rows },
       paged.page,
@@ -437,17 +868,42 @@ export class SemanticApp {
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticBindingDataFlowResult> {
-    const rows = readBindingDataFlowRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
-    const paged = pageRows(rows, page, (row) =>
-      `${row.definitionName}:${row.sourceName ?? ''}:${row.direction}:${row.targetProperty ?? ''}:${row.source?.label ?? ''}`
+    const unsupported = this.requireAnalysisDepth(
+      SemanticAppAnalysisDepth.BindingObservation,
+      'runtime binding data-flow rows',
+      { rows: [] } satisfies SemanticBindingDataFlowResult,
     );
+    if (unsupported != null) {
+      return unsupported;
+    }
+    const rows = readBindingDataFlowRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
     return answer(
-      paged.rows.length === rows.length ? SemanticRuntimeAnswerOutcome.Hit : SemanticRuntimeAnswerOutcome.Partial,
+      outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} runtime binding data-flow row(s).`,
       { rows: paged.rows },
       paged.page,
     );
   }
+
+  private requireAnalysisDepth<TValue>(
+    requiredDepth: SemanticAppAnalysisDepth,
+    label: string,
+    value: TValue,
+  ): SemanticRuntimeAnswer<TValue> | null {
+    if (semanticAppAnalysisDepthSatisfies(this.emission.analysisDepth, requiredDepth)) {
+      return null;
+    }
+    return answer(
+      SemanticRuntimeAnswerOutcome.Unsupported,
+      `${label} require analysisDepth='${requiredDepth}', but this app was opened with analysisDepth='${this.emission.analysisDepth}'.`,
+      value,
+    );
+  }
+}
+
+function appCacheKey(projectKey: string, analysisDepth: SemanticAppAnalysisDepth): string {
+  return `${projectKey}:${analysisDepth}`;
 }
 
 type TemplateResourceEmission = AureliaAppWorldProjectEmission['templates']['resources'][number];
@@ -498,6 +954,8 @@ interface AppSummaryTemplateCounts {
   readonly runtimeBindingSourceOperations: number;
   readonly runtimeBindingValueChannels: number;
   readonly runtimeBindingDataFlows: number;
+  readonly runtimeBindingDataFlowSourceTypeGaps: number;
+  readonly runtimeBindingDataFlowSourceAssignmentGaps: number;
   readonly bindingScopes: number;
 }
 
@@ -513,15 +971,35 @@ function appSummary(
   store: KernelStore,
 ): SemanticAppSummary {
   const templates = emission.templates.resources;
+  const appOpenSeams = readAppOpenSeams(emission, store);
   return {
+    analysisDepth: emission.analysisDepth,
     ...projectSummaryCounts(project),
     ...evaluationSummaryCounts(emission),
     resourceDefinitions: emission.resources.readDefinitions().length,
+    routerOptions: emission.routerOptions.readRouterOptions().length,
+    routeConfigs: emission.routes.readRouteConfigs().length,
+    routeConfigContexts: emission.routeContexts.readRouteConfigContexts().length,
+    routeContexts: emission.routeRuntimeTopology.readRouteContexts().length,
+    routeRecognizers: emission.routeContexts.readRouteRecognizers().length,
+    routePatterns: emission.routeRecognizer.readConfigurableRoutes().length,
+    routeEndpoints: emission.routeRecognizer.readEndpoints().length,
+    routeRecognizerStates: emission.routeRecognizer.readStates().length,
+    recognizedRoutes: emission.routeRecognition.readRecognizedRoutes().length,
+    typedNavigationInstructions: emission.routeInstructions.readTypedNavigationInstructions().length,
+    viewportInstructions: emission.routeInstructions.readViewportInstructions().length,
+    viewportInstructionTrees: emission.routeInstructions.readViewportInstructionTrees().length,
+    routeTrees: emission.routeTree.readRouteTrees().length,
+    routeNodes: emission.routeTree.readRouteNodes().length,
+    routerViewports: emission.routeRuntimeTopology.readViewports().length,
+    viewportAgents: emission.routeRuntimeTopology.readViewportAgents().length,
+    componentAgents: emission.routeComponentAgents.readComponentAgents().length,
     ...configurationSummaryCounts(emission),
+    appTasks: appTaskSummaryCount(emission),
     ...diSummaryCounts(emission, templates),
-    ...compilerWorldSummaryCounts(emission.appWorld.compilerWorlds),
+    ...compilerWorldSummaryCounts(emission.templates.compilerWorlds),
     ...templateSummaryCounts(templates),
-    ...kernelSummaryCounts(store),
+    ...kernelSummaryCounts(store, appOpenSeams.length),
   };
 }
 
@@ -533,11 +1011,25 @@ function projectSummaryCounts(project: ProjectBootFrame): AppSummaryProjectCount
   };
 }
 
+function sourceRoleCounts(project: ProjectBootFrame): readonly SemanticSourceRoleCount[] {
+  const counts = new Map<string, number>();
+  for (const source of project.sourceFiles) {
+    counts.set(source.role, (counts.get(source.role) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([role, count]) => ({ role, count }));
+}
+
 function evaluationSummaryCounts(emission: AureliaAppWorldProjectEmission): AppSummaryEvaluationCounts {
   return {
     evaluatedSources: emission.evaluation.readEvaluatedSources().length,
     unresolvedModuleEdges: emission.evaluation.readUnresolvedModules().length,
   };
+}
+
+function appTaskSummaryCount(emission: AureliaAppWorldProjectEmission): number {
+  return emission.configuration.readConfiguration().appTasks.length + emission.appWorld.diWorld.appTasks.length;
 }
 
 function configurationSummaryCounts(emission: AureliaAppWorldProjectEmission): AppSummaryConfigurationCounts {
@@ -566,7 +1058,7 @@ function diSummaryCounts(
     ),
     runtimeControllers: sumTemplates(templates, (resource) =>
       resource.runtimeAnalysis.runtimeRendering.controllers.length
-    ),
+    ) + emission.routeComponentAgents.readControllers().length,
     resourceSlots: diWorld.resourceSlots.length,
     diOpenSeams: diWorld.openSeams.length,
   };
@@ -613,15 +1105,34 @@ function templateSummaryCounts(templates: readonly TemplateResourceEmission[]): 
     runtimeBindingDataFlows: sumTemplates(templates, (resource) =>
       resource.runtimeAnalysis.bindingDataFlow.dataFlows.length
     ),
+    runtimeBindingDataFlowSourceTypeGaps: sumTemplates(templates, (resource) =>
+      resource.runtimeAnalysis.bindingDataFlow.dataFlows.filter((dataFlow) => dataFlow.sourceTypeOpenReason != null).length
+    ),
+    runtimeBindingDataFlowSourceAssignmentGaps: sumTemplates(templates, (resource) =>
+      resource.runtimeAnalysis.bindingDataFlow.dataFlows.filter((dataFlow) => dataFlow.sourceAssignmentReason != null).length
+    ),
     bindingScopes: sumTemplates(templates, (resource) => resource.runtimeAnalysis.scopes.readScopes().length),
   };
 }
 
-function kernelSummaryCounts(store: KernelStore): AppSummaryKernelCounts {
+function kernelSummaryCounts(store: KernelStore, kernelOpenSeams: number): AppSummaryKernelCounts {
   return {
     kernelProducts: store.readProducts().length,
     kernelClaims: store.readClaims().length,
-    kernelOpenSeams: store.readOpenSeams().length,
+    kernelOpenSeams,
+  };
+}
+
+function sourceReferenceForNode(node: ts.Node): SemanticSourceReference {
+  const sourceFile = node.getSourceFile();
+  const start = node.getStart(sourceFile);
+  const end = node.getEnd();
+  return {
+    kind: 'typescript-node',
+    label: `${sourceFile.fileName}@${start}..${end}`,
+    path: sourceFile.fileName,
+    start,
+    end,
   };
 }
 
@@ -641,20 +1152,28 @@ function sumCompilerWorlds(
 
 function selectProject(
   projects: readonly ProjectBootFrame[],
-  projectKey: string | null,
+  projectKey: string,
 ): ProjectBootFrame {
-  if (projectKey == null) {
-    const project = projects[0];
-    if (project == null) {
-      throw new Error('Cannot open semantic app: workspace did not boot any projects.');
-    }
-    return project;
-  }
   const project = projects.find((candidate) => candidate.projectKey === projectKey);
   if (project == null) {
     throw new Error(`Cannot open semantic app: project '${projectKey}' was not booted.`);
   }
   return project;
+}
+
+function hasLikelyEntrypointSource(project: ProjectBootFrame): boolean {
+  return project.sourceFiles.some((source) => {
+    if (source.role !== SourceFileRole.AppSource) {
+      return false;
+    }
+    const baseName = path.basename(source.path).toLowerCase();
+    return baseName === 'main.ts' ||
+      baseName === 'main.js' ||
+      baseName === 'bootstrap.ts' ||
+      baseName === 'bootstrap.js' ||
+      baseName === 'startup.ts' ||
+      baseName === 'startup.js';
+  });
 }
 
 function toPageRequest(page: SemanticRuntimePageInput | undefined): InquiryPageRequest {
@@ -701,18 +1220,17 @@ function semanticOutcomeForInquiry(
 function pageRows<TRow>(
   rows: readonly TRow[],
   page: SemanticRuntimePageInput | undefined,
-  key: (row: TRow) => string,
 ): {
   readonly rows: readonly TRow[];
   readonly page: SemanticRuntimePageResult;
 } {
   const size = Math.max(0, page?.size ?? 50);
   const cursor = page?.cursor ?? null;
-  const start = cursor == null ? 0 : cursorStart(cursor, rows, key);
+  const start = cursor == null ? 0 : cursorStart(cursor, rows.length);
   const safeStart = start < 0 ? rows.length : start;
   const selected = rows.slice(safeStart, safeStart + size);
   const nextCursor = selected.length > 0 && safeStart + selected.length < rows.length
-    ? key(selected[selected.length - 1]!)
+    ? `offset:${safeStart + selected.length - 1}`
     : null;
   return {
     rows: selected,
@@ -726,15 +1244,19 @@ function pageRows<TRow>(
   };
 }
 
-function cursorStart<TRow>(
+function outcomeForPagedRows(paged: { readonly page: SemanticRuntimePageResult }): SemanticRuntimeAnswerOutcome {
+  return paged.page.nextCursor == null
+    ? SemanticRuntimeAnswerOutcome.Hit
+    : SemanticRuntimeAnswerOutcome.Partial;
+}
+
+function cursorStart(
   cursor: string,
-  rows: readonly TRow[],
-  key: (row: TRow) => string,
+  rowCount: number,
 ): number {
   if (cursor.startsWith('offset:')) {
     const offset = Number.parseInt(cursor.slice('offset:'.length), 10);
-    return Number.isFinite(offset) ? offset + 1 : rows.length;
+    return Number.isFinite(offset) ? offset + 1 : rowCount;
   }
-  const index = rows.findIndex((row) => key(row) === cursor);
-  return index < 0 ? rows.length : index + 1;
+  return rowCount;
 }

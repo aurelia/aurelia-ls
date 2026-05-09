@@ -17,6 +17,8 @@ export const enum RegistrationAdmissionKind {
   ContainerRegisterArgument = 'container-register-argument',
   /** Admission produced by a direct `aurelia.register(...)` argument. */
   AureliaRegisterArgument = 'aurelia-register-argument',
+  /** Admission produced by the browser `aurelia` facade's default container setup. */
+  AureliaFacadeDefault = 'aurelia-facade-default',
   /** Admission produced by an `IRegistry.register(container)` method. */
   RegistryMethod = 'registry-method',
   /** Admission produced by a resource definition's register behavior. */

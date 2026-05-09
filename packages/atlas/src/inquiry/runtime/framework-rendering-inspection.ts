@@ -7,7 +7,7 @@ import {
   containingCallbackParameterScope,
   isNestedExecutionBoundary,
   newExpressionsIn,
-  objectProperty,
+  objectLiteralProperty,
   propertyNameText,
   returnExpressions,
   unwrapExpression,
@@ -398,7 +398,7 @@ export function instructionTargetFromReturnedExpression(
   if (!ts.isObjectLiteralExpression(current)) {
     return null;
   }
-  const property = objectProperty(current, "type");
+  const property = objectLiteralProperty(current, "type");
   if (property === null || !ts.isPropertyAssignment(property)) {
     return null;
   }

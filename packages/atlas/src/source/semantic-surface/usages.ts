@@ -1,9 +1,11 @@
 import ts from "typescript";
 
+import { countBy } from "../../collections.js";
 import {
   canonicalSourceSymbolKey,
   symbolForExpression,
 } from "./symbols.js";
+import { literalValueField } from "./ast.js";
 
 /** Exact syntax/member role observed at one TypeScript identifier usage site. */
 export type TypeScriptUsageRoleId =
@@ -281,37 +283,4 @@ function fullyQualifiedName(checker: ts.TypeChecker, symbol: ts.Symbol): string 
   } catch {
     return symbol.getName();
   }
-}
-
-function literalValueField(
-  expression: ts.Expression,
-): { readonly literalValue?: string | number | boolean | null } {
-  if (ts.isStringLiteralLike(expression)) {
-    return { literalValue: expression.text };
-  }
-  if (ts.isNumericLiteral(expression)) {
-    return { literalValue: Number(expression.text) };
-  }
-  if (expression.kind === ts.SyntaxKind.TrueKeyword) {
-    return { literalValue: true };
-  }
-  if (expression.kind === ts.SyntaxKind.FalseKeyword) {
-    return { literalValue: false };
-  }
-  if (expression.kind === ts.SyntaxKind.NullKeyword) {
-    return { literalValue: null };
-  }
-  return {};
-}
-
-function countBy<T>(
-  values: readonly T[],
-  keyFor: (value: T) => string,
-): Readonly<Record<string, number>> {
-  const counts: Record<string, number> = Object.create(null) as Record<string, number>;
-  for (const value of values) {
-    const key = keyFor(value);
-    counts[key] = (counts[key] ?? 0) + 1;
-  }
-  return counts;
 }

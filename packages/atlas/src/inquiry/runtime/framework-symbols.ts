@@ -92,7 +92,7 @@ export function declarationsForExpressionSymbol(
   return resolved.getDeclarations() ?? symbol.getDeclarations() ?? [];
 }
 
-export function declarationKey(declaration: ts.Declaration): string | null {
+export function frameworkDeclarationKey(declaration: ts.Declaration): string | null {
   const sourceFile = declaration.getSourceFile();
   const span = sourceSpan(sourceFile, declaration);
   return sourceLocationKey(sourceFile.fileName, span.start, span.end);

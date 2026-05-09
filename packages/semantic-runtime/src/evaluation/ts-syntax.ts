@@ -32,8 +32,37 @@ export function guessScriptKind(
 export function readPropertyName(
   name: ts.PropertyName,
 ): string | null {
-  return ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNoSubstitutionTemplateLiteral(name)
+  return ts.isIdentifier(name)
+    || ts.isStringLiteral(name)
+    || ts.isNoSubstitutionTemplateLiteral(name)
+    || ts.isNumericLiteral(name)
     ? name.text
+    : null;
+}
+
+export function readDeclarationLocalName(
+  declaration: ts.Declaration | null,
+): string | null {
+  if (declaration == null) {
+    return null;
+  }
+
+  const name = (declaration as { readonly name?: ts.Node }).name;
+  if (
+    name != null
+    && (
+      ts.isIdentifier(name)
+      || ts.isStringLiteral(name)
+      || ts.isNoSubstitutionTemplateLiteral(name)
+      || ts.isNumericLiteral(name)
+    )
+  ) {
+    return name.text;
+  }
+
+  const parent = declaration.parent;
+  return parent != null && ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)
+    ? parent.name.text
     : null;
 }
 
@@ -53,6 +82,16 @@ export function unwrapExpression(
   }
 
   return current;
+}
+
+export function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
+  return ts.canHaveModifiers(node)
+    ? ts.getModifiers(node)?.some((modifier) => modifier.kind === kind) ?? false
+    : false;
+}
+
+export function hasStaticModifier(node: ts.Node): boolean {
+  return hasModifier(node, ts.SyntaxKind.StaticKeyword);
 }
 
 export function readCallCalleeText(

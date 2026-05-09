@@ -28,7 +28,7 @@ import {
 import {
   evidenceForAnchorResolution,
   evidenceForCallEdge,
-  evidenceForCallSite,
+  evidenceForFrameworkFlowCallSite,
   evidenceForCallTarget,
   evidenceForFlowSeed,
 } from "./framework-evidence.js";
@@ -61,7 +61,7 @@ export function flowContinuations(
   return continuations;
 }
 
-export function anchorContinuations(
+export function frameworkFlowAnchorContinuations(
   inquiry: Inquiry,
   anchors: readonly FrameworkAnchorResolution[],
   nextOffset: number | undefined,
@@ -511,7 +511,7 @@ export function callSiteContinuations(
   );
   for (const [index, row] of callSites.slice(0, 3).entries()) {
     const source = sourceRangeForFrameworkFlowCallSite(row);
-    const evidence = evidenceForCallSite(row);
+    const evidence = evidenceForFrameworkFlowCallSite(row);
     const builder = new FrameworkRowContinuationBuilder(
       inquiry,
       "framework.discovery:call-sites",

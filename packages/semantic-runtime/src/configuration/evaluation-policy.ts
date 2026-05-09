@@ -5,9 +5,11 @@ import {
   StaticEvaluationPolicy,
   type StaticEvaluationExpressionStatementPolicyInput,
 } from '../evaluation/policy.js';
+import { unwrapExpression } from '../evaluation/ts-syntax.js';
 
 export const aureliaConfigurationEvaluationPolicy = new StaticEvaluationPolicy([
   configurationOwnedAureliaFacadeSetupStatement,
+  externallyOwnedImportedObjectMutationStatement,
 ]);
 
 function configurationOwnedAureliaFacadeSetupStatement(
@@ -22,26 +24,52 @@ function isKnownAureliaFacadeSetupStatement(
   expression: ts.Expression,
   environment: ModuleEnvironmentRecord,
 ): boolean {
-  const root = rootNewExpressionForExpressionChain(expression);
-  if (root == null) {
+  const localName = rootFacadeIdentifierForExpressionChain(expression);
+  if (localName == null) {
     return false;
   }
-
-  const constructor = unwrapExpression(root.expression);
-  return ts.isIdentifier(constructor)
-    && isKnownAureliaFacadeImport(constructor.text, environment);
+  return isKnownAureliaFacadeImport(localName, environment);
 }
 
-function rootNewExpressionForExpressionChain(expression: ts.Expression): ts.NewExpression | null {
+function externallyOwnedImportedObjectMutationStatement(
+  input: StaticEvaluationExpressionStatementPolicyInput,
+): StaticEvaluationExpressionStatementDisposition | null {
+  const assignment = unwrapExpression(input.expression);
+  if (!ts.isBinaryExpression(assignment) || assignment.operatorToken.kind !== ts.SyntaxKind.EqualsToken) {
+    return null;
+  }
+  const root = rootIdentifierForMutationTarget(assignment.left);
+  if (root == null) {
+    return null;
+  }
+  const binding = input.environment.readBinding(root.text);
+  return binding?.bindingKind === EvaluationBindingKind.Import
+    ? StaticEvaluationExpressionStatementDisposition.ExternallyOwned
+    : null;
+}
+
+function rootFacadeIdentifierForExpressionChain(expression: ts.Expression): string | null {
   const current = unwrapExpression(expression);
   if (ts.isNewExpression(current)) {
-    return current;
+    const constructor = unwrapExpression(current.expression);
+    return ts.isIdentifier(constructor) ? constructor.text : null;
   }
   if (ts.isCallExpression(current)) {
-    return rootNewExpressionForExpressionChain(current.expression);
+    return rootFacadeIdentifierForExpressionChain(current.expression);
   }
   if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
-    return rootNewExpressionForExpressionChain(current.expression);
+    return rootFacadeIdentifierForExpressionChain(current.expression);
+  }
+  return ts.isIdentifier(current) ? current.text : null;
+}
+
+function rootIdentifierForMutationTarget(expression: ts.Expression): ts.Identifier | null {
+  const current = unwrapExpression(expression);
+  if (ts.isIdentifier(current)) {
+    return current;
+  }
+  if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+    return rootIdentifierForMutationTarget(current.expression);
   }
   return null;
 }
@@ -75,18 +103,4 @@ function isKnownAureliaFacadeImport(
   return ts.isImportSpecifier(declaration)
     ? (declaration.propertyName?.text ?? declaration.name.text) === 'Aurelia'
     : declaration.name?.text === localName;
-}
-
-function unwrapExpression(expression: ts.Expression): ts.Expression {
-  let current = expression;
-  while (
-    ts.isAsExpression(current)
-    || ts.isTypeAssertionExpression(current)
-    || ts.isParenthesizedExpression(current)
-    || ts.isNonNullExpression(current)
-    || ts.isSatisfiesExpression(current)
-  ) {
-    current = current.expression;
-  }
-  return current;
 }

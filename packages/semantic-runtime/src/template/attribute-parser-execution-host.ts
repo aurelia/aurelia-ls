@@ -1,6 +1,6 @@
 import {
-  AttributeParserHandlerExecutionInput,
   type AttributeParserExecutionHost,
+  type AttributeParserHandlerExecutionRequest,
   AttributePatternExecutionResult,
 } from './attribute-syntax.js';
 import { executeBuiltInAttributePattern } from './built-in-syntax.js';
@@ -12,7 +12,7 @@ export class BuiltInAttributeParserExecutionHost implements AttributeParserExecu
     private readonly world: TemplateCompilerWorldEmission,
   ) {}
 
-  execute(input: AttributeParserHandlerExecutionInput): AttributePatternExecutionResult | null {
+  execute(input: AttributeParserHandlerExecutionRequest): AttributePatternExecutionResult | null {
     const executableProductHandle = input.matchedPattern.executableProductHandle;
     if (executableProductHandle == null) {
       return null;

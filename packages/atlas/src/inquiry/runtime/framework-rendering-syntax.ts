@@ -2,6 +2,8 @@ import ts from "typescript";
 
 import {
   readTypeScriptExpressionFact,
+  requiredSourceFileIdentity,
+  sourceRangeForSourceFileNode,
   SourceProjectKeyedMemo,
   type SourceProject,
 } from "../../source/index.js";
@@ -37,11 +39,6 @@ import {
   isRendererHelperCall,
   readFrameworkResourcePackageCarrierRows,
 } from "./framework-resources.js";
-import {
-  externalFileIdentity,
-  sourceRangeFromFileSpan,
-  sourceSpan,
-} from "./framework-support.js";
 import { uniqueById } from "./framework-symbols.js";
 import { callExpressionsIn, propertyNameText } from "./framework-ts-utils.js";
 
@@ -452,14 +449,12 @@ export function syntaxProductRow(
     readonly expression: ts.Expression;
   },
 ): FrameworkSyntaxProductRow {
-  const file =
-    sourceProject.sourceFileIdentity(sourceFile) ??
-    externalFileIdentity(sourceProject, sourceFile);
-  const span = sourceSpan(sourceFile, values.expression);
+  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
+  const span = values.expression.getStart(sourceFile);
   return {
     id: `framework-syntax-product:${packageId}:${values.producerName}:${
       values.productKind
-    }:${span.start}:${
+    }:${span}:${
       values.instructionName ??
       values.bindingName ??
       values.instructionTarget ??
@@ -481,7 +476,7 @@ export function syntaxProductRow(
       sourceFile,
       values.expression,
     ),
-    source: sourceRangeFromFileSpan(file.repoPath, span),
+    source: sourceRangeForSourceFileNode(file.repoPath, sourceFile, values.expression),
   };
 }
 

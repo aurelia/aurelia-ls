@@ -3,15 +3,15 @@ import { auLink } from '../kernel/au-link.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
-  CheckerTypeProjectionInput,
   CheckerTypeProjector,
+  type CheckerTypeProjectionRequest,
 } from '../type-system/checker-projector.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   CheckerTypeProjectionOrigin,
   CheckerTypeReference,
-  CheckerTypeShapeKind,
+  classifyCheckerTypeShape,
   type CheckerTypeCarrier,
 } from '../type-system/type-shape.js';
 import {
@@ -848,14 +848,14 @@ export class ObserverLocator {
     suffix: string,
     sourceNode: ts.Node | null,
   ): CheckerTypeReference {
-    const shape = this.projector.ensureProjection(new CheckerTypeProjectionInput(
-      `${input.localKey}:observer-locator:${suffix}`,
+    const shape = this.projector.ensureProjection({
+      localKey: `${input.localKey}:observer-locator:${suffix}`,
       checker,
       type,
-      CheckerTypeProjectionOrigin.TypeChecker,
+      origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceNode,
-      input.sourceAddressHandle,
-    ));
+      sourceAddressHandle: input.sourceAddressHandle,
+    } satisfies CheckerTypeProjectionRequest);
     return shape.toReference();
   }
 
@@ -1071,38 +1071,10 @@ function transientTypeReference(
     null,
     display,
     display,
-    classifyTypeShape(type),
+    classifyCheckerTypeShape(type),
     CheckerTypeProjectionOrigin.TypeChecker,
     sourceAddressHandle,
   );
-}
-
-function classifyTypeShape(type: ts.Type): CheckerTypeShapeKind {
-  if (type.isUnion()) {
-    return CheckerTypeShapeKind.Union;
-  }
-  if (type.isIntersection()) {
-    return CheckerTypeShapeKind.Intersection;
-  }
-  if ((type.flags & (ts.TypeFlags.StringLike | ts.TypeFlags.NumberLike | ts.TypeFlags.BooleanLike | ts.TypeFlags.BigIntLike)) !== 0) {
-    return CheckerTypeShapeKind.Primitive;
-  }
-  if (type.getCallSignatures().length > 0) {
-    return CheckerTypeShapeKind.Function;
-  }
-  if (type.symbol?.declarations?.some((declaration) => ts.isClassDeclaration(declaration) || ts.isClassExpression(declaration)) === true) {
-    return CheckerTypeShapeKind.Class;
-  }
-  if (type.symbol?.declarations?.some((declaration) => ts.isInterfaceDeclaration(declaration)) === true) {
-    return CheckerTypeShapeKind.Interface;
-  }
-  if ((type.flags & ts.TypeFlags.TypeParameter) !== 0) {
-    return CheckerTypeShapeKind.TypeParameter;
-  }
-  if ((type.flags & ts.TypeFlags.Object) !== 0) {
-    return CheckerTypeShapeKind.Object;
-  }
-  return CheckerTypeShapeKind.Unknown;
 }
 
 function isWritableProperty(symbol: ts.Symbol): boolean | null {
