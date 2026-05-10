@@ -24,8 +24,10 @@ import {
   CheckerTypeProjectionOrigin,
   CheckerTypeReference,
   CheckerTypeShapeKind,
+  sameCheckerTypeReference,
 } from './type-shape.js';
 import { TypeSystemProductDetails } from './product-details.js';
+import { checkerNullishType } from './checker-related-types.js';
 
 export const enum CheckerExpressionScopeNarrowingPolarity {
   Truthy = 'truthy',
@@ -146,7 +148,7 @@ export class CheckerExpressionScopeNarrower {
     const narrowedType = polarity === CheckerExpressionScopeNarrowingPolarity.Truthy
       ? this.truthyTypeReference(projectedType, `${localKey}:truthy:${name}`, sourceAddressHandle)
       : this.falsyTypeReference(projectedType, `${localKey}:falsy:${name}`, sourceAddressHandle);
-    if (narrowedType == null || sameTypeReference(narrowedType, projectedType)) {
+    if (narrowedType == null || sameCheckerTypeReference(narrowedType, projectedType)) {
       return null;
     }
 
@@ -352,20 +354,10 @@ function nullishConstituents(
   type: ts.Type,
 ): readonly ts.Type[] {
   const parts = type.isUnion() ? type.types : [type];
-  const result = parts.filter((part) => isNullishType(checker, part));
-  return result.length === 0 && isNullishType(checker, type)
+  const result = parts.filter((part) => checkerNullishType(checker, part));
+  return result.length === 0 && checkerNullishType(checker, type)
     ? [type]
     : result;
-}
-
-function isNullishType(
-  checker: ts.TypeChecker,
-  type: ts.Type,
-): boolean {
-  const flags = type.getFlags();
-  return (flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined)) !== 0
-    || checker.typeToString(type) === 'null'
-    || checker.typeToString(type) === 'undefined';
 }
 
 function booleanKind(
@@ -382,12 +374,4 @@ function booleanKind(
   return (type.getFlags() & ts.TypeFlags.Boolean) !== 0 || display === 'boolean'
     ? BooleanTypeKind.Boolean
     : BooleanTypeKind.Other;
-}
-
-function sameTypeReference(
-  left: CheckerTypeReference,
-  right: CheckerTypeReference,
-): boolean {
-  return left.productHandle === right.productHandle
-    || (left.checkerKey === right.checkerKey && left.display === right.display);
 }

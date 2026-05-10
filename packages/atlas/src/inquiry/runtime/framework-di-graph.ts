@@ -25,6 +25,10 @@ import type {
 } from "./framework-materialization-lenses.js";
 import { readFrameworkMaterializationIndex } from "./framework-materialization-lenses.js";
 import { countBy } from "./framework-support.js";
+import {
+  FrameworkGraphAccumulator,
+  compareFrameworkGraphNodes,
+} from "./framework-graph-utils.js";
 
 export type FrameworkDiGraphLayer =
   | "definition"
@@ -188,8 +192,10 @@ export function readFrameworkDiGraph(
 }
 
 class FrameworkDiGraphBuilder {
-  readonly #nodes = new Map<string, FrameworkDiGraphNodeRow>();
-  readonly #edges = new Map<string, FrameworkDiGraphEdgeRow>();
+  readonly #graph = new FrameworkGraphAccumulator<
+    FrameworkDiGraphNodeRow,
+    FrameworkDiGraphEdgeRow
+  >();
   readonly #knownKeyNames = new Set<string>();
 
   constructor(
@@ -230,11 +236,11 @@ class FrameworkDiGraphBuilder {
   }
 
   get nodes(): readonly FrameworkDiGraphNodeRow[] {
-    return [...this.#nodes.values()].sort(compareNodes);
+    return this.#graph.nodeRows(compareFrameworkGraphNodes);
   }
 
   get edges(): readonly FrameworkDiGraphEdgeRow[] {
-    return [...this.#edges.values()].sort(compareEdges);
+    return this.#graph.edgeRows(compareEdges);
   }
 
   nodeMatches(
@@ -258,8 +264,8 @@ class FrameworkDiGraphBuilder {
     edge: FrameworkDiGraphEdgeRow,
     filters: FrameworkDiGraphFilters,
   ): boolean {
-    const from = this.#nodes.get(edge.fromNodeId);
-    const to = this.#nodes.get(edge.toNodeId);
+    const from = this.#graph.getNode(edge.fromNodeId);
+    const to = this.#graph.getNode(edge.toNodeId);
     return (
       (filters.packageId === undefined ||
         edge.packageId === filters.packageId ||
@@ -296,7 +302,7 @@ class FrameworkDiGraphBuilder {
   private addKeyRow(row: FrameworkDiKeyRow): void {
     const source = this.sourceNode(row.exportName, row.packageId, row.packageName, row.source);
     const key = this.keyNode(row.interfaceKey, row.packageId, row.packageName, row.source);
-    this.addEdge({
+    this.#graph.addEdge({
       id: `${row.id}:graph:declares-key`,
       kind: "declares-key",
       layer: "definition",
@@ -368,7 +374,7 @@ class FrameworkDiGraphBuilder {
       row.packageName,
       row.from.source ?? row.source,
     );
-    this.addEdge({
+    this.#graph.addEdge({
       ...edgeFromAtom(row, "provider-provides-key", "admission", provider, key),
       summary: `${provider.name} provides DI key ${key.name}.`,
     });
@@ -385,7 +391,7 @@ class FrameworkDiGraphBuilder {
       row.to.kind === FrameworkRelationshipEndpointKind.DiKey
         ? this.keyLikeNode(row.to.name, row.packageId, row.packageName, row.to.source ?? row.source)
         : this.nodeForEndpoint(row.to, "provider");
-    this.addEdge(edgeFromAtom(row, "key-aliases-key", "resolution", key, target));
+    this.#graph.addEdge(edgeFromAtom(row, "key-aliases-key", "resolution", key, target));
   }
 
   private addSlotStoreAtom(
@@ -406,10 +412,10 @@ class FrameworkDiGraphBuilder {
       slotKind === "resolver-slot"
         ? "slot-provides-key"
         : "resource-slot-provides-key";
-    this.addEdge(edgeFromAtom(row, storeKind, "container-state", owner, slot));
+    this.#graph.addEdge(edgeFromAtom(row, storeKind, "container-state", owner, slot));
     if (row.key !== undefined) {
       const key = this.keyLikeNode(row.key, row.packageId, row.packageName, row.source);
-      this.addEdge({
+      this.#graph.addEdge({
         id: `${row.id}:graph:${providesKind}`,
         kind: providesKind,
         layer: "container-state",
@@ -443,7 +449,7 @@ class FrameworkDiGraphBuilder {
       row.packageName,
       row.to.source ?? row.source,
     );
-    this.addEdge(edgeFromAtom(row, edgeKind, layer, consumer, key));
+    this.#graph.addEdge(edgeFromAtom(row, edgeKind, layer, consumer, key));
   }
 
   private addEndpointEdge(
@@ -453,14 +459,14 @@ class FrameworkDiGraphBuilder {
   ): void {
     const from = this.nodeForEndpoint(row.from, endpointNodeKind(row.from));
     const to = this.nodeForEndpoint(row.to, endpointNodeKind(row.to));
-    this.addEdge(edgeFromAtom(row, edgeKind, layer, from, to));
+    this.#graph.addEdge(edgeFromAtom(row, edgeKind, layer, from, to));
   }
 
   private addMaterializationRoute(row: FrameworkMaterializationRouteRow): void {
     const key = this.keyNode(row.key, row.packageId, row.packageName, row.keyEndpoint.source ?? row.source);
     const route = this.materializationRouteNode(row);
     const provider = this.materializationProviderNode(row, "provider");
-    this.addEdge({
+    this.#graph.addEdge({
       id: `${row.id}:graph:key-materializes-through-route`,
       kind: "key-materializes-through-route",
       layer: "materialization",
@@ -478,7 +484,7 @@ class FrameworkDiGraphBuilder {
       sourceRowId: row.id,
       summary: `${row.key} enters materialization route ${row.routeKind}.`,
     });
-    this.addEdge({
+    this.#graph.addEdge({
       id: `${row.id}:graph:route-uses-provider`,
       kind: "route-uses-provider",
       layer: "materialization",
@@ -512,13 +518,13 @@ class FrameworkDiGraphBuilder {
             row.packageName,
             row.to.source ?? row.source,
           );
-      this.addEdge(edgeFromMaterialization(row, "key-instantiates-value", "materialization", key, value));
+      this.#graph.addEdge(edgeFromMaterialization(row, "key-instantiates-value", "materialization", key, value));
       return;
     }
     if (row.relation === FrameworkRelationshipRelation.DependsOnKey) {
       const key = this.keyNode(row.key, row.packageId, row.packageName, row.from.source ?? row.source);
       const dependency = this.keyNode(row.to.name, row.packageId, row.packageName, row.to.source ?? row.source);
-      this.addEdge(edgeFromMaterialization(row, "key-depends-on-key", "dependency", key, dependency));
+      this.#graph.addEdge(edgeFromMaterialization(row, "key-depends-on-key", "dependency", key, dependency));
     }
   }
 
@@ -528,13 +534,13 @@ class FrameworkDiGraphBuilder {
     packageName: string | undefined,
     source: SourceRange | undefined,
   ): FrameworkDiGraphNodeRow {
-    return this.addNode({
+    return this.#graph.addNode({
       id: nodeId("source-symbol", packageId, name),
       kind: "source-symbol",
       name,
-      ...(packageId === undefined ? {} : { packageId }),
-      ...(packageName === undefined ? {} : { packageName }),
-      ...(source === undefined ? {} : { source }),
+      packageId,
+      packageName,
+      source,
       summary: `${name} source symbol.`,
     });
   }
@@ -545,13 +551,13 @@ class FrameworkDiGraphBuilder {
     packageName: string | undefined,
     source: SourceRange | undefined,
   ): FrameworkDiGraphNodeRow {
-    return this.addNode({
+    return this.#graph.addNode({
       id: nodeId("di-key", undefined, name),
       kind: "di-key",
       name,
-      ...(packageId === undefined ? {} : { packageId }),
-      ...(packageName === undefined ? {} : { packageName }),
-      ...(source === undefined ? {} : { source }),
+      packageId,
+      packageName,
+      source,
       summary: `${name} DI key.`,
     });
   }
@@ -562,13 +568,13 @@ class FrameworkDiGraphBuilder {
     packageName: string | undefined,
     source: SourceRange | undefined,
   ): FrameworkDiGraphNodeRow {
-    return this.addNode({
+    return this.#graph.addNode({
       id: nodeId("key-expression", packageId, name),
       kind: "key-expression",
       name,
-      ...(packageId === undefined ? {} : { packageId }),
-      ...(packageName === undefined ? {} : { packageName }),
-      ...(source === undefined ? {} : { source }),
+      packageId,
+      packageName,
+      source,
       summary: `${name} DI key expression that is not closed to a known framework key.`,
     });
   }
@@ -589,7 +595,7 @@ class FrameworkDiGraphBuilder {
     row: FrameworkRelationshipAtom,
   ): FrameworkDiGraphNodeRow {
     const keySuffix = row.key === undefined ? row.to.name : `${row.to.name}:${row.key}`;
-    return this.addNode({
+    return this.#graph.addNode({
       id: nodeId(kind, row.packageId, keySuffix),
       kind,
       name: keySuffix,
@@ -603,7 +609,7 @@ class FrameworkDiGraphBuilder {
   private materializationRouteNode(
     row: FrameworkMaterializationRouteRow,
   ): FrameworkDiGraphNodeRow {
-    return this.addNode({
+    return this.#graph.addNode({
       id: nodeId("materialization-route", row.packageId, row.id),
       kind: "materialization-route",
       name: `${row.key}:${row.routeKind}`,
@@ -654,13 +660,13 @@ class FrameworkDiGraphBuilder {
     packageName: string | undefined,
     source: SourceRange | undefined,
   ): FrameworkDiGraphNodeRow {
-    return this.addNode({
+    return this.#graph.addNode({
       id: nodeId(kind, packageId, identity.id),
       kind,
       name: identity.name,
-      ...(packageId === undefined ? {} : { packageId }),
-      ...(packageName === undefined ? {} : { packageName }),
-      ...(source === undefined ? {} : { source }),
+      packageId,
+      packageName,
+      source,
       summary: `${identity.name} ${kind} (${identity.kind}).`,
     });
   }
@@ -680,38 +686,17 @@ class FrameworkDiGraphBuilder {
     const kind =
       fallbackKind;
     const packageId = endpoint.packageId;
-    return this.addNode({
+    return this.#graph.addNode({
       id: nodeId(kind, packageId, endpoint.name),
       kind,
       name: endpoint.name,
-      ...(endpoint.packageId === undefined ? {} : { packageId: endpoint.packageId }),
-      ...(endpoint.packageName === undefined ? {} : { packageName: endpoint.packageName }),
-      ...(endpoint.source === undefined ? {} : { source: endpoint.source }),
+      packageId: endpoint.packageId,
+      packageName: endpoint.packageName,
+      source: endpoint.source,
       summary: `${endpoint.name} ${kind}.`,
     });
   }
 
-  private addNode(row: FrameworkDiGraphNodeRow): FrameworkDiGraphNodeRow {
-    const current = this.#nodes.get(row.id);
-    if (current !== undefined) {
-      const merged = {
-        ...current,
-        packageId: current.packageId ?? row.packageId,
-        packageName: current.packageName ?? row.packageName,
-        source: current.source ?? row.source,
-      };
-      this.#nodes.set(row.id, merged);
-      return merged;
-    }
-    this.#nodes.set(row.id, row);
-    return row;
-  }
-
-  private addEdge(row: FrameworkDiGraphEdgeRow): void {
-    if (!this.#edges.has(row.id)) {
-      this.#edges.set(row.id, row);
-    }
-  }
 }
 
 function edgeFromAtom(
@@ -734,7 +719,7 @@ function edgeFromAtom(
     relation: row.relation,
     mechanism: row.mechanism,
     phase: row.phase,
-    ...(row.strategy === undefined ? {} : { strategy: row.strategy }),
+    strategy: row.strategy,
     closure: row.closure,
     source: row.source,
     sourceRowId: row.id,
@@ -760,7 +745,7 @@ function edgeFromMaterialization(
     packageId: row.packageId,
     packageName: row.packageName,
     relation: row.relation,
-    ...(row.strategy === undefined ? {} : { strategy: row.strategy }),
+    strategy: row.strategy,
     routeKind: row.routeKind,
     source: row.source,
     sourceRowId: row.id,
@@ -813,12 +798,12 @@ function materializationFilters(
   readonly query?: string;
 } {
   return {
-    ...(filters.packageId === undefined ? {} : { packageId: filters.packageId }),
-    ...(filters.key === undefined ? {} : { key: filters.key }),
-    ...(filters.strategy === undefined ? {} : { strategy: filters.strategy }),
-    ...(filters.routeKind === undefined ? {} : { routeKind: filters.routeKind }),
-    ...(filters.relation === undefined ? {} : { relation: filters.relation }),
-    ...(filters.query === undefined ? {} : { query: filters.query }),
+    packageId: filters.packageId,
+    key: filters.key,
+    strategy: filters.strategy,
+    routeKind: filters.routeKind,
+    relation: filters.relation,
+    query: filters.query,
   };
 }
 
@@ -1011,17 +996,6 @@ function componentMatches(
     (query === undefined ||
       component.summary.includes(query) ||
       component.keyNames.some((key) => key.includes(query)))
-  );
-}
-
-function compareNodes(
-  left: FrameworkDiGraphNodeRow,
-  right: FrameworkDiGraphNodeRow,
-): number {
-  return (
-    left.kind.localeCompare(right.kind) ||
-    left.name.localeCompare(right.name) ||
-    (left.packageId ?? "").localeCompare(right.packageId ?? "")
   );
 }
 

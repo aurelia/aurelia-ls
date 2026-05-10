@@ -2,8 +2,7 @@ import ts from "typescript";
 
 import {
   deepestNodeContainingText,
-  requiredSourceFileIdentity,
-  sourceRangeForSourceFileNode,
+  requiredSourceRangeForNode,
   type SourceProject,
 } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
@@ -412,8 +411,8 @@ function compileFlowRow(
     stage,
     ownerName: TEMPLATE_COMPILER_OWNER,
     methodName,
-    ...(targetName === undefined ? {} : { targetName }),
-    source: sourceRangeForCompilerNode(basis, sourceNode),
+    targetName,
+    source: requiredSourceRangeForNode(basis.sourceProject, sourceNode),
     summary,
   };
 }
@@ -437,10 +436,10 @@ function attributeRow(
     order,
     ownerName: TEMPLATE_COMPILER_OWNER,
     methodName: ATTRIBUTE_CLASSIFICATION_METHOD,
-    ...(extras.operation === undefined ? {} : { operation: extras.operation }),
-    ...(extras.targetKind === undefined ? {} : { targetKind: extras.targetKind }),
+    operation: extras.operation,
+    targetKind: extras.targetKind,
     instructionNames: extras.instructionNames ?? [],
-    source: sourceRangeForCompilerNode(basis, sourceNode),
+    source: requiredSourceRangeForNode(basis.sourceProject, sourceNode),
     summary,
   };
 }
@@ -508,14 +507,6 @@ function nodeKindIn(root: ts.Node, kind: ts.SyntaxKind): ts.Node | null {
   };
   visit(root);
   return match;
-}
-
-function sourceRangeForCompilerNode(
-  basis: TemplateCompilerBasis,
-  node: ts.Node,
-): SourceRange {
-  const file = requiredSourceFileIdentity(basis.sourceProject, basis.sourceFile);
-  return sourceRangeForSourceFileNode(file.repoPath, basis.sourceFile, node);
 }
 
 function compileFlowRowMatches(

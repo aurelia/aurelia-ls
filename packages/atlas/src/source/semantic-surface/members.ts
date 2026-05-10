@@ -1,5 +1,6 @@
 import ts from "typescript";
 
+import { uniqueSortedStrings } from "../../collections.js";
 import {
   hasModifier,
   propertyNameText,
@@ -248,8 +249,4 @@ export function isParameterProperty(parameter: ts.ParameterDeclaration): boolean
     (flags & ts.ModifierFlags.Protected) !== 0 ||
     (flags & ts.ModifierFlags.Readonly) !== 0
   );
-}
-
-function uniqueSortedStrings(values: readonly string[]): readonly string[] {
-  return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }

@@ -45,7 +45,7 @@ export type ConfiguredBuiltInResourceCatalogSelectionField =
   | 'catalogs'
   | 'source';
 
-@auLink('runtime-html:DebounceBindingBehavior')
+@auLink('runtime-html:DebounceBindingBehavior', { facet: 'resource-definition' })
 export class RuntimeHtmlDebounceBindingBehaviorResource {
   readonly targetName = 'DebounceBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
@@ -62,7 +62,7 @@ export class RuntimeHtmlDebounceBindingBehaviorResource {
   ) {}
 }
 
-@auLink('runtime-html:OneTimeBindingBehavior')
+@auLink('runtime-html:OneTimeBindingBehavior', { facet: 'resource-definition' })
 export class RuntimeHtmlOneTimeBindingBehaviorResource {
   readonly targetName = 'OneTimeBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
@@ -79,7 +79,7 @@ export class RuntimeHtmlOneTimeBindingBehaviorResource {
   ) {}
 }
 
-@auLink('runtime-html:ToViewBindingBehavior')
+@auLink('runtime-html:ToViewBindingBehavior', { facet: 'resource-definition' })
 export class RuntimeHtmlToViewBindingBehaviorResource {
   readonly targetName = 'ToViewBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
@@ -96,7 +96,7 @@ export class RuntimeHtmlToViewBindingBehaviorResource {
   ) {}
 }
 
-@auLink('runtime-html:FromViewBindingBehavior')
+@auLink('runtime-html:FromViewBindingBehavior', { facet: 'resource-definition' })
 export class RuntimeHtmlFromViewBindingBehaviorResource {
   readonly targetName = 'FromViewBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
@@ -113,7 +113,7 @@ export class RuntimeHtmlFromViewBindingBehaviorResource {
   ) {}
 }
 
-@auLink('runtime-html:SignalBindingBehavior')
+@auLink('runtime-html:SignalBindingBehavior', { facet: 'resource-definition' })
 export class RuntimeHtmlSignalBindingBehaviorResource {
   readonly targetName = 'SignalBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
@@ -130,7 +130,7 @@ export class RuntimeHtmlSignalBindingBehaviorResource {
   ) {}
 }
 
-@auLink('runtime-html:ThrottleBindingBehavior')
+@auLink('runtime-html:ThrottleBindingBehavior', { facet: 'resource-definition' })
 export class RuntimeHtmlThrottleBindingBehaviorResource {
   readonly targetName = 'ThrottleBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
@@ -147,7 +147,7 @@ export class RuntimeHtmlThrottleBindingBehaviorResource {
   ) {}
 }
 
-@auLink('runtime-html:TwoWayBindingBehavior')
+@auLink('runtime-html:TwoWayBindingBehavior', { facet: 'resource-definition' })
 export class RuntimeHtmlTwoWayBindingBehaviorResource {
   readonly targetName = 'TwoWayBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
@@ -164,7 +164,7 @@ export class RuntimeHtmlTwoWayBindingBehaviorResource {
   ) {}
 }
 
-@auLink('runtime-html:AttrBindingBehavior')
+@auLink('runtime-html:AttrBindingBehavior', { facet: 'resource-definition' })
 export class RuntimeHtmlAttrBindingBehaviorResource {
   readonly targetName = 'AttrBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
@@ -181,7 +181,7 @@ export class RuntimeHtmlAttrBindingBehaviorResource {
   ) {}
 }
 
-@auLink('runtime-html:SelfBindingBehavior')
+@auLink('runtime-html:SelfBindingBehavior', { facet: 'resource-definition' })
 export class RuntimeHtmlSelfBindingBehaviorResource {
   readonly targetName = 'SelfBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
@@ -198,7 +198,7 @@ export class RuntimeHtmlSelfBindingBehaviorResource {
   ) {}
 }
 
-@auLink('runtime-html:UpdateTriggerBindingBehavior')
+@auLink('runtime-html:UpdateTriggerBindingBehavior', { facet: 'resource-definition' })
 export class RuntimeHtmlUpdateTriggerBindingBehaviorResource {
   readonly targetName = 'UpdateTriggerBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
@@ -215,7 +215,7 @@ export class RuntimeHtmlUpdateTriggerBindingBehaviorResource {
   ) {}
 }
 
-@auLink('runtime-html:SanitizeValueConverter')
+@auLink('runtime-html:SanitizeValueConverter', { facet: 'resource-definition' })
 export class RuntimeHtmlSanitizeValueConverterResource {
   readonly targetName = 'SanitizeValueConverter';
   readonly resourceKind = ResourceDefinitionKind.ValueConverter;
@@ -232,7 +232,7 @@ export class RuntimeHtmlSanitizeValueConverterResource {
   ) {}
 }
 
-@auLink('runtime-html:If')
+@auLink('runtime-html:If', { facet: 'resource-definition' })
 export class RuntimeHtmlIfResource {
   readonly targetName = 'If';
   readonly resourceKind = ResourceDefinitionKind.TemplateController;
@@ -249,7 +249,7 @@ export class RuntimeHtmlIfResource {
   ) {}
 }
 
-@auLink('runtime-html:Else')
+@auLink('runtime-html:Else', { facet: 'resource-definition' })
 export class RuntimeHtmlElseResource {
   readonly targetName = 'Else';
   readonly resourceKind = ResourceDefinitionKind.TemplateController;
@@ -266,7 +266,7 @@ export class RuntimeHtmlElseResource {
   ) {}
 }
 
-@auLink('runtime-html:Repeat')
+@auLink('runtime-html:Repeat', { facet: 'resource-definition' })
 export class RuntimeHtmlRepeatResource {
   readonly targetName = 'Repeat';
   readonly resourceKind = ResourceDefinitionKind.TemplateController;
@@ -283,7 +283,7 @@ export class RuntimeHtmlRepeatResource {
   ) {}
 }
 
-@auLink('runtime-html:With')
+@auLink('runtime-html:With', { facet: 'resource-definition' })
 export class RuntimeHtmlWithResource {
   readonly targetName = 'With';
   readonly resourceKind = ResourceDefinitionKind.TemplateController;
@@ -300,7 +300,7 @@ export class RuntimeHtmlWithResource {
   ) {}
 }
 
-@auLink('runtime-html:Switch')
+@auLink('runtime-html:Switch', { facet: 'resource-definition' })
 export class RuntimeHtmlSwitchResource {
   readonly targetName = 'Switch';
   readonly resourceKind = ResourceDefinitionKind.TemplateController;
@@ -317,7 +317,7 @@ export class RuntimeHtmlSwitchResource {
   ) {}
 }
 
-@auLink('runtime-html:Case')
+@auLink('runtime-html:Case', { facet: 'resource-definition' })
 export class RuntimeHtmlCaseResource {
   readonly targetName = 'Case';
   readonly resourceKind = ResourceDefinitionKind.TemplateController;
@@ -334,7 +334,7 @@ export class RuntimeHtmlCaseResource {
   ) {}
 }
 
-@auLink('runtime-html:DefaultCase')
+@auLink('runtime-html:DefaultCase', { facet: 'resource-definition' })
 export class RuntimeHtmlDefaultCaseResource {
   readonly targetName = 'DefaultCase';
   readonly resourceKind = ResourceDefinitionKind.TemplateController;
@@ -351,7 +351,7 @@ export class RuntimeHtmlDefaultCaseResource {
   ) {}
 }
 
-@auLink('runtime-html:PromiseTemplateController')
+@auLink('runtime-html:PromiseTemplateController', { facet: 'resource-definition' })
 export class RuntimeHtmlPromiseTemplateControllerResource {
   readonly targetName = 'PromiseTemplateController';
   readonly resourceKind = ResourceDefinitionKind.TemplateController;
@@ -368,7 +368,7 @@ export class RuntimeHtmlPromiseTemplateControllerResource {
   ) {}
 }
 
-@auLink('runtime-html:PendingTemplateController')
+@auLink('runtime-html:PendingTemplateController', { facet: 'resource-definition' })
 export class RuntimeHtmlPendingTemplateControllerResource {
   readonly targetName = 'PendingTemplateController';
   readonly resourceKind = ResourceDefinitionKind.TemplateController;
@@ -385,7 +385,7 @@ export class RuntimeHtmlPendingTemplateControllerResource {
   ) {}
 }
 
-@auLink('runtime-html:FulfilledTemplateController')
+@auLink('runtime-html:FulfilledTemplateController', { facet: 'resource-definition' })
 export class RuntimeHtmlFulfilledTemplateControllerResource {
   readonly targetName = 'FulfilledTemplateController';
   readonly resourceKind = ResourceDefinitionKind.TemplateController;
@@ -402,7 +402,7 @@ export class RuntimeHtmlFulfilledTemplateControllerResource {
   ) {}
 }
 
-@auLink('runtime-html:RejectedTemplateController')
+@auLink('runtime-html:RejectedTemplateController', { facet: 'resource-definition' })
 export class RuntimeHtmlRejectedTemplateControllerResource {
   readonly targetName = 'RejectedTemplateController';
   readonly resourceKind = ResourceDefinitionKind.TemplateController;
@@ -419,7 +419,7 @@ export class RuntimeHtmlRejectedTemplateControllerResource {
   ) {}
 }
 
-@auLink('runtime-html:AuCompose')
+@auLink('runtime-html:AuCompose', { facet: 'resource-definition' })
 export class RuntimeHtmlAuComposeResource {
   readonly targetName = 'AuCompose';
   readonly resourceKind = ResourceDefinitionKind.CustomElement;
@@ -436,7 +436,7 @@ export class RuntimeHtmlAuComposeResource {
   ) {}
 }
 
-@auLink('runtime-html:Portal')
+@auLink('runtime-html:Portal', { facet: 'resource-definition' })
 export class RuntimeHtmlPortalResource {
   readonly targetName = 'Portal';
   readonly resourceKind = ResourceDefinitionKind.TemplateController;
@@ -453,7 +453,7 @@ export class RuntimeHtmlPortalResource {
   ) {}
 }
 
-@auLink('runtime-html:Focus')
+@auLink('runtime-html:Focus', { facet: 'resource-definition' })
 export class RuntimeHtmlFocusResource {
   readonly targetName = 'Focus';
   readonly resourceKind = ResourceDefinitionKind.CustomAttribute;
@@ -470,7 +470,7 @@ export class RuntimeHtmlFocusResource {
   ) {}
 }
 
-@auLink('runtime-html:Show')
+@auLink('runtime-html:Show', { facet: 'resource-definition' })
 export class RuntimeHtmlShowResource {
   readonly targetName = 'Show';
   readonly resourceKind = ResourceDefinitionKind.CustomAttribute;
@@ -487,7 +487,7 @@ export class RuntimeHtmlShowResource {
   ) {}
 }
 
-@auLink('runtime-html:AuSlot')
+@auLink('runtime-html:AuSlot', { facet: 'resource-definition' })
 export class RuntimeHtmlAuSlotResource {
   readonly targetName = 'AuSlot';
   readonly resourceKind = ResourceDefinitionKind.CustomElement;
@@ -504,7 +504,7 @@ export class RuntimeHtmlAuSlotResource {
   ) {}
 }
 
-@auLink('i18n:TranslationValueConverter')
+@auLink('i18n:TranslationValueConverter', { facet: 'resource-definition' })
 export class I18nTranslationValueConverterResource {
   readonly targetName = 'TranslationValueConverter';
   readonly resourceKind = ResourceDefinitionKind.ValueConverter;
@@ -521,7 +521,7 @@ export class I18nTranslationValueConverterResource {
   ) {}
 }
 
-@auLink('i18n:TranslationBindingBehavior')
+@auLink('i18n:TranslationBindingBehavior', { facet: 'resource-definition' })
 export class I18nTranslationBindingBehaviorResource {
   readonly targetName = 'TranslationBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
@@ -538,7 +538,7 @@ export class I18nTranslationBindingBehaviorResource {
   ) {}
 }
 
-@auLink('i18n:DateFormatValueConverter')
+@auLink('i18n:DateFormatValueConverter', { facet: 'resource-definition' })
 export class I18nDateFormatValueConverterResource {
   readonly targetName = 'DateFormatValueConverter';
   readonly resourceKind = ResourceDefinitionKind.ValueConverter;
@@ -555,7 +555,7 @@ export class I18nDateFormatValueConverterResource {
   ) {}
 }
 
-@auLink('i18n:DateFormatBindingBehavior')
+@auLink('i18n:DateFormatBindingBehavior', { facet: 'resource-definition' })
 export class I18nDateFormatBindingBehaviorResource {
   readonly targetName = 'DateFormatBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
@@ -572,7 +572,7 @@ export class I18nDateFormatBindingBehaviorResource {
   ) {}
 }
 
-@auLink('i18n:NumberFormatValueConverter')
+@auLink('i18n:NumberFormatValueConverter', { facet: 'resource-definition' })
 export class I18nNumberFormatValueConverterResource {
   readonly targetName = 'NumberFormatValueConverter';
   readonly resourceKind = ResourceDefinitionKind.ValueConverter;
@@ -589,7 +589,7 @@ export class I18nNumberFormatValueConverterResource {
   ) {}
 }
 
-@auLink('i18n:NumberFormatBindingBehavior')
+@auLink('i18n:NumberFormatBindingBehavior', { facet: 'resource-definition' })
 export class I18nNumberFormatBindingBehaviorResource {
   readonly targetName = 'NumberFormatBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
@@ -606,7 +606,7 @@ export class I18nNumberFormatBindingBehaviorResource {
   ) {}
 }
 
-@auLink('i18n:RelativeTimeValueConverter')
+@auLink('i18n:RelativeTimeValueConverter', { facet: 'resource-definition' })
 export class I18nRelativeTimeValueConverterResource {
   readonly targetName = 'RelativeTimeValueConverter';
   readonly resourceKind = ResourceDefinitionKind.ValueConverter;
@@ -623,7 +623,7 @@ export class I18nRelativeTimeValueConverterResource {
   ) {}
 }
 
-@auLink('i18n:RelativeTimeBindingBehavior')
+@auLink('i18n:RelativeTimeBindingBehavior', { facet: 'resource-definition' })
 export class I18nRelativeTimeBindingBehaviorResource {
   readonly targetName = 'RelativeTimeBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
@@ -640,7 +640,7 @@ export class I18nRelativeTimeBindingBehaviorResource {
   ) {}
 }
 
-@auLink('state:StateBindingBehavior')
+@auLink('state:StateBindingBehavior', { facet: 'resource-definition' })
 export class StateBindingBehaviorResource {
   readonly targetName = 'StateBindingBehavior';
   readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
@@ -796,7 +796,7 @@ export const I18nBuiltInResourceCatalogs = {
   },
 } as const satisfies Record<string, BuiltInResourceCatalogInput>;
 
-@auLink('router:LoadCustomAttribute')
+@auLink('router:LoadCustomAttribute', { facet: 'resource-definition' })
 export class RouterLoadCustomAttributeResource {
   readonly targetName = 'LoadCustomAttribute';
   readonly resourceKind = ResourceDefinitionKind.CustomAttribute;
@@ -813,7 +813,7 @@ export class RouterLoadCustomAttributeResource {
   ) {}
 }
 
-@auLink('router:HrefCustomAttribute')
+@auLink('router:HrefCustomAttribute', { facet: 'resource-definition' })
 export class RouterHrefCustomAttributeResource {
   readonly targetName = 'HrefCustomAttribute';
   readonly resourceKind = ResourceDefinitionKind.CustomAttribute;
@@ -830,7 +830,7 @@ export class RouterHrefCustomAttributeResource {
   ) {}
 }
 
-@auLink('router:ViewportCustomElement')
+@auLink('router:ViewportCustomElement', { facet: 'resource-definition' })
 export class RouterViewportCustomElementResource {
   readonly targetName = 'ViewportCustomElement';
   readonly resourceKind = ResourceDefinitionKind.CustomElement;

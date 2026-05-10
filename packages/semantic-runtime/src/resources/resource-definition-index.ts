@@ -50,12 +50,18 @@ export class ResourceDefinitionIndex {
   private readonly byProduct = new Map<ProductHandle, FullResourceDefinition>();
   private readonly byTargetIdentity = new Map<IdentityHandle, FullResourceDefinition>();
   private readonly byLocalName = new Map<string, readonly FullResourceDefinition[]>();
+  private readonly byModule = new Map<string, readonly FullResourceDefinition[]>();
+  private readonly byResourceName = new Map<string, readonly FullResourceDefinition[]>();
 
   constructor(
     readonly entries: readonly ResourceDefinitionIndexEntry[],
   ) {
     for (const entry of entries) {
       this.byModuleLocal.set(resourceDefinitionIndexKey(entry.moduleKey, entry.localName), entry);
+      this.byModule.set(entry.moduleKey, [
+        ...(this.byModule.get(entry.moduleKey) ?? []),
+        entry.definition,
+      ]);
       if (entry.definition.productHandle != null) {
         this.byProduct.set(entry.definition.productHandle, entry.definition);
       }
@@ -66,6 +72,14 @@ export class ResourceDefinitionIndex {
         ...(this.byLocalName.get(entry.localName) ?? []),
         entry.definition,
       ]);
+      const resourceName = readResourceDefinitionName(entry.definition);
+      if (resourceName != null) {
+        const nameKey = resourceName.toLowerCase();
+        this.byResourceName.set(nameKey, [
+          ...(this.byResourceName.get(nameKey) ?? []),
+          entry.definition,
+        ]);
+      }
     }
   }
 
@@ -93,6 +107,14 @@ export class ResourceDefinitionIndex {
     return matching.length === 1 ? matching[0]! : null;
   }
 
+  lookupByResourceName(resourceName: string | null): FullResourceDefinition | null {
+    if (resourceName == null) {
+      return null;
+    }
+    const matching = this.byResourceName.get(resourceName.toLowerCase()) ?? [];
+    return matching.length === 1 ? matching[0]! : null;
+  }
+
   lookupByTargetReference(reference: ResourceTargetReference | null): FullResourceDefinition | null {
     if (reference == null) {
       return null;
@@ -108,20 +130,36 @@ export class ResourceDefinitionIndex {
   }
 
   lookupByDependencyReference(reference: ResourceDependencyReference | null): FullResourceDefinition | null {
+    const definitions = this.lookupAllByDependencyReference(reference);
+    return definitions.length === 1 ? definitions[0]! : null;
+  }
+
+  lookupAllByDependencyReference(reference: ResourceDependencyReference | null): readonly FullResourceDefinition[] {
     if (reference == null) {
-      return null;
+      return [];
     }
     const byIdentity = this.lookupByTargetIdentity(reference.identityHandle);
     if (byIdentity != null) {
-      return byIdentity;
+      return [byIdentity];
     }
     if (reference.moduleKey != null && reference.localName != null) {
       const byModuleLocal = this.lookupByModuleLocal(reference.moduleKey, reference.localName);
       if (byModuleLocal != null) {
-        return byModuleLocal;
+        return [byModuleLocal];
       }
     }
-    return this.lookupByLocalName(reference.keyName);
+    if (reference.moduleKey != null && reference.localName == null) {
+      const moduleDefinitions = this.byModule.get(normalizeModuleKey(reference.moduleKey)) ?? [];
+      if (moduleDefinitions.length > 0) {
+        return moduleDefinitions;
+      }
+    }
+    const byLocalName = this.lookupByLocalName(reference.keyName);
+    if (byLocalName != null) {
+      return [byLocalName];
+    }
+    const byResourceName = this.lookupByResourceName(reference.keyName);
+    return byResourceName == null ? [] : [byResourceName];
   }
 
   lookupValue(value: EvaluationValue | null): FullResourceDefinition | null {
@@ -149,4 +187,8 @@ export class ResourceDefinitionIndex {
 
 function resourceDefinitionIndexKey(moduleKey: string, localName: string): string {
   return `${normalizeModuleKey(moduleKey)}\0${localName}`;
+}
+
+function readResourceDefinitionName(definition: FullResourceDefinition): string | null {
+  return 'name' in definition ? definition.name : null;
 }

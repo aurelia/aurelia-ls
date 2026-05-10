@@ -6,22 +6,15 @@ import type { ConfigurationSequence } from '../configuration/configuration-seque
 import type { ConfigurationRecognitionProjectResult } from '../configuration/configuration-recognition-project-pass.js';
 import {
   EvidenceKind,
-  EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type {
   AddressHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
-import { RouterIdentity } from '../kernel/identity.js';
 import {
-  MaterializationRecord,
-  MaterializedProduct,
-} from '../kernel/materialization.js';
-import {
-  compactFieldProvenance,
+  fieldProvenanceEntries,
   FieldProvenance,
-  ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
   KernelStoreBatch,
@@ -39,12 +32,11 @@ import {
   RouterOptionsModel,
   type RouterOptionsField,
 } from './model.js';
+import { routerProductRecords } from './router-product-records.js';
 
-class RouterOptionsEmission {
-  constructor(
-    readonly records: readonly KernelStoreRecord[],
-    readonly options: RouterOptionsModel,
-  ) {}
+interface RouterOptionsEmission {
+  readonly records: readonly KernelStoreRecord[];
+  readonly options: RouterOptionsModel;
 }
 
 interface RouterOptionsSeed {
@@ -54,6 +46,7 @@ interface RouterOptionsSeed {
 }
 
 class RouterOptionsDraft {
+  readonly configuredFields = new Set<RouterOptionsField>();
   basePath: string | null = null;
   useUrlFragmentHash = false;
   useHref = true;
@@ -110,61 +103,69 @@ export class RouterOptionsMaterializationProjectPass {
   ): RouterOptionsEmission {
     const draft = foldRouterOptions(seed.contributions);
     const local = `router-options:${project.projectKey}:${seed.sequence.identityHandle}:${index}`;
-    const evidenceHandle = store.handles.evidence(local);
-    const provenanceHandle = store.handles.provenance(local);
-    const productHandle = store.handles.product(local);
-    const identityHandle = store.handles.identity(local);
     const sourceAddressHandle = seed.sourceAddressHandle ?? seed.sequence.sourceAddressHandle;
-    const options = new RouterOptionsModel(
-      productHandle,
-      identityHandle,
-      draft.basePath,
-      draft.useUrlFragmentHash,
-      draft.useHref,
-      draft.historyStrategy,
-      draft.useNavigationModel,
-      draft.activeClass,
-      draft.restorePreviousRouteTreeOnError,
-      draft.treatQueryAsParameters,
-      draft.useEagerLoading,
+    const options = routerOptionsModel(
+      store,
+      local,
+      draft,
       sourceAddressHandle,
-      routerOptionsFieldProvenance(provenanceHandle),
     );
-    return new RouterOptionsEmission(
-      [
-        new EvidenceRecord(
-          evidenceHandle,
-          EvidenceKind.ConfigurationFlow,
-          [EvidenceRole.Configuration],
-          'RouterOptions materialized from RouterConfiguration defaults and recognized customize option contributions.',
-          sourceAddressHandle,
-        ),
-        new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
-        new RouterIdentity(
-          identityHandle,
-          KernelVocabulary.Router.Options.key,
-          seed.sequence.identityHandle,
-          sourceAddressHandle,
-          'RouterOptions',
-        ),
-        new MaterializedProduct(
-          productHandle,
-          KernelVocabulary.Router.Options.key,
-          identityHandle,
-          sourceAddressHandle,
-          provenanceHandle,
-        ),
-        new MaterializationRecord(
-          store.handles.materialization(local),
-          seed.sequence.identityHandle,
-          [productHandle],
-          [],
-          [],
-        ),
-      ],
+    return {
+      records: routerOptionsRecords(
+        store,
+        local,
+        seed,
+        options,
+      ),
       options,
-    );
+    };
   }
+}
+
+function routerOptionsModel(
+  store: KernelStore,
+  local: string,
+  draft: RouterOptionsDraft,
+  sourceAddressHandle: AddressHandle | null,
+): RouterOptionsModel {
+  const provenanceHandle = store.handles.provenance(local);
+  return new RouterOptionsModel(
+    store.handles.product(local),
+    store.handles.identity(local),
+    draft.basePath,
+    draft.useUrlFragmentHash,
+    draft.useHref,
+    draft.historyStrategy,
+    draft.useNavigationModel,
+    draft.activeClass,
+    draft.restorePreviousRouteTreeOnError,
+    draft.treatQueryAsParameters,
+    draft.useEagerLoading,
+    sourceAddressHandle,
+    routerOptionsFieldProvenance(provenanceHandle, draft.configuredFields),
+  );
+}
+
+function routerOptionsRecords(
+  store: KernelStore,
+  local: string,
+  seed: RouterOptionsSeed,
+  options: RouterOptionsModel,
+): readonly KernelStoreRecord[] {
+  return routerProductRecords(store, {
+    local,
+    evidenceHandle: store.handles.evidence(local),
+    provenanceHandle: store.handles.provenance(local),
+    productHandle: options.productHandle,
+    identityHandle: options.identityHandle,
+    productKindKey: KernelVocabulary.Router.Options.key,
+    ownerHandle: seed.sequence.identityHandle,
+    sourceAddressHandle: options.sourceAddressHandle,
+    localName: 'RouterOptions',
+    evidenceKind: EvidenceKind.ConfigurationFlow,
+    evidenceRoles: [EvidenceRole.Configuration],
+    evidenceSummary: 'RouterOptions materialized from RouterConfiguration defaults and recognized customize option contributions.',
+  });
 }
 
 function routerOptionsSeeds(
@@ -247,31 +248,31 @@ function foldRouterOption(
   const name = contribution.optionPath[0];
   switch (name) {
     case 'basePath':
-      draft.basePath = stringOrNullOption(contribution);
+      draft.basePath = stringOrNullOption(contribution, draft.basePath, draft.configuredFields, name);
       return;
     case 'useUrlFragmentHash':
-      draft.useUrlFragmentHash = booleanOption(contribution, draft.useUrlFragmentHash);
+      draft.useUrlFragmentHash = booleanOption(contribution, draft.useUrlFragmentHash, draft.configuredFields, name);
       return;
     case 'useHref':
-      draft.useHref = booleanOption(contribution, draft.useHref);
+      draft.useHref = booleanOption(contribution, draft.useHref, draft.configuredFields, name);
       return;
     case 'historyStrategy':
-      draft.historyStrategy = stringOption(contribution, draft.historyStrategy);
+      draft.historyStrategy = stringOption(contribution, draft.historyStrategy, draft.configuredFields, name);
       return;
     case 'useNavigationModel':
-      draft.useNavigationModel = booleanOption(contribution, draft.useNavigationModel);
+      draft.useNavigationModel = booleanOption(contribution, draft.useNavigationModel, draft.configuredFields, name);
       return;
     case 'activeClass':
-      draft.activeClass = stringOrNullOption(contribution);
+      draft.activeClass = stringOrNullOption(contribution, draft.activeClass, draft.configuredFields, name);
       return;
     case 'restorePreviousRouteTreeOnError':
-      draft.restorePreviousRouteTreeOnError = booleanOption(contribution, draft.restorePreviousRouteTreeOnError);
+      draft.restorePreviousRouteTreeOnError = booleanOption(contribution, draft.restorePreviousRouteTreeOnError, draft.configuredFields, name);
       return;
     case 'treatQueryAsParameters':
-      draft.treatQueryAsParameters = booleanOption(contribution, draft.treatQueryAsParameters);
+      draft.treatQueryAsParameters = booleanOption(contribution, draft.treatQueryAsParameters, draft.configuredFields, name);
       return;
     case 'useEagerLoading':
-      draft.useEagerLoading = booleanOption(contribution, draft.useEagerLoading);
+      draft.useEagerLoading = booleanOption(contribution, draft.useEagerLoading, draft.configuredFields, name);
       return;
     default:
       return;
@@ -281,47 +282,53 @@ function foldRouterOption(
 function booleanOption(
   contribution: ConfigurationOptionContribution,
   current: boolean,
+  configuredFields: Set<RouterOptionsField>,
+  field: RouterOptionsField,
 ): boolean {
-  return contribution.value.valueKind === ConfigurationOptionValueKind.Boolean
-    ? contribution.value.value
-    : current;
+  if (contribution.value.valueKind !== ConfigurationOptionValueKind.Boolean) {
+    return current;
+  }
+  configuredFields.add(field);
+  return contribution.value.value;
 }
 
 function stringOption(
   contribution: ConfigurationOptionContribution,
   current: string | null,
+  configuredFields: Set<RouterOptionsField>,
+  field: RouterOptionsField,
 ): string | null {
-  return contribution.value.valueKind === ConfigurationOptionValueKind.String
-    ? contribution.value.value
-    : current;
+  if (contribution.value.valueKind !== ConfigurationOptionValueKind.String) {
+    return current;
+  }
+  configuredFields.add(field);
+  return contribution.value.value;
 }
 
 function stringOrNullOption(
   contribution: ConfigurationOptionContribution,
+  current: string | null,
+  configuredFields: Set<RouterOptionsField>,
+  field: RouterOptionsField,
 ): string | null {
   switch (contribution.value.valueKind) {
     case ConfigurationOptionValueKind.String:
+      configuredFields.add(field);
       return contribution.value.value;
     case ConfigurationOptionValueKind.Null:
+      configuredFields.add(field);
       return null;
     default:
-      return null;
+      return current;
   }
 }
 
 function routerOptionsFieldProvenance(
   provenanceHandle: ProvenanceHandle,
+  configuredFields: ReadonlySet<RouterOptionsField>,
 ): readonly FieldProvenance<RouterOptionsField>[] {
-  return compactFieldProvenance<RouterOptionsField>([
-    new FieldProvenance('basePath', provenanceHandle),
-    new FieldProvenance('useUrlFragmentHash', provenanceHandle),
-    new FieldProvenance('useHref', provenanceHandle),
-    new FieldProvenance('historyStrategy', provenanceHandle),
-    new FieldProvenance('useNavigationModel', provenanceHandle),
-    new FieldProvenance('activeClass', provenanceHandle),
-    new FieldProvenance('restorePreviousRouteTreeOnError', provenanceHandle),
-    new FieldProvenance('treatQueryAsParameters', provenanceHandle),
-    new FieldProvenance('useEagerLoading', provenanceHandle),
-    new FieldProvenance('source', provenanceHandle),
-  ]);
+  return fieldProvenanceEntries<RouterOptionsField>([
+    ...configuredFields,
+    'source',
+  ], provenanceHandle);
 }

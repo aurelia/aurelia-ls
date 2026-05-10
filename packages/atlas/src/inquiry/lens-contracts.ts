@@ -77,6 +77,8 @@ export const enum LensId {
   FrameworkObservation = "framework.observation",
   /** Aurelia framework router, route context, route tree, and route-recognizer architecture. */
   FrameworkRouter = "framework.router",
+  /** Aurelia framework error/event code definitions and usage sites. */
+  FrameworkErrors = "framework.errors",
   /** Aurelia framework configuration and bundle admission graph. */
   FrameworkAdmission = "framework.admission",
   /** Aurelia framework actor-centered semantic composition graph. */

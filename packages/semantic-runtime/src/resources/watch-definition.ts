@@ -68,6 +68,7 @@ export class WatchDefinition {
 
 export const enum WatchContributionKind {
   Decorator = 'decorator',
+  DefinitionObject = 'definition-object',
   StaticWatches = 'static-watches',
   InheritedMetadata = 'inherited-metadata',
 }

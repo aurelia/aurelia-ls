@@ -1,6 +1,7 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
 import { Container } from '../di/container.js';
 import {
+  type ContainerChildMaterializationEmission,
   ContainerChildMaterializationRequest,
   ContainerChildMaterializer,
   ContainerContextResolverSlotRequest,
@@ -11,16 +12,12 @@ import {
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type {
+  EvidenceHandle,
   IdentityHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
-import { RouterIdentity } from '../kernel/identity.js';
 import {
-  MaterializationRecord,
-  MaterializedProduct,
-} from '../kernel/materialization.js';
-import {
-  compactFieldProvenance,
+  fieldProvenanceEntries,
   FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
@@ -60,25 +57,22 @@ import {
   routeConfigContextsByComponentDefinition,
   routeConfigIndex,
 } from './route-topology-index.js';
+import { routerIdentityProductRecords, routerProductRecords } from './router-product-records.js';
 
 const DEFAULT_VIEWPORT_NAME = 'default';
 
-class RouteRuntimeContextEmission {
-  constructor(
-    readonly records: readonly KernelStoreRecord[],
-    readonly routeConfigContext: RouteConfigContextModel,
-    readonly routeContext: RouteContextModel,
-    readonly container: Container | null,
-  ) {}
+interface RouteRuntimeContextEmission {
+  readonly records: readonly KernelStoreRecord[];
+  readonly routeConfigContext: RouteConfigContextModel;
+  readonly routeContext: RouteContextModel;
+  readonly container: Container | null;
 }
 
-class ViewportRuntimeEmission {
-  constructor(
-    readonly records: readonly KernelStoreRecord[],
-    readonly draft: ViewportDraft,
-    readonly viewport: ViewportCustomElementModel,
-    readonly viewportAgent: ViewportAgentModel,
-  ) {}
+interface ViewportRuntimeEmission {
+  readonly records: readonly KernelStoreRecord[];
+  readonly draft: ViewportDraft;
+  readonly viewport: ViewportCustomElementModel;
+  readonly viewportAgent: ViewportAgentModel;
 }
 
 class RouteRuntimeTopologyState {
@@ -108,14 +102,12 @@ interface ViewportProperties {
   readonly fallback: string | null;
 }
 
-class ViewportDraft {
-  constructor(
-    readonly ownerRouteConfigContext: RouteConfigContextModel,
-    readonly localKey: string,
-    readonly controller: RuntimeControllerFrame,
-    readonly properties: ViewportProperties,
-    readonly index: number,
-  ) {}
+interface ViewportDraft {
+  readonly ownerRouteConfigContext: RouteConfigContextModel;
+  readonly localKey: string;
+  readonly controller: RuntimeControllerFrame;
+  readonly properties: ViewportProperties;
+  readonly index: number;
 }
 
 /** RouteContext, au-viewport, and ViewportAgent products materialized from static router/rendering topology. */
@@ -209,26 +201,12 @@ export class RouteRuntimeTopologyProjectPass {
     routeConfigContexts: RouteConfigContextMaterializationProjectResult,
     templates: TemplateCompilationProjectEmission,
   ): RouteRuntimeTopologyProjectResult {
-    const configs = routeConfigIndex(routeConfigContexts);
-    const contexts = routeConfigContexts.readRouteConfigContexts();
-    const childrenByParent = routeConfigContextChildrenByParent(contexts);
-    const viewportDraftsByOwner = viewportDraftsByOwnerContext(this.store, routeConfigContexts, templates);
-    const rootContexts = contexts.filter((context) => context.parent == null);
-    const state = new RouteRuntimeTopologyState();
-
-    for (const root of rootContexts) {
-      this.materializeRouteContextTree(
-        root,
-        null,
-        null,
-        configs,
-        childrenByParent,
-        viewportDraftsByOwner,
-        templates,
-        state,
-      );
-    }
-
+    const state = new RouteRuntimeTopologyFrame(
+      this.store,
+      this.childContainerMaterializer,
+      routeConfigContexts,
+      templates,
+    ).materialize();
     const records = state.readRecords();
     if (records.length > 0) {
       this.store.commit(new KernelStoreBatch(records, `router-runtime-topology:${project.projectKey}`));
@@ -241,47 +219,65 @@ export class RouteRuntimeTopologyProjectPass {
       routeContextContainersByIdentity(state.routeContexts),
     );
   }
+}
+
+class RouteRuntimeTopologyFrame {
+  private readonly configs: ReadonlyMap<IdentityHandle, RouteConfigModel>;
+  private readonly childrenByParent: ReadonlyMap<IdentityHandle, readonly RouteConfigContextModel[]>;
+  private readonly viewportDraftsByOwner: ReadonlyMap<IdentityHandle, readonly ViewportDraft[]>;
+  private readonly rootContexts: readonly RouteConfigContextModel[];
+  private readonly state = new RouteRuntimeTopologyState();
+
+  constructor(
+    private readonly store: KernelStore,
+    private readonly childContainerMaterializer: ContainerChildMaterializer,
+    routeConfigContexts: RouteConfigContextMaterializationProjectResult,
+    private readonly templates: TemplateCompilationProjectEmission,
+  ) {
+    const contexts = routeConfigContexts.readRouteConfigContexts();
+    this.configs = routeConfigIndex(routeConfigContexts);
+    this.childrenByParent = routeConfigContextChildrenByParent(contexts);
+    this.viewportDraftsByOwner = viewportDraftsByOwnerContext(store, routeConfigContexts, templates);
+    this.rootContexts = contexts.filter((context) => context.parent == null);
+  }
+
+  materialize(): RouteRuntimeTopologyState {
+    for (const root of this.rootContexts) {
+      this.materializeRouteContextTree(root, null, null);
+    }
+    return this.state;
+  }
 
   private materializeRouteContextTree(
     routeConfigContext: RouteConfigContextModel,
     parentRouteContext: RouteRuntimeContextEmission | null,
     hostingViewport: ViewportRuntimeEmission | null,
-    configs: ReadonlyMap<IdentityHandle, RouteConfigModel>,
-    childrenByParent: ReadonlyMap<IdentityHandle, readonly RouteConfigContextModel[]>,
-    viewportDraftsByOwner: ReadonlyMap<IdentityHandle, readonly ViewportDraft[]>,
-    templates: TemplateCompilationProjectEmission,
-    state: RouteRuntimeTopologyState,
   ): void {
-    const routeConfig = requiredRouteConfigForContext(routeConfigContext, configs);
-    const parentContainer = parentContainerForRouteContext(routeConfig, hostingViewport, templates);
+    const routeConfig = requiredRouteConfigForContext(routeConfigContext, this.configs);
+    const parentContainer = parentContainerForRouteContext(routeConfig, hostingViewport, this.templates);
     const routeContext = this.materializeRouteContext(
       routeConfigContext,
       parentRouteContext,
       hostingViewport,
       parentContainer,
     );
-    state.addRouteContext(routeContext);
+    this.state.addRouteContext(routeContext);
 
     const viewports = this.materializeViewports(
       routeConfigContext,
       routeContext.routeContext.toReference(),
-      viewportDraftsByOwner.get(routeConfigContext.identityHandle) ?? [],
+      this.viewportDraftsByOwner.get(routeConfigContext.identityHandle) ?? [],
     );
-    state.addViewports(viewports);
+    this.state.addViewports(viewports);
 
-    const children = childrenByParent.get(routeConfigContext.identityHandle) ?? [];
+    const children = this.childrenByParent.get(routeConfigContext.identityHandle) ?? [];
     for (const child of children) {
-      const childRouteConfig = requiredRouteConfigForContext(child, configs);
+      const childRouteConfig = requiredRouteConfigForContext(child, this.configs);
       for (const childHostingViewport of selectHostingViewports(viewports, childRouteConfig)) {
         this.materializeRouteContextTree(
           child,
           routeContext,
           childHostingViewport,
-          configs,
-          childrenByParent,
-          viewportDraftsByOwner,
-          templates,
-          state,
         );
       }
     }
@@ -294,82 +290,29 @@ export class RouteRuntimeTopologyProjectPass {
     parentContainer: Container | null,
   ): RouteRuntimeContextEmission {
     const local = `router-route-context:${routeConfigContext.identityHandle}:${hostingViewport?.viewportAgent.identityHandle ?? 'root'}`;
-    const evidenceHandle = this.store.handles.evidence(local);
-    const provenanceHandle = this.store.handles.provenance(local);
-    const productHandle = this.store.handles.product(local);
-    const identityHandle = this.store.handles.identity(local);
-    const sourceAddressHandle = routeConfigContext.sourceAddressHandle;
-    const containerEmission = parentContainer == null
-      ? null
-      : this.childContainerMaterializer.materializeChild(new ContainerChildMaterializationRequest(
-        `${local}:container`,
-        parentContainer,
-        sourceAddressHandle,
-        `${routeConfigContext.friendlyPath}:route-context-container`,
-        [
-          new ContainerContextResolverSlotRequest('IController', sourceAddressHandle),
-          new ContainerContextResolverSlotRequest('IRouteContext', sourceAddressHandle),
-          new ContainerContextResolverSlotRequest('IContextRouter', sourceAddressHandle),
-        ],
-      ));
-    const selfReference = new RouterReference(
-      productHandle,
-      identityHandle,
-      RouterModelKind.RouteContext,
-      sourceAddressHandle,
-      routeConfigContext.friendlyPath,
+    const containerEmission = materializedRouteContextContainer(
+      this.childContainerMaterializer,
+      local,
+      routeConfigContext,
+      parentContainer,
     );
-    const rootReference = parent?.routeContext.root ?? selfReference;
-    const routeContext = new RouteContextModel(
-      productHandle,
-      identityHandle,
-      parent?.routeContext.toReference() ?? null,
-      rootReference,
-      containerEmission?.container.toReference() ?? null,
-      null,
-      routeConfigContext.toReference(),
-      hostingViewport?.viewportAgent.toReference() ?? null,
-      routeConfigContext.friendlyPath,
-      sourceAddressHandle,
-      routeContextFieldProvenance(provenanceHandle, parent, containerEmission?.container ?? null, hostingViewport),
+    const routeContext = materializedRouteContext(
+      this.store,
+      local,
+      routeConfigContext,
+      parent,
+      hostingViewport,
+      containerEmission?.container ?? null,
     );
-    return new RouteRuntimeContextEmission(
-      [
+    return {
+      records: [
         ...(containerEmission?.records ?? []),
-        new EvidenceRecord(
-          evidenceHandle,
-          EvidenceKind.ConfigurationFlow,
-          [EvidenceRole.Configuration],
-          'RouteContext topology materialized from RouteConfigContext and static viewport/controller boundaries.',
-          sourceAddressHandle,
-        ),
-        new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
-        new RouterIdentity(
-          identityHandle,
-          KernelVocabulary.Router.RouteContext.key,
-          routeConfigContext.identityHandle,
-          sourceAddressHandle,
-          routeConfigContext.friendlyPath,
-        ),
-        new MaterializedProduct(
-          productHandle,
-          KernelVocabulary.Router.RouteContext.key,
-          identityHandle,
-          sourceAddressHandle,
-          provenanceHandle,
-        ),
-        new MaterializationRecord(
-          this.store.handles.materialization(local),
-          routeConfigContext.identityHandle,
-          [productHandle],
-          [],
-          [],
-        ),
+        ...routeContextRecords(this.store, local, routeConfigContext, routeContext),
       ],
       routeConfigContext,
       routeContext,
-      containerEmission?.container ?? null,
-    );
+      container: containerEmission?.container ?? null,
+    };
   }
 
   private materializeViewports(
@@ -390,92 +333,206 @@ export class RouteRuntimeTopologyProjectPass {
   ): ViewportRuntimeEmission {
     const local = `router-viewport:${routeContext.identityHandle}:${draft.localKey}:${index}:${draft.controller.productHandle}`;
     const agentLocal = `${local}:agent`;
-    const evidenceHandle = this.store.handles.evidence(local);
-    const provenanceHandle = this.store.handles.provenance(local);
-    const viewportProductHandle = this.store.handles.product(local);
-    const viewportIdentityHandle = this.store.handles.identity(local);
-    const agentProductHandle = this.store.handles.product(agentLocal);
-    const agentIdentityHandle = this.store.handles.identity(agentLocal);
-    const sourceAddressHandle = draft.controller.sourceAddressHandle;
-    const viewport = new ViewportCustomElementModel(
-      viewportProductHandle,
-      viewportIdentityHandle,
-      routeContext,
-      draft.controller.productHandle,
-      draft.properties.name,
-      draft.properties.usedBy,
-      draft.properties.defaultComponent,
-      draft.properties.fallback,
-      sourceAddressHandle,
-      viewportFieldProvenance(provenanceHandle, draft.properties),
-    );
-    const viewportAgent = new ViewportAgentModel(
-      agentProductHandle,
-      agentIdentityHandle,
-      viewport.toReference(),
-      routeContext,
-      draft.controller.productHandle,
-      sourceAddressHandle,
-      viewportAgentFieldProvenance(provenanceHandle),
-    );
-    return new ViewportRuntimeEmission(
-      [
-        new EvidenceRecord(
-          evidenceHandle,
-          EvidenceKind.SemanticObservation,
-          [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
-          'Router au-viewport and ViewportAgent topology materialized from runtime controller hydration.',
-          sourceAddressHandle,
-        ),
-        new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
-        new RouterIdentity(
-          viewportIdentityHandle,
-          KernelVocabulary.Router.Viewport.key,
-          owner.identityHandle,
-          sourceAddressHandle,
-          draft.properties.name,
-        ),
-        new MaterializedProduct(
-          viewportProductHandle,
-          KernelVocabulary.Router.Viewport.key,
-          viewportIdentityHandle,
-          sourceAddressHandle,
-          provenanceHandle,
-        ),
-        new MaterializationRecord(
-          this.store.handles.materialization(local),
-          owner.identityHandle,
-          [viewportProductHandle],
-          [],
-          [],
-        ),
-        new RouterIdentity(
-          agentIdentityHandle,
-          KernelVocabulary.Router.ViewportAgent.key,
-          viewportIdentityHandle,
-          sourceAddressHandle,
-          draft.properties.name,
-        ),
-        new MaterializedProduct(
-          agentProductHandle,
-          KernelVocabulary.Router.ViewportAgent.key,
-          agentIdentityHandle,
-          sourceAddressHandle,
-          provenanceHandle,
-        ),
-        new MaterializationRecord(
-          this.store.handles.materialization(agentLocal),
-          viewportIdentityHandle,
-          [agentProductHandle],
-          [],
-          [],
-        ),
-      ],
+    const viewport = materializedViewport(this.store, local, routeContext, draft);
+    const viewportAgent = materializedViewportAgent(this.store, agentLocal, local, routeContext, draft, viewport);
+    return {
+      records: viewportRuntimeRecords(this.store, local, agentLocal, owner, draft, viewport, viewportAgent),
       draft,
       viewport,
       viewportAgent,
-    );
+    };
   }
+}
+
+function materializedRouteContextContainer(
+  materializer: ContainerChildMaterializer,
+  local: string,
+  routeConfigContext: RouteConfigContextModel,
+  parentContainer: Container | null,
+): ContainerChildMaterializationEmission | null {
+  if (parentContainer == null) {
+    return null;
+  }
+  const sourceAddressHandle = routeConfigContext.sourceAddressHandle;
+  return materializer.materializeChild(new ContainerChildMaterializationRequest(
+    `${local}:container`,
+    parentContainer,
+    sourceAddressHandle,
+    `${routeConfigContext.friendlyPath}:route-context-container`,
+    [
+      new ContainerContextResolverSlotRequest('IController', sourceAddressHandle),
+      new ContainerContextResolverSlotRequest('IRouteContext', sourceAddressHandle),
+      new ContainerContextResolverSlotRequest('IContextRouter', sourceAddressHandle),
+    ],
+  ));
+}
+
+function materializedRouteContext(
+  store: KernelStore,
+  local: string,
+  routeConfigContext: RouteConfigContextModel,
+  parent: RouteRuntimeContextEmission | null,
+  hostingViewport: ViewportRuntimeEmission | null,
+  container: Container | null,
+): RouteContextModel {
+  const selfReference = new RouterReference(
+    store.handles.product(local),
+    store.handles.identity(local),
+    RouterModelKind.RouteContext,
+    routeConfigContext.sourceAddressHandle,
+    routeConfigContext.friendlyPath,
+  );
+  return new RouteContextModel(
+    store.handles.product(local),
+    store.handles.identity(local),
+    parent?.routeContext.toReference() ?? null,
+    parent?.routeContext.root ?? selfReference,
+    container?.toReference() ?? null,
+    null,
+    routeConfigContext.toReference(),
+    hostingViewport?.viewportAgent.toReference() ?? null,
+    routeConfigContext.friendlyPath,
+    routeConfigContext.sourceAddressHandle,
+    routeContextFieldProvenance(store.handles.provenance(local), parent, container, hostingViewport),
+  );
+}
+
+function routeContextRecords(
+  store: KernelStore,
+  local: string,
+  routeConfigContext: RouteConfigContextModel,
+  routeContext: RouteContextModel,
+): readonly KernelStoreRecord[] {
+  const evidenceHandle = store.handles.evidence(local);
+  const provenanceHandle = store.handles.provenance(local);
+  return routerProductRecords(store, {
+    local,
+    evidenceHandle,
+    provenanceHandle,
+    productHandle: routeContext.productHandle,
+    identityHandle: routeContext.identityHandle,
+    productKindKey: KernelVocabulary.Router.RouteContext.key,
+    ownerHandle: routeConfigContext.identityHandle,
+    sourceAddressHandle: routeConfigContext.sourceAddressHandle,
+    localName: routeConfigContext.friendlyPath,
+    evidenceKind: EvidenceKind.ConfigurationFlow,
+    evidenceRoles: [EvidenceRole.Configuration],
+    evidenceSummary: 'RouteContext topology materialized from RouteConfigContext and static viewport/controller boundaries.',
+  });
+}
+
+function materializedViewport(
+  store: KernelStore,
+  local: string,
+  routeContext: RouterReference,
+  draft: ViewportDraft,
+): ViewportCustomElementModel {
+  return new ViewportCustomElementModel(
+    store.handles.product(local),
+    store.handles.identity(local),
+    routeContext,
+    draft.controller.productHandle,
+    draft.properties.name,
+    draft.properties.usedBy,
+    draft.properties.defaultComponent,
+    draft.properties.fallback,
+    draft.controller.sourceAddressHandle,
+    viewportFieldProvenance(store.handles.provenance(local), draft.properties),
+  );
+}
+
+function materializedViewportAgent(
+  store: KernelStore,
+  agentLocal: string,
+  provenanceLocal: string,
+  routeContext: RouterReference,
+  draft: ViewportDraft,
+  viewport: ViewportCustomElementModel,
+): ViewportAgentModel {
+  return new ViewportAgentModel(
+    store.handles.product(agentLocal),
+    store.handles.identity(agentLocal),
+    viewport.toReference(),
+    routeContext,
+    draft.controller.productHandle,
+    draft.controller.sourceAddressHandle,
+    viewportAgentFieldProvenance(store.handles.provenance(provenanceLocal)),
+  );
+}
+
+function viewportRuntimeRecords(
+  store: KernelStore,
+  local: string,
+  agentLocal: string,
+  owner: RouteConfigContextModel,
+  draft: ViewportDraft,
+  viewport: ViewportCustomElementModel,
+  viewportAgent: ViewportAgentModel,
+): readonly KernelStoreRecord[] {
+  const evidenceHandle = store.handles.evidence(local);
+  const provenanceHandle = store.handles.provenance(local);
+  return [
+    ...viewportRuntimeSourceRecords(evidenceHandle, provenanceHandle, draft),
+    ...viewportProductRecords(store, local, owner, draft, viewport, provenanceHandle),
+    ...viewportAgentProductRecords(store, agentLocal, draft, viewport, viewportAgent, provenanceHandle),
+  ];
+}
+
+function viewportRuntimeSourceRecords(
+  evidenceHandle: EvidenceHandle,
+  provenanceHandle: ProvenanceHandle,
+  draft: ViewportDraft,
+): readonly KernelStoreRecord[] {
+  return [
+    new EvidenceRecord(
+      evidenceHandle,
+      EvidenceKind.SemanticObservation,
+      [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
+      'Router au-viewport and ViewportAgent topology materialized from runtime controller hydration.',
+      draft.controller.sourceAddressHandle,
+    ),
+    new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
+  ];
+}
+
+function viewportProductRecords(
+  store: KernelStore,
+  local: string,
+  owner: RouteConfigContextModel,
+  draft: ViewportDraft,
+  viewport: ViewportCustomElementModel,
+  provenanceHandle: ProvenanceHandle,
+): readonly KernelStoreRecord[] {
+  return routerIdentityProductRecords(store, {
+    local,
+    productHandle: viewport.productHandle,
+    identityHandle: viewport.identityHandle,
+    productKindKey: KernelVocabulary.Router.Viewport.key,
+    ownerHandle: owner.identityHandle,
+    sourceAddressHandle: draft.controller.sourceAddressHandle,
+    localName: draft.properties.name,
+    provenanceHandle,
+  });
+}
+
+function viewportAgentProductRecords(
+  store: KernelStore,
+  local: string,
+  draft: ViewportDraft,
+  viewport: ViewportCustomElementModel,
+  viewportAgent: ViewportAgentModel,
+  provenanceHandle: ProvenanceHandle,
+): readonly KernelStoreRecord[] {
+  return routerIdentityProductRecords(store, {
+    local,
+    productHandle: viewportAgent.productHandle,
+    identityHandle: viewportAgent.identityHandle,
+    productKindKey: KernelVocabulary.Router.ViewportAgent.key,
+    ownerHandle: viewport.identityHandle,
+    sourceAddressHandle: draft.controller.sourceAddressHandle,
+    localName: draft.properties.name,
+    provenanceHandle,
+  });
 }
 
 function routeConfigContextChildrenByParent(
@@ -514,13 +571,13 @@ function viewportDraftsByOwnerContext(
     const controllers = resource.runtimeAnalysis.runtimeRendering.controllers.filter(isViewportController);
     for (const owner of ownerRouteConfigContext) {
       controllers.forEach((controller, index) => {
-        const draft = new ViewportDraft(
-          owner,
-          resource.compilation.localKey,
+        const draft: ViewportDraft = {
+          ownerRouteConfigContext: owner,
+          localKey: resource.compilation.localKey,
           controller,
-          viewportPropertiesFromController(store, controller),
+          properties: viewportPropertiesFromController(store, controller),
           index,
-        );
+        };
         const drafts = draftsByOwner.get(owner.identityHandle);
         if (drafts == null) {
           draftsByOwner.set(owner.identityHandle, [draft]);
@@ -693,40 +750,40 @@ function routeContextFieldProvenance(
   container: Container | null,
   hostingViewport: ViewportRuntimeEmission | null,
 ): readonly FieldProvenance<RouteContextField>[] {
-  return compactFieldProvenance<RouteContextField>([
-    parent == null ? null : new FieldProvenance('parent', provenanceHandle),
-    new FieldProvenance('root', provenanceHandle),
-    container == null ? null : new FieldProvenance('container', provenanceHandle),
-    new FieldProvenance('routeConfigContext', provenanceHandle),
-    hostingViewport == null ? null : new FieldProvenance('viewportAgent', provenanceHandle),
-    new FieldProvenance('source', provenanceHandle),
-  ]);
+  return fieldProvenanceEntries<RouteContextField>([
+    parent == null ? null : 'parent',
+    'root',
+    container == null ? null : 'container',
+    'routeConfigContext',
+    hostingViewport == null ? null : 'viewportAgent',
+    'source',
+  ], provenanceHandle);
 }
 
 function viewportFieldProvenance(
   provenanceHandle: ProvenanceHandle,
   properties: ViewportProperties,
 ): readonly FieldProvenance<ViewportField>[] {
-  return compactFieldProvenance<ViewportField>([
-    new FieldProvenance('routeContext', provenanceHandle),
-    new FieldProvenance('controller', provenanceHandle),
-    new FieldProvenance('name', provenanceHandle),
-    properties.usedBy.length === 0 ? null : new FieldProvenance('usedBy', provenanceHandle),
-    properties.defaultComponent == null ? null : new FieldProvenance('default', provenanceHandle),
-    properties.fallback == null ? null : new FieldProvenance('fallback', provenanceHandle),
-    new FieldProvenance('source', provenanceHandle),
-  ]);
+  return fieldProvenanceEntries<ViewportField>([
+    'routeContext',
+    'controller',
+    'name',
+    properties.usedBy.length === 0 ? null : 'usedBy',
+    properties.defaultComponent == null ? null : 'default',
+    properties.fallback == null ? null : 'fallback',
+    'source',
+  ], provenanceHandle);
 }
 
 function viewportAgentFieldProvenance(
   provenanceHandle: ProvenanceHandle,
 ): readonly FieldProvenance<ViewportAgentField>[] {
-  return compactFieldProvenance<ViewportAgentField>([
-    new FieldProvenance('viewport', provenanceHandle),
-    new FieldProvenance('routeContext', provenanceHandle),
-    new FieldProvenance('hostController', provenanceHandle),
-    new FieldProvenance('source', provenanceHandle),
-  ]);
+  return fieldProvenanceEntries<ViewportAgentField>([
+    'viewport',
+    'routeContext',
+    'hostController',
+    'source',
+  ], provenanceHandle);
 }
 
 function splitList(value: string | undefined): readonly string[] {

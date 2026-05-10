@@ -91,6 +91,22 @@ export class SourceSpanAddress {
   ) {}
 }
 
+export function sourceSpanContains(
+  outer: SourceSpanAddress,
+  inner: SourceSpanAddress,
+): boolean {
+  return outer.fileHandle === inner.fileHandle
+    && outer.start <= inner.start
+    && inner.end <= outer.end;
+}
+
+export function sourceSpanContainsOffset(
+  span: SourceSpanAddress,
+  offset: number,
+): boolean {
+  return span.start <= offset && offset <= span.end;
+}
+
 /** Address for a template unit before or after compiler transformation. */
 export class TemplateAddress {
   /** String discriminator for serialized template address records. */

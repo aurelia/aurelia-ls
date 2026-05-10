@@ -22,10 +22,10 @@ import {
 } from './frames.js';
 import { discoverBootProjects } from './project-discovery.js';
 import {
-  discoverSourceFiles,
   inferSourceFileRole,
   inferSourceLanguage,
-} from './source-discovery.js';
+} from '../kernel/source-classification.js';
+import { discoverSourceFiles } from './source-discovery.js';
 
 function normalizePathForProject(rootDir: string, path: string): string {
   const normalized = isAbsolute(path)
@@ -110,11 +110,39 @@ export function admitSourceFile(
 ): SourceFileAdmission {
   const paths = sourceFileAdmissionPaths(workspaceRootDir, projectRootDir, source);
   const handles = sourceFileAdmissionHandles(store, projectKey, paths.projectPath);
+  const existing = existingSourceFileAdmission(store, projectKey, paths, handles);
+  if (existing != null) {
+    return existing;
+  }
   store.commit(new KernelStoreBatch(
     recordsForSourceFileAdmission(projectKey, source, paths, handles),
     `boot-source:${projectKey}:${paths.projectPath}`,
   ));
+  return sourceFileAdmission(projectKey, paths, handles);
+}
 
+function existingSourceFileAdmission(
+  store: KernelStore,
+  projectKey: string,
+  paths: SourceFileAdmissionPaths,
+  handles: SourceFileAdmissionHandles,
+): SourceFileAdmission | null {
+  const existing = store.readAddress(handles.addressHandle);
+  return existing?.kind === 'source-file-address'
+    ? sourceFileAdmission(projectKey, new SourceFileAdmissionPaths(
+      paths.projectPath,
+      paths.workspacePath,
+      existing.language,
+      existing.role,
+    ), handles)
+    : null;
+}
+
+function sourceFileAdmission(
+  projectKey: string,
+  paths: SourceFileAdmissionPaths,
+  handles: SourceFileAdmissionHandles,
+): SourceFileAdmission {
   return new SourceFileAdmission(
     projectKey,
     paths.projectPath,

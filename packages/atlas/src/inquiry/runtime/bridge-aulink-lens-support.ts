@@ -18,6 +18,10 @@ import { LocusKind, type SourceRange } from "../locus.js";
 import {
   NavigationPlane,
   NavigationRelation,
+  nextPageRouteClaim as nextPageRoute,
+  navigationRoute,
+  sourceInspectionRoute as sourceRoute,
+  typeFactsInspectionRoute as typeFactsRoute,
   type NavigationRouteClaim,
 } from "../navigation.js";
 import type {
@@ -30,6 +34,8 @@ export const AULINK_MIRROR_DETAIL_BUDGET: Budget = {
   rows: 20,
   evidencePerSubject: 3,
 };
+
+export { nextPageRoute, sourceRoute, typeFactsRoute };
 
 export function auLinkModelFilters(
   filters: {
@@ -44,15 +50,13 @@ export function auLinkModelFilters(
   options: { readonly includeQuery?: boolean } = {},
 ): AuLinkFilters {
   return {
-    ...(filters.linkId === undefined ? {} : { linkId: filters.linkId }),
-    ...(filters.packageId === undefined ? {} : { packageId: filters.packageId }),
-    ...(filters.symbolName === undefined ? {} : { symbolName: filters.symbolName }),
-    ...(filters.targetName === undefined ? {} : { targetName: filters.targetName }),
-    ...(filters.filePath === undefined ? {} : { filePath: filters.filePath }),
-    ...(filters.frameworkStatus === undefined ? {} : { frameworkStatus: filters.frameworkStatus }),
-    ...(options.includeQuery !== true || filters.query === undefined
-      ? {}
-      : { query: filters.query }),
+    linkId: filters.linkId,
+    packageId: filters.packageId,
+    symbolName: filters.symbolName,
+    targetName: filters.targetName,
+    filePath: filters.filePath,
+    frameworkStatus: filters.frameworkStatus,
+    query: options.includeQuery === true ? filters.query : undefined,
   };
 }
 
@@ -69,18 +73,9 @@ export function isUnscopedBridgeInquiry(
 }
 
 /** Route metadata for paging within one bridge projection. */
-export function nextPageRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(
-    NavigationPlane.Addressing,
-    NavigationRelation.NextPageOf,
-    [],
-    summary,
-  );
-}
-
 /** Route metadata for semantic bridge projection hops. */
 export function projectionRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(
+  return navigationRoute(
     NavigationPlane.Semantic,
     NavigationRelation.ProjectionOf,
     [BasisKind.AuLink],
@@ -88,29 +83,9 @@ export function projectionRoute(summary: string): NavigationRouteClaim {
   );
 }
 
-/** Route metadata for source-inspection hops. */
-export function sourceRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(
-    NavigationPlane.Inspection,
-    NavigationRelation.SourceFor,
-    [BasisKind.SourceText, BasisKind.TypeScriptProgram],
-    summary,
-  );
-}
-
-/** Route metadata for TypeScript fact-inspection hops. */
-export function typeFactsRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(
-    NavigationPlane.Inspection,
-    NavigationRelation.TypeFactsFor,
-    [BasisKind.TypeScriptChecker],
-    summary,
-  );
-}
-
 /** Route metadata for exact TypeScript call-site hops. */
 export function callSitesRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(
+  return navigationRoute(
     NavigationPlane.Flow,
     NavigationRelation.CallSitesOf,
     [BasisKind.TypeScriptChecker, BasisKind.SourceText],
@@ -120,7 +95,7 @@ export function callSitesRoute(summary: string): NavigationRouteClaim {
 
 /** Route metadata for auLink mirror-target hops. */
 export function mirrorTargetRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(
+  return navigationRoute(
     NavigationPlane.Semantic,
     NavigationRelation.MirrorTargetOf,
     [BasisKind.AuLink, BasisKind.TypeScriptChecker],
@@ -130,22 +105,12 @@ export function mirrorTargetRoute(summary: string): NavigationRouteClaim {
 
 /** Route metadata for modeled bridge seams. */
 export function seamRoute(summary: string): NavigationRouteClaim {
-  return continuationRoute(
+  return navigationRoute(
     NavigationPlane.Semantic,
     NavigationRelation.SeamFor,
     [BasisKind.AuLink],
     summary,
   );
-}
-
-/** Build a stable navigation route claim. */
-export function continuationRoute(
-  plane: NavigationPlane,
-  relation: NavigationRelation,
-  basis: readonly BasisKind[],
-  summary: string,
-): NavigationRouteClaim {
-  return { plane, relation, basis, summary };
 }
 
 /** Switch to another projection within bridge.aulink while preserving filters. */
@@ -171,10 +136,10 @@ export function mirrorProjectionContinuation(
         ...(inquiry.filters ?? {}),
         ...filters,
       },
-      ...(nextBudget === undefined ? {} : { budget: nextBudget }),
+      budget: nextBudget,
       page: undefined,
     },
-    ...(evidence === undefined ? {} : { evidence: [evidence] }),
+    evidence: evidence === undefined ? undefined : [evidence],
     route: projectionRoute(`bridge.aulink ${projection} projection.`),
   };
 }
@@ -206,7 +171,7 @@ export function ownerProjectionContinuation(
       budget: inquiry.budget,
     },
     evidence: [evidence],
-    route: continuationRoute(
+    route: navigationRoute(
       NavigationPlane.Semantic,
       NavigationRelation.ProjectionOf,
       basis,
@@ -260,7 +225,7 @@ export function callSitesRangeContinuation(
         range,
       },
       projection: "call-sites",
-      ...(filters === undefined ? {} : { filters }),
+      filters,
     },
     evidence: [evidence],
     route: callSitesRoute("Call-site facts inside auLink mirror evidence."),

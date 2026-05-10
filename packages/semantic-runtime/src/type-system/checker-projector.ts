@@ -1,9 +1,5 @@
 import ts from 'typescript';
-import {
-  SourceFileAddress,
-  SourceSpanAddress,
-  SourceSpanRole,
-} from '../kernel/address.js';
+import { SourceSpanRole } from '../kernel/address.js';
 import { SemanticClaim, claimsForProduct } from '../kernel/claim.js';
 import {
   OpenSeam,
@@ -23,8 +19,8 @@ import type {
 } from '../kernel/handles.js';
 import {
   TypeSystemIdentity,
-  TypeScriptDeclarationIdentity,
 } from '../kernel/identity.js';
+import { localKeyPart } from '../kernel/local-key.js';
 import {
   MaterializationRecord,
   MaterializedProduct,
@@ -54,6 +50,20 @@ import {
   type CheckerTypeMemberField,
   type CheckerTypeShapeField,
 } from './type-shape.js';
+import {
+  checkerIndexedValueType,
+  checkerIterableElementType,
+} from './checker-related-types.js';
+import {
+  checkerDeclarationsAreReadonly,
+  checkerSymbolIsOptional,
+  checkerSymbolMemberKind,
+  declarationsForCheckerSymbol,
+} from './checker-member-surface.js';
+import {
+  sourceSpanForCheckerDeclaration,
+  type DeclarationSourcePublication,
+} from './declaration-source.js';
 
 export interface CheckerTypeProjectionRequest {
   /** Store-local key for this type projection. */
@@ -465,7 +475,7 @@ export class CheckerTypeProjector {
 
   private claimsForShapeMembers(input: TypeShapePublicationFrame): readonly SemanticClaim[] {
     return input.members.map((member) => new SemanticClaim(
-      this.store.handles.claim(`type-shape:${input.localKey}:member:${encodeTypeLocalPart(member.name)}`),
+      this.store.handles.claim(`type-shape:${input.localKey}:member:${localKeyPart(member.name)}`),
       input.shapeProductHandle,
       KernelVocabulary.TypeSystem.TypeShapeHasMember.key,
       member.productHandle,
@@ -479,7 +489,7 @@ export class CheckerTypeProjector {
     provenanceHandle: ProvenanceHandle,
   ): readonly CheckerTypeMember[] {
     return input.members.map((member, index) => {
-      const localKey = `${input.localKey}:member:${index}:${encodeTypeLocalPart(member.name)}`;
+      const localKey = `${input.localKey}:member:${index}:${localKeyPart(member.name)}`;
       return new CheckerTypeMember(
         this.store.handles.product(`type-member:${localKey}`),
         this.store.handles.identity(`type-member:${localKey}`),
@@ -521,22 +531,22 @@ export class CheckerTypeProjector {
     records: KernelStoreRecord[],
     symbol: ts.Symbol,
   ): CheckerTypeMember {
-    const declarations = declarationsForSymbol(symbol);
+    const declarations = declarationsForCheckerSymbol(symbol);
     const name = symbol.getName();
-    const localKey = `${input.localKey}:member:${encodeTypeLocalPart(name)}`;
+    const localKey = `${input.localKey}:member:${localKeyPart(name)}`;
     const valueType = valueTypeForSymbol(input.checker, symbol, input.sourceNode ?? null, declarations);
-    const declarationSource = sourceSpanForDeclaration(this.store, symbol, declarations, SourceSpanRole.Name);
+    const declarationSource = sourceSpanForCheckerDeclaration(this.store, symbol, declarations, SourceSpanRole.Name);
     appendDeclarationSourceRecords(this.store, records, declarationSource);
     const valueTypeReference = valueTypeReferenceForMember(input, valueType);
     return new CheckerTypeMember(
       this.store.handles.product(`type-member:${localKey}`),
       this.store.handles.identity(`type-member:${localKey}`),
       name,
-      classifyMember(symbol, declarations),
+      checkerSymbolMemberKind(symbol, declarations),
       ownerType,
       valueTypeReference,
-      isOptionalMember(symbol, declarations),
-      isReadonlyMember(declarations),
+      checkerSymbolIsOptional(symbol, declarations),
+      checkerDeclarationsAreReadonly(declarations),
       declarationSource?.identity.handle ?? null,
       declarationSource?.address.handle ?? null,
       memberFieldProvenance(provenanceHandle, valueTypeReference, declarations),
@@ -569,10 +579,6 @@ export class CheckerTypeProjector {
   }
 }
 
-function declarationsForSymbol(symbol: ts.Symbol | null): readonly ts.Declaration[] {
-  return symbol?.getDeclarations() ?? [];
-}
-
 function displayType(
   checker: ts.TypeChecker,
   type: ts.Type,
@@ -597,7 +603,7 @@ function typeProjectionSourceAddress(
 
 function checkerTypeDescriptor(input: CheckerTypeProjectionRequest): CheckerTypeDescriptor {
   const symbol = input.type.aliasSymbol ?? input.type.symbol ?? null;
-  const declarations = declarationsForSymbol(symbol);
+  const declarations = declarationsForCheckerSymbol(symbol);
   const display = input.display ?? displayType(input.checker, input.type, input.sourceNode ?? null);
   return {
     symbol,
@@ -610,8 +616,16 @@ function checkerTypeDescriptor(input: CheckerTypeProjectionRequest): CheckerType
 
 function checkerTypeRelatedTypes(input: CheckerTypeProjectionRequest): TypeShapeRelatedTypes {
   return {
-    indexedValueType: null,
-    iteratedValueType: null,
+    indexedValueType: typeReferenceForRelatedCheckerType(
+      input.checker,
+      checkerIndexedValueType(input.checker, input.type),
+      input.sourceNode ?? null,
+    ),
+    iteratedValueType: typeReferenceForRelatedCheckerType(
+      input.checker,
+      checkerIterableElementType(input.checker, input.type),
+      input.sourceNode ?? null,
+    ),
     callReturnType: returnTypeReferenceForSignature(
       input.checker,
       input.type.getCallSignatures()[0] ?? null,
@@ -623,6 +637,27 @@ function checkerTypeRelatedTypes(input: CheckerTypeProjectionRequest): TypeShape
       input.sourceNode ?? null,
     ),
   };
+}
+
+function typeReferenceForRelatedCheckerType(
+  checker: ts.TypeChecker,
+  type: ts.Type | null,
+  sourceNode: ts.Node | null,
+): CheckerTypeReference | null {
+  if (type == null) {
+    return null;
+  }
+  const symbol = type.aliasSymbol ?? type.symbol ?? null;
+  const display = displayType(checker, type, sourceNode);
+  return new CheckerTypeReference(
+    null,
+    null,
+    checkerKeyForType(type, symbol, display),
+    display,
+    classifyCheckerTypeShape(type, symbol),
+    CheckerTypeProjectionOrigin.TypeChecker,
+    null,
+  );
 }
 
 function typeShapeReferenceFor(
@@ -649,7 +684,7 @@ function checkerKeyForType(
   symbol: ts.Symbol | null,
   display: string,
 ): string {
-  const declaration = declarationsForSymbol(symbol)[0] ?? null;
+  const declaration = declarationsForCheckerSymbol(symbol)[0] ?? null;
   if (declaration != null) {
     const sourceFile = declaration.getSourceFile();
     return `type:${sourceFile.fileName}:${declaration.pos}:${declaration.end}:${symbol?.getName() ?? display}`;
@@ -662,10 +697,6 @@ function checkerKeyForType(
 
 function syntheticCheckerKey(input: CheckerSyntheticTypeProjectionRequest): string {
   return `type:synthetic:${syntheticProjectionOrigin(input)}:${input.localKey}`;
-}
-
-function encodeTypeLocalPart(value: string): string {
-  return value.replace(/[^a-zA-Z0-9_$.-]+/g, '_');
 }
 
 function valueTypeForSymbol(
@@ -697,46 +728,6 @@ function returnTypeReferenceForSignature(
     classifyCheckerTypeShape(returnType, symbol),
     CheckerTypeProjectionOrigin.TypeChecker,
     null,
-  );
-}
-
-function classifyMember(
-  symbol: ts.Symbol,
-  declarations: readonly ts.Declaration[],
-): CheckerTypeMemberKind {
-  if ((symbol.flags & ts.SymbolFlags.Method) !== 0) {
-    return CheckerTypeMemberKind.Method;
-  }
-  if ((symbol.flags & (ts.SymbolFlags.GetAccessor | ts.SymbolFlags.SetAccessor)) !== 0) {
-    return CheckerTypeMemberKind.Accessor;
-  }
-  if ((symbol.flags & ts.SymbolFlags.Constructor) !== 0) {
-    return CheckerTypeMemberKind.Constructor;
-  }
-  if ((symbol.flags & ts.SymbolFlags.Property) !== 0) {
-    return CheckerTypeMemberKind.Property;
-  }
-  if (declarations.some((declaration) => ts.isCallSignatureDeclaration(declaration))) {
-    return CheckerTypeMemberKind.CallSignature;
-  }
-  if (declarations.some((declaration) => ts.isIndexSignatureDeclaration(declaration))) {
-    return CheckerTypeMemberKind.IndexSignature;
-  }
-  return CheckerTypeMemberKind.Unknown;
-}
-
-function isOptionalMember(
-  symbol: ts.Symbol,
-  declarations: readonly ts.Declaration[],
-): boolean {
-  return (symbol.flags & ts.SymbolFlags.Optional) !== 0
-    || declarations.some((declaration) => 'questionToken' in declaration && declaration.questionToken != null);
-}
-
-function isReadonlyMember(declarations: readonly ts.Declaration[]): boolean {
-  return declarations.some((declaration) =>
-    ts.canHaveModifiers(declaration)
-    && ts.getModifiers(declaration)?.some((modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword) === true
   );
 }
 
@@ -778,101 +769,14 @@ function memberFieldProvenance(
 function appendDeclarationSourceRecords(
   store: KernelStore,
   records: KernelStoreRecord[],
-  declarationSource: ReturnType<typeof sourceSpanForDeclaration>,
+  declarationSource: DeclarationSourcePublication | null,
 ): void {
   if (declarationSource == null) {
     return;
   }
-  appendKernelRecordIfAbsent(store, records, declarationSource.address);
-  appendKernelRecordIfAbsent(store, records, declarationSource.identity);
-}
-
-interface DeclarationSourcePublication {
-  readonly address: SourceSpanAddress;
-  readonly identity: TypeScriptDeclarationIdentity;
-}
-
-interface DeclarationSourceSpan {
-  readonly sourceFileAddress: SourceFileAddress;
-  readonly start: number;
-  readonly end: number;
-}
-
-function sourceSpanForDeclaration(
-  store: KernelStore,
-  symbol: ts.Symbol,
-  declarations: readonly ts.Declaration[],
-  role: SourceSpanRole,
-): DeclarationSourcePublication | null {
-  const span = declarationSourceSpan(store, symbol, declarations);
-  if (span == null) {
-    return null;
+  for (const record of declarationSource.records) {
+    appendKernelRecordIfAbsent(store, records, record);
   }
-  const local = declarationSourceLocal(span, role);
-  const addressHandle = store.handles.address(`${local}:span`);
-  return {
-    address: new SourceSpanAddress(
-      addressHandle,
-      span.sourceFileAddress.handle,
-      span.start,
-      span.end,
-      role,
-    ),
-    identity: new TypeScriptDeclarationIdentity(
-      store.handles.identity(`${local}:identity`),
-      span.sourceFileAddress.path,
-      null,
-      symbol.getName(),
-      addressHandle,
-    ),
-  };
-}
-
-function declarationSourceSpan(
-  store: KernelStore,
-  symbol: ts.Symbol,
-  declarations: readonly ts.Declaration[],
-): DeclarationSourceSpan | null {
-  const declaration = declarations[0] ?? symbol.valueDeclaration ?? null;
-  if (declaration == null) {
-    return null;
-  }
-  const sourceFileAddress = sourceFileAddressForDeclaration(store, declaration);
-  if (sourceFileAddress == null) {
-    return null;
-  }
-  const addressNode = declarationAddressNode(declaration);
-  const sourceFile = declaration.getSourceFile();
-  return {
-    sourceFileAddress,
-    start: addressNode.getStart(sourceFile),
-    end: addressNode.end,
-  };
-}
-
-function declarationSourceLocal(
-  span: DeclarationSourceSpan,
-  role: SourceSpanRole,
-): string {
-  return [
-    'type-system-declaration',
-    span.sourceFileAddress.workspaceKey,
-    span.sourceFileAddress.path,
-    span.start,
-    span.end,
-    role,
-  ].join(':');
-}
-
-function sourceFileAddressForDeclaration(
-  store: KernelStore,
-  declaration: ts.Declaration,
-): SourceFileAddress | null {
-  return store.readBestSourceFileAddressForFileName(declaration.getSourceFile().fileName);
-}
-
-function declarationAddressNode(declaration: ts.Declaration): ts.Node {
-  return ts.getNameOfDeclaration(declaration) ?? declaration;
 }
 
 function appendKernelRecordIfAbsent(

@@ -8,6 +8,9 @@ import type {
   AccessMemberExpression,
   AccessScopeExpression,
   BinaryExpression,
+  CallFunctionExpression,
+  CallMemberExpression,
+  CallScopeExpression,
   ConditionalExpression,
   ExpressionAstNode,
   Interpolation,
@@ -27,6 +30,7 @@ import {
 } from '../evaluation/module-graph.js';
 import {
   EvaluationBooleanValue,
+  EvaluationBoundaryKind,
   EvaluationNullValue,
   EvaluationNumberValue,
   EvaluationStringValue,
@@ -45,6 +49,7 @@ import {
 import {
   CheckerTypeMember,
 } from '../type-system/type-shape.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 
 export const enum RuntimeBindingSourceValueEvaluationKind {
   Value = 'value',
@@ -56,14 +61,23 @@ export class RuntimeBindingSourceValueEvaluation {
     readonly kind: RuntimeBindingSourceValueEvaluationKind,
     readonly value: EvaluationValue | null,
     readonly openReason: string | null,
+    readonly openReasonKinds: readonly OpenSeamReasonKind[] = [],
   ) {}
 
   static value(value: EvaluationValue): RuntimeBindingSourceValueEvaluation {
     return new RuntimeBindingSourceValueEvaluation(RuntimeBindingSourceValueEvaluationKind.Value, value, null);
   }
 
-  static open(reason: string): RuntimeBindingSourceValueEvaluation {
-    return new RuntimeBindingSourceValueEvaluation(RuntimeBindingSourceValueEvaluationKind.Open, null, reason);
+  static open(
+    reason: string,
+    reasonKinds: readonly OpenSeamReasonKind[] = [],
+  ): RuntimeBindingSourceValueEvaluation {
+    return new RuntimeBindingSourceValueEvaluation(
+      RuntimeBindingSourceValueEvaluationKind.Open,
+      null,
+      reason,
+      compactOpenReasonKinds(reasonKinds),
+    );
   }
 }
 
@@ -107,14 +121,20 @@ export class RuntimeBindingSourceValueEvaluator {
         return this.evaluateAccessScope(expression, scope);
       case 'AccessThis':
       case 'AccessBoundary':
-        return RuntimeBindingSourceValueEvaluation.open(`${expression.$kind} value evaluation needs a materialized binding-context instance.`);
+        return openNeedsRuntimeValue(`${expression.$kind} value evaluation needs a materialized binding-context instance.`);
       case 'AccessMember':
         return this.evaluateAccessMember(expression, scope);
+      case 'CallScope':
+        return this.evaluateCallScope(expression, scope);
+      case 'CallMember':
+        return this.evaluateCallMember(expression, scope);
+      case 'CallFunction':
+        return this.evaluateCallFunction(expression, scope);
       case 'Paren':
       case 'BindingBehavior':
         return this.evaluateNode(expression.expression, scope);
       case 'ValueConverter':
-        return RuntimeBindingSourceValueEvaluation.open(`Value converter '${expression.name.name}' is not statically evaluated by binding-source value flow.`);
+        return openUnsupportedExpression(`Value converter '${expression.name.name}' is not statically evaluated by binding-source value flow.`);
       case 'Template':
         return this.evaluateTemplate(expression, scope);
       case 'Interpolation':
@@ -126,7 +146,7 @@ export class RuntimeBindingSourceValueEvaluator {
       case 'Conditional':
         return this.evaluateConditional(expression, scope);
       default:
-        return RuntimeBindingSourceValueEvaluation.open(`Expression kind '${expression.$kind}' is not in the binding-source value evaluator set.`);
+        return openUnsupportedExpression(`Expression kind '${expression.$kind}' is not in the binding-source value evaluator set.`);
     }
   }
 
@@ -134,12 +154,20 @@ export class RuntimeBindingSourceValueEvaluator {
     expression: AccessScopeExpression,
     scope: BindingScope,
   ): RuntimeBindingSourceValueEvaluation {
-    const lookup = scope.lookup(expression.name.name, expression.ancestor);
+    return this.evaluateScopeName(expression.name.name, expression.ancestor, scope);
+  }
+
+  private evaluateScopeName(
+    name: string,
+    ancestor: number,
+    scope: BindingScope,
+  ): RuntimeBindingSourceValueEvaluation {
+    const lookup = scope.lookup(name, ancestor);
     if (lookup.lookupKind === BindingScopeLookupKind.MissingAncestor) {
-      return RuntimeBindingSourceValueEvaluation.open(`Could not resolve ancestor ${expression.ancestor} for '${expression.name.name}'.`);
+      return openSlotNoStaticValue(`Could not resolve ancestor ${ancestor} for '${name}'.`);
     }
     if (lookup.slot == null) {
-      return RuntimeBindingSourceValueEvaluation.open(`Scope lookup for '${expression.name.name}' did not expose a TypeChecker member slot.`);
+      return openSlotNoStaticValue(`Scope lookup for '${name}' did not expose a TypeChecker member slot.`);
     }
     return this.evaluateSlot(lookup.slot);
   }
@@ -150,26 +178,112 @@ export class RuntimeBindingSourceValueEvaluator {
   ): RuntimeBindingSourceValueEvaluation {
     const owner = this.evaluateNode(expression.object, scope);
     if (owner.kind === RuntimeBindingSourceValueEvaluationKind.Open || owner.value == null) {
-      return RuntimeBindingSourceValueEvaluation.open(owner.openReason ?? `Owner for member '${expression.name.name}' did not close.`);
+      return RuntimeBindingSourceValueEvaluation.open(
+        owner.openReason ?? `Owner for member '${expression.name.name}' did not close.`,
+        owner.openReasonKinds,
+      );
     }
     const source = evaluatedSourceForValue(owner.value, this.evaluatedSourcesByFileName);
     if (source == null) {
-      return RuntimeBindingSourceValueEvaluation.open(`Member '${expression.name.name}' owner did not retain an evaluated source module.`);
+      return openMemberNoStaticValue(`Member '${expression.name.name}' owner did not retain an evaluated source module.`);
     }
     const evaluator = new StaticEvaluator(source.evaluation.policy, source.evaluation.runtimeHost);
     const read = evaluator.evaluatePropertyValue(owner.value, expression.name.name, source.moduleKey, source.sourceFile);
     return evaluationResult(read.value, read.openSeams.map((seam) => seam.summary));
   }
 
+  private evaluateCallScope(
+    expression: CallScopeExpression,
+    scope: BindingScope,
+  ): RuntimeBindingSourceValueEvaluation {
+    const openArgument = this.evaluateCallArguments(`CallScope '${expression.name.name}'`, expression.args, scope);
+    if (openArgument != null) {
+      return openArgument;
+    }
+    const callee = this.evaluateScopeName(expression.name.name, expression.ancestor, scope);
+    if (callee.kind === RuntimeBindingSourceValueEvaluationKind.Open || callee.value == null) {
+      return RuntimeBindingSourceValueEvaluation.open(
+        callee.openReason ?? `CallScope '${expression.name.name}' callee did not close.`,
+        callee.openReasonKinds,
+      );
+    }
+    return openNeedsRuntimeValue(
+      `CallScope '${expression.name.name}' requires executing a view-model function; binding-source value evaluation does not execute runtime calls.`,
+    );
+  }
+
+  private evaluateCallMember(
+    expression: CallMemberExpression,
+    scope: BindingScope,
+  ): RuntimeBindingSourceValueEvaluation {
+    const owner = this.evaluateNode(expression.object, scope);
+    if (owner.kind === RuntimeBindingSourceValueEvaluationKind.Open || owner.value == null) {
+      return RuntimeBindingSourceValueEvaluation.open(
+        owner.openReason ?? `Owner for method '${expression.name.name}' did not close.`,
+        owner.openReasonKinds,
+      );
+    }
+    const openArgument = this.evaluateCallArguments(`CallMember '${expression.name.name}'`, expression.args, scope);
+    if (openArgument != null) {
+      return openArgument;
+    }
+    return openNeedsRuntimeValue(
+      `CallMember '${expression.name.name}' requires executing a method; binding-source value evaluation does not execute runtime calls.`,
+    );
+  }
+
+  private evaluateCallFunction(
+    expression: CallFunctionExpression,
+    scope: BindingScope,
+  ): RuntimeBindingSourceValueEvaluation {
+    const callee = this.evaluateNode(expression.func, scope);
+    if (callee.kind === RuntimeBindingSourceValueEvaluationKind.Open || callee.value == null) {
+      return RuntimeBindingSourceValueEvaluation.open(
+        callee.openReason ?? 'CallFunction callee did not close.',
+        callee.openReasonKinds,
+      );
+    }
+    const openArgument = this.evaluateCallArguments('CallFunction', expression.args, scope);
+    if (openArgument != null) {
+      return openArgument;
+    }
+    return openNeedsRuntimeValue(
+      'CallFunction requires executing a function value; binding-source value evaluation does not execute runtime calls.',
+    );
+  }
+
+  private evaluateCallArguments(
+    label: string,
+    args: readonly ExpressionAstNode[],
+    scope: BindingScope,
+  ): RuntimeBindingSourceValueEvaluation | null {
+    for (let index = 0; index < args.length; index += 1) {
+      const argument = this.evaluateNode(args[index]!, scope);
+      if (argument.kind === RuntimeBindingSourceValueEvaluationKind.Value && argument.value != null) {
+        continue;
+      }
+      return RuntimeBindingSourceValueEvaluation.open(
+        `${label} argument ${index} did not close.${argument.openReason == null ? '' : ` ${argument.openReason}`}`,
+        argument.openReasonKinds,
+      );
+    }
+    return null;
+  }
+
   private evaluateSlot(
     slot: BindingContextSlot,
   ): RuntimeBindingSourceValueEvaluation {
     if (slot.targetProductHandle == null) {
-      return RuntimeBindingSourceValueEvaluation.open(`Scope slot '${slot.name}' did not carry a TypeChecker member product.`);
+      if (slot.targetType != null) {
+        return openSlotNoStaticValue(
+          `Scope slot '${slot.name}' is runtime/local typed as '${slot.targetType.display ?? slot.targetType.shapeKind}', but it does not carry a static value carrier.`,
+        );
+      }
+      return openSlotNoStaticValue(`Scope slot '${slot.name}' did not carry a TypeChecker member product.`);
     }
     const member = this.store.productDetails.read(TypeSystemProductDetails.TypeMember, slot.targetProductHandle);
     if (!(member instanceof CheckerTypeMember)) {
-      return RuntimeBindingSourceValueEvaluation.open(`Scope slot '${slot.name}' target product is not a TypeChecker member.`);
+      return openSlotNoStaticValue(`Scope slot '${slot.name}' target product is not a TypeChecker member.`);
     }
     return this.evaluateMember(member);
   }
@@ -180,16 +294,16 @@ export class RuntimeBindingSourceValueEvaluator {
     const declaration = member.carrier?.declarations[0] ?? null;
     const classNode = declaration == null ? null : enclosingClassLike(declaration);
     if (declaration == null || classNode == null || classNode.name == null) {
-      return RuntimeBindingSourceValueEvaluation.open(`Member '${member.name}' does not have a named class declaration for static value evaluation.`);
+      return openMemberNoStaticValue(`Member '${member.name}' does not have a named class declaration for static value evaluation.`);
     }
 
     const source = this.evaluatedSourceForNode(classNode);
     if (source == null) {
-      return RuntimeBindingSourceValueEvaluation.open(`Member '${member.name}' source module was not part of static project evaluation.`);
+      return openMemberNoStaticValue(`Member '${member.name}' source module was not part of static project evaluation.`);
     }
     const classValue = source.evaluation.environment.readValue(classNode.name.text);
     if (classValue?.kind !== EvaluationValueKind.Class) {
-      return RuntimeBindingSourceValueEvaluation.open(`Class '${classNode.name.text}' was not available as an evaluator class value.`);
+      return openMemberNoStaticValue(`Class '${classNode.name.text}' was not available as an evaluator class value.`);
     }
 
     return this.evaluateClassMemberValue(classValue, member.name, classNode, source);
@@ -233,16 +347,19 @@ export class RuntimeBindingSourceValueEvaluator {
     scope: BindingScope,
   ): RuntimeBindingSourceValueEvaluation {
     if (parts.length !== expressions.length + 1) {
-      return RuntimeBindingSourceValueEvaluation.open('Template/interpolation parts do not align with expression holes.');
+      return openUnsupportedExpression('Template/interpolation parts do not align with expression holes.');
     }
     let text = parts[0] ?? '';
     for (let index = 0; index < expressions.length; index += 1) {
       const evaluated = this.evaluateNode(expressions[index]!, scope);
       if (evaluated.kind === RuntimeBindingSourceValueEvaluationKind.Open || evaluated.value == null) {
-        return RuntimeBindingSourceValueEvaluation.open(evaluated.openReason ?? `Expression hole ${index} did not close.`);
+        return RuntimeBindingSourceValueEvaluation.open(
+          evaluated.openReason ?? `Expression hole ${index} did not close.`,
+          evaluated.openReasonKinds,
+        );
       }
       if (!isEvaluationPrimitiveValue(evaluated.value)) {
-        return RuntimeBindingSourceValueEvaluation.open(`Expression hole ${index} did not reduce to a primitive value.`);
+        return openUnsupportedExpression(`Expression hole ${index} did not reduce to a primitive value.`);
       }
       text += String(readEvaluationPrimitive(evaluated.value)) + (parts[index + 1] ?? '');
     }
@@ -258,16 +375,22 @@ export class RuntimeBindingSourceValueEvaluator {
     }
     const left = this.evaluateNode(expression.left, scope);
     if (left.kind === RuntimeBindingSourceValueEvaluationKind.Open || left.value == null) {
-      return RuntimeBindingSourceValueEvaluation.open(left.openReason ?? `Left operand for '${expression.operation}' did not close.`);
+      return RuntimeBindingSourceValueEvaluation.open(
+        left.openReason ?? `Left operand for '${expression.operation}' did not close.`,
+        left.openReasonKinds,
+      );
     }
     const right = this.evaluateNode(expression.right, scope);
     if (right.kind === RuntimeBindingSourceValueEvaluationKind.Open || right.value == null) {
-      return RuntimeBindingSourceValueEvaluation.open(right.openReason ?? `Right operand for '${expression.operation}' did not close.`);
+      return RuntimeBindingSourceValueEvaluation.open(
+        right.openReason ?? `Right operand for '${expression.operation}' did not close.`,
+        right.openReasonKinds,
+      );
     }
     if (expression.operation === '+') {
       return evaluatePlus(left.value, right.value);
     }
-    return RuntimeBindingSourceValueEvaluation.open(`Binary operator '${expression.operation}' is type-visible but not value-reduced by binding-source value flow.`);
+    return openUnsupportedExpression(`Binary operator '${expression.operation}' is type-visible but not value-reduced by binding-source value flow.`);
   }
 
   private evaluateShortCircuitBinary(
@@ -276,7 +399,10 @@ export class RuntimeBindingSourceValueEvaluator {
   ): RuntimeBindingSourceValueEvaluation {
     const left = this.evaluateNode(expression.left, scope);
     if (left.kind === RuntimeBindingSourceValueEvaluationKind.Open || left.value == null) {
-      return RuntimeBindingSourceValueEvaluation.open(left.openReason ?? `Left operand for '${expression.operation}' did not close.`);
+      return RuntimeBindingSourceValueEvaluation.open(
+        left.openReason ?? `Left operand for '${expression.operation}' did not close.`,
+        left.openReasonKinds,
+      );
     }
     if (expression.operation === '??') {
       return left.value.kind === EvaluationValueKind.Null || left.value.kind === EvaluationValueKind.Undefined
@@ -285,7 +411,7 @@ export class RuntimeBindingSourceValueEvaluator {
     }
     const truthy = readEvaluationTruthiness(left.value);
     if (truthy == null) {
-      return RuntimeBindingSourceValueEvaluation.open(`Left operand for '${expression.operation}' did not reduce to known truthiness.`);
+      return openUnsupportedExpression(`Left operand for '${expression.operation}' did not reduce to known truthiness.`);
     }
     return expression.operation === '||'
       ? truthy ? left : this.evaluateNode(expression.right, scope)
@@ -304,11 +430,11 @@ export class RuntimeBindingSourceValueEvaluator {
       case '!': {
         const truthy = readEvaluationTruthiness(value.value);
         return truthy == null
-          ? RuntimeBindingSourceValueEvaluation.open('Logical-not operand did not reduce to known truthiness.')
+          ? openUnsupportedExpression('Logical-not operand did not reduce to known truthiness.')
           : RuntimeBindingSourceValueEvaluation.value(new EvaluationBooleanValue(!truthy, null));
       }
       default:
-        return RuntimeBindingSourceValueEvaluation.open(`Unary operator '${expression.operation}' is not value-reduced by binding-source value flow.`);
+        return openUnsupportedExpression(`Unary operator '${expression.operation}' is not value-reduced by binding-source value flow.`);
     }
   }
 
@@ -322,7 +448,7 @@ export class RuntimeBindingSourceValueEvaluator {
     }
     const truthy = readEvaluationTruthiness(condition.value);
     if (truthy == null) {
-      return RuntimeBindingSourceValueEvaluation.open('Conditional expression condition did not reduce to known truthiness.');
+      return openUnsupportedExpression('Conditional expression condition did not reduce to known truthiness.');
     }
     return this.evaluateNode(truthy ? expression.yes : expression.no, scope);
   }
@@ -349,17 +475,39 @@ function evaluationResult(
   if (value.kind === EvaluationValueKind.BoundaryValue) {
     return RuntimeBindingSourceValueEvaluation.open(
       [value.reason, ...openSummaries].filter((summary, index, all) => all.indexOf(summary) === index).join(' '),
+      [boundaryOpenReasonKind(value.boundaryKind)],
     );
   }
   if (value.kind === EvaluationValueKind.Unknown) {
     return RuntimeBindingSourceValueEvaluation.open(
       [value.reason, ...openSummaries].filter((summary, index, all) => all.indexOf(summary) === index).join(' '),
+      [OpenSeamReasonKind.BindingSourceNeedsRuntimeValue],
     );
   }
   if (openSummaries.length > 0) {
-    return RuntimeBindingSourceValueEvaluation.open(openSummaries.join(' '));
+    return RuntimeBindingSourceValueEvaluation.open(
+      openSummaries.join(' '),
+      [OpenSeamReasonKind.BindingSourceNeedsRuntimeValue],
+    );
   }
   return RuntimeBindingSourceValueEvaluation.value(value);
+}
+
+function boundaryOpenReasonKind(boundaryKind: EvaluationBoundaryKind): OpenSeamReasonKind {
+  switch (boundaryKind) {
+    case EvaluationBoundaryKind.HostEnvironment:
+      return OpenSeamReasonKind.HostEnvironmentValue;
+    case EvaluationBoundaryKind.ExternalModule:
+      return OpenSeamReasonKind.ExternalModuleValue;
+    case EvaluationBoundaryKind.AsyncExecution:
+      return OpenSeamReasonKind.AsyncExecutionValue;
+  }
+}
+
+function compactOpenReasonKinds(
+  values: readonly OpenSeamReasonKind[],
+): readonly OpenSeamReasonKind[] {
+  return [...new Set(values)];
 }
 
 function primitiveValue(
@@ -385,7 +533,7 @@ function evaluatePlus(
   right: EvaluationValue,
 ): RuntimeBindingSourceValueEvaluation {
   if (!isEvaluationPrimitiveValue(left) || !isEvaluationPrimitiveValue(right)) {
-    return RuntimeBindingSourceValueEvaluation.open("Binary '+' operands did not both reduce to primitive values.");
+    return openUnsupportedExpression("Binary '+' operands did not both reduce to primitive values.");
   }
   const leftPrimitive = readEvaluationPrimitive(left);
   const rightPrimitive = readEvaluationPrimitive(right);
@@ -395,7 +543,35 @@ function evaluatePlus(
   if (typeof leftPrimitive === 'number' && typeof rightPrimitive === 'number') {
     return RuntimeBindingSourceValueEvaluation.value(new EvaluationNumberValue(leftPrimitive + rightPrimitive, null));
   }
-  return RuntimeBindingSourceValueEvaluation.open("Binary '+' operands did not reduce to a string or numeric result.");
+  return openUnsupportedExpression("Binary '+' operands did not reduce to a string or numeric result.");
+}
+
+function openNeedsRuntimeValue(summary: string): RuntimeBindingSourceValueEvaluation {
+  return RuntimeBindingSourceValueEvaluation.open(
+    summary,
+    [OpenSeamReasonKind.BindingSourceNeedsRuntimeValue],
+  );
+}
+
+function openSlotNoStaticValue(summary: string): RuntimeBindingSourceValueEvaluation {
+  return RuntimeBindingSourceValueEvaluation.open(
+    summary,
+    [OpenSeamReasonKind.BindingSourceSlotNoStaticValue],
+  );
+}
+
+function openMemberNoStaticValue(summary: string): RuntimeBindingSourceValueEvaluation {
+  return RuntimeBindingSourceValueEvaluation.open(
+    summary,
+    [OpenSeamReasonKind.BindingSourceMemberNoStaticValue],
+  );
+}
+
+function openUnsupportedExpression(summary: string): RuntimeBindingSourceValueEvaluation {
+  return RuntimeBindingSourceValueEvaluation.open(
+    summary,
+    [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
+  );
 }
 
 function enclosingClassLike(node: ts.Node): ts.ClassLikeDeclarationBase | null {

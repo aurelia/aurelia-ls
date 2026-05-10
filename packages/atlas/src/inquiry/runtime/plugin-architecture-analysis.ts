@@ -1,6 +1,6 @@
 import ts from "typescript";
 
-import { countBy, countByWhere } from "../../collections.js";
+import { countBy, countByWhere, countWhere } from "../../collections.js";
 import {
   AURELIA_PLUGIN_PACKAGE_ID_PREFIX,
   assignmentTargetReceiverName,
@@ -26,12 +26,16 @@ import {
   isContainerLookupMethodName,
   isInsideImportDeclaration,
   isInsideCommonJsRequireDeclaration,
+  isAureliaContainerReference,
+  isAureliaContainerReceiverTypeNode,
   isAureliaKernelReference,
+  isReceiverDeclaration,
   isRouterInstanceMethodName,
   isRouterReceiverInitializer,
   isRouterReceiverTypeNode,
   isRouterReceiverValueExpression,
   readAureliaSourceImportsInto,
+  type ReceiverDeclaration,
 } from "./aurelia-source-imports.js";
 import {
   aureliaConventionResourceForClass,
@@ -237,13 +241,13 @@ export function pluginRollupForRows(
     packageCount: packages.length,
     sourceFileCount: packages.reduce((sum, row) => sum + row.sourceFileCount, 0),
     surfaceCount: surfaces.length,
-    resourceCount: countSurfaceKind(surfaces, "resource"),
-    registryCount: countSurfaceKind(surfaces, "registry"),
-    diRegistrationCount: countSurfaceKind(surfaces, "di-registration"),
-    appTaskCount: countSurfaceKind(surfaces, "app-task"),
-    resolveCallCount: countSurfaceKind(surfaces, "resolve-call"),
-    routerIntegrationCount: countSurfaceKind(surfaces, "router-integration"),
-    templateReferenceCount: countSurfaceKind(surfaces, "template-reference"),
+    resourceCount: countWhere(surfaces, (row) => row.kind === "resource"),
+    registryCount: countWhere(surfaces, (row) => row.kind === "registry"),
+    diRegistrationCount: countWhere(surfaces, (row) => row.kind === "di-registration"),
+    appTaskCount: countWhere(surfaces, (row) => row.kind === "app-task"),
+    resolveCallCount: countWhere(surfaces, (row) => row.kind === "resolve-call"),
+    routerIntegrationCount: countWhere(surfaces, (row) => row.kind === "router-integration"),
+    templateReferenceCount: countWhere(surfaces, (row) => row.kind === "template-reference"),
     surfaceKinds: countBy(surfaces, (row) => row.kind),
     surfaceMechanisms: countBy(surfaces, (row) => row.mechanism),
     bindableMechanisms: countByWhere(
@@ -298,17 +302,12 @@ function readPluginSourceBindings(sourceFile: ts.SourceFile): PluginSourceBindin
   return bindings;
 }
 
-type PluginReceiverDeclaration =
-  | ts.VariableDeclaration
-  | ts.ParameterDeclaration
-  | ts.PropertyDeclaration;
-
 function collectPluginReceiverBindings(
   sourceFile: ts.SourceFile,
   bindings: PluginSourceBindings,
 ): void {
   const visit = (node: ts.Node): void => {
-    if (isPluginReceiverDeclaration(node) && ts.isIdentifier(node.name)) {
+    if (isReceiverDeclaration(node) && ts.isIdentifier(node.name)) {
       if (declarationHasContainerReceiverShape(node, bindings)) {
         bindings.containerReceiverNames.add(node.name.text);
       }
@@ -330,12 +329,6 @@ function collectPluginReceiverBindings(
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-}
-
-function isPluginReceiverDeclaration(node: ts.Node): node is PluginReceiverDeclaration {
-  return ts.isVariableDeclaration(node) ||
-    ts.isParameter(node) ||
-    ts.isPropertyDeclaration(node);
 }
 
 function pluginPackageRow(row: MutablePluginPackageRow): PluginPackageRow {
@@ -633,7 +626,7 @@ function pluginSurfaceRowsForCallExpression(
       rows.push(row);
     }
   }
-  if (isContainerRegisterCall(call, bindings)) {
+  if (isPluginContainerRegisterCall(call, bindings)) {
     const row = rowForNode(
       sourceProject,
       sourceFile,
@@ -737,37 +730,28 @@ function registerMethodHasContainerParameter(
   bindings: PluginSourceBindings,
 ): boolean {
   return node.parameters.some((parameter) =>
-    isContainerReceiverTypeNode(parameter.type, bindings),
+    isAureliaContainerReceiverTypeNode(parameter.type, bindings),
   );
 }
 
 function declarationHasContainerReceiverShape(
-  node: PluginReceiverDeclaration,
+  node: ReceiverDeclaration,
   bindings: PluginSourceBindings,
 ): boolean {
   return (
-    isContainerReceiverTypeNode(node.type, bindings) ||
+    isAureliaContainerReceiverTypeNode(node.type, bindings) ||
     isContainerReceiverInitializer(declarationInitializer(node), bindings)
   );
 }
 
 function pluginDeclarationHasRouterReceiverShape(
-  node: PluginReceiverDeclaration,
+  node: ReceiverDeclaration,
   bindings: PluginSourceBindings,
 ): boolean {
   return (
     isRouterReceiverTypeNode(node.type, bindings) ||
     isRouterReceiverInitializer(declarationInitializer(node), bindings)
   );
-}
-
-function isContainerReceiverTypeNode(
-  type: ts.TypeNode | undefined,
-  bindings: PluginSourceBindings,
-): boolean {
-  return type !== undefined &&
-    ts.isTypeReferenceNode(type) &&
-    isContainerReference(type.typeName, bindings);
 }
 
 function isContainerReceiverInitializer(
@@ -782,7 +766,7 @@ function isContainerReceiverInitializer(
     isAureliaKernelReference(expression.expression, "resolve", bindings)
   ) {
     const first = expression.arguments[0];
-    return first !== undefined && isContainerReference(first, bindings);
+    return first !== undefined && isAureliaContainerReference(first, bindings);
   }
   return isContainerReceiverValueExpression(expression, bindings);
 }
@@ -801,7 +785,7 @@ function isContainerReceiverValueExpression(
   );
 }
 
-function isContainerRegisterCall(
+function isPluginContainerRegisterCall(
   call: ts.CallExpression,
   bindings: PluginSourceBindings,
 ): boolean {
@@ -845,13 +829,6 @@ function pluginRouterMechanismForCall(
     : null;
 }
 
-function isContainerReference(
-  expression: ts.Expression | ts.EntityName,
-  bindings: PluginSourceBindings,
-): boolean {
-  return isAureliaKernelReference(expression, "IContainer", bindings);
-}
-
 function comparePluginSurfaceRows(
   left: PluginSurfaceRow,
   right: PluginSurfaceRow,
@@ -864,11 +841,4 @@ function comparePluginSurfaceRows(
     left.kind.localeCompare(right.kind) ||
     left.mechanism.localeCompare(right.mechanism)
   );
-}
-
-function countSurfaceKind(
-  rows: readonly PluginSurfaceRow[],
-  kind: PluginSurfaceKind,
-): number {
-  return rows.filter((row) => row.kind === kind).length;
 }

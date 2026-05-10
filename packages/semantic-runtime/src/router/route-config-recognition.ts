@@ -5,7 +5,13 @@ import {
   type EvaluationPromiseValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
-import { hasStaticModifier, readPropertyName, readReferenceName, unwrapExpression } from '../evaluation/ts-syntax.js';
+import {
+  hasStaticModifier,
+  readObjectPropertyExpression,
+  readPropertyName,
+  readReferenceName,
+  unwrapExpression,
+} from '../evaluation/ts-syntax.js';
 import type { EvaluatedProjectSource, StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
 import { isEvaluatedProjectSource } from '../evaluation/project-evaluation.js';
 import {
@@ -24,11 +30,6 @@ import type {
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
-import { RouterIdentity } from '../kernel/identity.js';
-import {
-  MaterializationRecord,
-  MaterializedProduct,
-} from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
@@ -43,6 +44,7 @@ import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ProjectBootFrame, SourceFileAdmission } from '../boot/frames.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
+import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
   RouteableComponentKind,
   RouteableComponentModel,
@@ -52,6 +54,8 @@ import {
   type RouteConfigField,
   type RouteableComponentField,
 } from './model.js';
+import { RouterProductDetails } from './product-details.js';
+import { routerIdentityProductRecords } from './router-product-records.js';
 
 const ROUTER_MODULES = new Set([
   '@aurelia/router',
@@ -118,11 +122,54 @@ interface RouteConfigObservation {
   readonly localName: string | null;
 }
 
+interface RouteObjectConfigRead {
+  readonly id: string | null;
+  readonly paths: readonly string[];
+  readonly pathSourceNode: ts.Node | null;
+  readonly title: string | null;
+  readonly component: RouteableComponentObservation | null;
+  readonly redirectTo: string | null;
+  readonly caseSensitive: boolean | null;
+  readonly transitionPlan: string | null;
+  readonly viewport: string | null;
+  readonly hasData: boolean | null;
+  readonly childRoutes: readonly RouteConfigObservation[];
+  readonly fallback: RouteableComponentObservation | null;
+  readonly nav: boolean | null;
+  readonly localName: string | null;
+}
+
+interface RouteObjectPathRead {
+  readonly paths: readonly string[];
+  readonly pathSourceNode: ts.Node | null;
+}
+
+class RouteableComponentEmission {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly reference: RouteableComponentReference,
+  ) {}
+}
+
+interface RouteConfigRouteableEmissions {
+  readonly records: readonly KernelStoreRecord[];
+  readonly component: RouteableComponentReference | null;
+  readonly fallback: RouteableComponentReference | null;
+}
+
 class RouteConfigEmission {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly routeConfig: RouteConfigModel,
     readonly routeConfigs: readonly RouteConfigModel[],
+  ) {}
+}
+
+class RouteConfigSourceRecords {
+  constructor(
+    readonly records: readonly KernelStoreRecord[],
+    readonly source: SourceRecordSet,
+    readonly pathSource: SourceRecordSet | null,
   ) {}
 }
 
@@ -202,6 +249,9 @@ class RouteConfigKernelEmitter {
     const records = emissions.flatMap((emission) => emission.records);
     if (records.length > 0) {
       this.store.commit(new KernelStoreBatch(records, `router-route-config:${context.moduleKey}`));
+      for (const routeConfig of emissions.flatMap((emission) => emission.routeConfigs)) {
+        this.store.productDetails.add(RouterProductDetails.RouteConfig, routeConfig.productHandle, routeConfig);
+      }
     }
     return emissions.flatMap((emission) => emission.routeConfigs);
   }
@@ -212,40 +262,76 @@ class RouteConfigKernelEmitter {
     local: string,
     parentIdentityHandle: IdentityHandle | null,
   ): RouteConfigEmission {
-    const records: KernelStoreRecord[] = [];
-    const source = this.recordsForSource(
-      context,
-      observation.sourceNode,
-      `router-route-config:${local}:source`,
-      'Router route configuration source.',
-    );
-    records.push(...source.records);
-    const pathSource = observation.pathSourceNode == null
-      ? null
-      : this.recordsForSource(
-        context,
-        observation.pathSourceNode,
-        `router-route-config:${local}:path-source`,
-        'Router route path source.',
-      );
-    if (pathSource != null) {
-      records.push(...pathSource.records);
-    }
-
+    const sources = this.recordsForRouteConfigSources(context, observation, local);
     const productHandle = this.store.handles.product(`router-route-config:${local}`);
     const identityHandle = this.store.handles.identity(`router-route-config:${local}`);
-    const component = observation.component == null
-      ? null
-      : this.routeableReference(context, observation.component, `${local}:component`, identityHandle, records);
-    const fallback = observation.fallback == null
-      ? null
-      : this.routeableReference(context, observation.fallback, `${local}:fallback`, identityHandle, records);
-    const childEmissions = observation.childRoutes.map((child, index) =>
-      this.emitRouteConfig(context, child, `${local}:child:${index}`, identityHandle)
+    const routeables = this.routeableComponentEmissions(context, observation, local, identityHandle);
+    const childEmissions = this.childRouteConfigEmissions(context, observation, local, identityHandle);
+    const routeConfig = this.routeConfigModelForObservation(
+      observation,
+      sources,
+      routeables.component,
+      routeables.fallback,
+      childEmissions,
+      productHandle,
+      identityHandle,
     );
-    records.push(...childEmissions.flatMap((emission) => emission.records));
 
-    const routeConfig = new RouteConfigModel(
+    return new RouteConfigEmission(
+      [
+        ...sources.records,
+        ...routeables.records,
+        ...childEmissions.flatMap((emission) => emission.records),
+        ...this.recordsForRouteConfigProduct(local, observation, sources, routeConfig, parentIdentityHandle),
+      ],
+      routeConfig,
+      [routeConfig, ...childEmissions.flatMap((emission) => emission.routeConfigs)],
+    );
+  }
+
+  private routeableComponentEmissions(
+    context: RouteConfigRecognitionContext,
+    observation: RouteConfigObservation,
+    local: string,
+    ownerIdentityHandle: IdentityHandle,
+  ): RouteConfigRouteableEmissions {
+    const componentEmission = observation.component == null
+      ? null
+      : this.routeableComponentEmission(context, observation.component, `${local}:component`, ownerIdentityHandle);
+    const fallbackEmission = observation.fallback == null
+      ? null
+      : this.routeableComponentEmission(context, observation.fallback, `${local}:fallback`, ownerIdentityHandle);
+    return {
+      records: [
+        ...(componentEmission?.records ?? []),
+        ...(fallbackEmission?.records ?? []),
+      ],
+      component: componentEmission?.reference ?? null,
+      fallback: fallbackEmission?.reference ?? null,
+    };
+  }
+
+  private childRouteConfigEmissions(
+    context: RouteConfigRecognitionContext,
+    observation: RouteConfigObservation,
+    local: string,
+    ownerIdentityHandle: IdentityHandle,
+  ): readonly RouteConfigEmission[] {
+    return observation.childRoutes.map((child, index) =>
+      this.emitRouteConfig(context, child, `${local}:child:${index}`, ownerIdentityHandle)
+    );
+  }
+
+  private routeConfigModelForObservation(
+    observation: RouteConfigObservation,
+    sources: RouteConfigSourceRecords,
+    component: RouteableComponentReference | null,
+    fallback: RouteableComponentReference | null,
+    childEmissions: readonly RouteConfigEmission[],
+    productHandle: ProductHandle,
+    identityHandle: IdentityHandle,
+  ): RouteConfigModel {
+    return new RouteConfigModel(
       productHandle,
       identityHandle,
       observation.routeKind,
@@ -261,59 +347,89 @@ class RouteConfigKernelEmitter {
       childEmissions.map((emission) => emission.routeConfig.toReference()),
       fallback,
       observation.nav,
-      source.addressHandle,
-      pathSource?.addressHandle ?? null,
-      routeConfigFieldProvenance(source.provenanceHandle, pathSource?.provenanceHandle ?? null, observation, component, fallback),
-    );
-
-    records.push(
-      new RouterIdentity(
-        identityHandle,
-        KernelVocabulary.Router.RouteConfig.key,
-        parentIdentityHandle,
-        source.addressHandle,
-        observation.localName,
-      ),
-      new MaterializedProduct(
-        productHandle,
-        KernelVocabulary.Router.RouteConfig.key,
-        identityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializationRecord(
-        this.store.handles.materialization(`router-route-config:${local}`),
-        identityHandle,
-        [productHandle],
-        [],
-        [],
-      ),
-    );
-
-    return new RouteConfigEmission(
-      records,
-      routeConfig,
-      [routeConfig, ...childEmissions.flatMap((emission) => emission.routeConfigs)],
+      sources.source.addressHandle,
+      sources.pathSource?.addressHandle ?? null,
+      routeConfigFieldProvenance(sources.source.provenanceHandle, sources.pathSource?.provenanceHandle ?? null, observation, component, fallback),
     );
   }
 
-  private routeableReference(
+  private recordsForRouteConfigProduct(
+    local: string,
+    observation: RouteConfigObservation,
+    sources: RouteConfigSourceRecords,
+    routeConfig: RouteConfigModel,
+    parentIdentityHandle: IdentityHandle | null,
+  ): readonly KernelStoreRecord[] {
+    return routerIdentityProductRecords(this.store, {
+      local: `router-route-config:${local}`,
+      productHandle: routeConfig.productHandle,
+      identityHandle: routeConfig.identityHandle,
+      productKindKey: KernelVocabulary.Router.RouteConfig.key,
+      ownerHandle: parentIdentityHandle,
+      materializationOwnerHandle: routeConfig.identityHandle,
+      sourceAddressHandle: sources.source.addressHandle,
+      localName: observation.localName,
+      provenanceHandle: sources.source.provenanceHandle,
+    });
+  }
+
+  private recordsForRouteConfigSources(
+    context: RouteConfigRecognitionContext,
+    observation: RouteConfigObservation,
+    local: string,
+  ): RouteConfigSourceRecords {
+    const source = this.recordsForSource(
+      context,
+      observation.sourceNode,
+      `router-route-config:${local}:source`,
+      'Router route configuration source.',
+    );
+    const pathSource = observation.pathSourceNode == null
+      ? null
+      : this.recordsForSource(
+        context,
+        observation.pathSourceNode,
+        `router-route-config:${local}:path-source`,
+        'Router route path source.',
+      );
+    return new RouteConfigSourceRecords(
+      [...source.records, ...(pathSource?.records ?? [])],
+      source,
+      pathSource,
+    );
+  }
+
+  private routeableComponentEmission(
     context: RouteConfigRecognitionContext,
     observation: RouteableComponentObservation,
     local: string,
     ownerIdentityHandle: IdentityHandle,
-    records: KernelStoreRecord[],
-  ): RouteableComponentReference {
+  ): RouteableComponentEmission {
     const source = this.recordsForSource(
       context,
       observation.sourceNode,
       `router-routeable:${local}:source`,
       'Router routeable component reference.',
     );
-    records.push(...source.records);
     const productHandle = this.store.handles.product(`router-routeable:${local}`);
     const identityHandle = this.store.handles.identity(`router-routeable:${local}`);
-    const routeable = new RouteableComponentModel(
+    const routeable = this.routeableComponentModel(observation, source, productHandle, identityHandle);
+    return new RouteableComponentEmission(
+      [
+        ...source.records,
+        ...this.recordsForRouteableComponentProduct(local, observation, source, productHandle, identityHandle, ownerIdentityHandle),
+      ],
+      routeable.toReference(),
+    );
+  }
+
+  private routeableComponentModel(
+    observation: RouteableComponentObservation,
+    source: SourceRecordSet,
+    productHandle: ProductHandle,
+    identityHandle: IdentityHandle,
+  ): RouteableComponentModel {
+    return new RouteableComponentModel(
       productHandle,
       identityHandle,
       observation.componentKind,
@@ -323,30 +439,26 @@ class RouteConfigKernelEmitter {
       observation.localName,
       routeableComponentFieldProvenance(source.provenanceHandle, observation),
     );
-    records.push(
-      new RouterIdentity(
-        identityHandle,
-        KernelVocabulary.Router.RouteableComponent.key,
-        ownerIdentityHandle,
-        source.addressHandle,
-        observation.localName,
-      ),
-      new MaterializedProduct(
-        productHandle,
-        KernelVocabulary.Router.RouteableComponent.key,
-        identityHandle,
-        source.addressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializationRecord(
-        this.store.handles.materialization(`router-routeable:${local}`),
-        ownerIdentityHandle,
-        [productHandle],
-        [],
-        [],
-      ),
-    );
-    return routeable.toReference();
+  }
+
+  private recordsForRouteableComponentProduct(
+    local: string,
+    observation: RouteableComponentObservation,
+    source: SourceRecordSet,
+    productHandle: ProductHandle,
+    identityHandle: IdentityHandle,
+    ownerIdentityHandle: IdentityHandle,
+  ): readonly KernelStoreRecord[] {
+    return routerIdentityProductRecords(this.store, {
+      local: `router-routeable:${local}`,
+      productHandle,
+      identityHandle,
+      productKindKey: KernelVocabulary.Router.RouteableComponent.key,
+      ownerHandle: ownerIdentityHandle,
+      sourceAddressHandle: source.addressHandle,
+      localName: observation.localName,
+      provenanceHandle: source.provenanceHandle,
+    });
   }
 
   private recordsForSource(
@@ -528,42 +640,112 @@ function routeConfigFromObject(
   fallbackComponent: RouteableComponentObservation | null,
   typeDefaults: RouteTypeDefaults | null,
 ): RouteConfigObservation {
-  const pathExpression = readObjectPropertyExpression(object, 'path');
-  const objectPaths = pathExpression == null ? null : readStringArrayValue(context, pathExpression);
-  const paths = objectPaths ?? typeDefaults?.paths ?? [];
-  const componentExpression = readObjectPropertyExpression(object, 'component');
-  const component = componentExpression == null
-    ? fallbackComponent
-    : routeableComponentForExpression(context, componentExpression);
+  const read = readRouteObjectConfig(context, object, fallbackComponent, typeDefaults);
+  return {
+    routeKind: routeObjectKind(routeKind, read),
+    id: read.id,
+    paths: read.paths,
+    pathSourceNode: read.pathSourceNode,
+    title: read.title,
+    component: read.component,
+    redirectTo: read.redirectTo,
+    caseSensitive: read.caseSensitive,
+    transitionPlan: read.transitionPlan,
+    viewport: read.viewport,
+    hasData: read.hasData,
+    childRoutes: read.childRoutes,
+    fallback: read.fallback,
+    nav: read.nav,
+    sourceNode: object,
+    localName: read.localName,
+  };
+}
+
+function readRouteObjectConfig(
+  context: RouteConfigRecognitionContext,
+  object: ts.ObjectLiteralExpression,
+  fallbackComponent: RouteableComponentObservation | null,
+  typeDefaults: RouteTypeDefaults | null,
+): RouteObjectConfigRead {
+  const path = readRouteObjectPaths(context, object, typeDefaults);
+  const component = readRouteObjectComponent(context, object, fallbackComponent);
   const redirectTo = readStringObjectProperty(context, object, 'redirectTo') ?? typeDefaults?.redirectTo ?? null;
-  const childRoutes = [
-    ...readChildRouteObservations(context, readObjectPropertyExpression(object, 'routes')),
-    ...(typeDefaults?.childRoutes ?? []),
-  ];
-  const resolvedKind = routeKind === RouteConfigKind.ChildRoute
-    ? RouteConfigKind.ChildRoute
-    : redirectTo != null && component == null
-      ? RouteConfigKind.Redirect
-      : routeKind;
+  const childRoutes = readRouteObjectChildRoutes(context, object, typeDefaults);
+  const objectId = readStringObjectProperty(context, object, 'id');
+  const id = objectId ?? typeDefaults?.id ?? path.paths[0] ?? null;
 
   return {
-    routeKind: resolvedKind,
-    id: readStringObjectProperty(context, object, 'id') ?? typeDefaults?.id ?? paths[0] ?? null,
-    paths,
-    pathSourceNode: objectPaths == null ? typeDefaults?.pathSourceNode ?? null : pathExpression,
+    id,
+    paths: path.paths,
+    pathSourceNode: path.pathSourceNode,
     title: readStringObjectProperty(context, object, 'title') ?? typeDefaults?.title ?? null,
     component,
     redirectTo,
-    caseSensitive: readBooleanObjectProperty(context, object, 'caseSensitive') ?? typeDefaults?.caseSensitive ?? null,
+    caseSensitive: readRouteConfigBooleanObjectProperty(context, object, 'caseSensitive') ?? typeDefaults?.caseSensitive ?? null,
     transitionPlan: readStringObjectProperty(context, object, 'transitionPlan') ?? typeDefaults?.transitionPlan ?? null,
     viewport: readStringObjectProperty(context, object, 'viewport') ?? typeDefaults?.viewport ?? null,
     hasData: readObjectPropertyExpression(object, 'data') != null ? true : typeDefaults?.hasData ?? null,
     childRoutes,
-    fallback: routeableComponentForExpression(context, readObjectPropertyExpression(object, 'fallback')) ?? typeDefaults?.fallback ?? null,
-    nav: readBooleanObjectProperty(context, object, 'nav') ?? typeDefaults?.nav ?? null,
-    sourceNode: object,
-    localName: readStringObjectProperty(context, object, 'id') ?? component?.localName ?? paths[0] ?? null,
+    fallback: readRouteObjectFallback(context, object, typeDefaults),
+    nav: readRouteConfigBooleanObjectProperty(context, object, 'nav') ?? typeDefaults?.nav ?? null,
+    localName: objectId ?? component?.localName ?? path.paths[0] ?? null,
   };
+}
+
+function readRouteObjectPaths(
+  context: RouteConfigRecognitionContext,
+  object: ts.ObjectLiteralExpression,
+  typeDefaults: RouteTypeDefaults | null,
+): RouteObjectPathRead {
+  const pathExpression = readObjectPropertyExpression(object, 'path');
+  const objectPaths = pathExpression == null ? null : readStringArrayValue(context, pathExpression);
+  return {
+    paths: objectPaths ?? typeDefaults?.paths ?? [],
+    pathSourceNode: objectPaths == null ? typeDefaults?.pathSourceNode ?? null : pathExpression,
+  };
+}
+
+function readRouteObjectComponent(
+  context: RouteConfigRecognitionContext,
+  object: ts.ObjectLiteralExpression,
+  fallbackComponent: RouteableComponentObservation | null,
+): RouteableComponentObservation | null {
+  const componentExpression = readObjectPropertyExpression(object, 'component');
+  return componentExpression == null
+    ? fallbackComponent
+    : routeableComponentForExpression(context, componentExpression);
+}
+
+function readRouteObjectChildRoutes(
+  context: RouteConfigRecognitionContext,
+  object: ts.ObjectLiteralExpression,
+  typeDefaults: RouteTypeDefaults | null,
+): readonly RouteConfigObservation[] {
+  return [
+    ...readChildRouteObservations(context, readObjectPropertyExpression(object, 'routes')),
+    ...(typeDefaults?.childRoutes ?? []),
+  ];
+}
+
+function readRouteObjectFallback(
+  context: RouteConfigRecognitionContext,
+  object: ts.ObjectLiteralExpression,
+  typeDefaults: RouteTypeDefaults | null,
+): RouteableComponentObservation | null {
+  return routeableComponentForExpression(context, readObjectPropertyExpression(object, 'fallback'))
+    ?? typeDefaults?.fallback
+    ?? null;
+}
+
+function routeObjectKind(
+  routeKind: RouteConfigKind,
+  read: RouteObjectConfigRead,
+): RouteConfigKind {
+  return routeKind === RouteConfigKind.ChildRoute
+    ? RouteConfigKind.ChildRoute
+    : read.redirectTo != null && read.component == null
+      ? RouteConfigKind.Redirect
+      : routeKind;
 }
 
 function routeConfigFromTypeDefaults(
@@ -626,41 +808,69 @@ function readChildRouteObservations(
   }
   const current = unwrapExpression(expression);
   if (!ts.isArrayLiteralExpression(current)) {
-    return [
-      openRouteConfigObservation(RouteConfigKind.Open, routeableComponentForExpression(context, current), current),
-    ];
+    return [childRouteObservationForRouteable(context, current)];
   }
-  return current.elements.map((element) => {
-    if (ts.isSpreadElement(element)) {
-      return openRouteConfigObservation(RouteConfigKind.Open, null, element);
-    }
-    const expression = unwrapExpression(element);
-    if (ts.isObjectLiteralExpression(expression)) {
-      const redirectTo = readStringObjectProperty(context, expression, 'redirectTo');
-      return routeConfigFromObject(
-        context,
-        expression,
-        redirectTo == null ? RouteConfigKind.ChildRoute : RouteConfigKind.Redirect,
-        null,
-        null,
-      );
-    }
-    if (
-      ts.isStringLiteral(expression)
-      || ts.isNoSubstitutionTemplateLiteral(expression)
-    ) {
-      return openRouteConfigObservation(
-        RouteConfigKind.Open,
-        routeableComponentForExpression(context, expression),
-        expression,
-      );
-    }
-    return openRouteConfigObservation(
-      RouteConfigKind.Open,
-      routeableComponentForExpression(context, expression),
+  return current.elements.map((element) => readChildRouteElementObservation(context, element));
+}
+
+function readChildRouteElementObservation(
+  context: RouteConfigRecognitionContext,
+  element: ts.Expression,
+): RouteConfigObservation {
+  if (ts.isSpreadElement(element)) {
+    return openRouteConfigObservation(RouteConfigKind.Open, null, element);
+  }
+  const expression = unwrapExpression(element);
+  if (ts.isObjectLiteralExpression(expression)) {
+    const redirectTo = readStringObjectProperty(context, expression, 'redirectTo');
+    return routeConfigFromObject(
+      context,
       expression,
+      redirectTo == null ? RouteConfigKind.ChildRoute : RouteConfigKind.Redirect,
+      null,
+      null,
     );
-  });
+  }
+  return childRouteObservationForRouteable(context, expression);
+}
+
+function childRouteObservationForRouteable(
+  context: RouteConfigRecognitionContext,
+  expression: ts.Expression,
+): RouteConfigObservation {
+  const component = routeableComponentForExpression(context, expression);
+  const paths = routeableComponentDefaultPaths(component);
+  if (component == null || paths.length === 0) {
+    return openRouteConfigObservation(RouteConfigKind.Open, component, expression);
+  }
+  return {
+    routeKind: RouteConfigKind.ChildRoute,
+    id: paths[0] ?? component.localName ?? null,
+    paths,
+    pathSourceNode: expression,
+    title: null,
+    component,
+    redirectTo: null,
+    caseSensitive: null,
+    transitionPlan: null,
+    viewport: null,
+    hasData: null,
+    childRoutes: [],
+    fallback: null,
+    nav: null,
+    sourceNode: expression,
+    localName: component.localName ?? paths[0] ?? null,
+  };
+}
+
+function routeableComponentDefaultPaths(
+  component: RouteableComponentObservation | null,
+): readonly string[] {
+  const definition = component?.resourceDefinition;
+  if (definition?.type !== ResourceDefinitionKind.CustomElement) {
+    return [];
+  }
+  return [definition.name, ...definition.aliases.map((alias) => alias.name)];
 }
 
 interface RouteTypeDefaults {
@@ -737,42 +947,73 @@ function routeableComponentForExpression(
   }
   const current = unwrapExpression(expression);
   if (ts.isStringLiteral(current) || ts.isNoSubstitutionTemplateLiteral(current)) {
-    return {
-      componentKind: RouteableComponentKind.CustomElementName,
-      localName: current.text,
-      sourceNode: current,
-      resourceDefinition: null,
-    };
+    return stringRouteableComponent(context, current);
   }
   const dynamicImportSpecifier = readDynamicImportSpecifier(current);
   const read = context.expressionReader.evaluateExpression(current);
   if (read.value?.kind === EvaluationValueKind.Promise) {
-    const resourceDefinition = routeableResourceDefinitionForPromise(context, read.value);
-    return {
-      componentKind: RouteableComponentKind.Promise,
-      localName: dynamicImportSpecifier ?? resourceDefinition?.target.localName ?? readReferenceName(current),
-      sourceNode: current,
-      resourceDefinition,
-    };
+    return promiseRouteableComponent(context, current, read.value, dynamicImportSpecifier);
   }
   if (dynamicImportSpecifier != null) {
-    return {
-      componentKind: RouteableComponentKind.Promise,
-      localName: dynamicImportSpecifier,
-      sourceNode: current,
-      resourceDefinition: null,
-    };
+    return dynamicImportRouteableComponent(current, dynamicImportSpecifier);
   }
-  const resourceDefinition = context.resourceIndex.lookupValue(read.value);
+  return evaluatedRouteableComponent(context, current, read.value ?? null);
+}
+
+function stringRouteableComponent(
+  context: RouteConfigRecognitionContext,
+  expression: ts.StringLiteral | ts.NoSubstitutionTemplateLiteral,
+): RouteableComponentObservation {
+  return {
+    componentKind: RouteableComponentKind.CustomElementName,
+    localName: expression.text,
+    sourceNode: expression,
+    resourceDefinition: context.resourceIndex.lookupByResourceName(expression.text),
+  };
+}
+
+function promiseRouteableComponent(
+  context: RouteConfigRecognitionContext,
+  expression: ts.Expression,
+  promise: EvaluationPromiseValue,
+  dynamicImportSpecifier: string | null,
+): RouteableComponentObservation {
+  const resourceDefinition = routeableResourceDefinitionForPromise(context, promise);
+  return {
+    componentKind: RouteableComponentKind.Promise,
+    localName: dynamicImportSpecifier ?? resourceDefinition?.target.localName ?? readReferenceName(expression),
+    sourceNode: expression,
+    resourceDefinition,
+  };
+}
+
+function dynamicImportRouteableComponent(
+  expression: ts.Expression,
+  dynamicImportSpecifier: string,
+): RouteableComponentObservation {
+  return {
+    componentKind: RouteableComponentKind.Promise,
+    localName: dynamicImportSpecifier,
+    sourceNode: expression,
+    resourceDefinition: null,
+  };
+}
+
+function evaluatedRouteableComponent(
+  context: RouteConfigRecognitionContext,
+  expression: ts.Expression,
+  value: EvaluationValue | null,
+): RouteableComponentObservation {
+  const resourceDefinition = context.resourceIndex.lookupValue(value);
   const componentKind = resourceDefinition != null
     ? RouteableComponentKind.ResourceDefinition
-    : read.value?.kind === EvaluationValueKind.Class || read.value?.kind === EvaluationValueKind.Function
+    : value?.kind === EvaluationValueKind.Class || value?.kind === EvaluationValueKind.Function
       ? RouteableComponentKind.ClassReference
       : RouteableComponentKind.Open;
   return {
     componentKind,
-    localName: readReferenceName(current),
-    sourceNode: current,
+    localName: readReferenceName(expression),
+    sourceNode: expression,
     resourceDefinition,
   };
 }
@@ -905,19 +1146,6 @@ function isRouteObjectExpression(
     && bindings.routerNamespaces.has((unwrapExpression(current.expression) as ts.Identifier).text);
 }
 
-function readObjectPropertyExpression(
-  object: ts.ObjectLiteralExpression,
-  propertyName: string,
-): ts.Expression | null {
-  for (const property of object.properties) {
-    if (!ts.isPropertyAssignment(property) || readPropertyName(property.name) !== propertyName) {
-      continue;
-    }
-    return property.initializer;
-  }
-  return null;
-}
-
 function readStringObjectProperty(
   context: RouteConfigRecognitionContext,
   object: ts.ObjectLiteralExpression,
@@ -927,16 +1155,7 @@ function readStringObjectProperty(
   return expression == null ? null : readStringValue(context, expression);
 }
 
-function readStringArrayObjectProperty(
-  context: RouteConfigRecognitionContext,
-  object: ts.ObjectLiteralExpression,
-  propertyName: string,
-): readonly string[] | null {
-  const expression = readObjectPropertyExpression(object, propertyName);
-  return expression == null ? null : readStringArrayValue(context, expression);
-}
-
-function readBooleanObjectProperty(
+function readRouteConfigBooleanObjectProperty(
   context: RouteConfigRecognitionContext,
   object: ts.ObjectLiteralExpression,
   propertyName: string,

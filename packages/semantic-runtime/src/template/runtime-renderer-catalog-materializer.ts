@@ -32,6 +32,7 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import { catalogGroupLocalKey } from '../kernel/local-key.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
 import {
@@ -52,7 +53,6 @@ import {
   RuntimeRendererGroup,
   RuntimeRendererPackage,
   StateDefaultRenderers,
-  type BuiltInRuntimeRendererCatalogField,
   type ConfiguredBuiltInRuntimeRendererCatalogSelectionField,
   type RuntimeRenderer,
   type RuntimeRendererField,
@@ -181,7 +181,7 @@ export class BuiltInRuntimeRendererCatalogMaterializer {
     readonly renderers: readonly BuiltInRuntimeRendererEmission[];
   } {
     const records: KernelStoreRecord[] = [];
-    const local = `built-in-runtime-renderers:${input.packageId}:${input.group}`;
+    const local = runtimeRendererCatalogLocal(input);
     const source = this.recordsForSource(
       `${local}:source`,
       input.packageId,
@@ -322,24 +322,8 @@ export class BuiltInRuntimeRendererCatalogMaterializer {
       handles.productHandle,
       handles.identityHandle,
       source.addressHandle,
-      this.runtimeRendererFieldProvenance(renderer, source),
+      [],
     );
-  }
-
-  private runtimeRendererFieldProvenance(
-    renderer: RuntimeRenderer,
-    source: BuiltInRuntimeRendererSourceSet,
-  ): readonly FieldProvenance<RuntimeRendererField>[] {
-    return compactFieldProvenance<RuntimeRendererField>([
-      new FieldProvenance('rendererKind', source.provenanceHandle),
-      new FieldProvenance('targetInstructionKind', source.provenanceHandle),
-      renderer.runtimeBindingKind == null ? null : new FieldProvenance('runtimeBindingKind', source.provenanceHandle),
-      renderer.semanticBindingKindKey == null ? null : new FieldProvenance('bindingKind', source.provenanceHandle),
-      renderer.scopeEffectKinds.length === 0 ? null : new FieldProvenance('scopeEffectKinds', source.provenanceHandle),
-      new FieldProvenance('package', source.provenanceHandle),
-      new FieldProvenance('group', source.provenanceHandle),
-      new FieldProvenance('source', source.provenanceHandle),
-    ]);
   }
 
   private recordsForRendererProduct(
@@ -441,7 +425,7 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
     readonly records: readonly KernelStoreRecord[];
     readonly selections: readonly ConfiguredBuiltInRuntimeRendererCatalogSelection[];
   } {
-    const catalogsByKey = new Map(catalogEmission.catalogs.map((catalog) => [catalogKey(catalog), catalog]));
+    const catalogsByKey = new Map(catalogEmission.catalogs.map((catalog) => [catalogGroupLocalKey(catalog), catalog]));
     const records: KernelStoreRecord[] = [];
     const selections: ConfiguredBuiltInRuntimeRendererCatalogSelection[] = [];
     for (const request of selectionRequests) {
@@ -492,7 +476,7 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
     const source = this.recordsForConfiguredSource(
       local,
       admission.sourceAddressHandle,
-      summaryForFrameworkKind(frameworkKind),
+      runtimeRendererCatalogSummaryForFrameworkKind(frameworkKind),
     );
     const handles = this.configuredSelectionHandles(local);
     const claims = this.claimsForConfiguredSelection(local, handles.productHandle, catalogs, source);
@@ -625,7 +609,7 @@ function readConfiguredRuntimeRendererCatalogRequests(
     if (frameworkKind == null) {
       continue;
     }
-    const catalogInputs = catalogInputsForAdmission(frameworkKind);
+    const catalogInputs = runtimeRendererCatalogInputsForAdmission(frameworkKind);
     if (catalogInputs.length === 0) {
       continue;
     }
@@ -634,7 +618,7 @@ function readConfiguredRuntimeRendererCatalogRequests(
   return requests;
 }
 
-function catalogInputsForAdmission(
+function runtimeRendererCatalogInputsForAdmission(
   frameworkKind: FrameworkRegistrationKind,
 ): readonly BuiltInRuntimeRendererCatalogInput[] {
   const inputs: BuiltInRuntimeRendererCatalogInput[] = [];
@@ -692,14 +676,14 @@ export const RuntimeRendererCatalogs = {
 } as const;
 
 function runtimeRendererCatalogInputKey(input: BuiltInRuntimeRendererCatalogInput): string {
-  return `${input.packageId}:${input.group}`;
+  return catalogGroupLocalKey(input);
 }
 
-function catalogKey(catalog: BuiltInRuntimeRendererCatalog): string {
-  return `${catalog.packageId}:${catalog.group}`;
+function runtimeRendererCatalogLocal(input: BuiltInRuntimeRendererCatalogInput): string {
+  return `built-in-runtime-renderers:${catalogGroupLocalKey(input)}`;
 }
 
-function summaryForFrameworkKind(frameworkKind: FrameworkRegistrationKind): string {
+function runtimeRendererCatalogSummaryForFrameworkKind(frameworkKind: FrameworkRegistrationKind): string {
   switch (frameworkKind) {
     case FrameworkRegistrationKind.StandardConfiguration:
       return 'RuntimeHtml StandardConfiguration admitted default runtime renderers.';
@@ -745,12 +729,7 @@ function catalogForInput(
     input.group,
     materializedRenderers,
     source.addressHandle,
-    compactFieldProvenance<BuiltInRuntimeRendererCatalogField>([
-      new FieldProvenance('package', source.provenanceHandle),
-      new FieldProvenance('group', source.provenanceHandle),
-      materializedRenderers.length === 0 ? null : new FieldProvenance('renderers', source.provenanceHandle),
-      new FieldProvenance('source', source.provenanceHandle),
-    ]),
+    [],
   );
 }
 

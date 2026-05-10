@@ -15,6 +15,7 @@ import {
   SourceDeclarationKind,
   SourceSelectorScheme,
   SourceTargetKind,
+  hasExportModifier,
   sourceSpanForNode,
   type SourceProject,
   type TypeScriptCallSiteEntry,
@@ -126,12 +127,8 @@ export function readFrameworkPackageExports(
       {
         limit: 100_000,
         offset: 0,
-        ...((filters.query ?? filters.exportName) === undefined
-          ? {}
-          : { query: filters.query ?? filters.exportName }),
-        ...(filters.memberName === undefined
-          ? {}
-          : { memberName: filters.memberName }),
+        query: filters.query ?? filters.exportName,
+        memberName: filters.memberName,
       },
     ).exports;
     return exports
@@ -511,16 +508,6 @@ export function exportedVariableDeclarations(
     declarations.push(...statement.declarationList.declarations);
   }
   return declarations;
-}
-
-export function hasExportModifier(node: ts.Node): boolean {
-  return (
-    ts.canHaveModifiers(node) &&
-    ts
-      .getModifiers(node)
-      ?.some((modifier) => modifier.kind === ts.SyntaxKind.ExportKeyword) ===
-      true
-  );
 }
 
 export function diInterfaceRowsForVariable(

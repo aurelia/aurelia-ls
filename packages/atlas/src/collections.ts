@@ -10,6 +10,19 @@ export function countBy<TValue>(
   );
 }
 
+/** Count rows by a string key and return count-ranked entries for pressure reporting. */
+export function countEntriesBy<TValue>(
+  rows: readonly TValue[],
+  keyFor: (row: TValue) => string,
+): readonly { readonly key: string; readonly count: number }[] {
+  return [...countByMap(rows, keyFor)]
+    .map(([key, count]) => ({ key, count }))
+    .sort((left, right) =>
+      right.count - left.count ||
+      left.key.localeCompare(right.key),
+    );
+}
+
 /** Count rows by any Map-compatible key while preserving first-seen key order. */
 export function countByMap<TValue, TKey>(
   rows: readonly TValue[],
@@ -32,6 +45,14 @@ export function countByWhere<TValue>(
   return countBy(rows.filter(predicate), keyFor);
 }
 
+/** Count rows matching one predicate. */
+export function countWhere<TValue>(
+  rows: readonly TValue[],
+  predicate: (row: TValue) => boolean,
+): number {
+  return rows.filter(predicate).length;
+}
+
 /** Group rows by any Map-compatible key while preserving first-seen key order. */
 export function groupBy<TValue, TKey>(
   rows: readonly TValue[],
@@ -40,6 +61,21 @@ export function groupBy<TValue, TKey>(
   const groups = new Map<TKey, TValue[]>();
   for (const row of rows) {
     pushMapValue(groups, keyFor(row), row);
+  }
+  return groups;
+}
+
+/** Group rows by keys that are present, skipping undefined keys. */
+export function groupByDefined<TValue, TKey>(
+  rows: readonly TValue[],
+  keyFor: (row: TValue) => TKey | undefined,
+): ReadonlyMap<TKey, readonly TValue[]> {
+  const groups = new Map<TKey, TValue[]>();
+  for (const row of rows) {
+    const key = keyFor(row);
+    if (key !== undefined) {
+      pushMapValue(groups, key, row);
+    }
   }
   return groups;
 }

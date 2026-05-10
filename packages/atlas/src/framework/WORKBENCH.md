@@ -78,7 +78,10 @@ touches most framework surfaces; it is not the ontology.
   [../inquiry/runtime/framework-compiler-flow.ts](../inquiry/runtime/framework-compiler-flow.ts), and
   [../inquiry/runtime/framework-compiler-products.ts](../inquiry/runtime/framework-compiler-products.ts). Current
   pressure: keep `compile-flow` high-level and `attribute-classification` as the dense `_classifyAttributes` detail
-  view.
+  view. [../inquiry/runtime/framework-compiler-contracts.ts](../inquiry/runtime/framework-compiler-contracts.ts) owns
+  the exact source-backed contract rows for compiler concepts that semantic-runtime mirrors directly with `auLink` but
+  that are not instruction products, such as binding-command definitions/instances, command build info, attribute
+  patterns, compiled patterns, and bindables-info interfaces.
 - Rendering/hydration: [../inquiry/runtime/framework-rendering-hydration-flow.ts](../inquiry/runtime/framework-rendering-hydration-flow.ts),
   [../inquiry/runtime/framework-rendering-consequences.ts](../inquiry/runtime/framework-rendering-consequences.ts), and
   [../inquiry/runtime/framework-rendering-public-rows.ts](../inquiry/runtime/framework-rendering-public-rows.ts).
@@ -87,6 +90,8 @@ touches most framework surfaces; it is not the ontology.
   handoffs such as `TemplateControllerRenderer` can be compared with semantic-runtime controller materialization before
   reading raw source.
 - Router grounding: [../inquiry/runtime/framework-router-analysis.ts](../inquiry/runtime/framework-router-analysis.ts),
+  [../inquiry/runtime/framework-router-descriptor-map.ts](../inquiry/runtime/framework-router-descriptor-map.ts),
+  [../inquiry/runtime/framework-router-source-map.ts](../inquiry/runtime/framework-router-source-map.ts),
   [../inquiry/runtime/framework-router-lenses.ts](../inquiry/runtime/framework-router-lenses.ts), and
   [../inquiry/runtime/framework-router-relationships.ts](../inquiry/runtime/framework-router-relationships.ts).
   Current pressure: use `framework.router:flow`, `recognizer`, `flow-issues`, `recognizer-issues`, and `relationships`
@@ -98,6 +103,8 @@ touches most framework surfaces; it is not the ontology.
   anchors. Router stage rows now have
   declared semantic route hops into resource materialization, rendering hydration/controller creation, and lifecycle
   controller-call projections when they cross those framework boundaries.
+  Relationship targets split multi-target flow descriptors, so `createConfiguredNode` exposes `ViewportRequest`,
+  `ViewportAgent`, `RouteContext`, and `RouteNode` as separate role-evidence targets for router emulation work.
 - Resource runtime policy: [resources.ts](resources.ts) and
   [../inquiry/runtime/framework-materialization-lenses.ts](../inquiry/runtime/framework-materialization-lenses.ts).
   Resource catalog admission is not resource instance lifetime.

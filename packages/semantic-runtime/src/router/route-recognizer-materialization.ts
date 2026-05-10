@@ -1,19 +1,18 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
   EvidenceKind,
-  EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
-import type { EvidenceHandle, ProvenanceHandle } from '../kernel/handles.js';
-import { RouteRecognizerIdentity } from '../kernel/identity.js';
-import {
-  MaterializationRecord,
-  MaterializedProduct,
-} from '../kernel/materialization.js';
+import type {
+  AddressHandle,
+  EvidenceHandle,
+  IdentityHandle,
+  ProductHandle,
+  ProvenanceHandle,
+} from '../kernel/handles.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
   KernelStoreBatch,
@@ -40,6 +39,12 @@ import {
   type RouteConfigModel,
 } from './model.js';
 import type { RouteConfigContextMaterializationProjectResult } from './route-context-materialization.js';
+import {
+  requiredRouteConfigForContext,
+  routeConfigContextIndex,
+  routeConfigIndex,
+} from './route-topology-index.js';
+import { routeRecognizerProductRecords } from './router-product-records.js';
 
 const RESIDUE = '$$residue';
 const ROUTE_PARAMETER_PATTERN = /^:(?<name>[^?\s{}]+)(?:\{\{(?<constraint>.+)\}\})?(?<optional>\?)?$/;
@@ -51,6 +56,15 @@ class ConfigurableRouteEmission {
     readonly configurableRoute: ConfigurableRouteModel,
     readonly endpoints: readonly EndpointModel[],
   ) {}
+}
+
+interface ConfigurableRoutePathSite {
+  readonly local: string;
+  readonly evidenceHandle: EvidenceHandle;
+  readonly provenanceHandle: ProvenanceHandle;
+  readonly sourceAddressHandle: AddressHandle | null;
+  readonly parse: ConfigurableRouteParse;
+  readonly configurableRoute: ConfigurableRouteModel;
 }
 
 /** Route-recognizer products materialized for one project without running navigation. */
@@ -82,20 +96,16 @@ export class RouteRecognizerMaterializationProjectPass {
     project: ProjectBootFrame,
     routeContexts: RouteConfigContextMaterializationProjectResult,
   ): RouteRecognizerMaterializationProjectResult {
-    const routeConfigIndex = new Map(
-      routeContexts.readRouteConfigs().map((routeConfig) => [routeConfig.identityHandle, routeConfig] as const),
-    );
+    const routeConfigsByIdentity = routeConfigIndex(routeContexts);
     const routeConfigContexts = routeContexts.readRouteConfigContexts();
-    const routeConfigContextsByIdentity = new Map(
-      routeConfigContexts.map((routeConfigContext) => [routeConfigContext.identityHandle, routeConfigContext] as const),
-    );
+    const routeConfigContextsByIdentity = routeConfigContextIndex(routeContexts);
     const routeEmissions = routeConfigContexts
       .flatMap((routeConfigContext) =>
         this.materializeRouteConfigContext(
           store,
           routeConfigContext,
           routeConfigContextsByIdentity,
-          routeConfigIndex,
+          routeConfigsByIdentity,
           routeContexts.usesEagerLoading(),
         )
       );
@@ -157,72 +167,70 @@ export class RouteRecognizerMaterializationProjectPass {
     parentPath: string | null,
     parentPathIndex: number,
   ): ConfigurableRouteEmission {
-    const local = `route-recognizer-configurable-route:${routeConfigContext.identityHandle}:route:${routeConfig.identityHandle}:path:${index}:parent:${parentPathIndex}`;
-    const productHandle = store.handles.product(local);
-    const identityHandle = store.handles.identity(local);
-    const evidenceHandle = store.handles.evidence(local);
-    const provenanceHandle = store.handles.provenance(local);
-    const sourceAddressHandle = routeConfig.pathSourceAddressHandle;
-    const parse = parseConfigurableRoutePath(path, routeConfig.caseSensitive === true);
-    const configurableRoute = new ConfigurableRouteModel(
-      productHandle,
-      identityHandle,
-      routeConfigContext.recognizer,
-      routeConfigContext.toReference(),
-      routeConfig.toReference(),
-      parentPath,
+    const routeSite = this.configurableRoutePathSite(
+      store,
+      routeConfigContext,
+      routeConfig,
       path,
-      routeConfig.caseSensitive === true,
-      parse.segments,
-      parse.parameters,
-      sourceAddressHandle,
-      configurableRouteFieldProvenance(provenanceHandle, parse, parentPath),
+      parentPath,
+      index,
+      parentPathIndex,
     );
     const endpointEmission = this.materializeEndpoints(
       store,
       routeConfigContext,
-      configurableRoute,
-      parse,
-      local,
-      sourceAddressHandle,
+      routeSite.configurableRoute,
+      routeSite.parse,
+      routeSite.local,
+      routeSite.sourceAddressHandle,
     );
     return new ConfigurableRouteEmission(
-      [
-        new EvidenceRecord(
-          evidenceHandle,
-          EvidenceKind.ConfigurationFlow,
-          [EvidenceRole.Configuration],
-          'RouteConfigContext child route registered as route-recognizer configurable route path.',
-          sourceAddressHandle,
-        ),
-        new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
-        new RouteRecognizerIdentity(
-          identityHandle,
-          KernelVocabulary.RouteRecognizer.ConfigurableRoute.key,
-          routeConfigContext.recognizer.identityHandle,
-          sourceAddressHandle,
-          path,
-        ),
-        new MaterializedProduct(
-          productHandle,
-          KernelVocabulary.RouteRecognizer.ConfigurableRoute.key,
-          identityHandle,
-          sourceAddressHandle,
-          provenanceHandle,
-        ),
-        new MaterializationRecord(
-          store.handles.materialization(local),
-          routeConfigContext.recognizer.identityHandle ?? routeConfigContext.identityHandle,
-          [productHandle],
-          [],
-          [],
-        ),
-        ...endpointEmission.records,
-      ],
+      recordsForConfigurableRoute(
+        store,
+        routeSite.local,
+        routeSite.configurableRoute,
+        routeConfigContext,
+        routeSite.evidenceHandle,
+        routeSite.provenanceHandle,
+        endpointEmission.records,
+      ),
       routeConfigContext,
-      configurableRoute,
+      routeSite.configurableRoute,
       endpointEmission.endpoints,
     );
+  }
+
+  private configurableRoutePathSite(
+    store: KernelStore,
+    routeConfigContext: RouteConfigContextModel,
+    routeConfig: RouteConfigModel,
+    path: string,
+    parentPath: string | null,
+    index: number,
+    parentPathIndex: number,
+  ): ConfigurableRoutePathSite {
+    const local = `route-recognizer-configurable-route:${routeConfigContext.identityHandle}:route:${routeConfig.identityHandle}:path:${index}:parent:${parentPathIndex}`;
+    const sourceAddressHandle = routeConfig.pathSourceAddressHandle;
+    const parse = parseConfigurableRoutePath(path, routeConfig.caseSensitive === true);
+    const provenanceHandle = store.handles.provenance(local);
+    return {
+      local,
+      evidenceHandle: store.handles.evidence(local),
+      provenanceHandle,
+      sourceAddressHandle,
+      parse,
+      configurableRoute: configurableRouteModel(
+        store.handles.product(local),
+        store.handles.identity(local),
+        path,
+        parentPath,
+        routeConfig,
+        routeConfigContext,
+        parse,
+        sourceAddressHandle,
+        provenanceHandle,
+      ),
+    };
   }
 
   private materializeEndpoints(
@@ -233,93 +241,108 @@ export class RouteRecognizerMaterializationProjectPass {
     configurableRouteLocal: string,
     sourceAddressHandle: RouteConfigModel['sourceAddressHandle'],
   ): ConfigurableRouteEndpointEmission {
-    const primaryLocal = `${configurableRouteLocal}:endpoint:primary`;
-    const primaryProductHandle = store.handles.product(primaryLocal);
-    const primaryIdentityHandle = store.handles.identity(primaryLocal);
-    const primaryProvenanceHandle = store.handles.provenance(primaryLocal);
-    const primaryEvidenceHandle = store.handles.evidence(primaryLocal);
-    const primaryReference = new RouteRecognizerReference(
-      primaryProductHandle,
-      primaryIdentityHandle,
-      RouteRecognizerModelKind.Endpoint,
-      sourceAddressHandle,
-      recognizerPathFor(configurableRoute),
-    );
-
     const primaryPath = recognizerPathFor(configurableRoute);
-    const residualPath = `${primaryPath}/*${RESIDUE}`;
     const hasResidualEndpoint = shouldAddResidualEndpoint(parse.parameters);
+    const primaryLocal = `${configurableRouteLocal}:endpoint:primary`;
     const residualLocal = `${configurableRouteLocal}:endpoint:residual`;
-    const residualProductHandle = store.handles.product(residualLocal);
-    const residualIdentityHandle = store.handles.identity(residualLocal);
-    const residualProvenanceHandle = store.handles.provenance(residualLocal);
-    const residualEvidenceHandle = store.handles.evidence(residualLocal);
-    const residualReference = hasResidualEndpoint
-      ? new RouteRecognizerReference(
-        residualProductHandle,
-        residualIdentityHandle,
-        RouteRecognizerModelKind.Endpoint,
-        sourceAddressHandle,
-        residualPath,
-      )
-      : null;
-
-    const primaryEndpoint = new EndpointModel(
-      primaryProductHandle,
-      primaryIdentityHandle,
+    const primaryEndpoint = endpointModel(
+      store,
+      primaryLocal,
       routeConfigContext.recognizer,
       configurableRoute.toReference(),
       primaryPath,
       false,
       parse.parameters,
       null,
-      residualReference,
+      hasResidualEndpoint ? endpointReference(
+        store,
+        residualLocal,
+        `${primaryPath}/*${RESIDUE}`,
+        sourceAddressHandle,
+      ) : null,
       sourceAddressHandle,
-      endpointFieldProvenance(primaryProvenanceHandle, parse.parameters, false, residualReference != null),
     );
-    const primaryRecords = endpointRecords(
-      store,
-      primaryLocal,
-      primaryEndpoint,
-      routeConfigContext,
-      primaryEvidenceHandle,
-      primaryProvenanceHandle,
-      'RouteRecognizer.add materialized the primary Endpoint for a configurable route path.',
-    );
+    const primaryRecords = recordsForEndpointPublication(store, primaryLocal, primaryEndpoint, routeConfigContext, 'primary');
 
     if (!hasResidualEndpoint) {
       return new ConfigurableRouteEndpointEmission(primaryRecords, [primaryEndpoint]);
     }
 
-    const residualEndpoint = new EndpointModel(
-      residualProductHandle,
-      residualIdentityHandle,
+    const residualEndpoint = endpointModel(
+      store,
+      residualLocal,
       routeConfigContext.recognizer,
       configurableRoute.toReference(),
-      residualPath,
+      `${primaryPath}/*${RESIDUE}`,
       true,
       residualEndpointParameters(parse.parameters),
-      primaryReference,
+      primaryEndpoint.toReference(),
       null,
       sourceAddressHandle,
-      endpointFieldProvenance(residualProvenanceHandle, residualEndpointParameters(parse.parameters), true, false),
     );
     return new ConfigurableRouteEndpointEmission(
       [
         ...primaryRecords,
-        ...endpointRecords(
-          store,
-          residualLocal,
-          residualEndpoint,
-          routeConfigContext,
-          residualEvidenceHandle,
-          residualProvenanceHandle,
-          'RouteRecognizer.add materialized the residual Endpoint for a configurable route path.',
-        ),
+        ...recordsForEndpointPublication(store, residualLocal, residualEndpoint, routeConfigContext, 'residual'),
       ],
       [primaryEndpoint, residualEndpoint],
     );
   }
+}
+
+function configurableRouteModel(
+  productHandle: ProductHandle,
+  identityHandle: IdentityHandle,
+  path: string,
+  parentPath: string | null,
+  routeConfig: RouteConfigModel,
+  routeConfigContext: RouteConfigContextModel,
+  parse: ConfigurableRouteParse,
+  sourceAddressHandle: RouteConfigModel['sourceAddressHandle'],
+  provenanceHandle: ProvenanceHandle,
+): ConfigurableRouteModel {
+  return new ConfigurableRouteModel(
+    productHandle,
+    identityHandle,
+    routeConfigContext.recognizer,
+    routeConfigContext.toReference(),
+    routeConfig.toReference(),
+    parentPath,
+    path,
+    routeConfig.caseSensitive === true,
+    parse.segments,
+    parse.parameters,
+    sourceAddressHandle,
+    configurableRouteFieldProvenance(provenanceHandle, parse, parentPath),
+  );
+}
+
+function recordsForConfigurableRoute(
+  store: KernelStore,
+  local: string,
+  configurableRoute: ConfigurableRouteModel,
+  routeConfigContext: RouteConfigContextModel,
+  evidenceHandle: EvidenceHandle,
+  provenanceHandle: ProvenanceHandle,
+  endpointRecords: readonly KernelStoreRecord[],
+): readonly KernelStoreRecord[] {
+  return [
+    ...routeRecognizerProductRecords(store, {
+      local,
+      evidenceHandle,
+      provenanceHandle,
+      productHandle: configurableRoute.productHandle,
+      identityHandle: configurableRoute.identityHandle,
+      productKindKey: KernelVocabulary.RouteRecognizer.ConfigurableRoute.key,
+      ownerHandle: routeConfigContext.recognizer.identityHandle ?? routeConfigContext.identityHandle,
+      sourceAddressHandle: configurableRoute.sourceAddressHandle,
+      localName: configurableRoute.path,
+      evidenceKind: EvidenceKind.ConfigurationFlow,
+      evidenceRoles: [EvidenceRole.Configuration],
+      evidenceSummary: 'RouteConfigContext child route registered as route-recognizer configurable route path.',
+    }),
+    ...endpointRecords,
+  ];
 }
 
 function materializeStateGraphs(
@@ -367,21 +390,6 @@ function eagerParentPaths(
   return nonEmptyParentPaths.length === 0 ? [null] : nonEmptyParentPaths;
 }
 
-function requiredRouteConfigForContext(
-  routeConfigContext: RouteConfigContextModel,
-  routeConfigIndex: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>,
-): RouteConfigModel {
-  const identityHandle = routeConfigContext.config.identityHandle;
-  if (identityHandle == null) {
-    throw new Error(`RouteConfigContext '${routeConfigContext.identityHandle}' is missing its RouteConfig identity reference.`);
-  }
-  const routeConfig = routeConfigIndex.get(identityHandle);
-  if (routeConfig == null) {
-    throw new Error(`RouteConfigContext '${routeConfigContext.identityHandle}' references unmaterialized RouteConfig '${identityHandle}'.`);
-  }
-  return routeConfig;
-}
-
 function requiredParentContext(
   routeConfigContext: RouteConfigContextModel,
   routeConfigContextsByIdentity: ReadonlyMap<RouteConfigContextModel['identityHandle'], RouteConfigContextModel>,
@@ -414,6 +422,68 @@ function residualEndpointParameters(
   ];
 }
 
+function endpointModel(
+  store: KernelStore,
+  local: string,
+  recognizer: RouteRecognizerReference,
+  configurableRoute: RouteRecognizerReference,
+  path: string,
+  isResidual: boolean,
+  parameters: readonly ParameterModel[],
+  primaryEndpoint: RouteRecognizerReference | null,
+  residualEndpoint: RouteRecognizerReference | null,
+  sourceAddressHandle: RouteConfigModel['sourceAddressHandle'],
+): EndpointModel {
+  return new EndpointModel(
+    store.handles.product(local),
+    store.handles.identity(local),
+    recognizer,
+    configurableRoute,
+    path,
+    isResidual,
+    parameters,
+    primaryEndpoint,
+    residualEndpoint,
+    sourceAddressHandle,
+    endpointFieldProvenance(store.handles.provenance(local), parameters, isResidual, residualEndpoint != null),
+  );
+}
+
+function endpointReference(
+  store: KernelStore,
+  local: string,
+  path: string,
+  sourceAddressHandle: RouteConfigModel['sourceAddressHandle'],
+): RouteRecognizerReference {
+  return new RouteRecognizerReference(
+    store.handles.product(local),
+    store.handles.identity(local),
+    RouteRecognizerModelKind.Endpoint,
+    sourceAddressHandle,
+    path,
+  );
+}
+
+function recordsForEndpointPublication(
+  store: KernelStore,
+  local: string,
+  endpoint: EndpointModel,
+  routeConfigContext: RouteConfigContextModel,
+  endpointKind: 'primary' | 'residual',
+): readonly KernelStoreRecord[] {
+  return endpointRecords(
+    store,
+    local,
+    endpoint,
+    routeConfigContext,
+    store.handles.evidence(local),
+    store.handles.provenance(local),
+    endpointKind === 'primary'
+      ? 'RouteRecognizer.add materialized the primary Endpoint for a configurable route path.'
+      : 'RouteRecognizer.add materialized the residual Endpoint for a configurable route path.',
+  );
+}
+
 class ConfigurableRouteEndpointEmission {
   constructor(
     readonly records: readonly KernelStoreRecord[],
@@ -430,37 +500,20 @@ function endpointRecords(
   provenanceHandle: ProvenanceHandle,
   summary: string,
 ): readonly KernelStoreRecord[] {
-  return [
-    new EvidenceRecord(
-      evidenceHandle,
-      EvidenceKind.ConfigurationFlow,
-      [EvidenceRole.Configuration],
-      summary,
-      endpoint.sourceAddressHandle,
-    ),
-    new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
-    new RouteRecognizerIdentity(
-      endpoint.identityHandle,
-      KernelVocabulary.RouteRecognizer.Endpoint.key,
-      routeConfigContext.recognizer.identityHandle,
-      endpoint.sourceAddressHandle,
-      endpoint.path,
-    ),
-    new MaterializedProduct(
-      endpoint.productHandle,
-      KernelVocabulary.RouteRecognizer.Endpoint.key,
-      endpoint.identityHandle,
-      endpoint.sourceAddressHandle,
-      provenanceHandle,
-    ),
-    new MaterializationRecord(
-      store.handles.materialization(local),
-      routeConfigContext.recognizer.identityHandle ?? routeConfigContext.identityHandle,
-      [endpoint.productHandle],
-      [],
-      [],
-    ),
-  ];
+  return routeRecognizerProductRecords(store, {
+    local,
+    evidenceHandle,
+    provenanceHandle,
+    productHandle: endpoint.productHandle,
+    identityHandle: endpoint.identityHandle,
+    productKindKey: KernelVocabulary.RouteRecognizer.Endpoint.key,
+    ownerHandle: routeConfigContext.recognizer.identityHandle ?? routeConfigContext.identityHandle,
+    sourceAddressHandle: endpoint.sourceAddressHandle,
+    localName: endpoint.path,
+    evidenceKind: EvidenceKind.ConfigurationFlow,
+    evidenceRoles: [EvidenceRole.Configuration],
+    evidenceSummary: summary,
+  });
 }
 
 class RouteRecognizerStateGraphEmission {
@@ -777,37 +830,20 @@ function stateRecords(
   state: StateModel,
   mutable: MutableRouteRecognizerState,
 ): readonly KernelStoreRecord[] {
-  return [
-    new EvidenceRecord(
-      mutable.evidenceHandle,
-      EvidenceKind.ConfigurationFlow,
-      [EvidenceRole.Configuration],
-      'RouteRecognizer.$add materialized a State node while appending a route endpoint path.',
-      state.sourceAddressHandle,
-    ),
-    new ProvenanceRecord(mutable.provenanceHandle, [mutable.evidenceHandle]),
-    new RouteRecognizerIdentity(
-      state.identityHandle,
-      KernelVocabulary.RouteRecognizer.State.key,
-      routeConfigContext.recognizer.identityHandle,
-      state.sourceAddressHandle,
-      state.toReference().localName,
-    ),
-    new MaterializedProduct(
-      state.productHandle,
-      KernelVocabulary.RouteRecognizer.State.key,
-      state.identityHandle,
-      state.sourceAddressHandle,
-      mutable.provenanceHandle,
-    ),
-    new MaterializationRecord(
-      store.handles.materialization(mutable.local),
-      routeConfigContext.recognizer.identityHandle ?? routeConfigContext.identityHandle,
-      [state.productHandle],
-      [],
-      [],
-    ),
-  ];
+  return routeRecognizerProductRecords(store, {
+    local: mutable.local,
+    evidenceHandle: mutable.evidenceHandle,
+    provenanceHandle: mutable.provenanceHandle,
+    productHandle: state.productHandle,
+    identityHandle: state.identityHandle,
+    productKindKey: KernelVocabulary.RouteRecognizer.State.key,
+    ownerHandle: routeConfigContext.recognizer.identityHandle ?? routeConfigContext.identityHandle,
+    sourceAddressHandle: state.sourceAddressHandle,
+    localName: state.toReference().localName,
+    evidenceKind: EvidenceKind.ConfigurationFlow,
+    evidenceRoles: [EvidenceRole.Configuration],
+    evidenceSummary: 'RouteRecognizer.$add materialized a State node while appending a route endpoint path.',
+  });
 }
 
 interface ConfigurableRouteParse {

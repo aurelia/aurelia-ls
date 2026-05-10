@@ -587,3 +587,44 @@ export type TemplateInstruction =
   | TranslationParametersBindingInstruction
   | StateBindingInstruction
   | DispatchBindingInstruction;
+
+export function expressionProductHandlesForInstruction(
+  instruction: TemplateInstruction,
+): readonly ProductHandle[] {
+  switch (instruction.instructionKind) {
+    case TemplateInstructionKind.PropertyBinding:
+    case TemplateInstructionKind.ListenerBinding:
+    case TemplateInstructionKind.RefBinding:
+    case TemplateInstructionKind.LetBinding:
+    case TemplateInstructionKind.TextBinding:
+    case TemplateInstructionKind.AttributeBinding:
+    case TemplateInstructionKind.StylePropertyBinding:
+    case TemplateInstructionKind.SpreadValueBinding:
+    case TemplateInstructionKind.TranslationBindBinding:
+    case TemplateInstructionKind.TranslationParametersBinding:
+      return productHandleArray(instruction.expressionProductHandle);
+    case TemplateInstructionKind.IteratorBinding:
+      return productHandleArray(instruction.iterableExpressionProductHandle);
+    case TemplateInstructionKind.Interpolation:
+      return instruction.expressionProductHandles;
+    case TemplateInstructionKind.HydrateElement:
+    case TemplateInstructionKind.HydrateAttribute:
+    case TemplateInstructionKind.HydrateTemplateController:
+    case TemplateInstructionKind.MultiAttr:
+    case TemplateInstructionKind.SetProperty:
+    case TemplateInstructionKind.SetAttribute:
+    case TemplateInstructionKind.SetClassAttribute:
+    case TemplateInstructionKind.SetStyleAttribute:
+    case TemplateInstructionKind.HydrateLetElement:
+    case TemplateInstructionKind.SpreadTransferedBinding:
+    case TemplateInstructionKind.SpreadElementPropBinding:
+    case TemplateInstructionKind.TranslationBinding:
+    case TemplateInstructionKind.StateBinding:
+    case TemplateInstructionKind.DispatchBinding:
+      return [];
+  }
+}
+
+function productHandleArray(handle: ProductHandle | null): readonly ProductHandle[] {
+  return handle == null ? [] : [handle];
+}

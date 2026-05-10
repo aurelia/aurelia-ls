@@ -633,15 +633,13 @@ export function bindingSetupRow(
       sourceFile,
       receiver,
     ),
-    ...(firstArgument === undefined || ts.isSpreadElement(firstArgument)
-      ? {}
-      : {
-          setupArgument: readTypeScriptExpressionFact(
-            sourceProject,
-            sourceFile,
-            unwrapExpression(firstArgument),
-          ),
-        }),
+    setupArgument: firstArgument === undefined || ts.isSpreadElement(firstArgument)
+      ? undefined
+      : readTypeScriptExpressionFact(
+        sourceProject,
+        sourceFile,
+        unwrapExpression(firstArgument),
+      ),
     callSite,
     source: sourceRangeForSourceFileNode(file.repoPath, sourceFile, call),
   };
@@ -706,7 +704,7 @@ export function bindingEffectRow(
       sourceFile,
       expression,
     ),
-    ...(callSite === undefined ? {} : { callSite }),
+    callSite,
     source: sourceRangeForSourceFileNode(file.repoPath, sourceFile, expression),
   };
 }

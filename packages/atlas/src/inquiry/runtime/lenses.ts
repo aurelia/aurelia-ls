@@ -26,7 +26,7 @@ import { LocusKind, RepoRootLocus, type SourceRange } from "../locus.js";
 import {
   NavigationPlane,
   NavigationRelation,
-  type NavigationRouteClaim,
+  navigationRoute,
 } from "../navigation.js";
 import { PagedRowFamily } from "../paged-row-family.js";
 import { pageOffset, rowLimit } from "../paging.js";
@@ -47,6 +47,7 @@ import {
   type AtlasSelfEnumReferenceRow,
   type AtlasSelfEnumRow,
   type AtlasSelfEnumValueSpaceRow,
+  type AtlasSelfFunctionShapeGroupRow,
   type AtlasSelfFunctionSurfaceRow,
   type AtlasSelfSourceFileSurfaceRow,
   type AtlasSelfSubstrateSurfaceRow,
@@ -136,6 +137,8 @@ export interface SelfValue {
   readonly classSurfaces?: readonly AtlasSelfClassSurfaceRow[];
   /** Function and method declaration surfaces discovered in Atlas source. */
   readonly functionSurfaces?: readonly AtlasSelfFunctionSurfaceRow[];
+  /** Repeated AST/control-flow function body-shape groups. */
+  readonly functionShapeGroups?: readonly AtlasSelfFunctionShapeGroupRow[];
   /** Source file module surfaces discovered in Atlas source. */
   readonly sourceFileSurfaces?: readonly AtlasSelfSourceFileSurfaceRow[];
   /** Lens contract rows joined to runtime implementation paths. */
@@ -207,7 +210,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "areas",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Structure,
             NavigationRelation.ProjectionOf,
             [BasisKind.AtlasContract],
@@ -224,7 +227,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.AtlasContract],
@@ -241,7 +244,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptChecker],
@@ -259,7 +262,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptChecker],
@@ -277,7 +280,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptChecker, BasisKind.StaticEvaluator],
@@ -295,7 +298,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptChecker],
@@ -313,7 +316,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
@@ -330,7 +333,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptChecker],
@@ -347,7 +350,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptChecker],
@@ -365,7 +368,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptChecker],
@@ -382,7 +385,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptChecker],
@@ -399,7 +402,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptProgram],
@@ -417,7 +420,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.AuLink, BasisKind.TypeScriptChecker],
@@ -435,7 +438,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Structure,
             NavigationRelation.ProjectionOf,
             [BasisKind.TypeScriptProgram],
@@ -453,7 +456,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Semantic,
             NavigationRelation.FrameworkFlowOf,
             [BasisKind.TypeScriptProgram],
@@ -471,7 +474,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Structure,
             NavigationRelation.ProjectionOf,
             [BasisKind.TypeScriptProgram],
@@ -488,7 +491,7 @@ export function answerRepoMap(
             locus: RepoRootLocus,
             projection: "summary",
           },
-          route: atlasSelfRoute(
+          route: navigationRoute(
             NavigationPlane.Maintenance,
             NavigationRelation.DiagnosticsFor,
             [BasisKind.AtlasContract],
@@ -711,6 +714,12 @@ class AtlasSelfAnswerer {
         );
       case "functions":
         return answerSelfFunctionsProjection(
+          this.#inquiry,
+          this.#value,
+          this.#analysis,
+        );
+      case "function-shapes":
+        return answerSelfFunctionShapesProjection(
           this.#inquiry,
           this.#value,
           this.#analysis,
@@ -1440,6 +1449,30 @@ function answerSelfFunctionsProjection(
   });
 }
 
+function answerSelfFunctionShapesProjection(
+  inquiry: Inquiry,
+  value: SelfValue,
+  analysis: AtlasSelfAnalysis,
+): Answer<SelfValue> {
+  const rows = filterAtlasSelfFunctionShapeGroups(analysis.functionShapeGroups, inquiry);
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:function-shapes",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, functionShapeGroups: pageRows }),
+    rowNoun: "Atlas repeated function body-shape group(s)",
+    basisSummary:
+      "Read repeated function body shapes through canonical AST/control-flow fingerprints, independent of helper names.",
+    evidenceForRow: evidenceForAtlasSelfFunctionShapeGroup,
+    nextPageId: "atlas.self:function-shapes:next-page",
+    nextPageRationale: "Continue repeated Atlas function body-shape groups.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect first function in repeated body-shape group ${row.bodyShapeFingerprint}.`,
+    }),
+  });
+}
+
 function answerSelfRelationshipRows(
   inquiry: Inquiry,
   value: SelfValue,
@@ -1603,6 +1636,12 @@ function selfSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
       "functions",
       "Inspect top-level function and class-method surfaces.",
     ),
+    atlasProjectionContinuation(
+      inquiry,
+      "atlas.self:function-shapes",
+      "function-shapes",
+      "Inspect repeated canonical function body-shape groups across helper names.",
+    ),
     {
       id: "atlas.self:map",
       kind: ContinuationKind.SwitchLens,
@@ -1613,7 +1652,7 @@ function selfSummaryContinuations(inquiry: Inquiry): readonly Continuation[] {
         locus: RepoRootLocus,
         projection: "summary",
       },
-      route: atlasSelfRoute(
+      route: navigationRoute(
         NavigationPlane.Structure,
         NavigationRelation.ProjectionOf,
         [BasisKind.AtlasContract],
@@ -1683,7 +1722,7 @@ function atlasProjectionContinuation(
       projection,
       page: undefined,
     },
-    route: atlasSelfRoute(
+    route: navigationRoute(
       NavigationPlane.Addressing,
       NavigationRelation.ProjectionOf,
       [BasisKind.TypeScriptProgram, BasisKind.AtlasContract],
@@ -2195,6 +2234,8 @@ function filterAtlasSelfFunctionSurfaces(
   const functionKind = inquiryStringFilter(inquiry, "functionKind");
   const className = inquiryStringFilter(inquiry, "className");
   const functionName = inquiryStringFilter(inquiry, "functionName");
+  const bodyFingerprint = inquiryStringFilter(inquiry, "bodyFingerprint");
+  const bodyShapeFingerprint = inquiryStringFilter(inquiry, "bodyShapeFingerprint");
   const minLineCount = inquiryNumberFilter(inquiry, "minLineCount");
   const minCallCount = inquiryNumberFilter(inquiry, "minCallCount");
   const minUniqueCallTargetCount = inquiryNumberFilter(
@@ -2215,6 +2256,12 @@ function filterAtlasSelfFunctionSurfaces(
     if (functionName !== undefined && row.name !== functionName) {
       return false;
     }
+    if (bodyFingerprint !== undefined && row.bodyFingerprint !== bodyFingerprint) {
+      return false;
+    }
+    if (bodyShapeFingerprint !== undefined && row.bodyShapeFingerprint !== bodyShapeFingerprint) {
+      return false;
+    }
     if (minLineCount !== undefined && row.lineCount < minLineCount) {
       return false;
     }
@@ -2232,6 +2279,8 @@ function filterAtlasSelfFunctionSurfaces(
     }
     return (
       row.name.toLowerCase().includes(query) ||
+      row.bodyFingerprint.toLowerCase().includes(query) ||
+      row.bodyShapeFingerprint.toLowerCase().includes(query) ||
       (row.className?.toLowerCase().includes(query) ?? false) ||
       row.filePath.toLowerCase().includes(query) ||
       row.functionKind.toLowerCase().includes(query)
@@ -2277,6 +2326,44 @@ function orderAtlasSelfFunctionSurfaces(
     default:
       return rows;
   }
+}
+
+function filterAtlasSelfFunctionShapeGroups(
+  rows: readonly AtlasSelfFunctionShapeGroupRow[],
+  inquiry: Inquiry,
+): readonly AtlasSelfFunctionShapeGroupRow[] {
+  const bodyShapeFingerprint = inquiryStringFilter(inquiry, "bodyShapeFingerprint");
+  const minFunctionCount = inquiryNumberFilter(inquiry, "minFunctionCount");
+  const minNameCount = inquiryNumberFilter(inquiry, "minNameCount");
+  const minFileCount = inquiryNumberFilter(inquiry, "minFileCount");
+  const minLineCount = inquiryNumberFilter(inquiry, "minLineCount");
+  const query = inquiryLowerStringFilter(inquiry, "query");
+  return rows.filter((row) => {
+    if (bodyShapeFingerprint !== undefined && row.bodyShapeFingerprint !== bodyShapeFingerprint) {
+      return false;
+    }
+    if (minFunctionCount !== undefined && row.functionCount < minFunctionCount) {
+      return false;
+    }
+    if (minNameCount !== undefined && row.nameCount < minNameCount) {
+      return false;
+    }
+    if (minFileCount !== undefined && row.fileCount < minFileCount) {
+      return false;
+    }
+    if (minLineCount !== undefined && row.lineCount < minLineCount) {
+      return false;
+    }
+    if (query === undefined) {
+      return true;
+    }
+    return (
+      row.bodyShapeFingerprint.toLowerCase().includes(query) ||
+      row.nameSamples.some((name) => name.toLowerCase().includes(query)) ||
+      row.fileSamples.some((filePath) => filePath.toLowerCase().includes(query)) ||
+      row.functionKinds.some((kind) => kind.toLowerCase().includes(query))
+    );
+  });
 }
 
 function filterContracts(
@@ -2868,6 +2955,21 @@ function evidenceForAtlasSelfFunctionSurface(
   };
 }
 
+function evidenceForAtlasSelfFunctionShapeGroup(
+  row: AtlasSelfFunctionShapeGroupRow,
+): Evidence {
+  return {
+    id: `${row.id}:evidence`,
+    kind: EvidenceKind.MaintenanceSignal,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Exact,
+    summary: row.summary,
+    basis: selfSourceBasis("Function body-shape grouping is derived from canonical AST/control-flow fingerprints."),
+    source: row.source,
+    data: row,
+  };
+}
+
 function selfAnalysisEvidence(
   analysis: AtlasSelfAnalysis,
   id: string,
@@ -2947,15 +3049,6 @@ export function answerUnimplementedLens(
       ],
     },
   );
-}
-
-function atlasSelfRoute(
-  plane: NavigationPlane,
-  relation: NavigationRelation,
-  basis: readonly BasisKind[],
-  summary: string,
-): NavigationRouteClaim {
-  return { plane, relation, basis, summary };
 }
 
 /** Count enum values while preserving all declared buckets. */

@@ -40,6 +40,7 @@ import { answerFrameworkCompiler } from "./framework-compiler-lenses.js";
 import { answerFrameworkComposition } from "./framework-composition-lenses.js";
 import { answerFrameworkObservation } from "./framework-observation-lenses.js";
 import { answerFrameworkResources } from "./framework-resource-lenses.js";
+import { answerFrameworkErrors } from "./framework-error-lenses.js";
 import { answerProductVocabulary } from "./product-vocabulary-lenses.js";
 import { answerProductArchitecture } from "./product-architecture-lenses.js";
 import { answerWorkspaceArchitecture } from "./workspace-architecture-lenses.js";
@@ -97,6 +98,7 @@ export class InquiryEngine {
     LensId.FrameworkLifecycle,
     LensId.FrameworkObservation,
     LensId.FrameworkRouter,
+    LensId.FrameworkErrors,
     LensId.FrameworkAdmission,
     LensId.FrameworkComposition,
   ]);
@@ -232,6 +234,11 @@ export class InquiryEngine {
           normalized.inquiry,
           this.substrates.sourceProject,
         );
+      case LensId.FrameworkErrors:
+        return answerFrameworkErrors(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
       case LensId.FrameworkAdmission:
         return answerFrameworkAdmission(
           normalized.inquiry,
@@ -279,19 +286,13 @@ export class InquiryEngine {
       inquiry: {
         lens: requestedLens ?? LensId.RepoMap,
         locus: normalizeLocus(input.locus),
-        ...(subject === undefined ? {} : { subject }),
-        ...(input.projection === undefined
-          ? {}
-          : { projection: input.projection }),
-        ...(input.filters === undefined ? {} : { filters: input.filters }),
-        ...(input.budget === undefined
-          ? {}
-          : { budget: normalizeBudget(input.budget) }),
-        ...(input.page === undefined
-          ? {}
-          : { page: normalizePage(input.page) }),
+        subject,
+        projection: input.projection,
+        filters: input.filters,
+        budget: input.budget === undefined ? undefined : normalizeBudget(input.budget),
+        page: input.page === undefined ? undefined : normalizePage(input.page),
       },
-      ...(unknownLens === undefined ? {} : { unknownLens }),
+      unknownLens,
     };
   }
 
@@ -521,8 +522,8 @@ function normalizePage(
   const size = source.size;
   const cursor = source.cursor;
   return {
-    ...(typeof size === "number" && Number.isFinite(size) ? { size } : {}),
-    ...(typeof cursor === "string" ? { cursor } : {}),
+    size: typeof size === "number" && Number.isFinite(size) ? size : undefined,
+    cursor: typeof cursor === "string" ? cursor : undefined,
   };
 }
 

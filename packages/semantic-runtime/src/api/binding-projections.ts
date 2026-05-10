@@ -19,7 +19,7 @@ export function readBindingTargetAccessRows(
   store: KernelStore,
   handles: boolean,
 ): readonly SemanticBindingTargetAccessRow[] {
-  return emission.templates.resources
+  return bindingProjectionResources(emission)
     .flatMap((resource): readonly SemanticBindingTargetAccessRow[] =>
       resource.runtimeAnalysis.controllerBind.targetAccesses.map((access) => ({
         definitionName: resource.compilation.definition.name,
@@ -59,7 +59,7 @@ export function readTargetOperationRows(
   store: KernelStore,
   handles: boolean,
 ): readonly SemanticTargetOperationRow[] {
-  return emission.templates.resources
+  return bindingProjectionResources(emission)
     .flatMap((resource): readonly SemanticTargetOperationRow[] =>
       [
         ...resource.runtimeAnalysis.runtimeRendering.targetOperations,
@@ -100,7 +100,7 @@ export function readBindingSourceOperationRows(
   store: KernelStore,
   handles: boolean,
 ): readonly SemanticBindingSourceOperationRow[] {
-  return emission.templates.resources
+  return bindingProjectionResources(emission)
     .flatMap((resource): readonly SemanticBindingSourceOperationRow[] =>
       resource.runtimeAnalysis.controllerBind.sourceOperations.map((operation) => ({
         definitionName: resource.compilation.definition.name,
@@ -134,7 +134,7 @@ export function readBindingValueChannelRows(
   store: KernelStore,
   handles: boolean,
 ): readonly SemanticBindingValueChannelRow[] {
-  return emission.templates.resources
+  return bindingProjectionResources(emission)
     .flatMap((resource): readonly SemanticBindingValueChannelRow[] =>
       resource.runtimeAnalysis.bindingValueChannel.valueChannels.map((valueChannel) => ({
         definitionName: resource.compilation.definition.name,
@@ -152,6 +152,7 @@ export function readBindingValueChannelRows(
         valueDomain: valueChannel.valueDomain,
         isCollection: valueChannel.isCollection,
         openReason: valueChannel.openReason,
+        openReasonKinds: valueChannel.openReasonKinds,
         source: describeAddress(store, valueChannel.sourceAddressHandle),
         ...(handles ? {
           handles: {
@@ -178,7 +179,7 @@ export function readBindingDataFlowRows(
   store: KernelStore,
   handles: boolean,
 ): readonly SemanticBindingDataFlowRow[] {
-  return emission.templates.resources
+  return bindingProjectionResources(emission)
     .flatMap((resource): readonly SemanticBindingDataFlowRow[] =>
       resource.runtimeAnalysis.bindingDataFlow.dataFlows.map((dataFlow) =>
         bindingDataFlowRow(resource.compilation.definition.name, dataFlow, store, handles)
@@ -188,6 +189,15 @@ export function readBindingDataFlowRows(
       `${left.definitionName}:${left.sourceName ?? ''}:${left.direction}:${left.targetProperty ?? ''}`
         .localeCompare(`${right.definitionName}:${right.sourceName ?? ''}:${right.direction}:${right.targetProperty ?? ''}`)
     );
+}
+
+function bindingProjectionResources(
+  emission: AureliaAppWorldProjectEmission,
+) {
+  return [
+    ...emission.templates.resources,
+    ...emission.templates.authoringResources,
+  ];
 }
 
 function bindingDataFlowRow(
@@ -207,6 +217,7 @@ function bindingDataFlowRow(
     sourceName: dataFlow.sourceName,
     sourceType: dataFlow.sourceType?.display ?? null,
     sourceTypeOpenReason: dataFlow.sourceTypeOpenReason,
+    sourceAssignmentTargetType: dataFlow.sourceAssignmentTargetType?.display ?? null,
     targetProperty: dataFlow.targetAccess?.targetProperty
       ?? dataFlow.targetOperation?.targetProperty
       ?? dataFlow.sourceOperation?.targetName
@@ -219,6 +230,7 @@ function bindingDataFlowRow(
     sourceWritable: dataFlow.sourceWritable,
     sourceAssignmentKind: dataFlow.sourceAssignmentKind,
     sourceAssignmentReason: dataFlow.sourceAssignmentReason,
+    sourceAssignmentReasonKinds: dataFlow.sourceAssignmentReasonKinds,
     sourceToTargetAssignable: dataFlow.sourceToTargetAssignable,
     targetToSourceAssignable: dataFlow.targetToSourceAssignable,
     openReason: dataFlow.openReason,
@@ -234,6 +246,7 @@ function bindingDataFlowRow(
         expressionProductHandle: dataFlow.expressionProductHandle,
         bindingScopeProductHandle: dataFlow.bindingScope?.productHandle ?? null,
         sourceTypeProductHandle: dataFlow.sourceType?.productHandle ?? null,
+        sourceAssignmentTargetTypeProductHandle: dataFlow.sourceAssignmentTargetType?.productHandle ?? null,
         targetPropertyTypeProductHandle: dataFlow.targetPropertyType?.productHandle ?? null,
         targetValueTypeProductHandle: dataFlow.targetValueType?.productHandle ?? null,
         sourceAddressHandle: dataFlow.sourceAddressHandle,

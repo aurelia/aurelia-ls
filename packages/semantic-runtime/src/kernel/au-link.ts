@@ -9,6 +9,15 @@ export type PackageId =
   | 'router'
   | 'route-recognizer';
 
+export type AuLinkFacet =
+  | 'resource-definition'
+  | 'template-controller-semantics'
+  | 'router-runtime-model';
+
+export interface AuLinkOptions {
+  readonly facet?: AuLinkFacet;
+}
+
 /**
  * Pure marker decorator that lets Atlas correlate new analysis substrate boundaries with the Aurelia runtime.
  *
@@ -264,7 +273,11 @@ export function auLink(id: 'route-recognizer:Parameter'): ClassDecorator;
 export function auLink(id: 'route-recognizer:StaticSegment'): ClassDecorator;
 export function auLink(id: 'route-recognizer:DynamicSegment'): ClassDecorator;
 export function auLink(id: 'route-recognizer:StarSegment'): ClassDecorator;
-export function auLink(_id: `${PackageId}:${string}`): ClassDecorator {
+export function auLink(id: `${PackageId}:${string}`, options?: AuLinkOptions): ClassDecorator;
+export function auLink(
+  _id: `${PackageId}:${string}`,
+  _options?: AuLinkOptions,
+): ClassDecorator {
   return function <TFunction extends Function>(_target: TFunction): void {
     // Marker only.
   };

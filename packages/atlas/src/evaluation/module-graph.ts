@@ -2,7 +2,7 @@ import path from "node:path";
 
 import ts from "typescript";
 
-import { hasModifier } from "../source/index.js";
+import { hasModifier, toPosixPath } from "../source/index.js";
 
 export const enum EvaluationImportKind {
   /** Import declaration that only executes the target module. */
@@ -163,7 +163,7 @@ export function readEvaluationModuleRecord(
 
 /** Normalize module keys for graph lookups and emitted diagnostics. */
 export function normalizeModuleKey(moduleKey: string): string {
-  return moduleKey.replace(/\\/g, "/");
+  return toPosixPath(moduleKey);
 }
 
 function readImportEntries(

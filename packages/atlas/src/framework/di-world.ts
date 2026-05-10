@@ -981,7 +981,7 @@ class FrameworkDiWorldBuilder {
             ts.isIdentifier(parameter.name) &&
             (parameter.name.text === "container" ||
               parameter.name.text === "c" ||
-              parameterTypeIsContainerLike(this.sourceProject, parameter))
+              nodeTypeIsContainerLike(this.sourceProject, parameter))
           ) {
             localContainers.names.add(parameter.name.text);
           }
@@ -2100,7 +2100,7 @@ function containerPropertyNames(
       const name = propertyNameText(member.name);
       if (
         name !== null &&
-        (memberTypeIsContainerLike(sourceProject, member) ||
+        (nodeTypeIsContainerLike(sourceProject, member) ||
           (member.initializer !== undefined &&
             isContainerLikeExpression(
               sourceProject,
@@ -2303,20 +2303,20 @@ function isContainerLikeExpression(
   if (ts.isIdentifier(current)) {
     return (
       containerScope.names.has(current.text) ||
-      expressionTypeIsContainerLike(sourceProject, current)
+      nodeTypeIsContainerLike(sourceProject, current)
     );
   }
   if (isThisPropertyAccess(current)) {
     return (
       containerScope.properties.has(current.name.text) ||
-      expressionTypeIsContainerLike(sourceProject, current)
+      nodeTypeIsContainerLike(sourceProject, current)
     );
   }
   if (ts.isPropertyAccessExpression(current)) {
     if (current.name.text === "root") {
       return isContainerLikeExpression(sourceProject, current.expression, containerScope);
     }
-    return expressionTypeIsContainerLike(sourceProject, current);
+    return nodeTypeIsContainerLike(sourceProject, current);
   }
   if (ts.isBinaryExpression(current) && isAssignmentOperator(current.operatorToken.kind)) {
     return isContainerLikeExpression(sourceProject, current.right, containerScope);
@@ -2325,7 +2325,7 @@ function isContainerLikeExpression(
     return true;
   }
   if (ts.isCallExpression(current)) {
-    return expressionTypeIsContainerLike(sourceProject, current);
+    return nodeTypeIsContainerLike(sourceProject, current);
   }
   return false;
 }
@@ -2352,32 +2352,12 @@ function isThisPropertyAccess(
   );
 }
 
-function parameterTypeIsContainerLike(
+function nodeTypeIsContainerLike(
   sourceProject: SourceProject,
-  parameter: ts.ParameterDeclaration,
+  node: ts.Node,
 ): boolean {
   return typeIsContainerLike(
-    sourceProject.checker.getTypeAtLocation(parameter),
-    sourceProject,
-  );
-}
-
-function memberTypeIsContainerLike(
-  sourceProject: SourceProject,
-  member: ts.PropertyDeclaration,
-): boolean {
-  return typeIsContainerLike(
-    sourceProject.checker.getTypeAtLocation(member),
-    sourceProject,
-  );
-}
-
-function expressionTypeIsContainerLike(
-  sourceProject: SourceProject,
-  expression: ts.Expression,
-): boolean {
-  return typeIsContainerLike(
-    sourceProject.checker.getTypeAtLocation(expression),
+    sourceProject.checker.getTypeAtLocation(node),
     sourceProject,
   );
 }

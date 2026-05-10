@@ -38,6 +38,7 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import { projectModuleSourceNodeOrdinalLocalKey } from '../kernel/local-key.js';
 import {
   recordsForSourceOpenSeams,
 } from '../kernel/source-open-seam.js';
@@ -113,6 +114,21 @@ class ResourceTargetPublication {
   ) {}
 }
 
+interface ResourceObservationParts {
+  readonly source: ResourceObservationSourceSet;
+  readonly target: ResourceTargetPublication;
+  readonly productHandle: ProductHandle | null;
+  readonly resourceIdentities: {
+    readonly records: readonly KernelStoreRecord[];
+    readonly primaryIdentityHandle: IdentityHandle | null;
+    readonly claimHandles: readonly ClaimHandle[];
+  };
+  readonly openSeams: {
+    readonly records: readonly KernelStoreRecord[];
+    readonly handles: readonly OpenSeamHandle[];
+  };
+}
+
 /** Emits source observations from resource recognition into the durable kernel graph. */
 export class ResourceRecognitionKernelEmitter {
   constructor(
@@ -148,33 +164,66 @@ export class ResourceRecognitionKernelEmitter {
     observation: ResourceRecognitionObservation,
     index: number,
   ): ResourceObservationEmission {
-    const local = observationLocalKey(context, observation.sourceNode, index);
+    const local = projectModuleSourceNodeOrdinalLocalKey({
+      projectKey: context.projectKey,
+      moduleKey: context.moduleKey,
+      sourceFile: context.sourceFile,
+      node: observation.sourceNode,
+      index,
+    });
+    const parts = this.resourceObservationParts(context, observation, local);
+
+    return new ResourceObservationEmission(
+      this.recordsForObservationParts(local, parts),
+      this.definitionEmissionForObservation(local, index, observation, parts.source, parts.target.targetReference, parts.productHandle, parts.resourceIdentities),
+    );
+  }
+
+  private resourceObservationParts(
+    context: ResourceRecognitionContext,
+    observation: ResourceRecognitionObservation,
+    local: string,
+  ): ResourceObservationParts {
     const source = this.recordsForObservationSource(context, observation, local);
     const target = this.recordsForTarget(context, observation, local);
     const productHandle = observation.definition == null
       ? null
       : this.store.handles.product(`resource-definition:${local}`);
-    const resourceIdentities = this.recordsForResourceIdentities(
-      context,
-      observation,
-      local,
+    return {
+      source,
+      target,
       productHandle,
-      target.identityHandle,
-      source.sourceAddressHandle,
-      source.provenanceHandle,
-    );
-    const openSeams = this.recordsForOpenSeams(context, observation.openSeams, local);
+      resourceIdentities: this.recordsForResourceIdentities(
+        context,
+        observation,
+        local,
+        productHandle,
+        target.identityHandle,
+        source.sourceAddressHandle,
+        source.provenanceHandle,
+      ),
+      openSeams: this.recordsForOpenSeams(context, observation.openSeams, local),
+    };
+  }
 
-    return new ResourceObservationEmission(
-      [
-        ...source.records,
-        ...target.records,
-        ...resourceIdentities.records,
-        ...openSeams.records,
-        ...this.recordsForDefinitionProduct(local, source, target.identityHandle, productHandle, resourceIdentities, openSeams),
-      ],
-      this.definitionEmissionForObservation(local, index, observation, source, target.targetReference, productHandle, resourceIdentities),
-    );
+  private recordsForObservationParts(
+    local: string,
+    parts: ResourceObservationParts,
+  ): readonly KernelStoreRecord[] {
+    return [
+      ...parts.source.records,
+      ...parts.target.records,
+      ...parts.resourceIdentities.records,
+      ...parts.openSeams.records,
+      ...this.recordsForDefinitionProduct(
+        local,
+        parts.source,
+        parts.target.identityHandle,
+        parts.productHandle,
+        parts.resourceIdentities,
+        parts.openSeams,
+      ),
+    ];
   }
 
   private recordsForObservationSource(
@@ -626,10 +675,35 @@ export class ResourceRecognitionKernelEmitter {
     const records: KernelStoreRecord[] = [];
     const claimHandles: ClaimHandle[] = [];
     aliases.forEach((alias, aliasIndex) => {
-      const aliasIdentityHandle = this.store.handles.identity(`${resourceIdentityLocalKey(local, resourceKind, alias, aliasIndex)}:alias`);
-      const aliasClaimHandle = this.store.handles.claim(`resource-alias:${local}:${aliasIndex}`);
-      claimHandles.push(aliasClaimHandle);
-      records.push(
+      const publication = this.publishResourceAliasIdentity(
+        local,
+        resourceKind,
+        alias,
+        aliasIndex,
+        canonicalIdentityHandle,
+        declarationIdentityHandle,
+        provenanceHandle,
+      );
+      claimHandles.push(publication.claimHandle);
+      records.push(...publication.records);
+    });
+    return { records, claimHandles };
+  }
+
+  private publishResourceAliasIdentity(
+    local: string,
+    resourceKind: NamedResourceDefinitionKind,
+    alias: string,
+    aliasIndex: number,
+    canonicalIdentityHandle: IdentityHandle,
+    declarationIdentityHandle: IdentityHandle | null,
+    provenanceHandle: ProvenanceHandle,
+  ): ResourceIdentityPublication {
+    const identityLocal = `${resourceIdentityLocalKey(local, resourceKind, alias, aliasIndex)}:alias`;
+    const aliasIdentityHandle = this.store.handles.identity(identityLocal);
+    const aliasClaimHandle = this.store.handles.claim(`resource-alias:${local}:${aliasIndex}`);
+    return new ResourceIdentityPublication(
+      [
         new AureliaResourceIdentity(
           aliasIdentityHandle,
           toAureliaResourceIdentityKind(resourceKind),
@@ -643,9 +717,10 @@ export class ResourceRecognitionKernelEmitter {
           canonicalIdentityHandle,
           provenanceHandle,
         ),
-      );
-    });
-    return { records, claimHandles };
+      ],
+      aliasIdentityHandle,
+      aliasClaimHandle,
+    );
   }
 
   private recordsForOpenSeams(
@@ -706,14 +781,6 @@ function resourceIdentityLocalKey(
   index: number,
 ): string {
   return `resource-identity:${local}:${resourceKind}:${name ?? 'anonymous'}:${index}`;
-}
-
-function observationLocalKey(
-  context: ResourceRecognitionContext,
-  node: ts.Node,
-  index: number,
-): string {
-  return `${context.projectKey}:${context.moduleKey}:${node.getStart(context.sourceFile)}:${node.end}:${index}`;
 }
 
 function projectTargetType(

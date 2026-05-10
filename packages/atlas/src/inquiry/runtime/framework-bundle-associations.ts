@@ -254,7 +254,7 @@ function associationsForRegisterFactoryEffect(
         path: [`arg${keyArgument.index}`],
         catalogName: null,
         helperName: "registerFactory",
-        ...(diInterface === undefined ? {} : { diInterface }),
+        diInterface,
       },
     ),
   ];
@@ -340,7 +340,7 @@ function associationsForRegistrationExpression(
               ? visibleExpressionName(current)
               : visibleExpressionName(keyExpression),
           helperName,
-          ...(diInterface === undefined ? {} : { diInterface }),
+          diInterface,
         },
       ),
     ];
@@ -370,7 +370,7 @@ function associationsForRegistrationExpression(
               ? appTaskName
               : visibleExpressionName(keyExpression)),
           helperName: appTaskName,
-          ...(diInterface === undefined ? {} : { diInterface }),
+          diInterface,
         },
       ),
     ];
@@ -643,15 +643,9 @@ function associationRowForVisit(
       helperName: "helperName" in values
         ? values.helperName
         : visit.frame.helperName,
-      ...(values.diInterface === undefined
-        ? {}
-        : { diInterface: values.diInterface }),
-      ...(values.resourceCarrier === undefined
-        ? {}
-        : { resourceCarrier: values.resourceCarrier }),
-      ...(values.registryExport === undefined
-        ? {}
-        : { registryExport: values.registryExport }),
+      diInterface: values.diInterface,
+      resourceCarrier: values.resourceCarrier,
+      registryExport: values.registryExport,
     },
   );
 }
@@ -1288,14 +1282,8 @@ function associationRow(
     targetName: values.targetName,
     expression: values.expression,
     source,
-    ...(values.diInterface === undefined
-      ? {}
-      : { diInterface: values.diInterface }),
-    ...(values.resourceCarrier === undefined
-      ? {}
-      : { resourceCarrier: values.resourceCarrier }),
-    ...(values.registryExport === undefined
-      ? {}
-      : { registryExport: values.registryExport }),
+    diInterface: values.diInterface,
+    resourceCarrier: values.resourceCarrier,
+    registryExport: values.registryExport,
   };
 }

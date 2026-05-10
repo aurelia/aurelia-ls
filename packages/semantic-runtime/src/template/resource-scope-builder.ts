@@ -99,12 +99,13 @@ export function directDependencyDefinitions(
   const definitions: FullResourceDefinition[] = [];
   const seen = new Set<ProductHandle>();
   for (const dependency of resourceDependencyReferences(definition)) {
-    const dependencyDefinition = resourceDefinitions.lookupByDependencyReference(dependency);
-    if (dependencyDefinition?.productHandle == null || seen.has(dependencyDefinition.productHandle)) {
-      continue;
+    for (const dependencyDefinition of resourceDefinitions.lookupAllByDependencyReference(dependency)) {
+      if (dependencyDefinition.productHandle == null || seen.has(dependencyDefinition.productHandle)) {
+        continue;
+      }
+      seen.add(dependencyDefinition.productHandle);
+      definitions.push(dependencyDefinition);
     }
-    seen.add(dependencyDefinition.productHandle);
-    definitions.push(dependencyDefinition);
   }
   return definitions;
 }

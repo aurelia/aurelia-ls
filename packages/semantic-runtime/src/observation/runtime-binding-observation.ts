@@ -12,6 +12,7 @@ import type {
   RuntimeBindingTargetAccessReference,
   RuntimeBindingTargetOperationReference,
 } from '../template/runtime-binding.js';
+import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 
 export const enum RuntimeBindingValueChannelKind {
   RawProperty = 'raw-property',
@@ -66,6 +67,23 @@ export const enum RuntimeBindingDataFlowSourceAssignmentKind {
   Open = 'open',
 }
 
+export const enum RuntimeBindingDataFlowSourceAssignmentReasonKind {
+  SourceUnresolved = 'source-unresolved',
+  ScopeLookupMissingAncestor = 'scope-lookup-missing-ancestor',
+  ScopeSlotMissingTypeCheckerMember = 'scope-slot-missing-typechecker-member',
+  ScopeSlotTypeCheckerMemberUnavailable = 'scope-slot-typechecker-member-unavailable',
+  ScopeSlotRuntimeOnly = 'scope-slot-runtime-only',
+  OwnerTypeOpen = 'owner-type-open',
+  OwnerMemberNotProjected = 'owner-member-not-projected',
+  SourceMemberRuntimeUnassignable = 'source-member-runtime-unassignable',
+  SourceMemberGetterWithoutSetter = 'source-member-getter-without-setter',
+  SourceMemberReadonly = 'source-member-readonly',
+  SourceMemberDeclarationMissing = 'source-member-declaration-missing',
+  RuntimeExpressionUnassignable = 'runtime-expression-unassignable',
+  SpreadSourceMemberPolicyOpen = 'spread-source-member-policy-open',
+  TargetToSourceTypeMismatch = 'target-to-source-type-mismatch',
+}
+
 export type RuntimeBindingDataFlowField =
   | 'binding'
   | 'targetAccess'
@@ -79,11 +97,13 @@ export type RuntimeBindingDataFlowField =
   | 'sourceName'
   | 'sourceType'
   | 'sourceTypeOpenReason'
+  | 'sourceAssignmentTargetType'
   | 'targetPropertyType'
   | 'targetValueType'
   | 'sourceWritable'
   | 'sourceAssignmentKind'
   | 'sourceAssignmentReason'
+  | 'sourceAssignmentReasonKinds'
   | 'sourceToTargetAssignable'
   | 'targetToSourceAssignable'
   | 'openReason'
@@ -101,6 +121,7 @@ export type RuntimeBindingValueChannelField =
   | 'valueDomain'
   | 'isCollection'
   | 'openReason'
+  | 'openReasonKinds'
   | 'source';
 
 /** Reference to a runtime value channel without expanding checker facts. */
@@ -139,6 +160,7 @@ export class RuntimeBindingValueChannel {
     readonly valueDomain: readonly string[],
     readonly isCollection: boolean | null,
     readonly openReason: string | null,
+    readonly openReasonKinds: readonly OpenSeamReasonKind[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingValueChannelField>[] = [],
   ) {}
@@ -170,11 +192,13 @@ export class RuntimeBindingDataFlow {
     readonly sourceName: string | null,
     readonly sourceType: CheckerTypeReference | null,
     readonly sourceTypeOpenReason: string | null,
+    readonly sourceAssignmentTargetType: CheckerTypeReference | null,
     readonly targetPropertyType: CheckerTypeReference | null,
     readonly targetValueType: CheckerTypeReference | null,
     readonly sourceWritable: boolean | null,
     readonly sourceAssignmentKind: RuntimeBindingDataFlowSourceAssignmentKind | null,
     readonly sourceAssignmentReason: string | null,
+    readonly sourceAssignmentReasonKinds: readonly RuntimeBindingDataFlowSourceAssignmentReasonKind[],
     readonly sourceToTargetAssignable: boolean | null,
     readonly targetToSourceAssignable: boolean | null,
     readonly openReason: string | null,

@@ -108,6 +108,16 @@ export function firstArgumentText(
   return call.arguments?.[0]?.getText(sourceFile) ?? null;
 }
 
+export function stringLiteralArgument(
+  call: ts.CallExpression | ts.NewExpression,
+  index: number,
+): string | null {
+  const argument = call.arguments?.[index];
+  return argument !== undefined && ts.isStringLiteralLike(argument)
+    ? argument.text
+    : null;
+}
+
 export function declarationInitializer(node: ts.Node): ts.Expression | undefined {
   return ts.isVariableDeclaration(node) ||
     ts.isParameter(node) ||

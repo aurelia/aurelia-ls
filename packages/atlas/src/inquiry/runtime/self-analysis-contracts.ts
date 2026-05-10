@@ -137,11 +137,41 @@ export interface AtlasSelfFunctionSurfaceRow {
   readonly filePath: string;
   /** Declaration span line count. */
   readonly lineCount: number;
+  /** Stable body-text fingerprint, normalized for whitespace-only formatting differences. */
+  readonly bodyFingerprint: string;
+  /** Stable AST/control-flow body fingerprint, normalized for simple equivalent body shapes. */
+  readonly bodyShapeFingerprint: string;
   /** Direct call-expression count inside this declaration, excluding nested executable declarations. */
   readonly callCount: number;
   /** Unique locally resolved call targets observed inside this declaration. */
   readonly uniqueCallTargetCount: number;
   /** Exact declaration source. */
+  readonly source: SourceRange;
+  /** Compact row summary. */
+  readonly summary: string;
+}
+
+/** Group of function/method declarations that share an AST/control-flow body shape. */
+export interface AtlasSelfFunctionShapeGroupRow {
+  /** Stable row id. */
+  readonly id: string;
+  /** Stable AST/control-flow body fingerprint shared by all grouped declarations. */
+  readonly bodyShapeFingerprint: string;
+  /** Number of function or method surfaces in the group. */
+  readonly functionCount: number;
+  /** Number of distinct declaration names in the group. */
+  readonly nameCount: number;
+  /** Number of distinct source files in the group. */
+  readonly fileCount: number;
+  /** Total declaration line count across grouped surfaces. */
+  readonly lineCount: number;
+  /** Function-kind families represented in the group. */
+  readonly functionKinds: readonly ("top-level" | "class-method")[];
+  /** Bounded declaration-name samples for compact review. */
+  readonly nameSamples: readonly string[];
+  /** Bounded file samples for compact review. */
+  readonly fileSamples: readonly string[];
+  /** Exact source of the first grouped declaration. */
   readonly source: SourceRange;
   /** Compact row summary. */
   readonly summary: string;
@@ -343,6 +373,8 @@ export const enum AtlasSelfAxisPressureKind {
   ParallelAxisSurface = "parallel-axis-surface",
   /** A continuation points at a projection that is not valid for a reachable target lens. */
   ContinuationTargetGap = "continuation-target-gap",
+  /** Object literal construction repeatedly uses conditional spreads of `{}` / `{ prop }` pairs. */
+  OptionalObjectSpread = "optional-object-spread",
 }
 
 /** Source-backed row explaining where Atlas axis/taxonomy pressure exists. */
@@ -401,6 +433,8 @@ export interface AtlasSelfAnalysis {
   readonly classSurfaces: readonly AtlasSelfClassSurfaceRow[];
   /** Function and method declaration surfaces. */
   readonly functionSurfaces: readonly AtlasSelfFunctionSurfaceRow[];
+  /** Repeated AST/control-flow body shape groups for finding split-brain helpers. */
+  readonly functionShapeGroups: readonly AtlasSelfFunctionShapeGroupRow[];
   /** Source file module surfaces. */
   readonly sourceFileSurfaces: readonly AtlasSelfSourceFileSurfaceRow[];
   /** Engine lens implementation rows. */
@@ -441,6 +475,7 @@ export interface AtlasSelfAnalysis {
     readonly functionSurfaceCount: number;
     readonly topLevelFunctionCount: number;
     readonly classMethodFunctionCount: number;
+    readonly functionShapeGroupCount: number;
     readonly sourceFileSurfaceCount: number;
     readonly sourceFileLineCount: number;
     readonly lensImplementationCount: number;

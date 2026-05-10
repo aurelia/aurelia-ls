@@ -58,7 +58,7 @@ export function createInMemoryApi(
         lens: LensId.RepoMap,
         locus: RepoRootLocus,
         projection: "summary",
-        ...(focus === undefined ? {} : { subject: focus }),
+        subject: focus,
       }) as Promise<Answer<InquirySurfaceMap>>,
     frameworkEmulationSymbolsReport: async () =>
       createFrameworkEmulationSymbolsReport(sourceProject),

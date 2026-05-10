@@ -892,7 +892,7 @@ export class RecognizedRouteModel {
 }
 
 /** Runtime au-viewport custom element instance semantics discovered from template/controller hydration. */
-@auLink('router:ViewportCustomElement')
+@auLink('router:ViewportCustomElement', { facet: 'router-runtime-model' })
 export class ViewportCustomElementModel {
   readonly routerKind = RouterModelKind.Viewport;
 
@@ -993,34 +993,79 @@ export class RouteConfigModel {
   }
 }
 
+export interface RouteNodeModelFields {
+  readonly productHandle: ProductHandle;
+  readonly identityHandle: IdentityHandle;
+  readonly routeContext: RouterReference;
+  readonly config: RouteConfigReference | null;
+  readonly parent: RouterReference | null;
+  readonly children: readonly RouterReference[];
+  readonly instruction: RouterReference | null;
+  readonly originalInstruction: RouterReference | null;
+  readonly recognizedRoute: RouteRecognizerReference | null;
+  readonly parameterCount: number;
+  readonly queryParamCount: number;
+  readonly fragment: string | null;
+  readonly hasData: boolean | null;
+  readonly viewport: string | null;
+  readonly residueInstructionCount: number;
+  readonly path: string;
+  readonly finalPath: string;
+  readonly component: RouteableComponentReference | null;
+  readonly title: string | null;
+  readonly sourceAddressHandle: AddressHandle | null;
+  readonly fieldProvenance?: readonly FieldProvenance<RouteNodeField>[];
+}
+
 /** Runtime RouteNode model used for recognized route state. */
 @auLink('router:RouteNode')
 export class RouteNodeModel {
   readonly routerKind = RouterModelKind.RouteNode;
+  readonly productHandle: ProductHandle;
+  readonly identityHandle: IdentityHandle;
+  readonly routeContext: RouterReference;
+  readonly config: RouteConfigReference | null;
+  readonly parent: RouterReference | null;
+  readonly children: readonly RouterReference[];
+  readonly instruction: RouterReference | null;
+  readonly originalInstruction: RouterReference | null;
+  readonly recognizedRoute: RouteRecognizerReference | null;
+  readonly parameterCount: number;
+  readonly queryParamCount: number;
+  readonly fragment: string | null;
+  readonly hasData: boolean | null;
+  readonly viewport: string | null;
+  readonly residueInstructionCount: number;
+  readonly path: string;
+  readonly finalPath: string;
+  readonly component: RouteableComponentReference | null;
+  readonly title: string | null;
+  readonly sourceAddressHandle: AddressHandle | null;
+  readonly fieldProvenance: readonly FieldProvenance<RouteNodeField>[];
 
-  constructor(
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
-    readonly routeContext: RouterReference,
-    readonly config: RouteConfigReference | null,
-    readonly parent: RouterReference | null,
-    readonly children: readonly RouterReference[],
-    readonly instruction: RouterReference | null,
-    readonly originalInstruction: RouterReference | null,
-    readonly recognizedRoute: RouteRecognizerReference | null,
-    readonly parameterCount: number,
-    readonly queryParamCount: number,
-    readonly fragment: string | null,
-    readonly hasData: boolean | null,
-    readonly viewport: string | null,
-    readonly residueInstructionCount: number,
-    readonly path: string,
-    readonly finalPath: string,
-    readonly component: RouteableComponentReference | null,
-    readonly title: string | null,
-    readonly sourceAddressHandle: AddressHandle | null,
-    readonly fieldProvenance: readonly FieldProvenance<RouteNodeField>[] = [],
-  ) {}
+  constructor(fields: RouteNodeModelFields) {
+    this.productHandle = fields.productHandle;
+    this.identityHandle = fields.identityHandle;
+    this.routeContext = fields.routeContext;
+    this.config = fields.config;
+    this.parent = fields.parent;
+    this.children = fields.children;
+    this.instruction = fields.instruction;
+    this.originalInstruction = fields.originalInstruction;
+    this.recognizedRoute = fields.recognizedRoute;
+    this.parameterCount = fields.parameterCount;
+    this.queryParamCount = fields.queryParamCount;
+    this.fragment = fields.fragment;
+    this.hasData = fields.hasData;
+    this.viewport = fields.viewport;
+    this.residueInstructionCount = fields.residueInstructionCount;
+    this.path = fields.path;
+    this.finalPath = fields.finalPath;
+    this.component = fields.component;
+    this.title = fields.title;
+    this.sourceAddressHandle = fields.sourceAddressHandle;
+    this.fieldProvenance = fields.fieldProvenance ?? [];
+  }
 
   toReference(): RouterReference {
     return new RouterReference(this.productHandle, this.identityHandle, this.routerKind, this.sourceAddressHandle, this.routeContext.localName);

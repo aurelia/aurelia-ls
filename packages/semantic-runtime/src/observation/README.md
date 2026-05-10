@@ -36,11 +36,28 @@ static type surfaces rather than hydrated runtime values.
   data-flow itself cannot be closed honestly. TypeChecker source-expression gaps, such as a missing projected
   view-model member, stay on the data-flow row as `sourceTypeOpenReason` instead of becoming a binding open seam.
   It asks the template parse-projection layer for runtime-accepted expression ASTs, so authoring-strict companion
-  parses remain visible without forcing closed Aurelia runtime data-flow to reopen.
+  parses remain visible without forcing closed Aurelia runtime data-flow to reopen. Source-expression evaluation
+  receives the target value type as contextual type, so callback and function-valued bindables can type arrow
+  parameters when the target bindable exposes a callable signature. If the target type is `unknown`, `any`, or
+  index-signature-only, the data-flow row stays honest instead of manufacturing members.
+  Runtime-only scope slots created by earlier two-way/from-view bindable assignments remain assignable through
+  Aurelia's runtime `astAssign` path, but data-flow reports them with TypeScript strictness pressure rather than as
+  real TypeChecker members. A runtime-created slot may still carry the target bindable's TypeMember product as a type
+  carrier for expression analysis; assignment policy should not treat that carrier as proof that the scope name is an
+  authored view-model member. Member-expression writes should spend the shared TypeChecker member surface before
+  reporting owner-member pressure: first use projected members, then ask the retained checker/apparent type for a
+  concrete property, then honor string index-signature writeability. Only after those fail should the row report
+  `owner-member-not-projected`; otherwise app pressure will confuse ordinary indexed/dynamic TypeScript surfaces with
+  missing Aurelia runtime semantics.
 - `binding-source-value-evaluator.ts` is the value-side companion to TypeChecker data flow. It evaluates Aurelia
   binding-source ASTs against modeled `Scope` slots and the shared static ECMAScript evaluator, including guarded local
   class getter reads. Consumers such as router resources can ask for a static source value without moving binding lookup
-  or getter execution into router-specific code. Host-dependent values stay open with evaluator reasons.
+  or getter execution into router-specific code. Host-dependent values stay open with evaluator reasons. Call expressions
+  are explicit open shapes: the evaluator inspects the callee/owner and arguments enough to report whether a runtime
+  slot, host value, or unknown owner blocked static reduction, but it does not execute arbitrary view-model functions.
+  Open reductions carry typed reason kinds such as runtime-only source value, missing static scope slot value, missing
+  static member value, or unsupported expression shape so downstream consumers can keep their own product seam while
+  still exposing the binding-layer cause.
 - `binding-value-channel-materializer.ts` sits between target-side products and data flow. It captures the value shape an
   observer/accessor or direct operation actually transports. Closed observer-specific slices include static
   single-select option domains, such as `select.value` carrying `'ship' | 'pickup'` instead of raw DOM `string`, plain
@@ -78,10 +95,15 @@ the value channel they imply. That split matters because the observers select th
 domain depends on authored option/input nodes plus TypeChecker-visible source facts. The current value-channel model
 closes the single-select option domain from static `option.value`, static `option.model`, or expression-backed
 `option.model/value` bindings. Static multi-selects close the selected option element domain for TypeChecker-visible
-array sources, while dynamic `multiple.bind` stays open until its value is closed. `CheckedObserver` closes plain
-checkbox boolean flow, radio values, and checkbox values for array/set membership sources using static attributes or
-expression-backed `model/value` bindings. Map key/value flow, custom matcher semantics, and non-literal dynamic element
-values remain explicit pressure.
+array sources; `multiple.bind` is only treated as static when the authored expression itself is a boolean literal or
+the TypeChecker projects a single boolean-literal type. Ordinary boolean-valued `multiple.bind` stays open until its
+value is closed and carries the typed
+`binding-value-channel-dynamic-select-multiple` reason through both value-channel and dependent data-flow seams.
+Other select-channel failures carry their own typed reasons for unclosed option values, absent option domains, missing
+authored select targets, and multi-select source-shape pressure.
+`CheckedObserver` closes plain checkbox boolean flow, radio values, and checkbox values for array/set membership sources
+using static attributes or expression-backed `model/value` bindings. Map key/value flow, custom matcher semantics, and
+non-literal dynamic element values remain explicit pressure.
 The checkbox branch must decide from the bound source shape before demanding an element model/value: boolean-like and
 non-collection sources use the checked boolean channel, while collection/map-like sources need the element value channel
 for membership semantics.

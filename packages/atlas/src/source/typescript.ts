@@ -2,6 +2,7 @@ import path from "node:path";
 
 import ts from "typescript";
 
+import { uniqueByKey } from "../collections.js";
 import type { SourceRange } from "../inquiry/locus.js";
 import { repoRelativePath, resolveRepoPath, type RepoRelativePath } from "./path.js";
 import {
@@ -22,8 +23,12 @@ import {
   isExportedDeclaration,
   literalValueField,
   propertyNameText,
+  visitNode,
 } from "./semantic-surface/ast.js";
-import { sourceSpanForNode } from "./semantic-surface/source-ranges.js";
+import {
+  requiredSourceFileIdentity,
+  sourceSpanForNode,
+} from "./semantic-surface/source-ranges.js";
 import {
   SourceSelectorScheme,
   SourceTargetKind,
@@ -277,12 +282,12 @@ export function readDocumentSymbols(
   return {
     resolution: serializableResolution(resolution),
     fileCount: files.length,
-    ...(query === undefined ? {} : { query }),
+    query,
     totalSymbols: allSymbols.length,
     symbols,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -297,9 +302,9 @@ export function readSymbolIndex(
 ): TypeScriptSymbolIndex {
   const resolution = resolveSourceSelector(project, selector);
   const query = options.query ?? (selector.scheme === SourceSelectorScheme.Workspace ? selector.query : undefined);
-  const selectedFiles = new Set(selectedSourceFiles(resolution).map((sourceFile) => normalizeAbsolutePath(project, sourceFile.fileName)));
+  const selectedFiles = new Set(selectedSourceFiles(resolution).map((sourceFile) => normalizeProjectAbsolutePath(project, sourceFile.fileName)));
   const allRows = project.declarationRows()
-    .filter((row) => selectedFiles.has(normalizeAbsolutePath(project, row.file.absolutePath)))
+    .filter((row) => selectedFiles.has(normalizeProjectAbsolutePath(project, row.file.absolutePath)))
     .filter((row) => query === undefined || row.name?.includes(query) === true)
     .sort((left, right) =>
       left.file.repoPath.localeCompare(right.file.repoPath)
@@ -316,12 +321,12 @@ export function readSymbolIndex(
 
   return {
     resolution: serializableResolution(resolution),
-    ...(query === undefined ? {} : { query }),
+    query,
     totalEntries: allRows.length,
     entries,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -338,7 +343,7 @@ export function readExportSurface(
   const surfaces = exportSurfaceFilesForResolution(project, resolution);
   const query = options.query;
   const context: ExportSurfaceReadContext = { memberPresenceBySymbol: new Map() };
-  const allExports = [...uniqueExportSurfaceEntries(surfaces.flatMap((sourceFile) => exportEntriesForSurface(
+  const entries = surfaces.flatMap((sourceFile) => exportEntriesForSurface(
     project,
     sourceFile,
     query,
@@ -347,8 +352,9 @@ export function readExportSurface(
     options.typeSymbolName,
     options.includeMemberNames ?? true,
     context,
-  )))]
-    .sort(compareExportSurfaceEntries);
+  ));
+  const allExports = uniqueByKey(entries, (entry) => entry.id)
+    .sort(compareExportRows);
   const offset = Math.max(0, Math.trunc(options.offset ?? 0));
   const limit = Math.max(1, Math.trunc(options.limit));
   const exports = allExports.slice(offset, offset + limit);
@@ -358,11 +364,11 @@ export function readExportSurface(
     resolution: serializableResolution(resolution),
     surfaceCount: surfaces.length,
     totalExports: allExports.length,
-    ...(query === undefined ? {} : { query }),
+    query,
     exports,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -389,7 +395,7 @@ export function readExportNames(
     options.includeFullyQualifiedName === true,
   ));
   const afterEntries = performance.now();
-  const allExports = [...uniqueExportNameEntries(entries)].sort(compareExportNameEntries);
+  const allExports = [...uniqueByKey(entries, (entry) => entry.id)].sort(compareExportRows);
   const afterSort = performance.now();
   const offset = Math.max(0, Math.trunc(options.offset ?? 0));
   const limit = Math.max(1, Math.trunc(options.limit));
@@ -415,11 +421,11 @@ export function readExportNames(
     resolution: serializedResolution,
     surfaceCount: surfaces.length,
     totalExports: allExports.length,
-    ...(query === undefined ? {} : { query }),
+    query,
     exports,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -659,7 +665,7 @@ export function readRename(
   return {
     resolution: serializableResolution(resolution),
     canRename: true,
-    ...(info.fileToRename === undefined ? {} : { fileToRename: fileIdentityForPath(project, info.fileToRename) }),
+    fileToRename: info.fileToRename === undefined ? undefined : fileIdentityForPath(project, info.fileToRename),
     displayName: info.displayName,
     fullDisplayName: info.fullDisplayName,
     kind: info.kind,
@@ -667,7 +673,7 @@ export function readRename(
     locations,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -702,8 +708,8 @@ export function readRefactors(
       refactorDescription: refactor.description,
       actionName: action.name,
       actionDescription: action.description,
-      ...(action.kind === undefined ? {} : { kind: action.kind }),
-      ...(action.notApplicableReason === undefined ? {} : { notApplicableReason: action.notApplicableReason }),
+      kind: action.kind,
+      notApplicableReason: action.notApplicableReason,
       interactive: action.isInteractive === true,
     })))
     .sort(compareRefactorActions);
@@ -733,7 +739,7 @@ export function readQuickInfo(
   const allEntries = typeTargetsForResolution(project, resolution)
     .map((target) => quickInfoForTarget(project, target))
     .filter((entry): entry is TypeScriptQuickInfoEntry => entry !== null)
-    .sort(compareQuickInfoEntries);
+    .sort(compareSourceSpanKindEntries);
   const offset = Math.max(0, Math.trunc(options.offset ?? 0));
   const limit = Math.max(1, Math.trunc(options.limit));
   const entries = allEntries.slice(offset, offset + limit);
@@ -790,7 +796,7 @@ export function readSignatureHelp(
 
   return {
     resolution: serializableResolution(resolution),
-    ...(applicableSpan === undefined ? {} : { applicableSpan }),
+    applicableSpan,
     selectedItemIndex: help.selectedItemIndex,
     argumentIndex: help.argumentIndex,
     argumentCount: help.argumentCount,
@@ -798,7 +804,7 @@ export function readSignatureHelp(
     items,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -829,7 +835,7 @@ export function readHighlights(
   const allHighlights = (project.languageService.getDocumentHighlights(position.fileName, position.offset, filesToSearch) ?? [])
     .flatMap((group) => group.highlightSpans.map((span) => highlightEntry(project, group.fileName, span)))
     .filter((entry): entry is TypeScriptHighlightEntry => entry !== null)
-    .sort(compareHighlights);
+    .sort(compareSourceSpanKindEntries);
   const highlights = allHighlights.slice(offset, offset + limit);
   const nextOffset = offset + highlights.length < allHighlights.length ? offset + highlights.length : undefined;
 
@@ -887,8 +893,8 @@ export function readRefactorEdits(
   if (refactorName === undefined || actionName === undefined) {
     return {
       resolution: serializableResolution(resolution),
-      ...(refactorName === undefined ? {} : { refactorName }),
-      ...(actionName === undefined ? {} : { actionName }),
+      refactorName,
+      actionName,
       applicable: false,
       notApplicableReason: "Refactor edit reads require refactorName and actionName from the refactors projection.",
       changes: [],
@@ -933,10 +939,10 @@ export function readRefactorEdits(
     refactorName,
     actionName,
     applicable: editInfo.notApplicableReason === undefined,
-    ...(editInfo.notApplicableReason === undefined ? {} : { notApplicableReason: editInfo.notApplicableReason }),
+    notApplicableReason: editInfo.notApplicableReason,
     changes: editInfo.edits.map((change, index) => fileEdits(project, change, `refactor:${index}`)),
-    ...(editInfo.renameFilename === undefined ? {} : { renameFile: fileIdentityForPath(project, editInfo.renameFilename) }),
-    ...(editInfo.renameLocation === undefined ? {} : { renameLocation: editInfo.renameLocation }),
+    renameFile: editInfo.renameFilename === undefined ? undefined : fileIdentityForPath(project, editInfo.renameFilename),
+    renameLocation: editInfo.renameLocation,
     commandCount: editInfo.commands?.length ?? 0,
   };
 }
@@ -1110,7 +1116,7 @@ function tokenResolution(project: SourceProject, selector: TokenSourceSelector):
     return emptyResolution(selector, "source.token.file-no-match", "No Program source file matched the token selector.");
   }
   const matches: ResolvedSourceTarget[] = [];
-  visit(sourceFile, (node) => {
+  visitNode(sourceFile, (node) => {
     if (ts.isIdentifier(node) && node.text === selector.text) {
       matches.push(sourceRangeTarget(project, sourceFile, node, node.getStart(sourceFile), node.getEnd(), selector));
     }
@@ -1124,13 +1130,13 @@ function tokenResolution(project: SourceProject, selector: TokenSourceSelector):
 
 function declarationResolution(project: SourceProject, selector: DeclarationSourceSelector): ResolvedSourceSelectorResolution {
   const normalizedKind = normalizeDeclarationKind(selector.kind);
-  const fileKey = selector.filePath === undefined ? null : normalizeAbsolutePath(project, selector.filePath);
+  const fileKey = selector.filePath === undefined ? null : normalizeProjectAbsolutePath(project, selector.filePath);
   const candidates = project.declarationRows()
     .filter((row) => row.name === selector.name)
     .filter((row) => normalizedKind === null || row.kind === normalizedKind)
     .filter((row) => selector.packageId === undefined || row.file.packageId === selector.packageId)
     .filter((row) => selector.packageName === undefined || packageNameForFile(project, row.file.absolutePath) === selector.packageName)
-    .filter((row) => fileKey === null || normalizeAbsolutePath(project, row.file.absolutePath) === fileKey)
+    .filter((row) => fileKey === null || normalizeProjectAbsolutePath(project, row.file.absolutePath) === fileKey)
     .map((row) => declarationTargetForRow(project, row, selector))
     .filter((target): target is ResolvedSourceTarget => target !== null)
     .sort(compareTargets);
@@ -1166,8 +1172,8 @@ function exportResolution(project: SourceProject, selector: ExportSourceSelector
 
 function moduleEdgesForFile(project: SourceProject, sourceFile: ts.SourceFile): readonly TypeScriptModuleEdge[] {
   const edges: TypeScriptModuleEdge[] = [];
-  const sourceIdentity = programSourceFileIdentity(project, sourceFile);
-  visit(sourceFile, (node) => {
+  const sourceIdentity = requiredSourceFileIdentity(project, sourceFile);
+  visitNode(sourceFile, (node) => {
     if (ts.isImportDeclaration(node) && ts.isStringLiteralLike(node.moduleSpecifier)) {
       edges.push({
         id: moduleEdgeId(sourceIdentity, node),
@@ -1220,7 +1226,7 @@ function moduleEdgesForFile(project: SourceProject, sourceFile: ts.SourceFile): 
 }
 
 function documentSymbolsForFile(project: SourceProject, sourceFile: ts.SourceFile): readonly TypeScriptDocumentSymbolEntry[] {
-  const file = programSourceFileIdentity(project, sourceFile);
+  const file = requiredSourceFileIdentity(project, sourceFile);
   const tree = project.languageService.getNavigationTree(sourceFile.fileName);
   const symbols: TypeScriptDocumentSymbolEntry[] = [];
   const visitTree = (node: ts.NavigationTree, depth: number): void => {
@@ -1233,7 +1239,7 @@ function documentSymbolsForFile(project: SourceProject, sourceFile: ts.SourceFil
         kind: node.kind,
         kindModifiers: node.kindModifiers,
         span: sourceSpanFromTextSpan(sourceFile, span),
-        ...(node.nameSpan === undefined ? {} : { nameSpan: sourceSpanFromTextSpan(sourceFile, node.nameSpan) }),
+        nameSpan: node.nameSpan === undefined ? undefined : sourceSpanFromTextSpan(sourceFile, node.nameSpan),
         depth: depth - 1,
         childCount: node.childItems?.length ?? 0,
       });
@@ -1254,7 +1260,7 @@ function declarationEntriesForResolution(project: SourceProject, resolution: Res
   const entries: TypeScriptApiSurfaceEntry[] = [];
 
   for (const file of files) {
-    visit(file, (node) => {
+    visitNode(file, (node) => {
       const kind = sourceDeclarationKindForNode(node);
       if (kind === null) {
         return;
@@ -1315,7 +1321,7 @@ function typeFactForTarget(checker: ts.TypeChecker, target: ResolvedSourceTarget
       membersTruncated: false,
     };
   }
-  const symbol = target.symbol ?? symbolForNode(checker, node) ?? null;
+  const symbol = target.symbol ?? symbolForTypeLocationNode(checker, node) ?? null;
   const type = checker.getTypeAtLocation(typeLocationNode(node));
   const apparentType = checker.getApparentType(type);
   const properties = apparentType.getProperties().sort((left, right) => left.getName().localeCompare(right.getName()));
@@ -1381,7 +1387,7 @@ function referenceEntry(project: SourceProject, reference: ts.ReferenceEntry, de
   if (sourceFile === null) {
     return null;
   }
-  const file = programSourceFileIdentity(project, sourceFile);
+  const file = requiredSourceFileIdentity(project, sourceFile);
   const start = reference.textSpan.start;
   const end = reference.textSpan.start + reference.textSpan.length;
   const key = referenceKey(reference.fileName, reference.textSpan);
@@ -1490,7 +1496,7 @@ function navigationEntry(
   if (sourceFile === null) {
     return null;
   }
-  const file = programSourceFileIdentity(project, sourceFile);
+  const file = requiredSourceFileIdentity(project, sourceFile);
   const start = entry.textSpan.start;
   const end = entry.textSpan.start + entry.textSpan.length;
   const name = "name" in entry ? entry.name : undefined;
@@ -1502,11 +1508,11 @@ function navigationEntry(
     origin,
     file,
     span: sourceSpanFromTextSpan(sourceFile, entry.textSpan),
-    ...(entry.contextSpan === undefined ? {} : { contextSpan: sourceSpanFromTextSpan(sourceFile, entry.contextSpan) }),
+    contextSpan: entry.contextSpan === undefined ? undefined : sourceSpanFromTextSpan(sourceFile, entry.contextSpan),
     scriptElementKindName: entry.kind,
-    ...(name === undefined ? {} : { name }),
-    ...(containerName === undefined ? {} : { containerName }),
-    ...(display === undefined ? {} : { display }),
+    name,
+    containerName,
+    display,
   };
 }
 
@@ -1567,12 +1573,12 @@ function callHierarchyItemRow(project: SourceProject, item: ts.CallHierarchyItem
   if (sourceFile === null) {
     return null;
   }
-  const file = programSourceFileIdentity(project, sourceFile);
+  const file = requiredSourceFileIdentity(project, sourceFile);
   return {
     id: `call-item:${file.repoPath}:${item.selectionSpan.start}:${item.selectionSpan.length}:${item.name}`,
     name: item.name,
     kind: item.kind,
-    ...(item.containerName === undefined ? {} : { containerName: item.containerName }),
+    containerName: item.containerName,
     file,
     span: sourceSpanFromTextSpan(sourceFile, item.span),
     selectionSpan: sourceSpanFromTextSpan(sourceFile, item.selectionSpan),
@@ -1603,7 +1609,7 @@ function callSitesForTarget(project: SourceProject, target: ResolvedSourceTarget
   }
   const root = target.node ?? sourceFile;
   const entries: TypeScriptCallSiteEntry[] = [];
-  visit(root, (node) => {
+  visitNode(root, (node) => {
     if (!isCallLikeExpression(node)) {
       return;
     }
@@ -1629,7 +1635,7 @@ function findEnclosingCallLike(
     current = current.parent;
   }
   let smallest: TypeScriptCallLikeExpression | null = null;
-  visit(sourceFile, (candidate) => {
+  visitNode(sourceFile, (candidate) => {
     if (!isCallLikeExpression(candidate) || !nodeRangeContains(candidate, sourceFile, start, end)) {
       return;
     }
@@ -1653,7 +1659,7 @@ function callSiteEntry(
   sourceFile: ts.SourceFile,
   node: TypeScriptCallLikeExpression,
 ): TypeScriptCallSiteEntry | null {
-  const file = programSourceFileIdentity(project, sourceFile);
+  const file = requiredSourceFileIdentity(project, sourceFile);
   const kind = ts.isNewExpression(node) ? TypeScriptCallSiteKind.New : TypeScriptCallSiteKind.Call;
   const span = sourceSpanForNode(sourceFile, node);
   const callee = expressionFact(project, sourceFile, node.expression);
@@ -1786,7 +1792,7 @@ function diagnosticsForFile(project: SourceProject, sourceFile: ts.SourceFile): 
 
 function diagnosticEntry(project: SourceProject, diagnostic: ts.Diagnostic): TypeScriptDiagnosticEntry {
   const sourceFile = diagnostic.file;
-  const file = sourceFile === undefined ? undefined : programSourceFileIdentity(project, sourceFile);
+  const file = sourceFile === undefined ? undefined : requiredSourceFileIdentity(project, sourceFile);
   const span = sourceFile === undefined || diagnostic.start === undefined || diagnostic.length === undefined
     ? undefined
     : sourceSpanFromOffsets(sourceFile, diagnostic.start, diagnostic.start + diagnostic.length);
@@ -1794,10 +1800,10 @@ function diagnosticEntry(project: SourceProject, diagnostic: ts.Diagnostic): Typ
     id: `diagnostic:${file?.repoPath ?? "<global>"}:${diagnostic.start ?? 0}:${diagnostic.code}:${diagnostic.category}`,
     category: diagnosticCategory(diagnostic.category),
     code: diagnostic.code,
-    ...(diagnostic.source === undefined ? {} : { source: diagnostic.source }),
+    source: diagnostic.source,
     message: diagnosticMessageText(diagnostic.messageText),
-    ...(file === undefined ? {} : { file }),
-    ...(span === undefined ? {} : { span }),
+    file,
+    span,
   };
 }
 
@@ -1806,17 +1812,22 @@ function renameLocationEntry(project: SourceProject, location: ts.RenameLocation
   if (sourceFile === null) {
     return null;
   }
-  const file = programSourceFileIdentity(project, sourceFile);
+  const file = requiredSourceFileIdentity(project, sourceFile);
   const start = location.textSpan.start;
   const end = location.textSpan.start + location.textSpan.length;
-  return {
+  const result = {
     id: `rename:${file.repoPath}:${start}:${end}`,
     file,
     span: sourceSpanFromOffsets(sourceFile, start, end),
     text: sourceFile.getFullText().slice(start, end),
-    ...(location.prefixText === undefined ? {} : { prefixText: location.prefixText }),
-    ...(location.suffixText === undefined ? {} : { suffixText: location.suffixText }),
   };
+  if (location.prefixText !== undefined) {
+    Object.assign(result, { prefixText: location.prefixText });
+  }
+  if (location.suffixText !== undefined) {
+    Object.assign(result, { suffixText: location.suffixText });
+  }
+  return result;
 }
 
 function refactorPositionOrRange(target: ResolvedSourceTarget): number | ts.TextRange | null {
@@ -1843,8 +1854,10 @@ function quickInfoForTarget(project: SourceProject, target: ResolvedSourceTarget
   if (sourceFile === null) {
     return null;
   }
-  const file = programSourceFileIdentity(project, sourceFile);
+  const file = requiredSourceFileIdentity(project, sourceFile);
   const span = sourceSpanFromTextSpan(sourceFile, quickInfo.textSpan);
+  const display = displayPartsText(quickInfo.displayParts);
+  const documentation = displayPartsText(quickInfo.documentation);
   return {
     id: `quick-info:${file.repoPath}:${quickInfo.textSpan.start}:${quickInfo.textSpan.length}`,
     target: rowForTarget(target),
@@ -1852,8 +1865,8 @@ function quickInfoForTarget(project: SourceProject, target: ResolvedSourceTarget
     span,
     kind: quickInfo.kind,
     kindModifiers: quickInfo.kindModifiers,
-    ...(displayPartsText(quickInfo.displayParts) === undefined ? {} : { display: displayPartsText(quickInfo.displayParts) }),
-    ...(displayPartsText(quickInfo.documentation) === undefined ? {} : { documentation: displayPartsText(quickInfo.documentation) }),
+    display,
+    documentation,
     tags: displayTags(quickInfo.tags),
     canIncreaseVerbosityLevel: quickInfo.canIncreaseVerbosityLevel === true,
   };
@@ -1895,7 +1908,7 @@ function highlightEntry(project: SourceProject, fileName: string, highlight: ts.
   if (sourceFile === null) {
     return null;
   }
-  const file = programSourceFileIdentity(project, sourceFile);
+  const file = requiredSourceFileIdentity(project, sourceFile);
   return {
     id: `highlight:${file.repoPath}:${highlight.textSpan.start}:${highlight.textSpan.length}:${highlight.kind}`,
     file,
@@ -1922,7 +1935,7 @@ function codeFixesForDiagnostic(project: SourceProject, diagnostic: TypeScriptDi
     diagnostic,
     fixName: action.fixName,
     description: action.description,
-    ...(action.fixAllDescription === undefined ? {} : { fixAllDescription: action.fixAllDescription }),
+    fixAllDescription: action.fixAllDescription,
     hasFixAll: action.fixId !== undefined,
     changes: action.changes.map((change, changeIndex) => fileEdits(project, change, `code-fix:${diagnostic.id}:${index}:${changeIndex}`)),
     commandCount: action.commands?.length ?? 0,
@@ -1951,11 +1964,11 @@ function fileIdentityForPath(project: SourceProject, fileName: string): SourceFi
   const sourceFile = project.readSourceFile(fileName);
   return sourceFile === null
     ? transientFileIdentityForPath(project, fileName)
-    : programSourceFileIdentity(project, sourceFile);
+    : requiredSourceFileIdentity(project, sourceFile);
 }
 
 function languageServicePath(project: SourceProject, fileName: string): string {
-  return project.readSourceFile(fileName)?.fileName ?? normalizeAbsolutePath(project, fileName).replace(/\\/gu, "/");
+  return project.readSourceFile(fileName)?.fileName ?? normalizeProjectAbsolutePath(project, fileName).replace(/\\/gu, "/");
 }
 
 function defaultFormatCodeSettings(): ts.FormatCodeSettings {
@@ -1993,7 +2006,7 @@ function displayPartsText(parts: readonly ts.SymbolDisplayPart[] | undefined): s
 function displayTags(tags: readonly ts.JSDocTagInfo[] | undefined): readonly TypeScriptDisplayTag[] {
   return (tags ?? []).map((tag) => ({
     name: tag.name,
-    ...(displayPartsText(tag.text) === undefined ? {} : { text: displayPartsText(tag.text) }),
+    text: displayPartsText(tag.text),
   }));
 }
 
@@ -2029,7 +2042,7 @@ function selectedSourceFiles(resolution: ResolvedSourceSelectorResolution): read
 }
 
 function sourceFileTarget(project: SourceProject, sourceFile: ts.SourceFile, _selector: SourceSelector): ResolvedSourceTarget {
-  const file = programSourceFileIdentity(project, sourceFile);
+  const file = requiredSourceFileIdentity(project, sourceFile);
   return {
     kind: SourceTargetKind.SourceFile,
     id: `file:${file.repoPath}`,
@@ -2047,11 +2060,11 @@ function sourceRangeTarget(
   end: number,
   _selector: SourceSelector,
 ): ResolvedSourceTarget {
-  const file = programSourceFileIdentity(project, sourceFile);
+  const file = requiredSourceFileIdentity(project, sourceFile);
   const span = sourceSpanFromOffsets(sourceFile, start, end);
-  const symbol = symbolForNode(project.checker, node) ?? undefined;
+  const symbol = symbolForTypeLocationNode(project.checker, node) ?? undefined;
   const name = symbol?.getName() ?? node.getText(sourceFile).slice(0, 80);
-  return {
+  const result = {
     kind: SourceTargetKind.SourceRange,
     id: `range:${file.repoPath}:${start}:${end}`,
     label: name,
@@ -2059,9 +2072,14 @@ function sourceRangeTarget(
     span,
     sourceFile,
     node,
-    ...(symbol === undefined ? {} : { symbol }),
-    ...(symbol === undefined ? {} : { symbolKey: project.checker.getFullyQualifiedName(symbol) }),
   };
+  if (symbol !== undefined) {
+    Object.assign(result, {
+      symbol,
+      symbolKey: project.checker.getFullyQualifiedName(symbol),
+    });
+  }
+  return result;
 }
 
 function declarationTargetForRow(
@@ -2097,11 +2115,11 @@ function declarationTarget(
   exported: boolean,
   selectedSymbol?: ts.Symbol,
 ): ResolvedSourceTarget {
-  const file = programSourceFileIdentity(project, sourceFile);
+  const file = requiredSourceFileIdentity(project, sourceFile);
   const kind = sourceDeclarationKindForNode(node) ?? SourceDeclarationKind.Variable;
   const span = sourceSpanForNode(sourceFile, node);
   const nameNode = declarationNameNode(node);
-  const symbol = selectedSymbol ?? symbolForNode(project.checker, nameNode ?? node) ?? undefined;
+  const symbol = selectedSymbol ?? symbolForTypeLocationNode(project.checker, nameNode ?? node) ?? undefined;
   const name = nameNode?.getText(sourceFile) ?? symbol?.getName() ?? null;
   return {
     kind: exported ? SourceTargetKind.Symbol : SourceTargetKind.Declaration,
@@ -2112,8 +2130,8 @@ function declarationTarget(
     declarationKind: kind,
     sourceFile,
     node,
-    ...(symbol === undefined ? {} : { symbol }),
-    ...(symbol === undefined ? {} : { symbolKey: project.checker.getFullyQualifiedName(symbol) }),
+    symbol,
+    symbolKey: symbol === undefined ? undefined : project.checker.getFullyQualifiedName(symbol),
   };
 }
 
@@ -2209,11 +2227,11 @@ function exportEntriesForSurface(
   if (moduleSymbol === undefined) {
     return [];
   }
-  const surfaceFile = programSourceFileIdentity(project, sourceFile);
+  const surfaceFile = requiredSourceFileIdentity(project, sourceFile);
   return [...checker.getExportsOfModule(moduleSymbol)]
     .map((symbol) => exportSurfaceEntryOrNull(project, sourceFile, surfaceFile, symbol, query, requiredMemberName, requiredTypeText, requiredTypeSymbolName, includeMemberNames, context))
     .filter((entry): entry is TypeScriptExportSurfaceEntry => entry !== null)
-    .sort(compareExportSurfaceEntries);
+    .sort(compareExportRows);
 }
 
 function exportNameEntriesForSurface(
@@ -2228,11 +2246,11 @@ function exportNameEntriesForSurface(
   if (moduleSymbol === undefined) {
     return [];
   }
-  const surfaceFile = programSourceFileIdentity(project, sourceFile);
+  const surfaceFile = requiredSourceFileIdentity(project, sourceFile);
   return [...checker.getExportsOfModule(moduleSymbol)]
     .filter((symbol) => query === undefined || symbol.getName().includes(query))
     .map((symbol) => exportNameEntry(checker, surfaceFile, symbol, resolveAliases, includeFullyQualifiedName))
-    .sort(compareExportNameEntries);
+    .sort(compareExportRows);
 }
 
 function exportNameEntry(
@@ -2418,22 +2436,6 @@ function memberNamesForSymbol(checker: ts.TypeChecker, symbol: ts.Symbol, locati
     .sort((left, right) => left.localeCompare(right));
 }
 
-function uniqueExportSurfaceEntries(entries: readonly TypeScriptExportSurfaceEntry[]): readonly TypeScriptExportSurfaceEntry[] {
-  const byId = new Map<string, TypeScriptExportSurfaceEntry>();
-  for (const entry of entries) {
-    byId.set(entry.id, entry);
-  }
-  return [...byId.values()];
-}
-
-function uniqueExportNameEntries(entries: readonly TypeScriptExportNameEntry[]): readonly TypeScriptExportNameEntry[] {
-  const byId = new Map<string, TypeScriptExportNameEntry>();
-  for (const entry of entries) {
-    byId.set(entry.id, entry);
-  }
-  return [...byId.values()];
-}
-
 function importNames(importClause: ts.ImportClause | undefined): readonly string[] {
   if (importClause === undefined) {
     return [];
@@ -2531,7 +2533,7 @@ function normalizeRepoSelectorPath(project: SourceProject, filePath: string): Re
   return repoRelativePath(project.repoRoot, absolutePath) ?? filePath.replace(/\\/gu, "/") as RepoRelativePath;
 }
 
-function normalizeAbsolutePath(project: SourceProject, filePath: string): string {
+function normalizeProjectAbsolutePath(project: SourceProject, filePath: string): string {
   return path.resolve(path.isAbsolute(filePath) ? filePath : resolveRepoPath(project.repoRoot, filePath));
 }
 
@@ -2545,7 +2547,7 @@ function positionToOffset(sourceFile: ts.SourceFile, position: SourcePositionSel
 
 function smallestNodeAt(sourceFile: ts.SourceFile, offset: number): ts.Node | null {
   let best: ts.Node | null = null;
-  visit(sourceFile, (node) => {
+  visitNode(sourceFile, (node) => {
     const start = node.getStart(sourceFile);
     const end = node.getEnd();
     if (start <= offset && offset <= end && (best === null || node.getWidth(sourceFile) <= best.getWidth(sourceFile))) {
@@ -2557,7 +2559,7 @@ function smallestNodeAt(sourceFile: ts.SourceFile, offset: number): ts.Node | nu
 
 function smallestNodeContaining(sourceFile: ts.SourceFile, start: number, end: number): ts.Node | null {
   let best: ts.Node | null = null;
-  visit(sourceFile, (node) => {
+  visitNode(sourceFile, (node) => {
     const nodeStart = node.getStart(sourceFile);
     const nodeEnd = node.getEnd();
     if (nodeStart <= start && end <= nodeEnd && (best === null || node.getWidth(sourceFile) <= best.getWidth(sourceFile))) {
@@ -2569,7 +2571,7 @@ function smallestNodeContaining(sourceFile: ts.SourceFile, start: number, end: n
 
 function nodeAtExactSpan(sourceFile: ts.SourceFile, span: SourceSpan): ts.Node | null {
   let matched: ts.Node | null = null;
-  visit(sourceFile, (node) => {
+  visitNode(sourceFile, (node) => {
     if (matched !== null) {
       return;
     }
@@ -2695,7 +2697,7 @@ function typeLocationNode(node: ts.Node): ts.Node {
   return declarationNameNode(node) ?? node;
 }
 
-function symbolForNode(checker: ts.TypeChecker, node: ts.Node): ts.Symbol | null {
+function symbolForTypeLocationNode(checker: ts.TypeChecker, node: ts.Node): ts.Symbol | null {
   const symbol = checker.getSymbolAtLocation(typeLocationNode(node));
   return symbol ?? null;
 }
@@ -2779,12 +2781,10 @@ function compareReferences(left: TypeScriptReferenceEntry, right: TypeScriptRefe
     || Number(right.definition) - Number(left.definition);
 }
 
-function compareExportSurfaceEntries(left: TypeScriptExportSurfaceEntry, right: TypeScriptExportSurfaceEntry): number {
-  return left.surfaceFile.repoPath.localeCompare(right.surfaceFile.repoPath)
-    || left.exportName.localeCompare(right.exportName);
-}
-
-function compareExportNameEntries(left: TypeScriptExportNameEntry, right: TypeScriptExportNameEntry): number {
+function compareExportRows(
+  left: TypeScriptExportSurfaceEntry | TypeScriptExportNameEntry,
+  right: TypeScriptExportSurfaceEntry | TypeScriptExportNameEntry,
+): number {
   return left.surfaceFile.repoPath.localeCompare(right.surfaceFile.repoPath)
     || left.exportName.localeCompare(right.exportName);
 }
@@ -2834,13 +2834,10 @@ function compareRefactorActions(left: TypeScriptRefactorActionRow, right: TypeSc
     || left.actionName.localeCompare(right.actionName);
 }
 
-function compareQuickInfoEntries(left: TypeScriptQuickInfoEntry, right: TypeScriptQuickInfoEntry): number {
-  return left.file.repoPath.localeCompare(right.file.repoPath)
-    || left.span.start - right.span.start
-    || left.kind.localeCompare(right.kind);
-}
-
-function compareHighlights(left: TypeScriptHighlightEntry, right: TypeScriptHighlightEntry): number {
+function compareSourceSpanKindEntries(
+  left: TypeScriptQuickInfoEntry | TypeScriptHighlightEntry,
+  right: TypeScriptQuickInfoEntry | TypeScriptHighlightEntry,
+): number {
   return left.file.repoPath.localeCompare(right.file.repoPath)
     || left.span.start - right.span.start
     || left.kind.localeCompare(right.kind);
@@ -2881,18 +2878,6 @@ function compareOptionalNumber(left: number | undefined, right: number | undefin
     return 1;
   }
   return left - right;
-}
-
-function visit(node: ts.Node, visitor: (node: ts.Node) => void): void {
-  visitor(node);
-  ts.forEachChild(node, (child) => visit(child, visitor));
-}
-
-function programSourceFileIdentity(
-  project: SourceProject,
-  sourceFile: ts.SourceFile,
-): SourceFileIdentity {
-  return project.requiredSourceFileIdentity(sourceFile);
 }
 
 function transientFileIdentityForPath(project: SourceProject, fileName: string): SourceFileIdentity {

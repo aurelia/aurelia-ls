@@ -36,6 +36,11 @@ Required shapes:
 - evidence roles and confidence/open-seam boundaries
 - continuation handles back to exact source
 
+Atlas `product.architecture` now exposes `field-provenance` rows for source-level `FieldProvenance` construction sites.
+Use that lane when deciding whether a fact needs field-level provenance or whether product/source provenance is the more
+honest shape. In particular, authored TS/HTML/configuration facts may need field spans, while framework-fixed catalog
+facts should not gain false edit precision just because every product field can technically receive a provenance handle.
+
 ### Cache And Invalidation
 
 The product must know which semantic facts become stale when source changes.
@@ -156,7 +161,7 @@ inquiry algebra.
 Mixed monorepos need a cheap project-shape lane before app-world opening. A stress run may intentionally open every
 discovered package, but product flows need to decide whether they are asking for app entrypoints, resource libraries,
 Aurelia packages without app facade evidence, or all-project pressure. Semantic-runtime summary rows now expose
-source-role counts, likely-entrypoint filename signals, manifest dependency counts for `aurelia` / `@aurelia/*`, and
+source-role counts, import/receiver-grounded Aurelia app entrypoint signals, manifest dependency counts for `aurelia` / `@aurelia/*`, and
 source-level Aurelia facade signals from parsed imports, default imports, namespace imports, constructor calls,
 `.register(...)`, `.app(...)`, and `.enhance(...)`. Atlas should keep improving the corresponding workspace/package projections so
 future agents can pick scope from architecture evidence instead of discovering the cost only after
@@ -164,8 +169,67 @@ TypeChecker/static-evaluation work has already run. Shape-filtered app pressure 
 is the current manual lane for validating that distinction. The nested TypeSystem profile shows whether the remaining
 cost is TS program creation, checker creation, project-option discovery, or source indexing.
 Semantic-runtime app pressure should default to generalized detail for proprietary roots. Source-assignment strictness
-and open-seam reason buckets are durable pressure; raw row wording is local debugging material unless it has been
-manually abstracted.
+is now carried as typed `sourceAssignmentReasonKinds` on binding data-flow rows; open-seam reason buckets are durable
+pressure. Raw row wording is local debugging material unless it has been manually abstracted.
+LSP-like template pressure adds a second scope axis: hydrated app templates versus standalone authoring templates.
+External monorepo sampling showed many recognized custom-element templates outside app-root compiler worlds. Those
+templates must be analyzable for editor/MCP/AOT-style questions, but they should not inflate app topology or route
+activation facts. Semantic-runtime now exposes an opt-in authoring-template lane with source-file selection through
+`sourceFilePath` / `authoringTemplateSourceFiles`; the per-project template cap remains a pressure fallback, not the
+preferred product shape. Source-file-selected authoring opens let callers pay for the template files they are asking
+about instead of compiling a whole resource library. The runtime facade now exposes direct `templateCompletions(...)`
+and `templateCursorInfo(...)` cursor-locus queries that first reuse any opened app-world whose compiled template
+already owns the cursor source, then fall back to a stable project-wide authoring open. Future hover, definition,
+diagnostics, and explanation entrypoints should reuse that cursor-locus boot protocol instead of making callers stitch
+`openApp(...)`, resource lookup, and cursor answer construction together. Do not make direct cursor calls materialize
+one app variant per cursor file; repeated LSP queries in the same runtime must converge on existing app context or a
+stable project authoring world, otherwise shared kernel publication will duplicate base records.
+Cursor pressure should separate expected-empty static platform values from real semantic gaps. The current
+semantic-runtime pressure script prints completion pressure classes, public API answer mismatches, template-resource
+miss reasons, and value-domain gaps so raw `miss` counts do not hide that distinction. Finite checker-backed bindable
+domains can already produce literal `attribute-value` candidates, and the public API completion wrapper is checked
+against the lower-level inquiry answer on sampled cursors. Resource re-selection for source cursors must match authored
+HTML spans, not only broad template-source carriers. Open-ended checker-backed scalar bindables should read as
+expected-empty completion sites rather than missing semantic domains. Inline multi-binding custom-attribute values can
+close at the resource-definition layer by offering bindable segment names. Router `load` and `href` primary values now
+close from modeled `RouteConfig` product details threaded through the completion query, producing `router-route`
+candidates without source rescanning; `href` stays open-ended because the framework can leave external URLs external.
+Static i18n `t` values now close from modeled translation-key products admitted from static `I18nConfiguration`
+resources, keeping translation-key completion as configuration/i18n substrate rather than a template-source scan. JSON
+resource imports use the evaluator asset-module source map so key products can preserve authored JSON property spans.
+Segment values that resolve to a custom-attribute bindable now report bindable-domain pressure, so
+untyped plugin keys stay separate from whole-resource grammar gaps. Remaining static-value pressure is mostly
+custom template-controller and genuinely resource-owned custom-attribute grammars that need framework/plugin-shaped
+domain models rather than ad hoc string suggestions. Built-in template-controller primary values are owned by
+`template-controller-semantics.ts`: open framework values such as `case="..."` are expected-empty completion sites,
+while secondary bindables and custom/plugin template-controller grammars should keep surfacing as pressure until their
+domain is modeled. Listener-member pressure should stay grounded in Aurelia runtime binding semantics: listener
+expressions get a transient `$event` override-context slot, and listener-returned callback functions receive that event
+as their first argument. Completion/hover/diagnostic APIs should read those facts from the expression-scope and
+TypeChecker substrate instead of carrying listener-specific answer shims. Function-valued bindable expressions should
+likewise flow target-side callable types into the expression evaluator as contextual types. If the app or plugin only
+publishes `unknown`, `any`, or index-signature-only surfaces, keep that as typing pressure rather than inventing member
+candidates.
+Semantic-runtime cursor pressure should preserve that split mechanically: public answers may still report
+`expression-member-owner-type:*` missing inputs so LSP callers can explain weak owner surfaces, while aggregate pressure
+should bucket candidate-less expression-member sites as `weak-type:*`. Rows only become product gaps again when a
+concrete typed member was dropped by scope construction, expression evaluation, or TypeChecker projection.
+Cursor-shaped authoring APIs should share the same selection substrate. `TemplateCompletions` and `TemplateCursorInfo`
+both reselect resources by authored HTML spans and both compare against the lower-level cursor adapter in pressure runs;
+future hover, definition, diagnostics, and explanation APIs should build on that cursor-info footing before adding their
+own source scans. Cursor-info now exposes a selected bindable row when classification or an active value site resolves
+one, which keeps bindable definition/hover pressure on the compiler-world resource substrate instead of a later
+attribute-name rescan. Pressure runs should also track source-bearing target coverage for template, HTML node/attribute,
+value site, selected definition, selected bindable, and member-owner type rows; that is the LSP pressure signal for
+whether hover and definition can be built from existing cursor-info facts. Derived hover targets, navigation targets,
+diagnostic signals, and compact LSP envelopes should remain aggregate and source-neutral; they are pressure counters for
+feature footing, not a second LSP implementation path.
+Diagnostic wording needs a policy split. Aurelia framework errors are grounded in framework source (`ErrorNames`,
+`Events`, `createMappedError`, `getMessage`, raw `Error` throws); semantic-runtime authoring diagnostics can also be
+useful LSP guidance, but they should not be described as framework errors unless `framework.errors` or direct framework
+source supports that claim. If semantic-runtime intentionally understands a web/ECMAScript/Aurelia edge better than the
+framework currently does, record that separately as a possible framework improvement instead of silently upgrading the
+product warning into framework truth.
 
 Atlas workspace pressure now uses the same shape vocabulary for admitted package topology: `aurelia-app`,
 `aurelia-resource-library`, `aurelia-package`, and `non-aurelia`. Keep package admission role as the origin axis
@@ -179,6 +243,11 @@ Router href materialization should not guess across host-environment boundaries.
 classifies external links from explicit `external` / `data-external` attributes or a concrete string value that parses as
 an external URL. If a binding-source value reduces to `process.env`, browser globals, or another host boundary, the
 semantic-runtime route-instruction seam is honest until a caller supplies an explicit host-environment value policy.
+Router-resource context ownership should be container-shaped, not only route-config-definition-shaped. Framework `load`
+and `href` resolve `IContextRouter` / `IRouteContext` through the custom-attribute controller's container chain, and the
+root route context also registers a root-context router for app-root descendants. Semantic-runtime should therefore use
+modeled controller/container ancestry as the primary route-context source and treat component-definition matching as a
+fallback for cases where the container chain has not been modeled deeply enough.
 
 Public-plugin pressure exposed resource factories as a distinct app-building shape: a module can export constants whose
 values are classes returned from a local factory, with the resource decorator inside the factory body and the name
@@ -187,6 +256,12 @@ plugin-specific rule: interpret the local factory, preserve boundary values for 
 class declarations inside the call environment, and let resource recognition read evaluated class bindings with their
 captured environment. Atlas plugin/workspace architecture can still count syntax carriers, but semantic-runtime is the
 authority for whether factory-produced resource definitions actually materialize.
+
+External table-like plugin pressure exposed a broader Aurelia rule: target-to-source bindable assignments can introduce
+runtime-only scope names before later expressions read them. Model that as template scope timing plus binding data-flow
+strictness, not as plugin-local template locals. The write expression remains checked against the pre-assignment scope;
+later sibling/descendant expressions can see a runtime-only slot, and diagnostics can still distinguish that slot from
+a declared TypeChecker member.
 
 ### Stable Handles Across Compression
 

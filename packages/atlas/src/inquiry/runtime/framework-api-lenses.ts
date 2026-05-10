@@ -17,6 +17,7 @@ import {
 import {
   sourceRangeKey,
   usageCallAggregate,
+  usageCallMatchesFilters,
   type SourceProject,
   type TypeScriptMemberAccessKindId,
   type TypeScriptUsageCallAggregate,
@@ -50,9 +51,9 @@ import {
   sourceIndexBasis,
 } from "./framework-support.js";
 import {
+  callSiteArgumentFilters,
   readInquiryFilters,
   singletonRecordFilter,
-  stringField,
   stringFiltersFromRecord,
 } from "./lens-filter-utils.js";
 
@@ -179,14 +180,14 @@ const FACET_ROW_FAMILY = new PagedRowFamily<AureliaApiFacetRow>({
 const MERGE_EDGE_ROW_FAMILY = new PagedRowFamily<AureliaApiMergeEdgeRow>({
   id: "framework.api:merge-edges",
   rowLabel: "Aurelia API merge edge row(s)",
-  evidenceForRow: evidenceForMergeEdge,
+  evidenceForRow: evidenceForTypeFactSourceRow,
   continuationsForPage: mergeEdgeContinuations,
 });
 
 const SHAPE_EDGE_ROW_FAMILY = new PagedRowFamily<AureliaApiShapeEdgeRow>({
   id: "framework.api:shape-edges",
   rowLabel: "Aurelia API shape edge row(s)",
-  evidenceForRow: evidenceForShapeEdge,
+  evidenceForRow: evidenceForTypeFactSourceRow,
   continuationsForPage: shapeEdgeContinuations,
 });
 
@@ -209,14 +210,14 @@ const MEMBER_DECLARATION_ROW_FAMILY =
   new PagedRowFamily<FrameworkApiMemberDeclarationRow>({
     id: "framework.api:member-declarations",
     rowLabel: "Aurelia API member declaration row(s)",
-    evidenceForRow: evidenceForMemberDeclaration,
+    evidenceForRow: evidenceForTypeFactSourceRow,
     continuationsForPage: memberDeclarationContinuations,
   });
 
 const USAGE_ROW_FAMILY = new PagedRowFamily<AureliaApiUsageRow>({
   id: "framework.api:usages",
   rowLabel: "Aurelia API usage row(s)",
-  evidenceForRow: evidenceForUsage,
+  evidenceForRow: evidenceForTypeFactSourceRow,
   continuationsForPage: usageContinuations,
 });
 
@@ -565,7 +566,7 @@ function usageMatches(
     (filters.ownerKind === undefined || row.owner.ownerKind === filters.ownerKind) &&
     (filters.ownerMemberName === undefined ||
       row.owner.ownerMemberName === filters.ownerMemberName) &&
-    apiUsageCallMatches(row, filters) &&
+    usageCallMatchesFilters(row.call, filters) &&
     frameworkApiQueryMatches(filters.query, [
       row.id,
       row.subjectName,
@@ -588,32 +589,6 @@ function usageMatches(
       row.summary,
     ])
   );
-}
-
-function apiUsageCallMatches(
-  row: AureliaApiUsageRow,
-  filters: FrameworkApiFilters,
-): boolean {
-  return (
-    (filters.callCalleeName === undefined ||
-      row.call?.calleeName === filters.callCalleeName) &&
-    (hasApiCallArgumentFilter(filters)
-      ? row.call?.arguments.some((argument) =>
-          (filters.callArgumentText === undefined ||
-            argument.text === filters.callArgumentText) &&
-          (filters.callArgumentSymbolName === undefined ||
-            argument.symbolName === filters.callArgumentSymbolName) &&
-          (filters.callArgumentFullyQualifiedName === undefined ||
-            argument.fullyQualifiedName === filters.callArgumentFullyQualifiedName),
-        ) === true
-      : true)
-  );
-}
-
-function hasApiCallArgumentFilter(filters: FrameworkApiFilters): boolean {
-  return filters.callArgumentText !== undefined ||
-    filters.callArgumentSymbolName !== undefined ||
-    filters.callArgumentFullyQualifiedName !== undefined;
 }
 
 function apiUsageConsumerRows(
@@ -644,21 +619,19 @@ function apiUsageConsumerRow(
     ].join(":"),
     subjectId: first.subjectId,
     subjectName: first.subjectName,
-    ...(first.memberName === undefined ? {} : { memberName: first.memberName }),
+    memberName: first.memberName,
     ownerKind: owner.ownerKind,
     ownerName: owner.ownerName,
-    ...(owner.ownerMemberKind === undefined ? {} : { ownerMemberKind: owner.ownerMemberKind }),
-    ...(owner.ownerMemberName === undefined ? {} : { ownerMemberName: owner.ownerMemberName }),
+    ownerMemberKind: owner.ownerMemberKind,
+    ownerMemberName: owner.ownerMemberName,
     consumerPackageId: first.consumerPackageId,
     consumerPackageName: first.consumerPackageName,
     usageCount: usages.length,
     usageRoles: countBy(usages, (usage) => usage.role),
     ...usageCallAggregate(usages),
     firstSource: first.source,
-    ...(owner.ownerSource === undefined ? {} : { ownerSource: owner.ownerSource }),
-    ...(owner.ownerMemberSource === undefined
-      ? {}
-      : { ownerMemberSource: owner.ownerMemberSource }),
+    ownerSource: owner.ownerSource,
+    ownerMemberSource: owner.ownerMemberSource,
     summary: `${first.subjectName}${first.memberName === undefined ? "" : `.${first.memberName}`} has ${usages.length} usage site(s) owned by ${owner.ownerName}${owner.ownerMemberName === undefined ? "" : `.${owner.ownerMemberName}`}.`,
   }];
 }
@@ -865,14 +838,6 @@ function evidenceForFacet(row: AureliaApiFacetRow): Evidence {
   );
 }
 
-function evidenceForMergeEdge(row: AureliaApiMergeEdgeRow): Evidence {
-  return evidenceForSourceRow(row.id, EvidenceKind.TypeFact, row.summary, row.source, row);
-}
-
-function evidenceForShapeEdge(row: AureliaApiShapeEdgeRow): Evidence {
-  return evidenceForSourceRow(row.id, EvidenceKind.TypeFact, row.summary, row.source, row);
-}
-
 function evidenceForImplementationShape(
   row: AureliaApiImplementationShapeRow,
 ): Evidence {
@@ -887,16 +852,6 @@ function evidenceForMemberSlot(row: AureliaApiMemberSlotRow): Evidence {
     row.firstSource,
     compactMemberSlotRow(row),
   );
-}
-
-function evidenceForMemberDeclaration(
-  row: FrameworkApiMemberDeclarationRow,
-): Evidence {
-  return evidenceForSourceRow(row.id, EvidenceKind.TypeFact, row.summary, row.source, row);
-}
-
-function evidenceForUsage(row: AureliaApiUsageRow): Evidence {
-  return evidenceForSourceRow(row.id, EvidenceKind.TypeFact, row.summary, row.source, row);
 }
 
 function evidenceForApiUsageConsumer(row: FrameworkApiUsageConsumerRow): Evidence {
@@ -918,6 +873,16 @@ function evidenceForApiUsageConsumer(row: FrameworkApiUsageConsumerRow): Evidenc
     },
   );
 }
+
+function evidenceForTypeFactSourceRow(row: FrameworkApiSourceEvidenceRow): Evidence {
+  return evidenceForSourceRow(row.id, EvidenceKind.TypeFact, row.summary, row.source, row);
+}
+
+type FrameworkApiSourceEvidenceRow = {
+  readonly id: string;
+  readonly summary: string;
+  readonly source: SourceRange;
+};
 
 function evidenceForSourceRow(
   id: string,
@@ -1046,7 +1011,7 @@ function mergeEdgeContinuations(
   nextOffset: number | undefined,
   limit: number,
 ): readonly Continuation[] {
-  return edgeContinuations(inquiry, "framework.api:merge-edges", rows, nextOffset, limit, evidenceForMergeEdge);
+  return edgeContinuations(inquiry, "framework.api:merge-edges", rows, nextOffset, limit, evidenceForTypeFactSourceRow);
 }
 
 function shapeEdgeContinuations(
@@ -1055,7 +1020,7 @@ function shapeEdgeContinuations(
   nextOffset: number | undefined,
   limit: number,
 ): readonly Continuation[] {
-  return edgeContinuations(inquiry, "framework.api:shape-edges", rows, nextOffset, limit, evidenceForShapeEdge);
+  return edgeContinuations(inquiry, "framework.api:shape-edges", rows, nextOffset, limit, evidenceForTypeFactSourceRow);
 }
 
 function implementationShapeContinuations(
@@ -1107,7 +1072,7 @@ function memberDeclarationContinuations(
         "framework.api:member-declarations",
         index,
         row.source,
-        evidenceForMemberDeclaration(row),
+        evidenceForTypeFactSourceRow(row),
       ),
     ),
   ];
@@ -1122,13 +1087,11 @@ function usageContinuations(
   return [
     ...nextPage(inquiry, "framework.api:usages", nextOffset, limit),
     ...rows.slice(0, 4).flatMap((row, index) => [
-      ...sourceAndTypeContinuations(inquiry, "framework.api:usages", index, row.source, evidenceForUsage(row)),
+      ...sourceAndTypeContinuations(inquiry, "framework.api:usages", index, row.source, evidenceForTypeFactSourceRow(row)),
       projectionForSubject(inquiry, row.subjectName, "usage-consumers", index, {
-        ...(row.memberName === undefined ? {} : { memberName: row.memberName }),
+        memberName: row.memberName,
         ownerName: row.owner.ownerName,
-        ...(row.owner.ownerMemberName === undefined
-          ? {}
-          : { ownerMemberName: row.owner.ownerMemberName }),
+        ownerMemberName: row.owner.ownerMemberName,
       }),
     ]),
   ];
@@ -1153,11 +1116,9 @@ function apiUsageConsumerContinuations(
           evidence,
         ),
         projectionForSubject(inquiry, row.subjectName, "usages", index, {
-          ...(row.memberName === undefined ? {} : { memberName: row.memberName }),
+          memberName: row.memberName,
           ownerName: row.ownerName,
-          ...(row.ownerMemberName === undefined
-            ? {}
-            : { ownerMemberName: row.ownerMemberName }),
+          ownerMemberName: row.ownerMemberName,
         }),
       ];
       if (row.ownerSource !== undefined) {
@@ -1212,7 +1173,7 @@ function apiUsageConsumerContinuations(
                   row.callArgumentFullyQualifiedNames,
                   "argumentFullyQualifiedName",
                 ),
-                ...callSiteFiltersFromFrameworkFilters(inquiry.filters),
+                ...callSiteArgumentFilters(inquiry.filters),
               },
             ),
           );
@@ -1286,23 +1247,6 @@ function callSitesContinuation(
     "Call sites inside an Aurelia API usage owner.",
     { priority: ContinuationPriority.Secondary, filters },
   );
-}
-
-function callSiteFiltersFromFrameworkFilters(
-  filters: Inquiry["filters"],
-): Record<string, string> {
-  if (filters === undefined) {
-    return {};
-  }
-  return {
-    ...stringField(filters, "callArgumentText", "argumentText"),
-    ...stringField(filters, "callArgumentSymbolName", "argumentSymbolName"),
-    ...stringField(
-      filters,
-      "callArgumentFullyQualifiedName",
-      "argumentFullyQualifiedName",
-    ),
-  };
 }
 
 function projectionForSubject(

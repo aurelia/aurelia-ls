@@ -18,15 +18,29 @@ These scripts should check static coherence rather than trying to prove runtime 
 - [product-architecture-pressure.ts](product-architecture-pressure.ts) prints compact current semantic-runtime
   large-module, cross-area import, large-class, zero-method `*Input` envelope, behavioral `*Input` suffix, and
   function-call pressure rows with request timing and source line anchors from `product.architecture`. It also prints
-  duplicate top-level helper-name pressure so small repeated helpers can be treated as possible split-brain before
-  manual grep. Use `pnpm --filter @aurelia-ls/atlas pressure:product-architecture:detail` when the compact rows hide a
-  needed metric or lower-ranked row.
+  duplicate top-level helper-name pressure from the `function-duplicates` projection so small repeated helpers can be
+  treated as possible split-brain before manual grep without paging every function row into the script. The duplicate
+  lane uses an AST body-shape fingerprint that normalizes local bindings and folds simple equivalent control flow such
+  as ternaries, `if`/early-return pairs, expression branches, and temporary return aliases. Product-record pressure
+  groups KernelStoreRecord construction sites, KernelStoreBatch commit sites, and FieldProvenance construction sites by
+  record kind, product vocabulary expression, field name, module, and owner so kernel/provenance flow can be inspected
+  before opening source.
+  Use `pnpm --filter @aurelia-ls/atlas pressure:product-architecture:detail` when the compact rows hide a needed metric
+  or lower-ranked row.
 - [framework-resources-pressure.ts](framework-resources-pressure.ts) prints resource convergence rollups from
   `framework.resources`, including carrier-kind/source-role counts, exact source-site role counts, and
   definition-vs-declaration provenance counts. Use it when resource convergence needs provenance pressure before
   following individual rows into admission, compiler, rendering, or materialization.
+- [framework-errors-pressure.ts](framework-errors-pressure.ts) prints the framework `ErrorNames`/`Events` code topology
+  from `framework.errors`: package/code/message counts, usage mechanisms, throw/warning effects, and code-range
+  buckets. Use it before promoting semantic-runtime diagnostics from authoring guidance into framework-grounded errors.
 - [framework-router-pressure.ts](framework-router-pressure.ts) prints the framework router rollup, curated route-flow
   spine health, relationship axis distributions, and flow self-audit rows from `framework.router`.
+- [bridge-aulink-pressure.ts](bridge-aulink-pressure.ts) prints auLink catalog/placement coverage, mirror role-evidence
+  gaps, mirror rows with role evidence but no emulation obligations, and usage divergence rollups. Use it after
+  product or LSP pressure flattens out to decide whether the next work is missing product links, missing framework
+  topology, or missing obligation classification. The script prints per-projection timings because usage comparison and
+  mirror filters can be much heavier than catalog gap checks.
 - [plugin-architecture-pressure.ts](plugin-architecture-pressure.ts) prints public plugin package topology and
   source-surface mechanism rollups from the filter-aware `plugin.architecture` summary projection, including
   bindable carrier mechanisms. It intentionally reads aggregate rollup maps instead of paging every plugin surface.
@@ -43,9 +57,14 @@ These scripts should check static coherence rather than trying to prove runtime 
   measuring, separates measured analysis time from warm request overhead, calls out hot daemon reads that reuse a
   cached analysis profile, and reports the source-scan phase in scanned-file units rather than cumulative surface rows.
 - [atlas-self-pressure.ts](atlas-self-pressure.ts) prints compact source-file shape/size/coupling, class density,
-  function density, duplicate top-level helper-name pressure, and high multi-axis pressure rows plus request timing and
-  source line anchors from `atlas.self` so Atlas refactors can start from source-backed pressure rather than raw file
-  browsing. Use `pnpm --filter @aurelia-ls/atlas pressure:self:detail` when the compact rows hide a needed metric.
+  function density, duplicate top-level helper-name pressure, repeated function body-shape pressure, optional
+  object-spread construction pressure, and high multi-axis pressure rows plus request timing and source line anchors
+  from `atlas.self` so Atlas refactors can start from source-backed pressure rather than raw file browsing. Its helper
+  lanes use the same AST body-shape fingerprint as product pressure, including a projection that catches helpers with
+  different names but equivalent canonical control flow; the compact script filters out very small grouped declarations
+  so coincidental key-builder shapes do not crowd out mergeable helpers. The object-spread lane catches `...(cond ? {} : { prop })` style
+  construction, including isolated low-pressure envelopes, so those rows can be simplified intentionally instead of found by grep. Use
+  `pnpm --filter @aurelia-ls/atlas pressure:self:detail` when the compact rows hide a needed metric.
 - [framework-emulation-symbols-report.ts](framework-emulation-symbols-report.ts) writes the deterministic framework
   emulation Markdown golden by calling the named session report endpoint. The report currently uses
   `StandardConfiguration` as a broad canary, not as the only configuration shape Atlas can reason about.
@@ -54,8 +73,9 @@ These scripts should check static coherence rather than trying to prove runtime 
 - [inquiry-session-playground.ts](inquiry-session-playground.ts) exercises idempotent daemon startup, protocol calls, self-check, continuation following, and polite shutdown.
 - [inquiry-session-shutdown.ts](inquiry-session-shutdown.ts) stops an existing local inquiry daemon without starting a new one.
 - [script-output.ts](script-output.ts) owns shared pressure-script formatting helpers such as answer assertions, value
-  extraction, sorted count maps, empty row markers, source labels, count labels, duplicate function-name grouping, and
-  row counting. Keep lane selection in the individual scripts, and put only repeated terminal output mechanics here.
+  extraction, sorted count maps, empty row markers, source labels, count labels, self-pressure duplicate function-name
+  grouping, and row counting. Keep lane selection in the individual scripts, and put only repeated terminal output
+  mechanics here.
 
 ## Dependency Rule
 

@@ -63,6 +63,33 @@ export type HtmlTextField =
   | 'text'
   | 'source';
 
+export interface HtmlAttributeLike {
+  readonly rawName: string | null;
+  readonly rawValue?: string;
+}
+
+export interface HtmlAttributeOwnerLike {
+  readonly attributes?: readonly HtmlAttributeLike[];
+}
+
+export function normalizeHtmlTagName(tagName: string): string {
+  return tagName.toUpperCase();
+}
+
+export function htmlAttributeValue(
+  owner: HtmlAttributeOwnerLike | null | undefined,
+  name: string,
+): string | null {
+  return owner?.attributes?.find((attribute) => attribute.rawName?.toLowerCase() === name)?.rawValue ?? null;
+}
+
+export function hasHtmlAttribute(
+  owner: HtmlAttributeOwnerLike | null | undefined,
+  name: string,
+): boolean {
+  return owner?.attributes?.some((attribute) => attribute.rawName?.toLowerCase() === name) ?? false;
+}
+
 export type HtmlCommentField =
   | 'text'
   | 'semanticKind'
@@ -276,3 +303,75 @@ export type HtmlIrNode =
   | HtmlText
   | HtmlComment
   | HtmlDoctype;
+
+/** Element owner row for an authored attribute in the parsed HTML IR. */
+export class HtmlElementAttributeOwner {
+  get tagName(): string {
+    return this.element.tagName;
+  }
+
+  get namespace(): HtmlElement['namespace'] {
+    return this.element.namespace;
+  }
+
+  constructor(
+    readonly element: HtmlElement,
+    readonly reference: HtmlNodeReference,
+    readonly attributes: readonly HtmlAttribute[],
+  ) {}
+}
+
+export function htmlElementAttributeOwnersByAttributeProduct(
+  nodes: readonly HtmlIrNode[],
+  attributes: readonly HtmlAttribute[],
+): ReadonlyMap<ProductHandle, HtmlElementAttributeOwner> {
+  const owners = htmlElementAttributeOwners(nodes, attributes);
+  const ownersByAttribute = new Map<ProductHandle, HtmlElementAttributeOwner>();
+  for (const owner of owners) {
+    for (const attribute of owner.element.attributes) {
+      if (attribute.productHandle != null) {
+        ownersByAttribute.set(attribute.productHandle, owner);
+      }
+    }
+  }
+  return ownersByAttribute;
+}
+
+export function htmlElementAttributeOwnersByElementProduct(
+  nodes: readonly HtmlIrNode[],
+  attributes: readonly HtmlAttribute[],
+): ReadonlyMap<ProductHandle, HtmlElementAttributeOwner> {
+  return new Map(htmlElementAttributeOwners(nodes, attributes).map((owner) => [owner.element.productHandle, owner]));
+}
+
+export function htmlElementLookupName(
+  element: HtmlElement,
+  owner: HtmlElementAttributeOwner | null = null,
+): string {
+  const asElement = owner?.attributes.find((attribute) => attribute.rawName.toLowerCase() === 'as-element') ?? null;
+  return asElement == null || asElement.rawValue === ''
+    ? element.tagName.toLowerCase()
+    : asElement.rawValue.toLowerCase();
+}
+
+function htmlElementAttributeOwners(
+  nodes: readonly HtmlIrNode[],
+  attributes: readonly HtmlAttribute[],
+): readonly HtmlElementAttributeOwner[] {
+  const attributesByProduct = new Map(attributes.map((attribute) => [attribute.productHandle, attribute]));
+  const owners: HtmlElementAttributeOwner[] = [];
+  for (const node of nodes) {
+    if (!(node instanceof HtmlElement)) {
+      continue;
+    }
+    const owner = new HtmlElementAttributeOwner(
+      node,
+      node.toReference(),
+      node.attributes
+        .map((reference) => reference.productHandle == null ? null : attributesByProduct.get(reference.productHandle) ?? null)
+        .filter((attribute): attribute is HtmlAttribute => attribute != null),
+    );
+    owners.push(owner);
+  }
+  return owners;
+}

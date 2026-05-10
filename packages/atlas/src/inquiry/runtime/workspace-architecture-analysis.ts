@@ -7,6 +7,7 @@ import ts from "typescript";
 import {
   countBy,
   countByWhere,
+  countWhere,
   uniqueSortedStrings,
 } from "../../collections.js";
 import {
@@ -41,6 +42,8 @@ import {
   aureliaResolveFirstArgument,
   aureliaRegistrationFactoryMechanismForCall,
   isContainerLookupMethodName,
+  isAureliaContainerReference,
+  isAureliaContainerReceiverTypeNode,
   isAureliaConstructorReference,
   isAureliaKernelReference,
   isAureliaReceiverEntityName,
@@ -48,12 +51,14 @@ import {
   isInsideImportDeclaration,
   isImportedRouterConfigurationExpression,
   isImportedRouterDecorator,
+  isReceiverDeclaration,
   isRouterInstanceMethodName,
   isRouterReceiverInitializer,
   isRouterReceiverTypeNode,
   isRouterReceiverValueExpression,
   readAureliaSourceImportsInto,
   readCommonJsRequireModuleSpecifier,
+  type ReceiverDeclaration,
 } from "./aurelia-source-imports.js";
 import {
   aureliaConventionResourceForClass,
@@ -155,6 +160,7 @@ export interface WorkspaceArchitectureRollup {
   readonly configDiagnosticCount: number;
   readonly surfaceKinds: Readonly<Record<string, number>>;
   readonly surfaceMechanisms: Readonly<Record<string, number>>;
+  readonly appEntrypointMechanisms: Readonly<Record<string, number>>;
   readonly manifestDependencyMechanisms: Readonly<Record<string, number>>;
   readonly resourceMechanisms: Readonly<Record<string, number>>;
   readonly configurationMechanisms: Readonly<Record<string, number>>;
@@ -438,12 +444,12 @@ export function workspaceRollupForRows(
     publicPluginPackageCount: packages.filter((row) => row.admissionRole === "public-plugin").length,
     sourceFileCount: packages.reduce((sum, row) => sum + row.sourceFileCount, 0),
     surfaceCount: surfaces.length,
-    entrypointCount: countSurfaceKind(surfaces, "app-entrypoint"),
-    resourceCount: countSurfaceKind(surfaces, "resource"),
-    bindableCount: countSurfaceKind(surfaces, "bindable"),
-    registrationCount: countSurfaceKind(surfaces, "registration"),
-    routerSurfaceCount: countSurfaceKind(surfaces, "router"),
-    templateReferenceCount: countSurfaceKind(surfaces, "template-reference"),
+    entrypointCount: countWhere(surfaces, (row) => row.kind === "app-entrypoint"),
+    resourceCount: countWhere(surfaces, (row) => row.kind === "resource"),
+    bindableCount: countWhere(surfaces, (row) => row.kind === "bindable"),
+    registrationCount: countWhere(surfaces, (row) => row.kind === "registration"),
+    routerSurfaceCount: countWhere(surfaces, (row) => row.kind === "router"),
+    templateReferenceCount: countWhere(surfaces, (row) => row.kind === "template-reference"),
     appSourceFileCount: packages.reduce((sum, row) => sum + row.appSourceFileCount, 0),
     templateFileCount: packages.reduce((sum, row) => sum + row.templateFileCount, 0),
     styleFileCount: packages.reduce((sum, row) => sum + row.styleFileCount, 0),
@@ -455,6 +461,11 @@ export function workspaceRollupForRows(
     configDiagnosticCount,
     surfaceKinds: countBy(surfaces, (row) => row.kind),
     surfaceMechanisms: countBy(surfaces, (row) => row.mechanism),
+    appEntrypointMechanisms: countByWhere(
+      surfaces,
+      (row) => row.kind === "app-entrypoint",
+      (row) => row.mechanism,
+    ),
     manifestDependencyMechanisms: countByWhere(
       surfaces,
       (row) => row.kind === "manifest-dependency",
@@ -715,17 +726,12 @@ function readWorkspaceSourceBindings(sourceFile: ts.SourceFile): WorkspaceSource
   return bindings;
 }
 
-type AureliaReceiverDeclaration =
-  | ts.VariableDeclaration
-  | ts.ParameterDeclaration
-  | ts.PropertyDeclaration;
-
 function collectAureliaReceiverBindings(
   sourceFile: ts.SourceFile,
   bindings: WorkspaceSourceBindings,
 ): void {
   const visit = (node: ts.Node): void => {
-    if (isAureliaReceiverDeclaration(node) && ts.isIdentifier(node.name) && declarationHasAureliaReceiverShape(node, bindings)) {
+    if (isReceiverDeclaration(node) && ts.isIdentifier(node.name) && declarationHasAureliaReceiverShape(node, bindings)) {
       bindings.aureliaReceiverNames.add(node.name.text);
     }
     if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
@@ -739,23 +745,12 @@ function collectAureliaReceiverBindings(
   visit(sourceFile);
 }
 
-function isAureliaReceiverDeclaration(node: ts.Node): node is AureliaReceiverDeclaration {
-  return ts.isVariableDeclaration(node)
-    || ts.isParameter(node)
-    || ts.isPropertyDeclaration(node);
-}
-
-type AureliaContainerReceiverDeclaration =
-  | ts.VariableDeclaration
-  | ts.ParameterDeclaration
-  | ts.PropertyDeclaration;
-
 function collectAureliaContainerReceiverBindings(
   sourceFile: ts.SourceFile,
   bindings: WorkspaceSourceBindings,
 ): void {
   const visit = (node: ts.Node): void => {
-    if (isAureliaContainerReceiverDeclaration(node) && ts.isIdentifier(node.name) && declarationHasAureliaContainerReceiverShape(node, bindings)) {
+    if (isReceiverDeclaration(node) && ts.isIdentifier(node.name) && declarationHasAureliaContainerReceiverShape(node, bindings)) {
       bindings.aureliaContainerReceiverNames.add(node.name.text);
     }
     if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
@@ -769,31 +764,14 @@ function collectAureliaContainerReceiverBindings(
   visit(sourceFile);
 }
 
-function isAureliaContainerReceiverDeclaration(
-  node: ts.Node,
-): node is AureliaContainerReceiverDeclaration {
-  return ts.isVariableDeclaration(node)
-    || ts.isParameter(node)
-    || ts.isPropertyDeclaration(node);
-}
-
 function declarationHasAureliaContainerReceiverShape(
-  node: AureliaContainerReceiverDeclaration,
+  node: ReceiverDeclaration,
   bindings: WorkspaceSourceBindings,
 ): boolean {
   return (
     isAureliaContainerReceiverTypeNode(node.type, bindings) ||
     isAureliaContainerReceiverInitializer(declarationInitializer(node), bindings)
   );
-}
-
-function isAureliaContainerReceiverTypeNode(
-  type: ts.TypeNode | undefined,
-  bindings: WorkspaceSourceBindings,
-): boolean {
-  return type !== undefined
-    && ts.isTypeReferenceNode(type)
-    && isAureliaContainerEntityName(type.typeName, bindings);
 }
 
 function isAureliaContainerReceiverInitializer(
@@ -828,7 +806,7 @@ function isAureliaContainerReceiverValueExpression(
 }
 
 function declarationHasAureliaReceiverShape(
-  node: AureliaReceiverDeclaration,
+  node: ReceiverDeclaration,
   bindings: WorkspaceSourceBindings,
 ): boolean {
   return (
@@ -868,17 +846,12 @@ function isAureliaReceiverValueExpression(
   );
 }
 
-type RouterReceiverDeclaration =
-  | ts.VariableDeclaration
-  | ts.ParameterDeclaration
-  | ts.PropertyDeclaration;
-
 function collectRouterReceiverBindings(
   sourceFile: ts.SourceFile,
   bindings: WorkspaceSourceBindings,
 ): void {
   const visit = (node: ts.Node): void => {
-    if (isRouterReceiverDeclaration(node) && ts.isIdentifier(node.name) && workspaceDeclarationHasRouterReceiverShape(node, sourceFile, bindings)) {
+    if (isReceiverDeclaration(node) && ts.isIdentifier(node.name) && workspaceDeclarationHasRouterReceiverShape(node, sourceFile, bindings)) {
       bindings.routerReceiverNames.add(node.name.text);
     }
     if (ts.isBinaryExpression(node) && node.operatorToken.kind === ts.SyntaxKind.EqualsToken) {
@@ -892,14 +865,8 @@ function collectRouterReceiverBindings(
   visit(sourceFile);
 }
 
-function isRouterReceiverDeclaration(node: ts.Node): node is RouterReceiverDeclaration {
-  return ts.isVariableDeclaration(node)
-    || ts.isParameter(node)
-    || ts.isPropertyDeclaration(node);
-}
-
 function workspaceDeclarationHasRouterReceiverShape(
-  node: RouterReceiverDeclaration,
+  node: ReceiverDeclaration,
   sourceFile: ts.SourceFile,
   bindings: WorkspaceSourceBindings,
 ): boolean {
@@ -932,21 +899,6 @@ function scanWorkspaceSourceFile(
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
-  if (isEntrypointSignalFile(sourceFile) && hasAureliaIntegration(rows)) {
-    const row = workspaceSourceRowForNode(
-      sourceProject,
-      sourceFile,
-      packageId,
-      packageName,
-      sourceFile,
-      "app-entrypoint",
-      "entry-module-name",
-      path.basename(sourceFile.fileName),
-    );
-    if (row !== null) {
-      rows.push(row);
-    }
-  }
   return rows;
 }
 
@@ -1492,22 +1444,6 @@ function workspacePackageRow(row: MutableWorkspacePackageRow): WorkspacePackageR
 
 function isAureliaPackage(row: WorkspacePackageRow): boolean {
   return row.aureliaShape !== "non-aurelia";
-}
-
-function hasAureliaIntegration(rows: readonly WorkspaceSurfaceRow[]): boolean {
-  return rows.some((row) =>
-    row.kind === "aurelia-import" ||
-    row.kind === "app-entrypoint" ||
-    row.kind === "resource" ||
-    row.kind === "configuration" ||
-    row.kind === "registration" ||
-    row.kind === "router"
-  );
-}
-
-function isEntrypointSignalFile(sourceFile: ts.SourceFile): boolean {
-  const baseName = path.basename(sourceFile.fileName).toLowerCase();
-  return baseName === "main.ts" || baseName === "main.js" || baseName === "bootstrap.ts" || baseName === "startup.ts";
 }
 
 function inferWorkspaceSourceRole(fileName: string): WorkspaceSourceRole {
@@ -2185,20 +2121,6 @@ function isAureliaContainerReceiverExpression(
     && bindings.aureliaContainerReceiverNames.has(expression.name.text);
 }
 
-function isAureliaContainerReference(
-  expression: ts.Expression | ts.EntityName,
-  bindings: WorkspaceSourceBindings,
-): boolean {
-  return isAureliaKernelReference(expression, "IContainer", bindings);
-}
-
-function isAureliaContainerEntityName(
-  name: ts.EntityName,
-  bindings: WorkspaceSourceBindings,
-): boolean {
-  return isAureliaKernelReference(name, "IContainer", bindings);
-}
-
 function routeNameFromDecorator(
   call: ts.CallExpression | undefined,
   decoratedNode: ts.Node,
@@ -2216,13 +2138,6 @@ function routeNameFromDecorator(
     }
   }
   return ownerNameForNode(decoratedNode);
-}
-
-function countSurfaceKind(
-  rows: readonly WorkspaceSurfaceRow[],
-  kind: WorkspaceSurfaceKind,
-): number {
-  return rows.filter((row) => row.kind === kind).length;
 }
 
 function countSurfaceFacets(

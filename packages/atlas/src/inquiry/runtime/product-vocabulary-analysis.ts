@@ -9,6 +9,7 @@ import {
   propertyNameText,
   requiredSourceFileIdentity,
   sourceReferenceForNode,
+  stringLiteralArgument,
   type SourceProject,
 } from "../../source/index.js";
 
@@ -257,8 +258,8 @@ function readVocabularyDefinitions(
         }
         const call = entryProperty.initializer;
         const memberName = propertyNameText(entryProperty.name, sourceFile);
-        const localName = stringArgument(call, 1);
-        const summary = stringArgument(call, moduleSpec.slot === "claim-predicate" ? 2 : 3);
+        const localName = stringLiteralArgument(call, 1);
+        const summary = stringLiteralArgument(call, moduleSpec.slot === "claim-predicate" ? 2 : 3);
         if (memberName === null || localName === null || summary === null) {
           continue;
         }
@@ -537,8 +538,8 @@ function claimPredicateSignatureFromDefinition(
       kind: issue.kind,
       predicateId: definition.id,
       predicateKey: definition.key,
-      ...(issue.endpoint === undefined ? {} : { endpoint: issue.endpoint }),
-      ...(issue.productKindRef === undefined ? {} : { productKindRef: issue.productKindRef }),
+      endpoint: issue.endpoint,
+      productKindRef: issue.productKindRef,
       summary: `${definition.id}: ${issue.summary}`,
       source: issue.source,
     }));
@@ -930,13 +931,6 @@ function unwrapInitializer(node: ts.Expression | undefined): ts.Expression | und
     return unwrapInitializer(node.expression);
   }
   return node;
-}
-
-function stringArgument(call: ts.CallExpression, index: number): string | null {
-  const argument = call.arguments[index];
-  return argument !== undefined && ts.isStringLiteral(argument)
-    ? argument.text
-    : null;
 }
 
 function vocabularyAccess(

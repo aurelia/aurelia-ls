@@ -12,7 +12,9 @@ import {
   normalizeModuleKey,
   readEvaluationModuleRecord,
 } from './module-graph.js';
+import { isRelativeModuleSpecifier } from './module-specifier.js';
 import { guessScriptKind } from './ts-syntax.js';
+import { assetModuleText } from './asset-module.js';
 
 const MODULE_EXTENSIONS = [
   '',
@@ -269,10 +271,6 @@ function uniqueModuleEdges(
   return unique;
 }
 
-function isRelativeModuleSpecifier(moduleSpecifier: string): boolean {
-  return moduleSpecifier.startsWith('./') || moduleSpecifier.startsWith('../');
-}
-
 function moduleSpecifierWithoutQuery(moduleSpecifier: string): string {
   const queryIndex = moduleSpecifier.search(/[?#]/);
   return queryIndex === -1 ? moduleSpecifier : moduleSpecifier.slice(0, queryIndex);
@@ -306,18 +304,6 @@ function canonicalExistingPath(fileName: string): string {
     return realpathSync.native(fileName);
   } catch {
     return fileName;
-  }
-}
-
-function assetModuleText(fileName: string, text: string): string | null {
-  switch (path.extname(fileName).toLowerCase()) {
-    case '.json':
-      return `export default ${text.trim()};`;
-    case '.html':
-    case '.css':
-      return `export default ${JSON.stringify(text)};`;
-    default:
-      return null;
   }
 }
 

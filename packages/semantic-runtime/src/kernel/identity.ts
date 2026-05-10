@@ -380,6 +380,25 @@ export class RouteRecognizerIdentity {
   ) {}
 }
 
+/** Identity for i18n translation products. */
+export class I18nIdentity {
+  /** String discriminator for serialized i18n identity records. */
+  readonly kind = 'i18n-identity' as const;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Controlled product kind represented by this identity. */
+    readonly productKindKey: ProductKindKey,
+    /** Optional owner identity such as the configuration sequence that admitted the translation resources. */
+    readonly ownerHandle: IdentityHandle | null,
+    /** Source address for the translation resource admission or key owner. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Runtime translation key, namespace, or catalog label. */
+    readonly localName: string | null = null,
+  ) {}
+}
+
 /** Identity for compiler service, scope, parser, syntax, and lowering products. */
 export class CompilerIdentity {
   /** String discriminator for serialized compiler identity records. */
@@ -496,6 +515,7 @@ export type SemanticIdentity =
   | ConfigurationIdentity
   | RouterIdentity
   | RouteRecognizerIdentity
+  | I18nIdentity
   | CompilerIdentity
   | TemplateIdentity
   | TemplateNodeIdentity

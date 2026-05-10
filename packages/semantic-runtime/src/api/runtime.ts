@@ -9,7 +9,6 @@ import {
 } from '../boot/project-shape.js';
 import { SourceFileRole } from '../kernel/address.js';
 import { answerAdmittedSources, AdmittedSourcesQuery } from '../inquiry/source-files.js';
-import { InquiryOutcomeKind } from '../inquiry/answer.js';
 import { InquiryPageRequest } from '../inquiry/page.js';
 import { KernelStore } from '../kernel/store.js';
 import { AureliaAppWorldProjectEmission, AureliaAppWorldProjectPass } from '../configuration/app-world-project-pass.js';
@@ -18,11 +17,15 @@ import {
   normalizeSemanticAppAnalysisDepth,
   semanticAppAnalysisDepthSatisfies,
 } from '../configuration/app-analysis.js';
-import type { TemplateCompilerWorldEmission } from '../template/compiler-world-materializer.js';
 import {
   readSemanticApplicationTopology,
   type SemanticApplicationTopologyResult,
 } from './app-topology.js';
+import { semanticOutcomeForInquiry } from './answer.js';
+import {
+  readSemanticAppSummary,
+  sourceRoleCounts,
+} from './app-summary.js';
 import {
   readBindingDataFlowRows,
   readBindingSourceOperationRows,
@@ -33,6 +36,11 @@ import {
 import {
   readRuntimeControllerRows,
 } from './controller-projections.js';
+import {
+  readSemanticTemplateCursorInfo,
+  readSemanticTemplateCompletions,
+  readSemanticTemplateDiagnostics,
+} from './template-completion.js';
 import {
   readAppOpenSeams,
 } from './open-seam-projections.js';
@@ -61,6 +69,10 @@ import {
   describeAddress,
   type SemanticSourceReference,
 } from './source-reference.js';
+import {
+  sourceFileAddressForAddress,
+  sourcePathMatchesFileName,
+} from '../kernel/source-address.js';
 import {
   SEMANTIC_RUNTIME_API_VERSION,
   SemanticAppQueryKind,
@@ -96,10 +108,10 @@ import {
   type SemanticRuntimePageInput,
   type SemanticRuntimePageResult,
   type SemanticRuntimeSummary,
-  type SemanticSourceRoleCount,
   type SemanticSourceFileRow,
   type SemanticSourceFilesResult,
   type SemanticTypedNavigationInstructionsResult,
+  type SemanticTemplateCursorQuery,
   type SemanticUnresolvedModuleRow,
   type SemanticUnresolvedModulesResult,
   type SemanticViewportAgentsResult,
@@ -108,6 +120,10 @@ import {
   type SemanticTargetOperationResult,
   type SemanticTemplateCompilationResult,
   type SemanticTemplateCompilationRow,
+  type SemanticTemplateCompletionResult,
+  type SemanticTemplateCursorInfoResult,
+  type SemanticTemplateDiagnosticsQuery,
+  type SemanticTemplateDiagnosticsResult,
 } from './contracts.js';
 
 /** Create the in-process semantic-runtime API surface. */
@@ -152,7 +168,7 @@ export class SemanticRuntime {
           rootDir: project.rootDir,
           sourceFiles: project.sourceFiles.length,
           sourceRoles: sourceRoleCounts(project),
-          hasLikelyEntrypointSource: hasLikelyEntrypointSource(project),
+          hasAureliaAppEntrypointSignal: shape.shapeKind === SemanticProjectShapeKind.AureliaApp,
           shapeKind: shape.shapeKind,
           aureliaDependencyScopes: shape.aureliaDependencyScopes,
           aureliaSourceSignals: shape.aureliaSourceSignals,
@@ -168,35 +184,170 @@ export class SemanticRuntime {
 
   async openApp(options: OpenSemanticAppOptions = {}): Promise<SemanticApp> {
     const analysisDepth = normalizeSemanticAppAnalysisDepth(options.analysisDepth);
-    if (options.projectKey == null) {
-      return this.openDefaultApp(analysisDepth);
-    }
-    return this.openProjectApp(selectProject(this.workspace.projects, options.projectKey), analysisDepth);
+    const includeAuthoringTemplates = options.includeAuthoringTemplates === true;
+    const sourceFilePath = normalizeSourceFilePathOption(options.sourceFilePath);
+    const requestedAuthoringSourceFiles = normalizeAuthoringTemplateSourceFiles(options.authoringTemplateSourceFiles);
+    const project = options.projectKey == null
+      ? this.selectProjectForOpen(sourceFilePath)
+      : selectProject(this.workspace.projects, options.projectKey);
+    const projectSourceFilePath = sourceFilePath == null
+      ? null
+      : canonicalProjectSourceFilePath(project, sourceFilePath);
+    const projectAuthoringSourceFiles = canonicalProjectSourceFilePaths(project, requestedAuthoringSourceFiles);
+    const authoringTemplateSourceFiles = includeAuthoringTemplates
+      ? authoringTemplateSourceFilesForOpen(projectSourceFilePath, projectAuthoringSourceFiles)
+      : [];
+    const authoringTemplateLimit = includeAuthoringTemplates ? normalizeAuthoringTemplateLimit(options.authoringTemplateLimit) : 0;
+    return this.openProjectApp(
+      project,
+      analysisDepth,
+      includeAuthoringTemplates,
+      authoringTemplateSourceFiles,
+      authoringTemplateLimit,
+    );
   }
 
-  private openDefaultApp(analysisDepth: SemanticAppAnalysisDepth): SemanticApp {
-    return this.openProjectApp(this.selectDefaultProject(), analysisDepth);
+  async templateCompletions(
+    query: SemanticTemplateCursorQuery,
+  ): Promise<SemanticRuntimeAnswer<SemanticTemplateCompletionResult>> {
+    const app = await this.openTemplateCursorApp(query);
+    return app.templateCompletions({
+      kind: SemanticAppQueryKind.TemplateCompletions,
+      cursor: query.cursor,
+      page: query.page,
+      detail: query.detail,
+    });
+  }
+
+  async templateCursorInfo(
+    query: SemanticTemplateCursorQuery,
+  ): Promise<SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult>> {
+    const app = await this.openTemplateCursorApp(query);
+    return app.templateCursorInfo({
+      kind: SemanticAppQueryKind.TemplateCursorInfo,
+      cursor: query.cursor,
+      detail: query.detail,
+    });
+  }
+
+  async templateDiagnostics(
+    query: SemanticTemplateDiagnosticsQuery = {},
+  ): Promise<SemanticRuntimeAnswer<SemanticTemplateDiagnosticsResult>> {
+    const app = await this.openTemplateDiagnosticsApp(query);
+    return app.templateDiagnostics({
+      kind: SemanticAppQueryKind.TemplateDiagnostics,
+      sourceFile: query.sourceFile,
+      page: query.page,
+      detail: query.detail,
+    });
   }
 
   private openProjectApp(
     project: ProjectBootFrame,
     analysisDepth: SemanticAppAnalysisDepth,
+    includeAuthoringTemplates: boolean,
+    authoringTemplateSourceFiles: readonly string[],
+    authoringTemplateLimit: number | null,
   ): SemanticApp {
-    const existing = this.readCachedApp(project.projectKey, analysisDepth);
+    const existing = this.readCachedApp(
+      project.projectKey,
+      analysisDepth,
+      includeAuthoringTemplates,
+      authoringTemplateSourceFiles,
+      authoringTemplateLimit,
+    );
     if (existing != null) {
       return existing;
     }
-    const emission = new AureliaAppWorldProjectPass().constructAndEmit(this.workspace.store, project, { analysisDepth });
+    const emission = new AureliaAppWorldProjectPass().constructAndEmit(this.workspace.store, project, {
+      analysisDepth,
+      includeAuthoringTemplates,
+      authoringTemplateSourceFiles,
+      authoringTemplateLimit,
+    });
     const app = new SemanticApp(this, project, emission);
-    this.appsByCacheKey.set(appCacheKey(project.projectKey, analysisDepth), app);
+    this.appsByCacheKey.set(
+      appCacheKey(project.projectKey, analysisDepth, includeAuthoringTemplates, authoringTemplateSourceFiles, authoringTemplateLimit),
+      app,
+    );
     return app;
+  }
+
+  private async openTemplateCursorApp(
+    query: SemanticTemplateCursorQuery,
+  ): Promise<SemanticApp> {
+    const analysisDepth = normalizeSemanticAppAnalysisDepth(query.analysisDepth);
+    const sourceFilePath = normalizeSourceFilePathOption(query.cursor.filePath);
+    const requestedProject = query.projectKey == null
+      ? null
+      : selectProject(this.workspace.projects, query.projectKey);
+    const cached = this.readCachedTemplateCursorApp(requestedProject, analysisDepth, query.cursor.filePath);
+    if (cached != null) {
+      return cached;
+    }
+    const project = requestedProject ?? this.selectProjectForOpen(sourceFilePath);
+    return this.openApp({
+      projectKey: project.projectKey,
+      sourceFilePath: null,
+      analysisDepth,
+      includeAuthoringTemplates: query.includeAuthoringTemplates ?? true,
+      authoringTemplateSourceFiles: query.authoringTemplateSourceFiles,
+      authoringTemplateLimit: query.authoringTemplateLimit,
+    });
+  }
+
+  private async openTemplateDiagnosticsApp(
+    query: SemanticTemplateDiagnosticsQuery,
+  ): Promise<SemanticApp> {
+    const analysisDepth = normalizeSemanticAppAnalysisDepth(query.analysisDepth);
+    const sourceFilePath = normalizeSourceFilePathOption(query.sourceFile?.filePath);
+    const requestedProject = query.projectKey == null
+      ? null
+      : selectProject(this.workspace.projects, query.projectKey);
+    const cached = sourceFilePath == null
+      ? null
+      : this.readCachedTemplateCursorApp(requestedProject, analysisDepth, sourceFilePath);
+    if (cached != null) {
+      return cached;
+    }
+    const project = requestedProject ?? this.selectProjectForOpen(sourceFilePath);
+    return this.openApp({
+      projectKey: project.projectKey,
+      sourceFilePath,
+      analysisDepth,
+      includeAuthoringTemplates: query.includeAuthoringTemplates ?? sourceFilePath != null,
+      authoringTemplateSourceFiles: query.authoringTemplateSourceFiles,
+      authoringTemplateLimit: query.authoringTemplateLimit,
+    });
+  }
+
+  private readCachedTemplateCursorApp(
+    project: ProjectBootFrame | null,
+    requestedDepth: SemanticAppAnalysisDepth,
+    sourceFilePath: string,
+  ): SemanticApp | null {
+    for (const app of this.appsByCacheKey.values()) {
+      if (
+        (project == null || app.project.projectKey === project.projectKey)
+        && semanticAppAnalysisDepthSatisfies(app.emission.analysisDepth, requestedDepth)
+        && appContainsTemplateSourceFile(app, sourceFilePath)
+      ) {
+        return app;
+      }
+    }
+    return null;
   }
 
   private readCachedApp(
     projectKey: string,
     requestedDepth: SemanticAppAnalysisDepth,
+    includeAuthoringTemplates: boolean,
+    authoringTemplateSourceFiles: readonly string[],
+    authoringTemplateLimit: number | null,
   ): SemanticApp | null {
-    const exact = this.appsByCacheKey.get(appCacheKey(projectKey, requestedDepth));
+    const exact = this.appsByCacheKey.get(
+      appCacheKey(projectKey, requestedDepth, includeAuthoringTemplates, authoringTemplateSourceFiles, authoringTemplateLimit),
+    );
     if (exact != null) {
       return exact;
     }
@@ -204,6 +355,7 @@ export class SemanticRuntime {
       if (
         app.project.projectKey === projectKey
         && semanticAppAnalysisDepthSatisfies(app.emission.analysisDepth, requestedDepth)
+        && appSatisfiesAuthoringTemplateRequest(app, includeAuthoringTemplates, authoringTemplateSourceFiles, authoringTemplateLimit)
       ) {
         return app;
       }
@@ -228,10 +380,6 @@ export class SemanticRuntime {
     if (aureliaAppProject != null) {
       return aureliaAppProject;
     }
-    const entrypointProject = this.workspace.projects.find(hasLikelyEntrypointSource);
-    if (entrypointProject != null) {
-      return entrypointProject;
-    }
     const appSourceProject = this.workspace.projects.find((project) =>
       project.sourceFiles.some((source) => source.role === SourceFileRole.AppSource)
     );
@@ -243,6 +391,24 @@ export class SemanticRuntime {
       throw new Error('Cannot open semantic app: workspace did not boot any projects.');
     }
     return project;
+  }
+
+  private selectProjectForOpen(sourceFilePath: string | null): ProjectBootFrame {
+    return sourceFilePath == null
+      ? this.selectDefaultProject()
+      : this.selectProjectForSourceFile(sourceFilePath);
+  }
+
+  private selectProjectForSourceFile(sourceFilePath: string): ProjectBootFrame {
+    for (const address of this.workspace.store.readSourceFileAddressesByFileName(sourceFilePath)) {
+      const project = this.workspace.projects.find((candidate) =>
+        candidate.sourceFiles.some((source) => source.addressHandle === address.handle)
+      );
+      if (project != null) {
+        return project;
+      }
+    }
+    throw new Error(`Cannot open semantic app: source file '${sourceFilePath}' was not admitted into any project.`);
   }
 }
 
@@ -302,6 +468,12 @@ export class SemanticApp {
         return this.resourceVisibility(query.page, query.detail);
       case SemanticAppQueryKind.TemplateCompilations:
         return this.templateCompilations(query.page, query.detail);
+      case SemanticAppQueryKind.TemplateCompletions:
+        return this.templateCompletions(query);
+      case SemanticAppQueryKind.TemplateCursorInfo:
+        return this.templateCursorInfo(query);
+      case SemanticAppQueryKind.TemplateDiagnostics:
+        return this.templateDiagnostics(query);
       case SemanticAppQueryKind.RuntimeControllers:
         return this.runtimeControllers(query.page, query.detail);
       case SemanticAppQueryKind.BindingTargetAccesses:
@@ -326,7 +498,7 @@ export class SemanticApp {
   }
 
   summary(): SemanticRuntimeAnswer<SemanticAppSummary> {
-    const value = appSummary(this.project, this.emission, this.runtime.workspace.store);
+    const value = readSemanticAppSummary(this.project, this.emission, this.runtime.workspace.store);
     return answer(
       SemanticRuntimeAnswerOutcome.Hit,
       `Opened semantic app '${value.projectKey}' with ${value.appRoots} app root(s), ${value.routeConfigs} route config(s), ${value.routePatterns} route pattern(s), ${value.routeEndpoints} route endpoint(s), ${value.compilerWorlds} compiler world(s), and ${value.compiledResources} compiled resource template(s).`,
@@ -395,6 +567,7 @@ export class SemanticApp {
       .map((seam): SemanticOpenSeamRow => ({
         seamKindKey: seam.seamKindKey,
         summary: seam.summary,
+        reasonKinds: seam.reasonKinds,
         source: describeAddress(this.runtime.workspace.store, seam.addressHandle),
         ...(handles ? {
           handles: {
@@ -696,62 +869,61 @@ export class SemanticApp {
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticTemplateCompilationResult> {
     const handles = includeHandles(detail);
-    const rows = this.emission.templates.resources
-      .map((resource): SemanticTemplateCompilationRow => ({
-        analysisDepth: resource.runtimeAnalysis.analysisDepth,
-        definitionName: resource.compilation.definition.name,
-        compilerWorld: compilerWorldLabel(this.runtime.workspace.store, resource.compilation.compilerWorld),
-        templateSourceKind: resource.compilation.unit.templateSource.sourceKind,
-        htmlNodes: resource.compilation.html.nodes.length,
-        htmlAttributes: resource.compilation.html.attributes.length,
-        recoveries: resource.compilation.html.recoveries.length,
-        attributeSyntaxes: resource.compilation.attributeSyntax.syntaxes.length,
-        classifications: resource.compilation.attributeClassification.classifications.length,
-        valueSites: resource.compilation.valueSites.sites.length + resource.compilation.bindingCommandLowering.valueSites.length,
-        expressionParses: resource.compilation.valueSites.parses.length
-          + resource.compilation.bindingCommandLowering.expressionParses.length,
-        bindingCommandLowerings: resource.compilation.bindingCommandLowering.lowerings.length
-          + resource.compilation.bindingCommandLowering.multiBindingLowerings.length,
-        instructions: resource.compilation.compiledTemplate.instructions.length,
-        renderTargets: resource.compilation.compiledTemplate.renderTargets.length,
-        runtimeControllers: resource.runtimeAnalysis.runtimeRendering.controllers.length,
-        runtimeChildContainers: resource.runtimeAnalysis.runtimeRendering.childContainers.length,
-        runtimeChildContextResolverSlots: resource.runtimeAnalysis.runtimeRendering.childContextResolverSlots.length,
-        runtimeBindings: resource.runtimeAnalysis.runtimeRendering.bindings.length,
-        runtimeTargetOperations: resource.runtimeAnalysis.runtimeRendering.targetOperations.length
-          + resource.runtimeAnalysis.controllerBind.targetOperations.length,
-        runtimeRendererTargetOperations: resource.runtimeAnalysis.runtimeRendering.targetOperations.length,
-        runtimeBindingTargetAccesses: resource.runtimeAnalysis.controllerBind.targetAccesses.length,
-        runtimeBindingTargetOperations: resource.runtimeAnalysis.controllerBind.targetOperations.length,
-        runtimeBindingSourceOperations: resource.runtimeAnalysis.controllerBind.sourceOperations.length,
-        runtimeBindingValueChannels: resource.runtimeAnalysis.bindingValueChannel.valueChannels.length,
-        runtimeBindingDataFlows: resource.runtimeAnalysis.bindingDataFlow.dataFlows.length,
-        bindingScopes: resource.runtimeAnalysis.scopes.readScopes().length,
-        openSeams: resource.compilation.compiledTemplate.openSeams.length
-          + resource.runtimeAnalysis.runtimeRendering.openSeams.length
-          + resource.runtimeAnalysis.controllerBind.openSeams.length
-          + resource.runtimeAnalysis.bindingValueChannel.openSeams.length
-          + resource.runtimeAnalysis.bindingDataFlow.openSeams.length,
-        source: describeAddress(
-          this.runtime.workspace.store,
-          resource.compilation.definition.template?.addressHandle ?? resource.compilation.definition.sourceAddressHandle,
-        ),
-        ...(handles ? {
-          handles: {
-            definitionProductHandle: resource.compilation.definition.productHandle,
-            compilerWorldProductHandle: resource.compilation.compilerWorld.world.productHandle,
-            sourceAddressHandle: resource.compilation.definition.template?.addressHandle
-              ?? resource.compilation.definition.sourceAddressHandle,
-          },
-        } : {}),
-      }))
-      .sort((left, right) => left.definitionName.localeCompare(right.definitionName));
+    const rows = [
+      ...templateCompilationRows(this.runtime.workspace.store, this.emission.templates.resources, 'app-runtime', handles),
+      ...templateCompilationRows(this.runtime.workspace.store, this.emission.templates.authoringResources, 'authoring', handles),
+    ]
+      .sort((left, right) =>
+        left.definitionName.localeCompare(right.definitionName)
+        || left.compilationLane.localeCompare(right.compilationLane)
+      );
     const paged = pageRows(rows, page);
     return answer(
       outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} compiled template row(s).`,
       { rows: paged.rows },
       paged.page,
+    );
+  }
+
+  templateCompletions(
+    query: SemanticAppQuery,
+  ): SemanticRuntimeAnswer<SemanticTemplateCompletionResult> {
+    return readSemanticTemplateCompletions(
+      this.runtime.workspace.store,
+      this.runtime.workspace.rootDir,
+      this.project.rootDir,
+      this.emission,
+      query.cursor,
+      toPageRequest(query.page),
+      query.detail ?? SemanticRuntimeDetail.Compact,
+    );
+  }
+
+  templateCursorInfo(
+    query: SemanticAppQuery,
+  ): SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult> {
+    return readSemanticTemplateCursorInfo(
+      this.runtime.workspace.store,
+      this.runtime.workspace.rootDir,
+      this.project.rootDir,
+      this.emission,
+      query.cursor,
+      query.detail ?? SemanticRuntimeDetail.Compact,
+    );
+  }
+
+  templateDiagnostics(
+    query: SemanticAppQuery,
+  ): SemanticRuntimeAnswer<SemanticTemplateDiagnosticsResult> {
+    return readSemanticTemplateDiagnostics(
+      this.runtime.workspace.store,
+      this.runtime.workspace.rootDir,
+      this.project.rootDir,
+      this.emission,
+      query.sourceFile,
+      toPageRequest(query.page),
+      query.detail ?? SemanticRuntimeDetail.Compact,
     );
   }
 
@@ -902,225 +1074,218 @@ export class SemanticApp {
   }
 }
 
-function appCacheKey(projectKey: string, analysisDepth: SemanticAppAnalysisDepth): string {
-  return `${projectKey}:${analysisDepth}`;
+function appCacheKey(
+  projectKey: string,
+  analysisDepth: SemanticAppAnalysisDepth,
+  includeAuthoringTemplates: boolean,
+  authoringTemplateSourceFiles: readonly string[],
+  authoringTemplateLimit: number | null,
+): string {
+  const sourceFileKey = authoringTemplateSourceFiles.length === 0
+    ? 'project'
+    : authoringTemplateSourceFiles.join('|');
+  return `${projectKey}:${analysisDepth}:authoring=${includeAuthoringTemplates}:${sourceFileKey}:${authoringTemplateLimit ?? 'all'}`;
+}
+
+function normalizeAuthoringTemplateLimit(value: number | null | undefined): number | null {
+  if (value == null) {
+    return null;
+  }
+  return Number.isFinite(value) && value > 0
+    ? Math.floor(value)
+    : 0;
+}
+
+function normalizeAuthoringTemplateSourceFiles(value: readonly string[] | null | undefined): readonly string[] {
+  if (value == null) {
+    return [];
+  }
+  return [...new Set(value
+    .map((fileName) => fileName.trim().replace(/\\/g, '/'))
+    .filter((fileName) => fileName.length > 0))]
+    .sort();
+}
+
+function normalizeSourceFilePathOption(value: string | null | undefined): string | null {
+  const [path] = normalizeAuthoringTemplateSourceFiles(value == null ? [] : [value]);
+  return path ?? null;
+}
+
+function canonicalProjectSourceFilePaths(
+  project: ProjectBootFrame,
+  values: readonly string[],
+): readonly string[] {
+  return [...new Set(values.map((value) => canonicalProjectSourceFilePath(project, value)))]
+    .sort();
+}
+
+function canonicalProjectSourceFilePath(
+  project: ProjectBootFrame,
+  value: string,
+): string {
+  return admittedProjectSourceFilePath(project, value)
+    ?? projectRelativePath(project.rootDir, value)
+    ?? projectRelativePath(project.rootDir, path.resolve(project.workspaceRootDir, value))
+    ?? value;
+}
+
+function admittedProjectSourceFilePath(
+  project: ProjectBootFrame,
+  value: string,
+): string | null {
+  const normalized = value.replace(/\\/g, '/');
+  return project.sourceFiles
+    .map((source) => source.path)
+    .filter((sourcePath) => sourcePathMatchesFileName(sourcePath, normalized))
+    .sort((left, right) => right.length - left.length)[0]
+    ?? null;
+}
+
+function projectRelativePath(
+  projectRootDir: string,
+  value: string,
+): string | null {
+  if (!path.isAbsolute(value)) {
+    return null;
+  }
+  const relativePath = path.relative(projectRootDir, value);
+  if (relativePath.startsWith('..') || path.isAbsolute(relativePath)) {
+    return null;
+  }
+  return relativePath.replace(/\\/g, '/');
+}
+
+function authoringTemplateSourceFilesForOpen(
+  sourceFilePath: string | null,
+  requestedAuthoringSourceFiles: readonly string[],
+): readonly string[] {
+  if (requestedAuthoringSourceFiles.length > 0) {
+    return requestedAuthoringSourceFiles;
+  }
+  return sourceFilePath == null ? [] : [sourceFilePath];
+}
+
+function appSatisfiesAuthoringTemplateRequest(
+  app: SemanticApp,
+  includeAuthoringTemplates: boolean,
+  authoringTemplateSourceFiles: readonly string[],
+  authoringTemplateLimit: number | null,
+): boolean {
+  if (!includeAuthoringTemplates) {
+    return true;
+  }
+  if (!authoringTemplateSourceFileRequestSatisfied(
+    app.emission.templates.authoringTemplateSourceFiles,
+    authoringTemplateSourceFiles,
+    app.emission.templates.authoringTemplateLimit,
+  )) {
+    return false;
+  }
+  return authoringTemplateLimitSatisfied(app.emission.templates.authoringTemplateLimit, authoringTemplateLimit);
+}
+
+function authoringTemplateSourceFileRequestSatisfied(
+  existingSourceFiles: readonly string[],
+  requestedSourceFiles: readonly string[],
+  existingTemplateLimit: number | null,
+): boolean {
+  if (requestedSourceFiles.length === 0) {
+    return existingSourceFiles.length === 0;
+  }
+  if (existingSourceFiles.length === 0) {
+    return existingTemplateLimit == null;
+  }
+  const existing = new Set(existingSourceFiles);
+  return requestedSourceFiles.every((fileName) => existing.has(fileName));
+}
+
+function authoringTemplateLimitSatisfied(
+  existingTemplateLimit: number | null,
+  requestedTemplateLimit: number | null,
+): boolean {
+  if (existingTemplateLimit == null) {
+    return true;
+  }
+  if (requestedTemplateLimit == null) {
+    return false;
+  }
+  return existingTemplateLimit >= requestedTemplateLimit;
+}
+
+function appContainsTemplateSourceFile(
+  app: SemanticApp,
+  filePath: string,
+): boolean {
+  return [
+    ...app.emission.templates.resources,
+    ...app.emission.templates.authoringResources,
+  ].some((resource) => {
+    const source = sourceFileAddressForAddress(
+      app.runtime.workspace.store,
+      resource.compilation.unit.templateSource.sourceAddressHandle,
+    );
+    return source != null && sourcePathMatchesFileName(source.path, filePath);
+  });
 }
 
 type TemplateResourceEmission = AureliaAppWorldProjectEmission['templates']['resources'][number];
+type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
 
-interface AppSummaryProjectCounts {
-  readonly projectKey: string;
-  readonly rootDir: string;
-  readonly sourceFiles: number;
-}
-
-interface AppSummaryEvaluationCounts {
-  readonly evaluatedSources: number;
-  readonly unresolvedModuleEdges: number;
-}
-
-interface AppSummaryConfigurationCounts {
-  readonly configurationSequences: number;
-  readonly configurationSteps: number;
-  readonly appRoots: number;
-  readonly registrationAdmissions: number;
-}
-
-interface AppSummaryDiCounts {
-  readonly containers: number;
-  readonly runtimeChildContainers: number;
-  readonly resolverSlots: number;
-  readonly runtimeChildContextResolverSlots: number;
-  readonly runtimeControllers: number;
-  readonly resourceSlots: number;
-  readonly diOpenSeams: number;
-}
-
-interface AppSummaryCompilerWorldCounts {
-  readonly compilerWorlds: number;
-  readonly visibleResources: number;
-  readonly visibleSyntaxResources: number;
-  readonly runtimeRenderers: number;
-}
-
-interface AppSummaryTemplateCounts {
-  readonly compiledResources: number;
-  readonly compiledInstructions: number;
-  readonly runtimeBindings: number;
-  readonly runtimeTargetOperations: number;
-  readonly runtimeRendererTargetOperations: number;
-  readonly runtimeBindingTargetAccesses: number;
-  readonly runtimeBindingTargetOperations: number;
-  readonly runtimeBindingSourceOperations: number;
-  readonly runtimeBindingValueChannels: number;
-  readonly runtimeBindingDataFlows: number;
-  readonly runtimeBindingDataFlowSourceTypeGaps: number;
-  readonly runtimeBindingDataFlowSourceAssignmentGaps: number;
-  readonly bindingScopes: number;
-}
-
-interface AppSummaryKernelCounts {
-  readonly kernelProducts: number;
-  readonly kernelClaims: number;
-  readonly kernelOpenSeams: number;
-}
-
-function appSummary(
-  project: ProjectBootFrame,
-  emission: AureliaAppWorldProjectEmission,
+function templateCompilationRows(
   store: KernelStore,
-): SemanticAppSummary {
-  const templates = emission.templates.resources;
-  const appOpenSeams = readAppOpenSeams(emission, store);
-  return {
-    analysisDepth: emission.analysisDepth,
-    ...projectSummaryCounts(project),
-    ...evaluationSummaryCounts(emission),
-    resourceDefinitions: emission.resources.readDefinitions().length,
-    routerOptions: emission.routerOptions.readRouterOptions().length,
-    routeConfigs: emission.routes.readRouteConfigs().length,
-    routeConfigContexts: emission.routeContexts.readRouteConfigContexts().length,
-    routeContexts: emission.routeRuntimeTopology.readRouteContexts().length,
-    routeRecognizers: emission.routeContexts.readRouteRecognizers().length,
-    routePatterns: emission.routeRecognizer.readConfigurableRoutes().length,
-    routeEndpoints: emission.routeRecognizer.readEndpoints().length,
-    routeRecognizerStates: emission.routeRecognizer.readStates().length,
-    recognizedRoutes: emission.routeRecognition.readRecognizedRoutes().length,
-    typedNavigationInstructions: emission.routeInstructions.readTypedNavigationInstructions().length,
-    viewportInstructions: emission.routeInstructions.readViewportInstructions().length,
-    viewportInstructionTrees: emission.routeInstructions.readViewportInstructionTrees().length,
-    routeTrees: emission.routeTree.readRouteTrees().length,
-    routeNodes: emission.routeTree.readRouteNodes().length,
-    routerViewports: emission.routeRuntimeTopology.readViewports().length,
-    viewportAgents: emission.routeRuntimeTopology.readViewportAgents().length,
-    componentAgents: emission.routeComponentAgents.readComponentAgents().length,
-    ...configurationSummaryCounts(emission),
-    appTasks: appTaskSummaryCount(emission),
-    ...diSummaryCounts(emission, templates),
-    ...compilerWorldSummaryCounts(emission.templates.compilerWorlds),
-    ...templateSummaryCounts(templates),
-    ...kernelSummaryCounts(store, appOpenSeams.length),
-  };
-}
-
-function projectSummaryCounts(project: ProjectBootFrame): AppSummaryProjectCounts {
-  return {
-    projectKey: project.projectKey,
-    rootDir: project.rootDir,
-    sourceFiles: project.sourceFiles.length,
-  };
-}
-
-function sourceRoleCounts(project: ProjectBootFrame): readonly SemanticSourceRoleCount[] {
-  const counts = new Map<string, number>();
-  for (const source of project.sourceFiles) {
-    counts.set(source.role, (counts.get(source.role) ?? 0) + 1);
-  }
-  return [...counts.entries()]
-    .sort(([left], [right]) => left.localeCompare(right))
-    .map(([role, count]) => ({ role, count }));
-}
-
-function evaluationSummaryCounts(emission: AureliaAppWorldProjectEmission): AppSummaryEvaluationCounts {
-  return {
-    evaluatedSources: emission.evaluation.readEvaluatedSources().length,
-    unresolvedModuleEdges: emission.evaluation.readUnresolvedModules().length,
-  };
-}
-
-function appTaskSummaryCount(emission: AureliaAppWorldProjectEmission): number {
-  return emission.configuration.readConfiguration().appTasks.length + emission.appWorld.diWorld.appTasks.length;
-}
-
-function configurationSummaryCounts(emission: AureliaAppWorldProjectEmission): AppSummaryConfigurationCounts {
-  const configuration = emission.configuration.readConfiguration();
-  return {
-    configurationSequences: configuration.sequences.length,
-    configurationSteps: configuration.steps.length,
-    appRoots: configuration.appRoots.length,
-    registrationAdmissions: configuration.registrationAdmissions.length,
-  };
-}
-
-function diSummaryCounts(
-  emission: AureliaAppWorldProjectEmission,
-  templates: readonly TemplateResourceEmission[],
-): AppSummaryDiCounts {
-  const diWorld = emission.appWorld.diWorld;
-  return {
-    containers: diWorld.containers.length,
-    runtimeChildContainers: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.runtimeRendering.childContainers.length
+  resources: readonly TemplateResourceEmission[],
+  compilationLane: TemplateCompilationLane,
+  handles: boolean,
+): readonly SemanticTemplateCompilationRow[] {
+  return resources.map((resource): SemanticTemplateCompilationRow => ({
+    compilationLane,
+    analysisDepth: resource.runtimeAnalysis.analysisDepth,
+    definitionName: resource.compilation.definition.name,
+    compilerWorld: compilerWorldLabel(store, resource.compilation.compilerWorld),
+    templateSourceKind: resource.compilation.unit.templateSource.sourceKind,
+    htmlNodes: resource.compilation.html.nodes.length,
+    htmlAttributes: resource.compilation.html.attributes.length,
+    recoveries: resource.compilation.html.recoveries.length,
+    attributeSyntaxes: resource.compilation.attributeSyntax.syntaxes.length,
+    classifications: resource.compilation.attributeClassification.classifications.length,
+    valueSites: resource.compilation.valueSites.sites.length + resource.compilation.bindingCommandLowering.valueSites.length,
+    expressionParses: resource.compilation.valueSites.parses.length
+      + resource.compilation.bindingCommandLowering.expressionParses.length,
+    bindingCommandLowerings: resource.compilation.bindingCommandLowering.lowerings.length
+      + resource.compilation.bindingCommandLowering.multiBindingLowerings.length,
+    instructions: resource.compilation.compiledTemplate.instructions.length,
+    renderTargets: resource.compilation.compiledTemplate.renderTargets.length,
+    runtimeControllers: resource.runtimeAnalysis.runtimeRendering.controllers.length,
+    runtimeChildContainers: resource.runtimeAnalysis.runtimeRendering.childContainers.length,
+    runtimeChildContextResolverSlots: resource.runtimeAnalysis.runtimeRendering.childContextResolverSlots.length,
+    runtimeBindings: resource.runtimeAnalysis.runtimeRendering.bindings.length,
+    runtimeTargetOperations: resource.runtimeAnalysis.runtimeRendering.targetOperations.length
+      + resource.runtimeAnalysis.controllerBind.targetOperations.length,
+    runtimeRendererTargetOperations: resource.runtimeAnalysis.runtimeRendering.targetOperations.length,
+    runtimeBindingTargetAccesses: resource.runtimeAnalysis.controllerBind.targetAccesses.length,
+    runtimeBindingTargetOperations: resource.runtimeAnalysis.controllerBind.targetOperations.length,
+    runtimeBindingSourceOperations: resource.runtimeAnalysis.controllerBind.sourceOperations.length,
+    runtimeBindingValueChannels: resource.runtimeAnalysis.bindingValueChannel.valueChannels.length,
+    runtimeBindingDataFlows: resource.runtimeAnalysis.bindingDataFlow.dataFlows.length,
+    bindingScopes: resource.runtimeAnalysis.scopes.readScopes().length,
+    openSeams: resource.compilation.compiledTemplate.openSeams.length
+      + resource.runtimeAnalysis.runtimeRendering.openSeams.length
+      + resource.runtimeAnalysis.controllerBind.openSeams.length
+      + resource.runtimeAnalysis.bindingValueChannel.openSeams.length
+      + resource.runtimeAnalysis.bindingDataFlow.openSeams.length,
+    source: describeAddress(
+      store,
+      resource.compilation.definition.template?.addressHandle ?? resource.compilation.definition.sourceAddressHandle,
     ),
-    resolverSlots: diWorld.resolverSlots.length,
-    runtimeChildContextResolverSlots: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.runtimeRendering.childContextResolverSlots.length
-    ),
-    runtimeControllers: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.runtimeRendering.controllers.length
-    ) + emission.routeComponentAgents.readControllers().length,
-    resourceSlots: diWorld.resourceSlots.length,
-    diOpenSeams: diWorld.openSeams.length,
-  };
-}
-
-function compilerWorldSummaryCounts(
-  compilerWorlds: readonly TemplateCompilerWorldEmission[],
-): AppSummaryCompilerWorldCounts {
-  return {
-    compilerWorlds: compilerWorlds.length,
-    visibleResources: sumCompilerWorlds(compilerWorlds, (world) => world.resourceScope.resources.length),
-    visibleSyntaxResources: sumCompilerWorlds(compilerWorlds, (world) => world.resourceScope.syntaxResources.length),
-    runtimeRenderers: sumCompilerWorlds(compilerWorlds, (world) => world.runtimeRenderers.length),
-  };
-}
-
-function templateSummaryCounts(templates: readonly TemplateResourceEmission[]): AppSummaryTemplateCounts {
-  const runtimeRendererTargetOperations = sumTemplates(templates, (resource) =>
-    resource.runtimeAnalysis.runtimeRendering.targetOperations.length
-  );
-  const runtimeBindingTargetOperations = sumTemplates(templates, (resource) =>
-    resource.runtimeAnalysis.controllerBind.targetOperations.length
-  );
-  return {
-    compiledResources: templates.length,
-    compiledInstructions: sumTemplates(templates, (resource) =>
-      resource.compilation.compiledTemplate.instructions.length
-    ),
-    runtimeBindings: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.runtimeRendering.bindings.length
-    ),
-    runtimeTargetOperations: runtimeRendererTargetOperations + runtimeBindingTargetOperations,
-    runtimeRendererTargetOperations,
-    runtimeBindingTargetAccesses: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.controllerBind.targetAccesses.length
-    ),
-    runtimeBindingTargetOperations,
-    runtimeBindingSourceOperations: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.controllerBind.sourceOperations.length
-    ),
-    runtimeBindingValueChannels: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.bindingValueChannel.valueChannels.length
-    ),
-    runtimeBindingDataFlows: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.bindingDataFlow.dataFlows.length
-    ),
-    runtimeBindingDataFlowSourceTypeGaps: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.bindingDataFlow.dataFlows.filter((dataFlow) => dataFlow.sourceTypeOpenReason != null).length
-    ),
-    runtimeBindingDataFlowSourceAssignmentGaps: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.bindingDataFlow.dataFlows.filter((dataFlow) => dataFlow.sourceAssignmentReason != null).length
-    ),
-    bindingScopes: sumTemplates(templates, (resource) => resource.runtimeAnalysis.scopes.readScopes().length),
-  };
-}
-
-function kernelSummaryCounts(store: KernelStore, kernelOpenSeams: number): AppSummaryKernelCounts {
-  return {
-    kernelProducts: store.readProducts().length,
-    kernelClaims: store.readClaims().length,
-    kernelOpenSeams,
-  };
+    ...(handles ? {
+      handles: {
+        definitionProductHandle: resource.compilation.definition.productHandle,
+        compilerWorldProductHandle: resource.compilation.compilerWorld.world.productHandle,
+        sourceAddressHandle: resource.compilation.definition.template?.addressHandle
+          ?? resource.compilation.definition.sourceAddressHandle,
+      },
+    } : {}),
+  }));
 }
 
 function sourceReferenceForNode(node: ts.Node): SemanticSourceReference {
@@ -1136,20 +1301,6 @@ function sourceReferenceForNode(node: ts.Node): SemanticSourceReference {
   };
 }
 
-function sumTemplates(
-  templates: readonly TemplateResourceEmission[],
-  selectCount: (resource: TemplateResourceEmission) => number,
-): number {
-  return templates.reduce((total, resource) => total + selectCount(resource), 0);
-}
-
-function sumCompilerWorlds(
-  compilerWorlds: readonly TemplateCompilerWorldEmission[],
-  selectCount: (world: TemplateCompilerWorldEmission) => number,
-): number {
-  return compilerWorlds.reduce((total, world) => total + selectCount(world), 0);
-}
-
 function selectProject(
   projects: readonly ProjectBootFrame[],
   projectKey: string,
@@ -1159,21 +1310,6 @@ function selectProject(
     throw new Error(`Cannot open semantic app: project '${projectKey}' was not booted.`);
   }
   return project;
-}
-
-function hasLikelyEntrypointSource(project: ProjectBootFrame): boolean {
-  return project.sourceFiles.some((source) => {
-    if (source.role !== SourceFileRole.AppSource) {
-      return false;
-    }
-    const baseName = path.basename(source.path).toLowerCase();
-    return baseName === 'main.ts' ||
-      baseName === 'main.js' ||
-      baseName === 'bootstrap.ts' ||
-      baseName === 'bootstrap.js' ||
-      baseName === 'startup.ts' ||
-      baseName === 'startup.js';
-  });
 }
 
 function toPageRequest(page: SemanticRuntimePageInput | undefined): InquiryPageRequest {
@@ -1197,24 +1333,6 @@ function answer<TValue>(
 
 function includeHandles(detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`): boolean {
   return detail === SemanticRuntimeDetail.Handles;
-}
-
-function semanticOutcomeForInquiry(
-  outcome: InquiryOutcomeKind,
-): SemanticRuntimeAnswerOutcome {
-  switch (outcome) {
-    case InquiryOutcomeKind.Hit:
-      return SemanticRuntimeAnswerOutcome.Hit;
-    case InquiryOutcomeKind.Miss:
-      return SemanticRuntimeAnswerOutcome.Miss;
-    case InquiryOutcomeKind.Partial:
-    case InquiryOutcomeKind.Open:
-    case InquiryOutcomeKind.Ambiguous:
-    case InquiryOutcomeKind.Reroute:
-      return SemanticRuntimeAnswerOutcome.Partial;
-    case InquiryOutcomeKind.Unsupported:
-      return SemanticRuntimeAnswerOutcome.Unsupported;
-  }
 }
 
 function pageRows<TRow>(

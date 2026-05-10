@@ -173,9 +173,7 @@ export function answerFrameworkEvaluator(
           cursor: inquiry.page?.cursor,
           returned: effectTrace.effects.length,
           total: effectTrace.totalEffects,
-          ...(effectTrace.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(effectTrace.nextOffset) }),
+          nextCursor: effectTrace.nextOffset === undefined ? undefined : String(effectTrace.nextOffset),
         },
         continuations: effectContinuations(inquiry, effectTrace),
       },

@@ -19,7 +19,8 @@ It defines the nouns that later TypeScript, product, framework, bridge, and Atla
   and `evidencePerSubject` for answer evidence display.
 - [composition.ts](composition.ts) defines the shared actor/claim composition answer shape. Use it when a lens can
   expose precise signed claims (`subject -> predicate -> object`) around semantic actors instead of returning only
-  lens-local rows plus continuations.
+  lens-local rows plus continuations. Claim families, predicates, mechanisms, phases, entity kinds, and source lenses
+  are controlled vocabularies here; do not widen them back to free-form strings when a new lens needs a missing axis.
 - [handle.ts](handle.ts) defines navigable handles used by loci, evidence, and continuations.
 - [navigation.ts](navigation.ts) defines reusable route grammar for continuation generation and promotion.
   Keep route relations semantic rather than cosmetic: `ProjectionOf` changes the answer projection, while

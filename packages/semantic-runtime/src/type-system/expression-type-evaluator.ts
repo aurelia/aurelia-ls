@@ -7,8 +7,6 @@ import type {
   AccessThisExpression,
   ArrayLiteralExpression,
   ArrowFunction,
-  BindingIdentifierOrPattern,
-  BindingPattern,
   BinaryExpression,
   BindingBehaviorExpression,
   CallFunctionExpression,
@@ -30,6 +28,7 @@ import type {
   ValueConverterExpression,
 } from '../expression/ast.js';
 import type { AddressHandle } from '../kernel/handles.js';
+import { localKeyPart } from '../kernel/local-key.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   BindingContext,
@@ -60,7 +59,17 @@ import {
   CheckerTypeReference,
   CheckerTypeShape,
   CheckerTypeShapeKind,
+  sameCheckerTypeReference,
 } from './type-shape.js';
+import {
+  checkerCollectionSymbolName,
+  checkerIterableElementType,
+} from './checker-related-types.js';
+import {
+  CheckerBindingPatternLocalTypeProjector,
+} from './binding-pattern-locals.js';
+import type { CheckerBindingPatternLocalType } from './binding-pattern-locals.js';
+import { CheckerTypeShapeAccess } from './checker-type-shape-access.js';
 
 export const enum CheckerExpressionTypeEvaluationResultKind {
   Type = 'type',
@@ -124,13 +133,111 @@ export type CheckerExpressionTypeEvaluation =
   | CheckerExpressionType
   | CheckerExpressionTypeOpen;
 
-export class CheckerBindingPatternLocalType {
-  constructor(
-    /** Runtime binding-context name introduced by the pattern. */
-    readonly name: string,
-    /** Type reached by the pattern path, when checker projection could close it. */
-    readonly typeReference: CheckerTypeReference | null,
-  ) {}
+export interface CheckerExpressionTypeEvaluationCacheStats {
+  readonly entries: number;
+  readonly hits: number;
+  readonly misses: number;
+  readonly writes: number;
+  readonly entriesByBucket: Readonly<Record<string, number>>;
+  readonly hitsByBucket: Readonly<Record<string, number>>;
+  readonly missesByBucket: Readonly<Record<string, number>>;
+  readonly writesByBucket: Readonly<Record<string, number>>;
+}
+
+/**
+ * Hot cache for Aurelia-expression TypeChecker evaluations within one runtime-analysis pass.
+ *
+ * The cache key is the caller-owned local key. Call sites must include the modeled binding scope, expression product,
+ * and semantic role in that key before sharing a cache across materializers.
+ */
+export class CheckerExpressionTypeEvaluationCache {
+  private readonly evaluations = new Map<string, CheckerExpressionTypeEvaluation>();
+  private hits = 0;
+  private misses = 0;
+  private writes = 0;
+  private readonly hitsByBucket = new Map<string, number>();
+  private readonly missesByBucket = new Map<string, number>();
+  private readonly writesByBucket = new Map<string, number>();
+
+  read(localKey: string): CheckerExpressionTypeEvaluation | null {
+    return this.evaluations.get(localKey) ?? null;
+  }
+
+  write(
+    localKey: string,
+    evaluation: CheckerExpressionTypeEvaluation,
+  ): CheckerExpressionTypeEvaluation {
+    this.evaluations.set(localKey, evaluation);
+    this.writes += 1;
+    incrementCacheBucket(this.writesByBucket, cacheKeyBucket(localKey));
+    return evaluation;
+  }
+
+  readOrEvaluate(
+    localKey: string,
+    evaluate: () => CheckerExpressionTypeEvaluation,
+  ): CheckerExpressionTypeEvaluation {
+    const existing = this.read(localKey);
+    if (existing != null) {
+      this.hits += 1;
+      incrementCacheBucket(this.hitsByBucket, cacheKeyBucket(localKey));
+      return existing;
+    }
+    this.misses += 1;
+    incrementCacheBucket(this.missesByBucket, cacheKeyBucket(localKey));
+    return this.write(localKey, evaluate());
+  }
+
+  snapshot(): CheckerExpressionTypeEvaluationCacheStats {
+    return {
+      entries: this.evaluations.size,
+      hits: this.hits,
+      misses: this.misses,
+      writes: this.writes,
+      entriesByBucket: cacheEntriesByBucket(this.evaluations.keys()),
+      hitsByBucket: cacheBucketSnapshot(this.hitsByBucket),
+      missesByBucket: cacheBucketSnapshot(this.missesByBucket),
+      writesByBucket: cacheBucketSnapshot(this.writesByBucket),
+    };
+  }
+}
+
+function cacheKeyBucket(localKey: string): string {
+  const contextual = localKey.includes(':contextual:') ? ':contextual' : '';
+  if (localKey.includes(':owner:')) {
+    return `member-owner${contextual}`;
+  }
+  if (localKey.includes(':iterator-')) {
+    return `iterator${contextual}`;
+  }
+  if (localKey.includes(':scope:template-controller:')) {
+    return `template-controller${contextual}`;
+  }
+  if (localKey.startsWith('let:')) {
+    return `let${contextual}`;
+  }
+  if (localKey.startsWith('checker-expression-type:')) {
+    return `binding-expression${contextual}`;
+  }
+  return `other${contextual}`;
+}
+
+function cacheEntriesByBucket(keys: Iterable<string>): Readonly<Record<string, number>> {
+  const buckets = new Map<string, number>();
+  for (const key of keys) {
+    incrementCacheBucket(buckets, cacheKeyBucket(key));
+  }
+  return cacheBucketSnapshot(buckets);
+}
+
+function incrementCacheBucket(buckets: Map<string, number>, bucket: string): void {
+  buckets.set(bucket, (buckets.get(bucket) ?? 0) + 1);
+}
+
+function cacheBucketSnapshot(buckets: ReadonlyMap<string, number>): Readonly<Record<string, number>> {
+  return Object.fromEntries([...buckets.entries()].sort((left, right) =>
+    right[1] - left[1] || left[0].localeCompare(right[0])
+  ));
 }
 
 /**
@@ -141,20 +248,51 @@ export class CheckerBindingPatternLocalType {
  * checker carriers or synthetic expression shapes for member, call-return, and primitive projections.
  */
 export class CheckerExpressionTypeEvaluator {
+  private readonly typeAccess: CheckerTypeShapeAccess;
+  private readonly bindingPatternLocals: CheckerBindingPatternLocalTypeProjector;
+
   constructor(
     readonly store: KernelStore,
     readonly projector: CheckerTypeProjector,
     /** Compiler resource scope visible at this expression site, when template compilation supplied one. */
     readonly resourceScope: TemplateResourceScope | null = null,
-  ) {}
+    readonly cache: CheckerExpressionTypeEvaluationCache = new CheckerExpressionTypeEvaluationCache(),
+  ) {
+    this.typeAccess = new CheckerTypeShapeAccess(store, projector);
+    this.bindingPatternLocals = new CheckerBindingPatternLocalTypeProjector(this.typeAccess);
+  }
 
   evaluateWithScope(
     expression: ExpressionAstNode,
     scope: BindingScope,
     localKey: string,
     sourceAddressHandle: AddressHandle | null = null,
+    contextualType: CheckerTypeReference | null = null,
   ): CheckerExpressionTypeEvaluation {
-    return this.evaluateNode(expression, scope, localKey, sourceAddressHandle);
+    return this.evaluateNode(expression, scope, localKey, sourceAddressHandle, contextualType);
+  }
+
+  evaluateMemberOwnerAtOffset(
+    expression: ExpressionAstNode,
+    offset: number,
+    scope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null = null,
+    contextualType: CheckerTypeReference | null = null,
+  ): CheckerExpressionTypeEvaluation {
+    const evaluation = this.evaluateMemberOwnerNodeAtOffset(
+      expression,
+      offset,
+      scope,
+      localKey,
+      sourceAddressHandle,
+      contextualType,
+    );
+    return evaluation ?? this.open(
+      CheckerExpressionTypeOpenKind.MissingMember,
+      expression,
+      `No member-owner expression was reachable at offset ${offset}.`,
+    );
   }
 
   evaluateIteratorElement(
@@ -185,7 +323,7 @@ export class CheckerExpressionTypeEvaluator {
     if (element.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return element;
     }
-    return this.localTypesForBindingPattern(
+    return this.bindingPatternLocals.localTypesForBindingPattern(
       expression.declaration,
       element.typeShape,
       `${localKey}:iterator-local`,
@@ -198,6 +336,21 @@ export class CheckerExpressionTypeEvaluator {
     scope: BindingScope,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
+    contextualType: CheckerTypeReference | null = null,
+  ): CheckerExpressionTypeEvaluation {
+    const effectiveContextualType = contextualTypeForEvaluation(expression, contextualType);
+    const cacheKey = contextualEvaluationLocalKey(localKey, effectiveContextualType);
+    return this.cache.readOrEvaluate(cacheKey, () =>
+      this.evaluateNodeUncached(expression, scope, localKey, sourceAddressHandle, effectiveContextualType)
+    );
+  }
+
+  private evaluateNodeUncached(
+    expression: ExpressionAstNode,
+    scope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+    contextualType: CheckerTypeReference | null,
   ): CheckerExpressionTypeEvaluation {
     switch (expression.$kind) {
       case 'Identifier':
@@ -229,7 +382,7 @@ export class CheckerExpressionTypeEvaluator {
       case 'New':
         return this.evaluateNew(expression, scope, localKey, sourceAddressHandle);
       case 'Paren':
-        return this.evaluateNode(expression.expression, scope, `${localKey}:paren`, sourceAddressHandle);
+        return this.evaluateNode(expression.expression, scope, `${localKey}:paren`, sourceAddressHandle, contextualType);
       case 'PrimitiveLiteral':
         return this.evaluatePrimitiveLiteral(expression, scope, localKey, sourceAddressHandle);
       case 'Template':
@@ -249,7 +402,7 @@ export class CheckerExpressionTypeEvaluator {
       case 'Assign':
         return this.evaluateNode(expression.value, scope, `${localKey}:assign-value`, sourceAddressHandle);
       case 'ArrowFunction':
-        return this.evaluateArrowFunction(expression, scope, localKey, sourceAddressHandle);
+        return this.evaluateArrowFunction(expression, scope, localKey, sourceAddressHandle, contextualType);
       case 'ValueConverter':
         return this.evaluateValueConverter(expression, scope, localKey, sourceAddressHandle);
       case 'BindingBehavior':
@@ -276,6 +429,139 @@ export class CheckerExpressionTypeEvaluator {
           'Custom expression type projection must be supplied by the custom expression implementation.',
         );
     }
+  }
+
+  private evaluateMemberOwnerNodeAtOffset(
+    expression: ExpressionAstNode,
+    offset: number,
+    scope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+    contextualType: CheckerTypeReference | null = null,
+  ): CheckerExpressionTypeEvaluation | null {
+    switch (expression.$kind) {
+      case 'AccessMember':
+        return this.memberNameContainsOffset(expression, offset)
+          ? this.evaluateNode(expression.object, scope, `${localKey}:owner:${expression.name.name}`, sourceAddressHandle)
+          : this.evaluateMemberOwnerNodeAtOffset(expression.object, offset, scope, `${localKey}:object`, sourceAddressHandle);
+      case 'CallMember':
+        return this.memberNameContainsOffset(expression, offset)
+          ? this.evaluateNode(expression.object, scope, `${localKey}:owner:${expression.name.name}`, sourceAddressHandle)
+          : this.evaluateMemberOwnerNodeAtOffset(expression.object, offset, scope, `${localKey}:object`, sourceAddressHandle)
+            ?? this.evaluateMemberOwnerNodeListAtOffset(expression.args, offset, scope, `${localKey}:args`, sourceAddressHandle);
+      case 'Paren':
+      case 'Unary':
+        return this.evaluateMemberOwnerNodeAtOffset(expression.expression, offset, scope, `${localKey}:expression`, sourceAddressHandle, contextualType);
+      case 'AccessKeyed':
+        return this.evaluateMemberOwnerNodeAtOffset(expression.object, offset, scope, `${localKey}:object`, sourceAddressHandle)
+          ?? this.evaluateMemberOwnerNodeAtOffset(expression.key, offset, scope, `${localKey}:key`, sourceAddressHandle);
+      case 'CallFunction':
+        return this.evaluateMemberOwnerNodeAtOffset(expression.func, offset, scope, `${localKey}:func`, sourceAddressHandle)
+          ?? this.evaluateMemberOwnerNodeListAtOffset(expression.args, offset, scope, `${localKey}:args`, sourceAddressHandle);
+      case 'CallScope':
+      case 'CallGlobal':
+        return this.evaluateMemberOwnerNodeListAtOffset(expression.args, offset, scope, `${localKey}:args`, sourceAddressHandle);
+      case 'New':
+        return this.evaluateMemberOwnerNodeAtOffset(expression.func, offset, scope, `${localKey}:func`, sourceAddressHandle)
+          ?? this.evaluateMemberOwnerNodeListAtOffset(expression.args, offset, scope, `${localKey}:args`, sourceAddressHandle);
+      case 'TaggedTemplate':
+        return this.evaluateMemberOwnerNodeAtOffset(expression.func, offset, scope, `${localKey}:func`, sourceAddressHandle)
+          ?? this.evaluateMemberOwnerNodeListAtOffset(expression.expressions, offset, scope, `${localKey}:expressions`, sourceAddressHandle);
+      case 'Binary':
+        return this.evaluateMemberOwnerNodeAtOffset(expression.left, offset, scope, `${localKey}:left`, sourceAddressHandle)
+          ?? this.evaluateMemberOwnerNodeAtOffset(expression.right, offset, scope, `${localKey}:right`, sourceAddressHandle);
+      case 'Conditional':
+        return this.evaluateMemberOwnerNodeAtOffset(expression.condition, offset, scope, `${localKey}:condition`, sourceAddressHandle)
+          ?? this.evaluateMemberOwnerNodeAtOffset(expression.yes, offset, scope, `${localKey}:yes`, sourceAddressHandle)
+          ?? this.evaluateMemberOwnerNodeAtOffset(expression.no, offset, scope, `${localKey}:no`, sourceAddressHandle);
+      case 'Assign':
+        return this.evaluateMemberOwnerNodeAtOffset(expression.target, offset, scope, `${localKey}:target`, sourceAddressHandle)
+          ?? this.evaluateMemberOwnerNodeAtOffset(expression.value, offset, scope, `${localKey}:value`, sourceAddressHandle);
+      case 'ArrowFunction': {
+        if (!this.expressionContainsOffset(expression.body, offset)) {
+          return null;
+        }
+        return this.evaluateMemberOwnerNodeAtOffset(
+          expression.body,
+          offset,
+          this.arrowFunctionScope(expression, scope, `${localKey}:arrow`, sourceAddressHandle, contextualType),
+          `${localKey}:arrow-body`,
+          sourceAddressHandle,
+        );
+      }
+      case 'ArrayLiteral':
+        return this.evaluateMemberOwnerNodeListAtOffset(expression.elements, offset, scope, `${localKey}:elements`, sourceAddressHandle);
+      case 'ObjectLiteral':
+        return this.evaluateMemberOwnerNodeListAtOffset(expression.values, offset, scope, `${localKey}:values`, sourceAddressHandle);
+      case 'Template':
+      case 'Interpolation':
+        return this.evaluateMemberOwnerNodeListAtOffset(expression.expressions, offset, scope, `${localKey}:expressions`, sourceAddressHandle);
+      case 'ForOfStatement':
+        return this.evaluateMemberOwnerNodeAtOffset(expression.iterable, offset, scope, `${localKey}:iterable`, sourceAddressHandle);
+      case 'BindingPatternDefault':
+        return this.evaluateMemberOwnerNodeAtOffset(expression.target, offset, scope, `${localKey}:target`, sourceAddressHandle)
+          ?? this.evaluateMemberOwnerNodeAtOffset(expression.default, offset, scope, `${localKey}:default`, sourceAddressHandle);
+      case 'ArrayBindingPattern':
+        return this.evaluateMemberOwnerNodeListAtOffset(expression.elements, offset, scope, `${localKey}:elements`, sourceAddressHandle)
+          ?? (expression.rest == null ? null : this.evaluateMemberOwnerNodeAtOffset(expression.rest, offset, scope, `${localKey}:rest`, sourceAddressHandle));
+      case 'ObjectBindingPattern':
+        return this.evaluateMemberOwnerNodeListAtOffset(expression.properties.map((property) => property.value), offset, scope, `${localKey}:properties`, sourceAddressHandle)
+          ?? (expression.rest == null ? null : this.evaluateMemberOwnerNodeAtOffset(expression.rest, offset, scope, `${localKey}:rest`, sourceAddressHandle));
+      case 'DestructuringAssignment':
+        return this.evaluateMemberOwnerNodeAtOffset(expression.pattern, offset, scope, `${localKey}:pattern`, sourceAddressHandle)
+          ?? this.evaluateMemberOwnerNodeAtOffset(expression.source, offset, scope, `${localKey}:source`, sourceAddressHandle);
+      case 'AccessThis':
+      case 'AccessBoundary':
+      case 'AccessScope':
+      case 'AccessGlobal':
+      case 'PrimitiveLiteral':
+      case 'Identifier':
+      case 'BindingIdentifier':
+      case 'BindingPatternHole':
+      case 'Custom':
+        return null;
+    }
+    return null;
+  }
+
+  private evaluateMemberOwnerNodeListAtOffset(
+    expressions: readonly ExpressionAstNode[],
+    offset: number,
+    scope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerExpressionTypeEvaluation | null {
+    for (const [index, expression] of expressions.entries()) {
+      if (!this.expressionContainsOffset(expression, offset)) {
+        continue;
+      }
+      const evaluation = this.evaluateMemberOwnerNodeAtOffset(
+        expression,
+        offset,
+        scope,
+        `${localKey}:${index}`,
+        sourceAddressHandle,
+      );
+      if (evaluation != null) {
+        return evaluation;
+      }
+    }
+    return null;
+  }
+
+  private memberNameContainsOffset(
+    expression: AccessMemberExpression | CallMemberExpression,
+    offset: number,
+  ): boolean {
+    return offset >= expression.object.span.end
+      && offset <= expression.name.span.end;
+  }
+
+  private expressionContainsOffset(
+    expression: ExpressionAstNode,
+    offset: number,
+  ): boolean {
+    return expression.span.start <= offset && offset <= expression.span.end;
   }
 
   private evaluateAccessThis(
@@ -483,7 +769,7 @@ export class CheckerExpressionTypeEvaluator {
       }
     }
 
-    if (owner.typeShape.indexedValueType != null) {
+    if (owner.typeShape.indexedValueType?.productHandle != null) {
       return this.resolveReference(
         expression,
         owner.typeShape.indexedValueType,
@@ -708,8 +994,9 @@ export class CheckerExpressionTypeEvaluator {
     scope: BindingScope,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
+    contextualType: CheckerTypeReference | null,
   ): CheckerExpressionTypeEvaluation {
-    const functionScope = this.arrowFunctionScope(expression, scope, localKey, sourceAddressHandle);
+    const functionScope = this.arrowFunctionScope(expression, scope, localKey, sourceAddressHandle, contextualType);
     const body = this.evaluateNode(expression.body, functionScope, `${localKey}:return`, sourceAddressHandle);
     const returnType = typeReferenceForEvaluation(body);
     return this.type(
@@ -723,6 +1010,7 @@ export class CheckerExpressionTypeEvaluator {
     parentScope: BindingScope,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
+    contextualType: CheckerTypeReference | null = null,
   ): BindingScope {
     return new BindingScope(
       this.store.handles.product(`type-system:arrow-scope:${localKey}`),
@@ -734,7 +1022,7 @@ export class CheckerExpressionTypeEvaluator {
         BindingContextKind.Object,
         null,
         null,
-        this.arrowParameterSlots(expression, parentScope, localKey, sourceAddressHandle),
+        this.arrowParameterSlots(expression, parentScope, localKey, sourceAddressHandle, contextualType),
         sourceAddressHandle,
       ),
       new OverrideContext(
@@ -756,12 +1044,13 @@ export class CheckerExpressionTypeEvaluator {
     scope: BindingScope,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
+    contextualType: CheckerTypeReference | null,
   ): readonly BindingContextSlot[] {
     return expression.args.map((parameter, index) => new BindingContextSlot(
       parameter.name.name,
       null,
       null,
-      this.arrowParameterType(expression, scope, localKey, sourceAddressHandle, parameter.name.name, index),
+      this.arrowParameterType(expression, scope, localKey, sourceAddressHandle, parameter.name.name, index, contextualType),
       sourceAddressHandle,
     ));
   }
@@ -773,8 +1062,21 @@ export class CheckerExpressionTypeEvaluator {
     sourceAddressHandle: AddressHandle | null,
     name: string,
     index: number,
+    contextualType: CheckerTypeReference | null,
   ): CheckerTypeReference {
     const isRest = expression.rest && index === expression.args.length - 1;
+    const listenerEventType = index === 0 && !isRest
+      ? scope.lookup('$event').slot?.targetType ?? null
+      : null;
+    if (listenerEventType != null) {
+      return listenerEventType;
+    }
+    const contextualParameterType = !isRest
+      ? this.contextualArrowParameterType(expression, contextualType, index, `${localKey}:param:${index}:${name}:context`, sourceAddressHandle)
+      : null;
+    if (contextualParameterType != null) {
+      return contextualParameterType;
+    }
     return isRest
       ? this.synthesizeArrayType(
         expression,
@@ -784,6 +1086,38 @@ export class CheckerExpressionTypeEvaluator {
         sourceAddressHandle,
       ).toReference()
       : this.synthesizeUnknownType(`${localKey}:param:${index}:${name}`, sourceAddressHandle);
+  }
+
+  private contextualArrowParameterType(
+    expression: ArrowFunction,
+    contextualType: CheckerTypeReference | null,
+    index: number,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    const typeShape = this.typeShapeForReference(contextualType);
+    const carrier = typeShape?.carrier;
+    const signature = carrier?.type.getCallSignatures()[0] ?? null;
+    const symbol = signature?.getParameters()[index] ?? null;
+    const declaration = symbol?.valueDeclaration ?? symbol?.declarations?.[0] ?? carrier?.declarations[0] ?? null;
+    if (carrier == null || signature == null || symbol == null || declaration == null) {
+      return null;
+    }
+    const parameterType = carrier.checker.getTypeOfSymbolAtLocation(symbol, declaration);
+    return this.projectType(
+      expression,
+      carrier.checker,
+      parameterType,
+      localKey,
+      sourceAddressHandle,
+      'Projected arrow-function parameter through contextual target type.',
+    ).typeReference;
+  }
+
+  private typeShapeForReference(reference: CheckerTypeReference | null): CheckerTypeShape | null {
+    return reference?.productHandle == null
+      ? null
+      : this.store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle);
   }
 
   private projectArrowFunctionType(
@@ -856,7 +1190,7 @@ export class CheckerExpressionTypeEvaluator {
       const value = expression.values[index] ?? null;
       const result = value == null
         ? null
-        : this.evaluateNode(value, scope, `${localKey}:object:${index}:${encodeLocalPart(String(key))}`, sourceAddressHandle);
+        : this.evaluateNode(value, scope, `${localKey}:object:${index}:${localKeyPart(String(key))}`, sourceAddressHandle);
       const valueType = result?.kind === CheckerExpressionTypeEvaluationResultKind.Type
         ? result.typeReference
         : null;
@@ -986,7 +1320,7 @@ export class CheckerExpressionTypeEvaluator {
     if (right.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return right;
     }
-    if (sameTypeReference(left.typeReference, right.typeReference)) {
+    if (sameCheckerTypeReference(left.typeReference, right.typeReference)) {
       return left;
     }
 
@@ -1186,7 +1520,7 @@ export class CheckerExpressionTypeEvaluator {
     if (reference.productHandle == null) {
       return this.open(openKind, expression, openSummary, reference);
     }
-    const typeShape = this.store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle);
+    const typeShape = this.typeAccess.resolveReference(reference);
     if (typeShape == null) {
       return this.open(
         CheckerExpressionTypeOpenKind.MissingTypeDetail,
@@ -1209,6 +1543,10 @@ export class CheckerExpressionTypeEvaluator {
     }
     const member = ownerType.members.find((candidate) => candidate.name === memberName) ?? null;
     if (member == null) {
+      const indexedMember = this.typeAccess.stringIndexMemberValueType(ownerType, memberName, `${localKey}:string-index`);
+      if (indexedMember != null) {
+        return this.type(indexedMember, `Projected string-index value type for member '${memberName}' on '${ownerType.display}'.`);
+      }
       return this.open(
         CheckerExpressionTypeOpenKind.MissingMember,
         expression,
@@ -1216,34 +1554,9 @@ export class CheckerExpressionTypeEvaluator {
       );
     }
 
-    return this.evaluateMemberValueType(expression, member, localKey);
-  }
-
-  private evaluateMemberValueType(
-    expression: ExpressionAstNode,
-    member: CheckerTypeMember,
-    localKey: string,
-  ): CheckerExpressionTypeEvaluation {
-    if (member.valueType?.productHandle != null) {
-      const existing = this.store.productDetails.read(TypeSystemProductDetails.TypeShape, member.valueType.productHandle);
-      if (existing != null) {
-        return this.type(existing, `Resolved projected value type for member '${member.name}'.`);
-      }
-    }
-
-    if (member.carrier?.valueType != null) {
-      const sourceNode = member.carrier.declarations[0] ?? null;
-      const typeShape = this.projector.ensureProjection({
-        localKey: `${localKey}:value`,
-        checker: member.carrier.checker,
-        type: member.carrier.valueType,
-        origin: CheckerTypeProjectionOrigin.TypeChecker,
-        sourceNode,
-        sourceAddressHandle: member.sourceAddressHandle,
-        ownerIdentityHandle: member.identityHandle,
-        display: member.valueType?.display ?? null,
-      } satisfies CheckerTypeProjectionRequest);
-      return this.type(typeShape, `Projected value type for member '${member.name}'.`);
+    const valueType = this.typeAccess.declaredMemberValueType(member, localKey);
+    if (valueType != null) {
+      return this.type(valueType, `Resolved projected value type for member '${member.name}'.`);
     }
 
     return this.open(
@@ -1379,7 +1692,11 @@ export class CheckerExpressionTypeEvaluator {
     localKey: string,
     sourceAddressHandle: AddressHandle | null = null,
   ): CheckerExpressionTypeEvaluation {
-    if (iterableType.iteratedValueType != null) {
+    if (iterableType.shapeKind === CheckerTypeShapeKind.Any) {
+      return this.type(iterableType, `Repeat local from iterable '${iterableType.display}' remains any.`);
+    }
+
+    if (iterableType.iteratedValueType?.productHandle != null) {
       return this.resolveReference(
         expression,
         iterableType.iteratedValueType,
@@ -1405,7 +1722,7 @@ export class CheckerExpressionTypeEvaluator {
       return mapEntryType;
     }
 
-    const elementType = iterableElementType(checker, type);
+    const elementType = checkerIterableElementType(checker, type);
     if (elementType == null) {
       return this.open(
         CheckerExpressionTypeOpenKind.MissingIterableElementType,
@@ -1425,7 +1742,7 @@ export class CheckerExpressionTypeEvaluator {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerExpressionTypeEvaluation | null {
-    const symbolName = collectionSymbolName(type);
+    const symbolName = checkerCollectionSymbolName(type);
     if (symbolName !== 'Map' && symbolName !== 'ReadonlyMap') {
       return null;
     }
@@ -1438,7 +1755,7 @@ export class CheckerExpressionTypeEvaluator {
     const keyReference = this.projectType(expression, checker, keyType, `${localKey}:key`, sourceAddressHandle).typeReference;
     const valueReference = this.projectType(expression, checker, valueType, `${localKey}:value`, sourceAddressHandle).typeReference;
     const lengthReference = this.projectType(expression, checker, checker.getNumberType(), `${localKey}:length`, sourceAddressHandle).typeReference;
-    const indexedValueType = sameTypeReference(keyReference, valueReference)
+    const indexedValueType = sameCheckerTypeReference(keyReference, valueReference)
       ? keyReference
       : null;
     const tupleType = this.projector.ensureSyntheticProjection({
@@ -1456,122 +1773,6 @@ export class CheckerExpressionTypeEvaluator {
       sourceAddressHandle,
     } satisfies CheckerSyntheticTypeProjectionRequest);
     return this.type(tupleType, `Synthesized ${symbolName} repeat entry type for destructuring.`);
-  }
-
-  private localTypesForBindingPattern(
-    pattern: BindingIdentifierOrPattern,
-    sourceType: CheckerTypeShape | null,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-  ): readonly CheckerBindingPatternLocalType[] {
-    return this.localTypesForPattern(pattern, sourceType, localKey, sourceAddressHandle);
-  }
-
-  private localTypesForPattern(
-    pattern: BindingPattern,
-    sourceType: CheckerTypeShape | null,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-  ): readonly CheckerBindingPatternLocalType[] {
-    switch (pattern.$kind) {
-      case 'BindingIdentifier':
-        return [
-          new CheckerBindingPatternLocalType(
-            pattern.name.name,
-            sourceType?.toReference() ?? null,
-          ),
-        ];
-      case 'BindingPatternDefault':
-        return this.localTypesForPattern(pattern.target, sourceType, `${localKey}:default`, sourceAddressHandle);
-      case 'BindingPatternHole':
-        return [];
-      case 'ArrayBindingPattern': {
-        const locals: CheckerBindingPatternLocalType[] = [];
-        pattern.elements.forEach((element, index) => {
-          const elementType = sourceType == null
-            ? null
-            : this.typeForArrayPatternElement(element, sourceType, index, `${localKey}:array:${index}`, sourceAddressHandle);
-          locals.push(...this.localTypesForPattern(element, elementType, `${localKey}:array:${index}`, sourceAddressHandle));
-        });
-        if (pattern.rest != null) {
-          locals.push(...this.localTypesForPattern(pattern.rest, null, `${localKey}:array:rest`, sourceAddressHandle));
-        }
-        return locals;
-      }
-      case 'ObjectBindingPattern': {
-        const locals: CheckerBindingPatternLocalType[] = [];
-        pattern.properties.forEach((property, index) => {
-          const propertyType = sourceType == null
-            ? null
-            : this.typeForObjectPatternProperty(property.value, sourceType, String(property.key), `${localKey}:object:${encodeLocalPart(String(property.key))}:${index}`);
-          locals.push(...this.localTypesForPattern(
-            property.value,
-            propertyType,
-            `${localKey}:object:${encodeLocalPart(String(property.key))}:${index}`,
-            sourceAddressHandle,
-          ));
-        });
-        if (pattern.rest != null) {
-          locals.push(...this.localTypesForPattern(pattern.rest, null, `${localKey}:object:rest`, sourceAddressHandle));
-        }
-        return locals;
-      }
-    }
-  }
-
-  private typeForArrayPatternElement(
-    expression: ExpressionAstNode,
-    sourceType: CheckerTypeShape,
-    index: number,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-  ): CheckerTypeShape | null {
-    const indexedMember = this.evaluateMemberOnType(expression, sourceType, String(index), `${localKey}:member`);
-    if (indexedMember.kind === CheckerExpressionTypeEvaluationResultKind.Type) {
-      return indexedMember.typeShape;
-    }
-
-    if (sourceType.indexedValueType != null) {
-      const indexed = this.resolveReference(
-        expression,
-        sourceType.indexedValueType,
-        `${localKey}:indexed`,
-        CheckerExpressionTypeOpenKind.MissingMemberValueType,
-        `Indexed value type for '${sourceType.display}' could not be hydrated while projecting an array binding pattern.`,
-      );
-      return indexed.kind === CheckerExpressionTypeEvaluationResultKind.Type
-        ? indexed.typeShape
-        : null;
-    }
-
-    const checker = sourceType.carrier?.checker ?? null;
-    const type = sourceType.carrier?.type ?? null;
-    const property = checker == null || type == null
-      ? null
-      : checker.getPropertyOfType(type, String(index));
-    const propertyDeclaration = property?.valueDeclaration ?? property?.declarations?.[0] ?? null;
-    const indexType = checker == null || type == null
-      ? null
-      : property != null && propertyDeclaration != null
-        ? checker.getTypeOfSymbolAtLocation(property, propertyDeclaration)
-        : checker.getIndexTypeOfType(type, ts.IndexKind.Number);
-    if (checker == null || indexType == null) {
-      return null;
-    }
-
-    return this.projectType(expression, checker, indexType, `${localKey}:checker-index`, sourceAddressHandle).typeShape;
-  }
-
-  private typeForObjectPatternProperty(
-    expression: ExpressionAstNode,
-    sourceType: CheckerTypeShape,
-    propertyName: string,
-    localKey: string,
-  ): CheckerTypeShape | null {
-    const member = this.evaluateMemberOnType(expression, sourceType, propertyName, `${localKey}:member`);
-    return member.kind === CheckerExpressionTypeEvaluationResultKind.Type
-      ? member.typeShape
-      : null;
   }
 
   private synthesizeUnknownType(
@@ -1638,6 +1839,7 @@ export class CheckerExpressionTypeEvaluator {
     type: ts.Type,
     localKey: string,
     sourceAddressHandle: AddressHandle | null = null,
+    summary: string = `Projected ${expression.$kind} through the TypeChecker.`,
   ): CheckerExpressionType {
     const typeShape = this.projector.ensureProjection({
       localKey,
@@ -1647,7 +1849,7 @@ export class CheckerExpressionTypeEvaluator {
       sourceAddressHandle,
       display: checker.typeToString(type),
     } satisfies CheckerTypeProjectionRequest);
-    return this.type(typeShape, `Projected ${expression.$kind} through the TypeChecker.`);
+    return this.type(typeShape, summary);
   }
 
   private findChecker(scope: BindingScope): ts.TypeChecker | null {
@@ -1804,13 +2006,6 @@ function commonTypeReference(
     : null;
 }
 
-function sameTypeReference(
-  left: CheckerTypeReference,
-  right: CheckerTypeReference,
-): boolean {
-  return left.checkerKey === right.checkerKey && left.display === right.display;
-}
-
 function commonNullableTypeReference(
   references: readonly (CheckerTypeReference | null)[],
 ): CheckerTypeReference | null {
@@ -1911,6 +2106,33 @@ function displayArrowFunctionType(
   return `(${parameters}) => ${returnType?.display ?? 'unknown'}`;
 }
 
+function contextualEvaluationLocalKey(
+  localKey: string,
+  contextualType: CheckerTypeReference | null,
+): string {
+  if (contextualType == null) {
+    return localKey;
+  }
+  const contextKey = contextualType.checkerKey
+    ?? contextualType.productHandle
+    ?? contextualType.display
+    ?? contextualType.shapeKind;
+  return `${localKey}:contextual:${contextKey}`;
+}
+
+function contextualTypeForEvaluation(
+  expression: ExpressionAstNode,
+  contextualType: CheckerTypeReference | null,
+): CheckerTypeReference | null {
+  if (contextualType == null) {
+    return null;
+  }
+  if (expression.$kind === 'Paren') {
+    return contextualTypeForEvaluation(expression.expression, contextualType);
+  }
+  return expression.$kind === 'ArrowFunction' ? contextualType : null;
+}
+
 function typeReferenceForEvaluation(
   evaluation: CheckerExpressionTypeEvaluation,
 ): CheckerTypeReference | null {
@@ -1923,10 +2145,6 @@ function arrowFunctionSummary(returnType: CheckerTypeReference | null): string {
   return returnType == null
     ? 'Synthesized ArrowFunction shape; return type remains open because the body could not be projected.'
     : 'Synthesized ArrowFunction shape with projected body return type.';
-}
-
-function encodeLocalPart(value: string): string {
-  return value.replace(/[^a-zA-Z0-9_$.-]+/g, '_');
 }
 
 function primitiveType(
@@ -1961,28 +2179,4 @@ function primitiveTypeByName(
     case 'undefined':
       return checker.getUndefinedType();
   }
-}
-
-function iterableElementType(
-  checker: ts.TypeChecker,
-  type: ts.Type,
-): ts.Type | null {
-  if ((type.flags & (ts.TypeFlags.Number | ts.TypeFlags.NumberLiteral)) !== 0) {
-    return checker.getNumberType();
-  }
-
-  const numberIndexType = checker.getIndexTypeOfType(type, ts.IndexKind.Number);
-  if (numberIndexType != null) {
-    return numberIndexType;
-  }
-
-  const symbolName = collectionSymbolName(type);
-  if (symbolName === 'Set' || symbolName === 'ReadonlySet') {
-    return checker.getTypeArguments(type as ts.TypeReference)[0] ?? null;
-  }
-  return null;
-}
-
-function collectionSymbolName(type: ts.Type): string | null {
-  return type.symbol?.getName() ?? type.aliasSymbol?.getName() ?? null;
 }

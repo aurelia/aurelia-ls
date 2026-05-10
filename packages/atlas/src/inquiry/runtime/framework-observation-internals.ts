@@ -16,6 +16,7 @@ import type {
 import {
   readTypeScriptCallSiteEntry,
   requiredSourceFileIdentity,
+  sourceRangeKey,
   sourceRangeForSourceFileNode,
   SourceProjectKeyedMemo,
   SourceProjectMemo,
@@ -23,8 +24,12 @@ import {
 import type { SourceRange } from "../locus.js";
 import type { FrameworkObserverEntityRow } from "./framework-entities.js";
 import type { FrameworkDiscoveryFilters } from "./framework-filters.js";
-import { readFrameworkObserverEntities } from "./framework-observer-entities.js";
+import {
+  readFrameworkObserverEntities,
+  sourceRangeForObserverEntity,
+} from "./framework-observer-entities.js";
 import { sourceRangeFromFileSpan } from "./framework-support.js";
+import { matchesFilterValue } from "./lens-filter-utils.js";
 import {
   isNestedExecutionBoundary,
   propertyNameText,
@@ -1312,7 +1317,7 @@ function observationInternalsForSourceFile(
       const surfaceKind = observationClassSurfaces.get(node.name.text);
       if (
         surfaceKind !== undefined &&
-        surfaceKindMatches(surfaceKind, requestedSurfaceKind)
+        matchesFilterValue(surfaceKind, requestedSurfaceKind)
       ) {
         for (const member of node.members) {
           const executable = executableForClassMember(
@@ -1340,7 +1345,7 @@ function observationInternalsForSourceFile(
       );
       if (
         resourceWatchSurfaceKind !== undefined &&
-        surfaceKindMatches(resourceWatchSurfaceKind, requestedSurfaceKind)
+        matchesFilterValue(resourceWatchSurfaceKind, requestedSurfaceKind)
       ) {
         for (const member of node.members) {
           if (
@@ -1372,7 +1377,7 @@ function observationInternalsForSourceFile(
       const surfaceKind = observationFunctionSurfaceKind(file, node.name.text);
       if (
         surfaceKind !== undefined &&
-        surfaceKindMatches(surfaceKind, requestedSurfaceKind)
+        matchesFilterValue(surfaceKind, requestedSurfaceKind)
       ) {
         const declaration = node as ts.FunctionDeclaration & {
           readonly name: ts.Identifier;
@@ -1396,7 +1401,7 @@ function observationInternalsForSourceFile(
       const objectMethodSurface = observationObjectMethodSurface(file, node);
       if (
         objectMethodSurface !== null &&
-        surfaceKindMatches(
+        matchesFilterValue(
           objectMethodSurface.surfaceKind,
           requestedSurfaceKind,
         )
@@ -1423,7 +1428,7 @@ function observationInternalsForSourceFile(
       const surfaceKind = observationFunctionSurfaceKind(file, node.name.text);
       if (
         surfaceKind !== undefined &&
-        surfaceKindMatches(surfaceKind, requestedSurfaceKind)
+        matchesFilterValue(surfaceKind, requestedSurfaceKind)
       ) {
         const executable = executableForFunctionLike(
           sourceFile,
@@ -1458,13 +1463,6 @@ function observationInternalsForSourceFile(
       ),
     },
   ];
-}
-
-function surfaceKindMatches(
-  surfaceKind: FrameworkObservationSurfaceKind,
-  requestedSurfaceKind: string | undefined,
-): boolean {
-  return requestedSurfaceKind === undefined || surfaceKind === requestedSurfaceKind;
 }
 
 function isObservationSourceFile(file: SourceFileIdentity): boolean {
@@ -1534,7 +1532,7 @@ function executableForFunctionLike(
     packageName,
     surfaceKind,
     "function",
-    ownerNameForFunction(sourceFile, declaration.name.text),
+    ownerNameForFunction(file, declaration.name.text),
     declaration.name.text,
     declaration.body,
     declaration,
@@ -1594,16 +1592,23 @@ function executable(
   };
 }
 
-function ownerNameForFunction(
-  sourceFile: ts.SourceFile,
-  functionName: string,
-): string {
-  if (sourceFile.fileName.replace(/\\/gu, "/").endsWith("/connectable.ts")) {
+function ownerNameForFunction(file: SourceFileIdentity, functionName: string): string {
+  if (file.repoPath.endsWith("runtime/src/connectable.ts")) {
     return "connectable";
   }
-  return functionName === "getCollectionObserver"
-    ? "module"
-    : sourceFile.fileName;
+  if (functionName === "getCollectionObserver") {
+    return "module";
+  }
+  if (file.repoPath.endsWith("runtime-html/src/watch.ts")) {
+    return "watch";
+  }
+  if (
+    functionName === "createWatchers" &&
+    file.repoPath.endsWith("runtime-html/src/templating/controller.ts")
+  ) {
+    return "Controller";
+  }
+  return functionName;
 }
 
 function surfaceMethodRow(
@@ -1617,7 +1622,7 @@ function surfaceMethodRow(
 ): FrameworkObservationSurfaceMethodRow {
   const parameters = declaration.parameters;
   return {
-    id: `framework-observation-method:${executable.packageId}:${executable.surfaceKind}:${executable.ownerName}:${executable.methodName}:${sourceKey(executable.methodSource)}`,
+    id: `framework-observation-method:${executable.packageId}:${executable.surfaceKind}:${executable.ownerName}:${executable.methodName}:${sourceRangeKey(executable.methodSource)}`,
     packageId: executable.packageId,
     packageName: executable.packageName,
     surfaceKind: executable.surfaceKind,
@@ -1765,7 +1770,7 @@ function flowSiteRow(
     classification.targetKind,
   );
   return {
-    id: `framework-observation-site:${executable.packageId}:${executable.surfaceKind}:${executable.ownerName}:${executable.methodName}:${classification.siteKind}:${sourceKey(source)}`,
+    id: `framework-observation-site:${executable.packageId}:${executable.surfaceKind}:${executable.ownerName}:${executable.methodName}:${classification.siteKind}:${sourceRangeKey(source)}`,
     packageId: executable.packageId,
     packageName: executable.packageName,
     surfaceKind: executable.surfaceKind,
@@ -2395,7 +2400,7 @@ function flowEntityLinkRow(
   entity: FrameworkObserverEntityRow,
   matchBasis: FrameworkObservationTargetMatchBasis,
 ): FrameworkObservationFlowEntityLinkRow {
-  const entitySource = entitySourceRange(entity);
+  const entitySource = sourceRangeForObserverEntity(entity);
   return {
     id: `${site.id}:entity-link:${matchBasis}:${entity.packageId}:${entity.exportEntry.exportName}`,
     packageId: site.packageId,
@@ -2413,22 +2418,12 @@ function flowEntityLinkRow(
     entityResolvedName: entity.exportEntry.resolvedName,
     entityObserverKinds: entity.observerKinds,
     entityObserverCapabilities: entity.observerCapabilities,
-    ...(entitySource === undefined ? {} : { entitySource }),
+    ...(entitySource === null ? {} : { entitySource }),
     source: site.source,
     summary: `${site.ownerName}.${site.methodName} ${summaryVerb(
       site,
     )} ${site.targetName}, linked to observer entity ${entity.packageId}:${entity.exportEntry.exportName} by ${matchBasis}.`,
   };
-}
-
-function entitySourceRange(
-  entity: FrameworkObserverEntityRow,
-): SourceRange | undefined {
-  const target = entity.exportEntry.targets[0];
-  if (target?.file === undefined || target.span === undefined) {
-    return undefined;
-  }
-  return sourceRangeFromFileSpan(target.file.repoPath, target.span);
 }
 
 function targetRootName(targetName: string): string {
@@ -2631,7 +2626,7 @@ function compareSurfaceMethods(
     left.surfaceKind.localeCompare(right.surfaceKind) ||
     left.ownerName.localeCompare(right.ownerName) ||
     left.methodName.localeCompare(right.methodName) ||
-    sourceKey(left.source).localeCompare(sourceKey(right.source))
+    sourceRangeKey(left.source).localeCompare(sourceRangeKey(right.source))
   );
 }
 
@@ -2647,7 +2642,7 @@ function compareFlowEntityLinks(
     left.siteKind.localeCompare(right.siteKind) ||
     left.entityPackageId.localeCompare(right.entityPackageId) ||
     left.entityExportName.localeCompare(right.entityExportName) ||
-    sourceKey(left.source).localeCompare(sourceKey(right.source))
+    sourceRangeKey(left.source).localeCompare(sourceRangeKey(right.source))
   );
 }
 
@@ -2661,7 +2656,7 @@ function compareFlowSites(
     left.ownerName.localeCompare(right.ownerName) ||
     left.methodName.localeCompare(right.methodName) ||
     left.siteKind.localeCompare(right.siteKind) ||
-    sourceKey(left.source).localeCompare(sourceKey(right.source))
+    sourceRangeKey(left.source).localeCompare(sourceRangeKey(right.source))
   );
 }
 
@@ -2677,16 +2672,6 @@ function compareInternalRelationships(
     left.relation.localeCompare(right.relation) ||
     left.from.name.localeCompare(right.from.name) ||
     left.to.name.localeCompare(right.to.name) ||
-    sourceKey(left.source).localeCompare(sourceKey(right.source))
+    sourceRangeKey(left.source).localeCompare(sourceRangeKey(right.source))
   );
-}
-
-function sourceKey(source: SourceRange): string {
-  return [
-    source.filePath,
-    source.start.line,
-    source.start.character,
-    source.end.line,
-    source.end.character,
-  ].join(":");
 }

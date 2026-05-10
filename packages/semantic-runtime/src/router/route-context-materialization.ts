@@ -3,22 +3,15 @@ import type { AppRoot } from '../configuration/app-root.js';
 import type { ConfigurationRecognitionProjectResult } from '../configuration/configuration-recognition-project-pass.js';
 import {
   EvidenceKind,
-  EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type {
   IdentityHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
-import { RouteRecognizerIdentity, RouterIdentity } from '../kernel/identity.js';
 import {
-  MaterializationRecord,
-  MaterializedProduct,
-} from '../kernel/materialization.js';
-import {
-  compactFieldProvenance,
+  fieldProvenanceEntries,
   FieldProvenance,
-  ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
   KernelStoreBatch,
@@ -41,13 +34,12 @@ import {
 } from './model.js';
 import type { RouteConfigRecognitionProjectResult } from './route-config-recognition.js';
 import type { RouterOptionsMaterializationProjectResult } from './router-options-materialization.js';
+import { routeRecognizerProductRecords, routerProductRecords } from './router-product-records.js';
 
-class RouteConfigContextEmission {
-  constructor(
-    readonly records: readonly KernelStoreRecord[],
-    readonly context: RouteConfigContextModel,
-    readonly recognizer: RouteRecognizerModel | null,
-  ) {}
+interface RouteConfigContextEmission {
+  readonly records: readonly KernelStoreRecord[];
+  readonly context: RouteConfigContextModel;
+  readonly recognizer: RouteRecognizerModel | null;
 }
 
 class RouteConfigGraph {
@@ -155,23 +147,8 @@ export class RouteConfigContextMaterializationProjectPass {
   ): RouteConfigContextMaterializationProjectResult {
     const graph = new RouteConfigGraph(routes.readRouteConfigs());
     const useEagerLoading = routerOptions?.readEffectiveRouterOptions()?.useEagerLoading === true;
-    const appRoots = configuration?.readConfiguration().appRoots ?? [];
-    const rootRouteConfigs = appRoots.length === 0
-      ? graph.roots()
-      : graph.rootsForAppRoots(appRoots);
-    const emitted = new Set<IdentityHandle>();
-    const emissions = rootRouteConfigs
-      .flatMap((routeConfig) => this.materializeContextTree(
-        store,
-        graph,
-        routeConfig,
-        null,
-        null,
-        0,
-        routeConfigContextName(routeConfig),
-        useEagerLoading,
-        emitted,
-      ));
+    const rootRouteConfigs = rootRouteConfigsForContextMaterialization(graph, configuration);
+    const emissions = this.materializeRootContextTrees(store, graph, rootRouteConfigs, useEagerLoading);
     const records = emissions.flatMap((emission) => emission.records);
     if (records.length > 0) {
       store.commit(new KernelStoreBatch(records, `router-route-config-context:${project.projectKey}`));
@@ -183,6 +160,26 @@ export class RouteConfigContextMaterializationProjectPass {
       emissions.flatMap((emission) => emission.recognizer == null ? [] : [emission.recognizer]),
       useEagerLoading,
     );
+  }
+
+  private materializeRootContextTrees(
+    store: KernelStore,
+    graph: RouteConfigGraph,
+    rootRouteConfigs: readonly RouteConfigModel[],
+    useEagerLoading: boolean,
+  ): readonly RouteConfigContextEmission[] {
+    const emitted = new Set<IdentityHandle>();
+    return rootRouteConfigs.flatMap((routeConfig) => this.materializeContextTree(
+      store,
+      graph,
+      routeConfig,
+      null,
+      null,
+      0,
+      routeConfigContextName(routeConfig),
+      useEagerLoading,
+      emitted,
+    ));
   }
 
   private materializeContextTree(
@@ -241,118 +238,170 @@ export class RouteConfigContextMaterializationProjectPass {
     const contextLocal = `router-route-config-context:${routeConfig.identityHandle}`;
     const ownsRecognizer = parent == null || !useEagerLoading;
     const recognizerLocal = `${contextLocal}:recognizer`;
-    const evidenceHandle = store.handles.evidence(contextLocal);
-    const provenanceHandle = store.handles.provenance(contextLocal);
-    const contextProductHandle = store.handles.product(contextLocal);
-    const contextIdentityHandle = store.handles.identity(contextLocal);
-    const recognizerProductHandle = ownsRecognizer
-      ? store.handles.product(recognizerLocal)
-      : parent!.recognizer.productHandle;
-    const recognizerIdentityHandle = ownsRecognizer
-      ? store.handles.identity(recognizerLocal)
-      : parent!.recognizer.identityHandle;
-    const sourceAddressHandle = routeConfig.sourceAddressHandle;
-    const contextReference = new RouterReference(
-      contextProductHandle,
-      contextIdentityHandle,
-      RouterModelKind.RouteConfigContext,
-      sourceAddressHandle,
+    const contextReference = routeConfigContextReference(store, contextLocal, routeConfig, friendlyPath);
+    const recognizerReference = routeConfigContextRecognizerReference(
+      store,
+      recognizerLocal,
+      routeConfig,
+      parent,
+      ownsRecognizer,
       friendlyPath,
     );
-    const recognizerReference = ownsRecognizer
-      ? new RouteRecognizerReference(
-        recognizerProductHandle,
-        recognizerIdentityHandle,
-        RouteRecognizerModelKind.RouteRecognizer,
-        sourceAddressHandle,
-        friendlyPath,
-      )
-      : parent!.recognizer;
-    const context = new RouteConfigContextModel(
-      contextProductHandle,
-      contextIdentityHandle,
-      parent?.toReference() ?? null,
-      root?.toReference() ?? contextReference,
-      routeConfig.toReference(),
-      recognizerReference,
-      children.map((child) => child.toReference()),
+    const context = materializedRouteConfigContext(
+      store,
+      contextLocal,
+      routeConfig,
+      parent,
+      root,
+      children,
       depth,
       friendlyPath,
-      children.length > 0 ? true : null,
-      sourceAddressHandle,
-      routeConfigContextFieldProvenance(provenanceHandle, parent, root, children),
+      contextReference,
+      recognizerReference,
     );
     const routeRecognizer = ownsRecognizer
-      ? new RouteRecognizerModel(
-        recognizerProductHandle!,
-        recognizerIdentityHandle!,
-        contextReference,
-        RouteRecognizerOwnershipKind.Own,
-        sourceAddressHandle,
-        routeRecognizerFieldProvenance(provenanceHandle),
-      )
+      ? ownedRouteRecognizer(store, recognizerLocal, routeConfig, contextReference)
       : null;
-    return new RouteConfigContextEmission(
-      [
-        new EvidenceRecord(
-          evidenceHandle,
-          EvidenceKind.ConfigurationFlow,
-          [EvidenceRole.Configuration],
-          'Router RouteConfigContext topology materialized from normalized RouteConfig.',
-          sourceAddressHandle,
-        ),
-        new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
-        new RouterIdentity(
-          contextIdentityHandle,
-          KernelVocabulary.Router.RouteConfigContext.key,
-          parent?.identityHandle ?? routeConfig.identityHandle,
-          sourceAddressHandle,
-          friendlyPath,
-        ),
-        new MaterializedProduct(
-          contextProductHandle,
-          KernelVocabulary.Router.RouteConfigContext.key,
-          contextIdentityHandle,
-          sourceAddressHandle,
-          provenanceHandle,
-        ),
-        new MaterializationRecord(
-          store.handles.materialization(contextLocal),
-          routeConfig.identityHandle,
-          [contextProductHandle],
-          [],
-          [],
-        ),
-        ...(ownsRecognizer
-          ? [
-            new RouteRecognizerIdentity(
-              recognizerIdentityHandle!,
-              KernelVocabulary.RouteRecognizer.RouteRecognizer.key,
-              contextIdentityHandle,
-              sourceAddressHandle,
-              friendlyPath,
-            ),
-            new MaterializedProduct(
-              recognizerProductHandle!,
-              KernelVocabulary.RouteRecognizer.RouteRecognizer.key,
-              recognizerIdentityHandle!,
-              sourceAddressHandle,
-              provenanceHandle,
-            ),
-            new MaterializationRecord(
-              store.handles.materialization(recognizerLocal),
-              contextIdentityHandle,
-              [recognizerProductHandle!],
-              [],
-              [],
-            ),
-          ]
-          : []),
+    return {
+      records: [
+        ...routeConfigContextRecords(store, contextLocal, routeConfig, parent, context),
+        ...routeRecognizerRecords(store, recognizerLocal, context, routeRecognizer),
       ],
       context,
-      routeRecognizer,
-    );
+      recognizer: routeRecognizer,
+    };
   }
+}
+
+function routeConfigContextReference(
+  store: KernelStore,
+  contextLocal: string,
+  routeConfig: RouteConfigModel,
+  friendlyPath: string,
+): RouterReference {
+  return new RouterReference(
+    store.handles.product(contextLocal),
+    store.handles.identity(contextLocal),
+    RouterModelKind.RouteConfigContext,
+    routeConfig.sourceAddressHandle,
+    friendlyPath,
+  );
+}
+
+function routeConfigContextRecognizerReference(
+  store: KernelStore,
+  recognizerLocal: string,
+  routeConfig: RouteConfigModel,
+  parent: RouteConfigContextModel | null,
+  ownsRecognizer: boolean,
+  friendlyPath: string,
+): RouteRecognizerReference {
+  return ownsRecognizer
+    ? new RouteRecognizerReference(
+      store.handles.product(recognizerLocal),
+      store.handles.identity(recognizerLocal),
+      RouteRecognizerModelKind.RouteRecognizer,
+      routeConfig.sourceAddressHandle,
+      friendlyPath,
+    )
+    : parent!.recognizer;
+}
+
+function materializedRouteConfigContext(
+  store: KernelStore,
+  contextLocal: string,
+  routeConfig: RouteConfigModel,
+  parent: RouteConfigContextModel | null,
+  root: RouteConfigContextModel | null,
+  children: readonly RouteConfigModel[],
+  depth: number,
+  friendlyPath: string,
+  contextReference: RouterReference,
+  recognizerReference: RouteRecognizerReference,
+): RouteConfigContextModel {
+  const provenanceHandle = store.handles.provenance(contextLocal);
+  return new RouteConfigContextModel(
+    store.handles.product(contextLocal),
+    store.handles.identity(contextLocal),
+    parent?.toReference() ?? null,
+    root?.toReference() ?? contextReference,
+    routeConfig.toReference(),
+    recognizerReference,
+    children.map((child) => child.toReference()),
+    depth,
+    friendlyPath,
+    children.length > 0 ? true : null,
+    routeConfig.sourceAddressHandle,
+    routeConfigContextFieldProvenance(provenanceHandle, parent, children),
+  );
+}
+
+function ownedRouteRecognizer(
+  store: KernelStore,
+  recognizerLocal: string,
+  routeConfig: RouteConfigModel,
+  contextReference: RouterReference,
+): RouteRecognizerModel {
+  const provenanceHandle = store.handles.provenance(recognizerLocal);
+  return new RouteRecognizerModel(
+    store.handles.product(recognizerLocal),
+    store.handles.identity(recognizerLocal),
+    contextReference,
+    RouteRecognizerOwnershipKind.Own,
+    routeConfig.sourceAddressHandle,
+    routeRecognizerFieldProvenance(provenanceHandle),
+  );
+}
+
+function routeConfigContextRecords(
+  store: KernelStore,
+  contextLocal: string,
+  routeConfig: RouteConfigModel,
+  parent: RouteConfigContextModel | null,
+  context: RouteConfigContextModel,
+): readonly KernelStoreRecord[] {
+  const evidenceHandle = store.handles.evidence(contextLocal);
+  const provenanceHandle = store.handles.provenance(contextLocal);
+  return routerProductRecords(store, {
+    local: contextLocal,
+    evidenceHandle,
+    provenanceHandle,
+    productHandle: context.productHandle,
+    identityHandle: context.identityHandle,
+    productKindKey: KernelVocabulary.Router.RouteConfigContext.key,
+    ownerHandle: parent?.identityHandle ?? routeConfig.identityHandle,
+    materializationOwnerHandle: routeConfig.identityHandle,
+    sourceAddressHandle: routeConfig.sourceAddressHandle,
+    localName: context.friendlyPath,
+    evidenceKind: EvidenceKind.ConfigurationFlow,
+    evidenceRoles: [EvidenceRole.Configuration],
+    evidenceSummary: 'Router RouteConfigContext topology materialized from normalized RouteConfig.',
+  });
+}
+
+function routeRecognizerRecords(
+  store: KernelStore,
+  recognizerLocal: string,
+  context: RouteConfigContextModel,
+  recognizer: RouteRecognizerModel | null,
+): readonly KernelStoreRecord[] {
+  if (recognizer == null) {
+    return [];
+  }
+  return routeRecognizerProductRecords(store, {
+    local: recognizerLocal,
+    evidenceHandle: store.handles.evidence(recognizerLocal),
+    provenanceHandle: store.handles.provenance(recognizerLocal),
+    productHandle: recognizer.productHandle,
+    identityHandle: recognizer.identityHandle,
+    productKindKey: KernelVocabulary.RouteRecognizer.RouteRecognizer.key,
+    ownerHandle: context.identityHandle,
+    sourceAddressHandle: recognizer.sourceAddressHandle,
+    localName: context.friendlyPath,
+    evidenceKind: EvidenceKind.ConfigurationFlow,
+    evidenceRoles: [EvidenceRole.Configuration],
+    evidenceSummary: 'RouteConfigContext materialization created an owned RouteRecognizer instance.',
+  });
 }
 
 function routeConfigContextName(routeConfig: RouteConfigModel): string {
@@ -362,31 +411,40 @@ function routeConfigContextName(routeConfig: RouteConfigModel): string {
     ?? '(anonymous-route)';
 }
 
+function rootRouteConfigsForContextMaterialization(
+  graph: RouteConfigGraph,
+  configuration: ConfigurationRecognitionProjectResult | null,
+): readonly RouteConfigModel[] {
+  const appRoots = configuration?.readConfiguration().appRoots ?? [];
+  return appRoots.length === 0
+    ? graph.roots()
+    : graph.rootsForAppRoots(appRoots);
+}
+
 function routeConfigContextFieldProvenance(
   provenanceHandle: ProvenanceHandle,
   parent: RouteConfigContextModel | null,
-  _root: RouteConfigContextModel | null,
   children: readonly RouteConfigModel[],
 ): readonly FieldProvenance<RouteConfigContextField>[] {
-  return compactFieldProvenance<RouteConfigContextField>([
-    parent == null ? null : new FieldProvenance('parent', provenanceHandle),
-    new FieldProvenance('root', provenanceHandle),
-    new FieldProvenance('config', provenanceHandle),
-    new FieldProvenance('recognizer', provenanceHandle),
-    children.length === 0 ? null : new FieldProvenance('childRoutes', provenanceHandle),
-    new FieldProvenance('depth', provenanceHandle),
-    new FieldProvenance('friendlyPath', provenanceHandle),
-    children.length === 0 ? null : new FieldProvenance('childRoutesConfigured', provenanceHandle),
-    new FieldProvenance('source', provenanceHandle),
-  ]);
+  return fieldProvenanceEntries<RouteConfigContextField>([
+    parent == null ? null : 'parent',
+    'root',
+    'config',
+    'recognizer',
+    children.length === 0 ? null : 'childRoutes',
+    'depth',
+    'friendlyPath',
+    children.length === 0 ? null : 'childRoutesConfigured',
+    'source',
+  ], provenanceHandle);
 }
 
 function routeRecognizerFieldProvenance(
   provenanceHandle: ProvenanceHandle,
 ): readonly FieldProvenance<RouteRecognizerField>[] {
-  return [
-    new FieldProvenance('routeConfigContext', provenanceHandle),
-    new FieldProvenance('ownership', provenanceHandle),
-    new FieldProvenance('source', provenanceHandle),
-  ];
+  return fieldProvenanceEntries<RouteRecognizerField>([
+    'routeConfigContext',
+    'ownership',
+    'source',
+  ], provenanceHandle);
 }

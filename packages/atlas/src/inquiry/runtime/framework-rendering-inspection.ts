@@ -365,7 +365,7 @@ export function instructionTypeExtendsIInstruction(
       declaration.heritageClauses?.some((clause) =>
         clause.types.some(
           (heritageType) =>
-            heritageExpressionTail(heritageType.expression) ===
+            calleeTail(heritageType.expression) ===
               "IInstruction" ||
             instructionTypeExtendsIInstruction(
               sourceProject,
@@ -375,19 +375,6 @@ export function instructionTypeExtendsIInstruction(
         ),
       ) === true,
   );
-}
-
-export function heritageExpressionTail(
-  expression: ts.ExpressionWithTypeArguments["expression"],
-): string | null {
-  const current = unwrapExpression(expression);
-  if (ts.isIdentifier(current)) {
-    return current.text;
-  }
-  if (ts.isPropertyAccessExpression(current)) {
-    return current.name.text;
-  }
-  return null;
 }
 
 export function instructionTargetFromReturnedExpression(

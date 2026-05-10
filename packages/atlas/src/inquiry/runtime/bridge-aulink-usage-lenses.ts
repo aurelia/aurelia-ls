@@ -25,6 +25,7 @@ import type { SourceRange } from "../locus.js";
 import {
   NavigationPlane,
   NavigationRelation,
+  navigationRoute,
 } from "../navigation.js";
 import { PagedRowFamily } from "../paged-row-family.js";
 import {
@@ -46,7 +47,6 @@ import {
   auLinkBasis,
   callSitesRangeContinuation,
   auLinkCheckerBasis,
-  continuationRoute,
   frameworkBasis,
   isUnscopedBridgeInquiry,
   mirrorProjectionContinuation,
@@ -54,6 +54,7 @@ import {
   sourceRangeContinuation,
 } from "./bridge-aulink-lens-support.js";
 import {
+  callSiteArgumentFilters,
   singletonRecordFilter,
   stringField,
 } from "./lens-filter-utils.js";
@@ -1018,7 +1019,7 @@ function usageComparisonContinuations(
           budget: inquiry.budget ?? AULINK_MIRROR_DETAIL_BUDGET,
         },
         evidence: [evidence],
-        route: continuationRoute(
+        route: navigationRoute(
           NavigationPlane.Semantic,
           NavigationRelation.ProjectionOf,
           [BasisKind.AuLink, BasisKind.TypeScriptChecker],
@@ -1279,10 +1280,8 @@ function auLinkUsageConsumerContinuations(
           linkId: row.linkId,
           side: row.side,
           ownerName: row.ownerName,
-          ...(row.memberName === undefined ? {} : { memberName: row.memberName }),
-          ...(row.ownerMemberName === undefined
-            ? {}
-            : { ownerMemberName: row.ownerMemberName }),
+          memberName: row.memberName,
+          ownerMemberName: row.ownerMemberName,
         },
         evidence,
       ),
@@ -1343,7 +1342,7 @@ function auLinkUsageConsumerContinuations(
                 row.callArgumentFullyQualifiedNames,
                 "argumentFullyQualifiedName",
               ),
-              ...callSiteFiltersFromBridgeFilters(inquiry.filters),
+              ...callSiteArgumentFilters(inquiry.filters),
             },
           ),
         );
@@ -1384,11 +1383,9 @@ function frameworkApiUsageConsumerContinuation(
       projection: "usage-consumers",
       filters: {
         implementationName: row.symbolName,
-        ...(row.memberName === undefined ? {} : { memberName: row.memberName }),
+        memberName: row.memberName,
         ownerName: row.ownerName,
-        ...(row.ownerMemberName === undefined
-          ? {}
-          : { ownerMemberName: row.ownerMemberName }),
+        ownerMemberName: row.ownerMemberName,
         ...(usageRoles.length === 1 ? { role: usageRoles[0] } : {}),
         ...singletonRecordFilter(row.callCalleeNames, "callCalleeName"),
         ...singletonRecordFilter(row.callArgumentTexts, "callArgumentText"),
@@ -1402,28 +1399,11 @@ function frameworkApiUsageConsumerContinuation(
       budget: inquiry.budget ?? AULINK_MIRROR_DETAIL_BUDGET,
     },
     evidence: [evidence],
-    route: continuationRoute(
+    route: navigationRoute(
       NavigationPlane.Semantic,
       NavigationRelation.ProjectionOf,
       [BasisKind.AuLink, BasisKind.TypeScriptChecker],
       "Native framework.api owner group behind this auLink usage consumer.",
-    ),
-  };
-}
-
-function callSiteFiltersFromBridgeFilters(
-  filters: Inquiry["filters"],
-): Record<string, string> {
-  if (filters === undefined) {
-    return {};
-  }
-  return {
-    ...stringField(filters, "callArgumentText", "argumentText"),
-    ...stringField(filters, "callArgumentSymbolName", "argumentSymbolName"),
-    ...stringField(
-      filters,
-      "callArgumentFullyQualifiedName",
-      "argumentFullyQualifiedName",
     ),
   };
 }
@@ -1502,7 +1482,7 @@ function usageSiteContinuations(
         "Return to the member comparison row for this usage site.",
         {
           linkId: row.linkId,
-          ...(row.memberName === undefined ? {} : { memberName: row.memberName }),
+          memberName: row.memberName,
         },
         evidence,
       ),
@@ -1515,10 +1495,8 @@ function usageSiteContinuations(
           linkId: row.linkId,
           side: row.side,
           ownerName: row.owner.ownerName,
-          ...(row.memberName === undefined ? {} : { memberName: row.memberName }),
-          ...(row.owner.ownerMemberName === undefined
-            ? {}
-            : { ownerMemberName: row.owner.ownerMemberName }),
+          memberName: row.memberName,
+          ownerMemberName: row.owner.ownerMemberName,
         },
         evidence,
       ),

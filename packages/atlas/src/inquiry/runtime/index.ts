@@ -12,6 +12,8 @@ export * from "./framework-composition-lenses.js";
 export * from "./framework-di-lenses.js";
 export * from "./framework-emulation-report.js";
 export * from "./framework-emulation-view.js";
+export * from "./framework-error-analysis.js";
+export * from "./framework-error-lenses.js";
 export * from "./framework-evaluator-lenses.js";
 export * from "./framework-lifecycle-lenses.js";
 export * from "./framework-materialization-lenses.js";

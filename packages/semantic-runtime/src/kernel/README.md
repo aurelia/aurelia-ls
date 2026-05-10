@@ -171,6 +171,11 @@ generic generated identity bucket.
 - Open seams answer "what remained unresolved and where can I inspect it?" not "how should an IDE, agent,
   diagnostic, or compiler rank the answer?"
 
+`source-open-seam.ts` is the shared publication primitive for source-backed open seams. Use it when a materializer has a
+source-file address plus an exact node/span and needs the standard source-span, evidence, optional provenance, and
+open-seam record bundle. Evaluation, resource recognition, and registration seams should share this path instead of
+locally minting parallel address/evidence/provenance/open-seam envelopes.
+
 `materialization.ts` records products emitted around one owner:
 
 - Products such as resource definitions, DI associations, binding records, or instructions.

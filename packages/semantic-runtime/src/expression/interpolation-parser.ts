@@ -2,7 +2,7 @@ import {
   Interpolation,
 } from "./ast.js";
 import {
-  absoluteSpan,
+  absoluteTextSpan,
   normalizeSpan,
   sourceSpanFromBounds,
   spanFromBounds,
@@ -31,6 +31,7 @@ import {
 } from "./parse-result-algebra.js";
 import type {
   CompletedInputPropertyLikeExpression,
+  ExpressionSuccess,
   PropertyLikeDegradedPublication,
   PropertyLikeFrontierPublication,
   InterpolationParseResult,
@@ -62,6 +63,15 @@ interface InterpolationSegments {
   readonly parts: readonly string[];
   readonly holes: readonly InterpolationHoleSegment[];
 }
+
+type InterpolationCompanionPublicationKind =
+  | ExpressionParseResultKind.InterpolationDegradedPublication
+  | ExpressionParseResultKind.InterpolationFrontierPublication;
+
+type ParsedInterpolationHoleExpression =
+  | ExpressionSuccess
+  | PropertyLikeDegradedPublication
+  | PropertyLikeFrontierPublication;
 
 export class InterpolationParser {
   /**
@@ -100,316 +110,12 @@ export class InterpolationParser {
       return new InterpolationAbsent(span, text);
     }
 
-    const expressions: CompletedInputPropertyLikeExpression[] = [];
-    const closedHoles: InterpolationClosedHole[] = [];
-    const suppressedHoles: InterpolationSuppressedHole[] = [];
-    let activePublicationKind:
-      | ExpressionParseResultKind.InterpolationDegradedPublication
-      | ExpressionParseResultKind.InterpolationFrontierPublication
-      | null = null;
-    let activeHole: InterpolationActiveHoleCompanion | null = null;
-    let fallbackPublicationKind:
-      | ExpressionParseResultKind.InterpolationDegradedPublication
-      | ExpressionParseResultKind.InterpolationFrontierPublication
-      | null = null;
-    let fallbackActiveHole: InterpolationActiveHoleCompanion | null = null;
-    let fallbackSuppressedHole: InterpolationSuppressedHole | null = null;
-    let fallbackHardError: InterpolationParseResult | null = null;
-
-    const publishCompanion = (
-      publicationKind:
-        | ExpressionParseResultKind.InterpolationDegradedPublication
-        | ExpressionParseResultKind.InterpolationFrontierPublication,
-      hole: InterpolationHoleSegment,
-      companion: InterpolationActiveHoleCompanion,
-    ): void => {
-      if (this.shouldUseActiveHole(hole, activeOffset, activeHole)) {
-        activePublicationKind = publicationKind;
-        activeHole = companion;
-        return;
-      }
-
-      const suppressed = this.createSuppressedHole(
-        companion.holeIndex,
-        hole,
-        InterpolationSuppressedHolePublicationKind.CompanionSuppressed,
-        baseSpan,
-      );
-      if (fallbackActiveHole == null) {
-        fallbackPublicationKind = publicationKind;
-        fallbackActiveHole = companion;
-        fallbackSuppressedHole = suppressed;
-      }
-      suppressedHoles.push(suppressed);
-    };
-
-    for (const [index, hole] of split.holes.entries()) {
-      if (hole.code.length === 0) {
-        publishCompanion(
-          ExpressionParseResultKind.InterpolationFrontierPublication,
-          hole,
-          this.createEmptyHoleCompanion(index, hole, text, baseSpan),
-        );
-        continue;
-      }
-
-      const expr = hole.parseResult;
-      if (expr.kind === ExpressionParseResultKind.CompleteInputParseError) {
-        if (this.shouldUseActiveHole(hole, activeOffset, activeHole)) {
-          return expr;
-        }
-
-        fallbackHardError ??= expr;
-        suppressedHoles.push(
-          this.createSuppressedHole(
-            index,
-            hole,
-            InterpolationSuppressedHolePublicationKind.HardErrorSuppressed,
-            baseSpan,
-          ),
-        );
-        continue;
-      }
-
-      if (expr.kind === ExpressionParseResultKind.EmptyExpressionSuccess) {
-        publishCompanion(
-          ExpressionParseResultKind.InterpolationFrontierPublication,
-          hole,
-          this.createEmptyHoleCompanion(index, hole, text, baseSpan),
-        );
-        continue;
-      }
-
-      if (hole.kind === "unterminated") {
-        if (
-          expr.kind === ExpressionParseResultKind.PropertyLikeDegradedPublication
-        ) {
-          publishCompanion(
-            ExpressionParseResultKind.InterpolationDegradedPublication,
-            hole,
-            this.createActiveHoleCompanion(index, hole, expr, baseSpan),
-          );
-          continue;
-        }
-
-        if (
-          expr.kind === ExpressionParseResultKind.PropertyLikeFrontierPublication
-        ) {
-          publishCompanion(
-            ExpressionParseResultKind.InterpolationFrontierPublication,
-            hole,
-            this.createActiveHoleCompanion(index, hole, expr, baseSpan),
-          );
-          continue;
-        }
-
-        publishCompanion(
-          ExpressionParseResultKind.InterpolationFrontierPublication,
-          hole,
-          this.createMissingHoleCloseCompanion(index, hole, expr.ast, baseSpan),
-        );
-        continue;
-      }
-
-      if (
-        expr.kind === ExpressionParseResultKind.PropertyLikeDegradedPublication
-      ) {
-        publishCompanion(
-          ExpressionParseResultKind.InterpolationDegradedPublication,
-          hole,
-          this.createActiveHoleCompanion(index, hole, expr, baseSpan),
-        );
-        continue;
-      }
-      if (
-        expr.kind === ExpressionParseResultKind.PropertyLikeFrontierPublication
-      ) {
-        publishCompanion(
-          ExpressionParseResultKind.InterpolationFrontierPublication,
-          hole,
-          this.createActiveHoleCompanion(index, hole, expr, baseSpan),
-        );
-        continue;
-      }
-      expressions.push(expr.ast);
-      closedHoles.push(new InterpolationClosedHole(index, expr.ast.span, expr.ast));
-    }
-
-    const span = baseSpan ? normalizeSpan(baseSpan) : sourceSpanFromBounds(0, text.length);
-    if (activeHole === null && fallbackActiveHole === null && fallbackHardError !== null) {
-      return fallbackHardError;
-    }
-    if (activeHole === null && fallbackActiveHole !== null) {
-      activePublicationKind = fallbackPublicationKind;
-      activeHole = fallbackActiveHole;
-      if (fallbackSuppressedHole != null) {
-        const fallbackIndex = suppressedHoles.indexOf(fallbackSuppressedHole);
-        if (fallbackIndex >= 0) {
-          suppressedHoles.splice(fallbackIndex, 1);
-        }
-      }
-    }
-    if (activeHole !== null) {
-      if (activePublicationKind === ExpressionParseResultKind.InterpolationFrontierPublication) {
-        return new InterpolationFrontierPublication(
-          span,
-          [...split.parts],
-          [...closedHoles],
-          activeHole,
-          [...suppressedHoles],
-        );
-      }
-
-      return new InterpolationDegradedPublication(
-        span,
-        [...split.parts],
-        [...closedHoles],
-        activeHole,
-        [...suppressedHoles],
-      );
-    }
-
-    return new InterpolationSuccess(
-      span,
-      new Interpolation(span, [...split.parts], expressions),
-    );
-  }
-
-  private static createActiveHoleCompanion(
-    holeIndex: number,
-    hole: InterpolationHoleSegment,
-    expr: PropertyLikeDegradedPublication | PropertyLikeFrontierPublication,
-    baseSpan: SourceSpan | null,
-  ): InterpolationActiveHoleCompanion {
-    const fallbackSpan = baseSpan ? normalizeSpan(baseSpan) : hole.codeSpan;
-    const absoluteHoleSpan = this.resolveHoleSpan(hole, baseSpan, fallbackSpan);
-    const boundaryState = this.createHoleBoundaryState(hole, baseSpan, fallbackSpan);
-
-    if (expr.kind === ExpressionParseResultKind.PropertyLikeDegradedPublication) {
-      return new InterpolationActiveHoleCompanion(
-        holeIndex,
-        absoluteHoleSpan,
-        boundaryState,
-        expr.frontierKind,
-        expr.expectedContinuationClasses,
-        expr.matchedDelimiterStack,
-        expr.surroundingFrameKind,
-        expr.preservedSpan,
-        expr.closedSubtreeRefs,
-        expr.gapDescriptors,
-      );
-    }
-
-    return new InterpolationActiveHoleCompanion(
-      holeIndex,
-      absoluteHoleSpan,
-      boundaryState,
-      expr.frontierKind,
-      expr.expectedContinuationClasses,
-      expr.matchedDelimiterStack,
-      expr.surroundingFrameKind,
-      expr.preservedSpan,
-      expr.closedSubtreeRefs,
-      [],
-    );
-  }
-
-  private static createMissingHoleCloseCompanion(
-    holeIndex: number,
-    hole: UnterminatedInterpolationHoleSegment,
-    ast: CompletedInputPropertyLikeExpression,
-    baseSpan: SourceSpan | null,
-  ): InterpolationActiveHoleCompanion {
-    const fallbackSpan = baseSpan ? normalizeSpan(baseSpan) : hole.codeSpan;
-    const absoluteHoleSpan = this.resolveHoleSpan(hole, baseSpan, fallbackSpan);
-    const boundaryState = this.createHoleBoundaryState(hole, baseSpan, fallbackSpan);
-
-    return new InterpolationActiveHoleCompanion(
-      holeIndex,
-      absoluteHoleSpan,
-      boundaryState,
-      ExpressionFrontierKind.AwaitingClosingDelimiter,
-      [ExpressionExpectedContinuationClass.InterpolationHoleClose],
-      [],
-      ExpressionCompanionFrameKind.InterpolationHole,
-      ast.span,
-      [new ClosedSubtreeRef("root-prefix", ast, ast.span)],
-      [
-        new ExpressionGapDescriptor(
-          ExpressionGapKind.MissingClosingDelimiter,
-          absoluteHoleSpan,
-          ExpressionCompanionFrameKind.InterpolationHole,
-          [ExpressionExpectedContinuationClass.InterpolationHoleClose],
-        ),
-      ],
-    );
-  }
-
-  private static createEmptyHoleCompanion(
-    holeIndex: number,
-    hole: InterpolationHoleSegment,
-    text: string,
-    baseSpan: SourceSpan | null,
-  ): InterpolationActiveHoleCompanion {
-    const interpolationSpan = baseSpan ? normalizeSpan(baseSpan) : sourceSpanFromBounds(0, text.length);
-    const holeSpan = this.resolveHoleSpan(hole, baseSpan, interpolationSpan);
-    const boundaryState = this.createHoleBoundaryState(hole, baseSpan, interpolationSpan);
-    const expectedContinuationClasses = hole.kind === "closed"
-      ? [ExpressionExpectedContinuationClass.Expression]
-      : [
-          ExpressionExpectedContinuationClass.Expression,
-          ExpressionExpectedContinuationClass.InterpolationHoleClose,
-        ];
-
-    return new InterpolationActiveHoleCompanion(
-      holeIndex,
-      holeSpan,
-      boundaryState,
-      ExpressionFrontierKind.AmbiguousClosure,
-      expectedContinuationClasses,
-      [],
-      ExpressionCompanionFrameKind.InterpolationHole,
-      boundaryState.openSpan,
-      [],
-      [],
-    );
-  }
-
-  private static createSuppressedHole(
-    holeIndex: number,
-    hole: InterpolationHoleSegment,
-    publicationKind: InterpolationSuppressedHolePublicationKind,
-    baseSpan: SourceSpan | null,
-  ): InterpolationSuppressedHole {
-    const fallbackSpan = baseSpan ? normalizeSpan(baseSpan) : hole.codeSpan;
-    return new InterpolationSuppressedHole(
-      holeIndex,
-      this.resolveHoleSpan(hole, baseSpan, fallbackSpan),
-      this.createHoleBoundaryState(hole, baseSpan, fallbackSpan),
-      publicationKind,
-    );
-  }
-
-  private static shouldUseActiveHole(
-    hole: InterpolationHoleSegment,
-    activeOffset: number | null,
-    activeHole: InterpolationActiveHoleCompanion | null,
-  ): boolean {
-    if (activeHole !== null) {
-      return false;
-    }
-    return activeOffset == null || this.holeContainsOffset(hole, activeOffset);
-  }
-
-  private static holeContainsOffset(
-    hole: InterpolationHoleSegment,
-    activeOffset: number,
-  ): boolean {
-    const start = hole.openSpan.start;
-    const end = hole.kind === "closed"
-      ? hole.closeSpan.end
-      : hole.codeSpan.end;
-    return start <= activeOffset && activeOffset <= end;
+    return new InterpolationPublicationFrame(
+      text,
+      split,
+      baseSpan,
+      activeOffset,
+    ).publish();
   }
 
   private static extractSegments(
@@ -422,32 +128,6 @@ export class InterpolationParser {
     baseSpan: SourceSpan | null,
   ): InterpolationSegments | null {
     return this.splitText(text, parseExpression, baseSpan);
-  }
-
-  private static resolveHoleSpan(
-    hole: InterpolationHoleSegment,
-    baseSpan: SourceSpan | null,
-    fallbackSpan: SourceSpan,
-  ): SourceSpan {
-    return baseSpan ? absoluteSpan(hole.codeSpan, baseSpan) ?? fallbackSpan : hole.codeSpan;
-  }
-
-  private static createHoleBoundaryState(
-    hole: InterpolationHoleSegment,
-    baseSpan: SourceSpan | null,
-    fallbackSpan: SourceSpan,
-  ): InterpolationHoleBoundaryState {
-    const holeOpenSpan = baseSpan ? absoluteSpan(hole.openSpan, baseSpan) ?? fallbackSpan : hole.openSpan;
-    const holeCloseSpan = hole.kind === "closed"
-      ? (baseSpan ? absoluteSpan(hole.closeSpan, baseSpan) ?? fallbackSpan : hole.closeSpan)
-      : null;
-    return new InterpolationHoleBoundaryState(
-      hole.kind === "closed"
-        ? InterpolationHoleBoundaryKind.Closed
-        : InterpolationHoleBoundaryKind.Unterminated,
-      holeOpenSpan,
-      holeCloseSpan,
-    );
   }
 
   private static splitText(
@@ -484,7 +164,7 @@ export class InterpolationParser {
         const closing = findTemplateExpressionClose(text, exprStart);
         const exprEnd = closing ?? text.length;
         const exprBase = baseSpan
-          ? absoluteSpan(spanFromBounds(exprStart, exprEnd), baseSpan)
+          ? absoluteTextSpan(spanFromBounds(exprStart, exprEnd), baseSpan)
           : null;
         const parsed = parseExpression(text.slice(exprStart, exprEnd), exprStart, exprBase);
 
@@ -523,5 +203,364 @@ export class InterpolationParser {
 
     parts.push(text.slice(partStart));
     return { parts, holes };
+  }
+}
+
+class InterpolationPublicationFrame {
+  private readonly expressions: CompletedInputPropertyLikeExpression[] = [];
+  private readonly closedHoles: InterpolationClosedHole[] = [];
+  private readonly suppressedHoles: InterpolationSuppressedHole[] = [];
+  private activePublicationKind: InterpolationCompanionPublicationKind | null = null;
+  private activeHole: InterpolationActiveHoleCompanion | null = null;
+  private firstInactivePublicationKind: InterpolationCompanionPublicationKind | null = null;
+  private firstInactiveHole: InterpolationActiveHoleCompanion | null = null;
+  private firstInactiveSuppressedHole: InterpolationSuppressedHole | null = null;
+  private firstInactiveHardError: InterpolationParseResult | null = null;
+
+  constructor(
+    private readonly text: string,
+    private readonly segments: InterpolationSegments,
+    private readonly baseSpan: SourceSpan | null,
+    private readonly activeOffset: number | null,
+  ) {}
+
+  publish(): InterpolationParseResult {
+    for (const [index, hole] of this.segments.holes.entries()) {
+      const hardError = this.consumeHole(index, hole);
+      if (hardError !== null) {
+        return hardError;
+      }
+    }
+
+    return this.publishResult();
+  }
+
+  private consumeHole(
+    index: number,
+    hole: InterpolationHoleSegment,
+  ): InterpolationParseResult | null {
+    if (hole.code.length === 0) {
+      this.publishCompanion(
+        ExpressionParseResultKind.InterpolationFrontierPublication,
+        hole,
+        this.createEmptyHoleCompanion(index, hole),
+      );
+      return null;
+    }
+
+    const expr = hole.parseResult;
+    if (expr.kind === ExpressionParseResultKind.CompleteInputParseError) {
+      if (this.shouldUseActiveHole(hole)) {
+        return expr;
+      }
+
+      this.firstInactiveHardError ??= expr;
+      this.suppressedHoles.push(
+        this.createSuppressedHole(
+          index,
+          hole,
+          InterpolationSuppressedHolePublicationKind.HardErrorSuppressed,
+        ),
+      );
+      return null;
+    }
+
+    if (expr.kind === ExpressionParseResultKind.EmptyExpressionSuccess) {
+      this.publishCompanion(
+        ExpressionParseResultKind.InterpolationFrontierPublication,
+        hole,
+        this.createEmptyHoleCompanion(index, hole),
+      );
+      return null;
+    }
+
+    if (hole.kind === "unterminated") {
+      this.publishUnterminatedHole(index, hole, expr);
+      return null;
+    }
+
+    if (expr.kind === ExpressionParseResultKind.PropertyLikeDegradedPublication) {
+      this.publishCompanion(
+        ExpressionParseResultKind.InterpolationDegradedPublication,
+        hole,
+        this.createActiveHoleCompanion(index, hole, expr),
+      );
+      return null;
+    }
+
+    if (expr.kind === ExpressionParseResultKind.PropertyLikeFrontierPublication) {
+      this.publishCompanion(
+        ExpressionParseResultKind.InterpolationFrontierPublication,
+        hole,
+        this.createActiveHoleCompanion(index, hole, expr),
+      );
+      return null;
+    }
+
+    this.expressions.push(expr.ast);
+    this.closedHoles.push(new InterpolationClosedHole(index, expr.ast.span, expr.ast));
+    return null;
+  }
+
+  private publishUnterminatedHole(
+    index: number,
+    hole: UnterminatedInterpolationHoleSegment,
+    expr: ParsedInterpolationHoleExpression,
+  ): void {
+    if (expr.kind === ExpressionParseResultKind.PropertyLikeDegradedPublication) {
+      this.publishCompanion(
+        ExpressionParseResultKind.InterpolationDegradedPublication,
+        hole,
+        this.createActiveHoleCompanion(index, hole, expr),
+      );
+      return;
+    }
+
+    if (expr.kind === ExpressionParseResultKind.PropertyLikeFrontierPublication) {
+      this.publishCompanion(
+        ExpressionParseResultKind.InterpolationFrontierPublication,
+        hole,
+        this.createActiveHoleCompanion(index, hole, expr),
+      );
+      return;
+    }
+
+    this.publishCompanion(
+      ExpressionParseResultKind.InterpolationFrontierPublication,
+      hole,
+      this.createMissingHoleCloseCompanion(index, hole, expr.ast),
+    );
+  }
+
+  private publishCompanion(
+    publicationKind: InterpolationCompanionPublicationKind,
+    hole: InterpolationHoleSegment,
+    companion: InterpolationActiveHoleCompanion,
+  ): void {
+    if (this.shouldUseActiveHole(hole)) {
+      this.activePublicationKind = publicationKind;
+      this.activeHole = companion;
+      return;
+    }
+
+    const suppressed = this.createSuppressedHole(
+      companion.holeIndex,
+      hole,
+      InterpolationSuppressedHolePublicationKind.CompanionSuppressed,
+    );
+    if (this.firstInactiveHole == null) {
+      this.firstInactivePublicationKind = publicationKind;
+      this.firstInactiveHole = companion;
+      this.firstInactiveSuppressedHole = suppressed;
+    }
+    this.suppressedHoles.push(suppressed);
+  }
+
+  private publishResult(): InterpolationParseResult {
+    if (this.activeHole === null && this.firstInactiveHole !== null) {
+      this.promoteFirstInactiveHole();
+    }
+
+    if (this.activeHole === null && this.firstInactiveHardError !== null) {
+      return this.firstInactiveHardError;
+    }
+
+    const span = this.interpolationSpan();
+    if (this.activeHole !== null) {
+      if (this.activePublicationKind === ExpressionParseResultKind.InterpolationFrontierPublication) {
+        return new InterpolationFrontierPublication(
+          span,
+          [...this.segments.parts],
+          [...this.closedHoles],
+          this.activeHole,
+          [...this.suppressedHoles],
+        );
+      }
+
+      return new InterpolationDegradedPublication(
+        span,
+        [...this.segments.parts],
+        [...this.closedHoles],
+        this.activeHole,
+        [...this.suppressedHoles],
+      );
+    }
+
+    return new InterpolationSuccess(
+      span,
+      new Interpolation(span, [...this.segments.parts], this.expressions),
+    );
+  }
+
+  private promoteFirstInactiveHole(): void {
+    this.activePublicationKind = this.firstInactivePublicationKind;
+    this.activeHole = this.firstInactiveHole;
+
+    if (this.firstInactiveSuppressedHole == null) {
+      return;
+    }
+
+    const suppressedIndex = this.suppressedHoles.indexOf(this.firstInactiveSuppressedHole);
+    if (suppressedIndex >= 0) {
+      this.suppressedHoles.splice(suppressedIndex, 1);
+    }
+  }
+
+  private createActiveHoleCompanion(
+    holeIndex: number,
+    hole: InterpolationHoleSegment,
+    expr: PropertyLikeDegradedPublication | PropertyLikeFrontierPublication,
+  ): InterpolationActiveHoleCompanion {
+    const absoluteHoleSpan = this.resolveHoleSpan(hole);
+    const boundaryState = this.createHoleBoundaryState(hole);
+
+    if (expr.kind === ExpressionParseResultKind.PropertyLikeDegradedPublication) {
+      return new InterpolationActiveHoleCompanion(
+        holeIndex,
+        absoluteHoleSpan,
+        boundaryState,
+        expr.frontierKind,
+        expr.expectedContinuationClasses,
+        expr.matchedDelimiterStack,
+        expr.surroundingFrameKind,
+        expr.preservedSpan,
+        expr.closedSubtreeRefs,
+        expr.gapDescriptors,
+      );
+    }
+
+    return new InterpolationActiveHoleCompanion(
+      holeIndex,
+      absoluteHoleSpan,
+      boundaryState,
+      expr.frontierKind,
+      expr.expectedContinuationClasses,
+      expr.matchedDelimiterStack,
+      expr.surroundingFrameKind,
+      expr.preservedSpan,
+      expr.closedSubtreeRefs,
+      [],
+    );
+  }
+
+  private createMissingHoleCloseCompanion(
+    holeIndex: number,
+    hole: UnterminatedInterpolationHoleSegment,
+    ast: CompletedInputPropertyLikeExpression,
+  ): InterpolationActiveHoleCompanion {
+    const absoluteHoleSpan = this.resolveHoleSpan(hole);
+    const boundaryState = this.createHoleBoundaryState(hole);
+
+    return new InterpolationActiveHoleCompanion(
+      holeIndex,
+      absoluteHoleSpan,
+      boundaryState,
+      ExpressionFrontierKind.AwaitingClosingDelimiter,
+      [ExpressionExpectedContinuationClass.InterpolationHoleClose],
+      [],
+      ExpressionCompanionFrameKind.InterpolationHole,
+      ast.span,
+      [new ClosedSubtreeRef("root-prefix", ast, ast.span)],
+      [
+        new ExpressionGapDescriptor(
+          ExpressionGapKind.MissingClosingDelimiter,
+          absoluteHoleSpan,
+          ExpressionCompanionFrameKind.InterpolationHole,
+          [ExpressionExpectedContinuationClass.InterpolationHoleClose],
+        ),
+      ],
+    );
+  }
+
+  private createEmptyHoleCompanion(
+    holeIndex: number,
+    hole: InterpolationHoleSegment,
+  ): InterpolationActiveHoleCompanion {
+    const holeSpan = this.resolveHoleSpan(hole);
+    const boundaryState = this.createHoleBoundaryState(hole);
+    const expectedContinuationClasses = hole.kind === "closed"
+      ? [ExpressionExpectedContinuationClass.Expression]
+      : [
+          ExpressionExpectedContinuationClass.Expression,
+          ExpressionExpectedContinuationClass.InterpolationHoleClose,
+        ];
+
+    return new InterpolationActiveHoleCompanion(
+      holeIndex,
+      holeSpan,
+      boundaryState,
+      ExpressionFrontierKind.AmbiguousClosure,
+      expectedContinuationClasses,
+      [],
+      ExpressionCompanionFrameKind.InterpolationHole,
+      boundaryState.openSpan,
+      [],
+      [],
+    );
+  }
+
+  private createSuppressedHole(
+    holeIndex: number,
+    hole: InterpolationHoleSegment,
+    publicationKind: InterpolationSuppressedHolePublicationKind,
+  ): InterpolationSuppressedHole {
+    return new InterpolationSuppressedHole(
+      holeIndex,
+      this.resolveHoleSpan(hole),
+      this.createHoleBoundaryState(hole),
+      publicationKind,
+    );
+  }
+
+  private shouldUseActiveHole(
+    hole: InterpolationHoleSegment,
+  ): boolean {
+    if (this.activeHole !== null) {
+      return false;
+    }
+    return this.activeOffset == null || this.holeContainsOffset(hole, this.activeOffset);
+  }
+
+  private holeContainsOffset(
+    hole: InterpolationHoleSegment,
+    activeOffset: number,
+  ): boolean {
+    const start = hole.openSpan.start;
+    const end = hole.kind === "closed"
+      ? hole.closeSpan.end
+      : hole.codeSpan.end;
+    return start <= activeOffset && activeOffset <= end;
+  }
+
+  private interpolationSpan(): SourceSpan {
+    return this.baseSpan ? normalizeSpan(this.baseSpan) : sourceSpanFromBounds(0, this.text.length);
+  }
+
+  private resolveHoleSpan(
+    hole: InterpolationHoleSegment,
+  ): SourceSpan {
+    return this.resolveTextSpan(hole.codeSpan);
+  }
+
+  private createHoleBoundaryState(
+    hole: InterpolationHoleSegment,
+  ): InterpolationHoleBoundaryState {
+    const holeOpenSpan = this.resolveTextSpan(hole.openSpan);
+    const holeCloseSpan = hole.kind === "closed"
+      ? this.resolveTextSpan(hole.closeSpan)
+      : null;
+    return new InterpolationHoleBoundaryState(
+      hole.kind === "closed"
+        ? InterpolationHoleBoundaryKind.Closed
+        : InterpolationHoleBoundaryKind.Unterminated,
+      holeOpenSpan,
+      holeCloseSpan,
+    );
+  }
+
+  private resolveTextSpan(
+    span: TextSpan,
+  ): SourceSpan {
+    return this.baseSpan ? absoluteTextSpan(span, this.baseSpan) : sourceSpanFromBounds(span.start, span.end);
   }
 }

@@ -14,6 +14,7 @@ const recognizerAnswer = await askRouter("recognizer", { rows: 5, evidencePerSub
 const recognizerIssueAnswer = await askOptionalRouter("recognizer-issues", { rows: 25, evidencePerSubject: 0 });
 
 const rollup = summaryAnswer.value.rollup;
+const sourceState = summaryAnswer.value.sourceState;
 const issues = issueAnswer?.value.flowIssues ?? [];
 const recognizerRows = recognizerAnswer.value.routeRecognizerMechanics ?? [];
 const recognizerIssues = recognizerIssueAnswer?.value.routeRecognizerMechanicIssues ?? [];
@@ -24,6 +25,9 @@ console.log(`request: ${(performance.now() - started).toFixed(1)}ms`);
 
 console.log("");
 console.log("router topology");
+console.log(`- source baseline: ${sourceState.status}`);
+console.log(`- expected Aurelia commit: ${sourceState.baseline.aureliaCommit}`);
+console.log(`- actual Aurelia commit: ${sourceState.actualAureliaCommit ?? "unknown"}`);
 console.log(`- packages: ${rollup.packageCount}`);
 console.log(`- source files: ${rollup.sourceFileCount}`);
 console.log(`- surfaces: ${rollup.surfaceCount}`);

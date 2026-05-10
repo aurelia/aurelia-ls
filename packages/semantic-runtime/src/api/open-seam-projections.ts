@@ -1,7 +1,10 @@
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import type { AddressHandle, OpenSeamHandle } from '../kernel/handles.js';
 import type { OpenSeam } from '../kernel/open-seam.js';
+import { addressBelongsToSourceFiles } from '../kernel/source-address.js';
 import type { KernelStore } from '../kernel/store.js';
+
+type RuntimeTemplateResource = AureliaAppWorldProjectEmission['templates']['resources'][number];
 
 /**
  * Read open seams owned by the app-world emission instead of the whole shared workspace store.
@@ -16,37 +19,45 @@ export function readAppOpenSeams(
   const sourceFileHandles = sourceFileAddressHandles(emission);
   const rows = new Map<OpenSeamHandle, OpenSeam>();
 
-  for (const seam of store.readOpenSeams()) {
-    if (seam.addressHandle != null && addressBelongsToApp(store, seam.addressHandle, sourceFileHandles)) {
-      rows.set(seam.handle, seam);
-    }
-  }
-
-  for (const seam of emission.appWorld.diWorld.openSeams) {
-    rows.set(seam.handle, seam);
-  }
-  for (const seam of emission.routeInstructions.openSeams) {
-    rows.set(seam.handle, seam);
-  }
+  recordSourceFileOpenSeams(rows, store, sourceFileHandles);
+  recordOpenSeams(rows, emission.appWorld.diWorld.openSeams);
+  recordOpenSeams(rows, emission.routeInstructions.openSeams);
   for (const resource of emission.templates.resources) {
-    for (const seam of resource.compilation.compiledTemplate.openSeams) {
-      rows.set(seam.handle, seam);
-    }
-    for (const seam of resource.runtimeAnalysis.runtimeRendering.openSeams) {
-      rows.set(seam.handle, seam);
-    }
-    for (const seam of resource.runtimeAnalysis.controllerBind.openSeams) {
-      rows.set(seam.handle, seam);
-    }
-    for (const seam of resource.runtimeAnalysis.bindingValueChannel.openSeams) {
-      rows.set(seam.handle, seam);
-    }
-    for (const seam of resource.runtimeAnalysis.bindingDataFlow.openSeams) {
-      rows.set(seam.handle, seam);
-    }
+    recordOpenSeams(rows, templateResourceOpenSeams(resource));
   }
 
   return [...rows.values()];
+}
+
+function recordSourceFileOpenSeams(
+  rows: Map<OpenSeamHandle, OpenSeam>,
+  store: KernelStore,
+  sourceFileHandles: ReadonlySet<AddressHandle>,
+): void {
+  for (const seam of store.readOpenSeams()) {
+    if (seam.addressHandle != null && addressBelongsToSourceFiles(store, seam.addressHandle, sourceFileHandles)) {
+      rows.set(seam.handle, seam);
+    }
+  }
+}
+
+function recordOpenSeams(
+  rows: Map<OpenSeamHandle, OpenSeam>,
+  seams: readonly OpenSeam[],
+): void {
+  for (const seam of seams) {
+    rows.set(seam.handle, seam);
+  }
+}
+
+function templateResourceOpenSeams(resource: RuntimeTemplateResource): readonly OpenSeam[] {
+  return [
+    ...resource.compilation.compiledTemplate.openSeams,
+    ...resource.runtimeAnalysis.runtimeRendering.openSeams,
+    ...resource.runtimeAnalysis.controllerBind.openSeams,
+    ...resource.runtimeAnalysis.bindingValueChannel.openSeams,
+    ...resource.runtimeAnalysis.bindingDataFlow.openSeams,
+  ];
 }
 
 function sourceFileAddressHandles(emission: AureliaAppWorldProjectEmission): ReadonlySet<AddressHandle> {
@@ -55,44 +66,4 @@ function sourceFileAddressHandles(emission: AureliaAppWorldProjectEmission): Rea
     ...emission.evaluation.sources.map((source) => source.admission.addressHandle),
     ...emission.resources.sources.map((source) => source.admission.addressHandle),
   ]);
-}
-
-function addressBelongsToApp(
-  store: KernelStore,
-  addressHandle: AddressHandle,
-  sourceFileHandles: ReadonlySet<AddressHandle>,
-  seen: Set<AddressHandle> = new Set(),
-): boolean {
-  if (sourceFileHandles.has(addressHandle)) {
-    return true;
-  }
-  if (seen.has(addressHandle)) {
-    return false;
-  }
-  seen.add(addressHandle);
-  const address = store.readAddress(addressHandle);
-  if (address == null) {
-    return false;
-  }
-
-  switch (address.kind) {
-    case 'source-file-address':
-      return sourceFileHandles.has(address.handle);
-    case 'source-span-address':
-      return addressBelongsToApp(store, address.fileHandle, sourceFileHandles, seen);
-    case 'template-address':
-      return address.authoredSourceHandle != null
-        && addressBelongsToApp(store, address.authoredSourceHandle, sourceFileHandles, seen);
-    case 'template-node-address':
-      return (
-        address.authoredSourceHandle != null
-        && addressBelongsToApp(store, address.authoredSourceHandle, sourceFileHandles, seen)
-      ) || addressBelongsToApp(store, address.templateHandle, sourceFileHandles, seen);
-    case 'generated-address':
-      return address.anchorHandle != null
-        && store.readAddress(address.anchorHandle as AddressHandle) != null
-        && addressBelongsToApp(store, address.anchorHandle as AddressHandle, sourceFileHandles, seen);
-    case 'external-address':
-      return false;
-  }
 }

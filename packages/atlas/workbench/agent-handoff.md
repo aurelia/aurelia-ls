@@ -8,6 +8,8 @@ Keep it compact; move stable ownership detail into package READMEs.
 ```powershell
 pnpm --filter @aurelia-ls/atlas orient
 pnpm --filter @aurelia-ls/atlas pressure:self
+pnpm --filter @aurelia-ls/atlas pressure:bridge-aulink
+pnpm --filter @aurelia-ls/atlas pressure:framework-errors
 pnpm --filter @aurelia-ls/atlas pressure:framework-resources
 pnpm --filter @aurelia-ls/atlas pressure:framework-router
 pnpm --filter @aurelia-ls/atlas pressure:plugin-architecture
@@ -46,7 +48,7 @@ pnpm --filter @aurelia-ls/atlas self-check
   summaries. The summary rollup includes filter-aware surface-kind, mechanism,
   admission-role, and Aurelia-shape distributions for this. App-entrypoint
   rows are import/receiver-aware for the Aurelia bootstrap API rather than
-  generic `.start()` matching; resource/bindable/watch decorators are also
+  generic `.start()` or entry-file-name matching; resource/bindable/watch decorators are also
   import/namespace-aware rather than bare-name matches; `resolve`,
   `Registration.*`, and `AppTask.*` rows are rooted in Aurelia package imports
   such as `aurelia`, `@aurelia/kernel`, or `@aurelia/runtime-html`.
@@ -61,7 +63,7 @@ pnpm --filter @aurelia-ls/atlas self-check
   distributions, which are the preferred durable shape for monorepo/build
   topology observations from proprietary roots. The pressure script also prints
   external/app-shaped aggregate sub-rollups without row names, paths, ranges,
-  or summaries, so use those before opening package rows.
+  or summaries, plus app-entrypoint mechanism counts, so use those before opening package rows.
   Manifest dependency, resource, configuration, registration, DI resolution,
   router, and template-reference mechanisms each have their own rollups.
   Manifest dependencies split framework-owned dependencies from plugin
@@ -119,12 +121,49 @@ pnpm --filter @aurelia-ls/atlas self-check
   relationship rows now include the route-recognizer mechanic rows and are joined
   by `bridge.aulink`, so mirror reads should be used to check semantic-runtime
   router anchors against framework role evidence before app pressure is trusted.
+  Flow relationship targets split slash-delimited multi-target descriptors; `createConfiguredNode` exposes
+  `ViewportRequest`, `ViewportAgent`, `RouteContext`, and `RouteNode` separately, so `auLink` anchors can attach to the
+  exact router handoff concept instead of only the broad route-tree source span.
+  `bridge.aulink` treats decorator facets as product-side modeling roles: the
+  same framework symbol may intentionally have a resource-definition placement
+  plus a controller/router semantics placement. Those show up as multi-facet
+  groups, not gap rows; same-facet duplicates still indicate split-brain.
+  `atlas.self:function-shapes` is now available for finding split-brain helpers
+  that share canonical AST/control-flow bodies even when their names differ.
+  `pressure:self` prints the repeated-shape lane; use it before broad Atlas
+  cleanup because it surfaces real small duplications that grep and duplicate-name
+  scans miss.
+  Recent cleanup promoted repeated ad-hoc route claims, exact boolean/string
+  filters, framework paged-answer assembly, call-site argument filters,
+  product-architecture source contexts, file-span source ranges, and Aurelia
+  container-reference recognition into shared primitives. Treat any reappearing
+  rows in those families as a likely ownership regression, not harmless local
+  style.
   Flow and relationship rows now carry
   semantic route continuations into resource materialization, rendering
   hydration, child-controller creation, and lifecycle controller-call rows when
   their stage crosses those framework boundaries. Use
   `pressure:framework-router` to check the router rollup, relationship axes,
   flow self-audit, and recognizer substrate self-audit quickly.
+- `pressure:bridge-aulink` is the compact product-to-framework bridge pressure
+  lane. It prints catalog/placement coverage, role-evidence gaps, links that
+  have framework role evidence but no emulation obligations, and usage
+  divergence. Use it when app/LSP sampling stabilizes and the next question is
+  whether semantic-runtime is missing auLink anchors, Atlas is missing framework
+  topology, or the obligation classifier needs to learn a modeled framework
+  concept. Current bridge coverage is healthy: no catalog/placement gaps, no
+  resolved mirror rows without role evidence, and no role-evidenced mirror rows
+  without emulation obligations. The obligation classifier now admits
+  expression-parser, router, structural rendering/observer/router definitions,
+  DI/materialization relationships, compiler relationships, lifecycle
+  relationships, and rendering dispatch/binding relationships into the
+  framework-emulation worklist. Relationship-derived obligations live in
+  `framework-emulation-relationship-obligations.ts` so
+  `framework-emulation-view.ts` stays focused on composition and non-relationship
+  substrates. Treat new no-obligation rows as fresh topology or product-model
+  pressure, not expected background noise. The pressure script prints
+  per-projection timings; use them before assuming bridge slowness comes from
+  catalog coverage rather than mirror role evidence or usage-comparison reads.
 - `aurelia-source-imports.ts` is the shared import-admission substrate for
   workspace and public-plugin architecture lenses. Router import admission is
   intentionally tied to the public `@aurelia/router` index: `self-check` parses
@@ -141,18 +180,66 @@ pnpm --filter @aurelia-ls/atlas self-check
   `di-interfaces`/`registry-exports`, not the spendable bundle catalog.
 - `pressure:self` is for Atlas maintenance. Its default output is compact:
   large source files, large classes, dense functions, duplicate helper names,
-  and calibrated high enum/axis pressure with source line anchors before raw
-  source browsing. Use `pressure:self:detail` when the compact source-file rows
-  hide a metric you need. The high mapper lane now focuses on multi-axis
-  framework-semantic mappers instead of one-axis endpoint/fact constructors.
+  optional object-spread construction pressure, and calibrated high enum/axis
+  pressure with source line anchors before raw source browsing. Use
+  `pressure:self:detail` when the compact source-file rows
+  hide a metric you need. Duplicate helper-name rows carry both normalized
+  body fingerprints and AST/control-flow body-shape fingerprints, so simple
+  equivalent shapes such as ternary returns versus if/else returns are visible
+  without depending on raw text equality. Follow exact repeats with the
+  `bodyFingerprint` filter and shape repeats with the `bodyShapeFingerprint`
+  filter. At this checkpoint Atlas self-pressure and semantic-runtime product
+  pressure both have a clean default duplicate-helper lane; new rows should be
+  treated as fresh ownership pressure rather than known noise.
+  The optional object-spread lane catches `...(cond ? {} : { prop })` object
+  construction, including isolated low-pressure envelopes. The current cleanup
+  passes resolved the concentrated review-note rows and several bridge/graph/page
+  payload rows, then left scattered helper construction visible for deliberate
+  follow-up. Prefer direct optional properties when own-property presence is not
+  part of the semantics, but keep using the pressure lane as the source of truth
+  instead of broad style-only churn. As of the current checkpoint, the next
+  compact page is clustered around framework evidence-row helpers; that likely
+  wants a shared evidence-construction pass rather than more one-off envelope
+  edits.
+  `answerTsType` remains the main deliberate Atlas self-pressure row. A future
+  pass should extract a typed answer-builder primitive for paged TypeScript IDE
+  reads before migrating projections; do not do a rushed local split that
+  preserves the repeated answer-shape construction under different names.
+- `pressure:app-api` now prints expression type cache counts from
+  semantic-runtime template runtime analysis. Use those counts when binding
+  observation feels expensive: a low hit rate can indicate local-key drift or a
+  materializer bypassing the shared `CheckerExpressionTypeEvaluationCache`,
+  while stable hits with high phase time points farther down into TypeChecker,
+  observer/value-channel, or record-publication work.
+- Interpolation parser pressure was narrowed by separating boundary extraction
+  from `InterpolationPublicationFrame`, which owns active-hole selection,
+  suppressed-hole promotion, and strict missing-close publication. Parser span
+  rebasing now uses non-null `absoluteTextSpan(...)` when both relative and base
+  spans are known; nullable absolute-span fallbacks in parser code should be
+  treated as a lost provenance handoff, not ordinary defensive programming.
+  The expression scanner's punctuation/operator branch is likewise split by
+  token family; future lexical expansion should extend the relevant family
+  method instead of regrowing one giant scanner switch.
+  The high mapper lane now focuses on multi-axis framework-semantic mappers
+  instead of one-axis endpoint/fact constructors.
 - `pressure:product-architecture` is for semantic-runtime cleanup planning. Its
   default output is compact: cheap structure pressure first (large modules,
   cross-area imports, large classes, zero-method `*Input` envelope classes, and
   auLink-backed or behavioral `*Input` suffix classes), then the expensive
-  call-backed function pressure. Use
-  `pressure:product-architecture:detail` when lower-ranked rows matter. Class
+  call-backed function pressure. It also prints duplicate top-level helper-name
+  pressure through the `function-duplicates` projection, which keeps duplicate
+  helper grouping inside `product.architecture` instead of paging every
+  function row into the script. It now also prints product-record construction
+  pressure: source-level KernelStoreRecord constructor sites grouped by record
+  discriminator, visible product-vocabulary expression, module hot spots, owner
+  hot spots, KernelStoreBatch commit labels/owners, and FieldProvenance creation
+  sites grouped by field, module, and owner. Use
+  `pressure:product-architecture:detail` when exact row samples matter. Class
   rows carry auLink ids, so product-model classes such as framework mirrors do
-  not get lumped into ordinary parameter-envelope pressure.
+  not get lumped into ordinary parameter-envelope pressure. At this checkpoint
+  the default duplicate-helper and compact function-pressure lanes are clear;
+  new rows should be treated as fresh ownership pressure rather than known
+  background noise.
 - `profile:product-architecture` is for cost decisions. It prints structure,
   compact-call core/full, exact-call core/full, and symbol lanes so
   cache/warmup/split work starts from measured cost.
@@ -166,7 +253,17 @@ pnpm --filter @aurelia-ls/atlas self-check
   carrier, backing declaration, bundle admission, syntax product, or
   materialization site. Resource convergence rows are memoized per source epoch,
   so repeated resource/admission/composition reads in one daemon should not
-  repeatedly rebuild the convergence product.
+  repeatedly rebuild the convergence product. The resource recognizer admits
+  framework static `$au.type` constants by source-level constant name when the
+  value is imported, including i18n's `valueConverterTypeName`; missing
+  formatter/resource anchors in `bridge.aulink` should be checked against this
+  lane before assuming semantic-runtime forgot an auLink.
+- `pressure:framework-errors` is the framework diagnostic grounding lane. It
+  reports Aurelia error/event code definitions, mapped messages, usage
+  mechanisms, and throw/warning effects. Use it before attaching
+  `framework-error-code` diagnostics in semantic-runtime; weak app typings,
+  TypeScript strictness, and authoring suggestions remain product policy unless
+  this lane shows an equivalent framework error path.
 
 ## Current Product Architecture Shape
 
@@ -174,30 +271,61 @@ pnpm --filter @aurelia-ls/atlas self-check
 `packages/semantic-runtime/src`.
 
 - Structure lane: `areas`, `modules`, `dependencies`, `area-dependencies`,
-  `declarations`, `cycles`, and `classes`. This lane skips checker call-site
-  and symbol-reference rows.
+  `declarations`, `cycles`, `classes`, and `function-duplicates`. This lane
+  skips checker call-site and symbol-reference rows. Duplicate helper groups are
+  direct lens rows backed by normalized body fingerprints and AST/control-flow
+  body-shape fingerprints, so pressure scripts can read the maintenance signal
+  without re-materializing every function row.
 - Core lane: `functions`, `call-sites`, and `call-dependencies`. This lane pays
   for checker call-site rows and enriches function bodies with call pressure.
-  `functions` and `call-dependencies` use compact call rows; exact `call-sites`
-  adds checker type/signature displays.
+  These projections use compact call rows by default; `call-sites` accepts
+  `includeCallDetails=true` when a caller needs checker type/signature displays.
+  Without a `query` filter, those details are materialized only for the returned
+  page. With `query`, Atlas does the honest whole-set exact scan so the query can
+  match signatures and callee type strings. Function rows carry normalized
+  `bodyFingerprint` and `bodyShapeFingerprint` values so duplicate-body and
+  duplicate-shape pressure can be followed through direct function-row filters
+  instead of by source browsing.
 - Symbol lane: `symbol-references` and `symbol-dependencies`. This lane pays
   for checker-backed identifier references without needing call-site rows.
+- Product record lane: `kernel-records` derives the KernelStoreRecord class set
+  from the semantic-runtime `KernelStoreRecord` type alias, then reports exact
+  `new`/object-literal construction sites with owner class/function, record
+  discriminator, source range, and visible product/predicate/seam/evidence
+  vocabulary expressions. The pressure script groups these rows by module and
+  owner so high-volume emitters can be found before opening source. Use it
+  before refactoring world construction, materialization passes, or product
+  vocabulary flow.
+- Product commit lane: `kernel-batches` reports `KernelStoreBatch` construction
+  and direct `KernelStore.commit(...)` handoffs with records expression, label
+  expression/literal, receiver, owner, and source range. The pressure script
+  groups these by module/owner as the pass-boundary view. Use it to connect
+  materializer pass boundaries to the record-construction lane.
+- Product provenance lane: `field-provenance` reports source-level
+  `FieldProvenance` construction sites with field-name and provenance-handle
+  expressions. Use it to review whether provenance belongs on authored source
+  surfaces, catalog-level framework products, or lower-level admission records
+  before adding more field-level provenance by habit.
 - Full lane: `summary` and explicit full profiles. This lane pays both checker
   call-site and symbol-reference costs. Summary uses compact call rows because
   it needs topology and pressure, not every callee type/signature string.
 
-Latest local profile after compact/exact call-site splitting: structure was about 120ms analysis, compact-call core
-about 960ms, exact-call core about 5.9s, symbol about 1.0s, compact-call full about 1.2s, and exact-call full about
-3.4s after some checker work was warm. The expensive exact-call phase is TypeScript callee type/signature display; keep
-that available for `call-sites`, but do not force it onto summary, function pressure, or call dependency rows.
+Latest local profile after page-scoped call-site detail materialization: structure was about 315ms analysis,
+structure+kernel-records about 383ms, compact-call core about 752ms, whole-set exact-call core about 4.1s, symbol about
+1.6s, compact-call full about 1.9s, and whole-set exact-call full about 4.7s after warmup. The expensive exact-call phase
+is TypeScript callee type/signature display; keep it explicitly available for detail search, but ordinary exact
+`call-sites` pages should reuse compact topology and enrich only the returned rows.
 
 Source-file, source-range, symbol-with-file, semantic-runtime package, and
 semantic-runtime repo-area loci now scope `product.architecture` rows like an
 explicit `pathPrefix`, including exact participant-file filtering for
 `area-dependencies`, so use loci directly when following continuations.
-Class rows include `auLinkIds` plus `hasAuLink`/`auLinkId` filters. Use those
-before deciding whether a zero-method `*Input` class is merely a request
-envelope or an intentionally modeled framework/product concept.
+Class rows include `auLinkIds` plus `hasAuLink`/`auLinkId` filters. They also
+include exact `auLinkCatalogIdsForName` plus `hasAuLinkCatalogNameMatch` /
+`auLinkCatalogIdForName` filters for finding product classes whose names match
+cataloged framework symbols without anchors. Use those before deciding whether
+a zero-method `*Input` class is merely a request envelope or an intentionally
+modeled framework/product concept.
 
 ## Mapping Policy
 
@@ -258,7 +386,10 @@ Inferred maintenance heuristics:
 - Answer-level `SemanticClaim` axes are intentionally generic composition axes,
   not framework row enums. Type-position enum member references are counted by
   the enum substrate, so type-only contracts should no longer appear as
-  unreferenced enum values.
+  unreferenced enum values. The composition contract now keeps claim axes,
+  entity kinds, and source lenses as controlled vocabularies; add explicit
+  extension values when a new answer family needs them rather than widening the
+  actor/claim surface back to plain strings.
 - The DI admission-materialization bridge was split enough that
   `diLinkForInstantiation` dropped out of high multi-axis pressure.
 - Bundle registration traversal now centralizes recurring argument-expression
@@ -271,11 +402,39 @@ Inferred maintenance heuristics:
 - DI provider atom constructors and resource instantiation closure now keep
   fixed relationship axes in named tables/constants. Prefer that pattern when a
   pressure row is really framework policy rather than local control flow.
+- In semantic-runtime, framework resolver effects and source resolver admissions
+  now share a DI resolver-publication path. Framework registration effect tables
+  live in `di/framework-registration-effects.ts`, and future capability-keyed
+  framework effects should be added there rather than inlining more manifest
+  data into `DiWorldConstructor`.
+- Binding data-flow source writeability is direction-gated: one-way
+  source-to-target flows should not project assignment/write policy. If large
+  app binding-observation cost rises, inspect whether owner/member writeability
+  checks are being requested without a target-to-source flow.
+- App-world project construction now uses a construction frame with named phase
+  methods; keep phase expansion there instead of rebuilding a monolithic
+  `constructAndEmit` chain.
+- Router identity/materialized-product/materialization-record emission is shared
+  through `router/router-product-records.ts` for route instruction and route
+  tree products. A repeated router product-record helper should be treated as a
+  missed ownership primitive.
+- Duplicate-helper pressure is deliberately more than a raw text/hash pass.
+  `bodyShapeFingerprint` normalizes local parameter/variable bindings and folds
+  conservative equivalent control flow such as ternary returns, `if`/early
+  returns, expression branches, negated branch order, and temporary return
+  aliases. Treat a repeated body-shape row as a stronger split-brain signal
+  than an exact grep match, but still inspect semantics before refactoring.
 - Several framework compiler/rendering/lifecycle/admission/materialization
   axis mappers have been converted into complete tables. If
   `pressure:self` advances to another obvious enum-to-relationship-axis switch,
   table it and verify the owning live lens; if it points into observation, read
   the framework semantics first because those classifiers are more contextual.
+- `framework.errors` is now a source-backed Atlas lens over Aurelia
+  `ErrorNames`/`Events` definitions, mapped messages, and usage sites. Use
+  `pnpm --filter @aurelia-ls/atlas pressure:framework-errors` before deciding
+  that a semantic-runtime template diagnostic is framework-grounded. Rows can
+  be filtered by package, enum name, mechanism, effect, or query and followed
+  into exact framework source.
 - Resource convergence rows distinguish exact definition source from declaration
   source and typed source-site lanes. `pressure:framework-resources` prints
   carrier-kind/source-role counts plus definition-vs-declaration counts; current
@@ -306,3 +465,19 @@ Inferred maintenance heuristics:
   splits app-root projects from resource-library/non-app packages; prefer that split before chasing evaluator seams in
   utility packages. Source-shipped plugin packages may now be admitted by mapping declaration entrypoints back to
   authored `src/*` files, while `aurelia` and `@aurelia/*` packages stay on the framework-emulation path.
+- The follow-up no-role mirror cleanup added exact framework-role rows for the remaining mirrored DI/compiler/router
+  definition concepts. DI now grounds `ContainerConfiguration`, `ParameterizedRegistry`, and `IRegistry.register`;
+  compiler contracts ground binding-command definitions/instances, command build info, attribute patterns, compiled
+  patterns, and bindables-info interfaces; rendering grounds `BindableDefinition`. A fresh `bridge.aulink` mirror read
+  with `hasRoleEvidence: false` should return zero rows before assuming a semantic-runtime `auLink` target is floating.
+- Product-architecture `call-sites includeCallDetails=true` is page-scoped when there is no detail `query`: Atlas builds
+  compact topology rows and enriches only the returned page with TypeChecker callee type/signature strings. A detail
+  `query` still performs the honest whole-set exact scan because those strings are part of the searchable surface.
+- Semantic-runtime project-shape pressure scripts accept exact `SemanticProjectShapeKind` values, not shorthand aliases:
+  use `aurelia-app`, `aurelia-resource-library`, `aurelia-package`, and `non-aurelia`.
+- Source-backed open seams should use `kernel/source-open-seam.ts` when the materializer has a source-file address plus
+  exact span. Evaluation, resource recognition, and registration now share that path instead of minting parallel
+  span/evidence/provenance/open-seam bundles.
+- `SelectValueObserver` multiple-mode closure is deliberately conservative: static `multiple` attributes, literal
+  `multiple.bind`, and single boolean-literal TypeChecker projections can close; ordinary boolean-valued
+  `multiple.bind` remains an open value-channel seam because Aurelia branches on the live element state.

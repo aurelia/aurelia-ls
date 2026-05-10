@@ -64,6 +64,10 @@ This is not a compatibility layer for old readers and not the default caller sur
   `bridge.aulink:mirror` also accepts `hasRoleEvidence`, `hasEmulationObligations`, and pressure-oriented `orderBy`
   values such as `roleEvidence`, `emulationObligation`, and `mirrorPressure`. Use those before reading source when
   you need to distinguish well-grounded framework anchors from auLink placements that still lack semantic evidence.
+  auLink decorator placements can carry a product-side `facet` when semantic-runtime intentionally mirrors one
+  framework symbol through several product concepts, such as a built-in resource definition plus template-controller
+  semantics. The bridge gap lane scopes duplicate-placement checks by facet; multi-facet groups remain visible in the
+  rollup, while same-facet duplicate decorators still surface as gaps.
 - [product-vocabulary-analysis.ts](product-vocabulary-analysis.ts) and
   [product-vocabulary-lenses.ts](product-vocabulary-lenses.ts) expose `product.vocabulary`. They walk the
   semantic-runtime vocabulary package through the hot TypeScript Program, then return the declared catalog, exact
@@ -82,11 +86,18 @@ This is not a compatibility layer for old readers and not the default caller sur
   large-class pressure. Projection cost is intentionally visible: `summary`, `symbol-references`,
   and `symbol-dependencies` spend the full symbol-backed memo, while row projections such as `functions`,
   `call-sites`, and `call-dependencies` use the lighter core memo and omit rollup counts that would pretend symbol
-  rows had been built. `areas`, `modules`, `dependencies`, `area-dependencies`, `declarations`, `cycles`, and
-  `classes` use the no-call-site structure lane; `functions` and `call-dependencies` use compact call-site topology;
-  exact `call-sites` additionally spends checker callee type/signature displays; symbol projections use the symbol
-  lane. The `profile` projection accepts `includeCallSites`, `includeCallDetails`, and `includeSymbols` so future
-  profiling can separate topology from expensive exact-call detail. Use `profile` or
+  rows had been built. `areas`, `modules`, `dependencies`, `area-dependencies`, `declarations`, `cycles`, `classes`,
+  and `function-duplicates` use the no-call-site structure lane; `function-duplicates` groups top-level helper names
+  across files with both normalized body fingerprints and AST/control-flow body-shape fingerprints, so the duplicate
+  pressure script does not need to page every function row and regroup outside the lens. `atlas.self:function-shapes`
+  groups repeated canonical function body shapes across different names, which catches split-brain helpers that would
+  be invisible to duplicate-name scans. `functions`,
+  `call-sites`, and `call-dependencies` use compact call-site topology by default; `call-sites` accepts
+  `includeCallDetails=true` when a caller needs checker callee type/signature displays. Without a detail `query`, those
+  displays are materialized only for the returned page; with a detail `query`, Atlas performs the whole-set exact call
+  scan because callee type/signature strings are part of the search surface. Symbol projections use the symbol lane. The
+  `profile` projection accepts `includeCallSites`, `includeCallDetails`, `includeSymbols`, and
+  `includeKernelRecords` so future profiling can separate topology, product-record flow, and expensive call detail. Use `profile` or
   `pnpm --filter @aurelia-ls/atlas profile:product-architecture` before adding cache, warmup, or split points; the
   current cold pressure tends to sit in exact-call checker detail and checker symbol reference rows. Source-file,
   source-range, symbol-with-file, semantic-runtime package, and semantic-runtime repo-area loci now scope rows the same
@@ -94,15 +105,24 @@ This is not a compatibility layer for old readers and not the default caller sur
   continuations and direct file probes do not need to rediscover the path filter. Class rows also accept
   `classNameSuffix` for envelope-shape questions such as zero-method `*Input` classes without mixing suffix matching
   into a broader text query. Class rows expose `auLinkIds` plus `hasAuLink`/`auLinkId` filters so product-model classes
-  can be separated from ordinary pass-parameter envelopes. Class property counts use the shared TypeScript
+  can be separated from ordinary pass-parameter envelopes. They also expose `auLinkCatalogIdsForName` with
+  `hasAuLinkCatalogNameMatch`/`auLinkCatalogIdForName` filters, which finds semantic-runtime classes whose name exactly
+  matches a cataloged framework symbol but lacks an anchor. `kernel-records`,
+  `kernel-batches`, and `field-provenance` expose exact source-level
+  semantic-runtime product record and provenance construction sites. Use them
+  when a refactor question is about how the kernel model is being populated
+  rather than just which files are large. Class property counts use the shared TypeScript
   member-surface substrate, so constructor parameter properties count as real property surfaces instead of making
   constructor-property records look empty.
   Use this lens when semantic-runtime architecture or refactor pressure would otherwise require source spelunking; it
   is a visibility substrate, not an automated judgment about which dependencies are good or bad.
-- [framework-compiler-products.ts](framework-compiler-products.ts) owns compiler relationship atoms derived from both
-  instruction-producing syntax products and source-backed TemplateCompiler compile-flow/attribute-classification rows.
-  This keeps actors such as `CompilationContext` and `AttrSyntax` visible in the auLink mirror as framework
-  relationships instead of only as derived emulation obligations.
+- [framework-compiler-products.ts](framework-compiler-products.ts) owns compiler relationship atoms derived from
+  instruction-producing syntax products, source-backed TemplateCompiler compile-flow/attribute-classification rows, and
+  [framework-compiler-contracts.ts](framework-compiler-contracts.ts) exact compiler contract rows. The contract rows
+  cover framework concepts such as `BindingCommandDefinition`, `BindingCommandInstance`, `ICommandBuildInfo`,
+  `AttributePatternDefinition`, `CompiledPattern`, and bindables-info interfaces when those concepts are mirrored with
+  `auLink` but do not emerge from instruction products alone. This keeps actors such as `CompilationContext` and
+  `AttrSyntax` visible in the auLink mirror as framework relationships instead of only as derived emulation obligations.
 - [framework-expression-relationships.ts](framework-expression-relationships.ts) and
   [framework-structural-relationships.ts](framework-structural-relationships.ts) lift framework catalog entity rows
   into relationship evidence for the auLink mirror and composition graph. They intentionally model definition/catalog
@@ -191,9 +211,12 @@ This is not a compatibility layer for old readers and not the default caller sur
   projection, including route-recognizer state population and recognition rows, plus route-context, route-tree,
   route-recognizer, viewport-agent, navigation, DI, resource, lifecycle surfaces, and normalized `relationships`.
   Use it before modeling router semantics in semantic-runtime; if a needed row is missing, improve this Atlas lens
-  before inventing router behavior from app examples. The `flow-issues` projection compares the curated route-flow
-  descriptors to the materialized source rows and reports stale descriptors, duplicate sequences, or ambiguous
-  descriptor keys. Router rows that cross component/materialization boundaries expose declared semantic route
+  before inventing router behavior from app examples. The scanner lives in
+  [framework-router-analysis.ts](framework-router-analysis.ts), the curated flow/route-recognizer descriptor keys live
+  in [framework-router-descriptor-map.ts](framework-router-descriptor-map.ts), and the expected Aurelia checkout
+  baseline lives in [framework-router-source-map.ts](framework-router-source-map.ts). The `flow-issues` projection
+  compares the curated route-flow descriptors to the materialized source rows and reports stale descriptors,
+  duplicate sequences, or ambiguous descriptor keys. Router rows that cross component/materialization boundaries expose declared semantic route
   continuations into `framework.materialization:resource-instantiations`,
   `framework.rendering:hydration-flow`, `framework.rendering:controller-creations`, and
   `framework.lifecycle:controller-calls`, so router modeling can follow the same end-to-end route grammar as compiler
@@ -301,8 +324,10 @@ This is not a compatibility layer for old readers and not the default caller sur
   source/type/detail continuations provide the expensive nested checker facts only when a caller asks for them.
 - [framework-rendering-relationships.ts](framework-rendering-relationships.ts) derives normalized rendering
   relationship rows from the existing rendering catalogs, including controller creation rows. It is intentionally a
-  relationship projection over catalog atoms, not a second scanner. Continuations from those rows should prefer
-  semantic hops first and only use source/type inspection when the next useful lens is not known yet.
+  relationship projection over catalog atoms, not a second scanner. The small `BindableDefinition` contract row is an
+  exception because runtime-html bindable metadata is a definition record that semantic-runtime mirrors directly and it
+  otherwise has no rendering role row. Continuations from those rows should prefer semantic hops first and only use
+  source/type inspection when the next useful lens is not known yet.
 - [framework-lifecycle-lenses.ts](framework-lifecycle-lenses.ts) exposes `framework.lifecycle`. It joins controller
   lifecycle method/call sites, binding lifecycle effects, and resource materialization phases into a separate lifecycle
   view instead of pushing controller activation or expression-resource behavior into the rendering lens. Controller

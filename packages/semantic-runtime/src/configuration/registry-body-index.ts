@@ -1,4 +1,4 @@
-import type { SourceSpanAddress } from '../kernel/address.js';
+import { sourceSpanContains, type SourceSpanAddress } from '../kernel/address.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
@@ -118,13 +118,4 @@ function readSourceSpan(
   }
   const address = store.readAddress(handle);
   return address?.kind === 'source-span-address' ? address : null;
-}
-
-function sourceSpanContains(
-  outer: SourceSpanAddress,
-  inner: SourceSpanAddress,
-): boolean {
-  return outer.fileHandle === inner.fileHandle
-    && outer.start <= inner.start
-    && inner.end <= outer.end;
 }

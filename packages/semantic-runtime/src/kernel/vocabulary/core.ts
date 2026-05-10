@@ -119,6 +119,8 @@ export const enum KernelVocabularyNamespace {
   Router = 'router',
   /** Vocabulary about route-recognizer path grammar and recognition products. */
   RouteRecognizer = 'route-recognizer',
+  /** Vocabulary about i18n translation resources and bindings. */
+  I18n = 'i18n',
   /** Vocabulary about template compiler services, scopes, syntax, and lowering. */
   Compiler = 'compiler',
   /** Vocabulary about template references and scope. */

@@ -67,7 +67,10 @@ open seams, or inquiry answers.
 - `ast.ts`
   Canonical AST carriers plus local/source span carriers.
 - `expression-scanner.ts`
-  Tokenization, token flags, and scanner hot path.
+  Tokenization, token flags, and scanner hot path. The top-level scan path
+  dispatches to token-family helpers for punctuation/operators so new lexical
+  grammar should land in the relevant family method instead of regrowing the
+  main scanner branch.
 - `expression-parser.ts`
   Public facade and family dispatch for expression-owned input.
 - `parse-result-algebra.ts`
@@ -97,7 +100,9 @@ state, with special corridors split out by ownership:
 
 - `completed-input-primary-corridor.ts`
   Literal primaries, identifiers, scope/global access roots, arrays, objects,
-  and parens.
+  and parens. Object literal parsing keeps entry/value/separator recovery as
+  separate helpers so future object grammar can attach to the right point
+  without reopening one giant primary branch.
 - `completed-input-left-hand-side-corridor.ts`
   `new`, member access, optional chaining, keyed access, calls, and tagged
   template handoff.
@@ -108,8 +113,11 @@ state, with special corridors split out by ownership:
 - `completed-input-template-corridor.ts`
   Template literal scanning plus nested `${...}` hole handoff.
 - `completed-input-iterator-corridor.ts`
-  Iterator header grammar, `of` separator law, iterable handoff, and raw `;`
-  tail visibility.
+  Iterator header grammar, `of` separator law, iterable handoff, object/array
+  binding patterns, and raw `;` tail visibility. Header publication plus
+  array/object binding pattern entry/rest/separator handling are intentionally
+  split inside the corridor; keep new iterator recovery law on the matching
+  helper rather than rebuilding a monolithic `repeat.for` parser.
 
 If another parser feature arrives, the first question should be "which corridor
 owns this?" rather than "which giant parser method do we patch?"
@@ -122,6 +130,13 @@ hands the completed-input parser only the expression slice it owns. The same
 lookahead is shared by `completed-input-template-corridor.ts`, so HTML
 interpolation and JavaScript template literals agree on `${...}` delimiter
 truth without asking EOF to stand in for a maybe-closed hole.
+
+Interpolation publication is a separate frame from boundary extraction. The
+frame owns active-hole selection, suppressed-hole promotion when the cursor is
+outside all holes, strict missing-close publication, and absolute source-span
+rebasing. If future work needs more interpolation scanner residue, add it beside
+that publication frame rather than weakening the completed-input parser or
+reintroducing nullable span fallbacks.
 
 ## Important Provisional Decisions
 
@@ -152,6 +167,9 @@ truth without asking EOF to stand in for a maybe-closed hole.
   that projection in `../template/expression-parse-projection.ts`, so the parse
   product can keep a companion/frontier state while binding data-flow still
   spends the runtime-accepted expression lane.
+- Inquiry follows the same split: a final missing interpolation close can stay
+  visible as cursor-info/diagnostic truth without suppressing expression-scope
+  completions for the accepted expression body.
 - Cursor-aware interpolation does not create a second AST family. It uses the caller's active offset to choose the
   active companion hole while preserving the same ordered closed/suppressed hole model.
 - `parse()` still defaults to `IsProperty`. If later callers need a true

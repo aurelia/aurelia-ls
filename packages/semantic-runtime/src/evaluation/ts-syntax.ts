@@ -15,6 +15,11 @@ export interface ReferenceSeed {
   readonly candidateName: string | null;
 }
 
+export interface ImportedAureliaExpressionBindings {
+  readonly aureliaIdentifiers: ReadonlySet<string>;
+  readonly aureliaNamespaces: ReadonlySet<string>;
+}
+
 export function guessScriptKind(
   filePath: string,
 ): ts.ScriptKind {
@@ -38,6 +43,33 @@ export function readPropertyName(
     || ts.isNumericLiteral(name)
     ? name.text
     : null;
+}
+
+export function readObjectPropertyExpression(
+  object: ts.ObjectLiteralExpression,
+  propertyName: string,
+): ts.Expression | null {
+  for (const property of object.properties) {
+    if (!ts.isPropertyAssignment(property) || readPropertyName(property.name) !== propertyName) {
+      continue;
+    }
+    return property.initializer;
+  }
+  return null;
+}
+
+export function isImportedAureliaExpression(
+  expression: ts.Expression,
+  bindings: ImportedAureliaExpressionBindings,
+): boolean {
+  const current = unwrapExpression(expression);
+  if (ts.isIdentifier(current)) {
+    return bindings.aureliaIdentifiers.has(current.text);
+  }
+  return ts.isPropertyAccessExpression(current)
+    && current.name.text === 'Aurelia'
+    && ts.isIdentifier(unwrapExpression(current.expression))
+    && bindings.aureliaNamespaces.has((unwrapExpression(current.expression) as ts.Identifier).text);
 }
 
 export function readDeclarationLocalName(

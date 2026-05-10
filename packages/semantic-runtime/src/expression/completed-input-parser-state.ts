@@ -7,9 +7,9 @@ import {
   TemplateExpression,
 } from './ast.js';
 import {
-  absoluteSpan,
-  ensureSpanFile,
+  absoluteTextSpan,
   normalizeSpan,
+  spanFromBounds,
   sourceSpanFromBounds,
   type SourceSpan,
   type TextSpan,
@@ -103,12 +103,11 @@ export class CompletedInputParserState {
   }
 
   span(start: number, end: number): SourceSpan {
-    const local = sourceSpanFromBounds(start, end, this.baseSpan?.file ?? null);
-    if (!this.baseSpan) return local;
-    const rebased = absoluteSpan(local, this.baseSpan);
-    if (rebased) return rebased;
-    const withFile = ensureSpanFile(local, this.baseSpan.file);
-    return normalizeSpan(withFile ?? local);
+    const local = spanFromBounds(start, end);
+    if (this.baseSpan) {
+      return absoluteTextSpan(local, this.baseSpan);
+    }
+    return sourceSpanFromBounds(local.start, local.end);
   }
 
   toLocal(offset: number): number {

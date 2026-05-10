@@ -47,8 +47,10 @@ import type { TemplateCompilerWorldEmission } from './compiler-world-materialize
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import {
   HtmlAttribute,
-  HtmlElement,
+  HtmlElementAttributeOwner,
   HtmlIrNodeKind,
+  htmlElementAttributeOwnersByAttributeProduct,
+  htmlElementLookupName,
   HtmlNodeReference,
 } from './html-ir.js';
 import type { HtmlParseEmission } from './html-parse-materializer.js';
@@ -78,14 +80,6 @@ class AttributeClassificationSourceSet {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly provenanceHandle: ProvenanceHandle,
-  ) {}
-}
-
-class OwnerElement {
-  constructor(
-    readonly element: HtmlElement,
-    readonly reference: HtmlNodeReference,
-    readonly attributes: readonly HtmlAttribute[],
   ) {}
 }
 
@@ -135,7 +129,7 @@ export class AttributeClassificationMaterializer {
     const classifications: AttributeClassification[] = [];
     const claims: SemanticClaim[] = [];
     const attributesByProduct = new Map(input.html.attributes.map((attribute) => [attribute.productHandle, attribute]));
-    const ownersByAttributeProduct = ownerElementsByAttributeProduct(input.html);
+    const ownersByAttributeProduct = htmlElementAttributeOwnersByAttributeProduct(input.html.nodes, input.html.attributes);
 
     input.attributeSyntax.syntaxes.forEach((syntax, index) => {
       const publication = this.publishAttributeClassification(
@@ -170,7 +164,7 @@ export class AttributeClassificationMaterializer {
     compilerWorld: TemplateCompilerWorldEmission,
     syntax: AttributeSyntax,
     attribute: HtmlAttribute | null,
-    owner: OwnerElement | null,
+    owner: HtmlElementAttributeOwner | null,
   ): AttributeClassificationPublication {
     const productHandle = this.store.handles.product(local);
     const identityHandle = this.store.handles.identity(local);
@@ -198,7 +192,7 @@ export class AttributeClassificationMaterializer {
     identityHandle: IdentityHandle,
     source: AttributeClassificationSourceSet,
     syntax: AttributeSyntax,
-    owner: OwnerElement | null,
+    owner: HtmlElementAttributeOwner | null,
     decision: ClassificationDecision,
   ): AttributeClassification {
     return new AttributeClassification(
@@ -300,28 +294,6 @@ export class AttributeClassificationMaterializer {
   }
 }
 
-function ownerElementsByAttributeProduct(html: HtmlParseEmission): ReadonlyMap<ProductHandle, OwnerElement> {
-  const owners = new Map<ProductHandle, OwnerElement>();
-  for (const node of html.nodes) {
-    if (!(node instanceof HtmlElement)) {
-      continue;
-    }
-    const attributes = node.attributes
-      .map((reference) => reference.productHandle == null
-        ? null
-        : html.attributes.find((attribute) => attribute.productHandle === reference.productHandle) ?? null
-      )
-      .filter((attribute): attribute is HtmlAttribute => attribute != null);
-    const owner = new OwnerElement(node, node.toReference(), attributes);
-    for (const attribute of node.attributes) {
-      if (attribute.productHandle != null) {
-        owners.set(attribute.productHandle, owner);
-      }
-    }
-  }
-  return owners;
-}
-
 function attributeForSyntax(
   syntax: AttributeSyntax,
   attributesByProduct: ReadonlyMap<ProductHandle, HtmlAttribute>,
@@ -333,8 +305,8 @@ function attributeForSyntax(
 
 function ownerForSyntax(
   syntax: AttributeSyntax,
-  ownersByAttributeProduct: ReadonlyMap<ProductHandle, OwnerElement>,
-): OwnerElement | null {
+  ownersByAttributeProduct: ReadonlyMap<ProductHandle, HtmlElementAttributeOwner>,
+): HtmlElementAttributeOwner | null {
   return syntax.attribute.productHandle == null
     ? null
     : ownersByAttributeProduct.get(syntax.attribute.productHandle) ?? null;
@@ -352,7 +324,7 @@ function referencedProductHandleForDecision(
 function classifySyntax(
   syntax: AttributeSyntax,
   attribute: HtmlAttribute,
-  owner: OwnerElement,
+  owner: HtmlElementAttributeOwner,
   world: TemplateCompilerWorldEmission,
 ): ClassificationDecision {
   const rawName = attribute.rawName.toLowerCase();
@@ -366,7 +338,7 @@ function classifySyntax(
   const bindingCommand = commandName == null
     ? null
     : world.bindingCommandResolver.get(commandName)?.toReference() ?? null;
-  const elementResolution = world.resourceResolver.el(elementLookupName(owner));
+  const elementResolution = world.resourceResolver.el(htmlElementLookupName(owner.element, owner));
   const elementDefinition = elementResolution?.definition?.type === ResourceDefinitionKind.CustomElement
     ? elementResolution.definition
     : null;
@@ -481,15 +453,6 @@ function classifyCapture(
     null,
     null,
   );
-}
-
-function elementLookupName(
-  owner: OwnerElement,
-): string {
-  const asElement = owner.attributes.find((attribute) => attribute.rawName.toLowerCase() === 'as-element');
-  return asElement == null || asElement.rawValue === ''
-    ? owner.element.tagName.toLowerCase()
-    : asElement.rawValue.toLowerCase();
 }
 
 function commandIgnoresAttribute(

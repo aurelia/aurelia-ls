@@ -52,6 +52,10 @@ The tooling model should keep that split:
   peeking into controller construction or compiler-world internals.
 - Configuration sequence records describe source/evaluation order for app setup, plugin setup, registry bodies, and
   builder-style configuration objects.
+- Configuration product publication should flow through one configuration-owned primitive for `ConfigurationIdentity`,
+  `MaterializedProduct`, and `MaterializationRecord`. Do not hand-spell that envelope for sequences, steps, app roots,
+  Aurelia facades, app-root configs, app tasks, or option contributions unless the product has genuinely different
+  ownership semantics.
 - `IRegistry.register(container, ...)` bodies are recognized as registry-owned configuration sequences. Their
   `container.register(...)` calls keep `RegistryMethod` admission provenance instead of being flattened into ordinary
   container-register calls, and static array spreads such as `...DefaultComponents` are expanded through the shared

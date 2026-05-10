@@ -24,6 +24,11 @@ import {
 import type { Continuation } from "../continuation.js";
 import {
   SEMANTIC_COMPOSITION_SCHEMA_VERSION,
+  SemanticClaimFamily,
+  SemanticClaimMechanism,
+  SemanticClaimPhase,
+  SemanticClaimPredicate,
+  SemanticEntityKind,
   type SemanticActorRow,
   type SemanticClaim,
   type SemanticCompositionValue,
@@ -363,10 +368,8 @@ function readerFiltersForComposition(
     (queryTerms.length === 1 ? queryTerms[0] : undefined);
   return {
     ...filters,
-    ...(filters.predicate === undefined
-      ? {}
-      : { relation: filters.predicate }),
-    ...(query === undefined ? {} : { query }),
+    relation: filters.predicate,
+    query,
   };
 }
 
@@ -388,19 +391,19 @@ function claimFromRelationship(
 ): SemanticClaim {
   return {
     id: `framework-claim:${sourceLens}:${row.id}`,
-    family: row.family ?? "framework",
+    family: row.family ?? SemanticClaimFamily.Framework,
     predicate: row.relation,
-    ...(row.mechanism === undefined ? {} : { mechanism: row.mechanism }),
-    ...(row.phase === undefined ? {} : { phase: row.phase }),
-    ...(row.packageId === undefined ? {} : { packageId: row.packageId }),
-    ...(row.packageName === undefined ? {} : { packageName: row.packageName }),
+    mechanism: row.mechanism,
+    phase: row.phase,
+    packageId: row.packageId,
+    packageName: row.packageName,
     subject: entityRefFromEndpoint(row.from),
     object: entityRefFromEndpoint(row.to),
     sourceLens,
     sourceProjection,
     basis,
-    ...(row.closure === undefined ? {} : { closure: row.closure }),
-    ...(row.source === undefined ? {} : { source: row.source }),
+    closure: row.closure,
+    source: row.source,
     sourceRowId: row.sourceRowId ?? row.id,
     summary: row.summary,
   };
@@ -422,14 +425,14 @@ function claimFromAuLinkAnchor(row: AuLinkAnchorRow): SemanticClaim {
   const objectName = frameworkCandidate?.symbolName ?? row.symbolName;
   return {
     id: `framework-claim:${LensId.BridgeAuLink}:${row.id}`,
-    family: "bridge",
-    predicate: "mirrors-framework-target",
-    mechanism: "aulink",
-    phase: "semantic-mapping",
+    family: SemanticClaimFamily.Bridge,
+    predicate: SemanticClaimPredicate.MirrorsFrameworkTarget,
+    mechanism: SemanticClaimMechanism.AuLink,
+    phase: SemanticClaimPhase.SemanticMapping,
     packageId: row.packageId,
     subject: {
-      id: entityId("product-class", row.target.name ?? row.symbolName, "semantic-runtime"),
-      kind: row.target.kind,
+      id: entityId(SemanticEntityKind.ProductClass, row.target.name ?? row.symbolName, "semantic-runtime"),
+      kind: SemanticEntityKind.ProductClass,
       name: row.target.name ?? row.symbolName,
       packageId: "semantic-runtime",
       source: productSource,
@@ -439,11 +442,11 @@ function claimFromAuLinkAnchor(row: AuLinkAnchorRow): SemanticClaim {
           : [row.symbolName],
     },
     object: {
-      id: entityId("framework-symbol", objectName, row.packageId),
-      kind: frameworkCandidate?.kind ?? "framework-target",
+      id: entityId(SemanticEntityKind.FrameworkSymbol, objectName, row.packageId),
+      kind: frameworkCandidate?.kind ?? SemanticEntityKind.FrameworkTarget,
       name: objectName,
       packageId: row.packageId,
-      ...(frameworkSource === undefined ? {} : { source: frameworkSource }),
+      source: frameworkSource,
       aliases:
         objectName === row.symbolName ? [] : [row.symbolName],
     },
@@ -464,13 +467,9 @@ function entityRefFromEndpoint(
     id: entityId(endpoint.kind, endpoint.name, endpoint.packageId),
     kind: endpoint.kind,
     name: endpoint.name,
-    ...(endpoint.packageId === undefined
-      ? {}
-      : { packageId: endpoint.packageId }),
-    ...(endpoint.packageName === undefined
-      ? {}
-      : { packageName: endpoint.packageName }),
-    ...(endpoint.source === undefined ? {} : { source: endpoint.source }),
+    packageId: endpoint.packageId,
+    packageName: endpoint.packageName,
+    source: endpoint.source,
     aliases: endpoint.resourceName === undefined || endpoint.resourceName === null
       ? []
       : [endpoint.resourceName],
@@ -976,13 +975,20 @@ function sourceFiltersForClaim(row: SemanticClaim): Inquiry["filters"] {
   if (row.sourceLens === LensId.BridgeAuLink) {
     return { symbolName: row.object.aliases?.[0] ?? row.object.name };
   }
-  return {
-    ...(row.packageId === undefined ? {} : { packageId: row.packageId }),
+  const filters: Record<string, unknown> = {
     relation: row.predicate,
-    ...(row.mechanism === undefined ? {} : { mechanism: row.mechanism }),
-    ...(row.phase === undefined ? {} : { phase: row.phase }),
     query: row.subject.name,
   };
+  if (row.packageId !== undefined) {
+    filters.packageId = row.packageId;
+  }
+  if (row.mechanism !== undefined) {
+    filters.mechanism = row.mechanism;
+  }
+  if (row.phase !== undefined) {
+    filters.phase = row.phase;
+  }
+  return filters;
 }
 
 function uniqueClaims(
@@ -1020,7 +1026,7 @@ function claimTouchesActor(
 }
 
 function entityId(
-  kind: string,
+  kind: SemanticEntityKind,
   name: string,
   packageId: string | undefined,
 ): string {

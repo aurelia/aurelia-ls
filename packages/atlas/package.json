@@ -30,6 +30,8 @@
     "pressure:product-architecture": "pnpm build && node dist/scripts/product-architecture-pressure.js",
     "pressure:product-architecture:detail": "pnpm build && node dist/scripts/product-architecture-pressure.js --detail",
     "pressure:framework-resources": "pnpm build && node dist/scripts/framework-resources-pressure.js",
+    "pressure:bridge-aulink": "pnpm build && node dist/scripts/bridge-aulink-pressure.js",
+    "pressure:framework-errors": "pnpm build && node dist/scripts/framework-errors-pressure.js",
     "pressure:framework-router": "pnpm build && node dist/scripts/framework-router-pressure.js",
     "pressure:plugin-architecture": "pnpm build && node dist/scripts/plugin-architecture-pressure.js",
     "pressure:workspace-architecture": "pnpm build && node dist/scripts/workspace-architecture-pressure.js",

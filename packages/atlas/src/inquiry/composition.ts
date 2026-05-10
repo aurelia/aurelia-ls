@@ -1,16 +1,45 @@
 import type { BasisKind } from "./basis.js";
+import type { LensId } from "./lens.js";
 import type { SourceRange } from "./locus.js";
+import type {
+  FrameworkRelationshipClosure,
+  FrameworkRelationshipEndpointKind,
+  FrameworkRelationshipFamily,
+  FrameworkRelationshipMechanism,
+  FrameworkRelationshipPhase,
+  FrameworkRelationshipRelation,
+} from "../framework/relationships.js";
+import type {
+  AuLinkFrameworkTargetStatus,
+  SourceDeclarationKind,
+} from "../source/index.js";
 
 /** Schema marker for answers that expose entity-centered claim composition. */
 export const SEMANTIC_COMPOSITION_SCHEMA_VERSION =
   "atlas-semantic-composition-v0" as const;
 
+/** Composition entity kinds that do not come directly from framework endpoints or TypeScript declarations. */
+export const SemanticEntityKind = {
+  /** Semantic-runtime class that carries an auLink mirror anchor. */
+  ProductClass: "product-class",
+  /** Framework symbol referenced by an auLink id before an exact declaration candidate is known. */
+  FrameworkTarget: "framework-target",
+  /** Framework-side symbol identity used for stable actor ids across type/value declaration pairs. */
+  FrameworkSymbol: "framework-symbol",
+} as const;
+
+/** Composition endpoint kind vocabulary. */
+export type SemanticEntityKind =
+  | FrameworkRelationshipEndpointKind
+  | SourceDeclarationKind
+  | (typeof SemanticEntityKind)[keyof typeof SemanticEntityKind];
+
 /** Stable reference to one semantic actor or claim endpoint. */
 export interface SemanticEntityRef {
   /** Stable answer-local entity id. */
   readonly id: string;
-  /** Domain-local endpoint kind such as symbol, method, di-key, resource, or product-class. */
-  readonly kind: string;
+  /** Controlled endpoint kind such as symbol, method, di-key, resource, declaration kind, or product-class. */
+  readonly kind: SemanticEntityKind;
   /** Human-readable actor or endpoint name. */
   readonly name: string;
   /** Package id when the entity is framework or product source-backed. */
@@ -23,17 +52,64 @@ export interface SemanticEntityRef {
   readonly aliases?: readonly string[];
 }
 
-/** Answer-level claim family; source substrates may use framework, product, bridge, or app-specific families. */
-export type SemanticClaimFamily = string;
+/** Answer-level claim families known to the composition algebra. */
+export const SemanticClaimFamily = {
+  Identity: "identity",
+  Di: "di",
+  Resource: "resource",
+  Rendering: "rendering",
+  Compiler: "compiler",
+  Lifecycle: "lifecycle",
+  Observation: "observation",
+  Expression: "expression",
+  Router: "router",
+  Materialization: "materialization",
+  Admission: "admission",
+  Bridge: "bridge",
+  Framework: "framework",
+  Product: "product",
+  App: "app",
+} as const;
 
-/** Answer-level claim mechanism; source substrates may map this from their own mechanism vocabulary. */
-export type SemanticClaimMechanism = string;
+/** Answer-level claim family; framework families are preserved by value and bridge/product/app are explicit extension points. */
+export type SemanticClaimFamily =
+  | FrameworkRelationshipFamily
+  | (typeof SemanticClaimFamily)[keyof typeof SemanticClaimFamily];
 
-/** Answer-level claim phase; source substrates may map this from their own phase vocabulary. */
-export type SemanticClaimPhase = string;
+/** Answer-level predicates that do not originate in a framework relationship enum. */
+export const SemanticClaimPredicate = {
+  MirrorsFrameworkTarget: "mirrors-framework-target",
+} as const;
 
-/** Answer-level claim closure; source substrates may map this from their own closure/status vocabulary. */
-export type SemanticClaimClosure = string;
+/** Signed predicate asserted from subject to object. */
+export type SemanticClaimPredicate =
+  | FrameworkRelationshipRelation
+  | (typeof SemanticClaimPredicate)[keyof typeof SemanticClaimPredicate];
+
+/** Answer-level mechanisms that do not originate in a framework relationship enum. */
+export const SemanticClaimMechanism = {
+  AuLink: "aulink",
+} as const;
+
+/** Answer-level claim mechanism; framework mechanisms are preserved by value and bridge mechanisms are explicit. */
+export type SemanticClaimMechanism =
+  | FrameworkRelationshipMechanism
+  | (typeof SemanticClaimMechanism)[keyof typeof SemanticClaimMechanism];
+
+/** Answer-level phases that do not originate in a framework relationship enum. */
+export const SemanticClaimPhase = {
+  SemanticMapping: "semantic-mapping",
+} as const;
+
+/** Answer-level claim phase; framework phases are preserved by value and bridge phases are explicit. */
+export type SemanticClaimPhase =
+  | FrameworkRelationshipPhase
+  | (typeof SemanticClaimPhase)[keyof typeof SemanticClaimPhase];
+
+/** Answer-level claim closure; framework closure and auLink target status are the current producing vocabularies. */
+export type SemanticClaimClosure =
+  | FrameworkRelationshipClosure
+  | AuLinkFrameworkTargetStatus;
 
 /** One signed semantic claim in an answer-level composition graph. */
 export interface SemanticClaim {
@@ -42,7 +118,7 @@ export interface SemanticClaim {
   /** Broad domain family that owns this claim, such as di, rendering, lifecycle, bridge, or product. */
   readonly family: SemanticClaimFamily;
   /** Signed predicate asserted from subject to object. */
-  readonly predicate: string;
+  readonly predicate: SemanticClaimPredicate;
   /** Source/runtime mechanism, when the producing substrate has one. */
   readonly mechanism?: SemanticClaimMechanism;
   /** Semantic or runtime phase, when the producing substrate has one. */
@@ -56,7 +132,7 @@ export interface SemanticClaim {
   /** Object endpoint for the claim. */
   readonly object: SemanticEntityRef;
   /** Lens that owns the row this claim was projected from. */
-  readonly sourceLens: string;
+  readonly sourceLens: LensId;
   /** Projection that owns the row this claim was projected from. */
   readonly sourceProjection: string;
   /** Basis kinds that support the claim. */

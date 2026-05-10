@@ -18,11 +18,6 @@ import {
   WorkspaceInquiryLocus,
   type InquiryLocus,
 } from './locus.js';
-import {
-  isSourceFileAddress,
-  sourceFilePathMatches,
-} from './source-file-addresses.js';
-
 export const enum InquirySelectorKind {
   Workspace = 'workspace',
   Project = 'project',
@@ -104,9 +99,7 @@ function resolveSourceFileSelector(
   store: KernelStore,
   selector: SourceFileSelector,
 ): InquiryAnswer<InquiryLocus, InquirySelector> {
-  const matches = store.readAddresses()
-    .filter(isSourceFileAddress)
-    .filter((address) => sourceFilePathMatches(address, selector.filePath));
+  const matches = store.readSourceFileAddressesByFileName(selector.filePath);
 
   if (matches.length === 0) {
     return miss(

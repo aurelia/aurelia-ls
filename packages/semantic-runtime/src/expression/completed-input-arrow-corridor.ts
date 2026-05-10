@@ -28,6 +28,47 @@ interface CompletedInputArrowCorridorDependencies {
   readonly bindingIdentifierFromToken: (token: Token) => ParseOutcome<BindingIdentifier>;
 }
 
+const enum ParenthesizedArrowHeadStep {
+  Continue = 'continue',
+}
+
+type ParsedParenthesizedArrowHeadStep =
+  | ParseOutcome<ArrowFunction>
+  | ParenthesizedArrowHeadStep
+  | null;
+
+class ParenthesizedArrowHeadState {
+  readonly params: BindingIdentifier[] = [];
+  rest = false;
+  committedByHeadShape = false;
+  pendingParameterAnchor: Token | null = null;
+
+  constructor(readonly openParen: Token) {}
+
+  get start(): number {
+    return this.openParen.start;
+  }
+
+  commitByHeadShape(): void {
+    this.committedByHeadShape = true;
+  }
+
+  markRest(): void {
+    this.rest = true;
+    this.commitByHeadShape();
+  }
+
+  addParameter(parameter: BindingIdentifier): void {
+    this.params.push(parameter);
+    this.pendingParameterAnchor = null;
+  }
+
+  expectParameterAfter(comma: Token): void {
+    this.commitByHeadShape();
+    this.pendingParameterAnchor = comma;
+  }
+}
+
 /**
  * Completed-input arrow-function corridor.
  *
@@ -137,108 +178,141 @@ export class CompletedInputArrowCorridor {
     this.state.nextToken();
     this.state.pushDelimiter(MatchedDelimiterKind.Paren, openParen);
 
-    const params: BindingIdentifier[] = [];
-    let rest = false;
-    let committedByHeadShape = false;
-    let pendingParameterAnchor: Token | null = null;
-    const start = openParen.start;
-
-    let token = this.state.peekToken();
-
-    if (token.type === TokenType.CloseParen) {
-      committedByHeadShape = true;
-      const closeParen = this.state.nextToken();
-      this.state.popDelimiter(MatchedDelimiterKind.Paren);
-      return this.finishParenthesized(openParen, closeParen, params, rest, committedByHeadShape);
+    const head = new ParenthesizedArrowHeadState(openParen);
+    const emptyHead = this.tryParseEmptyParenthesizedHead(head);
+    if (emptyHead !== null) {
+      return emptyHead;
     }
 
     while (true) {
-      token = this.state.peekToken();
-
-      let param: BindingIdentifier;
-      if (token.type === TokenType.Ellipsis) {
-        committedByHeadShape = true;
-        rest = true;
-        const ellipsis = this.state.nextToken();
-        const idTok = this.state.peekToken();
-        if (idTok.type !== TokenType.Identifier) {
-          return this.companionBuilder.missingArrowParameterFailure(
-            "Expected binding declaration after '...' in arrow parameter list",
-            idTok,
-            ellipsis,
-            start,
-            params,
-          );
-        }
-        this.state.nextToken();
-        const parsedParam = this.deps.bindingIdentifierFromToken(idTok);
-        if (isParseFailure(parsedParam)) {
-          return parsedParam;
-        }
-        param = parsedParam;
-      } else if (token.type === TokenType.Identifier) {
-        this.state.nextToken();
-        const parsedParam = this.deps.bindingIdentifierFromToken(token);
-        if (isParseFailure(parsedParam)) {
-          return parsedParam;
-        }
-        param = parsedParam;
-      } else {
-        if (!committedByHeadShape || pendingParameterAnchor == null) {
-          return null;
-        }
-        return this.companionBuilder.missingArrowParameterFailure(
-          'Expected binding declaration in arrow parameter list',
-          token,
-          pendingParameterAnchor,
-          start,
-          params,
-        );
+      const param = this.parseParenthesizedHeadParameter(head);
+      if (param === null || isParseFailure(param)) {
+        return param;
       }
+      head.addParameter(param);
 
-      pendingParameterAnchor = null;
-      params.push(param);
-
-      token = this.state.peekToken();
-      if (token.type === TokenType.Comma) {
-        const comma = this.state.nextToken();
-        if (rest) {
-          return this.state.error('Rest parameter must be last in arrow parameter list', comma);
-        }
-        committedByHeadShape = true;
-        pendingParameterAnchor = comma;
-        const next = this.state.peekToken();
-        if (next.type === TokenType.CloseParen) {
-          return this.companionBuilder.missingArrowParameterFailure(
-            "Expected binding declaration after ',' in arrow parameter list",
-            next,
-            comma,
-            start,
-            params,
-          );
-        }
-        continue;
+      const step = this.parseParenthesizedHeadSeparator(head, param);
+      if (step !== ParenthesizedArrowHeadStep.Continue) {
+        return step;
       }
+    }
+  }
 
-      if (token.type === TokenType.CloseParen) {
-        const closeParen = this.state.nextToken();
-        this.state.popDelimiter(MatchedDelimiterKind.Paren);
-        return this.finishParenthesized(openParen, closeParen, params, rest, committedByHeadShape);
-      }
+  private tryParseEmptyParenthesizedHead(
+    head: ParenthesizedArrowHeadState,
+  ): ParseOutcome<ArrowFunction> | null {
+    const token = this.state.peekToken();
+    if (token.type !== TokenType.CloseParen) {
+      return null;
+    }
+    head.commitByHeadShape();
+    return this.closeAndFinishParenthesizedHead(head);
+  }
 
-      if (!committedByHeadShape) {
-        return null;
-      }
+  private parseParenthesizedHeadParameter(
+    head: ParenthesizedArrowHeadState,
+  ): ParseOutcome<BindingIdentifier> | null {
+    const token = this.state.peekToken();
+    if (token.type === TokenType.Ellipsis) {
+      return this.parseRestParenthesizedHeadParameter(head);
+    }
+    if (token.type === TokenType.Identifier) {
+      return this.parseIdentifierParenthesizedHeadParameter(token);
+    }
+    if (!head.committedByHeadShape || head.pendingParameterAnchor == null) {
+      return null;
+    }
+    return this.companionBuilder.missingArrowParameterFailure(
+      'Expected binding declaration in arrow parameter list',
+      token,
+      head.pendingParameterAnchor,
+      head.start,
+      head.params,
+    );
+  }
 
-      return this.companionBuilder.missingClosingDelimiterFailure(
-        "Expected ')' in arrow parameter list",
-        token,
-        ExpressionCompanionFrameKind.ArrowParameterList,
-        ExpressionExpectedContinuationClass.CloseParen,
-        this.state.span(start, this.state.localEnd(param)),
-        this.companionBuilder.arrowParameterRefs(params),
+  private parseRestParenthesizedHeadParameter(
+    head: ParenthesizedArrowHeadState,
+  ): ParseOutcome<BindingIdentifier> {
+    head.markRest();
+    const ellipsis = this.state.nextToken();
+    const idTok = this.state.peekToken();
+    if (idTok.type !== TokenType.Identifier) {
+      return this.companionBuilder.missingArrowParameterFailure(
+        "Expected binding declaration after '...' in arrow parameter list",
+        idTok,
+        ellipsis,
+        head.start,
+        head.params,
       );
     }
+    return this.parseIdentifierParenthesizedHeadParameter(idTok);
+  }
+
+  private parseIdentifierParenthesizedHeadParameter(
+    token: Token,
+  ): ParseOutcome<BindingIdentifier> {
+    this.state.nextToken();
+    return this.deps.bindingIdentifierFromToken(token);
+  }
+
+  private parseParenthesizedHeadSeparator(
+    head: ParenthesizedArrowHeadState,
+    param: BindingIdentifier,
+  ): ParsedParenthesizedArrowHeadStep {
+    const token = this.state.peekToken();
+    if (token.type === TokenType.Comma) {
+      return this.parseParenthesizedHeadComma(head);
+    }
+    if (token.type === TokenType.CloseParen) {
+      return this.closeAndFinishParenthesizedHead(head);
+    }
+    if (!head.committedByHeadShape) {
+      return null;
+    }
+    return this.companionBuilder.missingClosingDelimiterFailure(
+      "Expected ')' in arrow parameter list",
+      token,
+      ExpressionCompanionFrameKind.ArrowParameterList,
+      ExpressionExpectedContinuationClass.CloseParen,
+      this.state.span(head.start, this.state.localEnd(param)),
+      this.companionBuilder.arrowParameterRefs(head.params),
+    );
+  }
+
+  private parseParenthesizedHeadComma(
+    head: ParenthesizedArrowHeadState,
+  ): ParsedParenthesizedArrowHeadStep {
+    const comma = this.state.nextToken();
+    if (head.rest) {
+      return this.state.error('Rest parameter must be last in arrow parameter list', comma);
+    }
+    head.expectParameterAfter(comma);
+    const next = this.state.peekToken();
+    if (next.type === TokenType.CloseParen) {
+      return this.companionBuilder.missingArrowParameterFailure(
+        "Expected binding declaration after ',' in arrow parameter list",
+        next,
+        comma,
+        head.start,
+        head.params,
+      );
+    }
+    return ParenthesizedArrowHeadStep.Continue;
+  }
+
+  private closeAndFinishParenthesizedHead(
+    head: ParenthesizedArrowHeadState,
+  ): ParseOutcome<ArrowFunction> | null {
+    const closeParen = this.state.nextToken();
+    this.state.popDelimiter(MatchedDelimiterKind.Paren);
+    return this.finishParenthesized(
+      head.openParen,
+      closeParen,
+      head.params,
+      head.rest,
+      head.committedByHeadShape,
+    );
   }
 
   private tryParseCommittedInvalidParenthesizedHead(): ParseHardFailure | null {

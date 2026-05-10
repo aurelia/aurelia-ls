@@ -942,6 +942,7 @@ export function resourceKindFromDefinitionExpression(
       return FrameworkResourceDefinitionKind.TemplateController;
     case "value-converter":
     case "converterTypeName":
+    case "valueConverterTypeName":
       return FrameworkResourceDefinitionKind.ValueConverter;
     case "binding-behavior":
     case "behaviorTypeName":

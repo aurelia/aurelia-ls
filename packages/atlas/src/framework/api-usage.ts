@@ -328,9 +328,9 @@ class AureliaApiUsageIndexBuilder {
     return {
       rollup,
       subjects: subjectsWithUsage,
-      facets: this.#facets.map(facetRow).sort(compareFacets),
-      mergeEdges: this.#mergeEdges.sort(compareMergeEdges),
-      shapeEdges: this.#shapeEdges.sort(compareShapeEdges),
+      facets: this.#facets.map(facetRow).sort(compareFacetIdentityRows),
+      mergeEdges: this.#mergeEdges.sort(compareApiRelationEdges),
+      shapeEdges: this.#shapeEdges.sort(compareApiRelationEdges),
       implementationShapes,
       memberSlots: memberSlotsWithUsage,
       usages,
@@ -456,7 +456,7 @@ class AureliaApiUsageIndexBuilder {
 
   #collectSameDeclarationEdges(): void {
     for (const facets of this.#facetsByDeclaration.values()) {
-      const sorted = uniqueByKey(facets, (facet) => facet.id).sort(compareMutableFacets);
+      const sorted = uniqueByKey(facets, (facet) => facet.id).sort(compareFacetIdentityRows);
       const first = sorted[0];
       if (first === undefined) {
         continue;
@@ -469,7 +469,7 @@ class AureliaApiUsageIndexBuilder {
 
   #collectSameExportEdges(): void {
     for (const facets of this.#facetsByExport.values()) {
-      const sorted = [...facets].sort(compareMutableFacets);
+      const sorted = [...facets].sort(compareFacetIdentityRows);
       const first = sorted[0];
       if (first === undefined) {
         continue;
@@ -487,7 +487,7 @@ class AureliaApiUsageIndexBuilder {
         (facet) => facet.localName,
       );
       for (const sameNameFacets of facetsByLocalName.values()) {
-        const sorted = [...sameNameFacets].sort(compareMutableFacets);
+        const sorted = [...sameNameFacets].sort(compareFacetIdentityRows);
         const first = sorted[0];
         if (first === undefined) {
           continue;
@@ -592,7 +592,7 @@ class AureliaApiUsageIndexBuilder {
       return null;
     }
     const facets = this.#facetsBySymbol.get(symbol);
-    const sorted = facets?.slice().sort(compareMutableFacets) ?? [];
+    const sorted = facets?.slice().sort(compareFacetIdentityRows) ?? [];
     const name = expressionNameText(current);
     if (name !== null) {
       const matchingName = sorted.find((facet) =>
@@ -677,7 +677,7 @@ class AureliaApiUsageIndexBuilder {
         facet.subjectId = subjectId;
       }
 
-      const facetRows = facets.map(facetRow).sort(compareFacets);
+      const facetRows = facets.map(facetRow).sort(compareFacetIdentityRows);
       const mergeEdges = this.#mergeEdges.filter(
         (edge) =>
           facetRows.some((facet) => facet.id === edge.fromFacetId) ||
@@ -824,7 +824,7 @@ class AureliaApiUsageIndexBuilder {
         source,
         text,
         owner,
-        ...(call === null ? {} : { call }),
+        call: call ?? undefined,
         summary: `${text} ${role} uses ${facet.localName}`,
       });
     }
@@ -862,7 +862,7 @@ class AureliaApiUsageIndexBuilder {
         source,
         text,
         owner,
-        ...(call === null ? {} : { call }),
+        call: call ?? undefined,
         summary: `${text} ${role} uses ${this.#subjectNameById.get(facet.subjectId) ?? facet.localName}.${declaration.name}`,
       });
     }
@@ -1098,14 +1098,10 @@ function expressionNameText(expression: ts.Expression): string | null {
   return null;
 }
 
-function compareMutableFacets(left: MutableFacet, right: MutableFacet): number {
-  return left.packageId.localeCompare(right.packageId) ||
-    left.exportName.localeCompare(right.exportName) ||
-    left.localName.localeCompare(right.localName) ||
-    left.id.localeCompare(right.id);
-}
-
-function compareFacets(left: AureliaApiFacetRow, right: AureliaApiFacetRow): number {
+function compareFacetIdentityRows(
+  left: MutableFacet | AureliaApiFacetRow,
+  right: MutableFacet | AureliaApiFacetRow,
+): number {
   return left.packageId.localeCompare(right.packageId) ||
     left.exportName.localeCompare(right.exportName) ||
     left.localName.localeCompare(right.localName) ||
@@ -1113,7 +1109,7 @@ function compareFacets(left: AureliaApiFacetRow, right: AureliaApiFacetRow): num
 }
 
 function compareFacetsByPrimaryPreference(left: MutableFacet, right: MutableFacet): number {
-  return facetPrimaryRank(left) - facetPrimaryRank(right) || compareMutableFacets(left, right);
+  return facetPrimaryRank(left) - facetPrimaryRank(right) || compareFacetIdentityRows(left, right);
 }
 
 function facetPrimaryRank(facet: MutableFacet): number {
@@ -1130,14 +1126,10 @@ function facetPrimaryRank(facet: MutableFacet): number {
   }
 }
 
-function compareMergeEdges(left: AureliaApiMergeEdgeRow, right: AureliaApiMergeEdgeRow): number {
-  return left.relation.localeCompare(right.relation) ||
-    left.fromName.localeCompare(right.fromName) ||
-    left.toName.localeCompare(right.toName) ||
-    left.id.localeCompare(right.id);
-}
-
-function compareShapeEdges(left: AureliaApiShapeEdgeRow, right: AureliaApiShapeEdgeRow): number {
+function compareApiRelationEdges(
+  left: AureliaApiMergeEdgeRow | AureliaApiShapeEdgeRow,
+  right: AureliaApiMergeEdgeRow | AureliaApiShapeEdgeRow,
+): number {
   return left.relation.localeCompare(right.relation) ||
     left.fromName.localeCompare(right.fromName) ||
     left.toName.localeCompare(right.toName) ||

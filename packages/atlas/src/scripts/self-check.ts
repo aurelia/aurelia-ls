@@ -146,6 +146,10 @@ if (routerSurfaceValue.rollup.flowIssueCount !== 0) {
   );
 }
 
+if (routerSurfaceValue.sourceState.status === "drifted") {
+  throw new Error(routerSurfaceValue.sourceState.summary);
+}
+
 const missingRouterPublicExports = routerPublicExportNames().filter(
   (name) => !isRouterExportName(name),
 );

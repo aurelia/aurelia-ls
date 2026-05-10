@@ -31,6 +31,7 @@ import {
   type PluginSurfaceRow,
 } from "./plugin-architecture-analysis.js";
 import {
+  hasAnyInquiryStringFilter,
   inquiryLowerStringFilter,
   inquiryPackageIdFilter,
   inquiryStringFilter,
@@ -183,7 +184,7 @@ function filterPluginArchitectureRows(
     queryPackageIds,
   );
   const surfacePackageIds = new Set(surfaces.map((row) => row.packageId));
-  const hasSurfaceFilter = hasExplicitSurfaceFilter(inquiry);
+  const hasSurfaceFilter = hasExplicitPluginSurfaceFilter(inquiry);
   const packages = axisPackages.filter((row) => {
     if (surfacePackageIds.has(row.id)) {
       return true;
@@ -255,10 +256,8 @@ function pluginSurfaceMatchesQuery(row: PluginSurfaceRow, query: string): boolea
   );
 }
 
-function hasExplicitSurfaceFilter(inquiry: Inquiry): boolean {
-  return inquiryStringFilter(inquiry, "kind") !== undefined ||
-    inquiryStringFilter(inquiry, "surfaceKind") !== undefined ||
-    inquiryStringFilter(inquiry, "mechanism") !== undefined;
+function hasExplicitPluginSurfaceFilter(inquiry: Inquiry): boolean {
+  return hasAnyInquiryStringFilter(inquiry, ["kind", "surfaceKind", "mechanism"]);
 }
 
 function pluginEvidenceForPackage(row: PluginPackageRow): Evidence {

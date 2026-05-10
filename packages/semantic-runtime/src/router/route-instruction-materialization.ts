@@ -1,32 +1,27 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type { BindingScope } from '../configuration/scope.js';
+import type { Container } from '../di/container.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
 import {
   EvaluationValueKind,
 } from '../evaluation/values.js';
 import {
   EvidenceKind,
-  EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
-import type { AddressHandle, EvidenceHandle, ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
-import { RouterIdentity } from '../kernel/identity.js';
+import type { AddressHandle, IdentityHandle, ProductHandle, ProvenanceHandle } from '../kernel/handles.js';
+import { localKeyPart } from '../kernel/local-key.js';
+import { OpenSeam, OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
-  MaterializationRecord,
-  MaterializedProduct,
-} from '../kernel/materialization.js';
-import { OpenSeam } from '../kernel/open-seam.js';
-import {
-  compactFieldProvenance,
+  fieldProvenanceEntries,
   FieldProvenance,
-  ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
   KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
-import { KernelVocabulary, type ProductKindKey } from '../kernel/vocabulary.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   RuntimeBindingSourceValueEvaluationKind,
   RuntimeBindingSourceValueEvaluator,
@@ -61,6 +56,7 @@ import {
 } from './route-expression-parser.js';
 import type { RouteRuntimeTopologyProjectResult } from './route-runtime-topology.js';
 import { routeRuntimeContextsByComponentDefinition } from './route-topology-index.js';
+import { routerOpenSeamRecords, routerProductRecords } from './router-product-records.js';
 import type { RouterOptionsMaterializationProjectResult } from './router-options-materialization.js';
 
 export const enum RouterResourceInstructionKind {
@@ -103,6 +99,19 @@ interface MaterializedViewportInstructionEmission {
   readonly viewportInstruction: ViewportInstructionModel;
 }
 
+interface RouteInstructionMaterializationState {
+  readonly sourceValueEvaluator: RuntimeBindingSourceValueEvaluator;
+  readonly routeContextsByDefinition: ReadonlyMap<IdentityHandle, readonly RouteContextModel[]>;
+  readonly routeContextsByContainerIdentity: ReadonlyMap<IdentityHandle, RouteContextModel>;
+  readonly rootRouteContextsByParentContainerIdentity: ReadonlyMap<IdentityHandle, readonly RouteContextModel[]>;
+  readonly routeContextsByIdentity: ReadonlyMap<IdentityHandle, RouteContextModel>;
+  readonly emissions: RouteInstructionEmission[];
+  readonly openSeams: OpenSeam[];
+  readonly openRecords: KernelStoreRecord[];
+}
+
+type RouteInstructionTemplateResource = TemplateCompilationProjectEmission['resources'][number];
+
 /** Router instruction products created before route-tree transition compilation. */
 export class RouteInstructionMaterializationProjectResult {
   constructor(
@@ -137,60 +146,147 @@ export class RouteInstructionMaterializationProjectPass {
     routerOptions: RouterOptionsMaterializationProjectResult,
     evaluation: StaticProjectEvaluationResult,
   ): RouteInstructionMaterializationProjectResult {
-    const sourceValueEvaluator = new RuntimeBindingSourceValueEvaluator(store, evaluation);
-    const routeContextsByDefinition = routeRuntimeContextsByComponentDefinition(routeConfigContexts, routeRuntime);
-    const routeContextsByIdentity = new Map(
-      routeRuntime.readRouteContexts().map((routeContext) => [routeContext.identityHandle, routeContext] as const),
+    const state = createRouteInstructionMaterializationState(
+      store,
+      evaluation,
+      routeConfigContexts,
+      routeRuntime,
     );
-    const emissions: RouteInstructionEmission[] = [];
-    const openSeams: OpenSeam[] = [];
-    const openRecords: KernelStoreRecord[] = [];
-
-    for (const resource of templates.resources) {
-      const definitionIdentity = resource.compilation.definition.target.identityHandle;
-      const routeContexts = definitionIdentity == null
-        ? null
-        : routeContextsByDefinition.get(definitionIdentity) ?? null;
-      for (const controller of resource.runtimeAnalysis.runtimeRendering.controllers) {
-        for (const routeContext of routeContextCandidates(routeContexts)) {
-          const site = routerResourceInstructionSite(store, controller, routeContext, resource.runtimeAnalysis.scopes);
-          if (site == null) {
-            continue;
-          }
-          const closed = closeRouterResourceInstruction(store, site, sourceValueEvaluator, openSeams, openRecords);
-          if (closed == null) {
-            continue;
-          }
-          const emission = materializeInstructionTree(
-            store,
-            closed,
-            routeContextsByIdentity,
-            routerOptions,
-            openSeams,
-            openRecords,
-          );
-          if (emission != null) {
-            emissions.push(emission);
-          }
-        }
-      }
-    }
+    this.collectRouteInstructionEmissions(store, templates, routerOptions, state);
 
     const records = [
-      ...emissions.flatMap((emission) => emission.records),
-      ...openRecords,
+      ...state.emissions.flatMap((emission) => emission.records),
+      ...state.openRecords,
     ];
     if (records.length > 0) {
       store.commit(new KernelStoreBatch(records, `router-instructions:${project.projectKey}`));
     }
     return new RouteInstructionMaterializationProjectResult(
       project,
-      emissions.flatMap((emission) => emission.typedNavigationInstructions),
-      emissions.flatMap((emission) => emission.viewportInstructions),
-      emissions.map((emission) => emission.viewportInstructionTree),
-      openSeams,
+      state.emissions.flatMap((emission) => emission.typedNavigationInstructions),
+      state.emissions.flatMap((emission) => emission.viewportInstructions),
+      state.emissions.map((emission) => emission.viewportInstructionTree),
+      state.openSeams,
     );
   }
+
+  private collectRouteInstructionEmissions(
+    store: KernelStore,
+    templates: TemplateCompilationProjectEmission,
+    routerOptions: RouterOptionsMaterializationProjectResult,
+    state: RouteInstructionMaterializationState,
+  ): void {
+    for (const resource of templates.resources) {
+      this.collectResourceInstructionEmissions(store, resource, routerOptions, state);
+    }
+  }
+
+  private collectResourceInstructionEmissions(
+    store: KernelStore,
+    resource: RouteInstructionTemplateResource,
+    routerOptions: RouterOptionsMaterializationProjectResult,
+    state: RouteInstructionMaterializationState,
+  ): void {
+    const definitionIdentity = resource.compilation.definition.target.identityHandle;
+    const routeContexts = definitionIdentity == null
+      ? null
+      : state.routeContextsByDefinition.get(definitionIdentity) ?? null;
+    for (const controller of resource.runtimeAnalysis.runtimeRendering.controllers) {
+      for (const routeContext of routeContextCandidatesForController(controller, routeContexts, state)) {
+        this.collectControllerInstructionEmission(store, resource, controller, routeContext, routerOptions, state);
+      }
+    }
+  }
+
+  private collectControllerInstructionEmission(
+    store: KernelStore,
+    resource: RouteInstructionTemplateResource,
+    controller: RuntimeControllerFrame,
+    routeContext: RouteContextModel | null,
+    routerOptions: RouterOptionsMaterializationProjectResult,
+    state: RouteInstructionMaterializationState,
+  ): void {
+    const site = routerResourceInstructionSite(store, controller, routeContext, resource.runtimeAnalysis.scopes);
+    if (site == null) {
+      return;
+    }
+    const closed = closeRouterResourceInstruction(
+      store,
+      site,
+      state.sourceValueEvaluator,
+      state.openSeams,
+      state.openRecords,
+    );
+    if (closed == null) {
+      return;
+    }
+    const emission = materializeInstructionTree(
+      store,
+      closed,
+      state.routeContextsByIdentity,
+      routerOptions,
+      state.openSeams,
+      state.openRecords,
+    );
+    if (emission != null) {
+      state.emissions.push(emission);
+    }
+  }
+}
+
+function createRouteInstructionMaterializationState(
+  store: KernelStore,
+  evaluation: StaticProjectEvaluationResult,
+  routeConfigContexts: RouteConfigContextMaterializationProjectResult,
+  routeRuntime: RouteRuntimeTopologyProjectResult,
+): RouteInstructionMaterializationState {
+  return {
+    sourceValueEvaluator: new RuntimeBindingSourceValueEvaluator(store, evaluation),
+    routeContextsByDefinition: routeRuntimeContextsByComponentDefinition(routeConfigContexts, routeRuntime),
+    routeContextsByContainerIdentity: routeContextsByContainerIdentity(routeRuntime),
+    rootRouteContextsByParentContainerIdentity: rootRouteContextsByParentContainerIdentity(routeRuntime),
+    routeContextsByIdentity: new Map(
+      routeRuntime.readRouteContexts().map((routeContext) => [routeContext.identityHandle, routeContext] as const),
+    ),
+    emissions: [],
+    openSeams: [],
+    openRecords: [],
+  };
+}
+
+function routeContextsByContainerIdentity(
+  routeRuntime: RouteRuntimeTopologyProjectResult,
+): ReadonlyMap<IdentityHandle, RouteContextModel> {
+  return new Map(routeRuntime.readRouteContexts().flatMap((routeContext) => {
+    const container = routeRuntime.containerForRouteContext(routeContext.identityHandle);
+    const identityHandle = container?.identityHandle ?? routeContext.container?.identityHandle ?? null;
+    return identityHandle == null
+      ? []
+      : [[identityHandle, routeContext] as const];
+  }));
+}
+
+function rootRouteContextsByParentContainerIdentity(
+  routeRuntime: RouteRuntimeTopologyProjectResult,
+): ReadonlyMap<IdentityHandle, readonly RouteContextModel[]> {
+  const byParent = new Map<IdentityHandle, RouteContextModel[]>();
+  for (const routeContext of routeRuntime.readRouteContexts()) {
+    if (routeContext.parent != null) {
+      continue;
+    }
+    const routeContextContainer = routeRuntime.containerForRouteContext(routeContext.identityHandle);
+    const parentIdentityHandle = routeContextContainer?.parent?.identityHandle ?? null;
+    if (parentIdentityHandle == null) {
+      continue;
+    }
+    const existing = byParent.get(parentIdentityHandle);
+    if (existing == null) {
+      byParent.set(parentIdentityHandle, [routeContext]);
+    } else {
+      existing.push(routeContext);
+    }
+  }
+  return byParent;
 }
 
 function routerResourceInstructionSite(
@@ -234,6 +330,43 @@ function routeContextCandidates(
     : routeContexts;
 }
 
+function routeContextCandidatesForController(
+  controller: RuntimeControllerFrame,
+  definitionRouteContexts: readonly RouteContextModel[] | null,
+  state: RouteInstructionMaterializationState,
+): readonly (RouteContextModel | null)[] {
+  const inheritedRouteContexts = routeContextsFromContainerAncestry(controller.containerFrame, state);
+  return routeContextCandidates(
+    inheritedRouteContexts.length > 0
+      ? inheritedRouteContexts
+      : definitionRouteContexts,
+  );
+}
+
+function routeContextsFromContainerAncestry(
+  container: Container | null,
+  state: RouteInstructionMaterializationState,
+): readonly RouteContextModel[] {
+  const matches: RouteContextModel[] = [];
+  const seen = new Set<IdentityHandle>();
+  let current = container;
+  while (current != null) {
+    const routeContext = state.routeContextsByContainerIdentity.get(current.identityHandle) ?? null;
+    if (routeContext != null && !seen.has(routeContext.identityHandle)) {
+      seen.add(routeContext.identityHandle);
+      matches.push(routeContext);
+    }
+    for (const rootContext of state.rootRouteContextsByParentContainerIdentity.get(current.identityHandle) ?? []) {
+      if (!seen.has(rootContext.identityHandle)) {
+        seen.add(rootContext.identityHandle);
+        matches.push(rootContext);
+      }
+    }
+    current = current.parent;
+  }
+  return matches;
+}
+
 function scopeForInstruction(
   scopes: TemplateScopeConstructionEmission,
   instruction: HydrateAttributeInstruction,
@@ -255,17 +388,17 @@ function closeRouterResourceInstruction(
       store,
       site,
       'Router resource instruction needs an owning RouteContext before relative ViewportInstructionTree creation can close.',
+      [OpenSeamReasonKind.RouterInstructionNeedsRouteContext],
       openSeams,
       records,
     );
     return null;
   }
-  if (site.kind === RouterResourceInstructionKind.Href && hrefIsExternal(store, site, sourceValueEvaluator)) {
-    return null;
-  }
-
   const property = site.kind === RouterResourceInstructionKind.Load ? 'route' : 'value';
   const value = staticStringBindingValue(store, site.instruction, property, site.scope, sourceValueEvaluator);
+  if (site.kind === RouterResourceInstructionKind.Href && hrefStaticStringIsExternal(store, site, value)) {
+    return null;
+  }
   switch (value.state) {
     case 'closed':
       return {
@@ -277,7 +410,8 @@ function closeRouterResourceInstruction(
       recordOpenSeam(
         store,
         site,
-        `${site.kind} router resource has a dynamic '${property}' binding; ViewportInstructionTree materialization needs a static string value before it can close.${value.reason == null ? '' : ` ${value.reason}`}`,
+        dynamicRouterInstructionSummary(site.kind, property, value.reason),
+        dynamicRouterInstructionReasonKinds(site.kind, value.reasonKinds),
         openSeams,
         records,
       );
@@ -287,6 +421,7 @@ function closeRouterResourceInstruction(
         store,
         site,
         `${site.kind} router resource did not expose a '${property}' value instruction.`,
+        [OpenSeamReasonKind.RouterInstructionMissingValue],
         openSeams,
         records,
       );
@@ -303,13 +438,7 @@ function materializeInstructionTree(
   openRecords: KernelStoreRecord[],
 ): RouteInstructionEmission | null {
   const site = closed.site;
-  const routeContextIdentity = site.routeContext?.identityHandle ?? 'unowned-route-context';
-  const local = `router-instruction:${routeContextIdentity}:${site.kind}:${site.controller.productHandle}:${encodeLocal(closed.value)}`;
-  const treeLocal = `${local}:tree`;
-  const treeEvidenceHandle = store.handles.evidence(treeLocal);
-  const treeProvenanceHandle = store.handles.provenance(treeLocal);
-  const treeProductHandle = store.handles.product(treeLocal);
-  const treeIdentityHandle = store.handles.identity(treeLocal);
+  const local = viewportInstructionTreeLocal(site, closed.value);
   const parsed = parseClosedRouteExpression(store, closed, routeContextsByIdentity, openSeams, openRecords);
   if (parsed == null) {
     return null;
@@ -318,40 +447,78 @@ function materializeInstructionTree(
   const viewportInstructionEmissions = parsed.expression.instructions.map((instruction, index) =>
     materializeViewportInstruction(store, closed, ownerHandle, local, `${index}`, instruction)
   );
-  const viewportInstructionTree = new ViewportInstructionTreeModel(
-    treeProductHandle,
-    treeIdentityHandle,
-    parsed.routeContext.toReference(),
-    viewportInstructionEmissions.map((emission) => emission.viewportInstruction.toReference()),
-    routerOptions.readEffectiveRouterOptions()?.toReference() ?? null,
-    parsed.expression.isAbsolute,
-    parsed.expression.queryParamCount,
-    parsed.expression.fragment,
-    site.sourceAddressHandle,
-    viewportInstructionTreeFieldProvenance(treeProvenanceHandle, routerOptions.readEffectiveRouterOptions() != null),
+  const viewportInstructionTree = viewportInstructionTreeModel(
+    store,
+    `${local}:tree`,
+    parsed,
+    viewportInstructionEmissions,
+    routerOptions,
+    site,
   );
-
   return {
-    records: [
-      ...viewportInstructionEmissions.flatMap((emission) => emission.records),
-      ...routerProductRecords(
-        store,
-        treeLocal,
-        viewportInstructionTree.productHandle,
-        viewportInstructionTree.identityHandle,
-        KernelVocabulary.Router.ViewportInstructionTree.key,
-        ownerHandle,
-        viewportInstructionTree.sourceAddressHandle,
-        treeProvenanceHandle,
-        treeEvidenceHandle,
-        site.kind,
-        'Router resource valueChanged created a RouteExpression-backed ViewportInstructionTree before route-tree transition compilation.',
-      ),
-    ],
+    records: viewportInstructionTreeRecords(store, `${local}:tree`, viewportInstructionTree, ownerHandle, site.kind, viewportInstructionEmissions),
     typedNavigationInstructions: viewportInstructionEmissions.flatMap((emission) => emission.typedNavigationInstructions),
     viewportInstructions: viewportInstructionEmissions.flatMap((emission) => emission.viewportInstructions),
     viewportInstructionTree,
   };
+}
+
+function viewportInstructionTreeLocal(
+  site: RouterResourceInstructionSite,
+  value: string,
+): string {
+  const routeContextIdentity = site.routeContext?.identityHandle ?? 'unowned-route-context';
+  return `router-instruction:${routeContextIdentity}:${site.kind}:${site.controller.productHandle}:${localKeyPart(value)}`;
+}
+
+function viewportInstructionTreeModel(
+  store: KernelStore,
+  treeLocal: string,
+  parsed: RouterResourceExpression,
+  viewportInstructionEmissions: readonly MaterializedViewportInstructionEmission[],
+  routerOptions: RouterOptionsMaterializationProjectResult,
+  site: RouterResourceInstructionSite,
+): ViewportInstructionTreeModel {
+  const effectiveOptions = routerOptions.readEffectiveRouterOptions();
+  return new ViewportInstructionTreeModel(
+    store.handles.product(treeLocal),
+    store.handles.identity(treeLocal),
+    parsed.routeContext.toReference(),
+    viewportInstructionEmissions.map((emission) => emission.viewportInstruction.toReference()),
+    effectiveOptions?.toReference() ?? null,
+    parsed.expression.isAbsolute,
+    parsed.expression.queryParamCount,
+    parsed.expression.fragment,
+    site.sourceAddressHandle,
+    viewportInstructionTreeFieldProvenance(store.handles.provenance(treeLocal), effectiveOptions != null),
+  );
+}
+
+function viewportInstructionTreeRecords(
+  store: KernelStore,
+  treeLocal: string,
+  viewportInstructionTree: ViewportInstructionTreeModel,
+  ownerHandle: RouteContextModel['identityHandle'],
+  localName: string,
+  viewportInstructionEmissions: readonly MaterializedViewportInstructionEmission[],
+): readonly KernelStoreRecord[] {
+  return [
+    ...viewportInstructionEmissions.flatMap((emission) => emission.records),
+    ...routerProductRecords(store, {
+      local: treeLocal,
+      evidenceHandle: store.handles.evidence(treeLocal),
+      provenanceHandle: store.handles.provenance(treeLocal),
+      productHandle: viewportInstructionTree.productHandle,
+      identityHandle: viewportInstructionTree.identityHandle,
+      productKindKey: KernelVocabulary.Router.ViewportInstructionTree.key,
+      ownerHandle,
+      sourceAddressHandle: viewportInstructionTree.sourceAddressHandle,
+      localName,
+      evidenceKind: EvidenceKind.SemanticObservation,
+      evidenceRoles: [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
+      evidenceSummary: 'Router resource valueChanged created a RouteExpression-backed ViewportInstructionTree before route-tree transition compilation.',
+    }),
+  ];
 }
 
 function parseClosedRouteExpression(
@@ -373,6 +540,7 @@ function parseClosedRouteExpression(
       store,
       closed.site,
       `${closed.site.kind} router resource value could not be parsed as a RouteExpression: ${reason}`,
+      [OpenSeamReasonKind.RouterInstructionParseFailure],
       openSeams,
       records,
     );
@@ -449,65 +617,32 @@ function materializeViewportInstruction(
   const site = closed.site;
   const local = `${treeLocal}:viewport:${indexPath}`;
   const typedLocal = `${local}:typed`;
-  const childEmissions = instruction.children.map((child, index) =>
-    materializeViewportInstruction(store, closed, ownerHandle, treeLocal, `${indexPath}.${index}`, child)
+  const childEmissions = materializeChildViewportInstructions(
+    store,
+    closed,
+    ownerHandle,
+    treeLocal,
+    indexPath,
+    instruction,
   );
-  const typedEvidenceHandle = store.handles.evidence(typedLocal);
-  const typedProvenanceHandle = store.handles.provenance(typedLocal);
-  const typedInstruction = new TypedNavigationInstructionModel(
-    store.handles.product(typedLocal),
-    store.handles.identity(typedLocal),
-    NavigationInstructionKind.String,
-    instruction.component,
-    null,
-    closed.valueSourceAddressHandle ?? site.sourceAddressHandle,
-    typedInstructionFieldProvenance(typedProvenanceHandle),
+  const typedInstruction = typedNavigationInstructionForViewport(
+    store,
+    typedLocal,
+    closed,
+    instruction,
   );
-  const viewportEvidenceHandle = store.handles.evidence(local);
-  const viewportProvenanceHandle = store.handles.provenance(local);
-  const viewportInstruction = new ViewportInstructionModel(
-    store.handles.product(local),
-    store.handles.identity(local),
-    typedInstruction.toReference(),
-    instruction.viewport,
-    null,
-    instruction.parameterCount,
-    childEmissions.map((emission) => emission.viewportInstruction.toReference()),
-    instruction.open,
-    instruction.close,
-    null,
-    site.sourceAddressHandle,
-    viewportInstructionFieldProvenance(viewportProvenanceHandle, instruction),
+  const viewportInstruction = viewportInstructionForParsedInstruction(
+    store,
+    local,
+    site,
+    instruction,
+    typedInstruction,
+    childEmissions,
   );
   return {
     records: [
       ...childEmissions.flatMap((emission) => emission.records),
-      ...routerProductRecords(
-        store,
-        typedLocal,
-        typedInstruction.productHandle,
-        typedInstruction.identityHandle,
-        KernelVocabulary.Router.TypedNavigationInstruction.key,
-        ownerHandle,
-        typedInstruction.sourceAddressHandle,
-        typedProvenanceHandle,
-        typedEvidenceHandle,
-        instruction.component,
-        'TypedNavigationInstruction.create normalized one static RouteExpression component segment.',
-      ),
-      ...routerProductRecords(
-        store,
-        local,
-        viewportInstruction.productHandle,
-        viewportInstruction.identityHandle,
-        KernelVocabulary.Router.ViewportInstruction.key,
-        ownerHandle,
-        viewportInstruction.sourceAddressHandle,
-        viewportProvenanceHandle,
-        viewportEvidenceHandle,
-        instruction.component,
-        'ViewportInstruction.create wrapped a typed RouteExpression segment with viewport, parameter, and child shape.',
-      ),
+      ...viewportInstructionRecords(store, local, typedLocal, ownerHandle, instruction, typedInstruction, viewportInstruction),
     ],
     typedNavigationInstructions: [
       ...childEmissions.flatMap((emission) => emission.typedNavigationInstructions),
@@ -521,55 +656,124 @@ function materializeViewportInstruction(
   };
 }
 
-function routerProductRecords(
+function materializeChildViewportInstructions(
+  store: KernelStore,
+  closed: ClosedRouterResourceInstruction,
+  ownerHandle: RouteContextModel['identityHandle'],
+  treeLocal: string,
+  indexPath: string,
+  instruction: ParsedViewportInstruction,
+): readonly MaterializedViewportInstructionEmission[] {
+  return instruction.children.map((child, index) =>
+    materializeViewportInstruction(store, closed, ownerHandle, treeLocal, `${indexPath}.${index}`, child)
+  );
+}
+
+function typedNavigationInstructionForViewport(
+  store: KernelStore,
+  typedLocal: string,
+  closed: ClosedRouterResourceInstruction,
+  instruction: ParsedViewportInstruction,
+): TypedNavigationInstructionModel {
+  return new TypedNavigationInstructionModel(
+    store.handles.product(typedLocal),
+    store.handles.identity(typedLocal),
+    NavigationInstructionKind.String,
+    instruction.component,
+    null,
+    closed.valueSourceAddressHandle ?? closed.site.sourceAddressHandle,
+    typedInstructionFieldProvenance(store.handles.provenance(typedLocal)),
+  );
+}
+
+function viewportInstructionForParsedInstruction(
   store: KernelStore,
   local: string,
-  productHandle: ProductHandle,
-  identityHandle: TypedNavigationInstructionModel['identityHandle'],
-  productKindKey: ProductKindKey,
+  site: RouterResourceInstructionSite,
+  instruction: ParsedViewportInstruction,
+  typedInstruction: TypedNavigationInstructionModel,
+  childEmissions: readonly MaterializedViewportInstructionEmission[],
+): ViewportInstructionModel {
+  return new ViewportInstructionModel(
+    store.handles.product(local),
+    store.handles.identity(local),
+    typedInstruction.toReference(),
+    instruction.viewport,
+    null,
+    instruction.parameterCount,
+    childEmissions.map((emission) => emission.viewportInstruction.toReference()),
+    instruction.open,
+    instruction.close,
+    null,
+    site.sourceAddressHandle,
+    viewportInstructionFieldProvenance(store.handles.provenance(local), instruction),
+  );
+}
+
+function viewportInstructionRecords(
+  store: KernelStore,
+  local: string,
+  typedLocal: string,
   ownerHandle: RouteContextModel['identityHandle'],
-  sourceAddressHandle: AddressHandle | null,
-  provenanceHandle: ProvenanceHandle,
-  evidenceHandle: EvidenceHandle,
-  localName: string | null,
-  summary: string,
+  instruction: ParsedViewportInstruction,
+  typedInstruction: TypedNavigationInstructionModel,
+  viewportInstruction: ViewportInstructionModel,
 ): readonly KernelStoreRecord[] {
   return [
-    new EvidenceRecord(
-      evidenceHandle,
-      EvidenceKind.SemanticObservation,
-      [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
-      summary,
-      sourceAddressHandle,
-    ),
-    new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
-    new RouterIdentity(
-      identityHandle,
-      productKindKey,
-      ownerHandle,
-      sourceAddressHandle,
-      localName,
-    ),
-    new MaterializedProduct(
-      productHandle,
-      productKindKey,
-      identityHandle,
-      sourceAddressHandle,
-      provenanceHandle,
-    ),
-    new MaterializationRecord(
-      store.handles.materialization(local),
-      ownerHandle,
-      [productHandle],
-      [],
-      [],
-    ),
+    ...typedNavigationInstructionRecords(store, typedLocal, ownerHandle, instruction, typedInstruction),
+    ...viewportInstructionProductRecords(store, local, ownerHandle, instruction, viewportInstruction),
   ];
+}
+
+function typedNavigationInstructionRecords(
+  store: KernelStore,
+  local: string,
+  ownerHandle: RouteContextModel['identityHandle'],
+  instruction: ParsedViewportInstruction,
+  typedInstruction: TypedNavigationInstructionModel,
+): readonly KernelStoreRecord[] {
+  return routerProductRecords(store, {
+    local,
+    evidenceHandle: store.handles.evidence(local),
+    provenanceHandle: store.handles.provenance(local),
+    productHandle: typedInstruction.productHandle,
+    identityHandle: typedInstruction.identityHandle,
+    productKindKey: KernelVocabulary.Router.TypedNavigationInstruction.key,
+    ownerHandle,
+    sourceAddressHandle: typedInstruction.sourceAddressHandle,
+    localName: instruction.component,
+    evidenceKind: EvidenceKind.SemanticObservation,
+    evidenceRoles: [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
+    evidenceSummary: 'TypedNavigationInstruction.create normalized one static RouteExpression component segment.',
+  });
+}
+
+function viewportInstructionProductRecords(
+  store: KernelStore,
+  local: string,
+  ownerHandle: RouteContextModel['identityHandle'],
+  instruction: ParsedViewportInstruction,
+  viewportInstruction: ViewportInstructionModel,
+): readonly KernelStoreRecord[] {
+  return routerProductRecords(store, {
+    local,
+    evidenceHandle: store.handles.evidence(local),
+    provenanceHandle: store.handles.provenance(local),
+    productHandle: viewportInstruction.productHandle,
+    identityHandle: viewportInstruction.identityHandle,
+    productKindKey: KernelVocabulary.Router.ViewportInstruction.key,
+    ownerHandle,
+    sourceAddressHandle: viewportInstruction.sourceAddressHandle,
+    localName: instruction.component,
+    evidenceKind: EvidenceKind.SemanticObservation,
+    evidenceRoles: [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
+    evidenceSummary: 'ViewportInstruction.create wrapped a typed RouteExpression segment with viewport, parameter, and child shape.',
+  });
 }
 
 type StaticStringBindingValue =
   | { readonly state: 'closed'; readonly value: string; readonly sourceAddressHandle: AddressHandle | null; readonly dynamicPartCount: number }
-  | { readonly state: 'dynamic'; readonly reason: string | null }
+  | { readonly state: 'dynamic'; readonly reason: string | null; readonly reasonKinds: readonly OpenSeamReasonKind[] }
   | { readonly state: 'missing' };
 
 function staticStringBindingValue(
@@ -581,6 +785,7 @@ function staticStringBindingValue(
 ): StaticStringBindingValue {
   let sawDynamic = false;
   let dynamicReason: string | null = null;
+  let dynamicReasonKinds: readonly OpenSeamReasonKind[] = [];
   for (const productHandle of hydrate.bindingInstructionProductHandles) {
     const instruction = store.productDetails.read(TemplateProductDetails.Instruction, productHandle);
     if (instruction instanceof SetPropertyInstruction && instruction.targetProperty === property) {
@@ -605,7 +810,9 @@ function staticStringBindingValue(
         return multiAttrInterpolated;
       }
       sawDynamic = true;
-      dynamicReason ??= dynamicBindingReason(store, instruction.expressionProductHandle, scope, sourceValueEvaluator);
+      const reason = dynamicBindingReason(store, instruction.expressionProductHandle, scope, sourceValueEvaluator);
+      dynamicReason ??= reason?.summary ?? null;
+      dynamicReasonKinds = compactOpenSeamReasonKinds([...dynamicReasonKinds, ...(reason?.reasonKinds ?? [])]);
       continue;
     }
     if (instruction instanceof PropertyBindingInstruction && instruction.targetProperty === property) {
@@ -614,7 +821,9 @@ function staticStringBindingValue(
         return propertyBound;
       }
       sawDynamic = true;
-      dynamicReason ??= dynamicBindingReason(store, instruction.expressionProductHandle, scope, sourceValueEvaluator);
+      const reason = dynamicBindingReason(store, instruction.expressionProductHandle, scope, sourceValueEvaluator);
+      dynamicReason ??= reason?.summary ?? null;
+      dynamicReasonKinds = compactOpenSeamReasonKinds([...dynamicReasonKinds, ...(reason?.reasonKinds ?? [])]);
       continue;
     }
     if (instruction instanceof InterpolationInstruction && instruction.target === property) {
@@ -623,10 +832,12 @@ function staticStringBindingValue(
         return interpolated;
       }
       sawDynamic = true;
-      dynamicReason ??= dynamicBindingReason(store, instruction.expressionProductHandles[0] ?? null, scope, sourceValueEvaluator);
+      const reason = dynamicBindingReason(store, instruction.expressionProductHandles[0] ?? null, scope, sourceValueEvaluator);
+      dynamicReason ??= reason?.summary ?? null;
+      dynamicReasonKinds = compactOpenSeamReasonKinds([...dynamicReasonKinds, ...(reason?.reasonKinds ?? [])]);
     }
   }
-  return sawDynamic ? { state: 'dynamic', reason: dynamicReason } : { state: 'missing' };
+  return sawDynamic ? { state: 'dynamic', reason: dynamicReason, reasonKinds: dynamicReasonKinds } : { state: 'missing' };
 }
 
 function expressionStringValue(
@@ -715,7 +926,7 @@ function dynamicBindingReason(
   expressionProductHandle: ProductHandle | null,
   scope: BindingScope | null,
   sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
-): string | null {
+): { readonly summary: string | null; readonly reasonKinds: readonly OpenSeamReasonKind[] } | null {
   if (expressionProductHandle == null || scope == null || sourceValueEvaluator == null) {
     return null;
   }
@@ -726,11 +937,17 @@ function dynamicBindingReason(
   }
   const evaluation = sourceValueEvaluator.evaluate(expression, scope);
   if (evaluation.kind === RuntimeBindingSourceValueEvaluationKind.Open) {
-    return evaluation.openReason;
+    return {
+      summary: evaluation.openReason,
+      reasonKinds: evaluation.openReasonKinds,
+    };
   }
   return evaluation.value?.kind === EvaluationValueKind.String
     ? null
-    : `Binding source value reduced to '${evaluation.value?.kind ?? 'unknown'}' instead of a string.`;
+    : {
+        summary: `Binding source value reduced to '${evaluation.value?.kind ?? 'unknown'}' instead of a string.`,
+        reasonKinds: [],
+      };
 }
 
 function dynamicRouteStringValue(
@@ -760,19 +977,22 @@ function hasStaticRoutePrefix(prefix: string): boolean {
     .length > 0;
 }
 
-function hrefIsExternal(
+function hrefStaticStringIsExternal(
   store: KernelStore,
   site: RouterResourceInstructionSite,
-  sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
+  value: StaticStringBindingValue,
 ): boolean {
   if (hasHostAttribute(store, site.host, 'external') || hasHostAttribute(store, site.host, 'data-external')) {
     return true;
   }
-  const value = staticStringBindingValue(store, site.instruction, 'value', site.scope, sourceValueEvaluator);
   if (value.state !== 'closed') {
     return false;
   }
-  const trimmed = value.value.trim();
+  return hrefStringIsExternal(value.value);
+}
+
+function hrefStringIsExternal(value: string): boolean {
+  const trimmed = value.trim();
   if (trimmed.length === 0) {
     return false;
   }
@@ -788,6 +1008,28 @@ function hrefIsExternal(
   } catch {
     return false;
   }
+}
+
+function dynamicRouterInstructionSummary(
+  kind: RouterResourceInstructionKind,
+  property: string,
+  reason: string | null,
+): string {
+  const closure = kind === RouterResourceInstructionKind.Href
+    ? 'ViewportInstructionTree materialization needs a static string value before it can close or prove the href is external.'
+    : 'ViewportInstructionTree materialization needs a static string value before it can close.';
+  return `${kind} router resource has a dynamic '${property}' binding; ${closure}${reason == null ? '' : ` ${reason}`}`;
+}
+
+function dynamicRouterInstructionReasonKinds(
+  kind: RouterResourceInstructionKind,
+  reasonKinds: readonly OpenSeamReasonKind[],
+): readonly OpenSeamReasonKind[] {
+  return compactOpenSeamReasonKinds([
+    OpenSeamReasonKind.RouterInstructionNeedsStaticValue,
+    ...(kind === RouterResourceInstructionKind.Href ? [OpenSeamReasonKind.RouterHrefExternalityOpen] : []),
+    ...reasonKinds,
+  ]);
 }
 
 function htmlElementForInstruction(
@@ -823,81 +1065,68 @@ function recordOpenSeam(
   store: KernelStore,
   site: RouterResourceInstructionSite,
   summary: string,
+  reasonKinds: readonly OpenSeamReasonKind[],
   openSeams: OpenSeam[],
   records: KernelStoreRecord[],
 ): void {
   const routeContextIdentity = site.routeContext?.identityHandle ?? 'unowned-route-context';
-  const local = `router-instruction-open:${routeContextIdentity}:${site.kind}:${site.controller.productHandle}:${encodeLocal(summary)}`;
-  const evidenceHandle = store.handles.evidence(local);
-  const openSeam = new OpenSeam(
-    store.handles.openSeam(local),
-    KernelVocabulary.Router.OpenInstruction.key,
+  const local = `router-instruction-open:${routeContextIdentity}:${site.kind}:${site.controller.productHandle}:${localKeyPart(summary)}`;
+  const emission = routerOpenSeamRecords(store, {
+    local,
+    seamKindKey: KernelVocabulary.Router.OpenInstruction.key,
+    ownerHandle: site.controller.identityHandle,
     summary,
-    site.sourceAddressHandle,
-    evidenceHandle,
-  );
-  openSeams.push(openSeam);
-  records.push(
-    new EvidenceRecord(
-      evidenceHandle,
-      EvidenceKind.SemanticObservation,
-      [EvidenceRole.TransformInput],
-      summary,
-      site.sourceAddressHandle,
-    ),
-    openSeam,
-    new MaterializationRecord(
-      store.handles.materialization(local),
-      site.controller.identityHandle,
-      [],
-      [],
-      [openSeam.handle],
-    ),
-  );
+    sourceAddressHandle: site.sourceAddressHandle,
+    reasonKinds: compactOpenSeamReasonKinds(reasonKinds),
+    evidenceKind: EvidenceKind.SemanticObservation,
+    evidenceRoles: [EvidenceRole.TransformInput],
+  });
+  openSeams.push(emission.openSeam);
+  records.push(...emission.records);
+}
+
+function compactOpenSeamReasonKinds(
+  values: readonly OpenSeamReasonKind[],
+): readonly OpenSeamReasonKind[] {
+  return [...new Set(values)];
 }
 
 function typedInstructionFieldProvenance(
   provenanceHandle: ProvenanceHandle,
 ): readonly FieldProvenance<RouterInstructionField>[] {
-  return compactFieldProvenance<RouterInstructionField>([
-    new FieldProvenance('instructionKind', provenanceHandle),
-    new FieldProvenance('value', provenanceHandle),
-    new FieldProvenance('source', provenanceHandle),
-  ]);
+  return fieldProvenanceEntries<RouterInstructionField>([
+    'instructionKind',
+    'value',
+    'source',
+  ], provenanceHandle);
 }
 
 function viewportInstructionFieldProvenance(
   provenanceHandle: ProvenanceHandle,
   instruction: ParsedViewportInstruction,
 ): readonly FieldProvenance<RouterInstructionField>[] {
-  return compactFieldProvenance<RouterInstructionField>([
-    new FieldProvenance('component', provenanceHandle),
-    instruction.viewport == null ? null : new FieldProvenance('viewport', provenanceHandle),
-    instruction.parameterCount === 0 ? null : new FieldProvenance('parameterCount', provenanceHandle),
-    instruction.children.length === 0 ? null : new FieldProvenance('children', provenanceHandle),
-    instruction.open === 0 ? null : new FieldProvenance('open', provenanceHandle),
-    instruction.close === 0 ? null : new FieldProvenance('close', provenanceHandle),
-    new FieldProvenance('source', provenanceHandle),
-  ]);
+  return fieldProvenanceEntries<RouterInstructionField>([
+    'component',
+    instruction.viewport == null ? null : 'viewport',
+    instruction.parameterCount === 0 ? null : 'parameterCount',
+    instruction.children.length === 0 ? null : 'children',
+    instruction.open === 0 ? null : 'open',
+    instruction.close === 0 ? null : 'close',
+    'source',
+  ], provenanceHandle);
 }
 
 function viewportInstructionTreeFieldProvenance(
   provenanceHandle: ProvenanceHandle,
   hasOptions: boolean,
 ): readonly FieldProvenance<RouterInstructionField>[] {
-  return compactFieldProvenance<RouterInstructionField>([
-    new FieldProvenance('routeContext', provenanceHandle),
-    new FieldProvenance('children', provenanceHandle),
-    hasOptions ? new FieldProvenance('options', provenanceHandle) : null,
-    new FieldProvenance('isAbsolute', provenanceHandle),
-    new FieldProvenance('queryParamCount', provenanceHandle),
-    new FieldProvenance('fragment', provenanceHandle),
-    new FieldProvenance('source', provenanceHandle),
-  ]);
-}
-
-function encodeLocal(value: string): string {
-  return encodeURIComponent(value).replace(/[!'()*]/g, (ch) =>
-    `%${ch.charCodeAt(0).toString(16).toUpperCase()}`
-  );
+  return fieldProvenanceEntries<RouterInstructionField>([
+    'routeContext',
+    'children',
+    hasOptions ? 'options' : null,
+    'isAbsolute',
+    'queryParamCount',
+    'fragment',
+    'source',
+  ], provenanceHandle);
 }

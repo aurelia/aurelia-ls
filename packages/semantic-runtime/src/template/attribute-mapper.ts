@@ -1,21 +1,24 @@
 import { isStandardSvgAttribute } from '../observation/svg-analyzer-data.generated.js';
-import { HtmlNamespaceKind } from './html-ir.js';
+import {
+  hasHtmlAttribute,
+  htmlAttributeValue,
+  HtmlNamespaceKind,
+  normalizeHtmlTagName,
+  type HtmlAttributeLike,
+} from './html-ir.js';
 
 /** Minimal element shape consumed by AttrMapper without depending on DOM nodes. */
 export interface TemplateAttributeMapperNode {
   readonly tagName: string;
   readonly namespace?: HtmlNamespaceKind;
-  readonly attributes?: readonly {
-    readonly rawName: string | null;
-    readonly rawValue?: string;
-  }[];
+  readonly attributes?: readonly HtmlAttributeLike[];
 }
 
 export function mapAttribute(
   element: TemplateAttributeMapperNode,
   attr: string,
 ): string | null {
-  const tagName = element.tagName.toUpperCase();
+  const tagName = normalizeHtmlTagName(element.tagName);
   const lowerAttr = attr.toLowerCase();
   const tagMapping = tagName === 'LABEL' && lowerAttr === 'for'
     ? 'htmlFor'
@@ -42,7 +45,7 @@ export function shouldDefaultToTwoWay(
   attr: string,
 ): boolean {
   const lowerAttr = attr.toLowerCase();
-  switch (owner.tagName.toUpperCase()) {
+  switch (normalizeHtmlTagName(owner.tagName)) {
     case 'INPUT': {
       const type = attributeValue(owner, 'type')?.toLowerCase() ?? '';
       switch (type) {
@@ -63,7 +66,7 @@ export function shouldDefaultToTwoWay(
       switch (lowerAttr) {
         case 'textcontent':
         case 'innerhtml':
-          return hasAttribute(owner, 'contenteditable');
+          return hasHtmlAttribute(owner, 'contenteditable');
         case 'scrolltop':
         case 'scrollleft':
           return true;
@@ -147,12 +150,5 @@ function attributeValue(
   owner: TemplateAttributeMapperNode,
   name: string,
 ): string | null {
-  return owner.attributes?.find((attribute) => attribute.rawName?.toLowerCase() === name)?.rawValue ?? null;
-}
-
-function hasAttribute(
-  owner: TemplateAttributeMapperNode,
-  name: string,
-): boolean {
-  return owner.attributes?.some((attribute) => attribute.rawName?.toLowerCase() === name) ?? false;
+  return htmlAttributeValue(owner, name);
 }

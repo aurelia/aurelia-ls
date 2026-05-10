@@ -326,11 +326,7 @@ export class HtmlParseMaterializer {
       new MaterializationRecord(
         this.store.handles.materialization(`html-parse:${input.localKey}`),
         document.identityHandle,
-        [
-          document.productHandle,
-          ...state.nodes.map((node) => node.productHandle),
-          ...state.attributes.map((attribute) => attribute.productHandle),
-        ],
+        htmlParseMaterializedProductHandles(document, state),
         state.claims.map((claim) => claim.handle),
       ),
     ];
@@ -1051,6 +1047,17 @@ function isNameCharacter(value: string): boolean {
 
 function isWhitespace(value: string): boolean {
   return value === ' ' || value === '\t' || value === '\r' || value === '\n' || value === '\f';
+}
+
+function htmlParseMaterializedProductHandles(
+  document: HtmlDocument,
+  state: HtmlMaterializationState,
+): readonly ProductHandle[] {
+  return [
+    document.productHandle,
+    ...state.nodes.map((node) => node.productHandle),
+    ...state.attributes.map((attribute) => attribute.productHandle),
+  ];
 }
 
 function nodeLocalName(draft: ParsedHtmlNodeDraft): string | null {

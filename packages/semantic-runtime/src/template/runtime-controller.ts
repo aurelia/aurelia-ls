@@ -32,7 +32,7 @@ import {
   SpreadBinding,
   type RuntimeBinding,
   type RuntimeBindingBindContribution,
-  type RuntimeBindingBindInput,
+  type RuntimeBindingBindContext,
   type RuntimeBindingSourceOperation,
   type RuntimeBindingTargetAccess,
   type RuntimeBindingTargetOperation,
@@ -107,7 +107,7 @@ export interface RuntimeControllerBindHost {
     controller: RuntimeControllerFrame,
     binding: RuntimeBinding,
     index: number,
-  ): RuntimeBindingBindInput | null;
+  ): RuntimeBindingBindContext | null;
 }
 
 export interface RuntimeControllerBindRequest {

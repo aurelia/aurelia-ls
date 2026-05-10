@@ -47,17 +47,19 @@ relevant declaration.
 `call-sites`, `call-dependencies`, `symbol-references`, `symbol-dependencies`, or `profile` when a product refactor
 needs compact visibility into source-area coupling, import cycles, large modules, exported surfaces, implementation
 bodies, exact import rows, checker-backed call flow, checker-backed runtime/type/value references, or cold build phase
-costs before opening files. The `profile` projection accepts `includeCallSites` and `includeSymbols` so future
-profiling can separate the structure lane from checker call-site and checker symbol-reference work. Use
+costs before opening files. The `profile` projection accepts `includeCallSites`, `includeCallDetails`,
+`includeSymbols`, and `includeKernelRecords` so future profiling can separate the structure lane from product-record,
+checker call-site, and checker symbol-reference work. Use
 `pathPrefix` when you want the same projections scoped to one semantic-runtime subtree or exact file without losing the
 projection's ordering and paging behavior; source-file/source-range/package loci now apply that scoping automatically
 for `product.architecture`. For pressure reads, prefer narrow numeric filters such as `minLineCount`,
 `minCallSiteCount`, `minCrossAreaCallSiteCount`, `minFunctionSurfaceCount`, `minLargeFunctionCount`,
 `minMethodCount`, or `minPropertyCount` over an invented score; those keep Atlas useful as a steering tool without
 turning architecture work into pressure-matrix theatre. Use
-`pnpm --filter @aurelia-ls/atlas pressure:product-architecture` for the compact bundled structure and function
-pressure view, and `pnpm --filter @aurelia-ls/atlas pressure:product-architecture:detail` when lower-ranked rows
-matter. Class and function pressure rows print source line anchors when the architecture lane has exact spans. Use
+`pnpm --filter @aurelia-ls/atlas pressure:product-architecture` for the compact bundled structure, function,
+KernelStoreRecord, KernelStoreBatch, and FieldProvenance pressure view, and
+`pnpm --filter @aurelia-ls/atlas pressure:product-architecture:detail` when lower-ranked rows matter. Class, function,
+record, and provenance pressure rows print source line anchors when the architecture lane has exact spans. Use
 `pnpm --filter @aurelia-ls/atlas profile:product-architecture` before adding daemon warmup or durable
 projection caches; the profile script prints structure, core, symbol, and full lane phase timings with row counts.
 

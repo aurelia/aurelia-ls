@@ -394,8 +394,8 @@ export interface RuntimeBindingBindHost {
   materializeSourceOperation(request: RuntimeBindingSourceOperationRequest): RuntimeBindingSourceOperation | null;
 }
 
-/** Input visible to one runtime binding while its owning controller is binding. */
-export class RuntimeBindingBindInput {
+/** Bind-time context visible to one runtime binding while its owning controller is binding. */
+export class RuntimeBindingBindContext {
   constructor(
     readonly localKey: string,
     readonly host: RuntimeBindingBindHost,
@@ -632,7 +632,7 @@ export class PropertyBinding {
     return this.scopeEffects;
   }
 
-  bind(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+  bind(input: RuntimeBindingBindContext): RuntimeBindingBindContribution {
     return input.targetAccess(
       this,
       targetAccessLookupForBindingMode(this.bindingMode),
@@ -670,11 +670,11 @@ export class AttributeBinding {
     return this.scopeEffects;
   }
 
-  bind(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+  bind(input: RuntimeBindingBindContext): RuntimeBindingBindContribution {
     return this.updateTarget(input);
   }
 
-  updateTarget(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+  updateTarget(input: RuntimeBindingBindContext): RuntimeBindingBindContribution {
     return input.targetOperation(
       this,
       this.attr,
@@ -746,7 +746,7 @@ export class ListenerBinding {
     return this.scopeEffects;
   }
 
-  bind(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+  bind(input: RuntimeBindingBindContext): RuntimeBindingBindContribution {
     return input.targetOperation(
       this,
       this.eventName,
@@ -785,7 +785,7 @@ export class InterpolationBinding {
     return this.scopeEffects;
   }
 
-  bind(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+  bind(input: RuntimeBindingBindContext): RuntimeBindingBindContribution {
     return input.targetAccess(
       this,
       RuntimeBindingTargetAccessLookup.Accessor,
@@ -822,11 +822,11 @@ export class RefBinding {
     return this.scopeEffects;
   }
 
-  bind(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+  bind(input: RuntimeBindingBindContext): RuntimeBindingBindContribution {
     return this.updateSource(input);
   }
 
-  updateSource(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+  updateSource(input: RuntimeBindingBindContext): RuntimeBindingBindContribution {
     return input.sourceOperation(
       this,
       this.target,
@@ -862,7 +862,7 @@ export class ContentBinding {
     return this.scopeEffects;
   }
 
-  bind(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+  bind(input: RuntimeBindingBindContext): RuntimeBindingBindContribution {
     return input.targetOperation(
       this,
       '#text',
@@ -937,7 +937,7 @@ export class SpreadValueBinding {
     return this.scopeEffects;
   }
 
-  bind(input: RuntimeBindingBindInput): RuntimeBindingBindContribution {
+  bind(input: RuntimeBindingBindContext): RuntimeBindingBindContribution {
     if (this.target === '$bindables' && input.spreadValueTargetProperties.length > 0) {
       const targetAccesses = input.spreadValueTargetProperties.flatMap((targetProperty, index) =>
         input.targetAccess(
@@ -1059,7 +1059,7 @@ export type RuntimeBinding =
 
 export function bindRuntimeBinding(
   binding: RuntimeBinding,
-  input: RuntimeBindingBindInput,
+  input: RuntimeBindingBindContext,
 ): RuntimeBindingBindContribution {
   if (binding instanceof PropertyBinding
     || binding instanceof AttributeBinding

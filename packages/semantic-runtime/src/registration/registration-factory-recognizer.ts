@@ -1,5 +1,5 @@
 import ts from 'typescript';
-import { KernelVocabulary, type OpenSeamKindKey } from '../kernel/vocabulary.js';
+import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   readReferenceName,
   unwrapExpression,
@@ -9,7 +9,14 @@ import {
 } from './registration-admission.js';
 import {
   REGISTRATION_FACTORY_SHAPES,
+  type RegistrationFactoryShape,
 } from './registration-factory-shapes.js';
+import {
+  readDeferredRegistryParameters,
+  readRegistrationFactoryNameFromCall,
+  readRequiredRegistrationFactoryArgument,
+  type RegistrationFactoryImportedBindings,
+} from './registration-factory-arguments.js';
 import type { RegistrationEmissionContext } from './registration-kernel-emitter.js';
 import {
   RegistrationAdmissionObservation,
@@ -18,16 +25,23 @@ import {
   RegistrationRecognitionOpen,
   RegistrationValueObservation,
 } from './registration-observation.js';
-import { RegistrationValueKind } from './registration-reference.js';
 
 const AURELIA_REGISTRATION_MODULES = new Set([
   'aurelia',
   '@aurelia/kernel',
 ]);
 
-interface RegistrationFactoryBindings {
-  readonly identifiers: ReadonlySet<string>;
-  readonly namespaces: ReadonlySet<string>;
+type RegistrationFactoryBindings = RegistrationFactoryImportedBindings;
+
+interface RegistrationFactoryCallShape {
+  readonly factoryName: string;
+  readonly shape: RegistrationFactoryShape;
+}
+
+interface RegistrationFactoryArgumentRead {
+  readonly keyArgument: ts.Expression | null;
+  readonly valueArgument: ts.Expression | null;
+  readonly openSeams: RegistrationRecognitionOpen[];
 }
 
 /** Recognizes Aurelia `Registration.*(...)` factory call source shapes. */
@@ -58,50 +72,15 @@ function recognizeRegistrationFactoryCall(
   call: ts.CallExpression,
   bindings: RegistrationFactoryBindings,
 ): RegistrationAdmissionObservation | null {
-  const factoryName = readRegistrationFactoryName(call, bindings);
-  if (factoryName == null) {
+  const callShape = readRegistrationFactoryCallShape(call, bindings);
+  if (callShape == null) {
     return null;
   }
-  const shape = REGISTRATION_FACTORY_SHAPES.get(factoryName);
-  if (shape == null) {
-    return null;
-  }
+  const { factoryName, shape } = callShape;
+  const argumentsRead = readRegistrationFactoryArguments(call, factoryName, shape);
 
-  const openSeams: RegistrationRecognitionOpen[] = [];
-  const keyArgument = readRequiredArgument(
-    call,
-    shape.keyArgumentIndex,
-    KernelVocabulary.Registration.OpenKeyExpression.key,
-    'Registration factory call did not expose a target key.',
-    openSeams,
-  );
-  const valueArgument = shape.value == null
-    ? null
-    : readRequiredArgument(call, shape.value.argumentIndex, shape.value.missingOpenKind, `Registration.${factoryName}(...) did not expose a registered value.`, openSeams);
-
-  for (const argument of call.arguments) {
-    if (ts.isSpreadElement(argument)) {
-      openSeams.push(new RegistrationRecognitionOpen(
-        KernelVocabulary.Registration.OpenSpread.key,
-        `Registration.${factoryName}(...) contains a spread argument that registration recognition cannot close.`,
-        argument,
-      ));
-    }
-  }
-
-  const targetKey = keyArgument == null
-    ? null
-    : new RegistrationKeyObservation(readReferenceName(keyArgument), keyArgument);
-  const registeredValue = valueArgument == null || shape.value == null
-    ? null
-    : new RegistrationValueObservation(
-      shape.value.valueKind,
-      readReferenceName(valueArgument),
-      valueArgument,
-      isDeclarationExpression(valueArgument),
-    );
   const registryParameters = factoryName === 'defer'
-    ? readDeferredRegistryParameters(call)
+    ? readDeferredRegistryParameters(call, isClassDeclarationExpression)
     : [];
 
   return new RegistrationAdmissionObservation(
@@ -110,60 +89,78 @@ function recognizeRegistrationFactoryCall(
     shape.strategy,
     shape.keyRole,
     call,
-    targetKey,
-    registeredValue,
+    registrationKeyObservation(argumentsRead.keyArgument),
+    registrationValueObservation(argumentsRead.valueArgument, shape),
     registryParameters,
-    openSeams,
+    argumentsRead.openSeams,
   );
 }
 
-function readRequiredArgument(
-  call: ts.CallExpression,
-  index: number,
-  openKind: OpenSeamKindKey,
-  missingSummary: string,
-  openSeams: RegistrationRecognitionOpen[],
-): ts.Expression | null {
-  const argument = call.arguments[index] ?? null;
-  if (argument == null || ts.isSpreadElement(argument)) {
-    openSeams.push(new RegistrationRecognitionOpen(openKind, missingSummary, argument ?? call));
-    return null;
-  }
-  return argument;
-}
-
-function readDeferredRegistryParameters(
-  call: ts.CallExpression,
-): readonly RegistrationValueObservation[] {
-  return call.arguments.slice(1).map((argument) => new RegistrationValueObservation(
-    RegistrationValueKind.Unknown,
-    readReferenceName(argument),
-    argument,
-    isDeclarationExpression(argument),
-  ));
-}
-
-function readRegistrationFactoryName(
+function readRegistrationFactoryCallShape(
   call: ts.CallExpression,
   bindings: RegistrationFactoryBindings,
-): string | null {
-  const expression = unwrapExpression(call.expression);
-  if (!ts.isPropertyAccessExpression(expression)) {
+): RegistrationFactoryCallShape | null {
+  const factoryName = readRegistrationFactoryNameFromCall(call, bindings);
+  if (factoryName == null) {
     return null;
   }
-  const receiver = unwrapExpression(expression.expression);
-  if (ts.isIdentifier(receiver) && bindings.identifiers.has(receiver.text)) {
-    return expression.name.text;
-  }
-  if (
-    ts.isPropertyAccessExpression(receiver)
-    && receiver.name.text === 'Registration'
-    && ts.isIdentifier(unwrapExpression(receiver.expression))
-    && bindings.namespaces.has((unwrapExpression(receiver.expression) as ts.Identifier).text)
-  ) {
-    return expression.name.text;
-  }
-  return null;
+  const shape = REGISTRATION_FACTORY_SHAPES.get(factoryName);
+  return shape == null ? null : { factoryName, shape };
+}
+
+function readRegistrationFactoryArguments(
+  call: ts.CallExpression,
+  factoryName: string,
+  shape: RegistrationFactoryShape,
+): RegistrationFactoryArgumentRead {
+  const openSeams: RegistrationRecognitionOpen[] = [];
+  const keyArgument = readRequiredRegistrationFactoryArgument(
+    call,
+    shape.keyArgumentIndex,
+    KernelVocabulary.Registration.OpenKeyExpression.key,
+    'Registration factory call did not expose a target key.',
+    openSeams,
+  );
+  const valueArgument = shape.value == null
+    ? null
+    : readRequiredRegistrationFactoryArgument(call, shape.value.argumentIndex, shape.value.missingOpenKind, `Registration.${factoryName}(...) did not expose a registered value.`, openSeams);
+  openSeams.push(...spreadArgumentOpenSeams(call, factoryName));
+  return { keyArgument, valueArgument, openSeams };
+}
+
+function spreadArgumentOpenSeams(
+  call: ts.CallExpression,
+  factoryName: string,
+): readonly RegistrationRecognitionOpen[] {
+  return call.arguments.flatMap((argument) =>
+    ts.isSpreadElement(argument)
+      ? [new RegistrationRecognitionOpen(
+        KernelVocabulary.Registration.OpenSpread.key,
+        `Registration.${factoryName}(...) contains a spread argument that registration recognition cannot close.`,
+        argument,
+      )]
+      : []
+  );
+}
+
+function registrationKeyObservation(argument: ts.Expression | null): RegistrationKeyObservation | null {
+  return argument == null
+    ? null
+    : new RegistrationKeyObservation(readReferenceName(argument), argument);
+}
+
+function registrationValueObservation(
+  argument: ts.Expression | null,
+  shape: RegistrationFactoryShape,
+): RegistrationValueObservation | null {
+  return argument == null || shape.value == null
+    ? null
+    : new RegistrationValueObservation(
+      shape.value.valueKind,
+      readReferenceName(argument),
+      argument,
+      isClassDeclarationExpression(argument),
+    );
 }
 
 function readRegistrationFactoryBindings(
@@ -197,7 +194,7 @@ function readRegistrationFactoryBindings(
   return { identifiers, namespaces };
 }
 
-function isDeclarationExpression(
+function isClassDeclarationExpression(
   expression: ts.Expression,
 ): boolean {
   return ts.isClassExpression(unwrapExpression(expression));

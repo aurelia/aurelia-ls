@@ -32,6 +32,13 @@ export class SourceSpan {
 
 export type SpanLike = TextSpan | SourceSpan;
 
+export function expressionSpanContainsOffset(
+  span: SpanLike,
+  offset: number,
+): boolean {
+  return span.start <= offset && offset <= span.end;
+}
+
 function hasSourceSpanFileSlot(span: SpanLike): span is SourceSpan {
   return span instanceof SourceSpan
     || Object.prototype.hasOwnProperty.call(span, 'file');
@@ -89,6 +96,15 @@ export function absoluteSpan(
     return null;
   }
 
+  const start = base.start + relative.start;
+  const end = base.start + relative.end;
+  return sourceSpanFromBounds(start, end, base.file ?? null);
+}
+
+export function absoluteTextSpan(
+  relative: TextSpan,
+  base: SourceSpan,
+): SourceSpan {
   const start = base.start + relative.start;
   const end = base.start + relative.end;
   return sourceSpanFromBounds(start, end, base.file ?? null);

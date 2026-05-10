@@ -19,6 +19,8 @@ import {
   type FrameworkCompileFlowRow,
 } from "./framework-compiler-flow.js";
 import { readFrameworkCompilerSyntaxProducts } from "./framework-rendering-graph.js";
+import { uniqueFrameworkSymbolPackageIdentity } from "./framework-symbol-package-index.js";
+import { readFrameworkCompilerContractRelationships } from "./framework-compiler-contracts.js";
 
 export type { FrameworkCompilerFilters } from "./framework-compiler-model.js";
 
@@ -62,6 +64,7 @@ export function readFrameworkCompilerRelationships(
 ): readonly FrameworkCompilerRelationshipRow[] {
   return [
     ...compilerRelationshipsFromProducts(
+      sourceProject,
       readFrameworkCompilerInstructionProducts(sourceProject, filters),
       filters,
     ),
@@ -73,23 +76,31 @@ export function readFrameworkCompilerRelationships(
       readFrameworkAttributeClassificationRows(sourceProject, filters),
       filters,
     ),
+    ...readFrameworkCompilerContractRelationships(sourceProject, filters),
   ].sort(compareCompilerRelationshipRows);
 }
 
 export function compilerRelationshipsFromProducts(
+  sourceProject: SourceProject,
   products: readonly FrameworkSyntaxProductRow[],
   filters: FrameworkCompilerFilters,
 ): readonly FrameworkCompilerRelationshipRow[] {
   return products
-    .map(compilerRelationshipFromProduct)
+    .map((row) => compilerRelationshipFromProduct(sourceProject, row))
     .filter((row) => compilerRelationshipMatches(row, filters));
 }
 
 function compilerRelationshipFromProduct(
+  sourceProject: SourceProject,
   row: FrameworkSyntaxProductRow,
 ): FrameworkCompilerRelationshipRow {
   const mechanism = compilerProductMechanismByProducerKind[row.producerKind];
   const instructionName = row.instructionName ?? "unknown-instruction";
+  const instructionPackage =
+    uniqueFrameworkSymbolPackageIdentity(sourceProject, row.instructionName) ?? {
+      packageId: row.packageId,
+      packageName: row.packageName,
+    };
   return {
     id: `${row.id}:compiler-relationship:produces-instruction`,
     family: FrameworkRelationshipFamily.Compiler,
@@ -108,8 +119,8 @@ function compilerRelationshipFromProduct(
     to: {
       kind: FrameworkRelationshipEndpointKind.Symbol,
       name: instructionName,
-      packageId: row.packageId,
-      packageName: row.packageName,
+      packageId: instructionPackage.packageId,
+      packageName: instructionPackage.packageName,
     },
     source: row.source,
     sourceRowId: row.id,

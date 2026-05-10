@@ -33,11 +33,22 @@ interface AtlasSelfPressureValue {
     readonly uniqueCallTargetCount: number;
     readonly source?: SourceRef;
   }[];
+  readonly functionShapeGroups?: readonly {
+    readonly bodyShapeFingerprint: string;
+    readonly functionCount: number;
+    readonly nameCount: number;
+    readonly fileCount: number;
+    readonly lineCount: number;
+    readonly nameSamples: readonly string[];
+    readonly fileSamples: readonly string[];
+    readonly source?: SourceRef;
+  }[];
   readonly axisPressure?: readonly {
     readonly kind: string;
     readonly axis: string;
     readonly axisField: string | null;
     readonly pressure: string;
+    readonly sourceName: string;
     readonly summary: string;
     readonly source?: SourceRef;
   }[];
@@ -67,6 +78,9 @@ const detail = process.argv.includes("--detail");
 const sourceFileDisplayRows = detail ? 8 : 5;
 const classFunctionDisplayRows = detail ? 10 : 5;
 const duplicateDisplayRows = detail ? 12 : 6;
+const functionShapeFilters = detail
+  ? { minNameCount: 2, minFunctionCount: 2 }
+  : { minNameCount: 2, minFunctionCount: 2, minLineCount: 8 };
 
 const api = createApi({ idleTtlMs: 120_000, requestTimeoutMs: 120_000 });
 
@@ -102,7 +116,9 @@ const [
   classAnswer,
   functionAnswer,
   duplicateFunctionNameRows,
+  functionShapeAnswer,
   axisAnswer,
+  optionalObjectSpreadAnswer,
 ] = await Promise.all([
   api.ask({
     lens: LensId.AtlasSelf,
@@ -131,9 +147,23 @@ const [
   api.ask({
     lens: LensId.AtlasSelf,
     locus: RepoRootLocus,
+    projection: "function-shapes",
+    filters: functionShapeFilters,
+    budget: { rows: detail ? 12 : 6, evidencePerSubject: 2 },
+  }),
+  api.ask({
+    lens: LensId.AtlasSelf,
+    locus: RepoRootLocus,
     projection: "axis-pressure",
     filters: { pressure: "high" },
     budget: { rows: 12, evidencePerSubject: 2 },
+  }),
+  api.ask({
+    lens: LensId.AtlasSelf,
+    locus: RepoRootLocus,
+    projection: "axis-pressure",
+    filters: { kind: "optional-object-spread" },
+    budget: { rows: detail ? 12 : 6, evidencePerSubject: 2 },
   }),
 ]);
 
@@ -147,7 +177,9 @@ for (const answer of [
 }
 assertHitAnswer<AtlasSelfPressureValue>("atlas.self:classes", classAnswer);
 assertHitAnswer<AtlasSelfPressureValue>("atlas.self:functions", functionAnswer);
+assertHitOrMissAnswer("atlas.self:function-shapes", functionShapeAnswer);
 assertHitOrMissAnswer("atlas.self:axis-pressure", axisAnswer);
+assertHitOrMissAnswer("atlas.self:axis-pressure optional object spread", optionalObjectSpreadAnswer);
 
 const sourceFileRowsBySize = sourceFileRows(sourceFileSizeAnswer.value);
 const sourceFileCatalogRowsBySize = sourceFileRowsBySize
@@ -179,8 +211,13 @@ const functionRows = (functionAnswer.value.functionSurfaces ?? []).slice(
 const duplicateFunctionNameGroups = duplicateTopLevelFunctionNameGroups(
   duplicateFunctionNameRows,
 );
+const functionShapeRows =
+  answerValue<AtlasSelfPressureValue>(functionShapeAnswer)?.functionShapeGroups ?? [];
 const axisRows =
-  answerValue<AtlasSelfPressureValue>(axisAnswer)?.axisPressure ?? [];
+  (answerValue<AtlasSelfPressureValue>(axisAnswer)?.axisPressure ?? [])
+    .filter((row) => row.kind !== "optional-object-spread");
+const optionalObjectSpreadRows =
+  answerValue<AtlasSelfPressureValue>(optionalObjectSpreadAnswer)?.axisPressure ?? [];
 
 console.log("atlas.self source-file pressure by lineCount");
 console.log(`requests: ${(performance.now() - started).toFixed(1)}ms; mode=${detail ? "detail" : "compact"}`);
@@ -224,11 +261,39 @@ for (const row of functionRows) {
 
 console.log("");
 console.log("atlas.self duplicate top-level helper-name pressure");
-console.log("filters: functionKind=top-level; same function name appears in more than one file");
+console.log("filters: functionKind=top-level; same function name appears in more than one file; AST body-shape fingerprint groups equivalent control-flow shapes before exact body text");
 printEmptyRows(duplicateFunctionNameGroups);
 for (const group of duplicateFunctionNameGroups.slice(0, duplicateDisplayRows)) {
+  const shapeSignal = group.distinctBodyShapeFingerprintCount === null
+    ? "no body-shape fingerprint"
+    : `${group.distinctBodyShapeFingerprintCount} distinct body-shape fingerprint(s), ${group.repeatedBodyShapeFingerprintCount} repeated shape(s) across files`;
+  const bodySignal = group.distinctBodyFingerprintCount === null
+    ? "no body fingerprint"
+    : `${group.distinctBodyFingerprintCount} distinct body fingerprint(s), ${group.repeatedBodyFingerprintCount} repeated across files`;
   console.log(
-    `- ${group.name}: ${group.functionCount} function(s), ${group.fileCount} file(s), ${group.lineCount} total line(s), samples ${group.samples.join("; ")}`,
+    `- ${group.name}: ${group.functionCount} function(s), ${group.fileCount} file(s), ${group.lineCount} total line(s), ${shapeSignal}, ${bodySignal}, samples ${group.samples.join("; ")}`,
+  );
+}
+
+console.log("");
+console.log("atlas.self repeated function body-shape pressure");
+console.log(`filters: minNameCount=2;${detail ? "" : " minLineCount=8;"} canonical AST/control-flow shapes can match helpers with different names`);
+printEmptyRows(functionShapeRows);
+for (const row of functionShapeRows.slice(0, duplicateDisplayRows)) {
+  console.log(
+    `- ${row.functionCount} function(s), ${row.nameCount} name(s), ${row.fileCount} file(s), ${row.lineCount} total line(s), names ${row.nameSamples.join(", ")}, samples ${row.fileSamples.join("; ")} at ${sourceLabel(row)}`,
+  );
+}
+
+console.log("");
+console.log("atlas.self optional object-spread pressure");
+console.log("filters: kind=optional-object-spread; conditional spreads of {} / { prop } branches inside one object literal");
+if (optionalObjectSpreadRows.length === 0) {
+  console.log("- no optional object-spread rows at the current threshold");
+}
+for (const row of optionalObjectSpreadRows) {
+  console.log(
+    `- ${row.sourceName}: ${row.summary} (${sourceLabel(row)})`,
   );
 }
 

@@ -183,17 +183,38 @@ function applicationComponentRows(
   emission: AureliaAppWorldProjectEmission,
   handles: boolean,
 ): readonly SemanticApplicationComponentRow[] {
-  const appRootCountByProduct = new Map<ProductHandle, number>();
+  const appRootCounts = appRootCountByDefinitionProduct(emission);
+  const rows = uniqueCustomElementDefinitions(emission).map((definition) => {
+    const reference = applicationComponentReference(store, emission, definition, handles);
+    return {
+      ...reference,
+      appRootCount: definition.productHandle == null ? 0 : appRootCounts.get(definition.productHandle) ?? 0,
+      visibleCompilerWorlds: visibleCompilerWorldsForDefinition(emission, definition).length,
+      templateCompilations: templateCompilationsForDefinition(emission, definition).length,
+    };
+  });
+  return rows.sort((left, right) =>
+    `${left.elementName}:${left.className ?? ''}`.localeCompare(`${right.elementName}:${right.className ?? ''}`)
+  );
+}
+
+function appRootCountByDefinitionProduct(
+  emission: AureliaAppWorldProjectEmission,
+): ReadonlyMap<ProductHandle, number> {
+  const counts = new Map<ProductHandle, number>();
   for (const appRoot of emission.configuration.readConfiguration().appRoots) {
     const definition = emission.resourceIndex.lookupByTargetReference(appRoot.component);
-    const productHandle = definition instanceof CustomElementDefinition ? definition.productHandle : null;
-    if (productHandle == null) {
-      continue;
+    if (definition instanceof CustomElementDefinition && definition.productHandle != null) {
+      counts.set(definition.productHandle, (counts.get(definition.productHandle) ?? 0) + 1);
     }
-    appRootCountByProduct.set(productHandle, (appRootCountByProduct.get(productHandle) ?? 0) + 1);
   }
+  return counts;
+}
 
-  const rows: SemanticApplicationComponentRow[] = [];
+function uniqueCustomElementDefinitions(
+  emission: AureliaAppWorldProjectEmission,
+): readonly CustomElementDefinition[] {
+  const definitions: CustomElementDefinition[] = [];
   const seen = new Set<string>();
   for (const entry of emission.resourceIndex.entries) {
     const definition = entry.definition;
@@ -201,22 +222,12 @@ function applicationComponentRows(
       continue;
     }
     const key = definition.productHandle ?? `${entry.moduleKey}:${entry.localName}:${definition.name}`;
-    if (seen.has(key)) {
-      continue;
+    if (!seen.has(key)) {
+      seen.add(key);
+      definitions.push(definition);
     }
-    seen.add(key);
-    const reference = applicationComponentReference(store, emission, definition, handles);
-    rows.push({
-      ...reference,
-      appRootCount: definition.productHandle == null ? 0 : appRootCountByProduct.get(definition.productHandle) ?? 0,
-      visibleCompilerWorlds: visibleCompilerWorldsForDefinition(emission, definition).length,
-      templateCompilations: templateCompilationsForDefinition(emission, definition).length,
-    });
   }
-
-  return rows.sort((left, right) =>
-    `${left.elementName}:${left.className ?? ''}`.localeCompare(`${right.elementName}:${right.className ?? ''}`)
-  );
+  return definitions;
 }
 
 function applicationComponentReference(
@@ -243,10 +254,11 @@ function applicationComponentReference(
         },
       } : {}),
     })),
-    dependencies: definition.dependencies.map((dependency) => {
-      const dependencyDefinition = emission.resourceIndex.lookupByDependencyReference(dependency);
-      const component = dependencyDefinition instanceof CustomElementDefinition ? dependencyDefinition : null;
-      return {
+    dependencies: definition.dependencies.flatMap((dependency) => {
+      const dependencyDefinitions = emission.resourceIndex.lookupAllByDependencyReference(dependency)
+        .filter((candidate): candidate is CustomElementDefinition => candidate instanceof CustomElementDefinition);
+      const components = dependencyDefinitions.length === 0 ? [null] : dependencyDefinitions;
+      return components.map((component) => ({
         keyName: dependency.keyName,
         componentName: component?.name ?? null,
         componentClassName: component?.target.localName ?? null,
@@ -258,7 +270,7 @@ function applicationComponentReference(
             sourceAddressHandle: component?.sourceAddressHandle ?? null,
           },
         } : {}),
-      };
+      }));
     }),
     ...(handles ? {
       handles: {

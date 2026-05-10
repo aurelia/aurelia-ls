@@ -39,7 +39,10 @@ import {
   type FrameworkObservationInternalRelationshipRow,
   type FrameworkObservationSurfaceMethodRow,
 } from "./framework-observation-internals.js";
-import { readFrameworkObserverEntities } from "./framework-observer-entities.js";
+import {
+  readFrameworkObserverEntities,
+  sourceRangeForObserverEntity,
+} from "./framework-observer-entities.js";
 import { readFrameworkBindingEffects, readFrameworkBindingSetups } from "./framework-rendering-graph.js";
 import {
   readFrameworkRenderingRelationships,
@@ -48,8 +51,8 @@ import {
 import {
   checkerBasis,
   countBy,
+  frameworkPagedAnswer,
   sourceIndexBasis,
-  sourceRangeFromFileSpan,
 } from "./framework-support.js";
 import { evidenceForObserverEntity } from "./framework-evidence.js";
 import {
@@ -142,7 +145,7 @@ const OBSERVATION_SURFACE_METHOD_ROW_FAMILY =
   new PagedRowFamily<FrameworkObservationSurfaceMethodRow>({
     id: "framework.observation:surface-methods",
     rowLabel: "framework observation surface method row(s)",
-    evidenceForRow: evidenceForSurfaceMethod,
+    evidenceForRow: evidenceForObservationTypeFactRow,
     continuationsForPage: surfaceMethodContinuations,
   });
 
@@ -150,7 +153,7 @@ const OBSERVATION_FLOW_SITE_ROW_FAMILY =
   new PagedRowFamily<FrameworkObservationFlowSiteRow>({
     id: "framework.observation:flow-sites",
     rowLabel: "framework observation flow site row(s)",
-    evidenceForRow: evidenceForFlowSite,
+    evidenceForRow: evidenceForObservationTypeFactRow,
     continuationsForPage: flowSiteContinuations,
   });
 
@@ -166,7 +169,7 @@ const OBSERVATION_RELATIONSHIP_ROW_FAMILY =
   new PagedRowFamily<FrameworkObservationRelationshipRow>({
     id: "framework.observation:relationships",
     rowLabel: "framework observation relationship row(s)",
-    evidenceForRow: evidenceForObservationRelationship,
+    evidenceForRow: evidenceForObservationTypeFactRow,
     continuationsForPage: observationRelationshipContinuations,
   });
 
@@ -183,7 +186,7 @@ export function answerFrameworkObservation(
   switch (projection) {
     case "entities": {
       const observers = readFrameworkObserverEntities(sourceProject, filters);
-      return observationPagedAnswer(
+      return frameworkPagedAnswer(
         inquiry,
         sourceProject,
         OBSERVATION_ENTITY_ROW_FAMILY,
@@ -199,7 +202,7 @@ export function answerFrameworkObservation(
         ...filters,
         effectKind: FrameworkBindingEffectKind.ObserverLookup,
       });
-      return observationPagedAnswer(
+      return frameworkPagedAnswer(
         inquiry,
         sourceProject,
         OBSERVATION_BINDING_LOOKUP_ROW_FAMILY,
@@ -212,7 +215,7 @@ export function answerFrameworkObservation(
     }
     case "binding-setups": {
       const bindingSetups = readFrameworkBindingSetups(sourceProject, filters);
-      return observationPagedAnswer(
+      return frameworkPagedAnswer(
         inquiry,
         sourceProject,
         OBSERVATION_BINDING_SETUP_ROW_FAMILY,
@@ -228,7 +231,7 @@ export function answerFrameworkObservation(
         sourceProject,
         filters,
       );
-      return observationPagedAnswer(
+      return frameworkPagedAnswer(
         inquiry,
         sourceProject,
         OBSERVATION_SURFACE_METHOD_ROW_FAMILY,
@@ -244,7 +247,7 @@ export function answerFrameworkObservation(
         sourceProject,
         filters,
       );
-      return observationPagedAnswer(
+      return frameworkPagedAnswer(
         inquiry,
         sourceProject,
         OBSERVATION_FLOW_SITE_ROW_FAMILY,
@@ -260,7 +263,7 @@ export function answerFrameworkObservation(
         sourceProject,
         filters,
       );
-      return observationPagedAnswer(
+      return frameworkPagedAnswer(
         inquiry,
         sourceProject,
         OBSERVATION_FLOW_ENTITY_LINK_ROW_FAMILY,
@@ -276,7 +279,7 @@ export function answerFrameworkObservation(
         sourceProject,
         filters,
       );
-      return observationPagedAnswer(
+      return frameworkPagedAnswer(
         inquiry,
         sourceProject,
         OBSERVATION_RELATIONSHIP_ROW_FAMILY,
@@ -330,46 +333,15 @@ export function answerFrameworkObservation(
           evidence: [
             ...observers.slice(0, 2).map(evidenceForObserverEntity),
             ...bindingLookups.slice(0, 2).map(evidenceForBindingLookup),
-            ...flowSites.slice(0, 2).map(evidenceForFlowSite),
+            ...flowSites.slice(0, 2).map(evidenceForObservationTypeFactRow),
             ...flowEntityLinks.slice(0, 2).map(evidenceForFlowEntityLink),
-            ...relationships.slice(0, 2).map(evidenceForObservationRelationship),
+            ...relationships.slice(0, 2).map(evidenceForObservationTypeFactRow),
           ],
           continuations: observationSummaryContinuations(inquiry),
         },
       );
     }
   }
-}
-
-function observationPagedAnswer<TRow>(
-  inquiry: Inquiry,
-  sourceProject: SourceProject,
-  rowFamily: PagedRowFamily<TRow>,
-  baseValue: FrameworkObservationValue,
-  rows: readonly TRow[],
-  offset: number,
-  limit: number,
-  key:
-    | "observers"
-    | "bindingLookups"
-    | "bindingSetups"
-    | "surfaceMethods"
-    | "flowSites"
-    | "flowEntityLinks"
-    | "relationships",
-): Answer<FrameworkObservationValue> {
-  return rowFamily.answer({
-    inquiry,
-    rows,
-    offset,
-    limit,
-    basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
-    value: (page) =>
-      ({
-        ...baseValue,
-        [key]: page.rows,
-      }) as FrameworkObservationValue,
-  });
 }
 
 function observationBaseValue(
@@ -385,63 +357,49 @@ function observationBaseValue(
     relationships,
   } = parts;
   return {
-    ...(observers === undefined
-      ? {}
-      : {
-          observerCount: observers.length,
-          observerKinds: countBy(
-            observers.flatMap((row) => row.observerKinds),
-            (value) => value,
-          ),
-          observerCapabilities: countBy(
-            observers.flatMap((row) => row.observerCapabilities),
-            (value) => value,
-          ),
-        }),
-    ...(bindingLookups === undefined
-      ? {}
-      : {
-          bindingLookupCount: bindingLookups.length,
-          bindingLookupNames: countBy(bindingLookups, (row) => row.effectName),
-        }),
-    ...(bindingSetups === undefined
-      ? {}
-      : {
-          bindingSetupCount: bindingSetups.length,
-          bindingSetupKinds: countBy(bindingSetups, (row) => row.setupKind),
-        }),
-    ...(surfaceMethods === undefined
-      ? {}
-      : {
-          surfaceMethodCount: surfaceMethods.length,
-          surfaceKinds: countBy(surfaceMethods, (row) => row.surfaceKind),
-        }),
-    ...(flowSites === undefined
-      ? {}
-      : {
-          flowSiteCount: flowSites.length,
-          flowSiteKinds: countBy(flowSites, (row) => row.siteKind),
-        }),
-    ...(flowEntityLinks === undefined
-      ? {}
-      : {
-          flowEntityLinkCount: flowEntityLinks.length,
-          flowEntityMatchBases: countBy(
-            flowEntityLinks,
-            (row) => row.matchBasis,
-          ),
-        }),
-    ...(relationships === undefined
-      ? {}
-      : {
-          relationshipCount: relationships.length,
-          relationshipRelations: countBy(relationships, (row) => row.relation),
-          relationshipMechanisms: countBy(
-            relationships,
-            (row) => row.mechanism,
-          ),
-          relationshipPhases: countBy(relationships, (row) => row.phase),
-        }),
+    observerCount: observers?.length,
+    observerKinds: observers === undefined
+      ? undefined
+      : countBy(
+          observers.flatMap((row) => row.observerKinds),
+          (value) => value,
+        ),
+    observerCapabilities: observers === undefined
+      ? undefined
+      : countBy(
+          observers.flatMap((row) => row.observerCapabilities),
+          (value) => value,
+        ),
+    bindingLookupCount: bindingLookups?.length,
+    bindingLookupNames: bindingLookups === undefined
+      ? undefined
+      : countBy(bindingLookups, (row) => row.effectName),
+    bindingSetupCount: bindingSetups?.length,
+    bindingSetupKinds: bindingSetups === undefined
+      ? undefined
+      : countBy(bindingSetups, (row) => row.setupKind),
+    surfaceMethodCount: surfaceMethods?.length,
+    surfaceKinds: surfaceMethods === undefined
+      ? undefined
+      : countBy(surfaceMethods, (row) => row.surfaceKind),
+    flowSiteCount: flowSites?.length,
+    flowSiteKinds: flowSites === undefined
+      ? undefined
+      : countBy(flowSites, (row) => row.siteKind),
+    flowEntityLinkCount: flowEntityLinks?.length,
+    flowEntityMatchBases: flowEntityLinks === undefined
+      ? undefined
+      : countBy(flowEntityLinks, (row) => row.matchBasis),
+    relationshipCount: relationships?.length,
+    relationshipRelations: relationships === undefined
+      ? undefined
+      : countBy(relationships, (row) => row.relation),
+    relationshipMechanisms: relationships === undefined
+      ? undefined
+      : countBy(relationships, (row) => row.mechanism),
+    relationshipPhases: relationships === undefined
+      ? undefined
+      : countBy(relationships, (row) => row.phase),
   };
 }
 
@@ -581,21 +539,15 @@ function evidenceForObservationBindingSetup(row: FrameworkBindingSetupRow): Evid
   };
 }
 
-function evidenceForSurfaceMethod(
-  row: FrameworkObservationSurfaceMethodRow,
-): Evidence {
-  return {
-    id: row.id,
-    kind: EvidenceKind.TypeFact,
-    role: EvidenceRole.Subject,
-    confidence: EvidenceConfidence.Exact,
-    summary: row.summary,
-    source: row.source,
-    data: row,
-  };
+interface FrameworkObservationTypeFactEvidenceRow {
+  readonly id: string;
+  readonly summary: string;
+  readonly source: SourceRange;
 }
 
-function evidenceForFlowSite(row: FrameworkObservationFlowSiteRow): Evidence {
+function evidenceForObservationTypeFactRow<T extends FrameworkObservationTypeFactEvidenceRow>(
+  row: T,
+): Evidence {
   return {
     id: row.id,
     kind: EvidenceKind.TypeFact,
@@ -618,20 +570,6 @@ function evidenceForFlowEntityLink(
       row.matchBasis === "fully-qualified-name"
         ? EvidenceConfidence.Exact
         : EvidenceConfidence.Strong,
-    summary: row.summary,
-    source: row.source,
-    data: row,
-  };
-}
-
-function evidenceForObservationRelationship(
-  row: FrameworkObservationRelationshipRow,
-): Evidence {
-  return {
-    id: row.id,
-    kind: EvidenceKind.TypeFact,
-    role: EvidenceRole.Subject,
-    confidence: EvidenceConfidence.Exact,
     summary: row.summary,
     source: row.source,
     data: row,
@@ -1044,8 +982,8 @@ function observerEntitySourceContinuations(
     );
   }
   for (const [index, row] of rows.slice(0, 3).entries()) {
-    const source = sourceForObserverEntity(row);
-    if (source === undefined) {
+    const source = sourceRangeForObserverEntity(row);
+    if (source === null) {
       continue;
     }
     const builder = new FrameworkRowContinuationBuilder(
@@ -1063,16 +1001,6 @@ function observerEntitySourceContinuations(
     );
   }
   return continuations;
-}
-
-function sourceForObserverEntity(
-  row: FrameworkObserverEntityRow,
-): SourceRange | undefined {
-  const target = row.exportEntry.targets[0];
-  if (target?.file === undefined || target.span === undefined) {
-    return undefined;
-  }
-  return sourceRangeFromFileSpan(target.file.repoPath, target.span);
 }
 
 function observerCapabilityForLookup(effectName: string): string {

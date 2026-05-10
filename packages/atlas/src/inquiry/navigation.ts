@@ -136,16 +136,66 @@ export function routeClaim(
   spec: NavigationRouteSpec,
   summary?: string,
 ): NavigationRouteClaim {
-  return {
+  const claim = {
     specId: spec.id,
     plane: spec.plane,
     relation: spec.relation,
     basis: spec.supportedBasis,
-    ...(spec.basisTransition === undefined
-      ? {}
-      : { basisTransition: spec.basisTransition }),
-    ...(summary === undefined ? {} : { summary }),
   };
+  if (spec.basisTransition !== undefined) {
+    Object.assign(claim, { basisTransition: spec.basisTransition });
+  }
+  if (summary !== undefined) {
+    Object.assign(claim, { summary });
+  }
+  return claim;
+}
+
+/** Build an ad-hoc route claim when a continuation has not been promoted to a named route spec yet. */
+export function navigationRoute(
+  plane: NavigationPlane,
+  relation: NavigationRelation,
+  basis: readonly BasisKind[],
+  summary: string,
+  basisTransition?: BasisTransition,
+): NavigationRouteClaim {
+  return {
+    plane,
+    relation,
+    basis,
+    summary,
+    ...(basisTransition === undefined ? {} : { basisTransition }),
+  };
+}
+
+/** Build the common next-page route used by paged answer families. */
+export function nextPageRouteClaim(summary: string): NavigationRouteClaim {
+  return navigationRoute(
+    NavigationPlane.Addressing,
+    NavigationRelation.NextPageOf,
+    [],
+    summary,
+  );
+}
+
+/** Build the common source-inspection route used by source, bridge, and TypeScript lenses. */
+export function sourceInspectionRoute(summary: string): NavigationRouteClaim {
+  return navigationRoute(
+    NavigationPlane.Inspection,
+    NavigationRelation.SourceFor,
+    [BasisKind.SourceText, BasisKind.TypeScriptProgram],
+    summary,
+  );
+}
+
+/** Build the common TypeChecker fact-inspection route used by source, bridge, and TypeScript lenses. */
+export function typeFactsInspectionRoute(summary: string): NavigationRouteClaim {
+  return navigationRoute(
+    NavigationPlane.Inspection,
+    NavigationRelation.TypeFactsFor,
+    [BasisKind.TypeScriptChecker],
+    summary,
+  );
 }
 
 function basisTransition(

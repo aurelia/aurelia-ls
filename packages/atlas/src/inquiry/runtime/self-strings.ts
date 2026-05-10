@@ -5,6 +5,7 @@ import {
   uniqueSortedStrings,
 } from "../../collections.js";
 import type { TypeScriptEnumUsageIndex } from "../../source/index.js";
+import { stableTextFingerprint } from "../../text-fingerprint.js";
 import type { SourceRange } from "../locus.js";
 
 /** Role assigned to one string literal occurrence. */
@@ -306,13 +307,5 @@ function stableStringId(value: string): string {
     .replace(/[^a-z0-9]+/giu, "-")
     .replace(/^-+|-+$/gu, "")
     .slice(0, 48);
-  return `${readable}:${stableHash(value)}`;
-}
-
-function stableHash(value: string): string {
-  let hash = 5381;
-  for (let index = 0; index < value.length; index += 1) {
-    hash = (hash * 33) ^ value.charCodeAt(index);
-  }
-  return (hash >>> 0).toString(16);
+  return `${readable}:${stableTextFingerprint(value)}`;
 }

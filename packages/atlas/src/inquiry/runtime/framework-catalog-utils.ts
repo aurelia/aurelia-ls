@@ -1,5 +1,10 @@
 import type { FrameworkCatalogMatchRow } from "./framework-entities.js";
 
+export {
+  uniqueValues as uniqueEnumValues,
+  uniqueValues as uniqueStrings,
+} from "../../collections.js";
+
 export function uniqueCatalogMatches(
   matches: readonly FrameworkCatalogMatchRow[],
 ): readonly FrameworkCatalogMatchRow[] {
@@ -13,16 +18,6 @@ export function uniqueCatalogMatches(
     }
   }
   return unique;
-}
-
-export function uniqueEnumValues<TValue extends string>(
-  values: readonly TValue[],
-): readonly TValue[] {
-  return [...new Set(values)];
-}
-
-export function uniqueStrings(values: readonly string[]): readonly string[] {
-  return [...new Set(values)];
 }
 
 export function normalizeIdentifierText(text: string): string {

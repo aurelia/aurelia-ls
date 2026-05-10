@@ -7,6 +7,8 @@ import {
   groupBy,
   uniqueSortedStrings,
 } from "../../collections.js";
+import { normalizedSourceFingerprint } from "../../text-fingerprint.js";
+import { functionBodyShapeFingerprint } from "../../ast-fingerprint.js";
 import {
   calleeNameForExpression,
   canonicalSourceSymbolKey,
@@ -22,30 +24,29 @@ import {
   TypeScriptCallSiteKind,
   type SourceDeclarationRow,
   type SourceProject,
-  type SourceSpan,
   type TypeScriptUsageRoleId,
   symbolForNode,
   usageRoleForIdentifier,
   usageText,
 } from "../../source/index.js";
+import {
+  readProductArchitectureKernelRecordRows,
+  type ProductArchitectureFieldProvenanceConstructionRow,
+  type ProductArchitectureKernelRecordBatchRow,
+  type ProductArchitectureKernelRecordConstructionRow,
+} from "./product-architecture-kernel-records.js";
+import {
+  lineCountForSource,
+  productArchitectureContextForNode,
+  sourceReferenceForEntryNode,
+  sourceReferenceForFile,
+  sourceReferenceFromSpan,
+  type ProductArchitectureSourceReference,
+} from "./product-architecture-source.js";
 
 /** Schema marker for the semantic-runtime architecture source model. */
 export const PRODUCT_ARCHITECTURE_ANALYSIS_VERSION =
   "product-architecture-analysis@1";
-
-/** Semantic-runtime source reference with editor-friendly one-based coordinates. */
-export interface ProductArchitectureSourceReference {
-  /** Repository-relative source file path when Atlas can identify it. */
-  readonly filePath: string;
-  /** One-based line at the start of the source span. */
-  readonly startLine: number;
-  /** One-based character at the start of the source span. */
-  readonly startCharacter: number;
-  /** One-based line at the end of the source span. */
-  readonly endLine: number;
-  /** One-based character at the end of the source span. */
-  readonly endCharacter: number;
-}
 
 /** Rollup for the semantic-runtime architecture analysis. */
 export interface ProductArchitectureRollup {
@@ -63,6 +64,8 @@ export interface ProductArchitectureRollup {
   readonly classCount: number;
   /** Number of class surface rows discovered directly from semantic-runtime source. */
   readonly classSurfaceCount: number;
+  /** Number of class surface rows whose name exactly matches at least one auLink catalog symbol. */
+  readonly auLinkCatalogNameMatchCount: number;
   /** Number of function/method body surface rows discovered directly from semantic-runtime source. */
   readonly functionSurfaceCount: number;
   /** Number of checker-backed call-site rows inside semantic-runtime source. */
@@ -81,6 +84,14 @@ export interface ProductArchitectureRollup {
   readonly crossAreaSymbolReferenceCount: number;
   /** Number of grouped semantic symbol dependency rows. */
   readonly symbolDependencyCount: number;
+  /** Number of source-level KernelStoreRecord construction rows. */
+  readonly kernelRecordConstructionCount: number;
+  /** Number of distinct KernelStoreRecord constructor classes found in semantic-runtime source. */
+  readonly kernelRecordConstructorClassCount: number;
+  /** Number of source-level KernelStoreBatch construction/commit rows. */
+  readonly kernelRecordBatchCount: number;
+  /** Number of FieldProvenance construction rows. */
+  readonly fieldProvenanceConstructionCount: number;
   /** Number of import-dependency rows read from semantic-runtime src. */
   readonly dependencyCount: number;
   /** Number of local dependencies that cross semantic-runtime source areas. */
@@ -337,6 +348,8 @@ export interface ProductArchitectureClassSurfaceRow {
   readonly properties: readonly string[];
   /** auLink ids decorating this product class, when any. */
   readonly auLinkIds: readonly string[];
+  /** auLink catalog ids whose framework symbol name exactly matches this product class name. */
+  readonly auLinkCatalogIdsForName: readonly string[];
   /** Number of constructor declarations. */
   readonly constructorCount: number;
   /** Number of instance and static method declarations. */
@@ -384,6 +397,10 @@ export interface ProductArchitectureFunctionSurfaceRow {
   readonly area: string;
   /** Function-like body span line count. */
   readonly lineCount: number;
+  /** Stable body-text fingerprint, normalized for whitespace-only formatting differences. */
+  readonly bodyFingerprint: string;
+  /** Stable AST/control-flow body fingerprint, normalized for simple equivalent body shapes. */
+  readonly bodyShapeFingerprint: string;
   /** Checker-backed call-site rows observed in this function body. */
   readonly callSiteCount: number;
   /** Checker-backed call-site rows whose target resolves inside semantic-runtime. */
@@ -602,6 +619,12 @@ export interface ProductArchitectureAnalysis {
   readonly symbolReferences: readonly ProductArchitectureSymbolReferenceRow[];
   /** Grouped checker-backed symbol dependency rows. */
   readonly symbolDependencies: readonly ProductArchitectureSymbolDependencyRow[];
+  /** Source-level KernelStoreRecord construction rows. */
+  readonly kernelRecordConstructions: readonly ProductArchitectureKernelRecordConstructionRow[];
+  /** Source-level KernelStoreBatch construction/commit rows. */
+  readonly kernelRecordBatches: readonly ProductArchitectureKernelRecordBatchRow[];
+  /** Source-level FieldProvenance construction rows. */
+  readonly fieldProvenanceConstructions: readonly ProductArchitectureFieldProvenanceConstructionRow[];
 }
 
 /** One measured product-architecture build phase. */
@@ -624,6 +647,8 @@ export interface ProductArchitectureProfile {
   readonly includeCallDetails: boolean;
   /** True when checker-backed identifier reference and symbol dependency rows were included. */
   readonly includeSymbols: boolean;
+  /** True when KernelStoreRecord construction and batch rows were included. */
+  readonly includeKernelRecords: boolean;
   /** Measured build phases in execution order. */
   readonly phases: readonly ProductArchitecturePhaseProfile[];
   /** Total wall-clock duration in milliseconds. */
@@ -638,6 +663,8 @@ export interface ProductArchitectureAnalysisOptions {
   readonly includeCallDetails?: boolean;
   /** Include checker-backed identifier reference and symbol dependency rows. */
   readonly includeSymbols?: boolean;
+  /** Include KernelStoreRecord construction rows and KernelStoreBatch commit rows. */
+  readonly includeKernelRecords?: boolean;
 }
 
 interface SemanticRuntimeSourceFile {
@@ -669,11 +696,14 @@ function productArchitectureMemoKey(
   includeCallSites: boolean,
   includeCallDetails: boolean,
   includeSymbols: boolean,
+  includeKernelRecords: boolean,
 ): string {
   return `${includeCallSites ? "calls" : "no-calls"}:${
     includeCallDetails ? "call-details" : "compact-calls"
   }:${
     includeSymbols ? "symbols" : "no-symbols"
+  }:${
+    includeKernelRecords ? "kernel-records" : "no-kernel-records"
   }`;
 }
 
@@ -685,10 +715,12 @@ export function readProductArchitectureAnalysis(
   const includeCallSites = options.includeCallSites ?? true;
   const includeCallDetails = includeCallSites && (options.includeCallDetails ?? false);
   const includeSymbols = options.includeSymbols ?? true;
+  const includeKernelRecords = options.includeKernelRecords ?? true;
   const memoKey = productArchitectureMemoKey(
     includeCallSites,
     includeCallDetails,
     includeSymbols,
+    includeKernelRecords,
   );
   return productArchitectureMemo.read(sourceProject, memoKey, () =>
     buildProductArchitectureAnalysis(
@@ -697,6 +729,7 @@ export function readProductArchitectureAnalysis(
       includeCallSites,
       includeCallDetails,
       includeSymbols,
+      includeKernelRecords,
     ),
   );
 }
@@ -709,6 +742,7 @@ export function profileProductArchitectureAnalysis(
   const includeCallSites = options.includeCallSites ?? true;
   const includeCallDetails = includeCallSites && (options.includeCallDetails ?? false);
   const includeSymbols = options.includeSymbols ?? true;
+  const includeKernelRecords = options.includeKernelRecords ?? true;
   const phases: ProductArchitecturePhaseProfile[] = [];
   const started = performance.now();
   const analysis = buildProductArchitectureAnalysis(sourceProject, (phase, read, count) => {
@@ -720,12 +754,13 @@ export function profileProductArchitectureAnalysis(
       count: countValue(value, count),
     });
     return value;
-  }, includeCallSites, includeCallDetails, includeSymbols);
+  }, includeCallSites, includeCallDetails, includeSymbols, includeKernelRecords);
   return {
     analysis,
     includeCallSites,
     includeCallDetails,
     includeSymbols,
+    includeKernelRecords,
     phases,
     totalMilliseconds: performance.now() - started,
   };
@@ -737,6 +772,7 @@ function buildProductArchitectureAnalysis(
   includeCallSites: boolean = true,
   includeCallDetails: boolean = false,
   includeSymbols: boolean = true,
+  includeKernelRecords: boolean = true,
 ): ProductArchitectureAnalysis {
   const sourceFiles = phase(
     "semantic-runtime source files",
@@ -773,11 +809,33 @@ function buildProductArchitectureAnalysis(
     () => auLinkClassIdsByFileAndName(sourceProject),
     (value) => value.size,
   );
+  const auLinkCatalogIds = phase(
+    "auLink catalog symbols",
+    () => auLinkCatalogIdsBySymbolName(sourceProject),
+    (value) => value.size,
+  );
   const classSurfaces = phase(
     "class surface rows",
-    () => sourceFiles.flatMap((entry) => classSurfaceRows(entry, auLinkClassIds)),
+    () => sourceFiles.flatMap((entry) =>
+      classSurfaceRows(entry, auLinkClassIds, auLinkCatalogIds)
+    ),
     rowCount,
   );
+  const kernelRecordRows = includeKernelRecords
+    ? phase(
+      "kernel record source rows",
+      () => readProductArchitectureKernelRecordRows(sourceFiles),
+      (value) => value.constructions.length + value.batches.length + value.fieldProvenanceConstructions.length,
+    )
+    : {
+        constructorClassCount: 0,
+        constructions: [],
+        batches: [],
+        fieldProvenanceConstructions: [],
+      };
+  const kernelRecordConstructions = kernelRecordRows.constructions;
+  const kernelRecordBatches = kernelRecordRows.batches;
+  const fieldProvenanceConstructions = kernelRecordRows.fieldProvenanceConstructions;
   const rawFunctionSurfaces = phase(
     "function surface rows",
     () => sourceFiles.flatMap(functionSurfaceRows),
@@ -857,6 +915,10 @@ function buildProductArchitectureAnalysis(
       callDependencies,
       symbolReferences,
       symbolDependencies,
+      kernelRecordConstructions,
+      kernelRecordRows.constructorClassCount,
+      kernelRecordBatches,
+      fieldProvenanceConstructions,
       dependencies,
       areaDependencies,
     ),
@@ -872,6 +934,9 @@ function buildProductArchitectureAnalysis(
     callDependencies,
     symbolReferences,
     symbolDependencies,
+    kernelRecordConstructions,
+    kernelRecordBatches,
+    fieldProvenanceConstructions,
   };
 }
 
@@ -1404,6 +1469,26 @@ function auLinkClassIdsByFileAndName(
   );
 }
 
+function auLinkCatalogIdsBySymbolName(
+  sourceProject: SourceProject,
+): ReadonlyMap<string, readonly string[]> {
+  const idsBySymbol = new Map<string, string[]>();
+  for (const entry of readAuLinkModel(sourceProject, {}).catalog) {
+    const ids = idsBySymbol.get(entry.symbolName);
+    if (ids === undefined) {
+      idsBySymbol.set(entry.symbolName, [entry.linkId]);
+    } else {
+      ids.push(entry.linkId);
+    }
+  }
+  return new Map(
+    [...idsBySymbol.entries()].map(([symbolName, ids]) => [
+      symbolName,
+      uniqueSortedStrings(ids),
+    ]),
+  );
+}
+
 function classSurfaceKey(filePath: string, className: string): string {
   return `${filePath}\u0000${className}`;
 }
@@ -1411,11 +1496,19 @@ function classSurfaceKey(filePath: string, className: string): string {
 function classSurfaceRows(
   entry: SemanticRuntimeSourceFile,
   auLinkClassIds: ReadonlyMap<string, readonly string[]>,
+  auLinkCatalogIds: ReadonlyMap<string, readonly string[]>,
 ): readonly ProductArchitectureClassSurfaceRow[] {
   return entry.sourceFile.statements
     .filter(ts.isClassDeclaration)
     .filter((node) => node.name !== undefined)
-    .map((node) => productClassSurfaceForDeclaration(entry, node, auLinkClassIds));
+    .map((node) =>
+      productClassSurfaceForDeclaration(
+        entry,
+        node,
+        auLinkClassIds,
+        auLinkCatalogIds,
+      )
+    );
 }
 
 function functionSurfaceRows(
@@ -1449,11 +1542,13 @@ function productClassSurfaceForDeclaration(
   entry: SemanticRuntimeSourceFile,
   node: ts.ClassDeclaration,
   auLinkClassIds: ReadonlyMap<string, readonly string[]>,
+  auLinkCatalogIds: ReadonlyMap<string, readonly string[]>,
 ): ProductArchitectureClassSurfaceRow {
   const surface = classDeclarationSurface(node, entry.sourceFile);
   const source = sourceReferenceForEntryNode(entry, node);
   const lineCount = lineCountForSource(source);
   const auLinkIds = auLinkClassIds.get(classSurfaceKey(entry.filePath, surface.name)) ?? [];
+  const auLinkCatalogIdsForName = auLinkCatalogIds.get(surface.name) ?? [];
   return {
     id: `product.arch:class:${entry.filePath}:${surface.name}:${node.getStart(entry.sourceFile)}`,
     name: surface.name,
@@ -1468,12 +1563,13 @@ function productClassSurfaceForDeclaration(
     accessors: surface.accessors,
     properties: surface.properties,
     auLinkIds,
+    auLinkCatalogIdsForName,
     constructorCount: surface.constructorCount,
     methodCount: surface.methodCount,
     propertyCount: surface.propertyCount,
     lineCount,
     source,
-    summary: `${surface.name} spans ${lineCount} line(s), ${surface.methodCount} method(s), ${surface.propertyCount} property/accessor surface(s), ${surface.constructorCount} constructor declaration(s), and ${auLinkIds.length} auLink anchor(s).`,
+    summary: `${surface.name} spans ${lineCount} line(s), ${surface.methodCount} method(s), ${surface.propertyCount} property/accessor surface(s), ${surface.constructorCount} constructor declaration(s), ${auLinkIds.length} auLink anchor(s), and ${auLinkCatalogIdsForName.length} auLink catalog name match(es).`,
   };
 }
 
@@ -1711,6 +1807,7 @@ function functionSurfaceRow(
 ): ProductArchitectureFunctionSurfaceRow {
   const source = sourceReferenceForEntryNode(entry, node);
   const lineCount = lineCountForSource(source);
+  const body = "body" in node && node.body !== undefined ? node.body : node;
   return {
     id: `product.arch:function:${entry.filePath}:${fields.name}:${node.getStart(entry.sourceFile)}`,
     ...fields,
@@ -1719,6 +1816,8 @@ function functionSurfaceRow(
     filePath: entry.filePath,
     area: entry.area,
     lineCount,
+    bodyFingerprint: normalizedSourceFingerprint(body.getText(entry.sourceFile)),
+    bodyShapeFingerprint: functionBodyShapeFingerprint(node, entry.sourceFile),
     callSiteCount: 0,
     localCallSiteCount: 0,
     crossAreaCallSiteCount: 0,
@@ -1794,7 +1893,7 @@ function callSiteRowsForEntry(
     node: ts.Node,
     context: SymbolReferenceVisitContext,
   ): void => {
-    const nodeContext = symbolReferenceContextForNode(
+    const nodeContext = productArchitectureContextForNode(
       node,
       context,
       entry.sourceFile,
@@ -1991,6 +2090,25 @@ export function callDependencyRows(
     );
 }
 
+/** Add expensive checker display strings to already-discovered call-site rows. */
+export function enrichProductArchitectureCallSiteRows(
+  sourceProject: SourceProject,
+  rows: readonly ProductArchitectureCallSiteRow[],
+): readonly ProductArchitectureCallSiteRow[] {
+  const expressions = new ProductArchitectureCallSiteExpressionCache(sourceProject);
+  return rows.map((row) => {
+    const details = callSiteDetailsForExpression(
+      sourceProject.checker,
+      expressions.read(row),
+    );
+    return {
+      ...row,
+      calleeType: details.calleeType,
+      signature: details.signature,
+    };
+  });
+}
+
 interface SymbolReferenceVisitContext {
   readonly className: string | null;
   readonly functionName: string | null;
@@ -2025,7 +2143,7 @@ function symbolReferenceRowsForEntry(
     node: ts.Node,
     context: SymbolReferenceVisitContext,
   ): void => {
-    const nodeContext = symbolReferenceContextForNode(
+    const nodeContext = productArchitectureContextForNode(
       node,
       context,
       entry.sourceFile,
@@ -2161,68 +2279,6 @@ function symbolDependencyRows(
     );
 }
 
-function symbolReferenceContextForNode(
-  node: ts.Node,
-  context: SymbolReferenceVisitContext,
-  sourceFile: ts.SourceFile,
-): SymbolReferenceVisitContext {
-  if (ts.isClassDeclaration(node) && node.name !== undefined) {
-    return {
-      className: node.name.text,
-      functionName: context.functionName,
-    };
-  }
-  const functionName = functionNameForReferenceContext(node, context, sourceFile);
-  if (functionName === null) {
-    return context;
-  }
-  return {
-    className: context.className,
-    functionName,
-  };
-}
-
-function functionNameForReferenceContext(
-  node: ts.Node,
-  context: SymbolReferenceVisitContext,
-  sourceFile: ts.SourceFile,
-): string | null {
-  if (ts.isConstructorDeclaration(node)) {
-    return `${context.className ?? "anonymous"}.constructor`;
-  }
-  if (ts.isMethodDeclaration(node) || ts.isGetAccessor(node) || ts.isSetAccessor(node)) {
-    const name = propertyNameText(node.name, sourceFile);
-    if (name === null) {
-      return null;
-    }
-    return context.className === null ? name : `${context.className}.${name}`;
-  }
-  if (ts.isFunctionDeclaration(node) && node.name !== undefined) {
-    return nestedFunctionName(context.functionName, node.name.text);
-  }
-  if (ts.isArrowFunction(node) || ts.isFunctionExpression(node)) {
-    const parent = node.parent;
-    if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
-      return nestedFunctionName(context.functionName, parent.name.text);
-    }
-    if (ts.isPropertyDeclaration(parent)) {
-      const name = propertyNameText(parent.name, sourceFile);
-      if (name === null) {
-        return null;
-      }
-      return context.className === null ? name : `${context.className}.${name}`;
-    }
-  }
-  return null;
-}
-
-function nestedFunctionName(
-  parentFunctionName: string | null,
-  localName: string,
-): string {
-  return parentFunctionName === null ? localName : `${parentFunctionName}.${localName}`;
-}
-
 type ProductArchitectureTargetDeclaration = {
   readonly declaration: ts.Declaration;
   readonly identity: NonNullable<ReturnType<SourceProject["sourceFileIdentity"]>>;
@@ -2265,6 +2321,47 @@ class ProductArchitectureSymbolResolutionCache {
   }
 }
 
+class ProductArchitectureCallSiteExpressionCache {
+  readonly #sourceFiles = new Map<string, ts.SourceFile>();
+  readonly #expressionsByRowId = new Map<string, ts.CallExpression | ts.NewExpression>();
+
+  constructor(
+    readonly sourceProject: SourceProject,
+  ) {}
+
+  read(row: ProductArchitectureCallSiteRow): ts.CallExpression | ts.NewExpression {
+    const existing = this.#expressionsByRowId.get(row.id);
+    if (existing !== undefined) {
+      return existing;
+    }
+
+    const sourceFile = this.sourceFile(row.source.filePath);
+    const expression = callSiteExpressionForSourceReference(sourceFile, row.source);
+    if (expression === null) {
+      throw new Error(
+        `Product architecture call-site row does not resolve to a call expression: ${row.source.filePath}:${row.source.startLine}:${row.source.startCharacter}.`,
+      );
+    }
+    this.#expressionsByRowId.set(row.id, expression);
+    return expression;
+  }
+
+  private sourceFile(filePath: string): ts.SourceFile {
+    const existing = this.#sourceFiles.get(filePath);
+    if (existing !== undefined) {
+      return existing;
+    }
+    const sourceFile = this.sourceProject.readSourceFile(filePath);
+    if (sourceFile === null) {
+      throw new Error(
+        `Product architecture call-site source file is not admitted: ${filePath}.`,
+      );
+    }
+    this.#sourceFiles.set(filePath, sourceFile);
+    return sourceFile;
+  }
+}
+
 function targetDeclarationForSymbol(
   sourceProject: SourceProject,
   symbol: ts.Symbol,
@@ -2296,6 +2393,56 @@ function symbolForCallCallee(
     symbol = checker.getSymbolAtLocation(expression);
   }
   return symbol === undefined ? null : resolveAlias(checker, symbol);
+}
+
+interface ProductArchitectureCallSiteDetails {
+  readonly calleeType: string;
+  readonly signature: string | null;
+}
+
+function callSiteDetailsForExpression(
+  checker: ts.TypeChecker,
+  expression: ts.CallExpression | ts.NewExpression,
+): ProductArchitectureCallSiteDetails {
+  const signature = checker.getResolvedSignature(expression);
+  const callee = expression.expression;
+  return {
+    calleeType: checker.typeToString(checker.getTypeAtLocation(callee), callee),
+    signature: signature === undefined
+      ? null
+      : checker.signatureToString(signature, expression),
+  };
+}
+
+function callSiteExpressionForSourceReference(
+  sourceFile: ts.SourceFile,
+  source: ProductArchitectureSourceReference,
+): ts.CallExpression | ts.NewExpression | null {
+  const start = sourceFile.getPositionOfLineAndCharacter(
+    source.startLine - 1,
+    source.startCharacter - 1,
+  );
+  const end = sourceFile.getPositionOfLineAndCharacter(
+    source.endLine - 1,
+    source.endCharacter - 1,
+  );
+  let expression: ts.CallExpression | ts.NewExpression | null = null;
+  const visit = (node: ts.Node): void => {
+    if (expression !== null) {
+      return;
+    }
+    if (
+      (ts.isCallExpression(node) || ts.isNewExpression(node)) &&
+      node.getStart(sourceFile) === start &&
+      node.getEnd() === end
+    ) {
+      expression = node;
+      return;
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(sourceFile);
+  return expression;
 }
 
 function symbolKeyForResolvedSymbol(
@@ -2350,6 +2497,10 @@ function productArchitectureRollup(
   callDependencies: readonly ProductArchitectureCallDependencyRow[],
   symbolReferences: readonly ProductArchitectureSymbolReferenceRow[],
   symbolDependencies: readonly ProductArchitectureSymbolDependencyRow[],
+  kernelRecordConstructions: readonly ProductArchitectureKernelRecordConstructionRow[],
+  kernelRecordConstructorClassCount: number,
+  kernelRecordBatches: readonly ProductArchitectureKernelRecordBatchRow[],
+  fieldProvenanceConstructions: readonly ProductArchitectureFieldProvenanceConstructionRow[],
   dependencies: readonly ProductArchitectureDependencyRow[],
   areaDependencies: readonly ProductArchitectureAreaDependencyRow[],
 ): ProductArchitectureRollup {
@@ -2362,6 +2513,9 @@ function productArchitectureRollup(
     classCount: declarations.filter((row) => row.declarationKind === "class")
       .length,
     classSurfaceCount: classSurfaces.length,
+    auLinkCatalogNameMatchCount: classSurfaces.filter(
+      (row) => row.auLinkCatalogIdsForName.length > 0,
+    ).length,
     functionSurfaceCount: functionSurfaces.length,
     callSiteCount: callSites.length,
     localCallSiteCount: callSites.filter((row) => row.local).length,
@@ -2372,6 +2526,10 @@ function productArchitectureRollup(
     crossAreaSymbolReferenceCount: symbolReferences.filter((row) => row.crossesArea)
       .length,
     symbolDependencyCount: symbolDependencies.length,
+    kernelRecordConstructionCount: kernelRecordConstructions.length,
+    kernelRecordConstructorClassCount,
+    kernelRecordBatchCount: kernelRecordBatches.length,
+    fieldProvenanceConstructionCount: fieldProvenanceConstructions.length,
     dependencyCount: dependencies.length,
     crossAreaDependencyCount: dependencies.filter((row) => row.crossesArea)
       .length,
@@ -2419,55 +2577,6 @@ function dependencySummary(
   return `${fromArea} imports ${target.toArea}${
     crossesArea ? " across semantic-runtime areas" : ""
   }.`;
-}
-
-function sourceReferenceForFile(
-  entry: SemanticRuntimeSourceFile,
-): ProductArchitectureSourceReference {
-  const endPosition = entry.sourceFile.getLineAndCharacterOfPosition(
-    entry.sourceFile.text.length,
-  );
-  return {
-    filePath: entry.filePath,
-    startLine: 1,
-    startCharacter: 1,
-    endLine: endPosition.line + 1,
-    endCharacter: endPosition.character + 1,
-  };
-}
-
-function sourceReferenceFromSpan(
-  filePath: string,
-  span: SourceSpan,
-): ProductArchitectureSourceReference {
-  return {
-    filePath,
-    startLine: span.startLine,
-    startCharacter: span.startCharacter,
-    endLine: span.endLine,
-    endCharacter: span.endCharacter,
-  };
-}
-
-function sourceReferenceForEntryNode(
-  entry: SemanticRuntimeSourceFile,
-  node: ts.Node,
-): ProductArchitectureSourceReference {
-  const start = node.getStart(entry.sourceFile);
-  const end = node.getEnd();
-  const startPosition = entry.sourceFile.getLineAndCharacterOfPosition(start);
-  const endPosition = entry.sourceFile.getLineAndCharacterOfPosition(end);
-  return {
-    filePath: entry.filePath,
-    startLine: startPosition.line + 1,
-    startCharacter: startPosition.character + 1,
-    endLine: endPosition.line + 1,
-    endCharacter: endPosition.character + 1,
-  };
-}
-
-function lineCountForSource(source: ProductArchitectureSourceReference): number {
-  return Math.max(1, source.endLine - source.startLine + 1);
 }
 
 function productArchitectureDeclarationKey(row: SourceDeclarationRow): string {

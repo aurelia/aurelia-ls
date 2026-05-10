@@ -37,6 +37,10 @@ import {
 import {
   endpointForAdmissionAssociation,
 } from "./framework-admission-endpoints.js";
+import {
+  FrameworkGraphAccumulator,
+  compareFrameworkGraphNodes,
+} from "./framework-graph-utils.js";
 
 /** Node kinds used by the admission flow graph. */
 export type FrameworkAdmissionFlowNodeKind =
@@ -278,8 +282,10 @@ export function readFrameworkAdmissionFlow(
 }
 
 class FrameworkAdmissionFlowBuilder {
-  readonly #nodes = new Map<string, FrameworkAdmissionFlowNodeRow>();
-  readonly #edges = new Map<string, FrameworkAdmissionFlowEdgeRow>();
+  readonly #graph = new FrameworkGraphAccumulator<
+    FrameworkAdmissionFlowNodeRow,
+    FrameworkAdmissionFlowEdgeRow
+  >();
   readonly #visitedRegistryTargets = new Set<string>();
   readonly #visitedDependencyRoutes = new Set<string>();
   readonly #resourceRowsBySource = new Map<string, FrameworkResourceConvergenceRow>();
@@ -336,10 +342,10 @@ class FrameworkAdmissionFlowBuilder {
     if (this.filters.corridor === FrameworkAdmissionFlowCorridor.JitCompiler) {
       this.addJitCompilerEdges();
     }
-    const allNodes = [...this.#nodes.values()].sort(compareAdmissionFlowNodes);
+    const allNodes = this.#graph.nodeRows(compareFrameworkGraphNodes);
     const allNodesById = new Map(allNodes.map((node) => [node.id, node]));
     const corridorEdges = flowCorridorEdges(
-      [...this.#edges.values()],
+      this.#graph.edgeRows(),
       allNodesById,
       this.filters.corridor,
     );
@@ -382,7 +388,7 @@ class FrameworkAdmissionFlowBuilder {
     );
     const isCatalog =
       relationship.to.kind === FrameworkRelationshipEndpointKind.RegistrationCatalog;
-    this.addEdge({
+    this.#graph.addEdge({
       id: `${relationship.id}:flow:admission`,
       edgeKind: isCatalog
         ? "expands-catalog"
@@ -423,13 +429,13 @@ class FrameworkAdmissionFlowBuilder {
     }
     const from = this.nodeForEndpoint(relationship.to, "resource");
     const role = resourceRole(resource);
-    const to = this.addNode({
+    const to = this.#graph.addNode({
       id: admissionFlowNodeId("world-role", undefined, role),
       kind: "world-role",
       name: role,
       summary: `${role} resource role.`,
     });
-    this.addEdge({
+    this.#graph.addEdge({
       id: `${relationship.id}:flow:resource:${resource.id}`,
       edgeKind: "resource-forms-world",
       layer: "resource-world",
@@ -485,7 +491,7 @@ class FrameworkAdmissionFlowBuilder {
         const child = endpointForAdmissionAssociation(association);
         const from = this.nodeForEndpoint(endpoint, "registry-export");
         const to = this.nodeForEndpoint(child, nodeKindForEndpoint(child));
-        this.addEdge({
+        this.#graph.addEdge({
           id: `${association.id}:flow:registry:${depth}`,
           edgeKind: "registry-invokes",
           layer: "registry",
@@ -543,7 +549,7 @@ class FrameworkAdmissionFlowBuilder {
     admissionRelationshipId: string | undefined,
   ): void {
     const to = this.nodeForEndpoint(route.keyEndpoint, "di-key");
-    this.addEdge({
+    this.#graph.addEdge({
       id: `framework-admission-flow:materializes:${route.providerIdentity.id}:${route.key}:${route.routeKind}`,
       edgeKind: "materializes-key",
       layer: "di-materialization",
@@ -614,7 +620,7 @@ class FrameworkAdmissionFlowBuilder {
       },
       "di-key",
     );
-    this.addEdge({
+    this.#graph.addEdge({
       id: `framework-admission-flow:provider-depends:${route.providerIdentity.id}:${dependency.dependencyKey}:${dependency.access}:${dependency.policy}`,
       edgeKind: "provider-depends-on-key",
       layer: "di-dependency",
@@ -653,7 +659,7 @@ class FrameworkAdmissionFlowBuilder {
         continue;
       }
       const instructionName = relationship.to.name;
-      const to = this.addNode({
+      const to = this.#graph.addNode({
         id: admissionFlowNodeId(
           "compiler-instruction",
           relationship.packageId,
@@ -665,7 +671,7 @@ class FrameworkAdmissionFlowBuilder {
         packageName: relationship.packageName,
         summary: `${instructionName} compiler instruction.`,
       });
-      this.addEdge({
+      this.#graph.addEdge({
         id: `${relationship.id}:flow:jit-compiler`,
         edgeKind: "compiler-produces-instruction",
         layer: "compiler",
@@ -692,7 +698,7 @@ class FrameworkAdmissionFlowBuilder {
     producerName: string,
   ): FrameworkAdmissionFlowNodeRow | null {
     const actorName = compilerActorName(producerName);
-    const candidates = [...this.#nodes.values()].filter(
+    const candidates = this.#graph.nodeRows().filter(
       (node) => node.name === producerName || node.name === actorName,
     );
     if (candidates.length === 0) {
@@ -704,7 +710,7 @@ class FrameworkAdmissionFlowBuilder {
   private providerNodeForRoute(
     route: FrameworkMaterializationRouteRow,
   ): FrameworkAdmissionFlowNodeRow {
-    return this.addNode({
+    return this.#graph.addNode({
       id: admissionFlowNodeId("provider", route.packageId, route.providerIdentity.id),
       kind: "provider",
       name: route.providerIdentity.name,
@@ -721,44 +727,17 @@ class FrameworkAdmissionFlowBuilder {
   ): FrameworkAdmissionFlowNodeRow {
     const nodePackageId =
       fallbackKind === "di-key" ? undefined : endpoint.packageId;
-    return this.addNode({
+    return this.#graph.addNode({
       id: admissionFlowNodeId(fallbackKind, nodePackageId, endpoint.name),
       kind: fallbackKind,
       name: endpoint.name,
-      ...(endpoint.packageId === undefined
-        ? {}
-        : { packageId: endpoint.packageId }),
-      ...(endpoint.packageName === undefined
-        ? {}
-        : { packageName: endpoint.packageName }),
-      ...(endpoint.source === undefined ? {} : { source: endpoint.source }),
+      packageId: endpoint.packageId,
+      packageName: endpoint.packageName,
+      source: endpoint.source,
       summary: `${endpoint.name} ${fallbackKind}.`,
     });
   }
 
-  private addNode(
-    row: FrameworkAdmissionFlowNodeRow,
-  ): FrameworkAdmissionFlowNodeRow {
-    const current = this.#nodes.get(row.id);
-    if (current !== undefined) {
-      const merged = {
-        ...current,
-        packageId: current.packageId ?? row.packageId,
-        packageName: current.packageName ?? row.packageName,
-        source: current.source ?? row.source,
-      };
-      this.#nodes.set(row.id, merged);
-      return merged;
-    }
-    this.#nodes.set(row.id, row);
-    return row;
-  }
-
-  private addEdge(row: FrameworkAdmissionFlowEdgeRow): void {
-    if (!this.#edges.has(row.id)) {
-      this.#edges.set(row.id, row);
-    }
-  }
 }
 
 function routeTraversalKey(route: FrameworkMaterializationRouteRow): string {
@@ -1227,17 +1206,6 @@ function admissionFlowNodeId(
   name: string,
 ): string {
   return `framework-admission-flow:${kind}:${packageId ?? "repo"}:${name}`;
-}
-
-function compareAdmissionFlowNodes(
-  left: FrameworkAdmissionFlowNodeRow,
-  right: FrameworkAdmissionFlowNodeRow,
-): number {
-  return (
-    left.kind.localeCompare(right.kind) ||
-    left.name.localeCompare(right.name) ||
-    (left.packageId ?? "").localeCompare(right.packageId ?? "")
-  );
 }
 
 function compareAdmissionFlowEdges(

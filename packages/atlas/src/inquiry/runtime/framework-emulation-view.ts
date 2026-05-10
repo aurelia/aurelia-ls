@@ -20,6 +20,7 @@ import {
   type FrameworkRenderConsequenceKind,
   type FrameworkRenderConsequenceFilters,
 } from "./framework-rendering-consequences.js";
+import { readFrameworkRelationshipEmulationObligations } from "./framework-emulation-relationship-obligations.js";
 import { countBy } from "./framework-support.js";
 
 /** How semantic-runtime should approach one framework obligation. */
@@ -36,6 +37,9 @@ export type FrameworkEmulationLayer =
   | "di-world"
   | "resource-catalog"
   | "jit-compilation"
+  | "expression-language"
+  | "router-runtime"
+  | "rendering-runtime"
   | "resolved-hydration"
   | "template-controller-virtualization"
   | "typechecker-reactivity";
@@ -47,6 +51,9 @@ export type FrameworkEmulationObligationKind =
   | "resolve-dependency"
   | "admit-built-in-resource"
   | "compile-template"
+  | "model-expression"
+  | "model-router"
+  | "model-rendering"
   | "classify-template-attribute"
   | "hydrate-runtime"
   | "virtualize-template-controller"
@@ -109,6 +116,7 @@ export function readFrameworkEmulationObligations(
 ): readonly FrameworkEmulationObligationRow[] {
   const rows = [
     ...diWorldObligations(sourceProject),
+    ...readFrameworkRelationshipEmulationObligations(sourceProject, filters),
     ...resourceObligations(sourceProject, filters),
     ...compilerObligations(sourceProject, filters),
     ...hydrationObligations(sourceProject, filters),
@@ -598,12 +606,18 @@ function layerPriority(layer: FrameworkEmulationLayer): number {
       return 2;
     case "jit-compilation":
       return 3;
-    case "resolved-hydration":
+    case "expression-language":
       return 4;
-    case "template-controller-virtualization":
+    case "router-runtime":
       return 5;
-    case "typechecker-reactivity":
+    case "rendering-runtime":
       return 6;
+    case "resolved-hydration":
+      return 7;
+    case "template-controller-virtualization":
+      return 8;
+    case "typechecker-reactivity":
+      return 9;
   }
 }
 

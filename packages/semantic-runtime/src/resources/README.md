@@ -30,7 +30,10 @@ The output is deliberately before scope admission, DI/configuration reachability
 template/compiler lowering. Recognition observations pair a source carrier with a definition header. Headers are
 carrier-level summaries: kind, target, public name, aliases, or syntax patterns. A header does not mean the resource
 is available in a container, visible to a template, merged with inherited metadata, or lowered into rendering
-instructions.
+instructions. Decorators, static `$au`, and imperative `.define(...)` calls keep separate carrier observations, but
+they share the same named-definition field reader for `name`, `aliases`, header creation, and carrier-owned open seams.
+Do not reintroduce carrier-local name/alias parsing unless a framework carrier genuinely diverges from the shared
+runtime definition shape.
 
 Definition models sit beyond headers. Recognition observations are the AST-bearing layer; definition models use
 kernel handles, scalar fields, entry-level source handles, and field provenance rather than retaining TypeScript
@@ -66,8 +69,12 @@ need that narrower origin instead of only the owning resource definition. Member
 property as bindable when its optional config object stays open; checker-visible `set` properties become open setter
 metadata, and the unresolved config fields remain visible as seams instead of erasing the bindable. Dependency
 convergence first trusts evaluator-closed class/function values, then uses the TypeChecker as a fallback for identifier
-dependencies that are checker-visible constructable/callable values. It records open seams for explicit metadata that is
-visible but not safely materialized yet, including dependencies, pre-lowered instructions, surrogates, and watches.
+dependencies that are checker-visible constructable/callable values. Watch convergence now closes class/method
+`@watch(...)` decorators, static `watches`, and definition-object `watches` when their expression, callback, and flush
+metadata reduce to static runtime metadata. Runtime watcher/controller execution is still observation/lifecycle work;
+definition convergence should only model the metadata Aurelia stores on resource definitions. It records open seams for
+explicit metadata that is visible but not safely materialized yet, including dependencies, pre-lowered instructions, and
+surrogates.
 
 `product-details.ts` declares the typed detail slots that hydrate resource definition headers, built-in catalogs,
 configured catalog selections, and full definitions from product handles. This keeps resource inquiry and tooling

@@ -1,6 +1,9 @@
 import ts from "typescript";
 
 import { uniqueSortedStrings } from "../../collections.js";
+import { normalizedSourceFingerprint, stableTextFingerprint } from "../../text-fingerprint.js";
+import { lowerFirst } from "../../text-case.js";
+import { functionBodyShapeFingerprint } from "../../ast-fingerprint.js";
 import {
   classDeclarationSurface,
   requiredSourceFileIdentity,
@@ -13,6 +16,7 @@ import {
   sourceRangeFromFileSpan,
   sourceSpanForNode,
   SourceProjectMemo,
+  stringLiteralArgument,
   unwrapExpression,
   type SourceProject,
   type TypeScriptEnumDeclarationRow,
@@ -50,6 +54,7 @@ import type {
   AtlasSelfEnumReferenceRow,
   AtlasSelfEnumRow,
   AtlasSelfEnumValueSpaceRow,
+  AtlasSelfFunctionShapeGroupRow,
   AtlasSelfFunctionSurfaceRow,
   AtlasSelfLensImplementationRow,
   AtlasSelfModuleDependencyRow,
@@ -356,6 +361,14 @@ class AtlasSelfAnalysisBuilder {
       if (continuation !== null) {
         this.#continuationSeeds.push(continuation);
       }
+      this.#axisMapperPressure.push(
+        ...optionalObjectSpreadPressureForObjectLiteral(
+          sourceFile,
+          filePath,
+          currentFunction,
+          node,
+        ),
+      );
     } else if (ts.isInterfaceDeclaration(node)) {
       const row = rowSurfaceForInterface(sourceFile, packageId, filePath, node);
       if (row !== null) {
@@ -403,6 +416,7 @@ class AtlasSelfAnalysisBuilder {
     const functionSurfaces = this.#functionDeclarations.sort(
       compareFunctionSurface,
     );
+    const functionShapeGroups = atlasSelfFunctionShapeGroups(functionSurfaces);
     const lensImplementations = finalizeLensImplementations(
       this.#lensImplementationSeeds,
       this.#enumUsage.enumDeclarations,
@@ -481,6 +495,7 @@ class AtlasSelfAnalysisBuilder {
       classMethodFunctionCount: functionSurfaces.filter(
         (row) => row.functionKind === "class-method",
       ).length,
+      functionShapeGroupCount: functionShapeGroups.length,
       sourceFileSurfaceCount: sourceFileSurfaces.length,
       sourceFileLineCount: sourceFileSurfaces.reduce(
         (sum, row) => sum + row.lineCount,
@@ -512,6 +527,7 @@ class AtlasSelfAnalysisBuilder {
       classSurfaces,
       sourceFileSurfaces,
       functionSurfaces,
+      functionShapeGroups,
       lensImplementations,
       projectionBranches,
       continuations,
@@ -541,21 +557,66 @@ function atlasSemanticRouteRows(
       )
       .map((occurrence) => [occurrence.value, occurrence.source]),
   );
-  return FRAMEWORK_SEMANTIC_ROUTE_SPECS.map((routeSpec) => ({
-    id: `atlas-self:semantic-route:${routeSpec.id}`,
-    semanticRouteId: routeSpec.id,
-    navigationSpecId: routeSpec.navigationSpecId,
-    targetEndpointId: routeSpec.target.id,
-    targetLens: routeSpec.target.lens,
-    targetProjection: routeSpec.target.projection,
-    relation: routeSpec.relation,
-    relationMember: relationMemberByValue.get(routeSpec.relation) ?? null,
-    basis: routeSpec.basis,
-    ...(sourceByRouteId.get(routeSpec.id) === undefined
-      ? {}
-      : { source: sourceByRouteId.get(routeSpec.id) }),
-    summary: routeSpec.summary,
-  }));
+  return FRAMEWORK_SEMANTIC_ROUTE_SPECS.map((routeSpec) => {
+    const source = sourceByRouteId.get(routeSpec.id);
+    return {
+      id: `atlas-self:semantic-route:${routeSpec.id}`,
+      semanticRouteId: routeSpec.id,
+      navigationSpecId: routeSpec.navigationSpecId,
+      targetEndpointId: routeSpec.target.id,
+      targetLens: routeSpec.target.lens,
+      targetProjection: routeSpec.target.projection,
+      relation: routeSpec.relation,
+      relationMember: relationMemberByValue.get(routeSpec.relation) ?? null,
+      basis: routeSpec.basis,
+      source,
+      summary: routeSpec.summary,
+    };
+  });
+}
+
+function atlasSelfFunctionShapeGroups(
+  functions: readonly AtlasSelfFunctionSurfaceRow[],
+): readonly AtlasSelfFunctionShapeGroupRow[] {
+  const byShape = new Map<string, AtlasSelfFunctionSurfaceRow[]>();
+  for (const row of functions) {
+    const group = byShape.get(row.bodyShapeFingerprint);
+    if (group === undefined) {
+      byShape.set(row.bodyShapeFingerprint, [row]);
+    } else {
+      group.push(row);
+    }
+  }
+  return [...byShape.entries()]
+    .flatMap(([bodyShapeFingerprint, rows]) => {
+      if (rows.length < 2) {
+        return [];
+      }
+      const sortedRows = [...rows].sort(compareFunctionSurface);
+      const names = uniqueSortedStrings(sortedRows.map((row) => row.name));
+      const files = uniqueSortedStrings(sortedRows.map((row) => row.filePath));
+      const functionKinds = uniqueSortedStrings(sortedRows.map((row) => row.functionKind));
+      return [{
+        id: `atlas-self:function-shape:${bodyShapeFingerprint}`,
+        bodyShapeFingerprint,
+        functionCount: sortedRows.length,
+        nameCount: names.length,
+        fileCount: files.length,
+        lineCount: sortedRows.reduce((sum, row) => sum + row.lineCount, 0),
+        functionKinds,
+        nameSamples: names.slice(0, 8),
+        fileSamples: files.slice(0, 5),
+        source: sortedRows[0]!.source,
+        summary: `${sortedRows.length} function surface(s) share one AST/control-flow body shape across ${names.length} name(s) and ${files.length} file(s).`,
+      } satisfies AtlasSelfFunctionShapeGroupRow];
+    })
+    .sort((left, right) =>
+      right.functionCount - left.functionCount ||
+      right.nameCount - left.nameCount ||
+      right.fileCount - left.fileCount ||
+      right.lineCount - left.lineCount ||
+      left.bodyShapeFingerprint.localeCompare(right.bodyShapeFingerprint)
+    );
 }
 
 function rowSurfaceForInterface(
@@ -777,6 +838,10 @@ function atlasSelfFunctionSurfaceForFunctionDeclaration(
     exported: hasModifier(node, ts.SyntaxKind.ExportKeyword),
     filePath,
     lineCount: lineCountForSourceRange(source),
+    bodyFingerprint: normalizedSourceFingerprint(
+      (node.body ?? node).getText(sourceFile),
+    ),
+    bodyShapeFingerprint: functionBodyShapeFingerprint(node, sourceFile),
     callCount: callStats.callCount,
     uniqueCallTargetCount: callStats.uniqueCallTargetCount,
     source,
@@ -803,6 +868,10 @@ function functionSurfaceForMethodDeclaration(
     exported: methodOwningClassIsExported(node),
     filePath,
     lineCount: lineCountForSourceRange(source),
+    bodyFingerprint: normalizedSourceFingerprint(
+      (node.body ?? node).getText(sourceFile),
+    ),
+    bodyShapeFingerprint: functionBodyShapeFingerprint(node, sourceFile),
     callCount: callStats.callCount,
     uniqueCallTargetCount: callStats.uniqueCallTargetCount,
     source,
@@ -1028,7 +1097,7 @@ function moduleDependencyRows(
     const toArea = toFile === null ? null : atlasAreaForPath(toFile);
     return [
       {
-        id: `atlas-self:module:${filePath}:${statement.pos}:${stableHash(
+        id: `atlas-self:module:${filePath}:${statement.pos}:${stableTextFingerprint(
           moduleSpecifier,
         )}`,
         fromFile: filePath,
@@ -1463,7 +1532,7 @@ function continuationForHelperCall(
           objectLiteralStringPropertyValue(options, "lens");
     return {
       id: `atlas-self:continuation:${filePath}:${currentFunction}:${node.pos}`,
-      continuationId: stringArgument(node, 1),
+      continuationId: stringLiteralArgument(node, 1),
       kind: targetLens === null ? "SwitchProjection" : null,
       priority:
         options === null
@@ -1477,7 +1546,7 @@ function continuationForHelperCall(
       functionName: currentFunction,
       filePath,
       targetLens,
-      targetProjection: stringArgument(node, 2),
+      targetProjection: stringLiteralArgument(node, 2),
       routeRelationMember: "ProjectionOf",
       source: sourceRangeForNode(sourceFile, filePath, node),
     };
@@ -1486,7 +1555,7 @@ function continuationForHelperCall(
     const options = objectArgument(node, 5);
     return {
       id: `atlas-self:continuation:${filePath}:${currentFunction}:${node.pos}`,
-      continuationId: stringArgument(node, 1),
+      continuationId: stringLiteralArgument(node, 1),
       kind: "NextPage",
       priority:
         options === null
@@ -1571,7 +1640,7 @@ function continuationForRowContinuationBuilderCall(
   const options = objectArgument(node, 4);
   return {
     id: `atlas-self:continuation:${filePath}:${currentFunction}:${node.pos}`,
-    continuationId: stringArgument(node, 0),
+    continuationId: stringLiteralArgument(node, 0),
     kind: methodSpec.kind,
     priority:
       options === null
@@ -1636,7 +1705,7 @@ function continuationForSemanticRouteBuilderCall(
   const instance = objectArgument(node, 2);
   return {
     id: `atlas-self:continuation:${filePath}:${currentFunction}:${node.pos}`,
-    continuationId: stringArgument(node, 1),
+    continuationId: stringLiteralArgument(node, 1),
     kind:
       instance === null
         ? null
@@ -1689,16 +1758,6 @@ function semanticRouteSpecPropertyName(
     return node.name.text;
   }
   return node.getText(sourceFile);
-}
-
-function stringArgument(
-  node: ts.CallExpression,
-  index: number,
-): string | null {
-  const argument = node.arguments[index];
-  return argument !== undefined && isStringLiteralLike(argument)
-    ? argument.text
-    : null;
 }
 
 function objectArgument(
@@ -2458,6 +2517,105 @@ function axisMapperPressureForFunctionLike(
   ];
 }
 
+function optionalObjectSpreadPressureForObjectLiteral(
+  sourceFile: ts.SourceFile,
+  filePath: string,
+  functionName: string,
+  node: ts.ObjectLiteralExpression,
+): readonly AtlasSelfAxisPressureRow[] {
+  const optionalSpreads = node.properties.flatMap((property) =>
+    optionalObjectSpreadPropertyNames(property, sourceFile),
+  );
+  if (optionalSpreads.length === 0) {
+    return [];
+  }
+
+  const propertyNames = uniqueSortedStrings(optionalSpreads.flatMap((entry) => entry));
+  return [
+    {
+      id: `atlas-self:axis-pressure:optional-object-spread:${filePath}:${node.pos}:${node.end}`,
+      kind: AtlasSelfAxisPressureKind.OptionalObjectSpread,
+      axis: "object-construction",
+      axisField: null,
+      valueSpace: "optional-spread-properties",
+      axisId: "object-construction:optional-spread",
+      sourceName: functionName,
+      filePath,
+      sourceAxes: propertyNames,
+      targetAxes: ["object-literal"],
+      signals: [
+        `conditional-spread-count:${optionalSpreads.length}`,
+        ...propertyNames.map((propertyName) => `property:${propertyName}`),
+      ],
+      pressure: optionalSpreads.length >= 5 ? "high" : optionalSpreads.length >= 2 ? "medium" : "low",
+      source: sourceRangeForNode(sourceFile, filePath, node),
+      summary: `${functionName} builds an object literal with ${optionalSpreads.length} conditional empty-object spread branch(es).`,
+    },
+  ];
+}
+
+function optionalObjectSpreadPropertyNames(
+  property: ts.ObjectLiteralElementLike,
+  sourceFile: ts.SourceFile,
+): readonly string[] {
+  if (!ts.isSpreadAssignment(property)) {
+    return [];
+  }
+
+  const expression = unwrapExpression(property.expression);
+  if (!ts.isConditionalExpression(expression)) {
+    return [];
+  }
+
+  const whenTrue = optionalObjectLiteral(expression.whenTrue, sourceFile);
+  const whenFalse = optionalObjectLiteral(expression.whenFalse, sourceFile);
+  if (whenTrue?.kind === "empty" && whenFalse?.kind === "properties") {
+    return whenFalse.propertyNames;
+  }
+  if (whenFalse?.kind === "empty" && whenTrue?.kind === "properties") {
+    return whenTrue.propertyNames;
+  }
+  return [];
+}
+
+function optionalObjectLiteral(
+  expression: ts.Expression,
+  sourceFile: ts.SourceFile,
+): { readonly kind: "empty" } | { readonly kind: "properties"; readonly propertyNames: readonly string[] } | null {
+  const unwrapped = unwrapExpression(expression);
+  if (!ts.isObjectLiteralExpression(unwrapped)) {
+    return null;
+  }
+  if (unwrapped.properties.length === 0) {
+    return { kind: "empty" };
+  }
+  const propertyNames = uniqueSortedStrings(
+    unwrapped.properties.flatMap((property) => objectLiteralElementNames(property, sourceFile)),
+  );
+  return propertyNames.length === 0
+    ? null
+    : { kind: "properties", propertyNames };
+}
+
+function objectLiteralElementNames(
+  property: ts.ObjectLiteralElementLike,
+  sourceFile: ts.SourceFile,
+): readonly string[] {
+  if (ts.isShorthandPropertyAssignment(property)) {
+    return [property.name.text];
+  }
+  if (
+    ts.isPropertyAssignment(property) ||
+    ts.isMethodDeclaration(property) ||
+    ts.isGetAccessorDeclaration(property) ||
+    ts.isSetAccessorDeclaration(property)
+  ) {
+    const name = propertyNameText(property.name, sourceFile);
+    return name === null ? [] : [name];
+  }
+  return [];
+}
+
 function axisMapperFunctionPressure(
   targetAxes: readonly string[],
   sourceAxes: readonly string[],
@@ -2725,12 +2883,6 @@ function axisLikeSuffix(text: string): string | null {
   return match?.[0] ?? null;
 }
 
-function lowerFirst(text: string): string {
-  return text.length === 0
-    ? text
-    : `${text[0]!.toLowerCase()}${text.slice(1)}`;
-}
-
 function isStringlyAxisType(typeText: string): boolean {
   return (
     typeText === "string" ||
@@ -2792,15 +2944,6 @@ function sourceRangeForNode(
 
 function lineCountForSourceRange(source: SourceRange): number {
   return source.end.line - source.start.line + 1;
-}
-
-function stableHash(value: string): string {
-  let hash = 0x811c9dc5;
-  for (let index = 0; index < value.length; index += 1) {
-    hash ^= value.charCodeAt(index);
-    hash = Math.imul(hash, 0x01000193);
-  }
-  return (hash >>> 0).toString(36);
 }
 
 function compareByName(

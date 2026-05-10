@@ -6,6 +6,7 @@ import ts from "typescript";
 import {
   objectLiteralStringPropertyValue,
   ownerNameForNode,
+  toPosixPath,
 } from "../../source/index.js";
 import {
   aureliaDecoratorExportNameForExpression,
@@ -72,7 +73,7 @@ export function readAureliaResourceNameConvention(
 
 /** Mirror the framework/plugin-conventions file-name resource convention. */
 export function conventionalResourceNameForFilePath(filePath: string): string {
-  const parsed = path.posix.parse(normalizeProjectPath(filePath));
+  const parsed = path.posix.parse(toPosixPath(filePath));
   const name = parsed.name === "index" ? path.posix.basename(parsed.dir) : parsed.name;
   return kebabCase(name);
 }
@@ -180,7 +181,7 @@ export function hasConventionalTemplatePair(fileName: string): boolean {
 }
 
 function conventionalTemplateCandidates(fileName: string): readonly string[] {
-  const normalized = normalizeProjectPath(fileName);
+  const normalized = toPosixPath(fileName);
   const extension = path.posix.extname(normalized);
   const withoutExtension = extension.length === 0
     ? normalized
@@ -189,10 +190,6 @@ function conventionalTemplateCandidates(fileName: string): readonly string[] {
     `${withoutExtension}${htmlTemplateExtension}`,
     `${withoutExtension}-view${htmlTemplateExtension}`,
   ];
-}
-
-function normalizeProjectPath(filePath: string): string {
-  return filePath.replace(/\\/g, "/");
 }
 
 function camelCase(input: string): string {

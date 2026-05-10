@@ -372,14 +372,10 @@ export class FrameworkRowContinuationBuilder {
         lens: init.lens,
         locus: { kind: LocusKind.SourceRange, range: init.source },
         projection: init.projection,
-        ...(init.filters === undefined ? {} : { filters: init.filters }),
-        ...((init.budget ?? this.#inquiry.budget) === undefined
-          ? {}
-          : { budget: init.budget ?? this.#inquiry.budget }),
+        filters: init.filters,
+        budget: init.budget ?? this.#inquiry.budget,
       },
-      ...(this.#evidence === undefined
-        ? {}
-        : { evidence: evidenceArray(this.#evidence) }),
+      evidence: this.#evidence === undefined ? undefined : evidenceArray(this.#evidence),
       route: route(
         init.plane,
         init.relation,
@@ -408,16 +404,12 @@ export function projectionContinuation(
     rationale,
     inquiry: {
       ...inquiry,
-      ...(options.lens === undefined ? {} : { lens: options.lens }),
+      lens: targetLens,
       projection,
-      ...(options.filters === undefined
-        ? {}
-        : { filters: options.filters }),
+      filters: options.filters ?? inquiry.filters,
       page: undefined,
     },
-    ...(options.evidence === undefined
-      ? {}
-      : { evidence: evidenceArray(options.evidence) }),
+    evidence: options.evidence === undefined ? undefined : evidenceArray(options.evidence),
     route: route(
       NavigationPlane.Semantic,
       NavigationRelation.ProjectionOf,

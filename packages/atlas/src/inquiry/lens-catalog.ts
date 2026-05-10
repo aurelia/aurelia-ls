@@ -438,6 +438,11 @@ export const LensCatalog: readonly LensSpec[] = [
           "Function, method, constructor, and accessor bodies with source-span size.",
       },
       {
+        id: "function-duplicates",
+        summary:
+          "Grouped duplicate top-level helper names across files with exact body and AST body-shape fingerprint signals.",
+      },
+      {
         id: "call-sites",
         summary:
           "Exact semantic-runtime call and constructor invocations resolved through the TypeScript checker, with owner function/class and target declaration.",
@@ -456,6 +461,21 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "symbol-dependencies",
         summary:
           "Grouped checker-backed symbol dependencies between semantic-runtime source files and admitted package targets.",
+      },
+      {
+        id: "kernel-records",
+        summary:
+          "Source-level KernelStoreRecord construction sites with record kind, owner function/class, and visible product/predicate/seam/evidence vocabulary expressions.",
+      },
+      {
+        id: "kernel-batches",
+        summary:
+          "Source-level KernelStoreBatch construction and direct commit sites with records expression, batch label, commit receiver, owner function/class, and source range.",
+      },
+      {
+        id: "field-provenance",
+        summary:
+          "Source-level FieldProvenance construction sites with field names, provenance handle expressions, owners, and source ranges.",
       },
       {
         id: "profile",
@@ -501,6 +521,18 @@ export const LensCatalog: readonly LensSpec[] = [
         summary: "Filter module rows to files with at least this many function-like body surfaces.",
       },
       {
+        id: "minFunctionCount",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter duplicate function groups to names with at least this many top-level function surfaces.",
+      },
+      {
+        id: "minFileCount",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter duplicate function groups to names present in at least this many files.",
+      },
+      {
         id: "minLargeFunctionCount",
         role: ParameterRole.Filter,
         summary: "Filter module rows to files with at least this many large function-like bodies.",
@@ -524,6 +556,18 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "minCrossAreaCallSiteCount",
         role: ParameterRole.Filter,
         summary: "Filter function rows to bodies with at least this many cross-area call sites.",
+      },
+      {
+        id: "minRepeatedBodyFingerprintCount",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter duplicate function groups to names with at least this many exact body fingerprints repeated across files.",
+      },
+      {
+        id: "minRepeatedBodyShapeFingerprintCount",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter duplicate function groups to names with at least this many AST/control-flow body-shape fingerprints repeated across files.",
       },
       {
         id: "minMethodCount",
@@ -597,6 +641,14 @@ export const LensCatalog: readonly LensSpec[] = [
           "typeReferenceCount",
           "symbolName",
           "usageRole",
+          "recordKind",
+          "owner",
+          "label",
+          "labelLiteral",
+          "fieldName",
+          "functionCount",
+          "bodyFingerprint",
+          "bodyShapeFingerprint",
         ],
       },
       {
@@ -618,6 +670,18 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "functionName",
         role: ParameterRole.Filter,
         summary: "Filter function rows by exact function surface name.",
+      },
+      {
+        id: "bodyFingerprint",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter function rows by normalized body fingerprint; useful for following duplicate-body pressure.",
+      },
+      {
+        id: "bodyShapeFingerprint",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter function rows by AST/control-flow body fingerprint; useful for following duplicate-shape pressure.",
       },
       {
         id: "parentFunctionName",
@@ -668,6 +732,88 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Filter,
         summary: "Filter call-site rows by call or new.",
         values: ["call", "new"],
+      },
+      {
+        id: "constructionKind",
+        role: ParameterRole.Filter,
+        summary: "Filter kernel-record rows by new-expression or object-literal construction.",
+        values: ["new-expression", "object-literal"],
+      },
+      {
+        id: "recordKind",
+        role: ParameterRole.Filter,
+        summary: "Filter kernel-record rows by exact KernelStoreRecord discriminator.",
+      },
+      {
+        id: "committed",
+        role: ParameterRole.Filter,
+        summary: "Filter kernel-batch rows by whether construction is immediately committed.",
+        values: ["true", "false"],
+      },
+      {
+        id: "recordsExpression",
+        role: ParameterRole.Filter,
+        summary: "Filter kernel-batch rows by exact records argument expression.",
+      },
+      {
+        id: "labelExpression",
+        role: ParameterRole.Filter,
+        summary: "Filter kernel-batch rows by exact label argument expression.",
+      },
+      {
+        id: "labelLiteral",
+        role: ParameterRole.Filter,
+        summary: "Filter kernel-batch rows by exact string literal label when present.",
+      },
+      {
+        id: "commitReceiverExpression",
+        role: ParameterRole.Filter,
+        summary: "Filter kernel-batch rows by exact commit receiver expression.",
+      },
+      {
+        id: "fieldName",
+        role: ParameterRole.Filter,
+        summary: "Filter field-provenance rows by exact literal field name.",
+      },
+      {
+        id: "fieldNameExpression",
+        role: ParameterRole.Filter,
+        summary: "Filter field-provenance rows by exact field-name argument expression.",
+      },
+      {
+        id: "provenanceExpression",
+        role: ParameterRole.Filter,
+        summary: "Filter field-provenance rows by exact provenance-handle argument expression.",
+      },
+      {
+        id: "ownerClassName",
+        role: ParameterRole.Filter,
+        summary: "Filter product record/provenance rows by exact owning class name.",
+      },
+      {
+        id: "ownerFunctionName",
+        role: ParameterRole.Filter,
+        summary: "Filter product record/provenance rows by exact owning function or method surface name.",
+      },
+      {
+        id: "productKindExpression",
+        role: ParameterRole.Filter,
+        summary: "Filter kernel-record rows by exact visible product kind expression.",
+      },
+      {
+        id: "predicateKeyExpression",
+        role: ParameterRole.Filter,
+        summary: "Filter kernel-record rows by exact visible claim predicate expression.",
+      },
+      {
+        id: "seamKindExpression",
+        role: ParameterRole.Filter,
+        summary: "Filter kernel-record rows by exact visible open-seam kind expression.",
+      },
+      {
+        id: "evidenceKindExpression",
+        role: ParameterRole.Filter,
+        summary: "Filter kernel-record rows by exact visible evidence kind expression.",
       },
       {
         id: "calleeName",
@@ -765,6 +911,20 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Execution,
         summary:
           "For the profile projection, include checker-backed call-site phases when true; false profiles the structure lane used by projections that only need source, import, declaration, module, cycle, or class rows.",
+        values: ["true", "false"],
+      },
+      {
+        id: "includeCallDetails",
+        role: ParameterRole.Execution,
+        summary:
+          "For call-sites and profile projections, include expensive checker callee type and signature displays; ordinary call topology keeps this false.",
+        values: ["true", "false"],
+      },
+      {
+        id: "includeKernelRecords",
+        role: ParameterRole.Execution,
+        summary:
+          "For the profile projection, include KernelStoreRecord construction and KernelStoreBatch source-flow phases when true; ordinary structure projections skip them unless requested.",
         values: ["true", "false"],
       },
       {
@@ -2970,6 +3130,78 @@ export const LensCatalog: readonly LensSpec[] = [
     defaultBudget: { rows: 100, evidencePerSubject: 4 },
   },
   {
+    id: LensId.FrameworkErrors,
+    family: LensFamily.Framework,
+    stage: LensStage.Implemented,
+    summary:
+      "Inspect Aurelia framework error/event code definitions, mapped messages, and usage sites.",
+    supportedLoci: [
+      LocusKind.Repo,
+      LocusKind.RepoArea,
+      LocusKind.Package,
+      LocusKind.SourceFile,
+      LocusKind.Symbol,
+    ],
+    requiredSubstrates: [
+      SubstrateId.TypeScriptProgram,
+    ],
+    projections: [
+      {
+        id: "summary",
+        summary:
+          "Roll up framework ErrorNames/Events code definitions, mapped messages, and usage mechanisms.",
+      },
+      {
+        id: "packages",
+        summary:
+          "Framework package rows with error-code, mapped-message, usage, throw, warning, and raw Error counts.",
+      },
+      {
+        id: "codes",
+        summary:
+          "Source-backed ErrorNames/Events member rows with code labels, mapped messages, and usage counts.",
+      },
+      {
+        id: "usages",
+        summary:
+          "Source-backed createMappedError/getMessage/raw Error usage rows with effect classification.",
+      },
+    ],
+    parameters: [
+      {
+        id: "packageId",
+        role: ParameterRole.Filter,
+        summary: "Filter framework error rows by admitted Aurelia framework package id.",
+      },
+      {
+        id: "enumName",
+        role: ParameterRole.Filter,
+        summary: "Filter definitions/usages to ErrorNames or Events.",
+      },
+      {
+        id: "mechanism",
+        role: ParameterRole.Filter,
+        summary: "Filter usage rows by mechanism such as createMappedError, getMessage, or raw-new-error.",
+      },
+      {
+        id: "effect",
+        role: ParameterRole.Filter,
+        summary: "Filter usage rows by effect such as throw, warning, return, new-error, or call.",
+      },
+      {
+        id: "query",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter rows by exact substring across package, code name, code label, message, mechanism, and summary.",
+      },
+    ],
+    outputKinds: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.SourceSpan,
+    ],
+    defaultBudget: { rows: 80, evidencePerSubject: 4 },
+  },
+  {
     id: LensId.FrameworkAdmission,
     family: LensFamily.Framework,
     stage: LensStage.Implemented,
@@ -3422,7 +3654,7 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "axis-pressure",
         summary:
-          "Exact enum, mapper-function, stringly-field, and parallel-axis pressure rows.",
+          "Exact enum, mapper-function, stringly-field, optional object-spread, and parallel-axis pressure rows.",
       },
       {
         id: "row-surfaces",
@@ -3442,6 +3674,11 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "functions",
         summary: "Top-level function and class-method declaration surfaces.",
+      },
+      {
+        id: "function-shapes",
+        summary:
+          "Repeated canonical AST/control-flow function body-shape groups for finding split-brain helpers.",
       },
     ],
     parameters: [
@@ -3483,6 +3720,18 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Filter,
         summary:
           "Filter projection or function-surface rows by exact function name.",
+      },
+      {
+        id: "bodyFingerprint",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter function-surface rows by normalized body fingerprint; useful for following duplicate-body pressure.",
+      },
+      {
+        id: "bodyShapeFingerprint",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter function-surface rows by AST/control-flow body fingerprint; useful for following duplicate-shape pressure.",
       },
       {
         id: "targetLens",
@@ -3686,7 +3935,7 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "minLineCount",
         role: ParameterRole.Filter,
-        summary: "Filter class or function surfaces to declarations spanning at least this many lines.",
+        summary: "Filter class, function, or repeated function-shape surfaces to declarations or grouped declarations spanning at least this many lines.",
       },
       {
         id: "minOutgoingLocalImportCount",
@@ -3707,6 +3956,21 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "minCallCount",
         role: ParameterRole.Filter,
         summary: "Filter function surfaces to declarations containing at least this many direct call expressions.",
+      },
+      {
+        id: "minFunctionCount",
+        role: ParameterRole.Filter,
+        summary: "Filter repeated function-shape groups to at least this many grouped declarations.",
+      },
+      {
+        id: "minNameCount",
+        role: ParameterRole.Filter,
+        summary: "Filter repeated function-shape groups to at least this many distinct declaration names.",
+      },
+      {
+        id: "minFileCount",
+        role: ParameterRole.Filter,
+        summary: "Filter repeated function-shape groups to at least this many source files.",
       },
       {
         id: "minUniqueCallTargetCount",

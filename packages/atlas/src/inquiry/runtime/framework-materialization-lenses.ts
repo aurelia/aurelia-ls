@@ -734,23 +734,18 @@ function routeForProviderSeed(
       : []),
     ...dependencyRowsFromConfigurationDiWorld(sourceProject, row, id),
   ];
-  return {
+  const result = {
     id,
     packageId: row.packageId,
     packageName: row.packageName,
     key,
     keyEndpoint: row.from,
-    ...(row.strategy === undefined ? {} : { strategy: row.strategy }),
     routeKind: route.routeKind,
     provider: row.to,
     providerIdentity,
-    ...(row.to.expression?.type === undefined
-      ? {}
-      : { providerType: row.to.expression.type }),
     relationshipAtomId: row.id,
     closure: route.routeClosure(row.closure),
     source: row.source,
-    ...(row.to.source === undefined ? {} : { providerSource: row.to.source }),
     dependencies,
     summary: route.summarizeRoute(
       key,
@@ -758,6 +753,16 @@ function routeForProviderSeed(
       row.strategy,
     ),
   };
+  if (row.strategy !== undefined) {
+    Object.assign(result, { strategy: row.strategy });
+  }
+  if (row.to.expression?.type !== undefined) {
+    Object.assign(result, { providerType: row.to.expression.type });
+  }
+  if (row.to.source !== undefined) {
+    Object.assign(result, { providerSource: row.to.source });
+  }
+  return result;
 }
 
 function routeForConfigurationWorldSlot(
@@ -898,7 +903,7 @@ function endpointForDiWorldValueRef(
     name: ref.name,
     packageId: packageInfo.packageId,
     packageName: packageInfo.packageName,
-    ...(ref.source === undefined ? {} : { source: ref.source }),
+    source: ref.source,
   };
 }
 
@@ -1041,14 +1046,12 @@ function instantiationForRoute(
     packageName: row.packageName,
     key: row.key,
     routeKind: row.routeKind,
-    ...(row.strategy === undefined ? {} : { strategy: row.strategy }),
+    strategy: row.strategy,
     keyEndpoint: row.keyEndpoint,
     provider: row.provider,
     providerIdentity: row.providerIdentity,
-    ...(row.providerType === undefined ? {} : { providerType: row.providerType }),
-    ...(row.providerSource === undefined
-      ? {}
-      : { providerSource: row.providerSource }),
+    providerType: row.providerType,
+    providerSource: row.providerSource,
     relationshipAtomId: row.relationshipAtomId,
     closure: instantiationClosureForRoute(row, constructionSites),
     constructionSites,
@@ -1079,7 +1082,7 @@ function constructionSitesForRoute(
       siteKind: constructionSiteKindForAtom(atom),
       relation: atom.relation,
       mechanism: atom.mechanism,
-      ...(atom.strategy === undefined ? {} : { strategy: atom.strategy }),
+      strategy: atom.strategy,
       from: atom.from,
       to: atom.to,
       source: atom.source,
@@ -1128,7 +1131,7 @@ function dependsOnKeyRelationship(
     relation: FrameworkRelationshipRelation.DependsOnKey,
     key: dependency.key,
     routeKind: route.routeKind,
-    ...(route.strategy === undefined ? {} : { strategy: route.strategy }),
+    strategy: route.strategy,
     from: route.keyEndpoint,
     to: {
       kind: FrameworkRelationshipEndpointKind.DiKey,
@@ -1516,26 +1519,22 @@ function frameworkMaterializationEvidenceForRelationship(
 function evidenceForInstantiation(
   row: FrameworkMaterializationInstantiationRow,
 ): Evidence {
-  return {
-    id: row.id,
-    kind: EvidenceKind.TypeFact,
-    role: EvidenceRole.Subject,
-    confidence:
-      row.closure === FrameworkRelationshipClosure.Partial
-        ? EvidenceConfidence.Strong
-        : EvidenceConfidence.Exact,
-    summary: row.summary,
-    source: row.source,
-    data: row,
-  };
+  return evidenceForClosureBackedRow(row, EvidenceKind.TypeFact);
 }
 
 function evidenceForResourceInstantiation(
   row: FrameworkResourceInstantiationRow,
 ): Evidence {
+  return evidenceForClosureBackedRow(row, EvidenceKind.ResourceDefinition);
+}
+
+function evidenceForClosureBackedRow(
+  row: FrameworkMaterializationInstantiationRow | FrameworkResourceInstantiationRow,
+  kind: EvidenceKind,
+): Evidence {
   return {
     id: row.id,
-    kind: EvidenceKind.ResourceDefinition,
+    kind,
     role: EvidenceRole.Subject,
     confidence:
       row.closure === FrameworkRelationshipClosure.Partial
@@ -1573,7 +1572,7 @@ function callbackOpenSeam(
     id: `framework-materialization:callback:${row.relationshipAtomId}`,
     kind: OpenSeamKind.DynamicRuntime,
     summary: `${row.key} has a visible callback provider. ${dependencySummary}`,
-    ...(evidence === undefined ? {} : { evidence }),
+    evidence,
     basis: frameworkMaterializationBasisSummary(),
     data: row,
   };

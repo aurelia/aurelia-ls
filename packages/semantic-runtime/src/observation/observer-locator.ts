@@ -1,6 +1,7 @@
 import ts from 'typescript';
 import { auLink } from '../kernel/au-link.js';
 import type { AddressHandle } from '../kernel/handles.js';
+import { localKeyPart } from '../kernel/local-key.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   CheckerTypeProjector,
@@ -20,10 +21,13 @@ import {
   RuntimeBindingTargetAccessStrategy,
   RuntimeBindingTargetKind,
 } from '../template/runtime-binding.js';
-import { HtmlNamespaceKind } from '../template/html-ir.js';
+import {
+  HtmlNamespaceKind,
+  normalizeHtmlTagName,
+} from '../template/html-ir.js';
 import { isStandardSvgAttribute } from './svg-analyzer-data.generated.js';
 
-export class ObserverLocatorLookupInput {
+export class ObserverLocatorLookupRequest {
   constructor(
     /** Store-local key for checker projections forced by this observer lookup. */
     readonly localKey: string,
@@ -47,8 +51,8 @@ export class ObserverLocatorLookupInput {
     readonly allowDirtyCheck: boolean = false,
   ) {}
 
-  withLookup(lookup: RuntimeBindingTargetAccessLookup): ObserverLocatorLookupInput {
-    return new ObserverLocatorLookupInput(
+  withLookup(lookup: RuntimeBindingTargetAccessLookup): ObserverLocatorLookupRequest {
+    return new ObserverLocatorLookupRequest(
       this.localKey,
       lookup,
       this.targetKind,
@@ -65,7 +69,7 @@ export class ObserverLocatorLookupInput {
 
 export class ObserverLocatorLookupResult {
   static open(
-    input: ObserverLocatorLookupInput,
+    input: ObserverLocatorLookupRequest,
     reason: string,
   ): ObserverLocatorLookupResult {
     return new ObserverLocatorLookupResult(
@@ -472,7 +476,7 @@ export class NodeObserverLocator {
     });
   }
 
-  handles(input: ObserverLocatorLookupInput): boolean {
+  handles(input: ObserverLocatorLookupRequest): boolean {
     return input.targetKind === RuntimeBindingTargetKind.Node;
   }
 
@@ -532,21 +536,21 @@ export class NodeObserverLocator {
     }
   }
 
-  getAccessor(input: ObserverLocatorLookupInput): ObserverLocatorLookupResult {
+  getAccessor(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
     return this.lookup(input.withLookup(RuntimeBindingTargetAccessLookup.Accessor));
   }
 
-  getObserver(input: ObserverLocatorLookupInput): ObserverLocatorLookupResult {
+  getObserver(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
     return this.lookup(input.withLookup(RuntimeBindingTargetAccessLookup.Observer));
   }
 
   getNodeObserverConfig(tagName: string, key: string): NodeObserverConfig | undefined {
-    return this.events.get(normalizeTagName(tagName))?.get(key)
+    return this.events.get(normalizeHtmlTagName(tagName))?.get(key)
       ?? this.globalEvents.get(key);
   }
 
-  getNodeObserver(input: ObserverLocatorLookupInput): RuntimeBindingTargetAccessStrategy | null {
-    const tagName = input.tagName == null ? null : normalizeTagName(input.tagName);
+  getNodeObserver(input: ObserverLocatorLookupRequest): RuntimeBindingTargetAccessStrategy | null {
+    const tagName = input.tagName == null ? null : normalizeHtmlTagName(input.tagName);
     if (tagName == null) {
       return null;
     }
@@ -554,8 +558,8 @@ export class NodeObserverLocator {
     return config == null ? null : nodeObserverStrategyForConfig(config);
   }
 
-  private lookup(input: ObserverLocatorLookupInput): ObserverLocatorLookupResult {
-    const tagName = input.tagName == null ? null : normalizeTagName(input.tagName);
+  private lookup(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
+    const tagName = input.tagName == null ? null : normalizeHtmlTagName(input.tagName);
     const config = tagName == null ? undefined : this.getNodeObserverConfig(tagName, input.targetProperty);
     const hasAccessorOverride = tagName != null && this.hasAccessorOverride(tagName, input.targetProperty);
     return this.observerLocator.createObserver(input, config, this.allowDirtyCheck, hasAccessorOverride);
@@ -569,7 +573,7 @@ export class NodeObserverLocator {
     if (config == null || key === '') {
       return;
     }
-    const nodeNameKey = normalizeTagName(nodeName);
+    const nodeNameKey = normalizeHtmlTagName(nodeName);
     let nodeConfig = this.events.get(nodeNameKey);
     if (nodeConfig == null) {
       nodeConfig = new Map();
@@ -582,7 +586,7 @@ export class NodeObserverLocator {
     if (key === '') {
       return;
     }
-    const tagNameKey = normalizeTagName(tagName);
+    const tagNameKey = normalizeHtmlTagName(tagName);
     let overrides = this.overrides.get(tagNameKey);
     if (overrides == null) {
       overrides = new Set();
@@ -592,7 +596,7 @@ export class NodeObserverLocator {
   }
 
   private hasAccessorOverride(tagName: string, key: string): boolean {
-    return this.globalOverrides.has(key) || this.overrides.get(normalizeTagName(tagName))?.has(key) === true;
+    return this.globalOverrides.has(key) || this.overrides.get(normalizeHtmlTagName(tagName))?.has(key) === true;
   }
 }
 
@@ -614,11 +618,11 @@ export class ObserverLocator {
     this.adapters.push(adapter);
   }
 
-  getAccessor(input: ObserverLocatorLookupInput): ObserverLocatorLookupResult {
+  getAccessor(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
     return this.lookup(input.withLookup(RuntimeBindingTargetAccessLookup.Accessor));
   }
 
-  getObserver(input: ObserverLocatorLookupInput): ObserverLocatorLookupResult {
+  getObserver(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
     return this.lookup(input.withLookup(RuntimeBindingTargetAccessLookup.Observer));
   }
 
@@ -642,7 +646,7 @@ export class ObserverLocator {
     return null;
   }
 
-  private lookup(input: ObserverLocatorLookupInput): ObserverLocatorLookupResult {
+  private lookup(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
     if (input.lookup === RuntimeBindingTargetAccessLookup.Open) {
       return this.open(input, 'Binding mode did not close to an ObserverLocator accessor or observer lookup.');
     }
@@ -661,9 +665,9 @@ export class ObserverLocator {
     return this.open(input, 'Runtime target kind is not closed enough to resolve ObserverLocator lookup.');
   }
 
-  private resolveTargetType(input: ObserverLocatorLookupInput): CheckerTypeReference | null {
+  private resolveTargetType(input: ObserverLocatorLookupRequest): CheckerTypeReference | null {
     if (input.targetKind === RuntimeBindingTargetKind.Node) {
-      const tagName = input.tagName == null ? null : normalizeTagName(input.tagName);
+      const tagName = input.tagName == null ? null : normalizeHtmlTagName(input.tagName);
       if (tagName == null) {
         return null;
       }
@@ -680,12 +684,12 @@ export class ObserverLocator {
   }
 
   createObserver(
-    input: ObserverLocatorLookupInput,
+    input: ObserverLocatorLookupRequest,
     config: NodeObserverConfig | undefined,
     nodeAllowDirtyCheck: boolean,
     hasAccessorOverride: boolean,
   ): ObserverLocatorLookupResult {
-    const tagName = input.tagName == null ? null : normalizeTagName(input.tagName);
+    const tagName = input.tagName == null ? null : normalizeHtmlTagName(input.tagName);
     if (tagName == null) {
       return this.open(input, 'Native node target did not carry a closed HTML tag name.');
     }
@@ -723,7 +727,7 @@ export class ObserverLocator {
     );
   }
 
-  private lookupObject(input: ObserverLocatorLookupInput): ObserverLocatorLookupResult {
+  private lookupObject(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
     const targetType = this.resolveReferenceType(input, input.targetType);
     const property = targetType == null ? null : this.resolveProperty(input, targetType);
     const strategy = objectAccessStrategy(input.lookup, property);
@@ -750,7 +754,7 @@ export class ObserverLocator {
   }
 
   private resolveReferenceType(
-    input: ObserverLocatorLookupInput,
+    input: ObserverLocatorLookupRequest,
     reference: CheckerTypeReference | null,
   ): TypeResolution | null {
     if (input.typeSystem == null || reference?.productHandle == null) {
@@ -772,7 +776,7 @@ export class ObserverLocator {
   }
 
   private resolveNodeType(
-    input: ObserverLocatorLookupInput,
+    input: ObserverLocatorLookupRequest,
     tagName: string,
     namespace: HtmlNamespaceKind,
   ): TypeResolution | null {
@@ -818,7 +822,7 @@ export class ObserverLocator {
   }
 
   private resolveProperty(
-    input: ObserverLocatorLookupInput,
+    input: ObserverLocatorLookupRequest,
     target: TypeResolution,
   ): PropertyResolution {
     const symbol = target.checker.getPropertyOfType(target.type, input.targetProperty) ?? null;
@@ -835,14 +839,14 @@ export class ObserverLocator {
     return {
       symbol,
       type: propertyType,
-      typeReference: this.projectTypeReference(input, target.checker, propertyType, `property:${encodeLocal(input.targetProperty)}`, target.location),
+      typeReference: this.projectTypeReference(input, target.checker, propertyType, `property:${localKeyPart(input.targetProperty)}`, target.location),
       exists: true,
       isWritable: isWritableProperty(symbol),
     };
   }
 
   private projectTypeReference(
-    input: ObserverLocatorLookupInput,
+    input: ObserverLocatorLookupRequest,
     checker: ts.TypeChecker,
     type: ts.Type,
     suffix: string,
@@ -860,7 +864,7 @@ export class ObserverLocator {
   }
 
   private open(
-    input: ObserverLocatorLookupInput,
+    input: ObserverLocatorLookupRequest,
     reason: string,
   ): ObserverLocatorLookupResult {
     return ObserverLocatorLookupResult.open(input, reason);
@@ -1123,12 +1127,4 @@ function undefinedNode(checker: ts.TypeChecker): ts.Node {
 function checkerLocationFromProgram(checker: ts.TypeChecker): ts.SourceFile {
   return checker.getAmbientModules()[0]?.declarations?.[0]?.getSourceFile()
     ?? ts.createSourceFile('semantic-runtime-observer-locator.ts', '', ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
-}
-
-function normalizeTagName(tagName: string): string {
-  return tagName.toUpperCase();
-}
-
-function encodeLocal(value: string): string {
-  return encodeURIComponent(value).replace(/%/g, '_');
 }

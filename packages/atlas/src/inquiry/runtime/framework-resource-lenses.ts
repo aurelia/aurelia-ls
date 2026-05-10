@@ -251,10 +251,10 @@ function readAllFrameworkResourceConvergenceRows(
   sourceProject: SourceProject,
 ): readonly FrameworkResourceConvergenceRow[] {
   const filters: FrameworkResourceFilters = {};
-  const carrierFilters = resourceCarrierFilters(filters);
+  const carrierFilters = resourceDefinitionFilters(filters);
   const carriers = readFrameworkResourceCarriers(sourceProject, carrierFilters);
   const exportsByCarrier = groupBy(
-    readFrameworkResourceExports(sourceProject, resourceSideFilters(filters)),
+    readFrameworkResourceExports(sourceProject, resourceDefinitionFilters(filters)),
     (row) => row.carrier.id,
   );
   const admissionsByCarrier = groupBy(
@@ -264,7 +264,7 @@ function readAllFrameworkResourceConvergenceRows(
   const instantiationsByCarrier = new Map(
     readFrameworkResourceInstantiationRows(
       sourceProject,
-      resourceSideFilters(filters),
+      resourceDefinitionFilters(filters),
     ).map((row) => [resourceInstantiationCarrierId(row), row] as const),
   );
   const syntaxProductsByCarrier = groupBy(
@@ -512,16 +512,7 @@ function readResourceAdmissionRows(
   );
 }
 
-function resourceCarrierFilters(
-  filters: FrameworkResourceFilters,
-): FrameworkDiscoveryFilters {
-  return {
-    packageId: filters.packageId,
-    resourceKind: filters.resourceKind,
-  };
-}
-
-function resourceSideFilters(
+function resourceDefinitionFilters(
   filters: FrameworkResourceFilters,
 ): FrameworkDiscoveryFilters {
   return {

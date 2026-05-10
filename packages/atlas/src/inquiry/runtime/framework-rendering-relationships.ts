@@ -1,3 +1,5 @@
+import ts from "typescript";
+
 import {
   FrameworkRelationshipEndpointKind,
   FrameworkRelationshipFamily,
@@ -6,7 +8,10 @@ import {
   FrameworkRelationshipRelation,
   type FrameworkRelationshipEndpoint,
 } from "../../framework/relationships.js";
-import type { SourceProject } from "../../source/index.js";
+import {
+  requiredSourceRangeForNode,
+  type SourceProject,
+} from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 import { FrameworkBindingEffectKind } from "./framework-entities.js";
 import type {
@@ -29,6 +34,7 @@ import {
   readFrameworkRenderingSyntaxProducts,
 } from "./framework-rendering-graph.js";
 import { sourceRangeForCallSiteEntry } from "./framework-support.js";
+import { uniqueFrameworkSymbolPackageIdentity } from "./framework-symbol-package-index.js";
 
 /** Graph row derived from framework rendering catalogs. */
 export interface FrameworkRenderingRelationshipRow {
@@ -120,7 +126,7 @@ export function readFrameworkRenderingRelationships(
       syntaxProductRelationships,
     ),
     ...readFrameworkInstructionDispatches(sourceProject, filters).map(
-      instructionDispatchRelationship,
+      (row) => instructionDispatchRelationship(sourceProject, row),
     ),
     ...readFrameworkControllerCreations(sourceProject, filters).flatMap(
       controllerCreationRelationships,
@@ -137,6 +143,7 @@ export function readFrameworkRenderingRelationships(
     ...readFrameworkBindingSetups(sourceProject, filters).map(
       bindingSetupRelationship,
     ),
+    ...bindablesDefinitionRelationships(sourceProject),
   ]);
   return rows
     .filter((row) => renderingRelationshipMatches(row, filters))
@@ -148,6 +155,65 @@ export function readFrameworkRenderingRelationships(
         left.from.name.localeCompare(right.from.name) ||
         left.to.name.localeCompare(right.to.name),
     );
+}
+
+function bindablesDefinitionRelationships(
+  sourceProject: SourceProject,
+): readonly FrameworkRenderingRelationshipRow[] {
+  const sourceFile = sourceProject
+    .ownedSourceFiles()
+    .find((file) =>
+      file.fileName
+        .replace(/\\/gu, "/")
+        .endsWith("aurelia/packages/runtime-html/src/bindable.ts"),
+    );
+  if (sourceFile === undefined) {
+    return [];
+  }
+  const classDeclaration = sourceFile.statements.find(
+    (statement): statement is ts.ClassDeclaration =>
+      ts.isClassDeclaration(statement) &&
+      statement.name?.text === "BindableDefinition",
+  );
+  if (classDeclaration?.name === undefined) {
+    return [];
+  }
+  const source = requiredSourceRangeForNode(sourceProject, classDeclaration.name);
+  return [
+    {
+      id: [
+        "framework-rendering-contract",
+        "bindable-definition",
+        source.filePath,
+        source.start.line,
+        source.start.character,
+      ].join(":"),
+      family: FrameworkRelationshipFamily.Rendering,
+      relation: FrameworkRelationshipRelation.DefinesRenderingStructure,
+      mechanism: FrameworkRelationshipMechanism.SyntaxProduct,
+      phase: FrameworkRelationshipPhase.Definition,
+      packageId: "runtime-html",
+      packageName: "@aurelia/runtime-html",
+      from: {
+        kind: FrameworkRelationshipEndpointKind.Package,
+        name: "@aurelia/runtime-html",
+        packageId: "runtime-html",
+        packageName: "@aurelia/runtime-html",
+        source,
+      },
+      to: {
+        kind: FrameworkRelationshipEndpointKind.Symbol,
+        name: "BindableDefinition",
+        packageId: "runtime-html",
+        packageName: "@aurelia/runtime-html",
+        source,
+      },
+      source,
+      sourceRowId: "framework-rendering-contract:bindable-definition",
+      summary:
+        "BindableDefinition is the runtime-html definition record produced for @bindable metadata and ResourceResolver bindable tables.",
+    },
+  ];
 }
 
 function uniqueRenderingRelationships(
@@ -221,8 +287,14 @@ function syntaxProductRelationships(
 }
 
 function instructionDispatchRelationship(
+  sourceProject: SourceProject,
   row: FrameworkInstructionDispatchRow,
 ): FrameworkRenderingRelationshipRow {
+  const instructionPackage =
+    uniqueFrameworkSymbolPackageIdentity(sourceProject, row.instructionName) ?? {
+      packageId: row.packageId,
+      packageName: row.packageName,
+    };
   return {
     id: `${row.id}:relationship:dispatches-instruction`,
     family: FrameworkRelationshipFamily.Rendering,
@@ -234,8 +306,8 @@ function instructionDispatchRelationship(
     from: {
       kind: FrameworkRelationshipEndpointKind.Concept,
       name: row.instructionName ?? row.slotName,
-      packageId: row.packageId,
-      packageName: row.packageName,
+      packageId: instructionPackage.packageId,
+      packageName: instructionPackage.packageName,
       source: row.instructionSlot.source,
     },
     to: symbolEndpoint(row.rendererName, row.packageId, row.packageName),

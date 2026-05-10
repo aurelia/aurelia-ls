@@ -15,6 +15,7 @@ import {
   concreteExportTarget,
   sourceRangeForTarget,
 } from "./framework-support.js";
+import { frameworkRelationshipMatchesQuery } from "./framework-relationship-utils.js";
 
 export interface FrameworkExpressionRelationshipFilters
   extends FrameworkDiscoveryFilters {
@@ -45,7 +46,7 @@ export function readFrameworkExpressionRelationships(
   return readFrameworkExpressionEntities(sourceProject, filters)
     .map(expressionRelationship)
     .filter((row): row is FrameworkExpressionRelationshipRow => row !== null)
-    .filter((row) => expressionRelationshipMatches(row, filters))
+    .filter((row) => frameworkRelationshipMatchesQuery(row, filters))
     .sort(
       (left, right) =>
         left.packageId.localeCompare(right.packageId) ||
@@ -88,18 +89,4 @@ function expressionRelationship(
     sourceRowId: row.id,
     summary: `${row.packageName} defines expression entity ${row.exportEntry.exportName} with ${row.expressionKinds.join(", ")} role(s).`,
   };
-}
-
-function expressionRelationshipMatches(
-  row: FrameworkExpressionRelationshipRow,
-  filters: FrameworkExpressionRelationshipFilters,
-): boolean {
-  return (
-    (filters.packageId === undefined || row.packageId === filters.packageId) &&
-    (filters.relation === undefined || row.relation === filters.relation) &&
-    (filters.query === undefined ||
-      row.from.name.includes(filters.query) ||
-      row.to.name.includes(filters.query) ||
-      row.summary.includes(filters.query))
-  );
 }

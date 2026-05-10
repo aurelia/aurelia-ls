@@ -18,12 +18,14 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
-  InterfaceDiKeyIdentity,
   RegistrationIdentity,
-  StringDiKeyIdentity,
   TypeScriptDeclarationIdentity,
-  UnknownDiKeyIdentity,
 } from '../kernel/identity.js';
+import {
+  diKeyIdentityRecord,
+  type DiKeyIdentityRecord,
+  type DiKeyIdentitySeed,
+} from '../kernel/di-key-identity.js';
 import {
   MaterializationRecord,
   MaterializedProduct,
@@ -38,6 +40,7 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import { sourceNodeOrdinalLocalKey } from '../kernel/local-key.js';
 import {
   recordsForSourceOpenSeams,
 } from '../kernel/source-open-seam.js';
@@ -174,6 +177,36 @@ class RegistrationAdmissionProductEmission {
   ) {}
 }
 
+interface RegistrationObservationProductHandles {
+  readonly productHandle: ProductHandle;
+  readonly identityHandle: IdentityHandle;
+}
+
+interface RegistrationObservationProductEmission {
+  readonly records: readonly KernelStoreRecord[];
+  readonly admission: RegistrationAdmissionProduct;
+}
+
+interface RegistrationOpenSeamEmissionSet {
+  readonly records: readonly KernelStoreRecord[];
+  readonly handles: readonly OpenSeamHandle[];
+}
+
+interface RegistrationRegistryParameterEmissionSet {
+  readonly records: readonly KernelStoreRecord[];
+  readonly references: readonly RegistrationValueReference[];
+  readonly claimTargets: readonly RegistrationClaimTarget[];
+  readonly provenanceHandles: readonly ProvenanceHandle[];
+}
+
+interface RegistrationObservationSupportSet {
+  readonly records: readonly KernelStoreRecord[];
+  readonly key: RegistrationKeyEmission;
+  readonly value: RegistrationValueEmission;
+  readonly registryParameters: RegistrationRegistryParameterEmissionSet;
+  readonly seams: RegistrationOpenSeamEmissionSet;
+}
+
 /** Emits registration observations into the durable kernel graph. */
 export class RegistrationKernelEmitter {
   constructor(
@@ -216,18 +249,59 @@ export class RegistrationKernelEmitter {
     readonly admission: RegistrationAdmissionProduct;
   } {
     const records: KernelStoreRecord[] = [];
-    const local = observationLocalKey(context, observation.sourceNode, index);
+    const local = sourceNodeOrdinalLocalKey({
+      prefix: context.recordKeyPrefix,
+      sourceFile: context.sourceFile,
+      node: observation.sourceNode,
+      index,
+    });
     const source = this.recordsForObservationSource(context, observation, local);
     records.push(...source.records);
 
     const support = this.recordsForObservationSupport(context, observation, local, source);
     records.push(...support.records);
 
-    const productHandle = this.store.handles.product(`registration-admission:${local}`);
-    const registrationIdentityHandle = this.store.handles.identity(`registration-admission:${local}`);
-    records.push(this.registrationIdentityForObservation(registrationIdentityHandle, support.key.identityHandle, source));
+    const admission = this.recordsForObservationProduct(observation, local, source, support);
+    records.push(...admission.records);
+    return { records, admission: admission.admission };
+  }
 
-    const claims = this.recordsForClaims(
+  private recordsForObservationProduct(
+    observation: RegistrationAdmissionObservation,
+    local: string,
+    source: RegistrationObservationSourceSet,
+    support: RegistrationObservationSupportSet,
+  ): RegistrationObservationProductEmission {
+    const handles = this.registrationObservationProductHandles(local);
+    const claims = this.claimsForObservationProduct(observation, local, handles.productHandle, source, support);
+    const admission = this.admissionProductForObservation(
+      observation,
+      handles.productHandle,
+      handles.identityHandle,
+      source.addressHandle,
+      registrationAdmissionFieldProvenance(source, support.key, support.value, support.registryParameters),
+      support.key.reference,
+      support.value.reference,
+      support.registryParameters.references,
+    );
+    return this.registrationObservationProductEmission(local, handles, source, support, claims, admission);
+  }
+
+  private registrationObservationProductHandles(local: string): RegistrationObservationProductHandles {
+    return {
+      productHandle: this.store.handles.product(`registration-admission:${local}`),
+      identityHandle: this.store.handles.identity(`registration-admission:${local}`),
+    };
+  }
+
+  private claimsForObservationProduct(
+    observation: RegistrationAdmissionObservation,
+    local: string,
+    productHandle: ProductHandle,
+    source: RegistrationObservationSourceSet,
+    support: RegistrationObservationSupportSet,
+  ): RegistrationClaimEmission {
+    return this.recordsForClaims(
       local,
       productHandle,
       observation.keyRole,
@@ -237,24 +311,32 @@ export class RegistrationKernelEmitter {
       support.value.provenanceHandle,
       support.registryParameters.claimTargets,
     );
-    records.push(...claims.records);
+  }
 
-    const admission = this.admissionProductForObservation(
-      observation,
-      productHandle,
-      registrationIdentityHandle,
-      source.addressHandle,
-      registrationAdmissionFieldProvenance(source, support.key, support.value, support.registryParameters),
-      support.key.reference,
-      support.value.reference,
-      support.registryParameters.references,
-    );
-
-    records.push(
-      ...this.recordsForAdmissionEnvelope(local, productHandle, registrationIdentityHandle, admission.productKind, source, claims.handles, support.seams.handles),
-    );
-
-    return { records, admission: admission.admission };
+  private registrationObservationProductEmission(
+    local: string,
+    handles: RegistrationObservationProductHandles,
+    source: RegistrationObservationSourceSet,
+    support: RegistrationObservationSupportSet,
+    claims: RegistrationClaimEmission,
+    admission: RegistrationAdmissionProductEmission,
+  ): RegistrationObservationProductEmission {
+    return {
+      records: [
+        this.registrationIdentityForObservation(handles.identityHandle, support.key.identityHandle, source),
+        ...claims.records,
+        ...this.recordsForAdmissionEnvelope(
+          local,
+          handles.productHandle,
+          handles.identityHandle,
+          admission.productKind,
+          source,
+          claims.handles,
+          support.seams.handles,
+        ),
+      ],
+      admission: admission.admission,
+    };
   }
 
   private recordsForObservationSupport(
@@ -262,7 +344,7 @@ export class RegistrationKernelEmitter {
     observation: RegistrationAdmissionObservation,
     local: string,
     source: RegistrationObservationSourceSet,
-  ) {
+  ): RegistrationObservationSupportSet {
     const key = this.recordsForKey(context, observation.targetKey, local, source.addressHandle);
     const value = this.recordsForValue(context, observation.registeredValue, local);
     const registryParameters = this.recordsForRegistryParameters(context, observation.registryParameters, local);
@@ -525,26 +607,13 @@ export class RegistrationKernelEmitter {
     identityHandle: IdentityHandle,
     observation: RegistrationKeyObservation,
     addressHandle: AddressHandle,
-  ): StringDiKeyIdentity | InterfaceDiKeyIdentity | UnknownDiKeyIdentity {
-    const stringValue = stringLiteralValue(observation.node);
-    return stringValue != null
-      ? new StringDiKeyIdentity(
-        identityHandle,
-        stringValue,
-        addressHandle,
-      )
-      : isInterfaceKeyName(observation.localName)
-      ? new InterfaceDiKeyIdentity(
-        identityHandle,
-        observation.localName,
-        null,
-        addressHandle,
-      )
-      : new UnknownDiKeyIdentity(
-        identityHandle,
-        addressHandle,
-        `Registration key expression still needs DI key classification: ${observation.localName ?? ts.SyntaxKind[observation.node.kind]}.`,
-      );
+  ): DiKeyIdentityRecord {
+    return diKeyIdentityRecord(
+      identityHandle,
+      registrationKeyIdentitySeed(observation),
+      addressHandle,
+      `Registration key expression still needs DI key classification: ${observation.localName ?? ts.SyntaxKind[observation.node.kind]}.`,
+    );
   }
 
   private recordsForValue(
@@ -648,12 +717,7 @@ export class RegistrationKernelEmitter {
     context: RegistrationEmissionContext,
     observations: readonly RegistrationValueObservation[],
     local: string,
-  ): {
-    readonly records: readonly KernelStoreRecord[];
-    readonly references: readonly RegistrationValueReference[];
-    readonly claimTargets: readonly RegistrationClaimTarget[];
-    readonly provenanceHandles: readonly ProvenanceHandle[];
-  } {
+  ): RegistrationRegistryParameterEmissionSet {
     const records: KernelStoreRecord[] = [];
     const references: RegistrationValueReference[] = [];
     const claimTargets: RegistrationClaimTarget[] = [];
@@ -743,10 +807,7 @@ export class RegistrationKernelEmitter {
     context: RegistrationEmissionContext,
     seams: readonly RegistrationRecognitionOpen[],
     local: string,
-  ): {
-    readonly records: readonly KernelStoreRecord[];
-    readonly handles: readonly OpenSeamHandle[];
-  } {
+  ): RegistrationOpenSeamEmissionSet {
     return recordsForSourceOpenSeams(
       this.store,
       seams.map((seam, index) => ({
@@ -831,14 +892,24 @@ function stringLiteralValue(node: ts.Node): string | null {
   return null;
 }
 
-function isInterfaceKeyName(name: string | null): name is string {
-  return name != null && /^I[A-Z][A-Za-z0-9]*$/.test(name);
-}
-
-function observationLocalKey(
-  context: RegistrationEmissionContext,
-  node: ts.Node,
-  index: number,
-): string {
-  return `${context.recordKeyPrefix}:${node.getStart(context.sourceFile)}:${node.end}:${index}`;
+function registrationKeyIdentitySeed(
+  observation: RegistrationKeyObservation,
+): DiKeyIdentitySeed {
+  const stringValue = stringLiteralValue(observation.node);
+  if (stringValue != null) {
+    return {
+      kind: 'string-key',
+      candidateName: stringValue,
+    };
+  }
+  if (observation.localName != null) {
+    return {
+      kind: 'identifier-name',
+      candidateName: observation.localName,
+    };
+  }
+  return {
+    kind: 'open-expression',
+    candidateName: null,
+  };
 }

@@ -78,6 +78,7 @@ import {
   BindableSetterKind,
   type BindableDefinitionField,
 } from './bindable-definition.js';
+import { bindableAttributeNameForProperty } from './bindable-attribute.js';
 import {
   BindingBehaviorDefinition,
   BindingBehaviorDefinitionContribution,
@@ -123,7 +124,10 @@ import {
   ValueConverterDefinitionHeader,
 } from './resource-definition.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
-import { readConventionalTemplateAdmission } from './resource-convention.js';
+import {
+  conventionalResourceNameForFilePath,
+  readConventionalTemplateAdmission,
+} from './resource-convention.js';
 import {
   ResourceCarrierKind,
   type ResourceRecognitionObservation,
@@ -134,6 +138,10 @@ import {
   runtimeResourceKeyForKind,
   toAureliaResourceIdentityKind,
 } from './resource-kind.js';
+import {
+  readHtmlTemplateMetadata,
+  type HtmlTemplateMetadataImport,
+} from './html-template-metadata.js';
 import type { ResourceDefinitionHeaderEmission } from './resource-definition-header-emission.js';
 import type { ResourceRecognitionKernelEmission } from './resource-recognition-kernel-emitter.js';
 import {
@@ -148,6 +156,19 @@ import {
   ValueConverterDefinitionContributionKind,
   type ValueConverterDefinitionField,
 } from './value-converter-definition.js';
+import {
+  WatchCallbackDefinition,
+  WatchCallbackKind,
+  WatchContributionKind,
+  WatchDefinition,
+  WatchDefinitionContribution,
+  type WatchDefinitionField,
+  WatchExpressionDefinition,
+  WatchExpressionKind,
+  WatchFlushMode,
+  WatchPropertyKeyDefinition,
+  WatchPropertyKeyKind,
+} from './watch-definition.js';
 
 export class ResourceDefinitionConvergenceEmission {
   constructor(
@@ -235,10 +256,20 @@ class BindableRead {
   ) {}
 }
 
+class WatchRead {
+  constructor(
+    readonly watches: readonly WatchDefinition[],
+    readonly contributions: readonly WatchDefinitionContribution[],
+    readonly open: readonly ConvergenceOpen[],
+    readonly records: readonly KernelStoreRecord[] = [],
+  ) {}
+}
+
 class TemplateDefinitionRead {
   constructor(
     readonly template: CustomElementTemplateDefinition,
     readonly records: readonly KernelStoreRecord[] = [],
+    readonly dependencies: ResourceDependenciesRead = new ResourceDependenciesRead([], []),
   ) {}
 }
 
@@ -293,6 +324,27 @@ type AliasableResourceDefinitionHeader =
   | ValueConverterDefinitionHeader
   | BindingBehaviorDefinitionHeader
   | BindingCommandDefinitionHeader;
+
+interface CustomElementConvergenceFacts {
+  readonly target: ResourceTargetReference;
+  readonly name: string;
+  readonly aliasDefinitions: readonly ResourceAliasDefinition[];
+  readonly key: string;
+  readonly capture: CustomElementCaptureDefinition;
+  readonly template: TemplateDefinitionRead;
+  readonly dependencies: ResourceDependenciesRead;
+  readonly bindables: BindableRead;
+  readonly watches: WatchRead;
+  readonly containerless: boolean;
+  readonly shadowOptions: ShadowOptionsDefinition | null;
+  readonly hasSlots: boolean;
+  readonly enhance: boolean;
+  readonly needsCompile: boolean;
+  readonly strict: boolean | null;
+  readonly processContent: ResourceTargetReference | null;
+  readonly open: readonly ConvergenceOpen[];
+  readonly fieldProvenance: readonly FieldProvenance<CustomElementDefinitionField>[];
+}
 
 function emptyResourceAliasClaims(): ResourceAliasClaimsEmission {
   return new ResourceAliasClaimsEmission([], []);
@@ -515,19 +567,49 @@ export class ResourceDefinitionConverger {
     productHandle: ProductHandle,
     provenanceHandle: ProvenanceHandle,
   ): ConvergedResourceDefinition | null {
+    const facts = this.readCustomElementFacts(context, definition, observation, header, provenanceHandle);
+    if (facts == null) {
+      return null;
+    }
+
+    return new ConvergedResourceDefinition(
+      this.createCustomElementDefinition(productHandle, header, observation, facts),
+      facts.open,
+      [
+        ...facts.template.records,
+        ...facts.bindables.records,
+        ...facts.watches.records,
+      ],
+    );
+  }
+
+  private readCustomElementFacts(
+    context: ResourceRecognitionContext,
+    definition: CustomElementDefinitionHeader,
+    observation: ResourceRecognitionObservation,
+    header: ResourceDefinitionHeaderEmission,
+    provenanceHandle: ProvenanceHandle,
+  ): CustomElementConvergenceFacts | null {
     const target = header.targetReference;
     const name = definition.name;
     const key = name == null ? null : runtimeResourceKeyForKind(definition.type, name);
     if (target == null || name == null || key == null) {
       return null;
     }
-
     const targetClass = classNodeForTarget(definition.target);
     const definitionExpression = expressionNode(observation.definitionNode);
     const bindables = readBindables(
       this.store,
       context,
       `resource-definition-converged:${header.localKey}:bindable`,
+      definitionExpression,
+      targetClass,
+      provenanceHandle,
+    );
+    const watches = readWatches(
+      this.store,
+      context,
+      `resource-definition-converged:${header.localKey}:watch`,
       definitionExpression,
       targetClass,
       provenanceHandle,
@@ -542,7 +624,10 @@ export class ResourceDefinitionConverger {
       observation,
       `resource-definition-converged:${header.localKey}:template`,
     );
-    const dependencies = readResourceDependencies(context, definitionExpression, targetClass);
+    const dependencies = mergeResourceDependencies(
+      readResourceDependencies(context, definitionExpression, targetClass),
+      template.dependencies,
+    );
     const containerless = readBooleanField(context, definitionExpression, targetClass, 'containerless') ?? false;
     const shadowOptions = readShadowOptions(context, definitionExpression, targetClass);
     const hasSlots = readBooleanField(context, definitionExpression, targetClass, 'hasSlots') ?? false;
@@ -552,90 +637,95 @@ export class ResourceDefinitionConverger {
     const processContent = readTargetField(context, definitionExpression, targetClass, 'processContent');
     const open = [
       ...bindables.open,
+      ...watches.open,
       ...dependencies.open,
       ...openIfPresent(context, definitionExpression, targetClass, 'instructions', 'Custom element instructions are present before template lowering is modeled.'),
       ...openIfPresent(context, definitionExpression, targetClass, 'surrogates', 'Custom element surrogates are present before surrogate lowering is modeled.'),
-      ...openIfPresent(context, definitionExpression, targetClass, 'watches', 'Custom element watches are present but watch convergence is still deferred.'),
     ];
-    const fieldProvenance = fieldProvenanceFor<CustomElementDefinitionField>(provenanceHandle, [
-      'target',
-      'name',
-      'aliases',
-      'key',
-      'capture',
-      'template',
-      'instructions',
-      'dependencies',
-      'injectable',
-      'needsCompile',
-      'surrogates',
-      'bindables',
-      'containerless',
-      'shadowOptions',
-      'hasSlots',
-      'enhance',
-      'watches',
-      'strict',
-      'processContent',
-    ]);
 
     const aliasDefinitions = aliases.map((alias) => new ResourceAliasDefinition(alias, header.sourceAddressHandle, provenanceHandle));
-    return new ConvergedResourceDefinition(
-      new CustomElementDefinition(
-        productHandle,
-        header.primaryIdentityHandle,
-        header.sourceAddressHandle,
-        target,
-        name,
-        aliasDefinitions,
-        key,
-        capture,
-        template.template,
-        [],
-        dependencies.dependencies,
-        null,
-        needsCompile,
-        [],
-        bindables.bindables,
-        containerless,
-        shadowOptions,
-        hasSlots,
-        enhance,
-        [],
-        strict,
-        processContent,
-        [
-          new CustomElementDefinitionContribution(
-            customElementContributionKind(observation),
-            target,
-            name,
-            aliasDefinitions,
-            key,
-            capture,
-            template.template,
-            [],
-            dependencies.dependencies,
-            null,
-            needsCompile,
-            [],
-            bindables.contributions,
-            containerless,
-            shadowOptions,
-            hasSlots,
-            enhance,
-            [],
-            strict,
-            processContent,
-            fieldProvenance,
-          ),
-        ],
-        fieldProvenance,
-      ),
+    return {
+      target,
+      name,
+      aliasDefinitions,
+      key,
+      capture,
+      template,
+      dependencies,
+      bindables,
+      watches,
+      containerless,
+      shadowOptions,
+      hasSlots,
+      enhance,
+      needsCompile,
+      strict,
+      processContent,
       open,
-      [
-        ...template.records,
-        ...bindables.records,
-      ],
+      fieldProvenance: customElementFieldProvenance(provenanceHandle),
+    };
+  }
+
+  private createCustomElementDefinition(
+    productHandle: ProductHandle,
+    header: ResourceDefinitionHeaderEmission,
+    observation: ResourceRecognitionObservation,
+    facts: CustomElementConvergenceFacts,
+  ): CustomElementDefinition {
+    return new CustomElementDefinition(
+      productHandle,
+      header.primaryIdentityHandle,
+      header.sourceAddressHandle,
+      facts.target,
+      facts.name,
+      facts.aliasDefinitions,
+      facts.key,
+      facts.capture,
+      facts.template.template,
+      [],
+      facts.dependencies.dependencies,
+      null,
+      facts.needsCompile,
+      [],
+      facts.bindables.bindables,
+      facts.containerless,
+      facts.shadowOptions,
+      facts.hasSlots,
+      facts.enhance,
+      facts.watches.watches,
+      facts.strict,
+      facts.processContent,
+      [this.customElementContribution(observation, facts)],
+      facts.fieldProvenance,
+    );
+  }
+
+  private customElementContribution(
+    observation: ResourceRecognitionObservation,
+    facts: CustomElementConvergenceFacts,
+  ): CustomElementDefinitionContribution {
+    return new CustomElementDefinitionContribution(
+      customElementContributionKind(observation),
+      facts.target,
+      facts.name,
+      facts.aliasDefinitions,
+      facts.key,
+      facts.capture,
+      facts.template.template,
+      [],
+      facts.dependencies.dependencies,
+      null,
+      facts.needsCompile,
+      [],
+      facts.bindables.contributions,
+      facts.containerless,
+      facts.shadowOptions,
+      facts.hasSlots,
+      facts.enhance,
+      facts.watches.contributions,
+      facts.strict,
+      facts.processContent,
+      facts.fieldProvenance,
     );
   }
 
@@ -664,6 +754,14 @@ export class ResourceDefinitionConverger {
       targetClass,
       provenanceHandle,
     );
+    const watches = readWatches(
+      this.store,
+      context,
+      `resource-definition-converged:${header.localKey}:watch`,
+      definitionExpression,
+      targetClass,
+      provenanceHandle,
+    );
     const aliases = mergeAliases(definition.aliases, readStaticStringArrayClassProperty(context, targetClass, 'aliases'));
     const isTemplateController = definition.type === ResourceDefinitionKind.TemplateController
       || readBooleanField(context, definitionExpression, targetClass, 'isTemplateController') === true;
@@ -673,8 +771,8 @@ export class ResourceDefinitionConverger {
     const dependencies = readResourceDependencies(context, definitionExpression, targetClass);
     const open = [
       ...bindables.open,
+      ...watches.open,
       ...dependencies.open,
-      ...openIfPresent(context, definitionExpression, targetClass, 'watches', 'Custom attribute watches are present but watch convergence is still deferred.'),
     ];
     const fieldProvenance = fieldProvenanceFor<CustomAttributeDefinitionField>(provenanceHandle, [
       'target',
@@ -703,7 +801,7 @@ export class ResourceDefinitionConverger {
         isTemplateController,
         bindables.bindables,
         noMultiBindings,
-        [],
+        watches.watches,
         dependencies.dependencies,
         containerStrategy,
         defaultProperty,
@@ -717,7 +815,7 @@ export class ResourceDefinitionConverger {
             isTemplateController,
             bindables.contributions,
             noMultiBindings,
-            [],
+            watches.contributions,
             dependencies.dependencies,
             containerStrategy,
             defaultProperty,
@@ -727,7 +825,7 @@ export class ResourceDefinitionConverger {
         fieldProvenance,
       ),
       open,
-      bindables.records,
+      [...bindables.records, ...watches.records],
     );
   }
 
@@ -961,6 +1059,32 @@ function customElementContributionKind(
     : CustomElementDefinitionContributionKind.Header;
 }
 
+function customElementFieldProvenance(
+  provenanceHandle: ProvenanceHandle,
+): readonly FieldProvenance<CustomElementDefinitionField>[] {
+  return fieldProvenanceFor<CustomElementDefinitionField>(provenanceHandle, [
+    'target',
+    'name',
+    'aliases',
+    'key',
+    'capture',
+    'template',
+    'instructions',
+    'dependencies',
+    'injectable',
+    'needsCompile',
+    'surrogates',
+    'bindables',
+    'containerless',
+    'shadowOptions',
+    'hasSlots',
+    'enhance',
+    'watches',
+    'strict',
+    'processContent',
+  ]);
+}
+
 function customAttributeContributionKind(
   observation: ResourceRecognitionObservation,
 ): CustomAttributeDefinitionContributionKind {
@@ -1173,16 +1297,18 @@ function readConventionalHtmlTemplate(
     return null;
   }
 
-  const markup = readFileSync(absolutePath, 'utf8');
-  const source = externalTemplateSourceAddress(store, admission.addressHandle, markup, local);
+  const rawMarkup = readFileSync(absolutePath, 'utf8');
+  const metadata = readHtmlTemplateMetadata(rawMarkup);
+  const source = externalTemplateSourceAddress(store, admission.addressHandle, rawMarkup.length, local, metadata.sourceMap);
   return new TemplateDefinitionRead(
     new CustomElementTemplateDefinition(
       CustomElementTemplateKind.Markup,
-      markup,
+      metadata.markup,
       source.addressHandle,
-      null,
+      source.sourceMap,
     ),
     source.records,
+    readHtmlTemplateDependencies(context, admission.path, metadata.imports),
   );
 }
 
@@ -1213,16 +1339,18 @@ function readImportedHtmlTemplate(
     return null;
   }
 
-  const markup = readFileSync(absolutePath, 'utf8');
-  const source = externalTemplateSourceAddress(store, admission.addressHandle, markup, local);
+  const rawMarkup = readFileSync(absolutePath, 'utf8');
+  const metadata = readHtmlTemplateMetadata(rawMarkup);
+  const source = externalTemplateSourceAddress(store, admission.addressHandle, rawMarkup.length, local, metadata.sourceMap);
   return new TemplateDefinitionRead(
     new CustomElementTemplateDefinition(
       CustomElementTemplateKind.Markup,
-      markup,
+      metadata.markup,
       source.addressHandle,
-      null,
+      source.sourceMap,
     ),
     source.records,
+    readHtmlTemplateDependencies(context, admission.path, metadata.imports),
   );
 }
 
@@ -1279,8 +1407,9 @@ function htmlPathFromModuleSpecifier(moduleSpecifier: string): string | null {
 function externalTemplateSourceAddress(
   store: KernelStore,
   sourceFileAddressHandle: AddressHandle,
-  markup: string,
+  markupLength: number,
   local: string,
+  sourceMap: TemplateSourceOffsetMap | null = null,
 ): TemplateSourceAddressSet {
   const addressHandle = store.handles.address(`${local}:source`);
   const evidenceHandle = store.handles.evidence(local);
@@ -1290,7 +1419,7 @@ function externalTemplateSourceAddress(
       addressHandle,
       sourceFileAddressHandle,
       0,
-      markup.length,
+      markupLength,
       SourceSpanRole.Value,
     ),
     new EvidenceRecord(
@@ -1305,7 +1434,7 @@ function externalTemplateSourceAddress(
       [evidenceHandle],
     ),
   ];
-  return new TemplateSourceAddressSet(records, addressHandle, null);
+  return new TemplateSourceAddressSet(records, addressHandle, sourceMap);
 }
 
 function findTemplateAdmissionForAbsolutePath(
@@ -1526,11 +1655,38 @@ function sourceSpanAddressForNode(
   local: string,
   role: SourceSpanRole,
 ): SourceSpanAddressSet | null {
+  const span = sourceSpanRangeForNode(context.sourceFile, node);
+  if (span == null) {
+    return null;
+  }
+  const addressHandle = store.handles.address(`${local}:source`);
+  return new SourceSpanAddressSet(
+    [
+      new SourceSpanAddress(
+        addressHandle,
+        context.sourceFileAddressHandle,
+        span.start,
+        span.end,
+        role,
+      ),
+    ],
+    addressHandle,
+  );
+}
+
+interface SourceSpanRange {
+  readonly start: number;
+  readonly end: number;
+}
+
+function sourceSpanRangeForNode(
+  sourceFile: ts.SourceFile,
+  node: ts.Node | null,
+): SourceSpanRange | null {
   if (node == null) {
     return null;
   }
   const sourceNode = sourceAddressNode(node);
-  const sourceFile = context.sourceFile;
   let start = sourceNode.getStart(sourceFile);
   let end = sourceNode.end;
   if (ts.isStringLiteralLike(sourceNode) || ts.isNoSubstitutionTemplateLiteral(sourceNode)) {
@@ -1540,19 +1696,7 @@ function sourceSpanAddressForNode(
   if (end < start) {
     return null;
   }
-  const addressHandle = store.handles.address(`${local}:source`);
-  return new SourceSpanAddressSet(
-    [
-      new SourceSpanAddress(
-        addressHandle,
-        context.sourceFileAddressHandle,
-        start,
-        end,
-        role,
-      ),
-    ],
-    addressHandle,
-  );
+  return { start, end };
 }
 
 function sourceAddressNode(node: ts.Node): ts.Node {
@@ -1649,6 +1793,106 @@ function readResourceDependencies(
     appendConvergenceOpen(open, 'Resource dependencies include open spread, hole, or unknown-order entries.', value.node);
   }
   return new ResourceDependenciesRead(dependencies, open);
+}
+
+function mergeResourceDependencies(
+  left: ResourceDependenciesRead,
+  right: ResourceDependenciesRead,
+): ResourceDependenciesRead {
+  const dependencies: ResourceDependencyReference[] = [];
+  const seen = new Set<string>();
+  for (const dependency of [...left.dependencies, ...right.dependencies]) {
+    const key = resourceDependencyReferenceKey(dependency);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    dependencies.push(dependency);
+  }
+  return new ResourceDependenciesRead(
+    dependencies,
+    [...left.open, ...right.open],
+  );
+}
+
+function readHtmlTemplateDependencies(
+  context: ResourceRecognitionContext,
+  templatePath: string,
+  imports: readonly HtmlTemplateMetadataImport[],
+): ResourceDependenciesRead {
+  return new ResourceDependenciesRead(
+    imports.map((htmlImport) => {
+      const moduleKey = resolveTemplateImportModuleKey(context, templatePath, htmlImport.specifier);
+      return new ResourceDependencyReference(
+        null,
+        templateImportDependencyKeyName(htmlImport.specifier, moduleKey),
+        moduleKey,
+        null,
+      );
+    }),
+    [],
+  );
+}
+
+function resolveTemplateImportModuleKey(
+  context: ResourceRecognitionContext,
+  templatePath: string,
+  specifier: string,
+): string | null {
+  const pathOnly = specifier.split(/[?#]/, 1)[0] ?? '';
+  if (!pathOnly.startsWith('.')) {
+    return null;
+  }
+
+  const importerDir = path.posix.dirname(normalizeProjectModulePath(templatePath));
+  const resolved = normalizeProjectModulePath(path.posix.normalize(path.posix.join(importerDir, pathOnly)));
+  const candidates = templateImportModuleKeyCandidates(resolved);
+  return context.sourceFiles.find((source) => candidates.has(normalizeProjectModulePath(source.path)))?.path ?? null;
+}
+
+function templateImportModuleKeyCandidates(
+  resolved: string,
+): ReadonlySet<string> {
+  const extension = path.posix.extname(resolved);
+  if (extension.length > 0) {
+    return new Set([resolved]);
+  }
+  return new Set([
+    `${resolved}.ts`,
+    `${resolved}.tsx`,
+    `${resolved}.js`,
+    `${resolved}.jsx`,
+    `${resolved}.mjs`,
+    `${resolved}.cjs`,
+    path.posix.join(resolved, 'index.ts'),
+    path.posix.join(resolved, 'index.tsx'),
+    path.posix.join(resolved, 'index.js'),
+    path.posix.join(resolved, 'index.jsx'),
+  ]);
+}
+
+function templateImportDependencyKeyName(
+  specifier: string,
+  moduleKey: string | null,
+): string | null {
+  return moduleKey == null
+    ? conventionalResourceNameForFilePath(specifier)
+    : conventionalResourceNameForFilePath(moduleKey);
+}
+
+function normalizeProjectModulePath(value: string): string {
+  return value.replace(/\\/g, '/').replace(/^\.\//, '');
+}
+
+function resourceDependencyReferenceKey(
+  reference: ResourceDependencyReference,
+): string {
+  return [
+    reference.identityHandle ?? '',
+    reference.keyName ?? '',
+    reference.moduleKey ?? '',
+    reference.localName ?? '',
+  ].join('\0');
 }
 
 function readCheckerDependencyReference(
@@ -1963,7 +2207,7 @@ function bindableEntry(
   source: SourceSpanAddressSet | null,
   setterOverride: BindableSetterDefinition | null = null,
 ): BindableEntryRead {
-  const attribute = readObjectString(partial, 'attribute') ?? toBindableAttribute(propertyName);
+  const attribute = readObjectString(partial, 'attribute') ?? bindableAttributeNameForProperty(propertyName);
   const callback = readObjectString(partial, 'callback') ?? `${propertyName}Changed`;
   const mode = readBindableMode(partial?.properties.get('mode')?.value) ?? BindableBindingMode.ToView;
   const name = readObjectString(partial, 'name') ?? propertyName;
@@ -2057,6 +2301,325 @@ function readBindableMode(value: EvaluationValue | null | undefined): BindableBi
       default:
         return null;
     }
+  }
+  return null;
+}
+
+class WatchEntryRead {
+  constructor(
+    readonly watch: WatchDefinition | null,
+    readonly contribution: WatchDefinitionContribution | null,
+    readonly open: ConvergenceOpen | null,
+    readonly records: readonly KernelStoreRecord[] = [],
+  ) {}
+}
+
+function readWatches(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  definitionExpression: ts.Expression | null,
+  targetClass: ts.ClassLikeDeclarationBase | null,
+  provenanceHandle: ProvenanceHandle,
+): WatchRead {
+  const reads = [
+    ...readDecoratorWatches(store, context, `${local}:decorator`, targetClass, provenanceHandle),
+    ...readWatchListExpression(store, context, `${local}:static`, readStaticClassProperty(targetClass, 'watches'), provenanceHandle, WatchContributionKind.StaticWatches),
+    ...readWatchListValue(store, context, `${local}:definition-object`, readObjectProperty(context.expressionReader, definitionExpression, 'watches'), provenanceHandle, WatchContributionKind.DefinitionObject),
+  ];
+  return watchReadFromEntries(reads);
+}
+
+function watchReadFromEntries(reads: readonly WatchEntryRead[]): WatchRead {
+  const watches: WatchDefinition[] = [];
+  const contributions: WatchDefinitionContribution[] = [];
+  const open: ConvergenceOpen[] = [];
+  const records: KernelStoreRecord[] = [];
+  for (const read of reads) {
+    if (read.watch != null) {
+      watches.push(read.watch);
+    }
+    if (read.contribution != null) {
+      contributions.push(read.contribution);
+    }
+    if (read.open != null) {
+      open.push(read.open);
+    }
+    records.push(...read.records);
+  }
+  return new WatchRead(watches, contributions, open, records);
+}
+
+function readDecoratorWatches(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  targetClass: ts.ClassLikeDeclarationBase | null,
+  provenanceHandle: ProvenanceHandle,
+): readonly WatchEntryRead[] {
+  if (targetClass == null) {
+    return [];
+  }
+  return [
+    ...readClassWatchDecorators(store, context, `${local}:class`, targetClass, provenanceHandle),
+    ...targetClass.members.flatMap((member) =>
+      readMemberWatchDecorators(store, context, `${local}:member`, member, provenanceHandle)
+    ),
+  ];
+}
+
+function readClassWatchDecorators(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  targetClass: ts.ClassLikeDeclarationBase,
+  provenanceHandle: ProvenanceHandle,
+): readonly WatchEntryRead[] {
+  const decorators = ts.canHaveDecorators(targetClass) ? ts.getDecorators(targetClass) ?? [] : [];
+  return decorators
+    .map((decorator, index) => readClassWatchDecorator(store, context, `${local}:${index}`, decorator, provenanceHandle))
+    .filter((entry): entry is WatchEntryRead => entry != null);
+}
+
+function readMemberWatchDecorators(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  member: ts.ClassElement,
+  provenanceHandle: ProvenanceHandle,
+): readonly WatchEntryRead[] {
+  const name = memberName(member);
+  if (name == null || !ts.canHaveDecorators(member)) {
+    return [];
+  }
+  return (ts.getDecorators(member) ?? [])
+    .map((decorator, index) => readMethodWatchDecorator(store, context, `${local}:${name}:${index}`, decorator, member, name, provenanceHandle))
+    .filter((entry): entry is WatchEntryRead => entry != null);
+}
+
+function readClassWatchDecorator(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  decorator: ts.Decorator,
+  provenanceHandle: ProvenanceHandle,
+): WatchEntryRead | null {
+  const call = decoratorCallNamed(decorator, 'watch');
+  if (call == null) {
+    return null;
+  }
+  return readWatchCall(
+    store,
+    context,
+    local,
+    call.arguments[0] ?? null,
+    call.arguments[1] ?? null,
+    call.arguments[2] ?? null,
+    call,
+    WatchContributionKind.Decorator,
+    provenanceHandle,
+  );
+}
+
+function readMethodWatchDecorator(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  decorator: ts.Decorator,
+  member: ts.ClassElement,
+  methodName: string,
+  provenanceHandle: ProvenanceHandle,
+): WatchEntryRead | null {
+  const call = decoratorCallNamed(decorator, 'watch');
+  if (call == null) {
+    return null;
+  }
+  const callbackSource = sourceSpanAddressForNode(store, context, memberNameNode(member) ?? member, `${local}:callback`, SourceSpanRole.Name);
+  return readWatchCall(
+    store,
+    context,
+    local,
+    call.arguments[0] ?? null,
+    watchMethodNameExpression(methodName, callbackSource?.addressHandle ?? null),
+    call.arguments[1] ?? null,
+    call,
+    WatchContributionKind.Decorator,
+    provenanceHandle,
+    callbackSource?.records ?? [],
+  );
+}
+
+function readWatchCall(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  expressionNode: ts.Expression | null,
+  callbackNode: ts.Expression | WatchCallbackDefinition | null,
+  optionsNode: ts.Expression | null,
+  carrierNode: ts.Node,
+  contributionKind: WatchContributionKind,
+  provenanceHandle: ProvenanceHandle,
+  extraRecords: readonly KernelStoreRecord[] = [],
+): WatchEntryRead {
+  if (expressionNode == null || callbackNode == null) {
+    return new WatchEntryRead(null, null, new ConvergenceOpen('@watch requires static expression and callback metadata.', expressionNode ?? optionsNode ?? carrierNode));
+  }
+  const source = sourceSpanAddressForNode(store, context, expressionNode, `${local}:expression`, SourceSpanRole.Value);
+  const expression = readWatchExpression(context.expressionReader.evaluateExpression(expressionNode).value, source?.addressHandle ?? null);
+  const callback = callbackNode instanceof WatchCallbackDefinition
+    ? callbackNode
+    : readWatchCallback(context.expressionReader.evaluateExpression(callbackNode).value, source?.addressHandle ?? null);
+  const flush = readWatchFlush(context, optionsNode);
+  if (expression == null || callback == null || flush == null) {
+    return new WatchEntryRead(null, null, nullableConvergenceOpenForNode('Watch metadata did not close to a static expression, callback, and flush mode.', expressionNode));
+  }
+  return watchEntry(expression, callback, flush, contributionKind, provenanceHandle, [...extraRecords, ...source?.records ?? []]);
+}
+
+function watchMethodNameExpression(methodName: string, addressHandle: AddressHandle | null): WatchCallbackDefinition {
+  return new WatchCallbackDefinition(
+    WatchCallbackKind.MethodName,
+    new WatchPropertyKeyDefinition(WatchPropertyKeyKind.String, methodName, null, new ResourceTargetReference(null, addressHandle, methodName)),
+  );
+}
+
+function readWatchListExpression(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  expression: ts.Expression | null,
+  provenanceHandle: ProvenanceHandle,
+  contributionKind: WatchContributionKind,
+): readonly WatchEntryRead[] {
+  return expression == null
+    ? []
+    : readWatchListValue(store, context, local, context.expressionReader.evaluateExpression(expression), provenanceHandle, contributionKind);
+}
+
+function readWatchListValue(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  read: EvaluationRead<EvaluationValue> | null,
+  provenanceHandle: ProvenanceHandle,
+  contributionKind: WatchContributionKind,
+): readonly WatchEntryRead[] {
+  const value = read?.value;
+  if (value == null || value.kind === EvaluationValueKind.Undefined) {
+    return [];
+  }
+  if (value.kind !== EvaluationValueKind.Array) {
+    return [new WatchEntryRead(null, null, nullableConvergenceOpenForRead('Watch list did not close to a static array.', read))];
+  }
+  const entries = value.elements.map((element, index) =>
+    readWatchListEntry(store, context, `${local}:array:${index}`, element.value, element.expression, provenanceHandle, contributionKind)
+  );
+  return value.mayHaveUnknownElements || value.mayHaveUnknownOrder
+    ? [...entries, new WatchEntryRead(null, null, nullableConvergenceOpenForNode('Watch array includes open spread, hole, or unknown-order entries.', value.node))]
+    : entries;
+}
+
+function readWatchListEntry(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  value: EvaluationValue,
+  node: ts.Expression | null,
+  provenanceHandle: ProvenanceHandle,
+  contributionKind: WatchContributionKind,
+): WatchEntryRead {
+  if (value.kind !== EvaluationValueKind.Object) {
+    return new WatchEntryRead(null, null, nullableConvergenceOpenForNode('Watch array entry did not close to a static object.', node));
+  }
+  const source = node == null ? null : sourceSpanAddressForNode(store, context, node, local, SourceSpanRole.Value);
+  const expression = readWatchExpression(value.properties.get('expression')?.value ?? null, source?.addressHandle ?? null);
+  const callback = readWatchCallback(value.properties.get('callback')?.value ?? null, source?.addressHandle ?? null);
+  const flush = readWatchFlushValue(value.properties.get('flush')?.value ?? null);
+  return expression == null || callback == null || flush == null
+    ? new WatchEntryRead(null, null, nullableConvergenceOpenForNode('Watch entry did not expose static expression, callback, and flush fields.', node))
+    : watchEntry(expression, callback, flush, contributionKind, provenanceHandle, source?.records ?? []);
+}
+
+function watchEntry(
+  expression: WatchExpressionDefinition,
+  callback: WatchCallbackDefinition,
+  flush: WatchFlushMode,
+  contributionKind: WatchContributionKind,
+  provenanceHandle: ProvenanceHandle,
+  records: readonly KernelStoreRecord[],
+): WatchEntryRead {
+  const fieldProvenance = fieldProvenanceFor<WatchDefinitionField>(provenanceHandle, ['expression', 'callback', 'flush']);
+  return new WatchEntryRead(
+    new WatchDefinition(expression, callback, flush, fieldProvenance),
+    new WatchDefinitionContribution(contributionKind, expression, callback, flush, fieldProvenance),
+    null,
+    records,
+  );
+}
+
+function readWatchExpression(
+  value: EvaluationValue | null,
+  addressHandle: AddressHandle | null,
+): WatchExpressionDefinition | null {
+  const propertyKey = readWatchPropertyKey(value, addressHandle);
+  if (propertyKey != null) {
+    return new WatchExpressionDefinition(WatchExpressionKind.PropertyKey, propertyKey);
+  }
+  return value?.kind === EvaluationValueKind.Function
+    ? new WatchExpressionDefinition(WatchExpressionKind.DependencyCollectionFunction, null, targetReferenceForFunction(value, addressHandle))
+    : null;
+}
+
+function readWatchCallback(
+  value: EvaluationValue | null,
+  addressHandle: AddressHandle | null,
+): WatchCallbackDefinition | null {
+  const propertyKey = readWatchPropertyKey(value, addressHandle);
+  if (propertyKey != null) {
+    return new WatchCallbackDefinition(WatchCallbackKind.MethodName, propertyKey);
+  }
+  return value?.kind === EvaluationValueKind.Function
+    ? new WatchCallbackDefinition(WatchCallbackKind.Function, null, targetReferenceForFunction(value, addressHandle))
+    : null;
+}
+
+function readWatchPropertyKey(
+  value: EvaluationValue | null,
+  addressHandle: AddressHandle | null,
+): WatchPropertyKeyDefinition | null {
+  if (value?.kind === EvaluationValueKind.String) {
+    return new WatchPropertyKeyDefinition(WatchPropertyKeyKind.String, value.value, null, new ResourceTargetReference(null, addressHandle, value.value));
+  }
+  return value?.kind === EvaluationValueKind.Number
+    ? new WatchPropertyKeyDefinition(WatchPropertyKeyKind.Number, String(value.value), value.value)
+    : null;
+}
+
+function readWatchFlush(
+  context: ResourceRecognitionContext,
+  optionsNode: ts.Expression | null,
+): WatchFlushMode | null {
+  if (optionsNode == null) {
+    return WatchFlushMode.Async;
+  }
+  const value = context.expressionReader.evaluateExpression(optionsNode).value;
+  if (value == null || value.kind === EvaluationValueKind.Undefined) {
+    return WatchFlushMode.Async;
+  }
+  return value.kind === EvaluationValueKind.Object
+    ? readWatchFlushValue(value.properties.get('flush')?.value ?? null)
+    : null;
+}
+
+function readWatchFlushValue(value: EvaluationValue | null): WatchFlushMode | null {
+  if (value == null || value.kind === EvaluationValueKind.Undefined) {
+    return WatchFlushMode.Async;
+  }
+  if (value.kind === EvaluationValueKind.String && value.value === 'sync') {
+    return WatchFlushMode.Sync;
+  }
+  if (value.kind === EvaluationValueKind.String && value.value === 'async') {
+    return WatchFlushMode.Async;
   }
   return null;
 }
@@ -2175,8 +2738,4 @@ function fieldProvenanceFor<TField extends string>(
   fields: readonly TField[],
 ): readonly FieldProvenance<TField>[] {
   return compactFieldProvenance(fields.map((field) => new FieldProvenance(field, provenanceHandle)));
-}
-
-function toBindableAttribute(name: string): string {
-  return name.replace(/([A-Z])/g, (_match, char: string) => `-${char.toLowerCase()}`);
 }

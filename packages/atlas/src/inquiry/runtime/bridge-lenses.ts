@@ -32,9 +32,8 @@ import {
 import {
   AuLinkGapKind,
   readAuLinkModel,
-  sourceRangeForAuLinkFrameworkCandidate,
   sourceRangeForAuLinkAnchor,
-  sourceRangeForAuLinkCatalog,
+  sourceRangeForAuLinkFileSpan,
   sourceRangeForAuLinkTarget,
   type AuLinkAnchorRow,
   type AuLinkCatalogEntry,
@@ -74,7 +73,6 @@ import {
   sourceRoute,
   typeFactsRoute,
 } from "./bridge-aulink-lens-support.js";
-import { booleanField, stringField } from "./lens-filter-utils.js";
 
 /** Value returned by the bridge.aulink runtime lens. */
 export interface BridgeAuLinkValue extends BridgeAuLinkUsageValue {
@@ -383,51 +381,66 @@ function auLinkMirrorFiltersFromRecord(
     return {};
   }
   return {
-    ...stringField(source, "linkId"),
-    ...stringField(source, "packageId"),
-    ...stringField(source, "targetName"),
-    ...stringField(source, "filePath"),
-    ...stringField(source, "frameworkStatus"),
-    ...stringField(source, "roleFamily"),
-    ...stringField(source, "relation"),
-    ...stringField(source, "sourceLens"),
-    ...stringField(source, "sourceProjection"),
-    ...stringField(source, "emulationLayer"),
-    ...stringField(source, "emulationMode"),
-    ...stringField(source, "obligationKind"),
-    ...stringField(source, "productArea"),
-    ...stringField(source, "productDeclarationKind"),
-    ...booleanField(source, "hasRoleEvidence"),
-    ...booleanField(source, "hasEmulationObligations"),
-    ...stringField(source, "side"),
-    ...stringField(source, "memberName"),
-    ...stringField(source, "memberAccess"),
-    ...stringField(source, "frameworkScopeMode"),
-    ...stringField(source, "frameworkMemberAccess"),
-    ...stringField(source, "productMemberAccess"),
-    ...stringField(source, "memberDeclarationKind"),
-    ...stringField(source, "presence"),
-    ...stringField(source, "ownerName"),
-    ...stringField(source, "ownerKind"),
-    ...stringField(source, "ownerMemberName"),
-    ...stringField(source, "usageRole"),
-    ...stringField(source, "callCalleeName"),
-    ...stringField(source, "callArgumentText"),
-    ...stringField(source, "callArgumentSymbolName"),
-    ...stringField(source, "callArgumentFullyQualifiedName"),
-    ...stringField(source, "query"),
-    ...stringField(source, "orderBy"),
-    ...(typeof source.symbolName === "string"
-      ? { symbolName: source.symbolName }
-      : {}),
-    ...(typeof source.frameworkSymbol === "string"
-      ? { symbolName: source.frameworkSymbol }
-      : {}),
+    linkId: nonEmptyString(source.linkId),
+    packageId: nonEmptyString(source.packageId),
+    targetName: nonEmptyString(source.targetName),
+    filePath: nonEmptyString(source.filePath),
+    frameworkStatus: nonEmptyString(source.frameworkStatus),
+    roleFamily: nonEmptyString(source.roleFamily),
+    relation: nonEmptyString(source.relation),
+    sourceLens: nonEmptyString(source.sourceLens),
+    sourceProjection: nonEmptyString(source.sourceProjection),
+    emulationLayer: nonEmptyString(source.emulationLayer),
+    emulationMode: nonEmptyString(source.emulationMode),
+    obligationKind: nonEmptyString(source.obligationKind),
+    productArea: nonEmptyString(source.productArea),
+    productDeclarationKind: nonEmptyString(source.productDeclarationKind),
+    hasRoleEvidence: booleanFilterValue(source.hasRoleEvidence),
+    hasEmulationObligations: booleanFilterValue(source.hasEmulationObligations),
+    side: nonEmptyString(source.side),
+    memberName: nonEmptyString(source.memberName),
+    memberAccess: nonEmptyString(source.memberAccess),
+    frameworkScopeMode: nonEmptyString(source.frameworkScopeMode),
+    frameworkMemberAccess: nonEmptyString(source.frameworkMemberAccess),
+    productMemberAccess: nonEmptyString(source.productMemberAccess),
+    memberDeclarationKind: nonEmptyString(source.memberDeclarationKind),
+    presence: nonEmptyString(source.presence),
+    ownerName: nonEmptyString(source.ownerName),
+    ownerKind: nonEmptyString(source.ownerKind),
+    ownerMemberName: nonEmptyString(source.ownerMemberName),
+    usageRole: nonEmptyString(source.usageRole),
+    callCalleeName: nonEmptyString(source.callCalleeName),
+    callArgumentText: nonEmptyString(source.callArgumentText),
+    callArgumentSymbolName: nonEmptyString(source.callArgumentSymbolName),
+    callArgumentFullyQualifiedName: nonEmptyString(source.callArgumentFullyQualifiedName),
+    query: nonEmptyString(source.query),
+    orderBy: nonEmptyString(source.orderBy),
+    symbolName: nonEmptyString(source.symbolName) ?? nonEmptyString(source.frameworkSymbol),
   };
 }
 
+function nonEmptyString(value: unknown): string | undefined {
+  return typeof value === "string" && value.length > 0 ? value : undefined;
+}
+
+function booleanFilterValue(value: unknown): boolean | undefined {
+  if (typeof value === "boolean") {
+    return value;
+  }
+  if (value === "true") {
+    return true;
+  }
+  if (value === "false") {
+    return false;
+  }
+  return undefined;
+}
+
 function summaryForRollup(rollup: AuLinkRollup): string {
-  return `Read ${rollup.anchors} auLink anchor(s), ${rollup.catalogEntries} catalog entrie(s), ${rollup.gaps} gap row(s), and ${rollup.resolvedFrameworkTargets} resolved framework target(s).`;
+  const facetText = rollup.multiFacetPlacementGroups === 0
+    ? ""
+    : `, ${rollup.multiFacetPlacementGroups} multi-facet placement group(s)`;
+  return `Read ${rollup.anchors} auLink anchor(s), ${rollup.catalogEntries} catalog entrie(s), ${rollup.gaps} gap row(s)${facetText}, and ${rollup.resolvedFrameworkTargets} resolved framework target(s).`;
 }
 
 function summaryEvidence(
@@ -769,7 +782,7 @@ function targetContinuations(
         lens: LensId.TsSource,
         locus: {
           kind: LocusKind.SourceRange,
-          range: sourceRangeForAuLinkFrameworkCandidate(firstCandidate),
+          range: sourceRangeForAuLinkFileSpan(firstCandidate),
         },
         projection: "text",
         budget: inquiry.budget,
@@ -786,7 +799,7 @@ function targetContinuations(
         lens: LensId.TsType,
         locus: {
           kind: LocusKind.SourceRange,
-          range: sourceRangeForAuLinkFrameworkCandidate(firstCandidate),
+          range: sourceRangeForAuLinkFileSpan(firstCandidate),
         },
         projection: "facts",
         budget: inquiry.budget,
@@ -932,7 +945,7 @@ function evidenceForFrameworkCandidate(
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: `${candidate.linkId} -> ${candidate.kind} ${candidate.symbolName}`,
-    source: sourceRangeForAuLinkFrameworkCandidate(candidate),
+    source: sourceRangeForAuLinkFileSpan(candidate),
     handle: {
       namespace: HandleNamespace.Framework,
       kind: HandleKind.EvaluatorValue,
@@ -1001,7 +1014,7 @@ function evidenceForObligationEvidence(
           ? EvidenceConfidence.Unknown
           : EvidenceConfidence.Strong,
     summary: row.summary,
-    ...(row.source === undefined ? {} : { source: row.source }),
+    source: row.source,
     handle: {
       namespace: HandleNamespace.Framework,
       kind: HandleKind.EvaluatorValue,
@@ -1074,7 +1087,7 @@ function sourceRangeForGap(gap: AuLinkGapRow): SourceRange | null {
   }
   return gap.catalog === undefined
     ? null
-    : sourceRangeForAuLinkCatalog(gap.catalog);
+    : sourceRangeForAuLinkFileSpan(gap.catalog);
 }
 
 function handleForAnchor(anchor: AuLinkAnchorRow): InquiryHandle {

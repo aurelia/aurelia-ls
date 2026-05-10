@@ -1,6 +1,7 @@
 import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
+import { isImportedAureliaExpression } from '../evaluation/ts-syntax.js';
 import { SourceFileRole } from '../kernel/address.js';
 import type { ProjectBootFrame } from './frames.js';
 import {
@@ -265,21 +266,6 @@ function isAureliaFacadeValue(
       || current.expression.name.text === 'enhance'
     )
     && isAureliaFacadeValue(current.expression.expression, bindings);
-}
-
-function isImportedAureliaExpression(
-  expression: ts.Expression,
-  bindings: SourceAureliaBindings,
-): boolean {
-  const current = unwrapParentheses(expression);
-  return (
-    ts.isIdentifier(current) && bindings.aureliaIdentifiers.has(current.text)
-  ) || (
-    ts.isPropertyAccessExpression(current)
-    && current.name.text === 'Aurelia'
-    && ts.isIdentifier(current.expression)
-    && bindings.aureliaNamespaces.has(current.expression.text)
-  );
 }
 
 function unwrapParentheses(expression: ts.Expression): ts.Expression {

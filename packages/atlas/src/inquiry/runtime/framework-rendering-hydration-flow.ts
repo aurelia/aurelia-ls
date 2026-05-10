@@ -2,8 +2,7 @@ import ts from "typescript";
 
 import {
   deepestNodeContainingText,
-  requiredSourceFileIdentity,
-  sourceRangeForSourceFileNode,
+  requiredSourceRangeForNode,
   SourceProjectMemo,
   type SourceProject,
 } from "../../source/index.js";
@@ -1139,7 +1138,7 @@ function hydrationRow(
   summary: string,
   overview = true,
 ): FrameworkHydrationFlowRow {
-  const source = sourceRangeForBasisNode(basis, node);
+  const source = requiredSourceRangeForNode(basis.sourceProject, node);
   return {
     id: `framework-hydration-flow:${ownerName}:${methodName}:${stage}:${operation}:${targetKind}:${source.start.line}:${source.start.character}`,
     packageId: basis.packageId,
@@ -1171,11 +1170,6 @@ function isHydrationFlowSourceCandidate(node: ts.Node): boolean {
     ts.isVariableDeclaration(node) ||
     ts.isVariableStatement(node)
   );
-}
-
-function sourceRangeForBasisNode(basis: FileBasis, node: ts.Node): SourceRange {
-  const file = requiredSourceFileIdentity(basis.sourceProject, basis.sourceFile);
-  return sourceRangeForSourceFileNode(file.repoPath, basis.sourceFile, node);
 }
 
 function shouldUseHydrationOverview(

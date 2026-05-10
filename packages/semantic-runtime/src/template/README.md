@@ -180,17 +180,29 @@ classification, expression parsing, and instruction lowering converge on the sam
   It preserves the CE boundary-scope rule, repeat local binding-context rule, repeat override contextual names,
   `with.bind` object binding-context rule, branch-local `if.bind`/`else` narrowing, promise result locals, and
   let-binding target-context rule so expression inquiry can use the same scope substrate as runtime-shaped compilation.
+  It also models target-to-source bindable assignments that create runtime-only binding-context names for later
+  template expressions. A two-way/from-view bindable can write a previously undeclared scope name; later
+  sibling/descendant expressions should see that name after the instruction that wrote it. The slot stays runtime-only
+  for assignment policy, but can retain the bindable's TypeChecker member as a type carrier so repeat locals and
+  member completions degrade to the actual target type instead of to a missing-slot-type seam. When the bindable itself
+  is untyped, the remaining authoring pressure is honest `any`/weak-type pressure from the plugin or app surface, not
+  a lost scope handoff.
   Dynamic instructions compiled from closed `...$attrs` captures first try to reuse the parent usage scope that captured
   the attribute; this lets wrapper components forward expressions such as `value.bind="email"` into an inner input
   while typechecking `email` against the parent view model. They still receive a root-scope fallback when no capture
   scope can be found. Definition-level spread fallback groups captures by parent `HydrateElementInstruction` usage, so
   wrapper components under built-in template controllers can keep the child-view scope that the controller semantics
   produced. Repeated runtime instances still need instance-specific controller/template products beyond the current
-  definition-level aggregate rows.
-- `template-controller-semantics.ts` records built-in template-controller child-scope, child-view cardinality, and
-  control-flow roles as product-side semantic profiles. The built-in resource descriptors remain the single auLink
-  anchors for runtime-html template-controller classes; these profiles are behavior data consumed by scope, controller,
-  and API projections rather than separate framework mirror placements.
+  definition-level aggregate rows. Listener binding instructions receive a derived expression scope with the runtime
+  `$event` override-context slot typed from DOM event maps for the event name. This models `ListenerBinding.callSource`
+  rather than a completion special case, and it gives listener-returned functions the same first-argument event type
+  when arrow callbacks such as `(e) => e.stopPropagation()` are evaluated by the TypeChecker substrate.
+- `template-controller-semantics.ts` records built-in template-controller child-scope, child-view cardinality,
+  primary-value domain kind, and control-flow roles as product-side semantic profiles. These semantics classes carry
+  direct `auLink` anchors to the runtime-html template-controller classes because they are the product-side behavior
+  counterpart used by scope, controller, inquiry, and API projections. The value-domain kind is intentionally separate
+  from bindable type projection: framework primary values such as `case.value` are open-ended, while secondary
+  bindables such as `case.fallThrough` still need their own finite/static or checker-backed domain.
 - `built-in-syntax.ts` records framework-provided attribute-pattern and binding-command handlers as concrete
   runtime-shaped model classes with `auLink` anchors.
 - `built-in-syntax-catalog-materializer.ts` materializes framework-owned syntax catalogs into kernel-backed catalog, executable,
@@ -199,7 +211,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   same file consumes explicit `FrameworkRegistrationKind` values from configuration/registration and records which
   built-in catalogs a known framework configuration or registration group made available. I18n translation syntax is
   configuration-sensitive: closed `translationAttributeAliases` option contributions produce a catalog variant with
-  the corresponding attribute patterns and binding-command aliases.
+  the corresponding attribute patterns and binding-command aliases. Translation-key catalogs are separate i18n
+  products in `../i18n`; syntax visibility says where `t` can appear, while i18n products say which static keys are
+  known from configuration resources.
 - The current syntax-execution middle ground is deliberate: built-in framework and built-in plugin attribute patterns
   and binding commands are modeled as concrete executable classes. Userland custom elements, custom attributes, value
   converters, binding behaviors, and template controllers are product priorities; userland attribute-pattern and

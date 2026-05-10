@@ -26,6 +26,11 @@ export interface TypeSystemProjectProfile {
   readonly phases: readonly TypeSystemProjectPhaseTiming[];
 }
 
+interface TypeSystemSourceFileIndexes {
+  readonly byPath: Map<string, ts.SourceFile>;
+  readonly byModuleKey: Map<string, ts.SourceFile>;
+}
+
 /** Current TypeScript Program/checker epoch for one booted project frame. */
 export class TypeSystemProject {
   constructor(
@@ -96,45 +101,21 @@ export class TypeSystemProjectBuilder {
     const evaluatedSources = measureTypeSystemProjectPhase(phases, 'evaluated-source-index', () =>
       evaluation.readEvaluatedSources()
     );
-    const byPath = new Map<string, ts.SourceFile>();
-    const byModuleKey = new Map<string, ts.SourceFile>();
-
-    for (const source of evaluatedSources) {
-      const absolutePath = normalizeTypeSystemPath(source.sourceFile.fileName);
-      byPath.set(absolutePath, source.sourceFile);
-      byModuleKey.set(normalizeModuleKey(source.moduleKey), source.sourceFile);
-    }
+    const sourceFiles = typeSystemSourceFileIndexes(evaluatedSources);
 
     const projectOptions = measureTypeSystemProjectPhase(phases, 'project-options', () =>
       buildTypeSystemProjectOptions(project.rootDir)
     );
-    measureTypeSystemProjectPhase(phases, 'ambient-source-index', () => {
-      for (const ambientSource of projectOptions.ambientSourceFiles) {
-        byPath.set(normalizeTypeSystemPath(ambientSource.fileName), ambientSource);
-      }
-    });
+    measureTypeSystemProjectPhase(phases, 'ambient-source-index', () =>
+      addAmbientSourceFiles(sourceFiles.byPath, projectOptions.ambientSourceFiles)
+    );
 
     const options = projectOptions.compilerOptions;
-    const host = measureTypeSystemProjectPhase(phases, 'compiler-host', () => {
-      const compilerHost = ts.createCompilerHost(options, true);
-      const defaultGetSourceFile = compilerHost.getSourceFile.bind(compilerHost);
-      compilerHost.getSourceFile = (
-        fileName,
-        languageVersionOrOptions,
-        onError,
-        shouldCreateNewSourceFile,
-      ) => {
-        const normalized = normalizeTypeSystemPath(fileName);
-        const existing = byPath.get(normalized);
-        if (existing != null) {
-          return existing;
-        }
-        return defaultGetSourceFile(fileName, languageVersionOrOptions, onError, shouldCreateNewSourceFile);
-      };
-      return compilerHost;
-    });
+    const host = measureTypeSystemProjectPhase(phases, 'compiler-host', () =>
+      createTypeSystemCompilerHost(options, sourceFiles.byPath)
+    );
 
-    const rootNames = [...byPath.keys()];
+    const rootNames = [...sourceFiles.byPath.keys()];
     const program = measureTypeSystemProjectPhase(phases, 'program', () =>
       ts.createProgram(rootNames, options, host)
     );
@@ -150,10 +131,49 @@ export class TypeSystemProjectBuilder {
         totalMilliseconds: performance.now() - started,
         phases,
       },
-      byModuleKey,
-      byPath,
+      sourceFiles.byModuleKey,
+      sourceFiles.byPath,
     );
   }
+}
+
+function typeSystemSourceFileIndexes(
+  evaluatedSources: ReturnType<StaticProjectEvaluationResult['readEvaluatedSources']>,
+): TypeSystemSourceFileIndexes {
+  const byPath = new Map<string, ts.SourceFile>();
+  const byModuleKey = new Map<string, ts.SourceFile>();
+  for (const source of evaluatedSources) {
+    byPath.set(normalizeTypeSystemPath(source.sourceFile.fileName), source.sourceFile);
+    byModuleKey.set(normalizeModuleKey(source.moduleKey), source.sourceFile);
+  }
+  return { byPath, byModuleKey };
+}
+
+function addAmbientSourceFiles(
+  byPath: Map<string, ts.SourceFile>,
+  ambientSourceFiles: readonly ts.SourceFile[],
+): void {
+  for (const ambientSource of ambientSourceFiles) {
+    byPath.set(normalizeTypeSystemPath(ambientSource.fileName), ambientSource);
+  }
+}
+
+function createTypeSystemCompilerHost(
+  options: ts.CompilerOptions,
+  byPath: ReadonlyMap<string, ts.SourceFile>,
+): ts.CompilerHost {
+  const compilerHost = ts.createCompilerHost(options, true);
+  const defaultGetSourceFile = compilerHost.getSourceFile.bind(compilerHost);
+  compilerHost.getSourceFile = (
+    fileName,
+    languageVersionOrOptions,
+    onError,
+    shouldCreateNewSourceFile,
+  ) => {
+    const existing = byPath.get(normalizeTypeSystemPath(fileName));
+    return existing ?? defaultGetSourceFile(fileName, languageVersionOrOptions, onError, shouldCreateNewSourceFile);
+  };
+  return compilerHost;
 }
 
 function classDeclarationForTarget(

@@ -3,6 +3,7 @@ import { performance } from "node:perf_hooks";
 import { OutcomeKind } from "../inquiry/answer.js";
 import { LensId } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
+import { productArchitectureProfileLaneName } from "../inquiry/runtime/product-architecture-profile-label.js";
 import { createApi } from "../session/index.js";
 
 interface ProductArchitectureProfileValue {
@@ -10,6 +11,7 @@ interface ProductArchitectureProfileValue {
     readonly includeCallSites: boolean;
     readonly includeCallDetails: boolean;
     readonly includeSymbols: boolean;
+    readonly includeKernelRecords: boolean;
     readonly totalMilliseconds: number;
     readonly phases: readonly {
       readonly phase: string;
@@ -28,6 +30,7 @@ console.log(`product.architecture profile session warmup: ${warmupMilliseconds.t
 console.log("");
 
 for (const lane of [
+  { includeCallSites: false, includeSymbols: false, includeKernelRecords: false },
   { includeCallSites: false, includeSymbols: false },
   { includeCallSites: true, includeSymbols: false },
   { includeCallSites: true, includeCallDetails: true, includeSymbols: false },
@@ -39,6 +42,7 @@ for (const lane of [
     lane.includeCallSites,
     lane.includeCallDetails ?? false,
     lane.includeSymbols,
+    lane.includeKernelRecords ?? true,
   );
 }
 
@@ -46,13 +50,14 @@ async function printProfile(
   includeCallSites: boolean,
   includeCallDetails: boolean,
   includeSymbols: boolean,
+  includeKernelRecords: boolean,
 ): Promise<void> {
   const started = performance.now();
   const answer = await api.ask({
     lens: LensId.ProductArchitecture,
     locus: RepoRootLocus,
     projection: "profile",
-    filters: { includeCallSites, includeCallDetails, includeSymbols },
+    filters: { includeCallSites, includeCallDetails, includeSymbols, includeKernelRecords },
     budget: { evidencePerSubject: 20 },
   });
 
@@ -68,10 +73,11 @@ async function printProfile(
 
   const phases = [...profile.phases]
     .sort((left, right) => right.milliseconds - left.milliseconds);
-  const label = profileLaneName(
+  const label = productArchitectureProfileLaneName(
     profile.includeCallSites,
     profile.includeCallDetails,
     profile.includeSymbols,
+    profile.includeKernelRecords,
   );
 
   console.log(
@@ -83,21 +89,4 @@ async function printProfile(
     console.log(`- ${row.phase}: ${row.milliseconds.toFixed(1)}ms${count}`);
   }
   console.log("");
-}
-
-function profileLaneName(
-  includeCallSites: boolean,
-  includeCallDetails: boolean,
-  includeSymbols: boolean,
-): string {
-  if (includeCallSites && includeSymbols) {
-    return includeCallDetails ? "full exact-call" : "full compact-call";
-  }
-  if (includeCallSites) {
-    return includeCallDetails ? "core exact-call" : "core compact-call";
-  }
-  if (includeSymbols) {
-    return "symbol";
-  }
-  return "structure";
 }

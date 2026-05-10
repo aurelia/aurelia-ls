@@ -385,7 +385,7 @@ function orientationScripts(): readonly OrientationScriptGuide[] {
       id: "pressure:product-architecture",
       command: "pnpm --filter @aurelia-ls/atlas pressure:product-architecture",
       summary:
-        "Print compact semantic-runtime structure pressure and call-backed function pressure before product cleanup passes.",
+        "Print compact semantic-runtime structure, function, kernel-record, and provenance pressure before product cleanup passes.",
     },
     {
       id: "pressure:product-architecture:detail",
@@ -398,6 +398,18 @@ function orientationScripts(): readonly OrientationScriptGuide[] {
       command: "pnpm --filter @aurelia-ls/atlas pressure:framework-resources",
       summary:
         "Print framework resource convergence, lane, and exact source-site role pressure.",
+    },
+    {
+      id: "pressure:bridge-aulink",
+      command: "pnpm --filter @aurelia-ls/atlas pressure:bridge-aulink",
+      summary:
+        "Print product-to-framework auLink coverage, role evidence, emulation obligation, and usage-divergence pressure.",
+    },
+    {
+      id: "pressure:framework-errors",
+      command: "pnpm --filter @aurelia-ls/atlas pressure:framework-errors",
+      summary:
+        "Print framework error/event code definitions, mapped messages, usage mechanisms, and effects for diagnostic grounding.",
     },
     {
       id: "pressure:framework-router",
@@ -617,7 +629,7 @@ function orientationCapabilityMoves(): readonly OrientationCapabilityMove[] {
       id: "product.architecture-pressure",
       family: "product",
       summary:
-        "Inspect semantic-runtime function call pressure rows; use pressure:product-architecture for the broader structure/function bundle.",
+        "Inspect semantic-runtime function call pressure rows; use pressure:product-architecture for the broader structure/function/product-record bundle.",
       ask: {
         lens: LensId.ProductArchitecture,
         locus: RepoRootLocus,
@@ -691,9 +703,7 @@ function answerGuide(answer: Answer): OrientationAnswerGuide {
   return {
     outcome: answer.outcome,
     lens: answer.inquiry.lens,
-    ...(answer.inquiry.projection === undefined
-      ? {}
-      : { projection: answer.inquiry.projection }),
+    projection: answer.inquiry.projection,
     summary: answer.summary,
     basis: answer.basis.map((basis) => basis.kind),
     evidenceCount: answer.evidence.length,

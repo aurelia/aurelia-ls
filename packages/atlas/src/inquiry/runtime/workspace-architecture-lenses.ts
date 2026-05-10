@@ -31,6 +31,7 @@ import {
   type WorkspaceSurfaceRow,
 } from "./workspace-architecture-analysis.js";
 import {
+  hasAnyInquiryStringFilter,
   inquiryBooleanFilter,
   inquiryLowerStringFilter,
   inquiryPackageIdFilter,
@@ -146,7 +147,8 @@ function answerWorkspaceArchitectureProfile(
     `Profiled workspace architecture in ${analysis.profile.totalMilliseconds.toFixed(1)}ms across ${analysis.profile.phases.length} phase(s).`,
     {
       value: {
-        ...workspaceArchitectureBaseValue(analysis),
+        version: analysis.version,
+        rollup: analysis.rollup,
         profile: analysis.profile,
       },
       basis,
@@ -188,15 +190,6 @@ function answerWorkspaceRows<TRow>(
   });
 }
 
-function workspaceArchitectureBaseValue(
-  analysis: WorkspaceArchitectureAnalysis,
-): WorkspaceArchitectureValue {
-  return {
-    version: analysis.version,
-    rollup: analysis.rollup,
-  };
-}
-
 function workspaceArchitectureProjection(
   inquiry: Inquiry,
 ): WorkspaceArchitectureProjection {
@@ -229,7 +222,7 @@ function filterWorkspaceArchitectureRows(
     queryPackageIds,
   );
   const surfacePackageIds = new Set(surfaces.map((row) => row.packageId));
-  const hasSurfaceFilter = hasExplicitSurfaceFilter(inquiry);
+  const hasSurfaceFilter = hasExplicitWorkspaceSurfaceFilter(inquiry);
   const packages = axisPackages.filter((row) => {
     if (surfacePackageIds.has(row.id)) {
       return true;
@@ -278,7 +271,7 @@ function filterWorkspacePackagesForAxis(
     if (externalOnly === true && !row.external) {
       return false;
     }
-    if (aureliaOnly === true && !packageIsAureliaShaped(row)) {
+    if (aureliaOnly === true && row.aureliaShape === "non-aurelia") {
       return false;
     }
     return true;
@@ -350,12 +343,14 @@ function workspaceSurfaceMatchesQuery(row: WorkspaceSurfaceRow, query: string): 
   );
 }
 
-function hasExplicitSurfaceFilter(inquiry: Inquiry): boolean {
-  return inquiryStringFilter(inquiry, "kind") !== undefined ||
-    inquiryStringFilter(inquiry, "surfaceKind") !== undefined ||
-    inquiryStringFilter(inquiry, "mechanism") !== undefined ||
-    inquiryStringFilter(inquiry, "facet") !== undefined ||
-    inquiryStringFilter(inquiry, "facetPrefix") !== undefined;
+function hasExplicitWorkspaceSurfaceFilter(inquiry: Inquiry): boolean {
+  return hasAnyInquiryStringFilter(inquiry, [
+    "kind",
+    "surfaceKind",
+    "mechanism",
+    "facet",
+    "facetPrefix",
+  ]);
 }
 
 function workspaceEvidenceForPackage(row: WorkspacePackageRow): Evidence {
@@ -377,12 +372,10 @@ function workspaceEvidenceForSurface(row: WorkspaceSurfaceRow): Evidence {
     id: `${row.id}:workspace-evidence`,
     kind: workspaceEvidenceKindForSurface(row),
     role: EvidenceRole.Subject,
-    confidence: row.kind === "app-entrypoint"
-      ? EvidenceConfidence.Strong
-      : EvidenceConfidence.Exact,
+    confidence: EvidenceConfidence.Exact,
     summary: row.summary,
     basis: workspaceSourceBasis(
-      "Workspace surface rows are source-shape observations; app-entrypoint rows are filename-plus-Aurelia-integration signals, not complete runtime proof.",
+      "Workspace surface rows are source-shape observations; app-entrypoint rows are import/receiver-grounded Aurelia bootstrap signals, not complete runtime proof.",
     ),
     ...(row.source === undefined ? {} : { source: row.source }),
     data: row,
@@ -478,8 +471,4 @@ function workspaceSourceBasis(summary: string, identity = "working-tree"): Basis
     summary,
     identity,
   };
-}
-
-function packageIsAureliaShaped(row: WorkspacePackageRow): boolean {
-  return row.aureliaShape !== "non-aurelia";
 }

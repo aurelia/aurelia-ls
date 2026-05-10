@@ -85,6 +85,10 @@ source records but do not enter app-world static evaluation.
   project imported function/class body seams onto the caller source file.
 - Local JSON imports evaluate as default-exported object/array/primitive values; local HTML/CSS imports evaluate as
   default-exported strings. This models common bundler semantics without making the evaluator execute a bundler.
+  JSON asset modules also expose a generated-to-authored span helper for consumers that need exact source addresses
+  for object properties materialized out of the generated default export. HTML/CSS asset modules still only provide
+  default string values; escaped-string source maps should become a real asset primitive before any consumer claims
+  exact interior spans there.
 - Supported intrinsic calls are deliberately small and standard-shaped: current coverage includes `Object.freeze`,
   `Object.assign`, `Object.values`, `String(...)`, `Array.of`, `Array.isArray`, `new Array(...)`, `RegExp(...)`,
   `new RegExp(...)`, `array.concat`, `array.filter`, `array.fill`, `array.slice`, `array.sort`, `string.slice`,

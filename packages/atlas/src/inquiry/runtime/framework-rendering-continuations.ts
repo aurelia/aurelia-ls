@@ -42,9 +42,8 @@ import {
   evidenceForHydrationFlow,
   evidenceForInstructionDispatch,
   evidenceForInstructionSlot,
-  evidenceForRenderConsequence,
   evidenceForSyntaxProduct,
-  evidenceForRenderingRelationship,
+  evidenceForRenderingTypeFact,
 } from "./framework-evidence.js";
 import type { FrameworkHydrationFlowRow } from "./framework-rendering-hydration-flow.js";
 import type { FrameworkRenderConsequenceRow } from "./framework-rendering-consequences.js";
@@ -1030,7 +1029,7 @@ export function renderConsequenceContinuations(
     }),
   );
   for (const [index, row] of rows.slice(0, 3).entries()) {
-    const evidence = evidenceForRenderConsequence(row);
+    const evidence = evidenceForRenderingTypeFact(row);
     const builder = new FrameworkRowContinuationBuilder(
       inquiry,
       "framework.rendering:render-consequences",
@@ -1196,7 +1195,7 @@ export function renderingRelationshipContinuations(
     }),
   );
   for (const [index, row] of rows.slice(0, 5).entries()) {
-    const evidence = evidenceForRenderingRelationship(row);
+    const evidence = evidenceForRenderingTypeFact(row);
     pushRenderingRelationshipSemanticContinuations(
       continuations,
       inquiry,

@@ -7,6 +7,15 @@ import type {
   SemanticProjectAureliaSourceSignalKind,
   SemanticProjectShapeKind,
 } from '../boot/project-shape.js';
+import type {
+  ExpressionExpectedContinuationClass,
+  ExpressionFrontierKind,
+} from '../expression/parse-result-algebra.js';
+import type {
+  TemplateCompletionCandidateKind,
+  TemplateCompletionCandidateSourceKind,
+  TemplateCompletionSiteKind,
+} from '../inquiry/template-completion.js';
 import type { SemanticAppAnalysisDepth } from '../configuration/app-analysis.js';
 import type { ControllerPhase } from '../configuration/controller.js';
 import type {
@@ -16,6 +25,7 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { OpenSeam } from '../kernel/open-seam.js';
+import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type {
   BindableBindingMode,
@@ -27,11 +37,18 @@ import type {
   ShadowRootMode,
 } from '../resources/custom-element-definition.js';
 import type { CustomAttributeContainerStrategy } from '../resources/custom-attribute-definition.js';
+import type {
+  WatchCallbackKind,
+  WatchExpressionKind,
+  WatchFlushMode,
+  WatchPropertyKeyKind,
+} from '../resources/watch-definition.js';
 import type { TemplateResourceVisibilityKind } from '../template/compiler-world-reference.js';
 import type { TemplateInstructionKind } from '../template/instruction-ir.js';
 import type {
   RuntimeBindingDataFlowDirection,
   RuntimeBindingDataFlowSourceAssignmentKind,
+  RuntimeBindingDataFlowSourceAssignmentReasonKind,
   RuntimeBindingDataFlowSourceKind,
   RuntimeBindingValueChannelAuthority,
   RuntimeBindingValueChannelKind,
@@ -55,7 +72,11 @@ import type {
   RuntimeControllerReadinessKind,
 } from '../template/runtime-controller.js';
 import type { RuntimeRendererKind } from '../template/runtime-renderer-reference.js';
-import type { TemplateExpressionParseState } from '../template/value-site.js';
+import type {
+  TemplateExpressionParseState,
+  TemplateValueSiteKind,
+} from '../template/value-site.js';
+import type { CheckerTypeMemberKind } from '../type-system/type-shape.js';
 import type { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import type {
   BuiltInTemplateControllerChildViewCardinality,
@@ -105,6 +126,9 @@ export const enum SemanticAppQueryKind {
   ResourceDefinitions = 'resource-definitions',
   ResourceVisibility = 'resource-visibility',
   TemplateCompilations = 'template-compilations',
+  TemplateCompletions = 'template-completions',
+  TemplateCursorInfo = 'template-cursor-info',
+  TemplateDiagnostics = 'template-diagnostics',
   RuntimeControllers = 'runtime-controllers',
   BindingTargetAccesses = 'binding-target-accesses',
   TargetOperations = 'target-operations',
@@ -142,8 +166,16 @@ export interface SemanticRuntimeOptions {
 export interface OpenSemanticAppOptions {
   /** Project key selected from the booted workspace. Omit to use the first project. */
   readonly projectKey?: string | null;
+  /** Optional source file used to select the owning project when projectKey is omitted. */
+  readonly sourceFilePath?: string | null;
   /** Runtime/checker product depth requested for this app-world emission. Omit for full binding observation. */
   readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null;
+  /** Include standalone resource-library template analysis for authoring/LSP inquiries. */
+  readonly includeAuthoringTemplates?: boolean | null;
+  /** Optional source-file selection for authoring/LSP template compilation. */
+  readonly authoringTemplateSourceFiles?: readonly string[] | null;
+  /** Optional cap for standalone authoring templates compiled in this app open request. */
+  readonly authoringTemplateLimit?: number | null;
 }
 
 export interface SemanticRuntimePageInput {
@@ -153,6 +185,44 @@ export interface SemanticRuntimePageInput {
 
 export interface SemanticAppQuery {
   readonly kind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;
+  readonly page?: SemanticRuntimePageInput;
+  readonly detail?: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`;
+  /** Source cursor used by cursor-scoped authoring queries such as template completions. */
+  readonly cursor?: SemanticRuntimeSourceCursorInput | null;
+  /** Source file used by file-scoped authoring queries such as template diagnostics. */
+  readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
+}
+
+export interface SemanticTemplateCursorQuery {
+  /** Source cursor for template authoring queries. */
+  readonly cursor: SemanticRuntimeSourceCursorInput;
+  /** Project key selected from the booted workspace. Omit to select from the cursor file path. */
+  readonly projectKey?: string | null;
+  /** Runtime/checker product depth requested for this cursor query. */
+  readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null;
+  /** Include standalone resource-library template analysis. Defaults to true for cursor-locus queries. */
+  readonly includeAuthoringTemplates?: boolean | null;
+  /** Optional source-file selection for authoring template compilation. Defaults to the cursor file. */
+  readonly authoringTemplateSourceFiles?: readonly string[] | null;
+  /** Optional cap for standalone authoring templates compiled in this cursor query. */
+  readonly authoringTemplateLimit?: number | null;
+  readonly page?: SemanticRuntimePageInput;
+  readonly detail?: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`;
+}
+
+export interface SemanticTemplateDiagnosticsQuery {
+  /** Optional source file for file-locus diagnostics. Omit to scan the opened app's compiled template basis. */
+  readonly sourceFile?: SemanticRuntimeSourceFileInput | null;
+  /** Project key selected from the booted workspace. Omit to select from the source file or default app project. */
+  readonly projectKey?: string | null;
+  /** Runtime/checker product depth requested for this diagnostic query. */
+  readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null;
+  /** Include standalone resource-library template analysis. Defaults to true for file-locus diagnostics. */
+  readonly includeAuthoringTemplates?: boolean | null;
+  /** Optional source-file selection for authoring template compilation. Defaults to the diagnostic source file. */
+  readonly authoringTemplateSourceFiles?: readonly string[] | null;
+  /** Optional cap for standalone authoring templates compiled in this diagnostic query. */
+  readonly authoringTemplateLimit?: number | null;
   readonly page?: SemanticRuntimePageInput;
   readonly detail?: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`;
 }
@@ -173,6 +243,22 @@ export interface SemanticRuntimePageResult {
   readonly totalRows: number;
 }
 
+export interface SemanticRuntimeSourceCursorInput {
+  /** Host-facing source path, absolute or relative to the opened project root. */
+  readonly filePath: string;
+  /** Zero-based source line. */
+  readonly line: number;
+  /** Zero-based source character. */
+  readonly character: number;
+  /** Optional zero-based source offset; callers with an editor document should usually supply this. */
+  readonly offset?: number | null;
+}
+
+export interface SemanticRuntimeSourceFileInput {
+  /** Host-facing source path, absolute or relative to the opened project root. */
+  readonly filePath: string;
+}
+
 export interface SemanticRuntimeSummary {
   readonly workspaceRoot: string;
   readonly workspaceKey: string;
@@ -184,7 +270,7 @@ export interface SemanticProjectSummary {
   readonly rootDir: string;
   readonly sourceFiles: number;
   readonly sourceRoles: readonly SemanticSourceRoleCount[];
-  readonly hasLikelyEntrypointSource: boolean;
+  readonly hasAureliaAppEntrypointSignal: boolean;
   readonly shapeKind: SemanticProjectShapeKind | `${SemanticProjectShapeKind}`;
   readonly aureliaDependencyScopes: readonly SemanticProjectAureliaDependencyScopeCount[];
   readonly aureliaSourceSignals: readonly SemanticProjectAureliaSourceSignalCount[];
@@ -257,7 +343,7 @@ export interface SemanticAppSummary {
   readonly runtimeBindingValueChannels: number;
   readonly runtimeBindingDataFlows: number;
   readonly runtimeBindingDataFlowSourceTypeGaps: number;
-  readonly runtimeBindingDataFlowSourceAssignmentGaps: number;
+  readonly runtimeBindingDataFlowSourceAssignmentPressures: number;
   readonly bindingScopes: number;
   readonly kernelProducts: number;
   readonly kernelClaims: number;
@@ -291,6 +377,7 @@ export interface SemanticUnresolvedModulesResult {
 export interface SemanticOpenSeamRow {
   readonly seamKindKey: OpenSeam['seamKindKey'];
   readonly summary: string;
+  readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly handle: OpenSeam['handle'];
@@ -309,6 +396,18 @@ export interface SemanticResourceDefinitionBindableRow {
   readonly mode: BindableBindingMode | `${BindableBindingMode}`;
   readonly setterKind: BindableSetterKind | `${BindableSetterKind}`;
   readonly source: SemanticSourceReference | null;
+}
+
+export interface SemanticResourceDefinitionWatchRow {
+  readonly expressionKind: WatchExpressionKind | `${WatchExpressionKind}`;
+  readonly expressionPropertyKeyKind: WatchPropertyKeyKind | `${WatchPropertyKeyKind}` | null;
+  readonly expressionPropertyKeyText: string | null;
+  readonly expressionSource: SemanticSourceReference | null;
+  readonly callbackKind: WatchCallbackKind | `${WatchCallbackKind}`;
+  readonly callbackPropertyKeyKind: WatchPropertyKeyKind | `${WatchPropertyKeyKind}` | null;
+  readonly callbackPropertyKeyText: string | null;
+  readonly callbackSource: SemanticSourceReference | null;
+  readonly flush: WatchFlushMode | `${WatchFlushMode}`;
 }
 
 export interface SemanticResourceDefinitionDependencyRow {
@@ -338,6 +437,7 @@ export interface SemanticResourceDefinitionRow {
   readonly captureKind: CustomElementCaptureKind | `${CustomElementCaptureKind}` | null;
   readonly template: SemanticResourceDefinitionTemplateRow | null;
   readonly bindables: readonly SemanticResourceDefinitionBindableRow[];
+  readonly watches: readonly SemanticResourceDefinitionWatchRow[];
   readonly dependencies: readonly SemanticResourceDefinitionDependencyRow[];
   readonly isTemplateController: boolean | null;
   readonly containerStrategy: CustomAttributeContainerStrategy | `${CustomAttributeContainerStrategy}` | null;
@@ -898,6 +998,7 @@ export interface SemanticResourceVisibilityResult {
 }
 
 export interface SemanticTemplateCompilationRow {
+  readonly compilationLane: 'app-runtime' | 'authoring';
   readonly analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
   readonly definitionName: string;
   readonly compilerWorld: string;
@@ -935,6 +1036,212 @@ export interface SemanticTemplateCompilationRow {
 
 export interface SemanticTemplateCompilationResult {
   readonly rows: readonly SemanticTemplateCompilationRow[];
+}
+
+export interface SemanticTemplateCompletionCandidateRow {
+  readonly candidateKind: TemplateCompletionCandidateKind | `${TemplateCompletionCandidateKind}`;
+  readonly name: string;
+  readonly sourceKind: TemplateCompletionCandidateSourceKind | `${TemplateCompletionCandidateSourceKind}`;
+  readonly summary: string | null;
+  readonly typeDisplay: string | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle | null;
+    readonly identityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateCompletionFrontierRow {
+  readonly frontierKind: ExpressionFrontierKind | `${ExpressionFrontierKind}` | null;
+  readonly expectedContinuationClasses: readonly (ExpressionExpectedContinuationClass | `${ExpressionExpectedContinuationClass}`)[];
+}
+
+export interface SemanticTemplateCompletionResult {
+  readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
+  readonly candidates: readonly SemanticTemplateCompletionCandidateRow[];
+  readonly expressionFrontier: SemanticTemplateCompletionFrontierRow | null;
+  readonly missingInputs: readonly string[];
+  readonly template: {
+    readonly compilationLane: SemanticTemplateCompilationRow['compilationLane'] | null;
+    readonly source: SemanticSourceReference | null;
+  };
+}
+
+export interface SemanticTemplateCursorHtmlRow {
+  readonly nodeKind: string | null;
+  readonly tagName: string | null;
+  readonly attributeName: string | null;
+  readonly attributeValue: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly attributeSource: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly nodeProductHandle: ProductHandle | null;
+    readonly attributeProductHandle: ProductHandle | null;
+    readonly nodeSourceAddressHandle: AddressHandle | null;
+    readonly attributeSourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateCursorValueSiteRow {
+  readonly siteKind: TemplateValueSiteKind | `${TemplateValueSiteKind}`;
+  readonly rawValue: string;
+  readonly entryFamily: string | null;
+  readonly bindingCommandName: string | null;
+  readonly bindableName: string | null;
+  readonly bindableAttribute: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle | null;
+    readonly identityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateCursorDefinitionRow {
+  readonly resourceKind: ResourceDefinitionKind | `${ResourceDefinitionKind}`;
+  readonly name: string | null;
+  readonly targetName: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly definitionProductHandle: ProductHandle | null;
+    readonly identityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateCursorBindableRow {
+  readonly name: string;
+  readonly attribute: string;
+  readonly mode: BindableBindingMode | `${BindableBindingMode}`;
+  readonly ownerDefinitionProductHandle: ProductHandle | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly ownerDefinitionProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticTemplateCursorMemberRow {
+  readonly name: string;
+  readonly memberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}`;
+  readonly typeDisplay: string | null;
+  readonly isOptional: boolean;
+  readonly isReadonly: boolean;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export type SemanticTemplateCursorDiagnosticSeverity =
+  | 'information'
+  | 'warning'
+  | 'error';
+
+export type SemanticTemplateCursorDiagnosticKind =
+  | 'weak-expression-member-owner'
+  | 'binding-source-assignment-strictness'
+  | 'binding-source-assignment-runtime-noop';
+
+export type SemanticTemplateCursorDiagnosticAuthority =
+  | 'semantic-authoring-policy'
+  | 'framework-runtime-behavior'
+  | 'framework-error-code';
+
+export type SemanticTemplateCursorSuggestionKind =
+  | 'declare-explicit-member'
+  | 'declare-assignable-member'
+  | 'declare-scope-slot-type'
+  | 'replace-any-owner'
+  | 'use-assignable-expression'
+  | 'inspect-owner-type';
+
+export type SemanticTemplateCursorSuggestionActionKind =
+  | 'declare-member'
+  | 'declare-scope-slot'
+  | 'replace-owner-type'
+  | 'rewrite-expression'
+  | 'inspect-owner-type';
+
+export type SemanticTemplateCursorSuggestionActionTargetKind =
+  | 'owner-type'
+  | 'scope-slot'
+  | 'expression';
+
+export interface SemanticTemplateCursorSuggestionActionTargetRow {
+  readonly targetKind: SemanticTemplateCursorSuggestionActionTargetKind;
+  readonly source: SemanticSourceReference | null;
+  readonly memberName: string | null;
+  readonly typeDisplay: string | null;
+}
+
+export interface SemanticTemplateCursorSuggestionRow {
+  readonly suggestionKind: SemanticTemplateCursorSuggestionKind;
+  readonly actionKind: SemanticTemplateCursorSuggestionActionKind;
+  readonly actionTarget: SemanticTemplateCursorSuggestionActionTargetRow | null;
+  readonly summary: string;
+  readonly targetMemberName: string | null;
+  readonly ownerTypeDisplay: string | null;
+  readonly valueTypeDisplay: string | null;
+}
+
+export interface SemanticTemplateCursorDiagnosticRow {
+  readonly diagnosticKind: SemanticTemplateCursorDiagnosticKind;
+  readonly diagnosticAuthority: SemanticTemplateCursorDiagnosticAuthority;
+  readonly frameworkErrorCode: string | null;
+  readonly severity: SemanticTemplateCursorDiagnosticSeverity;
+  readonly summary: string;
+  readonly missingInput: string | null;
+  readonly missingInputs: readonly string[];
+  readonly source: SemanticSourceReference | null;
+  readonly selectedMemberName: string | null;
+  readonly ownerTypeDisplay: string | null;
+  readonly ownerTypeShapeKind: string | null;
+  readonly ownerTypeOrigin: string | null;
+  readonly suggestion: SemanticTemplateCursorSuggestionRow | null;
+}
+
+export interface SemanticTemplateDiagnosticRow extends SemanticTemplateCursorDiagnosticRow {
+  readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
+  readonly valueSiteKind: TemplateValueSiteKind | `${TemplateValueSiteKind}` | null;
+  readonly template: {
+    readonly compilationLane: SemanticTemplateCompilationRow['compilationLane'] | null;
+    readonly source: SemanticSourceReference | null;
+  };
+}
+
+export interface SemanticTemplateDiagnosticsResult {
+  readonly rows: readonly SemanticTemplateDiagnosticRow[];
+}
+
+export interface SemanticTemplateCursorInfoResult {
+  readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
+  readonly expressionFrontier: SemanticTemplateCompletionFrontierRow | null;
+  readonly missingInputs: readonly string[];
+  readonly template: {
+    readonly compilationLane: SemanticTemplateCompilationRow['compilationLane'] | null;
+    readonly source: SemanticSourceReference | null;
+  };
+  readonly html: SemanticTemplateCursorHtmlRow;
+  readonly valueSite: SemanticTemplateCursorValueSiteRow | null;
+  readonly selectedDefinition: SemanticTemplateCursorDefinitionRow | null;
+  readonly selectedBindable: SemanticTemplateCursorBindableRow | null;
+  readonly selectedMemberName: string | null;
+  readonly selectedMember: SemanticTemplateCursorMemberRow | null;
+  readonly memberOwnerType: {
+    readonly display: string | null;
+    readonly shapeKind: string | null;
+    readonly origin: string | null;
+    readonly source: SemanticSourceReference | null;
+    readonly handles?: {
+      readonly productHandle: ProductHandle | null;
+      readonly identityHandle: IdentityHandle | null;
+      readonly sourceAddressHandle: AddressHandle | null;
+    };
+  } | null;
+  readonly diagnostics: readonly SemanticTemplateCursorDiagnosticRow[];
 }
 
 export type SemanticRuntimeControllerHydrationHandoffKind =
@@ -1114,6 +1421,7 @@ export interface SemanticBindingValueChannelRow {
   readonly valueDomain: readonly string[];
   readonly isCollection: boolean | null;
   readonly openReason: string | null;
+  readonly openReasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly bindingProductHandle: ProductHandle | null;
@@ -1141,6 +1449,7 @@ export interface SemanticBindingDataFlowRow {
   readonly sourceName: string | null;
   readonly sourceType: string | null;
   readonly sourceTypeOpenReason: string | null;
+  readonly sourceAssignmentTargetType: string | null;
   readonly targetProperty: string | null;
   readonly targetOperationKind: RuntimeBindingTargetOperationKind | `${RuntimeBindingTargetOperationKind}` | null;
   readonly sourceOperationKind: RuntimeBindingSourceOperationKind | `${RuntimeBindingSourceOperationKind}` | null;
@@ -1150,6 +1459,7 @@ export interface SemanticBindingDataFlowRow {
   readonly sourceWritable: boolean | null;
   readonly sourceAssignmentKind: RuntimeBindingDataFlowSourceAssignmentKind | `${RuntimeBindingDataFlowSourceAssignmentKind}` | null;
   readonly sourceAssignmentReason: string | null;
+  readonly sourceAssignmentReasonKinds: readonly (RuntimeBindingDataFlowSourceAssignmentReasonKind | `${RuntimeBindingDataFlowSourceAssignmentReasonKind}`)[];
   readonly sourceToTargetAssignable: boolean | null;
   readonly targetToSourceAssignable: boolean | null;
   readonly openReason: string | null;
@@ -1164,6 +1474,7 @@ export interface SemanticBindingDataFlowRow {
     readonly expressionProductHandle: ProductHandle | null;
     readonly bindingScopeProductHandle: ProductHandle | null;
     readonly sourceTypeProductHandle: ProductHandle | null;
+    readonly sourceAssignmentTargetTypeProductHandle: ProductHandle | null;
     readonly targetPropertyTypeProductHandle: ProductHandle | null;
     readonly targetValueTypeProductHandle: ProductHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;

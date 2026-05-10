@@ -5,12 +5,11 @@ import {
   ExpressionParseResultKind,
   type ExpressionParseResult,
 } from '../expression/parse-result-algebra.js';
+import ts from 'typescript';
 import { ExpressionParser } from '../expression/expression-parser.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
-import type {
-  AccessMemberExpression,
-  CallMemberExpression,
-} from '../expression/ast.js';
+import { ExpressionParseResultInspector } from '../expression/parse-result-inspection.js';
+import { expressionSpanContainsOffset } from '../expression/source-span.js';
 import type {
   AddressHandle,
   ClaimHandle,
@@ -39,19 +38,32 @@ import {
   CheckerExpressionTypeEvaluationResultKind,
 } from '../type-system/expression-type-evaluator.js';
 import { CheckerTypeProjector } from '../type-system/checker-projector.js';
+import { checkerNullishType } from '../type-system/checker-related-types.js';
 import type {
   CheckerTypeMember,
   CheckerTypeReference,
 } from '../type-system/type-shape.js';
+import { CheckerTypeShapeKind } from '../type-system/type-shape.js';
+import {
+  RouteConfigKind,
+  type RouteConfigModel,
+} from '../router/model.js';
+import { RouterProductDetails } from '../router/product-details.js';
+import { I18nProductDetails } from '../i18n/product-details.js';
+import type { I18nTranslationKey } from '../i18n/model.js';
 import {
   TemplateResourceScope,
 } from '../template/compiler-world.js';
-import { TemplateVisibleResource } from '../template/compiler-world-reference.js';
+import {
+  TemplateVisibleResource,
+  type TemplateBindableReference,
+} from '../template/compiler-world-reference.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from '../template/template-compilation-project-pass.js';
 import type {
   TemplateExpressionParse,
   TemplateValueSite,
 } from '../template/value-site.js';
+import { TemplateValueSiteKind } from '../template/value-site.js';
 import type { TemplateSource } from '../template/compilation-unit.js';
 import type { AttributeClassification, AttributeSyntax } from '../template/attribute-syntax.js';
 import {
@@ -59,7 +71,14 @@ import {
   HtmlElement,
   type HtmlIrNode,
 } from '../template/html-ir.js';
-import { type TemplateInstruction } from '../template/instruction-ir.js';
+import {
+  BuiltInTemplateControllerValueDomainKind,
+  runtimeHtmlTemplateControllerSemanticsForName,
+} from '../template/template-controller-semantics.js';
+import {
+  expressionProductHandlesForInstruction,
+  type TemplateInstruction,
+} from '../template/instruction-ir.js';
 import {
   InquiryAnswer,
   InquiryContinuation,
@@ -108,6 +127,9 @@ export const enum TemplateCompletionCandidateKind {
   CustomAttribute = 'custom-attribute',
   TemplateController = 'template-controller',
   BindableAttribute = 'bindable-attribute',
+  AttributeValue = 'attribute-value',
+  RouterRoute = 'router-route',
+  I18nTranslationKey = 'i18n-translation-key',
   ValueConverter = 'value-converter',
   BindingBehavior = 'binding-behavior',
   BindingCommand = 'binding-command',
@@ -120,6 +142,8 @@ export const enum TemplateCompletionCandidateSourceKind {
   ResourceScope = 'resource-scope',
   ResourceDefinition = 'resource-definition',
   TypeSystem = 'type-system',
+  Router = 'router',
+  I18n = 'i18n',
 }
 
 export class TemplateCompletionCandidate {
@@ -195,8 +219,14 @@ export class TemplateCompletionQuery {
     readonly expressionParseProductHandle: ProductHandle | null = null,
     /** Type shape whose members should be offered for member-access completion. */
     readonly memberOwnerTypeProductHandle: ProductHandle | null = null,
+    /** Template value-site product under the cursor, when a parsed or owned value produced this site. */
+    readonly valueSiteProductHandle: ProductHandle | null = null,
     /** Projection requested by the caller. */
     readonly projection: InquiryProjection = new InquiryProjection(InquiryProjectionKind.Compact),
+    /** Router route configs visible to this app/template context, when route-aware value completion is requested. */
+    readonly routeConfigProductHandles: readonly ProductHandle[] = [],
+    /** Static i18n translation keys visible to this app/template context. */
+    readonly i18nTranslationKeyProductHandles: readonly ProductHandle[] = [],
   ) {}
 
   withPage(page: InquiryPageRequest): TemplateCompletionQuery {
@@ -209,7 +239,10 @@ export class TemplateCompletionQuery {
       this.selectedDefinitionProductHandle,
       this.expressionParseProductHandle,
       this.memberOwnerTypeProductHandle,
+      this.valueSiteProductHandle,
       this.projection,
+      this.routeConfigProductHandles,
+      this.i18nTranslationKeyProductHandles,
     );
   }
 
@@ -223,7 +256,10 @@ export class TemplateCompletionQuery {
       this.selectedDefinitionProductHandle,
       this.expressionParseProductHandle,
       memberOwnerTypeProductHandle,
+      this.valueSiteProductHandle,
       this.projection,
+      this.routeConfigProductHandles,
+      this.i18nTranslationKeyProductHandles,
     );
   }
 }
@@ -237,6 +273,10 @@ export interface TemplateCompletionCursorContextRequest {
   readonly page?: InquiryPageRequest;
   /** Projection copied into the resulting completion query. */
   readonly projection?: InquiryProjection;
+  /** Router route configs visible to the app/template context. */
+  readonly routeConfigProductHandles?: readonly ProductHandle[];
+  /** Static i18n translation keys visible to the app/template context. */
+  readonly i18nTranslationKeyProductHandles?: readonly ProductHandle[];
 }
 
 export class TemplateCompletionCursorContext {
@@ -249,6 +289,12 @@ export class TemplateCompletionCursorContext {
     readonly htmlAttributeProductHandle: ProductHandle | null,
     /** Value-site product under the cursor, when expression/value parsing owns the site. */
     readonly valueSiteProductHandle: ProductHandle | null,
+    /** Bindable selected by the cursor's classification or active value site, when one exists. */
+    readonly selectedBindable: TemplateBindableReference | null,
+    /** Closed member token selected by the cursor, when the cursor is on an authored member name. */
+    readonly selectedMemberName: string | null,
+    /** Parser frontier under the cursor, when the cursor selected an expression parse. */
+    readonly expressionFrontier: TemplateExpressionCompletionFrontier | null,
     /** Extra context gaps found while turning a cursor into product handles. */
     readonly missingInputs: readonly string[] = [],
   ) {}
@@ -277,23 +323,47 @@ export function templateCompletionQueryForCursor(
   store: KernelStore,
   input: TemplateCompletionCursorContextRequest,
 ): TemplateCompletionCursorContext {
-  const page = input.page ?? new InquiryPageRequest();
-  const projection = input.projection ?? new InquiryProjection(InquiryProjectionKind.Compact);
-  const offset = input.locus.cursor.offset;
-  const compilation = input.resource.compilation;
-  if (offset == null) {
+  return new TemplateCompletionCursorContextBuilder(store, input).build();
+}
+
+class TemplateCompletionCursorContextBuilder {
+  private readonly page: InquiryPageRequest;
+  private readonly projection: InquiryProjection;
+
+  constructor(
+    private readonly store: KernelStore,
+    private readonly input: TemplateCompletionCursorContextRequest,
+  ) {
+    this.page = input.page ?? new InquiryPageRequest();
+    this.projection = input.projection ?? new InquiryProjection(InquiryProjectionKind.Compact);
+  }
+
+  build(): TemplateCompletionCursorContext {
+    const offset = this.input.locus.cursor.offset;
+    return offset == null
+      ? this.missingOffsetContext()
+      : this.contextForOffset(offset);
+  }
+
+  private missingOffsetContext(): TemplateCompletionCursorContext {
     return new TemplateCompletionCursorContext(
       new TemplateCompletionQuery(
-        input.locus,
+        this.input.locus,
         TemplateCompletionSiteKind.Unknown,
-        page,
+        this.page,
         null,
-        compilation.compilerWorld.resourceScope.productHandle,
+        this.input.resource.compilation.compilerWorld.resourceScope.productHandle,
         null,
         null,
         null,
-        projection,
+        null,
+        this.projection,
+        this.input.routeConfigProductHandles ?? [],
+        this.input.i18nTranslationKeyProductHandles ?? [],
       ),
+      null,
+      null,
+      null,
       null,
       null,
       null,
@@ -301,84 +371,161 @@ export function templateCompletionQueryForCursor(
     );
   }
 
-  const htmlNode = smallestContaining(
-    compilation.html.nodes,
-    offset,
-    (node) => sourceSpanFor(store, node.sourceAddressHandle),
-  );
-  const htmlAttribute = smallestContaining(
-    compilation.html.attributes,
-    offset,
-    (attribute) => sourceSpanFor(store, attribute.sourceAddressHandle),
-  );
-  const valueSites = templateValueSitesForCursor(input.resource);
-  const expressionParses = templateExpressionParsesForCursor(input.resource);
-  const valueSite = smallestContaining(
-    valueSites,
-    offset,
-    (site) => sourceSpanFor(store, site.sourceAddressHandle),
-  );
-  const expressionParse = valueSite == null
-    ? null
-    : expressionParses.find((parse) => parse.site.productHandle === valueSite.productHandle) ?? null;
-  const expressionResult = expressionParse == null
-    ? null
-    : cursorFocusedExpressionResult(store, expressionParse, offset);
-  const syntax = htmlAttribute == null
-    ? null
-    : syntaxForAttribute(compilation.attributeSyntax.syntaxes, htmlAttribute);
-  const classification = syntax == null
-    ? null
-    : classificationForSyntax(compilation.attributeClassification.classifications, syntax);
-  const activeElement = elementForCursorContext(compilation.html.nodes, htmlNode, classification);
-  const siteKind = classifyTemplateCompletionSite(
-    store,
-    offset,
-    compilation.unit.templateSource.markup,
-    compilation.unit.templateSource.sourceAddressHandle,
-    compilation.unit.templateSource.sourceMap,
-    htmlNode,
-    activeElement,
-    htmlAttribute,
-    syntax,
-    valueSite,
-    expressionResult,
-  );
-  const bindingScope = bindingScopeForCursor(store, input.resource, offset, expressionParse);
-  const selectedDefinitionProductHandle = selectedDefinitionForCursor(input.resource, activeElement, classification);
-  const missingInputs: string[] = [];
-  const memberOwnerExpression = expressionResult == null
-    ? null
-    : memberOwnerExpressionForOffset(expressionResult, offset);
-  const memberOwnerTypeProductHandle = siteKind === TemplateCompletionSiteKind.ExpressionMember && memberOwnerExpression != null && bindingScope != null
-    ? deriveMemberOwnerTypeProductHandleForExpression(
-      store,
-      input.locus.key,
-      memberOwnerExpression,
-      expressionParse!.sourceAddressHandle,
-      bindingScope,
-      compilation.compilerWorld.resourceScope,
-      missingInputs,
-    )
-    : null;
-
-  return new TemplateCompletionCursorContext(
-    new TemplateCompletionQuery(
-      input.locus,
+  private contextForOffset(offset: number): TemplateCompletionCursorContext {
+    const htmlNode = this.htmlNodeForOffset(offset);
+    const htmlAttribute = this.htmlAttributeForOffset(offset);
+    const valueSite = this.valueSiteForOffset(offset);
+    const expressionParse = this.expressionParseForValueSite(valueSite);
+    const expressionResult = expressionParse == null
+      ? null
+      : cursorFocusedExpressionResult(this.store, expressionParse, offset);
+    const syntax = this.syntaxForCursorAttribute(htmlAttribute);
+    const classification = this.classificationForCursorSyntax(syntax);
+    const activeElement = elementForCursorContext(this.input.resource.compilation.html.nodes, htmlNode, classification);
+    const siteKind = this.siteKindForCursor(offset, htmlNode, activeElement, htmlAttribute, syntax, valueSite, expressionResult);
+    const bindingScope = bindingScopeForCursor(this.store, this.input.resource, offset, expressionParse);
+    const selectedDefinitionProductHandle = selectedDefinitionForCursor(this.input.resource, activeElement, classification);
+    const selectedBindable = selectedBindableForCursor(classification, valueSite);
+    const missingInputs: string[] = [];
+    const memberOwnerTypeProductHandle = this.memberOwnerTypeProductHandle(
+      offset,
       siteKind,
-      page,
-      bindingScope?.productHandle ?? null,
-      compilation.compilerWorld.resourceScope.productHandle,
-      selectedDefinitionProductHandle,
-      siteKindUsesExpressionParse(siteKind) ? expressionParse?.productHandle ?? null : null,
-      memberOwnerTypeProductHandle,
-      projection,
-    ),
-    htmlNode?.productHandle ?? null,
-    htmlAttribute?.productHandle ?? null,
-    valueSite?.productHandle ?? null,
-    uniqueValues(missingInputs),
-  );
+      expressionParse,
+      expressionResult,
+      bindingScope,
+      valueSite,
+      missingInputs,
+    );
+    const selectedMemberName = selectedMemberNameForCursor(siteKind, expressionResult, offset);
+
+    return new TemplateCompletionCursorContext(
+      new TemplateCompletionQuery(
+        this.input.locus,
+        siteKind,
+        this.page,
+        bindingScope?.productHandle ?? null,
+        this.input.resource.compilation.compilerWorld.resourceScope.productHandle,
+        selectedDefinitionProductHandle,
+        siteKindUsesExpressionParse(siteKind) ? expressionParse?.productHandle ?? null : null,
+        memberOwnerTypeProductHandle,
+        valueSite?.productHandle ?? null,
+        this.projection,
+        this.input.routeConfigProductHandles ?? [],
+        this.input.i18nTranslationKeyProductHandles ?? [],
+      ),
+      htmlNode?.productHandle ?? null,
+      htmlAttribute?.productHandle ?? null,
+      valueSite?.productHandle ?? null,
+      selectedBindable,
+      selectedMemberName,
+      expressionResult == null ? null : expressionCompletionFrontier(expressionResult),
+      uniqueValues(missingInputs),
+    );
+  }
+
+  private htmlNodeForOffset(offset: number): HtmlIrNode | null {
+    return smallestContaining(
+      this.input.resource.compilation.html.nodes,
+      offset,
+      (node) => sourceSpanFor(this.store, node.sourceAddressHandle),
+    );
+  }
+
+  private htmlAttributeForOffset(offset: number): HtmlAttribute | null {
+    return smallestContaining(
+      this.input.resource.compilation.html.attributes,
+      offset,
+      (attribute) => sourceSpanFor(this.store, attribute.sourceAddressHandle),
+    );
+  }
+
+  private valueSiteForOffset(offset: number): TemplateValueSite | null {
+    return smallestContaining(
+      templateValueSitesForCursor(this.input.resource),
+      offset,
+      (site) => sourceSpanFor(this.store, site.sourceAddressHandle),
+    );
+  }
+
+  private expressionParseForValueSite(valueSite: TemplateValueSite | null): TemplateExpressionParse | null {
+    return valueSite == null
+      ? null
+      : templateExpressionParsesForCursor(this.input.resource)
+        .find((parse) => parse.site.productHandle === valueSite.productHandle) ?? null;
+  }
+
+  private syntaxForCursorAttribute(htmlAttribute: HtmlAttribute | null): AttributeSyntax | null {
+    return htmlAttribute == null
+      ? null
+      : syntaxForAttribute(this.input.resource.compilation.attributeSyntax.syntaxes, htmlAttribute);
+  }
+
+  private classificationForCursorSyntax(syntax: AttributeSyntax | null): AttributeClassification | null {
+    return syntax == null
+      ? null
+      : classificationForSyntax(this.input.resource.compilation.attributeClassification.classifications, syntax);
+  }
+
+  private siteKindForCursor(
+    offset: number,
+    htmlNode: HtmlIrNode | null,
+    activeElement: HtmlElement | null,
+    htmlAttribute: HtmlAttribute | null,
+    syntax: AttributeSyntax | null,
+    valueSite: TemplateValueSite | null,
+    expressionResult: ExpressionParseResult | null,
+  ): TemplateCompletionSiteKind {
+    const source = this.input.resource.compilation.unit.templateSource;
+    return classifyTemplateCompletionSite(
+      this.store,
+      offset,
+      source.markup,
+      source.sourceAddressHandle,
+      source.sourceMap,
+      htmlNode,
+      activeElement,
+      htmlAttribute,
+      syntax,
+      valueSite,
+      expressionResult,
+    );
+  }
+
+  private memberOwnerTypeProductHandle(
+    offset: number,
+    siteKind: TemplateCompletionSiteKind,
+    expressionParse: TemplateExpressionParse | null,
+    expressionResult: ExpressionParseResult | null,
+    bindingScope: BindingScope | null,
+    valueSite: TemplateValueSite | null,
+    missingInputs: string[],
+  ): ProductHandle | null {
+    return siteKind === TemplateCompletionSiteKind.ExpressionMember
+      && bindingScope != null
+      && expressionParse != null
+      ? deriveMemberOwnerTypeProductHandleForExpression(
+        this.store,
+        this.input.locus.key,
+        expressionResult,
+        offset,
+        expressionParse.sourceAddressHandle,
+        bindingScope,
+        this.input.resource.compilation.compilerWorld.resourceScope,
+        valueSite == null ? null : bindableTypeMember(this.store, valueSite)?.valueType ?? null,
+        missingInputs,
+      )
+      : null;
+  }
+}
+
+function selectedMemberNameForCursor(
+  siteKind: TemplateCompletionSiteKind,
+  expressionResult: ExpressionParseResult | null,
+  offset: number,
+): string | null {
+  return siteKind === TemplateCompletionSiteKind.ExpressionMember && expressionResult != null
+    ? ExpressionParseResultInspector.memberNameAtOffset(expressionResult, offset)
+    : null;
 }
 
 /** Answer template and expression completion candidates from already-materialized product details. */
@@ -439,6 +586,7 @@ function collectTemplateCompletionCandidates(
   collectResourceScopeCandidates(frame);
   collectBindableCandidates(frame);
   collectExpressionMemberCandidates(frame);
+  collectAttributeValueDomainCandidates(frame);
 }
 
 function collectBindingScopeCandidates(
@@ -491,6 +639,32 @@ function collectExpressionMemberCandidates(
   }
 }
 
+function collectAttributeValueDomainCandidates(
+  frame: TemplateCompletionAnswerFrame,
+): void {
+  if (frame.query.siteKind !== TemplateCompletionSiteKind.AttributeValue) {
+    return;
+  }
+  const site = readValueSite(frame.store, frame.query.valueSiteProductHandle, frame.missingInputs);
+  if (site == null) {
+    return;
+  }
+  const candidates = attributeValueDomainCandidates(
+    frame.store,
+    site,
+    frame.query.routeConfigProductHandles,
+    frame.query.i18nTranslationKeyProductHandles,
+  );
+  if (candidates.length > 0) {
+    frame.candidates.push(...candidates);
+    return;
+  }
+  const reason = attributeValueCompletionMissingInput(frame.store, site);
+  if (reason != null) {
+    frame.missingInputs.push(reason);
+  }
+}
+
 function templateCompletionAnswer(
   frame: TemplateCompletionAnswerFrame,
   uniqueCandidates: readonly TemplateCompletionCandidate[],
@@ -499,9 +673,9 @@ function templateCompletionAnswer(
   const products = completionCandidateProducts(frame.store, page.rows);
   const missingInputs = uniqueValues(frame.missingInputs);
   return new InquiryAnswer(
-    outcomeForCompletion(page.rows, uniqueCandidates, missingInputs),
+    outcomeForCompletion(page.rows, uniqueCandidates, missingInputs, frame.expressionFrontier),
     frame.query.locus,
-    summaryForCompletion(page.rows.length, uniqueCandidates.length, missingInputs),
+    summaryForCompletion(page.rows.length, uniqueCandidates.length, missingInputs, frame.expressionFrontier),
     KernelExactBasis,
     templateCompletionResult(frame, page.rows, missingInputs),
     [],
@@ -715,7 +889,401 @@ function readTypeMembers(
     missingInputs.push('type-shape-detail');
     return null;
   }
+  if (detail.members.length === 0) {
+    missingInputs.push(expressionMemberSurfaceMissingInput(detail.shapeKind, detail.indexedValueType));
+  }
   return detail.members;
+}
+
+function readValueSite(
+  store: KernelStore,
+  productHandle: ProductHandle | null,
+  missingInputs: string[],
+): TemplateValueSite | null {
+  if (productHandle == null) {
+    missingInputs.push('attribute-value-site');
+    return null;
+  }
+  const detail = store.productDetails.read(TemplateProductDetails.ValueSite, productHandle);
+  if (detail == null) {
+    missingInputs.push('attribute-value-site-detail');
+    return null;
+  }
+  return detail;
+}
+
+function attributeValueCompletionMissingInput(
+  store: KernelStore,
+  site: TemplateValueSite,
+): string | null {
+  switch (site.siteKind) {
+    case TemplateValueSiteKind.BindingCommandValue:
+      if (i18nTranslationValueHasOpenEndedDomain(site)) {
+        return null;
+      }
+      return `attribute-value-domain:binding-command:${site.bindingCommand?.name ?? 'unknown'}`;
+    case TemplateValueSiteKind.BindableValue:
+      if (bindableValueHasOpenEndedScalarDomain(store, site)) {
+        return null;
+      }
+      return `attribute-value-domain:bindable:${site.bindable?.reference.attribute ?? 'unknown'}`;
+    case TemplateValueSiteKind.CustomAttributeValue:
+      if (routerResourcePrimaryValueHasOpenEndedDomain(site)) {
+        return null;
+      }
+      if (site.bindable != null) {
+        if (bindableValueHasOpenEndedScalarDomain(store, site)) {
+          return null;
+        }
+        return `attribute-value-domain:bindable:${site.bindable.reference.attribute}`;
+      }
+      return `attribute-value-domain:custom-attribute:${site.classification?.resource?.name ?? 'unknown'}`;
+    case TemplateValueSiteKind.MultiBindingValue:
+      return `attribute-value-domain:custom-attribute:${site.classification?.resource?.name ?? 'unknown'}`;
+    case TemplateValueSiteKind.TemplateControllerValue:
+      if (templateControllerPrimaryValueHasOpenEndedDomain(site)) {
+        return null;
+      }
+      return `attribute-value-domain:template-controller:${site.classification?.resource?.name ?? 'unknown'}`;
+    case TemplateValueSiteKind.CapturedValue:
+      return `attribute-value-domain:captured:${site.syntax?.target ?? 'unknown'}`;
+    case TemplateValueSiteKind.SpreadValue:
+      return 'attribute-value-domain:spread';
+    case TemplateValueSiteKind.PlainAttributeInterpolation:
+    case TemplateValueSiteKind.TextInterpolation:
+      return null;
+  }
+}
+
+function templateControllerPrimaryValueHasOpenEndedDomain(
+  site: TemplateValueSite,
+): boolean {
+  const semantics = templateControllerSemanticsForValueSite(site);
+  return semantics?.valueDomainKind === BuiltInTemplateControllerValueDomainKind.OpenEnded
+    && semantics.valueProperty != null
+    && site.bindable?.reference.name === semantics.valueProperty;
+}
+
+function templateControllerSemanticsForValueSite(
+  site: TemplateValueSite,
+) {
+  const resourceName = site.classification?.resource?.name
+    ?? site.syntax?.target
+    ?? null;
+  return resourceName == null
+    ? null
+    : runtimeHtmlTemplateControllerSemanticsForName(resourceName);
+}
+
+function bindableValueHasOpenEndedScalarDomain(
+  store: KernelStore,
+  site: TemplateValueSite,
+): boolean {
+  const member = bindableTypeMember(store, site);
+  const carrier = member?.carrier;
+  return carrier?.valueType == null ? false : isOpenEndedScalarType(carrier.checker, carrier.valueType);
+}
+
+function attributeValueDomainCandidates(
+  store: KernelStore,
+  site: TemplateValueSite,
+  routeConfigProductHandles: readonly ProductHandle[],
+  i18nTranslationKeyProductHandles: readonly ProductHandle[],
+): readonly TemplateCompletionCandidate[] {
+  return [
+    ...routerResourceRouteCandidates(store, site, routeConfigProductHandles),
+    ...i18nTranslationKeyCandidates(store, site, i18nTranslationKeyProductHandles),
+    ...inlineMultiBindingTargetCandidates(store, site),
+    ...(site.bindable == null ? [] : bindableAttributeValueCandidates(store, site)),
+  ];
+}
+
+function i18nTranslationKeyCandidates(
+  store: KernelStore,
+  site: TemplateValueSite,
+  i18nTranslationKeyProductHandles: readonly ProductHandle[],
+): readonly TemplateCompletionCandidate[] {
+  if (!isI18nTranslationBindingValueSite(site)) {
+    return [];
+  }
+  return uniqueI18nTranslationKeyCandidates(
+    i18nTranslationKeyProductHandles
+      .map((handle) => store.productDetails.read(I18nProductDetails.TranslationKey, handle))
+      .filter((translationKey): translationKey is I18nTranslationKey => translationKey != null)
+      .map((translationKey) => i18nTranslationKeyCandidate(translationKey)),
+  );
+}
+
+function i18nTranslationValueHasOpenEndedDomain(
+  site: TemplateValueSite,
+): boolean {
+  return isI18nTranslationBindingValueSite(site);
+}
+
+function isI18nTranslationBindingValueSite(site: TemplateValueSite): boolean {
+  return site.siteKind === TemplateValueSiteKind.BindingCommandValue
+    && (
+      site.bindingCommand?.key === 'au:resource:binding-command:t'
+      || site.bindingCommand?.name === 't'
+    );
+}
+
+function i18nTranslationKeyCandidate(
+  translationKey: I18nTranslationKey,
+): TemplateCompletionCandidate {
+  return new TemplateCompletionCandidate(
+    TemplateCompletionCandidateKind.I18nTranslationKey,
+    translationKey.key,
+    TemplateCompletionCandidateSourceKind.I18n,
+    translationKey.productHandle,
+    translationKey.identityHandle,
+    translationKey.sourceAddressHandle,
+    'I18n translation key admitted from static init resources.',
+  );
+}
+
+function uniqueI18nTranslationKeyCandidates(
+  candidates: readonly TemplateCompletionCandidate[],
+): readonly TemplateCompletionCandidate[] {
+  const seen = new Set<string>();
+  const unique: TemplateCompletionCandidate[] = [];
+  for (const candidate of candidates) {
+    if (seen.has(candidate.name)) {
+      continue;
+    }
+    seen.add(candidate.name);
+    unique.push(candidate);
+  }
+  return unique.sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function routerResourceRouteCandidates(
+  store: KernelStore,
+  site: TemplateValueSite,
+  routeConfigProductHandles: readonly ProductHandle[],
+): readonly TemplateCompletionCandidate[] {
+  if (!isRouterResourcePrimaryValueSite(site)) {
+    return [];
+  }
+  return uniqueRouteConfigCandidates(
+    routeConfigProductHandles
+      .map((handle) => store.productDetails.read(RouterProductDetails.RouteConfig, handle))
+      .filter((routeConfig): routeConfig is RouteConfigModel => routeConfig != null)
+      .flatMap(routeConfigRouteCandidates),
+  );
+}
+
+function routerResourcePrimaryValueHasOpenEndedDomain(
+  site: TemplateValueSite,
+): boolean {
+  return isRouterResourcePrimaryValueSite(site);
+}
+
+function isRouterResourcePrimaryValueSite(site: TemplateValueSite): boolean {
+  if (site.siteKind !== TemplateValueSiteKind.CustomAttributeValue) {
+    return false;
+  }
+  const definition = site.classification?.resource?.definition ?? null;
+  return definition?.type === ResourceDefinitionKind.CustomAttribute
+    && (
+      (definition.name === 'load' && definition.target.localName === 'LoadCustomAttribute')
+      || (definition.name === 'href' && definition.target.localName === 'HrefCustomAttribute')
+    );
+}
+
+function routeConfigRouteCandidates(
+  routeConfig: RouteConfigModel,
+): readonly TemplateCompletionCandidate[] {
+  if (routeConfig.routeKind === RouteConfigKind.Open) {
+    return [];
+  }
+  const values = [
+    routeConfig.id,
+    ...routeConfig.paths.filter((path) => path.length > 0),
+  ].filter((value): value is string => value != null && value.length > 0);
+  return uniqueValues(values).map((value) => new TemplateCompletionCandidate(
+    TemplateCompletionCandidateKind.RouterRoute,
+    value,
+    TemplateCompletionCandidateSourceKind.Router,
+    routeConfig.productHandle,
+    routeConfig.identityHandle,
+    routeConfig.id === value ? routeConfig.sourceAddressHandle : routeConfig.pathSourceAddressHandle ?? routeConfig.sourceAddressHandle,
+    'Router route id or path accepted by a router resource primary value.',
+  ));
+}
+
+function uniqueRouteConfigCandidates(
+  candidates: readonly TemplateCompletionCandidate[],
+): readonly TemplateCompletionCandidate[] {
+  const seen = new Set<string>();
+  const unique: TemplateCompletionCandidate[] = [];
+  for (const candidate of candidates) {
+    const key = `${candidate.name}:${candidate.productHandle ?? ''}`;
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(candidate);
+  }
+  return unique;
+}
+
+function inlineMultiBindingTargetCandidates(
+  store: KernelStore,
+  site: TemplateValueSite,
+): readonly TemplateCompletionCandidate[] {
+  if (site.siteKind !== TemplateValueSiteKind.MultiBindingValue) {
+    return [];
+  }
+  const definition = valueSiteResourceDefinition(store, site);
+  return definition == null ? [] : bindableCandidates(definition);
+}
+
+function bindableAttributeValueCandidates(
+  store: KernelStore,
+  site: TemplateValueSite,
+): readonly TemplateCompletionCandidate[] {
+  const member = bindableTypeMember(store, site);
+  if (member == null) {
+    return [];
+  }
+  return finiteStaticValueCandidatesForMember(member).map((value) => new TemplateCompletionCandidate(
+    TemplateCompletionCandidateKind.AttributeValue,
+    value,
+    TemplateCompletionCandidateSourceKind.TypeSystem,
+    member.productHandle,
+    member.identityHandle,
+    member.sourceAddressHandle,
+    'Finite static value accepted by the checker-projected bindable type.',
+    member.valueType,
+  ));
+}
+
+function valueSiteResourceDefinition(
+  store: KernelStore,
+  site: TemplateValueSite,
+): FullResourceDefinition | null {
+  const definitionHandle = site.classification?.resource?.definitionProductHandle ?? null;
+  return definitionHandle == null
+    ? null
+    : store.productDetails.read(ResourceProductDetails.Definition, definitionHandle);
+}
+
+function bindableTypeMember(
+  store: KernelStore,
+  site: TemplateValueSite,
+): CheckerTypeMember | null {
+  const ownerDefinitionHandle = site.bindable?.reference.ownerDefinitionProductHandle ?? null;
+  const bindableName = site.bindable?.reference.name ?? null;
+  if (ownerDefinitionHandle == null || bindableName == null) {
+    return null;
+  }
+  const definition = store.productDetails.read(ResourceProductDetails.Definition, ownerDefinitionHandle);
+  const targetTypeProductHandle = definition?.target.targetType?.productHandle ?? null;
+  if (targetTypeProductHandle == null) {
+    return null;
+  }
+  const targetType = store.productDetails.read(TypeSystemProductDetails.TypeShape, targetTypeProductHandle);
+  return targetType?.members.find((member) => member.name === bindableName) ?? null;
+}
+
+function contextualExpressionTypeForQuery(
+  store: KernelStore,
+  query: TemplateCompletionQuery,
+): CheckerTypeReference | null {
+  const site = query.valueSiteProductHandle == null
+    ? null
+    : store.productDetails.read(TemplateProductDetails.ValueSite, query.valueSiteProductHandle);
+  return site == null ? null : bindableTypeMember(store, site)?.valueType ?? null;
+}
+
+function finiteStaticValueCandidatesForMember(
+  member: CheckerTypeMember,
+): readonly string[] {
+  const carrier = member.carrier;
+  return carrier?.valueType == null ? [] : finiteStaticValueCandidatesForType(carrier.checker, carrier.valueType);
+}
+
+function finiteStaticValueCandidatesForType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): readonly string[] {
+  if (type.isUnion()) {
+    return finiteStaticValueCandidatesForUnion(checker, type);
+  }
+  if (isBooleanType(type)) {
+    return ['false', 'true'];
+  }
+  const literal = literalCandidateForType(type);
+  return literal == null ? [] : [literal];
+}
+
+function isOpenEndedScalarType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): boolean {
+  if (type.isUnion()) {
+    return type.types.some((constituent) => !checkerNullishType(checker, constituent))
+      && type.types.every((constituent) => checkerNullishType(checker, constituent) || isOpenEndedScalarType(checker, constituent));
+  }
+  return (type.flags & ts.TypeFlags.String) !== 0
+    || (type.flags & ts.TypeFlags.Number) !== 0
+    || (type.flags & ts.TypeFlags.BigInt) !== 0;
+}
+
+function finiteStaticValueCandidatesForUnion(
+  checker: ts.TypeChecker,
+  type: ts.UnionType,
+): readonly string[] {
+  const values: string[] = [];
+  for (const constituent of type.types) {
+    if (checkerNullishType(checker, constituent)) {
+      continue;
+    }
+    if (isBooleanType(constituent)) {
+      values.push('false', 'true');
+      continue;
+    }
+    const literal = literalCandidateForType(constituent);
+    if (literal == null) {
+      return [];
+    }
+    values.push(literal);
+  }
+  return [...uniqueValues(values)].sort((left: string, right: string) => left.localeCompare(right));
+}
+
+function literalCandidateForType(
+  type: ts.Type,
+): string | null {
+  if ((type.flags & ts.TypeFlags.StringLiteral) !== 0) {
+    return String((type as ts.StringLiteralType).value);
+  }
+  if ((type.flags & ts.TypeFlags.NumberLiteral) !== 0) {
+    return String((type as ts.NumberLiteralType).value);
+  }
+  if ((type.flags & ts.TypeFlags.BooleanLiteral) !== 0) {
+    const intrinsicName = (type as unknown as { readonly intrinsicName?: string }).intrinsicName;
+    return intrinsicName === 'true' ? 'true' : 'false';
+  }
+  return null;
+}
+
+function isBooleanType(type: ts.Type): boolean {
+  return (type.flags & ts.TypeFlags.Boolean) !== 0;
+}
+
+function expressionMemberSurfaceMissingInput(
+  shapeKind: CheckerTypeShapeKind,
+  indexedValueType: CheckerTypeReference | null,
+): string {
+  if (shapeKind === CheckerTypeShapeKind.Any) {
+    return 'expression-member-owner-type:any';
+  }
+  if (indexedValueType != null) {
+    return 'expression-member-owner-type:index-signature-only';
+  }
+  return `expression-member-owner-type:no-members:${shapeKind}`;
 }
 
 function shouldDeriveMemberOwnerType(
@@ -734,7 +1302,7 @@ function shouldReadResourceScopeForMemberOwner(
   if (!needsMemberOwnerType || expressionResult == null) {
     return false;
   }
-  const owner = memberOwnerExpression(expressionResult);
+  const owner = ExpressionParseResultInspector.memberOwner(expressionResult);
   return owner != null && expressionContainsValueConverter(owner);
 }
 
@@ -751,51 +1319,162 @@ function deriveMemberOwnerTypeProductHandle(
   }
 
   const expressionResult = focusedExpressionResultForQuery(store, query, expressionParse);
-  const owner = expressionResult == null
-    ? null
-    : memberOwnerExpression(expressionResult);
-  if (owner == null) {
+  if (expressionResult == null) {
     missingInputs.push('expression-member-owner');
     return null;
   }
 
-  const evaluation = new CheckerExpressionTypeEvaluator(
-    store,
-    new CheckerTypeProjector(store),
-    resourceScope,
-  );
-  return deriveMemberOwnerTypeProductHandleFromEvaluation(
-    evaluation.evaluateWithScope(
-      owner,
-      bindingScope,
-      `template-completion:${query.locus.key}:member-owner`,
+  if (query.locus.kind === InquiryLocusKind.SourceCursor && query.locus.cursor.offset != null) {
+    return deriveMemberOwnerTypeProductHandleForExpression(
+      store,
+      query.locus.key,
+      expressionResult,
+      query.locus.cursor.offset,
       expressionParse.sourceAddressHandle,
+      bindingScope,
+      resourceScope,
+      contextualExpressionTypeForQuery(store, query),
+      missingInputs,
+    );
+  }
+
+  const owner = ExpressionParseResultInspector.memberOwner(expressionResult);
+  if (owner == null) {
+    missingInputs.push('expression-member-owner');
+    return null;
+  }
+  return deriveMemberOwnerTypeProductHandleFromEvaluation(
+    evaluateMemberOwnerExpression(
+      store,
+      query.locus.key,
+      owner,
+      expressionParse.sourceAddressHandle,
+      bindingScope,
+      resourceScope,
+      contextualExpressionTypeForQuery(store, query),
     ),
     missingInputs,
   );
 }
 
-function deriveMemberOwnerTypeProductHandleForExpression(
+function evaluateMemberOwnerExpression(
   store: KernelStore,
   locusKey: string,
   owner: ExpressionAstNode,
   sourceAddressHandle: AddressHandle | null,
   bindingScope: BindingScope,
   resourceScope: TemplateResourceScope | null,
-  missingInputs: string[],
-): ProductHandle | null {
-  const evaluation = new CheckerExpressionTypeEvaluator(
+  contextualType: CheckerTypeReference | null = null,
+): ReturnType<CheckerExpressionTypeEvaluator['evaluateWithScope']> {
+  return checkerExpressionEvaluator(store, resourceScope).evaluateWithScope(
+    owner,
+    bindingScope,
+    memberOwnerLocalKey(locusKey),
+    sourceAddressHandle,
+    contextualType,
+  );
+}
+
+function checkerExpressionEvaluator(
+  store: KernelStore,
+  resourceScope: TemplateResourceScope | null,
+): CheckerExpressionTypeEvaluator {
+  return new CheckerExpressionTypeEvaluator(
     store,
     new CheckerTypeProjector(store),
     resourceScope,
-  ).evaluateWithScope(
-    owner,
-    bindingScope,
-    `template-completion:${locusKey}:member-owner`,
-    sourceAddressHandle,
   );
+}
+
+function memberOwnerLocalKey(locusKey: string): string {
+  return `template-completion:${locusKey}:member-owner`;
+}
+
+function deriveMemberOwnerTypeProductHandleForExpression(
+  store: KernelStore,
+  locusKey: string,
+  result: ExpressionParseResult | null,
+  offset: number,
+  sourceAddressHandle: AddressHandle | null,
+  bindingScope: BindingScope,
+  resourceScope: TemplateResourceScope | null,
+  contextualType: CheckerTypeReference | null,
+  missingInputs: string[],
+): ProductHandle | null {
+  const evaluation = evaluateMemberOwnerExpressionAtOffset(
+    store,
+    locusKey,
+    result,
+    offset,
+    sourceAddressHandle,
+    bindingScope,
+    resourceScope,
+    contextualType,
+    missingInputs,
+  );
+  if (evaluation == null) {
+    return null;
+  }
 
   return deriveMemberOwnerTypeProductHandleFromEvaluation(evaluation, missingInputs);
+}
+
+function evaluateMemberOwnerExpressionAtOffset(
+  store: KernelStore,
+  locusKey: string,
+  result: ExpressionParseResult | null,
+  offset: number,
+  sourceAddressHandle: AddressHandle | null,
+  bindingScope: BindingScope,
+  resourceScope: TemplateResourceScope | null,
+  contextualType: CheckerTypeReference | null,
+  missingInputs: string[],
+): ReturnType<CheckerExpressionTypeEvaluator['evaluateWithScope']> | null {
+  const evaluator = checkerExpressionEvaluator(store, resourceScope);
+  if (result != null && 'ast' in result) {
+    return evaluator.evaluateMemberOwnerAtOffset(
+      result.ast,
+      offset,
+      bindingScope,
+      memberOwnerLocalKey(locusKey),
+      sourceAddressHandle,
+      contextualType,
+    );
+  }
+  return evaluateMemberOwnerFrontierAtOffset(
+    evaluator,
+    locusKey,
+    result,
+    offset,
+    sourceAddressHandle,
+    bindingScope,
+    contextualType,
+    missingInputs,
+  );
+}
+
+function evaluateMemberOwnerFrontierAtOffset(
+  evaluator: CheckerExpressionTypeEvaluator,
+  locusKey: string,
+  result: ExpressionParseResult | null,
+  offset: number,
+  sourceAddressHandle: AddressHandle | null,
+  bindingScope: BindingScope,
+  contextualType: CheckerTypeReference | null,
+  missingInputs: string[],
+): ReturnType<CheckerExpressionTypeEvaluator['evaluateWithScope']> | null {
+  const owner = result == null ? null : ExpressionParseResultInspector.memberOwnerAtOffset(result, offset);
+  if (owner == null) {
+    missingInputs.push('expression-member-owner');
+    return null;
+  }
+  return evaluator.evaluateWithScope(
+    owner,
+    bindingScope,
+    memberOwnerLocalKey(locusKey),
+    sourceAddressHandle,
+    contextualType,
+  );
 }
 
 function deriveMemberOwnerTypeProductHandleFromEvaluation(
@@ -888,248 +1567,6 @@ function expressionContainsValueConverter(expression: ExpressionAstNode): boolea
   }
 }
 
-function memberOwnerExpression(result: ExpressionParseResult): ExpressionAstNode | null {
-  if (
-    'frontierKind' in result
-    && 'closedSubtreeRefs' in result
-    && result.frontierKind === ExpressionFrontierKind.AwaitingMemberName
-  ) {
-    return result.closedSubtreeRefs.at(-1)?.node ?? null;
-  }
-
-  if (
-    'activeHole' in result
-    && result.activeHole.frontierKind === ExpressionFrontierKind.AwaitingMemberName
-  ) {
-    return result.activeHole.closedSubtreeRefs.at(-1)?.node ?? null;
-  }
-
-  if ('ast' in result && result.ast.$kind === 'AccessMember') {
-    return result.ast.object;
-  }
-
-  if ('ast' in result) {
-    return firstMemberOwnerExpression(result.ast);
-  }
-
-  return null;
-}
-
-function memberOwnerExpressionForOffset(
-  result: ExpressionParseResult,
-  offset: number,
-): ExpressionAstNode | null {
-  if ('ast' in result) {
-    return memberOwnerExpressionForNodeOffset(result.ast, offset);
-  }
-  if (
-    'activeHole' in result
-    && result.activeHole.frontierKind === ExpressionFrontierKind.AwaitingMemberName
-  ) {
-    return result.activeHole.closedSubtreeRefs.at(-1)?.node ?? null;
-  }
-  if (
-    'frontierKind' in result
-    && 'closedSubtreeRefs' in result
-    && result.frontierKind === ExpressionFrontierKind.AwaitingMemberName
-  ) {
-    return result.closedSubtreeRefs.at(-1)?.node ?? null;
-  }
-  return null;
-}
-
-function firstMemberOwnerExpression(expression: ExpressionAstNode): ExpressionAstNode | null {
-  switch (expression.$kind) {
-    case 'AccessMember':
-    case 'CallMember':
-      return expression.object;
-    case 'Paren':
-    case 'Unary':
-      return firstMemberOwnerExpression(expression.expression);
-    case 'AccessKeyed':
-      return firstMemberOwnerExpression(expression.object)
-        ?? firstMemberOwnerExpression(expression.key);
-    case 'CallFunction':
-      return firstMemberOwnerExpression(expression.func)
-        ?? firstMemberOwnerExpressionInList(expression.args);
-    case 'CallScope':
-    case 'CallGlobal':
-      return firstMemberOwnerExpressionInList(expression.args);
-    case 'New':
-      return firstMemberOwnerExpression(expression.func)
-        ?? firstMemberOwnerExpressionInList(expression.args);
-    case 'TaggedTemplate':
-      return firstMemberOwnerExpression(expression.func)
-        ?? firstMemberOwnerExpressionInList(expression.expressions);
-    case 'Binary':
-      return firstMemberOwnerExpression(expression.left)
-        ?? firstMemberOwnerExpression(expression.right);
-    case 'Conditional':
-      return firstMemberOwnerExpression(expression.condition)
-        ?? firstMemberOwnerExpression(expression.yes)
-        ?? firstMemberOwnerExpression(expression.no);
-    case 'Assign':
-      return firstMemberOwnerExpression(expression.target)
-        ?? firstMemberOwnerExpression(expression.value);
-    case 'ArrowFunction':
-      return firstMemberOwnerExpression(expression.body);
-    case 'ArrayLiteral':
-      return firstMemberOwnerExpressionInList(expression.elements);
-    case 'ObjectLiteral':
-      return firstMemberOwnerExpressionInList(expression.values);
-    case 'Template':
-    case 'Interpolation':
-      return firstMemberOwnerExpressionInList(expression.expressions);
-    case 'ForOfStatement':
-      return firstMemberOwnerExpression(expression.iterable);
-    case 'BindingPatternDefault':
-      return firstMemberOwnerExpression(expression.target)
-        ?? firstMemberOwnerExpression(expression.default);
-    case 'ArrayBindingPattern':
-      return firstMemberOwnerExpressionInList(expression.elements)
-        ?? (expression.rest == null ? null : firstMemberOwnerExpression(expression.rest));
-    case 'ObjectBindingPattern':
-      return firstMemberOwnerExpressionInList(expression.properties.map((property) => property.value))
-        ?? (expression.rest == null ? null : firstMemberOwnerExpression(expression.rest));
-    case 'DestructuringAssignment':
-      return firstMemberOwnerExpression(expression.pattern)
-        ?? firstMemberOwnerExpression(expression.source);
-    case 'AccessThis':
-    case 'AccessBoundary':
-    case 'AccessScope':
-    case 'AccessGlobal':
-    case 'PrimitiveLiteral':
-    case 'Identifier':
-    case 'BindingIdentifier':
-    case 'BindingPatternHole':
-    case 'Custom':
-      return null;
-  }
-  return null;
-}
-
-function firstMemberOwnerExpressionInList(
-  expressions: readonly ExpressionAstNode[],
-): ExpressionAstNode | null {
-  for (const expression of expressions) {
-    const owner = firstMemberOwnerExpression(expression);
-    if (owner != null) {
-      return owner;
-    }
-  }
-  return null;
-}
-
-function memberOwnerExpressionForNodeOffset(
-  expression: ExpressionAstNode,
-  offset: number,
-): ExpressionAstNode | null {
-  switch (expression.$kind) {
-    case 'AccessMember':
-      return isMemberNameOffset(expression, offset)
-        ? expression.object
-        : memberOwnerExpressionForNodeOffset(expression.object, offset);
-    case 'CallMember':
-      return isMemberNameOffset(expression, offset)
-        ? expression.object
-        : memberOwnerExpressionForNodeOffset(expression.object, offset)
-          ?? memberOwnerExpressionForNodeOffsetInList(expression.args, offset);
-    case 'Paren':
-    case 'Unary':
-      return memberOwnerExpressionForNodeOffset(expression.expression, offset);
-    case 'AccessKeyed':
-      return memberOwnerExpressionForNodeOffset(expression.object, offset)
-        ?? memberOwnerExpressionForNodeOffset(expression.key, offset);
-    case 'CallFunction':
-      return memberOwnerExpressionForNodeOffset(expression.func, offset)
-        ?? memberOwnerExpressionForNodeOffsetInList(expression.args, offset);
-    case 'CallScope':
-    case 'CallGlobal':
-      return memberOwnerExpressionForNodeOffsetInList(expression.args, offset);
-    case 'New':
-      return memberOwnerExpressionForNodeOffset(expression.func, offset)
-        ?? memberOwnerExpressionForNodeOffsetInList(expression.args, offset);
-    case 'TaggedTemplate':
-      return memberOwnerExpressionForNodeOffset(expression.func, offset)
-        ?? memberOwnerExpressionForNodeOffsetInList(expression.expressions, offset);
-    case 'Binary':
-      return memberOwnerExpressionForNodeOffset(expression.left, offset)
-        ?? memberOwnerExpressionForNodeOffset(expression.right, offset);
-    case 'Conditional':
-      return memberOwnerExpressionForNodeOffset(expression.condition, offset)
-        ?? memberOwnerExpressionForNodeOffset(expression.yes, offset)
-        ?? memberOwnerExpressionForNodeOffset(expression.no, offset);
-    case 'Assign':
-      return memberOwnerExpressionForNodeOffset(expression.target, offset)
-        ?? memberOwnerExpressionForNodeOffset(expression.value, offset);
-    case 'ArrowFunction':
-      return memberOwnerExpressionForNodeOffset(expression.body, offset);
-    case 'ArrayLiteral':
-      return memberOwnerExpressionForNodeOffsetInList(expression.elements, offset);
-    case 'ObjectLiteral':
-      return memberOwnerExpressionForNodeOffsetInList(expression.values, offset);
-    case 'Template':
-    case 'Interpolation':
-      return memberOwnerExpressionForNodeOffsetInList(expression.expressions, offset);
-    case 'ForOfStatement':
-      return memberOwnerExpressionForNodeOffset(expression.iterable, offset);
-    case 'BindingPatternDefault':
-      return memberOwnerExpressionForNodeOffset(expression.target, offset)
-        ?? memberOwnerExpressionForNodeOffset(expression.default, offset);
-    case 'ArrayBindingPattern':
-      return memberOwnerExpressionForNodeOffsetInList(expression.elements, offset)
-        ?? (expression.rest == null ? null : memberOwnerExpressionForNodeOffset(expression.rest, offset));
-    case 'ObjectBindingPattern':
-      return memberOwnerExpressionForNodeOffsetInList(expression.properties.map((property) => property.value), offset)
-        ?? (expression.rest == null ? null : memberOwnerExpressionForNodeOffset(expression.rest, offset));
-    case 'DestructuringAssignment':
-      return memberOwnerExpressionForNodeOffset(expression.pattern, offset)
-        ?? memberOwnerExpressionForNodeOffset(expression.source, offset);
-    case 'AccessThis':
-    case 'AccessBoundary':
-    case 'AccessScope':
-    case 'AccessGlobal':
-    case 'PrimitiveLiteral':
-    case 'Identifier':
-    case 'BindingIdentifier':
-    case 'BindingPatternHole':
-    case 'Custom':
-      return null;
-  }
-  return null;
-}
-
-function memberOwnerExpressionForNodeOffsetInList(
-  expressions: readonly ExpressionAstNode[],
-  offset: number,
-): ExpressionAstNode | null {
-  for (const expression of expressions) {
-    if (!spanContainsOffset(expression.span, offset)) {
-      continue;
-    }
-    const owner = memberOwnerExpressionForNodeOffset(expression, offset);
-    if (owner != null) {
-      return owner;
-    }
-  }
-  return null;
-}
-
-function isMemberNameOffset(
-  expression: AccessMemberExpression | CallMemberExpression,
-  offset: number,
-): boolean {
-  return offset >= expression.object.span.end
-    && offset <= expression.name.span.end;
-}
-
-function spanContainsOffset(
-  span: ExpressionAstNode['span'],
-  offset: number,
-): boolean {
-  return offset >= span.start && offset <= span.end;
-}
-
 function expressionCompletionFrontier(
   result: ExpressionParseResult,
 ): TemplateExpressionCompletionFrontier | null {
@@ -1156,6 +1593,7 @@ function shouldReadBindingScope(
     case TemplateCompletionSiteKind.Expression:
       return frontier == null
         || frontier.expectedContinuationClasses.length === 0
+        || frontierOnlyExpectsInterpolationHoleClose(frontier)
         || frontier.expectedContinuationClasses.includes(ExpressionExpectedContinuationClass.Expression)
         || frontier.expectedContinuationClasses.includes(ExpressionExpectedContinuationClass.BindingDeclaration);
     default:
@@ -1412,6 +1850,7 @@ function outcomeForCompletion(
   pageRows: readonly TemplateCompletionCandidate[],
   allRows: readonly TemplateCompletionCandidate[],
   missingInputs: readonly string[],
+  expressionFrontier: TemplateExpressionCompletionFrontier | null,
 ): InquiryOutcomeKind {
   if (pageRows.length > 0) {
     return missingInputs.length === 0 ? InquiryOutcomeKind.Hit : InquiryOutcomeKind.Partial;
@@ -1419,20 +1858,51 @@ function outcomeForCompletion(
   if (allRows.length > 0) {
     return InquiryOutcomeKind.Hit;
   }
-  return missingInputs.length === 0 ? InquiryOutcomeKind.Miss : InquiryOutcomeKind.Partial;
+  return missingInputs.length === 0 && !frontierContributesPartialAnswer(expressionFrontier)
+    ? InquiryOutcomeKind.Miss
+    : InquiryOutcomeKind.Partial;
 }
 
 function summaryForCompletion(
   pageCount: number,
   totalCount: number,
   missingInputs: readonly string[],
+  expressionFrontier: TemplateExpressionCompletionFrontier | null,
 ): string {
   const base = totalCount === 0
     ? 'No completion candidates were available from the supplied product details.'
     : `Returned ${pageCount} of ${totalCount} completion candidates.`;
-  return missingInputs.length === 0
+  const notes = [
+    missingInputs.length === 0 ? null : `Missing inputs: ${missingInputs.join(', ')}.`,
+    expectedContinuationSummary(expressionFrontier),
+  ].filter((note): note is string => note != null);
+  return notes.length === 0
     ? base
-    : `${base} Missing inputs: ${missingInputs.join(', ')}.`;
+    : `${base} ${notes.join(' ')}`;
+}
+
+function frontierContributesPartialAnswer(
+  frontier: TemplateExpressionCompletionFrontier | null,
+): boolean {
+  return frontier != null
+    && frontier.expectedContinuationClasses.length > 0
+    && !frontierOnlyExpectsInterpolationHoleClose(frontier);
+}
+
+function expectedContinuationSummary(
+  frontier: TemplateExpressionCompletionFrontier | null,
+): string | null {
+  if (frontier == null || frontier.expectedContinuationClasses.length === 0) {
+    return null;
+  }
+  return `Expected continuation classes: ${frontier.expectedContinuationClasses.join(', ')}.`;
+}
+
+function frontierOnlyExpectsInterpolationHoleClose(
+  frontier: TemplateExpressionCompletionFrontier,
+): boolean {
+  return frontier.expectedContinuationClasses.length === 1
+    && frontier.expectedContinuationClasses[0] === ExpressionExpectedContinuationClass.InterpolationHoleClose;
 }
 
 function sourceSpanFor(
@@ -1519,6 +1989,12 @@ function classifyTemplateCompletionSite(
   valueSite: TemplateValueSite | null,
   expressionResult: ExpressionParseResult | null,
 ): TemplateCompletionSiteKind {
+  if (htmlAttribute != null && cursorTouchesSpan(sourceSpanFor(store, htmlAttribute.nameAddressHandle), offset)) {
+    return isBindingCommandNameOffset(store, offset, htmlAttribute, syntax)
+      ? TemplateCompletionSiteKind.BindingCommandName
+      : TemplateCompletionSiteKind.AttributeName;
+  }
+
   if (valueSite != null) {
     if (expressionResult == null) {
       return TemplateCompletionSiteKind.AttributeValue;
@@ -1528,24 +2004,15 @@ function classifyTemplateCompletionSite(
         ? TemplateCompletionSiteKind.Unknown
         : TemplateCompletionSiteKind.AttributeValue;
     }
-    return memberOwnerExpressionForOffset(expressionResult, offset) == null
-      ? completionSiteForExpressionResult(expressionResult)
-      : TemplateCompletionSiteKind.ExpressionMember;
+    return completionSiteForExpressionOffset(expressionResult, offset);
   }
 
   if (htmlAttribute != null) {
-    if (cursorTouchesSpan(sourceSpanFor(store, htmlAttribute.nameAddressHandle), offset)) {
-      return isBindingCommandNameOffset(store, offset, htmlAttribute, syntax)
-        ? TemplateCompletionSiteKind.BindingCommandName
-        : TemplateCompletionSiteKind.AttributeName;
-    }
     if (cursorTouchesSpan(sourceSpanFor(store, htmlAttribute.valueAddressHandle), offset)) {
       if (expressionResult == null) {
         return TemplateCompletionSiteKind.AttributeValue;
       }
-      return memberOwnerExpressionForOffset(expressionResult, offset) == null
-        ? completionSiteForExpressionResult(expressionResult)
-        : TemplateCompletionSiteKind.ExpressionMember;
+      return completionSiteForExpressionOffset(expressionResult, offset);
     }
   }
 
@@ -1589,13 +2056,13 @@ function valueSiteOwnsExpressionOffset(
     case ExpressionParseResultKind.InterpolationAbsent:
       return false;
     case ExpressionParseResultKind.InterpolationSuccess:
-      return result.ast.expressions.some((expression) => spanContainsOffset(expression.span, offset));
+      return result.ast.expressions.some((expression) => expressionSpanContainsOffset(expression.span, offset));
     case ExpressionParseResultKind.InterpolationDegradedPublication:
     case ExpressionParseResultKind.InterpolationFrontierPublication:
       return interpolationActiveHoleContainsOffset(result.activeHole, offset)
-        || result.closedHoles.some((hole) => spanContainsOffset(hole.span, offset));
+        || result.closedHoles.some((hole) => expressionSpanContainsOffset(hole.span, offset));
     case ExpressionParseResultKind.CompleteInputParseError:
-      return result.primarySpan != null && spanContainsOffset(result.primarySpan, offset);
+      return result.primarySpan != null && expressionSpanContainsOffset(result.primarySpan, offset);
     default:
       return cursorTouchesSpan(sourceSpanFor(store, site.sourceAddressHandle), offset);
   }
@@ -1605,7 +2072,7 @@ function interpolationActiveHoleContainsOffset(
   activeHole: InterpolationActiveHoleCompanion,
   offset: number,
 ): boolean {
-  if (spanContainsOffset(activeHole.holeSpan, offset)) {
+  if (expressionSpanContainsOffset(activeHole.holeSpan, offset)) {
     return true;
   }
 
@@ -1630,6 +2097,92 @@ function completionSiteForExpressionResult(
     return TemplateCompletionSiteKind.ExpressionBindingBehavior;
   }
   return TemplateCompletionSiteKind.Expression;
+}
+
+function completionSiteForExpressionOffset(
+  expressionResult: ExpressionParseResult,
+  offset: number,
+): TemplateCompletionSiteKind {
+  if (ExpressionParseResultInspector.memberOwnerAtOffset(expressionResult, offset) != null) {
+    return TemplateCompletionSiteKind.ExpressionMember;
+  }
+  return expressionTailCompletionSiteForOffset(expressionResult, offset)
+    ?? completionSiteForExpressionResult(expressionResult);
+}
+
+function expressionTailCompletionSiteForOffset(
+  result: ExpressionParseResult,
+  offset: number,
+): TemplateCompletionSiteKind | null {
+  if ('ast' in result) {
+    return expressionTailCompletionSiteForNodeOffset(result.ast, offset);
+  }
+  if ('activeHole' in result) {
+    return expressionTailCompletionSiteForNodeRefs(result.activeHole.closedSubtreeRefs, offset);
+  }
+  if ('closedSubtreeRefs' in result) {
+    return expressionTailCompletionSiteForNodeRefs(result.closedSubtreeRefs, offset);
+  }
+  return null;
+}
+
+function expressionTailCompletionSiteForNodeRefs(
+  refs: readonly { readonly node: ExpressionAstNode }[],
+  offset: number,
+): TemplateCompletionSiteKind | null {
+  for (const ref of refs) {
+    const site = expressionTailCompletionSiteForNodeOffset(ref.node, offset);
+    if (site != null) {
+      return site;
+    }
+  }
+  return null;
+}
+
+function expressionTailCompletionSiteForNodeOffset(
+  expression: ExpressionAstNode,
+  offset: number,
+  seen: Set<object> = new Set(),
+): TemplateCompletionSiteKind | null {
+  if (seen.has(expression)) {
+    return null;
+  }
+  seen.add(expression);
+
+  if (expression.$kind === 'ValueConverter' && expressionSpanContainsOffset(expression.name.span, offset)) {
+    return TemplateCompletionSiteKind.ExpressionValueConverter;
+  }
+  if (expression.$kind === 'BindingBehavior' && expressionSpanContainsOffset(expression.name.span, offset)) {
+    return TemplateCompletionSiteKind.ExpressionBindingBehavior;
+  }
+
+  for (const child of Object.values(expression as unknown as Record<string, unknown>)) {
+    const site = expressionTailCompletionSiteForChild(child, offset, seen);
+    if (site != null) {
+      return site;
+    }
+  }
+  return null;
+}
+
+function expressionTailCompletionSiteForChild(
+  child: unknown,
+  offset: number,
+  seen: Set<object>,
+): TemplateCompletionSiteKind | null {
+  if (Array.isArray(child)) {
+    for (const item of child) {
+      const site = expressionTailCompletionSiteForChild(item, offset, seen);
+      if (site != null) {
+        return site;
+      }
+    }
+    return null;
+  }
+  if (child == null || typeof child !== 'object' || !('$kind' in child)) {
+    return null;
+  }
+  return expressionTailCompletionSiteForNodeOffset(child as ExpressionAstNode, offset, seen);
 }
 
 function isElementNameOffset(
@@ -1871,22 +2424,6 @@ function instructionNodeProductHandle(
   return 'node' in instruction ? instruction.node.productHandle : null;
 }
 
-function expressionProductHandlesForInstruction(
-  instruction: TemplateInstruction,
-): readonly ProductHandle[] {
-  const handles: ProductHandle[] = [];
-  if ('expressionProductHandle' in instruction && instruction.expressionProductHandle != null) {
-    handles.push(instruction.expressionProductHandle);
-  }
-  if ('expressionProductHandles' in instruction) {
-    handles.push(...instruction.expressionProductHandles);
-  }
-  if ('iterableExpressionProductHandle' in instruction && instruction.iterableExpressionProductHandle != null) {
-    handles.push(instruction.iterableExpressionProductHandle);
-  }
-  return handles;
-}
-
 function selectedDefinitionForCursor(
   resource: TemplateResourceRuntimeAnalysisEmission,
   activeElement: HtmlElement | null,
@@ -1895,6 +2432,15 @@ function selectedDefinitionForCursor(
   return classification?.bindable?.reference.ownerDefinitionProductHandle
     ?? classification?.resource?.definitionProductHandle
     ?? definitionForElement(resource, activeElement);
+}
+
+function selectedBindableForCursor(
+  classification: AttributeClassification | null,
+  valueSite: TemplateValueSite | null,
+): TemplateBindableReference | null {
+  return valueSite?.bindable
+    ?? classification?.bindable
+    ?? null;
 }
 
 function definitionForElement(

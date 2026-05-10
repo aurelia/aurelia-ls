@@ -28,6 +28,7 @@ import {
   EvaluationValueKind,
   type EvaluationValue,
 } from './values.js';
+import { isRelativeModuleSpecifier } from './module-specifier.js';
 
 /** Result of evaluating a graph of local ECMAScript modules. */
 export class StaticModuleGraphEvaluationResult {
@@ -347,10 +348,6 @@ function externalImportBoundaryValue(entry: EvaluationImportEntry): EvaluationVa
     `import '${importedName}' from '${entry.moduleSpecifier}'`,
     entry.node,
   );
-}
-
-function isRelativeModuleSpecifier(moduleSpecifier: string): boolean {
-  return moduleSpecifier.startsWith('./') || moduleSpecifier.startsWith('../');
 }
 
 function readCommonJsExportValue(

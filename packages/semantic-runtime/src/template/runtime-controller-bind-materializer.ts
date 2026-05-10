@@ -34,7 +34,7 @@ import {
 } from '../kernel/vocabulary.js';
 import {
   ObserverLocator,
-  ObserverLocatorLookupInput,
+  ObserverLocatorLookupRequest,
   ObserverLocatorLookupResult,
 } from '../observation/observer-locator.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
@@ -47,7 +47,7 @@ import {
   RefBinding,
   type RuntimeBinding,
   type RuntimeBindingBindHost,
-  RuntimeBindingBindInput,
+  RuntimeBindingBindContext,
   RuntimeBindingTargetAccess,
   RuntimeBindingTargetAccessLookup,
   type RuntimeBindingTargetAccessField,
@@ -68,9 +68,11 @@ import {
   SpreadValueBinding,
 } from './runtime-binding.js';
 import type {
-  RuntimeBindingRenderContext,
   RuntimeRenderingEmission,
 } from './runtime-rendering-materializer.js';
+import type {
+  RuntimeBindingRenderContext,
+} from './runtime-rendered-instruction-recorder.js';
 import type {
   RuntimeControllerBindHost,
   RuntimeControllerFrame,
@@ -210,13 +212,13 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
     controller: RuntimeControllerFrame,
     binding: RuntimeBinding,
     index: number,
-  ): RuntimeBindingBindInput {
+  ): RuntimeBindingBindContext {
     const renderContext = this.input.runtimeRendering.readRenderContextForBinding(binding.productHandle);
     const targetController = targetControllerForContext(renderContext);
     this.targetControllerByBinding.set(binding.productHandle, targetController);
     const local = renderContext?.local
       ?? `${this.input.localKey}:controller:${controller.productHandle}:binding:${index}`;
-    return new RuntimeBindingBindInput(
+    return new RuntimeBindingBindContext(
       `${local}:binding:${binding.productHandle}`,
       this,
       binding instanceof SpreadValueBinding
@@ -296,7 +298,7 @@ export class RuntimeControllerBindMaterializer {
     }
   }
 
-  private resolveTargetAccess(input: ObserverLocatorLookupInput): ObserverLocatorLookupResult {
+  private resolveTargetAccess(input: ObserverLocatorLookupRequest): ObserverLocatorLookupResult {
     switch (input.lookup) {
       case RuntimeBindingTargetAccessLookup.Accessor:
         return this.observerLocator.getAccessor(input);
@@ -353,7 +355,7 @@ export class RuntimeControllerBindMaterializer {
     openSeams: OpenSeam[],
   ): RuntimeBindingTargetAccess {
     const target = this.targetAccessTarget(request.binding, targetController);
-    const lookup = this.resolveTargetAccess(this.targetAccessLookupInput(input, request, target));
+    const lookup = this.resolveTargetAccess(this.targetAccessLookupRequest(input, request, target));
     const handles = this.productHandles(`${request.localKey}:target-access`);
     const publication = this.targetAccessPublication(handles, request, target, lookup, source);
     if (lookup.openReason != null) {
@@ -444,12 +446,12 @@ export class RuntimeControllerBindMaterializer {
     );
   }
 
-  private targetAccessLookupInput(
+  private targetAccessLookupRequest(
     input: RuntimeControllerBindMaterializationRequest,
     request: RuntimeBindingTargetAccessRequest,
     target: RuntimeBindingTarget,
-  ): ObserverLocatorLookupInput {
-    return new ObserverLocatorLookupInput(
+  ): ObserverLocatorLookupRequest {
+    return new ObserverLocatorLookupRequest(
       request.localKey,
       request.lookup,
       target.targetKind,
@@ -884,7 +886,7 @@ export class RuntimeControllerBindMaterializer {
     if (element == null) {
       return RuntimeBindingSourceOperationTarget.open('RefBinding element target did not carry a closed authored HTMLElement target.');
     }
-    const targetType = this.observerLocator.getAccessor(new ObserverLocatorLookupInput(
+    const targetType = this.observerLocator.getAccessor(new ObserverLocatorLookupRequest(
       `${input.localKey}:ref:${binding.productHandle}:element-target-type`,
       RuntimeBindingTargetAccessLookup.Accessor,
       RuntimeBindingTargetKind.Node,

@@ -3,13 +3,11 @@ import ts from "typescript";
 import { FrameworkResourceDefinitionKind } from "../../framework/index.js";
 import {
   readTypeScriptCallSiteEntry,
-  requiredSourceFileIdentity,
-  sourceRangeForSourceFileNode,
+  requiredSourceRangeForNode,
   SourceProjectMemo,
   type SourceProject,
   type TypeScriptCallSiteEntry,
 } from "../../source/index.js";
-import type { SourceRange } from "../locus.js";
 import type {
   FrameworkControllerHydrationStepKind,
   FrameworkControllerHydrationStepRow,
@@ -185,7 +183,7 @@ function controllerCreationForDeclaration(
       recursiveDispatchCalls,
       linkCall,
       hydrationSteps,
-      source: sourceRangeForAdmittedFileNode(sourceProject, sourceFile, renderMethod),
+      source: requiredSourceRangeForNode(sourceProject, renderMethod),
       summary: `${rendererName} creates ${resourceKind} child controller ${childControllerExpression} and admits it to ${parentControllerExpression}.`,
     },
   ];
@@ -306,15 +304,6 @@ function resourceKindForRenderer(
     return FrameworkResourceDefinitionKind.CustomAttribute;
   }
   return FrameworkResourceDefinitionKind.CustomElement;
-}
-
-function sourceRangeForAdmittedFileNode(
-  sourceProject: SourceProject,
-  sourceFile: ts.SourceFile,
-  node: ts.Node,
-): SourceRange {
-  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
-  return sourceRangeForSourceFileNode(file.repoPath, sourceFile, node);
 }
 
 function controllerCreationMatches(

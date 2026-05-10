@@ -88,14 +88,14 @@ export function evidenceArray(evidence: Evidence | readonly Evidence[]): readonl
 /** Strip lens-local payload data from evidence before embedding it into continuations. */
 export function evidenceBreadcrumb(evidence: Evidence): Evidence {
   return {
-    ...(evidence.id === undefined ? {} : { id: evidence.id }),
+    id: evidence.id,
     kind: evidence.kind,
     role: evidence.role,
-    ...(evidence.confidence === undefined ? {} : { confidence: evidence.confidence }),
+    confidence: evidence.confidence,
     summary: evidence.summary,
-    ...(evidence.basis === undefined ? {} : { basis: evidence.basis }),
-    ...(evidence.source === undefined ? {} : { source: evidence.source }),
-    ...(evidence.handle === undefined ? {} : { handle: evidence.handle }),
+    basis: evidence.basis,
+    source: evidence.source,
+    handle: evidence.handle,
   };
 }
 

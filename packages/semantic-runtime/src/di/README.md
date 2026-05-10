@@ -96,6 +96,13 @@ Plugin, builder, and registry-body sequences can exist in a project without bein
 construction skips those unattached sequences instead of emitting missing-container seams; the seam is reserved for
 app-owned configuration sequences that should have produced a root container but did not.
 
+Recursive registry-body spending is owned by `DiRegistrationSpendingCascade`. The cascade is a construction-time
+traversal object that owns the visited-admission set and admission lookup while each per-admission
+`DiRegistrationSpendingCascadeFrame` gathers the direct registration operation, any recursively spent registry-body
+operations, their emitted resolvers/registries/slots/tasks, and open seams before handing the aggregate back to the
+world construction frame. This keeps recursive spending as one DI-owned traversal instead of scattering local
+accumulator arrays through the materializer.
+
 The current spending path is intentionally narrow but end-to-end:
 
 - resolver-producing admissions with closed admitted keys become runtime-shaped `Resolver` products and
@@ -122,5 +129,5 @@ The current spending path is intentionally narrow but end-to-end:
 - open registration admissions produce only the container operation and an open DI seam. They are preserved as
   registration pressure rather than being treated as resolver rows.
 
-`world-construction.ts` is the typed emission envelope for callers that need the live container emulator frames,
+`world-constructor.ts` is the typed emission envelope for callers that need the live container emulator frames,
 operation products, produced slots, resolver products, and open seams before inquiry projections exist.

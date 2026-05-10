@@ -33,6 +33,7 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import { catalogGroupLocalKey, localKeyPart } from '../kernel/local-key.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
 import {
@@ -46,7 +47,6 @@ import {
 } from '../registration/framework-registration-manifest.js';
 import {
   BuiltInResourceCatalog,
-  type BuiltInResourceCatalogField,
   type BuiltInResourceCatalogInput,
   ConfiguredBuiltInResourceCatalogSelection,
   type ConfiguredBuiltInResourceCatalogSelectionField,
@@ -67,18 +67,15 @@ import {
 } from './bindable-definition.js';
 import {
   BindingBehaviorDefinition,
-  type BindingBehaviorDefinitionField,
 } from './binding-behavior-definition.js';
 import {
   CustomAttributeContainerStrategy,
   CustomAttributeDefinition,
-  type CustomAttributeDefinitionField,
 } from './custom-attribute-definition.js';
 import {
   CustomElementCaptureDefinition,
   CustomElementCaptureKind,
   CustomElementDefinition,
-  type CustomElementDefinitionField,
   CustomElementTemplateDefinition,
   CustomElementTemplateKind,
 } from './custom-element-definition.js';
@@ -94,9 +91,9 @@ import {
 } from './resource-reference.js';
 import {
   ValueConverterDefinition,
-  type ValueConverterDefinitionField,
 } from './value-converter-definition.js';
 import { ResourceProductDetails } from './product-details.js';
+import { bindableAttributeNameForProperty } from './bindable-attribute.js';
 
 class BuiltInResourceSourceSet {
   constructor(
@@ -169,11 +166,15 @@ class BuiltInResourceHandles {
   ) {}
 }
 
-class BuiltInResourceAliasEmission {
-  constructor(
-    readonly identity: AureliaResourceIdentity,
-    readonly claim: SemanticClaim,
-  ) {}
+interface BuiltInResourceAliasEmission {
+  readonly identity: AureliaResourceIdentity;
+  readonly claim: SemanticClaim;
+}
+
+interface BuiltInResourcePublication {
+  readonly records: readonly KernelStoreRecord[];
+  readonly resource: BuiltInResource;
+  readonly definition: FullResourceDefinition | null;
 }
 
 /** Materializes framework-owned resource headers and static full definitions before compiler-world visibility is decided. */
@@ -233,7 +234,7 @@ export class BuiltInResourceCatalogMaterializer {
     readonly catalog: BuiltInResourceCatalog;
     readonly resources: readonly BuiltInResourceEmission[];
   } {
-    const local = `built-in-resource:${input.packageId}:${input.group}`;
+    const local = resourceCatalogLocal(input);
     const source = this.recordsForSource(
       `${local}:source`,
       input.packageId,
@@ -279,15 +280,11 @@ export class BuiltInResourceCatalogMaterializer {
     input: BuiltInResourceCatalogInput,
     local: string,
     source: BuiltInResourceSourceSet,
-  ): readonly {
-    readonly records: readonly KernelStoreRecord[];
-    readonly resource: BuiltInResource;
-    readonly definition: FullResourceDefinition | null;
-  }[] {
+  ): readonly BuiltInResourcePublication[] {
     return input.resources.map((resource, index) =>
       this.recordsForResource(
         resource,
-        `${local}:resource:${resource.resourceKind}:${resource.name}:${index}`,
+        `${local}:resource:${localKeyPart(resource.resourceKind)}:${localKeyPart(resource.name)}:${index}`,
         source,
       )
     );
@@ -306,12 +303,7 @@ export class BuiltInResourceCatalogMaterializer {
       input.group,
       resources,
       source.addressHandle,
-      compactFieldProvenance<BuiltInResourceCatalogField>([
-        new FieldProvenance('packageId', source.provenanceHandle),
-        new FieldProvenance('group', source.provenanceHandle),
-        resources.length === 0 ? null : new FieldProvenance('resources', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -416,36 +408,34 @@ export class BuiltInResourceCatalogMaterializer {
     resource: BuiltInResource,
     local: string,
     source: BuiltInResourceSourceSet,
-  ): {
-    readonly records: readonly KernelStoreRecord[];
-    readonly resource: BuiltInResource;
-    readonly definition: FullResourceDefinition | null;
-  } {
+  ): BuiltInResourcePublication {
     const handles = this.resourceHandles(local);
     const materializedResource = materializeResource(
       resource,
       handles.productHandle,
       handles.identityHandle,
       source.addressHandle,
-      builtInResourceFieldProvenance(resource, source),
+      [],
     );
-    const declareClaim = this.declareClaimForResource(local, handles, materializedResource, source);
-    const aliasEmissions = this.aliasEmissionsForResource(local, handles, materializedResource, source);
     const definition = materializeBuiltInResourceDefinition(
       materializedResource,
       handles.definitionProductHandle,
       handles.identityHandle,
       source,
     );
-    const convergenceClaim = definition == null
-      ? null
-      : new SemanticClaim(
-        this.store.handles.claim(`${local}:converges-to-definition`),
-        handles.productHandle,
-        KernelVocabulary.Resource.ConvergesToDefinition.key,
-        handles.definitionProductHandle,
-        source.provenanceHandle,
-      );
+    return this.resourcePublication(local, handles, materializedResource, definition, source);
+  }
+
+  private resourcePublication(
+    local: string,
+    handles: BuiltInResourceHandles,
+    materializedResource: BuiltInResource,
+    definition: FullResourceDefinition | null,
+    source: BuiltInResourceSourceSet,
+  ): BuiltInResourcePublication {
+    const declareClaim = this.declareClaimForResource(local, handles, source);
+    const aliasEmissions = this.aliasEmissionsForResource(local, handles, materializedResource, source);
+    const convergenceClaim = this.convergenceClaimForResource(local, handles, definition, source);
     return {
       records: this.recordsForResourcePublication(
         local,
@@ -473,7 +463,6 @@ export class BuiltInResourceCatalogMaterializer {
   private declareClaimForResource(
     local: string,
     handles: BuiltInResourceHandles,
-    resource: BuiltInResource,
     source: BuiltInResourceSourceSet,
   ): SemanticClaim {
     return new SemanticClaim(
@@ -492,23 +481,40 @@ export class BuiltInResourceCatalogMaterializer {
     source: BuiltInResourceSourceSet,
   ): readonly BuiltInResourceAliasEmission[] {
     return resource.aliases.map((alias, index) => {
-      const aliasIdentityHandle = this.store.handles.identity(`${local}:alias:${alias}`);
-      return new BuiltInResourceAliasEmission(
-        new AureliaResourceIdentity(
+      const aliasIdentityHandle = this.store.handles.identity(`${local}:alias:${localKeyPart(alias)}`);
+      return {
+        identity: new AureliaResourceIdentity(
           aliasIdentityHandle,
           toAureliaResourceIdentityKind(resource.resourceKind),
           alias,
           null,
         ),
-        new SemanticClaim(
+        claim: new SemanticClaim(
           this.store.handles.claim(`${local}:alias:${index}`),
           aliasIdentityHandle,
           KernelVocabulary.Resource.AliasOf.key,
           handles.identityHandle,
           source.provenanceHandle,
         ),
-      );
+      };
     });
+  }
+
+  private convergenceClaimForResource(
+    local: string,
+    handles: BuiltInResourceHandles,
+    definition: FullResourceDefinition | null,
+    source: BuiltInResourceSourceSet,
+  ): SemanticClaim | null {
+    return definition == null
+      ? null
+      : new SemanticClaim(
+        this.store.handles.claim(`${local}:converges-to-definition`),
+        handles.productHandle,
+        KernelVocabulary.Resource.ConvergesToDefinition.key,
+        handles.definitionProductHandle,
+        source.provenanceHandle,
+      );
   }
 
   private recordsForResourcePublication(
@@ -669,7 +675,7 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
     readonly records: readonly KernelStoreRecord[];
     readonly selections: readonly ConfiguredBuiltInResourceCatalogSelection[];
   } {
-    const catalogsByKey = new Map(catalogEmission.catalogs.map((catalog) => [catalogKey(catalog), catalog]));
+    const catalogsByKey = new Map(catalogEmission.catalogs.map((catalog) => [catalogGroupLocalKey(catalog), catalog]));
     const records: KernelStoreRecord[] = [];
     const selections: ConfiguredBuiltInResourceCatalogSelection[] = [];
     for (const request of selectionRequests) {
@@ -720,7 +726,7 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
     const source = this.recordsForConfiguredSource(
       local,
       admission.sourceAddressHandle,
-      summaryForFrameworkKind(frameworkKind),
+      resourceCatalogSummaryForFrameworkKind(frameworkKind),
     );
     const handles = this.configuredSelectionHandles(local);
     const claims = this.claimsForConfiguredSelection(local, handles.productHandle, catalogs, source);
@@ -904,11 +910,11 @@ function catalogInputsForFrameworkKind(
 }
 
 function resourceCatalogInputKey(input: BuiltInResourceCatalogInput): string {
-  return `${input.packageId}:${input.group}`;
+  return catalogGroupLocalKey(input);
 }
 
-function catalogKey(catalog: BuiltInResourceCatalog): string {
-  return `${catalog.packageId}:${catalog.group}`;
+function resourceCatalogLocal(input: BuiltInResourceCatalogInput): string {
+  return `built-in-resource:${catalogGroupLocalKey(input)}`;
 }
 
 function resourcePublicationClaimHandles(
@@ -923,7 +929,7 @@ function resourcePublicationClaimHandles(
   ];
 }
 
-function summaryForFrameworkKind(frameworkKind: FrameworkRegistrationKind): string {
+function resourceCatalogSummaryForFrameworkKind(frameworkKind: FrameworkRegistrationKind): string {
   switch (frameworkKind) {
     case FrameworkRegistrationKind.StandardConfiguration:
       return 'RuntimeHtml StandardConfiguration admitted framework default resource headers.';
@@ -961,21 +967,6 @@ interface BuiltInBindableInput {
   readonly mode?: BindableBindingMode;
   readonly setterKind?: BindableSetterKind;
   readonly setterName?: string;
-}
-
-function builtInResourceFieldProvenance(
-  resource: BuiltInResource,
-  source: BuiltInResourceSourceSet,
-): readonly FieldProvenance<BuiltInResourceField>[] {
-  return compactFieldProvenance<BuiltInResourceField>([
-    new FieldProvenance('targetName', source.provenanceHandle),
-    new FieldProvenance('resourceKind', source.provenanceHandle),
-    new FieldProvenance('name', source.provenanceHandle),
-    resource.aliases.length === 0 ? null : new FieldProvenance('aliases', source.provenanceHandle),
-    new FieldProvenance('packageId', source.provenanceHandle),
-    new FieldProvenance('group', source.provenanceHandle),
-    new FieldProvenance('source', source.provenanceHandle),
-  ]);
 }
 
 function materializeBuiltInResourceDefinition(
@@ -1023,7 +1014,7 @@ function materializeBuiltInResourceDefinition(
           ? new ResourceTargetReference(null, source.addressHandle, 'AuSlot.processContent')
           : null,
         [],
-        customElementDefinitionProvenance(source),
+        [],
       );
     case ResourceDefinitionKind.CustomAttribute:
     case ResourceDefinitionKind.TemplateController:
@@ -1043,7 +1034,7 @@ function materializeBuiltInResourceDefinition(
         CustomAttributeContainerStrategy.Reuse,
         builtInDefaultProperty(resource.targetName),
         [],
-        customAttributeDefinitionProvenance(source),
+        [],
       );
     case ResourceDefinitionKind.ValueConverter:
       return new ValueConverterDefinition(
@@ -1055,7 +1046,7 @@ function materializeBuiltInResourceDefinition(
         aliases,
         key,
         [],
-        thinResourceDefinitionProvenance<ValueConverterDefinitionField>(source),
+        [],
       );
     case ResourceDefinitionKind.BindingBehavior:
       return new BindingBehaviorDefinition(
@@ -1067,7 +1058,7 @@ function materializeBuiltInResourceDefinition(
         aliases,
         key,
         [],
-        thinResourceDefinitionProvenance<BindingBehaviorDefinitionField>(source),
+        [],
       );
   }
 }
@@ -1195,7 +1186,7 @@ function bindables(
   inputs: readonly BuiltInBindableInput[],
 ): readonly BindableDefinition[] {
   return inputs.map((input) => new BindableDefinition(
-    input.attribute ?? toBindableAttribute(input.name),
+    input.attribute ?? bindableAttributeNameForProperty(input.name),
     input.callback ?? `${input.name}Changed`,
     input.mode ?? BindableBindingMode.ToView,
     input.name,
@@ -1206,74 +1197,7 @@ function bindables(
         : new ResourceTargetReference(null, source.addressHandle, input.setterName),
     ),
     source.addressHandle,
-    compactFieldProvenance([
-      new FieldProvenance('attribute', source.provenanceHandle),
-      new FieldProvenance('callback', source.provenanceHandle),
-      new FieldProvenance('mode', source.provenanceHandle),
-      new FieldProvenance('name', source.provenanceHandle),
-      new FieldProvenance('set', source.provenanceHandle),
-      new FieldProvenance('source', source.provenanceHandle),
-    ]),
   ));
-}
-
-function toBindableAttribute(name: string): string {
-  return name.replace(/([A-Z])/g, (_match, char: string) => `-${char.toLowerCase()}`);
-}
-
-function customElementDefinitionProvenance(
-  source: BuiltInResourceSourceSet,
-): readonly FieldProvenance<CustomElementDefinitionField>[] {
-  return compactFieldProvenance<CustomElementDefinitionField>([
-    new FieldProvenance('target', source.provenanceHandle),
-    new FieldProvenance('name', source.provenanceHandle),
-    new FieldProvenance('aliases', source.provenanceHandle),
-    new FieldProvenance('key', source.provenanceHandle),
-    new FieldProvenance('capture', source.provenanceHandle),
-    new FieldProvenance('template', source.provenanceHandle),
-    new FieldProvenance('instructions', source.provenanceHandle),
-    new FieldProvenance('dependencies', source.provenanceHandle),
-    new FieldProvenance('injectable', source.provenanceHandle),
-    new FieldProvenance('needsCompile', source.provenanceHandle),
-    new FieldProvenance('surrogates', source.provenanceHandle),
-    new FieldProvenance('bindables', source.provenanceHandle),
-    new FieldProvenance('containerless', source.provenanceHandle),
-    new FieldProvenance('shadowOptions', source.provenanceHandle),
-    new FieldProvenance('hasSlots', source.provenanceHandle),
-    new FieldProvenance('enhance', source.provenanceHandle),
-    new FieldProvenance('watches', source.provenanceHandle),
-    new FieldProvenance('strict', source.provenanceHandle),
-    new FieldProvenance('processContent', source.provenanceHandle),
-  ]);
-}
-
-function customAttributeDefinitionProvenance(
-  source: BuiltInResourceSourceSet,
-): readonly FieldProvenance<CustomAttributeDefinitionField>[] {
-  return compactFieldProvenance<CustomAttributeDefinitionField>([
-    new FieldProvenance('target', source.provenanceHandle),
-    new FieldProvenance('name', source.provenanceHandle),
-    new FieldProvenance('aliases', source.provenanceHandle),
-    new FieldProvenance('key', source.provenanceHandle),
-    new FieldProvenance('isTemplateController', source.provenanceHandle),
-    new FieldProvenance('bindables', source.provenanceHandle),
-    new FieldProvenance('noMultiBindings', source.provenanceHandle),
-    new FieldProvenance('watches', source.provenanceHandle),
-    new FieldProvenance('dependencies', source.provenanceHandle),
-    new FieldProvenance('containerStrategy', source.provenanceHandle),
-    new FieldProvenance('defaultProperty', source.provenanceHandle),
-  ]);
-}
-
-function thinResourceDefinitionProvenance<TField extends 'target' | 'name' | 'aliases' | 'key'>(
-  source: BuiltInResourceSourceSet,
-): readonly FieldProvenance<TField>[] {
-  return compactFieldProvenance<TField>([
-    new FieldProvenance('target' as TField, source.provenanceHandle),
-    new FieldProvenance('name' as TField, source.provenanceHandle),
-    new FieldProvenance('aliases' as TField, source.provenanceHandle),
-    new FieldProvenance('key' as TField, source.provenanceHandle),
-  ]);
 }
 
 type BuiltInResourceConstructor = new (

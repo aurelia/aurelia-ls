@@ -32,6 +32,10 @@ import { LocusKind, type SourceRange } from "../locus.js";
 import {
   NavigationPlane,
   NavigationRelation,
+  nextPageRouteClaim,
+  navigationRoute,
+  sourceInspectionRoute,
+  typeFactsInspectionRoute,
   type NavigationRouteClaim,
 } from "../navigation.js";
 import {
@@ -107,7 +111,9 @@ import {
   readSymbolIndex,
   readTypeFacts,
   rowForTarget,
+  sourceRangeForFileSpanCarrier,
   sourceRangeFromFileSpan,
+  sourceRangeForOptionalFileSpanCarrier,
   sourceRangeForTarget,
   type SourceProject,
 } from "../../source/index.js";
@@ -316,9 +322,7 @@ export function answerTsStructure(
           cursor: inquiry.page?.cursor,
           returned: moduleGraph.edges.length,
           total: moduleGraph.totalEdges,
-          ...(moduleGraph.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(moduleGraph.nextOffset) }),
+          nextCursor: moduleGraph.nextOffset === undefined ? undefined : String(moduleGraph.nextOffset),
         },
         continuations: moduleGraphContinuations(inquiry, selector, moduleGraph),
       },
@@ -351,9 +355,7 @@ export function answerTsStructure(
           cursor: inquiry.page?.cursor,
           returned: documentSymbols.symbols.length,
           total: documentSymbols.totalSymbols,
-          ...(documentSymbols.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(documentSymbols.nextOffset) }),
+          nextCursor: documentSymbols.nextOffset === undefined ? undefined : String(documentSymbols.nextOffset),
         },
         continuations: documentSymbolContinuations(
           inquiry,
@@ -386,9 +388,7 @@ export function answerTsStructure(
           cursor: inquiry.page?.cursor,
           returned: symbols.entries.length,
           total: symbols.totalEntries,
-          ...(symbols.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(symbols.nextOffset) }),
+          nextCursor: symbols.nextOffset === undefined ? undefined : String(symbols.nextOffset),
         },
         continuations: symbolContinuations(inquiry, selector, symbols),
       },
@@ -417,9 +417,7 @@ export function answerTsStructure(
           cursor: inquiry.page?.cursor,
           returned: exports.exports.length,
           total: exports.totalExports,
-          ...(exports.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(exports.nextOffset) }),
+          nextCursor: exports.nextOffset === undefined ? undefined : String(exports.nextOffset),
         },
         continuations: exportSurfaceContinuations(inquiry, selector, exports),
       },
@@ -446,9 +444,7 @@ export function answerTsStructure(
         cursor: inquiry.page?.cursor,
         returned,
         total: surface.rollup.totalEntries,
-        ...(surface.nextOffset === undefined
-          ? {}
-          : { nextCursor: String(surface.nextOffset) }),
+        nextCursor: surface.nextOffset === undefined ? undefined : String(surface.nextOffset),
       },
       continuations: apiSurfaceContinuations(inquiry, selector, surface),
     },
@@ -504,9 +500,7 @@ export function answerTsType(
           cursor: inquiry.page?.cursor,
           returned: references.references.length,
           total: references.totalReferences,
-          ...(references.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(references.nextOffset) }),
+          nextCursor: references.nextOffset === undefined ? undefined : String(references.nextOffset),
         },
         continuations: referenceContinuations(inquiry, selector, references),
       },
@@ -531,9 +525,7 @@ export function answerTsType(
           cursor: inquiry.page?.cursor,
           returned: navigation.entries.length,
           total: navigation.totalEntries,
-          ...(navigation.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(navigation.nextOffset) }),
+          nextCursor: navigation.nextOffset === undefined ? undefined : String(navigation.nextOffset),
         },
         continuations: navigationContinuations(inquiry, selector, navigation),
       },
@@ -564,9 +556,7 @@ export function answerTsType(
           cursor: inquiry.page?.cursor,
           returned: callHierarchy.edges.length,
           total: callHierarchy.totalEdges,
-          ...(callHierarchy.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(callHierarchy.nextOffset) }),
+          nextCursor: callHierarchy.nextOffset === undefined ? undefined : String(callHierarchy.nextOffset),
         },
         continuations: callHierarchyContinuations(
           inquiry,
@@ -602,9 +592,7 @@ export function answerTsType(
           cursor: inquiry.page?.cursor,
           returned: callSites.callSites.length,
           total: callSites.totalCallSites,
-          ...(callSites.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(callSites.nextOffset) }),
+          nextCursor: callSites.nextOffset === undefined ? undefined : String(callSites.nextOffset),
         },
         continuations: typeScriptCallSiteContinuations(inquiry, selector, callSites),
       },
@@ -631,9 +619,7 @@ export function answerTsType(
           cursor: inquiry.page?.cursor,
           returned: diagnostics.diagnostics.length,
           total: diagnostics.totalDiagnostics,
-          ...(diagnostics.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(diagnostics.nextOffset) }),
+          nextCursor: diagnostics.nextOffset === undefined ? undefined : String(diagnostics.nextOffset),
         },
         continuations: diagnosticContinuations(inquiry, selector, diagnostics),
       },
@@ -658,9 +644,7 @@ export function answerTsType(
           cursor: inquiry.page?.cursor,
           returned: quickInfo.entries.length,
           total: quickInfo.totalEntries,
-          ...(quickInfo.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(quickInfo.nextOffset) }),
+          nextCursor: quickInfo.nextOffset === undefined ? undefined : String(quickInfo.nextOffset),
         },
         continuations: quickInfoContinuations(inquiry, selector, quickInfo),
       },
@@ -689,9 +673,7 @@ export function answerTsType(
           cursor: inquiry.page?.cursor,
           returned: signatureHelp.items.length,
           total: signatureHelp.totalItems,
-          ...(signatureHelp.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(signatureHelp.nextOffset) }),
+          nextCursor: signatureHelp.nextOffset === undefined ? undefined : String(signatureHelp.nextOffset),
         },
         continuations: signatureHelpContinuations(
           inquiry,
@@ -720,9 +702,7 @@ export function answerTsType(
           cursor: inquiry.page?.cursor,
           returned: highlights.highlights.length,
           total: highlights.totalHighlights,
-          ...(highlights.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(highlights.nextOffset) }),
+          nextCursor: highlights.nextOffset === undefined ? undefined : String(highlights.nextOffset),
         },
         continuations: highlightContinuations(inquiry, selector, highlights),
       },
@@ -750,9 +730,7 @@ export function answerTsType(
           cursor: inquiry.page?.cursor,
           returned: rename.locations.length,
           total: rename.totalLocations,
-          ...(rename.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(rename.nextOffset) }),
+          nextCursor: rename.nextOffset === undefined ? undefined : String(rename.nextOffset),
         },
         continuations: renameContinuations(inquiry, selector, rename),
       },
@@ -777,9 +755,7 @@ export function answerTsType(
           cursor: inquiry.page?.cursor,
           returned: refactors.actions.length,
           total: refactors.totalActions,
-          ...(refactors.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(refactors.nextOffset) }),
+          nextCursor: refactors.nextOffset === undefined ? undefined : String(refactors.nextOffset),
         },
         continuations: refactorContinuations(inquiry, selector, refactors),
       },
@@ -804,9 +780,7 @@ export function answerTsType(
           cursor: inquiry.page?.cursor,
           returned: codeFixes.actions.length,
           total: codeFixes.totalActions,
-          ...(codeFixes.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(codeFixes.nextOffset) }),
+          nextCursor: codeFixes.nextOffset === undefined ? undefined : String(codeFixes.nextOffset),
         },
         continuations: codeFixContinuations(inquiry, selector, codeFixes),
       },
@@ -867,9 +841,7 @@ export function answerTsType(
           cursor: inquiry.page?.cursor,
           returned: organizeImports.changes.length,
           total: organizeImports.totalFiles,
-          ...(organizeImports.nextOffset === undefined
-            ? {}
-            : { nextCursor: String(organizeImports.nextOffset) }),
+          nextCursor: organizeImports.nextOffset === undefined ? undefined : String(organizeImports.nextOffset),
         },
         continuations: organizeImportContinuations(
           inquiry,
@@ -1336,7 +1308,7 @@ function typeScriptGuideContinuations(
         projection: "facts",
         budget: { facts: 20, members: 20, evidencePerSubject: 3 },
       },
-      route: tsTypeFactsRoute("Checker facts for the kernel Container export from the TypeScript guide."),
+      route: typeFactsInspectionRoute("Checker facts for the kernel Container export from the TypeScript guide."),
     },
     {
       id: "ts.guide:framework-semantics",
@@ -1350,7 +1322,7 @@ function typeScriptGuideContinuations(
         projection: "summary",
         budget: { rows: 40, evidencePerSubject: 3 },
       },
-      route: tsContinuationRoute(
+      route: navigationRoute(
         NavigationPlane.Semantic,
         NavigationRelation.FrameworkFlowOf,
         [BasisKind.TypeScriptChecker, BasisKind.StaticEvaluator],
@@ -1395,7 +1367,7 @@ function typeScriptSourceContinuations(
           projection: "text",
         },
         evidence: [evidenceForTarget(target, EvidenceKind.SourceSpan)],
-        route: tsSourceRoute("Source text for a resolved source target."),
+        route: sourceInspectionRoute("Source text for a resolved source target."),
       },
     ];
   });
@@ -1417,7 +1389,7 @@ function apiSurfaceContinuations(
         ...inquiry,
         page: { size: surface.limit, cursor: String(surface.nextOffset) },
       },
-      route: tsNextPageRoute("Next declaration-surface page."),
+      route: nextPageRouteClaim("Next declaration-surface page."),
     });
   }
   continuations.push({
@@ -1432,7 +1404,7 @@ function apiSurfaceContinuations(
       projection: "facts",
       budget: inquiry.budget,
     },
-    route: tsTypeFactsRoute("Type facts for the same TypeScript selector."),
+    route: typeFactsInspectionRoute("Type facts for the same TypeScript selector."),
   });
   for (const [index, entry] of surface.entries.slice(0, 3).entries()) {
     const range = sourceRangeForTarget(entry.target);
@@ -1450,7 +1422,7 @@ function apiSurfaceContinuations(
         projection: "text",
       },
       evidence: [evidenceForTarget(entry.target, EvidenceKind.Symbol)],
-      route: tsSourceRoute("Source declaration behind an API-surface row."),
+      route: sourceInspectionRoute("Source declaration behind an API-surface row."),
     });
   }
   return continuations;
@@ -1475,7 +1447,7 @@ function moduleGraphContinuations(
           cursor: String(moduleGraph.nextOffset),
         },
       },
-      route: tsNextPageRoute("Next module-graph page."),
+      route: nextPageRouteClaim("Next module-graph page."),
     });
   }
   continuations.push({
@@ -1509,7 +1481,7 @@ function moduleGraphContinuations(
         projection: "text",
       },
       evidence: [evidenceForModuleEdge(edge)],
-      route: tsSourceRoute(
+      route: sourceInspectionRoute(
         "Source import/export edge behind a module-graph row.",
       ),
     });
@@ -1536,7 +1508,7 @@ function documentSymbolContinuations(
           cursor: String(documentSymbols.nextOffset),
         },
       },
-      route: tsNextPageRoute("Next document-symbol page."),
+      route: nextPageRouteClaim("Next document-symbol page."),
     });
   }
   continuations.push({
@@ -1565,13 +1537,13 @@ function documentSymbolContinuations(
         lens: LensId.TsSource,
         locus: {
           kind: LocusKind.SourceRange,
-          range: sourceRangeForDocumentSymbol(symbol),
+          range: sourceRangeForFileSpanCarrier(symbol),
         },
         projection: "text",
         budget: inquiry.budget,
       },
       evidence: [evidenceForDocumentSymbol(symbol)],
-      route: tsSourceRoute("Source range behind a document-symbol row."),
+      route: sourceInspectionRoute("Source range behind a document-symbol row."),
     });
   }
   return continuations;
@@ -1593,7 +1565,7 @@ function symbolContinuations(
         ...inquiry,
         page: { size: symbols.limit, cursor: String(symbols.nextOffset) },
       },
-      route: tsNextPageRoute("Next symbol-index page."),
+      route: nextPageRouteClaim("Next symbol-index page."),
     });
   }
   continuations.push({
@@ -1627,7 +1599,7 @@ function symbolContinuations(
         budget: inquiry.budget,
       },
       evidence: [evidenceForTarget(entry.target, EvidenceKind.Symbol)],
-      route: tsTypeFactsRoute("Type facts for a symbol-index row."),
+      route: typeFactsInspectionRoute("Type facts for a symbol-index row."),
     });
   }
   return continuations;
@@ -1649,7 +1621,7 @@ function exportSurfaceContinuations(
         ...inquiry,
         page: { size: exports.limit, cursor: String(exports.nextOffset) },
       },
-      route: tsNextPageRoute("Next TypeScript export surface page."),
+      route: nextPageRouteClaim("Next TypeScript export surface page."),
     });
   }
   continuations.push({
@@ -1688,7 +1660,7 @@ function exportSurfaceContinuations(
           budget: inquiry.budget,
         },
         evidence: [evidence],
-        route: tsSourceRoute(
+        route: sourceInspectionRoute(
           "Source declaration behind a TypeScript export row.",
         ),
       });
@@ -1704,7 +1676,7 @@ function exportSurfaceContinuations(
           budget: inquiry.budget,
         },
         evidence: [evidence],
-        route: tsTypeFactsRoute("Type facts for a TypeScript export row."),
+        route: typeFactsInspectionRoute("Type facts for a TypeScript export row."),
       });
     }
   }
@@ -1748,7 +1720,7 @@ function typeContinuations(
         budget: inquiry.budget,
       },
       evidence: [evidenceForTarget(fact.target, EvidenceKind.TypeFact)],
-      route: tsSourceRoute("Source range behind a TypeChecker fact."),
+      route: sourceInspectionRoute("Source range behind a TypeChecker fact."),
     });
   }
   return continuations;
@@ -1770,7 +1742,7 @@ function referenceContinuations(
         ...inquiry,
         page: { size: references.limit, cursor: String(references.nextOffset) },
       },
-      route: tsNextPageRoute("Next TypeScript reference page."),
+      route: nextPageRouteClaim("Next TypeScript reference page."),
     });
   }
   continuations.push({
@@ -1785,7 +1757,7 @@ function referenceContinuations(
       projection: "facts",
       budget: inquiry.budget,
     },
-    route: tsTypeFactsRoute("Type facts for the same TypeScript selector."),
+    route: typeFactsInspectionRoute("Type facts for the same TypeScript selector."),
   });
   for (const [index, reference] of references.references
     .slice(0, 3)
@@ -1799,13 +1771,13 @@ function referenceContinuations(
         lens: LensId.TsSource,
         locus: {
           kind: LocusKind.SourceRange,
-          range: sourceRangeForReference(reference),
+          range: sourceRangeForFileSpanCarrier(reference),
         },
         projection: "text",
         budget: inquiry.budget,
       },
       evidence: [evidenceForReference(reference)],
-      route: tsSourceRoute("Source range behind a TypeScript reference."),
+      route: sourceInspectionRoute("Source range behind a TypeScript reference."),
     });
   }
   return continuations;
@@ -1834,13 +1806,13 @@ function navigationContinuations(
         lens: LensId.TsSource,
         locus: {
           kind: LocusKind.SourceRange,
-          range: sourceRangeForNavigation(entry),
+          range: sourceRangeForFileSpanCarrier(entry),
         },
         projection: "text",
         budget: inquiry.budget,
       },
       evidence: [evidenceForNavigation(entry)],
-      route: tsSourceRoute("Source range behind a TypeScript navigation target."),
+      route: sourceInspectionRoute("Source range behind a TypeScript navigation target."),
     });
   }
   return continuations;
@@ -1893,7 +1865,7 @@ function callHierarchyContinuations(
         budget: inquiry.budget,
       },
       evidence: [evidenceForCallHierarchyEdge(edge)],
-      route: tsSourceRoute("Source call site behind a call-hierarchy edge."),
+      route: sourceInspectionRoute("Source call site behind a call-hierarchy edge."),
     });
   }
   return continuations;
@@ -1922,13 +1894,13 @@ function typeScriptCallSiteContinuations(
         lens: LensId.TsSource,
         locus: {
           kind: LocusKind.SourceRange,
-          range: sourceRangeForCallSite(callSite),
+          range: sourceRangeForFileSpanCarrier(callSite),
         },
         projection: "text",
         budget: inquiry.budget,
       },
       evidence: [typeScriptEvidenceForCallSite(callSite)],
-      route: tsSourceRoute("Source range behind an exact TypeScript call site."),
+      route: sourceInspectionRoute("Source range behind an exact TypeScript call site."),
     });
   }
   return continuations;
@@ -1950,7 +1922,7 @@ function diagnosticContinuations(
   for (const [index, diagnostic] of diagnostics.diagnostics
     .slice(0, 3)
     .entries()) {
-    const range = sourceRangeForDiagnostic(diagnostic);
+    const range = sourceRangeForOptionalFileSpanCarrier(diagnostic);
     if (range === null) {
       continue;
     }
@@ -1966,7 +1938,7 @@ function diagnosticContinuations(
         budget: inquiry.budget,
       },
       evidence: [evidenceForDiagnostic(diagnostic)],
-      route: tsSourceRoute("Source range behind a TypeScript diagnostic."),
+      route: sourceInspectionRoute("Source range behind a TypeScript diagnostic."),
     });
   }
   return continuations;
@@ -1995,13 +1967,13 @@ function quickInfoContinuations(
         lens: LensId.TsSource,
         locus: {
           kind: LocusKind.SourceRange,
-          range: sourceRangeForQuickInfo(entry),
+          range: sourceRangeForFileSpanCarrier(entry),
         },
         projection: "text",
         budget: inquiry.budget,
       },
       evidence: [evidenceForQuickInfo(entry)],
-      route: tsSourceRoute("Source range behind a TypeScript quick-info row."),
+      route: sourceInspectionRoute("Source range behind a TypeScript quick-info row."),
     });
   }
   return continuations;
@@ -2047,13 +2019,13 @@ function highlightContinuations(
         lens: LensId.TsSource,
         locus: {
           kind: LocusKind.SourceRange,
-          range: sourceRangeForHighlight(highlight),
+          range: sourceRangeForFileSpanCarrier(highlight),
         },
         projection: "text",
         budget: inquiry.budget,
       },
       evidence: [evidenceForHighlight(highlight)],
-      route: tsSourceRoute("Source range behind a document highlight."),
+      route: sourceInspectionRoute("Source range behind a document highlight."),
     });
   }
   return continuations;
@@ -2082,13 +2054,13 @@ function renameContinuations(
         lens: LensId.TsSource,
         locus: {
           kind: LocusKind.SourceRange,
-          range: sourceRangeForRenameLocation(location),
+          range: sourceRangeForFileSpanCarrier(location),
         },
         projection: "text",
         budget: inquiry.budget,
       },
       evidence: [evidenceForRenameLocation(location)],
-      route: tsSourceRoute("Source range behind a rename location."),
+      route: sourceInspectionRoute("Source range behind a rename location."),
     });
   }
   return continuations;
@@ -2213,7 +2185,7 @@ function typeProjectionBaseContinuations(
         ...inquiry,
         page: { size: limit, cursor: String(nextOffset) },
       },
-      route: tsNextPageRoute(nextPageRationale),
+      route: nextPageRouteClaim(nextPageRationale),
     });
   }
   continuations.push({
@@ -2228,22 +2200,13 @@ function typeProjectionBaseContinuations(
       projection: "facts",
       budget: inquiry.budget,
     },
-    route: tsTypeFactsRoute("Type facts for the same TypeScript selector."),
+    route: typeFactsInspectionRoute("Type facts for the same TypeScript selector."),
   });
   return continuations;
 }
 
-function tsNextPageRoute(summary: string): NavigationRouteClaim {
-  return tsContinuationRoute(
-    NavigationPlane.Addressing,
-    NavigationRelation.NextPageOf,
-    [],
-    summary,
-  );
-}
-
 function tsProjectionRoute(summary: string): NavigationRouteClaim {
-  return tsContinuationRoute(
+  return navigationRoute(
     NavigationPlane.Structure,
     NavigationRelation.ProjectionOf,
     [BasisKind.TypeScriptProgram],
@@ -2251,26 +2214,8 @@ function tsProjectionRoute(summary: string): NavigationRouteClaim {
   );
 }
 
-function tsSourceRoute(summary: string): NavigationRouteClaim {
-  return tsContinuationRoute(
-    NavigationPlane.Inspection,
-    NavigationRelation.SourceFor,
-    [BasisKind.SourceText, BasisKind.TypeScriptProgram],
-    summary,
-  );
-}
-
-function tsTypeFactsRoute(summary: string): NavigationRouteClaim {
-  return tsContinuationRoute(
-    NavigationPlane.Inspection,
-    NavigationRelation.TypeFactsFor,
-    [BasisKind.TypeScriptChecker],
-    summary,
-  );
-}
-
 function tsReferencesRoute(summary: string): NavigationRouteClaim {
-  return tsContinuationRoute(
+  return navigationRoute(
     NavigationPlane.Flow,
     NavigationRelation.ReferencesOf,
     [BasisKind.TypeScriptChecker],
@@ -2279,7 +2224,7 @@ function tsReferencesRoute(summary: string): NavigationRouteClaim {
 }
 
 function tsCallSitesRoute(summary: string): NavigationRouteClaim {
-  return tsContinuationRoute(
+  return navigationRoute(
     NavigationPlane.Flow,
     NavigationRelation.CallSitesOf,
     [BasisKind.SourceText, BasisKind.TypeScriptChecker],
@@ -2288,21 +2233,12 @@ function tsCallSitesRoute(summary: string): NavigationRouteClaim {
 }
 
 function tsEditPlanRoute(summary: string): NavigationRouteClaim {
-  return tsContinuationRoute(
+  return navigationRoute(
     NavigationPlane.Maintenance,
     NavigationRelation.EditPlanFor,
     [BasisKind.TypeScriptChecker],
     summary,
   );
-}
-
-function tsContinuationRoute(
-  plane: NavigationPlane,
-  relation: NavigationRelation,
-  basis: readonly BasisKind[],
-  summary: string,
-): NavigationRouteClaim {
-  return { plane, relation, basis, summary };
 }
 
 function sourceRangeForModuleEdge(edge: TypeScriptModuleEdge): SourceRange {
@@ -2319,34 +2255,6 @@ function sourceRangeForModuleEdge(edge: TypeScriptModuleEdge): SourceRange {
   };
 }
 
-function sourceRangeForDocumentSymbol(
-  symbol: TypeScriptDocumentSymbolEntry,
-): SourceRange {
-  return sourceRangeFromFileSpan(symbol.file.repoPath, symbol.span);
-}
-
-function sourceRangeForReference(
-  reference: TypeScriptReferenceEntry,
-): SourceRange {
-  return {
-    filePath: reference.file.repoPath,
-    start: {
-      line: reference.span.startLine - 1,
-      character: reference.span.startCharacter - 1,
-    },
-    end: {
-      line: reference.span.endLine - 1,
-      character: reference.span.endCharacter - 1,
-    },
-  };
-}
-
-function sourceRangeForNavigation(
-  entry: TypeScriptNavigationEntry,
-): SourceRange {
-  return sourceRangeFromFileSpan(entry.file.repoPath, entry.span);
-}
-
 function sourceRangeForCallHierarchyEdge(
   edge: TypeScriptCallHierarchyEdge,
 ): SourceRange | null {
@@ -2354,36 +2262,6 @@ function sourceRangeForCallHierarchyEdge(
   return span === undefined
     ? null
     : sourceRangeFromFileSpan(edge.from.file.repoPath, span);
-}
-
-function sourceRangeForCallSite(
-  callSite: TypeScriptCallSiteEntry,
-): SourceRange {
-  return sourceRangeFromFileSpan(callSite.file.repoPath, callSite.span);
-}
-
-function sourceRangeForDiagnostic(
-  diagnostic: TypeScriptDiagnosticEntry,
-): SourceRange | null {
-  return diagnostic.file === undefined || diagnostic.span === undefined
-    ? null
-    : sourceRangeFromFileSpan(diagnostic.file.repoPath, diagnostic.span);
-}
-
-function sourceRangeForQuickInfo(entry: TypeScriptQuickInfoEntry): SourceRange {
-  return sourceRangeFromFileSpan(entry.file.repoPath, entry.span);
-}
-
-function sourceRangeForHighlight(
-  highlight: TypeScriptHighlightEntry,
-): SourceRange {
-  return sourceRangeFromFileSpan(highlight.file.repoPath, highlight.span);
-}
-
-function sourceRangeForRenameLocation(
-  location: TypeScriptRenameLocationEntry,
-): SourceRange {
-  return sourceRangeFromFileSpan(location.file.repoPath, location.span);
 }
 
 function sourceRangeForFileEdits(
@@ -2413,7 +2291,7 @@ function evidenceForTarget(
 }
 
 function evidenceForReference(reference: TypeScriptReferenceEntry): Evidence {
-  const source = sourceRangeForReference(reference);
+  const source = sourceRangeForFileSpanCarrier(reference);
   const handle: SourceHandle = {
     namespace: HandleNamespace.Source,
     kind: HandleKind.SourceRange,
@@ -2465,7 +2343,7 @@ function evidenceForModuleEdge(edge: TypeScriptModuleEdge): Evidence {
 function evidenceForDocumentSymbol(
   symbol: TypeScriptDocumentSymbolEntry,
 ): Evidence {
-  const source = sourceRangeForDocumentSymbol(symbol);
+  const source = sourceRangeForFileSpanCarrier(symbol);
   const handle: SourceHandle = {
     namespace: HandleNamespace.Source,
     kind: HandleKind.SourceRange,
@@ -2514,7 +2392,7 @@ function evidenceForExportSurfaceEntry(
 }
 
 function evidenceForNavigation(entry: TypeScriptNavigationEntry): Evidence {
-  const source = sourceRangeForNavigation(entry);
+  const source = sourceRangeForFileSpanCarrier(entry);
   const handle: SourceHandle = {
     namespace: HandleNamespace.Source,
     kind: HandleKind.SourceRange,
@@ -2562,7 +2440,7 @@ function evidenceForCallHierarchyEdge(
 }
 
 function typeScriptEvidenceForCallSite(callSite: TypeScriptCallSiteEntry): Evidence {
-  const source = sourceRangeForCallSite(callSite);
+  const source = sourceRangeForFileSpanCarrier(callSite);
   const handle: SourceHandle = {
     namespace: HandleNamespace.Source,
     kind: HandleKind.SourceRange,
@@ -2586,7 +2464,7 @@ function typeScriptEvidenceForCallSite(callSite: TypeScriptCallSiteEntry): Evide
 function evidenceForDiagnostic(
   diagnostic: TypeScriptDiagnosticEntry,
 ): Evidence {
-  const source = sourceRangeForDiagnostic(diagnostic);
+  const source = sourceRangeForOptionalFileSpanCarrier(diagnostic);
   const handle: SourceHandle | undefined = diagnostic.file === undefined
     ? undefined
     : {
@@ -2603,14 +2481,14 @@ function evidenceForDiagnostic(
     role: EvidenceRole.Diagnostic,
     confidence: EvidenceConfidence.Exact,
     summary: `${diagnostic.category} TS${diagnostic.code}: ${diagnostic.message}`,
-    ...(source === null ? {} : { source }),
-    ...(handle === undefined ? {} : { handle }),
+    source: source ?? undefined,
+    handle,
     data: diagnostic,
   };
 }
 
 function evidenceForQuickInfo(entry: TypeScriptQuickInfoEntry): Evidence {
-  const source = sourceRangeForQuickInfo(entry);
+  const source = sourceRangeForFileSpanCarrier(entry);
   const handle: SymbolHandle = {
     namespace: HandleNamespace.TypeScript,
     kind: HandleKind.TypeFact,
@@ -2660,7 +2538,7 @@ function evidenceForSignatureHelp(
 }
 
 function evidenceForHighlight(highlight: TypeScriptHighlightEntry): Evidence {
-  const source = sourceRangeForHighlight(highlight);
+  const source = sourceRangeForFileSpanCarrier(highlight);
   const handle: SourceHandle = {
     namespace: HandleNamespace.Source,
     kind: HandleKind.SourceRange,
@@ -2687,7 +2565,7 @@ function evidenceForHighlight(highlight: TypeScriptHighlightEntry): Evidence {
 function evidenceForRenameLocation(
   location: TypeScriptRenameLocationEntry,
 ): Evidence {
-  const source = sourceRangeForRenameLocation(location);
+  const source = sourceRangeForFileSpanCarrier(location);
   const handle: SourceHandle = {
     namespace: HandleNamespace.Source,
     kind: HandleKind.SourceRange,
@@ -2733,7 +2611,7 @@ function evidenceForRefactorAction(
 function evidenceForCodeFixAction(
   action: TypeScriptCodeFixActionRow,
 ): Evidence {
-  const source = sourceRangeForDiagnostic(action.diagnostic);
+  const source = sourceRangeForOptionalFileSpanCarrier(action.diagnostic);
   const handle: SymbolHandle = {
     namespace: HandleNamespace.TypeScript,
     kind: HandleKind.TypeFact,

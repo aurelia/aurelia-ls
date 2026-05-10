@@ -15,6 +15,17 @@ export class AureliaSourceImports {
   readonly routerReceiverNames = new Set<string>();
 }
 
+export type ReceiverDeclaration =
+  | ts.VariableDeclaration
+  | ts.ParameterDeclaration
+  | ts.PropertyDeclaration;
+
+export function isReceiverDeclaration(node: ts.Node): node is ReceiverDeclaration {
+  return ts.isVariableDeclaration(node) ||
+    ts.isParameter(node) ||
+    ts.isPropertyDeclaration(node);
+}
+
 export function readAureliaSourceImportsInto(
   sourceFile: ts.SourceFile,
   bindings: AureliaSourceImports,
@@ -308,6 +319,22 @@ export function isAureliaKernelReference(
       expression.right.text === exportName;
   }
   return false;
+}
+
+export function isAureliaContainerReference(
+  expression: ts.Expression | ts.EntityName,
+  bindings: AureliaSourceImports,
+): boolean {
+  return isAureliaKernelReference(expression, "IContainer", bindings);
+}
+
+export function isAureliaContainerReceiverTypeNode(
+  type: ts.TypeNode | undefined,
+  bindings: AureliaSourceImports,
+): boolean {
+  return type !== undefined &&
+    ts.isTypeReferenceNode(type) &&
+    isAureliaContainerReference(type.typeName, bindings);
 }
 
 export function aureliaResolveFirstArgument(

@@ -2,8 +2,10 @@ import {
   readExportNames,
   SourceProjectKeyedMemo,
   SourceSelectorScheme,
+  sourceRangeForTarget,
   type SourceProject,
 } from "../../source/index.js";
+import type { SourceRange } from "../locus.js";
 import {
   catalogExportShapeForPackageExport,
   packageExportsForCandidateNames,
@@ -30,6 +32,7 @@ import {
   readFrameworkDiInterfacePackageRows,
   readFrameworkPackageNames,
 } from "./framework-package-exports.js";
+import { concreteExportTarget } from "./framework-support.js";
 
 const observerEntityRowsByPackage = new SourceProjectKeyedMemo<
   string,
@@ -87,6 +90,12 @@ export function readFrameworkObserverEntities(
           .localeCompare(right.observerKinds.join(",")) ||
         left.exportEntry.exportName.localeCompare(right.exportEntry.exportName),
     );
+}
+
+export function sourceRangeForObserverEntity(
+  row: FrameworkObserverEntityRow,
+): SourceRange | null {
+  return sourceRangeForTarget(concreteExportTarget(row.exportEntry.targets));
 }
 
 export function readFrameworkObserverEntityPackageRows(

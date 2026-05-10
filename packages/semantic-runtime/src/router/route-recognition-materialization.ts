@@ -1,19 +1,12 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
   EvidenceKind,
-  EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type { IdentityHandle, ProvenanceHandle } from '../kernel/handles.js';
-import { RouteRecognizerIdentity } from '../kernel/identity.js';
-import {
-  MaterializationRecord,
-  MaterializedProduct,
-} from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
   KernelStoreBatch,
@@ -43,6 +36,7 @@ import type { RouteConfigContextMaterializationProjectResult } from './route-con
 import type { RouteInstructionMaterializationProjectResult } from './route-instruction-materialization.js';
 import type { RouteRecognizerMaterializationProjectResult } from './route-recognizer-materialization.js';
 import type { RouteRuntimeTopologyProjectResult } from './route-runtime-topology.js';
+import { routeRecognizerProductRecords } from './router-product-records.js';
 
 const RESIDUE = '$$residue';
 
@@ -68,6 +62,15 @@ interface RecognizedRouteDraft {
   readonly redirectDepth: number;
 }
 
+interface RouteRecognitionIndexes {
+  readonly routeContextsByIdentity: ReadonlyMap<RouteContextModel['identityHandle'], RouteContextModel>;
+  readonly routeConfigContextsByIdentity: ReadonlyMap<RouteConfigContextModel['identityHandle'], RouteConfigContextModel>;
+  readonly routeConfigsByIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>;
+  readonly viewportInstructionsByIdentity: ReadonlyMap<ViewportInstructionModel['identityHandle'], ViewportInstructionModel>;
+  readonly typedInstructionsByIdentity: ReadonlyMap<TypedNavigationInstructionModel['identityHandle'], TypedNavigationInstructionModel>;
+  readonly recognizerGraphs: ReadonlyMap<string, RecognizerGraph>;
+}
+
 /** RecognizedRoute products from static ViewportInstruction paths, before RouteNode transition compilation. */
 export class RouteRecognitionMaterializationProjectResult {
   constructor(
@@ -90,34 +93,10 @@ export class RouteRecognitionMaterializationProjectPass {
     routeRecognizer: RouteRecognizerMaterializationProjectResult,
     routeInstructions: RouteInstructionMaterializationProjectResult,
   ): RouteRecognitionMaterializationProjectResult {
-    const routeContextsByIdentity = new Map(
-      routeRuntime.readRouteContexts().map((routeContext) => [routeContext.identityHandle, routeContext] as const),
-    );
-    const routeConfigContextsByIdentity = new Map(
-      routeConfigContexts.readRouteConfigContexts().map((routeConfigContext) => [routeConfigContext.identityHandle, routeConfigContext] as const),
-    );
-    const routeConfigsByIdentity = new Map(
-      routeConfigContexts.readRouteConfigs().map((routeConfig) => [routeConfig.identityHandle, routeConfig] as const),
-    );
-    const viewportInstructionsByIdentity = new Map(
-      routeInstructions.readViewportInstructions().map((instruction) => [instruction.identityHandle, instruction] as const),
-    );
-    const typedInstructionsByIdentity = new Map(
-      routeInstructions.readTypedNavigationInstructions().map((instruction) => [instruction.identityHandle, instruction] as const),
-    );
-    const recognizerGraphs = recognizerGraphsByIdentity(routeRecognizer);
+    const indexes = routeRecognitionIndexes(routeConfigContexts, routeRuntime, routeRecognizer, routeInstructions);
 
     const emissions = routeInstructions.readViewportInstructionTrees().flatMap((tree) =>
-      this.materializeInstructionTreeRecognitions(
-        store,
-        tree,
-        routeContextsByIdentity,
-        routeConfigContextsByIdentity,
-        viewportInstructionsByIdentity,
-        typedInstructionsByIdentity,
-        recognizerGraphs,
-        routeConfigsByIdentity,
-      )
+      this.materializeInstructionTreeRecognitions(store, tree, indexes)
     );
     const records = emissions.flatMap((emission) => emission.records);
     if (records.length > 0) {
@@ -132,17 +111,12 @@ export class RouteRecognitionMaterializationProjectPass {
   private materializeInstructionTreeRecognitions(
     store: KernelStore,
     tree: ViewportInstructionTreeModel,
-    routeContextsByIdentity: ReadonlyMap<RouteContextModel['identityHandle'], RouteContextModel>,
-    routeConfigContextsByIdentity: ReadonlyMap<RouteConfigContextModel['identityHandle'], RouteConfigContextModel>,
-    viewportInstructionsByIdentity: ReadonlyMap<ViewportInstructionModel['identityHandle'], ViewportInstructionModel>,
-    typedInstructionsByIdentity: ReadonlyMap<TypedNavigationInstructionModel['identityHandle'], TypedNavigationInstructionModel>,
-    recognizerGraphs: ReadonlyMap<string, RecognizerGraph>,
-    routeConfigsByIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>,
+    indexes: RouteRecognitionIndexes,
   ): readonly RouteRecognitionEmission[] {
-    const routeContext = routeContextForInstructionTree(tree, routeContextsByIdentity);
-    const routeConfigContext = routeConfigContextForRouteContext(routeContext, routeConfigContextsByIdentity);
+    const routeContext = routeContextForInstructionTree(tree, indexes.routeContextsByIdentity);
+    const routeConfigContext = routeConfigContextForRouteContext(routeContext, indexes.routeConfigContextsByIdentity);
     const recognizerIdentity = routeConfigContext?.recognizer.identityHandle ?? null;
-    const graph = recognizerIdentity == null ? null : recognizerGraphs.get(recognizerIdentity) ?? null;
+    const graph = recognizerIdentity == null ? null : indexes.recognizerGraphs.get(recognizerIdentity) ?? null;
     if (graph == null) {
       return [];
     }
@@ -150,14 +124,14 @@ export class RouteRecognitionMaterializationProjectPass {
     return tree.instructions.flatMap((instruction, index) => {
       const viewportInstruction = instruction.identityHandle == null
         ? null
-        : viewportInstructionsByIdentity.get(instruction.identityHandle) ?? null;
+        : indexes.viewportInstructionsByIdentity.get(instruction.identityHandle) ?? null;
       if (viewportInstruction == null) {
         return [];
       }
       const path = collapsedStringPath(
         viewportInstruction,
-        viewportInstructionsByIdentity,
-        typedInstructionsByIdentity,
+        indexes.viewportInstructionsByIdentity,
+        indexes.typedInstructionsByIdentity,
       );
       if (path == null) {
         return [];
@@ -166,7 +140,7 @@ export class RouteRecognitionMaterializationProjectPass {
       if (recognizedRoutes == null) {
         return [];
       }
-      const expandedRoutes = expandRedirectTargets(graph, recognizedRoutes, routeConfigsByIdentity);
+      const expandedRoutes = expandRedirectTargets(graph, recognizedRoutes, indexes.routeConfigsByIdentity);
       return [
         this.materializeRecognizedRoutes(
           store,
@@ -214,6 +188,32 @@ export class RouteRecognitionMaterializationProjectPass {
       recognizedRoutes,
     };
   }
+}
+
+function routeRecognitionIndexes(
+  routeConfigContexts: RouteConfigContextMaterializationProjectResult,
+  routeRuntime: RouteRuntimeTopologyProjectResult,
+  routeRecognizer: RouteRecognizerMaterializationProjectResult,
+  routeInstructions: RouteInstructionMaterializationProjectResult,
+): RouteRecognitionIndexes {
+  return {
+    routeContextsByIdentity: new Map(
+      routeRuntime.readRouteContexts().map((routeContext) => [routeContext.identityHandle, routeContext] as const),
+    ),
+    routeConfigContextsByIdentity: new Map(
+      routeConfigContexts.readRouteConfigContexts().map((routeConfigContext) => [routeConfigContext.identityHandle, routeConfigContext] as const),
+    ),
+    routeConfigsByIdentity: new Map(
+      routeConfigContexts.readRouteConfigs().map((routeConfig) => [routeConfig.identityHandle, routeConfig] as const),
+    ),
+    viewportInstructionsByIdentity: new Map(
+      routeInstructions.readViewportInstructions().map((instruction) => [instruction.identityHandle, instruction] as const),
+    ),
+    typedInstructionsByIdentity: new Map(
+      routeInstructions.readTypedNavigationInstructions().map((instruction) => [instruction.identityHandle, instruction] as const),
+    ),
+    recognizerGraphs: recognizerGraphsByIdentity(routeRecognizer),
+  };
 }
 
 function recognizerGraphsByIdentity(
@@ -878,37 +878,20 @@ function recognizedRouteRecords(
   const evidenceHandle = store.handles.evidence(local);
   const provenanceHandle = store.handles.provenance(local);
   const ownerHandle = routeRecognizerOwnerHandle(graph);
-  return [
-    new EvidenceRecord(
-      evidenceHandle,
-      EvidenceKind.SemanticObservation,
-      [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
-      'RouteRecognizer.recognize walked a static ViewportInstruction path into a RecognizedRoute.',
-      route.sourceAddressHandle,
-    ),
-    new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
-    new RouteRecognizerIdentity(
-      route.identityHandle,
-      KernelVocabulary.RouteRecognizer.RecognizedRoute.key,
-      ownerHandle,
-      route.sourceAddressHandle,
-      route.path,
-    ),
-    new MaterializedProduct(
-      route.productHandle,
-      KernelVocabulary.RouteRecognizer.RecognizedRoute.key,
-      route.identityHandle,
-      route.sourceAddressHandle,
-      provenanceHandle,
-    ),
-    new MaterializationRecord(
-      store.handles.materialization(local),
-      ownerHandle,
-      [route.productHandle],
-      [],
-      [],
-    ),
-  ];
+  return routeRecognizerProductRecords(store, {
+    local,
+    evidenceHandle,
+    provenanceHandle,
+    productHandle: route.productHandle,
+    identityHandle: route.identityHandle,
+    productKindKey: KernelVocabulary.RouteRecognizer.RecognizedRoute.key,
+    ownerHandle,
+    sourceAddressHandle: route.sourceAddressHandle,
+    localName: route.path,
+    evidenceKind: EvidenceKind.SemanticObservation,
+    evidenceRoles: [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
+    evidenceSummary: 'RouteRecognizer.recognize walked a static ViewportInstruction path into a RecognizedRoute.',
+  });
 }
 
 function routeRecognizerOwnerHandle(

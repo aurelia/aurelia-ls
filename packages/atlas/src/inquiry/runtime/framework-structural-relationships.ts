@@ -24,6 +24,7 @@ import {
   concreteExportTarget,
   sourceRangeForTarget,
 } from "./framework-support.js";
+import { frameworkRelationshipMatchesQuery } from "./framework-relationship-utils.js";
 
 export interface FrameworkStructuralRelationshipFilters
   extends FrameworkDiscoveryFilters {
@@ -100,7 +101,7 @@ export function readFrameworkStructuralRelationships(
       ),
     ),
   ]
-    .filter((row) => structuralRelationshipMatches(row, filters))
+    .filter((row) => frameworkRelationshipMatchesQuery(row, filters))
     .sort(
       (left, right) =>
         left.family.localeCompare(right.family) ||
@@ -168,18 +169,4 @@ function exportRelationshipBase(
     source,
     sourceRowId: row.id,
   };
-}
-
-function structuralRelationshipMatches(
-  row: FrameworkStructuralRelationshipRow,
-  filters: FrameworkStructuralRelationshipFilters,
-): boolean {
-  return (
-    (filters.packageId === undefined || row.packageId === filters.packageId) &&
-    (filters.relation === undefined || row.relation === filters.relation) &&
-    (filters.query === undefined ||
-      row.from.name.includes(filters.query) ||
-      row.to.name.includes(filters.query) ||
-      row.summary.includes(filters.query))
-  );
 }

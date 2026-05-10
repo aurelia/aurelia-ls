@@ -42,7 +42,7 @@ export function sourceInspectionContinuation(
   options: SourceInspectionContinuationOptions,
 ): Continuation {
   return {
-    ...(options.id === undefined ? {} : { id: options.id }),
+    id: options.id,
     kind: ContinuationKind.InspectEvidence,
     priority: options.priority ?? ContinuationPriority.Secondary,
     rationale: options.rationale,
@@ -80,7 +80,7 @@ export function optionalNextPageContinuation(
   }
   return [
     {
-      ...(options.id === undefined ? {} : { id: options.id }),
+      id: options.id,
       kind: ContinuationKind.NextPage,
       priority: options.priority ?? ContinuationPriority.Primary,
       rationale: options.rationale,

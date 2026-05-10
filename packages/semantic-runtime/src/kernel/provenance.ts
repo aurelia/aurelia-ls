@@ -13,7 +13,13 @@ export class ProvenanceRecord {
   ) {}
 }
 
-/** Field-level provenance for objects whose properties come from different evidence. */
+/**
+ * Field-level provenance for objects whose properties come from different evidence.
+ *
+ * Use this for authored/source-derived facts where individual fields may map to distinct spans, symbols, or
+ * contributions. Framework-fixed concept products should usually rely on product/source provenance instead of
+ * mechanically assigning the same provenance handle to every field.
+ */
 export class FieldProvenance<TField extends string = string> {
   /** String discriminator for serialized field-provenance records. */
   readonly kind = 'field-provenance' as const;
@@ -32,4 +38,16 @@ export function compactFieldProvenance<TField extends string>(
   provenance: readonly (FieldProvenance<TField> | null | undefined)[],
 ): readonly FieldProvenance<TField>[] {
   return provenance.filter((entry): entry is FieldProvenance<TField> => entry != null);
+}
+
+/** Create same-provenance field entries while preserving optional field slots at the call site. */
+export function fieldProvenanceEntries<TField extends string>(
+  /** Field names materialized from the same provenance handle. */
+  fields: readonly (TField | null | undefined)[],
+  /** Provenance handle explaining each provided field value. */
+  provenanceHandle: ProvenanceHandle,
+): readonly FieldProvenance<TField>[] {
+  return compactFieldProvenance(fields.map((field) =>
+    field == null ? null : new FieldProvenance(field, provenanceHandle)
+  ));
 }

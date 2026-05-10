@@ -38,12 +38,12 @@ import {
 import {
   KernelVocabulary,
   type OpenSeamKindKey,
+  type ProductKindKey,
 } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
 import {
   AppTaskCallbackKind,
   AppTaskDefinition,
-  AppTaskSlot,
   ConfigurationCallbackReference,
   type AppTaskField,
 } from '../configuration/app-task.js';
@@ -81,13 +81,13 @@ import {
 import {
   FrameworkRegistrationKind,
   RegistrationKeyReference,
-  RegistrationValueKind,
   RegistrationValueReference,
 } from '../registration/registration-reference.js';
 import {
-  FrameworkRegistrationCapability,
-  frameworkRegistrationCapabilitiesForKind,
-} from '../registration/framework-registration-manifest.js';
+  frameworkRegistrationEffectsForKind,
+  type FrameworkAppTaskEffect,
+  type FrameworkResolverEffect,
+} from './framework-registration-effects.js';
 import type { Container } from './container.js';
 import { ContainerRegistrationOperation, type ContainerRegistrationField } from './container-registration.js';
 import {
@@ -120,6 +120,19 @@ class DiProductEmission<TProduct> {
     readonly identityHandle: IdentityHandle,
     readonly openSeams: readonly OpenSeam[] = [],
   ) {}
+}
+
+interface PublishedDiProductRecordSpec {
+  readonly productKindKey: ProductKindKey;
+  readonly productHandle: ProductHandle;
+  readonly identityHandle: IdentityHandle;
+  readonly parentIdentityHandle: IdentityHandle | null;
+  readonly ownerIdentityHandle: IdentityHandle | null;
+  readonly sourceAddressHandle: AddressHandle | null;
+  readonly providesKeyClaimHandle: ClaimHandle;
+  readonly keyIdentityHandle: IdentityHandle;
+  readonly provenanceHandle: ProvenanceHandle;
+  readonly materializationLocal: string;
 }
 
 class DiFrameworkRegistrationEffectEmission {
@@ -158,6 +171,65 @@ class DiClaimEmission {
   ) {}
 }
 
+function recordsForPublishedDiProduct(
+  store: KernelStore,
+  spec: PublishedDiProductRecordSpec,
+): readonly KernelStoreRecord[] {
+  return [
+    new DiProductIdentity(
+      spec.identityHandle,
+      spec.productKindKey,
+      spec.parentIdentityHandle,
+      spec.ownerIdentityHandle,
+      spec.sourceAddressHandle,
+    ),
+    new SemanticClaim(
+      spec.providesKeyClaimHandle,
+      spec.productHandle,
+      KernelVocabulary.Di.ProvidesKey.key,
+      spec.keyIdentityHandle,
+      spec.provenanceHandle,
+    ),
+    new MaterializedProduct(
+      spec.productHandle,
+      spec.productKindKey,
+      spec.identityHandle,
+      spec.sourceAddressHandle,
+      spec.provenanceHandle,
+    ),
+    new MaterializationRecord(
+      store.handles.materialization(spec.materializationLocal),
+      spec.identityHandle,
+      [spec.productHandle],
+      [spec.providesKeyClaimHandle],
+    ),
+  ];
+}
+
+interface DiResolverPublication {
+  readonly ownerIdentityHandle: IdentityHandle;
+  readonly key: RegistrationKeyReference;
+  readonly keyIdentityHandle: IdentityHandle;
+  readonly strategy: RegistrationStrategy;
+  readonly state: RegistrationValueReference | null;
+  readonly sourceAddressHandle: AddressHandle | null;
+}
+
+interface DiResolverPublicationEmission {
+  readonly records: readonly KernelStoreRecord[];
+  readonly resolver: Resolver;
+  readonly resolverSlot: ContainerResolverSlot;
+}
+
+interface DiResolverPublicationHandles {
+  readonly resolverProductHandle: ProductHandle;
+  readonly resolverIdentityHandle: IdentityHandle;
+  readonly resolverProvidesKeyClaimHandle: ClaimHandle;
+  readonly resolverSlotProductHandle: ProductHandle;
+  readonly resolverSlotIdentityHandle: IdentityHandle;
+  readonly resolverSlotProvidesKeyClaimHandle: ClaimHandle;
+}
+
 class DiResourceSlotEmission {
   constructor(
     readonly records: readonly KernelStoreRecord[],
@@ -165,32 +237,6 @@ class DiResourceSlotEmission {
     readonly claimHandles: readonly ClaimHandle[],
     readonly openSeams: readonly OpenSeam[] = [],
   ) {}
-}
-
-class DiResolverHandles {
-  constructor(
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
-    readonly keyIdentityHandle: IdentityHandle,
-    readonly providesKeyClaimHandle: ClaimHandle,
-  ) {}
-
-  get claimHandles(): readonly ClaimHandle[] {
-    return [this.providesKeyClaimHandle];
-  }
-}
-
-class DiResolverSlotHandles {
-  constructor(
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
-    readonly keyIdentityHandle: IdentityHandle,
-    readonly providesKeyClaimHandle: ClaimHandle,
-  ) {}
-
-  get claimHandles(): readonly ClaimHandle[] {
-    return [this.providesKeyClaimHandle];
-  }
 }
 
 class DiResourceSlotPublication {
@@ -234,145 +280,332 @@ class DiContainerSelfResolverHandles {
   }
 }
 
-interface FrameworkResolverEffect {
-  readonly capability: FrameworkRegistrationCapability;
-  readonly keyName: string;
-  readonly strategy: RegistrationStrategy;
-  readonly valueKind: RegistrationValueKind | null;
-  readonly valueName: string | null;
+interface DiRegistrationSpendingEmission {
+  readonly records: readonly KernelStoreRecord[];
+  readonly operation: ContainerRegistrationOperation;
+  readonly resolvers: readonly Resolver[];
+  readonly registries: readonly RegistryValue[];
+  readonly parameterizedRegistries: readonly ParameterizedRegistry[];
+  readonly resolverSlots: readonly ContainerResolverSlot[];
+  readonly resourceSlots: readonly ContainerResourceSlot[];
+  readonly appTasks: readonly AppTaskDefinition[];
+  readonly openSeams: readonly OpenSeam[];
 }
 
-interface FrameworkAppTaskEffect {
-  readonly capability: FrameworkRegistrationCapability;
-  readonly slot: AppTaskSlot;
-  readonly keyName: string;
-  readonly callbackName: string;
+interface DiRegistrationSpendingCascadeEmission {
+  readonly records: readonly KernelStoreRecord[];
+  readonly operations: readonly ContainerRegistrationOperation[];
+  readonly resolvers: readonly Resolver[];
+  readonly registries: readonly RegistryValue[];
+  readonly parameterizedRegistries: readonly ParameterizedRegistry[];
+  readonly resolverSlots: readonly ContainerResolverSlot[];
+  readonly resourceSlots: readonly ContainerResourceSlot[];
+  readonly appTasks: readonly AppTaskDefinition[];
+  readonly openSeams: readonly OpenSeam[];
 }
 
-const frameworkResolverEffects: readonly FrameworkResolverEffect[] = [
-  {
-    capability: FrameworkRegistrationCapability.I18nServiceResolvers,
-    keyName: 'I18nInitOptions',
-    strategy: RegistrationStrategy.Callback,
-    valueKind: RegistrationValueKind.Callback,
-    valueName: 'I18nConfiguration init options callback',
-  },
-  {
-    capability: FrameworkRegistrationCapability.I18nServiceResolvers,
-    keyName: 'II18nextWrapper',
-    strategy: RegistrationStrategy.Singleton,
-    valueKind: RegistrationValueKind.Constructable,
-    valueName: 'I18nextWrapper',
-  },
-  {
-    capability: FrameworkRegistrationCapability.I18nServiceResolvers,
-    keyName: 'I18N',
-    strategy: RegistrationStrategy.Singleton,
-    valueKind: RegistrationValueKind.Constructable,
-    valueName: 'I18nService',
-  },
-  {
-    capability: FrameworkRegistrationCapability.RouterConfigurationResolvers,
-    keyName: 'IBaseHref',
-    strategy: RegistrationStrategy.CachedCallback,
-    valueKind: RegistrationValueKind.CachedCallback,
-    valueName: 'RouterConfiguration IBaseHref callback',
-  },
-  {
-    capability: FrameworkRegistrationCapability.RouterConfigurationResolvers,
-    keyName: 'IRouterOptions',
-    strategy: RegistrationStrategy.Instance,
-    valueKind: RegistrationValueKind.Instance,
-    valueName: 'RouterOptions',
-  },
-  {
-    capability: FrameworkRegistrationCapability.RouterConfigurationResolvers,
-    keyName: 'RouterOptions',
-    strategy: RegistrationStrategy.Instance,
-    valueKind: RegistrationValueKind.Instance,
-    valueName: 'RouterOptions',
-  },
-  {
-    capability: FrameworkRegistrationCapability.RouterDefaultComponents,
-    keyName: 'IRouter',
-    strategy: RegistrationStrategy.Singleton,
-    valueKind: RegistrationValueKind.Constructable,
-    valueName: 'Router',
-  },
-  {
-    capability: FrameworkRegistrationCapability.StateStoreResolvers,
-    keyName: 'IStoreRegistry',
-    strategy: RegistrationStrategy.Singleton,
-    valueKind: RegistrationValueKind.Constructable,
-    valueName: 'StoreRegistry',
-  },
-  {
-    capability: FrameworkRegistrationCapability.DialogServiceResolvers,
-    keyName: 'IDialogGlobalSettings',
-    strategy: RegistrationStrategy.Singleton,
-    valueKind: RegistrationValueKind.Constructable,
-    valueName: 'Dialog global settings',
-  },
-  {
-    capability: FrameworkRegistrationCapability.DialogServiceResolvers,
-    keyName: 'DialogService',
-    strategy: RegistrationStrategy.Singleton,
-    valueKind: RegistrationValueKind.Constructable,
-    valueName: 'DialogService',
-  },
-  {
-    capability: FrameworkRegistrationCapability.DialogServiceResolvers,
-    keyName: 'IDialogChildSettings',
-    strategy: RegistrationStrategy.Instance,
-    valueKind: RegistrationValueKind.Instance,
-    valueName: 'Dialog child settings map',
-  },
-];
+type DiRegistrationDirectSpender = (
+  container: Container,
+  step: ConfigurationStep,
+  admission: RegistrationAdmissionProduct,
+  registryBodyInterpreted: boolean,
+) => DiRegistrationSpendingEmission;
 
-const frameworkAppTaskEffects: readonly FrameworkAppTaskEffect[] = [
-  {
-    capability: FrameworkRegistrationCapability.I18nLifecycleTasks,
-    slot: AppTaskSlot.Activating,
-    keyName: 'I18N',
-    callbackName: 'i18n.initPromise',
-  },
-  {
-    capability: FrameworkRegistrationCapability.RouterLifecycleTasks,
-    slot: AppTaskSlot.Creating,
-    keyName: 'IRouter',
-    callbackName: 'RouterConfiguration ensure router instance',
-  },
-  {
-    capability: FrameworkRegistrationCapability.RouterLifecycleTasks,
-    slot: AppTaskSlot.Hydrated,
-    keyName: 'IContainer',
-    callbackName: 'RouteContext.setRoot',
-  },
-  {
-    capability: FrameworkRegistrationCapability.RouterLifecycleTasks,
-    slot: AppTaskSlot.Activated,
-    keyName: 'IRouter',
-    callbackName: 'router.start(true)',
-  },
-  {
-    capability: FrameworkRegistrationCapability.RouterLifecycleTasks,
-    slot: AppTaskSlot.Deactivated,
-    keyName: 'IRouter',
-    callbackName: 'router.stop()',
-  },
-  {
-    capability: FrameworkRegistrationCapability.StateStoreTasks,
-    slot: AppTaskSlot.Creating,
-    keyName: 'IContainer',
-    callbackName: 'StateDefaultConfiguration create/register store',
-  },
-  {
-    capability: FrameworkRegistrationCapability.DialogLifecycleTasks,
-    slot: AppTaskSlot.Creating,
-    keyName: 'IDialogGlobalSettings',
-    callbackName: 'DialogConfiguration settings provider',
-  },
-];
+interface DiRegistrationSpendingCascadeServices {
+  readonly admissionsByProduct: ReadonlyMap<ProductHandle, RegistrationAdmissionProduct>;
+  readonly registryBodyIndex: RegistryBodyStepIndex;
+  readonly spendDirect: DiRegistrationDirectSpender;
+}
+
+class DiRegistrationSpendingFrame {
+  readonly records: KernelStoreRecord[];
+  readonly resolvers: Resolver[] = [];
+  readonly registries: RegistryValue[] = [];
+  readonly parameterizedRegistries: ParameterizedRegistry[] = [];
+  readonly resolverSlots: ContainerResolverSlot[] = [];
+  readonly resourceSlots: ContainerResourceSlot[] = [];
+  readonly appTasks: AppTaskDefinition[] = [];
+  readonly openSeams: OpenSeam[] = [];
+  readonly operationMaterializationClaimHandles: ClaimHandle[];
+
+  constructor(
+    source: DiSourceSet,
+    readonly operation: DiRegistrationOperationEmission,
+  ) {
+    this.records = [
+      ...source.records,
+      ...operation.records,
+    ];
+    this.operationMaterializationClaimHandles = [operation.acceptRegistrationClaimHandle];
+  }
+
+  recordOpenSeam(
+    seam: {
+      readonly records: readonly KernelStoreRecord[];
+      readonly seam: OpenSeam;
+    },
+  ): void {
+    this.records.push(...seam.records);
+    this.openSeams.push(seam.seam);
+  }
+
+  recordProductClaims(claims: DiClaimEmission): void {
+    this.records.push(...claims.records);
+    this.operationMaterializationClaimHandles.push(...claims.handles);
+  }
+
+  recordResolverEmission(container: Container, emission: {
+    readonly records: readonly KernelStoreRecord[];
+    readonly resolvers: readonly Resolver[];
+    readonly resolverSlots: readonly ContainerResolverSlot[];
+    readonly openSeams: readonly OpenSeam[];
+  }): void {
+    this.records.push(...emission.records);
+    this.resolvers.push(...emission.resolvers);
+    this.resolverSlots.push(...emission.resolverSlots);
+    this.openSeams.push(...emission.openSeams);
+    for (const slot of emission.resolverSlots) {
+      container.registerResolver(slot);
+    }
+  }
+
+  recordParameterizedRegistry(emission: {
+    readonly records: readonly KernelStoreRecord[];
+    readonly registry: ParameterizedRegistry | null;
+    readonly openSeams: readonly OpenSeam[];
+  }): void {
+    this.records.push(...emission.records);
+    if (emission.registry != null) {
+      this.parameterizedRegistries.push(emission.registry);
+    }
+    this.openSeams.push(...emission.openSeams);
+  }
+
+  recordRegistry(emission: {
+    readonly records: readonly KernelStoreRecord[];
+    readonly registry: RegistryValue;
+    readonly openSeams: readonly OpenSeam[];
+  }): void {
+    this.records.push(...emission.records);
+    this.registries.push(emission.registry);
+    this.openSeams.push(...emission.openSeams);
+  }
+
+  recordResourceSlots(container: Container, emission: DiResourceSlotEmission): void {
+    this.records.push(...emission.records);
+    this.resourceSlots.push(...emission.slots);
+    this.openSeams.push(...emission.openSeams);
+    for (const slot of emission.slots) {
+      container.registerResource(slot);
+    }
+  }
+
+  recordFrameworkEffects(container: Container, effects: DiFrameworkRegistrationEffectEmission): void {
+    this.records.push(...effects.records);
+    this.resolvers.push(...effects.resolvers);
+    this.resolverSlots.push(...effects.resolverSlots);
+    this.resourceSlots.push(...effects.resourceSlots);
+    this.appTasks.push(...effects.appTasks);
+    this.openSeams.push(...effects.openSeams);
+    for (const slot of effects.resolverSlots) {
+      container.registerResolver(slot);
+    }
+    for (const slot of effects.resourceSlots) {
+      container.registerResource(slot);
+    }
+  }
+
+  recordAppTask(task: AppTaskDefinition | null): void {
+    if (task != null) {
+      this.appTasks.push(task);
+    }
+  }
+
+  toEmission(): DiRegistrationSpendingEmission {
+    return {
+      records: this.records,
+      operation: this.operation.product,
+      resolvers: this.resolvers,
+      registries: this.registries,
+      parameterizedRegistries: this.parameterizedRegistries,
+      resolverSlots: this.resolverSlots,
+      resourceSlots: this.resourceSlots,
+      appTasks: this.appTasks,
+      openSeams: this.openSeams,
+    };
+  }
+}
+
+class DiRegistrationSpendingCascadeFrame {
+  private readonly records: KernelStoreRecord[] = [];
+  private readonly operations: ContainerRegistrationOperation[] = [];
+  private readonly resolvers: Resolver[] = [];
+  private readonly registries: RegistryValue[] = [];
+  private readonly parameterizedRegistries: ParameterizedRegistry[] = [];
+  private readonly resolverSlots: ContainerResolverSlot[] = [];
+  private readonly resourceSlots: ContainerResourceSlot[] = [];
+  private readonly appTasks: AppTaskDefinition[] = [];
+  private readonly openSeams: OpenSeam[] = [];
+
+  constructor(direct: DiRegistrationSpendingEmission) {
+    this.recordDirect(direct);
+  }
+
+  recordDirect(spent: DiRegistrationSpendingEmission): void {
+    this.records.push(...spent.records);
+    this.operations.push(spent.operation);
+    this.resolvers.push(...spent.resolvers);
+    this.registries.push(...spent.registries);
+    this.parameterizedRegistries.push(...spent.parameterizedRegistries);
+    this.resolverSlots.push(...spent.resolverSlots);
+    this.resourceSlots.push(...spent.resourceSlots);
+    this.appTasks.push(...spent.appTasks);
+    this.openSeams.push(...spent.openSeams);
+  }
+
+  recordCascade(spent: DiRegistrationSpendingCascadeEmission): void {
+    this.records.push(...spent.records);
+    this.operations.push(...spent.operations);
+    this.resolvers.push(...spent.resolvers);
+    this.registries.push(...spent.registries);
+    this.parameterizedRegistries.push(...spent.parameterizedRegistries);
+    this.resolverSlots.push(...spent.resolverSlots);
+    this.resourceSlots.push(...spent.resourceSlots);
+    this.appTasks.push(...spent.appTasks);
+    this.openSeams.push(...spent.openSeams);
+  }
+
+  toEmission(): DiRegistrationSpendingCascadeEmission {
+    return {
+      records: this.records,
+      operations: this.operations,
+      resolvers: this.resolvers,
+      registries: this.registries,
+      parameterizedRegistries: this.parameterizedRegistries,
+      resolverSlots: this.resolverSlots,
+      resourceSlots: this.resourceSlots,
+      appTasks: this.appTasks,
+      openSeams: this.openSeams,
+    };
+  }
+}
+
+class DiRegistrationSpendingCascade {
+  private readonly spentAdmissionKeys = new Set<string>();
+
+  constructor(private readonly services: DiRegistrationSpendingCascadeServices) {}
+
+  admissionForProduct(productHandle: ProductHandle): RegistrationAdmissionProduct | null {
+    return this.services.admissionsByProduct.get(productHandle) ?? null;
+  }
+
+  spend(
+    container: Container,
+    step: ConfigurationStep,
+    admission: RegistrationAdmissionProduct,
+  ): DiRegistrationSpendingCascadeEmission {
+    const spentKey = `${container.productHandle}:${step.productHandle}:${admission.productHandle}`;
+    if (this.spentAdmissionKeys.has(spentKey)) {
+      return emptyRegistrationSpendingCascade();
+    }
+    this.spentAdmissionKeys.add(spentKey);
+
+    const bodySteps = this.services.registryBodyIndex.stepsForAdmission(admission);
+    const registryBodyInterpreted = this.services.registryBodyIndex.bodyInterpretedForAdmission(admission);
+    const frame = new DiRegistrationSpendingCascadeFrame(
+      this.services.spendDirect(container, step, admission, registryBodyInterpreted),
+    );
+    for (const bodyStep of bodySteps) {
+      this.recordBodyStep(frame, container, bodyStep);
+    }
+    return frame.toEmission();
+  }
+
+  private recordBodyStep(
+    frame: DiRegistrationSpendingCascadeFrame,
+    container: Container,
+    bodyStep: ConfigurationStep,
+  ): void {
+    for (const admissionHandle of bodyStep.registrationAdmissionProductHandles) {
+      const admission = this.admissionForProduct(admissionHandle);
+      if (admission != null) {
+        frame.recordCascade(this.spend(container, bodyStep, admission));
+      }
+    }
+  }
+}
+
+interface DiConfigurationSequenceIndex {
+  readonly containerBySequenceProduct: ReadonlyMap<ProductHandle, Container>;
+  readonly sequenceKindByProduct: ReadonlyMap<ProductHandle, ConfigurationSequenceKind>;
+}
+
+class DiWorldConstructionFrame {
+  readonly records: KernelStoreRecord[] = [];
+  readonly registrationOperations: ContainerRegistrationOperation[] = [];
+  readonly resolvers: Resolver[] = [];
+  readonly registries: RegistryValue[] = [];
+  readonly parameterizedRegistries: ParameterizedRegistry[] = [];
+  readonly resolverSlots: ContainerResolverSlot[] = [];
+  readonly selfResolverSlots: ContainerSelfResolverSlot[] = [];
+  readonly resourceSlots: ContainerResourceSlot[] = [];
+  readonly appTasks: AppTaskDefinition[] = [];
+  readonly openSeams: OpenSeam[] = [];
+
+  recordSelfResolver(container: Container, selfResolver: DiProductEmission<ContainerSelfResolverSlot>): void {
+    this.records.push(...selfResolver.records);
+    this.selfResolverSlots.push(selfResolver.product);
+    container.registerSelfResolver(selfResolver.product);
+  }
+
+  recordOpenSeam(
+    seam: {
+      readonly records: readonly KernelStoreRecord[];
+      readonly seam: OpenSeam;
+    },
+  ): void {
+    this.records.push(...seam.records);
+    this.openSeams.push(seam.seam);
+  }
+
+  recordSpending(spent: {
+    readonly records: readonly KernelStoreRecord[];
+    readonly operations: readonly ContainerRegistrationOperation[];
+    readonly resolvers: readonly Resolver[];
+    readonly registries: readonly RegistryValue[];
+    readonly parameterizedRegistries: readonly ParameterizedRegistry[];
+    readonly resolverSlots: readonly ContainerResolverSlot[];
+    readonly resourceSlots: readonly ContainerResourceSlot[];
+    readonly appTasks: readonly AppTaskDefinition[];
+    readonly openSeams: readonly OpenSeam[];
+  }): void {
+    this.records.push(...spent.records);
+    this.registrationOperations.push(...spent.operations);
+    this.resolvers.push(...spent.resolvers);
+    this.registries.push(...spent.registries);
+    this.parameterizedRegistries.push(...spent.parameterizedRegistries);
+    this.resolverSlots.push(...spent.resolverSlots);
+    this.resourceSlots.push(...spent.resourceSlots);
+    this.appTasks.push(...spent.appTasks);
+    this.openSeams.push(...spent.openSeams);
+  }
+
+  toEmission(containers: readonly Container[]): DiWorldConstructionEmission {
+    return new DiWorldConstructionEmission(
+      containers,
+      this.registrationOperations,
+      this.resolvers,
+      this.registries,
+      this.parameterizedRegistries,
+      this.resolverSlots,
+      this.selfResolverSlots,
+      this.resourceSlots,
+      this.appTasks,
+      this.openSeams,
+      this.records,
+    );
+  }
+}
 
 /** Spends configuration-owned registration products into abstract DI container state. */
 export class DiWorldConstructor {
@@ -390,26 +623,73 @@ export class DiWorldConstructor {
   ): DiWorldConstructionEmission {
     this.emittedIdentityHandles.clear();
 
-    const records: KernelStoreRecord[] = [];
-    const registrationOperations: ContainerRegistrationOperation[] = [];
-    const resolvers: Resolver[] = [];
-    const registries: RegistryValue[] = [];
-    const parameterizedRegistries: ParameterizedRegistry[] = [];
-    const resolverSlots: ContainerResolverSlot[] = [];
-    const selfResolverSlots: ContainerSelfResolverSlot[] = [];
-    const resourceSlots: ContainerResourceSlot[] = [];
-    const appTasks: AppTaskDefinition[] = [];
-    const openSeams: OpenSeam[] = [];
+    const frame = new DiWorldConstructionFrame();
+    const containersByProduct = this.installSelfResolvers(configuration, frame);
+    const aureliaContainerByProduct = this.aureliaContainerIndex(configuration, containersByProduct);
+    const sequenceIndex = this.sequenceContainerIndex(configuration, aureliaContainerByProduct);
+    const admissionsByProduct = registrationAdmissionIndex(configuration);
+    const appTasksByProduct = appTaskIndex(configuration);
+    const registrationCascade = this.registrationSpendingCascade(
+      configuration,
+      configuredResources,
+      resourceDefinitions,
+      admissionsByProduct,
+      appTasksByProduct,
+    );
 
+    this.spendConfigurationSteps(
+      frame,
+      configuration,
+      sequenceIndex,
+      registrationCascade,
+    );
+
+    if (frame.records.length > 0) {
+      this.store.commit(new KernelStoreBatch(frame.records, 'di-world-construction'));
+    }
+
+    return frame.toEmission(configuration.containers);
+  }
+
+  private registrationSpendingCascade(
+    configuration: ConfigurationKernelEmission,
+    configuredResources: ConfiguredBuiltInResourceCatalogEmission,
+    resourceDefinitions: ResourceDefinitionIndex | null,
+    admissionsByProduct: ReadonlyMap<ProductHandle, RegistrationAdmissionProduct>,
+    appTasksByProduct: ReadonlyMap<ProductHandle, AppTaskDefinition>,
+  ): DiRegistrationSpendingCascade {
+    return new DiRegistrationSpendingCascade({
+      admissionsByProduct,
+      registryBodyIndex: buildRegistryBodyStepIndex(this.store, configuration),
+      spendDirect: (container, step, admission, registryBodyInterpreted) =>
+        this.recordsForRegistrationSpending(
+          container,
+          step,
+          admission,
+          configuredResources,
+          resourceDefinitions,
+          appTasksByProduct,
+          registryBodyInterpreted,
+        ),
+    });
+  }
+
+  private installSelfResolvers(
+    configuration: ConfigurationKernelEmission,
+    frame: DiWorldConstructionFrame,
+  ): ReadonlyMap<ProductHandle, Container> {
     const containersByProduct = new Map<ProductHandle, Container>();
     for (const container of configuration.containers) {
       containersByProduct.set(container.productHandle, container);
-      const selfResolver = this.recordsForContainerSelfResolver(container);
-      records.push(...selfResolver.records);
-      selfResolverSlots.push(selfResolver.product);
-      container.registerSelfResolver(selfResolver.product);
+      frame.recordSelfResolver(container, this.recordsForContainerSelfResolver(container));
     }
+    return containersByProduct;
+  }
 
+  private aureliaContainerIndex(
+    configuration: ConfigurationKernelEmission,
+    containersByProduct: ReadonlyMap<ProductHandle, Container>,
+  ): ReadonlyMap<ProductHandle, Container> {
     const aureliaContainerByProduct = new Map<ProductHandle, Container>();
     for (const aurelia of configuration.aurelias) {
       if (aurelia.container.productHandle == null) {
@@ -420,7 +700,13 @@ export class DiWorldConstructor {
         aureliaContainerByProduct.set(aurelia.productHandle, container);
       }
     }
+    return aureliaContainerByProduct;
+  }
 
+  private sequenceContainerIndex(
+    configuration: ConfigurationKernelEmission,
+    aureliaContainerByProduct: ReadonlyMap<ProductHandle, Container>,
+  ): DiConfigurationSequenceIndex {
     const containerBySequenceProduct = new Map<ProductHandle, Container>();
     const sequenceKindByProduct = new Map<ProductHandle, ConfigurationSequenceKind>();
     for (const sequence of configuration.sequences) {
@@ -433,92 +719,49 @@ export class DiWorldConstructor {
         containerBySequenceProduct.set(sequence.productHandle, container);
       }
     }
+    return { containerBySequenceProduct, sequenceKindByProduct };
+  }
 
-    const admissionsByProduct = new Map<ProductHandle, RegistrationAdmissionProduct>();
-    for (const admission of configuration.registrationAdmissions) {
-      admissionsByProduct.set(admission.productHandle, admission);
-    }
-    const appTasksByProduct = new Map(
-      configuration.appTasks.map((task) => [task.productHandle, task] as const),
-    );
-    const registryBodyIndex = buildRegistryBodyStepIndex(this.store, configuration);
-    const spentAdmissionKeys = new Set<string>();
-
+  private spendConfigurationSteps(
+    frame: DiWorldConstructionFrame,
+    configuration: ConfigurationKernelEmission,
+    sequenceIndex: DiConfigurationSequenceIndex,
+    registrationCascade: DiRegistrationSpendingCascade,
+  ): void {
     for (const step of configuration.steps) {
       if (step.registrationAdmissionProductHandles.length === 0) {
         continue;
       }
 
-      const container = this.containerForStep(step, containerBySequenceProduct);
+      const container = this.containerForStep(step, sequenceIndex.containerBySequenceProduct);
       if (container == null) {
-        if (!this.stepBelongsToAppSequence(step, sequenceKindByProduct)) {
+        if (!this.stepBelongsToAppSequence(step, sequenceIndex.sequenceKindByProduct)) {
           continue;
         }
-        const seam = this.recordsForOpenSeam(
+        frame.recordOpenSeam(this.recordsForOpenSeam(
           `di-open-container:${step.productHandle}`,
           KernelVocabulary.Di.OpenRegistrationSpending.key,
           'Configuration step admitted registrations, but DI world construction could not identify the receiving container.',
           step.sourceAddressHandle,
-        );
-        records.push(...seam.records);
-        openSeams.push(seam.seam);
+        ));
         continue;
       }
 
       for (const admissionProductHandle of step.registrationAdmissionProductHandles) {
-        const admission = admissionsByProduct.get(admissionProductHandle);
+        const admission = registrationCascade.admissionForProduct(admissionProductHandle);
         if (admission == null) {
-          const seam = this.recordsForOpenSeam(
+          frame.recordOpenSeam(this.recordsForOpenSeam(
             `di-open-admission:${step.productHandle}:${admissionProductHandle}`,
             KernelVocabulary.Di.OpenRegistrationSpending.key,
             'Configuration step referenced a registration admission product that was not present in the configuration emission.',
             step.sourceAddressHandle,
-          );
-          records.push(...seam.records);
-          openSeams.push(seam.seam);
+          ));
           continue;
         }
 
-        const spent = this.recordsForRegistrationSpendingCascade(
-          container,
-          step,
-          admission,
-          configuredResources,
-          resourceDefinitions,
-          admissionsByProduct,
-          appTasksByProduct,
-          registryBodyIndex,
-          spentAdmissionKeys,
-        );
-        records.push(...spent.records);
-        registrationOperations.push(...spent.operations);
-        resolvers.push(...spent.resolvers);
-        registries.push(...spent.registries);
-        parameterizedRegistries.push(...spent.parameterizedRegistries);
-        resolverSlots.push(...spent.resolverSlots);
-        resourceSlots.push(...spent.resourceSlots);
-        appTasks.push(...spent.appTasks);
-        openSeams.push(...spent.openSeams);
+        frame.recordSpending(registrationCascade.spend(container, step, admission));
       }
     }
-
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, 'di-world-construction'));
-    }
-
-    return new DiWorldConstructionEmission(
-      configuration.containers,
-      registrationOperations,
-      resolvers,
-      registries,
-      parameterizedRegistries,
-      resolverSlots,
-      selfResolverSlots,
-      resourceSlots,
-      appTasks,
-      openSeams,
-      records,
-    );
   }
 
   private containerForStep(
@@ -538,106 +781,6 @@ export class DiWorldConstructor {
       && sequenceKindByProduct.get(step.sequence.productHandle) === ConfigurationSequenceKind.App;
   }
 
-  private recordsForRegistrationSpendingCascade(
-    container: Container,
-    step: ConfigurationStep,
-    admission: RegistrationAdmissionProduct,
-    configuredResources: ConfiguredBuiltInResourceCatalogEmission,
-    resourceDefinitions: ResourceDefinitionIndex | null,
-    admissionsByProduct: ReadonlyMap<ProductHandle, RegistrationAdmissionProduct>,
-    appTasksByProduct: ReadonlyMap<ProductHandle, AppTaskDefinition>,
-    registryBodyIndex: RegistryBodyStepIndex,
-    spentAdmissionKeys: Set<string>,
-  ): {
-    readonly records: readonly KernelStoreRecord[];
-    readonly operations: readonly ContainerRegistrationOperation[];
-    readonly resolvers: readonly Resolver[];
-    readonly registries: readonly RegistryValue[];
-    readonly parameterizedRegistries: readonly ParameterizedRegistry[];
-    readonly resolverSlots: readonly ContainerResolverSlot[];
-    readonly resourceSlots: readonly ContainerResourceSlot[];
-    readonly appTasks: readonly AppTaskDefinition[];
-    readonly openSeams: readonly OpenSeam[];
-  } {
-    const spentKey = `${container.productHandle}:${step.productHandle}:${admission.productHandle}`;
-    if (spentAdmissionKeys.has(spentKey)) {
-      return {
-        records: [],
-        operations: [],
-        resolvers: [],
-        registries: [],
-        parameterizedRegistries: [],
-        resolverSlots: [],
-        resourceSlots: [],
-        appTasks: [],
-        openSeams: [],
-      };
-    }
-    spentAdmissionKeys.add(spentKey);
-
-    const bodySteps = registryBodyIndex.stepsForAdmission(admission);
-    const registryBodyInterpreted = registryBodyIndex.bodyInterpretedForAdmission(admission);
-    const direct = this.recordsForRegistrationSpending(
-      container,
-      step,
-      admission,
-      configuredResources,
-      resourceDefinitions,
-      appTasksByProduct,
-      registryBodyInterpreted,
-    );
-    const records: KernelStoreRecord[] = [...direct.records];
-    const operations: ContainerRegistrationOperation[] = [direct.operation];
-    const resolvers: Resolver[] = [...direct.resolvers];
-    const registries: RegistryValue[] = [...direct.registries];
-    const parameterizedRegistries: ParameterizedRegistry[] = [...direct.parameterizedRegistries];
-    const resolverSlots: ContainerResolverSlot[] = [...direct.resolverSlots];
-    const resourceSlots: ContainerResourceSlot[] = [...direct.resourceSlots];
-    const appTasks: AppTaskDefinition[] = [...direct.appTasks];
-    const openSeams: OpenSeam[] = [...direct.openSeams];
-
-    for (const bodyStep of bodySteps) {
-      for (const bodyAdmissionHandle of bodyStep.registrationAdmissionProductHandles) {
-        const bodyAdmission = admissionsByProduct.get(bodyAdmissionHandle);
-        if (bodyAdmission == null) {
-          continue;
-        }
-        const body = this.recordsForRegistrationSpendingCascade(
-          container,
-          bodyStep,
-          bodyAdmission,
-          configuredResources,
-          resourceDefinitions,
-          admissionsByProduct,
-          appTasksByProduct,
-          registryBodyIndex,
-          spentAdmissionKeys,
-        );
-        records.push(...body.records);
-        operations.push(...body.operations);
-        resolvers.push(...body.resolvers);
-        registries.push(...body.registries);
-        parameterizedRegistries.push(...body.parameterizedRegistries);
-        resolverSlots.push(...body.resolverSlots);
-        resourceSlots.push(...body.resourceSlots);
-        appTasks.push(...body.appTasks);
-        openSeams.push(...body.openSeams);
-      }
-    }
-
-    return {
-      records,
-      operations,
-      resolvers,
-      registries,
-      parameterizedRegistries,
-      resolverSlots,
-      resourceSlots,
-      appTasks,
-      openSeams,
-    };
-  }
-
   private recordsForRegistrationSpending(
     container: Container,
     step: ConfigurationStep,
@@ -646,220 +789,253 @@ export class DiWorldConstructor {
     resourceDefinitions: ResourceDefinitionIndex | null,
     appTasksByProduct: ReadonlyMap<ProductHandle, AppTaskDefinition>,
     registryBodyInterpreted = false,
-  ): {
-    readonly records: readonly KernelStoreRecord[];
-    readonly operation: ContainerRegistrationOperation;
-    readonly resolvers: readonly Resolver[];
-    readonly registries: readonly RegistryValue[];
-    readonly parameterizedRegistries: readonly ParameterizedRegistry[];
-    readonly resolverSlots: readonly ContainerResolverSlot[];
-    readonly resourceSlots: readonly ContainerResourceSlot[];
-    readonly appTasks: readonly AppTaskDefinition[];
-    readonly openSeams: readonly OpenSeam[];
-  } {
-    const records: KernelStoreRecord[] = [];
-    const resolvers: Resolver[] = [];
-    const registries: RegistryValue[] = [];
-    const parameterizedRegistries: ParameterizedRegistry[] = [];
-    const resolverSlots: ContainerResolverSlot[] = [];
-    const resourceSlots: ContainerResourceSlot[] = [];
-    const appTasks: AppTaskDefinition[] = [];
-    const openSeams: OpenSeam[] = [];
+  ): DiRegistrationSpendingEmission {
     const local = `di-registration:${container.productHandle}:${step.productHandle}:${admission.productHandle}`;
     const source = this.recordsForSource(
       `${local}:source`,
       'Configuration-owned registration admission spent into DI world construction.',
       step.sourceAddressHandle ?? admission.sourceAddressHandle,
     );
-    records.push(...source.records);
-
     const operation = this.operationForAdmission(container, admission, local, source.provenanceHandle);
-    records.push(...operation.records);
     container.register(operation.product);
-    const operationMaterializationClaimHandles = [operation.acceptRegistrationClaimHandle];
+    const frame = new DiRegistrationSpendingFrame(source, operation);
 
-    if (admission instanceof OpenRegistrationAdmission) {
-      const seam = this.recordsForOpenSeam(
-        `${local}:open-admission`,
-        KernelVocabulary.Di.OpenRegistrationSpending.key,
-        summaryForOpenRegistrationAdmission(admission),
-        admission.sourceAddressHandle,
-      );
-      records.push(...seam.records);
-      openSeams.push(seam.seam);
-    } else if (admission instanceof ResolverRegistrationAdmission) {
-      const emission = this.recordsForResolverAdmission(container, admission, local, source.provenanceHandle);
-      records.push(...emission.records);
-      resolvers.push(...emission.resolvers);
-      resolverSlots.push(...emission.resolverSlots);
-      openSeams.push(...emission.openSeams);
-      const productClaims = this.recordsForOperationProductClaims(
-        `${local}:resolver-products`,
-        operation.product.productHandle,
-        [
-          ...emission.resolvers.map((resolver) => resolver.productHandle),
-          ...emission.resolverSlots.map((slot) => slot.productHandle),
-        ],
-        source.provenanceHandle,
-      );
-      records.push(...productClaims.records);
-      operationMaterializationClaimHandles.push(...productClaims.handles);
-      for (const slot of emission.resolverSlots) {
-        container.registerResolver(slot);
-      }
-    } else if (admission instanceof ParameterizedRegistryAdmission) {
-      const emission = this.recordsForParameterizedRegistry(
-        container,
-        admission,
-        local,
-        source.provenanceHandle,
-      );
-      records.push(...emission.records);
-      if (emission.registry != null) {
-        parameterizedRegistries.push(emission.registry);
-        const productClaims = this.recordsForOperationProductClaims(
-          `${local}:parameterized-registry-products`,
-          operation.product.productHandle,
-          [emission.registry.productHandle],
-          source.provenanceHandle,
-        );
-        records.push(...productClaims.records);
-        operationMaterializationClaimHandles.push(...productClaims.handles);
-      }
-      openSeams.push(...emission.openSeams);
-    } else if (admission instanceof RegistryRegistrationAdmission) {
-      const emission = this.recordsForRegistry(
-        container,
-        admission,
-        local,
-        source.provenanceHandle,
-        registryBodyInterpreted || frameworkRegistrationEffectsCloseRegistryBody(admission),
-      );
-      records.push(...emission.records);
-      registries.push(emission.registry);
-      const registeredAppTask = appTaskForRegistryAdmission(admission, appTasksByProduct);
-      if (registeredAppTask != null) {
-        appTasks.push(registeredAppTask);
-      }
-      const frameworkEffects = this.recordsForFrameworkRegistrationEffects(
-        container,
-        admission,
-        configuredResources,
-        `${local}:registry-framework-effects`,
-        source.provenanceHandle,
-      );
-      records.push(...frameworkEffects.records);
-      resolvers.push(...frameworkEffects.resolvers);
-      resolverSlots.push(...frameworkEffects.resolverSlots);
-      resourceSlots.push(...frameworkEffects.resourceSlots);
-      appTasks.push(...frameworkEffects.appTasks);
-      for (const slot of frameworkEffects.resolverSlots) {
-        container.registerResolver(slot);
-      }
-      for (const slot of frameworkEffects.resourceSlots) {
-        container.registerResource(slot);
-      }
-      const productClaims = this.recordsForOperationProductClaims(
-        `${local}:registry-products`,
-        operation.product.productHandle,
-        [
-          emission.registry.productHandle,
-          ...(registeredAppTask == null ? [] : [registeredAppTask.productHandle]),
-          ...frameworkEffects.resolvers.map((resolver) => resolver.productHandle),
-          ...frameworkEffects.resolverSlots.map((slot) => slot.productHandle),
-          ...frameworkEffects.resourceSlots.map((slot) => slot.productHandle),
-        ],
-        source.provenanceHandle,
-      );
-      records.push(...productClaims.records);
-      operationMaterializationClaimHandles.push(...productClaims.handles);
-      openSeams.push(...emission.openSeams, ...frameworkEffects.openSeams);
-    } else if (admission instanceof ResourceRegistrationAdmission) {
-      const slotEmission = this.recordsForResourceAdmission(
-        container,
-        admission,
-        resourceDefinitions,
-        `${local}:resource`,
-        source.provenanceHandle,
-      );
-      records.push(...slotEmission.records);
-      resourceSlots.push(...slotEmission.slots);
-      for (const slot of slotEmission.slots) {
-        container.registerResource(slot);
-      }
-      const productClaims = this.recordsForOperationProductClaims(
-        `${local}:resource-products`,
-        operation.product.productHandle,
-        slotEmission.slots.map((slot) => slot.productHandle),
-        source.provenanceHandle,
-      );
-      records.push(...productClaims.records);
-      operationMaterializationClaimHandles.push(...productClaims.handles);
-      openSeams.push(...slotEmission.openSeams);
-    } else if (admission instanceof FrameworkRegistrationAdmission) {
-      const frameworkEffects = this.recordsForFrameworkRegistrationEffects(
-        container,
-        admission,
-        configuredResources,
-        `${local}:framework-effects`,
-        source.provenanceHandle,
-      );
-      records.push(...frameworkEffects.records);
-      resolvers.push(...frameworkEffects.resolvers);
-      resolverSlots.push(...frameworkEffects.resolverSlots);
-      resourceSlots.push(...frameworkEffects.resourceSlots);
-      appTasks.push(...frameworkEffects.appTasks);
-      for (const slot of frameworkEffects.resolverSlots) {
-        container.registerResolver(slot);
-      }
-      for (const slot of frameworkEffects.resourceSlots) {
-        container.registerResource(slot);
-      }
-      const productClaims = this.recordsForOperationProductClaims(
-        `${local}:framework-effect-products`,
-        operation.product.productHandle,
-        [
-          ...frameworkEffects.resolvers.map((resolver) => resolver.productHandle),
-          ...frameworkEffects.resolverSlots.map((slot) => slot.productHandle),
-          ...frameworkEffects.resourceSlots.map((slot) => slot.productHandle),
-        ],
-        source.provenanceHandle,
-      );
-      records.push(...productClaims.records);
-      operationMaterializationClaimHandles.push(...productClaims.handles);
-
-      const openSummary = summaryForFrameworkRegistrationOpen(admission.frameworkKind);
-      if (openSummary != null) {
-        const seam = this.recordsForOpenSeam(
-          `${local}:framework-registration-open`,
-          KernelVocabulary.Di.OpenRegistrationSpending.key,
-          openSummary,
-          admission.sourceAddressHandle,
-        );
-        records.push(...seam.records);
-        openSeams.push(seam.seam);
-      }
-      openSeams.push(...frameworkEffects.openSeams);
-    }
-    records.push(...this.recordsForOperationEnvelope(
+    this.spendRegistrationAdmission(
+      frame,
+      container,
+      admission,
+      configuredResources,
+      resourceDefinitions,
+      appTasksByProduct,
+      local,
+      source.provenanceHandle,
+      registryBodyInterpreted,
+    );
+    frame.records.push(...this.recordsForOperationEnvelope(
       local,
       operation,
-      operationMaterializationClaimHandles,
-      openSeams.map((seam) => seam.handle),
+      frame.operationMaterializationClaimHandles,
+      frame.openSeams.map((seam) => seam.handle),
       source.provenanceHandle,
     ));
 
-    return {
-      records,
-      operation: operation.product,
-      resolvers,
-      registries,
-      parameterizedRegistries,
-      resolverSlots,
-      resourceSlots,
-      appTasks,
-      openSeams,
-    };
+    return frame.toEmission();
+  }
+
+  private spendRegistrationAdmission(
+    frame: DiRegistrationSpendingFrame,
+    container: Container,
+    admission: RegistrationAdmissionProduct,
+    configuredResources: ConfiguredBuiltInResourceCatalogEmission,
+    resourceDefinitions: ResourceDefinitionIndex | null,
+    appTasksByProduct: ReadonlyMap<ProductHandle, AppTaskDefinition>,
+    local: string,
+    provenanceHandle: ProvenanceHandle,
+    registryBodyInterpreted: boolean,
+  ): void {
+    if (admission instanceof OpenRegistrationAdmission) {
+      this.spendOpenRegistrationAdmission(frame, admission, local);
+      return;
+    }
+    if (admission instanceof ResolverRegistrationAdmission) {
+      this.spendResolverRegistrationAdmission(frame, container, admission, local, provenanceHandle);
+      return;
+    }
+    if (admission instanceof ParameterizedRegistryAdmission) {
+      this.spendParameterizedRegistryAdmission(frame, container, admission, local, provenanceHandle);
+      return;
+    }
+    if (admission instanceof RegistryRegistrationAdmission) {
+      this.spendRegistryRegistrationAdmission(
+        frame,
+        container,
+        admission,
+        configuredResources,
+        appTasksByProduct,
+        local,
+        provenanceHandle,
+        registryBodyInterpreted,
+      );
+      return;
+    }
+    if (admission instanceof ResourceRegistrationAdmission) {
+      this.spendResourceRegistrationAdmission(
+        frame,
+        container,
+        admission,
+        resourceDefinitions,
+        local,
+        provenanceHandle,
+      );
+      return;
+    }
+    if (admission instanceof FrameworkRegistrationAdmission) {
+      this.spendFrameworkRegistrationAdmission(
+        frame,
+        container,
+        admission,
+        configuredResources,
+        local,
+        provenanceHandle,
+      );
+    }
+  }
+
+  private spendOpenRegistrationAdmission(
+    frame: DiRegistrationSpendingFrame,
+    admission: OpenRegistrationAdmission,
+    local: string,
+  ): void {
+    frame.recordOpenSeam(this.recordsForOpenSeam(
+      `${local}:open-admission`,
+      KernelVocabulary.Di.OpenRegistrationSpending.key,
+      summaryForOpenRegistrationAdmission(admission),
+      admission.sourceAddressHandle,
+    ));
+  }
+
+  private spendResolverRegistrationAdmission(
+    frame: DiRegistrationSpendingFrame,
+    container: Container,
+    admission: ResolverRegistrationAdmission,
+    local: string,
+    provenanceHandle: ProvenanceHandle,
+  ): void {
+    const emission = this.recordsForResolverAdmission(container, admission, local, provenanceHandle);
+    frame.recordResolverEmission(container, emission);
+    frame.recordProductClaims(this.recordsForOperationProductClaims(
+      `${local}:resolver-products`,
+      frame.operation.productHandle,
+      [
+        ...emission.resolvers.map((resolver) => resolver.productHandle),
+        ...emission.resolverSlots.map((slot) => slot.productHandle),
+      ],
+      provenanceHandle,
+    ));
+  }
+
+  private spendParameterizedRegistryAdmission(
+    frame: DiRegistrationSpendingFrame,
+    container: Container,
+    admission: ParameterizedRegistryAdmission,
+    local: string,
+    provenanceHandle: ProvenanceHandle,
+  ): void {
+    const emission = this.recordsForParameterizedRegistry(container, admission, local, provenanceHandle);
+    frame.recordParameterizedRegistry(emission);
+    if (emission.registry != null) {
+      frame.recordProductClaims(this.recordsForOperationProductClaims(
+        `${local}:parameterized-registry-products`,
+        frame.operation.productHandle,
+        [emission.registry.productHandle],
+        provenanceHandle,
+      ));
+    }
+  }
+
+  private spendRegistryRegistrationAdmission(
+    frame: DiRegistrationSpendingFrame,
+    container: Container,
+    admission: RegistryRegistrationAdmission,
+    configuredResources: ConfiguredBuiltInResourceCatalogEmission,
+    appTasksByProduct: ReadonlyMap<ProductHandle, AppTaskDefinition>,
+    local: string,
+    provenanceHandle: ProvenanceHandle,
+    registryBodyInterpreted: boolean,
+  ): void {
+    const emission = this.recordsForRegistry(
+      container,
+      admission,
+      local,
+      provenanceHandle,
+      registryBodyInterpreted || frameworkRegistrationEffectsCloseRegistryBody(admission),
+    );
+    frame.recordRegistry(emission);
+    const registeredAppTask = appTaskForRegistryAdmission(admission, appTasksByProduct);
+    frame.recordAppTask(registeredAppTask);
+
+    const frameworkEffects = this.recordsForFrameworkRegistrationEffects(
+      container,
+      admission,
+      configuredResources,
+      `${local}:registry-framework-effects`,
+      provenanceHandle,
+    );
+    frame.recordFrameworkEffects(container, frameworkEffects);
+    frame.recordProductClaims(this.recordsForOperationProductClaims(
+      `${local}:registry-products`,
+      frame.operation.productHandle,
+      [
+        emission.registry.productHandle,
+        ...(registeredAppTask == null ? [] : [registeredAppTask.productHandle]),
+        ...frameworkEffects.resolvers.map((resolver) => resolver.productHandle),
+        ...frameworkEffects.resolverSlots.map((slot) => slot.productHandle),
+        ...frameworkEffects.resourceSlots.map((slot) => slot.productHandle),
+      ],
+      provenanceHandle,
+    ));
+  }
+
+  private spendResourceRegistrationAdmission(
+    frame: DiRegistrationSpendingFrame,
+    container: Container,
+    admission: ResourceRegistrationAdmission,
+    resourceDefinitions: ResourceDefinitionIndex | null,
+    local: string,
+    provenanceHandle: ProvenanceHandle,
+  ): void {
+    const emission = this.recordsForResourceAdmission(
+      container,
+      admission,
+      resourceDefinitions,
+      `${local}:resource`,
+      provenanceHandle,
+    );
+    frame.recordResourceSlots(container, emission);
+    frame.recordProductClaims(this.recordsForOperationProductClaims(
+      `${local}:resource-products`,
+      frame.operation.productHandle,
+      emission.slots.map((slot) => slot.productHandle),
+      provenanceHandle,
+    ));
+  }
+
+  private spendFrameworkRegistrationAdmission(
+    frame: DiRegistrationSpendingFrame,
+    container: Container,
+    admission: FrameworkRegistrationAdmission,
+    configuredResources: ConfiguredBuiltInResourceCatalogEmission,
+    local: string,
+    provenanceHandle: ProvenanceHandle,
+  ): void {
+    const frameworkEffects = this.recordsForFrameworkRegistrationEffects(
+      container,
+      admission,
+      configuredResources,
+      `${local}:framework-effects`,
+      provenanceHandle,
+    );
+    frame.recordFrameworkEffects(container, frameworkEffects);
+    frame.recordProductClaims(this.recordsForOperationProductClaims(
+      `${local}:framework-effect-products`,
+      frame.operation.productHandle,
+      [
+        ...frameworkEffects.resolvers.map((resolver) => resolver.productHandle),
+        ...frameworkEffects.resolverSlots.map((slot) => slot.productHandle),
+        ...frameworkEffects.resourceSlots.map((slot) => slot.productHandle),
+      ],
+      provenanceHandle,
+    ));
+
+    const openSummary = summaryForFrameworkRegistrationOpen(admission.frameworkKind);
+    if (openSummary != null) {
+      frame.recordOpenSeam(this.recordsForOpenSeam(
+        `${local}:framework-registration-open`,
+        KernelVocabulary.Di.OpenRegistrationSpending.key,
+        openSummary,
+        admission.sourceAddressHandle,
+      ));
+    }
   }
 
   private operationForAdmission(
@@ -1018,188 +1194,116 @@ export class DiWorldConstructor {
       return { records, resolvers: [], resolverSlots: [], openSeams };
     }
 
-    const resolver = this.recordsForResolver(container, admission, local, provenanceHandle);
-    const slot = this.recordsForResolverSlot(container, admission, resolver.productHandle, local, provenanceHandle);
-    records.push(...resolver.records, ...slot.records);
+    const publication = this.resolverPublicationForAdmission(admission);
+    if (publication == null) {
+      const seam = this.recordsForOpenSeam(
+        `${local}:open-publication`,
+        KernelVocabulary.Di.OpenRegistrationSpending.key,
+        'Resolver admission had a closed strategy but did not expose a closed DI key publication.',
+        admission.sourceAddressHandle,
+      );
+      records.push(...seam.records);
+      openSeams.push(seam.seam);
+      return { records, resolvers: [], resolverSlots: [], openSeams };
+    }
+
+    const emission = this.recordsForResolverPublication(container, publication, local, provenanceHandle);
+    records.push(...emission.records);
     return {
       records,
-      resolvers: [resolver.product],
-      resolverSlots: [slot.product],
+      resolvers: [emission.resolver],
+      resolverSlots: [emission.resolverSlot],
       openSeams,
     };
   }
 
-  private recordsForResolver(
-    container: Container,
+  private resolverPublicationForAdmission(
     admission: ResolverRegistrationAdmission,
+  ): DiResolverPublication | null {
+    if (admission.targetKey?.identityHandle == null) {
+      return null;
+    }
+    return {
+      ownerIdentityHandle: admission.identityHandle,
+      key: admission.targetKey,
+      keyIdentityHandle: admission.targetKey.identityHandle,
+      strategy: admission.strategy,
+      state: admission.registeredValue,
+      sourceAddressHandle: admission.sourceAddressHandle,
+    };
+  }
+
+  private recordsForResolverPublication(
+    container: Container,
+    publication: DiResolverPublication,
     local: string,
     provenanceHandle: ProvenanceHandle,
-  ): DiProductEmission<Resolver> {
-    const handles = this.resolverHandles(local, admission);
-    const resolver = this.resolverForAdmission(handles.productHandle, handles.identityHandle, admission, provenanceHandle);
-    const records = this.recordsForResolverProduct(
-      local,
-      container,
-      admission,
+  ): DiResolverPublicationEmission {
+    const handles = this.resolverPublicationHandles(local);
+    const resolver = this.resolverForPublication(publication, handles, provenanceHandle);
+    const resolverSlot = this.resolverSlotForPublication(container, publication, resolver, handles, provenanceHandle);
+    return {
+      records: this.recordsForResolverPublicationProducts(
+        container,
+        publication,
+        resolver,
+        resolverSlot,
+        handles,
+        local,
+        provenanceHandle,
+      ),
       resolver,
-      handles,
-      provenanceHandle,
-    );
-    return new DiProductEmission(records, resolver, handles.productHandle, handles.identityHandle);
+      resolverSlot,
+    };
   }
 
-  private resolverHandles(
-    local: string,
-    admission: ResolverRegistrationAdmission,
-  ): DiResolverHandles {
-    return new DiResolverHandles(
-      this.store.handles.product(`${local}:resolver`),
-      this.store.handles.identity(`${local}:resolver`),
-      admission.targetKey!.identityHandle!,
-      this.store.handles.claim(`${local}:resolver-provides-key`),
-    );
+  private resolverPublicationHandles(local: string): DiResolverPublicationHandles {
+    return {
+      resolverProductHandle: this.store.handles.product(`${local}:resolver`),
+      resolverIdentityHandle: this.store.handles.identity(`${local}:resolver`),
+      resolverProvidesKeyClaimHandle: this.store.handles.claim(`${local}:resolver-provides-key`),
+      resolverSlotProductHandle: this.store.handles.product(`${local}:resolver-slot`),
+      resolverSlotIdentityHandle: this.store.handles.identity(`${local}:resolver-slot`),
+      resolverSlotProvidesKeyClaimHandle: this.store.handles.claim(`${local}:resolver-slot-provides-key`),
+    };
   }
 
-  private resolverForAdmission(
-    productHandle: ProductHandle,
-    identityHandle: IdentityHandle,
-    admission: ResolverRegistrationAdmission,
+  private resolverForPublication(
+    publication: DiResolverPublication,
+    handles: DiResolverPublicationHandles,
     provenanceHandle: ProvenanceHandle,
   ): Resolver {
     return new Resolver(
-      productHandle,
-      identityHandle,
-      admission.targetKey!,
-      admission.strategy,
-      admission.registeredValue,
-      admission.sourceAddressHandle,
+      handles.resolverProductHandle,
+      handles.resolverIdentityHandle,
+      publication.key,
+      publication.strategy,
+      publication.state,
+      publication.sourceAddressHandle,
       compactFieldProvenance<ResolverField>([
         new FieldProvenance('_key', provenanceHandle),
         new FieldProvenance('_strategy', provenanceHandle),
-        admission.registeredValue == null ? null : new FieldProvenance('_state', provenanceHandle),
+        publication.state == null ? null : new FieldProvenance('_state', provenanceHandle),
         new FieldProvenance('source', provenanceHandle),
       ]),
     );
   }
 
-  private recordsForResolverProduct(
-    local: string,
+  private resolverSlotForPublication(
     container: Container,
-    admission: ResolverRegistrationAdmission,
+    publication: DiResolverPublication,
     resolver: Resolver,
-    handles: DiResolverHandles,
-    provenanceHandle: ProvenanceHandle,
-  ): readonly KernelStoreRecord[] {
-    return [
-      this.resolverIdentity(container, admission, resolver),
-      this.resolverProvidesKeyClaim(resolver, handles, provenanceHandle),
-      this.resolverProduct(admission, resolver, provenanceHandle),
-      this.resolverMaterialization(local, resolver, handles),
-    ];
-  }
-
-  private resolverIdentity(
-    container: Container,
-    admission: ResolverRegistrationAdmission,
-    resolver: Resolver,
-  ): DiProductIdentity {
-    return new DiProductIdentity(
-      resolver.identityHandle,
-      KernelVocabulary.Di.Resolver.key,
-      container.identityHandle,
-      admission.identityHandle,
-      admission.sourceAddressHandle,
-    );
-  }
-
-  private resolverProvidesKeyClaim(
-    resolver: Resolver,
-    handles: DiResolverHandles,
-    provenanceHandle: ProvenanceHandle,
-  ): SemanticClaim {
-    return new SemanticClaim(
-      handles.providesKeyClaimHandle,
-      resolver.productHandle,
-      KernelVocabulary.Di.ProvidesKey.key,
-      handles.keyIdentityHandle,
-      provenanceHandle,
-    );
-  }
-
-  private resolverProduct(
-    admission: ResolverRegistrationAdmission,
-    resolver: Resolver,
-    provenanceHandle: ProvenanceHandle,
-  ): MaterializedProduct {
-    return new MaterializedProduct(
-      resolver.productHandle,
-      KernelVocabulary.Di.Resolver.key,
-      resolver.identityHandle,
-      admission.sourceAddressHandle,
-      provenanceHandle,
-    );
-  }
-
-  private resolverMaterialization(
-    local: string,
-    resolver: Resolver,
-    handles: DiResolverHandles,
-  ): MaterializationRecord {
-    return new MaterializationRecord(
-      this.store.handles.materialization(`${local}:resolver`),
-      resolver.identityHandle,
-      [resolver.productHandle],
-      handles.claimHandles,
-    );
-  }
-
-  private recordsForResolverSlot(
-    container: Container,
-    admission: ResolverRegistrationAdmission,
-    resolverProductHandle: ProductHandle,
-    local: string,
-    provenanceHandle: ProvenanceHandle,
-  ): DiProductEmission<ContainerResolverSlot> {
-    const handles = this.resolverSlotHandles(local, admission);
-    const slot = this.resolverSlotForAdmission(container, admission, resolverProductHandle, handles, provenanceHandle);
-    const records = this.recordsForResolverSlotProduct(
-      local,
-      container,
-      admission,
-      slot,
-      handles,
-      provenanceHandle,
-    );
-    return new DiProductEmission(records, slot, handles.productHandle, handles.identityHandle);
-  }
-
-  private resolverSlotHandles(
-    local: string,
-    admission: ResolverRegistrationAdmission,
-  ): DiResolverSlotHandles {
-    return new DiResolverSlotHandles(
-      this.store.handles.product(`${local}:resolver-slot`),
-      this.store.handles.identity(`${local}:resolver-slot`),
-      admission.targetKey!.identityHandle!,
-      this.store.handles.claim(`${local}:resolver-slot-provides-key`),
-    );
-  }
-
-  private resolverSlotForAdmission(
-    container: Container,
-    admission: ResolverRegistrationAdmission,
-    resolverProductHandle: ProductHandle,
-    handles: DiResolverSlotHandles,
+    handles: DiResolverPublicationHandles,
     provenanceHandle: ProvenanceHandle,
   ): ContainerResolverSlot {
     return new ContainerResolverSlot(
-      handles.productHandle,
+      handles.resolverSlotProductHandle,
       container.toReference(),
-      handles.keyIdentityHandle,
-      resolverProductHandle,
-      admission.strategy,
+      publication.keyIdentityHandle,
+      resolver.productHandle,
+      publication.strategy,
       false,
-      admission.sourceAddressHandle,
+      publication.sourceAddressHandle,
       compactFieldProvenance<ContainerSlotField>([
         new FieldProvenance('container', provenanceHandle),
         new FieldProvenance('key', provenanceHandle),
@@ -1209,76 +1313,63 @@ export class DiWorldConstructor {
     );
   }
 
-  private recordsForResolverSlotProduct(
-    local: string,
+  private recordsForResolverPublicationProducts(
     container: Container,
-    admission: ResolverRegistrationAdmission,
-    slot: ContainerResolverSlot,
-    handles: DiResolverSlotHandles,
+    publication: DiResolverPublication,
+    resolver: Resolver,
+    resolverSlot: ContainerResolverSlot,
+    handles: DiResolverPublicationHandles,
+    local: string,
     provenanceHandle: ProvenanceHandle,
   ): readonly KernelStoreRecord[] {
     return [
-      this.resolverSlotIdentity(container, admission, handles),
-      this.resolverSlotProvidesKeyClaim(slot, handles, provenanceHandle),
-      this.resolverSlotProduct(admission, slot, handles, provenanceHandle),
-      this.resolverSlotMaterialization(local, slot, handles),
+      ...this.recordsForPublishedResolver(container, publication, resolver, handles, local, provenanceHandle),
+      ...this.recordsForPublishedResolverSlot(container, publication, resolverSlot, handles, local, provenanceHandle),
     ];
   }
 
-  private resolverSlotIdentity(
+  private recordsForPublishedResolver(
     container: Container,
-    admission: ResolverRegistrationAdmission,
-    handles: DiResolverSlotHandles,
-  ): DiProductIdentity {
-    return new DiProductIdentity(
-      handles.identityHandle,
-      KernelVocabulary.Di.ResolverSlot.key,
-      container.identityHandle,
-      admission.identityHandle,
-      admission.sourceAddressHandle,
-    );
-  }
-
-  private resolverSlotProvidesKeyClaim(
-    slot: ContainerResolverSlot,
-    handles: DiResolverSlotHandles,
-    provenanceHandle: ProvenanceHandle,
-  ): SemanticClaim {
-    return new SemanticClaim(
-      handles.providesKeyClaimHandle,
-      slot.productHandle,
-      KernelVocabulary.Di.ProvidesKey.key,
-      handles.keyIdentityHandle,
-      provenanceHandle,
-    );
-  }
-
-  private resolverSlotProduct(
-    admission: ResolverRegistrationAdmission,
-    slot: ContainerResolverSlot,
-    handles: DiResolverSlotHandles,
-    provenanceHandle: ProvenanceHandle,
-  ): MaterializedProduct {
-    return new MaterializedProduct(
-      slot.productHandle,
-      KernelVocabulary.Di.ResolverSlot.key,
-      handles.identityHandle,
-      admission.sourceAddressHandle,
-      provenanceHandle,
-    );
-  }
-
-  private resolverSlotMaterialization(
+    publication: DiResolverPublication,
+    resolver: Resolver,
+    handles: DiResolverPublicationHandles,
     local: string,
-    slot: ContainerResolverSlot,
-    handles: DiResolverSlotHandles,
-  ): MaterializationRecord {
-    return new MaterializationRecord(
-      this.store.handles.materialization(`${local}:resolver-slot`),
-      handles.identityHandle,
-      [slot.productHandle],
-      handles.claimHandles,
-    );
+    provenanceHandle: ProvenanceHandle,
+  ): readonly KernelStoreRecord[] {
+    return recordsForPublishedDiProduct(this.store, {
+      productKindKey: KernelVocabulary.Di.Resolver.key,
+      productHandle: resolver.productHandle,
+      identityHandle: resolver.identityHandle,
+      parentIdentityHandle: container.identityHandle,
+      ownerIdentityHandle: publication.ownerIdentityHandle,
+      sourceAddressHandle: publication.sourceAddressHandle,
+      providesKeyClaimHandle: handles.resolverProvidesKeyClaimHandle,
+      keyIdentityHandle: publication.keyIdentityHandle,
+      provenanceHandle,
+      materializationLocal: `${local}:resolver`,
+    });
+  }
+
+  private recordsForPublishedResolverSlot(
+    container: Container,
+    publication: DiResolverPublication,
+    resolverSlot: ContainerResolverSlot,
+    handles: DiResolverPublicationHandles,
+    local: string,
+    provenanceHandle: ProvenanceHandle,
+  ): readonly KernelStoreRecord[] {
+    return recordsForPublishedDiProduct(this.store, {
+      productKindKey: KernelVocabulary.Di.ResolverSlot.key,
+      productHandle: resolverSlot.productHandle,
+      identityHandle: handles.resolverSlotIdentityHandle,
+      parentIdentityHandle: container.identityHandle,
+      ownerIdentityHandle: publication.ownerIdentityHandle,
+      sourceAddressHandle: publication.sourceAddressHandle,
+      providesKeyClaimHandle: handles.resolverSlotProvidesKeyClaimHandle,
+      keyIdentityHandle: publication.keyIdentityHandle,
+      provenanceHandle,
+      materializationLocal: `${local}:resolver-slot`,
+    });
   }
 
   private recordsForParameterizedRegistry(
@@ -1571,7 +1662,7 @@ export class DiWorldConstructor {
       return new DiFrameworkRegistrationEffectEmission([], [], [], [], []);
     }
 
-    const capabilities = new Set(frameworkRegistrationCapabilitiesForKind(frameworkKind));
+    const frameworkEffects = frameworkRegistrationEffectsForKind(frameworkKind);
     const resourceEmission = this.recordsForConfiguredResourceSlots(
       container,
       admission,
@@ -1579,8 +1670,7 @@ export class DiWorldConstructor {
       `${local}:resources`,
       provenanceHandle,
     );
-    const resolverEmissions = frameworkResolverEffects
-      .filter((effect) => capabilities.has(effect.capability))
+    const resolverEmissions = frameworkEffects.resolvers
       .map((effect, index) =>
         this.recordsForFrameworkResolverEffect(
           container,
@@ -1590,8 +1680,7 @@ export class DiWorldConstructor {
           provenanceHandle,
         )
       );
-    const appTaskEmissions = frameworkAppTaskEffects
-      .filter((effect) => capabilities.has(effect.capability))
+    const appTaskEmissions = frameworkEffects.appTasks
       .map((effect, index) =>
         this.recordsForFrameworkAppTaskEffect(
           admission,
@@ -1630,116 +1719,45 @@ export class DiWorldConstructor {
     const keyIdentityHandle = this.store.handles.identity(`${local}:key:${effect.keyName}`);
     this.emitInterfaceKeyIdentity(records, keyIdentityHandle, effect.keyName, admission.sourceAddressHandle);
 
-    const key = new RegistrationKeyReference(
+    const publication = this.frameworkResolverPublication(
+      admission,
+      effect,
       keyIdentityHandle,
-      admission.sourceAddressHandle,
-      effect.keyName,
     );
-    const state = effect.valueKind == null
-      ? null
-      : new RegistrationValueReference(
-        effect.valueKind,
-        null,
-        null,
+    const emission = this.recordsForResolverPublication(container, publication, local, provenanceHandle);
+    records.push(...emission.records);
+    return {
+      records,
+      resolver: emission.resolver,
+      resolverSlot: emission.resolverSlot,
+    };
+  }
+
+  private frameworkResolverPublication(
+    admission: RegistrationAdmissionProduct,
+    effect: FrameworkResolverEffect,
+    keyIdentityHandle: IdentityHandle,
+  ): DiResolverPublication {
+    return {
+      ownerIdentityHandle: admission.identityHandle,
+      key: new RegistrationKeyReference(
+        keyIdentityHandle,
         admission.sourceAddressHandle,
-        effect.valueName,
-      );
-
-    const resolverProductHandle = this.store.handles.product(`${local}:resolver`);
-    const resolverIdentityHandle = this.store.handles.identity(`${local}:resolver`);
-    const resolverProvidesKeyClaimHandle = this.store.handles.claim(`${local}:resolver-provides-key`);
-    const resolver = new Resolver(
-      resolverProductHandle,
-      resolverIdentityHandle,
-      key,
-      effect.strategy,
-      state,
-      admission.sourceAddressHandle,
-      compactFieldProvenance<ResolverField>([
-        new FieldProvenance('_key', provenanceHandle),
-        new FieldProvenance('_strategy', provenanceHandle),
-        state == null ? null : new FieldProvenance('_state', provenanceHandle),
-        new FieldProvenance('source', provenanceHandle),
-      ]),
-    );
-
-    const resolverSlotProductHandle = this.store.handles.product(`${local}:resolver-slot`);
-    const resolverSlotIdentityHandle = this.store.handles.identity(`${local}:resolver-slot`);
-    const resolverSlotProvidesKeyClaimHandle = this.store.handles.claim(`${local}:resolver-slot-provides-key`);
-    const resolverSlot = new ContainerResolverSlot(
-      resolverSlotProductHandle,
-      container.toReference(),
+        effect.keyName,
+      ),
       keyIdentityHandle,
-      resolver.productHandle,
-      effect.strategy,
-      false,
-      admission.sourceAddressHandle,
-      compactFieldProvenance<ContainerSlotField>([
-        new FieldProvenance('container', provenanceHandle),
-        new FieldProvenance('key', provenanceHandle),
-        new FieldProvenance('resolver', provenanceHandle),
-        new FieldProvenance('source', provenanceHandle),
-      ]),
-    );
-
-    records.push(
-      new DiProductIdentity(
-        resolver.identityHandle,
-        KernelVocabulary.Di.Resolver.key,
-        container.identityHandle,
-        admission.identityHandle,
-        admission.sourceAddressHandle,
-      ),
-      new SemanticClaim(
-        resolverProvidesKeyClaimHandle,
-        resolver.productHandle,
-        KernelVocabulary.Di.ProvidesKey.key,
-        keyIdentityHandle,
-        provenanceHandle,
-      ),
-      new MaterializedProduct(
-        resolver.productHandle,
-        KernelVocabulary.Di.Resolver.key,
-        resolver.identityHandle,
-        admission.sourceAddressHandle,
-        provenanceHandle,
-      ),
-      new MaterializationRecord(
-        this.store.handles.materialization(`${local}:resolver`),
-        resolver.identityHandle,
-        [resolver.productHandle],
-        [resolverProvidesKeyClaimHandle],
-      ),
-      new DiProductIdentity(
-        resolverSlotIdentityHandle,
-        KernelVocabulary.Di.ResolverSlot.key,
-        container.identityHandle,
-        admission.identityHandle,
-        admission.sourceAddressHandle,
-      ),
-      new SemanticClaim(
-        resolverSlotProvidesKeyClaimHandle,
-        resolverSlot.productHandle,
-        KernelVocabulary.Di.ProvidesKey.key,
-        keyIdentityHandle,
-        provenanceHandle,
-      ),
-      new MaterializedProduct(
-        resolverSlot.productHandle,
-        KernelVocabulary.Di.ResolverSlot.key,
-        resolverSlotIdentityHandle,
-        admission.sourceAddressHandle,
-        provenanceHandle,
-      ),
-      new MaterializationRecord(
-        this.store.handles.materialization(`${local}:resolver-slot`),
-        resolverSlotIdentityHandle,
-        [resolverSlot.productHandle],
-        [resolverSlotProvidesKeyClaimHandle],
-      ),
-    );
-
-    return { records, resolver, resolverSlot };
+      strategy: effect.strategy,
+      state: effect.valueKind == null
+        ? null
+        : new RegistrationValueReference(
+          effect.valueKind,
+          null,
+          null,
+          admission.sourceAddressHandle,
+          effect.valueName,
+        ),
+      sourceAddressHandle: admission.sourceAddressHandle,
+    };
   }
 
   private recordsForFrameworkAppTaskEffect(
@@ -1755,11 +1773,22 @@ export class DiWorldConstructor {
     const keyIdentityHandle = this.store.handles.identity(`${local}:key:${effect.keyName}`);
     this.emitInterfaceKeyIdentity(records, keyIdentityHandle, effect.keyName, admission.sourceAddressHandle);
 
-    const taskProductHandle = this.store.handles.product(local);
-    const taskIdentityHandle = this.store.handles.identity(local);
-    const task = new AppTaskDefinition(
-      taskProductHandle,
-      taskIdentityHandle,
+    const task = this.frameworkAppTaskDefinition(admission, effect, local, keyIdentityHandle, provenanceHandle);
+    records.push(...this.recordsForFrameworkAppTaskProduct(admission, effect, local, task, provenanceHandle));
+
+    return { records, appTask: task };
+  }
+
+  private frameworkAppTaskDefinition(
+    admission: RegistrationAdmissionProduct,
+    effect: FrameworkAppTaskEffect,
+    local: string,
+    keyIdentityHandle: IdentityHandle,
+    provenanceHandle: ProvenanceHandle,
+  ): AppTaskDefinition {
+    return new AppTaskDefinition(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
       effect.slot,
       AppTaskCallbackKind.ResolvedKey,
       new RegistrationKeyReference(
@@ -1781,8 +1810,16 @@ export class DiWorldConstructor {
         new FieldProvenance('source', provenanceHandle),
       ]),
     );
+  }
 
-    records.push(
+  private recordsForFrameworkAppTaskProduct(
+    admission: RegistrationAdmissionProduct,
+    effect: FrameworkAppTaskEffect,
+    local: string,
+    task: AppTaskDefinition,
+    provenanceHandle: ProvenanceHandle,
+  ): readonly KernelStoreRecord[] {
+    return [
       new ConfigurationIdentity(
         task.identityHandle,
         KernelVocabulary.Configuration.AppTask.key,
@@ -1802,9 +1839,7 @@ export class DiWorldConstructor {
         task.identityHandle,
         [task.productHandle],
       ),
-    );
-
-    return { records, appTask: task };
+    ];
   }
 
   private recordsForResourceDefinitionSlot(
@@ -2333,6 +2368,32 @@ function frameworkRegistrationEffectsCloseRegistryBody(admission: RegistrationAd
     case FrameworkRegistrationKind.AppTask:
       return true;
   }
+}
+
+function registrationAdmissionIndex(
+  configuration: ConfigurationKernelEmission,
+): ReadonlyMap<ProductHandle, RegistrationAdmissionProduct> {
+  return new Map(configuration.registrationAdmissions.map((admission) => [admission.productHandle, admission] as const));
+}
+
+function appTaskIndex(
+  configuration: ConfigurationKernelEmission,
+): ReadonlyMap<ProductHandle, AppTaskDefinition> {
+  return new Map(configuration.appTasks.map((task) => [task.productHandle, task] as const));
+}
+
+function emptyRegistrationSpendingCascade(): DiRegistrationSpendingCascadeEmission {
+  return {
+    records: [],
+    operations: [],
+    resolvers: [],
+    registries: [],
+    parameterizedRegistries: [],
+    resolverSlots: [],
+    resourceSlots: [],
+    appTasks: [],
+    openSeams: [],
+  };
 }
 
 function summaryForRegistryAdmissionOpen(admission: RegistryRegistrationAdmission): string | null {

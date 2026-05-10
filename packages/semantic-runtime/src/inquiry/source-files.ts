@@ -25,7 +25,7 @@ import {
   InquiryPageRequest,
 } from './page.js';
 import { uniqueValues } from './collections.js';
-import { isSourceFileAddress } from './source-file-addresses.js';
+import { isSourceFileAddress } from '../kernel/source-address.js';
 
 export class AdmittedSourcesQuery {
   readonly kind = 'admitted-sources' as const;

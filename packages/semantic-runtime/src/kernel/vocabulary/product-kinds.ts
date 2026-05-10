@@ -378,6 +378,15 @@ export const KernelProductKinds = {
       'A ViewportInstructionTree created by Router, ContextRouter, load, href, or RouteContext before transition compilation.',
     ),
   },
+  I18n: {
+    /** Product kind for one translation key admitted from static i18n init resources. */
+    TranslationKey: defineVocabulary(
+      KernelVocabularyNamespace.I18n,
+      'translation-key',
+      KernelVocabularySlot.ProductKind,
+      'One static i18n translation key admitted from I18nConfiguration init resources for template authoring.',
+    ),
+  },
   RouteRecognizer: {
 
     /** Product kind for the route-recognizer instance owned or inherited by a RouteConfigContext. */

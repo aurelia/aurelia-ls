@@ -37,6 +37,7 @@ import {
 } from '../kernel/materialization.js';
 import {
   OpenSeam,
+  OpenSeamReasonKind,
 } from '../kernel/open-seam.js';
 import {
   compactFieldProvenance,
@@ -53,12 +54,21 @@ import {
   type OpenSeamKindKey,
 } from '../kernel/vocabulary.js';
 import {
+  checkerExpressionTypeLocalKey,
+} from '../kernel/local-key.js';
+import {
+  CheckerExpressionTypeEvaluationCache,
   CheckerExpressionTypeEvaluationResultKind,
   CheckerExpressionTypeEvaluator,
 } from '../type-system/expression-type-evaluator.js';
 import {
   TypeSystemProductDetails,
 } from '../type-system/product-details.js';
+import {
+  checkerDeclarationsAreReadonly,
+  checkerSymbolMemberKind,
+  declarationsForCheckerSymbol,
+} from '../type-system/checker-member-surface.js';
 import {
   CheckerTypeMember,
   CheckerTypeMemberKind,
@@ -81,9 +91,6 @@ import {
 import { TemplateProductDetails } from '../template/product-details.js';
 import { ObservationProductDetails } from './product-details.js';
 import {
-  AttributeBinding,
-  ContentBinding,
-  InterpolationBinding,
   PropertyBinding,
   RefBinding,
   SpreadValueBinding,
@@ -97,6 +104,7 @@ import {
   type RuntimeBindingDataFlowField,
   RuntimeBindingDataFlowDirection,
   RuntimeBindingDataFlowSourceAssignmentKind,
+  RuntimeBindingDataFlowSourceAssignmentReasonKind,
   RuntimeBindingDataFlowSourceKind,
   type RuntimeBindingValueChannel,
   RuntimeBindingValueChannelKind,
@@ -112,16 +120,15 @@ import {
 } from '../template/expression-parse-projection.js';
 import type {
   TemplateScopeConstructionEmission,
-  TemplateInstructionScopeApplication,
 } from '../template/template-controller-scope-materializer.js';
+import {
+  expressionProductHandleForBinding,
+  instructionScopeMap,
+  isRuntimeExpressionBinding,
+  type RuntimeExpressionBinding,
+} from './runtime-binding-expression.js';
 
-type RuntimeDataFlowBinding =
-  | PropertyBinding
-  | AttributeBinding
-  | InterpolationBinding
-  | ContentBinding
-  | RefBinding
-  | SpreadValueBinding;
+type RuntimeDataFlowBinding = RuntimeExpressionBinding;
 
 export class RuntimeBindingDataFlowMaterializationRequest {
   constructor(
@@ -137,6 +144,8 @@ export class RuntimeBindingDataFlowMaterializationRequest {
     readonly scopes: TemplateScopeConstructionEmission,
     /** Compiler resource scope visible to expression semantics such as value converters. */
     readonly resourceScope: TemplateResourceScope | null = null,
+    /** Runtime-analysis shared cache for expression type evaluations keyed by scope/expression/role. */
+    readonly expressionTypeCache: CheckerExpressionTypeEvaluationCache = new CheckerExpressionTypeEvaluationCache(),
   ) {}
 }
 
@@ -169,20 +178,21 @@ export class RuntimeBindingDataFlowEmission {
   }
 }
 
-class BindingDataFlowSourceSet {
-  constructor(
-    readonly records: readonly KernelStoreRecord[],
-    readonly evidenceHandle: EvidenceHandle,
-    readonly provenanceHandle: ProvenanceHandle,
-  ) {}
+interface BindingDataFlowSourceSet {
+  readonly records: readonly KernelStoreRecord[];
+  readonly evidenceHandle: EvidenceHandle;
+  readonly provenanceHandle: ProvenanceHandle;
 }
 
-class BindingDataFlowRecordEmission {
-  constructor(
-    readonly dataFlow: RuntimeBindingDataFlow,
-    readonly openSeams: readonly OpenSeam[],
-    readonly records: readonly KernelStoreRecord[],
-  ) {}
+interface BindingDataFlowRecordEmission {
+  readonly dataFlow: RuntimeBindingDataFlow;
+  readonly openSeams: readonly OpenSeam[];
+  readonly records: readonly KernelStoreRecord[];
+}
+
+interface BindingDataFlowOpenSeamEmission {
+  readonly openSeams: readonly OpenSeam[];
+  readonly records: readonly KernelStoreRecord[];
 }
 
 class BindingDataFlowMaterializationFrame {
@@ -212,7 +222,7 @@ class BindingDataFlowMaterializationFrame {
 type SourceExpressionInfo = {
   readonly sourceKind: RuntimeBindingDataFlowSourceKind;
   readonly sourceName: string | null;
-  readonly sourceWriteCapability: SourceWriteCapability;
+  readonly sourceWriteCapability: SourceWriteCapability | null;
 };
 
 type BindingDataFlowContext = {
@@ -234,14 +244,73 @@ type DataFlowDraft = {
   readonly sourceName: string | null;
   readonly sourceType: CheckerTypeReference | null;
   readonly sourceTypeOpenReason: string | null;
+  readonly sourceAssignmentTargetType: CheckerTypeReference | null;
   readonly targetPropertyType: CheckerTypeReference | null;
   readonly targetValueType: CheckerTypeReference | null;
   readonly sourceWritable: boolean | null;
   readonly sourceAssignmentKind: RuntimeBindingDataFlowSourceAssignmentKind | null;
   readonly sourceAssignmentReason: string | null;
+  readonly sourceAssignmentReasonKinds: readonly RuntimeBindingDataFlowSourceAssignmentReasonKind[];
   readonly sourceToTargetAssignable: boolean | null;
   readonly targetToSourceAssignable: boolean | null;
   readonly openReason: string | null;
+};
+
+function runtimeBindingDataFlowForDraft(
+  store: KernelStore,
+  local: string,
+  binding: RuntimeDataFlowBinding,
+  target: DataFlowTarget,
+  scope: BindingScope | null,
+  draft: DataFlowDraft,
+  fieldProvenance: readonly FieldProvenance<RuntimeBindingDataFlowField>[],
+): RuntimeBindingDataFlow {
+  return new RuntimeBindingDataFlow(
+    store.handles.product(`${local}:binding-data-flow`), store.handles.identity(`${local}:binding-data-flow`),
+    binding.toReference(),
+    target.targetAccess?.toReference() ?? null, target.targetOperation?.toReference() ?? null,
+    target.sourceOperation?.toReference() ?? null, target.valueChannel?.toReference() ?? null,
+    draft.expressionProductHandle,
+    scope?.toReference() ?? null,
+    draft.direction,
+    draft.sourceKind,
+    draft.sourceName,
+    draft.sourceType,
+    draft.sourceTypeOpenReason,
+    draft.sourceAssignmentTargetType,
+    draft.targetPropertyType,
+    draft.targetValueType,
+    draft.sourceWritable,
+    draft.sourceAssignmentKind, draft.sourceAssignmentReason,
+    draft.sourceAssignmentReasonKinds,
+    draft.sourceToTargetAssignable, draft.targetToSourceAssignable,
+    draft.openReason,
+    binding.sourceAddressHandle,
+    fieldProvenance,
+  );
+}
+
+type DataFlowTargetTypes = {
+  readonly spreadTargetProperty: string | null;
+  readonly targetPropertyType: CheckerTypeReference | null;
+  readonly targetValueType: CheckerTypeReference | null;
+};
+
+type DataFlowExpressionFacts = {
+  readonly expressionProductHandle: ProductHandle | null;
+  readonly ast: ExpressionAstNode | null;
+  readonly expressionTypeLocal: string;
+};
+
+type DataFlowSourceProjection = {
+  readonly sourceInfo: SourceExpressionInfo;
+  readonly sourceType: CheckerTypeReference | null;
+  readonly sourceTypeOpenReason: string | null;
+};
+
+type DataFlowAssignability = {
+  readonly sourceToTargetAssignable: boolean | null;
+  readonly targetToSourceAssignable: boolean | null;
 };
 
 const enum SourceWriteCapabilityKind {
@@ -255,6 +324,8 @@ type SourceWriteCapability = {
   readonly capabilityKind: SourceWriteCapabilityKind;
   readonly checkerWritable: boolean | null;
   readonly reason: string | null;
+  readonly reasonKind: RuntimeBindingDataFlowSourceAssignmentReasonKind | null;
+  readonly assignmentTargetType: CheckerTypeReference | null;
 };
 
 /** Materializes binding data-flow edges after target observers and instruction scopes are both known. */
@@ -296,7 +367,12 @@ export class RuntimeBindingDataFlowMaterializer {
   ): BindingDataFlowMaterializationFrame {
     const source = this.recordsForSource(input.localKey);
     const instructionScopes = instructionScopeMap(input.scopes.instructionScopes);
-    const evaluator = new CheckerExpressionTypeEvaluator(this.store, this.typeProjector, input.resourceScope);
+    const evaluator = new CheckerExpressionTypeEvaluator(
+      this.store,
+      this.typeProjector,
+      input.resourceScope,
+      input.expressionTypeCache,
+    );
     return new BindingDataFlowMaterializationFrame(source, instructionScopes, {
       evaluator,
     });
@@ -308,7 +384,7 @@ export class RuntimeBindingDataFlowMaterializer {
     index: number,
     frame: BindingDataFlowMaterializationFrame,
   ): void {
-    if (!isRuntimeDataFlowBinding(binding)) {
+    if (!isRuntimeExpressionBinding(binding)) {
       return;
     }
     const scope = frame.instructionScopes.get(binding.instructionProductHandle) ?? null;
@@ -339,30 +415,58 @@ export class RuntimeBindingDataFlowMaterializer {
     target: DataFlowTarget,
     scope: BindingScope | null,
   ): BindingDataFlowRecordEmission {
-    const records: KernelStoreRecord[] = [];
-    const openSeams: OpenSeam[] = [];
     const local = `${input.localKey}:binding:${bindingIndex}:${binding.productHandle}${target.localSuffix}`;
     const dataFlow = this.dataFlowForBinding(binding, target, scope, context.evaluator, local, source);
-    const claim = new SemanticClaim(
+    const claim = this.claimForDataFlow(local, binding, dataFlow, source);
+    const openSeams = this.openSeamEmissionForDataFlow(local, binding, target, dataFlow, source);
+    return {
+      dataFlow,
+      openSeams: openSeams.openSeams,
+      records: [
+        ...openSeams.records,
+        ...this.dataFlowRecords(local, binding, target, dataFlow, claim, openSeams.openSeams, source),
+      ],
+    };
+  }
+
+  private claimForDataFlow(
+    local: string,
+    binding: RuntimeDataFlowBinding,
+    dataFlow: RuntimeBindingDataFlow,
+    source: BindingDataFlowSourceSet,
+  ): SemanticClaim {
+    return new SemanticClaim(
       this.store.handles.claim(`${local}:runtime-binding-uses-data-flow`),
       binding.productHandle,
       KernelVocabulary.Binding.RuntimeBindingUsesDataFlow.key,
       dataFlow.productHandle,
       source.provenanceHandle,
     );
-    if (dataFlow.openReason != null) {
-      this.recordOpenSeam(
-        `${local}:open-data-flow`,
-        dataFlow.openReason,
-        binding.sourceAddressHandle,
-        source,
-        records,
-        openSeams,
-        KernelVocabulary.Binding.OpenDataFlow.key,
-      );
+  }
+
+  private openSeamEmissionForDataFlow(
+    local: string,
+    binding: RuntimeDataFlowBinding,
+    target: DataFlowTarget,
+    dataFlow: RuntimeBindingDataFlow,
+    source: BindingDataFlowSourceSet,
+  ): BindingDataFlowOpenSeamEmission {
+    if (dataFlow.openReason == null) {
+      return { openSeams: [], records: [] };
     }
-    records.push(...this.dataFlowRecords(local, binding, target, dataFlow, claim, openSeams, source));
-    return new BindingDataFlowRecordEmission(dataFlow, openSeams, records);
+    const records: KernelStoreRecord[] = [];
+    const openSeams: OpenSeam[] = [];
+    this.recordOpenSeam(
+      `${local}:open-data-flow`,
+      dataFlow.openReason,
+      binding.sourceAddressHandle,
+      source,
+      records,
+      openSeams,
+      KernelVocabulary.Binding.OpenDataFlow.key,
+      target.valueChannel?.openReasonKinds ?? [],
+    );
+    return { openSeams, records };
   }
 
   private dataFlowForBinding(
@@ -374,30 +478,13 @@ export class RuntimeBindingDataFlowMaterializer {
     source: BindingDataFlowSourceSet,
   ): RuntimeBindingDataFlow {
     const draft = this.dataFlowDraftForBinding(binding, target, scope, evaluator, local);
-    return new RuntimeBindingDataFlow(
-      this.store.handles.product(`${local}:binding-data-flow`),
-      this.store.handles.identity(`${local}:binding-data-flow`),
-      binding.toReference(),
-      target.targetAccess?.toReference() ?? null,
-      target.targetOperation?.toReference() ?? null,
-      target.sourceOperation?.toReference() ?? null,
-      target.valueChannel?.toReference() ?? null,
-      draft.expressionProductHandle,
-      scope?.toReference() ?? null,
-      draft.direction,
-      draft.sourceKind,
-      draft.sourceName,
-      draft.sourceType,
-      draft.sourceTypeOpenReason,
-      draft.targetPropertyType,
-      draft.targetValueType,
-      draft.sourceWritable,
-      draft.sourceAssignmentKind,
-      draft.sourceAssignmentReason,
-      draft.sourceToTargetAssignable,
-      draft.targetToSourceAssignable,
-      draft.openReason,
-      binding.sourceAddressHandle,
+    return runtimeBindingDataFlowForDraft(
+      this.store,
+      local,
+      binding,
+      target,
+      scope,
+      draft,
       this.dataFlowProvenance(target, scope, draft, source),
     );
   }
@@ -410,60 +497,31 @@ export class RuntimeBindingDataFlowMaterializer {
     local: string,
   ): DataFlowDraft {
     const direction = directionForBinding(binding);
-    const expressionProductHandle = expressionProductHandleForBinding(binding);
-    const parse = this.readParse(expressionProductHandle);
-    const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
-    const spreadTargetProperty = binding instanceof SpreadValueBinding
-      ? target.targetAccess?.targetProperty ?? null
-      : null;
-    const targetPropertyType = target.targetAccess?.propertyType ?? null;
-    const targetValueType = target.valueChannel?.runtimeValueType ?? target.sourceOperation?.targetType ?? targetPropertyType;
-    const templateControllerAlias = templateControllerResultAlias(this.store, binding, target.targetAccess, ast);
-    const expressionTypeLocal = scope == null || ast == null
-      ? local
-      : checkerExpressionTypeLocalKey(scope, binding.productHandle, expressionProductHandle, 'source');
-    const baseSourceInfo = templateControllerAlias != null
-      ? {
-        sourceKind: RuntimeBindingDataFlowSourceKind.ScopeName,
-        sourceName: templateControllerAlias,
-        sourceWriteCapability: sourceWriteCapabilityWritable(),
-      }
-      : scope == null || ast == null
-      ? openSourceExpressionInfo()
-      : this.sourceInfoForExpression(ast, scope, evaluator, expressionTypeLocal, binding.sourceAddressHandle);
-    const sourceEvaluation = templateControllerAlias != null || scope == null || ast == null
-      ? null
-      : evaluator.evaluateWithScope(ast, scope, expressionTypeLocal, binding.sourceAddressHandle);
-    const evaluatedSourceType = sourceEvaluation?.kind === CheckerExpressionTypeEvaluationResultKind.Type
-      ? sourceEvaluation.typeReference
-      : templateControllerAlias != null
-        ? targetValueType
-      : null;
-    const sourceType = spreadTargetProperty == null
-      ? evaluatedSourceType
-      : this.memberType(evaluatedSourceType, spreadTargetProperty);
-    const spreadSourceTypeOpenReason = spreadTargetProperty != null && evaluatedSourceType != null && sourceType == null
-      ? `SpreadValueBinding source expression type did not expose bindable property '${spreadTargetProperty}'.`
-      : null;
-    const sourceTypeOpenReason = sourceEvaluation?.kind === CheckerExpressionTypeEvaluationResultKind.Open
-      ? sourceEvaluation.summary
-      : spreadSourceTypeOpenReason;
-    const sourceInfo = spreadTargetProperty == null
-      ? baseSourceInfo
-      : spreadSourceInfo(baseSourceInfo, spreadTargetProperty);
-    const sourceToTargetAssignable = directionIncludesSourceToTarget(direction)
-      ? this.isSourceAssignableToTarget(sourceType, targetValueType, target.valueChannel)
-      : null;
-    const targetToSourceAssignable = directionIncludesTargetToSource(direction)
-      ? this.isTargetAssignableToSource(targetValueType, sourceType, target.valueChannel)
-      : null;
+    const needsSourceWriteCapability = directionIncludesTargetToSource(direction);
+    const expressionFacts = this.dataFlowExpressionFacts(binding, scope, local);
+    const targetTypes = this.dataFlowTargetTypes(binding, target);
+    const sourceProjection = this.dataFlowSourceProjection(
+      binding,
+      target,
+      scope,
+      evaluator,
+      needsSourceWriteCapability,
+      expressionFacts,
+      targetTypes,
+    );
+    const assignability = this.dataFlowAssignability(
+      direction,
+      sourceProjection.sourceType,
+      targetTypes.targetValueType,
+      target.valueChannel,
+    );
     const sourceAssignment = sourceAssignmentForDataFlow({
       direction,
-      sourceInfo,
-      targetToSourceAssignable,
+      sourceInfo: sourceProjection.sourceInfo,
+      targetToSourceAssignable: assignability.targetToSourceAssignable,
       valueChannel: target.valueChannel,
-      sourceType,
-      targetValueType,
+      sourceType: sourceProjection.sourceType,
+      targetValueType: targetTypes.targetValueType,
     });
     const openReason = openReasonForDataFlow({
       direction,
@@ -472,26 +530,163 @@ export class RuntimeBindingDataFlowMaterializer {
       sourceOperation: target.sourceOperation,
       valueChannel: target.valueChannel,
       scope,
-      ast,
+      ast: expressionFacts.ast,
       sourceOpenReason: null,
       sourceAssignmentKind: sourceAssignment.kind,
     });
 
     return {
-      expressionProductHandle,
+      expressionProductHandle: expressionFacts.expressionProductHandle,
       direction,
-      sourceKind: sourceInfo.sourceKind,
-      sourceName: sourceInfo.sourceName,
-      sourceType,
-      sourceTypeOpenReason,
-      targetPropertyType,
-      targetValueType,
-      sourceWritable: directionIncludesTargetToSource(direction) ? sourceInfo.sourceWriteCapability.checkerWritable : null,
+      sourceKind: sourceProjection.sourceInfo.sourceKind,
+      sourceName: sourceProjection.sourceInfo.sourceName,
+      sourceType: sourceProjection.sourceType,
+      sourceTypeOpenReason: sourceProjection.sourceTypeOpenReason,
+      sourceAssignmentTargetType: needsSourceWriteCapability
+        ? sourceProjection.sourceInfo.sourceWriteCapability?.assignmentTargetType ?? sourceProjection.sourceType
+        : null,
+      targetPropertyType: targetTypes.targetPropertyType,
+      targetValueType: targetTypes.targetValueType,
+      sourceWritable: needsSourceWriteCapability
+        ? sourceProjection.sourceInfo.sourceWriteCapability?.checkerWritable ?? null
+        : null,
       sourceAssignmentKind: sourceAssignment.kind,
       sourceAssignmentReason: sourceAssignment.reason,
-      sourceToTargetAssignable,
-      targetToSourceAssignable,
+      sourceAssignmentReasonKinds: sourceAssignment.reasonKinds,
+      sourceToTargetAssignable: assignability.sourceToTargetAssignable,
+      targetToSourceAssignable: assignability.targetToSourceAssignable,
       openReason,
+    };
+  }
+
+  private dataFlowExpressionFacts(
+    binding: RuntimeDataFlowBinding,
+    scope: BindingScope | null,
+    local: string,
+  ): DataFlowExpressionFacts {
+    const expressionProductHandle = expressionProductHandleForBinding(binding);
+    const parse = this.readParse(expressionProductHandle);
+    const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+    return {
+      expressionProductHandle,
+      ast,
+      expressionTypeLocal: scope == null || ast == null
+        ? local
+        : checkerExpressionTypeLocalKey(scope.productHandle, binding.productHandle, expressionProductHandle),
+    };
+  }
+
+  private dataFlowTargetTypes(
+    binding: RuntimeDataFlowBinding,
+    target: DataFlowTarget,
+  ): DataFlowTargetTypes {
+    const targetPropertyType = target.targetAccess?.propertyType ?? null;
+    return {
+      spreadTargetProperty: binding instanceof SpreadValueBinding
+        ? target.targetAccess?.targetProperty ?? null
+        : null,
+      targetPropertyType,
+      targetValueType: target.valueChannel?.runtimeValueType ?? target.sourceOperation?.targetType ?? targetPropertyType,
+    };
+  }
+
+  private dataFlowSourceProjection(
+    binding: RuntimeDataFlowBinding,
+    target: DataFlowTarget,
+    scope: BindingScope | null,
+    evaluator: CheckerExpressionTypeEvaluator,
+    needsSourceWriteCapability: boolean,
+    expressionFacts: DataFlowExpressionFacts,
+    targetTypes: DataFlowTargetTypes,
+  ): DataFlowSourceProjection {
+    const templateControllerAlias = templateControllerResultAlias(
+      this.store,
+      binding,
+      target.targetAccess,
+      expressionFacts.ast,
+    );
+    const sourceInfo = this.dataFlowSourceInfo(
+      binding,
+      scope,
+      evaluator,
+      needsSourceWriteCapability,
+      expressionFacts,
+      templateControllerAlias,
+    );
+    const sourceEvaluation = templateControllerAlias != null || scope == null || expressionFacts.ast == null
+      ? null
+      : evaluator.evaluateWithScope(
+        expressionFacts.ast,
+        scope,
+        expressionFacts.expressionTypeLocal,
+        binding.sourceAddressHandle,
+        targetTypes.targetValueType,
+      );
+    const evaluatedSourceType = sourceEvaluation?.kind === CheckerExpressionTypeEvaluationResultKind.Type
+      ? sourceEvaluation.typeReference
+      : templateControllerAlias != null
+        ? targetTypes.targetValueType
+        : null;
+    const sourceType = targetTypes.spreadTargetProperty == null
+      ? evaluatedSourceType
+      : this.memberType(evaluatedSourceType, targetTypes.spreadTargetProperty);
+    const spreadSourceTypeOpenReason = targetTypes.spreadTargetProperty != null
+      && evaluatedSourceType != null
+      && sourceType == null
+      ? `SpreadValueBinding source expression type did not expose bindable property '${targetTypes.spreadTargetProperty}'.`
+      : null;
+    return {
+      sourceInfo: targetTypes.spreadTargetProperty == null
+        ? sourceInfo
+        : spreadSourceInfo(sourceInfo, targetTypes.spreadTargetProperty),
+      sourceType,
+      sourceTypeOpenReason: sourceEvaluation?.kind === CheckerExpressionTypeEvaluationResultKind.Open
+        ? sourceEvaluation.summary
+        : spreadSourceTypeOpenReason,
+    };
+  }
+
+  private dataFlowSourceInfo(
+    binding: RuntimeDataFlowBinding,
+    scope: BindingScope | null,
+    evaluator: CheckerExpressionTypeEvaluator,
+    needsSourceWriteCapability: boolean,
+    expressionFacts: DataFlowExpressionFacts,
+    templateControllerAlias: string | null,
+  ): SourceExpressionInfo {
+    if (templateControllerAlias != null) {
+      return {
+        sourceKind: RuntimeBindingDataFlowSourceKind.ScopeName,
+        sourceName: templateControllerAlias,
+        sourceWriteCapability: needsSourceWriteCapability ? sourceWriteCapabilityWritable() : null,
+      };
+    }
+    if (scope == null || expressionFacts.ast == null) {
+      return openSourceExpressionInfo(needsSourceWriteCapability);
+    }
+    return this.sourceInfoForExpression(
+      expressionFacts.ast,
+      scope,
+      evaluator,
+      expressionFacts.expressionTypeLocal,
+      binding.sourceAddressHandle,
+      needsSourceWriteCapability,
+    );
+  }
+
+  private dataFlowAssignability(
+    direction: RuntimeBindingDataFlowDirection,
+    sourceType: CheckerTypeReference | null,
+    targetValueType: CheckerTypeReference | null,
+    valueChannel: RuntimeBindingValueChannel | null,
+  ): DataFlowAssignability {
+    return {
+      sourceToTargetAssignable: directionIncludesSourceToTarget(direction)
+        ? this.isSourceAssignableToTarget(sourceType, targetValueType, valueChannel)
+        : null,
+      targetToSourceAssignable: directionIncludesTargetToSource(direction)
+        ? this.isTargetAssignableToSource(targetValueType, sourceType, valueChannel)
+        : null,
     };
   }
 
@@ -549,11 +744,13 @@ export class RuntimeBindingDataFlowMaterializer {
       draft.sourceName == null ? null : new FieldProvenance('sourceName', source.provenanceHandle),
       draft.sourceType == null ? null : new FieldProvenance('sourceType', source.provenanceHandle),
       draft.sourceTypeOpenReason == null ? null : new FieldProvenance('sourceTypeOpenReason', source.provenanceHandle),
+      draft.sourceAssignmentTargetType == null ? null : new FieldProvenance('sourceAssignmentTargetType', source.provenanceHandle),
       draft.targetPropertyType == null ? null : new FieldProvenance('targetPropertyType', source.provenanceHandle),
       draft.targetValueType == null ? null : new FieldProvenance('targetValueType', source.provenanceHandle),
       draft.sourceWritable == null ? null : new FieldProvenance('sourceWritable', source.provenanceHandle),
       draft.sourceAssignmentKind == null ? null : new FieldProvenance('sourceAssignmentKind', source.provenanceHandle),
       draft.sourceAssignmentReason == null ? null : new FieldProvenance('sourceAssignmentReason', source.provenanceHandle),
+      draft.sourceAssignmentReasonKinds.length === 0 ? null : new FieldProvenance('sourceAssignmentReasonKinds', source.provenanceHandle),
       draft.sourceToTargetAssignable == null ? null : new FieldProvenance('sourceToTargetAssignable', source.provenanceHandle),
       draft.targetToSourceAssignable == null ? null : new FieldProvenance('targetToSourceAssignable', source.provenanceHandle),
       draft.openReason == null ? null : new FieldProvenance('openReason', source.provenanceHandle),
@@ -567,51 +764,69 @@ export class RuntimeBindingDataFlowMaterializer {
     evaluator: CheckerExpressionTypeEvaluator,
     local: string,
     sourceAddressHandle: AddressHandle | null,
+    needsSourceWriteCapability: boolean,
   ): SourceExpressionInfo {
     const unwrapped = unwrapParen(expression);
     switch (unwrapped.$kind) {
       case 'BindingBehavior':
       case 'ValueConverter':
-        return this.sourceInfoForExpression(unwrapped.expression, scope, evaluator, local, sourceAddressHandle);
+        return this.sourceInfoForExpression(
+          unwrapped.expression,
+          scope,
+          evaluator,
+          local,
+          sourceAddressHandle,
+          needsSourceWriteCapability,
+        );
       case 'AccessScope':
         return {
           sourceKind: RuntimeBindingDataFlowSourceKind.ScopeName,
           sourceName: sourceNameForExpression(unwrapped),
-          sourceWriteCapability: this.sourceWriteCapabilityForAccessScope(unwrapped, scope),
+          sourceWriteCapability: needsSourceWriteCapability
+            ? this.sourceWriteCapabilityForAccessScope(unwrapped, scope)
+            : null,
         };
       case 'AccessMember':
         return {
           sourceKind: RuntimeBindingDataFlowSourceKind.Member,
           sourceName: sourceNameForExpression(unwrapped),
-          sourceWriteCapability: this.sourceWriteCapabilityForAccessMember(
-            unwrapped,
-            scope,
-            evaluator,
-            local,
-            sourceAddressHandle,
-          ),
+          sourceWriteCapability: needsSourceWriteCapability
+            ? this.sourceWriteCapabilityForAccessMember(
+              unwrapped,
+              scope,
+              evaluator,
+              local,
+              sourceAddressHandle,
+            )
+            : null,
         };
       case 'AccessKeyed':
         return {
           sourceKind: RuntimeBindingDataFlowSourceKind.Keyed,
           sourceName: sourceNameForExpression(unwrapped),
-          sourceWriteCapability: sourceWriteCapabilityWritable(),
+          sourceWriteCapability: needsSourceWriteCapability ? sourceWriteCapabilityWritable() : null,
         };
       case 'AccessThis':
         return {
           sourceKind: RuntimeBindingDataFlowSourceKind.This,
           sourceName: '$this',
-          sourceWriteCapability: sourceWriteCapabilityRuntimeUnassignable(
-            'Aurelia astAssign does not assign to AccessThis expressions.',
-          ),
+          sourceWriteCapability: needsSourceWriteCapability
+            ? sourceWriteCapabilityRuntimeUnassignable(
+              'Aurelia astAssign does not assign to AccessThis expressions.',
+              RuntimeBindingDataFlowSourceAssignmentReasonKind.RuntimeExpressionUnassignable,
+            )
+            : null,
         };
       default:
         return {
           sourceKind: RuntimeBindingDataFlowSourceKind.Other,
           sourceName: sourceNameForExpression(unwrapped),
-          sourceWriteCapability: sourceWriteCapabilityRuntimeUnassignable(
-            `Aurelia astAssign does not assign to expression kind '${unwrapped.$kind}'.`,
-          ),
+          sourceWriteCapability: needsSourceWriteCapability
+            ? sourceWriteCapabilityRuntimeUnassignable(
+              `Aurelia astAssign does not assign to expression kind '${unwrapped.$kind}'.`,
+              RuntimeBindingDataFlowSourceAssignmentReasonKind.RuntimeExpressionUnassignable,
+            )
+            : null,
         };
     }
   }
@@ -622,12 +837,16 @@ export class RuntimeBindingDataFlowMaterializer {
   ): SourceWriteCapability {
     const lookup = scope.lookup(expression.name.name, expression.ancestor);
     if (lookup.lookupKind === BindingScopeLookupKind.MissingAncestor) {
-      return sourceWriteCapabilityOpen('Scope lookup could not resolve the requested ancestor for runtime assignment.');
+      return sourceWriteCapabilityOpen(
+        'Scope lookup could not resolve the requested ancestor for runtime assignment.',
+        RuntimeBindingDataFlowSourceAssignmentReasonKind.ScopeLookupMissingAncestor,
+      );
     }
     return lookup.slot == null
       ? sourceWriteCapabilityTypeScriptStrictness(
         'Scope lookup did not expose a TypeChecker slot; Aurelia astAssign can still write to the runtime context.',
         null,
+        RuntimeBindingDataFlowSourceAssignmentReasonKind.ScopeSlotMissingTypeCheckerMember,
       )
       : this.slotWriteCapability(lookup.slot);
   }
@@ -646,25 +865,52 @@ export class RuntimeBindingDataFlowMaterializer {
       sourceAddressHandle,
     );
     if (ownerEvaluation.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
-      return sourceWriteCapabilityOpen(ownerEvaluation.summary);
+      return sourceWriteCapabilityOpen(
+        ownerEvaluation.summary,
+        RuntimeBindingDataFlowSourceAssignmentReasonKind.OwnerTypeOpen,
+      );
     }
     const ownerShape = this.readTypeShape(ownerEvaluation.typeReference);
     const member = ownerShape?.members.find((candidate) => candidate.name === expression.name.name) ?? null;
-    return member == null
-      ? sourceWriteCapabilityTypeScriptStrictness(
-        `Owner type '${ownerShape?.display ?? ownerEvaluation.typeReference.display ?? 'unknown'}' did not project member '${expression.name.name}'; Aurelia astAssign can still write to runtime objects.`,
-        null,
-      )
-      : memberWriteCapability(member);
+    if (member != null) {
+      return memberWriteCapability(member);
+    }
+    const checkerMember = checkerMemberForOwnerType(ownerShape, expression.name.name);
+    if (checkerMember != null) {
+      return checkerSymbolWriteCapability(checkerMember.symbol, checkerMember.declarations);
+    }
+    const stringIndexInfo = checkerStringIndexInfoForOwnerType(ownerShape);
+    if (stringIndexInfo != null) {
+      return stringIndexInfo.isReadonly
+        ? sourceWriteCapabilityTypeScriptStrictness(
+          `Owner type '${ownerShape?.display ?? ownerEvaluation.typeReference.display ?? 'unknown'}' exposes a readonly string index signature; Aurelia astAssign still writes to runtime objects.`,
+          false,
+          RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceMemberReadonly,
+        )
+        : sourceWriteCapabilityWritable();
+    }
+    return sourceWriteCapabilityTypeScriptStrictness(
+      `Owner type '${ownerShape?.display ?? ownerEvaluation.typeReference.display ?? 'unknown'}' did not project member '${expression.name.name}'; Aurelia astAssign can still write to runtime objects.`,
+      null,
+      RuntimeBindingDataFlowSourceAssignmentReasonKind.OwnerMemberNotProjected,
+      ownerEvaluation.typeReference,
+    );
   }
 
   private slotWriteCapability(slot: BindingContextSlot): SourceWriteCapability {
     if (slot.targetProductHandle == null) {
-      return sourceWriteCapabilityOpen('Scope slot did not carry a TypeChecker member product for runtime assignment policy.');
+      return sourceWriteCapabilityTypeScriptStrictness(
+        'Scope slot is runtime-only and does not carry a TypeChecker member product; Aurelia astAssign can still write to the runtime context.',
+        null,
+        RuntimeBindingDataFlowSourceAssignmentReasonKind.ScopeSlotRuntimeOnly,
+      );
     }
     const member = this.store.productDetails.read(TypeSystemProductDetails.TypeMember, slot.targetProductHandle);
     return member == null
-      ? sourceWriteCapabilityOpen('Scope slot member product was not available for runtime assignment policy.')
+      ? sourceWriteCapabilityOpen(
+        'Scope slot member product was not available for runtime assignment policy.',
+        RuntimeBindingDataFlowSourceAssignmentReasonKind.ScopeSlotTypeCheckerMemberUnavailable,
+      )
       : memberWriteCapability(member);
   }
 
@@ -862,6 +1108,7 @@ export class RuntimeBindingDataFlowMaterializer {
     records: KernelStoreRecord[],
     openSeams: OpenSeam[],
     seamKindKey: OpenSeamKindKey = KernelVocabulary.Binding.OpenDataFlow.key,
+    reasonKinds: readonly OpenSeamReasonKind[] = [],
   ): OpenSeam {
     const seam = new OpenSeam(
       this.store.handles.openSeam(local),
@@ -869,6 +1116,7 @@ export class RuntimeBindingDataFlowMaterializer {
       summary,
       addressHandle,
       source.evidenceHandle,
+      reasonKinds,
     );
     openSeams.push(seam);
     records.push(seam);
@@ -878,8 +1126,8 @@ export class RuntimeBindingDataFlowMaterializer {
   private recordsForSource(local: string): BindingDataFlowSourceSet {
     const evidenceHandle = this.store.handles.evidence(`binding-data-flow:${local}`);
     const provenanceHandle = this.store.handles.provenance(`binding-data-flow:${local}`);
-    return new BindingDataFlowSourceSet(
-      [
+    return {
+      records: [
         new EvidenceRecord(
           evidenceHandle,
           EvidenceKind.SemanticObservation,
@@ -894,20 +1142,8 @@ export class RuntimeBindingDataFlowMaterializer {
       ],
       evidenceHandle,
       provenanceHandle,
-    );
+    };
   }
-}
-
-function instructionScopeMap(
-  applications: readonly TemplateInstructionScopeApplication[],
-): ReadonlyMap<ProductHandle, BindingScope> {
-  const result = new Map<ProductHandle, BindingScope>();
-  for (const application of applications) {
-    if (!result.has(application.instructionProductHandle)) {
-      result.set(application.instructionProductHandle, application.scope);
-    }
-  }
-  return result;
 }
 
 function directionForBindingMode(bindingMode: TemplateBindingMode): RuntimeBindingDataFlowDirection {
@@ -943,36 +1179,6 @@ function directionIncludesSourceToTarget(direction: RuntimeBindingDataFlowDirect
 function directionIncludesTargetToSource(direction: RuntimeBindingDataFlowDirection): boolean {
   return direction === RuntimeBindingDataFlowDirection.TargetToSource
     || direction === RuntimeBindingDataFlowDirection.TwoWay;
-}
-
-function expressionProductHandleForBinding(binding: RuntimeDataFlowBinding): ProductHandle | null {
-  if (binding instanceof InterpolationBinding) {
-    return binding.expressionProductHandles[0] ?? null;
-  }
-  return binding.expressionProductHandle;
-}
-
-function checkerExpressionTypeLocalKey(
-  scope: BindingScope,
-  bindingProductHandle: ProductHandle,
-  expressionProductHandle: ProductHandle | null,
-  role: string,
-): string {
-  return [
-    'checker-expression-type',
-    scope.productHandle,
-    expressionProductHandle ?? `binding:${bindingProductHandle}`,
-    role,
-  ].join(':');
-}
-
-function isRuntimeDataFlowBinding(binding: RuntimeBinding): binding is RuntimeDataFlowBinding {
-  return binding instanceof PropertyBinding
-    || binding instanceof AttributeBinding
-    || binding instanceof InterpolationBinding
-    || binding instanceof ContentBinding
-    || binding instanceof RefBinding
-    || binding instanceof SpreadValueBinding;
 }
 
 function dataFlowTargetsForBinding(
@@ -1042,39 +1248,59 @@ function sourceAssignmentForDataFlow(input: {
   readonly valueChannel: RuntimeBindingValueChannel | null;
   readonly sourceType: CheckerTypeReference | null;
   readonly targetValueType: CheckerTypeReference | null;
-}): { readonly kind: RuntimeBindingDataFlowSourceAssignmentKind | null; readonly reason: string | null } {
+}): {
+  readonly kind: RuntimeBindingDataFlowSourceAssignmentKind | null;
+  readonly reason: string | null;
+  readonly reasonKinds: readonly RuntimeBindingDataFlowSourceAssignmentReasonKind[];
+} {
   if (!directionIncludesTargetToSource(input.direction) || valueChannelMutatesCollection(input.valueChannel)) {
-    return { kind: null, reason: null };
+    return { kind: null, reason: null, reasonKinds: [] };
   }
-  switch (input.sourceInfo.sourceWriteCapability.capabilityKind) {
+  const sourceWriteCapability = input.sourceInfo.sourceWriteCapability;
+  if (sourceWriteCapability == null) {
+    return {
+      kind: RuntimeBindingDataFlowSourceAssignmentKind.Open,
+      reason: 'Target-to-source data flow did not request source write capability.',
+      reasonKinds: [],
+    };
+  }
+  switch (sourceWriteCapability.capabilityKind) {
     case SourceWriteCapabilityKind.Writable: {
       const typeReason = targetToSourceStrictnessReason(input.targetToSourceAssignable, input.targetValueType, input.sourceType);
       return typeReason == null
-        ? { kind: RuntimeBindingDataFlowSourceAssignmentKind.RuntimeAssignable, reason: null }
+        ? { kind: RuntimeBindingDataFlowSourceAssignmentKind.RuntimeAssignable, reason: null, reasonKinds: [] }
         : {
           kind: RuntimeBindingDataFlowSourceAssignmentKind.RuntimeAssignableWithTypeScriptStrictness,
-          reason: typeReason,
+          reason: typeReason.reason,
+          reasonKinds: [typeReason.kind],
         };
     }
     case SourceWriteCapabilityKind.TypeScriptStrictness: {
+      const typeReason = targetToSourceStrictnessReason(input.targetToSourceAssignable, input.targetValueType, input.sourceType);
       const reasons = compactStrings([
-        input.sourceInfo.sourceWriteCapability.reason,
-        targetToSourceStrictnessReason(input.targetToSourceAssignable, input.targetValueType, input.sourceType),
+        sourceWriteCapability.reason,
+        typeReason?.reason,
       ]);
       return {
         kind: RuntimeBindingDataFlowSourceAssignmentKind.RuntimeAssignableWithTypeScriptStrictness,
         reason: reasons.join(' '),
+        reasonKinds: compactReasonKinds([
+          sourceWriteCapability.reasonKind,
+          typeReason?.kind,
+        ]),
       };
     }
     case SourceWriteCapabilityKind.RuntimeUnassignable:
       return {
         kind: RuntimeBindingDataFlowSourceAssignmentKind.RuntimeUnassignable,
-        reason: input.sourceInfo.sourceWriteCapability.reason,
+        reason: sourceWriteCapability.reason,
+        reasonKinds: compactReasonKinds([sourceWriteCapability.reasonKind]),
       };
     case SourceWriteCapabilityKind.Open:
       return {
         kind: RuntimeBindingDataFlowSourceAssignmentKind.Open,
-        reason: input.sourceInfo.sourceWriteCapability.reason,
+        reason: sourceWriteCapability.reason,
+        reasonKinds: compactReasonKinds([sourceWriteCapability.reasonKind]),
       };
   }
 }
@@ -1083,9 +1309,12 @@ function targetToSourceStrictnessReason(
   targetToSourceAssignable: boolean | null,
   targetValueType: CheckerTypeReference | null,
   sourceType: CheckerTypeReference | null,
-): string | null {
+): { readonly kind: RuntimeBindingDataFlowSourceAssignmentReasonKind; readonly reason: string } | null {
   return targetToSourceAssignable === false
-    ? `TypeChecker target-to-source assignment is not assignable (${typeDisplay(targetValueType)} -> ${typeDisplay(sourceType)}); Aurelia runtime still passes the observer value to astAssign.`
+    ? {
+      kind: RuntimeBindingDataFlowSourceAssignmentReasonKind.TargetToSourceTypeMismatch,
+      reason: `TypeChecker target-to-source assignment is not assignable (${typeDisplay(targetValueType)} -> ${typeDisplay(sourceType)}); Aurelia runtime still passes the observer value to astAssign.`,
+    }
     : null;
 }
 
@@ -1144,11 +1373,16 @@ function valueChannelMutatesCollection(valueChannel: RuntimeBindingValueChannel 
     || valueChannel?.channelKind === RuntimeBindingValueChannelKind.SelectMultipleOptionValues;
 }
 
-function openSourceExpressionInfo(): SourceExpressionInfo {
+function openSourceExpressionInfo(needsSourceWriteCapability: boolean): SourceExpressionInfo {
   return {
     sourceKind: RuntimeBindingDataFlowSourceKind.Open,
     sourceName: null,
-    sourceWriteCapability: sourceWriteCapabilityOpen('Binding expression source could not be resolved.'),
+    sourceWriteCapability: needsSourceWriteCapability
+      ? sourceWriteCapabilityOpen(
+        'Binding expression source could not be resolved.',
+        RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceUnresolved,
+      )
+      : null,
   };
 }
 
@@ -1159,9 +1393,12 @@ function spreadSourceInfo(
   return {
     sourceKind: RuntimeBindingDataFlowSourceKind.Member,
     sourceName: base.sourceName == null ? targetProperty : `${base.sourceName}.${targetProperty}`,
-    sourceWriteCapability: sourceWriteCapabilityOpen(
-      'SpreadValueBinding source property assignment policy has not been projected from the spread source member.',
-    ),
+    sourceWriteCapability: base.sourceWriteCapability == null
+      ? null
+      : sourceWriteCapabilityOpen(
+        'SpreadValueBinding source property assignment policy has not been projected from the spread source member.',
+        RuntimeBindingDataFlowSourceAssignmentReasonKind.SpreadSourceMemberPolicyOpen,
+      ),
   };
 }
 
@@ -1227,64 +1464,148 @@ function sourceWriteCapabilityWritable(): SourceWriteCapability {
     capabilityKind: SourceWriteCapabilityKind.Writable,
     checkerWritable: true,
     reason: null,
+    reasonKind: null,
+    assignmentTargetType: null,
   };
 }
 
 function sourceWriteCapabilityTypeScriptStrictness(
   reason: string,
   checkerWritable: boolean | null,
+  reasonKind: RuntimeBindingDataFlowSourceAssignmentReasonKind,
+  assignmentTargetType: CheckerTypeReference | null = null,
 ): SourceWriteCapability {
   return {
     capabilityKind: SourceWriteCapabilityKind.TypeScriptStrictness,
     checkerWritable,
     reason,
+    reasonKind,
+    assignmentTargetType,
   };
 }
 
-function sourceWriteCapabilityRuntimeUnassignable(reason: string): SourceWriteCapability {
+function sourceWriteCapabilityRuntimeUnassignable(
+  reason: string,
+  reasonKind: RuntimeBindingDataFlowSourceAssignmentReasonKind,
+): SourceWriteCapability {
   return {
     capabilityKind: SourceWriteCapabilityKind.RuntimeUnassignable,
     checkerWritable: false,
     reason,
+    reasonKind,
+    assignmentTargetType: null,
   };
 }
 
-function sourceWriteCapabilityOpen(reason: string): SourceWriteCapability {
+function sourceWriteCapabilityOpen(
+  reason: string,
+  reasonKind: RuntimeBindingDataFlowSourceAssignmentReasonKind,
+): SourceWriteCapability {
   return {
     capabilityKind: SourceWriteCapabilityKind.Open,
     checkerWritable: null,
     reason,
+    reasonKind,
+    assignmentTargetType: null,
   };
 }
 
 function memberWriteCapability(member: CheckerTypeMember): SourceWriteCapability {
-  if (member.memberKind === CheckerTypeMemberKind.Method
-    || member.memberKind === CheckerTypeMemberKind.Constructor
-    || member.memberKind === CheckerTypeMemberKind.CallSignature) {
+  return memberSurfaceWriteCapability(
+    member.name,
+    member.memberKind,
+    member.isReadonly,
+    member.carrier?.declarations ?? [],
+  );
+}
+
+function checkerSymbolWriteCapability(
+  symbol: ts.Symbol,
+  declarations: readonly ts.Declaration[],
+): SourceWriteCapability {
+  return memberSurfaceWriteCapability(
+    symbol.getName(),
+    checkerSymbolMemberKind(symbol, declarations),
+    checkerDeclarationsAreReadonly(declarations),
+    declarations,
+  );
+}
+
+function memberSurfaceWriteCapability(
+  memberName: string,
+  memberKind: CheckerTypeMemberKind,
+  isReadonly: boolean,
+  declarations: readonly ts.Declaration[],
+): SourceWriteCapability {
+  if (memberKind === CheckerTypeMemberKind.Method
+    || memberKind === CheckerTypeMemberKind.Constructor
+    || memberKind === CheckerTypeMemberKind.CallSignature) {
     return sourceWriteCapabilityRuntimeUnassignable(
-      `Source member '${member.name}' is a ${member.memberKind} and is not an Aurelia astAssign target.`,
+      `Source member '${memberName}' is a ${memberKind} and is not an Aurelia astAssign target.`,
+      RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceMemberRuntimeUnassignable,
     );
   }
-  const declarations = member.carrier?.declarations ?? [];
   if (declarations.some((declaration) => ts.isSetAccessorDeclaration(declaration))) {
     return sourceWriteCapabilityWritable();
   }
   if (declarations.some((declaration) => ts.isGetAccessorDeclaration(declaration))) {
     return sourceWriteCapabilityRuntimeUnassignable(
-      `Source member '${member.name}' is a getter without a setter at runtime.`,
+      `Source member '${memberName}' is a getter without a setter at runtime.`,
+      RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceMemberGetterWithoutSetter,
     );
   }
-  if (member.isReadonly) {
+  if (isReadonly) {
     return sourceWriteCapabilityTypeScriptStrictness(
-      `Source member '${member.name}' is readonly in the TypeChecker surface, but Aurelia astAssign performs a runtime property assignment.`,
+      `Source member '${memberName}' is readonly in the TypeChecker surface, but Aurelia astAssign performs a runtime property assignment.`,
       false,
+      RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceMemberReadonly,
     );
   }
   return declarations.length === 0
-    ? sourceWriteCapabilityOpen(`Source member '${member.name}' did not expose declarations for assignment policy.`)
+    ? sourceWriteCapabilityOpen(
+      `Source member '${memberName}' did not expose declarations for assignment policy.`,
+      RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceMemberDeclarationMissing,
+    )
     : sourceWriteCapabilityWritable();
+}
+
+function checkerMemberForOwnerType(
+  ownerType: CheckerTypeShape | null,
+  memberName: string,
+): { readonly symbol: ts.Symbol; readonly declarations: readonly ts.Declaration[] } | null {
+  const carrier = ownerType?.carrier ?? null;
+  if (carrier == null) {
+    return null;
+  }
+  const symbol = carrier.checker.getPropertyOfType(carrier.type, memberName)
+    ?? carrier.checker.getPropertyOfType(carrier.checker.getApparentType(carrier.type), memberName);
+  if (symbol == null) {
+    return null;
+  }
+  return {
+    symbol,
+    declarations: declarationsForCheckerSymbol(symbol),
+  };
+}
+
+function checkerStringIndexInfoForOwnerType(
+  ownerType: CheckerTypeShape | null,
+): ts.IndexInfo | null {
+  const carrier = ownerType?.carrier ?? null;
+  if (carrier == null) {
+    return null;
+  }
+  return carrier.checker.getIndexInfoOfType(carrier.type, ts.IndexKind.String)
+    ?? carrier.checker.getIndexInfoOfType(carrier.checker.getApparentType(carrier.type), ts.IndexKind.String)
+    ?? null;
 }
 
 function compactStrings(values: readonly (string | null | undefined)[]): readonly string[] {
   return values.filter((value): value is string => value != null && value.length > 0);
+}
+
+function compactReasonKinds(
+  values: readonly (RuntimeBindingDataFlowSourceAssignmentReasonKind | null | undefined)[],
+): readonly RuntimeBindingDataFlowSourceAssignmentReasonKind[] {
+  return [...new Set(values.filter((value): value is RuntimeBindingDataFlowSourceAssignmentReasonKind => value != null))];
 }

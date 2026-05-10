@@ -14,6 +14,8 @@ source, value, expression, or template-local slot.
 - Keep the checker epoch app-local: use the booted project root's `tsconfig.json` when present, otherwise fall back to
   Aurelia-app-shaped defaults instead of inheriting the semantic-runtime package's own build config.
 - Materialize type-shape and type-member product envelopes with identities, claims, provenance, and typed details.
+- Materialize declaration source spans for checker-backed members, including Program files that were not boot-admitted
+  as app sources, so hover/definition targets can point at TypeScript declaration truth instead of only the owning type.
 - Allow hot product details to retain `ts.TypeChecker`, `ts.Type`, `ts.Symbol`, and declaration carriers when that
   avoids lossy re-resolution.
 - Keep type references cheap enough for scope slots, resource definitions, and future parser frontiers to point at.
@@ -31,6 +33,9 @@ source, value, expression, or template-local slot.
 - Project repeat-local types through runtime repeat semantics, including synthetic tuple-shaped entries for
   `Map<K, V>` / `ReadonlyMap<K, V>` so `[key, value] of map` can flow into the same binding-pattern machinery as
   arrays and object destructuring.
+- Keep projected type-shape access reusable. Ordinary expression member reads, cursor member-owner projection, and
+  repeat binding-pattern destructuring should share the same member/index/reference resolver instead of each growing a
+  local TypeChecker access path.
 - Spend compiler resource scope when expression semantics need resource lookup. Value-converter projection resolves
   the visible `ValueConverterDefinition`, projects the converter instance type, and reads the `toView` return surface
   without collapsing that lookup into static evaluation.
@@ -84,6 +89,9 @@ determine which member surface is visible, while leaving unsupported expression 
   introduced only when an inquiry or materializer needs it.
 - Type-shape identities are session-stable because checker objects are epoch-bound even when their source
   declarations are source-stable.
+- Checker declaration source is allowed to admit a Program-only source-file address on demand. This is not a source
+  discovery fallback for app semantics; it is a navigation/provenance handoff for TypeScript declaration files reached
+  through the active Program, including lib and external package declaration members.
 - Member value types are currently stored as references without automatically materializing nested type-shape
   products. If member navigation or deep completion needs those products, add a projector continuation instead of
   stuffing more raw detail into completion answers.
@@ -91,7 +99,17 @@ determine which member surface is visible, while leaving unsupported expression 
   can close over the checker-visible `toView` return type because the compiler resource scope supplies a runtime
   definition. Argument-sensitive overload choice, `fromView`, custom expression plugins, and richer collection
   prototype semantics should stay explicit until the binding direction or plugin-specific substrate supplies the
-  missing facts.
+  missing facts. When a converter declares `unknown[]` or another broad return surface, repeat locals derived from that
+  converter should surface as weak-type pressure; do not infer element preservation unless a TypeChecker-visible
+  signature or explicit converter model says so.
+- Member-owner evaluation can be offset-aware. Cursor completion asks the evaluator for the member owner at the source
+  offset inside the full expression so lexical arrow-function scopes are preserved. In listener binding scopes, the
+  first non-rest arrow parameter inherits the typed `$event` override-context slot, matching Aurelia's runtime behavior
+  where a listener expression result that is a function is invoked with the event argument.
+- Expression evaluation can accept a contextual target type. Arrow-function parameters first spend listener `$event`
+  semantics when present, then fall back to parameter types from the contextual callable target, and only synthesize
+  `unknown` when neither runtime nor target-side facts can type the parameter. This keeps binding data-flow and
+  member-completion inference on the TypeChecker substrate instead of in answer-specific callback heuristics.
 - Binding direction is part of expression meaning. Promise `then`/`catch` value expressions are from-view write
   targets that seed scoped locals; child interpolations read those locals afterward. Future expression inquiry should
   carry that direction instead of evaluating every parse as an ordinary read.
@@ -107,3 +125,6 @@ determine which member surface is visible, while leaving unsupported expression 
   `unknown` because JavaScript promise rejection is not statically typed by `Promise<T>`.
 - Repeat rest patterns stay open until the product has a precise array/object rest taxonomy. A destructured local gets
   a type when the runtime-shaped path to that local is known.
+- Binding-pattern local projection is split from the expression evaluator. The evaluator owns expression execution
+  shape; `binding-pattern-locals.ts` owns destructuring local collection and spends `checker-type-shape-access.ts` for
+  member/index value-shape resolution.

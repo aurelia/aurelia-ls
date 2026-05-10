@@ -4,23 +4,22 @@ import {
   ContainerChildMaterializationRequest,
   ContainerChildMaterializer,
   ContainerContextResolverSlotRequest,
+  type ContainerChildMaterializationEmission,
 } from '../di/container-materializer.js';
 import type { Container } from '../di/container.js';
 import { ConfigurationProductDetails } from '../configuration/product-details.js';
 import {
   EvidenceKind,
-  EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type {
+  EvidenceHandle,
+  IdentityHandle,
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import { SemanticClaim } from '../kernel/claim.js';
-import {
-  ConfigurationIdentity,
-  RouterIdentity,
-} from '../kernel/identity.js';
+import { ConfigurationIdentity } from '../kernel/identity.js';
 import {
   MaterializationRecord,
   MaterializedProduct,
@@ -28,7 +27,6 @@ import {
 import {
   compactFieldProvenance,
   FieldProvenance,
-  ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
   KernelStoreBatch,
@@ -46,6 +44,7 @@ import {
 } from './model.js';
 import type { RouteRuntimeTopologyProjectResult } from './route-runtime-topology.js';
 import type { RouteTreeMaterializationProjectResult } from './route-tree-materialization.js';
+import { routerProductRecords } from './router-product-records.js';
 import {
   RuntimeControllerCreationKind,
   RuntimeControllerFrame,
@@ -87,66 +86,117 @@ export class RouteComponentAgentMaterializationProjectPass {
     routeTree: RouteTreeMaterializationProjectResult,
     templates: TemplateCompilationProjectEmission,
   ): RouteComponentAgentMaterializationProjectResult {
-    const routeContextsByIdentity = new Map(
-      routeRuntime.readRouteContexts().map((routeContext) => [routeContext.identityHandle, routeContext] as const),
-    );
-    const compiledTemplateByDefinition = compiledTemplatesByDefinition(templates);
-    const emissions = routeTree.readRouteNodes().flatMap((routeNode) => {
-      if (routeNode.recognizedRoute == null) {
-        return [];
-      }
-      const routeContextIdentity = routeNode.routeContext.identityHandle;
-      const routeContext = routeContextIdentity == null
-        ? null
-        : routeContextsByIdentity.get(routeContextIdentity) ?? null;
-      if (routeContext == null) {
-        return [];
-      }
-      const routeContextContainer = routeRuntime.containerForRouteContext(routeContext.identityHandle);
-      return [componentAgentEmission(
-        this.store,
-        this.childContainerMaterializer,
-        routeNode,
-        routeContext,
-        routeContextContainer,
-        customElementDefinitionForRouteNode(this.store, routeNode),
-        compiledTemplateByDefinition.get(routeNode.component?.resolvedProductHandle ?? '') ?? null,
-      )];
-    });
-    const records = emissions.flatMap((emission) => emission.records);
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, `router-component-agent:${project.projectKey}`));
-    }
-    for (const emission of emissions) {
-      if (emission.controller != null) {
-        this.store.productDetails.add(
-          ConfigurationProductDetails.Controller,
-          emission.controller.productHandle,
-          emission.controller.toControllerProduct(),
-        );
-      }
-    }
+    const emissions = this.componentAgentEmissions(routeRuntime, routeTree, templates);
+    this.commitComponentAgentRecords(project, emissions);
+    this.publishControllerDetails(emissions);
     return new RouteComponentAgentMaterializationProjectResult(
       project,
       emissions.map((emission) => emission.componentAgent),
       emissions.flatMap((emission) => emission.controller == null ? [] : [emission.controller]),
     );
   }
+
+  private componentAgentEmissions(
+    routeRuntime: RouteRuntimeTopologyProjectResult,
+    routeTree: RouteTreeMaterializationProjectResult,
+    templates: TemplateCompilationProjectEmission,
+  ): readonly ComponentAgentEmission[] {
+    const routeContextsByIdentity = routeContextsByIdentityHandle(routeRuntime);
+    const compiledTemplateByDefinition = compiledTemplatesByDefinition(templates);
+    return routeTree.readRouteNodes().flatMap((routeNode) =>
+      componentAgentEmissionForRouteNode(
+        this.store,
+        this.childContainerMaterializer,
+        routeRuntime,
+        routeContextsByIdentity,
+        compiledTemplateByDefinition,
+        routeNode,
+      )
+    );
+  }
+
+  private commitComponentAgentRecords(
+    project: ProjectBootFrame,
+    emissions: readonly ComponentAgentEmission[],
+  ): void {
+    const records = emissions.flatMap((emission) => emission.records);
+    if (records.length > 0) {
+      this.store.commit(new KernelStoreBatch(records, `router-component-agent:${project.projectKey}`));
+    }
+  }
+
+  private publishControllerDetails(
+    emissions: readonly ComponentAgentEmission[],
+  ): void {
+    for (const emission of emissions) {
+      if (emission.controller == null) {
+        continue;
+      }
+      this.store.productDetails.add(
+        ConfigurationProductDetails.Controller,
+        emission.controller.productHandle,
+        emission.controller.toControllerProduct(),
+      );
+    }
+  }
 }
 
-class ComponentAgentEmission {
-  constructor(
-    readonly records: readonly KernelStoreRecord[],
-    readonly componentAgent: ComponentAgentModel,
-    readonly controller: RuntimeControllerFrame | null,
-  ) {}
+interface ComponentAgentEmission {
+  readonly records: readonly KernelStoreRecord[];
+  readonly componentAgent: ComponentAgentModel;
+  readonly controller: RuntimeControllerFrame | null;
 }
 
-class RoutedControllerEmission {
-  constructor(
-    readonly records: readonly KernelStoreRecord[],
-    readonly controller: RuntimeControllerFrame,
-  ) {}
+interface RoutedControllerEmission {
+  readonly records: readonly KernelStoreRecord[];
+  readonly controller: RuntimeControllerFrame;
+}
+
+interface ComponentAgentHandles {
+  readonly local: string;
+  readonly evidenceHandle: EvidenceHandle;
+  readonly provenanceHandle: ProvenanceHandle;
+  readonly productHandle: ProductHandle;
+  readonly identityHandle: IdentityHandle;
+  readonly sourceAddressHandle: RouteNodeModel['sourceAddressHandle'];
+}
+
+function routeContextsByIdentityHandle(
+  routeRuntime: RouteRuntimeTopologyProjectResult,
+): ReadonlyMap<IdentityHandle | null, RouteContextModel> {
+  return new Map(
+    routeRuntime.readRouteContexts().map((routeContext) => [routeContext.identityHandle, routeContext] as const),
+  );
+}
+
+function componentAgentEmissionForRouteNode(
+  store: KernelStore,
+  childContainerMaterializer: ContainerChildMaterializer,
+  routeRuntime: RouteRuntimeTopologyProjectResult,
+  routeContextsByIdentity: ReadonlyMap<IdentityHandle | null, RouteContextModel>,
+  compiledTemplateByDefinition: ReadonlyMap<string, ProductHandle>,
+  routeNode: RouteNodeModel,
+): readonly ComponentAgentEmission[] {
+  if (routeNode.recognizedRoute == null) {
+    return [];
+  }
+  const routeContextIdentity = routeNode.routeContext.identityHandle;
+  const routeContext = routeContextIdentity == null
+    ? null
+    : routeContextsByIdentity.get(routeContextIdentity) ?? null;
+  if (routeContext == null) {
+    return [];
+  }
+  const routeContextContainer = routeRuntime.containerForRouteContext(routeContext.identityHandle);
+  return [componentAgentEmission(
+    store,
+    childContainerMaterializer,
+    routeNode,
+    routeContext,
+    routeContextContainer,
+    customElementDefinitionForRouteNode(store, routeNode),
+    compiledTemplateByDefinition.get(routeNode.component?.resolvedProductHandle ?? '') ?? null,
+  )];
 }
 
 function componentAgentEmission(
@@ -158,73 +208,140 @@ function componentAgentEmission(
   definition: CustomElementDefinition | null,
   compiledTemplateProductHandle: ProductHandle | null,
 ): ComponentAgentEmission {
+  const handles = componentAgentHandles(store, routeNode);
+  const controllerEmission = componentAgentControllerEmission(
+    store,
+    childContainerMaterializer,
+    `${handles.local}:controller`,
+    routeNode,
+    routeContextContainer,
+    definition,
+    compiledTemplateProductHandle,
+    handles.provenanceHandle,
+  );
+  const componentAgent = componentAgentModel(
+    handles.productHandle,
+    handles.identityHandle,
+    handles.sourceAddressHandle,
+    handles.provenanceHandle,
+    routeContext.toReference(),
+    routeNode.toReference(),
+    routeContext.viewportAgent,
+    controllerEmission?.controller ?? null,
+    routeNode,
+    routeContext,
+  );
+  return {
+    records: recordsForComponentAgent(
+      store,
+      handles.local,
+      componentAgent,
+      routeContext,
+      routeNode,
+      controllerEmission,
+      handles.evidenceHandle,
+      handles.provenanceHandle,
+    ),
+    componentAgent,
+    controller: controllerEmission?.controller ?? null,
+  };
+}
+
+function componentAgentHandles(
+  store: KernelStore,
+  routeNode: RouteNodeModel,
+): ComponentAgentHandles {
   const local = `router-component-agent:${routeNode.identityHandle}`;
-  const evidenceHandle = store.handles.evidence(local);
-  const provenanceHandle = store.handles.provenance(local);
-  const productHandle = store.handles.product(local);
-  const identityHandle = store.handles.identity(local);
-  const sourceAddressHandle = routeNode.sourceAddressHandle;
-  const controllerEmission = routeContextContainer == null || definition == null
+  return {
+    local,
+    evidenceHandle: store.handles.evidence(local),
+    provenanceHandle: store.handles.provenance(local),
+    productHandle: store.handles.product(local),
+    identityHandle: store.handles.identity(local),
+    sourceAddressHandle: routeNode.sourceAddressHandle,
+  };
+}
+
+function componentAgentControllerEmission(
+  store: KernelStore,
+  childContainerMaterializer: ContainerChildMaterializer,
+  local: string,
+  routeNode: RouteNodeModel,
+  routeContextContainer: Container | null,
+  definition: CustomElementDefinition | null,
+  compiledTemplateProductHandle: ProductHandle | null,
+  provenanceHandle: ProvenanceHandle,
+): RoutedControllerEmission | null {
+  return routeContextContainer == null || definition == null
     ? null
     : routedControllerEmission(
       store,
       childContainerMaterializer,
-      `${local}:controller`,
+      local,
       routeNode,
       routeContextContainer,
       definition,
       compiledTemplateProductHandle,
       provenanceHandle,
     );
-  const componentAgent = new ComponentAgentModel(
+}
+
+function componentAgentModel(
+  productHandle: ProductHandle,
+  identityHandle: IdentityHandle,
+  sourceAddressHandle: RouteNodeModel['sourceAddressHandle'],
+  provenanceHandle: ProvenanceHandle,
+  routeContext: ComponentAgentModel['routeContext'],
+  routeNodeReference: ComponentAgentModel['routeNode'],
+  viewportAgent: ComponentAgentModel['viewportAgent'],
+  controller: RuntimeControllerFrame | null,
+  routeNode: RouteNodeModel,
+  routeContextModel: RouteContextModel,
+): ComponentAgentModel {
+  return new ComponentAgentModel(
     productHandle,
     identityHandle,
-    routeContext.toReference(),
-    routeNode.toReference(),
-    routeContext.viewportAgent,
-    controllerEmission?.controller.productHandle ?? null,
+    routeContext,
+    routeNodeReference,
+    viewportAgent,
+    controller?.productHandle ?? null,
     routeNode.component,
     sourceAddressHandle,
-    componentAgentFieldProvenance(provenanceHandle, routeContext, controllerEmission?.controller ?? null, routeNode),
+    componentAgentFieldProvenance(provenanceHandle, routeContextModel, controller, routeNode),
   );
-  return new ComponentAgentEmission(
-    [
-      ...(controllerEmission?.records ?? []),
-      new EvidenceRecord(
-        evidenceHandle,
-        EvidenceKind.SemanticObservation,
-        [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
-        'RouteContext._createComponentAgent handoff materialized for a transition RouteNode before lifecycle execution.',
-        sourceAddressHandle,
-      ),
-      new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
-      new RouterIdentity(
-        identityHandle,
-        KernelVocabulary.Router.ComponentAgent.key,
-        routeNode.identityHandle,
-        sourceAddressHandle,
-        routeContext.localName,
-      ),
-      new MaterializedProduct(
-        productHandle,
-        KernelVocabulary.Router.ComponentAgent.key,
-        identityHandle,
-        sourceAddressHandle,
-        provenanceHandle,
-      ),
-      new MaterializationRecord(
-        store.handles.materialization(local),
-        routeNode.identityHandle,
-        controllerEmission == null
-          ? [productHandle]
-          : [productHandle, controllerEmission.controller.productHandle],
-        [],
-        [],
-      ),
-    ],
-    componentAgent,
-    controllerEmission?.controller ?? null,
-  );
+}
+
+function recordsForComponentAgent(
+  store: KernelStore,
+  local: string,
+  componentAgent: ComponentAgentModel,
+  routeContext: RouteContextModel,
+  routeNode: RouteNodeModel,
+  controllerEmission: RoutedControllerEmission | null,
+  evidenceHandle: EvidenceHandle,
+  provenanceHandle: ProvenanceHandle,
+): readonly KernelStoreRecord[] {
+  return [
+    ...(controllerEmission?.records ?? []),
+    ...routerProductRecords(store, {
+      local,
+      productHandle: componentAgent.productHandle,
+      identityHandle: componentAgent.identityHandle,
+      productKindKey: KernelVocabulary.Router.ComponentAgent.key,
+      ownerHandle: routeNode.identityHandle,
+      materializationOwnerHandle: routeNode.identityHandle,
+      materializationProductHandles: controllerEmission == null
+        ? [componentAgent.productHandle]
+        : [componentAgent.productHandle, controllerEmission.controller.productHandle],
+      sourceAddressHandle: componentAgent.sourceAddressHandle,
+      localName: routeContext.localName,
+      provenanceHandle,
+      evidenceHandle,
+      evidenceKind: EvidenceKind.SemanticObservation,
+      evidenceRoles: [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
+      evidenceSummary: 'RouteContext._createComponentAgent handoff materialized for a transition RouteNode before lifecycle execution.',
+    }),
+  ];
 }
 
 function routedControllerEmission(
@@ -238,8 +355,37 @@ function routedControllerEmission(
   provenanceHandle: ProvenanceHandle,
 ): RoutedControllerEmission {
   const sourceAddressHandle = routeNode.sourceAddressHandle;
-  const childContainer = childContainerMaterializer.materializeChild(new ContainerChildMaterializationRequest(
+  const childContainer = routedComponentChildContainer(
+    childContainerMaterializer,
     `${local}:container`,
+    routeNode,
+    routeContextContainer,
+  );
+  const controller = routedControllerFrame(
+    store,
+    local,
+    definition,
+    childContainer,
+    sourceAddressHandle,
+    provenanceHandle,
+  );
+  recordRoutedControllerHydration(controller, childContainer, sourceAddressHandle);
+  const claim = routedControllerCompiledTemplateClaim(store, local, controller, compiledTemplateProductHandle, provenanceHandle);
+  return {
+    records: recordsForRoutedController(store, local, childContainer, controller, claim, provenanceHandle),
+    controller,
+  };
+}
+
+function routedComponentChildContainer(
+  childContainerMaterializer: ContainerChildMaterializer,
+  local: string,
+  routeNode: RouteNodeModel,
+  routeContextContainer: Container,
+): ContainerChildMaterializationEmission {
+  const sourceAddressHandle = routeNode.sourceAddressHandle;
+  return childContainerMaterializer.materializeChild(new ContainerChildMaterializationRequest(
+    local,
     routeContextContainer,
     sourceAddressHandle,
     `${routeNode.path}:routed-component-container`,
@@ -251,12 +397,20 @@ function routedControllerEmission(
       sourceAddressHandle,
     } satisfies ContainerConfigurationRequest,
   ));
-  const productHandle = store.handles.product(local);
-  const identityHandle = store.handles.identity(local);
-  const controller = new RuntimeControllerFrame(
+}
+
+function routedControllerFrame(
+  store: KernelStore,
+  local: string,
+  definition: CustomElementDefinition,
+  childContainer: ContainerChildMaterializationEmission,
+  sourceAddressHandle: RouteNodeModel['sourceAddressHandle'],
+  provenanceHandle: ProvenanceHandle,
+): RuntimeControllerFrame {
+  return new RuntimeControllerFrame(
     RuntimeControllerCreationKind.RoutedCustomElement,
-    productHandle,
-    identityHandle,
+    store.handles.product(local),
+    store.handles.identity(local),
     definition.name,
     childContainer.container.toReference(),
     childContainer.container,
@@ -270,6 +424,13 @@ function routedControllerEmission(
     sourceAddressHandle,
     provenanceHandle,
   );
+}
+
+function recordRoutedControllerHydration(
+  controller: RuntimeControllerFrame,
+  childContainer: ContainerChildMaterializationEmission,
+  sourceAddressHandle: RouteNodeModel['sourceAddressHandle'],
+): void {
   controller.recordLifecycleStep(
     RuntimeControllerLifecycleStage.Hydration,
     RuntimeControllerLifecycleStepKind.CreateChildContainer,
@@ -277,7 +438,16 @@ function routedControllerEmission(
     sourceAddressHandle,
     'RouteContext._createComponentAgent created a child container with inherited resources for routed component construction.',
   );
-  const claim = compiledTemplateProductHandle == null
+}
+
+function routedControllerCompiledTemplateClaim(
+  store: KernelStore,
+  local: string,
+  controller: RuntimeControllerFrame,
+  compiledTemplateProductHandle: ProductHandle | null,
+  provenanceHandle: ProvenanceHandle,
+): SemanticClaim | null {
+  return compiledTemplateProductHandle == null
     ? null
     : new SemanticClaim(
       store.handles.claim(`${local}:uses-compiled-template`),
@@ -286,33 +456,40 @@ function routedControllerEmission(
       compiledTemplateProductHandle,
       provenanceHandle,
     );
-  return new RoutedControllerEmission(
-    [
-      ...childContainer.records,
-      new ConfigurationIdentity(
-        controller.identityHandle,
-        KernelVocabulary.Configuration.Controller.key,
-        null,
-        controller.sourceAddressHandle,
-        controller.name,
-      ),
-      new MaterializedProduct(
-        controller.productHandle,
-        KernelVocabulary.Configuration.Controller.key,
-        controller.identityHandle,
-        controller.sourceAddressHandle,
-        provenanceHandle,
-      ),
-      new MaterializationRecord(
-        store.handles.materialization(`${local}:runtime-controller`),
-        controller.identityHandle,
-        [controller.productHandle],
-        claim == null ? [] : [claim.handle],
-      ),
-      ...(claim == null ? [] : [claim]),
-    ],
-    controller,
-  );
+}
+
+function recordsForRoutedController(
+  store: KernelStore,
+  local: string,
+  childContainer: ContainerChildMaterializationEmission,
+  controller: RuntimeControllerFrame,
+  claim: SemanticClaim | null,
+  provenanceHandle: ProvenanceHandle,
+): readonly KernelStoreRecord[] {
+  return [
+    ...childContainer.records,
+    new ConfigurationIdentity(
+      controller.identityHandle,
+      KernelVocabulary.Configuration.Controller.key,
+      null,
+      controller.sourceAddressHandle,
+      controller.name,
+    ),
+    new MaterializedProduct(
+      controller.productHandle,
+      KernelVocabulary.Configuration.Controller.key,
+      controller.identityHandle,
+      controller.sourceAddressHandle,
+      provenanceHandle,
+    ),
+    new MaterializationRecord(
+      store.handles.materialization(`${local}:runtime-controller`),
+      controller.identityHandle,
+      [controller.productHandle],
+      claim == null ? [] : [claim.handle],
+    ),
+    ...(claim == null ? [] : [claim]),
+  ];
 }
 
 function compiledTemplatesByDefinition(

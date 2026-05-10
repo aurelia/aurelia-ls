@@ -10,7 +10,7 @@ import {
   localFunctionDeclarationForCall,
   propertyNameText,
   returnExpressions,
-  sourceRangeFromFileSpan,
+  sourceRangeForFileSpanCarrier,
   sourceSpanForNode,
   unwrapExpression,
   type ResolvedSourceTarget,
@@ -271,10 +271,10 @@ export function readEvaluationEffectTrace(
         kind: target.kind,
         id: target.id,
         label: target.label,
-        ...(target.file === undefined ? {} : { file: target.file }),
-        ...(target.span === undefined ? {} : { span: target.span }),
-        ...(target.declarationKind === undefined ? {} : { declarationKind: target.declarationKind }),
-        ...(target.symbolKey === undefined ? {} : { symbolKey: target.symbolKey }),
+        file: target.file,
+        span: target.span,
+        declarationKind: target.declarationKind,
+        symbolKey: target.symbolKey,
       })),
     },
     roots,
@@ -283,7 +283,7 @@ export function readEvaluationEffectTrace(
     openSeams,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -710,19 +710,24 @@ function traceLocalFunctionCall(
         ? argument.expression
         : argument;
     const argumentAlias = argumentExpression === null ? null : bindingForExpression(argumentExpression, scope);
+    const bindingOptions = {
+      parameterIndex: argumentAlias?.parameterIndex ?? index,
+    };
+    if (argumentAlias !== null) {
+      Object.assign(bindingOptions, { aliasOf: argumentAlias.name });
+    }
+    if (argumentExpression !== null) {
+      Object.assign(bindingOptions, {
+        expression: readTypeScriptExpressionFact(context.project, context.sourceFile, argumentExpression),
+        capturedFromArgument: argumentExpression.getText(context.sourceFile),
+      });
+    }
     callScope.set(bindingFromName(
       context.project,
       context.sourceFile,
       parameter.name,
       argumentAlias === null ? EvaluationTraceBindingOrigin.CapturedParameter : EvaluationTraceBindingOrigin.Alias,
-      {
-        parameterIndex: argumentAlias?.parameterIndex ?? index,
-        ...(argumentAlias === null ? {} : { aliasOf: argumentAlias.name }),
-        ...(argumentExpression === null ? {} : {
-          expression: readTypeScriptExpressionFact(context.project, context.sourceFile, argumentExpression),
-          capturedFromArgument: argumentExpression.getText(context.sourceFile),
-        }),
-      },
+      bindingOptions,
     ));
   }
 
@@ -954,10 +959,10 @@ function capturedParameterBindings(
         EvaluationTraceBindingOrigin.CapturedParameter,
         {
           parameterIndex: index,
-          ...(argument === undefined ? {} : {
-            expression: readTypeScriptExpressionFact(project, sourceFile, ts.isSpreadElement(argument) ? argument.expression : argument),
-            capturedFromArgument: argument.getText(sourceFile),
-          }),
+          expression: argument === undefined
+            ? undefined
+            : readTypeScriptExpressionFact(project, sourceFile, ts.isSpreadElement(argument) ? argument.expression : argument),
+          capturedFromArgument: argument?.getText(sourceFile),
         },
       );
     })
@@ -1066,10 +1071,10 @@ function memberNameForFunctionLike(node: TraceFunctionLike): string | null {
 
 /** Convert an effect row source span to an inquiry source range. */
 export function sourceRangeForEvaluationEffect(effect: EvaluationInvocationEffect): SourceRange {
-  return sourceRangeFromFileSpan(effect.callSite.file.repoPath, effect.callSite.span);
+  return sourceRangeForFileSpanCarrier(effect.callSite);
 }
 
 /** Convert an effect seam source span to an inquiry source range. */
 export function sourceRangeForEvaluationOpenSeam(seam: EvaluationEffectOpenSeam): SourceRange {
-  return sourceRangeFromFileSpan(seam.file.repoPath, seam.span);
+  return sourceRangeForFileSpanCarrier(seam);
 }

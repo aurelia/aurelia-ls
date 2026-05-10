@@ -1,20 +1,17 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
   EvidenceKind,
-  EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
-import type { ProvenanceHandle } from '../kernel/handles.js';
-import { RouterIdentity } from '../kernel/identity.js';
+import type {
+  IdentityHandle,
+  ProvenanceHandle,
+} from '../kernel/handles.js';
+import { localKeyPart } from '../kernel/local-key.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import {
-  MaterializationRecord,
-  MaterializedProduct,
-} from '../kernel/materialization.js';
-import { OpenSeam } from '../kernel/open-seam.js';
-import {
-  compactFieldProvenance,
+  fieldProvenanceEntries,
   FieldProvenance,
-  ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
   KernelStoreBatch,
@@ -39,6 +36,7 @@ import {
   type RouteConfigContextModel,
   type RouteConfigModel,
   type RouteNodeField,
+  type RouteNodeModelFields,
   type RouteTreeField,
 } from './model.js';
 import type { RouteConfigContextMaterializationProjectResult } from './route-context-materialization.js';
@@ -52,16 +50,15 @@ import {
   routeConfigContextIndex,
   routeConfigIndex,
 } from './route-topology-index.js';
+import { routerOpenSeamRecords, routerProductRecords } from './router-product-records.js';
 
 const DEFAULT_VIEWPORT_NAME = 'default';
 const RESIDUE = '$$residue';
 
-class RouteTreeEmission {
-  constructor(
-    readonly records: readonly KernelStoreRecord[],
-    readonly routeTree: RouteTreeModel,
-    readonly routeNodes: readonly RouteNodeModel[],
-  ) {}
+interface RouteTreeEmission {
+  readonly records: readonly KernelStoreRecord[];
+  readonly routeTree: RouteTreeModel;
+  readonly routeNodes: readonly RouteNodeModel[];
 }
 
 interface TransitionRouteNodeSeed {
@@ -84,6 +81,12 @@ interface TransitionRouteNodeEmission {
   readonly node: RouteNodeModel;
 }
 
+interface TransitionRouteNodeSite {
+  readonly seed: ResolvedTransitionRouteNodeSeed;
+  readonly local: string;
+  readonly reference: RouterReference;
+}
+
 interface OpenViewportResolution {
   readonly parentRouteContext: RouteContextModel;
   readonly seed: TransitionRouteNodeSeed;
@@ -91,11 +94,27 @@ interface OpenViewportResolution {
   readonly reason: string;
 }
 
-class ResolvedTransitionRouteNodeSeedSet {
-  constructor(
-    readonly seeds: readonly ResolvedTransitionRouteNodeSeed[],
-    readonly open: OpenViewportResolution | null,
-  ) {}
+interface ResolvedTransitionRouteNodeSeedSet {
+  readonly seeds: readonly ResolvedTransitionRouteNodeSeed[];
+  readonly open: OpenViewportResolution | null;
+}
+
+interface RouteNodeMaterializationFields extends Omit<RouteNodeModelFields, 'productHandle' | 'identityHandle' | 'config' | 'fieldProvenance'> {
+  readonly routeConfig: RouteConfigModel;
+}
+
+interface RouteNodeProvenanceFacts {
+  readonly hasChildren: boolean;
+  readonly hasInstruction: boolean;
+  readonly hasOriginalInstruction: boolean;
+  readonly hasRecognizedRoute: boolean;
+  readonly parameterCount: number;
+  readonly queryParamCount: number;
+  readonly fragment: string | null;
+  readonly hasData: boolean | null;
+  readonly viewport: string | null;
+  readonly residueInstructionCount: number;
+  readonly hasParent: boolean;
 }
 
 /** RouteTree products materialized for initial state and closed pre-activation transition compilation. */
@@ -127,20 +146,7 @@ export class RouteTreeMaterializationProjectPass {
     routeRecognition: RouteRecognitionMaterializationProjectResult,
     routerOptions: RouterOptionsMaterializationProjectResult | null,
   ): RouteTreeMaterializationProjectResult {
-    const routeConfigsByContext = routeConfigByContextIdentity(routeConfigContexts);
-    const openRecords: KernelStoreRecord[] = [];
-    const initialEmissions = routeRuntime.readRouteContexts()
-      .filter((routeContext) => routeContext.parent == null)
-      .flatMap((routeContext, index) => {
-        const routeConfigContextIdentity = routeContext.routeConfigContext?.identityHandle ?? null;
-        const routeConfig = routeConfigContextIdentity == null
-          ? null
-          : routeConfigsByContext.get(routeConfigContextIdentity) ?? null;
-        return routeConfig == null
-          ? []
-          : [this.materializeInitialTree(store, routeConfig, routeContext, routerOptions, index)];
-      });
-    const transitionEmissions = this.materializeTransitionTrees(
+    const frame = new RouteTreeMaterializationFrame(
       store,
       routeConfigContexts,
       routeRuntime,
@@ -148,16 +154,9 @@ export class RouteTreeMaterializationProjectPass {
       routeInstructions,
       routeRecognition,
       routerOptions,
-      openRecords,
     );
-    const emissions = [
-      ...initialEmissions,
-      ...transitionEmissions,
-    ];
-    const records = [
-      ...emissions.flatMap((emission) => emission.records),
-      ...openRecords,
-    ];
+    const emissions = frame.materialize();
+    const records = frame.readRecords(emissions);
     if (records.length > 0) {
       store.commit(new KernelStoreBatch(records, `router-route-tree:${project.projectKey}`));
     }
@@ -167,436 +166,462 @@ export class RouteTreeMaterializationProjectPass {
       emissions.flatMap((emission) => emission.routeNodes),
     );
   }
+}
+
+class RouteTreeMaterializationFrame {
+  private readonly routeConfigsByContext: ReadonlyMap<IdentityHandle, RouteConfigModel>;
+  private readonly openRecords: KernelStoreRecord[] = [];
+
+  constructor(
+    private readonly store: KernelStore,
+    private readonly routeConfigContexts: RouteConfigContextMaterializationProjectResult,
+    private readonly routeRuntime: RouteRuntimeTopologyProjectResult,
+    private readonly routeRecognizer: RouteRecognizerMaterializationProjectResult,
+    private readonly routeInstructions: RouteInstructionMaterializationProjectResult,
+    private readonly routeRecognition: RouteRecognitionMaterializationProjectResult,
+    private readonly routerOptions: RouterOptionsMaterializationProjectResult | null,
+  ) {
+    this.routeConfigsByContext = routeConfigByContextIdentity(routeConfigContexts);
+  }
+
+  materialize(): readonly RouteTreeEmission[] {
+    return [
+      ...this.materializeInitialTrees(),
+      ...this.materializeTransitionTrees(),
+    ];
+  }
+
+  readRecords(emissions: readonly RouteTreeEmission[]): readonly KernelStoreRecord[] {
+    return [
+      ...emissions.flatMap((emission) => emission.records),
+      ...this.openRecords,
+    ];
+  }
+
+  private materializeInitialTrees(): readonly RouteTreeEmission[] {
+    return this.routeRuntime.readRouteContexts()
+      .filter((routeContext) => routeContext.parent == null)
+      .flatMap((routeContext, index) => {
+        const routeConfigContextIdentity = routeContext.routeConfigContext?.identityHandle ?? null;
+        const routeConfig = routeConfigContextIdentity == null
+          ? null
+          : this.routeConfigsByContext.get(routeConfigContextIdentity) ?? null;
+        return routeConfig == null
+          ? []
+          : [this.materializeInitialTree(routeConfig, routeContext, index)];
+      });
+  }
 
   private materializeInitialTree(
-    store: KernelStore,
     routeConfig: RouteConfigModel,
     routeContext: RouteContextModel,
-    routerOptions: RouterOptionsMaterializationProjectResult | null,
     index: number,
   ): RouteTreeEmission {
     const treeLocal = `router-route-tree:${routeContext.identityHandle}:${index}`;
     const nodeLocal = `${treeLocal}:root-node`;
-    const treeEvidenceHandle = store.handles.evidence(treeLocal);
-    const treeProvenanceHandle = store.handles.provenance(treeLocal);
-    const treeProductHandle = store.handles.product(treeLocal);
-    const treeIdentityHandle = store.handles.identity(treeLocal);
-    const nodeEvidenceHandle = store.handles.evidence(nodeLocal);
-    const nodeProvenanceHandle = store.handles.provenance(nodeLocal);
-    const nodeProductHandle = store.handles.product(nodeLocal);
-    const nodeIdentityHandle = store.handles.identity(nodeLocal);
-    const sourceAddressHandle = routeContext.sourceAddressHandle;
-    const rootNode = new RouteNodeModel(
-      nodeProductHandle,
-      nodeIdentityHandle,
-      routeContext.toReference(),
-      routeConfig.toReference(),
-      null,
-      [],
-      null,
-      null,
-      null,
-      0,
-      0,
-      null,
-      routeConfig.hasData,
-      null,
-      0,
-      '',
-      '',
-      routeConfig.component,
-      routeConfig.title,
-      sourceAddressHandle,
-      routeNodeFieldProvenance(nodeProvenanceHandle, routeConfig),
-    );
-    const routeTree = new RouteTreeModel(
-      treeProductHandle,
-      treeIdentityHandle,
-      rootNode.toReference(),
-      null,
-      routerOptions?.readEffectiveRouterOptions()?.toReference() ?? null,
-      1,
-      0,
-      null,
-      sourceAddressHandle,
-      routeTreeFieldProvenance(treeProvenanceHandle, false, routerOptions != null),
-    );
-    return new RouteTreeEmission(
-      [
-        new EvidenceRecord(
-          nodeEvidenceHandle,
-          EvidenceKind.ConfigurationFlow,
-          [EvidenceRole.Configuration],
-          'Initial RouteNode materialized from Router.routeTree lazy root creation before navigation.',
-          sourceAddressHandle,
-        ),
-        new ProvenanceRecord(nodeProvenanceHandle, [nodeEvidenceHandle]),
-        new RouterIdentity(
-          nodeIdentityHandle,
-          KernelVocabulary.Router.RouteNode.key,
-          routeContext.identityHandle,
-          sourceAddressHandle,
-          routeContext.localName,
-        ),
-        new MaterializedProduct(
-          nodeProductHandle,
-          KernelVocabulary.Router.RouteNode.key,
-          nodeIdentityHandle,
-          sourceAddressHandle,
-          nodeProvenanceHandle,
-        ),
-        new MaterializationRecord(
-          store.handles.materialization(nodeLocal),
-          routeContext.identityHandle,
-          [nodeProductHandle],
-          [],
-          [],
-        ),
-        new EvidenceRecord(
-          treeEvidenceHandle,
-          EvidenceKind.ConfigurationFlow,
-          [EvidenceRole.Configuration],
-          'Initial RouteTree materialized from Router.routeTree lazy root creation before navigation.',
-          sourceAddressHandle,
-        ),
-        new ProvenanceRecord(treeProvenanceHandle, [treeEvidenceHandle]),
-        new RouterIdentity(
-          treeIdentityHandle,
-          KernelVocabulary.Router.RouteTree.key,
-          routeContext.identityHandle,
-          sourceAddressHandle,
-          routeContext.localName,
-        ),
-        new MaterializedProduct(
-          treeProductHandle,
-          KernelVocabulary.Router.RouteTree.key,
-          treeIdentityHandle,
-          sourceAddressHandle,
-          treeProvenanceHandle,
-        ),
-        new MaterializationRecord(
-          store.handles.materialization(treeLocal),
-          routeContext.identityHandle,
-          [treeProductHandle],
-          [],
-          [],
-        ),
-      ],
+    const rootNode = initialRootRouteNode(this.store, nodeLocal, routeConfig, routeContext);
+    const routeTree = initialRouteTree(this.store, treeLocal, routeContext, rootNode, this.routerOptions);
+    return {
+      records: initialRouteTreeRecords(this.store, treeLocal, nodeLocal, routeContext, rootNode, routeTree),
       routeTree,
-      [rootNode],
-    );
+      routeNodes: [rootNode],
+    };
   }
 
-  private materializeTransitionTrees(
-    store: KernelStore,
-    routeConfigContexts: RouteConfigContextMaterializationProjectResult,
-    routeRuntime: RouteRuntimeTopologyProjectResult,
-    routeRecognizer: RouteRecognizerMaterializationProjectResult,
-    routeInstructions: RouteInstructionMaterializationProjectResult,
-    routeRecognition: RouteRecognitionMaterializationProjectResult,
-    routerOptions: RouterOptionsMaterializationProjectResult | null,
-    openRecords: KernelStoreRecord[],
-  ): readonly RouteTreeEmission[] {
-    const routeConfigsByIdentity = routeConfigIndex(routeConfigContexts);
-    const routeConfigContextsByIdentity = routeConfigContextIndex(routeConfigContexts);
-    const routeConfigContextsByConfigIdentity = new Map(
+  private materializeTransitionTrees(): readonly RouteTreeEmission[] {
+    return new RouteTreeTransitionMaterializationFrame(
+      this.store,
+      this.routeConfigContexts,
+      this.routeRuntime,
+      this.routeRecognizer,
+      this.routeInstructions,
+      this.routeRecognition,
+      this.routerOptions,
+      this.openRecords,
+    ).materialize();
+  }
+}
+
+class RouteTreeTransitionMaterializationFrame {
+  private readonly routeConfigsByIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>;
+  private readonly routeConfigContextsByIdentity: ReadonlyMap<RouteConfigContextModel['identityHandle'], RouteConfigContextModel>;
+  private readonly routeConfigContextsByConfigIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigContextModel>;
+  private readonly routeContextsByIdentity: ReadonlyMap<RouteContextModel['identityHandle'], RouteContextModel>;
+  private readonly endpointsByIdentity: ReadonlyMap<EndpointModel['identityHandle'], EndpointModel>;
+  private readonly configurableRoutesByIdentity: ReadonlyMap<ConfigurableRouteModel['identityHandle'], ConfigurableRouteModel>;
+  private readonly viewportInstructionsByIdentity: ReadonlyMap<ViewportInstructionModel['identityHandle'], ViewportInstructionModel>;
+  private readonly viewportInstructionTreesByIdentity: ReadonlyMap<ViewportInstructionTreeModel['identityHandle'], ViewportInstructionTreeModel>;
+
+  constructor(
+    private readonly store: KernelStore,
+    private readonly routeConfigContexts: RouteConfigContextMaterializationProjectResult,
+    private readonly routeRuntime: RouteRuntimeTopologyProjectResult,
+    private readonly routeRecognizer: RouteRecognizerMaterializationProjectResult,
+    private readonly routeInstructions: RouteInstructionMaterializationProjectResult,
+    private readonly routeRecognition: RouteRecognitionMaterializationProjectResult,
+    private readonly routerOptions: RouterOptionsMaterializationProjectResult | null,
+    private readonly openRecords: KernelStoreRecord[],
+  ) {
+    this.routeConfigsByIdentity = routeConfigIndex(routeConfigContexts);
+    this.routeConfigContextsByIdentity = routeConfigContextIndex(routeConfigContexts);
+    this.routeConfigContextsByConfigIdentity = new Map(
       routeConfigContexts.readRouteConfigContexts().flatMap((context) => {
         const configIdentity = context.config.identityHandle;
         return configIdentity == null ? [] : [[configIdentity, context] as const];
       }),
     );
-    const routeContextsByIdentity = new Map(
+    this.routeContextsByIdentity = new Map(
       routeRuntime.readRouteContexts().map((routeContext) => [routeContext.identityHandle, routeContext] as const),
     );
-    const endpointsByIdentity = new Map(
+    this.endpointsByIdentity = new Map(
       routeRecognizer.readEndpoints().map((endpoint) => [endpoint.identityHandle, endpoint] as const),
     );
-    const configurableRoutesByIdentity = new Map(
+    this.configurableRoutesByIdentity = new Map(
       routeRecognizer.readConfigurableRoutes().map((route) => [route.identityHandle, route] as const),
     );
-    const viewportInstructionsByIdentity = new Map(
+    this.viewportInstructionsByIdentity = new Map(
       routeInstructions.readViewportInstructions().map((instruction) => [instruction.identityHandle, instruction] as const),
     );
-    const viewportInstructionTreesByIdentity = new Map(
+    this.viewportInstructionTreesByIdentity = new Map(
       routeInstructions.readViewportInstructionTrees().map((tree) => [tree.identityHandle, tree] as const),
     );
+  }
 
-    return recognizedRoutesByInstructionTree(routeRecognition).flatMap((routes, index) => {
-      const treeIdentity = routes[0]?.viewportInstructionTree.identityHandle ?? null;
-      const tree = treeIdentity == null
-        ? null
-        : viewportInstructionTreesByIdentity.get(treeIdentity) ?? null;
-      const routeContextIdentity = tree?.routeContext?.identityHandle ?? null;
-      const updateRouteContext = routeContextIdentity == null
-        ? null
-        : routeContextsByIdentity.get(routeContextIdentity) ?? null;
-      if (tree == null || updateRouteContext == null) {
-        return [];
-      }
-      const updateRouteConfigContextIdentity = updateRouteContext.routeConfigContext?.identityHandle ?? null;
-      const updateRouteConfigContext = updateRouteConfigContextIdentity == null
-        ? null
-        : routeConfigContextsByIdentity.get(updateRouteConfigContextIdentity) ?? null;
-      const updateRouteConfig = updateRouteConfigContext?.config.identityHandle == null
-        ? null
-        : routeConfigsByIdentity.get(updateRouteConfigContext.config.identityHandle) ?? null;
-      if (updateRouteConfig == null) {
-        return [];
-      }
+  materialize(): readonly RouteTreeEmission[] {
+    return recognizedRoutesByInstructionTree(this.routeRecognition).flatMap((routes, index) =>
+      this.materializeRecognizedRouteGroup(routes, index)
+    );
+  }
 
-      const seeds = routes.flatMap((recognizedRoute) => {
-        const seed = transitionRouteNodeSeed(
-          recognizedRoute,
-          endpointsByIdentity,
-          configurableRoutesByIdentity,
-          routeConfigsByIdentity,
-          routeConfigContextsByConfigIdentity,
-          viewportInstructionsByIdentity,
-        );
-        return seed == null ? [] : [seed];
-      });
-      const resolvedSeeds = resolveTransitionRouteNodeSeeds(routeRuntime, updateRouteContext, seeds);
-      if (resolvedSeeds.open != null) {
-        recordViewportResolutionOpenSeam(store, resolvedSeeds.open, openRecords);
-      }
-      if (resolvedSeeds.seeds.length === 0) {
-        return [];
-      }
-      return [
-        this.materializeTransitionTree(
-          store,
-          tree,
-          updateRouteContext,
-          updateRouteConfig,
-          resolvedSeeds.seeds,
-          routerOptions,
-          index,
-        ),
-      ];
+  private materializeRecognizedRouteGroup(
+    routes: readonly RecognizedRouteModel[],
+    index: number,
+  ): readonly RouteTreeEmission[] {
+    const instructionTree = this.instructionTreeForRecognizedRouteGroup(routes);
+    const updateRouteContext = this.updateRouteContextForInstructionTree(instructionTree);
+    const updateRouteConfig = this.updateRouteConfigForRouteContext(updateRouteContext);
+    const seeds = routes.flatMap((recognizedRoute) => {
+      const seed = this.transitionRouteNodeSeed(recognizedRoute);
+      return seed == null ? [] : [seed];
     });
+    const resolvedSeeds = resolveTransitionRouteNodeSeeds(this.routeRuntime, updateRouteContext, seeds);
+    if (resolvedSeeds.open != null) {
+      recordViewportResolutionOpenSeam(this.store, resolvedSeeds.open, this.openRecords);
+    }
+    if (resolvedSeeds.seeds.length === 0) {
+      return [];
+    }
+    return [
+      this.materializeTransitionTree(
+        instructionTree,
+        updateRouteContext,
+        updateRouteConfig,
+        resolvedSeeds.seeds,
+        index,
+      ),
+    ];
+  }
+
+  private instructionTreeForRecognizedRouteGroup(
+    routes: readonly RecognizedRouteModel[],
+  ): ViewportInstructionTreeModel {
+    const first = routes[0];
+    if (first == null) {
+      throw new Error('RouteTree transition materialization received an empty RecognizedRoute group.');
+    }
+    return requiredByIdentity(
+      this.viewportInstructionTreesByIdentity,
+      first.viewportInstructionTree.identityHandle,
+      `RecognizedRoute '${first.identityHandle}' references an unmaterialized ViewportInstructionTree.`,
+    );
+  }
+
+  private updateRouteContextForInstructionTree(
+    instructionTree: ViewportInstructionTreeModel,
+  ): RouteContextModel {
+    return requiredByIdentity(
+      this.routeContextsByIdentity,
+      instructionTree.routeContext?.identityHandle ?? null,
+      `ViewportInstructionTree '${instructionTree.identityHandle}' references an unmaterialized update RouteContext.`,
+    );
+  }
+
+  private updateRouteConfigForRouteContext(
+    updateRouteContext: RouteContextModel,
+  ): RouteConfigModel {
+    const context = requiredByIdentity(
+      this.routeConfigContextsByIdentity,
+      updateRouteContext.routeConfigContext?.identityHandle ?? null,
+      `RouteContext '${updateRouteContext.identityHandle}' references an unmaterialized RouteConfigContext.`,
+    );
+    return requiredByIdentity(
+      this.routeConfigsByIdentity,
+      context.config.identityHandle,
+      `RouteConfigContext '${context.identityHandle}' references an unmaterialized RouteConfig.`,
+    );
   }
 
   private materializeTransitionTree(
-    store: KernelStore,
     instructionTree: ViewportInstructionTreeModel,
     updateRouteContext: RouteContextModel,
     updateRouteConfig: RouteConfigModel,
     seeds: readonly ResolvedTransitionRouteNodeSeed[],
-    routerOptions: RouterOptionsMaterializationProjectResult | null,
     index: number,
   ): RouteTreeEmission {
     const treeLocal = `router-route-tree-transition:${instructionTree.identityHandle}:${index}`;
     const rootLocal = `${treeLocal}:update-root`;
-    const treeEvidenceHandle = store.handles.evidence(treeLocal);
-    const treeProvenanceHandle = store.handles.provenance(treeLocal);
-    const treeProductHandle = store.handles.product(treeLocal);
-    const treeIdentityHandle = store.handles.identity(treeLocal);
-    const rootProductHandle = store.handles.product(rootLocal);
-    const rootIdentityHandle = store.handles.identity(rootLocal);
-    const rootReference = new RouterReference(
-      rootProductHandle,
-      rootIdentityHandle,
-      RouterModelKind.RouteNode,
-      instructionTree.sourceAddressHandle,
-      updateRouteContext.localName,
+    const rootReference = transitionRootRouteNodeReference(this.store, rootLocal, instructionTree, updateRouteContext);
+    const childSites = transitionRouteNodeSites(this.store, treeLocal, seeds);
+    const childNodes = transitionRouteNodeEmissions(this.store, instructionTree, rootReference, childSites);
+    const rootNode = transitionRootRouteNode(
+      this.store,
+      rootLocal,
+      instructionTree,
+      updateRouteContext,
+      updateRouteConfig,
+      childNodes,
     );
-    const nodeLocals = seeds.map((seed, seedIndex) =>
-      `${treeLocal}:node:${seedIndex}:${seed.recognizedRoute.identityHandle}`
-    );
-    const nodeReferences = seeds.map((seed, seedIndex) =>
-      new RouterReference(
-        store.handles.product(nodeLocals[seedIndex]!),
-        store.handles.identity(nodeLocals[seedIndex]!),
-        RouterModelKind.RouteNode,
-        seed.recognizedRoute.sourceAddressHandle,
-        seed.routeContext.localName,
-      )
-    );
-    const childNodes: TransitionRouteNodeEmission[] = seeds.map((seed, seedIndex) => {
-      const local = nodeLocals[seedIndex]!;
-      const node = transitionRouteNode(
-        store,
-        local,
-        instructionTree,
-        seed,
-        seedIndex === 0 ? rootReference : nodeReferences[seedIndex - 1]!,
-        seedIndex === seeds.length - 1 ? null : nodeReferences[seedIndex + 1]!,
-      );
-      return { local, node };
-    });
-    const childReferences = childNodes.length === 0
-      ? []
-      : [childNodes[0]!.node.toReference()];
-
-    const rootEvidenceHandle = store.handles.evidence(rootLocal);
-    const rootProvenanceHandle = store.handles.provenance(rootLocal);
-    const rootNode = new RouteNodeModel(
-      rootProductHandle,
-      rootIdentityHandle,
-      updateRouteContext.toReference(),
-      updateRouteConfig.toReference(),
-      null,
-      childReferences,
-      null,
-      null,
-      null,
-      0,
-      instructionTree.queryParamCount,
-      instructionTree.fragment,
-      updateRouteConfig.hasData,
-      null,
-      0,
-      '',
-      '',
-      updateRouteConfig.component,
-      updateRouteConfig.title,
-      instructionTree.sourceAddressHandle,
-      routeNodeFieldProvenance(rootProvenanceHandle, updateRouteConfig, {
-        hasChildren: childReferences.length > 0,
-        hasInstruction: false,
-        hasOriginalInstruction: false,
-        hasRecognizedRoute: false,
-        parameterCount: 0,
-        queryParamCount: instructionTree.queryParamCount,
-        fragment: instructionTree.fragment,
-        hasData: updateRouteConfig.hasData,
-        viewport: null,
-        residueInstructionCount: 0,
-        hasParent: false,
-      }),
-    );
-    const routeTree = new RouteTreeModel(
-      treeProductHandle,
-      treeIdentityHandle,
-      rootNode.toReference(),
-      instructionTree.toReference(),
-      routerOptions?.readEffectiveRouterOptions()?.toReference() ?? null,
-      childNodes.length + 1,
-      instructionTree.queryParamCount,
-      instructionTree.fragment,
-      instructionTree.sourceAddressHandle,
-      routeTreeFieldProvenance(treeProvenanceHandle, true, routerOptions != null),
+    const routeTree = transitionRouteTree(
+      this.store,
+      treeLocal,
+      instructionTree,
+      rootNode,
+      childNodes,
+      this.routerOptions,
     );
 
-    return new RouteTreeEmission(
-      [
-        new EvidenceRecord(
-          rootEvidenceHandle,
-          EvidenceKind.SemanticObservation,
-          [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
-          'RouteTree update root materialized for a ViewportInstructionTree navigation context before viewport activation.',
-          instructionTree.sourceAddressHandle,
-        ),
-        new ProvenanceRecord(rootProvenanceHandle, [rootEvidenceHandle]),
-        new RouterIdentity(
-          rootNode.identityHandle,
-          KernelVocabulary.Router.RouteNode.key,
-          updateRouteContext.identityHandle,
-          rootNode.sourceAddressHandle,
-          updateRouteContext.localName,
-        ),
-        new MaterializedProduct(
-          rootNode.productHandle,
-          KernelVocabulary.Router.RouteNode.key,
-          rootNode.identityHandle,
-          rootNode.sourceAddressHandle,
-          rootProvenanceHandle,
-        ),
-        new MaterializationRecord(
-          store.handles.materialization(rootLocal),
-          updateRouteContext.identityHandle,
-          [rootNode.productHandle],
-          [],
-          [],
-        ),
-        ...childNodes.flatMap((emission) =>
-          transitionRouteNodeRecords(store, emission.local, emission.node)
-        ),
-        new EvidenceRecord(
-          treeEvidenceHandle,
-          EvidenceKind.SemanticObservation,
-          [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
-          'RouteTree transition materialized from a closed ViewportInstructionTree and its RecognizedRoute chain.',
-          instructionTree.sourceAddressHandle,
-        ),
-        new ProvenanceRecord(treeProvenanceHandle, [treeEvidenceHandle]),
-        new RouterIdentity(
-          treeIdentityHandle,
-          KernelVocabulary.Router.RouteTree.key,
-          updateRouteContext.identityHandle,
-          instructionTree.sourceAddressHandle,
-          instructionTree.toReference().localName,
-        ),
-        new MaterializedProduct(
-          treeProductHandle,
-          KernelVocabulary.Router.RouteTree.key,
-          treeIdentityHandle,
-          instructionTree.sourceAddressHandle,
-          treeProvenanceHandle,
-        ),
-        new MaterializationRecord(
-          store.handles.materialization(treeLocal),
-          updateRouteContext.identityHandle,
-          [treeProductHandle],
-          [],
-          [],
-        ),
-      ],
+    return {
+      records: transitionRouteTreeRecords(this.store, treeLocal, rootLocal, updateRouteContext, instructionTree, rootNode, childNodes),
       routeTree,
-      [rootNode, ...childNodes.map((emission) => emission.node)],
-    );
+      routeNodes: [rootNode, ...childNodes.map((emission) => emission.node)],
+    };
   }
+
+  private transitionRouteNodeSeed(
+    recognizedRoute: RecognizedRouteModel,
+  ): TransitionRouteNodeSeed | null {
+    const endpoint = requiredByIdentity(
+      this.endpointsByIdentity,
+      recognizedRoute.endpoint.identityHandle,
+      `RecognizedRoute '${recognizedRoute.identityHandle}' references an unmaterialized Endpoint.`,
+    );
+    const configurableRoute = requiredByIdentity(
+      this.configurableRoutesByIdentity,
+      endpoint.configurableRoute.identityHandle,
+      `Endpoint '${endpoint.identityHandle}' references an unmaterialized ConfigurableRoute.`,
+    );
+    const routeConfig = requiredByIdentity(
+      this.routeConfigsByIdentity,
+      configurableRoute.routeConfig.identityHandle,
+      `ConfigurableRoute '${configurableRoute.identityHandle}' references an unmaterialized RouteConfig.`,
+    );
+    const routeConfigContext = this.routeConfigContextsByConfigIdentity.get(routeConfig.identityHandle) ?? null;
+    if (routeConfigContext == null) {
+      if (routeConfig.routeKind === RouteConfigKind.Redirect) {
+        recordRedirectTargetOpenSeam(this.store, recognizedRoute, routeConfig, this.openRecords);
+        return null;
+      }
+      throw new Error(`RouteConfig '${routeConfig.identityHandle}' has no materialized RouteConfigContext.`);
+    }
+    const instructionIdentity = recognizedRoute.viewportInstruction.identityHandle;
+    const instruction = instructionIdentity == null
+      ? null
+      : this.viewportInstructionsByIdentity.get(instructionIdentity) ?? null;
+    return {
+      recognizedRoute,
+      endpoint,
+      configurableRoute,
+      routeConfig,
+      routeConfigContext,
+      instruction,
+    };
+  }
+}
+
+function initialRootRouteNode(
+  store: KernelStore,
+  nodeLocal: string,
+  routeConfig: RouteConfigModel,
+  routeContext: RouteContextModel,
+): RouteNodeModel {
+  return materializedRouteNode(store, nodeLocal, {
+    routeContext: routeContext.toReference(),
+    routeConfig,
+    parent: null,
+    children: [],
+    instruction: null,
+    originalInstruction: null,
+    recognizedRoute: null,
+    parameterCount: 0,
+    queryParamCount: 0,
+    fragment: null,
+    hasData: routeConfig.hasData,
+    viewport: null,
+    residueInstructionCount: 0,
+    path: '',
+    finalPath: '',
+    component: routeConfig.component,
+    title: routeConfig.title,
+    sourceAddressHandle: routeContext.sourceAddressHandle,
+  });
+}
+
+function initialRouteTree(
+  store: KernelStore,
+  treeLocal: string,
+  routeContext: RouteContextModel,
+  rootNode: RouteNodeModel,
+  routerOptions: RouterOptionsMaterializationProjectResult | null,
+): RouteTreeModel {
+  const effectiveRouterOptions = routerOptions?.readEffectiveRouterOptions() ?? null;
+  return new RouteTreeModel(
+    store.handles.product(treeLocal),
+    store.handles.identity(treeLocal),
+    rootNode.toReference(),
+    null,
+    effectiveRouterOptions?.toReference() ?? null,
+    1,
+    0,
+    null,
+    routeContext.sourceAddressHandle,
+    routeTreeFieldProvenance(store.handles.provenance(treeLocal), false, effectiveRouterOptions != null),
+  );
+}
+
+function initialRouteTreeRecords(
+  store: KernelStore,
+  treeLocal: string,
+  nodeLocal: string,
+  routeContext: RouteContextModel,
+  rootNode: RouteNodeModel,
+  routeTree: RouteTreeModel,
+): readonly KernelStoreRecord[] {
+  return [
+    ...initialRootRouteNodeRecords(store, nodeLocal, routeContext, rootNode),
+    ...initialRouteTreeProductRecords(store, treeLocal, routeContext, routeTree),
+  ];
+}
+
+function initialRootRouteNodeRecords(
+  store: KernelStore,
+  local: string,
+  routeContext: RouteContextModel,
+  rootNode: RouteNodeModel,
+): readonly KernelStoreRecord[] {
+  return routerProductRecords(store, {
+    local,
+    evidenceHandle: store.handles.evidence(local),
+    provenanceHandle: store.handles.provenance(local),
+    productHandle: rootNode.productHandle,
+    identityHandle: rootNode.identityHandle,
+    productKindKey: KernelVocabulary.Router.RouteNode.key,
+    ownerHandle: routeContext.identityHandle,
+    sourceAddressHandle: rootNode.sourceAddressHandle,
+    localName: routeContext.localName,
+    evidenceKind: EvidenceKind.ConfigurationFlow,
+    evidenceRoles: [EvidenceRole.Configuration],
+    evidenceSummary: 'Initial RouteNode materialized from Router.routeTree lazy root creation before navigation.',
+  });
+}
+
+function initialRouteTreeProductRecords(
+  store: KernelStore,
+  local: string,
+  routeContext: RouteContextModel,
+  routeTree: RouteTreeModel,
+): readonly KernelStoreRecord[] {
+  return routerProductRecords(store, {
+    local,
+    evidenceHandle: store.handles.evidence(local),
+    provenanceHandle: store.handles.provenance(local),
+    productHandle: routeTree.productHandle,
+    identityHandle: routeTree.identityHandle,
+    productKindKey: KernelVocabulary.Router.RouteTree.key,
+    ownerHandle: routeContext.identityHandle,
+    sourceAddressHandle: routeTree.sourceAddressHandle,
+    localName: routeContext.localName,
+    evidenceKind: EvidenceKind.ConfigurationFlow,
+    evidenceRoles: [EvidenceRole.Configuration],
+    evidenceSummary: 'Initial RouteTree materialized from Router.routeTree lazy root creation before navigation.',
+  });
 }
 
 function routeNodeFieldProvenance(
   provenanceHandle: ProvenanceHandle,
   routeConfig: RouteConfigModel,
-  facts: {
-    readonly hasChildren: boolean;
-    readonly hasInstruction: boolean;
-    readonly hasOriginalInstruction: boolean;
-    readonly hasRecognizedRoute: boolean;
-    readonly parameterCount: number;
-    readonly queryParamCount: number;
-    readonly fragment: string | null;
-    readonly hasData: boolean | null;
-    readonly viewport: string | null;
-    readonly residueInstructionCount: number;
-    readonly hasParent: boolean;
-  } = {
-    hasChildren: false,
-    hasInstruction: false,
-    hasOriginalInstruction: false,
-    hasRecognizedRoute: false,
-    parameterCount: 0,
-    queryParamCount: 0,
-    fragment: null,
-    hasData: null,
-    viewport: null,
-    residueInstructionCount: 0,
-    hasParent: false,
-  },
+  facts: RouteNodeProvenanceFacts,
 ): readonly FieldProvenance<RouteNodeField>[] {
-  return compactFieldProvenance<RouteNodeField>([
-    new FieldProvenance('routeContext', provenanceHandle),
-    new FieldProvenance('config', provenanceHandle),
-    facts.hasParent ? new FieldProvenance('parent', provenanceHandle) : null,
-    facts.hasChildren ? new FieldProvenance('children', provenanceHandle) : null,
-    facts.hasInstruction ? new FieldProvenance('instruction', provenanceHandle) : null,
-    facts.hasOriginalInstruction ? new FieldProvenance('originalInstruction', provenanceHandle) : null,
-    facts.hasRecognizedRoute ? new FieldProvenance('recognizedRoute', provenanceHandle) : null,
-    facts.parameterCount === 0 ? null : new FieldProvenance('params', provenanceHandle),
-    facts.queryParamCount === 0 ? null : new FieldProvenance('queryParams', provenanceHandle),
-    facts.fragment == null ? null : new FieldProvenance('fragment', provenanceHandle),
-    facts.hasData == null ? null : new FieldProvenance('data', provenanceHandle),
-    facts.viewport == null ? null : new FieldProvenance('viewport', provenanceHandle),
-    facts.residueInstructionCount === 0 ? null : new FieldProvenance('residue', provenanceHandle),
-    new FieldProvenance('path', provenanceHandle),
-    new FieldProvenance('finalPath', provenanceHandle),
-    routeConfig.component == null ? null : new FieldProvenance('component', provenanceHandle),
-    routeConfig.title == null ? null : new FieldProvenance('title', provenanceHandle),
-    new FieldProvenance('source', provenanceHandle),
-  ]);
+  return fieldProvenanceEntries<RouteNodeField>([
+    'routeContext',
+    'config',
+    facts.hasParent ? 'parent' : null,
+    facts.hasChildren ? 'children' : null,
+    facts.hasInstruction ? 'instruction' : null,
+    facts.hasOriginalInstruction ? 'originalInstruction' : null,
+    facts.hasRecognizedRoute ? 'recognizedRoute' : null,
+    facts.parameterCount === 0 ? null : 'params',
+    facts.queryParamCount === 0 ? null : 'queryParams',
+    facts.fragment == null ? null : 'fragment',
+    facts.hasData == null ? null : 'data',
+    facts.viewport == null ? null : 'viewport',
+    facts.residueInstructionCount === 0 ? null : 'residue',
+    'path',
+    'finalPath',
+    routeConfig.component == null ? null : 'component',
+    routeConfig.title == null ? null : 'title',
+    'source',
+  ], provenanceHandle);
+}
+
+function materializedRouteNode(
+  store: KernelStore,
+  local: string,
+  fields: RouteNodeMaterializationFields,
+): RouteNodeModel {
+  const routeConfig = fields.routeConfig;
+  return new RouteNodeModel({
+    productHandle: store.handles.product(local),
+    identityHandle: store.handles.identity(local),
+    routeContext: fields.routeContext,
+    config: routeConfig.toReference(),
+    parent: fields.parent,
+    children: fields.children,
+    instruction: fields.instruction,
+    originalInstruction: fields.originalInstruction,
+    recognizedRoute: fields.recognizedRoute,
+    parameterCount: fields.parameterCount,
+    queryParamCount: fields.queryParamCount,
+    fragment: fields.fragment,
+    hasData: fields.hasData,
+    viewport: fields.viewport,
+    residueInstructionCount: fields.residueInstructionCount,
+    path: fields.path,
+    finalPath: fields.finalPath,
+    component: fields.component,
+    title: fields.title,
+    sourceAddressHandle: fields.sourceAddressHandle,
+    fieldProvenance: routeNodeFieldProvenance(
+      store.handles.provenance(local),
+      routeConfig,
+      routeNodeProvenanceFacts(fields),
+    ),
+  });
+}
+
+function routeNodeProvenanceFacts(fields: RouteNodeMaterializationFields): RouteNodeProvenanceFacts {
+  return {
+    hasChildren: fields.children.length > 0,
+    hasInstruction: fields.instruction != null,
+    hasOriginalInstruction: fields.originalInstruction != null,
+    hasRecognizedRoute: fields.recognizedRoute != null,
+    parameterCount: fields.parameterCount,
+    queryParamCount: fields.queryParamCount,
+    fragment: fields.fragment,
+    hasData: fields.hasData,
+    viewport: fields.viewport,
+    residueInstructionCount: fields.residueInstructionCount,
+    hasParent: fields.parent != null,
+  };
 }
 
 function routeTreeFieldProvenance(
@@ -604,15 +629,194 @@ function routeTreeFieldProvenance(
   hasInstructionTree: boolean,
   hasOptions: boolean,
 ): readonly FieldProvenance<RouteTreeField>[] {
-  return compactFieldProvenance<RouteTreeField>([
-    new FieldProvenance('rootNode', provenanceHandle),
-    hasInstructionTree ? new FieldProvenance('instructionTree', provenanceHandle) : null,
-    hasOptions ? new FieldProvenance('options', provenanceHandle) : null,
-    new FieldProvenance('nodeCount', provenanceHandle),
-    new FieldProvenance('queryParamCount', provenanceHandle),
-    new FieldProvenance('fragment', provenanceHandle),
-    new FieldProvenance('source', provenanceHandle),
-  ]);
+  return fieldProvenanceEntries<RouteTreeField>([
+    'rootNode',
+    hasInstructionTree ? 'instructionTree' : null,
+    hasOptions ? 'options' : null,
+    'nodeCount',
+    'queryParamCount',
+    'fragment',
+    'source',
+  ], provenanceHandle);
+}
+
+function transitionRootRouteNodeReference(
+  store: KernelStore,
+  rootLocal: string,
+  instructionTree: ViewportInstructionTreeModel,
+  routeContext: RouteContextModel,
+): RouterReference {
+  return new RouterReference(
+    store.handles.product(rootLocal),
+    store.handles.identity(rootLocal),
+    RouterModelKind.RouteNode,
+    instructionTree.sourceAddressHandle,
+    routeContext.localName,
+  );
+}
+
+function transitionRouteNodeSites(
+  store: KernelStore,
+  treeLocal: string,
+  seeds: readonly ResolvedTransitionRouteNodeSeed[],
+): readonly TransitionRouteNodeSite[] {
+  return seeds.map((seed, seedIndex) => {
+    const local = `${treeLocal}:node:${seedIndex}:${seed.recognizedRoute.identityHandle}`;
+    return {
+      seed,
+      local,
+      reference: new RouterReference(
+        store.handles.product(local),
+        store.handles.identity(local),
+        RouterModelKind.RouteNode,
+        seed.recognizedRoute.sourceAddressHandle,
+        seed.routeContext.localName,
+      ),
+    };
+  });
+}
+
+function transitionRouteNodeEmissions(
+  store: KernelStore,
+  instructionTree: ViewportInstructionTreeModel,
+  rootReference: RouterReference,
+  sites: readonly TransitionRouteNodeSite[],
+): readonly TransitionRouteNodeEmission[] {
+  return sites.map((site, seedIndex) => {
+    const node = transitionRouteNode(
+      store,
+      site.local,
+      instructionTree,
+      site.seed,
+      seedIndex === 0 ? rootReference : sites[seedIndex - 1]!.reference,
+      seedIndex === sites.length - 1 ? null : sites[seedIndex + 1]!.reference,
+    );
+    return { local: site.local, node };
+  });
+}
+
+function transitionRootRouteNode(
+  store: KernelStore,
+  rootLocal: string,
+  instructionTree: ViewportInstructionTreeModel,
+  routeContext: RouteContextModel,
+  routeConfig: RouteConfigModel,
+  childNodes: readonly TransitionRouteNodeEmission[],
+): RouteNodeModel {
+  const childReferences = childNodes.length === 0
+    ? []
+    : [childNodes[0]!.node.toReference()];
+  return materializedRouteNode(store, rootLocal, {
+    routeContext: routeContext.toReference(),
+    routeConfig,
+    parent: null,
+    children: childReferences,
+    instruction: null,
+    originalInstruction: null,
+    recognizedRoute: null,
+    parameterCount: 0,
+    queryParamCount: instructionTree.queryParamCount,
+    fragment: instructionTree.fragment,
+    hasData: routeConfig.hasData,
+    viewport: null,
+    residueInstructionCount: 0,
+    path: '',
+    finalPath: '',
+    component: routeConfig.component,
+    title: routeConfig.title,
+    sourceAddressHandle: instructionTree.sourceAddressHandle,
+  });
+}
+
+function transitionRouteTree(
+  store: KernelStore,
+  treeLocal: string,
+  instructionTree: ViewportInstructionTreeModel,
+  rootNode: RouteNodeModel,
+  childNodes: readonly TransitionRouteNodeEmission[],
+  routerOptions: RouterOptionsMaterializationProjectResult | null,
+): RouteTreeModel {
+  return new RouteTreeModel(
+    store.handles.product(treeLocal),
+    store.handles.identity(treeLocal),
+    rootNode.toReference(),
+    instructionTree.toReference(),
+    routerOptions?.readEffectiveRouterOptions()?.toReference() ?? null,
+    childNodes.length + 1,
+    instructionTree.queryParamCount,
+    instructionTree.fragment,
+    instructionTree.sourceAddressHandle,
+    routeTreeFieldProvenance(store.handles.provenance(treeLocal), true, routerOptions != null),
+  );
+}
+
+function transitionRouteTreeRecords(
+  store: KernelStore,
+  treeLocal: string,
+  rootLocal: string,
+  routeContext: RouteContextModel,
+  instructionTree: ViewportInstructionTreeModel,
+  rootNode: RouteNodeModel,
+  childNodes: readonly TransitionRouteNodeEmission[],
+): readonly KernelStoreRecord[] {
+  return [
+    ...transitionRootRouteNodeRecords(store, rootLocal, routeContext, rootNode),
+    ...transitionChildRouteNodeRecords(store, childNodes),
+    ...transitionRouteTreeProductRecords(store, treeLocal, routeContext, instructionTree),
+  ];
+}
+
+function transitionRootRouteNodeRecords(
+  store: KernelStore,
+  local: string,
+  routeContext: RouteContextModel,
+  rootNode: RouteNodeModel,
+): readonly KernelStoreRecord[] {
+  return routerProductRecords(store, {
+    local,
+    evidenceHandle: store.handles.evidence(local),
+    provenanceHandle: store.handles.provenance(local),
+    productHandle: rootNode.productHandle,
+    identityHandle: rootNode.identityHandle,
+    productKindKey: KernelVocabulary.Router.RouteNode.key,
+    ownerHandle: routeContext.identityHandle,
+    sourceAddressHandle: rootNode.sourceAddressHandle,
+    localName: routeContext.localName,
+    evidenceKind: EvidenceKind.SemanticObservation,
+    evidenceRoles: [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
+    evidenceSummary: 'RouteTree update root materialized for a ViewportInstructionTree navigation context before viewport activation.',
+  });
+}
+
+function transitionChildRouteNodeRecords(
+  store: KernelStore,
+  childNodes: readonly TransitionRouteNodeEmission[],
+): readonly KernelStoreRecord[] {
+  return childNodes.flatMap((emission) =>
+    transitionRouteNodeRecords(store, emission.local, emission.node)
+  );
+}
+
+function transitionRouteTreeProductRecords(
+  store: KernelStore,
+  local: string,
+  routeContext: RouteContextModel,
+  instructionTree: ViewportInstructionTreeModel,
+): readonly KernelStoreRecord[] {
+  return routerProductRecords(store, {
+    local,
+    evidenceHandle: store.handles.evidence(local),
+    provenanceHandle: store.handles.provenance(local),
+    productHandle: store.handles.product(local),
+    identityHandle: store.handles.identity(local),
+    productKindKey: KernelVocabulary.Router.RouteTree.key,
+    ownerHandle: routeContext.identityHandle,
+    sourceAddressHandle: instructionTree.sourceAddressHandle,
+    localName: instructionTree.toReference().localName,
+    evidenceKind: EvidenceKind.SemanticObservation,
+    evidenceRoles: [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
+    evidenceSummary: 'RouteTree transition materialized from a closed ViewportInstructionTree and its RecognizedRoute chain.',
+  });
 }
 
 function transitionRouteNode(
@@ -623,45 +827,29 @@ function transitionRouteNode(
   parent: RouterReference | null,
   child: RouterReference | null,
 ): RouteNodeModel {
-  const provenanceHandle = store.handles.provenance(local);
   const path = configuredPathForEndpoint(seed.endpoint, seed.configurableRoute);
   const viewport = seed.instruction?.viewport ?? seed.routeConfig.viewport ?? DEFAULT_VIEWPORT_NAME;
   const residueInstructionCount = seed.recognizedRoute.residue == null ? 0 : 1;
-  return new RouteNodeModel(
-    store.handles.product(local),
-    store.handles.identity(local),
-    seed.routeContext.toReference(),
-    seed.routeConfig.toReference(),
+  return materializedRouteNode(store, local, {
+    routeContext: seed.routeContext.toReference(),
+    routeConfig: seed.routeConfig,
     parent,
-    child == null ? [] : [child],
-    seed.recognizedRoute.viewportInstruction,
-    seed.recognizedRoute.viewportInstruction,
-    seed.recognizedRoute.toReference(),
-    seed.recognizedRoute.parameterCount,
-    instructionTree.queryParamCount,
-    instructionTree.fragment,
-    seed.routeConfig.hasData,
+    children: child == null ? [] : [child],
+    instruction: seed.recognizedRoute.viewportInstruction,
+    originalInstruction: seed.recognizedRoute.viewportInstruction,
+    recognizedRoute: seed.recognizedRoute.toReference(),
+    parameterCount: seed.recognizedRoute.parameterCount,
+    queryParamCount: instructionTree.queryParamCount,
+    fragment: instructionTree.fragment,
+    hasData: seed.routeConfig.hasData,
     viewport,
     residueInstructionCount,
     path,
-    path,
-    seed.routeConfig.component,
-    seed.routeConfig.title,
-    seed.recognizedRoute.sourceAddressHandle,
-    routeNodeFieldProvenance(provenanceHandle, seed.routeConfig, {
-      hasChildren: child != null,
-      hasInstruction: true,
-      hasOriginalInstruction: true,
-      hasRecognizedRoute: true,
-      parameterCount: seed.recognizedRoute.parameterCount,
-      queryParamCount: instructionTree.queryParamCount,
-      fragment: instructionTree.fragment,
-      hasData: seed.routeConfig.hasData,
-      viewport,
-      residueInstructionCount,
-      hasParent: parent != null,
-    }),
-  );
+    finalPath: path,
+    component: seed.routeConfig.component,
+    title: seed.routeConfig.title,
+    sourceAddressHandle: seed.recognizedRoute.sourceAddressHandle,
+  });
 }
 
 function transitionRouteNodeRecords(
@@ -675,82 +863,20 @@ function transitionRouteNodeRecords(
     node.routeContext,
     `RouteNode '${node.identityHandle}' is missing its RouteContext identity owner.`,
   );
-  return [
-    new EvidenceRecord(
-      evidenceHandle,
-      EvidenceKind.SemanticObservation,
-      [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
-      'RouteTree.createAndAppendNodes materialized a RouteNode from a recognized viewport instruction path.',
-      node.sourceAddressHandle,
-    ),
-    new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
-    new RouterIdentity(
-      node.identityHandle,
-      KernelVocabulary.Router.RouteNode.key,
-      node.routeContext.identityHandle,
-      node.sourceAddressHandle,
-      node.routeContext.localName,
-    ),
-    new MaterializedProduct(
-      node.productHandle,
-      KernelVocabulary.Router.RouteNode.key,
-      node.identityHandle,
-      node.sourceAddressHandle,
-      provenanceHandle,
-    ),
-    new MaterializationRecord(
-      store.handles.materialization(local),
-      ownerHandle,
-      [node.productHandle],
-      [],
-      [],
-    ),
-  ];
-}
-
-function transitionRouteNodeSeed(
-  recognizedRoute: RecognizedRouteModel,
-  endpointsByIdentity: ReadonlyMap<EndpointModel['identityHandle'], EndpointModel>,
-  configurableRoutesByIdentity: ReadonlyMap<ConfigurableRouteModel['identityHandle'], ConfigurableRouteModel>,
-  routeConfigsByIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>,
-  routeConfigContextsByConfigIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigContextModel>,
-  viewportInstructionsByIdentity: ReadonlyMap<ViewportInstructionModel['identityHandle'], ViewportInstructionModel>,
-): TransitionRouteNodeSeed | null {
-  const endpoint = requiredByIdentity(
-    endpointsByIdentity,
-    recognizedRoute.endpoint.identityHandle,
-    `RecognizedRoute '${recognizedRoute.identityHandle}' references an unmaterialized Endpoint.`,
-  );
-  const configurableRoute = requiredByIdentity(
-    configurableRoutesByIdentity,
-    endpoint.configurableRoute.identityHandle,
-    `Endpoint '${endpoint.identityHandle}' references an unmaterialized ConfigurableRoute.`,
-  );
-  const routeConfig = requiredByIdentity(
-    routeConfigsByIdentity,
-    configurableRoute.routeConfig.identityHandle,
-    `ConfigurableRoute '${configurableRoute.identityHandle}' references an unmaterialized RouteConfig.`,
-  );
-  const routeConfigContext = routeConfigContextsByConfigIdentity.get(routeConfig.identityHandle) ?? null;
-  if (routeConfigContext == null) {
-    if (routeConfig.routeKind === RouteConfigKind.Redirect) {
-      // Framework createConfiguredNode rewrites redirects before RouteNode.create; model that target handoff separately.
-      return null;
-    }
-    throw new Error(`RouteConfig '${routeConfig.identityHandle}' has no materialized RouteConfigContext.`);
-  }
-  const instructionIdentity = recognizedRoute.viewportInstruction.identityHandle;
-  const instruction = instructionIdentity == null
-    ? null
-    : viewportInstructionsByIdentity.get(instructionIdentity) ?? null;
-  return {
-    recognizedRoute,
-    endpoint,
-    configurableRoute,
-    routeConfig,
-    routeConfigContext,
-    instruction,
-  };
+  return routerProductRecords(store, {
+    local,
+    evidenceHandle,
+    provenanceHandle,
+    productHandle: node.productHandle,
+    identityHandle: node.identityHandle,
+    productKindKey: KernelVocabulary.Router.RouteNode.key,
+    ownerHandle,
+    sourceAddressHandle: node.sourceAddressHandle,
+    localName: node.routeContext.localName,
+    evidenceKind: EvidenceKind.SemanticObservation,
+    evidenceRoles: [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
+    evidenceSummary: 'RouteTree.createAndAppendNodes materialized a RouteNode from a recognized viewport instruction path.',
+  });
 }
 
 function resolveTransitionRouteNodeSeeds(
@@ -763,12 +889,15 @@ function resolveTransitionRouteNodeSeeds(
   for (const seed of seeds) {
     const componentName = seed.routeConfig.component?.localName ?? null;
     if (componentName == null) {
-      return new ResolvedTransitionRouteNodeSeedSet([], {
-        parentRouteContext,
-        seed,
-        request: null,
-        reason: 'resolved route config does not expose a component name for ViewportRequest construction',
-      });
+      return {
+        seeds: [],
+        open: {
+          parentRouteContext,
+          seed,
+          request: null,
+          reason: 'resolved route config does not expose a component name for ViewportRequest construction',
+        },
+      };
     }
     const viewportRequest = new ViewportRequestModel(
       seed.instruction?.viewport ?? seed.routeConfig.viewport ?? DEFAULT_VIEWPORT_NAME,
@@ -776,24 +905,30 @@ function resolveTransitionRouteNodeSeeds(
     );
     const viewportAgent = routeRuntime.resolveViewportAgent(parentRouteContext.identityHandle, viewportRequest);
     if (viewportAgent == null) {
-      return new ResolvedTransitionRouteNodeSeedSet([], {
-        parentRouteContext,
-        seed,
-        request: viewportRequest,
-        reason: 'parent RouteContext has no matching available ViewportAgent',
-      });
+      return {
+        seeds: [],
+        open: {
+          parentRouteContext,
+          seed,
+          request: viewportRequest,
+          reason: 'parent RouteContext has no matching available ViewportAgent',
+        },
+      };
     }
     const routeContext = routeRuntime.routeContextForRouteConfigContextAndViewportAgent(
       seed.routeConfigContext.identityHandle,
       viewportAgent.identityHandle,
     );
     if (routeContext == null) {
-      return new ResolvedTransitionRouteNodeSeedSet([], {
-        parentRouteContext,
-        seed,
-        request: viewportRequest,
-        reason: 'Router._getRouteContext pair is not materialized for the resolved ViewportAgent and RouteConfigContext',
-      });
+      return {
+        seeds: [],
+        open: {
+          parentRouteContext,
+          seed,
+          request: viewportRequest,
+          reason: 'Router._getRouteContext pair is not materialized for the resolved ViewportAgent and RouteConfigContext',
+        },
+      };
     }
     resolved.push({
       ...seed,
@@ -803,7 +938,10 @@ function resolveTransitionRouteNodeSeeds(
     });
     parentRouteContext = routeContext;
   }
-  return new ResolvedTransitionRouteNodeSeedSet(resolved, null);
+  return {
+    seeds: resolved,
+    open: null,
+  };
 }
 
 function recordViewportResolutionOpenSeam(
@@ -815,32 +953,39 @@ function recordViewportResolutionOpenSeam(
     ? 'unavailable ViewportRequest'
     : `ViewportRequest(viewport:'${open.request.viewportName}',component:'${open.request.componentName}')`;
   const summary = `RouteTree.createConfiguredNode could not resolve ${requestLabel}: ${open.reason}.`;
-  const local = `router-route-tree-open:viewport-request:${open.seed.recognizedRoute.identityHandle}:${encodeLocal(open.reason)}`;
-  const evidenceHandle = store.handles.evidence(local);
-  const openSeam = new OpenSeam(
-    store.handles.openSeam(local),
-    KernelVocabulary.Router.OpenInstruction.key,
+  const local = `router-route-tree-open:viewport-request:${open.seed.recognizedRoute.identityHandle}:${localKeyPart(open.reason)}`;
+  const emission = routerOpenSeamRecords(store, {
+    local,
+    seamKindKey: KernelVocabulary.Router.OpenInstruction.key,
+    ownerHandle: open.parentRouteContext.identityHandle,
     summary,
-    open.seed.recognizedRoute.sourceAddressHandle,
-    evidenceHandle,
-  );
-  records.push(
-    new EvidenceRecord(
-      evidenceHandle,
-      EvidenceKind.SemanticObservation,
-      [EvidenceRole.TransformInput],
-      summary,
-      open.seed.recognizedRoute.sourceAddressHandle,
-    ),
-    openSeam,
-    new MaterializationRecord(
-      store.handles.materialization(local),
-      open.parentRouteContext.identityHandle,
-      [],
-      [],
-      [openSeam.handle],
-    ),
-  );
+    sourceAddressHandle: open.seed.recognizedRoute.sourceAddressHandle,
+    reasonKinds: [OpenSeamReasonKind.RouterViewportResolutionOpen],
+    evidenceKind: EvidenceKind.SemanticObservation,
+    evidenceRoles: [EvidenceRole.TransformInput],
+  });
+  records.push(...emission.records);
+}
+
+function recordRedirectTargetOpenSeam(
+  store: KernelStore,
+  recognizedRoute: RecognizedRouteModel,
+  routeConfig: RouteConfigModel,
+  records: KernelStoreRecord[],
+): void {
+  const local = `router-route-tree-open:redirect:${recognizedRoute.identityHandle}:${routeConfig.identityHandle}`;
+  const summary = 'RouteTree.createConfiguredNode encountered a redirect RouteConfig; redirect target route-tree materialization is not modeled yet.';
+  const emission = routerOpenSeamRecords(store, {
+    local,
+    seamKindKey: KernelVocabulary.Router.OpenInstruction.key,
+    ownerHandle: routeConfig.identityHandle,
+    summary,
+    sourceAddressHandle: recognizedRoute.sourceAddressHandle ?? routeConfig.sourceAddressHandle,
+    reasonKinds: [OpenSeamReasonKind.RouterRedirectTargetOpen],
+    evidenceKind: EvidenceKind.SemanticObservation,
+    evidenceRoles: [EvidenceRole.TransformInput],
+  });
+  records.push(...emission.records);
 }
 
 function recognizedRoutesByInstructionTree(
@@ -894,8 +1039,4 @@ function requiredRouterReferenceIdentity(
     throw new Error(message);
   }
   return reference.identityHandle;
-}
-
-function encodeLocal(value: string): string {
-  return value.replace(/[^a-zA-Z0-9_.:-]/g, '_');
 }

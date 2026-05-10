@@ -56,6 +56,7 @@ import {
   sourceIndexBasis,
 } from "./framework-support.js";
 import { FrameworkSemanticRoutes } from "./framework-route-catalog.js";
+import { stringFiltersFromRecord } from "./lens-filter-utils.js";
 
 export {
   readFrameworkCompilerInstructionProducts,
@@ -97,7 +98,7 @@ const COMPILER_RELATIONSHIP_ROW_FAMILY =
   new PagedRowFamily<FrameworkCompilerRelationshipRow>({
     id: "framework.compiler:relationships",
     rowLabel: "Aurelia framework compiler relationship row(s)",
-    evidenceForRow: evidenceForCompilerRelationship,
+    evidenceForRow: evidenceForCompilerTypeFactRow,
     continuationsForPage: compilerRelationshipContinuations,
   });
 
@@ -105,7 +106,7 @@ const COMPILER_COMPILE_FLOW_ROW_FAMILY =
   new PagedRowFamily<FrameworkCompileFlowRow>({
     id: "framework.compiler:compile-flow",
     rowLabel: "Aurelia framework compiler compile-flow stage row(s)",
-    evidenceForRow: evidenceForCompileFlowRow,
+    evidenceForRow: evidenceForCompilerTypeFactRow,
     continuationsForPage: compilerCompileFlowContinuations,
   });
 
@@ -114,7 +115,7 @@ const COMPILER_ATTRIBUTE_CLASSIFICATION_ROW_FAMILY =
     id: "framework.compiler:attribute-classification",
     rowLabel:
       "Aurelia framework compiler attribute-classification branch row(s)",
-    evidenceForRow: evidenceForAttributeClassificationRow,
+    evidenceForRow: evidenceForCompilerTypeFactRow,
     continuationsForPage: compilerAttributeClassificationContinuations,
   });
 
@@ -201,7 +202,7 @@ export function answerFrameworkCompiler(
       basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
       evidence: compileFlow
         .slice(0, evidenceLimit(inquiry))
-        .map(evidenceForCompileFlowRow),
+        .map(evidenceForCompilerTypeFactRow),
       continuations: [
         FrameworkSemanticRoutes.CompilerToAdmissionJitFlow.continuation(
           inquiry,
@@ -296,32 +297,14 @@ function evidenceForCompilerInstructionProduct(
   };
 }
 
-function evidenceForCompilerRelationship(
-  row: FrameworkCompilerRelationshipRow,
-): Evidence {
-  return {
-    id: row.id,
-    kind: EvidenceKind.TypeFact,
-    role: EvidenceRole.Subject,
-    confidence: EvidenceConfidence.Exact,
-    source: row.source,
-    summary: row.summary,
-  };
+interface FrameworkCompilerTypeFactEvidenceRow {
+  readonly id: string;
+  readonly source: SourceRange;
+  readonly summary: string;
 }
 
-function evidenceForCompileFlowRow(row: FrameworkCompileFlowRow): Evidence {
-  return {
-    id: row.id,
-    kind: EvidenceKind.TypeFact,
-    role: EvidenceRole.Subject,
-    confidence: EvidenceConfidence.Exact,
-    source: row.source,
-    summary: row.summary,
-  };
-}
-
-function evidenceForAttributeClassificationRow(
-  row: FrameworkAttributeClassificationRow,
+function evidenceForCompilerTypeFactRow<T extends FrameworkCompilerTypeFactEvidenceRow>(
+  row: T,
 ): Evidence {
   return {
     id: row.id,
@@ -385,7 +368,7 @@ function compilerRelationshipContinuations(
     );
   }
   for (const [index, row] of rows.slice(0, 5).entries()) {
-    const evidence = evidenceForCompilerRelationship(row);
+    const evidence = evidenceForCompilerTypeFactRow(row);
     const builder = new FrameworkRowContinuationBuilder(
       inquiry,
       "framework.compiler:relationships",
@@ -468,7 +451,7 @@ function compilerCompileFlowContinuations(
   }
 
   for (const [index, row] of rowsForDirectContinuations(rows).entries()) {
-    const evidence = evidenceForCompileFlowRow(row);
+    const evidence = evidenceForCompilerTypeFactRow(row);
     const builder = new FrameworkRowContinuationBuilder(
       inquiry,
       "framework.compiler:compile-flow",
@@ -591,7 +574,7 @@ function compilerAttributeClassificationContinuations(
   );
 
   for (const [index, row] of rowsForDirectContinuations(rows).entries()) {
-    const evidence = evidenceForAttributeClassificationRow(row);
+    const evidence = evidenceForCompilerTypeFactRow(row);
     const builder = new FrameworkRowContinuationBuilder(
       inquiry,
       "framework.compiler:attribute-classification",
@@ -871,24 +854,12 @@ function compilerFiltersFromInquiry(
 function compilerAxisFiltersFromRecord(
   value: unknown,
 ): Partial<FrameworkCompilerFilters> {
-  if (value === null || typeof value !== "object") {
-    return {};
-  }
-  const source = value as Record<string, unknown>;
-  return {
-    ...compilerStringFilter(source, "relation"),
-    ...compilerStringFilter(source, "mechanism"),
-    ...compilerStringFilter(source, "phase"),
-    ...compilerStringFilter(source, "compileStage"),
-    ...compilerStringFilter(source, "branchKind"),
-    ...compilerStringFilter(source, "methodName"),
-  };
-}
-
-function compilerStringFilter(
-  source: Record<string, unknown>,
-  key: keyof FrameworkCompilerFilters,
-): object {
-  const value = source[key];
-  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
+  return stringFiltersFromRecord<FrameworkCompilerFilters>(value, [
+    "relation",
+    "mechanism",
+    "phase",
+    "compileStage",
+    "branchKind",
+    "methodName",
+  ]);
 }

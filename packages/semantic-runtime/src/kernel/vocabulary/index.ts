@@ -61,6 +61,9 @@ export const KernelVocabulary = {
   RouteRecognizer: {
     ...KernelProductKinds.RouteRecognizer,
   },
+  I18n: {
+    ...KernelProductKinds.I18n,
+  },
   Compiler: {
     ...KernelOpenSeamKinds.Compiler,
     ...KernelBindingKinds.Compiler,

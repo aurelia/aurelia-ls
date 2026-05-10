@@ -37,8 +37,7 @@ import {
   evidenceForHydrationFlow,
   evidenceForInstructionDispatch,
   evidenceForInstructionSlot,
-  evidenceForRenderConsequence,
-  evidenceForRenderingRelationship,
+  evidenceForRenderingTypeFact,
   evidenceForSyntaxProduct,
 } from "./framework-evidence.js";
 import {
@@ -88,6 +87,7 @@ import {
   sourceIndexBasis,
 } from "./framework-support.js";
 import { PagedRowFamily } from "../paged-row-family.js";
+import { stringFiltersFromRecord } from "./lens-filter-utils.js";
 
 class FrameworkRenderingQueryContext {
   readonly projection: string;
@@ -168,7 +168,7 @@ const RENDER_CONSEQUENCE_ROW_FAMILY =
   new PagedRowFamily<FrameworkRenderConsequenceRow>({
     id: "framework.rendering:render-consequences",
     rowLabel: "Aurelia framework renderer consequence row(s)",
-    evidenceForRow: evidenceForRenderConsequence,
+    evidenceForRow: evidenceForRenderingTypeFact,
     continuationsForPage: renderConsequenceContinuations,
   });
 
@@ -228,7 +228,7 @@ const RENDERING_RELATIONSHIP_ROW_FAMILY =
   new PagedRowFamily<FrameworkRenderingRelationshipRow>({
     id: "framework.rendering:relationships",
     rowLabel: "Aurelia framework rendering relationship row(s)",
-    evidenceForRow: evidenceForRenderingRelationship,
+    evidenceForRow: evidenceForRenderingTypeFact,
     continuationsForPage: renderingRelationshipContinuations,
   });
 
@@ -609,7 +609,7 @@ class FrameworkRenderingAnswerer {
           ...syntaxProducts.slice(0, 2).map(evidenceForSyntaxProduct),
           ...renderConsequences
             .slice(0, 2)
-            .map(evidenceForRenderConsequence),
+            .map(evidenceForRenderingTypeFact),
           ...controllerCreations
             .slice(0, 2)
             .map(evidenceForControllerCreation),
@@ -617,7 +617,7 @@ class FrameworkRenderingAnswerer {
           ...bindingProducts.slice(0, 2).map(evidenceForBindingProduct),
           ...renderingRelationships
             .slice(0, 2)
-            .map(evidenceForRenderingRelationship),
+            .map(evidenceForRenderingTypeFact),
           ...bindingSetups.slice(0, 2).map(evidenceForBindingSetup),
         ],
         continuations: renderingSummaryContinuations(inquiry),
@@ -656,66 +656,30 @@ function consequenceAxisFiltersFromInquiry(
 function hydrationAxisFiltersFromRecord(
   value: unknown,
 ): Partial<FrameworkHydrationFlowFilters> {
-  if (value === null || typeof value !== "object") {
-    return {};
-  }
-  const source = value as Record<string, unknown>;
-  return {
-    ...hydrationStringFilter(source, "hydrationStage"),
-    ...hydrationStringFilter(source, "operation"),
-    ...hydrationStringFilter(source, "targetKind"),
-    ...hydrationStringFilter(source, "ownerName"),
-    ...hydrationStringFilter(source, "methodName"),
-    ...hydrationStringFilter(source, "targetName"),
-  };
-}
-
-function hydrationStringFilter(
-  source: Record<string, unknown>,
-  key: keyof FrameworkHydrationFlowFilters,
-): object {
-  const value = source[key];
-  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
+  return stringFiltersFromRecord<FrameworkHydrationFlowFilters>(value, [
+    "hydrationStage",
+    "operation",
+    "targetKind",
+    "ownerName",
+    "methodName",
+    "targetName",
+  ]);
 }
 
 function consequenceAxisFiltersFromRecord(
   value: unknown,
 ): Pick<FrameworkRenderConsequenceFilters, "consequenceKind"> {
-  if (value === null || typeof value !== "object") {
-    return {};
-  }
-  const source = value as Record<string, unknown>;
-  return {
-    ...consequenceStringFilter(source, "consequenceKind"),
-  };
-}
-
-function consequenceStringFilter(
-  source: Record<string, unknown>,
-  key: keyof Pick<FrameworkRenderConsequenceFilters, "consequenceKind">,
-): object {
-  const value = source[key];
-  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
+  return stringFiltersFromRecord<Pick<FrameworkRenderConsequenceFilters, "consequenceKind">>(
+    value,
+    ["consequenceKind"],
+  );
 }
 
 function relationshipAxisFiltersFromRecord(
   value: unknown,
 ): Pick<FrameworkRenderingRelationshipFilters, "relation" | "mechanism" | "phase"> {
-  if (value === null || typeof value !== "object") {
-    return {};
-  }
-  const source = value as Record<string, unknown>;
-  return {
-    ...stringAxisFilter(source, "relation"),
-    ...stringAxisFilter(source, "mechanism"),
-    ...stringAxisFilter(source, "phase"),
-  };
-}
-
-function stringAxisFilter(
-  source: Record<string, unknown>,
-  key: "relation" | "mechanism" | "phase",
-): object {
-  const value = source[key];
-  return typeof value === "string" && value.length > 0 ? { [key]: value } : {};
+  return stringFiltersFromRecord<Pick<FrameworkRenderingRelationshipFilters, "relation" | "mechanism" | "phase">>(
+    value,
+    ["relation", "mechanism", "phase"],
+  );
 }

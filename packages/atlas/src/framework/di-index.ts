@@ -1,6 +1,6 @@
 import ts from "typescript";
 
-import { countBy } from "../collections.js";
+import { countBy, uniqueFirstByKey } from "../collections.js";
 import {
   declarationName,
   hasModifier,
@@ -121,6 +121,17 @@ const staticNewExpressionClassifications =
       },
     ],
     [
+      "ContainerConfiguration",
+      {
+        relation: FrameworkRelationshipRelation.ConstructsInstance,
+        mechanism: FrameworkRelationshipMechanism.ContainerChild,
+        phase: FrameworkRelationshipPhase.ContainerConstruction,
+        closure: FrameworkRelationshipClosure.Exact,
+        toKind: FrameworkRelationshipEndpointKind.Symbol,
+        toName: "ContainerConfiguration",
+      },
+    ],
+    [
       "ResolverBuilder",
       {
         relation: FrameworkRelationshipRelation.CreatesRegistration,
@@ -129,6 +140,17 @@ const staticNewExpressionClassifications =
         closure: FrameworkRelationshipClosure.Exact,
         toKind: FrameworkRelationshipEndpointKind.Symbol,
         toName: "ResolverBuilder",
+      },
+    ],
+    [
+      "ParameterizedRegistry",
+      {
+        relation: FrameworkRelationshipRelation.CreatesRegistration,
+        mechanism: FrameworkRelationshipMechanism.RegistrationFactory,
+        phase: FrameworkRelationshipPhase.Definition,
+        closure: FrameworkRelationshipClosure.Exact,
+        toKind: FrameworkRelationshipEndpointKind.Symbol,
+        toName: "ParameterizedRegistry",
       },
     ],
     [
@@ -342,7 +364,10 @@ export function readFrameworkDiIndex(
     );
     const keys = payloads.flatMap((payload) => payload.keys);
     const relationships = [
-      ...uniqueAtoms(payloads.flatMap((payload) => payload.relationships)),
+      ...uniqueFirstByKey(
+        payloads.flatMap((payload) => payload.relationships),
+        (row) => row.id,
+      ),
     ].sort(compareRelationshipAtoms);
     return {
       version: FRAMEWORK_DI_RELATIONSHIP_INDEX_VERSION,
@@ -447,8 +472,8 @@ function scanFrameworkDiPackagePayload(
   }
 
   return {
-    keys: [...uniqueDiKeys(keys)].sort(compareDiKeys),
-    relationships: [...uniqueAtoms(relationships)].sort(
+    keys: uniqueFirstByKey(keys, (row) => row.id).sort(compareDiKeys),
+    relationships: uniqueFirstByKey(relationships, (row) => row.id).sort(
       compareRelationshipAtoms,
     ),
   };
@@ -588,9 +613,9 @@ function createInterfaceBuilderAtoms(
             source,
           },
           source,
-          ...(callSite === undefined ? {} : { callSite }),
+          callSite,
           key: interfaceKey,
-          ...(value === undefined ? {} : { value }),
+          value,
           strategy,
           summary: `${interfaceKey} has createInterface default ${strategy} registration.`,
         });
@@ -659,7 +684,7 @@ function createInterfaceBuilderProviderAtom(
       providerArgument,
     ),
     source,
-    ...(callSite === undefined ? {} : { callSite }),
+    callSite,
     key: interfaceKey,
     value: providerText,
     strategy,
@@ -735,11 +760,9 @@ function relationshipAtomsForCall(
       ),
     },
     source,
-    ...(callSite === undefined ? {} : { callSite }),
+    callSite,
     ...keyAndValueFromArguments(sourceFile, call.arguments, classified),
-    ...(classified.strategy === undefined
-      ? {}
-      : { strategy: classified.strategy }),
+    strategy: classified.strategy,
     summary: summaryForRelationshipClassification(classified, sourceFile, call),
   };
   const providerAtom = registrationFactoryProviderAtomForCall(
@@ -809,7 +832,7 @@ function implementationRegisterAtomForCall(
       ),
     },
     source,
-    ...(callSite === undefined ? {} : { callSite }),
+    callSite,
     key,
     value: provider,
     strategy: FrameworkDiResolverStrategy.Singleton,
@@ -865,15 +888,13 @@ function relationshipAtomForNew(
       ),
     },
     source,
-    ...(callSite === undefined ? {} : { callSite }),
+    callSite,
     ...keyAndValueFromArguments(
       sourceFile,
       node.arguments ?? ts.factory.createNodeArray(),
       classified,
     ),
-    ...(classified.strategy === undefined
-      ? {}
-      : { strategy: classified.strategy }),
+    strategy: classified.strategy,
     summary: summaryForRelationshipClassification(classified, sourceFile, node),
   };
 }
@@ -996,7 +1017,7 @@ function registrationFactoryProviderAtomForCall(
       providerArgument,
     ),
     source,
-    ...(callSite === undefined ? {} : { callSite }),
+    callSite,
     key,
     value,
     strategy: classified.strategy,
@@ -1035,6 +1056,14 @@ function classifyCall(
   if (!includeKernelInternals) {
     return null;
   }
+  const registryRegister = classifyRegistryRegisterCall(
+    sourceProject,
+    call,
+    calleeName,
+  );
+  if (registryRegister !== null) {
+    return registryRegister;
+  }
   const resolverStoreClassification = classifyResolverStoreCall(calleeText);
   if (resolverStoreClassification !== null) {
     return resolverStoreClassification;
@@ -1046,6 +1075,31 @@ function classifyCall(
     return resolveCallClassification(sourceFile, call);
   }
   return kernelCallClassifications.get(calleeName) ?? null;
+}
+
+function classifyRegistryRegisterCall(
+  sourceProject: SourceProject,
+  call: ts.CallExpression,
+  calleeName: string,
+): FrameworkRelationshipClassification | null {
+  if (calleeName !== "register" || !ts.isPropertyAccessExpression(call.expression)) {
+    return null;
+  }
+  const receiverType = sourceProject.checker.typeToString(
+    sourceProject.checker.getTypeAtLocation(call.expression.expression),
+    call.expression.expression,
+  );
+  if (!receiverType.includes("IRegistry")) {
+    return null;
+  }
+  return {
+    relation: FrameworkRelationshipRelation.InvokesRegistry,
+    mechanism: FrameworkRelationshipMechanism.ContainerRegister,
+    phase: FrameworkRelationshipPhase.Registration,
+    closure: FrameworkRelationshipClosure.Exact,
+    toKind: FrameworkRelationshipEndpointKind.Method,
+    toName: "IRegistry.register",
+  };
 }
 
 function registrationFactoryClassification(
@@ -1434,21 +1488,16 @@ function enclosingEndpoint(
       source: sourceRangeForSourceFileNode(file.repoPath, sourceFile, declaration),
     };
   }
+  const expression = nearestExpression(node);
   return {
     kind: FrameworkRelationshipEndpointKind.Package,
     name: packageId,
     packageId,
     packageName,
     source: sourceRangeForSourceFileNode(file.repoPath, sourceFile, sourceFile),
-    ...(nearestExpression(node) === null
-      ? {}
-      : {
-          expression: readTypeScriptExpressionFact(
-            sourceProject,
-            sourceFile,
-            nearestExpression(node)!,
-          ),
-        }),
+    expression: expression === null
+      ? undefined
+      : readTypeScriptExpressionFact(sourceProject, sourceFile, expression),
   };
 }
 
@@ -1594,16 +1643,12 @@ function keyAndValueFromArguments(
   }
   if (classified.relation === FrameworkRelationshipRelation.InvokesRegistry) {
     return {
-      ...(first === undefined ? {} : { value: first.getText(sourceFile) }),
+      value: first?.getText(sourceFile),
     };
   }
   return {
-    ...(first === undefined
-      ? {}
-      : { key: expressionDisplayName(sourceFile, first) }),
-    ...(second === undefined
-      ? {}
-      : { value: expressionDisplayName(sourceFile, second) }),
+    key: first === undefined ? undefined : expressionDisplayName(sourceFile, first),
+    value: second === undefined ? undefined : expressionDisplayName(sourceFile, second),
   };
 }
 
@@ -1667,36 +1712,6 @@ function summaryForRelationshipClassification(
 ): string {
   const site = node.getText(sourceFile).slice(0, 160);
   return `${classified.relation} through ${classified.mechanism} at ${site}`;
-}
-
-function uniqueDiKeys(
-  rows: readonly FrameworkDiKeyRow[],
-): readonly FrameworkDiKeyRow[] {
-  const seen = new Set<string>();
-  const unique: FrameworkDiKeyRow[] = [];
-  for (const row of rows) {
-    if (seen.has(row.id)) {
-      continue;
-    }
-    seen.add(row.id);
-    unique.push(row);
-  }
-  return unique;
-}
-
-function uniqueAtoms(
-  rows: readonly FrameworkRelationshipAtom[],
-): readonly FrameworkRelationshipAtom[] {
-  const seen = new Set<string>();
-  const unique: FrameworkRelationshipAtom[] = [];
-  for (const row of rows) {
-    if (seen.has(row.id)) {
-      continue;
-    }
-    seen.add(row.id);
-    unique.push(row);
-  }
-  return unique;
 }
 
 function compareDiKeys(

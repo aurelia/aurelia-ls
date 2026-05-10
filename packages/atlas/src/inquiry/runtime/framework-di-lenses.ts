@@ -210,8 +210,8 @@ export function answerFrameworkDi(
     const evidence = [
       ...worldSlots.slice(0, 3).map(evidenceForDiWorldResolverSlot),
       ...resourceSlots.slice(0, 3).map(evidenceForDiWorldResourceSlot),
-      ...worldDependencies.slice(0, 3).map(evidenceForDiWorldDependency),
-      ...worldVariableDependencies.slice(0, 3).map(evidenceForDiWorldVariableDependency),
+      ...worldDependencies.slice(0, 3).map(evidenceForDiWorldLookupSupport),
+      ...worldVariableDependencies.slice(0, 3).map(evidenceForDiWorldLookupSupport),
     ];
     return createAnswer(
       inquiry,
@@ -602,22 +602,8 @@ function evidenceForDiWorldResourceSlot(
   };
 }
 
-function evidenceForDiWorldDependency(
-  row: FrameworkDiDependencyRow,
-): Evidence {
-  return {
-    id: row.id,
-    kind: EvidenceKind.DiLookup,
-    role: EvidenceRole.Support,
-    confidence: EvidenceConfidence.Strong,
-    summary: row.summary,
-    source: row.source,
-    data: row,
-  };
-}
-
-function evidenceForDiWorldVariableDependency(
-  row: FrameworkDiVariableDependencyRead,
+function evidenceForDiWorldLookupSupport(
+  row: FrameworkDiDependencyRow | FrameworkDiVariableDependencyRead,
 ): Evidence {
   return {
     id: row.id,

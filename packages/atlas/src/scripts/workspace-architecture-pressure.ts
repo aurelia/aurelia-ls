@@ -140,6 +140,7 @@ printCounts(
   appShapeBindableAnswer.value.rollup.surfaceMechanisms,
   30,
 );
+printCounts("app entrypoint mechanisms", rollup.appEntrypointMechanisms, 12);
 printCounts("manifest dependency mechanisms", rollup.manifestDependencyMechanisms, 12);
 printCounts("resource mechanisms", rollup.resourceMechanisms, 12);
 printCounts("configuration mechanisms", rollup.configurationMechanisms, 12);

@@ -32,6 +32,7 @@ The broad horizontal substrate is present but not finished end to end. The activ
 - `authoring` for semantic app-creation intent, operation, plan, capability, and verification contracts.
 - `evaluation` for static module/value evaluation and explicit open seams.
 - `resources`, `configuration`, `registration`, and `di` for Aurelia world construction.
+- `i18n` for translation-key products admitted from static i18n configuration resources.
 - `template` and `expression` for authored template/compiler surfaces and parser-owned recovery.
 - `type-system` for TypeChecker-backed projection where runtime emulation should stop.
 - `observation` for TypeChecker-backed ObserverLocator lookup, value channels, and source/target data flow.
@@ -45,6 +46,12 @@ consumers pressure these layers and then refactor horizontally when the boundari
 - Start repo work through `pnpm --filter @aurelia-ls/atlas orient`.
 - Build this package with `pnpm --filter @aurelia-ls/semantic-runtime build`.
 - Keep `auLink` narrow: framework-symbol anchors only, not product taxonomy.
+- When adding a prominent framework-shaped product concept, add or verify the corresponding `auLink` decorator while
+  the framework source is fresh in context. If the bridge view is noisy, improve Atlas role/topology classification
+  before treating the semantic-runtime concept as ungrounded.
+- Use `auLink` placement facets only when one framework symbol is deliberately modeled by several product concepts.
+  Current examples are built-in resource definitions, built-in template-controller semantics, and router runtime models;
+  same-facet duplicate placements should still be treated as split-brain.
 - Put durable semantics in product records and vocabulary, not in documentation tables.
 - Keep uncertainty explicit with open seams instead of flattening partial knowledge into resolved-looking facts.
 - Treat package-local READMEs as boundary notes. Keep them short enough that future agents actually read them.
@@ -81,6 +88,10 @@ User-directed product taste:
   agent/tree surface alongside the controller tree, so route-context and route-tree products should not pretend routed
   component loading is only controller hydration. Treat `RouteableComponent` as a convergeable framework concept, closer
   in spirit to `CustomElement` convergence, not as a loose string/class/promise field on route configs.
+- Use field-level provenance for authored TS/HTML/configuration facts whose fields can point at different spans,
+  symbols, or contributions. Framework-fixed catalog concepts such as built-in resources, built-in bindables, syntax
+  handlers, and renderers should normally rely on product/source provenance only; assigning the same framework
+  provenance handle to every built-in field creates false edit/rename precision.
 
 Current inferred engineering heuristics:
 
@@ -88,8 +99,26 @@ Current inferred engineering heuristics:
   should expose a typed product record, vocabulary term, claim, or provenance link.
 - Use Atlas pressure scripts as navigation, not as a substitute for understanding. A pressure row just chooses the
   next source span to inspect.
+- Treat repeated kernel publication envelopes as ownership pressure. Router product records already have a shared
+  helper; configuration products now have the same local primitive for the normal identity/product/materialization
+  triplet. Remaining pressure in those files should mean orchestration or domain semantics, not copy-pasted record
+  ceremony.
 - Small framework-policy tables are helpful when they make a real axis mapping explicit; observation, hydration, and
   recursive rendering classifiers need framework-semantic review before table-only cleanup.
+- When TypeChecker-backed expression, cursor, or binding-pattern code needs the same projected member/index/reference
+  access, keep that as reusable type-system substrate. Answer-specific or evaluator-local resolvers are a split-brain
+  smell unless the runtime semantics genuinely differ.
+- Resource-definition watches now close at metadata convergence time for class/method `@watch(...)`, static `watches`,
+  and definition-object `watches`. Treat runtime watcher execution, observer subscription, and lifecycle scheduling as
+  a later controller/observation problem; do not push those concerns back into resource recognition.
+- Weakly typed template member access should become diagnostic/suggestion pressure, not autocomplete guesswork.
+  Index-signature-only owners can yield a selected synthetic member for hover/explanation, but no declaration-backed
+  navigation target; cursor-info diagnostics should carry enough typed context for future code actions to recommend
+  explicit owner properties or stronger app interfaces.
+- Keep diagnostic policy explicit. Framework-grounded errors should be verified against Aurelia source and Atlas
+  `framework.errors` before they are presented as framework diagnostics. TypeChecker strictness, weak app typings, and
+  authoring suggestions can still be valuable LSP guidance, but they are product policy unless the framework itself
+  throws/logs an equivalent code path.
 
 ## Active Pressure
 
@@ -146,7 +175,7 @@ navigation, but static app-world evaluation now spends only `app-source` TS/JS a
 tool configs, package manifests, templates, and styles no longer contribute evaluator seams or app configuration by
 being present under the workspace root. Boot now also discovers package/tsconfig project frames by default when the
 host does not supply projects, excludes nested project roots from parent source discovery, and opens the default app
-from the first project with an entrypoint-signal source. Keep the classifier conservative; explicit host project
+from the first project with import/receiver-grounded Aurelia app bootstrap signals. Keep the classifier conservative; explicit host project
 selection is still the strongest answer when a monorepo has multiple app packages.
 
 The operational API boundary now lives in `api`. It opens an app by composing source admission, static module
@@ -154,6 +183,24 @@ evaluation, resource recognition, configuration admission, DI world construction
 compilation, rendering dispatch, and TypeChecker-backed scope products. Keep initial answers compact; expose opaque
 kernel handles only through explicit detail projections so the API can serve app developers and AI callers without
 forcing every query into full graph expansion.
+Authoring/LSP template analysis is now a separate opt-in lane on app opening. Hydrated app templates remain on
+`templates.resources`; standalone resource-library templates can be compiled into `templates.authoringResources`.
+`openApp({ includeAuthoringTemplates: true, authoringTemplateSourceFiles: [...] })` is the preferred editor/LSP shape:
+source-file selection keeps the authoring compiler world tied to the file being asked about. `authoringTemplateLimit`
+remains a pressure/fallback budget, not the durable API shape. This split exists because external monorepo sampling
+showed hundreds of recognized custom-element templates with no app-root compiler world, while compiling all of them at
+once can exhaust the Node heap. The durable direction is file/locus-budgeted authoring opens, not pretending every
+recognized component is part of the hydrated app topology. Source-file address lookup now indexes suffixes of admitted
+source paths, so project-relative editor paths can resolve to the same source-file addresses as workspace-relative or
+absolute host paths. `openApp({ sourceFilePath, includeAuthoringTemplates: true })` now uses the source file to select
+the owning project when the caller does not already know a monorepo project key, and uses that file as the default
+authoring template selection.
+Direct cursor-locus API calls (`templateCompletions(...)` / `templateCursorInfo(...)`) have a slightly different
+context rule: they first reuse an opened app whose compiled template owns the cursor source, even when the file itself
+belongs to a dependency/resource package. If no app contains the cursor, they open the selected project with a stable
+project-wide authoring lane instead of creating one app-world variant per cursor file. Keep that distinction; external
+app pressure showed that file-owner project selection alone can lose app context and can also duplicate shared kernel
+publication when repeated LSP queries walk different templates in one runtime instance.
 Route configuration is now a first authored router layer in that flow. `@route(...)` and `Route.configure(...)` produce
 source-backed route config products and `routes` API rows before route-context, route-tree, or route-recognizer
 emulation exists. The product is anchored to Aurelia's normalized `RouteConfig` class; `IRouteConfig` and
@@ -252,8 +299,9 @@ keeps open data-flow pressure explainable when the expression parser intentional
 instead of a canonical AST-bearing success.
 Known-invalid reverse writes are not open seams. A two-way/default binding whose source expression is a computed
 comparison is fully understood as source-to-target flow plus a runtime-unassignable target-to-source assignment. Keep
-that on `sourceAssignmentKind` / `sourceAssignmentReason` and pressure summaries instead of reporting an `OpenDataFlow`
-seam.
+that on `sourceAssignmentKind` / `sourceAssignmentReason` / `sourceAssignmentReasonKinds` and pressure summaries
+instead of reporting an `OpenDataFlow` seam. The reason-kind array is the durable policy surface; the prose reason is
+for local human explanation and may include type displays or source member names.
 Spread value bindings should not reopen runtime data flow merely because the TypeChecker source object lacks a target
 bindable property. Record that as a source-type gap; the runtime read still has a well-defined `undefined` outcome.
 External template pressure closed an interpolation/data-flow gap around class attributes whose interpolation holes contain
@@ -267,6 +315,11 @@ EOF even without an authored closing `}`. Semantic-runtime keeps the parser publ
 `template/expression-parse-projection.ts` gives binding value-channel and data-flow materializers a runtime-accepted AST
 projection for exactly that missing-close frontier. External pressure now keeps those rows as
 `interpolation-frontier-publication` companion parses while the binding data-flow itself is closed.
+Parser span rebasing is now explicit: `absoluteTextSpan(...)` is the non-null path when a relative parser span and a
+base source span are both known. Do not reintroduce nullable absolute-span fallbacks in parser publication code; if a
+span cannot be rebased, the caller has lost the parser/source ownership chain and should fix that lower-level handoff.
+`InterpolationParser` is split into scanning and an `InterpolationPublicationFrame` lifetime object so active-hole
+selection, suppressed-hole promotion, and strict/runtime projection pressure stay separate from boundary extraction.
 Unresolved globals and async/generator bodies in non-app-root resource libraries remain evaluator boundary pressure,
 not app authoring API pressure.
 The dialog configuration registry pressure also exposed a lower-level evaluator leak: configuration recognition was
@@ -306,8 +359,11 @@ binding emulation.
 Router-resource dynamic binding pressure belongs in the binding-source substrate, not in router-specific expression
 guessing. `binding-source-value-evaluator.ts` now lets router instruction materialization ask the binding layer for a
 static string value, including guarded local getter reads over evaluator-known view-model classes. If the getter depends
-on host environment state, the router seam should remain open with that lower-level reason attached rather than being
-forced into either an internal route or external-link bucket.
+on host environment state, the router seam should remain open with typed lower-level reason kinds attached rather than
+being forced into either an internal route or external-link bucket. Open seam pressure should aggregate those reason
+kinds, not parse summary prose. If the blocked value comes from a runtime/local scope slot, the router seam should carry
+the binding-source slot reason alongside `router-instruction-needs-static-value`; do not hide that under a generic
+router expression failure.
 Host environment and external module reads are now explicit evaluator boundary values. The old object-level
 missing-property reason blurred host state with ordinary object fallbacks, and external package imports blurred
 dependency boundaries with missing lexical bindings. The durable rule is: boundary objects/values propagate through
@@ -359,10 +415,13 @@ depth rather than returning silently empty rows. The next inquiry-algebra pressu
 large roots still pay TypeChecker construction, resource recognition, and static evaluation when a product question may
 only need a narrower resource/router slice.
 
-When `product.architecture` reports duplicate helpers, treat the row as a question, not a quota. Shared primitives that
-now have one home include kernel claim filtering/nullability, attribute fallback casing, instruction-kind vocabulary
-mapping, generic first-seen de-dupe, TypeScript declaration names/static modifier detection, whitespace tokenization,
-and checker type-shape classification. Catalog-specific summaries intentionally remain local until there is a real
+When `product.architecture` reports duplicate helpers, treat the row as a question, not a quota. The pressure includes
+both exact body fingerprints and AST/control-flow body-shape fingerprints, so rows can mean exact duplication, equivalent
+control-flow shape, or only same-name conceptual pressure. Shared primitives that now have one home include kernel claim
+filtering/nullability, attribute fallback casing, instruction-kind vocabulary mapping, generic first-seen de-dupe,
+TypeScript declaration names/static modifier detection, whitespace tokenization, checker type-shape classification,
+HTML tag/attribute helpers, module specifier policy, interface-key recognition, bindable attribute fallback, and
+registration factory argument/name reading. Catalog-specific summaries intentionally remain local until there is a real
 shared message model.
 
 Resource-recognition performance pressure can be a proxy for lower-level TypeChecker provenance cost. A large-root
@@ -371,18 +430,148 @@ was checker type projection scanning all store addresses for every projected mem
 a source-file-address suffix index via `readBestSourceFileAddressForFileName(...)`, so declaration provenance lookup is
 indexed and shared by every checker projection lane. If this pressure returns, profile below the resource-recognition
 label before tuning recognizers or weakening source provenance.
+Checker-backed declaration provenance also needs to handle Program files that were not boot-admitted as app sources.
+`type-system/declaration-source.ts` owns that boundary: it first reuses admitted source-file addresses and otherwise
+materializes a Program-source file address for declaration navigation. Keep this path source/provenance-oriented only;
+do not treat Program-only declaration files as newly discovered app code.
 
 Mixed-monorepo pressure should be separated into workspace discovery, project-shape triage, app-world construction, and
-all-project stress. `SemanticRuntimeSummary` now exposes per-project source-role counts, likely-entrypoint filename
+all-project stress. `SemanticRuntimeSummary` now exposes per-project source-role counts, Aurelia app entrypoint
 signals, and a formal cheap `SemanticProjectShapeKind`. The shape policy first counts manifest dependencies on
 `aurelia` / `@aurelia/*`, then parses app-source files for Aurelia facade import/default-import/namespace-import,
 constructor, `.register(...)`, `.app(...)`, and `.enhance(...)` signals. `openApp()` without a project key prefers `aurelia-app` projects
-before falling back to filename/source heuristics. Use these rows to choose whether a caller wants app entrypoints,
+before falling back to a project with admitted app source and then the first booted project. Use these rows to choose whether a caller wants app entrypoints,
 resource-library packages, Aurelia packages without app facade evidence, or a full package scan before paying
 TypeChecker/static-evaluation/app-world cost for every project. The stress script may still open every discovered
 project because it is intentionally pressure-oriented; product APIs should make the scope explicit.
-`SEMANTIC_RUNTIME_PROJECT_SHAPES` lets pressure runs select a subset of shape kinds when the question is app-like
-topology rather than all-package stress.
+`SEMANTIC_RUNTIME_PROJECT_SHAPES` lets pressure runs select a subset of exact shape kinds when the question is app-like
+topology rather than all-package stress. The accepted tokens are the runtime enum values: `aurelia-app`,
+`aurelia-resource-library`, `aurelia-package`, and `non-aurelia`.
+
+Cursor/LSP pressure has its own script now: `pressure:cursor-loci`. It samples bounded template cursor positions and
+prints aggregate site kinds, outcomes, completion pressure classes, value-site kinds, candidate lanes, public API
+answer mismatches, cursor-info source coverage, focused selected-member coverage, hover/navigation targets, diagnostic
+signals, compact LSP envelopes, value-domain gaps, and bucketed missing-input reasons without paths, source text, or candidate names. Use it with
+`SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS` for external roots when a question is about hovers/completion/navigation
+pressure rather than whole app topology. Current sampled behavior is: generic expression scopes, binding-command names,
+resource names, bindable names, expression member owners, and parent repeat scopes are reachable; plain platform
+attribute values can remain empty misses; finite checker-backed static bindable domains offer literal
+`attribute-value` candidates; open-ended checker-backed scalar bindables are expected-empty completion sites; inline
+multi-binding custom-attribute values can offer bindable segment names from the resource definition; and router
+`load` primary values now offer `router-route` candidates from typed `RouteConfig` product details threaded through
+the completion query. Plugin-style segment values such as table sort keys now report bindable-domain pressure when the
+inner segment resolves to a bindable, which keeps untyped plugin semantics separate from whole-custom-attribute grammar
+gaps.
+Static i18n resources now have their own product lane: `I18nConfiguration` `initOptions.resources` contributions can
+materialize `I18nTranslationKey` products, and `t="..."` value completion spends those product handles through the same
+cursor adapter as router/resource/scope candidates. Keep this as configuration-owned i18n substrate, not an answer-local
+string scan. Imported JSON key spans use the evaluator's asset-module source mapping so i18n key products can point at
+authored JSON property spans rather than the generated default-export wrapper.
+Built-in template-controller primary values now read the framework-shaped semantics profile before reporting a domain
+gap. Open primary values such as `case="..."` are expected-empty completion sites because the framework accepts broad
+runtime values; secondary bindables and custom/plugin template-controller grammars should still surface value-domain
+pressure until their grammar or checker-backed candidate lane is modeled.
+Router-resource instructions now resolve their owning `RouteContext` from modeled controller/container ancestry before
+falling back to route-config component-definition matching. This matches `load` / `href` resolving `IContextRouter` from
+the custom-attribute controller container chain and prevents ordinary child components inside routed components from
+being misclassified as context-less router-resource sites. Remaining router-resource seams after that are static-value
+or host-environment boundaries, not route-context ownership gaps.
+For `href`, the open seam must also preserve the framework's externality gate. `HrefCustomAttribute.valueChanged(...)`
+calls `_resolveIsExternal(...)` before it creates viewport instructions; static external URLs and explicit
+`external`/`data-external` markers should not publish router instruction products. Dynamic `href` values that cannot be
+proven external or internal now carry `router-href-externality-open` beside the static-value and binding-source reasons.
+Listener expression scopes now model Aurelia's transient `$event` override-context slot before the expression is
+evaluated. Member-owner completion uses an offset-aware evaluator walk, so a listener expression can surface event
+members through `$event.foo` and through callback parameters such as `(e) => e.foo()` without adding a second
+completion path.
+Expression evaluation now accepts a contextual target type from binding data-flow and template completion value sites.
+This lets function-valued bindables type arrow parameters through the target callable signature when that signature is
+available. The sampled external callback pressure did not drop because those app/plugin surfaces expose `unknown`,
+`any`, or index-signature-only member owners; that is useful app typing pressure, not a reason to invent completion
+members.
+The public template-completion API now reselects compiled resources by matching the cursor against the resource's
+authored HTML span set rather than only the template-source carrier span. Keep that shape: exact cursor ownership can
+live on HTML nodes, attributes, values, or generated template-address authored spans depending on how the template was
+admitted.
+The public `TemplateCursorInfo` API shares that cursor-selection path but returns the semantic site under the cursor
+instead of candidates. External cursor pressure now compares both completion answers and cursor-info site/value-site
+classification and source-bearing target coverage. It also derives hover targets, navigation targets, diagnostic
+signals, and compact LSP envelopes from those same cursor-info rows, giving future hover/definition/diagnostic work a
+shared footing without a separate source scan.
+Cursor-info also carries the selected bindable when classification or the active value site resolves one, so future
+definition/hover answers can target the bindable declaration rather than only the owning resource definition.
+Weak member-owner diagnostics now carry the owner type projection origin. The sampled external app currently buckets
+weak owner diagnostics as TypeChecker-origin app typing pressure rather than synthetic template-semantics pressure; keep
+that distinction visible in pressure output before deciding whether the next fix belongs in app guidance, plugin
+typings, or semantic-runtime scope construction.
+Diagnostic suggestions now also carry an action target. External pressure currently splits weak owner repairs as
+`owner-type:source` and assignment strictness repairs as `scope-slot:source`, which is the right asymmetry: if the
+TypeChecker owner exists, future code actions can target that owner type; if the write created a scope name before a
+declared member exists, the best honest target is the authored scope-slot expression, not a fabricated owner
+declaration.
+Cursor-info diagnostics must stay aligned with file/app diagnostics. Weak owner diagnostics come from the completion
+cursor context; binding assignment diagnostics come from the observation data-flow row whose authored source span
+contains the cursor. The cursor pressure diagnostic-probe lane reads enough file diagnostics to preserve rare classes
+and samples by diagnostic pressure class before generic expression loci, so do not regress it to first-N source-order
+sampling.
+
+Runtime target-to-source assignments can create scope names that do not exist on the declared view-model surface. The
+modeled example is a two-way custom-attribute bindable assigning to a fresh scope name and later template expressions
+reading it. `template-controller-scope-materializer.ts` now publishes a runtime-only binding-context slot after the
+assigning instruction so later scopes see the name. That slot can retain the target bindable TypeMember as a type
+carrier, allowing repeat locals and member hovers/completions to hydrate through the TypeChecker when the bindable is
+typed. `binding-data-flow-materializer.ts` still reports TypeScript strictness for the original write expression instead
+of pretending there is an authored TypeChecker member. This is an Aurelia scope/assignment timing rule, not
+plugin-specific local injection; untyped plugin bindables should surface as weak-type pressure rather than missing-slot
+pressure.
+Cursor-pressure classes now keep that distinction visible. `expression-member-owner-type:any`,
+`expression-member-owner-type:index-signature-only`, and `expression-member-owner-type:no-members` still flow through
+public `missingInputs`, but sampled expression-member sites with no candidates are bucketed as `weak-type:*` instead of
+`missing-input:*`. Do not close those rows by synthesizing members; either improve the app/plugin typings or design a
+separate value-shape bridge that is explicit about where finite members came from.
+`expression-member-owner-type:missing-slot-type` is the same family at an earlier boundary: the member name is authored,
+but the owning template scope slot has no TypeChecker-backed type. It should surface as a diagnostic with
+`declare-scope-slot-type` guidance, while the deeper fix remains scope/type projection rather than answer-local member
+guessing.
+
+File/app diagnostics are now a first batch locus over that same cursor substrate. `TemplateDiagnostics` walks
+parser-owned stable member-name spans for compiled templates, asks cursor-info at those source offsets, and returns
+weak-owner diagnostic rows with exact authored source ranges. The current materializer is deliberately an aggregation
+over cursor facts rather than a second source scan; if diagnostics start needing facts that cursor-info cannot express,
+extend the shared selection/value-site substrate first. Direct file diagnostics also exposed an app-context rule:
+runtime instances can be reused across app-scope and LSP-scope queries, so source-file admission must be idempotent and
+direct cursor/file APIs should reuse an opened app when its compiled template already owns the requested source file.
+Nested app pressure added a source-root rule for that batch scan: admitted source-file addresses are workspace-relative,
+even when the selected app project is below the workspace and even when the compiled template came from a source-shipped
+dependency package. Batch diagnostics should read template text through workspace-root source-address semantics;
+resolving those addresses relative to the app project makes cursor-info and file/app diagnostics diverge.
+
+Resource-library app pressure now uses source-file-selected authoring templates too. `pressure:app-api` asks bounded
+resource-library projects for admitted template source files and opens those through the authoring lane, so the same
+diagnostics/value-channel/open-seam substrate is exercised without pretending the package has an app runtime topology.
+Public binding projections must use that same combined app-runtime plus authoring template basis. A monorepo pressure
+pass caught `TemplateDiagnostics` counting authoring binding strictness rows that `BindingDataFlows` did not expose;
+the projections now share the same basis so diagnostic and data-flow reason counts compare the same template world.
+Binding assignment diagnostics distinguish TypeScript strictness from runtime no-op assignment. Framework source shows
+`astAssign` falls through for unsupported assignment target shapes outside the explicit throw cases, so
+`runtime-expression-unassignable` is authoring guidance (`binding-source-assignment-runtime-noop` plus
+`use-assignable-expression`) rather than a framework-grounded error.
+Diagnostic rows now carry `diagnosticAuthority` and `frameworkErrorCode`. The existing weak-owner and TypeScript
+strictness rows are `semantic-authoring-policy`; runtime no-op assignment is `framework-runtime-behavior` with no
+framework error code. Do not add `framework-error-code` diagnostics without first checking Aurelia source through Atlas
+`framework.errors` and carrying the exact code.
+The current resource-library pressure exposed a dynamic `SelectValueObserver` multi-select channel; that is modeled as a
+typed `binding-value-channel-dynamic-select-multiple` open reason on the value-channel seam and preserved by dependent
+data-flow seams.
+Public plugin pressure then exposed the sibling single-select case: a select with no static option domain should report
+`binding-value-channel-select-option-domain-open`, not a summary-only seam. Cursor-pressure public API comparisons are
+now project-scoped in multi-project runs so cache/app-context ambiguity does not masquerade as candidate drift.
+The 2026-05-10 clean-room external app and mixed-monorepo samples still show stable public API behavior:
+app/resource-library shape triage opens bounded app-world emissions, router/controller/resource products materialize,
+unresolved module edges stay closed, cursor completions and cursor-info agree, and public cursor/file calls report no
+exception or template-resource miss classes. Treat remaining rows as typed product pressure: weak owner diagnostics,
+TypeScript assignment strictness, expected-empty plain-attribute interpolation completions, and explicit open seams such
+as dynamic select-multiple value channels or dynamic router-href externality.
 
 TypeSystem construction has its own profile under app pressure. On large mixed roots, TS `program` creation dominates
 the checker phase, with checker creation second and project-options discovery much smaller. Treat future TypeSystem
@@ -391,26 +580,82 @@ cost; do not hide it under resource/template/router phase labels.
 
 ### Deliberate Cleanup Pressure
 
-The next real product-architecture cleanup pressure is not tiny and should not be treated as tail-end polish.
-`pressure:product-architecture` currently points at a cluster that needs a deliberate pass:
+The default `pressure:product-architecture` function-pressure lane is currently clear. Treat that as a clean navigation
+baseline, not as a claim that the substrate is finished. The remaining deliberate pressure is mostly large-class,
+cross-area, and product-flow topology:
 
-- `di/world-constructor.ts` owns real world-construction semantics, so size alone is not the smell. The pressure is
-  whether framework registration spending, resolver effects, registry/AppTask/callback effects, and lifecycle output
-  still have one coherent world-constructor model or whether some subproducts should be split along Aurelia-facing
-  interfaces without weakening DI provenance.
+- Kernel-store publication is now visible through Atlas as a product-flow lane, not just through vocabulary tables.
+  Use the KernelStoreRecord module/owner hot spots before opening source: they show which emitters construct the most
+  low-level records, which vocabulary expressions are direct versus delegated, and where KernelStoreBatch labels define
+  pass boundaries. Treat this as a guide for finding product-flow ownership, not as a mandate to reduce record count.
+- `di/world-constructor.ts` owns real world-construction semantics, so size alone is not the smell. Framework resolver
+  effects now share the source resolver-admission publication path and effect tables have moved out to
+  `di/framework-registration-effects.ts`; remaining pressure is whether registry/AppTask/callback effects and lifecycle
+  output still have one coherent world-constructor model or whether some subproducts should be split along
+  Aurelia-facing interfaces without weakening DI provenance.
 - `router/route-tree-materialization.ts` sits on the route-context, viewport-agent, recognizer, instruction, and
-  component-agent handoff. Any cleanup has to preserve exact route-node provenance and framework-shaped `RouteTree` /
-  `RouteNode` semantics; do not flatten this into app-specific navigation shortcuts.
-- The expression scanner, interpolation parser, and completed-input iterator corridor are parser substrate, not incidental
-  helper code. Refactors here should preserve parser ownership, boundary/frontier semantics, template-literal-aware
-  lookahead, and exact source slices before trying to reduce body size.
-- Repeated helpers such as `summaryForFrameworkKind`, `observationLocalKey`, `encodeLocal`, `catalogKey`,
-  `catalogInputsForAdmission`, and `expressionProductHandlesForInstruction` are questions about identity,
-  provenance, catalog row modeling, and local-key policy. Some duplication may be lane-specific vocabulary; some may
-  want a shared primitive. Inspect the owning products first instead of extracting a generic utility by name alone.
+  component-agent handoff. Router product record boilerplate now lives in `router/router-product-records.ts`; remaining
+  cleanup has to preserve exact route-node provenance and framework-shaped `RouteTree` / `RouteNode` semantics; do not
+  flatten this into app-specific navigation shortcuts. Transition-tree construction now runs through a dedicated frame:
+  missing instruction-tree / route-context / route-config products are treated as internal invariant failures, while a
+  framework redirect handoff that cannot yet be compiled into its target tree is recorded as an explicit router open
+  seam.
+- The expression scanner and completed-input iterator corridor are parser substrate, not incidental helper code. The
+  interpolation parser has been split between boundary extraction and a publication frame, and scanner punctuation/operator
+  recognition now dispatches through token-family helpers instead of one giant switch. Future parser refactors should
+  preserve parser ownership, boundary/frontier semantics, template-literal-aware lookahead, active-hole selection, token
+  family law, and exact source slices before trying to reduce body size.
+- The default duplicate-helper lane is currently clean. The last pass resolved it by moving real concepts downward:
+  instruction expression-handle extraction into `instruction-ir.ts`, element/attribute owner lookup and element lookup
+  naming into `html-ir.ts`, source-span containment into `kernel/address.ts`, type-reference equality into
+  `type-shape.ts`, and arbitrary local-key component encoding into `kernel/local-key.ts`. Catalog group/variant locals
+  should keep using the central local-key helpers so framework package ids, groups, aliases, and variants are encoded
+  at the boundary instead of hand-joined in individual catalog materializers. Keep treating future duplicate helper rows
+  as ownership questions first, not as generic utility extraction prompts.
+- The compact function-pressure cleanup that followed split resource catalog publication, API source-reference
+  expansion, registration observation product emission, resource source-span selection, and configuration
+  sequence/callback/open-seam publication into named phases. If those rows return, inspect whether a new caller is
+  rebuilding product/source/identity envelopes locally before adding another local helper.
+- Runtime rendering now separates renderer-product publication from render-loop/controller orchestration.
+  `runtime-rendered-instruction-recorder.ts` owns renderer-produced runtime bindings, target operations, scope effects,
+  and binding render contexts. `runtime-rendering-materializer.ts` still owns controller, synthetic-view, view-factory,
+  child-container, and render-host orchestration. If more runtime-rendering pressure appears, split along those
+  framework-shaped responsibilities rather than moving record constructors around by file size alone.
+- Template API cursor/file readers now delegate weak-owner and binding-assignment diagnostic decisions to
+  `api/template-diagnostic-policy.ts`. Keep source selection and cursor context in the API reader, but keep severity,
+  diagnostic authority, framework error-code attachment, suggestion/action-target routing, and product-policy wording in
+  that policy module until diagnostics become a deeper materialized product.
 
 Treat that cluster as a future substrate pass across DI, router, parser/evaluator boundaries, and product catalog
 identity.
+
+Expression type evaluation now carries a shared per-template-runtime-analysis cache across scope construction,
+binding value-channel, and binding data-flow materializers. App pressure prints aggregate `expression type cache`
+entries/hits/misses/writes plus semantic buckets for binding expressions, member owners, iterator locals, template
+controllers, and contextual keys. If binding observation cost rises again, first inspect whether a materializer is
+bypassing the shared cache or introducing a downstream role into the local key; expression type projections should be
+keyed by modeled scope plus expression product, not by the materializer lane that asked. Contextual target types should
+only enter the cache key for expression kinds whose evaluator semantics actually consume them. At the moment that means
+arrow-function parameter projection, including paren-wrapped arrows. Do not pay contextual cache cardinality for
+ordinary member/value expressions until the evaluator grows a real contextual semantics for them.
+
+Binding data-flow source writeability is demand-driven by flow direction. Source-to-target bindings still project source
+kind/name/type, but they should not ask whether the source expression is assignable because no target-to-source
+`astAssign` can happen. This matters for member expressions: owner-type writeability checks are useful strictness policy
+for two-way/from-view flows, but they are wasted TypeChecker work for one-way rendering. If future source-assignment
+pressure changes, verify the direction gate before widening assignment policy.
+
+DI world construction now uses a shared resolver-publication primitive for both source resolver admissions and framework
+resolver effects. Framework registration effect tables live in `di/framework-registration-effects.ts`; keep adding
+capability-keyed framework effects there rather than inlining them into `DiWorldConstructor`.
+
+App-world project construction now runs through a construction frame. The frame has a real lifetime, owns timing phase
+state, and gives each project phase a named handoff method. Preserve that shape if adding more router, SSR/SSG, or AOT
+phases; do not grow `constructAndEmit` back into a single long dependency chain.
+
+Router product record emission is shared by route-instruction and route-tree materialization through
+`router/router-product-records.ts`. Use that primitive for RouterIdentity + materialized-product + materialization-record
+bundles unless a router product needs materially different ownership or provenance semantics.
 
 ## Template Compiler Emulation Notes
 

@@ -6,6 +6,7 @@ import {
   FrameworkRelationshipRelation,
   type FrameworkRelationshipEndpoint,
 } from "../../framework/relationships.js";
+import { uniqueValues } from "../../collections.js";
 import type { SourceRange } from "../locus.js";
 import type {
   FrameworkRouterFlowRow,
@@ -45,7 +46,7 @@ export function routerRelationshipsFromFlowRows(
   filters: FrameworkRouterRelationshipFilters = {},
 ): readonly FrameworkRouterRelationshipRow[] {
   return rows
-    .map(routerRelationshipFromFlowRow)
+    .flatMap(routerRelationshipsFromFlowRow)
     .filter((row) => routerRelationshipMatches(row, filters))
     .sort(compareRouterRelationshipRows);
 }
@@ -71,14 +72,23 @@ export function routerRelationshipsFromRouteRecognizerMechanicRows(
     .sort(compareRouterRelationshipRows);
 }
 
-function routerRelationshipFromFlowRow(
+function routerRelationshipsFromFlowRow(
   row: FrameworkRouterFlowRow,
+): readonly FrameworkRouterRelationshipRow[] {
+  return routerFlowTargets(row).map((target) =>
+    routerRelationshipFromFlowTarget(row, target),
+  );
+}
+
+function routerRelationshipFromFlowTarget(
+  row: FrameworkRouterFlowRow,
+  target: string,
 ): FrameworkRouterRelationshipRow {
-  const relation = routerRelationForFlow(row);
+  const relation = routerRelationForFlow(row, target);
   const mechanism = routerMechanismForStage(row.stage);
   const phase = routerPhaseForFlow(row);
   return {
-    id: `${row.id}:router-relationship:${relation}`,
+    id: `${row.id}:router-relationship:${relation}:${target}`,
     family: FrameworkRelationshipFamily.Router,
     relation,
     mechanism,
@@ -88,10 +98,10 @@ function routerRelationshipFromFlowRow(
     flowStage: row.stage,
     descriptorKey: row.descriptorKey,
     from: routerMethodEndpoint(row),
-    to: routerTargetEndpoint(row),
+    to: routerTargetEndpoint(row, target),
     source: row.source,
     sourceRowId: row.id,
-    summary: `${row.actor} ${relation} ${row.target} during ${row.stage}: ${row.summary}`,
+    summary: `${row.actor} ${relation} ${target} during ${row.stage}: ${row.summary}`,
   };
 }
 
@@ -119,7 +129,11 @@ function routerRelationshipFromRouteRecognizerMechanicRow(
 
 function routerRelationForFlow(
   row: FrameworkRouterFlowRow,
+  target: string,
 ): FrameworkRelationshipRelation {
+  if (target === "ViewportRequest") {
+    return FrameworkRelationshipRelation.ProducesViewportInstruction;
+  }
   switch (row.stage) {
     case "configuration-registration":
       return FrameworkRelationshipRelation.ConfiguresRouter;
@@ -274,10 +288,22 @@ function routerMethodEndpoint(row: FrameworkRouterFlowRow): FrameworkRelationshi
   };
 }
 
-function routerTargetEndpoint(row: FrameworkRouterFlowRow): FrameworkRelationshipEndpoint {
+function routerFlowTargets(row: FrameworkRouterFlowRow): readonly string[] {
+  return uniqueValues(
+    row.target
+      .split("/")
+      .map((target) => target.trim())
+      .filter((target) => target.length > 0),
+  );
+}
+
+function routerTargetEndpoint(
+  row: FrameworkRouterFlowRow,
+  target: string,
+): FrameworkRelationshipEndpoint {
   return {
-    kind: routerTargetEndpointKind(row.target),
-    name: row.target,
+    kind: routerTargetEndpointKind(target),
+    name: target,
     packageId: row.packageId,
     packageName: row.packageName,
   };

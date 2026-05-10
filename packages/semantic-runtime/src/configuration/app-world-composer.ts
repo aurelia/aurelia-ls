@@ -127,44 +127,76 @@ export class AureliaAppWorldComposer {
     configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
     resourceDefinitions: ResourceDefinitionIndex | null,
   ): readonly TemplateCompilerWorldEmission[] {
-    const containersByProduct = new Map(configuration.containers.map((container) => [container.productHandle, container]));
-    const registryBodyIndex = buildRegistryBodyStepIndex(this.store, configuration);
-    const compilerWorlds: TemplateCompilerWorldEmission[] = [];
+    return new AppRootCompilerWorldFrame(
+      this.store,
+      this.compilerWorldMaterializer,
+      this.resourceVisibilityComposer,
+      configuration,
+      diWorld,
+      configuredSyntax,
+      configuredResources,
+      configuredRenderers,
+      resourceDefinitions,
+    ).construct();
+  }
+}
 
-    for (const appRoot of configuration.appRoots) {
-      const container = containerForAppRoot(appRoot, containersByProduct);
-      if (container == null) {
-        continue;
-      }
-      const admissions = registrationAdmissionsForAppRoot(appRoot, configuration, registryBodyIndex);
-      if (!admitsRuntimeCompilerServices(admissions)) {
-        continue;
-      }
-      const syntax = syntaxForAdmissions(admissions, configuredSyntax);
-      const runtimeRenderers = runtimeRenderersForAdmissions(admissions, configuredRenderers);
-      const resources = this.resourceVisibilityComposer.construct(
-        container,
-        diWorld,
-        configuredResources,
-        resourceDefinitions,
-        appRoot,
-      );
+class AppRootCompilerWorldFrame {
+  private readonly containersByProduct: ReadonlyMap<Container['productHandle'], Container>;
+  private readonly registryBodyIndex: RegistryBodyStepIndex;
 
-      compilerWorlds.push(this.compilerWorldMaterializer.construct(new TemplateCompilerWorldConstructionRequest(
-        `app-root:${appRoot.productHandle}`,
-        TemplateCompilerWorldKind.AppRoot,
-        container,
-        appRoot,
-        resources,
-        syntax.attributePatterns,
-        syntax.bindingCommands,
-        runtimeRenderers,
-        TemplateResourceVisibilityKind.Configured,
-        appRoot.sourceAddressHandle,
-      )));
+  constructor(
+    store: KernelStore,
+    private readonly compilerWorldMaterializer: TemplateCompilerWorldMaterializer,
+    private readonly resourceVisibilityComposer: AppWorldResourceVisibilityComposer,
+    private readonly configuration: ConfigurationKernelEmission,
+    private readonly diWorld: DiWorldConstructionEmission,
+    private readonly configuredSyntax: ConfiguredBuiltInSyntaxCatalogEmission,
+    private readonly configuredResources: ConfiguredBuiltInResourceCatalogEmission,
+    private readonly configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
+    private readonly resourceDefinitions: ResourceDefinitionIndex | null,
+  ) {
+    this.containersByProduct = new Map(configuration.containers.map((container) => [container.productHandle, container]));
+    this.registryBodyIndex = buildRegistryBodyStepIndex(store, configuration);
+  }
+
+  construct(): readonly TemplateCompilerWorldEmission[] {
+    return this.configuration.appRoots.flatMap((appRoot) => {
+      const compilerWorld = this.constructForAppRoot(appRoot);
+      return compilerWorld == null ? [] : [compilerWorld];
+    });
+  }
+
+  private constructForAppRoot(appRoot: AppRoot): TemplateCompilerWorldEmission | null {
+    const container = containerForAppRoot(appRoot, this.containersByProduct);
+    if (container == null) {
+      return null;
     }
-
-    return compilerWorlds;
+    const admissions = registrationAdmissionsForAppRoot(appRoot, this.configuration, this.registryBodyIndex);
+    if (!admitsRuntimeCompilerServices(admissions)) {
+      return null;
+    }
+    const syntax = syntaxForAdmissions(admissions, this.configuredSyntax);
+    const runtimeRenderers = runtimeRenderersForAdmissions(admissions, this.configuredRenderers);
+    const resources = this.resourceVisibilityComposer.construct(
+      container,
+      this.diWorld,
+      this.configuredResources,
+      this.resourceDefinitions,
+      appRoot,
+    );
+    return this.compilerWorldMaterializer.construct(new TemplateCompilerWorldConstructionRequest(
+      `app-root:${appRoot.productHandle}`,
+      TemplateCompilerWorldKind.AppRoot,
+      container,
+      appRoot,
+      resources,
+      syntax.attributePatterns,
+      syntax.bindingCommands,
+      runtimeRenderers,
+      TemplateResourceVisibilityKind.Configured,
+      appRoot.sourceAddressHandle,
+    ));
   }
 }
 

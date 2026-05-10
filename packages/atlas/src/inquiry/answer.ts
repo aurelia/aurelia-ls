@@ -95,11 +95,11 @@ export function createAnswer<TValue, TInquiry extends Inquiry>(
     inquiry,
     outcome,
     summary,
-    ...(options.value === undefined ? {} : { value: options.value }),
+    value: options.value,
     basis: options.basis ?? [UnsupportedBasis],
     evidence: options.evidence ?? [],
     openSeams: options.openSeams ?? [],
-    ...(options.page === undefined ? {} : { page: options.page }),
+    page: options.page,
     continuations: options.continuations ?? [],
   };
 }

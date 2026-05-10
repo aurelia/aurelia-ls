@@ -16,6 +16,30 @@ export interface OneBasedSourceReference {
   readonly endCharacter: number;
 }
 
+export interface SourceFileSpanCarrier {
+  readonly file: {
+    readonly repoPath: string;
+  };
+  readonly span: {
+    readonly startLine: number;
+    readonly startCharacter: number;
+    readonly endLine: number;
+    readonly endCharacter: number;
+  };
+}
+
+export interface OptionalSourceFileSpanCarrier {
+  readonly file?: {
+    readonly repoPath: string;
+  };
+  readonly span?: {
+    readonly startLine: number;
+    readonly startCharacter: number;
+    readonly endLine: number;
+    readonly endCharacter: number;
+  };
+}
+
 export function requiredSourceRangeForNode(
   sourceProject: SourceProject,
   node: ts.Node,
@@ -47,6 +71,19 @@ export function sourceRangeFromFileSpan(
   };
 }
 
+export function sourceRangeForFileSpanCarrier(carrier: SourceFileSpanCarrier): SourceRange {
+  return sourceRangeFromFileSpan(carrier.file.repoPath, carrier.span);
+}
+
+export function sourceRangeForOptionalFileSpanCarrier(
+  carrier: OptionalSourceFileSpanCarrier | undefined,
+): SourceRange | null {
+  if (carrier?.file === undefined || carrier.span === undefined) {
+    return null;
+  }
+  return sourceRangeFromFileSpan(carrier.file.repoPath, carrier.span);
+}
+
 export function sourceRangeForSourceFileNode(
   filePath: string,
   sourceFile: ts.SourceFile,
@@ -58,10 +95,7 @@ export function sourceRangeForSourceFileNode(
 export function sourceRangeForTarget(
   target: SourceTargetRow | undefined,
 ): SourceRange | null {
-  if (target?.file === undefined || target.span === undefined) {
-    return null;
-  }
-  return sourceRangeFromFileSpan(target.file.repoPath, target.span);
+  return sourceRangeForOptionalFileSpanCarrier(target);
 }
 
 export function sourceReferenceForNode(

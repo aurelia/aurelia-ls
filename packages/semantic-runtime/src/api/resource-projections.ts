@@ -4,6 +4,12 @@ import type { BindableDefinition } from '../resources/bindable-definition.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { ResourceDependencyReference } from '../resources/resource-reference.js';
+import type {
+  WatchCallbackDefinition,
+  WatchDefinition,
+  WatchExpressionDefinition,
+  WatchPropertyKeyDefinition,
+} from '../resources/watch-definition.js';
 import {
   describeAddress,
 } from './source-reference.js';
@@ -13,6 +19,7 @@ import type {
   SemanticResourceDefinitionPatternRow,
   SemanticResourceDefinitionRow,
   SemanticResourceDefinitionTemplateRow,
+  SemanticResourceDefinitionWatchRow,
 } from './contracts.js';
 
 export function readResourceDefinitionRows(
@@ -31,6 +38,7 @@ export function readResourceDefinitionRows(
       captureKind: 'capture' in definition ? definition.capture.kind : null,
       template: 'template' in definition ? templateRow(definition.template, store) : null,
       bindables: 'bindables' in definition ? bindableRows(definition.bindables, store) : [],
+      watches: 'watches' in definition ? watchRows(definition.watches, store) : [],
       dependencies: 'dependencies' in definition ? dependencyRows(definition.dependencies) : [],
       isTemplateController: 'isTemplateController' in definition ? definition.isTemplateController : null,
       containerStrategy: 'containerStrategy' in definition ? definition.containerStrategy : null,
@@ -110,6 +118,42 @@ function bindableRows(
       source: describeAddress(store, bindable.sourceAddressHandle),
     }))
     .sort((left, right) => left.name.localeCompare(right.name));
+}
+
+function watchRows(
+  watches: readonly WatchDefinition[],
+  store: KernelStore,
+): readonly SemanticResourceDefinitionWatchRow[] {
+  return watches
+    .map((watch): SemanticResourceDefinitionWatchRow => ({
+      expressionKind: watch.expression.kind,
+      expressionPropertyKeyKind: watch.expression.propertyKey?.kind ?? null,
+      expressionPropertyKeyText: watch.expression.propertyKey?.text ?? null,
+      expressionSource: watchExpressionSource(watch.expression, store),
+      callbackKind: watch.callback.kind,
+      callbackPropertyKeyKind: watch.callback.methodName?.kind ?? null,
+      callbackPropertyKeyText: watch.callback.methodName?.text ?? null,
+      callbackSource: watchCallbackSource(watch.callback, store),
+      flush: watch.flush,
+    }))
+    .sort((left, right) =>
+      `${left.expressionKind}:${left.expressionPropertyKeyText ?? ''}:${left.callbackKind}:${left.callbackPropertyKeyText ?? ''}:${left.flush}`
+        .localeCompare(`${right.expressionKind}:${right.expressionPropertyKeyText ?? ''}:${right.callbackKind}:${right.callbackPropertyKeyText ?? ''}:${right.flush}`)
+    );
+}
+
+function watchExpressionSource(
+  expression: WatchExpressionDefinition,
+  store: KernelStore,
+) {
+  return describeAddress(store, expression.propertyKey?.target?.addressHandle ?? expression.target?.addressHandle ?? null);
+}
+
+function watchCallbackSource(
+  callback: WatchCallbackDefinition,
+  store: KernelStore,
+) {
+  return describeAddress(store, callback.methodName?.target?.addressHandle ?? callback.target?.addressHandle ?? null);
 }
 
 function dependencyRows(

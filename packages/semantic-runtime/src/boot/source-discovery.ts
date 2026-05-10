@@ -9,9 +9,9 @@ import {
   relative,
 } from 'node:path';
 import {
-  SourceFileRole,
-  SourceLanguage,
-} from '../kernel/address.js';
+  inferSourceFileRole,
+  inferSourceLanguage,
+} from '../kernel/source-classification.js';
 import {
   SourceDiscoveryResult,
   type BootSourceFileInput,
@@ -47,67 +47,14 @@ export interface SourceDiscoveryOptions {
   readonly maxFiles?: number | null;
 }
 
-/** Infer a coarse source language from the path extension. */
-export function inferSourceLanguage(path: string): SourceLanguage {
-  switch (extname(path).toLowerCase()) {
-    case '.ts':
-    case '.tsx':
-      return SourceLanguage.TypeScript;
-    case '.js':
-    case '.jsx':
-    case '.mjs':
-    case '.cjs':
-      return SourceLanguage.JavaScript;
-    case '.html':
-      return SourceLanguage.Html;
-    case '.css':
-      return SourceLanguage.Css;
-    case '.json':
-      return SourceLanguage.Json;
-    default:
-      return SourceLanguage.Unknown;
-  }
-}
-
-/** Infer the source's app-world role without interpreting project config yet. */
-export function inferSourceFileRole(path: string): SourceFileRole {
-  const normalized = path.replace(/\\/g, '/').toLowerCase();
-  const segments = normalized.split('/');
-  const baseName = segments.at(-1) ?? normalized;
-  const language = inferSourceLanguage(path);
-
-  if (segments.includes('.aurelia-artifacts')) {
-    return SourceFileRole.Generated;
-  }
-  if (isDeclarationFileName(baseName)) {
-    return SourceFileRole.Declaration;
-  }
-  if (isExampleSourcePath(segments, baseName)) {
-    return SourceFileRole.ExampleSource;
-  }
-  if (isTestSourcePath(segments, baseName)) {
-    return SourceFileRole.TestSource;
-  }
-  if (isToolingConfigPath(baseName)) {
-    return SourceFileRole.ToolingConfig;
-  }
-  if (baseName === 'package.json') {
-    return SourceFileRole.PackageManifest;
-  }
-
-  switch (language) {
-    case SourceLanguage.TypeScript:
-    case SourceLanguage.JavaScript:
-      return SourceFileRole.AppSource;
-    case SourceLanguage.Html:
-      return SourceFileRole.Template;
-    case SourceLanguage.Css:
-      return SourceFileRole.Style;
-    case SourceLanguage.Json:
-      return SourceFileRole.ToolingConfig;
-    default:
-      return SourceFileRole.Unknown;
-  }
+interface SourceDiscoveryFrame {
+  readonly rootDir: string;
+  readonly extensions: ReadonlySet<string>;
+  readonly excludedDirectories: ReadonlySet<string>;
+  readonly excludedSubtrees: ReadonlySet<string>;
+  readonly maxFiles: number | null;
+  readonly admitted: BootSourceFileInput[];
+  truncated: boolean;
 }
 
 /** Filesystem source discovery used only to admit candidate inputs into the kernel. */
@@ -115,62 +62,79 @@ export function discoverSourceFiles(
   rootDir: string,
   options: SourceDiscoveryOptions = {},
 ): SourceDiscoveryResult {
-  const extensions = options.extensions ?? DEFAULT_SOURCE_EXTENSIONS;
-  const excludedDirectories = options.excludedDirectories ?? DEFAULT_EXCLUDED_DIRECTORIES;
-  const excludedSubtrees = normalizeExcludedSubtrees(rootDir, options.excludedSubtrees ?? new Set());
-  const maxFiles = options.maxFiles ?? null;
-  const admitted: BootSourceFileInput[] = [];
+  const frame: SourceDiscoveryFrame = {
+    rootDir,
+    extensions: options.extensions ?? DEFAULT_SOURCE_EXTENSIONS,
+    excludedDirectories: options.excludedDirectories ?? DEFAULT_EXCLUDED_DIRECTORIES,
+    excludedSubtrees: normalizeExcludedSubtrees(rootDir, options.excludedSubtrees ?? new Set()),
+    maxFiles: options.maxFiles ?? null,
+    admitted: [],
+    truncated: false,
+  };
   if (!existsSync(rootDir)) {
-    return new SourceDiscoveryResult(rootDir, admitted, false, false, maxFiles);
+    return new SourceDiscoveryResult(rootDir, frame.admitted, false, false, frame.maxFiles);
   }
-  let truncated = false;
+  visitSourceDiscoveryDirectory(frame, rootDir);
+  return new SourceDiscoveryResult(rootDir, frame.admitted, true, frame.truncated, frame.maxFiles);
+}
 
-  function visit(directory: string): void {
-    if (excludedSubtrees.has(normalizeCaseFoldedPath(directory))) {
-      return;
-    }
-    if (maxFiles != null && admitted.length >= maxFiles) {
-      truncated = true;
-      return;
-    }
-
-    const entries = readdirSync(directory, { withFileTypes: true })
-      .sort((left, right) => left.name.localeCompare(right.name));
-
-    for (const entry of entries) {
-      if (maxFiles != null && admitted.length >= maxFiles) {
-        truncated = true;
-        return;
-      }
-
-      if (entry.isDirectory()) {
-        if (!entry.name.startsWith('.') && !excludedDirectories.has(entry.name)) {
-          visit(join(directory, entry.name));
-        }
-        continue;
-      }
-
-      if (!entry.isFile()) {
-        continue;
-      }
-
-      const absolutePath = join(directory, entry.name);
-      if (!extensions.has(extname(absolutePath).toLowerCase())) {
-        continue;
-      }
-
-      const projectPath = relative(rootDir, absolutePath).replace(/\\/g, '/');
-      admitted.push({
-        path: projectPath,
-        language: inferSourceLanguage(projectPath),
-        role: inferSourceFileRole(projectPath),
-        note: 'Admitted by boot source discovery.',
-      });
-    }
+function visitSourceDiscoveryDirectory(frame: SourceDiscoveryFrame, directory: string): void {
+  if (sourceDiscoveryShouldStop(frame, directory)) {
+    return;
   }
 
-  visit(rootDir);
-  return new SourceDiscoveryResult(rootDir, admitted, true, truncated, maxFiles);
+  const entries = readdirSync(directory, { withFileTypes: true })
+    .sort((left, right) => left.name.localeCompare(right.name));
+
+  for (const entry of entries) {
+    if (sourceDiscoveryShouldStop(frame)) {
+      return;
+    }
+    if (entry.isDirectory()) {
+      visitChildSourceDirectory(frame, directory, entry.name);
+    } else if (entry.isFile()) {
+      admitSourceFileEntry(frame, directory, entry.name);
+    }
+  }
+}
+
+function sourceDiscoveryShouldStop(frame: SourceDiscoveryFrame, directory: string | null = null): boolean {
+  if (directory != null && frame.excludedSubtrees.has(normalizeCaseFoldedPath(directory))) {
+    return true;
+  }
+  if (frame.maxFiles != null && frame.admitted.length >= frame.maxFiles) {
+    frame.truncated = true;
+    return true;
+  }
+  return false;
+}
+
+function visitChildSourceDirectory(
+  frame: SourceDiscoveryFrame,
+  directory: string,
+  entryName: string,
+): void {
+  if (!entryName.startsWith('.') && !frame.excludedDirectories.has(entryName)) {
+    visitSourceDiscoveryDirectory(frame, join(directory, entryName));
+  }
+}
+
+function admitSourceFileEntry(
+  frame: SourceDiscoveryFrame,
+  directory: string,
+  entryName: string,
+): void {
+  const absolutePath = join(directory, entryName);
+  if (!frame.extensions.has(extname(absolutePath).toLowerCase())) {
+    return;
+  }
+  const projectPath = relative(frame.rootDir, absolutePath).replace(/\\/g, '/');
+  frame.admitted.push({
+    path: projectPath,
+    language: inferSourceLanguage(projectPath),
+    role: inferSourceFileRole(projectPath),
+    note: 'Admitted by boot source discovery.',
+  });
 }
 
 function normalizeExcludedSubtrees(rootDir: string, subtrees: ReadonlySet<string>): ReadonlySet<string> {
@@ -183,47 +147,4 @@ function normalizeExcludedSubtrees(rootDir: string, subtrees: ReadonlySet<string
 
 function normalizeCaseFoldedPath(path: string): string {
   return path.replace(/\\/g, '/').toLowerCase();
-}
-
-function isDeclarationFileName(baseName: string): boolean {
-  return baseName.endsWith('.d.ts') || baseName.endsWith('.d.mts') || baseName.endsWith('.d.cts');
-}
-
-function isTestSourcePath(segments: readonly string[], baseName: string): boolean {
-  return (
-    segments.some((segment) =>
-      segment === '__tests__' ||
-      segment === 'test' ||
-      segment === 'tests' ||
-      segment === 'spec' ||
-      segment === 'specs' ||
-      segment === 'e2e'
-    ) ||
-    /\.(spec|test|e2e|cy)\.[cm]?[tj]sx?$/.test(baseName)
-  );
-}
-
-function isExampleSourcePath(segments: readonly string[], baseName: string): boolean {
-  return (
-    segments.some((segment) =>
-      segment === 'story' ||
-      segment === 'stories' ||
-      segment === 'demo' ||
-      segment === 'demos'
-    ) ||
-    /\.(story|stories)\.[cm]?[tj]sx?$/.test(baseName)
-  );
-}
-
-function isToolingConfigPath(baseName: string): boolean {
-  return (
-    /^(vite|vitest|webpack|rollup|jest|playwright|karma|tsup|eslint|prettier|postcss|tailwind|babel|commitlint)\.config\./.test(baseName) ||
-    /^\.(eslint|prettier|commitlint|babel|stylelint|lintstaged)rc(?:\.[cm]?[jt]s(?:x)?|\.json)?$/.test(baseName) ||
-    /^karma\.conf\.[cm]?js$/.test(baseName) ||
-    baseName === 'tsconfig.json' ||
-    baseName.startsWith('tsconfig.') ||
-    baseName === 'jsconfig.json' ||
-    baseName === 'nx.json' ||
-    baseName === 'turbo.json'
-  );
 }

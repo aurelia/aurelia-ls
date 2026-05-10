@@ -631,10 +631,8 @@ function relationshipFiltersForProjection(
     return filters;
   }
   return {
-    ...(filters.packageId === undefined ? {} : { packageId: filters.packageId }),
-    ...(filters.exportName === undefined
-      ? {}
-      : { exportName: filters.exportName }),
+    packageId: filters.packageId,
+    exportName: filters.exportName,
   };
 }
 
@@ -837,26 +835,14 @@ function flowEdgeSummaryRow(
     role: row.role,
     fromName: row.fromName,
     toName: row.toName,
-    ...(row.source === undefined ? {} : { source: row.source }),
-    ...(row.ownerKey === undefined ? {} : { ownerKey: row.ownerKey }),
-    ...(row.providerName === undefined
-      ? {}
-      : { providerName: row.providerName }),
-    ...(row.dependencyAccess === undefined
-      ? {}
-      : { dependencyAccess: row.dependencyAccess }),
-    ...(row.dependencyKey === undefined
-      ? {}
-      : { dependencyKey: row.dependencyKey }),
-    ...(row.resourceKind === undefined
-      ? {}
-      : { resourceKind: row.resourceKind }),
-    ...(row.instructionName === undefined
-      ? {}
-      : { instructionName: row.instructionName }),
-    ...(row.compilerProducerName === undefined
-      ? {}
-      : { compilerProducerName: row.compilerProducerName }),
+    source: row.source,
+    ownerKey: row.ownerKey,
+    providerName: row.providerName,
+    dependencyAccess: row.dependencyAccess,
+    dependencyKey: row.dependencyKey,
+    resourceKind: row.resourceKind,
+    instructionName: row.instructionName,
+    compilerProducerName: row.compilerProducerName,
     summary: row.summary,
   };
 }

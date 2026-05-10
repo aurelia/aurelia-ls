@@ -542,8 +542,6 @@ export function declarationSelectorForAnchor(anchor: FrameworkDiscoveryAnchor) {
     scheme: SourceSelectorScheme.Declaration,
     name: anchor.source.symbolName,
     packageId: anchor.source.packageId,
-    ...(anchor.source.declarationKind === undefined
-      ? {}
-      : { kind: anchor.source.declarationKind }),
+    kind: anchor.source.declarationKind,
   };
 }

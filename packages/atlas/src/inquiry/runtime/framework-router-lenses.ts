@@ -50,6 +50,7 @@ import {
 
 export interface FrameworkRouterValue {
   readonly version: FrameworkRouterAnalysis["version"];
+  readonly sourceState: FrameworkRouterAnalysis["sourceState"];
   readonly rollup: FrameworkRouterAnalysis["rollup"];
   readonly packages?: readonly FrameworkRouterPackageRow[];
   readonly surfaces?: readonly FrameworkRouterSurfaceRow[];
@@ -167,7 +168,7 @@ function answerFrameworkRouterSummary(
   return createAnswer(
     inquiry,
     OutcomeKind.Hit,
-    `Read ${analysis.rollup.packageCount} router package(s), ${analysis.rollup.surfaceCount} router surface row(s), ${analysis.rollup.flowCount} ordered route-flow row(s), ${analysis.rollup.routeRecognizerMechanicCount} route-recognizer mechanic row(s), ${analysis.rollup.relationshipCount} router relationship row(s), ${analysis.rollup.flowIssueCount} flow self-audit issue row(s), ${analysis.rollup.routeRecognizerMechanicIssueCount} recognizer self-audit issue row(s), ${analysis.rollup.routeContextCount} route-context row(s), ${analysis.rollup.routeTreeCount} route-tree row(s), and ${analysis.rollup.routeRecognizerCount} route-recognizer surface row(s).`,
+    `Read ${analysis.rollup.packageCount} router package(s), ${analysis.rollup.surfaceCount} router surface row(s), ${analysis.rollup.flowCount} ordered route-flow row(s), ${analysis.rollup.routeRecognizerMechanicCount} route-recognizer mechanic row(s), ${analysis.rollup.relationshipCount} router relationship row(s), ${analysis.rollup.flowIssueCount} flow self-audit issue row(s), ${analysis.rollup.routeRecognizerMechanicIssueCount} recognizer self-audit issue row(s), ${analysis.rollup.routeContextCount} route-context row(s), ${analysis.rollup.routeTreeCount} route-tree row(s), and ${analysis.rollup.routeRecognizerCount} route-recognizer surface row(s). ${analysis.sourceState.summary}`,
     {
       value: {
         ...frameworkRouterBaseValue(analysis),
@@ -219,6 +220,7 @@ function answerFrameworkRouterRows<TRow>(
 function frameworkRouterBaseValue(analysis: FrameworkRouterAnalysis): FrameworkRouterValue {
   return {
     version: analysis.version,
+    sourceState: analysis.sourceState,
     rollup: analysis.rollup,
   };
 }

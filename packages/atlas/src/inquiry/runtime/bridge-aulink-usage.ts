@@ -22,10 +22,11 @@ import {
   requiredSourceRangeForNode,
   SourcePackageId,
   SourceProjectMemo,
-  sourceRangeForAuLinkFrameworkCandidate,
+  sourceRangeForAuLinkFileSpan,
   sourceRangeForAuLinkTarget,
   sourceRangeKey,
   symbolForNode,
+  toPosixPath,
   type AuLinkAnchorRow,
   type AuLinkFrameworkTargetResolution,
   type SourceProject,
@@ -36,6 +37,8 @@ import {
   type TypeScriptUsageRoleId,
   usageCallAggregate,
   usageCallForIdentifier,
+  usageCallFiltersHaveArgumentFilter,
+  usageCallMatchesFilters,
   usageOwnerForNode,
   usageRoleForIdentifier,
   usageText,
@@ -388,15 +391,15 @@ export function readAuLinkUsageComparisonModel(
   const visibleMemberRows = memberRows
     .filter((row) => visibleLinkIds.has(row.linkId))
     .filter((row) => usageMemberRowMatches(row, filters))
-    .sort(compareMemberRows);
+    .sort(compareMemberIdentityRows);
   const visibleSurfaceRows = surfaceRows
     .filter((row) => visibleLinkIds.has(row.linkId))
     .filter((row) => memberSurfaceRowMatches(row, filters))
-    .sort(compareMemberSurfaceRows);
+    .sort(compareMemberIdentityRows);
   const visibleSiteRows = siteRows
     .filter((row) => visibleLinkIds.has(row.linkId))
     .filter((row) => usageSiteRowMatches(row, filters))
-    .filter((row) => usageSiteMatchesMemberFilters(row, filters, visibleMemberRows))
+    .filter((row) => usageRowMatchesMemberPresence(row, filters, visibleMemberRows))
     .sort(compareSiteRows);
   const visibleConsumerCandidates = shouldRegroupConsumerRows(filters)
     ? consumerRowsForVisibleSites(visibleRows, visibleSiteRows)
@@ -404,7 +407,7 @@ export function readAuLinkUsageComparisonModel(
   const visibleConsumerRows = visibleConsumerCandidates
     .filter((row) => visibleLinkIds.has(row.linkId))
     .filter((row) => usageConsumerRowMatches(row, filters))
-    .filter((row) => usageConsumerMatchesMemberFilters(row, filters, visibleMemberRows))
+    .filter((row) => usageRowMatchesMemberPresence(row, filters, visibleMemberRows))
     .sort(compareConsumerRows);
 
   return {
@@ -472,7 +475,7 @@ function buildProductUsageIndex(sourceProject: SourceProject): AuLinkProductUsag
         return;
       }
 
-      const memberTargets = productMemberTargetsForIdentifier(checker, node, memberSymbols);
+      const memberTargets = memberTargetsForIdentifier(checker, node, memberSymbols);
       for (const target of memberTargets) {
         usages.push(productUsageRow(sourceProject, node, target.anchor, role, target.memberName));
       }
@@ -488,7 +491,7 @@ function buildProductUsageIndex(sourceProject: SourceProject): AuLinkProductUsag
   }
 
   return {
-    usages: uniqueByKey(usages, (usage) => usage.id).sort(compareProductUsages),
+    usages: uniqueByKey(usages, (usage) => usage.id).sort(compareUsageLocationRows),
   };
 }
 
@@ -541,7 +544,7 @@ function buildFrameworkTargetUsageIndex(
         return;
       }
 
-      const memberTargets = frameworkMemberTargetsForIdentifier(checker, node, memberSymbols);
+      const memberTargets = memberTargetsForIdentifier(checker, node, memberSymbols);
       for (const target of memberTargets) {
         usages.push(frameworkTargetUsageRow(sourceProject, node, target.target, role, target.memberName));
       }
@@ -557,30 +560,15 @@ function buildFrameworkTargetUsageIndex(
   }
 
   return {
-    usages: uniqueByKey(usages, (usage) => usage.id).sort(compareFrameworkTargetUsages),
+    usages: uniqueByKey(usages, (usage) => usage.id).sort(compareUsageLocationRows),
   };
 }
 
-function productMemberTargetsForIdentifier(
+function memberTargetsForIdentifier<TMemberSymbol>(
   checker: ts.TypeChecker,
   identifier: ts.Identifier,
-  memberSymbols: ReadonlyMap<ts.Symbol, readonly ProductMemberSymbol[]>,
-): readonly ProductMemberSymbol[] {
-  if (
-    !ts.isPropertyAccessExpression(identifier.parent) ||
-    identifier.parent.name !== identifier
-  ) {
-    return [];
-  }
-  const symbol = symbolForNode(checker, identifier);
-  return symbol === null ? [] : memberSymbols.get(symbol) ?? [];
-}
-
-function frameworkMemberTargetsForIdentifier(
-  checker: ts.TypeChecker,
-  identifier: ts.Identifier,
-  memberSymbols: ReadonlyMap<ts.Symbol, readonly FrameworkMemberSymbol[]>,
-): readonly FrameworkMemberSymbol[] {
+  memberSymbols: ReadonlyMap<ts.Symbol, readonly TMemberSymbol[]>,
+): readonly TMemberSymbol[] {
   if (
     !ts.isPropertyAccessExpression(identifier.parent) ||
     identifier.parent.name !== identifier
@@ -609,14 +597,14 @@ function productUsageRow(
     packageId: anchor.packageId,
     symbolName: anchor.symbolName,
     targetName: anchor.target.name,
-    ...(memberName === undefined ? {} : { memberName }),
+    memberName,
     role,
     consumerArea,
     filePath: source.filePath,
     source,
     text: usageText(identifier),
     owner,
-    ...(call === null ? {} : { call }),
+    call: call ?? undefined,
   };
 }
 
@@ -637,14 +625,14 @@ function frameworkTargetUsageRow(
     linkId: target.linkId,
     packageId: target.packageId,
     symbolName: target.symbolName,
-    ...(memberName === undefined ? {} : { memberName }),
+    memberName,
     role,
     consumerPackageId,
     filePath: source.filePath,
     source,
     text: usageText(identifier),
     owner,
-    ...(call === null ? {} : { call }),
+    call: call ?? undefined,
   };
 }
 
@@ -677,6 +665,10 @@ function usageComparisonRow(
   const productOnlyMemberNames = difference(productMemberNames, frameworkMemberNames);
   const firstAnchor = anchors[0];
   const firstCandidate = target.candidates[0];
+  const firstProductSource =
+    firstAnchor === undefined ? undefined : sourceRangeForAuLinkTarget(firstAnchor);
+  const firstFrameworkSource =
+    firstCandidate === undefined ? undefined : sourceRangeForAuLinkFileSpan(firstCandidate);
   const productTargetNames = uniqueSortedStrings(
     anchors.flatMap((anchor) => anchor.target.name === null ? [] : [anchor.target.name]),
   );
@@ -708,12 +700,8 @@ function usageComparisonRow(
     sharedMemberNames,
     frameworkOnlyMemberNames,
     productOnlyMemberNames,
-    ...(firstAnchor === undefined
-      ? {}
-      : { firstProductSource: sourceRangeForAuLinkTarget(firstAnchor) }),
-    ...(firstCandidate === undefined
-      ? {}
-      : { firstFrameworkSource: sourceRangeForAuLinkFrameworkCandidate(firstCandidate) }),
+    firstProductSource,
+    firstFrameworkSource,
     summary: `${target.linkId} has ${frameworkUsages.length} Aurelia-side usage(s), ${productUsages.length} semantic-runtime usage(s), ${sharedMemberNames.length} shared member name(s), ${frameworkOnlyMemberNames.length} framework-only member name(s), and ${productOnlyMemberNames.length} product-only member name(s).`,
   };
 }
@@ -902,7 +890,7 @@ function usageComparisonRowMatches(
     (filters.memberName === undefined ||
       row.frameworkMemberNames.includes(filters.memberName) ||
       row.productMemberNames.includes(filters.memberName)) &&
-    (filters.side === undefined || usageComparisonHasSide(row, filters.side)) &&
+    (filters.side === undefined || usageRowHasSide(row, filters.side)) &&
     (filters.presence === undefined ||
       memberRows.some(
         (memberRow) =>
@@ -1025,14 +1013,14 @@ function frameworkUsageSiteRow(
     symbolName: target.symbolName,
     side: "framework",
     targetName: target.symbolName,
-    ...(usage.memberName === undefined ? {} : { memberName: usage.memberName }),
+    memberName: usage.memberName,
     role: usage.role,
     consumerPackageId: usage.consumerPackageId,
     filePath: usage.filePath,
     source: usage.source,
     text: usage.text,
     owner: usage.owner,
-    ...(usage.call === undefined ? {} : { call: usage.call }),
+    call: usage.call,
     summary: `${target.linkId} framework ${usage.role} ${usage.text} in ${usage.consumerPackageId ?? "<external>"}.`,
   };
 }
@@ -1044,15 +1032,15 @@ function productUsageSiteRow(usage: AuLinkProductUsageRow): AuLinkUsageSiteRow {
     packageId: usage.packageId,
     symbolName: usage.symbolName,
     side: "product",
-    ...(usage.targetName === null ? {} : { targetName: usage.targetName }),
-    ...(usage.memberName === undefined ? {} : { memberName: usage.memberName }),
+    targetName: usage.targetName ?? undefined,
+    memberName: usage.memberName,
     role: usage.role,
     consumerArea: usage.consumerArea,
     filePath: usage.filePath,
     source: usage.source,
     text: usage.text,
     owner: usage.owner,
-    ...(usage.call === undefined ? {} : { call: usage.call }),
+    call: usage.call,
     summary: `${usage.linkId} product ${usage.role} ${usage.text} in ${usage.consumerArea}.`,
   };
 }
@@ -1081,6 +1069,8 @@ function usageMemberComparisonRows(
       frameworkMemberSites.length,
       productMemberSites.length,
     );
+    const firstFrameworkSource = frameworkMemberSites[0]?.source;
+    const firstProductSource = productMemberSites[0]?.source;
     return {
       id: `aulink-usage-member:${row.linkId}:${memberName}`,
       linkId: row.linkId,
@@ -1100,12 +1090,8 @@ function usageMemberComparisonRows(
         productMemberSites,
         (site) => site.consumerArea ?? "unknown",
       ),
-      ...(frameworkMemberSites[0] === undefined
-        ? {}
-        : { firstFrameworkSource: frameworkMemberSites[0].source }),
-      ...(productMemberSites[0] === undefined
-        ? {}
-        : { firstProductSource: productMemberSites[0].source }),
+      firstFrameworkSource,
+      firstProductSource,
       summary: `${row.linkId}.${memberName} is ${presence}: ${frameworkMemberSites.length} framework usage site(s), ${productMemberSites.length} product usage site(s).`,
     };
   });
@@ -1147,7 +1133,7 @@ function shouldRegroupConsumerRows(filters: AuLinkMirrorFilters): boolean {
     filters.ownerMemberName !== undefined ||
     filters.presence !== undefined ||
     filters.callCalleeName !== undefined ||
-    hasAuLinkCallArgumentFilter(filters);
+    usageCallFiltersHaveArgumentFilter(filters);
 }
 
 function auLinkUsageConsumerRow(
@@ -1173,23 +1159,19 @@ function auLinkUsageConsumerRow(
     packageId: row.packageId,
     symbolName: row.symbolName,
     side: first.side,
-    ...(first.memberName === undefined ? {} : { memberName: first.memberName }),
+    memberName: first.memberName,
     ownerKind: owner.ownerKind,
     ownerName: owner.ownerName,
-    ...(owner.ownerMemberKind === undefined ? {} : { ownerMemberKind: owner.ownerMemberKind }),
-    ...(owner.ownerMemberName === undefined ? {} : { ownerMemberName: owner.ownerMemberName }),
-    ...(first.consumerPackageId === undefined
-      ? {}
-      : { consumerPackageId: first.consumerPackageId }),
-    ...(first.consumerArea === undefined ? {} : { consumerArea: first.consumerArea }),
+    ownerMemberKind: owner.ownerMemberKind,
+    ownerMemberName: owner.ownerMemberName,
+    consumerPackageId: first.consumerPackageId,
+    consumerArea: first.consumerArea,
     usageCount: sites.length,
     usageRoles: countBy(sites, (site) => site.role),
     ...usageCallAggregate(sites),
     firstSource: first.source,
-    ...(owner.ownerSource === undefined ? {} : { ownerSource: owner.ownerSource }),
-    ...(owner.ownerMemberSource === undefined
-      ? {}
-      : { ownerMemberSource: owner.ownerMemberSource }),
+    ownerSource: owner.ownerSource,
+    ownerMemberSource: owner.ownerMemberSource,
     summary: `${row.linkId}${first.memberName === undefined ? "" : `.${first.memberName}`} has ${sites.length} ${first.side} usage site(s) owned by ${owner.ownerName}${owner.ownerMemberName === undefined ? "" : `.${owner.ownerMemberName}`}.`,
   }];
 }
@@ -1256,12 +1238,8 @@ function memberSurfaceRows(
       productUsageCount: usage?.productUsageCount ?? 0,
       frameworkDeclarationSources: frameworkSources,
       productDeclarationSources: productSources,
-      ...(frameworkSources[0] === undefined
-        ? {}
-        : { firstFrameworkSource: frameworkSources[0] }),
-      ...(productSources[0] === undefined
-        ? {}
-        : { firstProductSource: productSources[0] }),
+      firstFrameworkSource: frameworkSources[0],
+      firstProductSource: productSources[0],
       summary: `${row.linkId}.${memberName} member surface is ${presence}: ${frameworkSources.length} framework declaration(s), ${productSources.length} product declaration(s), ${usage?.frameworkUsageCount ?? 0} framework usage site(s), ${usage?.productUsageCount ?? 0} product usage site(s).`,
     };
   });
@@ -1348,8 +1326,11 @@ function usageMemberPresence(
   return frameworkCount > 0 ? "framework-only" : "product-only";
 }
 
-function usageComparisonHasSide(
-  row: AuLinkUsageComparisonRow,
+function usageRowHasSide(
+  row: {
+    readonly frameworkUsageCount: number;
+    readonly productUsageCount: number;
+  },
   side: string,
 ): boolean {
   if (side === "framework") {
@@ -1371,25 +1352,12 @@ function usageMemberRowMatches(
     (filters.symbolName === undefined || row.symbolName === filters.symbolName) &&
     (filters.memberName === undefined || row.memberName === filters.memberName) &&
     (filters.presence === undefined || row.presence === filters.presence) &&
-    (filters.side === undefined || usageMemberHasSide(row, filters.side)) &&
+    (filters.side === undefined || usageRowHasSide(row, filters.side)) &&
     (filters.usageRole === undefined ||
       row.frameworkUsageRoles[filters.usageRole] !== undefined ||
       row.productUsageRoles[filters.usageRole] !== undefined) &&
     (filters.query === undefined || usageMemberContains(row, filters.query))
   );
-}
-
-function usageMemberHasSide(
-  row: AuLinkUsageMemberComparisonRow,
-  side: string,
-): boolean {
-  if (side === "framework") {
-    return row.frameworkUsageCount > 0;
-  }
-  if (side === "product") {
-    return row.productUsageCount > 0;
-  }
-  return false;
 }
 
 function usageMemberContains(
@@ -1480,53 +1448,8 @@ function usageSiteRowMatches(
     (filters.ownerKind === undefined || row.owner.ownerKind === filters.ownerKind) &&
     (filters.ownerMemberName === undefined ||
       row.owner.ownerMemberName === filters.ownerMemberName) &&
-    auLinkUsageCallMatches(row, filters) &&
+    usageCallMatchesFilters(row.call, filters) &&
     (filters.query === undefined || usageSiteContains(row, filters.query))
-  );
-}
-
-function auLinkUsageCallMatches(
-  row: AuLinkUsageSiteRow,
-  filters: AuLinkMirrorFilters,
-): boolean {
-  return (
-    (filters.callCalleeName === undefined ||
-      row.call?.calleeName === filters.callCalleeName) &&
-    (hasAuLinkCallArgumentFilter(filters)
-      ? row.call?.arguments.some((argument) =>
-          (filters.callArgumentText === undefined ||
-            argument.text === filters.callArgumentText) &&
-          (filters.callArgumentSymbolName === undefined ||
-            argument.symbolName === filters.callArgumentSymbolName) &&
-          (filters.callArgumentFullyQualifiedName === undefined ||
-            argument.fullyQualifiedName === filters.callArgumentFullyQualifiedName),
-        ) === true
-      : true)
-  );
-}
-
-function hasAuLinkCallArgumentFilter(filters: AuLinkMirrorFilters): boolean {
-  return filters.callArgumentText !== undefined ||
-    filters.callArgumentSymbolName !== undefined ||
-    filters.callArgumentFullyQualifiedName !== undefined;
-}
-
-function usageSiteMatchesMemberFilters(
-  row: AuLinkUsageSiteRow,
-  filters: AuLinkMirrorFilters,
-  memberRows: readonly AuLinkUsageMemberComparisonRow[],
-): boolean {
-  if (filters.presence === undefined) {
-    return true;
-  }
-  if (row.memberName === undefined) {
-    return false;
-  }
-  return memberRows.some(
-    (memberRow) =>
-      memberRow.linkId === row.linkId &&
-      memberRow.memberName === row.memberName &&
-      memberRow.presence === filters.presence,
   );
 }
 
@@ -1588,8 +1511,11 @@ function usageConsumerRowMatches(
   );
 }
 
-function usageConsumerMatchesMemberFilters(
-  row: AuLinkUsageConsumerRow,
+function usageRowMatchesMemberPresence(
+  row: {
+    readonly linkId: string;
+    readonly memberName?: string;
+  },
   filters: AuLinkMirrorFilters,
   memberRows: readonly AuLinkUsageMemberComparisonRow[],
 ): boolean {
@@ -1685,7 +1611,7 @@ function isDeclarationNode(node: ts.Node): node is ts.Declaration {
 }
 
 function productAreaForPath(filePath: string): string {
-  const normalized = filePath.replace(/\\/gu, "/");
+  const normalized = toPosixPath(filePath);
   const prefix = "packages/semantic-runtime/src/";
   return normalized.startsWith(prefix)
     ? normalized.slice(prefix.length).split("/")[0] ?? "unknown"
@@ -1722,20 +1648,9 @@ function difference(left: readonly string[], right: readonly string[]): readonly
   return left.filter((value) => !rightSet.has(value));
 }
 
-function compareProductUsages(
-  left: AuLinkProductUsageRow,
-  right: AuLinkProductUsageRow,
-): number {
-  return left.linkId.localeCompare(right.linkId) ||
-    left.filePath.localeCompare(right.filePath) ||
-    left.source.start.line - right.source.start.line ||
-    (left.memberName ?? "").localeCompare(right.memberName ?? "") ||
-    left.id.localeCompare(right.id);
-}
-
-function compareFrameworkTargetUsages(
-  left: AuLinkFrameworkTargetUsageRow,
-  right: AuLinkFrameworkTargetUsageRow,
+function compareUsageLocationRows(
+  left: AuLinkProductUsageRow | AuLinkFrameworkTargetUsageRow,
+  right: AuLinkProductUsageRow | AuLinkFrameworkTargetUsageRow,
 ): number {
   return left.linkId.localeCompare(right.linkId) ||
     left.filePath.localeCompare(right.filePath) ||
@@ -1843,20 +1758,9 @@ function usageImbalance(row: AuLinkUsageComparisonRow): number {
   return Math.abs(row.frameworkUsageCount - row.productUsageCount);
 }
 
-function compareMemberRows(
-  left: AuLinkUsageMemberComparisonRow,
-  right: AuLinkUsageMemberComparisonRow,
-): number {
-  return left.packageId.localeCompare(right.packageId) ||
-    left.symbolName.localeCompare(right.symbolName) ||
-    left.memberName.localeCompare(right.memberName) ||
-    left.presence.localeCompare(right.presence) ||
-    left.linkId.localeCompare(right.linkId);
-}
-
-function compareMemberSurfaceRows(
-  left: AuLinkMemberSurfaceRow,
-  right: AuLinkMemberSurfaceRow,
+function compareMemberIdentityRows(
+  left: AuLinkUsageMemberComparisonRow | AuLinkMemberSurfaceRow,
+  right: AuLinkUsageMemberComparisonRow | AuLinkMemberSurfaceRow,
 ): number {
   return left.packageId.localeCompare(right.packageId) ||
     left.symbolName.localeCompare(right.symbolName) ||

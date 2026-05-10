@@ -1,4 +1,5 @@
 import type { SourceProject } from "../../source/index.js";
+import { repoRelativePath } from "../../source/path.js";
 import { readFrameworkObserverEntities } from "./framework-observer-entities.js";
 import {
   frameworkEmulationValue,
@@ -49,6 +50,19 @@ interface NamedGroup<TRow> {
   readonly rows: readonly TRow[];
 }
 
+interface FrameworkEmulationReportBasis {
+  readonly rollup: ReturnType<typeof frameworkEmulationValue>;
+  readonly materializeRows: readonly FrameworkEmulationObligationRow[];
+  readonly resourceRows: readonly FrameworkEmulationObligationRow[];
+  readonly compilerRows: readonly FrameworkEmulationObligationRow[];
+  readonly hydrationRows: readonly FrameworkEmulationObligationRow[];
+  readonly virtualizationRows: readonly FrameworkEmulationObligationRow[];
+  readonly handoffRows: readonly FrameworkEmulationObligationRow[];
+  readonly variableConstructionRows: readonly FrameworkEmulationObligationRow[];
+  readonly resourceFindRows: readonly FrameworkEmulationObligationRow[];
+  readonly constructionDependencyRows: readonly FrameworkEmulationObligationRow[];
+}
+
 /** Build the deterministic Markdown golden for StandardConfiguration, emulation, and observer placement. */
 export function createFrameworkEmulationSymbolsReport(
   sourceProject: SourceProject,
@@ -82,30 +96,49 @@ function renderFrameworkEmulationSymbolsMarkdown(
   rows: readonly FrameworkEmulationObligationRow[],
   observers: readonly FrameworkObserverEntityRow[],
 ): string {
-  const rollup = frameworkEmulationValue(rows);
-  const materializeRows = rowsFor(rows, "materialize-di-key");
+  const basis = frameworkEmulationReportBasis(rows);
+  const md: string[] = [];
+  appendReportPreamble(md);
+  appendCompositionSections(md, basis, observers);
+  appendConfigurationSections(md, sourceProject, rows, basis);
+  appendDiMaterializationSections(md, sourceProject, rows, basis);
+  appendResourceSections(md, sourceProject, rows, basis);
+  appendCompilerRenderingSections(md, sourceProject, basis);
+  appendObserverSections(md, observers);
+
+  return `${md.join("\n").trimEnd()}\n`;
+}
+
+function frameworkEmulationReportBasis(
+  rows: readonly FrameworkEmulationObligationRow[],
+): FrameworkEmulationReportBasis {
   const dependencyRows = rowsFor(rows, "resolve-dependency");
-  const resourceRows = rowsFor(rows, "admit-built-in-resource");
-  const compilerRows = rows.filter((row) => row.layer === "jit-compilation");
-  const hydrationRows = rows.filter((row) => row.layer === "resolved-hydration");
-  const virtualizationRows = rowsFor(rows, "virtualize-template-controller");
-  const variableConstructionRows = variableDependencyRows(rows);
-  const handoffRows = rows.filter(
-    (row) =>
-      row.mode === "typescript-handoff" ||
-      row.layer === "typechecker-reactivity",
-  );
   const exactDependencyRows = dependencyRows.filter(
     (row) => row.targetExpression === undefined,
   );
-  const resourceFindRows = exactDependencyRows.filter(
-    (row) => row.targetKind === "find",
-  );
-  const constructionDependencyRows = exactDependencyRows.filter(
-    (row) => row.targetKind !== "find",
-  );
+  return {
+    rollup: frameworkEmulationValue(rows),
+    materializeRows: rowsFor(rows, "materialize-di-key"),
+    resourceRows: rowsFor(rows, "admit-built-in-resource"),
+    compilerRows: rows.filter((row) => row.layer === "jit-compilation"),
+    hydrationRows: rows.filter((row) => row.layer === "resolved-hydration"),
+    virtualizationRows: rowsFor(rows, "virtualize-template-controller"),
+    handoffRows: rows.filter(
+      (row) =>
+        row.mode === "typescript-handoff" ||
+        row.layer === "typechecker-reactivity",
+    ),
+    variableConstructionRows: variableDependencyRows(rows),
+    resourceFindRows: exactDependencyRows.filter(
+      (row) => row.targetKind === "find",
+    ),
+    constructionDependencyRows: exactDependencyRows.filter(
+      (row) => row.targetKind !== "find",
+    ),
+  };
+}
 
-  const md: string[] = [];
+function appendReportPreamble(md: string[]): void {
   md.push("# Framework Emulation Symbols");
   md.push("");
   md.push(
@@ -116,13 +149,20 @@ function renderFrameworkEmulationSymbolsMarkdown(
     "Do not hand-edit this snapshot or treat its counts as standing documentation. Re-run `pnpm --filter @aurelia-ls/atlas report:framework-emulation` before using exact totals or rows as evidence.",
   );
   md.push("");
+}
+
+function appendCompositionSections(
+  md: string[],
+  basis: FrameworkEmulationReportBasis,
+  observers: readonly FrameworkObserverEntityRow[],
+): void {
   md.push("## Composition Rollup");
   md.push("");
   md.push(table(["axis", "counts"], [
-    ["layers", countText(rollup.layers)],
-    ["modes", countText(rollup.modes)],
-    ["obligation kinds", countText(rollup.obligationKinds)],
-    ["interpretation status", countText(rollup.interpretationStatuses)],
+    ["layers", countText(basis.rollup.layers)],
+    ["modes", countText(basis.rollup.modes)],
+    ["obligation kinds", countText(basis.rollup.obligationKinds)],
+    ["interpretation status", countText(basis.rollup.interpretationStatuses)],
     [
       "observer kinds",
       countText(countFlat(observers.flatMap((row) => row.observerKinds))),
@@ -153,6 +193,18 @@ function renderFrameworkEmulationSymbolsMarkdown(
       "Runtime JIT compiler behavior that semantic-runtime needs to emulate for definition/instruction production.",
     ],
     [
+      "expression-language / semantic-runtime-emulator",
+      "Expression parser entities and AST surfaces that semantic-runtime models before template/typechecker handoff.",
+    ],
+    [
+      "router-runtime / semantic-runtime-emulator",
+      "Router, route-tree, viewport, route-recognizer, and navigation relationships that semantic-runtime models as route products.",
+    ],
+    [
+      "rendering-runtime / semantic-runtime-emulator",
+      "Controller, rendering, and view-structure relationships that semantic-runtime models around hydration products.",
+    ],
+    [
       "resolved-hydration / semantic-runtime-emulator",
       "Hydration/rendering facts that can be resolved once compiled instructions and DI resources exist.",
     ],
@@ -165,7 +217,14 @@ function renderFrameworkEmulationSymbolsMarkdown(
       "Binding, observer, accessor, and reactive behavior where Atlas should hand off to TypeChecker-backed semantic-runtime modeling.",
     ],
   ]));
+}
 
+function appendConfigurationSections(
+  md: string[],
+  sourceProject: SourceProject,
+  rows: readonly FrameworkEmulationObligationRow[],
+  basis: FrameworkEmulationReportBasis,
+): void {
   md.push("## StandardConfiguration Direct Admissions");
   md.push("");
   md.push(
@@ -208,7 +267,7 @@ function renderFrameworkEmulationSymbolsMarkdown(
   md.push("");
   md.push("Interface materialization view:");
   md.push("");
-  md.push(table(["DI key", "default/provider", "strategy", "source"], interfaceMaterializationRows(materializeRows).map((row) => [
+  md.push(table(["DI key", "default/provider", "strategy", "source"], interfaceMaterializationRows(basis.materializeRows).map((row) => [
     cleanName(row.ownerName),
     cleanName(row.targetName),
     cleanName(row.targetKind),
@@ -217,20 +276,27 @@ function renderFrameworkEmulationSymbolsMarkdown(
   md.push("");
   md.push("Anonymous default-provider boundaries:");
   md.push("");
-  md.push(table(["DI key", "provider boundary", "strategy", "source"], anonymousMaterializationRows(materializeRows).map((row) => [
+  md.push(table(["DI key", "provider boundary", "strategy", "source"], anonymousMaterializationRows(basis.materializeRows).map((row) => [
     cleanName(row.ownerName),
     cleanName(row.targetName),
     cleanName(row.targetKind),
     sourceLoc(sourceProject, row),
   ])));
+}
 
+function appendDiMaterializationSections(
+  md: string[],
+  sourceProject: SourceProject,
+  rows: readonly FrameworkEmulationObligationRow[],
+  basis: FrameworkEmulationReportBasis,
+): void {
   md.push("## DI Resolver Materialization Slots");
   md.push("");
   md.push(
     "Every materialized DI key/provider pair currently visible from the evaluated framework world, excluding resource type/factory carrier rows. Resource discovery and resource instance lifetime are modeled separately below.",
   );
   md.push("");
-  md.push(table(["DI key", "provider(s)", "strategy/kind", "composition", "source"], namedGroupsBy(materializeRows, (row) => row.ownerName).map((group) => [
+  md.push(table(["DI key", "provider(s)", "strategy/kind", "composition", "source"], namedGroupsBy(basis.materializeRows, (row) => row.ownerName).map((group) => [
     cleanName(group.key),
     list(uniqueCleanNames(group.rows.map((row) => row.targetName))),
     list(uniqueCleanNames(group.rows.map((row) => row.targetKind))),
@@ -252,7 +318,7 @@ function renderFrameworkEmulationSymbolsMarkdown(
     "These are catalog lookups, not recursive construction dependencies. They matter for resource identity and compiler/hydration lookup, but should not be pulled as DI closure.",
   );
   md.push("");
-  md.push(table(["owner/provider", "resource kind(s)", "lookup target(s)", "source"], namedGroupsBy(resourceFindRows, (row) => row.ownerName).map((group) => [
+  md.push(table(["owner/provider", "resource kind(s)", "lookup target(s)", "source"], namedGroupsBy(basis.resourceFindRows, (row) => row.ownerName).map((group) => [
     cleanName(group.key),
     list(uniqueCleanNames(group.rows.map((row) => row.targetName))),
     list(uniqueCleanNames(group.rows.map((row) => row.targetKind))),
@@ -265,7 +331,7 @@ function renderFrameworkEmulationSymbolsMarkdown(
     "These are the dependency reads that do affect construction/materialization pressure. They are intentionally separate from resource `find` reads.",
   );
   md.push("");
-  md.push(table(["owner/provider", "access", "dependency keys", "source"], namedGroupsBy(constructionDependencyRows, (row) => `${row.ownerName}::${row.targetKind}`).map((group) => {
+  md.push(table(["owner/provider", "access", "dependency keys", "source"], namedGroupsBy(basis.constructionDependencyRows, (row) => `${row.ownerName}::${row.targetKind}`).map((group) => {
     const [owner = "", access = ""] = group.key.split("::");
     return [
       cleanName(owner),
@@ -281,25 +347,38 @@ function renderFrameworkEmulationSymbolsMarkdown(
     "These are container construction reads where the key or constructable type is carried by runtime value flow. They are source-backed, but they are not stable DI key identities and should not seed DI closure.",
   );
   md.push("");
-  md.push(table(["owner/provider", "access", "variable key/type expression", "checker type", "source"], variableConstructionRows.map((row) => [
+  md.push(table(["owner/provider", "access", "variable key/type expression", "checker type", "source"], basis.variableConstructionRows.map((row) => [
     cleanName(row.ownerName),
     cleanName(row.targetKind),
     row.targetExpression ?? row.targetName,
     row.targetType ?? "",
     sourceLoc(sourceProject, row),
   ])));
+}
 
+function appendResourceSections(
+  md: string[],
+  sourceProject: SourceProject,
+  rows: readonly FrameworkEmulationObligationRow[],
+  basis: FrameworkEmulationReportBasis,
+): void {
   md.push("## Built-In Resources And Semantic-Runtime Placement");
   md.push("");
   md.push(
     "This combines the ECMAScript-emulated resource catalog with the TypeChecker handoff families, so the section shows where each built-in resource family lands in the composition.",
   );
   md.push("");
-  md.push(table(["resource/target kind", "unique symbols", "instance lifetime", "symbols", "composition", "packages"], resourcePlacementRows(rows, resourceRows)));
+  md.push(table(["resource/target kind", "unique symbols", "instance lifetime", "symbols", "composition", "packages"], resourcePlacementRows(rows, basis.resourceRows)));
+}
 
+function appendCompilerRenderingSections(
+  md: string[],
+  sourceProject: SourceProject,
+  basis: FrameworkEmulationReportBasis,
+): void {
   md.push("## JIT Compiler Obligations");
   md.push("");
-  md.push(table(["compiler area", "rows", "operations / targets", "source lens"], namedGroupsBy(compilerRows, (row) => row.obligationKind).map((group) => [
+  md.push(table(["compiler area", "rows", "operations / targets", "source lens"], namedGroupsBy(basis.compilerRows, (row) => row.obligationKind).map((group) => [
     cleanName(group.key),
     String(group.rows.length),
     list(uniqueCleanNames(group.rows.flatMap((row) => [row.ownerName, row.targetName]))),
@@ -308,7 +387,7 @@ function renderFrameworkEmulationSymbolsMarkdown(
 
   md.push("## Hydration And Rendering Boundary");
   md.push("");
-  md.push(table(["hydration target kind", "rows", "owners", "targets", "source lens"], namedGroupsBy(hydrationRows, (row) => row.targetKind).map((group) => [
+  md.push(table(["hydration target kind", "rows", "owners", "targets", "source lens"], namedGroupsBy(basis.hydrationRows, (row) => row.targetKind).map((group) => [
     cleanName(group.key),
     String(group.rows.length),
     list(uniqueCleanNames(group.rows.map((row) => row.ownerName)), 40),
@@ -318,7 +397,7 @@ function renderFrameworkEmulationSymbolsMarkdown(
 
   md.push("## Template Controller Virtualization");
   md.push("");
-  md.push(table(["template controller / virtualized symbol", "source package(s)", "source"], uniqueRowsBy(virtualizationRows, (row) => `${row.targetKind}:${row.targetName}:${sourceLoc(sourceProject, row)}`)
+  md.push(table(["template controller / virtualized symbol", "source package(s)", "source"], uniqueRowsBy(basis.virtualizationRows, (row) => `${row.targetKind}:${row.targetName}:${sourceLoc(sourceProject, row)}`)
     .slice()
     .sort((left, right) => cleanName(left.targetName).localeCompare(cleanName(right.targetName)))
     .map((row) => [
@@ -333,14 +412,19 @@ function renderFrameworkEmulationSymbolsMarkdown(
     "These source-backed rows mark where Atlas can already see a boundary into binding, observer, accessor, and reactive behavior. The boundary is intentionally provisional and approximate: it is a navigation aid for semantic-runtime work, not a complete TypeChecker behavior graph. Handoff confidence is depth-sensitive: root/controller-owned binding materialization can be deterministic while bindings under template-controller-created synthetic views may be speculative because the owning controllers are speculative even when the compiled instructions are deterministic.",
   );
   md.push("");
-  md.push(table(["handoff owner/symbol", "status", "kind(s)", "targets / methods", "composition evidence"], namedGroupsBy(handoffRows, (row) => row.ownerName).map((group) => [
+  md.push(table(["handoff owner/symbol", "status", "kind(s)", "targets / methods", "composition evidence"], namedGroupsBy(basis.handoffRows, (row) => row.ownerName).map((group) => [
     cleanName(group.key),
     list(uniqueCleanNames(group.rows.map((row) => row.interpretationStatus ?? "source-visible"))),
     list(uniqueCleanNames(group.rows.map((row) => `${row.obligationKind}:${row.targetKind}`))),
     list(uniqueCleanNames(group.rows.map((row) => row.targetName))),
     list(uniqueCleanStrings(group.rows.map(lens))),
   ])));
+}
 
+function appendObserverSections(
+  md: string[],
+  observers: readonly FrameworkObserverEntityRow[],
+): void {
   md.push("## Observer Catalog By Kind");
   md.push("");
   md.push(table(["observer kind", "symbols"], namedGroupsBy(observers.flatMap((observer) =>
@@ -370,8 +454,6 @@ function renderFrameworkEmulationSymbolsMarkdown(
       list(uniqueCleanNames(observer.observerCapabilities)),
       cleanName(observer.packageId),
     ])));
-
-  return `${md.join("\n").trimEnd()}\n`;
 }
 
 function rowsFor(
@@ -671,14 +753,8 @@ function repoRelativeSourcePath(
   sourceProject: SourceProject,
   filePath: string,
 ): string {
-  const normalizedRoot = sourceProject.repoRoot.replace(/\\/gu, "/");
-  const normalizedPath = filePath.replace(/\\/gu, "/");
-  const rootPrefix = normalizedRoot.endsWith("/")
-    ? normalizedRoot
-    : `${normalizedRoot}/`;
-  return normalizedPath.startsWith(rootPrefix)
-    ? normalizedPath.slice(rootPrefix.length)
-    : normalizedPath;
+  return repoRelativePath(sourceProject.repoRoot, filePath)
+    ?? filePath.replace(/\\/gu, "/");
 }
 
 function compareTargetRows(

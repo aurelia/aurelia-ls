@@ -181,6 +181,14 @@ export class CheckerTypeReference {
   ) {}
 }
 
+export function sameCheckerTypeReference(
+  left: CheckerTypeReference,
+  right: CheckerTypeReference,
+): boolean {
+  return left.productHandle === right.productHandle
+    || (left.checkerKey === right.checkerKey && left.display === right.display);
+}
+
 /** Type-system member detail visible to template/expression inquiry. */
 export class CheckerTypeMember {
   constructor(

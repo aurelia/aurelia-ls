@@ -418,7 +418,9 @@ export class KernelStore {
       case 'external-address':
         this.addresses.set(record.handle, record);
         if (record.kind === 'source-file-address') {
-          addToSet(this.sourceFileAddressesByPath, normalizeSourcePath(record.path), record.handle);
+          for (const suffix of sourcePathSuffixes(record.path)) {
+            addToSet(this.sourceFileAddressesByPath, suffix, record.handle);
+          }
         }
         return;
       case 'typescript-declaration-identity':

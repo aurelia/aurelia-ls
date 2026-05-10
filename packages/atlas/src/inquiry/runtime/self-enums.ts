@@ -237,14 +237,12 @@ function atlasEnumValueSpaceRows(
     memberReferenceCount: row.memberReferenceCount,
     rawValueOccurrenceCount: row.rawValueOccurrenceCount,
     sourceFiles: row.sourceFiles,
-    ...(row.firstOccurrence === undefined
-      ? {}
-      : {
-          firstSource: sourceRangeFromFileSpan(
-            row.firstOccurrence.file.repoPath,
-            row.firstOccurrence.span,
-          ),
-        }),
+    firstSource: row.firstOccurrence === undefined
+      ? undefined
+      : sourceRangeFromFileSpan(
+        row.firstOccurrence.file.repoPath,
+        row.firstOccurrence.span,
+      ),
     summary: row.summary,
   }));
 }

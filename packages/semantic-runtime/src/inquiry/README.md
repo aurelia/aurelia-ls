@@ -57,18 +57,41 @@ next, and whether a caller can act on it.
 
 `template-completion.ts` is the concrete completion answer surface. It deliberately assumes cursor-to-template-site
 classification already happened: the query supplies a site kind and optional product handles for binding scope,
-resource scope, selected resource definition, expression parse, and optionally a checker-projected member owner type.
-The answer spends those typed details and reports missing inputs rather than re-scanning templates or inventing
-candidates. Member completion after `foo.` can derive the member-owner type from the parser's closed owner subtree,
-the visible binding scope, and the TypeChecker expression evaluator. That is an answer-local type projection, not
-runtime execution and not completion ranking.
+resource scope, selected resource definition, expression parse, active value site, and optionally a checker-projected
+member owner type. The answer spends those typed details and reports missing inputs rather than re-scanning templates
+or inventing candidates. Member completion after `foo.` can derive the member-owner type from the parser's closed owner
+subtree or, when the cursor is inside a larger expression, from an offset-aware evaluator walk that preserves lexical
+arrow scopes. Listener expressions get their `$event` slot from the runtime binding scope, so `$event.detail` and
+listener callback parameters are TypeChecker projections over Aurelia's listener semantics rather than answer-local
+string handling. Expression-member queries also carry the active value-site product, so bindable target types can
+contextualize arrow parameters when the target surface exposes a callable type. That is an answer-local type
+projection over the same shared type-shape access path used by repeat destructuring, not runtime execution and not
+completion ranking. Static
+attribute-value completion stays honest about ownership: plain
+platform values may remain empty misses, finite checker-backed bindable domains can offer literal `attribute-value`
+candidates, open-ended checker-backed scalar bindables are expected-empty completion sites, inline multi-binding
+custom-attribute values can offer bindable segment-name candidates from the resource definition, and router `load`
+and `href` primary values can offer `router-route` candidates from the app's modeled `RouteConfig` products while
+remaining open-ended because framework `href` can also represent external URLs. Static i18n `t` values can offer
+`i18n-translation-key` candidates from `I18nTranslationKey` products materialized out of closed
+`I18nConfiguration.initOptions.resources` data. Custom-attribute
+segment values that resolve to a bindable report bindable-domain pressure rather than blaming the whole custom
+attribute. Built-in template-controller primary values use `template-controller-semantics.ts` to distinguish open
+framework domains such as `case="..."` from secondary bindables such as `fall-through`; open primary values are
+expected-empty completion sites rather than missing finite domains. Remaining custom-attribute primary-value and
+custom template-controller grammars still report bucketed value-domain gaps until their domain has a real candidate
+lane.
 
 `templateCompletionQueryForCursor` is the cursor adapter over the horizontal compiler/runtime path. It consumes a
 materialized `TemplateResourceRuntimeAnalysisEmission`, picks the smallest HTML/value/scope products around the cursor,
-classifies the site, and returns the same product-handle `TemplateCompletionQuery` used by the answer. Empty start-tag
-attribute positions, such as `<my-element |>` before an authored attribute product exists, are still classified from
-the materialized element and template-source span rather than by rescanning project source. That keeps cursor-sensitive
-editor/tooling entry points above the compiler products without creating a second completion path.
+classifies the site, returns the same product-handle `TemplateCompletionQuery` used by the answer, and carries the
+selected bindable, selected expression-member name, and expression frontier for cursor-inspection APIs that should not
+pay completion candidate collection cost. Closed member tokens and member frontiers deliberately share the same owner
+type derivation path: completions need the owner surface, while hover/definition can resolve the exact authored member
+token from that same owner type without rescanning template source. Empty
+start-tag attribute positions, such as `<my-element |>` before an authored attribute product exists, are still
+classified from the materialized element and template-source span rather than by rescanning project source. That keeps
+cursor-sensitive editor/tooling entry points above the compiler products without creating a second completion path.
 
 Interpolation completion adds one extra answer-local projection over the same value-site product: when a text value
 contains multiple incomplete `${...}` holes, the cursor adapter reparses that product with an active offset so the
@@ -77,4 +100,54 @@ selects the active frontier needed for the current answer. The value-site produc
 or attribute value an expression-completion site: cursor classification only enters expression inquiry when the cursor
 is inside an interpolation hole, command-owned expression, or expression/member frontier span. Plain text and plain
 attribute values remain non-expression sites even though the compiler may have materialized interpolation parse
-products for the surrounding authored value.
+products for the surrounding authored value. Completed value-converter and binding-behavior names are also classified
+by their authored name spans, not only by parser frontiers, so existing tail names can use the same resource-candidate
+lanes as incomplete `|` and `&` continuations.
+An interpolation frontier that only expects the final interpolation-hole close is not a completion blocker: Aurelia's
+runtime parser can consume that final EOF-style hole, so expression-scope completion should still read binding scope
+while cursor-info can expose the strict authoring diagnostic signal.
+
+`pnpm --filter @aurelia-ls/semantic-runtime pressure:cursor-loci` is the current batch pressure view for this layer. It
+samples bounded template cursor loci, answers completion through the same cursor adapter, compares that substrate answer
+with the public `SemanticApp.ask({ kind: TemplateCompletions })` path, compares cursor site/value-site classification
+with `SemanticApp.ask({ kind: TemplateCursorInfo })`, and prints aggregate site kinds, outcomes, completion pressure
+classes, value-site kinds, candidate lanes, public-API mismatches, cursor-info source coverage, hover/navigation
+targets, diagnostic signals, LSP envelopes, value-domain gaps, and bucketed missing-input reasons without paths, source
+text, or candidate names. Use it for LSP-shaped pressure before assuming a gap belongs to parsing, scope construction,
+resource lookup, API wrapping, or domain-specific value completion. `SEMANTIC_RUNTIME_CURSOR_PRESSURE_PROJECT_SHAPES`
+can scope that sampling to app-shaped, resource-library, Aurelia-package, or non-Aurelia project frames; if omitted,
+the cursor script uses `SEMANTIC_RUNTIME_PROJECT_SHAPES` when present and otherwise samples all booted projects. Both
+env vars accept exact runtime shape tokens: `aurelia-app`, `aurelia-resource-library`, `aurelia-package`, and
+`non-aurelia`. The
+public API comparison passes the sampled app's project key on purpose, so candidate mismatches point at cursor/API
+wrapping drift rather than at the direct runtime facade choosing a different cached app-world that also owns the source.
+The
+command opts into the authoring-template lane by selecting admitted template
+source files per project, with the older per-project template cap only as a fallback when no template source file can be
+selected. Hydrated app/runtime templates remain the default app-topology surface; standalone resource-library templates
+are compiled only when an authoring/LSP inquiry asks for those files. This keeps app facts honest and prevents broad
+monorepo sampling from turning "all possible component templates" into an accidental app-world hydration claim.
+Cursor pressure deliberately separates missing semantic-runtime substrate from weak application typings. Completion
+answers still carry `expression-member-owner-type:any`, `index-signature-only`, and `no-members` as missing inputs so
+hover/completion callers can explain why member candidates are absent, but the pressure script classifies those rows as
+`weak-type:*` when the expression-member site has no candidates. Treat that as typing or value-shape pressure in the app
+or plugin surface unless a lower-level projection lost a concrete TypeChecker member.
+The public cursor-info API now turns those weak owner surfaces into diagnostic rows with coarse suggestion kinds. This
+keeps completion honest while giving future diagnostics/code actions enough structure to recommend stronger owner types
+or explicit properties. The diagnostic row carries the owner type projection origin and an action-target envelope, so
+pressure can distinguish TypeChecker/app-typing weakness from synthetic template-semantics weakness while also seeing
+whether a future code action should target an owner type, a scope slot, or the authored expression. Missing owner-type
+rows such as `missing-slot-type` should remain diagnostic pressure: they say the template scope did not provide enough
+TypeChecker footing for the owner expression, not that completion should invent members.
+Diagnostics are not cursor-only. Cursor loci remain the highest-pressure way to force template/resource/value-site
+selection to be exact, but file/app loci now aggregate the same cursor-info diagnostic substrate through
+`SemanticAppQueryKind.TemplateDiagnostics`. Use that batch answer when the product question is editor diagnostics, CI,
+or agent review over a whole template file; use cursor pressure when the question is whether a specific source offset
+selects the right semantic site.
+For app/file diagnostics, source text should be loaded from the admitted source-file address using workspace-root
+semantics. The selected app project may be nested below the workspace, while compiled template resources can also come
+from source-shipped package dependencies; resolving every address relative to the app project silently hides those
+member-token diagnostics.
+Resource-library pressure should use the same authoring-template lane for file/app loci that cursor pressure uses for
+cursor loci. Selecting admitted template source files keeps diagnostics and value-channel seams visible for standalone
+components without reclassifying a library package as an app runtime entrypoint.

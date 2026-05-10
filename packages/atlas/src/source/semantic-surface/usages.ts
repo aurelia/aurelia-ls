@@ -62,6 +62,14 @@ export interface TypeScriptUsageCallAggregate {
   readonly callArgumentFullyQualifiedNames: Readonly<Record<string, number>>;
 }
 
+/** Exact call-shape filters shared by usage-based framework and bridge lenses. */
+export interface TypeScriptUsageCallFilters {
+  readonly callCalleeName?: string;
+  readonly callArgumentText?: string;
+  readonly callArgumentSymbolName?: string;
+  readonly callArgumentFullyQualifiedName?: string;
+}
+
 /** Count compact call-shape facts across usage-like rows that optionally carry call metadata. */
 export function usageCallAggregate(
   rows: readonly { readonly call?: TypeScriptUsageCallSite }[],
@@ -92,6 +100,33 @@ export function usageCallAggregate(
       (fullyQualifiedName) => fullyQualifiedName,
     ),
   };
+}
+
+/** Match one optional usage call against exact callee and argument filters. */
+export function usageCallMatchesFilters(
+  call: TypeScriptUsageCallSite | undefined,
+  filters: TypeScriptUsageCallFilters,
+): boolean {
+  return (
+    (filters.callCalleeName === undefined ||
+      call?.calleeName === filters.callCalleeName) &&
+    (usageCallFiltersHaveArgumentFilter(filters)
+      ? call?.arguments.some((argument) =>
+          (filters.callArgumentText === undefined ||
+            argument.text === filters.callArgumentText) &&
+          (filters.callArgumentSymbolName === undefined ||
+            argument.symbolName === filters.callArgumentSymbolName) &&
+          (filters.callArgumentFullyQualifiedName === undefined ||
+            argument.fullyQualifiedName === filters.callArgumentFullyQualifiedName),
+        ) === true
+      : true)
+  );
+}
+
+export function usageCallFiltersHaveArgumentFilter(filters: TypeScriptUsageCallFilters): boolean {
+  return filters.callArgumentText !== undefined ||
+    filters.callArgumentSymbolName !== undefined ||
+    filters.callArgumentFullyQualifiedName !== undefined;
 }
 
 export function usageRoleForIdentifier(
@@ -237,17 +272,23 @@ function usageCallArgument(
   const spread = ts.isSpreadElement(argument);
   const expression = spread ? argument.expression : argument;
   const symbol = symbolForExpression(checker, expression);
-  return {
+  const result = {
     index,
     spread,
     text: cappedText(expression, sourceFile),
     syntaxKindName: ts.SyntaxKind[expression.kind] ?? String(expression.kind),
-    ...(symbol === null ? {} : {
+  };
+  if (symbol !== null) {
+    Object.assign(result, {
       symbolName: symbol.getName(),
       fullyQualifiedName: fullyQualifiedName(checker, symbol),
-    }),
-    ...literalValueField(expression),
-  };
+    });
+  }
+  const literalValue = literalValueField(expression).literalValue;
+  if (literalValue !== undefined) {
+    Object.assign(result, { literalValue });
+  }
+  return result;
 }
 
 function usageCallCalleeName(expression: ts.Expression): string {

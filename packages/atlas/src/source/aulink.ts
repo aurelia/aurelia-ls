@@ -13,6 +13,10 @@ import {
   sourceRangeFromFileSpan,
   sourceSpanForNode,
 } from "./semantic-surface/source-ranges.js";
+import {
+  propertyNameText,
+  visitNode,
+} from "./semantic-surface/ast.js";
 
 const AU_LINK_SOURCE_FILE = "packages/semantic-runtime/src/kernel/au-link.ts";
 const auLinkMemo = new SourceProjectMemo<AuLinkIndex>();
@@ -55,6 +59,16 @@ export const enum AuLinkFrameworkTargetCompositionKind {
   TypeAliasVariablePair = "type-alias-variable-pair",
   /** More than one type-side or value-side declaration matched. */
   MultipleDeclarations = "multiple-declarations",
+}
+
+/** Product-side semantic facet carried by an auLink placement. */
+export const enum AuLinkPlacementFacet {
+  /** Product row models the framework resource definition/catalog aspect. */
+  ResourceDefinition = "resource-definition",
+  /** Product row models static template-controller child-scope/cardinality behavior. */
+  TemplateControllerSemantics = "template-controller-semantics",
+  /** Product row models a router runtime topology/product record. */
+  RouterRuntimeModel = "router-runtime-model",
 }
 
 /** Exact filter lanes accepted by auLink substrate reads. */
@@ -135,6 +149,14 @@ export interface AuLinkCatalogEntry extends AuLinkIdParts {
   readonly frameworkTarget: AuLinkFrameworkTargetResolution;
 }
 
+/** File-backed auLink record with an exact declaration/catalog source span. */
+export interface AuLinkFileSpanRecord {
+  /** Source file containing the auLink-side record. */
+  readonly file: SourceFileIdentity;
+  /** Exact source span for the auLink-side record. */
+  readonly span: SourceSpan;
+}
+
 /** Product-side TypeScript declaration that carries an auLink decorator. */
 export interface AuLinkTarget {
   /** Declaration name, when the source declaration is named. */
@@ -157,6 +179,8 @@ export interface AuLinkAnchorRow extends AuLinkIdParts {
   readonly file: SourceFileIdentity;
   /** Exact source span for the decorator call. */
   readonly decoratorSpan: SourceSpan;
+  /** Product-side facet when several semantic-runtime models intentionally mirror the same framework symbol. */
+  readonly facet: AuLinkPlacementFacet | null;
   /** Product-side declaration that carries the decorator. */
   readonly target: AuLinkTarget;
   /** Framework-side target resolution for this anchor. */
@@ -173,6 +197,8 @@ export interface AuLinkGapRow extends AuLinkIdParts {
   readonly kind: AuLinkGapKind;
   /** Number of rows involved in the gap. */
   readonly count: number;
+  /** Product-side facet involved in the gap, when duplicate detection is facet-scoped. */
+  readonly facet?: AuLinkPlacementFacet | null;
   /** Catalog entry involved in the gap, when any. */
   readonly catalog?: AuLinkCatalogEntry;
   /** Anchor placements involved in the gap, when any. */
@@ -195,6 +221,8 @@ export interface AuLinkPackageRollup {
   readonly placementsWithoutCatalog: number;
   /** Duplicate placement gap rows in this package. */
   readonly duplicatePlacementGroups: number;
+  /** auLink ids intentionally mirrored by multiple product-side facets in this package. */
+  readonly multiFacetPlacementGroups: number;
 }
 
 /** Compact rollup for the auLink bridge substrate. */
@@ -213,6 +241,8 @@ export interface AuLinkRollup {
   readonly placementsWithoutCatalog: number;
   /** auLink ids with multiple placements after exact filters. */
   readonly duplicatePlacementGroups: number;
+  /** auLink ids intentionally mirrored by multiple product-side facets after exact filters. */
+  readonly multiFacetPlacementGroups: number;
   /** auLink ids whose framework side resolved to exactly one declaration. */
   readonly resolvedFrameworkTargets: number;
   /** auLink ids whose framework side resolved to more than one declaration. */
@@ -321,11 +351,6 @@ function auLinkIndex(project: SourceProject): AuLinkIndex {
   });
 }
 
-/** Convert an auLink catalog row into a source range suitable for continuations. */
-export function sourceRangeForAuLinkCatalog(entry: AuLinkCatalogEntry): SourceRange {
-  return sourceRangeForSpan(entry.file, entry.span);
-}
-
 /** Convert an auLink anchor row into a source range suitable for continuations. */
 export function sourceRangeForAuLinkAnchor(anchor: AuLinkAnchorRow): SourceRange {
   return sourceRangeForSpan(anchor.file, anchor.decoratorSpan);
@@ -336,9 +361,9 @@ export function sourceRangeForAuLinkTarget(anchor: AuLinkAnchorRow): SourceRange
   return sourceRangeForSpan(anchor.target.file, anchor.target.span);
 }
 
-/** Convert an auLink framework candidate into a source range suitable for continuations. */
-export function sourceRangeForAuLinkFrameworkCandidate(candidate: AuLinkFrameworkTargetCandidate): SourceRange {
-  return sourceRangeForSpan(candidate.file, candidate.span);
+/** Convert a file-backed auLink record span into a source range suitable for continuations. */
+export function sourceRangeForAuLinkFileSpan(record: AuLinkFileSpanRecord): SourceRange {
+  return sourceRangeForSpan(record.file, record.span);
 }
 
 function collectAuLinkCatalog(
@@ -352,7 +377,7 @@ function collectAuLinkCatalog(
     if (file.packageId !== SourcePackageId.SemanticRuntime || file.repoPath !== AU_LINK_SOURCE_FILE) {
       continue;
     }
-    visit(sourceFile, (node) => {
+    visitNode(sourceFile, (node) => {
       if (!ts.isFunctionDeclaration(node) || node.name?.text !== "auLink") {
         return;
       }
@@ -390,15 +415,16 @@ function collectAuLinkAnchors(
     if (markerNames.size === 0) {
       continue;
     }
-    visit(sourceFile, (node) => {
+    visitNode(sourceFile, (node) => {
       if (!ts.isClassDeclaration(node)) {
         return;
       }
       for (const decorator of decoratorsFor(node)) {
-        const id = auLinkIdFromDecorator(decorator, markerNames);
-        if (id === null) {
+        const metadata = auLinkMetadataFromDecorator(decorator, markerNames);
+        if (metadata === null) {
           continue;
         }
+        const { id, facet } = metadata;
         const parts = splitAuLinkId(id);
         const name = node.name?.text ?? null;
         anchors.push({
@@ -406,6 +432,7 @@ function collectAuLinkAnchors(
           ...parts,
           file,
           decoratorSpan: sourceSpanForNode(sourceFile, decorator),
+          facet,
           target: {
             name,
             kind: SourceDeclarationKind.Class,
@@ -475,19 +502,23 @@ function collectAuLinkGaps(
   }
 
   for (const [linkId, entryAnchors] of anchorsById) {
-    if (entryAnchors.length <= 1) {
-      continue;
+    for (const [facetKey, facetAnchors] of groupAnchorsByFacet(entryAnchors)) {
+      if (facetAnchors.length <= 1) {
+        continue;
+      }
+      const parts = splitAuLinkId(linkId);
+      const facet = auLinkFacetFromGroupKey(facetKey);
+      gaps.push({
+        id: `aulink-gap:${AuLinkGapKind.DuplicatePlacement}:${linkId}:${facetKey}`,
+        kind: AuLinkGapKind.DuplicatePlacement,
+        ...parts,
+        count: facetAnchors.length,
+        facet,
+        catalog: catalogById.get(linkId),
+        anchors: facetAnchors,
+        frameworkTarget: facetAnchors[0]?.frameworkTarget ?? frameworkTargetForPartsFromLinkId(parts),
+      });
     }
-    const parts = splitAuLinkId(linkId);
-    gaps.push({
-      id: `aulink-gap:${AuLinkGapKind.DuplicatePlacement}:${linkId}`,
-      kind: AuLinkGapKind.DuplicatePlacement,
-      ...parts,
-      count: entryAnchors.length,
-      ...(catalogById.get(linkId) === undefined ? {} : { catalog: catalogById.get(linkId) }),
-      anchors: entryAnchors,
-      frameworkTarget: entryAnchors[0]?.frameworkTarget ?? frameworkTargetForPartsFromLinkId(parts),
-    });
   }
 
   return gaps.sort(compareGaps);
@@ -727,7 +758,15 @@ function auLinkIdFromParameterType(type: ts.TypeNode): string | null {
   return stringLiteralText(type.literal);
 }
 
-function auLinkIdFromDecorator(decorator: ts.Decorator, markerNames: ReadonlySet<string>): string | null {
+interface AuLinkDecoratorMetadata {
+  readonly id: string;
+  readonly facet: AuLinkPlacementFacet | null;
+}
+
+function auLinkMetadataFromDecorator(
+  decorator: ts.Decorator,
+  markerNames: ReadonlySet<string>,
+): AuLinkDecoratorMetadata | null {
   const expression = decorator.expression;
   if (!ts.isCallExpression(expression)) {
     return null;
@@ -736,7 +775,43 @@ function auLinkIdFromDecorator(decorator: ts.Decorator, markerNames: ReadonlySet
     return null;
   }
   const argument = expression.arguments[0];
-  return argument === undefined ? null : stringLiteralText(argument);
+  const id = argument === undefined ? null : stringLiteralText(argument);
+  if (id === null) {
+    return null;
+  }
+  return {
+    id,
+    facet: auLinkFacetFromDecoratorCall(expression),
+  };
+}
+
+function auLinkFacetFromDecoratorCall(
+  expression: ts.CallExpression,
+): AuLinkPlacementFacet | null {
+  const options = expression.arguments[1];
+  if (options === undefined || !ts.isObjectLiteralExpression(options)) {
+    return null;
+  }
+  for (const property of options.properties) {
+    if (!ts.isPropertyAssignment(property) || propertyNameText(property.name) !== "facet") {
+      continue;
+    }
+    return auLinkPlacementFacetFromString(stringLiteralText(property.initializer));
+  }
+  return null;
+}
+
+function auLinkPlacementFacetFromString(
+  value: string | null,
+): AuLinkPlacementFacet | null {
+  switch (value) {
+    case AuLinkPlacementFacet.ResourceDefinition:
+    case AuLinkPlacementFacet.TemplateControllerSemantics:
+    case AuLinkPlacementFacet.RouterRuntimeModel:
+      return value;
+    default:
+      return null;
+  }
 }
 
 function isAuLinkCallee(expression: ts.Expression, markerNames: ReadonlySet<string>): boolean {
@@ -890,6 +965,7 @@ function anchorContains(anchor: AuLinkAnchorRow, query: string): boolean {
     anchor.linkId,
     anchor.packageId,
     anchor.symbolName,
+    anchor.facet,
     anchor.file.repoPath,
     anchor.target.name,
     anchor.target.kind,
@@ -948,6 +1024,7 @@ function rollupFor(
   const duplicatePlacementGroups = gaps.filter((gap) => gap.kind === AuLinkGapKind.DuplicatePlacement).length;
   const unplacedCatalogEntries = gaps.filter((gap) => gap.kind === AuLinkGapKind.CatalogUnplaced).length;
   const placementsWithoutCatalog = gaps.filter((gap) => gap.kind === AuLinkGapKind.PlacementWithoutCatalog).length;
+  const multiFacetPlacementGroups = multiFacetPlacementGroupCount(anchors);
   return {
     catalogEntries: catalog.length,
     anchors: anchors.length,
@@ -956,6 +1033,7 @@ function rollupFor(
     unplacedCatalogEntries,
     placementsWithoutCatalog,
     duplicatePlacementGroups,
+    multiFacetPlacementGroups,
     resolvedFrameworkTargets: frameworkTargets.filter((target) => target.status === AuLinkFrameworkTargetStatus.Resolved).length,
     ambiguousFrameworkTargets: frameworkTargets.filter((target) => target.status === AuLinkFrameworkTargetStatus.Ambiguous).length,
     unresolvedFrameworkTargets: frameworkTargets.filter((target) => target.status === AuLinkFrameworkTargetStatus.Unresolved).length,
@@ -981,7 +1059,19 @@ function packageRollups(
     unplacedCatalogEntries: gaps.filter((gap) => gap.packageId === packageId && gap.kind === AuLinkGapKind.CatalogUnplaced).length,
     placementsWithoutCatalog: gaps.filter((gap) => gap.packageId === packageId && gap.kind === AuLinkGapKind.PlacementWithoutCatalog).length,
     duplicatePlacementGroups: gaps.filter((gap) => gap.packageId === packageId && gap.kind === AuLinkGapKind.DuplicatePlacement).length,
+    multiFacetPlacementGroups: multiFacetPlacementGroupCount(anchors.filter((anchor) => anchor.packageId === packageId)),
   }));
+}
+
+function multiFacetPlacementGroupCount(anchors: readonly AuLinkAnchorRow[]): number {
+  let count = 0;
+  for (const entryAnchors of groupAnchorsByLinkId(anchors).values()) {
+    const facets = new Set(entryAnchors.map((anchor) => auLinkFacetGroupKey(anchor.facet)));
+    if (facets.size > 1) {
+      count += 1;
+    }
+  }
+  return count;
 }
 
 function groupAnchorsByLinkId(anchors: readonly AuLinkAnchorRow[]): Map<string, readonly AuLinkAnchorRow[]> {
@@ -998,6 +1088,31 @@ function groupAnchorsByLinkId(anchors: readonly AuLinkAnchorRow[]): Map<string, 
     value.sort(compareAnchors);
   }
   return grouped;
+}
+
+function groupAnchorsByFacet(anchors: readonly AuLinkAnchorRow[]): Map<string, readonly AuLinkAnchorRow[]> {
+  const grouped = new Map<string, AuLinkAnchorRow[]>();
+  for (const anchor of anchors) {
+    const key = auLinkFacetGroupKey(anchor.facet);
+    const existing = grouped.get(key);
+    if (existing === undefined) {
+      grouped.set(key, [anchor]);
+    } else {
+      existing.push(anchor);
+    }
+  }
+  for (const value of grouped.values()) {
+    value.sort(compareAnchors);
+  }
+  return grouped;
+}
+
+function auLinkFacetGroupKey(facet: AuLinkPlacementFacet | null): string {
+  return facet ?? "unfaceted";
+}
+
+function auLinkFacetFromGroupKey(key: string): AuLinkPlacementFacet | null {
+  return key === "unfaceted" ? null : auLinkPlacementFacetFromString(key);
 }
 
 function uniqueCatalogEntries(entries: readonly AuLinkCatalogEntry[]): readonly AuLinkCatalogEntry[] {
@@ -1020,6 +1135,7 @@ function compareCatalogEntries(left: AuLinkCatalogEntry, right: AuLinkCatalogEnt
 
 function compareAnchors(left: AuLinkAnchorRow, right: AuLinkAnchorRow): number {
   return left.linkId.localeCompare(right.linkId)
+    || auLinkFacetGroupKey(left.facet).localeCompare(auLinkFacetGroupKey(right.facet))
     || left.file.repoPath.localeCompare(right.file.repoPath)
     || left.decoratorSpan.start - right.decoratorSpan.start;
 }
@@ -1040,9 +1156,4 @@ function compareFrameworkCandidates(left: AuLinkFrameworkTargetCandidate, right:
     || left.file.repoPath.localeCompare(right.file.repoPath)
     || left.span.start - right.span.start
     || left.kind.localeCompare(right.kind);
-}
-
-function visit(node: ts.Node, visitor: (node: ts.Node) => void): void {
-  visitor(node);
-  ts.forEachChild(node, (child) => visit(child, visitor));
 }

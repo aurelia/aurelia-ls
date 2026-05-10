@@ -71,6 +71,10 @@ import {
   RouteComponentAgentMaterializationProjectPass,
   type RouteComponentAgentMaterializationProjectResult,
 } from '../router/route-component-agent-materialization.js';
+import {
+  I18nTranslationCatalogMaterializationProjectPass,
+  type I18nTranslationCatalogProjectResult,
+} from '../i18n/translation-catalog-materialization.js';
 import { aureliaConfigurationEvaluationPolicy } from './evaluation-policy.js';
 import {
   aureliaExternalEvaluationValueResolver,
@@ -87,6 +91,7 @@ export type AureliaAppWorldProjectPhaseName =
   | 'router-options-materialization'
   | 'route-context-materialization'
   | 'route-recognizer-materialization'
+  | 'i18n-translation-catalog'
   | 'app-world-composition'
   | 'template-compilation'
   | 'route-runtime-topology'
@@ -107,6 +112,9 @@ export interface AureliaAppWorldProjectProfile {
 
 export interface AureliaAppWorldProjectOptions {
   readonly analysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
+  readonly includeAuthoringTemplates?: boolean;
+  readonly authoringTemplateSourceFiles?: readonly string[];
+  readonly authoringTemplateLimit?: number | null;
 }
 
 /**
@@ -140,6 +148,8 @@ export class AureliaAppWorldProjectEmission {
     readonly routeRecognizer: RouteRecognizerMaterializationProjectResult,
     /** Configuration recognition and kernel emission over the project. */
     readonly configuration: ConfigurationRecognitionProjectResult,
+    /** Static i18n translation keys admitted from configuration resources for authoring. */
+    readonly i18n: I18nTranslationCatalogProjectResult,
     /** App-world composition over the aggregated project configuration. */
     readonly appWorld: AureliaAppWorldEmission,
     /** Template compiler front-door and downstream rendering/scope products for compiler-visible custom elements. */
@@ -166,139 +176,70 @@ export class AureliaAppWorldProjectPass {
     project: ProjectBootFrame,
     options: AureliaAppWorldProjectOptions = {},
   ): AureliaAppWorldProjectEmission {
-    const started = performance.now();
-    const analysisDepth = normalizeSemanticAppAnalysisDepth(
+    return new AureliaAppWorldProjectConstructionFrame(store, project, options).constructAndEmit();
+  }
+}
+
+class AureliaAppWorldProjectConstructionFrame {
+  private readonly started = performance.now();
+  private readonly analysisDepth: SemanticAppAnalysisDepth;
+  private readonly includeAuthoringTemplates: boolean;
+  private readonly authoringTemplateSourceFiles: readonly string[];
+  private readonly authoringTemplateLimit: number | null;
+  private readonly phases: AureliaAppWorldProjectPhaseTiming[] = [];
+
+  constructor(
+    readonly store: KernelStore,
+    readonly project: ProjectBootFrame,
+    options: AureliaAppWorldProjectOptions,
+  ) {
+    this.analysisDepth = normalizeSemanticAppAnalysisDepth(
       options.analysisDepth ?? DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
     );
-    const phases: AureliaAppWorldProjectPhaseTiming[] = [];
-    const evaluation = measureAppWorldProjectPhase(phases, 'static-evaluation', () =>
-      new StaticProjectEvaluationPass().evaluateAndEmit(
-        store,
-        project,
-        new StaticProjectEvaluationOptions(
-          aureliaConfigurationEvaluationPolicy,
-          aureliaStaticEvaluationRuntimeHost,
-          aureliaExternalEvaluationValueResolver,
-        ),
-      )
-    );
-    const typeSystem = measureAppWorldProjectPhase(phases, 'type-system', () =>
-      new TypeSystemProjectBuilder().build(project, evaluation)
-    );
-    const resources = measureAppWorldProjectPhase(phases, 'resource-recognition', () =>
-      new ResourceRecognitionProjectPass().recognizeAndEmit(store, project, evaluation, typeSystem)
-    );
-    const resourceIndex = measureAppWorldProjectPhase(phases, 'resource-index', () =>
-      ResourceDefinitionIndex.fromProject(resources)
-    );
-    const routes = measureAppWorldProjectPhase(phases, 'route-config-recognition', () =>
-      new RouteConfigRecognitionProjectPass().recognizeAndEmit(
-        store,
-        project,
-        evaluation,
-        resourceIndex,
-      )
-    );
-    const configuration = measureAppWorldProjectPhase(phases, 'configuration-recognition', () =>
-      new ConfigurationRecognitionProjectPass().recognizeAndEmit(
-        store,
-        project,
-        resourceIndex,
-        evaluation,
-        typeSystem,
-      )
-    );
-    const routerOptions = measureAppWorldProjectPhase(phases, 'router-options-materialization', () =>
-      new RouterOptionsMaterializationProjectPass().materializeAndEmit(
-        store,
-        project,
-        configuration,
-      )
-    );
-    const routeContexts = measureAppWorldProjectPhase(phases, 'route-context-materialization', () =>
-      new RouteConfigContextMaterializationProjectPass().materializeAndEmit(
-        store,
-        project,
-        routes,
-        routerOptions,
-        configuration,
-      )
-    );
-    const routeRecognizer = measureAppWorldProjectPhase(phases, 'route-recognizer-materialization', () =>
-      new RouteRecognizerMaterializationProjectPass().materializeAndEmit(
-        store,
-        project,
-        routeContexts,
-      )
-    );
-    const appWorld = measureAppWorldProjectPhase(phases, 'app-world-composition', () =>
-      new AureliaAppWorldComposer(store).construct(configuration.readConfiguration(), resourceIndex)
-    );
-    const templates = measureAppWorldProjectPhase(phases, 'template-compilation', () =>
-      new TemplateCompilationProjectPass(store).compile(
-        appWorld,
-        typeSystem,
-        resourceIndex,
-        routeContexts,
-        { runtimeAnalysisDepth: analysisDepth },
-      )
-    );
-    const routeRuntimeTopology = measureAppWorldProjectPhase(phases, 'route-runtime-topology', () =>
-      new RouteRuntimeTopologyProjectPass(store).materializeAndEmit(
-        project,
-        routeContexts,
-        templates,
-      )
-    );
-    const routeInstructions = measureAppWorldProjectPhase(phases, 'route-instruction-materialization', () =>
-      new RouteInstructionMaterializationProjectPass().materializeAndEmit(
-        store,
-        project,
-        routeContexts,
-        routeRuntimeTopology,
-        templates,
-        routerOptions,
-        evaluation,
-      )
-    );
-    const routeRecognition = measureAppWorldProjectPhase(phases, 'route-recognition-materialization', () =>
-      new RouteRecognitionMaterializationProjectPass().materializeAndEmit(
-        store,
-        project,
-        routeContexts,
-        routeRuntimeTopology,
-        routeRecognizer,
-        routeInstructions,
-      )
-    );
-    const routeTree = measureAppWorldProjectPhase(phases, 'route-tree-materialization', () =>
-      new RouteTreeMaterializationProjectPass().materializeAndEmit(
-        store,
-        project,
-        routeContexts,
-        routeRuntimeTopology,
-        routeRecognizer,
-        routeInstructions,
-        routeRecognition,
-        routerOptions,
-      )
-    );
-    const routeComponentAgents = measureAppWorldProjectPhase(phases, 'route-component-agent-materialization', () =>
-      new RouteComponentAgentMaterializationProjectPass(store).materializeAndEmit(
-        project,
-        routeRuntimeTopology,
-        routeTree,
-        templates,
-      )
-    );
-    const profile: AureliaAppWorldProjectProfile = {
-      totalMilliseconds: performance.now() - started,
-      phases,
-    };
+    this.includeAuthoringTemplates = options.includeAuthoringTemplates === true;
+    this.authoringTemplateSourceFiles = options.authoringTemplateSourceFiles ?? [];
+    this.authoringTemplateLimit = options.authoringTemplateLimit ?? null;
+  }
 
+  constructAndEmit(): AureliaAppWorldProjectEmission {
+    const evaluation = this.evaluateProject();
+    const typeSystem = this.buildTypeSystem(evaluation);
+    const resources = this.recognizeResources(evaluation, typeSystem);
+    const resourceIndex = this.indexResources(resources);
+    const routes = this.recognizeRouteConfigs(evaluation, resourceIndex);
+    const configuration = this.recognizeConfiguration(evaluation, typeSystem, resourceIndex);
+    const routerOptions = this.materializeRouterOptions(configuration);
+    const routeContexts = this.materializeRouteContexts(routes, routerOptions, configuration);
+    const routeRecognizer = this.materializeRouteRecognizer(routeContexts);
+    const i18n = this.materializeI18nTranslationCatalog(configuration);
+    const appWorld = this.composeAppWorld(configuration, resourceIndex);
+    const templates = this.compileTemplates(appWorld, typeSystem, resourceIndex, routeContexts);
+    const routeRuntimeTopology = this.materializeRouteRuntimeTopology(routeContexts, templates);
+    const routeInstructions = this.materializeRouteInstructions(
+      evaluation,
+      routerOptions,
+      routeContexts,
+      routeRuntimeTopology,
+      templates,
+    );
+    const routeRecognition = this.materializeRouteRecognition(
+      routeContexts,
+      routeRuntimeTopology,
+      routeRecognizer,
+      routeInstructions,
+    );
+    const routeTree = this.materializeRouteTree(
+      routerOptions,
+      routeContexts,
+      routeRuntimeTopology,
+      routeRecognizer,
+      routeInstructions,
+      routeRecognition,
+    );
+    const routeComponentAgents = this.materializeRouteComponentAgents(routeRuntimeTopology, routeTree, templates);
     return new AureliaAppWorldProjectEmission(
-      analysisDepth,
-      project,
+      this.analysisDepth,
+      this.project,
       evaluation,
       typeSystem,
       resources,
@@ -308,6 +249,7 @@ export class AureliaAppWorldProjectPass {
       routeContexts,
       routeRecognizer,
       configuration,
+      i18n,
       appWorld,
       templates,
       routeRuntimeTopology,
@@ -315,8 +257,255 @@ export class AureliaAppWorldProjectPass {
       routeRecognition,
       routeTree,
       routeComponentAgents,
-      profile,
+      this.profile(),
     );
+  }
+
+  private evaluateProject(): StaticProjectEvaluationResult {
+    return this.measure('static-evaluation', () =>
+      new StaticProjectEvaluationPass().evaluateAndEmit(
+        this.store,
+        this.project,
+        new StaticProjectEvaluationOptions(
+          aureliaConfigurationEvaluationPolicy,
+          aureliaStaticEvaluationRuntimeHost,
+          aureliaExternalEvaluationValueResolver,
+        ),
+      )
+    );
+  }
+
+  private buildTypeSystem(evaluation: StaticProjectEvaluationResult): TypeSystemProject {
+    return this.measure('type-system', () =>
+      new TypeSystemProjectBuilder().build(this.project, evaluation)
+    );
+  }
+
+  private recognizeResources(
+    evaluation: StaticProjectEvaluationResult,
+    typeSystem: TypeSystemProject,
+  ): ResourceRecognitionProjectResult {
+    return this.measure('resource-recognition', () =>
+      new ResourceRecognitionProjectPass().recognizeAndEmit(this.store, this.project, evaluation, typeSystem)
+    );
+  }
+
+  private indexResources(resources: ResourceRecognitionProjectResult): ResourceDefinitionIndex {
+    return this.measure('resource-index', () =>
+      ResourceDefinitionIndex.fromProject(resources)
+    );
+  }
+
+  private recognizeRouteConfigs(
+    evaluation: StaticProjectEvaluationResult,
+    resourceIndex: ResourceDefinitionIndex,
+  ): RouteConfigRecognitionProjectResult {
+    return this.measure('route-config-recognition', () =>
+      new RouteConfigRecognitionProjectPass().recognizeAndEmit(
+        this.store,
+        this.project,
+        evaluation,
+        resourceIndex,
+      )
+    );
+  }
+
+  private recognizeConfiguration(
+    evaluation: StaticProjectEvaluationResult,
+    typeSystem: TypeSystemProject,
+    resourceIndex: ResourceDefinitionIndex,
+  ): ConfigurationRecognitionProjectResult {
+    return this.measure('configuration-recognition', () =>
+      new ConfigurationRecognitionProjectPass().recognizeAndEmit(
+        this.store,
+        this.project,
+        resourceIndex,
+        evaluation,
+        typeSystem,
+      )
+    );
+  }
+
+  private materializeRouterOptions(
+    configuration: ConfigurationRecognitionProjectResult,
+  ): RouterOptionsMaterializationProjectResult {
+    return this.measure('router-options-materialization', () =>
+      new RouterOptionsMaterializationProjectPass().materializeAndEmit(
+        this.store,
+        this.project,
+        configuration,
+      )
+    );
+  }
+
+  private materializeRouteContexts(
+    routes: RouteConfigRecognitionProjectResult,
+    routerOptions: RouterOptionsMaterializationProjectResult,
+    configuration: ConfigurationRecognitionProjectResult,
+  ): RouteConfigContextMaterializationProjectResult {
+    return this.measure('route-context-materialization', () =>
+      new RouteConfigContextMaterializationProjectPass().materializeAndEmit(
+        this.store,
+        this.project,
+        routes,
+        routerOptions,
+        configuration,
+      )
+    );
+  }
+
+  private materializeRouteRecognizer(
+    routeContexts: RouteConfigContextMaterializationProjectResult,
+  ): RouteRecognizerMaterializationProjectResult {
+    return this.measure('route-recognizer-materialization', () =>
+      new RouteRecognizerMaterializationProjectPass().materializeAndEmit(
+        this.store,
+        this.project,
+        routeContexts,
+      )
+    );
+  }
+
+  private materializeI18nTranslationCatalog(
+    configuration: ConfigurationRecognitionProjectResult,
+  ): I18nTranslationCatalogProjectResult {
+    return this.measure('i18n-translation-catalog', () =>
+      new I18nTranslationCatalogMaterializationProjectPass().materializeAndEmit(this.store, configuration)
+    );
+  }
+
+  private composeAppWorld(
+    configuration: ConfigurationRecognitionProjectResult,
+    resourceIndex: ResourceDefinitionIndex,
+  ): AureliaAppWorldEmission {
+    return this.measure('app-world-composition', () =>
+      new AureliaAppWorldComposer(this.store).construct(configuration.readConfiguration(), resourceIndex)
+    );
+  }
+
+  private compileTemplates(
+    appWorld: AureliaAppWorldEmission,
+    typeSystem: TypeSystemProject,
+    resourceIndex: ResourceDefinitionIndex,
+    routeContexts: RouteConfigContextMaterializationProjectResult,
+  ): TemplateCompilationProjectEmission {
+    return this.measure('template-compilation', () =>
+      new TemplateCompilationProjectPass(this.store).compile(
+        appWorld,
+        typeSystem,
+        resourceIndex,
+        routeContexts,
+        {
+          runtimeAnalysisDepth: this.analysisDepth,
+          includeAuthoringTemplates: this.includeAuthoringTemplates,
+          authoringTemplateSourceFiles: this.authoringTemplateSourceFiles,
+          authoringTemplateLimit: this.authoringTemplateLimit,
+          projectKey: this.project.projectKey,
+        },
+      )
+    );
+  }
+
+  private materializeRouteRuntimeTopology(
+    routeContexts: RouteConfigContextMaterializationProjectResult,
+    templates: TemplateCompilationProjectEmission,
+  ): RouteRuntimeTopologyProjectResult {
+    return this.measure('route-runtime-topology', () =>
+      new RouteRuntimeTopologyProjectPass(this.store).materializeAndEmit(
+        this.project,
+        routeContexts,
+        templates,
+      )
+    );
+  }
+
+  private materializeRouteInstructions(
+    evaluation: StaticProjectEvaluationResult,
+    routerOptions: RouterOptionsMaterializationProjectResult,
+    routeContexts: RouteConfigContextMaterializationProjectResult,
+    routeRuntimeTopology: RouteRuntimeTopologyProjectResult,
+    templates: TemplateCompilationProjectEmission,
+  ): RouteInstructionMaterializationProjectResult {
+    return this.measure('route-instruction-materialization', () =>
+      new RouteInstructionMaterializationProjectPass().materializeAndEmit(
+        this.store,
+        this.project,
+        routeContexts,
+        routeRuntimeTopology,
+        templates,
+        routerOptions,
+        evaluation,
+      )
+    );
+  }
+
+  private materializeRouteRecognition(
+    routeContexts: RouteConfigContextMaterializationProjectResult,
+    routeRuntimeTopology: RouteRuntimeTopologyProjectResult,
+    routeRecognizer: RouteRecognizerMaterializationProjectResult,
+    routeInstructions: RouteInstructionMaterializationProjectResult,
+  ): RouteRecognitionMaterializationProjectResult {
+    return this.measure('route-recognition-materialization', () =>
+      new RouteRecognitionMaterializationProjectPass().materializeAndEmit(
+        this.store,
+        this.project,
+        routeContexts,
+        routeRuntimeTopology,
+        routeRecognizer,
+        routeInstructions,
+      )
+    );
+  }
+
+  private materializeRouteTree(
+    routerOptions: RouterOptionsMaterializationProjectResult,
+    routeContexts: RouteConfigContextMaterializationProjectResult,
+    routeRuntimeTopology: RouteRuntimeTopologyProjectResult,
+    routeRecognizer: RouteRecognizerMaterializationProjectResult,
+    routeInstructions: RouteInstructionMaterializationProjectResult,
+    routeRecognition: RouteRecognitionMaterializationProjectResult,
+  ): RouteTreeMaterializationProjectResult {
+    return this.measure('route-tree-materialization', () =>
+      new RouteTreeMaterializationProjectPass().materializeAndEmit(
+        this.store,
+        this.project,
+        routeContexts,
+        routeRuntimeTopology,
+        routeRecognizer,
+        routeInstructions,
+        routeRecognition,
+        routerOptions,
+      )
+    );
+  }
+
+  private materializeRouteComponentAgents(
+    routeRuntimeTopology: RouteRuntimeTopologyProjectResult,
+    routeTree: RouteTreeMaterializationProjectResult,
+    templates: TemplateCompilationProjectEmission,
+  ): RouteComponentAgentMaterializationProjectResult {
+    return this.measure('route-component-agent-materialization', () =>
+      new RouteComponentAgentMaterializationProjectPass(this.store).materializeAndEmit(
+        this.project,
+        routeRuntimeTopology,
+        routeTree,
+        templates,
+      )
+    );
+  }
+
+  private profile(): AureliaAppWorldProjectProfile {
+    return {
+      totalMilliseconds: performance.now() - this.started,
+      phases: this.phases,
+    };
+  }
+
+  private measure<TValue>(
+    name: AureliaAppWorldProjectPhaseName,
+    read: () => TValue,
+  ): TValue {
+    return measureAppWorldProjectPhase(this.phases, name, read);
   }
 }
 

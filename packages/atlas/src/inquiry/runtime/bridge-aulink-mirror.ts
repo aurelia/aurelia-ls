@@ -11,7 +11,7 @@ import {
 import { readFrameworkDiIndex } from "../../framework/di-index.js";
 import {
   readAuLinkModel,
-  sourceRangeForAuLinkFrameworkCandidate,
+  sourceRangeForAuLinkFileSpan,
   sourceRangeForAuLinkTarget,
   type AuLinkAnchorRow,
   type AuLinkFilters,
@@ -143,6 +143,7 @@ export interface AuLinkMirrorRow {
 export interface AuLinkMirrorPlacementRef {
   readonly name: string | null;
   readonly kind: string;
+  readonly facet: string | null;
   readonly source: SourceRange;
 }
 
@@ -349,6 +350,13 @@ class AuLinkTargetMatcher {
     ) {
       return "emulation-target-name";
     }
+    if (
+      target.packageId === row.packageId &&
+      (row.targetName.startsWith(`${target.symbolName}.`) ||
+        row.ownerName.startsWith(`${target.symbolName}.`))
+    ) {
+      return "endpoint-member-owner";
+    }
     if (row.source !== undefined && this.candidatesContainSource(target, row.source)) {
       return "row-source-contained-by-target";
     }
@@ -377,7 +385,7 @@ class AuLinkTargetMatcher {
   ): boolean {
     return target.candidates.some((candidate) =>
       rangeContains(
-        sourceRangeForAuLinkFrameworkCandidate(candidate),
+        sourceRangeForAuLinkFileSpan(candidate),
         source,
       ),
     );
@@ -523,12 +531,10 @@ function relationshipSourceRow(
   row: FrameworkRelationshipSource,
   options: RelationshipSourceOptions,
 ): RelationshipSourceRow {
-  return {
+  const result = {
     id: row.id,
     roleFamily: options.roleFamily ?? row.family ?? FrameworkRelationshipFamily.Identity,
     relation: row.relation,
-    ...(row.mechanism === undefined ? {} : { mechanism: row.mechanism }),
-    ...(row.phase === undefined ? {} : { phase: row.phase }),
     packageId: row.packageId,
     packageName: row.packageName,
     from: row.from,
@@ -541,6 +547,13 @@ function relationshipSourceRow(
     detailFilters: options.detailFilters ?? relationshipDetailFilters(row),
     summary: row.summary,
   };
+  if (row.mechanism !== undefined) {
+    Object.assign(result, { mechanism: row.mechanism });
+  }
+  if (row.phase !== undefined) {
+    Object.assign(result, { phase: row.phase });
+  }
+  return result;
 }
 
 function resourceConvergenceRelationshipSourceRow(
@@ -589,13 +602,18 @@ function relationshipDetailFilters(row: {
   readonly phase?: FrameworkRelationshipPhase;
   readonly from: FrameworkRelationshipEndpoint;
 }): Readonly<Record<string, string>> {
-  return {
+  const filters: Record<string, string> = {
     packageId: row.packageId,
     relation: row.relation,
-    ...(row.mechanism === undefined ? {} : { mechanism: row.mechanism }),
-    ...(row.phase === undefined ? {} : { phase: row.phase }),
     query: row.from.name,
   };
+  if (row.mechanism !== undefined) {
+    filters.mechanism = row.mechanism;
+  }
+  if (row.phase !== undefined) {
+    filters.phase = row.phase;
+  }
+  return filters;
 }
 
 function roleEvidenceRow(
@@ -603,13 +621,11 @@ function roleEvidenceRow(
   row: RelationshipSourceRow,
   match: RoleMatch,
 ): AuLinkMirrorRoleEvidenceRow {
-  return {
+  const result = {
     id: `aulink-mirror-role:${target.linkId}:${row.id}:${match.matchedEndpoint}`,
     linkId: target.linkId,
     roleFamily: row.roleFamily,
     relation: row.relation,
-    ...(row.mechanism === undefined ? {} : { mechanism: row.mechanism }),
-    ...(row.phase === undefined ? {} : { phase: row.phase }),
     matchKind: match.matchKind,
     matchedEndpoint: match.matchedEndpoint,
     packageId: row.packageId,
@@ -624,6 +640,13 @@ function roleEvidenceRow(
     detailFilters: row.detailFilters,
     summary: `${target.linkId} participates in ${row.roleFamily}/${row.relation}: ${row.summary}`,
   };
+  if (row.mechanism !== undefined) {
+    Object.assign(result, { mechanism: row.mechanism });
+  }
+  if (row.phase !== undefined) {
+    Object.assign(result, { phase: row.phase });
+  }
+  return result;
 }
 
 function obligationEvidenceRow(
@@ -641,17 +664,13 @@ function obligationEvidenceRow(
     targetName: row.targetName,
     targetKind: row.targetKind,
     matchKind,
-    ...(row.runtimeLifetime === undefined
-      ? {}
-      : { runtimeLifetime: row.runtimeLifetime }),
+    runtimeLifetime: row.runtimeLifetime,
     closure: row.closure,
-    ...(row.interpretationStatus === undefined
-      ? {}
-      : { interpretationStatus: row.interpretationStatus }),
+    interpretationStatus: row.interpretationStatus,
     sourceLens: row.sourceLens,
     sourceProjection: row.sourceProjection,
     sourceRowId: row.sourceRowId,
-    ...(row.source === undefined ? {} : { source: row.source }),
+    source: row.source,
     basis: row.basis,
     detailFilters: row.detailFilters,
     summary: `${target.linkId} carries ${row.layer}/${row.mode} obligation: ${row.summary}`,
@@ -688,12 +707,10 @@ function mirrorRow(
     productDeclarationKinds: countBy(anchors, (anchor) => anchor.target.kind),
     productPlacements: anchors.map(placementRef),
     frameworkTargets: target.candidates.map(targetRef),
-    ...(firstAnchor === undefined
-      ? {}
-      : { firstProductSource: sourceRangeForAuLinkTarget(firstAnchor) }),
-    ...(firstCandidate === undefined
-      ? {}
-      : { firstFrameworkSource: sourceRangeForAuLinkFrameworkCandidate(firstCandidate) }),
+    firstProductSource: firstAnchor === undefined ? undefined : sourceRangeForAuLinkTarget(firstAnchor),
+    firstFrameworkSource: firstCandidate === undefined
+      ? undefined
+      : sourceRangeForAuLinkFileSpan(firstCandidate),
     summary: `${target.linkId} has ${anchors.length} product placement(s), ${target.candidates.length} framework candidate(s), ${roleEvidence.length} framework role row(s), and ${obligationEvidence.length} emulation obligation row(s).`,
   };
 }
@@ -702,6 +719,7 @@ function placementRef(anchor: AuLinkAnchorRow): AuLinkMirrorPlacementRef {
   return {
     name: anchor.target.name,
     kind: anchor.target.kind,
+    facet: anchor.facet,
     source: sourceRangeForAuLinkTarget(anchor),
   };
 }
@@ -711,7 +729,7 @@ function targetRef(candidate: AuLinkFrameworkTargetCandidate): AuLinkMirrorTarge
     name: candidate.symbolName,
     kind: candidate.kind,
     packageId: candidate.packageId,
-    source: sourceRangeForAuLinkFrameworkCandidate(candidate),
+    source: sourceRangeForAuLinkFileSpan(candidate),
   };
 }
 
@@ -721,11 +739,11 @@ function endpointRef(
   return {
     kind: endpoint.kind,
     name: endpoint.name,
-    ...(endpoint.packageId === undefined ? {} : { packageId: endpoint.packageId }),
-    ...(endpoint.packageName === undefined ? {} : { packageName: endpoint.packageName }),
-    ...(endpoint.resourceKind === undefined ? {} : { resourceKind: endpoint.resourceKind }),
-    ...(endpoint.resourceName === undefined ? {} : { resourceName: endpoint.resourceName }),
-    ...(endpoint.source === undefined ? {} : { source: endpoint.source }),
+    packageId: endpoint.packageId,
+    packageName: endpoint.packageName,
+    resourceKind: endpoint.resourceKind,
+    resourceName: endpoint.resourceName,
+    source: endpoint.source,
   };
 }
 

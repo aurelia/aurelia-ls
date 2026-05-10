@@ -13,6 +13,7 @@ const roots = pressureRoots();
 const analysisDepth = pressureAnalysisDepth();
 const projectShapeFilter = pressureProjectShapeFilter();
 const detailMode = pressureDetailMode();
+const authoringSourceFileLimitPerProject = integerEnv('SEMANTIC_RUNTIME_APP_AUTHORING_SOURCE_FILE_LIMIT_PER_PROJECT', 12);
 
 console.log('semantic-runtime app API pressure');
 console.log('scope: transient app-world API pressure; project keys, paths, and source text are omitted');
@@ -21,6 +22,7 @@ console.log('note: raw detail may include source-level names; do not promote it 
 console.log(`analysis-depth: ${analysisDepth}`);
 console.log(`project-shapes: ${projectShapeFilter == null ? 'all' : [...projectShapeFilter].join(',')}`);
 console.log(`detail-mode: ${detailMode}`);
+console.log(`authoring-source-file-limit-per-project: ${authoringSourceFileLimitPerProject}`);
 console.log(`inputs: ${roots.length}`);
 
 for (const [index, root] of roots.entries()) {
@@ -31,13 +33,16 @@ for (const [index, root] of roots.entries()) {
   console.log(`- request: ${(performance.now() - started).toFixed(1)}ms`);
   console.log(`- projects: ${aggregate.projects}`);
   console.log(`- source files: ${aggregate.sourceFiles}`);
-  console.log(`- projects with likely entrypoints: ${aggregate.projectsWithLikelyEntrypointSource}`);
+  console.log(`- projects with Aurelia app entrypoint signals: ${aggregate.projectsWithAureliaAppEntrypointSignal}`);
   console.log(`- selected projects: ${aggregate.selectedProjects}`);
-  console.log(`- opened apps: ${aggregate.openedApps}`);
+  console.log(`- opened app-world emissions: ${aggregate.openedAppWorlds}`);
   console.log(`- projects with app roots: ${aggregate.projectsWithAppRoots}`);
   console.log(`- projects without app roots: ${aggregate.projectsWithoutAppRoots}`);
   console.log(`- resource libraries without app roots: ${aggregate.resourceLibrariesWithoutAppRoots}`);
   console.log(`- resource definitions: ${aggregate.resourceDefinitions}`);
+  console.log(`- authoring source files requested: ${aggregate.authoringSourceFilesRequested}`);
+  console.log(`- app/runtime templates seen: ${aggregate.appRuntimeTemplatesSeen}`);
+  console.log(`- authoring templates seen: ${aggregate.authoringTemplatesSeen}`);
   console.log(`- router options: ${aggregate.routerOptions}`);
   console.log(`- route configs: ${aggregate.routeConfigs}`);
   console.log(`- route config contexts: ${aggregate.routeConfigContexts}`);
@@ -58,9 +63,11 @@ for (const [index, root] of roots.entries()) {
   console.log(`- app tasks: ${aggregate.appTasks}`);
   console.log(`- runtime controllers: ${aggregate.runtimeControllers}`);
   console.log(`- bindables: ${aggregate.bindables}`);
+  console.log(`- watches: ${aggregate.watches}`);
+  console.log(`- template diagnostics: ${aggregate.templateDiagnostics}`);
   console.log(`- binding data flows: ${aggregate.bindingDataFlows}`);
   console.log(`- open binding data flows: ${aggregate.openBindingDataFlows}`);
-  console.log(`- binding data-flow source assignment gaps: ${aggregate.bindingDataFlowSourceAssignmentGaps}`);
+  console.log(`- binding data-flow source assignment pressures: ${aggregate.bindingDataFlowSourceAssignmentPressures}`);
   console.log(`- unresolved module edges: ${aggregate.unresolvedModuleEdges}`);
   console.log(`- open seams: ${aggregate.openSeams}`);
   console.log(`- app-root project open seams: ${aggregate.appRootProjectOpenSeams}`);
@@ -82,7 +89,7 @@ for (const [index, root] of roots.entries()) {
   printCounts('route child cardinality', aggregate.routeChildCardinality);
   printCounts('route contexts: container', aggregate.routeContextContainers);
   printCounts('route contexts: viewport agent', aggregate.routeContextViewportAgents);
-  printCounts('router viewports: usedBy count', aggregate.routerViewportUsedByCount);
+  printCounts('router viewports: declared usedBy entries', aggregate.routerViewportUsedByCount);
   printCounts('viewport agents: host controller', aggregate.viewportAgentHostControllers);
   printCounts('component agents: controller', aggregate.componentAgentControllers);
   printCounts('component agents: viewport agent', aggregate.componentAgentViewportAgents);
@@ -137,15 +144,40 @@ for (const [index, root] of roots.entries()) {
   printCounts('viewport instruction tree fragment', aggregate.viewportInstructionTreeFragment);
   printCounts('bindable modes', aggregate.bindableModes);
   printCounts('setter kinds', aggregate.setterKinds);
+  printCounts('watch expression kinds', aggregate.watchExpressionKinds);
+  printCounts('watch expression property-key kinds', aggregate.watchExpressionPropertyKeyKinds);
+  printCounts('watch callback kinds', aggregate.watchCallbackKinds);
+  printCounts('watch callback property-key kinds', aggregate.watchCallbackPropertyKeyKinds);
+  printCounts('watch flush modes', aggregate.watchFlushModes);
+  printCounts('template diagnostic severities', aggregate.templateDiagnosticSeverities);
+  printCounts('template diagnostic authorities', aggregate.templateDiagnosticAuthorities);
+  printCounts('template diagnostic kinds', aggregate.templateDiagnosticKinds);
+  printCounts('template diagnostic framework error codes', aggregate.templateDiagnosticFrameworkErrorCodes, 18);
+  printCounts('template diagnostic missing inputs', aggregate.templateDiagnosticMissingInputs, 18);
+  printCounts('template diagnostic suggestions', aggregate.templateDiagnosticSuggestions, 18);
+  printCounts('template diagnostic suggestion actions', aggregate.templateDiagnosticSuggestionActions, 18);
+  printCounts('template diagnostic suggestion targets', aggregate.templateDiagnosticSuggestionTargets, 18);
+  printCounts('template diagnostic owner origins', aggregate.templateDiagnosticOwnerOrigins, 18);
+  printCounts('template diagnostic site kinds', aggregate.templateDiagnosticSiteKinds, 18);
+  printCounts('template diagnostic value-site kinds', aggregate.templateDiagnosticValueSiteKinds, 18);
   printCounts('binding data-flow binding kinds', aggregate.bindingDataFlowBindingKinds);
   printCounts('binding data-flow directions', aggregate.bindingDataFlowDirections);
   printCounts('binding data-flow parse states', aggregate.bindingDataFlowParseStates);
   printCounts('binding data-flow parse result kinds', aggregate.bindingDataFlowParseResultKinds);
   printCounts('binding data-flow source kinds', aggregate.bindingDataFlowSourceKinds);
   printCounts('binding data-flow source assignment kinds', aggregate.bindingDataFlowSourceAssignmentKinds);
-  printCounts('binding data-flow source assignment reasons', aggregate.bindingDataFlowSourceAssignmentReasons, 12);
+  printCounts('binding data-flow source assignment reason kinds', aggregate.bindingDataFlowSourceAssignmentReasons, 12);
+  printCounts('binding data-flow source assignment pressure classes', aggregate.bindingDataFlowSourceAssignmentPressureClasses, 18);
+  printCounts('binding data-flow source assignment by binding kind', aggregate.bindingDataFlowSourceAssignmentBindingKinds, 18);
+  printCounts('binding data-flow source assignment by source kind', aggregate.bindingDataFlowSourceAssignmentSourceKinds, 18);
+  printCounts('binding data-flow source assignment by value channel', aggregate.bindingDataFlowSourceAssignmentValueChannels, 18);
+  printCounts('binding data-flow source assignment by source type surface', aggregate.bindingDataFlowSourceAssignmentSourceTypeSurfaces, 18);
+  printCounts('binding data-flow source assignment by assignment target type surface', aggregate.bindingDataFlowSourceAssignmentTargetSourceTypeSurfaces, 18);
+  printCounts('binding data-flow source assignment by target type surface', aggregate.bindingDataFlowSourceAssignmentTargetTypeSurfaces, 18);
+  printCounts('binding data-flow source assignment by writeability', aggregate.bindingDataFlowSourceAssignmentWriteability, 18);
   printCounts('binding data-flow open reasons', aggregate.bindingDataFlowOpenReasons, 12);
   printCounts('open seam kinds', aggregate.openSeamKinds);
+  printCounts('open seam reason kinds', aggregate.openSeamReasonKinds, 12);
   printCounts('app-root project open seam kinds', aggregate.appRootOpenSeamKinds);
   printCounts('non-app-root project open seam kinds', aggregate.nonAppRootOpenSeamKinds);
   printCounts('open seam summaries', aggregate.openSeamSummaries, 12);
@@ -165,13 +197,16 @@ async function readPressureForRoot(root) {
   const aggregate = {
     projects: summary.projects.length,
     sourceFiles: summary.projects.reduce((sum, project) => sum + project.sourceFiles, 0),
-    projectsWithLikelyEntrypointSource: 0,
+    projectsWithAureliaAppEntrypointSignal: 0,
     selectedProjects: 0,
-    openedApps: 0,
+    openedAppWorlds: 0,
     projectsWithAppRoots: 0,
     projectsWithoutAppRoots: 0,
     resourceLibrariesWithoutAppRoots: 0,
     resourceDefinitions: 0,
+    authoringSourceFilesRequested: 0,
+    appRuntimeTemplatesSeen: 0,
+    authoringTemplatesSeen: 0,
     routerOptions: 0,
     routeConfigs: 0,
     routeConfigContexts: 0,
@@ -192,9 +227,11 @@ async function readPressureForRoot(root) {
     appTasks: 0,
     runtimeControllers: 0,
     bindables: 0,
+    watches: 0,
+    templateDiagnostics: 0,
     bindingDataFlows: 0,
     openBindingDataFlows: 0,
-    bindingDataFlowSourceAssignmentGaps: 0,
+    bindingDataFlowSourceAssignmentPressures: 0,
     unresolvedModuleEdges: 0,
     openSeams: 0,
     appRootProjectOpenSeams: 0,
@@ -264,6 +301,22 @@ async function readPressureForRoot(root) {
     viewportInstructionTreeFragment: {},
     bindableModes: {},
     setterKinds: {},
+    watchExpressionKinds: {},
+    watchExpressionPropertyKeyKinds: {},
+    watchCallbackKinds: {},
+    watchCallbackPropertyKeyKinds: {},
+    watchFlushModes: {},
+    templateDiagnosticSeverities: {},
+    templateDiagnosticAuthorities: {},
+    templateDiagnosticKinds: {},
+    templateDiagnosticFrameworkErrorCodes: {},
+    templateDiagnosticMissingInputs: {},
+    templateDiagnosticSuggestions: {},
+    templateDiagnosticSuggestionActions: {},
+    templateDiagnosticSuggestionTargets: {},
+    templateDiagnosticOwnerOrigins: {},
+    templateDiagnosticSiteKinds: {},
+    templateDiagnosticValueSiteKinds: {},
     bindingDataFlowBindingKinds: {},
     bindingDataFlowDirections: {},
     bindingDataFlowParseStates: {},
@@ -271,8 +324,17 @@ async function readPressureForRoot(root) {
     bindingDataFlowSourceKinds: {},
     bindingDataFlowSourceAssignmentKinds: {},
     bindingDataFlowSourceAssignmentReasons: {},
+    bindingDataFlowSourceAssignmentPressureClasses: {},
+    bindingDataFlowSourceAssignmentBindingKinds: {},
+    bindingDataFlowSourceAssignmentSourceKinds: {},
+    bindingDataFlowSourceAssignmentValueChannels: {},
+    bindingDataFlowSourceAssignmentSourceTypeSurfaces: {},
+    bindingDataFlowSourceAssignmentTargetSourceTypeSurfaces: {},
+    bindingDataFlowSourceAssignmentTargetTypeSurfaces: {},
+    bindingDataFlowSourceAssignmentWriteability: {},
     bindingDataFlowOpenReasons: {},
     openSeamKinds: {},
+    openSeamReasonKinds: {},
     appRootOpenSeamKinds: {},
     nonAppRootOpenSeamKinds: {},
     openSeamSummaries: {},
@@ -287,8 +349,8 @@ async function readPressureForRoot(root) {
   };
 
   for (const project of summary.projects) {
-    if (project.hasLikelyEntrypointSource) {
-      aggregate.projectsWithLikelyEntrypointSource += 1;
+    if (project.hasAureliaAppEntrypointSignal) {
+      aggregate.projectsWithAureliaAppEntrypointSignal += 1;
     }
     increment(aggregate.projectShapeKinds, project.shapeKind);
     for (const dependencyScope of project.aureliaDependencyScopes ?? []) {
@@ -307,16 +369,26 @@ async function readPressureForRoot(root) {
     aggregate.selectedProjects += 1;
 
     try {
+      const projectFrame = runtime.workspace.projects.find((candidate) => candidate.projectKey === project.projectKey);
+      const authoringTemplateSourceFiles = authoringTemplateSourceFilesForProject(project, projectFrame);
+      aggregate.authoringSourceFilesRequested += authoringTemplateSourceFiles.length;
       const appStarted = performance.now();
       const app = await measure(timings, 'open-app', () =>
-        runtime.openApp({ projectKey: project.projectKey, analysisDepth }),
+        runtime.openApp({
+          projectKey: project.projectKey,
+          analysisDepth,
+          includeAuthoringTemplates: authoringTemplateSourceFiles.length > 0,
+          authoringTemplateSourceFiles,
+        }),
       );
       recordAppWorldProfile(timings, app.emission?.profile);
       recordTypeSystemProjectProfile(timings, app.emission?.typeSystem?.profile);
       recordResourceRecognitionProfile(timings, app.emission?.resources?.profile);
       recordTemplateCompilationProfile(timings, app.emission?.templates?.profile);
-      recordTemplateRuntimeAnalysisProfiles(timings, app.emission?.templates?.resources);
-      aggregate.openedApps += 1;
+      recordTemplateRuntimeAnalysisProfiles(timings, allTemplateRuntimeAnalysisResources(app.emission?.templates));
+      aggregate.openedAppWorlds += 1;
+      aggregate.appRuntimeTemplatesSeen += app.emission?.templates?.resources?.length ?? 0;
+      aggregate.authoringTemplatesSeen += app.emission?.templates?.authoringResources?.length ?? 0;
       const appSummary = await measure(timings, 'app-summary', () =>
         app.summary().value,
       );
@@ -367,6 +439,37 @@ async function readPressureForRoot(root) {
           increment(aggregate.bindableModes, bindable.mode);
           increment(aggregate.setterKinds, bindable.setterKind);
         }
+        const watches = row.watches ?? [];
+        aggregate.watches += watches.length;
+        for (const watch of watches) {
+          increment(aggregate.watchExpressionKinds, watch.expressionKind);
+          increment(aggregate.watchExpressionPropertyKeyKinds, watch.expressionPropertyKeyKind ?? 'none');
+          increment(aggregate.watchCallbackKinds, watch.callbackKind);
+          increment(aggregate.watchCallbackPropertyKeyKinds, watch.callbackPropertyKeyKind ?? 'none');
+          increment(aggregate.watchFlushModes, watch.flush);
+        }
+      }
+
+      const templateDiagnosticRows = await measure(timings, 'query-template-diagnostics', () =>
+        pagedRows(app, SemanticAppQueryKind.TemplateDiagnostics),
+      );
+      increment(aggregate.outcomes, `template-diagnostics:${templateDiagnosticRows.outcome}`);
+      increment(aggregate.pageCounts, 'template-diagnostics', templateDiagnosticRows.pages);
+      aggregate.templateDiagnostics += templateDiagnosticRows.rows.length;
+      for (const row of templateDiagnosticRows.rows) {
+        increment(aggregate.templateDiagnosticSeverities, row.severity);
+        increment(aggregate.templateDiagnosticAuthorities, row.diagnosticAuthority ?? 'unknown');
+        increment(aggregate.templateDiagnosticKinds, row.diagnosticKind);
+        increment(aggregate.templateDiagnosticFrameworkErrorCodes, row.frameworkErrorCode ?? 'none');
+        for (const missingInput of diagnosticMissingInputs(row)) {
+          increment(aggregate.templateDiagnosticMissingInputs, missingInput);
+        }
+        increment(aggregate.templateDiagnosticSuggestions, row.suggestion?.suggestionKind ?? 'none');
+        increment(aggregate.templateDiagnosticSuggestionActions, row.suggestion?.actionKind ?? 'none');
+        increment(aggregate.templateDiagnosticSuggestionTargets, suggestionTargetKey(row.suggestion));
+        increment(aggregate.templateDiagnosticOwnerOrigins, row.ownerTypeOrigin ?? 'none');
+        increment(aggregate.templateDiagnosticSiteKinds, row.siteKind);
+        increment(aggregate.templateDiagnosticValueSiteKinds, row.valueSiteKind ?? 'none');
       }
 
       const routerOptionsRows = await measure(timings, 'query-router-options', () =>
@@ -584,8 +687,45 @@ async function readPressureForRoot(root) {
             increment(aggregate.bindingDataFlowSourceAssignmentKinds, row.sourceAssignmentKind);
           }
           if (row.sourceAssignmentReason != null) {
-            aggregate.bindingDataFlowSourceAssignmentGaps += 1;
-            increment(aggregate.bindingDataFlowSourceAssignmentReasons, sourceAssignmentReasonKey(row.sourceAssignmentReason));
+            aggregate.bindingDataFlowSourceAssignmentPressures += 1;
+            const reasonKeys = row.sourceAssignmentReasonKinds?.length > 0
+              ? row.sourceAssignmentReasonKinds.map(sourceAssignmentReasonKindKey)
+              : [sourceAssignmentReasonKey(row.sourceAssignmentReason)];
+            for (const reasonKey of reasonKeys) {
+              increment(aggregate.bindingDataFlowSourceAssignmentReasons, reasonKey);
+              increment(
+                aggregate.bindingDataFlowSourceAssignmentPressureClasses,
+                `${row.sourceAssignmentKind ?? 'unknown'}:${reasonKey}`,
+              );
+              increment(
+                aggregate.bindingDataFlowSourceAssignmentBindingKinds,
+                `${reasonKey}:${row.bindingKind}`,
+              );
+              increment(
+                aggregate.bindingDataFlowSourceAssignmentSourceKinds,
+                `${reasonKey}:${row.sourceKind}`,
+              );
+              increment(
+                aggregate.bindingDataFlowSourceAssignmentValueChannels,
+                `${reasonKey}:${row.valueChannelKind ?? 'none'}`,
+              );
+              increment(
+                aggregate.bindingDataFlowSourceAssignmentSourceTypeSurfaces,
+                `${reasonKey}:${typeSurfaceKey(row.sourceType)}`,
+              );
+              increment(
+                aggregate.bindingDataFlowSourceAssignmentTargetSourceTypeSurfaces,
+                `${reasonKey}:${typeSurfaceKey(row.sourceAssignmentTargetType ?? row.sourceType)}`,
+              );
+              increment(
+                aggregate.bindingDataFlowSourceAssignmentTargetTypeSurfaces,
+                `${reasonKey}:${typeSurfaceKey(row.targetValueType ?? row.targetPropertyType)}`,
+              );
+              increment(
+                aggregate.bindingDataFlowSourceAssignmentWriteability,
+                `${reasonKey}:${writeabilityKey(row.sourceWritable)}`,
+              );
+            }
           }
           if (row.openReason != null) {
             aggregate.openBindingDataFlows += 1;
@@ -603,6 +743,9 @@ async function readPressureForRoot(root) {
       increment(aggregate.pageCounts, 'open-seams', seamRows.pages);
       for (const row of seamRows.rows) {
         increment(aggregate.openSeamKinds, row.seamKindKey);
+        for (const reasonKind of row.reasonKinds ?? []) {
+          increment(aggregate.openSeamReasonKinds, reasonKind);
+        }
         increment(hasAppRoot ? aggregate.appRootOpenSeamKinds : aggregate.nonAppRootOpenSeamKinds, row.seamKindKey);
         increment(aggregate.openSeamSummaries, openSeamSummaryKey(row));
       }
@@ -613,6 +756,24 @@ async function readPressureForRoot(root) {
   }
 
   return aggregate;
+}
+
+function diagnosticMissingInputs(diagnostic) {
+  return diagnostic.missingInputs?.length > 0
+    ? diagnostic.missingInputs
+    : [diagnostic.missingInput ?? 'none'];
+}
+
+function suggestionTargetKey(suggestion) {
+  const target = suggestion?.actionTarget ?? null;
+  if (target == null) {
+    return 'none';
+  }
+  return `${target.targetKind}:${sourceReferenceState(target.source)}`;
+}
+
+function sourceReferenceState(source) {
+  return source == null ? 'no-source' : 'source';
 }
 
 async function pagedRows(app, kind) {
@@ -693,6 +854,26 @@ function pressureDetailMode() {
   throw new Error(`Unsupported SEMANTIC_RUNTIME_PRESSURE_DETAIL '${raw}'.`);
 }
 
+function authoringTemplateSourceFilesForProject(project, projectFrame) {
+  if (project.shapeKind !== SemanticProjectShapeKind.AureliaResourceLibrary || projectFrame == null) {
+    return [];
+  }
+  return projectFrame.sourceFiles
+    .filter((source) => source.role === 'template' || source.path.toLowerCase().endsWith('.html'))
+    .map((source) => source.path)
+    .slice(0, authoringSourceFileLimitPerProject);
+}
+
+function allTemplateRuntimeAnalysisResources(templates) {
+  if (templates == null) {
+    return [];
+  }
+  return [
+    ...(templates.resources ?? []),
+    ...(templates.authoringResources ?? []),
+  ];
+}
+
 function sourceAssignmentReasonKey(reason) {
   if (detailMode === 'raw') {
     return reason;
@@ -712,21 +893,72 @@ function sourceAssignmentReasonKey(reason) {
   return 'other source-assignment strictness pressure';
 }
 
+function sourceAssignmentReasonKindKey(kind) {
+  return kind;
+}
+
 function openSeamSummaryKey(row) {
   if (detailMode === 'raw') {
     return `${row.seamKindKey} :: ${row.summary}`;
   }
-  if (row.summary.includes('provided by the host environment')) {
-    return `${row.seamKindKey} :: dynamic value depends on host environment`;
-  }
-  if (row.summary.includes('dynamic') && row.summary.includes('binding')) {
-    return `${row.seamKindKey} :: dynamic binding value requires a static value to close`;
+  if (row.reasonKinds?.length > 0) {
+    return `${row.seamKindKey} :: ${row.reasonKinds.join('+')}`;
   }
   return `${row.seamKindKey} :: ${row.summary}`;
 }
 
+function typeSurfaceKey(type) {
+  if (type == null) {
+    return 'none';
+  }
+  const normalized = String(type).trim();
+  if (normalized.length === 0) {
+    return 'empty';
+  }
+  if (normalized === 'unknown') {
+    return 'unknown';
+  }
+  if (normalized === 'any') {
+    return 'any';
+  }
+  if (/\bany\b/u.test(normalized)) {
+    return 'contains-any';
+  }
+  if (/\bunknown\b/u.test(normalized)) {
+    return 'contains-unknown';
+  }
+  if (normalized.includes('|')) {
+    return 'union';
+  }
+  if (normalized.endsWith('[]') || /\b(?:Readonly)?Array</u.test(normalized)) {
+    return 'array';
+  }
+  if (/^(?:string|number|boolean|bigint|symbol|null|undefined)$/u.test(normalized)) {
+    return normalized;
+  }
+  return 'object-like';
+}
+
+function writeabilityKey(value) {
+  return value == null ? 'unknown' : String(value);
+}
+
+function integerEnv(name, fallback) {
+  const value = Number.parseInt(process.env[name] ?? '', 10);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
 function increment(counts, key, amount = 1) {
   counts[key] = (counts[key] ?? 0) + amount;
+}
+
+function incrementAll(target, values) {
+  if (values == null) {
+    return;
+  }
+  for (const [key, value] of Object.entries(values)) {
+    increment(target, key, value);
+  }
 }
 
 function cardinalityBucket(count) {
@@ -763,6 +995,11 @@ function printCounts(label, counts, limit = 20) {
 function createTimingAccumulator() {
   return {
     totals: {},
+    expressionTypeCache: {},
+    expressionTypeCacheEntriesByBucket: {},
+    expressionTypeCacheHitsByBucket: {},
+    expressionTypeCacheMissesByBucket: {},
+    expressionTypeCacheWritesByBucket: {},
     projectBuckets: {},
     slowestProjectMilliseconds: 0,
   };
@@ -847,7 +1084,22 @@ function recordTemplateRuntimeAnalysisProfiles(timings, resources) {
     for (const phase of profile.phases ?? []) {
       recordTiming(timings, `template-runtime:${phase.name}`, phase.milliseconds);
     }
+    recordExpressionTypeCacheStats(timings, profile.expressionTypeCache);
   }
+}
+
+function recordExpressionTypeCacheStats(timings, stats) {
+  if (stats == null) {
+    return;
+  }
+  increment(timings.expressionTypeCache, 'entries', stats.entries ?? 0);
+  increment(timings.expressionTypeCache, 'hits', stats.hits ?? 0);
+  increment(timings.expressionTypeCache, 'misses', stats.misses ?? 0);
+  increment(timings.expressionTypeCache, 'writes', stats.writes ?? 0);
+  incrementAll(timings.expressionTypeCacheEntriesByBucket, stats.entriesByBucket);
+  incrementAll(timings.expressionTypeCacheHitsByBucket, stats.hitsByBucket);
+  incrementAll(timings.expressionTypeCacheMissesByBucket, stats.missesByBucket);
+  incrementAll(timings.expressionTypeCacheWritesByBucket, stats.writesByBucket);
 }
 
 function printTimings(label, timings) {
@@ -865,5 +1117,10 @@ function printTimings(label, timings) {
     }
   }
   console.log(`- slowest project: ${timings.slowestProjectMilliseconds.toFixed(1)}ms`);
+  printCounts(`${label}: expression type cache`, timings.expressionTypeCache, 10);
+  printCounts(`${label}: expression type cache entries by bucket`, timings.expressionTypeCacheEntriesByBucket, 10);
+  printCounts(`${label}: expression type cache hits by bucket`, timings.expressionTypeCacheHitsByBucket, 10);
+  printCounts(`${label}: expression type cache misses by bucket`, timings.expressionTypeCacheMissesByBucket, 10);
+  printCounts(`${label}: expression type cache writes by bucket`, timings.expressionTypeCacheWritesByBucket, 10);
   printCounts(`${label}: project buckets`, timings.projectBuckets, 10);
 }

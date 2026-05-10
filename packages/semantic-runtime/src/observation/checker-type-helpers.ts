@@ -13,6 +13,23 @@ export function stringLiteralValuesForType(type: ts.Type): readonly string[] | n
   return values;
 }
 
+/** Return every boolean literal value in a boolean-literal union, or null for non-literal members. */
+export function booleanLiteralValuesForType(type: ts.Type): readonly boolean[] | null {
+  const parts = type.isUnion() ? type.types : [type];
+  const values: boolean[] = [];
+  for (const part of parts) {
+    if ((part.flags & ts.TypeFlags.BooleanLiteral) === 0) {
+      return null;
+    }
+    const intrinsicName = (part as unknown as { readonly intrinsicName?: string }).intrinsicName;
+    if (intrinsicName !== 'true' && intrinsicName !== 'false') {
+      return null;
+    }
+    values.push(intrinsicName === 'true');
+  }
+  return [...new Set(values)];
+}
+
 /** True when the checker type is assignable to a boolean-like primitive lane. */
 export function isBooleanLike(type: ts.Type): boolean {
   return typeParts(type).some((part) => (part.flags & ts.TypeFlags.BooleanLike) !== 0);

@@ -2,11 +2,9 @@ import { FRAMEWORK_DISCOVERY_SEEDS } from "../../framework/index.js";
 import type {
   SourceProject,
   SourceTargetRow,
-  TypeScriptCallSiteEntry,
 } from "../../source/index.js";
 import {
   sourceRangeForTarget,
-  sourceRangeFromFileSpan,
 } from "../../source/index.js";
 import {
   BasisAuthority,
@@ -16,15 +14,20 @@ import {
   type BasisTransition,
   type Basis,
 } from "../basis.js";
+import type { Answer } from "../answer.js";
+import type { Inquiry } from "../inquiry.js";
 import type { SourceRange } from "../locus.js";
 import {
   NavigationPlane,
   NavigationRelation,
+  navigationRoute,
   type NavigationRouteClaim,
 } from "../navigation.js";
+import type { PagedRowFamily } from "../paged-row-family.js";
 
 export { countBy } from "../../collections.js";
 export {
+  sourceRangeForFileSpanCarrier as sourceRangeForCallSiteEntry,
   sourceRangeForTarget,
   sourceRangeFromFileSpan,
   sourceSpanForNode as sourceSpan,
@@ -51,12 +54,6 @@ export function requiredSourceRangeForTarget(
     throw new Error(message);
   }
   return source;
-}
-
-export function sourceRangeForCallSiteEntry(
-  callSite: TypeScriptCallSiteEntry,
-): SourceRange {
-  return sourceRangeFromFileSpan(callSite.file.repoPath, callSite.span);
 }
 
 export function frameworkDiscoverySeedBasis(): Basis {
@@ -115,11 +112,33 @@ export function route(
   summary: string,
   basisTransition?: BasisTransition,
 ): NavigationRouteClaim {
-  return {
-    plane,
-    relation,
-    basis,
-    summary,
-    ...(basisTransition === undefined ? {} : { basisTransition }),
-  };
+  return navigationRoute(plane, relation, basis, summary, basisTransition);
+}
+
+export function frameworkPagedAnswer<
+  TValue extends object,
+  TRow,
+  TKey extends keyof TValue & string,
+>(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  rowFamily: PagedRowFamily<TRow>,
+  baseValue: TValue,
+  rows: readonly TRow[],
+  offset: number,
+  limit: number,
+  key: TKey,
+): Answer<TValue> {
+  return rowFamily.answer({
+    inquiry,
+    rows,
+    offset,
+    limit,
+    basis: [sourceIndexBasis(sourceProject), checkerBasis(sourceProject)],
+    value: (page) =>
+      ({
+        ...baseValue,
+        [key]: page.rows,
+      }) as TValue,
+  });
 }

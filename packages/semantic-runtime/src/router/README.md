@@ -39,6 +39,10 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   `promise`, custom-element name, resource definition, navigation strategy, or open), and resolved resource handles
   express the `resolveCustomElementDefinition(...)` / `_resolveLazy(...)` handoff when static module evaluation can close
   it.
+- Treat string entries in child `routes` arrays as routeable component inputs. When a string routeable resolves to a
+  custom-element definition in the current resource index, semantic-runtime can derive the same fallback path lane that
+  `RouteConfig.path` derives from the custom-element name and aliases; unresolved strings remain open routeable
+  components rather than pretending to be closed route paths.
 - Materialize `RouteConfigContext` parent/root/config/child-route topology from app roots when available, falling back
   to graph roots for library-like analysis. Explicit child route configs win; otherwise a route whose component has
   static route metadata borrows that component route config's child routes, matching the framework's
@@ -63,7 +67,9 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   `au-viewport` products from pretending that a configured-route context is the runtime route context. Follow
   `Router._getRouteContext(...)`: the same configured route context can produce multiple runtime route contexts when it
   is hosted by different viewport agents, so callers must use plural context sets or the explicit
-  `(RouteConfigContext, ViewportAgent | null)` pair.
+  `(RouteConfigContext, ViewportAgent | null)` pair. The route-runtime topology frame owns this recursive traversal so
+  route-config indexes, parent-child context topology, viewport drafts, and emitted context/viewport products stay in
+  one runtime-topology lifetime.
 - Materialize `ViewportCustomElement` and `ViewportAgent` products against the owning `RouteContext`. Viewport selection
   follows the framework's `ViewportAgent._handles(...)` shape: non-default viewport requests require a name match, and
   `usedBy` narrows by component name.
@@ -72,11 +78,23 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   `RouteExpression` input, then become nested/sibling `TypedNavigationInstruction`, `ViewportInstruction`, and
   `ViewportInstructionTree` products with viewport, parameter-count, grouping, query, and fragment shape. Binding-owned
   source-value evaluation can close getter/field-backed string values when the modeled `Scope` and static evaluator can
-  prove them; host-dependent values stay open with the evaluator boundary-value reason attached. Interpolation and template strings with an authored
+  prove them; host-dependent values stay open with the evaluator boundary-value reason attached as a typed open-seam
+  reason kind. `href` first follows the framework's `_resolveIsExternal(...)` gate: explicit `external` /
+  `data-external` attributes and statically external URL strings do not become viewport-instruction products, while a
+  dynamic `href` value stays open with `router-href-externality-open` until semantic-runtime can either prove the
+  external URL lane or close an internal route string. Interpolation and template strings with an authored
   static route prefix use opaque dynamic holes for the unknown runtime values, allowing recognizer matching to continue
   for static path/query shape without pretending the concrete parameter values are known. Root and relative string
   prefixes are normalized through the owning `RouteContext` before the instruction tree is materialized, matching
   `RouteContext.createViewportInstructions(...)`.
+- Resolve the owning router-resource `RouteContext` through modeled controller/container ancestry before falling back to
+  route-config component-definition matching. `load` and `href` resolve `IContextRouter` / `IRouteContext` from the
+  custom-attribute controller's container chain; ordinary child components inside a routed component can therefore
+  inherit the route context even when their own definition is not a routeable component. Root route contexts also publish
+  a root-container fallback, mirroring the framework's extra root `IContextRouter` registration.
+- Publish `RouteConfig` typed product details after committing route-config products. Inquiry surfaces such as
+  template completion should consume these details by product handle when they need route-authoring domains; they should
+  not rescan source files for route-like strings or reach through API row projections.
 - Walk static string instruction paths through the owning `RouteConfigContext` recognizer after instruction-tree
   creation. `RecognizedRoute` products are emitted from the same candidate-chain rules as
   `RouteRecognizer.recognize(...)`: state traversal uses the forward `State.nextStates` graph, candidate selection
@@ -94,7 +112,9 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   title, path, and final path. A transition chain emits a route tree only when every `ViewportRequest` can resolve
   through the parent route context's available `ViewportAgent`s and the resulting context pair is materialized; otherwise
   it records a router open seam at the parent route context instead of publishing a partial route tree as if it had
-  closed.
+  closed. Initial root, transition root, and transition child nodes all publish through the same route-node
+  materialization primitive so route-node handles, config references, and field provenance stay aligned as the router
+  tree substrate grows.
 - Materialize the first `ComponentAgent` handoff for recognized route nodes with resolved custom-element components.
   The framework creates a child container with inherited parent resources before `Controller.$el(...)`; semantic-runtime
   mirrors that as a `ComponentAgent` product and a `RuntimeControllerCreationKind.RoutedCustomElement` controller row
@@ -132,6 +152,9 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
 - Router resources (`au-viewport`, `load`, `href`) are ordinary Aurelia resources supplied by router configuration.
   They flow through the same resource/registration/DI/compiler-world machinery as framework resources, not through a
   router-only shortcut.
+- Authoring value completion for router resources should mirror that same shape. `load` and internal `href` values can
+  offer modeled route-config ids/paths as candidates, but `href` remains open-ended because the framework intentionally
+  allows external URLs and only turns non-external values into viewport instructions.
 - Static `href` and `load` strings are not single opaque component names. The framework sends them through
   `RouteExpression.parse(...)` before route-tree transition compilation, so semantic-runtime should preserve nested
   children, sibling `+` segments, viewport suffixes, root-only expressions, query params, and fragments before any

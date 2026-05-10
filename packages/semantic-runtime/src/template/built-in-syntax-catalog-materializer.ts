@@ -1,6 +1,7 @@
 import {
   ExternalAddress,
   SourceSpanAddress,
+  sourceSpanContains,
 } from '../kernel/address.js';
 import { uniqueByKey } from '../collections.js';
 import { SemanticClaim } from '../kernel/claim.js';
@@ -32,6 +33,7 @@ import {
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
+import { catalogVariantLocalKey } from '../kernel/local-key.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
 import { ConfigurationOptionValueKind } from '../configuration/configuration-option.js';
@@ -50,12 +52,10 @@ import {
   AttributePatternExecutionKind,
   CompiledAttributePattern,
   compileAttributePatternDefinition,
-  type AttributePatternExecutableField,
 } from './attribute-syntax.js';
 import {
   BindingCommandExecutable,
   BindingCommandExecutionKind,
-  type BindingCommandExecutableField,
 } from './binding-command-execution.js';
 import {
   BuiltInSyntaxCatalog,
@@ -74,7 +74,6 @@ import {
   type BuiltInAttributePatternField,
   type BuiltInBindingCommand,
   type BuiltInBindingCommandField,
-  type BuiltInSyntaxCatalogField,
   type BuiltInSyntaxGroup,
 } from './built-in-syntax.js';
 import { TemplateProductDetails } from './product-details.js';
@@ -365,14 +364,7 @@ export class BuiltInSyntaxCatalogMaterializer {
       materializedAttributePatterns,
       materializedBindingCommands,
       source.addressHandle,
-      compactFieldProvenance<BuiltInSyntaxCatalogField>([
-        new FieldProvenance('package', source.provenanceHandle),
-        input.variantKey == null ? null : new FieldProvenance('variant', source.provenanceHandle),
-        new FieldProvenance('group', source.provenanceHandle),
-        materializedAttributePatterns.length === 0 ? null : new FieldProvenance('attributePatterns', source.provenanceHandle),
-        materializedBindingCommands.length === 0 ? null : new FieldProvenance('bindingCommands', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -404,13 +396,7 @@ export class BuiltInSyntaxCatalogMaterializer {
       new MaterializationRecord(
         this.store.handles.materialization(handles.local),
         handles.identityHandle,
-        [
-          handles.productHandle,
-          ...executableProductHandles,
-          ...attributePatterns.flatMap((emission) =>
-            emission.compiledPatterns.map((pattern) => pattern.productHandle)
-          ),
-        ],
+        syntaxCatalogMaterializedProductHandles(handles, executableProductHandles, attributePatterns),
         catalogClaims.map((claim) => claim.handle),
       ),
     ];
@@ -434,7 +420,7 @@ export class BuiltInSyntaxCatalogMaterializer {
       handles.productHandle,
       handles.identityHandle,
       source.addressHandle,
-      fieldProvenanceForAttributePattern(source),
+      [],
     );
     const executable = this.attributePatternExecutableFor(
       handles,
@@ -496,12 +482,7 @@ export class BuiltInSyntaxCatalogMaterializer {
       handler.patterns,
       AttributePatternExecutionKind.BuiltIn,
       source.addressHandle,
-      compactFieldProvenance<AttributePatternExecutableField>([
-        new FieldProvenance('target', source.provenanceHandle),
-        new FieldProvenance('patterns', source.provenanceHandle),
-        new FieldProvenance('executionKind', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -627,7 +608,7 @@ export class BuiltInSyntaxCatalogMaterializer {
       handles.productHandle,
       handles.identityHandle,
       source.addressHandle,
-      fieldProvenanceForBindingCommand(source, handler),
+      [],
     );
     const executable = this.bindingCommandExecutableFor(
       handles,
@@ -661,15 +642,7 @@ export class BuiltInSyntaxCatalogMaterializer {
       handler.ignoreAttr,
       BindingCommandExecutionKind.BuiltIn,
       source.addressHandle,
-      compactFieldProvenance<BindingCommandExecutableField>([
-        new FieldProvenance('target', source.provenanceHandle),
-        new FieldProvenance('name', source.provenanceHandle),
-        handler.aliases.length === 0 ? null : new FieldProvenance('aliases', source.provenanceHandle),
-        new FieldProvenance('key', source.provenanceHandle),
-        new FieldProvenance('ignoreAttr', source.provenanceHandle),
-        new FieldProvenance('executionKind', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -775,7 +748,7 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
     readonly records: readonly KernelStoreRecord[];
     readonly selections: readonly ConfiguredBuiltInSyntaxCatalogSelection[];
   } {
-    const catalogsByKey = new Map(catalogEmission.catalogs.map((catalog) => [catalogKey(catalog), catalog]));
+    const catalogsByKey = new Map(catalogEmission.catalogs.map((catalog) => [catalogVariantLocalKey(catalog), catalog]));
     const records: KernelStoreRecord[] = [];
     const selections: ConfiguredBuiltInSyntaxCatalogSelection[] = [];
     for (const request of selectionRequests) {
@@ -826,7 +799,7 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
     const source = this.recordsForConfiguredSource(
       local,
       admission.sourceAddressHandle,
-      summaryForFrameworkKind(frameworkKind),
+      syntaxCatalogSummaryForFrameworkKind(frameworkKind),
     );
     const handles = this.configuredSelectionHandles(local);
     const claims = this.claimsForConfiguredSelection(local, handles.productHandle, catalogs, source);
@@ -960,7 +933,7 @@ function readConfiguredSyntaxCatalogRequests(
     if (frameworkKind == null) {
       continue;
     }
-    const catalogInputs = catalogInputsForAdmission(frameworkKind, admission, configuration, store);
+    const catalogInputs = syntaxCatalogInputsForAdmission(frameworkKind, admission, configuration, store);
     if (catalogInputs.length === 0) {
       continue;
     }
@@ -969,7 +942,7 @@ function readConfiguredSyntaxCatalogRequests(
   return requests;
 }
 
-function catalogInputsForAdmission(
+function syntaxCatalogInputsForAdmission(
   frameworkKind: FrameworkRegistrationKind,
   admission: RegistrationAdmissionProduct,
   configuration: ConfigurationKernelEmission,
@@ -1028,7 +1001,7 @@ function readI18nTranslationAttributeAliases(
     if (!isI18nTranslationAliasContribution(contribution)) {
       continue;
     }
-    if (sourceSpanContains(store, admission.sourceAddressHandle, contribution.sourceAddressHandle)) {
+    if (sourceSpanHandleContains(store, admission.sourceAddressHandle, contribution.sourceAddressHandle)) {
       aliases = contribution.value.values;
       continue;
     }
@@ -1055,7 +1028,7 @@ function isI18nTranslationAliasContribution(
     && contribution.value.valueKind === ConfigurationOptionValueKind.StringArray;
 }
 
-function sourceSpanContains(
+function sourceSpanHandleContains(
   store: KernelStore,
   containerHandle: AddressHandle | null,
   candidateHandle: AddressHandle | null,
@@ -1067,9 +1040,7 @@ function sourceSpanContains(
   const candidate = store.readAddress(candidateHandle);
   return container instanceof SourceSpanAddress
     && candidate instanceof SourceSpanAddress
-    && container.fileHandle === candidate.fileHandle
-    && container.start <= candidate.start
-    && candidate.end <= container.end;
+    && sourceSpanContains(container, candidate);
 }
 
 function i18nTranslationSyntaxCatalogInput(
@@ -1108,15 +1079,11 @@ function encodeCatalogVariantPart(part: string): string {
 }
 
 function syntaxCatalogInputKey(input: BuiltInSyntaxCatalogInput): string {
-  return `${input.packageId}:${input.group}:${input.variantKey ?? 'default'}`;
+  return catalogVariantLocalKey(input);
 }
 
 function syntaxCatalogLocal(input: BuiltInSyntaxCatalogInput): string {
-  return `built-in-syntax:${input.packageId}:${input.group}${input.variantKey == null ? '' : `:${input.variantKey}`}`;
-}
-
-function catalogKey(catalog: BuiltInSyntaxCatalog): string {
-  return `${catalog.packageId}:${catalog.group}:${catalog.variantKey ?? 'default'}`;
+  return `built-in-syntax:${catalogVariantLocalKey(input)}`;
 }
 
 function syntaxCatalogIdentityDiscriminator(catalog: BuiltInSyntaxCatalog): string {
@@ -1139,7 +1106,23 @@ function executableProductHandlesForSyntaxCatalog(
   ];
 }
 
-function summaryForFrameworkKind(frameworkKind: FrameworkRegistrationKind): string {
+function syntaxCatalogMaterializedProductHandles(
+  handles: BuiltInSyntaxCatalogHandles,
+  executableProductHandles: readonly ProductHandle[],
+  attributePatterns: readonly {
+    readonly compiledPatterns: readonly CompiledAttributePattern[];
+  }[],
+): readonly ProductHandle[] {
+  return [
+    handles.productHandle,
+    ...executableProductHandles,
+    ...attributePatterns.flatMap((emission) =>
+      emission.compiledPatterns.map((pattern) => pattern.productHandle)
+    ),
+  ];
+}
+
+function syntaxCatalogSummaryForFrameworkKind(frameworkKind: FrameworkRegistrationKind): string {
   switch (frameworkKind) {
     case FrameworkRegistrationKind.StandardConfiguration:
       return 'RuntimeHtml StandardConfiguration admitted framework template syntax catalogs.';
@@ -1185,34 +1168,6 @@ type BuiltInBindingCommandConstructor = new (
   sourceAddressHandle?: AddressHandle | null,
   fieldProvenance?: readonly FieldProvenance<BuiltInBindingCommandField>[],
 ) => BuiltInBindingCommand;
-
-function fieldProvenanceForAttributePattern(
-  source: BuiltInSyntaxSourceSet,
-): readonly FieldProvenance<BuiltInAttributePatternField>[] {
-  return compactFieldProvenance<BuiltInAttributePatternField>([
-    new FieldProvenance('targetName', source.provenanceHandle),
-    new FieldProvenance('patterns', source.provenanceHandle),
-    new FieldProvenance('package', source.provenanceHandle),
-    new FieldProvenance('group', source.provenanceHandle),
-  ]);
-}
-
-function fieldProvenanceForBindingCommand(
-  source: BuiltInSyntaxSourceSet,
-  handler: BuiltInBindingCommand,
-): readonly FieldProvenance<BuiltInBindingCommandField>[] {
-  return compactFieldProvenance<BuiltInBindingCommandField>([
-    new FieldProvenance('targetName', source.provenanceHandle),
-    new FieldProvenance('name', source.provenanceHandle),
-    handler.aliases.length === 0 ? null : new FieldProvenance('aliases', source.provenanceHandle),
-    new FieldProvenance('key', source.provenanceHandle),
-    new FieldProvenance('ignoreAttr', source.provenanceHandle),
-    new FieldProvenance('produces', source.provenanceHandle),
-    handler.producedInstructionTypeNames.length === 0 ? null : new FieldProvenance('producedInstructionTypeNames', source.provenanceHandle),
-    new FieldProvenance('package', source.provenanceHandle),
-    new FieldProvenance('group', source.provenanceHandle),
-  ]);
-}
 
 function materializeAttributePatternHandler(
   handler: BuiltInAttributePattern,

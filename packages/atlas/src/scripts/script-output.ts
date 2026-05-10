@@ -2,6 +2,7 @@ import { OutcomeKind, type Answer } from "../inquiry/answer.js";
 import type { LensId } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
 import type { Api } from "../session/api.js";
+import { groupByDefined } from "../collections.js";
 
 export interface ScriptSourceRef {
   readonly filePath?: string;
@@ -16,6 +17,8 @@ export interface ScriptFunctionNameRow {
   readonly functionKind?: string;
   readonly filePath: string;
   readonly lineCount: number;
+  readonly bodyFingerprint?: string;
+  readonly bodyShapeFingerprint?: string;
   readonly source?: ScriptSourceRef;
 }
 
@@ -24,6 +27,10 @@ export interface DuplicateFunctionNameGroup {
   readonly functionCount: number;
   readonly fileCount: number;
   readonly lineCount: number;
+  readonly distinctBodyFingerprintCount: number | null;
+  readonly repeatedBodyFingerprintCount: number;
+  readonly distinctBodyShapeFingerprintCount: number | null;
+  readonly repeatedBodyShapeFingerprintCount: number;
   readonly samples: readonly string[];
 }
 
@@ -74,9 +81,9 @@ export async function readAllPagedRows<TValue, TRow>(
       lens: options.lens,
       locus: RepoRootLocus,
       projection: options.projection,
-      ...(options.filters === undefined ? {} : { filters: options.filters }),
+      filters: options.filters,
       budget: { rows: pageSize, evidencePerSubject: 0 },
-      ...(cursor === undefined ? {} : { page: { size: pageSize, cursor } }),
+      page: cursor === undefined ? undefined : { size: pageSize, cursor },
     });
     assertHitOrMissAnswer(options.label, answer);
     rows.push(...options.rowsFromValue(answerValue<TValue>(answer)));
@@ -176,16 +183,34 @@ export function duplicateTopLevelFunctionNameGroups(
   return [...byName.entries()]
     .map(([name, group]) => {
       const fileCount = new Set(group.map((row) => row.filePath)).size;
+      const rowsByBodyFingerprint = groupByDefined(group, (row) => row.bodyFingerprint);
+      const repeatedBodyFingerprintCount = [...rowsByBodyFingerprint.values()]
+        .filter((rows) => new Set(rows.map((row) => row.filePath)).size > 1)
+        .length;
+      const rowsByBodyShapeFingerprint = groupByDefined(group, (row) => row.bodyShapeFingerprint);
+      const repeatedBodyShapeFingerprintCount = [...rowsByBodyShapeFingerprint.values()]
+        .filter((rows) => new Set(rows.map((row) => row.filePath)).size > 1)
+        .length;
       return {
         name,
         functionCount: group.length,
         fileCount,
         lineCount: group.reduce((total, row) => total + row.lineCount, 0),
+        distinctBodyFingerprintCount: rowsByBodyFingerprint.size === 0
+          ? null
+          : rowsByBodyFingerprint.size,
+        repeatedBodyFingerprintCount,
+        distinctBodyShapeFingerprintCount: rowsByBodyShapeFingerprint.size === 0
+          ? null
+          : rowsByBodyShapeFingerprint.size,
+        repeatedBodyShapeFingerprintCount,
         samples: group.slice(0, 3).map((row) => sourceLabel(row)),
       };
     })
     .filter((group) => group.fileCount > 1)
     .sort((left, right) =>
+      right.repeatedBodyShapeFingerprintCount - left.repeatedBodyShapeFingerprintCount ||
+      right.repeatedBodyFingerprintCount - left.repeatedBodyFingerprintCount ||
       right.functionCount - left.functionCount ||
       right.lineCount - left.lineCount ||
       left.name.localeCompare(right.name)

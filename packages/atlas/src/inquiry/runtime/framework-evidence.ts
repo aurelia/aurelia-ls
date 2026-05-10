@@ -43,6 +43,7 @@ import {
 import type { FrameworkDiscoveryRecipeRow } from "./framework-recipes.js";
 import type { FrameworkHydrationFlowRow } from "./framework-rendering-hydration-flow.js";
 import type { FrameworkRenderConsequenceRow } from "./framework-rendering-consequences.js";
+import { sourceRangeForObserverEntity } from "./framework-observer-entities.js";
 import {
   bindingAdmissionSummaryRow,
   bindingProductSummaryRow,
@@ -155,9 +156,9 @@ export function evidenceForAnchorResolution(
         ? EvidenceConfidence.Exact
         : EvidenceConfidence.Strong,
     summary: `${resolution.anchor.source.packageId}:${resolution.anchor.source.symbolName} is ${resolution.status}`,
-    ...(firstCandidate === undefined
-      ? {}
-      : { source: sourceRangeForFrameworkAnchorCandidate(firstCandidate) }),
+    source: firstCandidate === undefined
+      ? undefined
+      : sourceRangeForFrameworkAnchorCandidate(firstCandidate),
     data: resolution,
   };
 }
@@ -173,9 +174,9 @@ export function evidenceForFlowSeed(seed: FrameworkFlowSeedRow): Evidence {
         ? EvidenceConfidence.Strong
         : EvidenceConfidence.Exact,
     summary: `${seed.anchorResolution.anchor.source.packageId}:${seed.anchorResolution.anchor.source.symbolName} -> ${seed.flow} is ${seed.status}`,
-    ...(firstCandidate === undefined
-      ? {}
-      : { source: sourceRangeForFrameworkAnchorCandidate(firstCandidate) }),
+    source: firstCandidate === undefined
+      ? undefined
+      : sourceRangeForFrameworkAnchorCandidate(firstCandidate),
     data: seed,
   };
 }
@@ -188,7 +189,7 @@ export function evidenceForCallEdge(row: FrameworkFlowCallEdgeRow): Evidence {
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: `${row.flowSeed.flow}: ${row.edge.direction} call ${row.edge.from.name} -> ${row.edge.to.name}`,
-    ...(source === null ? {} : { source }),
+    source: source ?? undefined,
     data: row,
   };
 }
@@ -211,7 +212,7 @@ export function evidenceForCallTarget(
     }:${row.targetName} from ${row.anchorIds.length} anchor(s), ${
       row.edgeCount
     } edge row(s)`,
-    ...(source === null ? {} : { source }),
+    source: source ?? undefined,
     data: row,
   };
 }
@@ -320,7 +321,7 @@ export function evidenceForBundle(row: FrameworkBundleExportRow): Evidence {
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Strong,
     summary: `${row.packageId}:${row.exportEntry.exportName} is a ${row.bundleKind} bundle with ${row.associations.length} evaluated registration association(s) from ${row.effectCount} effect(s)`,
-    ...(source === null ? {} : { source }),
+    source: source ?? undefined,
     data: row,
   };
 }
@@ -486,22 +487,8 @@ export function evidenceForBindingSetup(
   };
 }
 
-export function evidenceForRenderingRelationship(
-  row: FrameworkRenderingRelationshipRow,
-): Evidence {
-  return {
-    id: row.id,
-    kind: EvidenceKind.TypeFact,
-    role: EvidenceRole.Subject,
-    confidence: EvidenceConfidence.Strong,
-    summary: row.summary,
-    source: row.source,
-    data: row,
-  };
-}
-
-export function evidenceForRenderConsequence(
-  row: FrameworkRenderConsequenceRow,
+export function evidenceForRenderingTypeFact(
+  row: FrameworkRenderingRelationshipRow | FrameworkRenderConsequenceRow,
 ): Evidence {
   return {
     id: row.id,
@@ -517,9 +504,7 @@ export function evidenceForRenderConsequence(
 export function evidenceForObserverEntity(
   row: FrameworkObserverEntityRow,
 ): Evidence {
-  const source = sourceRangeForTarget(
-    concreteExportTarget(row.exportEntry.targets),
-  );
+  const source = sourceRangeForObserverEntity(row);
   return {
     id: row.id,
     kind: EvidenceKind.TypeFact,
@@ -551,7 +536,7 @@ export function evidenceForAppTaskEntity(
     } AppTask roles [${row.appTaskKinds.join(
       ", ",
     )}] capabilities [${row.appTaskCapabilities.join(", ")}]`,
-    ...(source === null ? {} : { source }),
+    source: source ?? undefined,
     data: row,
   };
 }

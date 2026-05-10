@@ -42,6 +42,7 @@ import {
 import {
   inquiryQueryMatches,
   inquiryStringFilter,
+  matchesFilterValue,
 } from "./lens-filter-utils.js";
 import {
   optionalNextPageContinuation,
@@ -58,7 +59,6 @@ export interface ProductVocabularyValue {
   readonly claimGraphEdges?: readonly ProductClaimGraphEdgeRow[];
   readonly claimSignatureIssues?: readonly ProductClaimSignatureIssueRow[];
 }
-
 type ProductVocabularyProjection =
   | "summary"
   | "catalog"
@@ -74,10 +74,14 @@ export function answerProductVocabulary(
   const analysis = readProductVocabularyAnalysis(sourceProject);
   const projection = productVocabularyProjection(inquiry);
   const basis = productVocabularyBasis(sourceProject);
+  const baseValue = {
+    version: analysis.version,
+    rollup: analysis.rollup,
+  };
 
   switch (projection) {
     case "summary":
-      return answerProductVocabularySummary(inquiry, analysis, basis);
+      return answerProductVocabularySummary(inquiry, analysis, basis, baseValue);
     case "catalog":
       return answerProductVocabularyRows(
         inquiry,
@@ -85,7 +89,7 @@ export function answerProductVocabulary(
         "vocabulary definition row(s)",
         filterDefinitions(analysis.definitions, inquiry),
         basis,
-        (rows) => ({ ...productVocabularyBaseValue(analysis), definitions: rows }),
+        (rows) => ({ ...baseValue, definitions: rows }),
         evidenceForDefinition,
       );
     case "usage":
@@ -95,8 +99,8 @@ export function answerProductVocabulary(
         "vocabulary usage row(s)",
         filterUsages(analysis.usages, inquiry),
         basis,
-        (rows) => ({ ...productVocabularyBaseValue(analysis), usages: rows }),
-        evidenceForUsage,
+        (rows) => ({ ...baseValue, usages: rows }),
+        evidenceForVocabularyUsage,
       );
     case "claim-schema":
       return answerProductVocabularyRows(
@@ -105,7 +109,7 @@ export function answerProductVocabulary(
         "claim predicate schema row(s)",
         filterClaimPredicates(analysis.claimPredicates, inquiry),
         basis,
-        (rows) => ({ ...productVocabularyBaseValue(analysis), claimPredicates: rows }),
+        (rows) => ({ ...baseValue, claimPredicates: rows }),
         evidenceForClaimPredicate,
       );
     case "claim-graph":
@@ -115,7 +119,7 @@ export function answerProductVocabulary(
         "claim schema product-adjacency edge(s)",
         filterClaimGraphEdges(analysis.claimGraphEdges, inquiry),
         basis,
-        (rows) => ({ ...productVocabularyBaseValue(analysis), claimGraphEdges: rows }),
+        (rows) => ({ ...baseValue, claimGraphEdges: rows }),
         evidenceForClaimGraphEdge,
       );
     case "claim-issues":
@@ -125,7 +129,7 @@ export function answerProductVocabulary(
         "claim signature issue row(s)",
         filterClaimSignatureIssues(analysis.claimSignatureIssues, inquiry),
         basis,
-        (rows) => ({ ...productVocabularyBaseValue(analysis), claimSignatureIssues: rows }),
+        (rows) => ({ ...baseValue, claimSignatureIssues: rows }),
         evidenceForClaimSignatureIssue,
       );
   }
@@ -135,6 +139,7 @@ function answerProductVocabularySummary(
   inquiry: Inquiry,
   analysis: ProductVocabularyAnalysis,
   basis: readonly Basis[],
+  baseValue: ProductVocabularyValue,
 ): Answer<ProductVocabularyValue> {
   const topIssues = filterClaimSignatureIssues(analysis.claimSignatureIssues, inquiry)
     .slice(0, rowLimit(inquiry));
@@ -144,7 +149,7 @@ function answerProductVocabularySummary(
     `Read ${analysis.rollup.definitionCount} vocabulary definition(s), ${analysis.rollup.usageCount} exact source usage(s), and ${analysis.rollup.claimGraphEdgeCount} claim-schema product edge(s).`,
     {
       value: {
-        ...productVocabularyBaseValue(analysis),
+        ...baseValue,
         claimSignatureIssues: topIssues,
       },
       basis,
@@ -188,13 +193,6 @@ function answerProductVocabularyRows<TRow>(
   });
 }
 
-function productVocabularyBaseValue(analysis: ProductVocabularyAnalysis): ProductVocabularyValue {
-  return {
-    version: analysis.version,
-    rollup: analysis.rollup,
-  };
-}
-
 function productVocabularyProjection(inquiry: Inquiry): ProductVocabularyProjection {
   switch (inquiry.projection) {
     case undefined:
@@ -216,10 +214,10 @@ function filterDefinitions(
   inquiry: Inquiry,
 ): readonly ProductVocabularyDefinitionRow[] {
   return rows.filter((row) =>
-    matches(row.slot, inquiryStringFilter(inquiry, "slot")) &&
-    matches(row.namespace, inquiryStringFilter(inquiry, "namespace")) &&
-    matches(row.memberName, inquiryStringFilter(inquiry, "memberName")) &&
-    matches(row.rootName, inquiryStringFilter(inquiry, "rootName")) &&
+    matchesFilterValue(row.slot, inquiryStringFilter(inquiry, "slot")) &&
+    matchesFilterValue(row.namespace, inquiryStringFilter(inquiry, "namespace")) &&
+    matchesFilterValue(row.memberName, inquiryStringFilter(inquiry, "memberName")) &&
+    matchesFilterValue(row.rootName, inquiryStringFilter(inquiry, "rootName")) &&
     inquiryQueryMatches(inquiry, [
       row.id,
       row.key,
@@ -236,11 +234,11 @@ function filterUsages(
   inquiry: Inquiry,
 ): readonly ProductVocabularyUsageRow[] {
   return rows.filter((row) =>
-    matches(row.rootName, inquiryStringFilter(inquiry, "rootName")) &&
-    matches(row.namespace, inquiryStringFilter(inquiry, "namespace")) &&
-    matches(row.memberName, inquiryStringFilter(inquiry, "memberName")) &&
-    matches(row.syntacticRole, inquiryStringFilter(inquiry, "role")) &&
-    matches(row.accessKind, inquiryStringFilter(inquiry, "accessKind")) &&
+    matchesFilterValue(row.rootName, inquiryStringFilter(inquiry, "rootName")) &&
+    matchesFilterValue(row.namespace, inquiryStringFilter(inquiry, "namespace")) &&
+    matchesFilterValue(row.memberName, inquiryStringFilter(inquiry, "memberName")) &&
+    matchesFilterValue(row.syntacticRole, inquiryStringFilter(inquiry, "role")) &&
+    matchesFilterValue(row.accessKind, inquiryStringFilter(inquiry, "accessKind")) &&
     inquiryQueryMatches(inquiry, [
       row.id,
       row.accessPath,
@@ -258,8 +256,8 @@ function filterClaimPredicates(
   const endpointKind = inquiryStringFilter(inquiry, "endpointKind");
   const productKind = inquiryStringFilter(inquiry, "productKind");
   return rows.filter((row) =>
-    matches(row.namespace, inquiryStringFilter(inquiry, "namespace")) &&
-    matches(row.memberName, inquiryStringFilter(inquiry, "memberName")) &&
+    matchesFilterValue(row.namespace, inquiryStringFilter(inquiry, "namespace")) &&
+    matchesFilterValue(row.memberName, inquiryStringFilter(inquiry, "memberName")) &&
     (endpointKind === undefined ||
       row.signature?.subject.endpointKinds.includes(endpointKind as never) === true ||
       row.signature?.object.endpointKinds.includes(endpointKind as never) === true) &&
@@ -284,7 +282,7 @@ function filterClaimGraphEdges(
 ): readonly ProductClaimGraphEdgeRow[] {
   const productKind = inquiryStringFilter(inquiry, "productKind");
   return rows.filter((row) =>
-    matches(row.predicateKey, inquiryStringFilter(inquiry, "predicateKey")) &&
+    matchesFilterValue(row.predicateKey, inquiryStringFilter(inquiry, "predicateKey")) &&
     (productKind === undefined ||
       row.subjectProductKindId === productKind ||
       row.subjectProductKindKey === productKind ||
@@ -307,9 +305,9 @@ function filterClaimSignatureIssues(
   inquiry: Inquiry,
 ): readonly ProductClaimSignatureIssueRow[] {
   return rows.filter((row) =>
-    matches(row.kind, inquiryStringFilter(inquiry, "issueKind")) &&
-    matches(row.predicateKey, inquiryStringFilter(inquiry, "predicateKey")) &&
-    matches(row.productKindRef ?? "", inquiryStringFilter(inquiry, "productKind")) &&
+    matchesFilterValue(row.kind, inquiryStringFilter(inquiry, "issueKind")) &&
+    matchesFilterValue(row.predicateKey, inquiryStringFilter(inquiry, "predicateKey")) &&
+    matchesFilterValue(row.productKindRef ?? "", inquiryStringFilter(inquiry, "productKind")) &&
     inquiryQueryMatches(inquiry, [
       row.id,
       row.kind,
@@ -333,7 +331,7 @@ function evidenceForDefinition(row: ProductVocabularyDefinitionRow): Evidence {
   };
 }
 
-function evidenceForUsage(row: ProductVocabularyUsageRow): Evidence {
+function evidenceForVocabularyUsage(row: ProductVocabularyUsageRow): Evidence {
   return {
     id: row.id,
     kind: EvidenceKind.SourceSpan,
@@ -463,8 +461,8 @@ function productVocabularyContinuation(
       lens: LensId.ProductVocabulary,
       locus: inquiry.locus ?? RepoRootLocus,
       projection,
-      ...(inquiry.filters === undefined ? {} : { filters: inquiry.filters }),
-      ...(inquiry.budget === undefined ? {} : { budget: inquiry.budget }),
+      filters: inquiry.filters,
+      budget: inquiry.budget,
     },
     route: {
       plane: NavigationPlane.Structure,
@@ -495,8 +493,4 @@ function productVocabularyBasis(sourceProject: SourceProject): readonly Basis[] 
       identity: sourceProject.summary().identity,
     },
   ];
-}
-
-function matches(value: string, expected: string | undefined): boolean {
-  return expected === undefined || value === expected;
 }

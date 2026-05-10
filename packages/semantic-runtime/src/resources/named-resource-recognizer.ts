@@ -15,7 +15,10 @@ import {
   readResourceNameConvention,
 } from './resource-convention.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
-import { createNamedResourceDefinitionHeader } from './resource-definition.js';
+import {
+  createNamedResourceDefinitionHeader,
+  type NamedResourceDefinitionHeader,
+} from './resource-definition.js';
 import {
   readDecoratorCalleeName,
   readDefineCallKind,
@@ -43,6 +46,11 @@ export class NamedResourceRecognizer {
   recognize(context: ResourceRecognitionContext): readonly ResourceRecognitionObservation[] {
     return recognizeNamedResources(context, null);
   }
+}
+
+interface NamedResourceDefinitionRead {
+  readonly definition: NamedResourceDefinitionHeader;
+  readonly openSeams: readonly ResourceRecognitionOpen[];
 }
 
 function recognizeNamedResources(
@@ -92,60 +100,61 @@ function recognizeDecorators(
   const decorators = ts.canHaveDecorators(classNode)
     ? ts.getDecorators(classNode) ?? []
     : [];
-  const observations: ResourceRecognitionObservation[] = [];
+  const target = targetOverride ?? readClassTarget(classNode);
+  return decorators.flatMap((decorator) => {
+    const read = readDecoratorResource(decorator, wantedKind, expressionReader, target);
+    return read == null ? [] : [read];
+  });
+}
 
-  for (const decorator of decorators) {
-    const calleeName = readDecoratorCalleeName(decorator);
-    const resourceKind = calleeName == null
-      ? null
-      : RESOURCE_DECORATOR_KIND.get(calleeName) ?? null;
-    if (
-      resourceKind == null
-      || resourceKind === ResourceDefinitionKind.AttributePattern
-      || !matchesNamedKind(resourceKind, wantedKind)
-    ) {
-      continue;
-    }
-
-    const expression = unwrapExpression(decorator.expression);
-    const definitionExpression = ts.isCallExpression(expression)
-      ? expression.arguments[0] ?? null
-      : null;
-    const name = definitionExpression == null
-      ? null
-      : readResourceNameField(definitionExpression, expressionReader);
-    const aliases = definitionExpression == null
-      ? null
-      : readResourceAliasesField(definitionExpression, expressionReader);
-    const openSeams: ResourceRecognitionOpen[] = [];
-    if (definitionExpression == null || name?.value == null) {
-      openSeams.push(new ResourceRecognitionOpen(
-        KernelVocabulary.Resource.OpenNameExpression.key,
-        `Decorator ${calleeName}(...) did not expose a static resource name.`,
-        definitionExpression ?? decorator,
-      ));
-    }
-    if (aliases?.openSummary != null && aliases.node != null) {
-      openSeams.push(new ResourceRecognitionOpen(KernelVocabulary.Resource.OpenAliasExpression.key, aliases.openSummary, aliases.node));
-    }
-
-    const target = targetOverride ?? readClassTarget(classNode);
-    const definition = createNamedResourceDefinitionHeader(
-      resourceKind,
-      new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
-      name?.value ?? null,
-      aliases?.value ?? [],
-    );
-    observations.push(new ResourceRecognitionObservation(
-      ResourceCarrierKind.Decorator,
-      decorator,
-      definitionExpression,
-      definition,
-      openSeams,
-    ));
+function readDecoratorResource(
+  decorator: ts.Decorator,
+  wantedKind: NamedResourceDefinitionKind | null,
+  expressionReader: StaticEvaluationExpressionReader,
+  target: EvaluationTargetRead,
+): ResourceRecognitionObservation | null {
+  const calleeName = readDecoratorCalleeName(decorator);
+  const resourceKind = resourceKindForDecorator(calleeName, wantedKind);
+  if (resourceKind == null) {
+    return null;
   }
+  const definitionExpression = decoratorDefinitionExpression(decorator);
+  const read = readNamedResourceDefinition(
+    resourceKind,
+    new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
+    definitionExpression,
+    expressionReader,
+    decorator,
+    `Decorator ${calleeName}(...) did not expose a static resource name.`,
+  );
+  return new ResourceRecognitionObservation(
+    ResourceCarrierKind.Decorator,
+    decorator,
+    definitionExpression,
+    read.definition,
+    read.openSeams,
+  );
+}
 
-  return observations;
+function resourceKindForDecorator(
+  calleeName: string | null,
+  wantedKind: NamedResourceDefinitionKind | null,
+): NamedResourceDefinitionKind | null {
+  const resourceKind = calleeName == null
+    ? null
+    : RESOURCE_DECORATOR_KIND.get(calleeName) ?? null;
+  return resourceKind == null
+    || resourceKind === ResourceDefinitionKind.AttributePattern
+    || !matchesNamedKind(resourceKind, wantedKind)
+    ? null
+    : resourceKind;
+}
+
+function decoratorDefinitionExpression(decorator: ts.Decorator): ts.Expression | null {
+  const expression = unwrapExpression(decorator.expression);
+  return ts.isCallExpression(expression)
+    ? expression.arguments[0] ?? null
+    : null;
 }
 
 function recognizeEvaluatedClassBindings(
@@ -225,33 +234,21 @@ function recognizeStaticAu(
     return [];
   }
 
-  const name = readResourceNameField(initializer, context.expressionReader);
-  const aliases = readResourceAliasesField(initializer, context.expressionReader);
-  const openSeams: ResourceRecognitionOpen[] = [];
-  if (name.value == null) {
-    openSeams.push(new ResourceRecognitionOpen(
-      KernelVocabulary.Resource.OpenNameExpression.key,
-      name.openSummary ?? 'Static $au resource name did not close to a static string.',
-      name.node ?? initializer,
-    ));
-  }
-  if (aliases.openSummary != null && aliases.node != null) {
-    openSeams.push(new ResourceRecognitionOpen(KernelVocabulary.Resource.OpenAliasExpression.key, aliases.openSummary, aliases.node));
-  }
-
-  const definition = createNamedResourceDefinitionHeader(
+  const read = readNamedResourceDefinition(
     resourceKind,
     new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
-    name.value,
-    aliases.value ?? [],
+    initializer,
+    context.expressionReader,
+    initializer,
+    'Static $au resource name did not close to a static string.',
   );
   return [
     new ResourceRecognitionObservation(
       ResourceCarrierKind.StaticAu,
       initializer,
       initializer,
-      definition,
-      openSeams,
+      read.definition,
+      read.openSeams,
     ),
   ];
 }
@@ -317,27 +314,18 @@ function recognizeDefineCall(
 
   const definitionExpression = call.arguments[0] ?? null;
   const targetExpression = call.arguments[1] ?? null;
-  const name = definitionExpression == null
-    ? null
-    : readResourceNameField(definitionExpression, context.expressionReader);
-  const aliases = definitionExpression == null
-    ? null
-    : readResourceAliasesField(definitionExpression, context.expressionReader);
   const target = targetExpression == null
     ? null
     : readEvaluatedExpressionTarget(targetExpression, context.expressionReader);
-  const openSeams: ResourceRecognitionOpen[] = [];
-
-  if (definitionExpression == null || name?.value == null) {
-    openSeams.push(new ResourceRecognitionOpen(
-      KernelVocabulary.Resource.OpenNameExpression.key,
-      name?.openSummary ?? 'Define call did not expose a static resource name.',
-      name?.node ?? definitionExpression ?? call,
-    ));
-  }
-  if (aliases?.openSummary != null && aliases.node != null) {
-    openSeams.push(new ResourceRecognitionOpen(KernelVocabulary.Resource.OpenAliasExpression.key, aliases.openSummary, aliases.node));
-  }
+  const read = readNamedResourceDefinition(
+    resourceKind,
+    target == null ? null : new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
+    definitionExpression,
+    context.expressionReader,
+    call,
+    'Define call did not expose a static resource name.',
+  );
+  const openSeams: ResourceRecognitionOpen[] = [...read.openSeams];
   if (target == null || target.localName == null) {
     openSeams.push(new ResourceRecognitionOpen(
       KernelVocabulary.Resource.OpenTargetExpression.key,
@@ -346,19 +334,51 @@ function recognizeDefineCall(
     ));
   }
 
-  const definition = createNamedResourceDefinitionHeader(
-    resourceKind,
-    target == null ? null : new ResourceTargetObservation(target.localName, target.node, target.isDeclaration),
-    name?.value ?? null,
-    aliases?.value ?? [],
-  );
   return new ResourceRecognitionObservation(
     ResourceCarrierKind.DefineCall,
     call,
     definitionExpression,
-    definition,
+    read.definition,
     openSeams,
   );
+}
+
+function readNamedResourceDefinition(
+  resourceKind: NamedResourceDefinitionKind,
+  target: ResourceTargetObservation | null,
+  definitionExpression: ts.Expression | null,
+  expressionReader: StaticEvaluationExpressionReader,
+  carrierNode: ts.Node,
+  missingNameSummary: string,
+): NamedResourceDefinitionRead {
+  const name = definitionExpression == null
+    ? null
+    : readResourceNameField(definitionExpression, expressionReader);
+  const aliases = definitionExpression == null
+    ? null
+    : readResourceAliasesField(definitionExpression, expressionReader);
+  const openSeams: ResourceRecognitionOpen[] = [];
+
+  if (definitionExpression == null || name?.value == null) {
+    openSeams.push(new ResourceRecognitionOpen(
+      KernelVocabulary.Resource.OpenNameExpression.key,
+      name?.openSummary ?? missingNameSummary,
+      name?.node ?? definitionExpression ?? carrierNode,
+    ));
+  }
+  if (aliases?.openSummary != null && aliases.node != null) {
+    openSeams.push(new ResourceRecognitionOpen(KernelVocabulary.Resource.OpenAliasExpression.key, aliases.openSummary, aliases.node));
+  }
+
+  return {
+    definition: createNamedResourceDefinitionHeader(
+      resourceKind,
+      target,
+      name?.value ?? null,
+      aliases?.value ?? [],
+    ),
+    openSeams,
+  };
 }
 
 function hasExplicitResourceCarrier(classNode: ts.ClassLikeDeclarationBase): boolean {

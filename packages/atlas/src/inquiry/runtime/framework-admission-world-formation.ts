@@ -168,7 +168,7 @@ function worldFormationRowForAdmissionOnly(
 ): FrameworkAdmissionWorldFormationRow {
   const interpretation =
     frameworkAdmissionWorldFormation.interpretAdmissionOnly(relationship);
-  return {
+  const result = {
     id: `${relationship.id}:world-formation:admission-only`,
     packageId: relationship.packageId,
     packageName: relationship.packageName,
@@ -182,14 +182,15 @@ function worldFormationRowForAdmissionOnly(
     formedTarget: relationship.to,
     source: relationship.source,
     closure: interpretation.closure,
-    ...(interpretation.openReason === undefined
-      ? {}
-      : { openReason: interpretation.openReason }),
-    ...(relationship.to.resourceKind === undefined
-      ? {}
-      : { resourceKind: relationship.to.resourceKind }),
     summary: interpretation.summary,
   };
+  if (interpretation.openReason !== undefined) {
+    Object.assign(result, { openReason: interpretation.openReason });
+  }
+  if (relationship.to.resourceKind !== undefined) {
+    Object.assign(result, { resourceKind: relationship.to.resourceKind });
+  }
+  return result;
 }
 
 function worldFormationMatches(

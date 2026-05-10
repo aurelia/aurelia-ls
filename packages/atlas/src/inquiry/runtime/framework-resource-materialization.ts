@@ -22,6 +22,7 @@ import {
   readTypeScriptCallSiteEntry,
   requiredSourceFileIdentity,
   SourceProjectMemo,
+  toPosixPath,
   type SourceFileIdentity,
   type SourceProject,
   type TypeScriptCallSiteEntry,
@@ -289,7 +290,7 @@ function materializationSiteForCall(
   packageName: string,
   call: ts.CallExpression,
 ): FrameworkResourceMaterializationSiteRow | null {
-  const filePath = normalizedPath(file.repoPath);
+  const filePath = toPosixPath(file.repoPath);
   if (!isPotentialMaterializationCall(call, sourceFile, filePath)) {
     return null;
   }
@@ -524,9 +525,9 @@ function attributePatternDescriptorForCall(
       phase: FrameworkRelationshipPhase.Definition,
       resourceKinds: [FrameworkResourceDefinitionKind.AttributePattern],
       subjectText: calleeText,
-      ...(typeArgument === undefined || ts.isSpreadElement(typeArgument)
-        ? {}
-        : { producerName: typeArgument.getText(sourceFile) }),
+      producerName: typeArgument === undefined || ts.isSpreadElement(typeArgument)
+        ? undefined
+        : typeArgument.getText(sourceFile),
       summary:
         "AttributePattern.create produces a registry for compiler syntax pattern handlers.",
     };
@@ -991,8 +992,4 @@ function resourceInstantiationSummary(
     .sort()
     .join(", ");
   return `${row.resourceKind} ${target} has ${instanceLifetime} runtime materialization via ${siteKinds}.`;
-}
-
-function normalizedPath(filePath: string): string {
-  return filePath.replaceAll("\\", "/");
 }

@@ -49,6 +49,14 @@ export function inquiryStringFilter(
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+/** Return true when any listed runtime filter carries a non-empty string. */
+export function hasAnyInquiryStringFilter(
+  inquiry: Inquiry,
+  keys: readonly string[],
+): boolean {
+  return keys.some((key) => inquiryStringFilter(inquiry, key) !== undefined);
+}
+
 /** Read a non-empty string scalar and normalize it for case-insensitive matching. */
 export function inquiryLowerStringFilter(
   inquiry: Inquiry,
@@ -83,6 +91,14 @@ export function inquiryQueryMatches(
   values: readonly string[],
 ): boolean {
   return queryMatches(inquiryStringFilter(inquiry, "query"), values);
+}
+
+/** Return true when an exact scalar filter is absent or equal to the value. */
+export function matchesFilterValue<TValue extends boolean | string>(
+  value: TValue,
+  expected: TValue | undefined,
+): boolean {
+  return expected === undefined || value === expected;
 }
 
 /** Read a finite number scalar from an inquiry's runtime filters. */
@@ -136,6 +152,24 @@ export function stringField(
 ): object {
   const value = source[sourceKey];
   return typeof value === "string" && value.length > 0 ? { [targetKey]: value } : {};
+}
+
+/** Translate public call-argument filter keys to TypeScript call-site filter keys. */
+export function callSiteArgumentFilters(
+  source: Readonly<Record<string, unknown>> | undefined,
+): Record<string, string> {
+  if (source === undefined) {
+    return {};
+  }
+  return {
+    ...stringField(source, "callArgumentText", "argumentText"),
+    ...stringField(source, "callArgumentSymbolName", "argumentSymbolName"),
+    ...stringField(
+      source,
+      "callArgumentFullyQualifiedName",
+      "argumentFullyQualifiedName",
+    ),
+  };
 }
 
 /** Copy a boolean field, accepting either a boolean value or the strings "true"/"false". */
