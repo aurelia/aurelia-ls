@@ -192,6 +192,7 @@ export class KernelStore {
   }
 
   readSourceFileAddressesByFileName(fileName: string): readonly SourceFileAddress[] {
+    const normalizedFileName = normalizeSourcePath(fileName);
     const matches = new Map<AddressHandle, SourceFileAddress>();
     for (const candidate of sourcePathSuffixes(fileName)) {
       for (const handle of this.sourceFileAddressesByPath.get(candidate) ?? []) {
@@ -202,7 +203,9 @@ export class KernelStore {
       }
     }
     return [...matches.values()]
-      .sort((left, right) => right.path.length - left.path.length);
+      .sort((left, right) =>
+        sourcePathMatchScore(right.path, normalizedFileName) - sourcePathMatchScore(left.path, normalizedFileName)
+      );
   }
 
   readBestSourceFileAddressForFileName(fileName: string): SourceFileAddress | null {
@@ -288,9 +291,16 @@ export class KernelStore {
         case 'container-identity':
         case 'di-product-identity':
         case 'registration-identity':
+        case 'resource-product-identity':
+        case 'evaluation-identity':
         case 'configuration-identity':
         case 'router-identity':
         case 'route-recognizer-identity':
+        case 'i18n-identity':
+        case 'state-identity':
+        case 'validation-identity':
+        case 'fetch-client-identity':
+        case 'dialog-identity':
         case 'compiler-identity':
         case 'template-identity':
         case 'template-node-identity':
@@ -430,9 +440,16 @@ export class KernelStore {
       case 'container-identity':
       case 'di-product-identity':
       case 'registration-identity':
+      case 'resource-product-identity':
+      case 'evaluation-identity':
       case 'configuration-identity':
       case 'router-identity':
       case 'route-recognizer-identity':
+      case 'i18n-identity':
+      case 'state-identity':
+      case 'validation-identity':
+      case 'fetch-client-identity':
+      case 'dialog-identity':
       case 'compiler-identity':
       case 'template-identity':
       case 'template-node-identity':
@@ -478,6 +495,40 @@ export class KernelStore {
 
 function normalizeSourcePath(fileName: string): string {
   return fileName.replace(/\\/g, '/');
+}
+
+function sourcePathMatchScore(
+  addressPath: string,
+  normalizedFileName: string,
+): number {
+  const normalizedAddressPath = normalizeSourcePath(addressPath);
+  if (normalizedAddressPath === normalizedFileName) {
+    return 1_000_000 + normalizedAddressPath.length;
+  }
+  if (normalizedFileName.endsWith(`/${normalizedAddressPath}`)) {
+    return 900_000 + normalizedAddressPath.length;
+  }
+  if (normalizedAddressPath.endsWith(`/${normalizedFileName}`)) {
+    return 800_000 + normalizedFileName.length;
+  }
+  return commonPathSuffixLength(normalizedAddressPath, normalizedFileName);
+}
+
+function commonPathSuffixLength(
+  left: string,
+  right: string,
+): number {
+  const leftParts = left.split('/').filter((part) => part.length > 0);
+  const rightParts = right.split('/').filter((part) => part.length > 0);
+  let leftIndex = leftParts.length - 1;
+  let rightIndex = rightParts.length - 1;
+  let length = 0;
+  while (leftIndex >= 0 && rightIndex >= 0 && leftParts[leftIndex] === rightParts[rightIndex]) {
+    length += leftParts[leftIndex]!.length + 1;
+    leftIndex--;
+    rightIndex--;
+  }
+  return length;
 }
 
 function sourcePathSuffixes(fileName: string): readonly string[] {

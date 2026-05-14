@@ -16,6 +16,8 @@ export const enum EvaluationValueKind {
   BigInt = 'bigint',
   /** ECMAScript string primitive. */
   String = 'string',
+  /** String-shaped value with known static text parts and dynamic boundary holes. */
+  StringPattern = 'string-pattern',
   /** RegExp object produced by a regular-expression literal. */
   RegularExpression = 'regular-expression',
   /** Array value with evaluator-local element values. */
@@ -49,6 +51,8 @@ export const enum EvaluationBoundaryKind {
   ExternalModule = 'external-module',
   /** Fulfillment value produced by async control flow the synchronous evaluator did not execute. */
   AsyncExecution = 'async-execution',
+  /** Runtime binding-scope value such as a repeat local or runtime-only view-model slot. */
+  BindingScope = 'binding-scope',
 }
 
 /** Unknown value carrying the reason evaluation stayed open. */
@@ -301,8 +305,94 @@ export class EvaluationBoundaryValue {
         return `${this.path} is provided by an external module boundary.`;
       case EvaluationBoundaryKind.AsyncExecution:
         return `${this.path} is produced by async execution outside synchronous static evaluation.`;
+      case EvaluationBoundaryKind.BindingScope:
+        return `${this.path} is supplied by the runtime binding scope.`;
     }
   }
+}
+
+/** One dynamic hole inside a string pattern. */
+export class EvaluationStringPatternHole {
+  constructor(
+    /** Boundary value that produced this dynamic string hole. */
+    readonly value: EvaluationBoundaryValue,
+  ) {}
+}
+
+/** String-shaped value whose static parts are known while one or more holes are runtime supplied. */
+export class EvaluationStringPatternValue {
+  readonly kind = EvaluationValueKind.StringPattern;
+  readonly parts: readonly string[];
+  readonly holes: readonly EvaluationStringPatternHole[];
+
+  constructor(
+    /** Static text parts. Length is always one greater than `holes.length`. */
+    parts: readonly string[],
+    /** Dynamic boundary holes interleaved between the static parts. */
+    holes: readonly EvaluationStringPatternHole[],
+    /** Syntax node that produced the pattern, when one exists. */
+    readonly node: ts.Node | null = null,
+  ) {
+    this.parts = [...parts];
+    this.holes = [...holes];
+  }
+}
+
+/** Builder for string-shaped values with optional dynamic boundary holes. */
+export class EvaluationStringPatternBuilder {
+  private readonly parts: string[];
+  private readonly holes: EvaluationStringPatternHole[] = [];
+
+  constructor(
+    head: string,
+  ) {
+    this.parts = [head];
+  }
+
+  appendStatic(text: string): void {
+    this.parts[this.parts.length - 1] = `${this.parts[this.parts.length - 1] ?? ''}${text}`;
+  }
+
+  appendBoundary(value: EvaluationBoundaryValue, tail: string): void {
+    this.holes.push(new EvaluationStringPatternHole(value));
+    this.parts.push(tail);
+  }
+
+  appendPattern(value: EvaluationStringPatternValue, tail: string): void {
+    this.appendStatic(value.parts[0] ?? '');
+    for (let index = 0; index < value.holes.length; index += 1) {
+      this.holes.push(value.holes[index]!);
+      this.parts.push(value.parts[index + 1] ?? '');
+    }
+    this.appendStatic(tail);
+  }
+
+  build(node: ts.Node | null): EvaluationStringValue | EvaluationStringPatternValue {
+    return this.holes.length === 0
+      ? new EvaluationStringValue(this.parts.join(''), node)
+      : new EvaluationStringPatternValue(this.parts, this.holes, node);
+  }
+}
+
+/** Append a value into a string-pattern builder when ECMAScript string interpolation/concatenation can consume it. */
+export function appendEvaluationStringLikePart(
+  builder: EvaluationStringPatternBuilder,
+  value: EvaluationValue,
+  tail: string,
+): boolean {
+  if (value.kind === EvaluationValueKind.BoundaryValue) {
+    builder.appendBoundary(value, tail);
+    return true;
+  }
+  if (value.kind === EvaluationValueKind.StringPattern) {
+    builder.appendPattern(value, tail);
+    return true;
+  }
+  if (!isEvaluationPrimitiveValue(value)) {
+    return false;
+  }
+  builder.appendStatic(String(readEvaluationPrimitive(value)) + tail);
+  return true;
 }
 
 /** Function-like value that can be interpreted when its body is simple enough. */
@@ -405,6 +495,7 @@ export type EvaluationValue =
   | EvaluationNumberValue
   | EvaluationBigIntValue
   | EvaluationStringValue
+  | EvaluationStringPatternValue
   | EvaluationRegularExpressionValue
   | EvaluationArrayValue
   | EvaluationSetValue
@@ -417,6 +508,43 @@ export type EvaluationValue =
   | EvaluationInstanceValue
   | EvaluationModuleNamespaceValue
   | EvaluationPromiseValue;
+
+/** Return parts for values that can participate in string-pattern concatenation. */
+export function readEvaluationStringLikeParts(
+  value: EvaluationValue,
+): { readonly parts: readonly string[]; readonly holes: readonly EvaluationStringPatternHole[] } | null {
+  if (value.kind === EvaluationValueKind.String) {
+    return { parts: [value.value], holes: [] };
+  }
+  if (value.kind === EvaluationValueKind.StringPattern) {
+    return { parts: value.parts, holes: value.holes };
+  }
+  if (value.kind === EvaluationValueKind.BoundaryValue) {
+    return { parts: ['', ''], holes: [new EvaluationStringPatternHole(value)] };
+  }
+  return null;
+}
+
+/** Build a string-pattern concatenation when at least one side has a dynamic hole. */
+export function evaluationStringPatternFromConcatenation(
+  left: EvaluationValue,
+  right: EvaluationValue,
+  node: ts.Node | null,
+): EvaluationStringPatternValue | null {
+  const leftParts = readEvaluationStringLikeParts(left);
+  const rightParts = readEvaluationStringLikeParts(right);
+  if (leftParts == null || rightParts == null) {
+    return null;
+  }
+  const holes = [...leftParts.holes, ...rightParts.holes];
+  if (holes.length === 0) {
+    return null;
+  }
+  const parts = [...leftParts.parts];
+  parts[parts.length - 1] = `${parts.at(-1) ?? ''}${rightParts.parts[0] ?? ''}`;
+  parts.push(...rightParts.parts.slice(1));
+  return new EvaluationStringPatternValue(parts, holes, node);
+}
 
 /** Shared undefined value for statement completions without a source expression. */
 export const EvaluationUndefined = new EvaluationUndefinedValue();
@@ -437,6 +565,8 @@ export function readEvaluationTruthiness(value: EvaluationValue): boolean | null
       return value.text !== '0n';
     case EvaluationValueKind.String:
       return value.value.length > 0;
+    case EvaluationValueKind.StringPattern:
+      return value.parts.some((part) => part.length > 0) ? true : null;
     case EvaluationValueKind.RegularExpression:
     case EvaluationValueKind.Array:
     case EvaluationValueKind.Set:
@@ -465,6 +595,7 @@ export function isEvaluationPrimitiveValue(value: EvaluationValue): value is Eva
       return true;
     case EvaluationValueKind.BoundaryObject:
     case EvaluationValueKind.BoundaryValue:
+    case EvaluationValueKind.StringPattern:
     default:
       return false;
   }

@@ -28,6 +28,7 @@ import type { ParseOutcome } from './parse-failure.js';
 import { CompletedInputCompanionBuilder } from './completed-input-companion-builder.js';
 import { CompletedInputParserState } from './completed-input-parser-state.js';
 import { CompletedInputTemplateCorridor } from './completed-input-template-corridor.js';
+import { ExpressionFrameworkErrorCode } from './framework-error-code.js';
 
 type ParsedPrimary = ParseOutcome<IsPrimary>;
 type ParsedLeftHandSide = ParseOutcome<IsLeftHandSide>;
@@ -111,7 +112,7 @@ export class CompletedInputLeftHandSideCorridor {
           return this.companionBuilder.widenNewExpressionFailure(
             parsedArgs,
             newTok,
-            [this.state.childRef(func)],
+            [this.state.prefixRefs.child(func)],
           );
         }
         return parsedArgs;
@@ -158,6 +159,14 @@ export class CompletedInputLeftHandSideCorridor {
         continue;
       }
 
+      if (t.type === TokenType.DotDot || t.type === TokenType.Ellipsis) {
+        return this.state.failures.hardError(
+          "Expected identifier after '.'",
+          t,
+          ExpressionFrameworkErrorCode.ParseExpectedIdentifier,
+        );
+      }
+
       if (t.type === TokenType.QuestionDot) {
         const optionalExpr = this.parseOptionalChainTail(expr, t);
         if (isParseFailure(optionalExpr)) {
@@ -186,6 +195,14 @@ export class CompletedInputLeftHandSideCorridor {
       }
 
       if (t.type === TokenType.Backtick) {
+        if (this.hasOptionalChain(expr)) {
+          return this.state.failures.hardError(
+            'Invalid tagged template on optional chain',
+            t,
+            ExpressionFrameworkErrorCode.ParseInvalidTagInOptionalChain,
+          );
+        }
+
         const tpl = this.deps.templateCorridor.parseTemplateLiteral();
         if (isParseFailure(tpl)) {
           return tpl;
@@ -221,12 +238,21 @@ export class CompletedInputLeftHandSideCorridor {
       return this.parseKeyedAccess(expr, true);
     }
 
+    if (next.type === TokenType.Backtick) {
+      return this.state.failures.hardError(
+        'Invalid tagged template on optional chain',
+        next,
+        ExpressionFrameworkErrorCode.ParseInvalidTagInOptionalChain,
+      );
+    }
+
     if (!this.deps.isIdentifierNameToken(next)) {
       return this.companionBuilder.optionalChainContinuationFailure(
         "Expected member name, '[' or '(' after '?.'",
         next,
         questionDot,
         expr,
+        ExpressionFrameworkErrorCode.ParseUnexpectedTokenOptionalChain,
       );
     }
 
@@ -294,7 +320,7 @@ export class CompletedInputLeftHandSideCorridor {
     optional: boolean,
   ): ParseOutcome<AccessKeyedExpression> {
     const open = this.state.nextToken();
-    this.state.pushDelimiter(MatchedDelimiterKind.Bracket, open);
+    this.state.delimiters.push(MatchedDelimiterKind.Bracket, open);
 
     const key = this.deps.parseAssignExpr();
     if (isParseFailure(key)) {
@@ -307,7 +333,7 @@ export class CompletedInputLeftHandSideCorridor {
         open,
         ExpressionCompanionFrameKind.IndexedAccess,
         this.state.span(this.state.localStart(object), open.end),
-        [this.state.rootPrefix(object)],
+        [this.state.prefixRefs.root(object)],
         [
           ExpressionExpectedContinuationClass.Expression,
           ExpressionExpectedContinuationClass.CloseBracket,
@@ -324,14 +350,14 @@ export class CompletedInputLeftHandSideCorridor {
         ExpressionExpectedContinuationClass.CloseBracket,
         this.state.span(this.state.localStart(object), this.state.localEnd(key)),
         [
-          this.state.rootPrefix(object),
-          this.state.childRef(key),
+          this.state.prefixRefs.root(object),
+          this.state.prefixRefs.child(key),
         ],
       );
     }
 
     this.state.nextToken();
-    this.state.popDelimiter(MatchedDelimiterKind.Bracket);
+    this.state.delimiters.pop(MatchedDelimiterKind.Bracket);
 
     return new AccessKeyedExpression(
       this.state.spanFrom(object, this.state.consumedEnd),
@@ -344,18 +370,18 @@ export class CompletedInputLeftHandSideCorridor {
   private parseArguments(): ParsedArguments {
     const open = this.state.peekToken();
     if (open.type !== TokenType.OpenParen) {
-      return this.state.hardError("Expected '(' for argument list", open);
+      return this.state.failures.hardError("Expected '(' for argument list", open);
     }
 
     this.state.nextToken();
-    this.state.pushDelimiter(MatchedDelimiterKind.Paren, open);
+    this.state.delimiters.push(MatchedDelimiterKind.Paren, open);
 
     const args: IsAssign[] = [];
     let gapAnchor = open;
     const first = this.state.peekToken();
     if (first.type === TokenType.CloseParen) {
       this.state.nextToken();
-      this.state.popDelimiter(MatchedDelimiterKind.Paren);
+      this.state.delimiters.pop(MatchedDelimiterKind.Paren);
       return args;
     }
 
@@ -386,8 +412,8 @@ export class CompletedInputLeftHandSideCorridor {
           this.state.span(open.start, this.state.consumedEnd),
           args.map((arg, index) => (
             index === 0
-              ? this.state.childRef(arg)
-              : this.state.siblingRef(arg)
+              ? this.state.prefixRefs.child(arg)
+              : this.state.prefixRefs.sibling(arg)
           )),
         );
       }
@@ -402,7 +428,7 @@ export class CompletedInputLeftHandSideCorridor {
         const next = this.state.peekToken();
         if (next.type === TokenType.CloseParen) {
           this.state.nextToken();
-          this.state.popDelimiter(MatchedDelimiterKind.Paren);
+          this.state.delimiters.pop(MatchedDelimiterKind.Paren);
           break;
         }
         continue;
@@ -410,7 +436,7 @@ export class CompletedInputLeftHandSideCorridor {
 
       if (t.type === TokenType.CloseParen) {
         this.state.nextToken();
-        this.state.popDelimiter(MatchedDelimiterKind.Paren);
+        this.state.delimiters.pop(MatchedDelimiterKind.Paren);
         break;
       }
 
@@ -422,8 +448,8 @@ export class CompletedInputLeftHandSideCorridor {
         this.state.span(open.start, this.state.consumedEnd),
         args.map((arg, index) => (
           index === 0
-            ? this.state.childRef(arg)
-            : this.state.siblingRef(arg)
+            ? this.state.prefixRefs.child(arg)
+            : this.state.prefixRefs.sibling(arg)
         )),
       );
     }
@@ -441,5 +467,24 @@ export class CompletedInputLeftHandSideCorridor {
 
   private isAccessMember(expr: IsLeftHandSide): expr is AccessMemberExpression {
     return expr.$kind === 'AccessMember';
+  }
+
+  private hasOptionalChain(expr: IsLeftHandSide): boolean {
+    switch (expr.$kind) {
+      case 'AccessMember':
+        return expr.optional || this.hasOptionalChain(expr.object);
+      case 'AccessKeyed':
+        return expr.optional || this.hasOptionalChain(expr.object);
+      case 'CallFunction':
+        return expr.optional || this.hasOptionalChain(expr.func);
+      case 'CallMember':
+        return expr.optionalMember || expr.optionalCall || this.hasOptionalChain(expr.object);
+      case 'TaggedTemplate':
+        return this.hasOptionalChain(expr.func);
+      case 'New':
+        return this.hasOptionalChain(expr.func);
+      default:
+        return false;
+    }
   }
 }

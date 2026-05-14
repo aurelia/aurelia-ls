@@ -10,6 +10,7 @@ import {
   sourceDeclarationKindForNode,
   type SourceFileIdentity,
   type SourceProject,
+  type SourceTextFile,
   type SourceSpan,
 } from "./project.js";
 import {
@@ -173,21 +174,30 @@ export function readSourceText(
   options: SourceTextReadOptions,
 ): SourceTextRead {
   const resolution = resolveSourceSelector(project, selector);
-  const slices = resolution.targets
-    .filter((target): target is ResolvedSourceTarget & { readonly sourceFile: ts.SourceFile } => target.sourceFile !== undefined)
-    .map((target) => {
-      const sourceFile = target.sourceFile;
-      const text = textForTarget(sourceFile, target);
-      const capped = text.slice(0, options.maxTextChars);
-      return {
-        target: rowForTarget(target),
-        text: capped,
-        totalChars: text.length,
-        truncated: capped.length < text.length,
-      };
-    });
+  const readableTargets = resolution.targets
+    .map((target) => ({ target, text: textForTarget(target) }))
+    .filter((entry): entry is { readonly target: ResolvedSourceTarget; readonly text: string } => entry.text !== null);
+  const slices = readableTargets.map(({ target, text }) => {
+    const capped = text.slice(0, options.maxTextChars);
+    return {
+      target: rowForTarget(target),
+      programBacked: target.sourceFile !== undefined,
+      text: capped,
+      totalChars: text.length,
+      truncated: capped.length < text.length,
+    };
+  });
+  const programTargetCount = resolution.targets.filter((target) => target.sourceFile !== undefined).length;
+  const filesystemTargetCount = resolution.targets.filter(
+    (target) => target.sourceFile === undefined && target.sourceText !== undefined,
+  ).length;
 
-  return { resolution: serializableResolution(resolution), slices };
+  return {
+    resolution: serializableResolution(resolution),
+    programTargetCount,
+    filesystemTargetCount,
+    slices,
+  };
 }
 
 /** Project a bounded TypeScript declaration surface for one selector. */
@@ -216,7 +226,7 @@ export function readApiSurface(
     entries,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -244,7 +254,7 @@ export function readModuleGraph(
     edges,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -472,7 +482,7 @@ export function readReferences(
     references,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -500,7 +510,7 @@ export function readNavigation(
     entries,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -529,7 +539,7 @@ export function readCallHierarchy(
     edges,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -560,7 +570,7 @@ export function readCallSites(
     callSites,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -610,7 +620,7 @@ export function readDiagnostics(
     diagnostics,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -722,7 +732,7 @@ export function readRefactors(
     actions,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -751,7 +761,7 @@ export function readQuickInfo(
     entries,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -845,7 +855,7 @@ export function readHighlights(
     highlights,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -874,7 +884,7 @@ export function readCodeFixes(
     actions,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -977,7 +987,7 @@ export function readOrganizeImports(
     changes,
     offset,
     limit,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 
@@ -1026,6 +1036,7 @@ export function rowForTarget(
 ): SourceTargetRow {
   const {
     sourceFile: _sourceFile,
+    sourceText: _sourceText,
     node: _node,
     symbol: _symbol,
     ...row
@@ -1068,53 +1079,85 @@ function directoryResolution(project: SourceProject, selector: DirectorySourceSe
 }
 
 function fileResolution(project: SourceProject, selector: FileSourceSelector): ResolvedSourceSelectorResolution {
-  const sourceFile = project.readSourceFile(selector.filePath);
-  if (sourceFile === null) {
+  const sourceTextFile = project.readTextFile(selector.filePath);
+  if (sourceTextFile === null) {
     return {
       selector,
       targets: [],
       candidateCount: 0,
-      diagnostics: [{ code: "source.file.no-match", message: "No Program source file matched the file selector." }],
+      diagnostics: [{ code: "source.file.no-match", message: "No source text file matched the file selector." }],
     };
   }
-  const target = sourceFileTarget(project, sourceFile, selector);
+  const target = sourceTextFile.programBacked
+    ? sourceFileTarget(project, project.requiredSourceFileForIdentity(sourceTextFile.file), selector)
+    : textFileTarget(sourceTextFile, selector);
   return { selector, targets: [target], candidateCount: 1, diagnostics: [] };
 }
 
 function rangeResolution(project: SourceProject, selector: RangeSourceSelector): ResolvedSourceSelectorResolution {
-  const sourceFile = project.readSourceFile(selector.filePath);
-  if (sourceFile === null) {
-    return emptyResolution(selector, "source.range.file-no-match", "No Program source file matched the range selector.");
+  const sourceTextFile = project.readTextFile(selector.filePath);
+  if (sourceTextFile === null) {
+    return emptyResolution(selector, "source.range.file-no-match", "No source text file matched the range selector.");
   }
-  const start = positionToOffset(sourceFile, selector.start);
-  const end = positionToOffset(sourceFile, selector.end);
+  if (sourceTextFile.programBacked) {
+    const sourceFile = project.requiredSourceFileForIdentity(sourceTextFile.file);
+    const start = positionToOffset(sourceFile, selector.start);
+    const end = positionToOffset(sourceFile, selector.end);
+    if (start === null || end === null || end < start) {
+      return emptyResolution(selector, "source.range.invalid", "The source range is outside the selected file.");
+    }
+    const node = smallestNodeContaining(sourceFile, start, end);
+    const target = sourceRangeTarget(project, sourceFile, node ?? sourceFile, start, end, selector);
+    return { selector, targets: [target], candidateCount: 1, diagnostics: [] };
+  }
+  const start = textPositionToOffset(sourceTextFile.text, selector.start);
+  const end = textPositionToOffset(sourceTextFile.text, selector.end);
   if (start === null || end === null || end < start) {
     return emptyResolution(selector, "source.range.invalid", "The source range is outside the selected file.");
   }
-  const node = smallestNodeContaining(sourceFile, start, end);
-  const target = sourceRangeTarget(project, sourceFile, node ?? sourceFile, start, end, selector);
+  const target = textRangeTarget(sourceTextFile, start, end, selector);
   return { selector, targets: [target], candidateCount: 1, diagnostics: [] };
 }
 
 function positionResolution(project: SourceProject, selector: PositionSourceSelector): ResolvedSourceSelectorResolution {
-  const sourceFile = project.readSourceFile(selector.filePath);
-  if (sourceFile === null) {
-    return emptyResolution(selector, "source.position.file-no-match", "No Program source file matched the position selector.");
+  const sourceTextFile = project.readTextFile(selector.filePath);
+  if (sourceTextFile === null) {
+    return emptyResolution(selector, "source.position.file-no-match", "No source text file matched the position selector.");
   }
-  const offset = positionToOffset(sourceFile, selector);
+  if (sourceTextFile.programBacked) {
+    const sourceFile = project.requiredSourceFileForIdentity(sourceTextFile.file);
+    const offset = positionToOffset(sourceFile, selector);
+    if (offset === null) {
+      return emptyResolution(selector, "source.position.invalid", "The source position is outside the selected file.");
+    }
+    const node = smallestNodeAt(sourceFile, offset);
+    const target = sourceRangeTarget(project, sourceFile, node ?? sourceFile, node?.getStart(sourceFile) ?? offset, node?.getEnd() ?? offset, selector);
+    return { selector, targets: [target], candidateCount: 1, diagnostics: [] };
+  }
+  const offset = textPositionToOffset(sourceTextFile.text, selector);
   if (offset === null) {
     return emptyResolution(selector, "source.position.invalid", "The source position is outside the selected file.");
   }
-  const node = smallestNodeAt(sourceFile, offset);
-  const target = sourceRangeTarget(project, sourceFile, node ?? sourceFile, node?.getStart(sourceFile) ?? offset, node?.getEnd() ?? offset, selector);
+  const span = textTokenSpanAt(sourceTextFile.text, offset) ?? { start: offset, end: offset };
+  const target = textRangeTarget(sourceTextFile, span.start, span.end, selector);
   return { selector, targets: [target], candidateCount: 1, diagnostics: [] };
 }
 
 function tokenResolution(project: SourceProject, selector: TokenSourceSelector): ResolvedSourceSelectorResolution {
-  const sourceFile = project.readSourceFile(selector.filePath);
-  if (sourceFile === null) {
-    return emptyResolution(selector, "source.token.file-no-match", "No Program source file matched the token selector.");
+  const sourceTextFile = project.readTextFile(selector.filePath);
+  if (sourceTextFile === null) {
+    return emptyResolution(selector, "source.token.file-no-match", "No source text file matched the token selector.");
   }
+  if (!sourceTextFile.programBacked) {
+    const matches = textTokenMatches(sourceTextFile, selector.text)
+      .map((span) => textRangeTarget(sourceTextFile, span.start, span.end, selector));
+    const targets = applyOccurrence(matches, selector.occurrence);
+    const diagnostics = targets.length === 0
+      ? [{ code: "source.token.no-match", message: "No exact text token matched the selector." }]
+      : [];
+    return { selector, targets, candidateCount: matches.length, diagnostics };
+  }
+  const sourceFile = project.requiredSourceFileForIdentity(sourceTextFile.file);
   const matches: ResolvedSourceTarget[] = [];
   visitNode(sourceFile, (node) => {
     if (ts.isIdentifier(node) && node.text === selector.text) {
@@ -1349,7 +1392,7 @@ function memberFact(checker: ts.TypeChecker, symbol: ts.Symbol, location: ts.Nod
     name: symbol.getName(),
     type: valueType === undefined ? null : checker.typeToString(valueType, location),
     optional: (symbol.flags & ts.SymbolFlags.Optional) !== 0,
-    ...(declaration === undefined ? {} : { span: sourceSpanForNode(declaration.getSourceFile(), declaration) }),
+    span: declaration === undefined ? undefined : sourceSpanForNode(declaration.getSourceFile(), declaration),
   };
 }
 
@@ -1402,7 +1445,7 @@ function referenceEntry(project: SourceProject, reference: ts.ReferenceEntry, de
     writeAccess: reference.isWriteAccess === true,
     inString: reference.isInString === true,
     roles: referenceRoles(reference, definition, node),
-    ...(node === null ? {} : { syntaxKindName: ts.SyntaxKind[node.kind] }),
+    syntaxKindName: node === null ? undefined : ts.SyntaxKind[node.kind],
   };
 }
 
@@ -1878,13 +1921,16 @@ function signatureHelpEntry(
   index: number,
   selected: boolean,
 ): TypeScriptSignatureHelpEntry {
-  const parameters = item.parameters.map((parameter) => ({
-    name: parameter.name,
-    display: displayPartsText(parameter.displayParts) ?? parameter.name,
-    ...(displayPartsText(parameter.documentation) === undefined ? {} : { documentation: displayPartsText(parameter.documentation) }),
-    optional: parameter.isOptional,
-    rest: parameter.isRest === true,
-  }));
+  const parameters = item.parameters.map((parameter) => {
+    const documentation = displayPartsText(parameter.documentation);
+    return {
+      name: parameter.name,
+      display: displayPartsText(parameter.displayParts) ?? parameter.name,
+      documentation,
+      optional: parameter.isOptional,
+      rest: parameter.isRest === true,
+    };
+  });
   const display = [
     displayPartsText(item.prefixDisplayParts) ?? "",
     parameters.map((parameter) => parameter.display).join(displayPartsText(item.separatorDisplayParts) ?? ", "),
@@ -1897,7 +1943,7 @@ function signatureHelpEntry(
     selected,
     variadic: item.isVariadic,
     display,
-    ...(displayPartsText(item.documentation) === undefined ? {} : { documentation: displayPartsText(item.documentation) }),
+    documentation: displayPartsText(item.documentation),
     tags: displayTags(item.tags),
     parameters,
   };
@@ -1913,7 +1959,7 @@ function highlightEntry(project: SourceProject, fileName: string, highlight: ts.
     id: `highlight:${file.repoPath}:${highlight.textSpan.start}:${highlight.textSpan.length}:${highlight.kind}`,
     file,
     span: sourceSpanFromTextSpan(sourceFile, highlight.textSpan),
-    ...(highlight.contextSpan === undefined ? {} : { contextSpan: sourceSpanFromTextSpan(sourceFile, highlight.contextSpan) }),
+    contextSpan: highlight.contextSpan === undefined ? undefined : sourceSpanFromTextSpan(sourceFile, highlight.contextSpan),
     kind: highlight.kind,
     inString: highlight.isInString === true,
   };
@@ -1953,7 +1999,7 @@ function fileEdits(project: SourceProject, changes: ts.FileTextChanges, idPrefix
         id: `${idPrefix}:${file.repoPath}:${change.span.start}:${change.span.length}:${index}`,
         start: change.span.start,
         length: change.span.length,
-        ...(sourceFile === null ? {} : { span: sourceSpanFromTextSpan(sourceFile, change.span) }),
+        span: sourceFile === null ? undefined : sourceSpanFromTextSpan(sourceFile, change.span),
         newText: change.newText,
       }))
       .sort((left, right) => left.start - right.start || left.length - right.length),
@@ -1961,10 +2007,7 @@ function fileEdits(project: SourceProject, changes: ts.FileTextChanges, idPrefix
 }
 
 function fileIdentityForPath(project: SourceProject, fileName: string): SourceFileIdentity {
-  const sourceFile = project.readSourceFile(fileName);
-  return sourceFile === null
-    ? transientFileIdentityForPath(project, fileName)
-    : requiredSourceFileIdentity(project, sourceFile);
+  return project.sourceFileIdentityForPath(fileName);
 }
 
 function languageServicePath(project: SourceProject, fileName: string): string {
@@ -2052,6 +2095,16 @@ function sourceFileTarget(project: SourceProject, sourceFile: ts.SourceFile, _se
   };
 }
 
+function textFileTarget(textFile: SourceTextFile, _selector: SourceSelector): ResolvedSourceTarget {
+  return {
+    kind: SourceTargetKind.SourceFile,
+    id: `file:${textFile.file.repoPath}`,
+    label: textFile.file.repoPath,
+    file: textFile.file,
+    sourceText: textFile.text,
+  };
+}
+
 function sourceRangeTarget(
   project: SourceProject,
   sourceFile: ts.SourceFile,
@@ -2080,6 +2133,24 @@ function sourceRangeTarget(
     });
   }
   return result;
+}
+
+function textRangeTarget(
+  textFile: SourceTextFile,
+  start: number,
+  end: number,
+  _selector: SourceSelector,
+): ResolvedSourceTarget {
+  const text = textFile.text.slice(start, end);
+  const label = compactTextLabel(text) || textFile.file.repoPath;
+  return {
+    kind: SourceTargetKind.SourceRange,
+    id: `range:${textFile.file.repoPath}:${start}:${end}`,
+    label,
+    file: textFile.file,
+    span: sourceSpanFromTextOffsets(textFile.text, start, end),
+    sourceText: textFile.text,
+  };
 }
 
 function declarationTargetForRow(
@@ -2176,11 +2247,15 @@ function displayForDeclaration(checker: ts.TypeChecker, _sourceFile: ts.SourceFi
   return checker.typeToString(type, location);
 }
 
-function textForTarget(sourceFile: ts.SourceFile, target: ResolvedSourceTarget): string {
-  if (target.span === undefined) {
-    return sourceFile.getFullText();
+function textForTarget(target: ResolvedSourceTarget): string | null {
+  const sourceText = target.sourceFile?.getFullText() ?? target.sourceText;
+  if (sourceText === undefined) {
+    return null;
   }
-  return sourceFile.getFullText().slice(target.span.start, target.span.end);
+  if (target.span === undefined) {
+    return sourceText;
+  }
+  return sourceText.slice(target.span.start, target.span.end);
 }
 
 function exportSurfaceFiles(project: SourceProject, selector: ExportSourceSelector): readonly ts.SourceFile[] {
@@ -2545,6 +2620,125 @@ function positionToOffset(sourceFile: ts.SourceFile, position: SourcePositionSel
   return offset < 0 || offset > sourceFile.getFullText().length ? null : offset;
 }
 
+function textPositionToOffset(text: string, position: SourcePositionSelector): number | null {
+  if (position.line < 0 || position.character < 0) {
+    return null;
+  }
+  const lineStarts = textLineStarts(text);
+  const lineStart = lineStarts[position.line];
+  if (lineStart === undefined) {
+    return null;
+  }
+  const lineEnd = textLineContentEnd(text, lineStart);
+  const offset = lineStart + position.character;
+  return offset > lineEnd ? null : offset;
+}
+
+function textLineStarts(text: string): readonly number[] {
+  const starts = [0];
+  for (let index = 0; index < text.length; index++) {
+    const char = text.charCodeAt(index);
+    if (char === 13) {
+      if (text.charCodeAt(index + 1) === 10) {
+        index++;
+      }
+      starts.push(index + 1);
+      continue;
+    }
+    if (char === 10) {
+      starts.push(index + 1);
+    }
+  }
+  return starts;
+}
+
+function textLineContentEnd(text: string, lineStart: number): number {
+  let index = lineStart;
+  while (index < text.length) {
+    const char = text.charCodeAt(index);
+    if (char === 10 || char === 13) {
+      break;
+    }
+    index++;
+  }
+  return index;
+}
+
+function sourceSpanFromTextOffsets(text: string, start: number, end: number): SourceSpan {
+  const startPosition = textLineAndCharacterOfOffset(text, start);
+  const endPosition = textLineAndCharacterOfOffset(text, end);
+  return {
+    start,
+    end,
+    startLine: startPosition.line + 1,
+    startCharacter: startPosition.character + 1,
+    endLine: endPosition.line + 1,
+    endCharacter: endPosition.character + 1,
+  };
+}
+
+function textLineAndCharacterOfOffset(text: string, offset: number): SourcePositionSelector {
+  const lineStarts = textLineStarts(text);
+  let line = 0;
+  for (let index = 1; index < lineStarts.length; index++) {
+    const lineStart = lineStarts[index];
+    if (lineStart === undefined || lineStart > offset) {
+      break;
+    }
+    line = index;
+  }
+  return { line, character: offset - (lineStarts[line] ?? 0) };
+}
+
+function compactTextLabel(text: string): string {
+  return text
+    .replace(/\s+/gu, " ")
+    .trim()
+    .slice(0, 80);
+}
+
+function textTokenSpanAt(text: string, offset: number): { readonly start: number; readonly end: number } | null {
+  const tokenOffset = isTextTokenCharacter(text[offset] ?? "")
+    ? offset
+    : isTextTokenCharacter(text[offset - 1] ?? "")
+    ? offset - 1
+    : null;
+  if (tokenOffset === null) {
+    return null;
+  }
+  let start = tokenOffset;
+  while (start > 0 && isTextTokenCharacter(text[start - 1] ?? "")) {
+    start--;
+  }
+  let end = tokenOffset + 1;
+  while (end < text.length && isTextTokenCharacter(text[end] ?? "")) {
+    end++;
+  }
+  return { start, end };
+}
+
+function textTokenMatches(textFile: SourceTextFile, token: string): readonly { readonly start: number; readonly end: number }[] {
+  if (token.length === 0) {
+    return [];
+  }
+  const matches: { readonly start: number; readonly end: number }[] = [];
+  let start = textFile.text.indexOf(token);
+  while (start >= 0) {
+    const end = start + token.length;
+    const leftOk = start === 0 || !isTextTokenCharacter(textFile.text[start - 1] ?? "");
+    const rightOk = end >= textFile.text.length || !isTextTokenCharacter(textFile.text[end] ?? "");
+    if (leftOk && rightOk) {
+      matches.push({ start, end });
+    }
+    start = textFile.text.indexOf(token, start + token.length);
+  }
+  return matches;
+}
+
+function isTextTokenCharacter(value: string): boolean {
+  return /^[A-Za-z0-9_$-]$/u.test(value);
+}
+
 function smallestNodeAt(sourceFile: ts.SourceFile, offset: number): ts.Node | null {
   let best: ts.Node | null = null;
   visitNode(sourceFile, (node) => {
@@ -2878,12 +3072,4 @@ function compareOptionalNumber(left: number | undefined, right: number | undefin
     return 1;
   }
   return left - right;
-}
-
-function transientFileIdentityForPath(project: SourceProject, fileName: string): SourceFileIdentity {
-  return {
-    absolutePath: path.resolve(fileName),
-    repoPath: (repoRelativePath(project.repoRoot, fileName) ?? fileName.replace(/\\/gu, "/")) as RepoRelativePath,
-    packageId: null,
-  };
 }

@@ -17,8 +17,6 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  compactFieldProvenance,
-  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -32,10 +30,18 @@ import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
   AttributeClassification,
   AttributeClassificationKind,
-  type AttributeClassificationField,
   type AttributeSyntax,
 } from './attribute-syntax.js';
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
+import {
+  TemplateCompilerIssue,
+  TemplateCompilerIssueKind,
+  TemplateCompilerIssuePhase,
+} from './compiler-issue.js';
+import {
+  TemplateCompilerIssuePublisher,
+  type TemplateCompilerIssuePublication,
+} from './compiler-issue-publication.js';
 import type {
   TemplateResolvedResource,
 } from './compiler-world.js';
@@ -45,6 +51,7 @@ import type {
 } from './compiler-world-reference.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
+import { TemplateCompilerFrameworkErrorCode } from './framework-error-code.js';
 import {
   HtmlAttribute,
   HtmlElementAttributeOwner,
@@ -72,6 +79,7 @@ export interface AttributeClassificationRequest {
 export class AttributeClassificationEmission {
   constructor(
     readonly classifications: readonly AttributeClassification[],
+    readonly issues: readonly TemplateCompilerIssue[],
     readonly records: readonly KernelStoreRecord[],
   ) {}
 }
@@ -90,12 +98,22 @@ class ClassificationDecision {
     readonly resource: TemplateVisibleResource | null,
     readonly bindingCommand: AttributeClassification['bindingCommand'],
     readonly bindable: TemplateBindableReference | null,
+    readonly issue: TemplateCompilerIssueDraft | null = null,
+  ) {}
+}
+
+class TemplateCompilerIssueDraft {
+  constructor(
+    readonly issueKind: TemplateCompilerIssueKind,
+    readonly message: string,
+    readonly frameworkErrorCode: string | null,
   ) {}
 }
 
 class AttributeClassificationPublication {
   constructor(
     readonly classification: AttributeClassification,
+    readonly issue: TemplateCompilerIssuePublication | null,
     readonly records: readonly KernelStoreRecord[],
     readonly claims: readonly SemanticClaim[],
   ) {}
@@ -103,10 +121,14 @@ class AttributeClassificationPublication {
 
 /** Classifies runtime AttrSyntax against the compiler world's resource and command resolvers. */
 export class AttributeClassificationMaterializer {
+  private readonly issuePublisher: TemplateCompilerIssuePublisher;
+
   constructor(
     /** Hot analysis store that receives attribute classification records. */
     readonly store: KernelStore,
-  ) {}
+  ) {
+    this.issuePublisher = new TemplateCompilerIssuePublisher(store);
+  }
 
   classify(input: AttributeClassificationRequest): AttributeClassificationEmission {
     const emission = this.recordsForClassification(input);
@@ -120,6 +142,9 @@ export class AttributeClassificationMaterializer {
         classification,
       );
     }
+    for (const issue of emission.issues) {
+      this.store.productDetails.add(TemplateProductDetails.CompilerIssue, issue.productHandle, issue);
+    }
     return emission;
   }
 
@@ -127,6 +152,7 @@ export class AttributeClassificationMaterializer {
     const source = this.recordsForSource(input);
     const records: KernelStoreRecord[] = [...source.records];
     const classifications: AttributeClassification[] = [];
+    const issues: TemplateCompilerIssue[] = [];
     const claims: SemanticClaim[] = [];
     const attributesByProduct = new Map(input.html.attributes.map((attribute) => [attribute.productHandle, attribute]));
     const ownersByAttributeProduct = htmlElementAttributeOwnersByAttributeProduct(input.html.nodes, input.html.attributes);
@@ -141,6 +167,10 @@ export class AttributeClassificationMaterializer {
         ownerForSyntax(syntax, ownersByAttributeProduct),
       );
       classifications.push(publication.classification);
+      if (publication.issue != null) {
+        issues.push(publication.issue.issue);
+        records.push(...publication.issue.records);
+      }
       records.push(...publication.records);
       claims.push(...publication.claims);
     });
@@ -150,12 +180,15 @@ export class AttributeClassificationMaterializer {
       new MaterializationRecord(
         this.store.handles.materialization(`attribute-classification:${input.localKey}`),
         input.compilationUnit.identityHandle,
-        classifications.map((classification) => classification.productHandle),
+        [
+          ...classifications.map((classification) => classification.productHandle),
+          ...issues.map((issue) => issue.productHandle),
+        ],
         claims.map((claim) => claim.handle),
       ),
     );
 
-    return new AttributeClassificationEmission(classifications, records);
+    return new AttributeClassificationEmission(classifications, issues, records);
   }
 
   private publishAttributeClassification(
@@ -174,14 +207,26 @@ export class AttributeClassificationMaterializer {
     const classification = this.createAttributeClassification(
       productHandle,
       identityHandle,
-      source,
       syntax,
       owner,
       decision,
     );
+    const issue = decision.issue == null
+      ? null
+      : this.issuePublisher.publish(
+        `${local}:issue`,
+        classification.identityHandle,
+        source.provenanceHandle,
+        TemplateCompilerIssuePhase.AttributeClassification,
+        decision.issue.issueKind,
+        decision.issue.message,
+        decision.issue.frameworkErrorCode,
+        classification.sourceAddressHandle,
+      );
     const claims = this.claimsForAttributeClassification(local, source, syntax, classification, decision);
     return new AttributeClassificationPublication(
       classification,
+      issue,
       this.recordsForAttributeClassificationProduct(source, syntax, classification),
       claims,
     );
@@ -190,7 +235,6 @@ export class AttributeClassificationMaterializer {
   private createAttributeClassification(
     productHandle: ProductHandle,
     identityHandle: IdentityHandle,
-    source: AttributeClassificationSourceSet,
     syntax: AttributeSyntax,
     owner: HtmlElementAttributeOwner | null,
     decision: ClassificationDecision,
@@ -207,15 +251,7 @@ export class AttributeClassificationMaterializer {
       decision.bindable,
       [],
       syntax.sourceAddressHandle,
-      compactFieldProvenance<AttributeClassificationField>([
-        new FieldProvenance('syntax', source.provenanceHandle),
-        new FieldProvenance('classificationKind', source.provenanceHandle),
-        decision.resource == null ? null : new FieldProvenance('resource', source.provenanceHandle),
-        decision.bindingCommand == null ? null : new FieldProvenance('bindingCommand', source.provenanceHandle),
-        decision.bindable == null ? null : new FieldProvenance('bindable', source.provenanceHandle),
-        new FieldProvenance('instructions', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -361,7 +397,11 @@ function classifySyntax(
   if (target.startsWith('...')) {
     return elementDefinition != null && target.slice(3) !== '$element'
       ? new ClassificationDecision(AttributeClassificationKind.Spread, ResourceDefinitionKind.CustomElement, elementResolution?.resource ?? null, bindingCommand, null)
-      : openDecision(bindingCommand);
+      : invalidDecision(
+        TemplateCompilerIssueKind.ReservedSpreadSyntax,
+        `Spreading syntax "...xxx" is reserved. Encountered "${syntax.target}".`,
+        TemplateCompilerFrameworkErrorCode.CompilerNoReservedSpreadSyntax,
+      );
   }
 
   if (elementDefinition != null) {
@@ -381,7 +421,11 @@ function classifySyntax(
         : new ClassificationDecision(AttributeClassificationKind.Spread, ResourceDefinitionKind.CustomElement, elementResolution?.resource ?? null, bindingCommand, null);
     }
   } else if (target === '$bindables') {
-    return openDecision(bindingCommand);
+    return invalidDecision(
+      TemplateCompilerIssueKind.ReservedBindableSyntax,
+      `Usage of $bindables is only allowed on custom elements. Encountered "${syntax.rawName}".`,
+      TemplateCompilerFrameworkErrorCode.CompilerNoReservedBindableSyntax,
+    );
   }
 
   const attributeResolution = world.resourceResolver.attr(target);
@@ -475,4 +519,20 @@ function openDecision(
   bindingCommand: AttributeClassification['bindingCommand'] = null,
 ): ClassificationDecision {
   return new ClassificationDecision(AttributeClassificationKind.Open, null, null, bindingCommand, null);
+}
+
+function invalidDecision(
+  issueKind: TemplateCompilerIssueKind,
+  message: string,
+  frameworkErrorCode: string | null,
+  bindingCommand: AttributeClassification['bindingCommand'] = null,
+): ClassificationDecision {
+  return new ClassificationDecision(
+    AttributeClassificationKind.Open,
+    null,
+    null,
+    bindingCommand,
+    null,
+    new TemplateCompilerIssueDraft(issueKind, message, frameworkErrorCode),
+  );
 }

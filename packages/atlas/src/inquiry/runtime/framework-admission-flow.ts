@@ -308,12 +308,8 @@ class FrameworkAdmissionFlowBuilder {
       (route) => route.key,
     );
     for (const row of readFrameworkResourceConvergenceRows(sourceProject, {
-      ...(filters.exportName === undefined
-        ? {}
-        : { bundleExportName: filters.exportName }),
-      ...(filters.resourceKind === undefined
-        ? {}
-        : { resourceKind: filters.resourceKind }),
+      bundleExportName: filters.exportName,
+      resourceKind: filters.resourceKind,
     })) {
       this.#resourceRowsBySource.set(sourceRangeKey(row.definitionSource), row);
       if (row.declarationSource !== null) {
@@ -1108,9 +1104,7 @@ function flowValue(
 ): FrameworkAdmissionFlowValue {
   return {
     flowVersion: FRAMEWORK_ADMISSION_FLOW_VERSION,
-    ...(corridor === FrameworkAdmissionFlowCorridor.JitCompiler
-      ? { corridor }
-      : {}),
+    corridor: corridor === FrameworkAdmissionFlowCorridor.JitCompiler ? corridor : undefined,
     nodeCount: nodes.length,
     edgeCount: edges.length,
     edgeKinds: countBy(edges, (edge) => edge.edgeKind),

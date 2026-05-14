@@ -63,6 +63,7 @@ import {
   type FrameworkEmulationObligationRow,
   type FrameworkEmulationViewValue,
 } from "./framework-emulation-view.js";
+import { evidenceForStrongTypeFact } from "./framework-evidence.js";
 import { type FrameworkDiscoveryFilters } from "./framework-filters.js";
 import { stringFiltersFromRecord } from "./lens-filter-utils.js";
 import {
@@ -110,7 +111,7 @@ interface FrameworkCompositionFilters extends FrameworkDiscoveryFilters {
 
 interface RelationshipClaimDraft {
   readonly id: string;
-  readonly family?: FrameworkRelationshipFamily;
+  readonly family: FrameworkRelationshipFamily;
   readonly relation: FrameworkRelationshipRelation;
   readonly mechanism?: FrameworkRelationshipMechanism;
   readonly phase?: FrameworkRelationshipPhase;
@@ -125,10 +126,13 @@ interface RelationshipClaimDraft {
   readonly summary: string;
 }
 
+type RelationshipClaimInput =
+  Omit<RelationshipClaimDraft, "family">;
+
 const COMPOSITION_ACTOR_ROW_FAMILY = new PagedRowFamily<SemanticActorRow>({
   id: "framework.composition:actors",
   rowLabel: "framework composition actor row(s)",
-  evidenceForRow: evidenceForActor,
+  evidenceForRow: evidenceForStrongTypeFact,
   continuationsForPage: actorContinuations,
 });
 
@@ -295,7 +299,7 @@ function readFrameworkCompositionClaims(
     ...readFrameworkStructuralRelationships(sourceProject, readerFilters).map(
       (row) =>
         claimFromRelationship(
-          relationshipDraft(row, row.family),
+          row,
           LensId.FrameworkDiscovery,
           frameworkStructuralRelationshipProjection(row.family),
           [BasisKind.TypeScriptChecker],
@@ -374,12 +378,12 @@ function readerFiltersForComposition(
 }
 
 function relationshipDraft(
-  row: RelationshipClaimDraft,
+  row: RelationshipClaimInput,
   family: FrameworkRelationshipFamily,
 ): RelationshipClaimDraft {
   return {
     ...row,
-    family: row.family ?? family,
+    family,
   };
 }
 
@@ -391,7 +395,7 @@ function claimFromRelationship(
 ): SemanticClaim {
   return {
     id: `framework-claim:${sourceLens}:${row.id}`,
-    family: row.family ?? SemanticClaimFamily.Framework,
+    family: row.family,
     predicate: row.relation,
     mechanism: row.mechanism,
     phase: row.phase,
@@ -678,18 +682,6 @@ function isEmulationOverviewInquiry(
   );
 }
 
-function evidenceForActor(row: SemanticActorRow): Evidence {
-  return {
-    id: row.id,
-    kind: EvidenceKind.TypeFact,
-    role: EvidenceRole.Subject,
-    confidence: EvidenceConfidence.Strong,
-    summary: row.summary,
-    ...(row.source === undefined ? {} : { source: row.source }),
-    data: row,
-  };
-}
-
 function evidenceForClaim(row: SemanticClaim): Evidence {
   return {
     id: row.id,
@@ -700,7 +692,7 @@ function evidenceForClaim(row: SemanticClaim): Evidence {
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Strong,
     summary: row.summary,
-    ...(row.source === undefined ? {} : { source: row.source }),
+    source: row.source,
     data: row,
   };
 }
@@ -722,7 +714,7 @@ function evidenceForEmulationObligation(
           ? EvidenceConfidence.Unknown
           : EvidenceConfidence.Strong,
     summary: row.summary,
-    ...(row.source === undefined ? {} : { source: row.source }),
+    source: row.source,
     data: row,
   };
 }
@@ -746,7 +738,7 @@ function actorContinuations(
     );
   }
   for (const [index, row] of rows.slice(0, 5).entries()) {
-    const evidence = evidenceForActor(row);
+    const evidence = evidenceForStrongTypeFact(row);
     const builder = new FrameworkRowContinuationBuilder(
       inquiry,
       "framework.composition:actors",

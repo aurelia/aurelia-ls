@@ -1,0 +1,64 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:application-topology-builder",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "application",
+        "authoring",
+        "fixture",
+        "topology"
+      ],
+      "summary": "ApplicationTopologyBuilder is the mutable authoring-side assembler for app-level topology files, components, styles, services, registrations, and routes.",
+      "rationale": "The authoring API needs a topology model that can express intended app structure before source exists, while recognition and verification later prove what the app actually means. This builder is the topology-construction boundary; recipes should name intent and preferences rather than rebuilding topology graphs by hand.",
+      "guidance": [
+        "Start here when authoring operations need to assemble entrypoints, components, templates, styles, services, registrations, routes, or component dependencies.",
+        "Keep generator taste, formatting policy, and recipe-specific preferences out of application topology.",
+        "When recipe requests allow custom paths, derive topology component references and template/style import specifiers from the same paths used by source plans; `ApplicationTopologyBuilder.component(...)` owns component reference specifier derivation through `referenceFromPath`, and default-layout specifiers such as `./app` should not leak into custom-path topology.",
+        "This frontier is nextActionPolicy=when-touched: use it as topology grounding when app-building, fixture, or authoring-operation work needs topology assembly, not as default autonomous work just because the builder is live.",
+        "`ApplicationTopology` and reopened `AppTopology` share the same style asset vocabulary: owner kind, asset kind, source kind, optional style file, and optional import specifier.",
+        "`AppTopology.styles` and component `styles` rows are source-backed by local CSS imports and inline Aurelia `cssModules(...)` / `shadowCSS(...)` registry arguments. They distinguish plain component/global stylesheets from CSS module and Shadow DOM style registries. Use those rows for the `style-resource` expected effect and `style-resource-ownership` taste; dynamic class/style bindings are a separate template binding lane.",
+        "If generated fixtures fail verification, improve recognition/semantic-runtime proof layers rather than weakening topology into source-parser shortcuts."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/application/topology-builder.ts",
+          "symbolName": "ApplicationTopologyBuilder",
+          "line": 65,
+          "summary": "Mutable app topology assembler."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/application/module-specifier.ts",
+          "symbolName": "moduleSpecifier",
+          "summary": "Shared relative authored import specifier helper for topology and source plans."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/application/README.md",
+          "summary": "Application topology boundary and authoring pressure notes."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "ApplicationTopologyBuilder",
+          "filePath": "packages/semantic-runtime/src/application/topology-builder.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/application/module-specifier.ts",
+          "symbolName": "moduleSpecifier"
+        }
+      ],
+      "nextActionPolicy": "when-touched",
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-14"
+    }
+  ]
+}

@@ -161,14 +161,23 @@ inquiry algebra.
 Mixed monorepos need a cheap project-shape lane before app-world opening. A stress run may intentionally open every
 discovered package, but product flows need to decide whether they are asking for app entrypoints, resource libraries,
 Aurelia packages without app facade evidence, or all-project pressure. Semantic-runtime summary rows now expose
-source-role counts, import/receiver-grounded Aurelia app entrypoint signals, manifest dependency counts for `aurelia` / `@aurelia/*`, and
+source-role counts, import/receiver-grounded Aurelia app entrypoint signals, manifest dependency counts for `aurelia` /
+`@aurelia/*`, dependency origin (`project-manifest` versus `workspace-manifest`), project-shape reason counts, and
 source-level Aurelia facade signals from parsed imports, default imports, namespace imports, constructor calls,
-`.register(...)`, `.app(...)`, and `.enhance(...)`. Atlas should keep improving the corresponding workspace/package projections so
-future agents can pick scope from architecture evidence instead of discovering the cost only after
-TypeChecker/static-evaluation work has already run. Shape-filtered app pressure via `SEMANTIC_RUNTIME_PROJECT_SHAPES`
-is the current manual lane for validating that distinction. The nested TypeSystem profile shows whether the remaining
-cost is TS program creation, checker creation, project-option discovery, or source indexing.
-Semantic-runtime app pressure should default to generalized detail for proprietary roots. Source-assignment strictness
+`.register(...)`, `.app(...)`, and `.enhance(...)`. Workspace-manifest context is intentionally admission-level: a child
+package included by an ancestor `workspaces` manifest can become a resource-library authoring candidate when it has
+HTML/CSS source roles, but it still needs activation source evidence before becoming an app-world. Atlas should keep
+improving the corresponding workspace/package projections so future agents can pick scope from architecture evidence
+instead of discovering the cost only after TypeChecker/static-evaluation work has already run. Shape-filtered app
+pressure via `SEMANTIC_RUNTIME_PROJECT_SHAPES` is the current manual lane for validating that distinction. The nested
+TypeSystem profile shows whether the remaining cost is TS program creation, checker creation, project-option discovery,
+or source indexing.
+Atlas workspace architecture now mirrors this admission story more closely: manifest rows distinguish local
+`aurelia-framework-dependency` from `workspace-aurelia-framework-dependency`, and the file inventory supplies a bounded
+fallback source scan for package frames whose tsconfig admits no app source because of inherited `files` settings. That
+fallback must exclude nested package roots, otherwise parent workspace packages incorrectly inherit child app entrypoints
+and route surfaces.
+Semantic-runtime app pressure should default to generalized detail for external clean-room roots. Source-assignment strictness
 is now carried as typed `sourceAssignmentReasonKinds` on binding data-flow rows; open-seam reason buckets are durable
 pressure. Raw row wording is local debugging material unless it has been manually abstracted.
 LSP-like template pressure adds a second scope axis: hydrated app templates versus standalone authoring templates.
@@ -179,11 +188,11 @@ activation facts. Semantic-runtime now exposes an opt-in authoring-template lane
 preferred product shape. Source-file-selected authoring opens let callers pay for the template files they are asking
 about instead of compiling a whole resource library. The runtime facade now exposes direct `templateCompletions(...)`
 and `templateCursorInfo(...)` cursor-locus queries that first reuse any opened app-world whose compiled template
-already owns the cursor source, then fall back to a stable project-wide authoring open. Future hover, definition,
+already owns the cursor source, then fall back to a cursor-source-selected authoring open. Future hover, definition,
 diagnostics, and explanation entrypoints should reuse that cursor-locus boot protocol instead of making callers stitch
-`openApp(...)`, resource lookup, and cursor answer construction together. Do not make direct cursor calls materialize
-one app variant per cursor file; repeated LSP queries in the same runtime must converge on existing app context or a
-stable project authoring world, otherwise shared kernel publication will duplicate base records.
+`openApp(...)`, resource lookup, and cursor answer construction together. Repeated LSP queries in the same runtime must
+reuse existing app context when possible and otherwise keep the fallback authoring scope explicit through cursor source
+selection, explicit source lists, or `authoringTemplateLimit`.
 Cursor pressure should separate expected-empty static platform values from real semantic gaps. The current
 semantic-runtime pressure script prints completion pressure classes, public API answer mismatches, template-resource
 miss reasons, and value-domain gaps so raw `miss` counts do not hide that distinction. Finite checker-backed bindable

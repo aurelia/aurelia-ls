@@ -32,6 +32,7 @@ import type { ParseOutcome } from './parse-failure.js';
 import { CompletedInputCompanionBuilder } from './completed-input-companion-builder.js';
 import { CompletedInputParserState } from './completed-input-parser-state.js';
 import { CompletedInputTemplateCorridor } from './completed-input-template-corridor.js';
+import { ExpressionFrameworkErrorCode } from './framework-error-code.js';
 
 type ParsedPrimary = ParseOutcome<IsPrimary>;
 type ParsedArrayLiteralStep = ParseOutcome<ArrayLiteralStep>;
@@ -103,7 +104,11 @@ export class CompletedInputPrimaryCorridor {
       case TokenType.NumericLiteral:
       case TokenType.StringLiteral: {
         if (token.unterminated) {
-          return this.state.error('Unterminated string literal', token);
+          return this.state.failures.error(
+            'Unterminated string literal',
+            token,
+            ExpressionFrameworkErrorCode.ParseUnterminatedString,
+          );
         }
         this.state.nextToken();
         return new PrimitiveLiteralExpression(
@@ -138,19 +143,57 @@ export class CompletedInputPrimaryCorridor {
         return this.deps.templateCorridor.parseTemplateLiteral();
     }
 
-    return this.state.error(`Unexpected token ${tokenTypeName(token.type)} in primary expression`, token);
+    if (token.type === TokenType.Ellipsis) {
+      return this.state.failures.error(
+        'Spread syntax is not supported in binding expressions',
+        token,
+        ExpressionFrameworkErrorCode.ParseNoSpread,
+      );
+    }
+
+    if (token.type === TokenType.DotDot) {
+      return this.state.failures.error(
+        "Unexpected '..' at start of binding expression",
+        token,
+        ExpressionFrameworkErrorCode.ParseUnexpectedDoubleDot,
+      );
+    }
+
+    if (token.type === TokenType.Unknown) {
+      return this.state.failures.error(
+        'Unexpected character in binding expression',
+        token,
+        ExpressionFrameworkErrorCode.ParseUnexpectedCharacter,
+      );
+    }
+
+    return this.state.failures.error(
+      `Unexpected token ${tokenTypeName(token.type)} in primary expression`,
+      token,
+      token.type === TokenType.EOF
+        ? ExpressionFrameworkErrorCode.ParseUnexpectedEnd
+        : ExpressionFrameworkErrorCode.ParseInvalidStart,
+    );
   }
 
   private parseIdentifierPrimary(): ParsedPrimary {
     const token = this.state.peekToken();
     if (token.type !== TokenType.Identifier) {
-      return this.state.error('Expected identifier', token);
+      return this.state.failures.error(
+        'Expected identifier',
+        token,
+        ExpressionFrameworkErrorCode.ParseExpectedIdentifier,
+      );
     }
     this.state.nextToken();
 
     const name = this.deps.tokenToIdentifierName(token);
     if (name === 'import') {
-      return this.state.error("Bare 'import' is not allowed in binding expressions", token);
+      return this.state.failures.error(
+        "Bare 'import' is not allowed in binding expressions",
+        token,
+        ExpressionFrameworkErrorCode.ParseUnexpectedKeywordImport,
+      );
     }
 
     const identifier = this.deps.identifierFromToken(token);
@@ -217,6 +260,13 @@ export class CompletedInputPrimaryCorridor {
     while (true) {
       const dot = this.state.peekToken();
       if (dot.type !== TokenType.Dot) {
+        if (!this.isScopeSpecialAccessBoundary(dot)) {
+          return this.state.failures.error(
+            "Invalid member expression after '$parent'",
+            dot,
+            ExpressionFrameworkErrorCode.ParseInvalidMemberExpression,
+          );
+        }
         break;
       }
       this.state.nextToken();
@@ -255,7 +305,7 @@ export class CompletedInputPrimaryCorridor {
 
   private parseParenthesizedExpression(): ParsedPrimary {
     const open = this.state.nextToken();
-    this.state.pushDelimiter(MatchedDelimiterKind.Paren, open);
+    this.state.delimiters.push(MatchedDelimiterKind.Paren, open);
     const expr = this.deps.parseAssignExpr();
     if (isParseFailure(expr)) {
       if (isParseCompanionFailure(expr)) {
@@ -282,12 +332,12 @@ export class CompletedInputPrimaryCorridor {
         ExpressionCompanionFrameKind.ParenExpression,
         ExpressionExpectedContinuationClass.CloseParen,
         this.state.span(open.start, this.state.localEnd(expr)),
-        [this.state.childRef(expr)],
+        [this.state.prefixRefs.child(expr)],
       );
     }
 
     this.state.nextToken();
-    this.state.popDelimiter(MatchedDelimiterKind.Paren);
+    this.state.delimiters.pop(MatchedDelimiterKind.Paren);
     return new ParenExpression(
       this.state.span(open.start, close.end),
       expr,
@@ -296,7 +346,7 @@ export class CompletedInputPrimaryCorridor {
 
   private parseArrayLiteral(): ParseOutcome<ArrayLiteralExpression> {
     const open = this.state.nextToken();
-    this.state.pushDelimiter(MatchedDelimiterKind.Bracket, open);
+    this.state.delimiters.push(MatchedDelimiterKind.Bracket, open);
     const start = open.start;
 
     const elements: IsAssign[] = [];
@@ -396,7 +446,7 @@ export class CompletedInputPrimaryCorridor {
       );
     }
 
-    return this.state.error("Expected ',' or ']' in array literal", sep);
+    return this.state.failures.error("Expected ',' or ']' in array literal", sep);
   }
 
   private arrayLiteralOpeningFrontier(
@@ -435,20 +485,20 @@ export class CompletedInputPrimaryCorridor {
 
   private closeArrayLiteral(): void {
     this.state.nextToken();
-    this.state.popDelimiter(MatchedDelimiterKind.Bracket);
+    this.state.delimiters.pop(MatchedDelimiterKind.Bracket);
   }
 
   private arrayLiteralPrefixRefs(
     start: number,
     elements: readonly IsAssign[],
   ): readonly ClosedSubtreeRef[] {
-    return this.state.withOptionalPrefixRef(this.state.arrayPrefixRef(start, elements));
+    return this.state.prefixRefs.optional(this.state.prefixRefs.arrayLiteral(start, elements));
   }
 
   private parseObjectLiteral(): ParseOutcome<ObjectLiteralExpression> {
     const open = this.state.peekToken();
     this.state.nextToken();
-    this.state.pushDelimiter(MatchedDelimiterKind.Brace, open);
+    this.state.delimiters.push(MatchedDelimiterKind.Brace, open);
     const start = open.start;
 
     const keys: (number | string)[] = [];
@@ -457,7 +507,7 @@ export class CompletedInputPrimaryCorridor {
     const first = this.state.peekToken();
     if (first.type === TokenType.CloseBrace) {
       this.state.nextToken();
-      this.state.popDelimiter(MatchedDelimiterKind.Brace);
+      this.state.delimiters.pop(MatchedDelimiterKind.Brace);
       return new ObjectLiteralExpression(
         this.state.span(start, this.state.consumedEnd),
         keys,
@@ -500,7 +550,7 @@ export class CompletedInputPrimaryCorridor {
         ],
         ExpressionCompanionFrameKind.ObjectLiteral,
         this.state.span(start, this.state.consumedEnd || open.end),
-        this.state.withOptionalPrefixRef(this.state.objectPrefixRef(start, keys, values)),
+        this.state.prefixRefs.optional(this.state.prefixRefs.objectLiteral(start, keys, values)),
       );
     }
     if (keyTok.type === TokenType.CloseBrace) {
@@ -508,9 +558,10 @@ export class CompletedInputPrimaryCorridor {
       return ObjectLiteralStep.Closed;
     }
     if (!this.isObjectLiteralKeyToken(keyTok)) {
-      return this.state.error(
+      return this.state.failures.error(
         'Invalid object literal key; expected identifier, string, or number',
         keyTok,
+        ExpressionFrameworkErrorCode.ParseInvalidIdentifierObjectLiteralKey,
       );
     }
     this.state.nextToken();
@@ -525,7 +576,7 @@ export class CompletedInputPrimaryCorridor {
         colon,
         keyTok,
         this.state.span(start, keyTok.end),
-        this.state.withOptionalPrefixRef(this.state.objectPrefixRef(start, keys, values)),
+        this.state.prefixRefs.optional(this.state.prefixRefs.objectLiteral(start, keys, values)),
       );
     }
     this.state.nextToken();
@@ -549,7 +600,7 @@ export class CompletedInputPrimaryCorridor {
     if (!isParseFailure(value)) {
       return value;
     }
-    const prefix = this.state.withOptionalPrefixRef(this.state.objectPrefixRef(start, keys, values));
+    const prefix = this.state.prefixRefs.optional(this.state.prefixRefs.objectLiteral(start, keys, values));
     if (isParseCompanionFailure(value)) {
       return this.companionBuilder.widenFailureToFrame(
         value,
@@ -597,20 +648,72 @@ export class CompletedInputPrimaryCorridor {
         ],
         ExpressionCompanionFrameKind.ObjectLiteral,
         this.state.span(start, this.state.localEnd(values[values.length - 1]!)),
-        this.state.withOptionalPrefixRef(this.state.objectPrefixRef(start, keys, values)),
+        this.state.prefixRefs.optional(this.state.prefixRefs.objectLiteral(start, keys, values)),
       );
     }
-    return this.state.error("Expected ',' or '}' in object literal", sep);
+    return this.state.failures.error("Expected ',' or '}' in object literal", sep);
   }
 
   private closeObjectLiteral(): void {
     this.state.nextToken();
-    this.state.popDelimiter(MatchedDelimiterKind.Brace);
+    this.state.delimiters.pop(MatchedDelimiterKind.Brace);
   }
 
   private isObjectLiteralKeyToken(token: Token): boolean {
     return token.type === TokenType.Identifier
       || token.type === TokenType.StringLiteral
       || token.type === TokenType.NumericLiteral;
+  }
+
+  private isScopeSpecialAccessBoundary(token: Token): boolean {
+    switch (token.type) {
+      case TokenType.EOF:
+      case TokenType.CloseParen:
+      case TokenType.CloseBracket:
+      case TokenType.CloseBrace:
+      case TokenType.Comma:
+      case TokenType.Colon:
+      case TokenType.Semicolon:
+      case TokenType.Question:
+      case TokenType.QuestionDot:
+      case TokenType.OpenParen:
+      case TokenType.OpenBracket:
+      case TokenType.Backtick:
+      case TokenType.DotDot:
+      case TokenType.Ellipsis:
+      case TokenType.Plus:
+      case TokenType.Minus:
+      case TokenType.Asterisk:
+      case TokenType.Slash:
+      case TokenType.Percent:
+      case TokenType.StarStar:
+      case TokenType.Ampersand:
+      case TokenType.Bar:
+      case TokenType.AmpersandAmpersand:
+      case TokenType.BarBar:
+      case TokenType.QuestionQuestion:
+      case TokenType.LessThan:
+      case TokenType.LessThanOrEqual:
+      case TokenType.GreaterThan:
+      case TokenType.GreaterThanOrEqual:
+      case TokenType.Equals:
+      case TokenType.PlusEquals:
+      case TokenType.MinusEquals:
+      case TokenType.AsteriskEquals:
+      case TokenType.SlashEquals:
+      case TokenType.EqualsEquals:
+      case TokenType.EqualsEqualsEquals:
+      case TokenType.ExclamationEquals:
+      case TokenType.ExclamationEqualsEquals:
+      case TokenType.PlusPlus:
+      case TokenType.MinusMinus:
+      case TokenType.EqualsGreaterThan:
+      case TokenType.KeywordInstanceof:
+      case TokenType.KeywordIn:
+      case TokenType.KeywordOf:
+        return true;
+      default:
+        return false;
+    }
   }
 }

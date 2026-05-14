@@ -1,9 +1,35 @@
 import type { ApplicationTopology } from '../application/index.js';
+import type { SemanticSourceReference } from '../api/source-reference.js';
 import {
   type AuthoringOperationDescriptor,
   type AuthoringOperationKind,
   readAuthoringOperationDescriptor,
 } from './ontology.js';
+import type {
+  AuthoringRepairChangeDomain,
+  AuthoringRepairKind,
+  AuthoringRepairPlanKind,
+  AuthoringRepairPlanReadiness,
+  AuthoringRepairRuntimeBoundaryKind,
+  AuthoringRepairRuntimeIntentKind,
+} from './repair.js';
+
+export interface RepairAppMemberHint {
+  readonly memberName: string;
+  readonly evidenceCount: number;
+  readonly ownerTypeDisplays: readonly string[];
+  readonly valueTypeDisplays: readonly string[];
+  readonly valueTypeSources: readonly string[];
+  readonly valueTypeCoverage: 'all' | 'some' | 'none';
+}
+
+export interface RepairAppActionTarget {
+  readonly targetKind: string;
+  readonly source: SemanticSourceReference | null;
+  readonly typeDisplay: string | null;
+  readonly memberNames: readonly string[];
+  readonly evidenceCount: number;
+}
 
 /** Base class for semantic authoring operations before they become text edits. */
 export abstract class AuthoringOperation<TKind extends AuthoringOperationKind> {
@@ -37,6 +63,17 @@ export class CreateEntrypointOperation extends AuthoringOperation<'create-entryp
   }
 }
 
+/** Create the app root custom element source file. */
+export class CreateRootComponentOperation extends AuthoringOperation<'create-root-component'> {
+  constructor(
+    readonly sourcePath: string,
+    readonly className: string,
+    readonly elementName: string,
+  ) {
+    super('create-root-component', `Create app root component ${elementName}.`);
+  }
+}
+
 /** Create a custom element source file. */
 export class CreateComponentOperation extends AuthoringOperation<'create-component'> {
   constructor(
@@ -45,6 +82,17 @@ export class CreateComponentOperation extends AuthoringOperation<'create-compone
     readonly elementName: string,
   ) {
     super('create-component', `Create custom element ${elementName}.`);
+  }
+}
+
+/** Create a form-oriented custom element source file. */
+export class CreateFormComponentOperation extends AuthoringOperation<'create-form-component'> {
+  constructor(
+    readonly sourcePath: string,
+    readonly className: string,
+    readonly elementName: string,
+  ) {
+    super('create-form-component', `Create form component ${elementName}.`);
   }
 }
 
@@ -58,6 +106,26 @@ export class CreateExternalTemplateOperation extends AuthoringOperation<'create-
   }
 }
 
+/** Create or attach a stylesheet/style asset. */
+export class CreateStyleAssetOperation extends AuthoringOperation<'create-style-asset'> {
+  constructor(
+    readonly stylePath: string,
+    readonly ownerKind: 'component' | 'global',
+  ) {
+    super('create-style-asset', `Create ${ownerKind} style asset ${stylePath}.`);
+  }
+}
+
+/** Create a DI-owned state model class. */
+export class CreateStateModelOperation extends AuthoringOperation<'create-state-model'> {
+  constructor(
+    readonly sourcePath: string,
+    readonly className: string,
+  ) {
+    super('create-state-model', `Create state model ${className}.`);
+  }
+}
+
 /** Create an injectable app service or model class. */
 export class CreateServiceOperation extends AuthoringOperation<'create-service'> {
   constructor(
@@ -65,6 +133,16 @@ export class CreateServiceOperation extends AuthoringOperation<'create-service'>
     readonly className: string,
   ) {
     super('create-service', `Create service ${className}.`);
+  }
+}
+
+/** Add a template binding or control-flow usage to an authored template. */
+export class AddTemplateBindingOperation extends AuthoringOperation<'add-template-binding'> {
+  constructor(
+    readonly templatePath: string,
+    readonly bindingSummary: string,
+  ) {
+    super('add-template-binding', `Add template binding in ${templatePath}: ${bindingSummary}.`);
   }
 }
 
@@ -104,6 +182,25 @@ export class VerifyAppOperation extends AuthoringOperation<'verify-app'> {
     readonly expectedTopology: ApplicationTopology,
   ) {
     super('verify-app', 'Verify authored app semantic closure.');
+  }
+}
+
+/** Negotiate and apply a semantic repair cluster without claiming a concrete code action exists yet. */
+export class RepairAppOperation extends AuthoringOperation<'repair-app'> {
+  constructor(
+    readonly clusterKey: string,
+    readonly repairKind: AuthoringRepairKind | `${AuthoringRepairKind}`,
+    readonly planKind: AuthoringRepairPlanKind | `${AuthoringRepairPlanKind}`,
+    readonly changeDomain: AuthoringRepairChangeDomain | `${AuthoringRepairChangeDomain}`,
+    readonly planReadiness: AuthoringRepairPlanReadiness | `${AuthoringRepairPlanReadiness}`,
+    readonly repairCount: number,
+    readonly targetMemberNames: readonly string[] = [],
+    readonly actionTargets: readonly RepairAppActionTarget[] = [],
+    readonly memberHints: readonly RepairAppMemberHint[] = [],
+    readonly runtimeBoundaryKinds: readonly (AuthoringRepairRuntimeBoundaryKind | `${AuthoringRepairRuntimeBoundaryKind}`)[] = [],
+    readonly runtimeIntentKinds: readonly (AuthoringRepairRuntimeIntentKind | `${AuthoringRepairRuntimeIntentKind}`)[] = [],
+  ) {
+    super('repair-app', `Repair ${repairCount} ${repairKind} row(s) through ${planKind}.`);
   }
 }
 

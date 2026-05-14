@@ -1,0 +1,58 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:i18n-translation-binding-lifecycle",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "i18n",
+        "template",
+        "diagnostics"
+      ],
+      "summary": "I18n TranslationBinding lifecycle errors are modeled after runtime rendering joins key and parameter bindings on the same target element.",
+      "rationale": "Aurelia i18n does not treat each t/t.bind/t-params.bind attribute as an isolated binding lifetime. The renderer retrieves or creates one TranslationBinding per target and t-params.bind calls useParameter(...), so semantic-runtime diagnostics for AUR4000/AUR4001/AUR4002 must group rendered TranslationBinding products by target before publishing RuntimeBindingIssue products.",
+      "guidance": [
+        "Inspect framework i18n TranslationBinding and translation renderers before changing this lane; the join point is TranslationBinding.useParameter(...).",
+        "Keep translation-key catalog products separate from translation-binding lifecycle diagnostics: catalog completion comes from configuration resources, while lifecycle errors come from rendered binding products.",
+        "Surface i18n lifecycle diagnostics through shared template/app diagnostic projection instead of adding i18n-specific API rows prematurely."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/i18n/translation-binding-issues.ts",
+          "symbolName": "I18nTranslationBindingIssueMaterializer",
+          "summary": "Semantic-runtime materializer for TranslationBinding.create/bind diagnostics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/i18n/framework-error-code.ts",
+          "symbolName": "I18nTranslationBindingFrameworkErrorCode",
+          "summary": "Exact framework error-code links for AUR4000, AUR4001, and AUR4002."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/fixtures/pressure/i18n-translation-binding-errors/src/i18n-translation-binding-errors-app.html",
+          "summary": "Synthetic pressure fixture for i18n translation binding diagnostics."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "diagnostic-codes",
+          "summary": "Ground i18n error-code coverage before adding more i18n diagnostics."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "I18nTranslationBindingIssueMaterializer",
+          "filePath": "packages/semantic-runtime/src/i18n/translation-binding-issues.ts",
+          "minLineCount": 180,
+          "minMethodCount": 8
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-13"
+    }
+  ]
+}

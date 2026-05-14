@@ -1,0 +1,36 @@
+<form class.bind="canSubmit ? 'form-ready' : 'form-pending'" submit.trigger="submit()">
+  <label for="customer-name">Name</label>
+  <input id="customer-name" value.two-way="customerName & validate">
+
+  <label for="email">Email</label>
+  <input id="email" type="email" value.two-way="email & validate">
+
+  <label>
+    <input type="checkbox" checked.bind="urgent">
+    Urgent
+  </label>
+
+  <fieldset>
+    <legend>Contact preference</legend>
+    <label>
+      <input type="radio" model.bind="emailPreference" checked.bind="contactPreference">
+      Email
+    </label>
+    <label>
+      <input type="radio" model.bind="phonePreference" checked.bind="contactPreference">
+      Phone
+    </label>
+  </fieldset>
+
+  <label for="topics">Topics</label>
+  <select id="topics" multiple value.bind="topics">
+    <option model.bind="hardwareTopic">Hardware</option>
+    <option model.bind="billingTopic">Billing</option>
+    <option model.bind="supportTopic">Support</option>
+  </select>
+
+  <label for="notes">Notes</label>
+  <textarea id="notes" value.bind="notes"></textarea>
+
+  <button type="submit" disabled.bind="!canSubmit">Submit request</button>
+</form>

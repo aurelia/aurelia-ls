@@ -28,6 +28,42 @@ maintenance answer, first continuations, package scripts, and compact follow-up 
 session path. The package script `pnpm --filter @aurelia-ls/atlas orient` is the stable Codex-facing activation call and
 prints a compact text orientation; `pnpm --filter @aurelia-ls/atlas orient:json` prints the full request-shaped bundle.
 
+`atlas.memory` is the queryable durable-memory lane. Its manifest lives at
+`packages/atlas/memory/atlas-memory.json` and focused record shards live under
+`packages/atlas/memory/records`, while the lens recomputes status from live
+source, `product.architecture`, and `atlas.self` rows. Use it before trusting old
+workbench notes: `records` shows all durable records, `guidance` answers
+"what should I inspect or reuse for this kind of problem?", `frontiers` joins
+active/stale/intentional records with untracked live pressure, and `stale`
+shows resolved or stale records that should not masquerade as active work.
+`next` ranks computed start-here moves from storage issues, stale memory, live
+frontiers, live intentional shapes, reuse guides, and untracked product pressure; active frontiers can opt into
+`nextActionPolicy=when-touched` when they should stay queryable as domain guidance without driving unfiltered work.
+The compact summary
+prints its first rows. The
+shortcut script is `pnpm --filter @aurelia-ls/atlas memory`; use
+`memory:json` when a tool needs the exact answer payload.
+Pass `--query`, `--path`, `--domain`, `--kind`, `--status`, `--recordId`, `--surfaceRole`, `--liveCheckKind`, `--nextActionPolicy`, `--anchorKind`, `--anchorLensId`, `--symbolName`, or `--rows` to narrow the memory script without paging the full store.
+Memory scripts accept both `--name=value` and `--name value`; `--limit` is an alias for `--rows`. Repeating `--domain`
+narrows to rows carrying every listed domain unless `--domainMode=any` is supplied.
+Query-filtered memory rows and next actions rank ids, exact domains, anchors, and summaries above incidental mentions in guidance prose. They try strict all-token matching first and fall back to partial-token relevance only when a broad checkpoint query would otherwise return no rows, so loose workstream phrases can still find the strongest local handle first.
+Use `memory:next` when a fresh session needs a ranked live canary instead of a
+new markdown archaeology pass. Once the workstream is known, narrow the next
+lane structurally, for example `memory:next -- --domain authoring --rows 8`,
+so global large-class pressure does not bury the most relevant local frontier.
+In detail mode, record-backed next rows print anchors before guidance and the
+answer payload includes the backing memory record rows, so the next jump target
+is visible without opening raw JSON. The printed backing-record section
+summarizes rows already expanded as next actions instead of duplicating their
+full guidance blocks. Human detail output is intentionally bounded; use
+`--guidanceRows=...`, `--anchorRows=...`, `--liveCheckRows=...`, or the matching
+`--all-*` switches when the full printed expansion is worth the context.
+Use `memory:write` to list shards, print a record template, upsert a draft
+record, or remove a stale record with a dry-run first. Durable JSON memory is
+the queryable index; package READMEs remain boundary maps, workbenches remain
+rolling context, and `.temp` notes should be promoted before they matter beyond
+the current commit boundary.
+
 `createApi().frameworkEmulationSymbolsReport()` returns the deterministic framework emulation Markdown report used as
 the current framework-composition eyeball golden. It still uses `StandardConfiguration` as a broad canary, not as the
 framework ontology. Re-run it with
@@ -41,6 +77,12 @@ For a compact current handoff, read [workbench/agent-handoff.md](workbench/agent
 - Start broad work with `pnpm --filter @aurelia-ls/atlas orient`; it is the compact live map of lenses, projections,
   terrain, source footing, first moves, shortcut scripts, and compact follow-up docs. Use `orient:json` only when a
   tool needs the full machine-readable orientation payload.
+- Use `atlas.memory` before reading large workbenches for prior intent. It is
+  the source-backed memory/task lane: durable records are explicit JSON, but
+  active/resolved/stale status is computed from the current worktree when
+  possible. Its `next` projection is a computed start-here lane, not an
+  exhaustive project plan. Use `memory:write` for durable updates instead of
+  letting new direction live only in scratch notes.
 - Use `product.architecture` before opening semantic-runtime source for structure pressure. `functions`, `classes`,
   `call-sites`, and `call-dependencies` are the usual fast product refactor lanes; `summary` and symbol projections
   spend the heavier symbol-backed memo. The shortcut script is
@@ -58,13 +100,30 @@ For a compact current handoff, read [workbench/agent-handoff.md](workbench/agent
   `minLineCount`, `minCallCount`, `minUniqueCallTargetCount`, and pressure-oriented ordering. The shortcut script is
   compact `pnpm --filter @aurelia-ls/atlas pressure:self`; use
   `pnpm --filter @aurelia-ls/atlas pressure:self:detail` when a full metric row is needed. It also prints high
-  `atlas.self:axis-pressure` rows.
+  `atlas.self:axis-pressure` rows. Use
+  `pnpm --filter @aurelia-ls/atlas profile:self` when the question is projection cost rather than source shape.
 - Use framework lenses for Aurelia grounding rather than pattern-matching from other frameworks. `framework.resources`
   preserves exact definition spans plus typed source-site lanes for backing declarations, bundle admissions, syntax
   products, and materialization sites. `framework.rendering` owns hydration/binding/controller rows,
   `framework.observation` owns observer-locator/reactivity rows, and `framework.composition:emulation` is the compact
   semantic-runtime obligation map. Use `pnpm --filter @aurelia-ls/atlas pressure:framework-resources` when resource
   provenance is the question.
+- Use `framework.corpus` when official Aurelia docs or framework tests should seed fixture/authoring pressure. The
+  shortcut `pnpm --filter @aurelia-ls/atlas framework:corpus -- --projection=doc-snippets --concept=forms` returns
+  classified, paged rows from docs/tests/legacy replacement inventory without turning those corpora into MCP or direct
+  semantic truth. Its `expected-effects` projection derives source-backed rows from semantic-runtime's
+  expected-effect kind and role contracts, including a seed policy that separates corpus-pattern effects from reopen
+  baselines such as project shape, app root, and project tooling, orientation contracts, and closure contracts.
+  `fixture-seeds` joins docs/test snippets to those
+  expected-effect descriptors plus recipe hints so fixture expansion can start from a semantic pressure target instead
+  of raw examples. Seed classifiers read the exact source range behind each snippet rather than the compact preview.
+  Use `effectKind`, `effectRole`, `effectSeedPolicy`, and `recipeKey` as structural filters and `query` for
+  source/content concepts; recipe names are not allowed to make every row match a content query such as `forms`.
+  Use `seedUse=authoring-taste` or `seedUse=behavior-grounding` when choosing whether the corpus snippets are being
+  used as taste pressure or framework behavior pressure; `authoring-taste` expected effects are orientation contracts,
+  so they are not expected to have direct fixture seed rows of their own.
+  Fixture seed expected-effect filters can also be narrowed structurally with `expectedEffectFilterField` and
+  `expectedEffectFilterValue`, for example `staticArgumentValues=blur` or `targetProperty=value`.
 - Use `framework.discovery:bundles` when composition roots are the question. It separates spendable framework
   `configuration`, `registration-catalog`, and `registry` rows, so `StandardConfiguration` is a canary rather than the
   only visible composition shape. Follow bundle rows into `framework.di:world` with `configurationPackageId` and
@@ -81,7 +140,7 @@ For a compact current handoff, read [workbench/agent-handoff.md](workbench/agent
 - Use `workspace.architecture` when a pressure run admits authored apps or monorepos through the source substrate. It
   separates package admission role from inferred Aurelia shape, exposes source-role pressure for app/test/tooling
   separation, then reports Aurelia entrypoint signals, manifest/build signals, framework imports, resources,
-  configuration, registrations, router usage, and template references. For proprietary clean-room runs, keep tracked
+  configuration, registrations, router usage, and template references. For external clean-room runs, keep tracked
   notes to aggregate counts and mechanism categories rather than row names, paths, or exact source spans; the summary
   rollup includes filter-aware surface-kind, mechanism, admission-role, Aurelia-shape, package-manager, and build-tool
   distributions for that purpose. `pressure:workspace-architecture` adds external/app-shaped aggregate sub-rollups and

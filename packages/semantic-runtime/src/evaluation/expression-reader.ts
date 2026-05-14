@@ -128,6 +128,8 @@ export function readStaticStringValue(
   switch (value.kind) {
     case EvaluationValueKind.String:
       return value.value;
+    case EvaluationValueKind.StringPattern:
+      return null;
     case EvaluationValueKind.Object:
     case EvaluationValueKind.BoundaryObject:
     case EvaluationValueKind.BoundaryValue:

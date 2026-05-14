@@ -14,6 +14,87 @@ export interface TemplateAttributeMapperNode {
   readonly attributes?: readonly HtmlAttributeLike[];
 }
 
+export class AttributeMapperMapping {
+  constructor(
+    /** Runtime nodeName lane consumed by AttrMapper.map, normalized to the framework's uppercase HTML node names. */
+    readonly tagName: string | null,
+    /** Authored attribute key before binding-command lowering maps it to a target property. */
+    readonly attributeName: string,
+    /** Runtime property key selected for the attribute. */
+    readonly propertyName: string,
+  ) {}
+}
+
+export class AttributeMapperTwoWayRule {
+  constructor(
+    /** Runtime nodeName/tagName required by an app-authored useTwoWay predicate. */
+    readonly tagName: string | null,
+    /** Runtime attribute/property key required by an app-authored useTwoWay predicate. */
+    readonly propertyName: string | null,
+  ) {}
+
+  matches(
+    node: TemplateAttributeMapperNode,
+    propertyName: string,
+  ): boolean {
+    return (this.tagName == null || normalizeHtmlTagName(node.tagName) === normalizeHtmlTagName(this.tagName))
+      && (this.propertyName == null || propertyName === this.propertyName);
+  }
+}
+
+/**
+ * Static service state produced by app-authored AttrMapper customizations.
+ *
+ * Aurelia keeps this state inside the mutable AttrMapper instance. Semantic-runtime keeps the same service shape while
+ * making the statically recognized state explicit so compiler worlds and component worlds can inherit it.
+ */
+export class AttributeMapperConfiguration {
+  static readonly empty = new AttributeMapperConfiguration([], []);
+
+  private readonly mappingsByTag = new Map<string, Map<string, string>>();
+  private readonly globalMappings = new Map<string, string>();
+
+  constructor(
+    readonly mappings: readonly AttributeMapperMapping[],
+    readonly twoWayRules: readonly AttributeMapperTwoWayRule[],
+  ) {
+    for (const mapping of mappings) {
+      if (mapping.tagName == null) {
+        this.globalMappings.set(normalizeAttributeName(mapping.attributeName), mapping.propertyName);
+        continue;
+      }
+      const tagName = normalizeHtmlTagName(mapping.tagName);
+      let tagMappings = this.mappingsByTag.get(tagName);
+      if (tagMappings == null) {
+        tagMappings = new Map();
+        this.mappingsByTag.set(tagName, tagMappings);
+      }
+      tagMappings.set(normalizeAttributeName(mapping.attributeName), mapping.propertyName);
+    }
+  }
+
+  get isEmpty(): boolean {
+    return this.mappings.length === 0 && this.twoWayRules.length === 0;
+  }
+
+  map(
+    element: TemplateAttributeMapperNode,
+    attr: string,
+  ): string | null {
+    const attributeName = normalizeAttributeName(attr);
+    return this.mappingsByTag.get(normalizeHtmlTagName(element.tagName))?.get(attributeName)
+      ?? this.globalMappings.get(attributeName)
+      ?? null;
+  }
+
+  isTwoWay(
+    node: TemplateAttributeMapperNode,
+    propertyName: string,
+  ): boolean {
+    return this.twoWayRules.some((rule) => rule.matches(node, propertyName));
+  }
+}
+
 export function mapAttribute(
   element: TemplateAttributeMapperNode,
   attr: string,
@@ -151,4 +232,8 @@ function attributeValue(
   name: string,
 ): string | null {
   return htmlAttributeValue(owner, name);
+}
+
+function normalizeAttributeName(value: string): string {
+  return value.toLowerCase();
 }

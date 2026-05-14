@@ -33,6 +33,11 @@ const DI_MODULES = new Set([
   '@aurelia/kernel',
 ]);
 
+const MODULE_LOADER_MODULES = new Set([
+  'aurelia',
+  '@aurelia/kernel',
+]);
+
 const APP_TASK_SLOT_NAMES = new Set([
   'creating',
   'hydrating',
@@ -127,7 +132,7 @@ export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
       ts.isPropertyAccessExpression(expression)
       && (expression.name.text === 'customize' || expression.name.text === 'withChild')
     ) {
-      const mark = host.markOpenSeams();
+      const checkpoint = host.checkpoint();
       const receiver = host.evaluateExpression(expression.expression, environment, moduleKey, depth + 1);
       const frameworkKind = aureliaFrameworkRegistrationKindForEvaluationValue(receiver);
       if (frameworkKind === FrameworkRegistrationKind.DialogConfiguration) {
@@ -137,7 +142,7 @@ export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
       if (isSyntheticDialogConfigurationChainFunction(callee, expression.name.text)) {
         return dialogConfigurationObject(call);
       }
-      host.restoreOpenSeams(mark);
+      host.restore(checkpoint);
     }
 
     if (
@@ -154,6 +159,10 @@ export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
       && isDialogConfigurationFactoryIdentifier(expression)
     ) {
       return dialogConfigurationObject(call);
+    }
+
+    if (isAliasedResourcesRegistryCall(expression)) {
+      return registryObject(call);
     }
 
     if (
@@ -284,6 +293,42 @@ function sourceFileImportsLocal(
     }
   }
   return false;
+}
+
+function sourceFileImportsNamespace(
+  sourceFile: ts.SourceFile,
+  localName: string,
+  modules: ReadonlySet<string>,
+): boolean {
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier) || !modules.has(statement.moduleSpecifier.text)) {
+      continue;
+    }
+    const named = statement.importClause?.namedBindings;
+    if (named != null && ts.isNamespaceImport(named) && named.name.text === localName) {
+      return true;
+    }
+  }
+  return false;
+}
+
+function isAliasedResourcesRegistryCall(
+  expression: ts.Expression,
+): boolean {
+  if (ts.isIdentifier(expression)) {
+    return sourceFileImportsLocal(
+      expression.getSourceFile(),
+      expression.text,
+      'aliasedResourcesRegistry',
+      MODULE_LOADER_MODULES,
+    );
+  }
+  if (!ts.isPropertyAccessExpression(expression) || expression.name.text !== 'aliasedResourcesRegistry') {
+    return false;
+  }
+  const namespace = unwrapExpression(expression.expression);
+  return ts.isIdentifier(namespace)
+    && sourceFileImportsNamespace(namespace.getSourceFile(), namespace.text, MODULE_LOADER_MODULES);
 }
 
 function isDialogConfigurationFactoryIdentifier(identifier: ts.Identifier): boolean {

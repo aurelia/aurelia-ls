@@ -288,9 +288,7 @@ function readVocabularyDefinitions(
           directUsageCount: 0,
           keyReadCount: 0,
           claimSignatureUseCount: 0,
-          ...(parsedSignature?.signature === undefined || parsedSignature.signature === null
-            ? {}
-            : { claimSignature: parsedSignature.signature }),
+          claimSignature: parsedSignature?.signature ?? undefined,
           claimSignatureParseIssues: parsedSignature?.issues ?? [],
         });
       }

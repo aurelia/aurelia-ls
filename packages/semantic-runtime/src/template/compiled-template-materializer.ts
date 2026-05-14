@@ -23,8 +23,6 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  compactFieldProvenance,
-  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -54,8 +52,6 @@ import {
   CompiledTemplateState,
   TemplateRenderTarget,
   TemplateRenderTargetKind,
-  type CompiledTemplateField,
-  type TemplateRenderTargetField,
 } from './compiled-template.js';
 import type { TemplateCompilationUnit } from './compilation-unit.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
@@ -88,12 +84,18 @@ import {
   TemplateInstructionSequence,
   TemplateInstructionKind,
   TextBindingInstruction,
-  type TemplateInstructionField,
   type TemplateInstruction,
 } from './instruction-ir.js';
 import { instructionKindKeyFor } from './instruction-vocabulary.js';
 import type { BindingCommandLoweringEmission } from './binding-command-lowering-materializer.js';
 import type { TemplateValueSiteEmission } from './value-site-materializer.js';
+import {
+  TemplateCompilerIssue,
+  TemplateCompilerIssueKind,
+  TemplateCompilerIssuePhase,
+} from './compiler-issue.js';
+import { TemplateCompilerIssuePublisher } from './compiler-issue-publication.js';
+import { TemplateCompilerFrameworkErrorCode } from './framework-error-code.js';
 import {
   TemplateExpressionParse,
   TemplateValueSite,
@@ -126,6 +128,7 @@ export class CompiledTemplateEmission {
     readonly instructions: readonly TemplateInstruction[],
     readonly instructionSequences: readonly TemplateInstructionSequence[],
     readonly renderTargets: readonly TemplateRenderTarget[],
+    readonly issues: readonly TemplateCompilerIssue[],
     readonly openSeams: readonly OpenSeam[],
     readonly records: readonly KernelStoreRecord[],
   ) {}
@@ -221,6 +224,7 @@ class CompiledTemplateAssembly {
     readonly instructions: readonly TemplateInstruction[],
     readonly createdInstructions: readonly TemplateInstruction[],
     readonly records: readonly KernelStoreRecord[],
+    readonly issues: readonly TemplateCompilerIssue[],
     readonly openSeams: readonly OpenSeam[],
   ) {}
 }
@@ -287,6 +291,7 @@ class CompiledTemplateAssemblyState {
   readonly openSeams: OpenSeam[] = [];
   readonly instructions: TemplateInstruction[] = [];
   readonly createdInstructions: TemplateInstruction[] = [];
+  readonly issues: TemplateCompilerIssue[] = [];
   readonly targetDrafts: TargetDraft[] = [];
   readonly surrogateInstructions: TemplateInstruction[] = [];
   readonly nestedSequenceDrafts: NestedSequenceDraft[] = [];
@@ -297,12 +302,15 @@ class CompiledTemplateAssemblyState {
 
   private instructionIndex = 0;
   private rowIndex = 0;
+  private readonly issuePublisher: TemplateCompilerIssuePublisher;
 
   constructor(
     readonly store: KernelStore,
     readonly input: CompiledTemplateMaterializationRequest,
     readonly source: CompiledTemplateSourceSet,
-  ) {}
+  ) {
+    this.issuePublisher = new TemplateCompilerIssuePublisher(store);
+  }
 
   readonly addOpenSeam = (
     local: string,
@@ -319,6 +327,28 @@ class CompiledTemplateAssemblyState {
     );
     this.openSeams.push(seam);
     this.records.push(seam);
+  };
+
+  readonly addCompilerIssue = (
+    local: string,
+    ownerIdentityHandle: IdentityHandle,
+    issueKind: TemplateCompilerIssueKind,
+    message: string,
+    frameworkErrorCode: string | null,
+    addressHandle: AddressHandle | null,
+  ): void => {
+    const publication = this.issuePublisher.publish(
+      `compiled-template:${this.input.localKey}:assembly:${local}`,
+      ownerIdentityHandle,
+      this.source.provenanceHandle,
+      TemplateCompilerIssuePhase.CompiledTemplate,
+      issueKind,
+      message,
+      frameworkErrorCode,
+      addressHandle,
+    );
+    this.issues.push(publication.issue);
+    this.records.push(...publication.records);
   };
 
   readonly createInstruction = <TInstruction extends TemplateInstruction>(
@@ -348,13 +378,6 @@ class CompiledTemplateAssemblyState {
     this.instructions.push(instruction);
     return instruction;
   };
-
-  readonly fieldProvenance = <TField extends string>(
-    fields: readonly (TField | null)[],
-  ): readonly FieldProvenance<TField>[] =>
-    compactFieldProvenance(fields.map((field) =>
-      field == null ? null : new FieldProvenance(field, this.source.provenanceHandle)
-    ));
 
   readonly emitRootRow = (
     local: string,
@@ -410,6 +433,7 @@ class CompiledTemplateAssemblyState {
       this.instructions,
       this.createdInstructions,
       this.records,
+      this.issues,
       this.openSeams,
     );
   }
@@ -445,7 +469,7 @@ class CompiledTemplateInstructionFactory {
           node.toReference(),
           attribute.toReference(),
           addressHandle,
-          this.assemblyState.fieldProvenance<TemplateInstructionField>(['node', 'attribute', 'source']),
+          [],
         ),
       );
     }
@@ -468,7 +492,7 @@ class CompiledTemplateInstructionFactory {
         target === '...$bindables' ? syntax.rawValue : syntax.target.slice(3),
         parse?.productHandle ?? null,
         addressHandle,
-        this.assemblyState.fieldProvenance<TemplateInstructionField>(['node', 'attribute', 'target', 'value', 'expression', 'source']),
+        [],
       ),
     );
   };
@@ -582,7 +606,7 @@ class CompiledTemplateInstructionFactory {
         attribute.toReference(),
         syntax.rawValue,
         addressHandle,
-        this.assemblyState.fieldProvenance<TemplateInstructionField>(['node', 'attribute', 'value', 'source']),
+        [],
       ),
     );
   }
@@ -606,7 +630,7 @@ class CompiledTemplateInstructionFactory {
         attribute.toReference(),
         syntax.rawValue,
         addressHandle,
-        this.assemblyState.fieldProvenance<TemplateInstructionField>(['node', 'attribute', 'value', 'source']),
+        [],
       ),
     );
   }
@@ -631,7 +655,7 @@ class CompiledTemplateInstructionFactory {
         attribute.rawName,
         syntax.rawValue,
         addressHandle,
-        this.assemblyState.fieldProvenance<TemplateInstructionField>(['node', 'attribute', 'target', 'value', 'source']),
+        [],
       ),
     );
   }
@@ -657,7 +681,7 @@ class CompiledTemplateInstructionFactory {
         target,
         syntax.rawValue,
         addressHandle,
-        this.assemblyState.fieldProvenance<TemplateInstructionField>(['node', 'attribute', 'target', 'value', 'source']),
+        [],
       ),
     );
   }
@@ -683,7 +707,7 @@ class CompiledTemplateInstructionFactory {
         target,
         [parse.productHandle],
         addressHandle,
-        this.assemblyState.fieldProvenance<TemplateInstructionField>(['node', 'attribute', 'target', 'expression', 'source']),
+        [],
       ),
     );
   }
@@ -709,7 +733,7 @@ class CompiledTemplateInstructionFactory {
         resolvedInstructionResourceProductHandle(this.input, classification),
         props.map((instruction) => instruction.productHandle),
         classification.sourceAddressHandle,
-        this.assemblyState.fieldProvenance<TemplateInstructionField>(['node', 'attribute', 'resource', 'instructions', 'source']),
+        [],
       ),
     );
 
@@ -742,7 +766,7 @@ class CompiledTemplateInstructionFactory {
           childSequenceProductHandle,
           props.map((instruction) => instruction.productHandle),
           classification.sourceAddressHandle,
-          this.assemblyState.fieldProvenance<TemplateInstructionField>(['node', 'attribute', 'resource', 'children', 'instructions', 'source']),
+          [],
         );
       },
     );
@@ -766,6 +790,11 @@ class CompiledTemplateInstructionTraversal {
       && rootElements[0]?.tagName.toLowerCase() === 'template'
       ? rootElements[0]
       : null;
+    const contentRoots = rootTemplate?.children ?? this.input.html.document.rootNodes;
+    if (rootTemplate != null) {
+      this.recordRootLocalTemplateIssue(rootTemplate);
+    }
+    this.recordLocalTemplateIssues(contentRoots);
 
     if (rootTemplate != null) {
       this.assemblyState.surrogateInstructions.push(...this.surrogateInstructionsForTemplateElement(rootTemplate));
@@ -827,7 +856,7 @@ class CompiledTemplateInstructionTraversal {
             node.toReference(),
             parse.productHandle,
             node.sourceAddressHandle,
-            this.assemblyState.fieldProvenance<TemplateInstructionField>(['node', 'expression', 'source']),
+            [],
           ),
         ),
       ],
@@ -859,7 +888,7 @@ class CompiledTemplateInstructionTraversal {
               letInstructions.map((instruction) => instruction.productHandle),
               hasHtmlAttribute(this.indexes.ownersByElement.get(node.productHandle) ?? null, 'to-binding-context'),
               node.sourceAddressHandle,
-              this.assemblyState.fieldProvenance<TemplateInstructionField>(['node', 'instructions', 'toBindingContext', 'source']),
+              [],
             ),
           ),
         ],
@@ -874,11 +903,14 @@ class CompiledTemplateInstructionTraversal {
   ): void {
     const owner = this.indexes.ownersByElement.get(node.productHandle) ?? null;
     const classifications = this.indexes.classificationsByOwner.get(node.productHandle) ?? [];
-    const elementResolution = this.input.compilerWorld.resourceResolver.el(htmlElementLookupName(node, owner));
+    const lookupName = htmlElementLookupName(node, owner);
+    const elementResolution = this.input.compilerWorld.resourceResolver.el(lookupName);
     const elementDefinition = elementResolution?.definition instanceof CustomElementDefinition
       ? elementResolution.definition
       : null;
     const elementInstructions: TemplateInstruction[] = [];
+    this.recordSlotWithoutShadowDomIssue(node, lookupName);
+    this.recordAuSlotProjectionIssue(node, lookupName, elementDefinition);
     const parts = this.collectElementInstructionParts(node, classifications, elementDefinition);
 
     if (elementDefinition != null) {
@@ -898,13 +930,7 @@ class CompiledTemplateInstructionTraversal {
           parts.capturedSyntaxProductHandles,
           elementDefinition.containerless || hasHtmlAttribute(owner, 'containerless'),
           node.sourceAddressHandle,
-          this.assemblyState.fieldProvenance<TemplateInstructionField>([
-            'node',
-            'definition',
-            'instructions',
-            parts.capturedSyntaxProductHandles.length === 0 ? null : 'captures',
-            'source',
-          ]),
+          [],
         ),
       ));
     }
@@ -971,6 +997,242 @@ class CompiledTemplateInstructionTraversal {
       this.collectAttributeClassificationInstructionPart(node, classification, parts);
     }
     return parts;
+  }
+
+  private recordSlotWithoutShadowDomIssue(node: HtmlElement, lookupName: string): void {
+    if (lookupName !== 'slot') {
+      return;
+    }
+    const rootDefinition = this.rootCustomElementDefinition();
+    if (rootDefinition?.shadowOptions != null) {
+      return;
+    }
+    this.assemblyState.addCompilerIssue(
+      `slot-without-shadowdom:${node.productHandle}`,
+      node.identityHandle,
+      TemplateCompilerIssueKind.SlotWithoutShadowDom,
+      `Template compilation error: detected a usage of "<slot>" element without specifying shadow DOM options in element: ${rootDefinition?.name ?? '(unknown)'}`,
+      TemplateCompilerFrameworkErrorCode.CompilerSlotWithoutShadowDom,
+      node.sourceAddressHandle,
+    );
+  }
+
+  private recordAuSlotProjectionIssue(
+    node: HtmlElement,
+    lookupName: string,
+    elementDefinition: CustomElementDefinition | null,
+  ): void {
+    if (elementDefinition != null) {
+      return;
+    }
+    for (const projected of this.directAuSlotAttributes(node)) {
+      this.assemblyState.addCompilerIssue(
+        `au-slot-on-non-element:${projected.productHandle}`,
+        projected.identityHandle,
+        TemplateCompilerIssueKind.ProjectionOnNonCustomElement,
+        `Template compilation error: detected projection with [au-slot="${projected.rawValue}"] attempted on a non custom element ${lookupName}.`,
+        TemplateCompilerFrameworkErrorCode.CompilerAuSlotOnNonElement,
+        projected.sourceAddressHandle,
+      );
+    }
+  }
+
+  private directAuSlotAttributes(node: HtmlElement): readonly HtmlAttribute[] {
+    const attributes: HtmlAttribute[] = [];
+    for (const childReference of node.children) {
+      const child = childReference.productHandle == null
+        ? null
+        : this.indexes.nodesByProduct.get(childReference.productHandle) ?? null;
+      if (!(child instanceof HtmlElement)) {
+        continue;
+      }
+      const owner = this.indexes.ownersByElement.get(child.productHandle) ?? null;
+      const auSlotAttribute = owner?.attributes.find((attribute) => attribute.rawName.toLowerCase() === 'au-slot') ?? null;
+      if (auSlotAttribute != null) {
+        attributes.push(auSlotAttribute);
+      }
+    }
+    return attributes;
+  }
+
+  private rootCustomElementDefinition(): CustomElementDefinition | null {
+    const visible = this.input.compilerWorld.resourceResolver.resources.find((candidate) =>
+      candidate.definition instanceof CustomElementDefinition
+      && candidate.definition.template?.addressHandle === this.input.compilationUnit.sourceAddressHandle
+    ) ?? null;
+    return visible?.definition instanceof CustomElementDefinition
+      ? visible.definition
+      : null;
+  }
+
+  private recordRootLocalTemplateIssue(rootTemplate: HtmlElement): void {
+    const attribute = this.attributeForElement(rootTemplate, 'as-custom-element');
+    if (attribute == null) {
+      return;
+    }
+    const rootName = this.rootCustomElementDefinition()?.name ?? '(unknown)';
+    this.assemblyState.addCompilerIssue(
+      `root-is-local:${attribute.productHandle}`,
+      attribute.identityHandle,
+      TemplateCompilerIssueKind.RootTemplateCannotBeLocal,
+      `Template compilation error in element "${rootName}": the root <template> cannot be a local element template.`,
+      TemplateCompilerFrameworkErrorCode.CompilerRootIsLocal,
+      attribute.sourceAddressHandle,
+    );
+  }
+
+  private recordLocalTemplateIssues(rootReferences: readonly { readonly productHandle: ProductHandle | null }[]): void {
+    const rootName = this.rootCustomElementDefinition()?.name ?? '(unknown)';
+    const localTemplates = this.localTemplateElements(rootReferences);
+    if (localTemplates.length === 0) {
+      return;
+    }
+    if (localTemplates.length === this.directElementCount(rootReferences)) {
+      this.assemblyState.addCompilerIssue(
+        `only-local-templates:${this.input.compilationUnit.productHandle}`,
+        this.input.compilationUnit.identityHandle,
+        TemplateCompilerIssueKind.OnlyLocalTemplates,
+        `Template compilation error: the custom element "${rootName}" does not have any content other than local template(s).`,
+        TemplateCompilerFrameworkErrorCode.CompilerTemplateOnlyLocalTemplate,
+        this.input.compilationUnit.sourceAddressHandle,
+      );
+    }
+    const names = new Set<string>();
+    for (const template of localTemplates) {
+      if (!this.isDirectRootElement(template, rootReferences)) {
+        this.assemblyState.addCompilerIssue(
+          `local-template-not-under-root:${template.productHandle}`,
+          template.identityHandle,
+          TemplateCompilerIssueKind.LocalTemplateNotUnderRoot,
+          `Template compilation error: local element template needs to be defined directly under root of element "${rootName}".`,
+          TemplateCompilerFrameworkErrorCode.CompilerLocalElementNotUnderRoot,
+          template.sourceAddressHandle,
+        );
+      }
+      const nameAttribute = this.attributeForElement(template, 'as-custom-element');
+      const localName = nameAttribute?.rawValue ?? '';
+      if (localName === '') {
+        this.assemblyState.addCompilerIssue(
+          `local-template-name-empty:${nameAttribute?.productHandle ?? template.productHandle}`,
+          nameAttribute?.identityHandle ?? template.identityHandle,
+          TemplateCompilerIssueKind.LocalTemplateNameEmpty,
+          `Template compilation error: the value of "as-custom-element" attribute cannot be empty for local element in element "${rootName}".`,
+          TemplateCompilerFrameworkErrorCode.CompilerLocalNameEmpty,
+          nameAttribute?.sourceAddressHandle ?? template.sourceAddressHandle,
+        );
+        continue;
+      }
+      if (names.has(localName)) {
+        this.assemblyState.addCompilerIssue(
+          `local-template-name-duplicate:${nameAttribute?.productHandle ?? template.productHandle}`,
+          nameAttribute?.identityHandle ?? template.identityHandle,
+          TemplateCompilerIssueKind.LocalTemplateNameDuplicate,
+          `Template compilation error: duplicate definition of the local template named "${localName}" in element ${rootName}.`,
+          TemplateCompilerFrameworkErrorCode.CompilerDuplicateLocalName,
+          nameAttribute?.sourceAddressHandle ?? template.sourceAddressHandle,
+        );
+      } else {
+        names.add(localName);
+      }
+      this.recordLocalBindableIssues(template, localName);
+    }
+  }
+
+  private recordLocalBindableIssues(template: HtmlElement, localName: string): void {
+    const bindables = this.bindableElements(template.children);
+    const properties = new Set<string>();
+    const attributes = new Set<string>();
+    for (const bindable of bindables) {
+      if (!this.isDirectRootElement(bindable, template.children)) {
+        this.assemblyState.addCompilerIssue(
+          `local-bindable-not-under-root:${bindable.productHandle}`,
+          bindable.identityHandle,
+          TemplateCompilerIssueKind.LocalTemplateBindableNotUnderRoot,
+          `Template compilation error: bindable properties of local element "${localName}" template needs to be defined directly under <template>.`,
+          TemplateCompilerFrameworkErrorCode.CompilerLocalElementBindableNotUnderRoot,
+          bindable.sourceAddressHandle,
+        );
+      }
+      const propertyAttribute = this.attributeForElement(bindable, 'name');
+      const property = propertyAttribute?.rawValue ?? null;
+      if (property == null) {
+        this.assemblyState.addCompilerIssue(
+          `local-bindable-name-missing:${bindable.productHandle}`,
+          bindable.identityHandle,
+          TemplateCompilerIssueKind.LocalTemplateBindableNameMissing,
+          `Template compilation error: the attribute 'property' is missing in <bindable> in local element "${localName}".`,
+          TemplateCompilerFrameworkErrorCode.CompilerLocalElementBindableNameMissing,
+          bindable.sourceAddressHandle,
+        );
+        continue;
+      }
+      const attribute = this.attributeForElement(bindable, 'attribute')?.rawValue ?? null;
+      if ((attribute != null && attributes.has(attribute)) || properties.has(property)) {
+        this.assemblyState.addCompilerIssue(
+          `local-bindable-duplicate:${bindable.productHandle}`,
+          bindable.identityHandle,
+          TemplateCompilerIssueKind.LocalTemplateBindableDuplicate,
+          `Template compilation error: Bindable property and attribute needs to be unique; found property: ${property}, attribute: ${attribute ?? '(none)'}.`,
+          TemplateCompilerFrameworkErrorCode.CompilerLocalElementBindableDuplicate,
+          bindable.sourceAddressHandle,
+        );
+      } else {
+        if (attribute != null) {
+          attributes.add(attribute);
+        }
+        properties.add(property);
+      }
+    }
+  }
+
+  private localTemplateElements(rootReferences: readonly { readonly productHandle: ProductHandle | null }[]): readonly HtmlElement[] {
+    return this.descendantElements(rootReferences).filter((element) =>
+      element.tagName.toLowerCase() === 'template'
+      && this.attributeForElement(element, 'as-custom-element') != null
+    );
+  }
+
+  private bindableElements(rootReferences: readonly { readonly productHandle: ProductHandle | null }[]): readonly HtmlElement[] {
+    return this.descendantElements(rootReferences).filter((element) => element.tagName.toLowerCase() === 'bindable');
+  }
+
+  private descendantElements(rootReferences: readonly { readonly productHandle: ProductHandle | null }[]): readonly HtmlElement[] {
+    const result: HtmlElement[] = [];
+    const visit = (references: readonly { readonly productHandle: ProductHandle | null }[]): void => {
+      for (const reference of references) {
+        const node = reference.productHandle == null
+          ? null
+          : this.indexes.nodesByProduct.get(reference.productHandle) ?? null;
+        if (!(node instanceof HtmlElement)) {
+          continue;
+        }
+        result.push(node);
+        visit(node.children);
+      }
+    };
+    visit(rootReferences);
+    return result;
+  }
+
+  private directElementCount(rootReferences: readonly { readonly productHandle: ProductHandle | null }[]): number {
+    return rootReferences.filter((reference) => {
+      const node = reference.productHandle == null
+        ? null
+        : this.indexes.nodesByProduct.get(reference.productHandle) ?? null;
+      return node instanceof HtmlElement;
+    }).length;
+  }
+
+  private isDirectRootElement(
+    element: HtmlElement,
+    rootReferences: readonly { readonly productHandle: ProductHandle | null }[],
+  ): boolean {
+    return rootReferences.some((reference) => reference.productHandle === element.productHandle);
+  }
+
+  private attributeForElement(element: HtmlElement, attributeName: string): HtmlAttribute | null {
+    const owner = this.indexes.ownersByElement.get(element.productHandle) ?? null;
+    return owner?.attributes.find((attribute) => attribute.rawName.toLowerCase() === attributeName) ?? null;
   }
 
   private elementInstructionPartBuckets(
@@ -1187,6 +1449,17 @@ class CompiledTemplateInstructionTraversal {
       const classification = this.input.attributeClassification.classifications.find((candidate) =>
         candidate.syntaxProductHandle === syntax.productHandle
       ) ?? null;
+      if (classification?.bindingCommand != null && syntax.command !== 'bind') {
+        this.assemblyState.addCompilerIssue(
+          `let-command:${attribute.productHandle}`,
+          syntax.identityHandle,
+          TemplateCompilerIssueKind.InvalidLetCommand,
+          `Template compilation error: Invalid command ".${syntax.command ?? ''}" for <let>. Only to-view/bind supported.`,
+          TemplateCompilerFrameworkErrorCode.CompilerInvalidLetCommand,
+          syntax.sourceAddressHandle,
+        );
+        continue;
+      }
       const site = classification == null ? null : this.indexes.valueSiteByClassification.get(classification.productHandle) ?? null;
       const commandInstruction = classification == null
         ? null
@@ -1207,7 +1480,7 @@ class CompiledTemplateInstructionTraversal {
           camelCaseAttributeName(syntax.target),
           expressionHandle,
           attribute.valueAddressHandle ?? attribute.sourceAddressHandle,
-          this.assemblyState.fieldProvenance<TemplateInstructionField>(['node', 'attribute', 'target', 'expression', 'source']),
+        [],
         ),
       ));
     }
@@ -1227,9 +1500,12 @@ class CompiledTemplateInstructionTraversal {
         commandBuilt.forEach((instruction) => this.assemblyState.addExistingInstruction(instruction));
       }
       if (syntax != null && isInvalidSurrogateAttributeTarget(syntax.target)) {
-        this.assemblyState.addOpenSeam(
+        this.assemblyState.addCompilerIssue(
           `surrogate-invalid-attribute:${classification.productHandle}`,
-          `Root template surrogate attribute '${syntax.target}' is invalid in Aurelia and is not lowered into host instructions.`,
+          syntax.identityHandle,
+          TemplateCompilerIssueKind.InvalidSurrogateAttribute,
+          `Template compilation error: attribute "${syntax.target}" is invalid on element surrogate.`,
+          TemplateCompilerFrameworkErrorCode.CompilerInvalidSurrogateAttribute,
           classification.sourceAddressHandle,
         );
         continue;
@@ -1271,9 +1547,12 @@ class CompiledTemplateInstructionTraversal {
           result.push(...commandBuilt);
           break;
         case AttributeClassificationKind.TemplateController:
-          this.assemblyState.addOpenSeam(
+          this.assemblyState.addCompilerIssue(
             `surrogate-template-controller:${classification.productHandle}`,
-            'Template controller attributes on a root template surrogate are recognized as invalid by Aurelia and are not modeled as renderable host instructions.',
+            classification.identityHandle,
+            TemplateCompilerIssueKind.TemplateControllerOnSurrogate,
+            `Template compilation error: template controller "${syntax?.target ?? classification.resource?.name ?? '(unknown)'}" is invalid on element surrogate.`,
+            TemplateCompilerFrameworkErrorCode.CompilerNoTemplateControllerOnSurrogate,
             classification.sourceAddressHandle,
           );
           break;
@@ -1325,6 +1604,9 @@ export class CompiledTemplateMaterializer {
     for (const instruction of emission.instructions) {
       this.store.productDetails.addIfAbsent(TemplateProductDetails.Instruction, instruction.productHandle, instruction);
     }
+    for (const issue of emission.issues) {
+      this.store.productDetails.add(TemplateProductDetails.CompilerIssue, issue.productHandle, issue);
+    }
   }
 
   private recordsForCompiledTemplate(input: CompiledTemplateMaterializationRequest): CompiledTemplateEmission {
@@ -1342,7 +1624,7 @@ export class CompiledTemplateMaterializer {
       ...sequencePublications.claims,
     ];
     const openSeams = assembly.openSeams;
-    const state = compiledTemplateStateFor(openSeams, assembly.targetDrafts);
+    const state = compiledTemplateStateFor(assembly.issues, openSeams, assembly.targetDrafts);
     const compiledTemplate = this.createCompiledTemplate(
       input,
       handles,
@@ -1359,6 +1641,7 @@ export class CompiledTemplateMaterializer {
       compiledTemplate,
       sequencePublications,
       assembly.createdInstructions,
+      assembly.issues,
       claims,
       openSeams,
       source,
@@ -1369,6 +1652,7 @@ export class CompiledTemplateMaterializer {
       assembly.instructions,
       sequencePublications.instructionSequences,
       sequencePublications.renderTargets,
+      assembly.issues,
       openSeams,
       records,
     );
@@ -1477,13 +1761,7 @@ export class CompiledTemplateMaterializer {
       sequences.renderTargets,
       sequences.surrogateSequence,
       input.compilationUnit.sourceAddressHandle,
-      compactFieldProvenance<CompiledTemplateField>([
-        new FieldProvenance('htmlDocument', source.provenanceHandle),
-        new FieldProvenance('state', source.provenanceHandle),
-        sequences.renderTargets.length === 0 ? null : new FieldProvenance('targets', source.provenanceHandle),
-        sequences.surrogateSequence == null ? null : new FieldProvenance('surrogates', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -1493,6 +1771,7 @@ export class CompiledTemplateMaterializer {
     compiledTemplate: CompiledTemplate,
     sequences: CompiledTemplateSequencePublications,
     createdInstructions: readonly TemplateInstruction[],
+    issues: readonly TemplateCompilerIssue[],
     claims: readonly SemanticClaim[],
     openSeams: readonly OpenSeam[],
     source: CompiledTemplateSourceSet,
@@ -1502,7 +1781,7 @@ export class CompiledTemplateMaterializer {
       this.compiledTemplateProduct(handles, compiledTemplate, source),
       ...this.createdInstructionProducts(createdInstructions, source),
       ...claims,
-      this.compiledTemplateMaterialization(handles, sequences, createdInstructions, claims, openSeams),
+      this.compiledTemplateMaterialization(handles, sequences, createdInstructions, issues, claims, openSeams),
     ];
   }
 
@@ -1551,13 +1830,14 @@ export class CompiledTemplateMaterializer {
     handles: CompiledTemplateHandles,
     sequences: CompiledTemplateSequencePublications,
     createdInstructions: readonly TemplateInstruction[],
+    issues: readonly TemplateCompilerIssue[],
     claims: readonly SemanticClaim[],
     openSeams: readonly OpenSeam[],
   ): MaterializationRecord {
     return new MaterializationRecord(
       this.store.handles.materialization(handles.local),
       handles.identityHandle,
-      compiledTemplatePublicationProductHandles(handles, sequences, createdInstructions),
+      compiledTemplatePublicationProductHandles(handles, sequences, createdInstructions, issues),
       claims.map((claim) => claim.handle),
       openSeams.map((seam) => seam.handle),
     );
@@ -1638,12 +1918,7 @@ export class CompiledTemplateMaterializer {
       draft.node.toReference(),
       handles.sequenceProductHandle,
       draft.node.sourceAddressHandle,
-      compactFieldProvenance<TemplateRenderTargetField>([
-        new FieldProvenance('targetKind', source.provenanceHandle),
-        new FieldProvenance('htmlNode', source.provenanceHandle),
-        new FieldProvenance('instructionSequence', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -2098,9 +2373,13 @@ function resolvedInstructionResourceProductHandle(
 }
 
 function compiledTemplateStateFor(
+  issues: readonly TemplateCompilerIssue[],
   openSeams: readonly OpenSeam[],
   targetDrafts: readonly TargetDraft[],
 ): CompiledTemplateState {
+  if (issues.length > 0) {
+    return CompiledTemplateState.Invalid;
+  }
   if (openSeams.length === 0) {
     return CompiledTemplateState.Complete;
   }
@@ -2144,11 +2423,13 @@ function compiledTemplatePublicationProductHandles(
   handles: CompiledTemplateHandles,
   sequences: CompiledTemplateSequencePublications,
   createdInstructions: readonly TemplateInstruction[],
+  issues: readonly TemplateCompilerIssue[],
 ): readonly ProductHandle[] {
   return [
     handles.productHandle,
     ...sequences.renderTargets.map((target) => target.productHandle),
     ...sequences.instructionSequences.map((sequence) => sequence.productHandle),
     ...createdInstructions.map((instruction) => instruction.productHandle),
+    ...issues.map((issue) => issue.productHandle),
   ];
 }

@@ -21,6 +21,8 @@ export const enum SubstrateId {
   PluginArchitecture = "plugin.architecture",
   /** Aurelia router framework source architecture. */
   FrameworkRouter = "framework.router",
+  /** Aurelia documentation, framework tests, and legacy package corpus for fixture and authoring pressure. */
+  FrameworkCorpus = "framework.corpus",
   /** Product-to-framework auLink anchors. */
   ProductAuLink = "product.aulink",
   /** Framework static evaluator substrate. */
@@ -35,6 +37,8 @@ export const enum SubstrateId {
   FrameworkApi = "framework.api",
   /** Atlas static contracts. */
   AtlasContracts = "atlas.contracts",
+  /** Atlas filesystem-backed memory store joined to live source pressure. */
+  AtlasMemory = "atlas.memory",
 }
 
 /** Broad substrate family. */
@@ -222,6 +226,16 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
     dependsOn: [SubstrateId.TypeScriptProgram],
   },
   {
+    id: SubstrateId.FrameworkCorpus,
+    kind: SubstrateKind.Framework,
+    trust: SubstrateTrust.Steering,
+    summary:
+      "Aurelia documentation files, framework test files, documentation code fences, test call-site snippets, and legacy replacement package inventory scanned as fixture and authoring pressure seeds.",
+    basisKinds: [BasisKind.SourceText],
+    produces: [EvidenceKind.MaintenanceSignal, EvidenceKind.SourceSpan],
+    dependsOn: [SubstrateId.SourceFiles],
+  },
+  {
     id: SubstrateId.ProductAuLink,
     kind: SubstrateKind.Product,
     trust: SubstrateTrust.ModeledStatic,
@@ -326,6 +340,28 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
       EvidenceKind.OpenSeam,
     ],
     dependsOn: [SubstrateId.RepoTerrain],
+  },
+  {
+    id: SubstrateId.AtlasMemory,
+    kind: SubstrateKind.Atlas,
+    trust: SubstrateTrust.ModeledStatic,
+    summary:
+      "Durable JSON memory records joined to live product-architecture, atlas.self, and source existence checks so agent guidance can go stale or resolve explicitly.",
+    basisKinds: [
+      BasisKind.HumanJudgement,
+      BasisKind.TypeScriptProgram,
+      BasisKind.SourceText,
+    ],
+    produces: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.SourceSpan,
+      EvidenceKind.OpenSeam,
+    ],
+    dependsOn: [
+      SubstrateId.SourceFiles,
+      SubstrateId.TypeScriptProgram,
+      SubstrateId.ProductArchitecture,
+    ],
   },
 ];
 

@@ -1,0 +1,9 @@
+<nav>
+  <a repeat.for="product of products" href="${productHref(product)}">${product.name}</a>
+  <a repeat.for="product of products" href="${externalHref(product)}" target="_blank" rel="noreferrer">
+    External ${product.name}
+  </a>
+  <a repeat.for="product of products" href="${externalPackageHref(product.id)}">
+    Vendor ${product.name}
+  </a>
+</nav>

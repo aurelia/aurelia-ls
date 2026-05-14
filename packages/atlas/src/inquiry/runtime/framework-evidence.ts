@@ -255,7 +255,7 @@ export function evidenceForPackageExport(
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: `${row.packageId}:${row.exportEntry.exportName}`,
-    ...(source === null ? {} : { source }),
+    source: source ?? undefined,
     data: row,
   };
 }
@@ -487,8 +487,14 @@ export function evidenceForBindingSetup(
   };
 }
 
-export function evidenceForRenderingTypeFact(
-  row: FrameworkRenderingRelationshipRow | FrameworkRenderConsequenceRow,
+export interface FrameworkStrongTypeFactEvidenceRow {
+  readonly id: string;
+  readonly summary: string;
+  readonly source?: Evidence["source"];
+}
+
+export function evidenceForStrongTypeFact<T extends FrameworkStrongTypeFactEvidenceRow>(
+  row: T,
 ): Evidence {
   return {
     id: row.id,
@@ -499,6 +505,12 @@ export function evidenceForRenderingTypeFact(
     source: row.source,
     data: row,
   };
+}
+
+export function evidenceForRenderingTypeFact(
+  row: FrameworkRenderingRelationshipRow | FrameworkRenderConsequenceRow,
+): Evidence {
+  return evidenceForStrongTypeFact(row);
 }
 
 export function evidenceForObserverEntity(
@@ -515,7 +527,7 @@ export function evidenceForObserverEntity(
     } observer roles [${row.observerKinds.join(
       ", ",
     )}] capabilities [${row.observerCapabilities.join(", ")}]`,
-    ...(source === null ? {} : { source }),
+    source: source ?? undefined,
     data: row,
   };
 }
@@ -557,7 +569,7 @@ export function evidenceForRouterEntity(
     } router roles [${row.routerKinds.join(
       ", ",
     )}] capabilities [${row.routerCapabilities.join(", ")}]`,
-    ...(source === null ? {} : { source }),
+    source: source ?? undefined,
     data: row,
   };
 }
@@ -578,7 +590,7 @@ export function evidenceForExpressionEntity(
     } expression roles [${row.expressionKinds.join(
       ", ",
     )}] capabilities [${row.expressionCapabilities.join(", ")}]`,
-    ...(source === null ? {} : { source }),
+    source: source ?? undefined,
     data: row,
   };
 }
@@ -599,7 +611,7 @@ export function evidenceForRenderingStructure(
     } rendering roles [${row.renderingStructureKinds.join(
       ", ",
     )}] capabilities [${row.renderingCapabilities.join(", ")}]`,
-    ...(source === null ? {} : { source }),
+    source: source ?? undefined,
     data: row,
   };
 }

@@ -57,7 +57,21 @@ open seams, or inquiry answers.
 - Completed-input grammar and parser-owned companion publication are separate.
 - Parser result algebra is native. There is no public adapter layer on top of a
   legacy parser return shape.
-- Parser-local failure state is internal only.
+- Parser-local failure state is internal only, with retained-failure ranking and companion failure construction kept in
+  `completed-input-failures.ts` instead of the cursor/checkpoint state object.
+- Parser-local failures may carry an exact Aurelia framework parser error label through
+  `framework-error-code.ts`, but only when the semantic-runtime parser is modeling the
+  same `expression-parser ErrorNames` row checked through Atlas `framework.errors`.
+  The local table stores the framework package, enum, member name, and AUR label
+  because labels can collide across framework packages. Do not infer those labels
+  later from diagnostic wording. Companion/frontier publications preserve the parser
+  failure message and framework label so saved-file diagnostics can surface parser-owned
+  errors without weakening cursor-time incomplete-input recovery. Keep these labels low
+  in the corridor that owns the grammar fact: for example, primary parsing owns
+  unsupported spread, invalid object literal keys, and unknown scanner characters;
+  arrow parsing owns invalid arrow parameter lists, default/destructuring
+  parameters, rest placement, and unsupported block bodies;
+  broader API code should not retrofit those framework labels after publication.
 - Parser publication enums are string-valued where they can escape into product
   records or inquiry payloads. Numeric bitmasks remain internal classifier
   helpers only.
@@ -68,9 +82,12 @@ open seams, or inquiry answers.
   Canonical AST carriers plus local/source span carriers.
 - `expression-scanner.ts`
   Tokenization, token flags, and scanner hot path. The top-level scan path
-  dispatches to token-family helpers for punctuation/operators so new lexical
-  grammar should land in the relevant family method instead of regrowing the
-  main scanner branch.
+  dispatches to module-level token-family helpers for punctuation/operators so
+  new lexical grammar should land in the relevant family helper instead of
+  regrowing the main scanner branch. Pure character classification and pure
+  punctuation/operator token law are module-level scanner substrate; keep
+  scanner instance methods for mutable cursor/token state plus identifier,
+  number, and string scanning.
 - `expression-parser.ts`
   Public facade and family dispatch for expression-owned input.
 - `parse-result-algebra.ts`
@@ -79,8 +96,24 @@ open seams, or inquiry answers.
 - `parse-result-inspection.ts`
   Stable family/outcome inspection helpers for consumers.
 - `completed-input-parser-state.ts`
-  Parser state engine: scanner cursor, checkpoints, delimiter tracking,
-  rebasing, retained failure/provenance helpers.
+  Parser state engine: scanner cursor, checkpoints, rebasing, and local/global
+  offset translation.
+- `completed-input-failures.ts`
+  Parser-local retained-failure selection, hard-error construction, companion
+  failure construction, and gap descriptor creation. Corridors ask
+  `state.failures` so recovery policy does not hide in cursor state.
+- `framework-error-code.ts`
+  Exact Aurelia parser error-code links that parser failures can publish when
+  a semantic-runtime grammar failure is known to correspond to an
+  `expression-parser ErrorNames` member.
+- `completed-input-delimiters.ts`
+  Parser-local delimiter stack and matched-delimiter snapshots. Corridors push
+  and pop through `state.delimiters` directly so delimiter law does not hide as
+  generic parser-state cursor mechanics.
+- `completed-input-prefix-refs.ts`
+  Parser-local closed-subtree witnesses used by companion recovery. Grammar
+  corridors choose which prefixes matter; this builder owns how those partial
+  arrays, objects, binding patterns, templates, and relation tags are published.
 - `completed-input-companion-builder.ts`
   Parser-local companion shaping and widening.
 - `completed-input-publication.ts`
@@ -102,28 +135,42 @@ state, with special corridors split out by ownership:
   Literal primaries, identifiers, scope/global access roots, arrays, objects,
   and parens. Object literal parsing keeps entry/value/separator recovery as
   separate helpers so future object grammar can attach to the right point
-  without reopening one giant primary branch.
+  without reopening one giant primary branch. Leading `..` is scanned as its
+  own token and published as the framework `AUR0179` failure rather than
+  collapsing into generic trailing-token noise. Shared missing closing
+  delimiter publication carries `AUR0167` so paren, indexed-access, call,
+  arrow-head, and binding-pattern close gaps keep the framework parser code
+  visible without duplicating it at every caller.
 - `completed-input-left-hand-side-corridor.ts`
   `new`, member access, optional chaining, keyed access, calls, and tagged
-  template handoff.
+  template handoff. It also owns Aurelia's optional-chain/tagged-template
+  exclusion: once the receiver expression contains an optional-chain segment,
+  a following template tag publishes the framework `AUR0172` failure, while an
+  invalid `?.` continuation publishes `AUR0171`; post-receiver `..` and `...`
+  publish the framework expected-identifier failure (`AUR0153`).
 - `completed-input-tail-corridor.ts`
   Value-converter and binding-behavior tails.
 - `completed-input-arrow-corridor.ts`
   Arrow-head ownership, committed invalid heads, and arrow-owned body gaps.
 - `completed-input-template-corridor.ts`
   Template literal scanning plus nested `${...}` hole handoff.
+- `completed-input-binding-pattern-corridor.ts`
+  Binding declaration grammar for iterator headers: identifiers, defaults,
+  array/object patterns, holes, rest entries, separators, and missing-close
+  recovery. Keep destructuring recovery here so iterator parsing can stay on
+  repeat-header law rather than becoming the whole binding-pattern grammar.
 - `completed-input-iterator-corridor.ts`
-  Iterator header grammar, `of` separator law, iterable handoff, object/array
-  binding patterns, and raw `;` tail visibility. Header publication plus
-  array/object binding pattern entry/rest/separator handling are intentionally
-  split inside the corridor; keep new iterator recovery law on the matching
-  helper rather than rebuilding a monolithic `repeat.for` parser.
+  Iterator header grammar, `of` separator law, iterable handoff, and raw `;`
+  tail visibility. It delegates binding-pattern parsing to the binding-pattern
+  corridor and should stay focused on repeat-header publication. Stray `of`
+  outside the separator position carries Aurelia's `AUR0161` parse code, both
+  for property-like expressions and for iterator iterable tails.
 
 If another parser feature arrives, the first question should be "which corridor
 owns this?" rather than "which giant parser method do we patch?"
 
 Interpolation uses a template-aware boundary lookahead before it invokes the
-completed-input parser. The interpolation layer detects authored `${` starts,
+completed-input parser. The interpolation layer detects authored unescaped `${` starts,
 uses `expression-boundary-scanner.ts` to find the matching top-level `}` across
 strings, comments, object literals, and nested template-literal holes, and then
 hands the completed-input parser only the expression slice it owns. The same

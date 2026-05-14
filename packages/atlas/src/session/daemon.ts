@@ -2,6 +2,7 @@
 import { createServer, type Server, type Socket } from "node:net";
 
 import { parseFlagValueArgs } from "../cli-args.js";
+import { errorMessage } from "../errors.js";
 import { OutcomeKind } from "../inquiry/answer.js";
 import { LensId } from "../inquiry/lens.js";
 import { RepoRootLocus } from "../inquiry/locus.js";
@@ -122,7 +123,7 @@ async function handleLine(
   } catch (error) {
     socket.write(
       `${JSON.stringify(
-        failure("unknown", "invalid-json", errorSummary(error)),
+        failure("unknown", "invalid-json", errorMessage(error)),
       )}\n`,
     );
     return;
@@ -141,7 +142,7 @@ async function handleLine(
   } catch (error) {
     socket.write(
       `${JSON.stringify(
-        failure(request.id, "request-failed", errorSummary(error)),
+        failure(request.id, "request-failed", errorMessage(error)),
       )}\n`,
     );
   } finally {
@@ -227,9 +228,7 @@ async function runSelfCheck(): Promise<InquirySessionSelfCheckResult> {
     mapOutcome: mapAnswer.outcome,
     terrainOutcome: terrainAnswer.outcome,
     selfOutcome: selfAnswer.outcome,
-    ...(followedAnswer === undefined
-      ? {}
-      : { followedOutcome: followedAnswer.outcome }),
+    followedOutcome: followedAnswer?.outcome,
     selfOpenSeams: selfAnswer.openSeams.length,
   };
 }
@@ -339,7 +338,7 @@ function shutdown(
   try {
     sourceProject.dispose();
   } catch (error) {
-    console.error(`Atlas source project dispose failed: ${errorSummary(error)}`);
+    console.error(`Atlas source project dispose failed: ${errorMessage(error)}`);
   }
   server?.close(() => process.exit(0));
   setTimeout(() => process.exit(0), 500).unref();
@@ -442,12 +441,4 @@ function readPositiveInteger(
 ): number {
   const parsed = value === undefined ? Number.NaN : Number.parseInt(value, 10);
   return Number.isFinite(parsed) && parsed > 0 ? parsed : defaultValue;
-}
-
-/** Convert unknown thrown values into a compact message. */
-function errorSummary(
-  /** Unknown thrown value. */
-  error: unknown,
-): string {
-  return error instanceof Error ? error.message : String(error);
 }

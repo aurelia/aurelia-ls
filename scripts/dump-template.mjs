@@ -8,7 +8,7 @@
  * Example:
  *   node scripts/dump-template.mjs ../example-aurelia-app src/app.html dumps/example-app
  *
- * Do not commit dump output captured from proprietary projects.
+ * Do not commit dump output captured from external projects.
  *
  * Output files:
  *   <output-dir>/meta.json         — summary stats

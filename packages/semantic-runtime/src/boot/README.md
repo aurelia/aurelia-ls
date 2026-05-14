@@ -19,8 +19,9 @@ later materializers that consume admitted sources and emit their own evidence, c
   `tooling-config`, `declaration`, `template`, `style`, and `package-manifest`.
 - Read project compiler options as host footing for later evaluation and TypeChecker epochs. This is still boot-level
   because it describes how source modules are wired, not what Aurelia semantics they contain.
-- Expose conservative project-shape triage before app-world construction. The current policy counts manifest
-  dependencies on `aurelia` / `@aurelia/*` and parses app-source imports for Aurelia facade/default/namespace imports,
+- Expose conservative project-shape triage before app-world construction. The current policy counts local manifest
+  dependencies on `aurelia` / `@aurelia/*`, inherits Aurelia dependency context from ancestor workspace manifests that
+  explicitly include the project frame, and parses app-source imports for Aurelia facade/default/namespace imports,
   constructor use, `.app(...)`, `.enhance(...)`, and `.register(...)`. This classifies project frames as
   `aurelia-app`, `aurelia-resource-library`, `aurelia-package`, or `non-aurelia` so callers can choose app-like,
   resource-library, or all-package scope before paying TypeChecker/evaluator/materializer cost.
@@ -56,8 +57,11 @@ still app source unless it matches a known tool/artifact lane.
 
 Project discovery is also admission policy. A mixed monorepo should boot package/tsconfig roots as separate project
 frames so non-Aurelia packages do not enter one giant app-world pass. Nested project roots are excluded from their
-parent frame's filesystem source discovery. If a host already knows the intended app package, it should still pass an
-explicit `projects` entry or `projectKey`.
+parent frame's filesystem source discovery. Child workspace packages may inherit Aurelia dependency context from an
+ancestor `workspaces` manifest, but that only affects shape triage: a child package with HTML/CSS resource-surface
+source files becomes a resource-library authoring candidate, while activation calls are still required before the
+package is treated as an app-world. If a host already knows the intended app package, it should still pass an explicit
+`projects` entry or `projectKey`.
 
 External source roots are deliberately ephemeral. They let pressure runs resolve public or private sibling package
 source without copying those paths into fixtures or durable docs. Materializers may then recognize resources,

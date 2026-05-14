@@ -372,6 +372,8 @@ export class IteratorDegradedPublication {
     readonly iterableClosedSubtreeRefs: readonly ClosedSubtreeRef[],
     readonly gapDescriptors: readonly ExpressionGapDescriptor[],
     readonly trailingSplit: IteratorTrailingSplitState | null,
+    readonly frameworkErrorCode: string | null = null,
+    readonly diagnosticMessage: string | null = null,
   ) {}
 }
 
@@ -393,6 +395,8 @@ export class IteratorFrontierPublication {
     readonly iterable: CompletedInputPropertyLikeExpression | null,
     readonly iterableClosedSubtreeRefs: readonly ClosedSubtreeRef[],
     readonly trailingSplit: IteratorTrailingSplitState | null,
+    readonly frameworkErrorCode: string | null = null,
+    readonly diagnosticMessage: string | null = null,
   ) {}
 }
 
@@ -438,6 +442,7 @@ export class CompleteInputParseError {
     readonly primarySpan: SourceSpan | null,
     readonly message: string,
     readonly text: string | null,
+    readonly frameworkErrorCode: string | null = null,
   ) {}
 }
 
@@ -465,6 +470,8 @@ export class PropertyLikeDegradedPublication {
     readonly preservedSpan: SourceSpan | null,
     readonly closedSubtreeRefs: readonly ClosedSubtreeRef[],
     readonly gapDescriptors: readonly ExpressionGapDescriptor[],
+    readonly frameworkErrorCode: string | null = null,
+    readonly diagnosticMessage: string | null = null,
   ) {}
 }
 
@@ -493,6 +500,8 @@ export class PropertyLikeFrontierPublication {
     readonly surroundingFrameKind: ExpressionCompanionFrameKind | null,
     readonly preservedSpan: SourceSpan | null,
     readonly closedSubtreeRefs: readonly ClosedSubtreeRef[],
+    readonly frameworkErrorCode: string | null = null,
+    readonly diagnosticMessage: string | null = null,
   ) {}
 }
 
@@ -549,6 +558,8 @@ export class InterpolationActiveHoleCompanion {
     readonly preservedSpan: SourceSpan | null,
     readonly closedSubtreeRefs: readonly ClosedSubtreeRef[],
     readonly gapDescriptors: readonly ExpressionGapDescriptor[],
+    readonly frameworkErrorCode: string | null = null,
+    readonly diagnosticMessage: string | null = null,
   ) {}
 }
 

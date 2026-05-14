@@ -1,0 +1,267 @@
+import type { ArrowFunction } from '../expression/ast.js';
+import type { AddressHandle } from '../kernel/handles.js';
+import {
+  type CheckerSyntheticTypeMemberRequest,
+  type CheckerTypeProjector,
+} from './checker-projector.js';
+import {
+  CheckerIndexedAccessKeyKind,
+  CheckerTypeMember,
+  CheckerTypeMemberKind,
+  CheckerTypeProjectionOrigin,
+  CheckerTypeReference,
+  CheckerTypeShape,
+  CheckerTypeShapeKind,
+  sameCheckerTypeReference,
+} from './type-shape.js';
+
+/** Synthesizes product-owned type shapes for Aurelia expression and template-runtime semantics. */
+export class CheckerExpressionTypeSynthesizer {
+  constructor(
+    readonly projector: CheckerTypeProjector,
+  ) {}
+
+  arrowFunctionType(
+    expression: ArrowFunction,
+    returnType: CheckerTypeReference | null,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeShape {
+    return this.projector.ensureSyntheticProjection({
+      localKey: `${localKey}:arrow-function`,
+      shapeKind: CheckerTypeShapeKind.Function,
+      display: displayArrowFunctionType(expression, returnType),
+      members: [],
+      origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
+      sourceAddressHandle,
+      callReturnType: returnType,
+    });
+  }
+
+  arrayLiteralType(
+    members: readonly CheckerSyntheticTypeMemberRequest[],
+    elementTypes: readonly CheckerTypeReference[],
+    elementCount: number,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeShape {
+    const commonElementType = commonTypeReference(elementTypes, elementCount);
+    return this.projector.ensureSyntheticProjection({
+      localKey: `${localKey}:array-literal`,
+      shapeKind: CheckerTypeShapeKind.Object,
+      display: displayArrayLiteralType(commonElementType, elementCount),
+      members,
+      indexedValueType: commonElementType,
+      indexedAccessKeyKind: commonElementType == null ? null : CheckerIndexedAccessKeyKind.Number,
+      iteratedValueType: commonElementType,
+      origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
+      sourceAddressHandle,
+    });
+  }
+
+  objectLiteralType(
+    members: readonly CheckerSyntheticTypeMemberRequest[],
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeShape {
+    return this.projector.ensureSyntheticProjection({
+      localKey: `${localKey}:object-literal`,
+      shapeKind: CheckerTypeShapeKind.Object,
+      display: displayObjectLiteralType(members),
+      members,
+      origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
+      sourceAddressHandle,
+    });
+  }
+
+  unionType(
+    shapes: readonly CheckerTypeShape[],
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeShape {
+    return this.projector.ensureSyntheticProjection({
+      localKey: `${localKey}:union`,
+      shapeKind: CheckerTypeShapeKind.Union,
+      display: displayUnionType(shapes),
+      members: commonMembersForUnion(shapes),
+      indexedValueType: commonNullableTypeReference(shapes.map((shape) => shape.indexedValueType)),
+      indexedAccessKeyKind: commonNullableIndexedAccessKeyKind(shapes),
+      iteratedValueType: commonNullableTypeReference(shapes.map((shape) => shape.iteratedValueType)),
+      origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
+      sourceAddressHandle,
+      callReturnType: commonNullableTypeReference(shapes.map((shape) => shape.callReturnType)),
+      constructReturnType: commonNullableTypeReference(shapes.map((shape) => shape.constructReturnType)),
+    });
+  }
+
+  unknownTypeReference(
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference {
+    return this.projector.ensureSyntheticProjection({
+      localKey: `${localKey}:unknown`,
+      shapeKind: CheckerTypeShapeKind.Unknown,
+      display: 'unknown',
+      members: [],
+      origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
+      sourceAddressHandle,
+    }).toReference();
+  }
+
+  arrayType(
+    elementType: CheckerTypeReference,
+    lengthReference: CheckerTypeReference | null,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeShape {
+    return this.projector.ensureSyntheticProjection({
+      localKey: `${localKey}:array`,
+      shapeKind: CheckerTypeShapeKind.Object,
+      display: `Array<${elementType.display ?? 'unknown'}>`,
+      members: [
+        { name: 'length', valueType: lengthReference, memberKind: CheckerTypeMemberKind.Property },
+      ],
+      indexedValueType: elementType,
+      indexedAccessKeyKind: CheckerIndexedAccessKeyKind.Number,
+      iteratedValueType: elementType,
+      origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
+      sourceAddressHandle,
+    });
+  }
+
+  mapEntryType(
+    keyReference: CheckerTypeReference,
+    valueReference: CheckerTypeReference,
+    lengthReference: CheckerTypeReference,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeShape {
+    const indexedValueType = sameCheckerTypeReference(keyReference, valueReference)
+      ? keyReference
+      : null;
+    return this.projector.ensureSyntheticProjection({
+      localKey: `${localKey}:tuple`,
+      shapeKind: CheckerTypeShapeKind.Object,
+      display: `[${keyReference.display ?? 'unknown'}, ${valueReference.display ?? 'unknown'}]`,
+      members: [
+        { name: '0', valueType: keyReference, memberKind: CheckerTypeMemberKind.Property },
+        { name: '1', valueType: valueReference, memberKind: CheckerTypeMemberKind.Property },
+        { name: 'length', valueType: lengthReference, memberKind: CheckerTypeMemberKind.Property },
+      ],
+      indexedValueType,
+      indexedAccessKeyKind: indexedValueType == null ? null : CheckerIndexedAccessKeyKind.Number,
+      iteratedValueType: indexedValueType,
+      origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
+      sourceAddressHandle,
+    });
+  }
+}
+
+export function commonTypeReference(
+  references: readonly CheckerTypeReference[],
+  expectedCount: number,
+): CheckerTypeReference | null {
+  if (references.length !== expectedCount || references.length === 0) {
+    return null;
+  }
+  const first = references[0] ?? null;
+  if (first == null) {
+    return null;
+  }
+  return references.every((reference) => reference.checkerKey === first.checkerKey && reference.display === first.display)
+    ? first
+    : null;
+}
+
+function commonNullableTypeReference(
+  references: readonly (CheckerTypeReference | null)[],
+): CheckerTypeReference | null {
+  if (references.some((reference) => reference == null)) {
+    return null;
+  }
+  return commonTypeReference(references as readonly CheckerTypeReference[], references.length);
+}
+
+function commonNullableIndexedAccessKeyKind(
+  shapes: readonly CheckerTypeShape[],
+): CheckerIndexedAccessKeyKind | null {
+  if (commonNullableTypeReference(shapes.map((shape) => shape.indexedValueType)) == null) {
+    return null;
+  }
+  const [first, ...rest] = shapes.map((shape) => shape.indexedAccessKeyKind);
+  return first != null && rest.every((kind) => kind === first) ? first : null;
+}
+
+function commonMembersForUnion(
+  shapes: readonly CheckerTypeShape[],
+): readonly CheckerSyntheticTypeMemberRequest[] {
+  const [first, ...rest] = shapes;
+  if (first == null) {
+    return [];
+  }
+
+  const members: CheckerSyntheticTypeMemberRequest[] = [];
+  for (const member of first.members) {
+    const matches = rest.map((shape) => shape.members.find((candidate) => candidate.name === member.name) ?? null);
+    if (matches.some((candidate) => candidate == null)) {
+      continue;
+    }
+    const allMembers = [member, ...(matches as CheckerTypeMember[])];
+    members.push({
+      name: member.name,
+      valueType: commonNullableTypeReference(allMembers.map((candidate) => candidate.valueType)),
+      memberKind: allMembers.every((candidate) => candidate.memberKind === member.memberKind)
+        ? member.memberKind
+        : CheckerTypeMemberKind.Unknown,
+      isOptional: allMembers.some((candidate) => candidate.isOptional),
+      isReadonly: allMembers.every((candidate) => candidate.isReadonly),
+      sourceAddressHandle: commonAddressHandle(allMembers.map((candidate) => candidate.sourceAddressHandle)),
+    });
+  }
+  return members;
+}
+
+function commonAddressHandle(
+  handles: readonly (AddressHandle | null)[],
+): AddressHandle | null {
+  const [first, ...rest] = handles;
+  if (first == null) {
+    return null;
+  }
+  return rest.every((handle) => handle === first)
+    ? first
+    : null;
+}
+
+function displayArrayLiteralType(
+  elementType: CheckerTypeReference | null,
+  elementCount: number,
+): string {
+  if (elementType != null) {
+    return `Array<${elementType.display ?? elementType.checkerKey ?? 'unknown'}>`;
+  }
+  return elementCount === 0 ? 'Array<unknown>' : 'Array<mixed>';
+}
+
+function displayObjectLiteralType(members: readonly CheckerSyntheticTypeMemberRequest[]): string {
+  if (members.length === 0) {
+    return '{}';
+  }
+  return `{ ${members.map((member) => `${member.name}: ${member.valueType?.display ?? 'unknown'}`).join('; ')} }`;
+}
+
+function displayUnionType(shapes: readonly CheckerTypeShape[]): string {
+  const displays = [...new Set(shapes.map((shape) => shape.display))];
+  return displays.join(' | ');
+}
+
+function displayArrowFunctionType(
+  expression: ArrowFunction,
+  returnType: CheckerTypeReference | null,
+): string {
+  const parameters = expression.args.map((arg, index) => {
+    const isRest = expression.rest && index === expression.args.length - 1;
+    return `${isRest ? '...' : ''}${arg.name.name}: unknown`;
+  }).join(', ');
+  return `(${parameters}) => ${returnType?.display ?? 'unknown'}`;
+}

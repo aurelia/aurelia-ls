@@ -9,6 +9,7 @@ import type {
   FullResourceDefinition,
 } from './resource-definition.js';
 import type { ResourceDefinitionHeaderEmission } from './resource-definition-header-emission.js';
+import type { ResourceIssue } from './resource-issue.js';
 
 export type ResourceDefinitionHeaderDetail =
   | ResourceDefinitionHeaderEmission
@@ -25,6 +26,11 @@ export const ResourceProductDetails = {
     KernelVocabulary.Resource.Definition.key,
     'resource.definition',
     'Fully converged resource metadata definition detail.',
+  ),
+  Issue: defineProductDetailSlot<ResourceIssue>(
+    KernelVocabulary.Resource.Issue.key,
+    'resource.issue',
+    'Source-backed resource metadata issue detail.',
   ),
   BuiltInCatalog: defineProductDetailSlot<BuiltInResourceCatalog>(
     KernelVocabulary.Resource.BuiltInCatalog.key,

@@ -17,9 +17,16 @@
   "scripts": {
     "build": "tsc -p tsconfig.json",
     "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true }); require('node:fs').rmSync('tsconfig.tsbuildinfo', { force: true })\"",
+    "fixtures:authoring": "pnpm build && node scripts/materialize-authoring-fixtures.mjs",
     "pressure:app-api": "pnpm build && node scripts/app-api-pressure.mjs",
     "pressure:cursor-loci": "pnpm build && node scripts/cursor-locus-pressure.mjs",
+    "smoke:minimal-app": "pnpm build && node scripts/smoke-authoring-minimal-app.mjs",
+    "smoke:repair-plan": "pnpm build && node scripts/smoke-authoring-repair-plan.mjs",
+    "smoke:service-backed-form": "pnpm build && node scripts/smoke-authoring-service-backed-form.mjs",
     "smoke:storefront": "pnpm build && node scripts/smoke-authoring-storefront.mjs",
+    "smoke:validated-state-backed-form": "pnpm build && node scripts/smoke-authoring-validated-state-backed-form.mjs",
+    "smoke:routed-state-backed-form": "pnpm build && node scripts/smoke-authoring-routed-state-backed-form.mjs",
+    "smoke:state-backed-form": "pnpm build && node scripts/smoke-authoring-state-backed-form.mjs",
     "test": "pnpm build"
   },
   "dependencies": {

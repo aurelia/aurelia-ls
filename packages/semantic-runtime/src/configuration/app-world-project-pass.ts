@@ -6,10 +6,26 @@ import {
   StaticProjectEvaluationOptions,
   type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
+import {
+  ModuleLoaderIssueMaterializer,
+} from '../evaluation/module-loader-issues.js';
+import {
+  FrameworkApiIssueMaterializer,
+} from '../evaluation/framework-api-issues.js';
+import {
+  mergeEvaluationIssueProjectResults,
+  type EvaluationIssueProjectResult,
+} from '../evaluation/evaluation-source-issues.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   ResourceDefinitionIndex,
 } from '../resources/resource-definition-index.js';
+import {
+  ResourceDefinitionApiIssueMaterializer,
+} from '../resources/resource-definition-api-issues.js';
+import {
+  ScopeApiIssueMaterializer,
+} from './scope-api-issues.js';
 import {
   ResourceRecognitionProjectPass,
   type ResourceRecognitionProjectResult,
@@ -75,6 +91,54 @@ import {
   I18nTranslationCatalogMaterializationProjectPass,
   type I18nTranslationCatalogProjectResult,
 } from '../i18n/translation-catalog-materialization.js';
+import {
+  StateProjectResult,
+  StateStoreConfigurationMaterializationProjectPass,
+} from '../state/state-store-materialization.js';
+import {
+  FromStateDecoratorIssueMaterializer,
+} from '../state/from-state-decorator-issues.js';
+import {
+  mergeStateSourceIssueProjectResults,
+  type StateSourceIssueProjectResult,
+} from '../state/state-source-issues.js';
+import {
+  WithStoreAfterRegistrationIssueMaterializer,
+} from '../state/with-store-registration-order-issues.js';
+import {
+  StateStoreLookupIssueMaterializer,
+} from '../state/store-lookup-issues.js';
+import {
+  ValidationSourceIssueMaterializer,
+} from '../validation/validation-source-issue-materializer.js';
+import type {
+  ValidationSourceIssueProjectResult,
+} from '../validation/validation-source-issues.js';
+import {
+  FetchClientSourceIssueMaterializer,
+} from '../fetch-client/fetch-client-source-issue-materializer.js';
+import type {
+  FetchClientSourceIssueProjectResult,
+} from '../fetch-client/fetch-client-source-issues.js';
+import {
+  DialogSourceIssueMaterializer,
+} from '../dialog/dialog-source-issue-materializer.js';
+import type {
+  DialogSourceIssueProjectResult,
+} from '../dialog/dialog-source-issues.js';
+import {
+  AstTrackDecoratorIssueMaterializer,
+} from '../observation/ast-track-decorator-issues.js';
+import {
+  ComputedDecoratorIssueMaterializer,
+} from '../observation/computed-decorator-issues.js';
+import {
+  ObservableDecoratorIssueMaterializer,
+} from '../observation/observable-decorator-issues.js';
+import {
+  mergeObservationSourceIssueProjectResults,
+  type ObservationSourceIssueProjectResult,
+} from '../observation/observation-source-issues.js';
 import { aureliaConfigurationEvaluationPolicy } from './evaluation-policy.js';
 import {
   aureliaExternalEvaluationValueResolver,
@@ -84,14 +148,25 @@ import {
 export type AureliaAppWorldProjectPhaseName =
   | 'static-evaluation'
   | 'type-system'
+  | 'module-loader-issues'
+  | 'framework-api-issues'
+  | 'observation-source-issues'
   | 'resource-recognition'
   | 'resource-index'
+  | 'resource-definition-api-issues'
+  | 'scope-api-issues'
   | 'route-config-recognition'
   | 'configuration-recognition'
   | 'router-options-materialization'
   | 'route-context-materialization'
   | 'route-recognizer-materialization'
   | 'i18n-translation-catalog'
+  | 'state-store-materialization'
+  | 'state-source-issues'
+  | 'validation-source-issues'
+  | 'fetch-client-source-issues'
+  | 'dialog-source-issues'
+  | 'state-store-lookup-issues'
   | 'app-world-composition'
   | 'template-compilation'
   | 'route-runtime-topology'
@@ -134,6 +209,10 @@ export class AureliaAppWorldProjectEmission {
     readonly evaluation: StaticProjectEvaluationResult,
     /** Shared TypeChecker epoch consumed by resource, template, and inquiry passes. */
     readonly typeSystem: TypeSystemProject,
+    /** Source-backed evaluator/ModuleLoader diagnostics over project TypeScript files. */
+    readonly evaluationIssues: EvaluationIssueProjectResult,
+    /** Source-backed observation diagnostics over project TypeScript files. */
+    readonly observation: ObservationSourceIssueProjectResult,
     /** Resource recognition and convergence over the project. */
     readonly resources: ResourceRecognitionProjectResult,
     /** Product-handle and declaration index for converged resource definitions. */
@@ -150,6 +229,14 @@ export class AureliaAppWorldProjectEmission {
     readonly configuration: ConfigurationRecognitionProjectResult,
     /** Static i18n translation keys admitted from configuration resources for authoring. */
     readonly i18n: I18nTranslationCatalogProjectResult,
+    /** @aurelia/state store configurations admitted from builder flow before AppTask execution. */
+    readonly state: StateProjectResult,
+    /** @aurelia/validation source diagnostics admitted from validation rule construction and hydration APIs. */
+    readonly validation: ValidationSourceIssueProjectResult,
+    /** @aurelia/fetch-client source diagnostics admitted from HttpClient/retry configuration APIs. */
+    readonly fetchClient: FetchClientSourceIssueProjectResult,
+    /** @aurelia/dialog source diagnostics admitted from configuration and service APIs. */
+    readonly dialog: DialogSourceIssueProjectResult,
     /** App-world composition over the aggregated project configuration. */
     readonly appWorld: AureliaAppWorldEmission,
     /** Template compiler front-door and downstream rendering/scope products for compiler-visible custom elements. */
@@ -204,21 +291,32 @@ class AureliaAppWorldProjectConstructionFrame {
   constructAndEmit(): AureliaAppWorldProjectEmission {
     const evaluation = this.evaluateProject();
     const typeSystem = this.buildTypeSystem(evaluation);
+    const evaluationIssues = this.materializeEvaluationIssues(evaluation, typeSystem);
+    const observation = this.materializeObservationSourceIssues(typeSystem);
     const resources = this.recognizeResources(evaluation, typeSystem);
     const resourceIndex = this.indexResources(resources);
+    this.materializeResourceDefinitionApiIssues(typeSystem, resources);
+    this.materializeScopeApiIssues(typeSystem);
     const routes = this.recognizeRouteConfigs(evaluation, resourceIndex);
     const configuration = this.recognizeConfiguration(evaluation, typeSystem, resourceIndex);
     const routerOptions = this.materializeRouterOptions(configuration);
     const routeContexts = this.materializeRouteContexts(routes, routerOptions, configuration);
     const routeRecognizer = this.materializeRouteRecognizer(routeContexts);
     const i18n = this.materializeI18nTranslationCatalog(configuration);
-    const appWorld = this.composeAppWorld(configuration, resourceIndex);
+    const stateBase = this.materializeStateBase(configuration, typeSystem);
+    const validation = this.materializeValidationSourceIssues(typeSystem, configuration);
+    const fetchClient = this.materializeFetchClientSourceIssues(typeSystem);
+    const dialog = this.materializeDialogSourceIssues(typeSystem);
+    const appWorld = this.composeAppWorld(configuration, resourceIndex, typeSystem);
     const templates = this.compileTemplates(appWorld, typeSystem, resourceIndex, routeContexts);
+    const state = this.materializeStateStoreLookupIssues(stateBase, templates, typeSystem);
     const routeRuntimeTopology = this.materializeRouteRuntimeTopology(routeContexts, templates);
     const routeInstructions = this.materializeRouteInstructions(
       evaluation,
+      resourceIndex,
       routerOptions,
       routeContexts,
+      routeRecognizer,
       routeRuntimeTopology,
       templates,
     );
@@ -242,6 +340,8 @@ class AureliaAppWorldProjectConstructionFrame {
       this.project,
       evaluation,
       typeSystem,
+      evaluationIssues,
+      observation,
       resources,
       resourceIndex,
       routes,
@@ -250,6 +350,10 @@ class AureliaAppWorldProjectConstructionFrame {
       routeRecognizer,
       configuration,
       i18n,
+      state,
+      validation,
+      fetchClient,
+      dialog,
       appWorld,
       templates,
       routeRuntimeTopology,
@@ -281,6 +385,31 @@ class AureliaAppWorldProjectConstructionFrame {
     );
   }
 
+  private materializeEvaluationIssues(
+    evaluation: StaticProjectEvaluationResult,
+    typeSystem: TypeSystemProject,
+  ): EvaluationIssueProjectResult {
+    const moduleLoaderIssues = this.measure('module-loader-issues', () =>
+      new ModuleLoaderIssueMaterializer(this.store).materializeAndEmit(this.project, evaluation)
+    );
+    const frameworkApiIssues = this.measure('framework-api-issues', () =>
+      new FrameworkApiIssueMaterializer(this.store).materializeAndEmit(this.project, typeSystem)
+    );
+    return mergeEvaluationIssueProjectResults([moduleLoaderIssues, frameworkApiIssues]);
+  }
+
+  private materializeObservationSourceIssues(
+    typeSystem: TypeSystemProject,
+  ): ObservationSourceIssueProjectResult {
+    return this.measure('observation-source-issues', () =>
+      mergeObservationSourceIssueProjectResults([
+        new AstTrackDecoratorIssueMaterializer(this.store).materialize(this.project, typeSystem),
+        new ComputedDecoratorIssueMaterializer(this.store).materialize(this.project, typeSystem),
+        new ObservableDecoratorIssueMaterializer(this.store).materialize(this.project, typeSystem),
+      ])
+    );
+  }
+
   private recognizeResources(
     evaluation: StaticProjectEvaluationResult,
     typeSystem: TypeSystemProject,
@@ -293,6 +422,30 @@ class AureliaAppWorldProjectConstructionFrame {
   private indexResources(resources: ResourceRecognitionProjectResult): ResourceDefinitionIndex {
     return this.measure('resource-index', () =>
       ResourceDefinitionIndex.fromProject(resources)
+    );
+  }
+
+  private materializeResourceDefinitionApiIssues(
+    typeSystem: TypeSystemProject,
+    resources: ResourceRecognitionProjectResult,
+  ): void {
+    this.measure('resource-definition-api-issues', () =>
+      new ResourceDefinitionApiIssueMaterializer(this.store).materializeAndEmit(
+        this.project,
+        typeSystem,
+        resources.readDefinitions(),
+      )
+    );
+  }
+
+  private materializeScopeApiIssues(
+    typeSystem: TypeSystemProject,
+  ): void {
+    this.measure('scope-api-issues', () =>
+      new ScopeApiIssueMaterializer(this.store).materializeAndEmit(
+        this.project,
+        typeSystem,
+      )
     );
   }
 
@@ -374,12 +527,106 @@ class AureliaAppWorldProjectConstructionFrame {
     );
   }
 
+  private materializeStateBase(
+    configuration: ConfigurationRecognitionProjectResult,
+    typeSystem: TypeSystemProject,
+  ): StateProjectResult {
+    const stores = this.materializeStateStoreConfigurations(configuration);
+    const sourceIssues = this.materializeStateSourceIssues(typeSystem);
+    return new StateProjectResult(
+      stores.configuration,
+      stores.stores,
+      [
+        ...stores.issues,
+        ...sourceIssues.issues,
+      ],
+    );
+  }
+
+  private materializeStateStoreLookupIssues(
+    state: StateProjectResult,
+    templates: TemplateCompilationProjectEmission,
+    typeSystem: TypeSystemProject,
+  ): StateProjectResult {
+    const lookupIssues = this.measure('state-store-lookup-issues', () =>
+      new StateStoreLookupIssueMaterializer(this.store).materializeAndEmit(
+        this.project,
+        typeSystem,
+        state.readStores(),
+        templates,
+      )
+    );
+    return new StateProjectResult(
+      state.configuration,
+      state.stores,
+      [
+        ...state.issues,
+        ...lookupIssues.issues,
+      ],
+    );
+  }
+
+  private materializeStateStoreConfigurations(
+    configuration: ConfigurationRecognitionProjectResult,
+  ): StateProjectResult {
+    return this.measure('state-store-materialization', () =>
+      new StateStoreConfigurationMaterializationProjectPass().materializeAndEmit(this.store, configuration)
+    );
+  }
+
+  private materializeStateSourceIssues(
+    typeSystem: TypeSystemProject,
+  ): StateSourceIssueProjectResult {
+    return this.measure('state-source-issues', () =>
+      mergeStateSourceIssueProjectResults([
+        new FromStateDecoratorIssueMaterializer(this.store).materializeAndEmit(this.project, typeSystem),
+        new WithStoreAfterRegistrationIssueMaterializer(this.store).materializeAndEmit(this.project, typeSystem),
+      ])
+    );
+  }
+
+  private materializeValidationSourceIssues(
+    typeSystem: TypeSystemProject,
+    configuration: ConfigurationRecognitionProjectResult,
+  ): ValidationSourceIssueProjectResult {
+    return this.measure('validation-source-issues', () =>
+      new ValidationSourceIssueMaterializer(this.store).materializeAndEmit(
+        this.project,
+        typeSystem,
+        configuration,
+      )
+    );
+  }
+
+  private materializeFetchClientSourceIssues(
+    typeSystem: TypeSystemProject,
+  ): FetchClientSourceIssueProjectResult {
+    return this.measure('fetch-client-source-issues', () =>
+      new FetchClientSourceIssueMaterializer(this.store).materializeAndEmit(
+        this.project,
+        typeSystem,
+      )
+    );
+  }
+
+  private materializeDialogSourceIssues(
+    typeSystem: TypeSystemProject,
+  ): DialogSourceIssueProjectResult {
+    return this.measure('dialog-source-issues', () =>
+      new DialogSourceIssueMaterializer(this.store).materializeAndEmit(
+        this.project,
+        typeSystem,
+      )
+    );
+  }
+
   private composeAppWorld(
     configuration: ConfigurationRecognitionProjectResult,
     resourceIndex: ResourceDefinitionIndex,
+    typeSystem: TypeSystemProject,
   ): AureliaAppWorldEmission {
     return this.measure('app-world-composition', () =>
-      new AureliaAppWorldComposer(this.store).construct(configuration.readConfiguration(), resourceIndex)
+      new AureliaAppWorldComposer(this.store).construct(configuration, resourceIndex, typeSystem, this.project)
     );
   }
 
@@ -421,8 +668,10 @@ class AureliaAppWorldProjectConstructionFrame {
 
   private materializeRouteInstructions(
     evaluation: StaticProjectEvaluationResult,
+    resourceIndex: ResourceDefinitionIndex,
     routerOptions: RouterOptionsMaterializationProjectResult,
     routeContexts: RouteConfigContextMaterializationProjectResult,
+    routeRecognizer: RouteRecognizerMaterializationProjectResult,
     routeRuntimeTopology: RouteRuntimeTopologyProjectResult,
     templates: TemplateCompilationProjectEmission,
   ): RouteInstructionMaterializationProjectResult {
@@ -431,10 +680,12 @@ class AureliaAppWorldProjectConstructionFrame {
         this.store,
         this.project,
         routeContexts,
+        routeRecognizer,
         routeRuntimeTopology,
         templates,
         routerOptions,
         evaluation,
+        resourceIndex,
       )
     );
   }

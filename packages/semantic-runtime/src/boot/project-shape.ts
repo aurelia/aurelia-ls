@@ -7,6 +7,10 @@ import type { ProjectBootFrame } from './frames.js';
 import {
   type BootPackageManifest,
   readPackageManifest,
+  readPackageWorkspacePatterns,
+  isHostPathWithin,
+  normalizePosixPath,
+  sameHostPath,
 } from './host-files.js';
 
 export const enum SemanticProjectShapeKind {
@@ -16,10 +20,28 @@ export const enum SemanticProjectShapeKind {
   NonAurelia = 'non-aurelia',
 }
 
+export const enum SemanticProjectAnalysisKind {
+  /** Project can be opened as a real app-world because it has Aurelia bootstrap signals. */
+  AppWorld = 'app-world',
+  /** Project is useful for standalone resource/template authoring, but is not itself an app root. */
+  ResourceLibraryAuthoring = 'resource-library-authoring',
+  /** Project is Aurelia-adjacent package surface; inspect it as package/API input, not as an app. */
+  AureliaPackageInspection = 'aurelia-package-inspection',
+  /** Project is outside the current Aurelia semantic-runtime app analysis policy. */
+  OutsideAurelia = 'outside-aurelia',
+}
+
 export const enum SemanticProjectAureliaDependencyScope {
   Dependencies = 'dependencies',
   PeerDependencies = 'peerDependencies',
   DevDependencies = 'devDependencies',
+}
+
+export const enum SemanticProjectAureliaDependencyOrigin {
+  /** Aurelia dependency was declared by the project frame's own package manifest. */
+  ProjectManifest = 'project-manifest',
+  /** Aurelia dependency was declared by an ancestor package manifest whose workspaces include the project frame. */
+  WorkspaceManifest = 'workspace-manifest',
 }
 
 export const enum SemanticProjectAureliaSourceSignalKind {
@@ -31,8 +53,22 @@ export const enum SemanticProjectAureliaSourceSignalKind {
   AureliaRegisterCall = 'aurelia-register-call',
 }
 
+export const enum SemanticProjectShapeReasonKind {
+  /** Local or workspace manifest declares at least one Aurelia package dependency. */
+  AureliaDependency = 'aurelia-dependency',
+  /** Ancestor workspace manifest declares Aurelia dependencies and includes this project frame. */
+  WorkspaceAureliaContext = 'workspace-aurelia-context',
+  /** Source contains `new Aurelia(...)`, `.app(...)`, or `.enhance(...)` activation evidence. */
+  AureliaActivationSource = 'aurelia-activation-source',
+  /** Source contains Aurelia facade imports or registration calls but no activation evidence. */
+  AureliaPackageSource = 'aurelia-package-source',
+  /** Admitted source roles include HTML or CSS files that can carry Aurelia resource authoring pressure. */
+  ResourceSurfaceSourceFile = 'resource-surface-source-file',
+}
+
 export interface SemanticProjectAureliaDependencyScopeCount {
   readonly scope: SemanticProjectAureliaDependencyScope;
+  readonly origin: SemanticProjectAureliaDependencyOrigin;
   readonly count: number;
 }
 
@@ -41,10 +77,17 @@ export interface SemanticProjectAureliaSourceSignalCount {
   readonly count: number;
 }
 
+export interface SemanticProjectShapeReasonCount {
+  readonly reason: SemanticProjectShapeReasonKind;
+  readonly count: number;
+}
+
 export interface SemanticProjectShape {
   readonly shapeKind: SemanticProjectShapeKind;
+  readonly analysisKind: SemanticProjectAnalysisKind;
   readonly aureliaDependencyScopes: readonly SemanticProjectAureliaDependencyScopeCount[];
   readonly aureliaSourceSignals: readonly SemanticProjectAureliaSourceSignalCount[];
+  readonly shapeReasons: readonly SemanticProjectShapeReasonCount[];
 }
 
 const AURELIA_PACKAGE_NAMES = new Set([
@@ -57,13 +100,37 @@ const AURELIA_FACADE_MODULES = new Set([
 ]);
 
 export function readSemanticProjectShape(project: ProjectBootFrame): SemanticProjectShape {
-  const dependencyScopes = aureliaDependencyScopes(readPackageManifest(project.rootDir));
+  const dependencyScopes = [
+    ...aureliaDependencyScopes(
+      readPackageManifest(project.rootDir),
+      SemanticProjectAureliaDependencyOrigin.ProjectManifest,
+    ),
+    ...workspaceAureliaDependencyScopes(project),
+  ];
   const sourceSignals = aureliaSourceSignals(project);
+  const shapeKind = bootProjectShapeKind(project, dependencyScopes, sourceSignals);
   return {
-    shapeKind: bootProjectShapeKind(project, dependencyScopes, sourceSignals),
+    shapeKind,
+    analysisKind: semanticProjectAnalysisKindForShape(shapeKind),
     aureliaDependencyScopes: dependencyScopes,
     aureliaSourceSignals: sourceSignals,
+    shapeReasons: projectShapeReasons(project, dependencyScopes, sourceSignals),
   };
+}
+
+export function semanticProjectAnalysisKindForShape(
+  shapeKind: SemanticProjectShapeKind,
+): SemanticProjectAnalysisKind {
+  switch (shapeKind) {
+    case SemanticProjectShapeKind.AureliaApp:
+      return SemanticProjectAnalysisKind.AppWorld;
+    case SemanticProjectShapeKind.AureliaResourceLibrary:
+      return SemanticProjectAnalysisKind.ResourceLibraryAuthoring;
+    case SemanticProjectShapeKind.AureliaPackage:
+      return SemanticProjectAnalysisKind.AureliaPackageInspection;
+    case SemanticProjectShapeKind.NonAurelia:
+      return SemanticProjectAnalysisKind.OutsideAurelia;
+  }
 }
 
 function bootProjectShapeKind(
@@ -88,38 +155,163 @@ function bootProjectShapeKind(
 }
 
 function projectHasResourceLibraryShape(project: ProjectBootFrame): boolean {
-  return project.sourceFiles.some((source) =>
+  return countResourceSurfaceSourceFiles(project) > 0;
+}
+
+function projectShapeReasons(
+  project: ProjectBootFrame,
+  dependencyScopes: readonly SemanticProjectAureliaDependencyScopeCount[],
+  sourceSignals: readonly SemanticProjectAureliaSourceSignalCount[],
+): readonly SemanticProjectShapeReasonCount[] {
+  const counts = new Map<SemanticProjectShapeReasonKind, number>();
+  const aureliaDependencyCount = dependencyScopes.reduce((sum, entry) => sum + entry.count, 0);
+  if (aureliaDependencyCount > 0) {
+    counts.set(SemanticProjectShapeReasonKind.AureliaDependency, aureliaDependencyCount);
+  }
+  const workspaceDependencyCount = dependencyScopes
+    .filter((entry) => entry.origin === SemanticProjectAureliaDependencyOrigin.WorkspaceManifest)
+    .reduce((sum, entry) => sum + entry.count, 0);
+  if (workspaceDependencyCount > 0) {
+    counts.set(SemanticProjectShapeReasonKind.WorkspaceAureliaContext, workspaceDependencyCount);
+  }
+
+  const activationSignals =
+    countSourceSignals(sourceSignals, SemanticProjectAureliaSourceSignalKind.AureliaAppCall)
+    + countSourceSignals(sourceSignals, SemanticProjectAureliaSourceSignalKind.AureliaEnhanceCall)
+    + countSourceSignals(sourceSignals, SemanticProjectAureliaSourceSignalKind.AureliaConstructor);
+  if (activationSignals > 0) {
+    counts.set(SemanticProjectShapeReasonKind.AureliaActivationSource, activationSignals);
+  }
+
+  const packageSignals =
+    countSourceSignals(sourceSignals, SemanticProjectAureliaSourceSignalKind.AureliaImport)
+    + countSourceSignals(sourceSignals, SemanticProjectAureliaSourceSignalKind.AureliaNamespaceImport)
+    + countSourceSignals(sourceSignals, SemanticProjectAureliaSourceSignalKind.AureliaRegisterCall);
+  if (packageSignals > 0) {
+    counts.set(SemanticProjectShapeReasonKind.AureliaPackageSource, packageSignals);
+  }
+
+  const resourceSourceFileCount = countResourceSurfaceSourceFiles(project);
+  if (resourceSourceFileCount > 0) {
+    counts.set(SemanticProjectShapeReasonKind.ResourceSurfaceSourceFile, resourceSourceFileCount);
+  }
+
+  return [...counts.entries()].map(([reason, count]) => ({ reason, count }));
+}
+
+function countResourceSurfaceSourceFiles(project: ProjectBootFrame): number {
+  return project.sourceFiles.filter((source) =>
     source.role === SourceFileRole.Template
     || source.role === SourceFileRole.Style
-  );
+  ).length;
 }
 
 function aureliaDependencyScopes(
   manifest: BootPackageManifest | null,
+  origin: SemanticProjectAureliaDependencyOrigin,
 ): readonly SemanticProjectAureliaDependencyScopeCount[] {
   if (manifest == null) {
     return [];
   }
   return [
-    dependencyScopeCount(SemanticProjectAureliaDependencyScope.Dependencies, manifest.dependencies),
-    dependencyScopeCount(SemanticProjectAureliaDependencyScope.PeerDependencies, manifest.peerDependencies),
-    dependencyScopeCount(SemanticProjectAureliaDependencyScope.DevDependencies, manifest.devDependencies),
+    dependencyScopeCount(SemanticProjectAureliaDependencyScope.Dependencies, origin, manifest.dependencies),
+    dependencyScopeCount(SemanticProjectAureliaDependencyScope.PeerDependencies, origin, manifest.peerDependencies),
+    dependencyScopeCount(SemanticProjectAureliaDependencyScope.DevDependencies, origin, manifest.devDependencies),
   ].filter((entry): entry is SemanticProjectAureliaDependencyScopeCount => entry != null);
 }
 
 function dependencyScopeCount(
   scope: SemanticProjectAureliaDependencyScope,
+  origin: SemanticProjectAureliaDependencyOrigin,
   value: unknown,
 ): SemanticProjectAureliaDependencyScopeCount | null {
   const entries = value != null && typeof value === 'object'
     ? Object.keys(value)
     : [];
   const count = entries.filter(isAureliaPackageSpecifier).length;
-  return count === 0 ? null : { scope, count };
+  return count === 0 ? null : { scope, origin, count };
 }
 
 function isAureliaPackageSpecifier(specifier: string): boolean {
   return AURELIA_PACKAGE_NAMES.has(specifier) || specifier.startsWith('@aurelia/');
+}
+
+function workspaceAureliaDependencyScopes(
+  project: ProjectBootFrame,
+): readonly SemanticProjectAureliaDependencyScopeCount[] {
+  const manifest = nearestWorkspaceManifestForProject(project);
+  return aureliaDependencyScopes(manifest, SemanticProjectAureliaDependencyOrigin.WorkspaceManifest);
+}
+
+function nearestWorkspaceManifestForProject(
+  project: ProjectBootFrame,
+): BootPackageManifest | null {
+  const workspaceRoot = path.resolve(project.workspaceRootDir);
+  const projectRoot = path.resolve(project.rootDir);
+  let current = path.dirname(projectRoot);
+
+  while (isSameOrDescendantPath(workspaceRoot, current)) {
+    const manifest = readPackageManifest(current);
+    if (manifest != null && manifestWorkspacesIncludeProject(manifest, current, projectRoot)) {
+      return manifest;
+    }
+    if (sameHostPath(current, workspaceRoot)) {
+      break;
+    }
+    current = path.dirname(current);
+  }
+
+  return null;
+}
+
+function manifestWorkspacesIncludeProject(
+  manifest: BootPackageManifest,
+  manifestRoot: string,
+  projectRoot: string,
+): boolean {
+  const patterns = readPackageWorkspacePatterns(manifest);
+  if (patterns.length === 0) {
+    return false;
+  }
+  const relativeProjectRoot = normalizePosixPath(path.relative(manifestRoot, projectRoot));
+  return relativeProjectRoot.length > 0 && patterns.some((pattern) =>
+    workspacePatternMatchesProject(pattern, relativeProjectRoot)
+  );
+}
+
+function workspacePatternMatchesProject(
+  pattern: string,
+  relativeProjectRoot: string,
+): boolean {
+  const normalizedPattern = normalizeWorkspacePattern(pattern);
+  return globPatternToRegExp(normalizedPattern).test(relativeProjectRoot);
+}
+
+function normalizeWorkspacePattern(pattern: string): string {
+  let normalized = normalizePosixPath(pattern).replace(/^\.\//, '');
+  while (normalized.endsWith('/')) {
+    normalized = normalized.slice(0, -1);
+  }
+  return normalized;
+}
+
+function globPatternToRegExp(pattern: string): RegExp {
+  const body = pattern
+    .split('/')
+    .map((segment) => {
+      if (segment === '**') {
+        return '(?:[^/]+/)*[^/]+';
+      }
+      return segment
+        .replace(/[\\^$+?.()|[\]{}]/g, '\\$&')
+        .replace(/\*/g, '[^/]*');
+    })
+    .join('/');
+  return new RegExp(`^${body}$`);
+}
+
+function isSameOrDescendantPath(parent: string, child: string): boolean {
+  return isHostPathWithin(child, parent);
 }
 
 function aureliaSourceSignals(project: ProjectBootFrame): readonly SemanticProjectAureliaSourceSignalCount[] {

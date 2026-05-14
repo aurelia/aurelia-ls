@@ -1,5 +1,25 @@
 import type { ApplicationTopology } from '../application/index.js';
-import type { ExpectedSemanticEffect } from './plan.js';
+import type {
+  SemanticAppSummary,
+  SemanticAppQuery,
+  SemanticRuntimeAnswer,
+  SemanticAuthoringOrientationResult,
+  SemanticBindingBehaviorApplicationRow,
+  SemanticBindingDataFlowRow,
+  SemanticBindingTargetAccessRow,
+  SemanticBindingValueChannelRow,
+  SemanticOpenSeamRow,
+  SemanticTargetOperationRow,
+} from '../api/contracts.js';
+import { SemanticAppQueryKind, SemanticRuntimeAnswerOutcome } from '../api/contracts.js';
+import type { SemanticApplicationTopologyResult } from '../api/app-topology.js';
+import type {
+  ExpectedSemanticEffect,
+} from './expected-effect.js';
+import {
+  observeExpectedSemanticEffect,
+  type ExpectedSemanticEffectObservationSnapshot,
+} from './effect-observation.js';
 
 export type AuthoringVerificationOutcome =
   | 'satisfied'
@@ -23,9 +43,55 @@ export class AuthoringVerificationRequest {
   readonly kind = 'authoring-verification-request' as const;
 
   constructor(
-    readonly expectedTopology: ApplicationTopology,
+    readonly expectedTopology: ApplicationTopology | null,
     readonly expectedEffects: readonly ExpectedSemanticEffect[],
   ) {}
+}
+
+/** Reopened app facts used to compare expected semantic effects with observed API rows. */
+export class AuthoringVerificationSnapshot {
+  readonly kind = 'authoring-verification-snapshot' as const;
+
+  constructor(
+    readonly summary: SemanticAppSummary,
+    readonly topology: SemanticApplicationTopologyResult,
+    readonly authoringOrientation: SemanticAuthoringOrientationResult,
+    readonly openSeams: readonly SemanticOpenSeamRow[] = [],
+    readonly bindingBehaviorApplications: readonly SemanticBindingBehaviorApplicationRow[] = [],
+    readonly bindingTargetAccesses: readonly SemanticBindingTargetAccessRow[] | null = null,
+    readonly targetOperations: readonly SemanticTargetOperationRow[] | null = null,
+    readonly bindingValueChannels: readonly SemanticBindingValueChannelRow[] | null = null,
+    readonly bindingDataFlows: readonly SemanticBindingDataFlowRow[] | null = null,
+  ) {}
+}
+
+/** Minimal app facade shape needed to build a complete verification snapshot. */
+export interface AuthoringVerificationAppSnapshotSource {
+  summary(): SemanticRuntimeAnswer<SemanticAppSummary>;
+  ask(query: SemanticAppQuery): SemanticRuntimeAnswer<unknown>;
+}
+
+export interface AuthoringVerificationSnapshotOptions {
+  /** Page size used while collecting row-backed verification projections. */
+  readonly pageSize?: number | null;
+}
+
+export function readAuthoringVerificationSnapshot(
+  app: AuthoringVerificationAppSnapshotSource,
+  options: AuthoringVerificationSnapshotOptions = {},
+): AuthoringVerificationSnapshot {
+  const pageSize = normalizeVerificationSnapshotPageSize(options.pageSize);
+  return new AuthoringVerificationSnapshot(
+    app.summary().value,
+    readAnswerValue<SemanticApplicationTopologyResult>(app, SemanticAppQueryKind.AppTopology),
+    readAnswerValue<SemanticAuthoringOrientationResult>(app, SemanticAppQueryKind.AuthoringOrientation),
+    readPagedRows<SemanticOpenSeamRow>(app, SemanticAppQueryKind.OpenSeams, pageSize),
+    readPagedRows<SemanticBindingBehaviorApplicationRow>(app, SemanticAppQueryKind.BindingBehaviorApplications, pageSize),
+    readPagedRows<SemanticBindingTargetAccessRow>(app, SemanticAppQueryKind.BindingTargetAccesses, pageSize),
+    readPagedRows<SemanticTargetOperationRow>(app, SemanticAppQueryKind.TargetOperations, pageSize),
+    readPagedRows<SemanticBindingValueChannelRow>(app, SemanticAppQueryKind.BindingValueChannels, pageSize),
+    readPagedRows<SemanticBindingDataFlowRow>(app, SemanticAppQueryKind.BindingDataFlows, pageSize),
+  );
 }
 
 /** Result of one expected semantic effect after reopening the app. */
@@ -47,4 +113,132 @@ export class AuthoringVerificationResult {
     readonly effectResults: readonly AuthoringVerificationEffectResult[],
     readonly openSeams: readonly AuthoringVerificationOpenSeam[] = [],
   ) {}
+}
+
+export function verifyAuthoringEffects(
+  request: AuthoringVerificationRequest,
+  snapshot: AuthoringVerificationSnapshot,
+): AuthoringVerificationResult {
+  const effectResults = request.expectedEffects.map((expectedEffect) =>
+    verifyExpectedSemanticEffect(expectedEffect, snapshot)
+  );
+  return new AuthoringVerificationResult(
+    effectResults,
+    snapshot.openSeams.map((openSeam) =>
+      new AuthoringVerificationOpenSeam(
+        openSeam.seamKindKey,
+        openSeam.summary,
+        openSeam.source?.label ?? null,
+      )
+    ),
+  );
+}
+
+export function verifyExpectedSemanticEffect(
+  expectedEffect: ExpectedSemanticEffect,
+  snapshot: AuthoringVerificationSnapshot,
+): AuthoringVerificationEffectResult {
+  const observation = observeExpectedSemanticEffect(
+    expectedEffect,
+    verificationObservationSnapshot(snapshot),
+  );
+  const observedCount = observation.observedCount;
+  if (observedCount == null) {
+    return new AuthoringVerificationEffectResult(
+      expectedEffect,
+      'unsupported',
+    `Expected effect '${expectedEffect.effectKind}' is not supported by the verifier yet.`,
+    );
+  }
+  return new AuthoringVerificationEffectResult(
+    expectedEffect,
+    observation.outcome,
+    `${expectedEffect.summary} Observed ${observedCount} matching semantic fact(s).`,
+  );
+}
+
+function readAnswerValue<TValue>(
+  app: AuthoringVerificationAppSnapshotSource,
+  kind: SemanticAppQueryKind,
+): TValue {
+  const answer = app.ask({ kind });
+  assertVerificationSnapshotAnswerSupported(answer, kind);
+  return answer.value as TValue;
+}
+
+function readPagedRows<TRow>(
+  app: AuthoringVerificationAppSnapshotSource,
+  kind: SemanticAppQueryKind,
+  pageSize: number,
+): readonly TRow[] {
+  const rows: TRow[] = [];
+  let cursor: string | null = null;
+  do {
+    const answer = app.ask({
+      kind,
+      page: { size: pageSize, cursor },
+    });
+    assertVerificationSnapshotAnswerSupported(answer, kind);
+    rows.push(...readRowsValue<TRow>(answer, kind));
+    cursor = answer.page?.nextCursor ?? null;
+  } while (cursor != null);
+  return rows;
+}
+
+function readRowsValue<TRow>(
+  answer: SemanticRuntimeAnswer<unknown>,
+  kind: SemanticAppQueryKind,
+): readonly TRow[] {
+  const value = answer.value;
+  if (value == null || typeof value !== 'object' || !Array.isArray((value as { rows?: unknown }).rows)) {
+    throw new Error(`Expected ${kind} answer to return row-shaped value.`);
+  }
+  return (value as { rows: readonly TRow[] }).rows;
+}
+
+function assertVerificationSnapshotAnswerSupported(
+  answer: SemanticRuntimeAnswer<unknown>,
+  kind: SemanticAppQueryKind,
+): void {
+  if (answer.outcome === SemanticRuntimeAnswerOutcome.Unsupported) {
+    throw new Error(`Cannot build authoring verification snapshot: ${kind} is unsupported for the opened app. ${answer.summary}`);
+  }
+}
+
+function normalizeVerificationSnapshotPageSize(
+  value: number | null | undefined,
+): number {
+  return value == null || !Number.isFinite(value) || value <= 0
+    ? 1000
+    : Math.floor(value);
+}
+
+function verificationObservationSnapshot(
+  snapshot: AuthoringVerificationSnapshot,
+): ExpectedSemanticEffectObservationSnapshot {
+  return {
+    projectShapeKind: snapshot.authoringOrientation.project.shapeKind,
+    projectSourceRoles: snapshot.authoringOrientation.project.sourceRoles,
+    appRoots: snapshot.summary.appRoots,
+    resourceDefinitions: snapshot.summary.resourceDefinitions,
+    components: snapshot.topology.components,
+    styles: snapshot.topology.styles,
+    services: snapshot.topology.services,
+    serviceInteractions: snapshot.topology.serviceInteractions,
+    serviceInteractionBindings: snapshot.topology.serviceInteractionBindings,
+    compiledResources: snapshot.summary.compiledResources,
+    runtimeControllers: snapshot.summary.runtimeControllers,
+    bindingTargetAccesses: snapshot.bindingTargetAccesses ?? snapshot.summary.runtimeBindingTargetAccesses,
+    targetOperations: snapshot.targetOperations ?? snapshot.summary.runtimeTargetOperations,
+    bindingValueChannels: snapshot.bindingValueChannels ?? snapshot.summary.runtimeBindingValueChannels,
+    bindingBehaviorApplications: snapshot.bindingBehaviorApplications,
+    bindingDataFlows: snapshot.bindingDataFlows ?? snapshot.summary.runtimeBindingDataFlows,
+    routeFacts: snapshot.summary.routeConfigs + snapshot.summary.routePatterns + snapshot.summary.routeEndpoints,
+    routes: snapshot.topology.routes,
+    dependencyInjectionFacts: snapshot.summary.containers + snapshot.summary.resolverSlots + snapshot.summary.registrationAdmissions,
+    capabilities: snapshot.authoringOrientation.capabilities,
+    taste: snapshot.authoringOrientation.taste,
+    repairClusters: snapshot.authoringOrientation.repairClusters,
+    openSeams: snapshot.openSeams.length,
+  };
 }

@@ -18,8 +18,6 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  compactFieldProvenance,
-  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -29,21 +27,14 @@ import {
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { ConfigurationProductDetails } from './product-details.js';
+import { BindingScopeSlotProjector } from './binding-scope-slot-projector.js';
 import {
   BindingContext,
   BindingContextSlotDraft,
   BindingScope,
   BindingScopeConstructionRequest,
   OverrideContext,
-  type BindingContextSlotField,
-  type BindingContextField,
-  type BindingScopeField,
 } from './scope.js';
-import { TypeSystemProductDetails } from '../type-system/product-details.js';
-import type {
-  CheckerTypeMember,
-  CheckerTypeShape,
-} from '../type-system/type-shape.js';
 
 export class BindingScopeConstructionEmission {
   constructor(
@@ -103,6 +94,7 @@ export class BindingScopeMaterializer {
   constructor(
     /** Hot analysis store that receives scope records. */
     readonly store: KernelStore,
+    readonly slotProjector = new BindingScopeSlotProjector(store),
   ) {}
 
   construct(input: BindingScopeConstructionRequest): BindingScopeConstructionEmission {
@@ -167,15 +159,13 @@ export class BindingScopeMaterializer {
     handles: BindingScopeHandleSet,
     source: BindingScopeSourceSet,
   ): BindingScopeProducts {
-    const bindingContextSlots = this.contextSlotsFor(
+    const bindingContextSlots = this.slotProjector.contextSlotsFor(
       input.bindingContextSlots,
       input.bindingContextType,
-      source.provenanceHandle,
     );
-    const overrideContextSlots = this.contextSlotsFor(
+    const overrideContextSlots = this.slotProjector.contextSlotsFor(
       input.overrideContextSlots,
       input.overrideContextType,
-      source.provenanceHandle,
     );
     const bindingContext = this.bindingContextForScope(
       input,
@@ -213,13 +203,7 @@ export class BindingScopeMaterializer {
       input.bindingContextType,
       bindingContextSlots.map((slot) => slot.toSlot()),
       source.sourceAddressHandle,
-      compactFieldProvenance<BindingContextField>([
-        new FieldProvenance('contextKind', source.provenanceHandle),
-        input.ownerProductHandle == null ? null : new FieldProvenance('owner', source.provenanceHandle),
-        input.bindingContextType == null ? null : new FieldProvenance('contextType', source.provenanceHandle),
-        bindingContextSlots.length === 0 ? null : new FieldProvenance('slots', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -236,13 +220,7 @@ export class BindingScopeMaterializer {
       input.overrideContextType,
       overrideContextSlots.map((slot) => slot.toSlot()),
       source.sourceAddressHandle,
-      compactFieldProvenance<BindingContextField>([
-        new FieldProvenance('contextKind', source.provenanceHandle),
-        new FieldProvenance('owner', source.provenanceHandle),
-        input.overrideContextType == null ? null : new FieldProvenance('contextType', source.provenanceHandle),
-        overrideContextSlots.length === 0 ? null : new FieldProvenance('slots', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -262,13 +240,7 @@ export class BindingScopeMaterializer {
       input.isBoundary,
       input.ownerKind,
       source.sourceAddressHandle,
-      compactFieldProvenance<BindingScopeField>([
-        input.parent == null ? null : new FieldProvenance('parent', source.provenanceHandle),
-        new FieldProvenance('bindingContext', source.provenanceHandle),
-        new FieldProvenance('overrideContext', source.provenanceHandle),
-        new FieldProvenance('isBoundary', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -330,71 +302,6 @@ export class BindingScopeMaterializer {
         source.provenanceHandle,
       ),
     ];
-  }
-
-  private contextSlotsFor(
-    explicitSlots: readonly BindingContextSlotDraft[],
-    contextType: BindingScopeConstructionRequest['bindingContextType'],
-    scopeProvenanceHandle: ProvenanceHandle,
-  ): readonly BindingContextSlotDraft[] {
-    const slotsByName = this.explicitContextSlotsByName(explicitSlots);
-    const typeShape = this.typeShapeForContext(contextType);
-    if (typeShape != null) {
-      this.addTypeShapeSlots(slotsByName, typeShape, scopeProvenanceHandle);
-    }
-    return [...slotsByName.values()];
-  }
-
-  private explicitContextSlotsByName(
-    explicitSlots: readonly BindingContextSlotDraft[],
-  ): Map<string, BindingContextSlotDraft> {
-    const slotsByName = new Map<string, BindingContextSlotDraft>();
-    for (const slot of explicitSlots) {
-      slotsByName.set(slot.name, slot);
-    }
-    return slotsByName;
-  }
-
-  private typeShapeForContext(
-    contextType: BindingScopeConstructionRequest['bindingContextType'],
-  ): CheckerTypeShape | null {
-    return contextType?.productHandle == null
-      ? null
-      : this.store.productDetails.read(TypeSystemProductDetails.TypeShape, contextType.productHandle);
-  }
-
-  private addTypeShapeSlots(
-    slotsByName: Map<string, BindingContextSlotDraft>,
-    typeShape: CheckerTypeShape,
-    scopeProvenanceHandle: ProvenanceHandle,
-  ): void {
-    for (const member of typeShape.members) {
-      if (slotsByName.has(member.name)) {
-        continue;
-      }
-      slotsByName.set(member.name, this.slotDraftForTypeMember(member, scopeProvenanceHandle));
-    }
-  }
-
-  private slotDraftForTypeMember(
-    member: CheckerTypeMember,
-    scopeProvenanceHandle: ProvenanceHandle,
-  ): BindingContextSlotDraft {
-    const product = this.store.readProduct(member.productHandle);
-    const provenanceHandle = product?.provenanceHandle ?? scopeProvenanceHandle;
-    return new BindingContextSlotDraft(
-      member.name,
-      member.identityHandle,
-      member.productHandle,
-      member.valueType,
-      member.sourceAddressHandle,
-      compactFieldProvenance<BindingContextSlotField>([
-        new FieldProvenance('name', provenanceHandle),
-        new FieldProvenance('target', provenanceHandle),
-        member.valueType == null ? null : new FieldProvenance('targetType', provenanceHandle),
-        member.sourceAddressHandle == null ? null : new FieldProvenance('source', provenanceHandle),
-      ]),
-    );
   }
 
   private recordsForSource(local: string, addressHandle: AddressHandle | null): BindingScopeSourceSet {

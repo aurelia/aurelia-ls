@@ -188,6 +188,8 @@ export interface SourceTargetRow {
 export interface ResolvedSourceTarget extends SourceTargetRow {
   /** Source file object owned by the current Program epoch. */
   readonly sourceFile?: ts.SourceFile;
+  /** Source text for a resolved file outside the TypeScript Program. */
+  readonly sourceText?: string;
   /** Syntax node selected by this target, when any. */
   readonly node?: ts.Node;
   /** Checker-visible symbol selected by this target, when any. */
@@ -230,6 +232,8 @@ export interface SourceTextReadOptions {
 export interface SourceTextSlice {
   /** Target whose text was read. */
   readonly target: SourceTargetRow;
+  /** True when the text came from a TypeScript Program source file. */
+  readonly programBacked: boolean;
   /** Source text capped by the requested character budget. */
   readonly text: string;
   /** Total characters available before truncation. */
@@ -242,6 +246,10 @@ export interface SourceTextSlice {
 export interface SourceTextRead {
   /** Selector resolution used for the read. */
   readonly resolution: SourceSelectorResolution;
+  /** Number of resolved targets backed by the TypeScript Program. */
+  readonly programTargetCount: number;
+  /** Number of resolved targets backed only by filesystem source text. */
+  readonly filesystemTargetCount: number;
   /** Text slices returned for resolved source targets. */
   readonly slices: readonly SourceTextSlice[];
 }

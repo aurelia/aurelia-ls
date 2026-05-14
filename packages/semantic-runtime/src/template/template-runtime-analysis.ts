@@ -8,9 +8,9 @@ import {
 } from '../configuration/app-analysis.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
-  CheckerExpressionTypeEvaluationCache,
   type CheckerExpressionTypeEvaluationCacheStats,
-} from '../type-system/expression-type-evaluator.js';
+} from '../type-system/expression-type-evaluation.js';
+import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import {
   RuntimeBindingDataFlowEmission,
   RuntimeBindingDataFlowMaterializationRequest,
@@ -21,6 +21,21 @@ import {
   RuntimeBindingValueChannelMaterializationRequest,
   RuntimeBindingValueChannelMaterializer,
 } from '../observation/binding-value-channel-materializer.js';
+import {
+  RuntimeBindingBehaviorEmission,
+  RuntimeBindingBehaviorMaterializationRequest,
+  RuntimeBindingBehaviorMaterializer,
+} from './runtime-binding-behavior-materializer.js';
+import {
+  RuntimeValueConverterEmission,
+  RuntimeValueConverterMaterializationRequest,
+  RuntimeValueConverterMaterializer,
+} from './runtime-value-converter-materializer.js';
+import {
+  I18nTranslationBindingIssueEmission,
+  I18nTranslationBindingIssueMaterializationRequest,
+  I18nTranslationBindingIssueMaterializer,
+} from '../i18n/translation-binding-issues.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
@@ -69,6 +84,9 @@ export type TemplateRuntimeAnalysisPhaseName =
   | 'runtime-rendering'
   | 'scope-construction'
   | 'controller-bind'
+  | 'i18n-translation-binding'
+  | 'binding-behavior'
+  | 'value-converter'
   | 'binding-value-channel'
   | 'binding-data-flow';
 
@@ -95,6 +113,12 @@ export class TemplateRuntimeAnalysisEmission {
     readonly scopes: TemplateScopeConstructionEmission,
     /** Runtime Controller.bind target-side access and operation products. */
     readonly controllerBind: RuntimeControllerBindEmission,
+    /** Runtime i18n TranslationBinding.create/bind lifecycle framework issues. */
+    readonly i18nTranslationBinding: I18nTranslationBindingIssueEmission,
+    /** Runtime binding-behavior applications and behavior-owned framework issues. */
+    readonly bindingBehavior: RuntimeBindingBehaviorEmission,
+    /** Runtime value-converter applications and converter-owned framework issues. */
+    readonly valueConverter: RuntimeValueConverterEmission,
     /** Value channels derived from target access, target operation, and observer semantics. */
     readonly bindingValueChannel: RuntimeBindingValueChannelEmission,
     /** Source/target data-flow edges derived from runtime binding scopes and target-side products. */
@@ -114,6 +138,9 @@ export class TemplateRuntimeAnalysisMaterializer {
   private readonly runtimeRendering: RuntimeRenderingMaterializer;
   private readonly templateScopes: TemplateControllerScopeMaterializer;
   private readonly controllerBind: RuntimeControllerBindMaterializer;
+  private readonly i18nTranslationBinding: I18nTranslationBindingIssueMaterializer;
+  private readonly bindingBehavior: RuntimeBindingBehaviorMaterializer;
+  private readonly valueConverter: RuntimeValueConverterMaterializer;
   private readonly bindingValueChannel: RuntimeBindingValueChannelMaterializer;
   private readonly bindingDataFlow: RuntimeBindingDataFlowMaterializer;
 
@@ -124,15 +151,21 @@ export class TemplateRuntimeAnalysisMaterializer {
     this.runtimeRendering = new RuntimeRenderingMaterializer(store);
     this.templateScopes = new TemplateControllerScopeMaterializer(store);
     this.controllerBind = new RuntimeControllerBindMaterializer(store);
+    this.i18nTranslationBinding = new I18nTranslationBindingIssueMaterializer(store);
+    this.bindingBehavior = new RuntimeBindingBehaviorMaterializer(store);
+    this.valueConverter = new RuntimeValueConverterMaterializer(store);
     this.bindingValueChannel = new RuntimeBindingValueChannelMaterializer(store);
     this.bindingDataFlow = new RuntimeBindingDataFlowMaterializer(store);
   }
 
   materialize(request: TemplateRuntimeAnalysisRequest): TemplateRuntimeAnalysisEmission {
-    return new TemplateRuntimeAnalysisFrame(request, {
+    return new TemplateRuntimeAnalysisFrame(request, this.store, {
       runtimeRendering: this.runtimeRendering,
       templateScopes: this.templateScopes,
       controllerBind: this.controllerBind,
+      i18nTranslationBinding: this.i18nTranslationBinding,
+      bindingBehavior: this.bindingBehavior,
+      valueConverter: this.valueConverter,
       bindingValueChannel: this.bindingValueChannel,
       bindingDataFlow: this.bindingDataFlow,
     }).materialize();
@@ -143,6 +176,9 @@ interface TemplateRuntimeAnalysisServices {
   readonly runtimeRendering: RuntimeRenderingMaterializer;
   readonly templateScopes: TemplateControllerScopeMaterializer;
   readonly controllerBind: RuntimeControllerBindMaterializer;
+  readonly i18nTranslationBinding: I18nTranslationBindingIssueMaterializer;
+  readonly bindingBehavior: RuntimeBindingBehaviorMaterializer;
+  readonly valueConverter: RuntimeValueConverterMaterializer;
   readonly bindingValueChannel: RuntimeBindingValueChannelMaterializer;
   readonly bindingDataFlow: RuntimeBindingDataFlowMaterializer;
 }
@@ -151,13 +187,15 @@ class TemplateRuntimeAnalysisFrame {
   private readonly started = performance.now();
   private readonly analysisDepth: SemanticAppAnalysisDepth;
   private readonly phases: TemplateRuntimeAnalysisPhaseTiming[] = [];
-  private readonly expressionTypeCache = new CheckerExpressionTypeEvaluationCache();
+  private readonly expressionWorld: CheckerExpressionTypeWorld;
 
   constructor(
     private readonly request: TemplateRuntimeAnalysisRequest,
+    store: KernelStore,
     private readonly services: TemplateRuntimeAnalysisServices,
   ) {
     this.analysisDepth = normalizeSemanticAppAnalysisDepth(request.analysisDepth);
+    this.expressionWorld = new CheckerExpressionTypeWorld(store);
   }
 
   materialize(): TemplateRuntimeAnalysisEmission {
@@ -168,6 +206,9 @@ class TemplateRuntimeAnalysisFrame {
       this.constructScopes(runtimeRendering)
     );
     const controllerBind = this.materializeControllerBindForDepth(runtimeRendering, scopes);
+    const i18nTranslationBinding = this.materializeI18nTranslationBindingForDepth(runtimeRendering, scopes);
+    const bindingBehavior = this.materializeBindingBehaviorForDepth(runtimeRendering, controllerBind);
+    const valueConverter = this.materializeValueConverterForDepth(runtimeRendering);
     const bindingValueChannel = this.materializeBindingValueChannelForDepth(runtimeRendering, controllerBind, scopes);
     const bindingDataFlow = this.materializeBindingDataFlowForDepth(
       runtimeRendering,
@@ -178,7 +219,7 @@ class TemplateRuntimeAnalysisFrame {
     const profile: TemplateRuntimeAnalysisProfile = {
       totalMilliseconds: performance.now() - this.started,
       phases: this.phases,
-      expressionTypeCache: this.expressionTypeCache.snapshot(),
+      expressionTypeCache: this.expressionWorld.cacheSnapshot(),
     };
 
     return new TemplateRuntimeAnalysisEmission(
@@ -186,6 +227,9 @@ class TemplateRuntimeAnalysisFrame {
       runtimeRendering,
       scopes,
       controllerBind,
+      i18nTranslationBinding,
+      bindingBehavior,
+      valueConverter,
       bindingValueChannel,
       bindingDataFlow,
       profile,
@@ -203,6 +247,17 @@ class TemplateRuntimeAnalysisFrame {
       : skippedControllerBind(this.phases);
   }
 
+  private materializeI18nTranslationBindingForDepth(
+    runtimeRendering: RuntimeRenderingEmission,
+    scopes: TemplateScopeConstructionEmission,
+  ): I18nTranslationBindingIssueEmission {
+    return semanticAppAnalysisDepthSatisfies(this.analysisDepth, SemanticAppAnalysisDepth.BindingTargets)
+      ? this.measure('i18n-translation-binding', () =>
+        this.materializeI18nTranslationBinding(runtimeRendering, scopes)
+      )
+      : skippedI18nTranslationBinding(this.phases);
+  }
+
   private materializeBindingValueChannelForDepth(
     runtimeRendering: RuntimeRenderingEmission,
     controllerBind: RuntimeControllerBindEmission,
@@ -213,6 +268,27 @@ class TemplateRuntimeAnalysisFrame {
         this.materializeBindingValueChannel(runtimeRendering, controllerBind, scopes)
       )
       : skippedBindingValueChannel(this.phases);
+  }
+
+  private materializeBindingBehaviorForDepth(
+    runtimeRendering: RuntimeRenderingEmission,
+    controllerBind: RuntimeControllerBindEmission,
+  ): RuntimeBindingBehaviorEmission {
+    return semanticAppAnalysisDepthSatisfies(this.analysisDepth, SemanticAppAnalysisDepth.BindingTargets)
+      ? this.measure('binding-behavior', () =>
+        this.materializeBindingBehavior(runtimeRendering, controllerBind)
+      )
+      : skippedBindingBehavior(this.phases);
+  }
+
+  private materializeValueConverterForDepth(
+    runtimeRendering: RuntimeRenderingEmission,
+  ): RuntimeValueConverterEmission {
+    return semanticAppAnalysisDepthSatisfies(this.analysisDepth, SemanticAppAnalysisDepth.BindingTargets)
+      ? this.measure('value-converter', () =>
+        this.materializeValueConverter(runtimeRendering)
+      )
+      : skippedValueConverter(this.phases);
   }
 
   private materializeBindingDataFlowForDepth(
@@ -236,6 +312,7 @@ class TemplateRuntimeAnalysisFrame {
       attributeSyntax: this.request.attributeSyntax,
       compilerWorld: this.request.compilerWorld,
       projectContext: this.request.projectContext,
+      typeSystem: this.request.typeSystem,
     } satisfies RuntimeRenderingMaterializationRequest);
   }
 
@@ -247,9 +324,10 @@ class TemplateRuntimeAnalysisFrame {
       definition: this.request.definition,
       compiledTemplate: this.request.compiledTemplate,
       runtimeBindings: runtimeRendering,
+      projectContext: this.request.projectContext,
       typeSystem: this.request.typeSystem,
       resourceScope: this.request.compilerWorld.resourceScope,
-      expressionTypeCache: this.expressionTypeCache,
+      expressionWorld: this.expressionWorld,
     } satisfies TemplateScopeConstructionRequest);
   }
 
@@ -262,6 +340,7 @@ class TemplateRuntimeAnalysisFrame {
       runtimeRendering,
       scopes,
       typeSystem: this.request.typeSystem,
+      nodeObserverLocatorConfiguration: this.request.compilerWorld.nodeObserverLocatorConfiguration,
     } satisfies RuntimeControllerBindMaterializationRequest);
   }
 
@@ -276,7 +355,43 @@ class TemplateRuntimeAnalysisFrame {
       controllerBind,
       scopes,
       this.request.compilerWorld.resourceScope,
-      this.expressionTypeCache,
+      this.expressionWorld,
+    ));
+  }
+
+  private materializeBindingBehavior(
+    runtimeRendering: RuntimeRenderingEmission,
+    controllerBind: RuntimeControllerBindEmission,
+  ): RuntimeBindingBehaviorEmission {
+    return this.services.bindingBehavior.materialize(new RuntimeBindingBehaviorMaterializationRequest(
+      this.request.localKey,
+      runtimeRendering,
+      controllerBind,
+      this.request.compilerWorld.resourceScope,
+    ));
+  }
+
+  private materializeI18nTranslationBinding(
+    runtimeRendering: RuntimeRenderingEmission,
+    scopes: TemplateScopeConstructionEmission,
+  ): I18nTranslationBindingIssueEmission {
+    return this.services.i18nTranslationBinding.materialize(new I18nTranslationBindingIssueMaterializationRequest(
+      this.request.localKey,
+      runtimeRendering,
+      scopes,
+      this.request.compilerWorld.resourceScope,
+      this.expressionWorld,
+    ));
+  }
+
+  private materializeValueConverter(
+    runtimeRendering: RuntimeRenderingEmission,
+  ): RuntimeValueConverterEmission {
+    return this.services.valueConverter.materialize(new RuntimeValueConverterMaterializationRequest(
+      this.request.localKey,
+      runtimeRendering,
+      this.request.compilerWorld.container,
+      this.request.compilerWorld.resourceScope,
     ));
   }
 
@@ -293,7 +408,7 @@ class TemplateRuntimeAnalysisFrame {
       bindingValueChannel,
       scopes,
       this.request.compilerWorld.resourceScope,
-      this.expressionTypeCache,
+      this.expressionWorld,
     ));
   }
 
@@ -310,9 +425,24 @@ function skippedControllerBind(phases: TemplateRuntimeAnalysisPhaseTiming[]): Ru
   return new RuntimeControllerBindEmission([], [], [], [], []);
 }
 
+function skippedI18nTranslationBinding(phases: TemplateRuntimeAnalysisPhaseTiming[]): I18nTranslationBindingIssueEmission {
+  recordSkippedTemplateRuntimeAnalysisPhase(phases, 'i18n-translation-binding');
+  return new I18nTranslationBindingIssueEmission([], []);
+}
+
 function skippedBindingValueChannel(phases: TemplateRuntimeAnalysisPhaseTiming[]): RuntimeBindingValueChannelEmission {
   recordSkippedTemplateRuntimeAnalysisPhase(phases, 'binding-value-channel');
   return new RuntimeBindingValueChannelEmission([], [], []);
+}
+
+function skippedBindingBehavior(phases: TemplateRuntimeAnalysisPhaseTiming[]): RuntimeBindingBehaviorEmission {
+  recordSkippedTemplateRuntimeAnalysisPhase(phases, 'binding-behavior');
+  return new RuntimeBindingBehaviorEmission([], [], []);
+}
+
+function skippedValueConverter(phases: TemplateRuntimeAnalysisPhaseTiming[]): RuntimeValueConverterEmission {
+  recordSkippedTemplateRuntimeAnalysisPhase(phases, 'value-converter');
+  return new RuntimeValueConverterEmission([], [], []);
 }
 
 function skippedBindingDataFlow(phases: TemplateRuntimeAnalysisPhaseTiming[]): RuntimeBindingDataFlowEmission {

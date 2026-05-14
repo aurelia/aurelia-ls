@@ -6,6 +6,8 @@ import type {
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { ContainerReference } from '../di/container-reference.js';
+import type { RouterFrameworkErrorCode } from './framework-error-code.js';
+import type { RouteRecognizerRawErrorAuthority } from './framework-raw-error-authority.js';
 
 export const enum RouterModelKind {
   Registration = 'registration',
@@ -24,6 +26,7 @@ export const enum RouterModelKind {
   ComponentAgent = 'component-agent',
   RouteNode = 'route-node',
   RouteTree = 'route-tree',
+  Issue = 'issue',
   ViewportRequest = 'viewport-request',
   ViewportInstruction = 'viewport-instruction',
   ViewportInstructionTree = 'viewport-instruction-tree',
@@ -43,6 +46,21 @@ export const enum RouteConfigKind {
   ChildRoute = 'child-route',
   Redirect = 'redirect',
   Open = 'open',
+}
+
+export const enum RouteConfigOriginKind {
+  RouteDecorator = 'route-decorator',
+  ConfigureCall = 'configure-call',
+  ClassStaticDefaults = 'class-static-defaults',
+  ChildRoutesProperty = 'child-routes-property',
+}
+
+export const enum RouteConfigValueKind {
+  ObjectLiteral = 'object-literal',
+  PathExpression = 'path-expression',
+  RouteableComponent = 'routeable-component',
+  ClassStaticDefaults = 'class-static-defaults',
+  OpenExpression = 'open-expression',
 }
 
 export const enum NavigationInstructionKind {
@@ -70,6 +88,7 @@ export const enum RouteRecognizerModelKind {
   Endpoint = 'endpoint',
   State = 'state',
   RecognizedRoute = 'recognized-route',
+  Issue = 'issue',
 }
 
 export const enum RouteRecognizerSegmentKind {
@@ -91,6 +110,50 @@ export const enum RouteRecognizerOwnershipKind {
   Own = 'own',
   InheritedFromParent = 'inherited-from-parent',
 }
+
+export const enum RouteRecognizerIssueKind {
+  DuplicatePath = 'duplicate-path',
+  AmbiguousEndpoint = 'ambiguous-endpoint',
+  ReservedParameterName = 'reserved-parameter-name',
+  InvalidParameterConstraint = 'invalid-parameter-constraint',
+}
+
+export const enum RouterIssuePhase {
+  RouteConfigValidation = 'route-config-validation',
+  RouteConfigContextChildRouteConfiguration = 'route-config-context-child-route-configuration',
+  RouteContextLazyImportResolution = 'route-context-lazy-import-resolution',
+  RouteableComponentResolution = 'routeable-component-resolution',
+  TypedNavigationInstructionCreation = 'typed-navigation-instruction-creation',
+  RouteExpressionParsing = 'route-expression-parsing',
+  RouteContextEagerPathGeneration = 'route-context-eager-path-generation',
+  RouteRecognition = 'route-recognition',
+  RouteTreeRedirectResolution = 'route-tree-redirect-resolution',
+  RouteTreeViewportResolution = 'route-tree-viewport-resolution',
+  RouteTreeRedirectMigration = 'route-tree-redirect-migration',
+}
+
+export const enum RouterIssueKind {
+  InvalidRouteConfig = 'invalid-route-config',
+  InvalidRouteConfigProperty = 'invalid-route-config-property',
+  UnknownRouteConfigProperty = 'unknown-route-config-property',
+  UnknownRedirectRouteConfigProperty = 'unknown-redirect-route-config-property',
+  ChildRouteLazyImportMissingPath = 'child-route-lazy-import-missing-path',
+  InvalidLazyImport = 'invalid-lazy-import',
+  RouteableComponentNotFound = 'routeable-component-not-found',
+  InvalidInstruction = 'invalid-instruction',
+  RouteExpressionUnexpectedSegment = 'route-expression-unexpected-segment',
+  RouteExpressionNotDone = 'route-expression-not-done',
+  NoAvailableViewportAgent = 'no-available-viewport-agent',
+  InstructionNoFallback = 'instruction-no-fallback',
+  InstructionUnknownRedirect = 'instruction-unknown-redirect',
+  EagerPathGenerationFailed = 'eager-path-generation-failed',
+  RedirectUnexpectedExpressionKind = 'redirect-unexpected-expression-kind',
+}
+
+export type RouterIssueSeverity =
+  | 'information'
+  | 'warning'
+  | 'error';
 
 export type RouterField =
   | 'container'
@@ -129,6 +192,23 @@ export type RouteConfigField =
   | 'children'
   | 'fallback'
   | 'nav'
+  | 'source';
+
+export type RouterIssueField =
+  | 'phase'
+  | 'issueKind'
+  | 'message'
+  | 'severity'
+  | 'frameworkErrorCode'
+  | 'property'
+  | 'expected'
+  | 'actual'
+  | 'component'
+  | 'path'
+  | 'redirectTo'
+  | 'unexpectedExpressionKind'
+  | 'routeConfig'
+  | 'recognizedRoute'
   | 'source';
 
 export type RouteableComponentField =
@@ -224,6 +304,11 @@ export type RouteRecognizerField =
   | 'redirectDepth'
   | 'viewportInstruction'
   | 'viewportInstructionTree'
+  | 'issueKind'
+  | 'message'
+  | 'frameworkRawErrorAuthority'
+  | 'existingEndpoint'
+  | 'conflictingEndpoint'
   | 'source';
 
 export type ViewportField =
@@ -891,6 +976,72 @@ export class RecognizedRouteModel {
   }
 }
 
+/** Static route-recognizer condition where the framework would throw while registering or walking routes. */
+export class RouteRecognizerIssueModel {
+  readonly recognizerKind = RouteRecognizerModelKind.Issue;
+
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly recognizer: RouteRecognizerReference,
+    readonly issueKind: RouteRecognizerIssueKind,
+    readonly frameworkRawErrorAuthority: RouteRecognizerRawErrorAuthority | null,
+    readonly message: string,
+    readonly path: string | null,
+    readonly existingEndpoint: RouteRecognizerReference | null,
+    readonly conflictingEndpoint: RouteRecognizerReference | null,
+    readonly state: RouteRecognizerReference | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<RouteRecognizerField>[] = [],
+  ) {}
+
+  toReference(): RouteRecognizerReference {
+    return new RouteRecognizerReference(
+      this.productHandle,
+      this.identityHandle,
+      this.recognizerKind,
+      this.sourceAddressHandle,
+      this.path,
+    );
+  }
+}
+
+/** Static router condition where RouteTree, RouteContext, or router resource semantics would throw. */
+export class RouterIssueModel {
+  readonly routerKind = RouterModelKind.Issue;
+
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly phase: RouterIssuePhase,
+    readonly issueKind: RouterIssueKind,
+    readonly message: string,
+    readonly severity: RouterIssueSeverity,
+    readonly frameworkErrorCode: RouterFrameworkErrorCode | null,
+    readonly routeConfig: RouteConfigReference | null,
+    readonly recognizedRoute: RouteRecognizerReference | null,
+    readonly property: string | null,
+    readonly expected: string | null,
+    readonly actual: string | null,
+    readonly component: string | null,
+    readonly path: string | null,
+    readonly redirectTo: string | null,
+    readonly unexpectedExpressionKind: string | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<RouterIssueField>[] = [],
+  ) {}
+
+  toReference(): RouterReference {
+    return new RouterReference(
+      this.productHandle,
+      this.identityHandle,
+      this.routerKind,
+      this.sourceAddressHandle,
+      this.path,
+    );
+  }
+}
+
 /** Runtime au-viewport custom element instance semantics discovered from template/controller hydration. */
 @auLink('router:ViewportCustomElement', { facet: 'router-runtime-model' })
 export class ViewportCustomElementModel {
@@ -965,6 +1116,8 @@ export class RouteConfigModel {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly routeKind: RouteConfigKind,
+    readonly originKind: RouteConfigOriginKind,
+    readonly valueKind: RouteConfigValueKind,
     readonly id: string | null,
     readonly paths: readonly string[],
     readonly title: string | null,
@@ -979,6 +1132,7 @@ export class RouteConfigModel {
     readonly nav: boolean | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly pathSourceAddressHandle: AddressHandle | null,
+    readonly redirectToSourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RouteConfigField>[] = [],
   ) {}
 

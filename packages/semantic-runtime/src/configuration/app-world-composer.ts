@@ -1,9 +1,26 @@
 import type { KernelStore } from '../kernel/store.js';
+import type { ProjectBootFrame } from '../boot/frames.js';
 import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import { DiWorldConstructor } from '../di/world-constructor.js';
-import type { DiWorldConstructionEmission } from '../di/world-construction.js';
+import { DiWorldConstructionEmission } from '../di/world-construction.js';
+import {
+  DiResolveCallIssueMaterializer,
+  type DiResolveCallIssueMaterialization,
+} from '../di/resolve-call-issues.js';
+import {
+  DiInjectDecoratorIssueMaterializer,
+  type DiInjectDecoratorIssueMaterialization,
+} from '../di/inject-decorator-issues.js';
+import {
+  DiContainerApiIssueMaterializer,
+  type DiContainerApiIssueMaterialization,
+} from '../di/container-api-issues.js';
+import {
+  DiDependencyCycleIssueMaterializer,
+  type DiDependencyCycleIssueMaterialization,
+} from '../di/dependency-cycle-issues.js';
 import type { Container } from '../di/container.js';
 import {
   type BuiltInAttributePatternEmission,
@@ -39,6 +56,12 @@ import {
 } from '../registration/framework-registration-manifest.js';
 import type { AppRoot } from './app-root.js';
 import type { ConfigurationKernelEmission } from './configuration-kernel-emitter.js';
+import type { ConfigurationRecognitionProjectResult } from './configuration-recognition-project-pass.js';
+import {
+  FrameworkServiceCustomizationRecognitionPass,
+  type FrameworkServiceCustomizationProjectResult,
+} from './framework-service-customization.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 import {
   AppWorldResourceVisibilityComposer,
 } from './app-world-resource-visibility.js';
@@ -66,6 +89,8 @@ export class AureliaAppWorldEmission {
     readonly configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     /** Framework-owned runtime renderer catalogs admitted by recognized framework registrations. */
     readonly configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
+    /** App-authored mutations of framework compiler/observer services recognized from AppTasks. */
+    readonly frameworkServiceCustomizations: FrameworkServiceCustomizationProjectResult,
     /** Compiler worlds created for app roots with modeled containers. */
     readonly compilerWorlds: readonly TemplateCompilerWorldEmission[],
   ) {}
@@ -93,30 +118,67 @@ export class AureliaAppWorldComposer {
   }
 
   construct(
-    configuration: ConfigurationKernelEmission,
+    configuration: ConfigurationRecognitionProjectResult,
     resources: ResourceDefinitionIndex | null = null,
+    typeSystem: TypeSystemProject | null = null,
+    project: ProjectBootFrame | null = null,
   ): AureliaAppWorldEmission {
-    const configuredSyntax = this.configuredSyntaxMaterializer.materialize(configuration);
-    const configuredResources = this.configuredResourceMaterializer.materialize(configuration);
-    const configuredRenderers = this.configuredRendererMaterializer.materialize(configuration);
-    const diWorld = this.diWorldConstructor.construct(configuration, configuredResources, resources);
+    const kernelConfiguration = configuration.readConfiguration();
+    const frameworkServiceCustomizations = new FrameworkServiceCustomizationRecognitionPass().recognize(this.store, configuration);
+    const configuredSyntax = this.configuredSyntaxMaterializer.materialize(kernelConfiguration);
+    const configuredResources = this.configuredResourceMaterializer.materialize(kernelConfiguration, typeSystem);
+    const configuredRenderers = this.configuredRendererMaterializer.materialize(kernelConfiguration);
+    const diWorld = this.constructDiWorld(
+      kernelConfiguration,
+      configuredResources,
+      resources,
+      project,
+      typeSystem,
+    );
     const compilerWorlds = this.constructCompilerWorlds(
-      configuration,
+      kernelConfiguration,
       diWorld,
       configuredSyntax,
       configuredResources,
       configuredRenderers,
+      frameworkServiceCustomizations,
       resources,
     );
 
     return new AureliaAppWorldEmission(
-      configuration,
+      kernelConfiguration,
       diWorld,
       configuredSyntax,
       configuredResources,
       configuredRenderers,
+      frameworkServiceCustomizations,
       compilerWorlds,
     );
+  }
+
+  private constructDiWorld(
+    kernelConfiguration: ConfigurationKernelEmission,
+    configuredResources: ConfiguredBuiltInResourceCatalogEmission,
+    resources: ResourceDefinitionIndex | null,
+    project: ProjectBootFrame | null,
+    typeSystem: TypeSystemProject | null,
+  ): DiWorldConstructionEmission {
+    const diWorld = this.diWorldConstructor.construct(
+      kernelConfiguration,
+      configuredResources,
+      resources,
+      project?.projectKey ?? null,
+    );
+    if (project == null || typeSystem == null) {
+      return diWorld;
+    }
+    const sourceIssues = [
+      new DiResolveCallIssueMaterializer(this.store).materialize(project, typeSystem),
+      new DiInjectDecoratorIssueMaterializer(this.store).materialize(project, typeSystem),
+      new DiContainerApiIssueMaterializer(this.store).materialize(project, typeSystem),
+      new DiDependencyCycleIssueMaterializer(this.store).materialize(project, typeSystem),
+    ];
+    return appendDiSourceIssues(diWorld, sourceIssues);
   }
 
   private constructCompilerWorlds(
@@ -125,6 +187,7 @@ export class AureliaAppWorldComposer {
     configuredSyntax: ConfiguredBuiltInSyntaxCatalogEmission,
     configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
+    frameworkServiceCustomizations: FrameworkServiceCustomizationProjectResult,
     resourceDefinitions: ResourceDefinitionIndex | null,
   ): readonly TemplateCompilerWorldEmission[] {
     return new AppRootCompilerWorldFrame(
@@ -136,10 +199,44 @@ export class AureliaAppWorldComposer {
       configuredSyntax,
       configuredResources,
       configuredRenderers,
+      frameworkServiceCustomizations,
       resourceDefinitions,
     ).construct();
   }
 }
+
+function appendDiSourceIssues(
+  diWorld: DiWorldConstructionEmission,
+  sourceIssues: readonly DiSourceIssueMaterialization[],
+): DiWorldConstructionEmission {
+  const issues = sourceIssues.flatMap((materialization) => materialization.issues);
+  const records = sourceIssues.flatMap((materialization) => materialization.records);
+  if (issues.length === 0) {
+    return diWorld;
+  }
+  return new DiWorldConstructionEmission(
+    diWorld.containers,
+    diWorld.registrationOperations,
+    diWorld.resolvers,
+    diWorld.registries,
+    diWorld.parameterizedRegistries,
+    diWorld.resolverSlots,
+    diWorld.factorySlots,
+    diWorld.selfResolverSlots,
+    diWorld.resourceSlots,
+    diWorld.appTasks,
+    diWorld.openSeams,
+    [...diWorld.issues, ...issues],
+    diWorld.resourceIssues,
+    [...diWorld.records, ...records],
+  );
+}
+
+type DiSourceIssueMaterialization =
+  | DiResolveCallIssueMaterialization
+  | DiInjectDecoratorIssueMaterialization
+  | DiContainerApiIssueMaterialization
+  | DiDependencyCycleIssueMaterialization;
 
 class AppRootCompilerWorldFrame {
   private readonly containersByProduct: ReadonlyMap<Container['productHandle'], Container>;
@@ -154,6 +251,7 @@ class AppRootCompilerWorldFrame {
     private readonly configuredSyntax: ConfiguredBuiltInSyntaxCatalogEmission,
     private readonly configuredResources: ConfiguredBuiltInResourceCatalogEmission,
     private readonly configuredRenderers: ConfiguredBuiltInRuntimeRendererCatalogEmission,
+    private readonly frameworkServiceCustomizations: FrameworkServiceCustomizationProjectResult,
     private readonly resourceDefinitions: ResourceDefinitionIndex | null,
   ) {
     this.containersByProduct = new Map(configuration.containers.map((container) => [container.productHandle, container]));
@@ -196,6 +294,8 @@ class AppRootCompilerWorldFrame {
       runtimeRenderers,
       TemplateResourceVisibilityKind.Configured,
       appRoot.sourceAddressHandle,
+      this.frameworkServiceCustomizations.attributeMapper,
+      this.frameworkServiceCustomizations.nodeObserverLocator,
     ));
   }
 }

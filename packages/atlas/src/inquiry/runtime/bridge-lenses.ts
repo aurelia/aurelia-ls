@@ -29,6 +29,7 @@ import {
   pageOffset,
   rowLimit,
 } from "../paging.js";
+import { mergeDefinedFilters } from "./lens-filter-utils.js";
 import {
   AuLinkGapKind,
   readAuLinkModel,
@@ -59,6 +60,7 @@ import {
 export type { AuLinkUsageComparisonSummaryRow } from "./bridge-aulink-usage-lenses.js";
 import {
   AULINK_MIRROR_DETAIL_BUDGET,
+  auLinkMemoryContinuation,
   auLinkBasis,
   auLinkCheckerBasis,
   frameworkBasis,
@@ -358,10 +360,10 @@ export function answerBridgeAuLink(
 }
 
 function auLinkMirrorFiltersFromInquiry(inquiry: Inquiry): AuLinkMirrorFilters {
-  return {
-    ...auLinkMirrorFiltersFromSubject(inquiry.subject),
-    ...auLinkMirrorFiltersFromRecord(inquiry.filters),
-  };
+  return mergeDefinedFilters(
+    auLinkMirrorFiltersFromSubject(inquiry.subject),
+    auLinkMirrorFiltersFromRecord(inquiry.filters),
+  );
 }
 
 function auLinkMirrorFiltersFromSubject(subject: unknown): AuLinkMirrorFilters {
@@ -590,6 +592,27 @@ function auLinkSummaryContinuations(
   ];
 
   const firstAnchor = model.anchors[0];
+  if (filters.linkId !== undefined) {
+    continuations.push(
+      auLinkMemoryContinuation(
+        inquiry,
+        "bridge.aulink:memory",
+        filters.linkId,
+        "Inspect durable memory records for this auLink id.",
+      ),
+    );
+  } else {
+    for (const linkId of [...new Set(model.anchors.map((anchor) => anchor.linkId))].slice(0, 3)) {
+      continuations.push(
+        auLinkMemoryContinuation(
+          inquiry,
+          `bridge.aulink:memory:${linkId}`,
+          linkId,
+          "Inspect durable memory records for a visible auLink id.",
+        ),
+      );
+    }
+  }
   if (firstAnchor !== undefined) {
     continuations.push(
       auLinkSourceContinuation(
@@ -690,12 +713,22 @@ function auLinkAnchorContinuations(
     ),
   });
   for (const [index, anchor] of anchors.slice(0, 3).entries()) {
+    const evidence = evidenceForAnchor(anchor);
     continuations.push(
       auLinkSourceContinuation(
         `bridge.aulink:anchors:source:${index}`,
         "Inspect the decorator source for this auLink anchor.",
         anchor,
         sourceRangeForAuLinkAnchor(anchor),
+      ),
+    );
+    continuations.push(
+      auLinkMemoryContinuation(
+        inquiry,
+        `bridge.aulink:anchors:memory:${index}`,
+        anchor.linkId,
+        "Inspect durable memory records attached to this auLink anchor.",
+        evidence,
       ),
     );
     continuations.push({
@@ -713,7 +746,7 @@ function auLinkAnchorContinuations(
         projection: "facts",
         budget: inquiry.budget,
       },
-      evidence: [evidenceForAnchor(anchor)],
+      evidence: [evidence],
       route: typeFactsRoute(
         "Type facts for the decorated product declaration.",
       ),
@@ -768,6 +801,18 @@ function targetContinuations(
     route: projectionRoute("Return to product-side auLink placements."),
   });
   for (const [index, target] of targets.slice(0, 3).entries()) {
+    const targetEvidence = evidenceForFrameworkTarget(target)[0];
+    if (targetEvidence !== undefined) {
+      continuations.push(
+        auLinkMemoryContinuation(
+          inquiry,
+          `bridge.aulink:targets:memory:${index}`,
+          target.linkId,
+          "Inspect durable memory records attached to this auLink target.",
+          targetEvidence,
+        ),
+      );
+    }
     const firstCandidate = target.candidates[0];
     if (firstCandidate === undefined) {
       continue;
@@ -903,15 +948,14 @@ function evidenceForAnchor(anchor: AuLinkAnchorRow): Evidence {
 }
 
 function evidenceForGap(gap: AuLinkGapRow): Evidence {
+  const source = sourceRangeForGap(gap);
   return {
     id: gap.id,
     kind: EvidenceKind.OpenSeam,
     role: EvidenceRole.Diagnostic,
     confidence: EvidenceConfidence.Exact,
     summary: summaryForGap(gap),
-    ...(sourceRangeForGap(gap) === null
-      ? {}
-      : { source: sourceRangeForGap(gap) ?? undefined }),
+    source: source ?? undefined,
     handle: handleForGap(gap),
     data: gap,
   };
@@ -1400,6 +1444,13 @@ function mirrorContinuations(
         { linkId: row.linkId },
         evidence,
       ),
+      auLinkMemoryContinuation(
+        inquiry,
+        `bridge.aulink:mirror:memory:${index}`,
+        row.linkId,
+        "Inspect durable memory records for this auLink mirror row.",
+        evidence,
+      ),
     );
     if (row.firstProductSource !== undefined) {
       continuations.push(
@@ -1472,6 +1523,13 @@ function roleEvidenceContinuations(
         evidence,
         row.basis,
       ),
+      auLinkMemoryContinuation(
+        inquiry,
+        `bridge.aulink:role-evidence:memory:${index}`,
+        row.linkId,
+        "Inspect durable memory records for this role-evidenced auLink id.",
+        evidence,
+      ),
     );
   }
   return continuations;
@@ -1527,6 +1585,13 @@ function obligationContinuations(
         "Inspect the framework projection that owns this obligation.",
         evidence,
         row.basis,
+      ),
+      auLinkMemoryContinuation(
+        inquiry,
+        `bridge.aulink:obligations:memory:${index}`,
+        row.linkId,
+        "Inspect durable memory records for this obligation-bearing auLink id.",
+        evidence,
       ),
     );
   }

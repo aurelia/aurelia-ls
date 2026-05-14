@@ -32,6 +32,8 @@ import { checkerNullishType } from './checker-related-types.js';
 export const enum CheckerExpressionScopeNarrowingPolarity {
   Truthy = 'truthy',
   Falsy = 'falsy',
+  Nullish = 'nullish',
+  NonNullish = 'non-nullish',
 }
 
 export interface CheckerExpressionScopeNarrowingRequest {
@@ -145,9 +147,7 @@ export class CheckerExpressionScopeNarrower {
     }
 
     const projectedType = this.ensureProjectedSlotType(slot, slot.targetType, `${localKey}:slot:${name}`);
-    const narrowedType = polarity === CheckerExpressionScopeNarrowingPolarity.Truthy
-      ? this.truthyTypeReference(projectedType, `${localKey}:truthy:${name}`, sourceAddressHandle)
-      : this.falsyTypeReference(projectedType, `${localKey}:falsy:${name}`, sourceAddressHandle);
+    const narrowedType = this.narrowedTypeReference(projectedType, polarity, `${localKey}:${polarity}:${name}`, sourceAddressHandle);
     if (narrowedType == null || sameCheckerTypeReference(narrowedType, projectedType)) {
       return null;
     }
@@ -227,15 +227,28 @@ export class CheckerExpressionScopeNarrower {
       return this.projectType(carrier, carrier.checker.getFalseType(), localKey, sourceAddressHandle);
     }
 
-    const falsyTypes = nullishConstituents(carrier.checker, carrier.type);
-    if (falsyTypes.length === 0) {
+    return this.nullishTypeReference(reference, localKey, sourceAddressHandle);
+  }
+
+  private nullishTypeReference(
+    reference: CheckerTypeReference,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    const carrier = this.carrierForReference(reference);
+    if (carrier == null) {
       return null;
     }
-    if (falsyTypes.length === 1) {
-      return this.projectType(carrier, falsyTypes[0]!, localKey, sourceAddressHandle);
+
+    const nullishTypes = nullishConstituents(carrier.checker, carrier.type);
+    if (nullishTypes.length === 0) {
+      return null;
+    }
+    if (nullishTypes.length === 1) {
+      return this.projectType(carrier, nullishTypes[0]!, localKey, sourceAddressHandle);
     }
 
-    const references = falsyTypes.map((type, index) =>
+    const references = nullishTypes.map((type, index) =>
       this.projectType(carrier, type, `${localKey}:part:${index}`, sourceAddressHandle)
     );
     return this.projector.ensureSyntheticProjection({
@@ -246,6 +259,39 @@ export class CheckerExpressionScopeNarrower {
       origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
       sourceAddressHandle,
     } satisfies CheckerSyntheticTypeProjectionRequest).toReference();
+  }
+
+  private nonNullishTypeReference(
+    reference: CheckerTypeReference,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    const carrier = this.carrierForReference(reference);
+    if (carrier == null) {
+      return null;
+    }
+    const narrowed = carrier.checker.getNonNullableType(carrier.type);
+    return narrowed === carrier.type
+      ? reference
+      : this.projectType(carrier, narrowed, localKey, sourceAddressHandle);
+  }
+
+  private narrowedTypeReference(
+    reference: CheckerTypeReference,
+    polarity: CheckerExpressionScopeNarrowingPolarity,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    switch (polarity) {
+      case CheckerExpressionScopeNarrowingPolarity.Truthy:
+        return this.truthyTypeReference(reference, localKey, sourceAddressHandle);
+      case CheckerExpressionScopeNarrowingPolarity.Falsy:
+        return this.falsyTypeReference(reference, localKey, sourceAddressHandle);
+      case CheckerExpressionScopeNarrowingPolarity.Nullish:
+        return this.nullishTypeReference(reference, localKey, sourceAddressHandle);
+      case CheckerExpressionScopeNarrowingPolarity.NonNullish:
+        return this.nonNullishTypeReference(reference, localKey, sourceAddressHandle);
+    }
   }
 
   private carrierForReference(reference: CheckerTypeReference): CheckerTypeCarrierInput | null {
@@ -309,8 +355,8 @@ function nullishComparisonNarrowing(
     return null;
   }
   const positiveNullish = expression.operation === '=='
-    ? CheckerExpressionScopeNarrowingPolarity.Falsy
-    : CheckerExpressionScopeNarrowingPolarity.Truthy;
+    ? CheckerExpressionScopeNarrowingPolarity.Nullish
+    : CheckerExpressionScopeNarrowingPolarity.NonNullish;
   return {
     expression: narrowed,
     polarity: polarity === CheckerExpressionScopeNarrowingPolarity.Truthy
@@ -326,9 +372,16 @@ function isNullishLiteral(expression: ExpressionAstNode): boolean {
 function invertPolarity(
   polarity: CheckerExpressionScopeNarrowingPolarity,
 ): CheckerExpressionScopeNarrowingPolarity {
-  return polarity === CheckerExpressionScopeNarrowingPolarity.Truthy
-    ? CheckerExpressionScopeNarrowingPolarity.Falsy
-    : CheckerExpressionScopeNarrowingPolarity.Truthy;
+  switch (polarity) {
+    case CheckerExpressionScopeNarrowingPolarity.Truthy:
+      return CheckerExpressionScopeNarrowingPolarity.Falsy;
+    case CheckerExpressionScopeNarrowingPolarity.Falsy:
+      return CheckerExpressionScopeNarrowingPolarity.Truthy;
+    case CheckerExpressionScopeNarrowingPolarity.Nullish:
+      return CheckerExpressionScopeNarrowingPolarity.NonNullish;
+    case CheckerExpressionScopeNarrowingPolarity.NonNullish:
+      return CheckerExpressionScopeNarrowingPolarity.Nullish;
+  }
 }
 
 function combineNarrowings(

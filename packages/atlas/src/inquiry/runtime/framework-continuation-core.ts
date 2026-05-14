@@ -84,7 +84,7 @@ export class FrameworkRouteEndpoint {
       lens: this.lens,
       locus: instance.locus ?? this.locus ?? inquiry.locus,
       projection: this.projection,
-      ...(instance.filters === undefined ? {} : { filters: instance.filters }),
+      filters: instance.filters ?? inquiry.filters,
       page: undefined,
     };
   }
@@ -167,9 +167,9 @@ export class FrameworkSemanticRouteSpec {
       priority: instance.priority ?? this.priority ?? ContinuationPriority.Primary,
       rationale: instance.rationale,
       inquiry: this.target.toInquiry(inquiry, instance),
-      ...(evidence === undefined
-        ? {}
-        : { evidence: Array.isArray(evidence) ? evidence : [evidence] }),
+      evidence: evidence === undefined
+        ? undefined
+        : Array.isArray(evidence) ? evidence : [evidence],
       route: {
         specId: this.navigationSpecId,
         semanticRouteId: this.id,

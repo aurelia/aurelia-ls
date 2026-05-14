@@ -43,6 +43,20 @@ interface AtlasSelfPressureValue {
     readonly fileSamples: readonly string[];
     readonly source?: SourceRef;
   }[];
+  readonly functionWrapperRows?: readonly {
+    readonly name: string;
+    readonly functionKind: string;
+    readonly filePath: string;
+    readonly lineCount: number;
+    readonly wrapperKind: string;
+    readonly wrappedTarget: string;
+    readonly argumentCount: number;
+    readonly incomingCallCount: number;
+    readonly incomingValueReferenceCount: number;
+    readonly incomingUsageCount: number;
+    readonly exported: boolean;
+    readonly source?: SourceRef;
+  }[];
   readonly axisPressure?: readonly {
     readonly kind: string;
     readonly axis: string;
@@ -51,6 +65,25 @@ interface AtlasSelfPressureValue {
     readonly sourceName: string;
     readonly summary: string;
     readonly source?: SourceRef;
+  }[];
+  readonly strings?: readonly {
+    readonly value: string;
+    readonly count: number;
+    readonly roles: Readonly<Record<string, number>>;
+    readonly files: readonly string[];
+    readonly declaredByEnumMembers: readonly string[];
+    readonly declaredByConstObjectMembers: readonly string[];
+    readonly reusedOutsideDeclaration: boolean;
+    readonly firstSource: SourceRef;
+  }[];
+  readonly contractStrings?: readonly {
+    readonly value: string;
+    readonly classes: readonly string[];
+    readonly count: number;
+    readonly declaredByEnumMembers: readonly string[];
+    readonly declaredByConstObjectMembers: readonly string[];
+    readonly files: readonly string[];
+    readonly firstSource: SourceRef;
   }[];
 }
 
@@ -78,6 +111,7 @@ const detail = process.argv.includes("--detail");
 const sourceFileDisplayRows = detail ? 8 : 5;
 const classFunctionDisplayRows = detail ? 10 : 5;
 const duplicateDisplayRows = detail ? 12 : 6;
+const stringDisplayRows = detail ? 12 : 6;
 const functionShapeFilters = detail
   ? { minNameCount: 2, minFunctionCount: 2 }
   : { minNameCount: 2, minFunctionCount: 2, minLineCount: 8 };
@@ -117,8 +151,12 @@ const [
   functionAnswer,
   duplicateFunctionNameRows,
   functionShapeAnswer,
+  functionWrapperAnswer,
   axisAnswer,
   optionalObjectSpreadAnswer,
+  magicStringAnswer,
+  contractStringAnswer,
+  constObjectContractStringRows,
 ] = await Promise.all([
   api.ask({
     lens: LensId.AtlasSelf,
@@ -154,6 +192,13 @@ const [
   api.ask({
     lens: LensId.AtlasSelf,
     locus: RepoRootLocus,
+    projection: "function-wrappers",
+    filters: { maxIncomingUsageCount: 1, exported: false, orderBy: "incomingUsageCount" },
+    budget: { rows: detail ? 12 : 6, evidencePerSubject: 2 },
+  }),
+  api.ask({
+    lens: LensId.AtlasSelf,
+    locus: RepoRootLocus,
     projection: "axis-pressure",
     filters: { pressure: "high" },
     budget: { rows: 12, evidencePerSubject: 2 },
@@ -165,6 +210,29 @@ const [
     filters: { kind: "optional-object-spread" },
     budget: { rows: detail ? 12 : 6, evidencePerSubject: 2 },
   }),
+  api.ask({
+    lens: LensId.AtlasSelf,
+    locus: RepoRootLocus,
+    projection: "strings",
+    filters: { magicOnly: true },
+    budget: { rows: detail ? 12 : 6, evidencePerSubject: 2 },
+  }),
+  api.ask({
+    lens: LensId.AtlasSelf,
+    locus: RepoRootLocus,
+    projection: "contract-strings",
+    budget: { rows: detail ? 12 : 6, evidencePerSubject: 2 },
+  }),
+  readAllPagedRows<AtlasSelfPressureValue, NonNullable<AtlasSelfPressureValue["contractStrings"]>[number]>(
+    api,
+    {
+      label: "atlas.self:contract-strings const-object",
+      lens: LensId.AtlasSelf,
+      projection: "contract-strings",
+      filters: { declarationKind: "const-object" },
+      rowsFromValue: (value) => value?.contractStrings ?? [],
+    },
+  ),
 ]);
 
 for (const answer of [
@@ -178,8 +246,11 @@ for (const answer of [
 assertHitAnswer<AtlasSelfPressureValue>("atlas.self:classes", classAnswer);
 assertHitAnswer<AtlasSelfPressureValue>("atlas.self:functions", functionAnswer);
 assertHitOrMissAnswer("atlas.self:function-shapes", functionShapeAnswer);
+assertHitOrMissAnswer("atlas.self:function-wrappers", functionWrapperAnswer);
 assertHitOrMissAnswer("atlas.self:axis-pressure", axisAnswer);
 assertHitOrMissAnswer("atlas.self:axis-pressure optional object spread", optionalObjectSpreadAnswer);
+assertHitOrMissAnswer("atlas.self:strings magic", magicStringAnswer);
+assertHitOrMissAnswer("atlas.self:contract-strings", contractStringAnswer);
 
 const sourceFileRowsBySize = sourceFileRows(sourceFileSizeAnswer.value);
 const sourceFileCatalogRowsBySize = sourceFileRowsBySize
@@ -213,11 +284,30 @@ const duplicateFunctionNameGroups = duplicateTopLevelFunctionNameGroups(
 );
 const functionShapeRows =
   answerValue<AtlasSelfPressureValue>(functionShapeAnswer)?.functionShapeGroups ?? [];
+const functionWrapperRows =
+  answerValue<AtlasSelfPressureValue>(functionWrapperAnswer)?.functionWrapperRows ?? [];
 const axisRows =
   (answerValue<AtlasSelfPressureValue>(axisAnswer)?.axisPressure ?? [])
     .filter((row) => row.kind !== "optional-object-spread");
 const optionalObjectSpreadRows =
   answerValue<AtlasSelfPressureValue>(optionalObjectSpreadAnswer)?.axisPressure ?? [];
+const magicStringRows =
+  (answerValue<AtlasSelfPressureValue>(magicStringAnswer)?.strings ?? [])
+    .filter((row) => row.value.length > 0);
+const contractStringRows =
+  [...(answerValue<AtlasSelfPressureValue>(contractStringAnswer)?.contractStrings ?? [])]
+    .sort((left, right) =>
+      right.count - left.count ||
+      left.classes.join(",").localeCompare(right.classes.join(",")) ||
+      left.value.localeCompare(right.value)
+    );
+const sortedConstObjectContractStringRows = [...constObjectContractStringRows]
+  .sort(
+    (left, right) =>
+      right.declaredByConstObjectMembers.length - left.declaredByConstObjectMembers.length ||
+      right.count - left.count ||
+      left.value.localeCompare(right.value),
+  );
 
 console.log("atlas.self source-file pressure by lineCount");
 console.log(`requests: ${(performance.now() - started).toFixed(1)}ms; mode=${detail ? "detail" : "compact"}`);
@@ -286,6 +376,20 @@ for (const row of functionShapeRows.slice(0, duplicateDisplayRows)) {
 }
 
 console.log("");
+console.log("atlas.self shallow function wrapper pressure");
+console.log("filters: maxIncomingUsageCount=1; exported=false; rows are exact one-return constructor/call wrappers, not a verdict to inline blindly");
+if (functionWrapperRows.length === 0) {
+  console.log("- no shallow single-use wrapper rows at the current threshold");
+}
+for (const row of functionWrapperRows.slice(0, duplicateDisplayRows)) {
+  console.log(
+    `- ${row.name}: ${row.wrapperKind} -> ${row.wrappedTarget}, ${row.incomingCallCount} incoming call(s), ` +
+      `${row.incomingValueReferenceCount} value ref(s), ${row.incomingUsageCount} usage(s), ${row.lineCount} line(s), ` +
+      `${row.argumentCount} argument(s) at ${sourceLabel(row)}`,
+  );
+}
+
+console.log("");
 console.log("atlas.self optional object-spread pressure");
 console.log("filters: kind=optional-object-spread; conditional spreads of {} / { prop } branches inside one object literal");
 if (optionalObjectSpreadRows.length === 0) {
@@ -294,6 +398,36 @@ if (optionalObjectSpreadRows.length === 0) {
 for (const row of optionalObjectSpreadRows) {
   console.log(
     `- ${row.sourceName}: ${row.summary} (${sourceLabel(row)})`,
+  );
+}
+
+console.log("");
+console.log("atlas.self magic string pressure");
+console.log("filters: magicOnly=true; rows have at least one non-module/non-enum occurrence; role counts include all occurrences");
+printEmptyRows(magicStringRows);
+  for (const row of magicStringRows.slice(0, stringDisplayRows)) {
+    console.log(
+    `- ${JSON.stringify(row.value)}: ${row.count} occurrence(s), roles ${compactRecordSummary(row.roles)}, files ${row.files.length}, enum declarations ${row.declaredByEnumMembers.length}, const-object declarations ${row.declaredByConstObjectMembers.length}, first ${sourceLabel({ source: row.firstSource })}`,
+  );
+}
+
+console.log("");
+console.log("atlas.self contract string pressure");
+console.log("contract-bearing string literals classified by enum, schema, continuation, and lens contract roles");
+printEmptyRows(contractStringRows);
+  for (const row of contractStringRows.slice(0, stringDisplayRows)) {
+    console.log(
+    `- ${JSON.stringify(row.value)}: classes ${row.classes.join(", ")}, ${row.count} occurrence(s), files ${row.files.length}, enum declarations ${row.declaredByEnumMembers.length}, const-object declarations ${row.declaredByConstObjectMembers.length}, first ${sourceLabel({ source: row.firstSource })}`,
+  );
+}
+
+console.log("");
+console.log("atlas.self const-object contract string pressure");
+console.log("contract-bearing string literals declared by as-const object vocabularies");
+printEmptyRows(sortedConstObjectContractStringRows);
+for (const row of sortedConstObjectContractStringRows.slice(0, stringDisplayRows)) {
+  console.log(
+    `- ${JSON.stringify(row.value)}: classes ${row.classes.join(", ")}, const-object declarations ${row.declaredByConstObjectMembers.length}, enum declarations ${row.declaredByEnumMembers.length}, files ${row.files.length}, first ${sourceLabel({ source: row.firstSource })}`,
   );
 }
 
@@ -341,4 +475,17 @@ function printSourceFileRows(
       `- ${row.filePath}: ${row.lineCount} lines, ${row.moduleShape}, imports ${row.importCount}, local ${row.outgoingLocalImportCount} out/${row.incomingLocalImportCount} in, cross ${row.crossAreaOutgoingImportCount}, decls ${row.declarationCount} at ${sourceLabel(row)}`,
     );
   }
+}
+
+function compactRecordSummary(record: Readonly<Record<string, number>>): string {
+  const entries = Object.entries(record)
+    .sort((left, right) =>
+      right[1] - left[1] ||
+      left[0].localeCompare(right[0])
+    )
+    .slice(0, 4);
+  if (entries.length === 0) {
+    return "(none)";
+  }
+  return entries.map(([key, count]) => `${key}=${count}`).join(", ");
 }

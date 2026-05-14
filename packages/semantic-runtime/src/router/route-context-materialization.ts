@@ -7,12 +7,7 @@ import {
 } from '../kernel/evidence.js';
 import type {
   IdentityHandle,
-  ProvenanceHandle,
 } from '../kernel/handles.js';
-import {
-  fieldProvenanceEntries,
-  FieldProvenance,
-} from '../kernel/provenance.js';
 import {
   KernelStoreBatch,
   type KernelStore,
@@ -28,9 +23,7 @@ import {
   RouteRecognizerReference,
   RouteRecognizerModel,
   RouteRecognizerOwnershipKind,
-  type RouteConfigContextField,
   type RouteConfigModel,
-  type RouteRecognizerField,
 } from './model.js';
 import type { RouteConfigRecognitionProjectResult } from './route-config-recognition.js';
 import type { RouterOptionsMaterializationProjectResult } from './router-options-materialization.js';
@@ -319,7 +312,6 @@ function materializedRouteConfigContext(
   contextReference: RouterReference,
   recognizerReference: RouteRecognizerReference,
 ): RouteConfigContextModel {
-  const provenanceHandle = store.handles.provenance(contextLocal);
   return new RouteConfigContextModel(
     store.handles.product(contextLocal),
     store.handles.identity(contextLocal),
@@ -332,7 +324,6 @@ function materializedRouteConfigContext(
     friendlyPath,
     children.length > 0 ? true : null,
     routeConfig.sourceAddressHandle,
-    routeConfigContextFieldProvenance(provenanceHandle, parent, children),
   );
 }
 
@@ -342,14 +333,12 @@ function ownedRouteRecognizer(
   routeConfig: RouteConfigModel,
   contextReference: RouterReference,
 ): RouteRecognizerModel {
-  const provenanceHandle = store.handles.provenance(recognizerLocal);
   return new RouteRecognizerModel(
     store.handles.product(recognizerLocal),
     store.handles.identity(recognizerLocal),
     contextReference,
     RouteRecognizerOwnershipKind.Own,
     routeConfig.sourceAddressHandle,
-    routeRecognizerFieldProvenance(provenanceHandle),
   );
 }
 
@@ -419,32 +408,4 @@ function rootRouteConfigsForContextMaterialization(
   return appRoots.length === 0
     ? graph.roots()
     : graph.rootsForAppRoots(appRoots);
-}
-
-function routeConfigContextFieldProvenance(
-  provenanceHandle: ProvenanceHandle,
-  parent: RouteConfigContextModel | null,
-  children: readonly RouteConfigModel[],
-): readonly FieldProvenance<RouteConfigContextField>[] {
-  return fieldProvenanceEntries<RouteConfigContextField>([
-    parent == null ? null : 'parent',
-    'root',
-    'config',
-    'recognizer',
-    children.length === 0 ? null : 'childRoutes',
-    'depth',
-    'friendlyPath',
-    children.length === 0 ? null : 'childRoutesConfigured',
-    'source',
-  ], provenanceHandle);
-}
-
-function routeRecognizerFieldProvenance(
-  provenanceHandle: ProvenanceHandle,
-): readonly FieldProvenance<RouteRecognizerField>[] {
-  return fieldProvenanceEntries<RouteRecognizerField>([
-    'routeConfigContext',
-    'ownership',
-    'source',
-  ], provenanceHandle);
 }

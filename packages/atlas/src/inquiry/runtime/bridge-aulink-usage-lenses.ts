@@ -1386,7 +1386,7 @@ function frameworkApiUsageConsumerContinuation(
         memberName: row.memberName,
         ownerName: row.ownerName,
         ownerMemberName: row.ownerMemberName,
-        ...(usageRoles.length === 1 ? { role: usageRoles[0] } : {}),
+        role: usageRoles.length === 1 ? usageRoles[0] : undefined,
         ...singletonRecordFilter(row.callCalleeNames, "callCalleeName"),
         ...singletonRecordFilter(row.callArgumentTexts, "callArgumentText"),
         ...singletonRecordFilter(row.callArgumentSymbolNames, "callArgumentSymbolName"),

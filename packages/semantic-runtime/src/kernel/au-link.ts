@@ -6,12 +6,16 @@ export type PackageId =
   | 'expression-parser'
   | 'i18n'
   | 'state'
+  | 'validation-html'
   | 'router'
   | 'route-recognizer';
 
 export type AuLinkFacet =
   | 'resource-definition'
+  | 'binding-behavior-semantics'
+  | 'value-converter-semantics'
   | 'template-controller-semantics'
+  | 'validation-controller-semantics'
   | 'router-runtime-model';
 
 export interface AuLinkOptions {
@@ -27,16 +31,26 @@ export interface AuLinkOptions {
 export function auLink(id: 'kernel:Container'): ClassDecorator;
 export function auLink(id: 'kernel:ContainerConfiguration'): ClassDecorator;
 export function auLink(id: 'kernel:Resolver'): ClassDecorator;
+export function auLink(id: 'kernel:InstanceProvider'): ClassDecorator;
 export function auLink(id: 'kernel:ParameterizedRegistry'): ClassDecorator;
 export function auLink(id: 'kernel:IRegistry'): ClassDecorator;
+export function auLink(id: 'kernel:IModuleLoader'): ClassDecorator;
+export function auLink(id: 'kernel:ModuleLoader'): ClassDecorator;
+export function auLink(id: 'kernel:AnalyzedModule'): ClassDecorator;
+export function auLink(id: 'kernel:ModuleItem'): ClassDecorator;
 export function auLink(id: 'runtime:Scope'): ClassDecorator;
 export function auLink(id: 'runtime:BindingContext'): ClassDecorator;
 export function auLink(id: 'runtime:IOverrideContext'): ClassDecorator;
+export function auLink(id: 'runtime:IEffect'): ClassDecorator;
 export function auLink(id: 'runtime:IObserverLocator'): ClassDecorator;
 export function auLink(id: 'runtime:ObserverLocator'): ClassDecorator;
 export function auLink(id: 'runtime:PropertyAccessor'): ClassDecorator;
 export function auLink(id: 'runtime:SetterObserver'): ClassDecorator;
 export function auLink(id: 'runtime:ComputedObserver'): ClassDecorator;
+export function auLink(id: 'runtime:CollectionLengthObserver'): ClassDecorator;
+export function auLink(id: 'runtime:CollectionSizeObserver'): ClassDecorator;
+export function auLink(id: 'runtime:ArrayIndexObserver'): ClassDecorator;
+export function auLink(id: 'runtime:astEvaluate'): ClassDecorator;
 export function auLink(id: 'runtime-html:Aurelia'): ClassDecorator;
 export function auLink(id: 'runtime-html:AppRoot'): ClassDecorator;
 export function auLink(id: 'runtime-html:IAppRootConfig'): ClassDecorator;
@@ -238,6 +252,10 @@ export function auLink(id: 'state:StateBindingInstructionRenderer'): ClassDecora
 export function auLink(id: 'state:DispatchBindingInstructionRenderer'): ClassDecorator;
 export function auLink(id: 'state:StateBinding'): ClassDecorator;
 export function auLink(id: 'state:StateDispatchBinding'): ClassDecorator;
+export function auLink(id: 'validation-html:ValidateBindingBehavior'): ClassDecorator;
+export function auLink(id: 'validation-html:ValidationController'): ClassDecorator;
+export function auLink(id: 'validation-html:ValidationErrorsCustomAttribute'): ClassDecorator;
+export function auLink(id: 'validation-html:ValidationContainerCustomElement'): ClassDecorator;
 export function auLink(id: 'router:RouterRegistration'): ClassDecorator;
 export function auLink(id: 'router:RouterConfiguration'): ClassDecorator;
 export function auLink(id: 'router:IRouterOptions'): ClassDecorator;

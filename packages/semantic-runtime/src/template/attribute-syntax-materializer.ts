@@ -15,8 +15,6 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  compactFieldProvenance,
-  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -28,7 +26,6 @@ import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
   AttributeSyntax,
   type AttributeParserParseResult,
-  type AttributeSyntaxField,
 } from './attribute-syntax.js';
 import { BuiltInAttributeParserExecutionHost } from './attribute-parser-execution-host.js';
 import type { TemplateCompilerWorldEmission } from './compiler-world-materializer.js';
@@ -129,7 +126,7 @@ export class AttributeSyntaxMaterializer {
     attribute: HtmlAttribute,
   ): AttributeSyntaxPublication {
     const parse = input.compilerWorld.attributeParser.parse(attribute.rawName, attribute.rawValue, executionHost);
-    const syntax = this.createAttributeSyntax(local, source, attribute, parse);
+    const syntax = this.createAttributeSyntax(local, attribute, parse);
     const claims = this.claimsForAttributeSyntax(local, source, attribute, syntax, parse.executableProductHandle);
     return new AttributeSyntaxPublication(
       syntax,
@@ -140,32 +137,22 @@ export class AttributeSyntaxMaterializer {
 
   private createAttributeSyntax(
     local: string,
-    source: AttributeSyntaxSourceSet,
     attribute: HtmlAttribute,
     parse: AttributeParserParseResult,
   ): AttributeSyntax {
-    const execution = parse.execution;
     return new AttributeSyntax(
       this.store.handles.product(local),
       this.store.handles.identity(local),
-      execution.syntaxKind,
-      execution.rawName,
-      execution.rawValue,
-      execution.target,
-      execution.command,
-      execution.parts,
+      parse.execution.syntaxKind,
+      parse.execution.rawName,
+      parse.execution.rawValue,
+      parse.execution.target,
+      parse.execution.command,
+      parse.execution.parts,
       parse.pattern,
       attribute.toReference(),
       attribute.sourceAddressHandle,
-      compactFieldProvenance<AttributeSyntaxField>([
-        new FieldProvenance('rawName', source.provenanceHandle),
-        new FieldProvenance('rawValue', source.provenanceHandle),
-        new FieldProvenance('target', source.provenanceHandle),
-        execution.command == null ? null : new FieldProvenance('command', source.provenanceHandle),
-        execution.parts.length === 0 ? null : new FieldProvenance('parts', source.provenanceHandle),
-        parse.pattern == null ? null : new FieldProvenance('pattern', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 

@@ -17,12 +17,12 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import { I18nIdentity } from '../kernel/identity.js';
+import { localKeyPart } from '../kernel/local-key.js';
 import {
   MaterializationRecord,
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import type {
@@ -75,7 +75,7 @@ function translationKeyProductHandles(
   seed: I18nTranslationKeyProductSeed,
   index: number,
 ): I18nTranslationKeyProductHandles {
-  const local = `i18n-translation-key:${projectKey}:${index}:${safeLocalPart(seed.locale ?? 'unknown')}:${safeLocalPart(seed.namespace ?? 'translation')}:${safeLocalPart(seed.key)}`;
+  const local = `i18n-translation-key:${projectKey}:${index}:${localKeyPart(seed.locale ?? 'unknown')}:${localKeyPart(seed.namespace ?? 'translation')}:${localKeyPart(seed.key)}`;
   return {
     local,
     sourceAddressHandle: store.handles.address(`${local}:source`),
@@ -97,12 +97,7 @@ function translationKeyModel(
     seed.locale,
     seed.namespace,
     handles.sourceAddressHandle,
-    [
-      new FieldProvenance('key', handles.provenanceHandle),
-      new FieldProvenance('locale', handles.provenanceHandle),
-      new FieldProvenance('namespace', handles.provenanceHandle),
-      new FieldProvenance('source', handles.provenanceHandle),
-    ],
+    [],
   );
 }
 
@@ -192,8 +187,4 @@ function translationKeySourceSpan(
     start: seed.sourceNode.getStart(seed.sourceFile),
     end: seed.sourceNode.end,
   };
-}
-
-function safeLocalPart(value: string): string {
-  return encodeURIComponent(value).replace(/%/g, '~');
 }

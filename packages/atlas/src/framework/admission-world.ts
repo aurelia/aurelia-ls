@@ -233,9 +233,7 @@ export class FrameworkAdmissionWorldFormationDisposition {
       formationKind: this.formationKind,
       status: this.status,
       closure: FrameworkRelationshipClosure.Partial,
-      ...(this.openReason === undefined
-        ? {}
-        : { openReason: this.openReason }),
+      openReason: this.openReason,
       summary: this.summarize(relationship),
     };
   }

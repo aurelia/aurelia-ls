@@ -32,6 +32,7 @@ import {
   type FrameworkRouteRecognizerMechanicRow,
   type FrameworkRouterSurfaceRow,
 } from "./framework-router-analysis.js";
+import { frameworkSourceStateBaseValue } from "./framework-source-state-value.js";
 import {
   routerRelationshipsFromRows,
   type FrameworkRouterRelationshipRow,
@@ -89,7 +90,7 @@ export function answerFrameworkRouter(
         "framework router package row(s)",
         filterPackages(analysis.packages, inquiry),
         basis,
-        (rows) => ({ ...frameworkRouterBaseValue(analysis), packages: rows }),
+        (rows) => ({ ...frameworkSourceStateBaseValue(analysis), packages: rows }),
         frameworkRouterEvidenceForPackage,
       );
     case "surfaces":
@@ -99,7 +100,7 @@ export function answerFrameworkRouter(
         "framework router surface row(s)",
         filterFrameworkRouterSurfaces(analysis.surfaces, inquiry),
         basis,
-        (rows) => ({ ...frameworkRouterBaseValue(analysis), surfaces: rows }),
+        (rows) => ({ ...frameworkSourceStateBaseValue(analysis), surfaces: rows }),
         frameworkRouterEvidenceForSurface,
       );
     case "flow":
@@ -109,7 +110,7 @@ export function answerFrameworkRouter(
         "framework router route-flow row(s)",
         filterFlows(analysis.flows, inquiry),
         basis,
-        (rows) => ({ ...frameworkRouterBaseValue(analysis), flows: rows }),
+        (rows) => ({ ...frameworkSourceStateBaseValue(analysis), flows: rows }),
         evidenceForRouterFlow,
       );
     case "flow-issues":
@@ -119,7 +120,7 @@ export function answerFrameworkRouter(
         "framework router flow self-audit row(s)",
         filterFlowIssues(analysis.flowIssues, inquiry),
         basis,
-        (rows) => ({ ...frameworkRouterBaseValue(analysis), flowIssues: rows }),
+        (rows) => ({ ...frameworkSourceStateBaseValue(analysis), flowIssues: rows }),
         evidenceForFlowIssue,
       );
     case "recognizer":
@@ -129,7 +130,7 @@ export function answerFrameworkRouter(
         "framework route-recognizer mechanic row(s)",
         filterRecognizerMechanics(analysis.routeRecognizerMechanics, inquiry),
         basis,
-        (rows) => ({ ...frameworkRouterBaseValue(analysis), routeRecognizerMechanics: rows }),
+        (rows) => ({ ...frameworkSourceStateBaseValue(analysis), routeRecognizerMechanics: rows }),
         evidenceForRouteRecognizerMechanic,
       );
     case "recognizer-issues":
@@ -139,7 +140,7 @@ export function answerFrameworkRouter(
         "framework route-recognizer mechanic self-audit row(s)",
         filterRecognizerMechanicIssues(analysis.routeRecognizerMechanicIssues, inquiry),
         basis,
-        (rows) => ({ ...frameworkRouterBaseValue(analysis), routeRecognizerMechanicIssues: rows }),
+        (rows) => ({ ...frameworkSourceStateBaseValue(analysis), routeRecognizerMechanicIssues: rows }),
         evidenceForRouteRecognizerMechanicIssue,
       );
     case "relationships":
@@ -153,7 +154,7 @@ export function answerFrameworkRouter(
           routerRelationshipFilters(inquiry),
         ),
         basis,
-        (rows) => ({ ...frameworkRouterBaseValue(analysis), relationships: rows }),
+        (rows) => ({ ...frameworkSourceStateBaseValue(analysis), relationships: rows }),
         frameworkRouterEvidenceForRelationship,
       );
   }
@@ -171,7 +172,7 @@ function answerFrameworkRouterSummary(
     `Read ${analysis.rollup.packageCount} router package(s), ${analysis.rollup.surfaceCount} router surface row(s), ${analysis.rollup.flowCount} ordered route-flow row(s), ${analysis.rollup.routeRecognizerMechanicCount} route-recognizer mechanic row(s), ${analysis.rollup.relationshipCount} router relationship row(s), ${analysis.rollup.flowIssueCount} flow self-audit issue row(s), ${analysis.rollup.routeRecognizerMechanicIssueCount} recognizer self-audit issue row(s), ${analysis.rollup.routeContextCount} route-context row(s), ${analysis.rollup.routeTreeCount} route-tree row(s), and ${analysis.rollup.routeRecognizerCount} route-recognizer surface row(s). ${analysis.sourceState.summary}`,
     {
       value: {
-        ...frameworkRouterBaseValue(analysis),
+        ...frameworkSourceStateBaseValue(analysis),
         packages,
       },
       basis,
@@ -215,14 +216,6 @@ function answerFrameworkRouterRows<TRow>(
     basis,
     value: (page) => valueWithRows(page.rows),
   });
-}
-
-function frameworkRouterBaseValue(analysis: FrameworkRouterAnalysis): FrameworkRouterValue {
-  return {
-    version: analysis.version,
-    sourceState: analysis.sourceState,
-    rollup: analysis.rollup,
-  };
 }
 
 function frameworkRouterProjection(inquiry: Inquiry): FrameworkRouterProjection {

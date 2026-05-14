@@ -27,6 +27,12 @@ export const enum FrameworkRegistrationCapability {
   I18nServiceResolvers = 'i18n.service-resolvers',
   /** I18n lifecycle task that waits on `I18N.initPromise` during app activation. */
   I18nLifecycleTasks = 'i18n.lifecycle-tasks',
+  /** Validation core service registrations such as validators, rules, messages, and hydrators. */
+  ValidationServiceResolvers = 'validation.service-resolvers',
+  /** Validation HTML resource headers such as `validate`, `validation-errors`, and `validation-container`. */
+  ValidationHtmlDefaultResources = 'validation-html.default-resources',
+  /** Validation HTML service registrations such as the validation controller factory and default trigger. */
+  ValidationHtmlServiceResolvers = 'validation-html.service-resolvers',
   /** Router package default service registrations such as `IRouter`. */
   RouterDefaultComponents = 'router.default-components',
   /** Router package default resources such as `au-viewport`, `load`, and `href`. */
@@ -147,6 +153,28 @@ const frameworkRegistrationDescriptors: readonly FrameworkRegistrationDescriptor
       FrameworkRegistrationCapability.I18nTranslationRenderers,
       FrameworkRegistrationCapability.I18nServiceResolvers,
       FrameworkRegistrationCapability.I18nLifecycleTasks,
+    ],
+  },
+  {
+    kind: FrameworkRegistrationKind.ValidationConfiguration,
+    exportName: 'ValidationConfiguration',
+    moduleNames: ['@aurelia/validation'],
+    role: FrameworkRegistrationRole.Configuration,
+    chainMethods: ['customize'],
+    capabilities: [
+      FrameworkRegistrationCapability.ValidationServiceResolvers,
+    ],
+  },
+  {
+    kind: FrameworkRegistrationKind.ValidationHtmlConfiguration,
+    exportName: 'ValidationHtmlConfiguration',
+    moduleNames: ['@aurelia/validation-html'],
+    role: FrameworkRegistrationRole.Configuration,
+    chainMethods: ['customize'],
+    capabilities: [
+      FrameworkRegistrationCapability.ValidationServiceResolvers,
+      FrameworkRegistrationCapability.ValidationHtmlDefaultResources,
+      FrameworkRegistrationCapability.ValidationHtmlServiceResolvers,
     ],
   },
   {

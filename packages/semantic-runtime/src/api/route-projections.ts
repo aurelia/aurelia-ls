@@ -4,6 +4,8 @@ import type {
   ComponentAgentModel,
   ConfigurableRouteModel,
   EndpointModel,
+  RouteRecognizerIssueModel,
+  RouterIssueModel,
   RecognizedRouteModel,
   RouteRecognizerReference,
   RouteContextModel,
@@ -11,6 +13,7 @@ import type {
   RouteTreeModel,
   RouteableComponentReference,
   RouteConfigModel,
+  RouteConfigReference,
   RouterReference,
   RouterOptionsModel,
   StateModel,
@@ -26,6 +29,7 @@ import {
 } from './source-reference.js';
 import type {
   SemanticRouteConfigComponentRow,
+  SemanticRouteConfigReferenceRow,
   SemanticComponentAgentRow,
   SemanticRouteContextRow,
   SemanticRouteConfigRow,
@@ -33,7 +37,11 @@ import type {
   SemanticRecognizedRouteRow,
   SemanticRouteNodeRow,
   SemanticRoutePatternRow,
+  SemanticRouteRecognizerIssueRow,
   SemanticRouteRecognizerStateRow,
+  SemanticRouteRecognizerIssuesResult,
+  SemanticRouterIssueRow,
+  SemanticRouterIssuesResult,
   SemanticRouteTreeRow,
   SemanticRouterProductReferenceRow,
   SemanticRouterViewportRow,
@@ -203,6 +211,37 @@ export function readRouteRecognizerStateRows(
     );
 }
 
+export function readRouteRecognizerIssueRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): SemanticRouteRecognizerIssuesResult['rows'] {
+  return emission.routeRecognizer.readIssues()
+    .map((issue) => routeRecognizerIssueRow(emission, store, issue, handles))
+    .sort((left, right) =>
+      `${left.issueKind}:${left.path ?? ''}:${left.source?.label ?? ''}`
+        .localeCompare(`${right.issueKind}:${right.path ?? ''}:${right.source?.label ?? ''}`)
+    );
+}
+
+export function readRouterIssueRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): SemanticRouterIssuesResult['rows'] {
+  return [
+    ...emission.routes.readIssues(),
+    ...emission.routeInstructions.readIssues(),
+    ...emission.routeRecognition.readIssues(),
+    ...emission.routeTree.readIssues(),
+  ]
+    .map((issue) => routerIssueRow(emission, store, issue, handles))
+    .sort((left, right) =>
+      `${left.phase}:${left.issueKind}:${left.path ?? ''}:${left.source?.label ?? ''}`
+        .localeCompare(`${right.phase}:${right.issueKind}:${right.path ?? ''}:${right.source?.label ?? ''}`)
+    );
+}
+
 export function readRecognizedRouteRows(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
@@ -301,6 +340,8 @@ function routeConfigRow(
   return {
     projectKey: emission.project.projectKey,
     routeKind: routeConfig.routeKind,
+    originKind: routeConfig.originKind,
+    valueKind: routeConfig.valueKind,
     id: routeConfig.id,
     paths: routeConfig.paths,
     title: routeConfig.title,
@@ -800,6 +841,81 @@ function routeRecognizerStateRow(
   };
 }
 
+function routeRecognizerIssueRow(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  issue: RouteRecognizerIssueModel,
+  handles: boolean,
+): SemanticRouteRecognizerIssueRow {
+  return {
+    projectKey: emission.project.projectKey,
+    issueKind: issue.issueKind,
+    diagnosticAuthority: 'framework-runtime-behavior',
+    frameworkErrorCode: null,
+    frameworkRawErrorAuthority: issue.frameworkRawErrorAuthority?.key ?? null,
+    message: issue.message,
+    path: issue.path,
+    recognizer: routeRecognizerReferenceRow(store, issue.recognizer)!,
+    existingEndpoint: routeRecognizerReferenceRow(store, issue.existingEndpoint),
+    conflictingEndpoint: routeRecognizerReferenceRow(store, issue.conflictingEndpoint),
+    state: routeRecognizerReferenceRow(store, issue.state),
+    source: describeAddress(store, issue.sourceAddressHandle),
+    ...(handles ? {
+      handles: {
+        productHandle: issue.productHandle,
+        identityHandle: issue.identityHandle,
+        recognizerProductHandle: issue.recognizer.productHandle,
+        recognizerIdentityHandle: issue.recognizer.identityHandle,
+        existingEndpointProductHandle: issue.existingEndpoint?.productHandle ?? null,
+        existingEndpointIdentityHandle: issue.existingEndpoint?.identityHandle ?? null,
+        conflictingEndpointProductHandle: issue.conflictingEndpoint?.productHandle ?? null,
+        conflictingEndpointIdentityHandle: issue.conflictingEndpoint?.identityHandle ?? null,
+        stateProductHandle: issue.state?.productHandle ?? null,
+        stateIdentityHandle: issue.state?.identityHandle ?? null,
+        sourceAddressHandle: issue.sourceAddressHandle,
+      },
+    } : {}),
+  };
+}
+
+function routerIssueRow(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  issue: RouterIssueModel,
+  handles: boolean,
+): SemanticRouterIssueRow {
+  return {
+    projectKey: emission.project.projectKey,
+    phase: issue.phase,
+    issueKind: issue.issueKind,
+    diagnosticAuthority: issue.frameworkErrorCode == null ? 'semantic-runtime-product' : 'framework-error-code',
+    frameworkErrorCode: issue.frameworkErrorCode,
+    severity: issue.severity,
+    message: issue.message,
+    property: issue.property,
+    expected: issue.expected,
+    actual: issue.actual,
+    component: issue.component,
+    path: issue.path,
+    redirectTo: issue.redirectTo,
+    unexpectedExpressionKind: issue.unexpectedExpressionKind,
+    routeConfig: routeConfigReferenceRow(store, issue.routeConfig),
+    recognizedRoute: routeRecognizerReferenceRow(store, issue.recognizedRoute),
+    source: describeAddress(store, issue.sourceAddressHandle),
+    ...(handles ? {
+      handles: {
+        productHandle: issue.productHandle,
+        identityHandle: issue.identityHandle,
+        routeConfigProductHandle: issue.routeConfig?.productHandle ?? null,
+        routeConfigIdentityHandle: issue.routeConfig?.identityHandle ?? null,
+        recognizedRouteProductHandle: issue.recognizedRoute?.productHandle ?? null,
+        recognizedRouteIdentityHandle: issue.recognizedRoute?.identityHandle ?? null,
+        sourceAddressHandle: issue.sourceAddressHandle,
+      },
+    } : {}),
+  };
+}
+
 function recognizedRouteRow(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
@@ -897,6 +1013,20 @@ function routerProductReferenceRow(
   }
   return {
     routerKind: reference.routerKind,
+    label: reference.localName,
+    source: describeAddress(store, reference.sourceAddressHandle),
+  };
+}
+
+function routeConfigReferenceRow(
+  store: KernelStore,
+  reference: RouteConfigReference | null,
+): SemanticRouteConfigReferenceRow | null {
+  if (reference == null) {
+    return null;
+  }
+  return {
+    routeKind: reference.routeKind,
     label: reference.localName,
     source: describeAddress(store, reference.sourceAddressHandle),
   };

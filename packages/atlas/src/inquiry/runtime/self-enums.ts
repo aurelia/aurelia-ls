@@ -7,6 +7,7 @@ import type {
   TypeScriptEnumTranslationEvidence,
   TypeScriptEnumTranslationRelation,
   TypeScriptEnumUsageIndex,
+  TypeScriptEnumValueOccurrenceRow,
   TypeScriptEnumValueSpaceRow,
 } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
@@ -88,6 +89,19 @@ export interface AtlasSelfEnumValueSpaceRow {
   readonly summary: string;
 }
 
+/** Exact raw literal occurrence whose value overlaps at least one enum member value. */
+export interface AtlasSelfEnumValueOccurrenceRow {
+  readonly id: string;
+  readonly value: string | number;
+  readonly valueKind: "number" | "string";
+  readonly role: string;
+  readonly text: string;
+  readonly memberNames: readonly string[];
+  readonly contextualMemberNames: readonly string[];
+  readonly source: SourceRange;
+  readonly summary: string;
+}
+
 /** Exact enum-to-enum translation edge. */
 export interface AtlasSelfEnumMappingRow {
   readonly id: string;
@@ -108,6 +122,7 @@ export interface AtlasSelfEnumAnalysis {
   readonly enums: readonly AtlasSelfEnumRow[];
   readonly enumReferences: readonly AtlasSelfEnumReferenceRow[];
   readonly enumValueSpaces: readonly AtlasSelfEnumValueSpaceRow[];
+  readonly enumValueOccurrences: readonly AtlasSelfEnumValueOccurrenceRow[];
   readonly enumMappings: readonly AtlasSelfEnumMappingRow[];
 }
 
@@ -119,6 +134,10 @@ export function buildAtlasSelfEnumAnalysis(
     enums: atlasEnumRows(index),
     enumReferences: atlasEnumReferenceRows(index.memberReferences),
     enumValueSpaces: atlasEnumValueSpaceRows(index.valueSpaces, index),
+    enumValueOccurrences: atlasEnumValueOccurrenceRows(
+      index.valueOccurrences,
+      index,
+    ),
     enumMappings: atlasEnumMappingRows(index.translationEdges),
   };
 }
@@ -220,14 +239,7 @@ function atlasEnumValueSpaceRows(
   rows: readonly TypeScriptEnumValueSpaceRow[],
   index: TypeScriptEnumUsageIndex,
 ): readonly AtlasSelfEnumValueSpaceRow[] {
-  const memberNamesByKey = new Map(
-    index.enumDeclarations.flatMap((enumRow) =>
-      enumRow.members.map((member) => [
-        member.key,
-        `${member.enumName}.${member.memberName}`,
-      ]),
-    ),
-  );
+  const memberNamesByKey = enumMemberNamesByKey(index);
   return rows.map((row) => ({
     id: `atlas-self:enum-value-space:${row.valueKey}`,
     value: row.value,
@@ -247,6 +259,36 @@ function atlasEnumValueSpaceRows(
   }));
 }
 
+function atlasEnumValueOccurrenceRows(
+  rows: readonly TypeScriptEnumValueOccurrenceRow[],
+  index: TypeScriptEnumUsageIndex,
+): readonly AtlasSelfEnumValueOccurrenceRow[] {
+  const memberNamesByKey = enumMemberNamesByKey(index);
+  return rows.map((row) => {
+    const memberNames = row.memberKeys.map(
+      (key) => memberNamesByKey.get(key) ?? key,
+    );
+    const contextualMemberNames = row.contextualMemberKeys.map(
+      (key) => memberNamesByKey.get(key) ?? key,
+    );
+    const contextualSummary =
+      contextualMemberNames.length === 0
+        ? "no checker-backed enum context"
+        : `context narrows to ${contextualMemberNames.join(", ")}`;
+    return {
+      id: `atlas-self:enum-value-occurrence:${row.id}`,
+      value: row.value,
+      valueKind: row.valueKind,
+      role: row.role,
+      text: row.text,
+      memberNames,
+      contextualMemberNames,
+      source: sourceRangeFromFileSpan(row.file.repoPath, row.span),
+      summary: `${row.text} overlaps ${memberNames.join(", ")} as ${row.role}; ${contextualSummary}.`,
+    };
+  });
+}
+
 function atlasEnumMappingRows(
   rows: readonly TypeScriptEnumTranslationEdgeRow[],
 ): readonly AtlasSelfEnumMappingRow[] {
@@ -263,4 +305,17 @@ function atlasEnumMappingRows(
     source: sourceRangeFromFileSpan(row.file.repoPath, row.span),
     summary: row.summary,
   }));
+}
+
+function enumMemberNamesByKey(
+  index: TypeScriptEnumUsageIndex,
+): ReadonlyMap<string, string> {
+  return new Map(
+    index.enumDeclarations.flatMap((enumRow) =>
+      enumRow.members.map((member) => [
+        member.key,
+        `${member.enumName}.${member.memberName}`,
+      ]),
+    ),
+  );
 }

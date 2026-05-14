@@ -376,6 +376,30 @@ function orientationScripts(): readonly OrientationScriptGuide[] {
         "Print compact Atlas source-file, class, function, duplicate-helper, and high-axis-pressure rows before maintenance refactors.",
     },
     {
+      id: "profile:self",
+      command: "pnpm --filter @aurelia-ls/atlas profile:self",
+      summary:
+        "Profile major atlas.self projection timings before cache, split, or phase-boundary work.",
+    },
+    {
+      id: "memory",
+      command: "pnpm --filter @aurelia-ls/atlas memory",
+      summary:
+        "Print queryable Atlas memory: durable intent records joined to live source pressure, stale status, reuse guidance, and path filters.",
+    },
+    {
+      id: "memory:json",
+      command: "pnpm --filter @aurelia-ls/atlas memory:json",
+      summary:
+        "Print the exact atlas.memory answer payload for tools that need machine-readable memory records.",
+    },
+    {
+      id: "memory:next",
+      command: "pnpm --filter @aurelia-ls/atlas memory:next",
+      summary:
+        "Print ranked next actions computed from Atlas memory, stale records, and live source pressure.",
+    },
+    {
       id: "pressure:self:detail",
       command: "pnpm --filter @aurelia-ls/atlas pressure:self:detail",
       summary:
@@ -398,6 +422,24 @@ function orientationScripts(): readonly OrientationScriptGuide[] {
       command: "pnpm --filter @aurelia-ls/atlas pressure:framework-resources",
       summary:
         "Print framework resource convergence, lane, and exact source-site role pressure.",
+    },
+    {
+      id: "pressure:framework-corpus",
+      command: "pnpm --filter @aurelia-ls/atlas pressure:framework-corpus",
+      summary:
+        "Print compact public Aurelia docs, tests, and legacy replacement corpus pressure.",
+    },
+    {
+      id: "framework:corpus",
+      command: "pnpm --filter @aurelia-ls/atlas framework:corpus -- --projection=doc-snippets --concept=forms",
+      summary:
+        "Query framework.corpus docs/test/legacy rows for targeted fixture and authoring seeds.",
+    },
+    {
+      id: "pressure:framework-observation",
+      command: "pnpm --filter @aurelia-ls/atlas pressure:framework-observation",
+      summary:
+        "Print framework observer, binding-lookup, binding-setup, flow-site, and observation relationship pressure.",
     },
     {
       id: "pressure:bridge-aulink",
@@ -554,6 +596,18 @@ function orientationCapabilityMoves(): readonly OrientationCapabilityMove[] {
       },
     },
     {
+      id: "framework.observation",
+      family: "framework",
+      summary:
+        "Inspect observer entities, binding observer lookups/setups, observation flow sites, and flow-to-entity relationships before semantic-runtime observer work.",
+      ask: {
+        lens: LensId.FrameworkObservation,
+        locus: RepoRootLocus,
+        projection: "summary",
+        budget: { rows: 30, evidencePerSubject: 3 },
+      },
+    },
+    {
       id: "workspace.architecture",
       family: "repo",
       summary:
@@ -678,6 +732,18 @@ function orientationCapabilityMoves(): readonly OrientationCapabilityMove[] {
         projection: "axis-pressure",
         filters: { pressure: "high" },
         budget: { rows: 12, evidencePerSubject: 2 },
+      },
+    },
+    {
+      id: "atlas.memory",
+      family: "self",
+      summary:
+        "Inspect durable agent/maintainer memory joined to live source pressure before relying on markdown workbenches.",
+      ask: {
+        lens: LensId.AtlasMemory,
+        locus: RepoRootLocus,
+        projection: "summary",
+        budget: { rows: 20, evidencePerSubject: 3 },
       },
     },
   ];

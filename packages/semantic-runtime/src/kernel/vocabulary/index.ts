@@ -64,6 +64,21 @@ export const KernelVocabulary = {
   I18n: {
     ...KernelProductKinds.I18n,
   },
+  State: {
+    ...KernelProductKinds.State,
+  },
+  Validation: {
+    ...KernelProductKinds.Validation,
+  },
+  FetchClient: {
+    ...KernelProductKinds.FetchClient,
+  },
+  Dialog: {
+    ...KernelProductKinds.Dialog,
+  },
+  Observation: {
+    ...KernelProductKinds.Observation,
+  },
   Compiler: {
     ...KernelOpenSeamKinds.Compiler,
     ...KernelBindingKinds.Compiler,

@@ -127,6 +127,7 @@ export class TemplateResourceRuntimeAnalysisEmission {
 
 export type TemplateCompilationProjectPhaseName =
   | 'component-compiler-world'
+  | 'authoring-compiler-world'
   | 'compilation-unit'
   | 'html-parse'
   | 'attribute-syntax'
@@ -191,6 +192,7 @@ export class TemplateCompilationProjectEmission {
  */
 export class TemplateCompilationProjectPass {
   private readonly compilerWorldMaterializer: TemplateCompilerWorldMaterializer;
+  private readonly authoringCompilerWorldMaterializer: TemplateAuthoringCompilerWorldMaterializer;
   private readonly unitMaterializer: TemplateCompilationUnitMaterializer;
   private readonly htmlParser: HtmlParseMaterializer;
   private readonly attributeSyntax: AttributeSyntaxMaterializer;
@@ -205,6 +207,7 @@ export class TemplateCompilationProjectPass {
     readonly store: KernelStore,
   ) {
     this.compilerWorldMaterializer = new TemplateCompilerWorldMaterializer(store);
+    this.authoringCompilerWorldMaterializer = new TemplateAuthoringCompilerWorldMaterializer(store);
     this.unitMaterializer = new TemplateCompilationUnitMaterializer(store);
     this.htmlParser = new HtmlParseMaterializer(store);
     this.attributeSyntax = new AttributeSyntaxMaterializer(store);
@@ -355,10 +358,11 @@ export class TemplateCompilationProjectPass {
     }
     const compilerWorld = measureTemplateCompilationPhase(
       phases,
-      'component-compiler-world',
-      () => new TemplateAuthoringCompilerWorldMaterializer(this.store).construct({
+      'authoring-compiler-world',
+      () => this.authoringCompilerWorldMaterializer.construct({
         projectKey,
         resourceDefinitions: definitions,
+        typeSystem,
       }),
     );
     if (compilerWorld == null) {
@@ -438,6 +442,8 @@ export class TemplateCompilationProjectPass {
       parentCompilerWorld.runtimeRenderers,
       TemplateResourceVisibilityKind.Configured,
       definition.sourceAddressHandle,
+      parentCompilerWorld.attributeMapper.configuration,
+      parentCompilerWorld.nodeObserverLocatorConfiguration,
     ));
   }
 
@@ -840,17 +846,18 @@ function definitionBelongsToAuthoringSourceFile(
 }
 
 function templateRuntimeAnalysisProjectContext(
-  compilations: readonly TemplateResourceCompilationEmission[],
-): TemplateRuntimeAnalysisProjectContext {
-  return new TemplateRuntimeAnalysisProjectContext(compilations.flatMap((compilation) =>
-    compilation.definition.productHandle == null
-      ? []
-      : [new TemplateRuntimeAnalysisResource(
-        compilation.definition.productHandle,
-        compilation.compiledTemplate.compiledTemplate.productHandle,
-      )]
-  ));
-}
+    compilations: readonly TemplateResourceCompilationEmission[],
+  ): TemplateRuntimeAnalysisProjectContext {
+    return new TemplateRuntimeAnalysisProjectContext(compilations.flatMap((compilation) =>
+      compilation.definition.productHandle == null
+        ? []
+        : [new TemplateRuntimeAnalysisResource(
+          compilation.definition.productHandle,
+          compilation.compiledTemplate.compiledTemplate.productHandle,
+          compilation.compiledTemplate,
+        )]
+    ));
+  }
 
 function templateResourceCompilationLocalKey(
   worldIndex: number,

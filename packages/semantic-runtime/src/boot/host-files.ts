@@ -45,6 +45,22 @@ export function readPackageName(packageRoot: string): string | null {
     : null;
 }
 
+export function readPackageWorkspacePatterns(
+  manifest: BootPackageManifest | null,
+): readonly string[] {
+  const workspaces = manifest?.workspaces;
+  if (Array.isArray(workspaces)) {
+    return workspaces.filter((value): value is string => typeof value === 'string');
+  }
+  if (workspaces != null && typeof workspaces === 'object') {
+    const packages = (workspaces as { readonly packages?: unknown }).packages;
+    if (Array.isArray(packages)) {
+      return packages.filter((value): value is string => typeof value === 'string');
+    }
+  }
+  return [];
+}
+
 export function hasPackageManifest(directory: string): boolean {
   return existsSync(path.join(directory, 'package.json'));
 }
@@ -67,4 +83,16 @@ export function safeIsDirectory(directory: string): boolean {
 
 export function normalizePosixPath(fileName: string): string {
   return path.normalize(fileName).replace(/\\/g, '/');
+}
+
+export function sameHostPath(left: string, right: string): boolean {
+  return normalizePosixPath(path.resolve(left)).toLowerCase() === normalizePosixPath(path.resolve(right)).toLowerCase();
+}
+
+export function isHostPathWithin(fileName: string, rootDir: string): boolean {
+  const relativePath = path.relative(path.resolve(rootDir), path.resolve(fileName));
+  return (
+    relativePath === ''
+    || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath))
+  );
 }

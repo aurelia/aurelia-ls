@@ -1,6 +1,7 @@
 import ts from "typescript";
 
 import {
+  calleeNameForExpression,
   propertyNameText,
   unwrapExpression,
 } from "../../source/index.js";
@@ -83,6 +84,16 @@ export interface ProductArchitectureKernelRecordBatchRow {
 export interface ProductArchitectureFieldProvenanceConstructionRow {
   /** Stable row id. */
   readonly id: string;
+  /** Syntax form that produced the field provenance row. */
+  readonly constructionKind: "new-expression" | "fieldProvenanceEntries-call";
+  /** Field source inside the construction form, used to separate exact fields from helper fan-out. */
+  readonly fieldNameOrigin:
+    | "constructor-argument"
+    | "array-literal-element"
+    | "array-conditional-element"
+    | "array-spread-element"
+    | "array-dynamic-element"
+    | "dynamic-field-collection";
   /** Expression supplying the product field name. */
   readonly fieldNameExpression: string | null;
   /** Literal product field name when statically present. */
@@ -267,7 +278,7 @@ function kernelRecordSourceRows(
     const visit = (node: ts.Node, context: SourceVisitContext): void => {
       const nodeContext = productArchitectureContextForNode(node, context, entry.sourceFile);
       if (ts.isNewExpression(node)) {
-        const constructorName = constructorNameForNewExpression(node, entry.sourceFile);
+        const constructorName = visibleInvocationName(node, entry.sourceFile);
         const row = kernelRecordConstructionRowForNewExpression(
           entry,
           node,
@@ -284,6 +295,11 @@ function kernelRecordSourceRows(
         if (constructorName === "FieldProvenance") {
           fieldProvenanceConstructions.push(fieldProvenanceConstructionRow(entry, node, nodeContext));
         }
+      } else if (
+        ts.isCallExpression(node) &&
+        visibleInvocationName(node, entry.sourceFile) === "fieldProvenanceEntries"
+      ) {
+        fieldProvenanceConstructions.push(...fieldProvenanceRowsForHelperCall(entry, node, nodeContext));
       } else if (ts.isObjectLiteralExpression(node)) {
         const row = kernelRecordConstructionRowForObjectLiteral(
           entry,
@@ -338,6 +354,8 @@ function fieldProvenanceConstructionRow(
     : compactSourceExpressionText(provenanceArgument, entry.sourceFile);
   return {
     id: `product.arch:field-provenance:${entry.filePath}:${node.getStart(entry.sourceFile)}`,
+    constructionKind: "new-expression",
+    fieldNameOrigin: "constructor-argument",
     fieldNameExpression,
     fieldNameLiteral,
     provenanceExpression,
@@ -348,6 +366,131 @@ function fieldProvenanceConstructionRow(
     source,
     summary: fieldProvenanceConstructionSummary(entry.area, context, fieldNameExpression),
   };
+}
+
+interface FieldProvenanceFieldCandidate {
+  readonly node: ts.Node;
+  readonly fieldNameExpression: string | null;
+  readonly fieldNameLiteral: string | null;
+  readonly fieldNameOrigin: ProductArchitectureFieldProvenanceConstructionRow["fieldNameOrigin"];
+}
+
+function fieldProvenanceRowsForHelperCall(
+  entry: ProductArchitectureKernelRecordSourceFile,
+  node: ts.CallExpression,
+  context: SourceVisitContext,
+): readonly ProductArchitectureFieldProvenanceConstructionRow[] {
+  const fieldArgument = node.arguments[0];
+  const provenanceArgument = node.arguments[1];
+  const provenanceExpression = provenanceArgument === undefined
+    ? null
+    : compactSourceExpressionText(provenanceArgument, entry.sourceFile);
+  const candidates = fieldProvenanceFieldCandidatesForArgument(
+    entry,
+    fieldArgument,
+  );
+  return candidates.map((candidate, index) => {
+    const source = sourceReferenceForEntryNode(entry, candidate.node);
+    return {
+      id: `product.arch:field-provenance:${entry.filePath}:${node.getStart(entry.sourceFile)}:${index}`,
+      constructionKind: "fieldProvenanceEntries-call",
+      fieldNameOrigin: candidate.fieldNameOrigin,
+      fieldNameExpression: candidate.fieldNameExpression,
+      fieldNameLiteral: candidate.fieldNameLiteral,
+      provenanceExpression,
+      filePath: entry.filePath,
+      area: entry.area,
+      ownerClassName: context.className,
+      ownerFunctionName: context.functionName,
+      source,
+      summary: fieldProvenanceConstructionSummary(
+        entry.area,
+        context,
+        candidate.fieldNameExpression,
+      ),
+    };
+  });
+}
+
+function fieldProvenanceFieldCandidatesForArgument(
+  entry: ProductArchitectureKernelRecordSourceFile,
+  fieldArgument: ts.Expression | undefined,
+): readonly FieldProvenanceFieldCandidate[] {
+  if (fieldArgument === undefined) {
+    return [{
+      node: entry.sourceFile,
+      fieldNameExpression: null,
+      fieldNameLiteral: null,
+      fieldNameOrigin: "dynamic-field-collection",
+    }];
+  }
+  const current = unwrapExpression(fieldArgument);
+  if (!ts.isArrayLiteralExpression(current)) {
+    return [{
+      node: current,
+      fieldNameExpression: compactSourceExpressionText(current, entry.sourceFile),
+      fieldNameLiteral: literalStringExpressionText(current),
+      fieldNameOrigin: "dynamic-field-collection",
+    }];
+  }
+
+  return current.elements.flatMap((element) =>
+    fieldProvenanceFieldCandidatesForArrayElement(entry, element)
+  );
+}
+
+function fieldProvenanceFieldCandidatesForArrayElement(
+  entry: ProductArchitectureKernelRecordSourceFile,
+  element: ts.Expression | ts.SpreadElement,
+): readonly FieldProvenanceFieldCandidate[] {
+  if (ts.isSpreadElement(element)) {
+    return [{
+      node: element,
+      fieldNameExpression: compactSourceExpressionText(element, entry.sourceFile),
+      fieldNameLiteral: null,
+      fieldNameOrigin: "array-spread-element",
+    }];
+  }
+  return fieldProvenanceFieldCandidatesForExpression(
+    entry,
+    element,
+    "array-literal-element",
+  );
+}
+
+function fieldProvenanceFieldCandidatesForExpression(
+  entry: ProductArchitectureKernelRecordSourceFile,
+  expression: ts.Expression,
+  origin: ProductArchitectureFieldProvenanceConstructionRow["fieldNameOrigin"],
+): readonly FieldProvenanceFieldCandidate[] {
+  const current = unwrapExpression(expression);
+  if (isNullishExpression(current)) {
+    return [];
+  }
+  if (ts.isConditionalExpression(current)) {
+    return [
+      ...fieldProvenanceFieldCandidatesForExpression(
+        entry,
+        current.whenTrue,
+        "array-conditional-element",
+      ),
+      ...fieldProvenanceFieldCandidatesForExpression(
+        entry,
+        current.whenFalse,
+        "array-conditional-element",
+      ),
+    ];
+  }
+
+  const literal = literalStringExpressionText(current);
+  return [{
+    node: current,
+    fieldNameExpression: compactSourceExpressionText(current, entry.sourceFile),
+    fieldNameLiteral: literal,
+    fieldNameOrigin: literal === null && origin === "array-literal-element"
+      ? "array-dynamic-element"
+      : origin,
+  }];
 }
 
 function kernelRecordBatchRow(
@@ -423,6 +566,17 @@ function literalStringExpressionText(expression: ts.Expression): string | null {
     return current.text;
   }
   return null;
+}
+
+function isNullishExpression(expression: ts.Expression): boolean {
+  const current = unwrapExpression(expression);
+  return current.kind === ts.SyntaxKind.NullKeyword ||
+    (ts.isIdentifier(current) && current.text === "undefined") ||
+    (
+      ts.isVoidExpression(current) &&
+      ts.isNumericLiteral(current.expression) &&
+      current.expression.text === "0"
+    );
 }
 
 function kernelRecordBatchSummary(
@@ -543,18 +697,15 @@ function kernelRecordConstructionRowForObjectLiteral(
   };
 }
 
-function constructorNameForNewExpression(
-  node: ts.NewExpression,
+function visibleInvocationName(
+  node: ts.CallExpression | ts.NewExpression,
   sourceFile: ts.SourceFile,
 ): string | null {
-  const expression = unwrapExpression(node.expression);
-  if (ts.isIdentifier(expression)) {
-    return expression.text;
-  }
-  if (ts.isPropertyAccessExpression(expression)) {
-    return expression.name.text;
-  }
-  return expression.getText(sourceFile);
+  return calleeNameForExpression(
+    node.expression,
+    sourceFile,
+    node.expression.getText(sourceFile),
+  );
 }
 
 function objectLiteralStringValue(

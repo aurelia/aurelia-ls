@@ -1,8 +1,7 @@
 import { SemanticClaim } from '../kernel/claim.js';
-import type { ProductHandle, EvidenceHandle, ProvenanceHandle } from '../kernel/handles.js';
+import type { ProductHandle } from '../kernel/handles.js';
 import { InstructionIdentity } from '../kernel/identity.js';
 import { MaterializedProduct } from '../kernel/materialization.js';
-import { compactFieldProvenance, FieldProvenance } from '../kernel/provenance.js';
 import type { KernelStore, KernelStoreRecord } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
@@ -52,17 +51,31 @@ import {
   TemplateValueSitePublicationRequest,
   TemplateValueSitePublisher,
 } from './value-site-publication.js';
-
-export class RuntimeRenderingSourceSet {
-  constructor(
-    readonly records: readonly KernelStoreRecord[],
-    readonly evidenceHandle: EvidenceHandle,
-    readonly provenanceHandle: ProvenanceHandle,
-  ) {}
-}
+import type { RuntimeRenderingSourceSet } from './runtime-rendering-source.js';
+import {
+  RuntimeHtmlBindingFrameworkErrorCode,
+  TemplateCompilerFrameworkErrorCode,
+} from './framework-error-code.js';
+import {
+  TemplateCompilerIssueKind,
+  TemplateCompilerIssuePhase,
+} from './compiler-issue.js';
+import {
+  TemplateCompilerIssuePublisher,
+} from './compiler-issue-publication.js';
+import {
+  RuntimeBindingIssueKind,
+  RuntimeBindingIssuePhase,
+  RuntimeBindingIssuePublisher,
+} from './runtime-binding-issue.js';
+import type { RuntimeBindingIssue } from './runtime-binding-issue.js';
+import type {
+  SpreadBinding,
+} from './runtime-binding.js';
 
 export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompilerSpreadCompileHost {
   private readonly valueSitePublisher: TemplateValueSitePublisher;
+  private readonly compilerIssuePublisher: TemplateCompilerIssuePublisher;
   private instructionIndex = 0;
   private expressionIndex = 0;
 
@@ -70,12 +83,16 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     private readonly store: KernelStore,
     private readonly world: TemplateCompilerWorldEmission,
     private readonly source: RuntimeRenderingSourceSet,
+    private readonly bindingIssuePublisher: RuntimeBindingIssuePublisher,
+    private readonly bindingOwner: SpreadBinding,
     private readonly records: KernelStoreRecord[],
+    private readonly bindingIssues: RuntimeBindingIssue[],
     private readonly dynamicInstructions: TemplateInstruction[],
     private readonly dynamicValueSites: TemplateValueSite[],
     private readonly dynamicExpressionParses: TemplateExpressionParse[],
   ) {
     this.valueSitePublisher = new TemplateValueSitePublisher(store);
+    this.compilerIssuePublisher = new TemplateCompilerIssuePublisher(store);
   }
 
   compileSpread(
@@ -123,7 +140,6 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
           targetNode.toReference(),
           syntax.attribute,
           syntax.sourceAddressHandle,
-          this.fieldProvenance(['node', 'attribute', 'source']),
         ));
       return instructionSet([instruction]);
     }
@@ -152,7 +168,8 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       : null;
     if (attributeDefinition != null) {
       if (attributeDefinition.isTemplateController) {
-        return `TemplateCompiler.compileSpread does not allow captured template controller '${target}' to be spread onto '${targetNode.tagName}'.`;
+        this.publishSpreadTemplateControllerIssue(request, syntax, target, targetNode);
+        return `SpreadBinding.addChild does not allow captured template controller '${target}' to be spread onto '${targetNode.tagName}'.`;
       }
       const props = command == null
         ? instructionSet([this.customAttributeValueInstruction(request, syntax, targetNode, attributeDefinition.defaultProperty)])
@@ -170,7 +187,6 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
           this.world.templateCompiler.resolveResources ? attributeDefinition.productHandle : null,
           props.rootInstructions.map((prop) => prop.productHandle),
           syntax.sourceAddressHandle,
-          this.fieldProvenance(['node', 'attribute', 'resource', 'instructions', 'source']),
         ));
       return {
         rootInstructions: [instruction],
@@ -240,7 +256,6 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
           targetProperty,
           syntax.rawValue,
           syntax.sourceAddressHandle,
-          this.fieldProvenance(['node', 'attribute', 'target', 'value', 'source']),
         ));
     }
     return this.createInstruction(request, syntax, TemplateInstructionKind.Interpolation, 'interpolation',
@@ -252,7 +267,6 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
         targetProperty,
         [parse.productHandle],
         syntax.sourceAddressHandle,
-        this.fieldProvenance(['node', 'attribute', 'target', 'expression', 'source']),
       ));
   }
 
@@ -273,7 +287,6 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
           targetProperty,
           syntax.rawValue,
           syntax.sourceAddressHandle,
-          this.fieldProvenance(['node', 'attribute', 'target', 'value', 'source']),
         ));
     }
     return this.createInstruction(request, syntax, TemplateInstructionKind.Interpolation, 'custom-attribute-interpolation',
@@ -285,7 +298,6 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
         targetProperty,
         [parse.productHandle],
         syntax.sourceAddressHandle,
-        this.fieldProvenance(['node', 'attribute', 'target', 'expression', 'source']),
       ));
   }
 
@@ -306,7 +318,6 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
           mappedTarget,
           [parse.productHandle],
           syntax.sourceAddressHandle,
-          this.fieldProvenance(['node', 'attribute', 'target', 'expression', 'source']),
         ));
     }
     if (syntax.target === 'class') {
@@ -318,7 +329,6 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
           syntax.attribute,
           syntax.rawValue,
           syntax.sourceAddressHandle,
-          this.fieldProvenance(['node', 'attribute', 'value', 'source']),
         ));
     }
     if (syntax.target === 'style') {
@@ -330,7 +340,6 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
           syntax.attribute,
           syntax.rawValue,
           syntax.sourceAddressHandle,
-          this.fieldProvenance(['node', 'attribute', 'value', 'source']),
         ));
     }
     return this.createInstruction(request, syntax, TemplateInstructionKind.SetAttribute, 'set-attribute',
@@ -342,7 +351,6 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
         syntax.target,
         syntax.rawValue,
         syntax.sourceAddressHandle,
-        this.fieldProvenance(['node', 'attribute', 'target', 'value', 'source']),
       ));
   }
 
@@ -361,13 +369,49 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
           syntax.attribute,
           inner.productHandle,
           syntax.sourceAddressHandle,
-          this.fieldProvenance(['node', 'attribute', 'instructions', 'source']),
         ))
     );
     return {
       rootInstructions: wrappers,
       createdInstructions: [...wrappers, ...innerInstructions],
     };
+  }
+
+  private publishSpreadTemplateControllerIssue(
+    request: TemplateCompilerSpreadCompileRequest,
+    syntax: AttributeSyntax,
+    target: string,
+    targetNode: HtmlElement,
+  ): void {
+    const compilerIssue = this.compilerIssuePublisher.publish(
+      `${request.localKey}:issue:template-compiler:no-spread-template-controller:${syntax.productHandle}`,
+      this.world.templateCompiler.identityHandle,
+      this.source.provenanceHandle,
+      TemplateCompilerIssuePhase.SpreadCompile,
+      TemplateCompilerIssueKind.NoSpreadTemplateController,
+      `TemplateCompiler.compileSpread cannot admit captured template controller "${target}" on "${targetNode.tagName}".`,
+      TemplateCompilerFrameworkErrorCode.NoSpreadTemplateController,
+      syntax.sourceAddressHandle,
+    );
+    const publication = this.bindingIssuePublisher.publish(
+      `${request.localKey}:issue:no-spread-template-controller:${syntax.productHandle}`,
+      this.bindingOwner.toReference(),
+      this.bindingOwner.identityHandle,
+      this.source.provenanceHandle,
+      RuntimeBindingIssuePhase.SpreadChildAdmission,
+      RuntimeBindingIssueKind.SpreadTemplateControllerUnsupported,
+      `SpreadBinding.addChild cannot admit captured template controller "${target}" on "${targetNode.tagName}".`,
+      RuntimeHtmlBindingFrameworkErrorCode.NoSpreadTemplateController,
+      syntax.sourceAddressHandle,
+    );
+    this.records.push(...compilerIssue.records);
+    this.records.push(...publication.records);
+    this.store.productDetails.add(
+      TemplateProductDetails.CompilerIssue,
+      compilerIssue.issue.productHandle,
+      compilerIssue.issue,
+    );
+    this.bindingIssues.push(publication.issue);
   }
 
   allocateInstruction(
@@ -513,13 +557,6 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
       : asElement.rawValue.toLowerCase();
   }
 
-  fieldProvenance<TField extends string>(
-    fields: readonly (TField | null)[],
-  ): readonly FieldProvenance<TField>[] {
-    return compactFieldProvenance(fields.map((field) =>
-      field == null ? null : new FieldProvenance(field, this.source.provenanceHandle)
-    ));
-  }
 }
 
 interface SpreadCommandMatch {

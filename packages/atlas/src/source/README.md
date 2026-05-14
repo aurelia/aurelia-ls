@@ -15,7 +15,7 @@ runtime exports.
   `tsconfig.json`, skips dependency/build directories, and keeps external paths outside durable repo docs.
 - Keep source epoch identities non-extractive. `SourceProject.identity()` reports package/admission counts, not package
   ids or external package names, so daemon status and source-host profile logs can stay useful during clean-room runs
-  without recording proprietary structure.
+  without recording external app structure.
 - Keep a hot TypeScript `Program`, `TypeChecker`, LanguageService, file index, declaration index, and top-level
   declaration index in the daemon process. `SourceProject` is an immutable source epoch: it materializes the
   LanguageService `Program` and `TypeChecker` once during construction, then returns those fixed objects from its
@@ -24,6 +24,9 @@ runtime exports.
   versions, snapshots, host reads, existence checks, directory checks, and realpath answers for the immutable source
   epoch; `SourceProject` should coordinate it, not absorb its implementation details.
 - Normalize file, span, declaration, symbol, and package identities into source-level records.
+- Treat exported destructuring as multiple declaration rows, not one broad pattern-shaped declaration. For example,
+  `export const { value } = ...` should expose `value` as a top-level variable row with a binding-name span so
+  framework bridges such as `auLink` can resolve destructured Aurelia exports with exact provenance.
 - Treat source identity as a real invariant. Lenses that walk admitted source should use
   `SourceProject.requiredSourceFileIdentity(...)`; call sites that already hold a `SourceFileIdentity` should use
   `SourceProject.requiredSourceFileForIdentity(...)` to recover the source file. Semantic-surface source-range helpers
@@ -31,6 +34,9 @@ runtime exports.
   files outside an admitted package carry `packageId: null`, so TypeScript LanguageService adapters do not need to
   synthesize source identities from paths when tsserver returns lib or external files. LanguageService edit plans can
   still name transient new-file paths, but those should be explicit edit targets rather than source-file fallbacks.
+- Read source text for repository-local non-Program evidence such as Aurelia docs and framework tests through
+  `SourceProject.readTextFile(...)`. `ts.source` may inspect those files and exact ranges, but TypeChecker,
+  LanguageService, structure, diagnostics, and refactor projections remain Program-only.
 - Attribute files to the most-specific admitted package root so nested monorepo packages are not swallowed by a parent
   workspace package.
 - Preserve package admission role strongly enough that higher lenses such as `workspace.architecture` can distinguish
@@ -69,7 +75,11 @@ runtime exports.
   and AST walking primitives that multiple higher lenses can share without inventing local compatibility layers.
 - Expose package-scoped enum usage indexes: enum/member declarations, exact `Enum.Member` reference sites, raw literal
   value-space overlap, and exact enum-to-enum translation edges. This is source substrate, not `atlas.self`
-  diagnostics; higher lenses decide what the value-space pressure means.
+  diagnostics; higher lenses decide what the value-space pressure means. Exact unambiguous `Enum.Member` text is a
+  fast-path because the index already admits that syntactic fallback; aliases, ambiguous members, and raw enum-like
+  literals stay TypeChecker-backed. In `profile:self`, the remaining enum pressure should usually be read as
+  raw-literal contextual narrowing (`call-argument`, `comparison`, `object-value`, etc.), not member-reference symbol
+  resolution.
 - Build source-index bases such as `auLink` anchors and framework discovery seeds on demand within the current
   source-project epoch. auLink framework target rows preserve raw candidate lists and also expose type/value
   composition (`interface-class-pair`, `interface-variable-pair`, etc.) plus preferred type/value candidates. Declaration

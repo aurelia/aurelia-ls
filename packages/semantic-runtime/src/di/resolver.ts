@@ -13,17 +13,39 @@ import type {
   RegistrationValueReference,
 } from '../registration/registration-reference.js';
 import type { Container } from './container.js';
+import {
+  containerLookupKeyForRegistrationValue,
+} from './container-key.js';
 import type {
   ContainerFactoryLookup,
   ContainerResolverLookup,
 } from './container-lookup.js';
 import type { ContainerResolverSlot } from './container-slot.js';
+import {
+  DiFrameworkErrorCode,
+  type DiFrameworkErrorCode as DiFrameworkErrorCodeValue,
+} from './framework-error-code.js';
 
 export type ResolverField =
   | '_key'
   | '_strategy'
   | '_state'
   | 'source';
+
+export const enum ResolverStrategy {
+  /** Return the resolver state directly. */
+  instance = 0,
+  /** Lazily construct once, then replace the resolver state with the instance. */
+  singleton = 1,
+  /** Construct a new instance from the resolver state on each resolution. */
+  transient = 2,
+  /** Invoke the resolver state as a callback. Cached callbacks are still this runtime strategy. */
+  callback = 3,
+  /** Delegate to the first resolver in an array resolver. */
+  array = 4,
+  /** Redirect resolution through the requestor container. */
+  alias = 5,
+}
 
 export const enum ResolverResolutionKind {
   /** Resolver returns a modeled value directly. */
@@ -44,6 +66,8 @@ export const enum ResolverResolutionKind {
   Open = 'open',
   /** Singleton resolution re-entered while already resolving. */
   Cyclic = 'cyclic',
+  /** Resolver carried a strategy value outside Aurelia's ResolverStrategy enum. */
+  InvalidStrategy = 'invalid-strategy',
 }
 
 export class ResolverResolution {
@@ -65,6 +89,24 @@ export class ResolverResolution {
     /** Alias lookup that would be used by alias resolution. */
     readonly aliasLookup: ContainerResolverLookup | null,
   ) {}
+
+  get frameworkErrorCode(): DiFrameworkErrorCodeValue | null {
+    switch (this.resolutionKind) {
+      case ResolverResolutionKind.Cyclic:
+        return DiFrameworkErrorCode.CyclicDependency;
+      case ResolverResolutionKind.InvalidStrategy:
+        return DiFrameworkErrorCode.InvalidResolverStrategy;
+      case ResolverResolutionKind.Instance:
+      case ResolverResolutionKind.SingletonFactory:
+      case ResolverResolutionKind.TransientFactory:
+      case ResolverResolutionKind.Callback:
+      case ResolverResolutionKind.CachedCallback:
+      case ResolverResolutionKind.Alias:
+      case ResolverResolutionKind.Array:
+      case ResolverResolutionKind.Open:
+        return null;
+    }
+  }
 }
 
 /**
@@ -74,7 +116,7 @@ export class ResolverResolution {
 @auLink('kernel:Resolver')
 export class Resolver {
   _key: RegistrationKeyReference;
-  _strategy: RegistrationStrategy;
+  _strategy: ResolverStrategy | number | null;
   _state: RegistrationValueReference | null;
 
   private _resolving = false;
@@ -88,7 +130,7 @@ export class Resolver {
     /** DI key carried by the resolver. */
     key: RegistrationKeyReference,
     /** Runtime resolver strategy. */
-    strategy: RegistrationStrategy,
+    strategy: ResolverStrategy | number | null,
     /** Runtime resolver state, when it has a modeled source-level carrier. */
     state: RegistrationValueReference | null,
     /** Source address for the resolver-producing expression or declaration. */
@@ -116,7 +158,7 @@ export class Resolver {
   /** Runtime `resolve(handler, requestor)` shape represented as an answer record. */
   resolve(handler: Container, requestor: Container): ResolverResolution {
     switch (this._strategy) {
-      case RegistrationStrategy.Instance:
+      case ResolverStrategy.instance:
         return new ResolverResolution(
           ResolverResolutionKind.Instance,
           this,
@@ -126,7 +168,7 @@ export class Resolver {
           null,
           null,
         );
-      case RegistrationStrategy.Singleton:
+      case ResolverStrategy.singleton:
         if (this._resolving) {
           return new ResolverResolution(
             ResolverResolutionKind.Cyclic,
@@ -150,7 +192,7 @@ export class Resolver {
           this._cachedFactory,
           null,
         );
-      case RegistrationStrategy.Transient:
+      case ResolverStrategy.transient:
         return new ResolverResolution(
           ResolverResolutionKind.TransientFactory,
           this,
@@ -160,7 +202,7 @@ export class Resolver {
           this.getFactory(handler),
           null,
         );
-      case RegistrationStrategy.Callback:
+      case ResolverStrategy.callback:
         return new ResolverResolution(
           ResolverResolutionKind.Callback,
           this,
@@ -170,17 +212,7 @@ export class Resolver {
           null,
           null,
         );
-      case RegistrationStrategy.CachedCallback:
-        return new ResolverResolution(
-          ResolverResolutionKind.CachedCallback,
-          this,
-          handler,
-          requestor,
-          this._state,
-          null,
-          null,
-        );
-      case RegistrationStrategy.AliasTo:
+      case ResolverStrategy.alias:
         return new ResolverResolution(
           ResolverResolutionKind.Alias,
           this,
@@ -188,9 +220,9 @@ export class Resolver {
           requestor,
           this._state,
           null,
-          this._state?.identityHandle == null ? null : requestor.get(this._state.identityHandle),
+          requestorLookupForRegistrationValue(requestor, this._state),
         );
-      case RegistrationStrategy.Array:
+      case ResolverStrategy.array:
         return new ResolverResolution(
           ResolverResolutionKind.Array,
           this,
@@ -200,9 +232,19 @@ export class Resolver {
           null,
           null,
         );
-      default:
+      case null:
         return new ResolverResolution(
           ResolverResolutionKind.Open,
+          this,
+          handler,
+          requestor,
+          this._state,
+          null,
+          null,
+        );
+      default:
+        return new ResolverResolution(
+          ResolverResolutionKind.InvalidStrategy,
           this,
           handler,
           requestor,
@@ -216,13 +258,59 @@ export class Resolver {
   /** Runtime `getFactory(container)` shape over the product container's factory map. */
   getFactory(container: Container): ContainerFactoryLookup | null {
     switch (this._strategy) {
-      case RegistrationStrategy.Singleton:
-      case RegistrationStrategy.Transient:
-        return this._state?.identityHandle == null ? null : container.getFactory(this._state.identityHandle);
-      case RegistrationStrategy.Instance:
+      case ResolverStrategy.singleton:
+      case ResolverStrategy.transient:
+        return factoryLookupForRegistrationValue(container, this._state);
+      case ResolverStrategy.instance:
         return this._cachedFactory;
       default:
         return null;
     }
   }
+}
+
+export function resolverStrategyForRegistrationStrategy(
+  strategy: RegistrationStrategy,
+): ResolverStrategy | null {
+  switch (strategy) {
+    case RegistrationStrategy.Instance:
+      return ResolverStrategy.instance;
+    case RegistrationStrategy.Singleton:
+      return ResolverStrategy.singleton;
+    case RegistrationStrategy.Transient:
+      return ResolverStrategy.transient;
+    case RegistrationStrategy.Callback:
+    case RegistrationStrategy.CachedCallback:
+      return ResolverStrategy.callback;
+    case RegistrationStrategy.AliasTo:
+      return ResolverStrategy.alias;
+    case RegistrationStrategy.Array:
+      return ResolverStrategy.array;
+    case RegistrationStrategy.Unknown:
+    case RegistrationStrategy.Defer:
+    case RegistrationStrategy.Registry:
+    case RegistrationStrategy.Resource:
+    case RegistrationStrategy.PlainClassSelf:
+    case RegistrationStrategy.ObjectMap:
+    case RegistrationStrategy.Resolver:
+    case RegistrationStrategy.Factory:
+    case RegistrationStrategy.FrameworkGroup:
+      return null;
+  }
+}
+
+function requestorLookupForRegistrationValue(
+  requestor: Container,
+  value: RegistrationValueReference | null,
+): ContainerResolverLookup | null {
+  const key = containerLookupKeyForRegistrationValue(value);
+  return key == null ? null : requestor.get(key);
+}
+
+function factoryLookupForRegistrationValue(
+  container: Container,
+  value: RegistrationValueReference | null,
+): ContainerFactoryLookup | null {
+  const key = containerLookupKeyForRegistrationValue(value);
+  return key == null ? null : container.getFactory(key);
 }

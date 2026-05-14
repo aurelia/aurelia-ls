@@ -7,7 +7,7 @@ import {
   sourceTextBasis,
   type Basis,
 } from "../basis.js";
-import { clampBudget } from "../budget.js";
+import { clampBudget, type PageInfo } from "../budget.js";
 import {
   ContinuationKind,
   ContinuationPriority,
@@ -128,6 +128,10 @@ export interface TsSourceValue {
   readonly targetCount: number;
   /** Number of candidates before occurrence slicing. */
   readonly candidateCount: number;
+  /** Number of targets backed by the TypeScript Program. */
+  readonly programTargetCount: number;
+  /** Number of targets backed only by filesystem source text. */
+  readonly filesystemTargetCount: number;
   /** Source target rows matched by the selector. */
   readonly targets: readonly SourceTargetRow[];
   /** Source text slices returned for text projections. */
@@ -269,6 +273,8 @@ export function answerTsSource(
     selector,
     targetCount: targets.length,
     candidateCount: read.resolution.candidateCount,
+    programTargetCount: read.programTargetCount,
+    filesystemTargetCount: read.filesystemTargetCount,
     targets,
     slices,
     diagnostics: read.resolution.diagnostics,
@@ -281,7 +287,7 @@ export function answerTsSource(
     sourceSummary(projection, targets.length, slices.length),
     {
       value,
-      basis: [tsSourceTextBasis(sourceProject), programBasis(sourceProject)],
+      basis: sourceTextReadBasis(sourceProject, read.programTargetCount),
       evidence: targets
         .slice(0, evidenceLimit(inquiry))
         .map((target) => evidenceForTarget(target, EvidenceKind.SourceSpan)),
@@ -299,155 +305,145 @@ export function answerTsStructure(
 ): Answer<TsStructureValue> {
   const selector = sourceSelectorFromInquiry(inquiry);
   const projection = inquiry.projection ?? "summary";
-  const options = {
-    limit: rowLimit(inquiry),
-    offset: pageOffset(inquiry),
-  };
-  if (projection === "module-graph") {
-    const moduleGraph = readModuleGraph(sourceProject, selector, options);
-    const outcome =
-      moduleGraph.totalEdges === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
-    return createAnswer(
-      inquiry,
-      outcome,
-      `Returned ${moduleGraph.edges.length} of ${moduleGraph.totalEdges} TypeScript module edge(s).`,
-      {
-        value: { moduleGraph },
-        basis: [programBasis(sourceProject)],
-        evidence: moduleGraph.edges
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForModuleEdge),
-        page: {
-          size: moduleGraph.limit,
-          cursor: inquiry.page?.cursor,
-          returned: moduleGraph.edges.length,
-          total: moduleGraph.totalEdges,
-          nextCursor: moduleGraph.nextOffset === undefined ? undefined : String(moduleGraph.nextOffset),
-        },
-        continuations: moduleGraphContinuations(inquiry, selector, moduleGraph),
-      },
-    );
+  const pageOptions = typeScriptPageOptions(inquiry);
+  switch (projection) {
+    case "module-graph":
+      return answerTsModuleGraph(inquiry, sourceProject, selector, pageOptions);
+    case "document-symbols":
+      return answerTsDocumentSymbols(inquiry, sourceProject, selector, pageOptions);
+    case "symbols":
+      return answerTsSymbols(inquiry, sourceProject, selector, pageOptions);
+    case "exports":
+      return answerTsExports(inquiry, sourceProject, selector, pageOptions);
+    default:
+      return answerTsApiSurface(inquiry, sourceProject, selector, pageOptions);
   }
-  if (projection === "document-symbols") {
-    const documentSymbolOptions: DocumentSymbolOptions = {
-      ...options,
-      ...stringFilter(inquiry.filters, "query"),
-    };
-    const documentSymbols = readDocumentSymbols(
-      sourceProject,
-      selector,
-      documentSymbolOptions,
-    );
-    const outcome =
-      documentSymbols.totalSymbols === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
-    return createAnswer(
-      inquiry,
-      outcome,
-      `Returned ${documentSymbols.symbols.length} of ${documentSymbols.totalSymbols} TypeScript document-symbol row(s).`,
-      {
-        value: { documentSymbols },
-        basis: [programBasis(sourceProject)],
-        evidence: documentSymbols.symbols
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForDocumentSymbol),
-        page: {
-          size: documentSymbols.limit,
-          cursor: inquiry.page?.cursor,
-          returned: documentSymbols.symbols.length,
-          total: documentSymbols.totalSymbols,
-          nextCursor: documentSymbols.nextOffset === undefined ? undefined : String(documentSymbols.nextOffset),
-        },
-        continuations: documentSymbolContinuations(
-          inquiry,
-          selector,
-          documentSymbols,
-        ),
-      },
-    );
-  }
-  if (projection === "symbols") {
-    const symbolOptions: SymbolIndexOptions = {
-      ...options,
-      ...stringFilter(inquiry.filters, "query"),
-    };
-    const symbols = readSymbolIndex(sourceProject, selector, symbolOptions);
-    const outcome =
-      symbols.totalEntries === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
-    return createAnswer(
-      inquiry,
-      outcome,
-      `Returned ${symbols.entries.length} of ${symbols.totalEntries} TypeScript symbol row(s).`,
-      {
-        value: { symbols },
-        basis: [programBasis(sourceProject)],
-        evidence: symbols.entries
-          .slice(0, evidenceLimit(inquiry))
-          .map((entry) => evidenceForTarget(entry.target, EvidenceKind.Symbol)),
-        page: {
-          size: symbols.limit,
-          cursor: inquiry.page?.cursor,
-          returned: symbols.entries.length,
-          total: symbols.totalEntries,
-          nextCursor: symbols.nextOffset === undefined ? undefined : String(symbols.nextOffset),
-        },
-        continuations: symbolContinuations(inquiry, selector, symbols),
-      },
-    );
-  }
-  if (projection === "exports") {
-    const exports = readExportSurface(sourceProject, selector, {
-      ...options,
-      ...stringFilter(inquiry.filters, "query"),
-      ...stringFilter(inquiry.filters, "memberName"),
-    });
-    const outcome =
-      exports.totalExports === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
-    return createAnswer(
-      inquiry,
-      outcome,
-      `Returned ${exports.exports.length} of ${exports.totalExports} TypeScript export row(s).`,
-      {
-        value: { exports },
-        basis: [programBasis(sourceProject), typeScriptCheckerBasis(sourceProject)],
-        evidence: exports.exports
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForExportSurfaceEntry),
-        page: {
-          size: exports.limit,
-          cursor: inquiry.page?.cursor,
-          returned: exports.exports.length,
-          total: exports.totalExports,
-          nextCursor: exports.nextOffset === undefined ? undefined : String(exports.nextOffset),
-        },
-        continuations: exportSurfaceContinuations(inquiry, selector, exports),
-      },
-    );
-  }
-  const surface = readApiSurface(sourceProject, selector, options);
-  const returned = surface.entries.length;
-  const value: TsStructureValue = { surface };
-  const outcome =
-    surface.rollup.totalEntries === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
+}
 
-  return createAnswer(
+function answerTsModuleGraph(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsStructureValue> {
+  const moduleGraph = readModuleGraph(sourceProject, selector, pageOptions);
+  return createPagedTypeScriptAnswer(
     inquiry,
-    outcome,
+    moduleGraph.totalEdges === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    `Returned ${moduleGraph.edges.length} of ${moduleGraph.totalEdges} TypeScript module edge(s).`,
+    { moduleGraph },
+    [programBasis(sourceProject)],
+    moduleGraph.edges,
+    moduleGraph.limit,
+    moduleGraph.totalEdges,
+    moduleGraph.nextOffset,
+    evidenceForModuleEdge,
+    moduleGraphContinuations(inquiry, selector, moduleGraph),
+  );
+}
+
+function answerTsDocumentSymbols(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsStructureValue> {
+  const documentSymbolOptions: DocumentSymbolOptions = {
+    ...pageOptions,
+    ...stringFilter(inquiry.filters, "query"),
+  };
+  const documentSymbols = readDocumentSymbols(
+    sourceProject,
+    selector,
+    documentSymbolOptions,
+  );
+  return createPagedTypeScriptAnswer(
+    inquiry,
+    documentSymbols.totalSymbols === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    `Returned ${documentSymbols.symbols.length} of ${documentSymbols.totalSymbols} TypeScript document-symbol row(s).`,
+    { documentSymbols },
+    [programBasis(sourceProject)],
+    documentSymbols.symbols,
+    documentSymbols.limit,
+    documentSymbols.totalSymbols,
+    documentSymbols.nextOffset,
+    evidenceForDocumentSymbol,
+    documentSymbolContinuations(inquiry, selector, documentSymbols),
+  );
+}
+
+function answerTsSymbols(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsStructureValue> {
+  const symbolOptions: SymbolIndexOptions = {
+    ...pageOptions,
+    ...stringFilter(inquiry.filters, "query"),
+  };
+  const symbols = readSymbolIndex(sourceProject, selector, symbolOptions);
+  return createPagedTypeScriptAnswer(
+    inquiry,
+    symbols.totalEntries === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    `Returned ${symbols.entries.length} of ${symbols.totalEntries} TypeScript symbol row(s).`,
+    { symbols },
+    [programBasis(sourceProject)],
+    symbols.entries,
+    symbols.limit,
+    symbols.totalEntries,
+    symbols.nextOffset,
+    (entry) => evidenceForTarget(entry.target, EvidenceKind.Symbol),
+    symbolContinuations(inquiry, selector, symbols),
+  );
+}
+
+function answerTsExports(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsStructureValue> {
+  const exports = readExportSurface(sourceProject, selector, {
+    ...pageOptions,
+    ...stringFilter(inquiry.filters, "query"),
+    ...stringFilter(inquiry.filters, "memberName"),
+  });
+  return createPagedTypeScriptAnswer(
+    inquiry,
+    exports.totalExports === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    `Returned ${exports.exports.length} of ${exports.totalExports} TypeScript export row(s).`,
+    { exports },
+    [programBasis(sourceProject), typeScriptCheckerBasis(sourceProject)],
+    exports.exports,
+    exports.limit,
+    exports.totalExports,
+    exports.nextOffset,
+    evidenceForExportSurfaceEntry,
+    exportSurfaceContinuations(inquiry, selector, exports),
+  );
+}
+
+function answerTsApiSurface(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsStructureValue> {
+  const surface = readApiSurface(sourceProject, selector, pageOptions);
+  const returned = surface.entries.length;
+  return createPagedTypeScriptAnswer(
+    inquiry,
+    surface.rollup.totalEntries === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
     `Returned ${returned} of ${surface.rollup.totalEntries} TypeScript declaration row(s).`,
-    {
-      value,
-      basis: [programBasis(sourceProject)],
-      evidence: surface.entries
-        .slice(0, evidenceLimit(inquiry))
-        .map((entry) => evidenceForTarget(entry.target, EvidenceKind.Symbol)),
-      page: {
-        size: surface.limit,
-        cursor: inquiry.page?.cursor,
-        returned,
-        total: surface.rollup.totalEntries,
-        nextCursor: surface.nextOffset === undefined ? undefined : String(surface.nextOffset),
-      },
-      continuations: apiSurfaceContinuations(inquiry, selector, surface),
-    },
+    { surface },
+    [programBasis(sourceProject)],
+    surface.entries,
+    surface.limit,
+    surface.rollup.totalEntries,
+    surface.nextOffset,
+    (entry) => evidenceForTarget(entry.target, EvidenceKind.Symbol),
+    apiSurfaceContinuations(inquiry, selector, surface),
   );
 }
 
@@ -460,446 +456,478 @@ export function answerTsType(
 ): Answer<TsTypeValue> {
   const projection = inquiry.projection ?? "facts";
   if (projection === "guide") {
-    return createAnswer(
-      inquiry,
-      OutcomeKind.Hit,
-      "Returned the compact TypeScript IDE capability guide.",
-      {
-        value: { guide: createTypeScriptIdeGuide(sourceProject) },
-        basis: [
-          tsSourceTextBasis(sourceProject),
-          programBasis(sourceProject),
-          typeScriptCheckerBasis(sourceProject),
-        ],
-        continuations: typeScriptGuideContinuations(inquiry, sourceProject),
-      },
-    );
+    return answerTsTypeGuide(inquiry, sourceProject);
   }
 
   const selector = sourceSelectorFromInquiry(inquiry);
-  const pageOptions = {
+  const pageOptions = typeScriptPageOptions(inquiry);
+  switch (projection) {
+    case "references":
+      return answerTsReferences(inquiry, sourceProject, selector, pageOptions);
+    case "definitions":
+      return answerTsNavigation(inquiry, sourceProject, selector, pageOptions);
+    case "call-hierarchy":
+      return answerTsCallHierarchy(inquiry, sourceProject, selector, pageOptions);
+    case "call-sites":
+      return answerTsCallSites(inquiry, sourceProject, selector, pageOptions);
+    case "diagnostics":
+      return answerTsDiagnostics(inquiry, sourceProject, selector, pageOptions);
+    case "quick-info":
+      return answerTsQuickInfo(inquiry, sourceProject, selector, pageOptions);
+    case "signature-help":
+      return answerTsSignatureHelp(inquiry, sourceProject, selector, pageOptions);
+    case "highlights":
+      return answerTsHighlights(inquiry, sourceProject, selector, pageOptions);
+    case "rename":
+      return answerTsRename(inquiry, sourceProject, selector, pageOptions);
+    case "refactors":
+      return answerTsRefactors(inquiry, sourceProject, selector, pageOptions);
+    case "code-fixes":
+      return answerTsCodeFixes(inquiry, sourceProject, selector, pageOptions);
+    case "refactor-edits":
+      return answerTsRefactorEdits(inquiry, sourceProject, selector, pageOptions);
+    case "organize-imports":
+      return answerTsOrganizeImports(inquiry, sourceProject, selector, pageOptions);
+    case "file-rename-edits":
+      return answerTsFileRenameEdits(inquiry, sourceProject, selector, pageOptions);
+    default:
+      return answerTsFacts(inquiry, sourceProject, selector);
+  }
+}
+
+interface TypeScriptPageOptions {
+  readonly limit: number;
+  readonly offset: number;
+}
+
+function typeScriptPageOptions(inquiry: Inquiry): TypeScriptPageOptions {
+  return {
     limit: rowLimit(inquiry),
     offset: pageOffset(inquiry),
   };
-  if (projection === "references") {
-    const references = readReferences(sourceProject, selector, pageOptions);
-    const outcome =
-      references.totalReferences === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
-    return createAnswer(
-      inquiry,
-      outcome,
-      `Returned ${references.references.length} of ${references.totalReferences} TypeScript reference row(s).`,
-      {
-        value: { references },
-        basis: [typeScriptCheckerBasis(sourceProject)],
-        evidence: references.references
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForReference),
-        page: {
-          size: references.limit,
-          cursor: inquiry.page?.cursor,
-          returned: references.references.length,
-          total: references.totalReferences,
-          nextCursor: references.nextOffset === undefined ? undefined : String(references.nextOffset),
-        },
-        continuations: referenceContinuations(inquiry, selector, references),
-      },
-    );
-  }
-  if (projection === "definitions") {
-    const navigation = readNavigation(sourceProject, selector, pageOptions);
-    const outcome =
-      navigation.totalEntries === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
-    return createAnswer(
-      inquiry,
-      outcome,
-      `Returned ${navigation.entries.length} of ${navigation.totalEntries} TypeScript navigation row(s).`,
-      {
-        value: { navigation },
-        basis: [typeScriptCheckerBasis(sourceProject)],
-        evidence: navigation.entries
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForNavigation),
-        page: {
-          size: navigation.limit,
-          cursor: inquiry.page?.cursor,
-          returned: navigation.entries.length,
-          total: navigation.totalEntries,
-          nextCursor: navigation.nextOffset === undefined ? undefined : String(navigation.nextOffset),
-        },
-        continuations: navigationContinuations(inquiry, selector, navigation),
-      },
-    );
-  }
-  if (projection === "call-hierarchy") {
-    const callHierarchy = readCallHierarchy(
-      sourceProject,
-      selector,
-      pageOptions,
-    );
-    const outcome =
-      callHierarchy.items.length === 0 && callHierarchy.totalEdges === 0
-        ? OutcomeKind.Miss
-        : OutcomeKind.Hit;
-    return createAnswer(
-      inquiry,
-      outcome,
-      `Returned ${callHierarchy.edges.length} of ${callHierarchy.totalEdges} TypeScript call-hierarchy edge(s) from ${callHierarchy.items.length} item(s).`,
-      {
-        value: { callHierarchy },
-        basis: [typeScriptCheckerBasis(sourceProject)],
-        evidence: callHierarchy.edges
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForCallHierarchyEdge),
-        page: {
-          size: callHierarchy.limit,
-          cursor: inquiry.page?.cursor,
-          returned: callHierarchy.edges.length,
-          total: callHierarchy.totalEdges,
-          nextCursor: callHierarchy.nextOffset === undefined ? undefined : String(callHierarchy.nextOffset),
-        },
-        continuations: callHierarchyContinuations(
-          inquiry,
-          selector,
-          callHierarchy,
-        ),
-      },
-    );
-  }
-  if (projection === "call-sites") {
-    const callSites = readCallSites(sourceProject, selector, {
-      ...pageOptions,
-      ...stringFilter(inquiry.filters, "calleeName"),
-      ...stringFilter(inquiry.filters, "argumentText"),
-      ...stringFilter(inquiry.filters, "argumentSymbolName"),
-      ...stringFilter(inquiry.filters, "argumentFullyQualifiedName"),
-      ...stringFilter(inquiry.filters, "kind"),
-    });
-    const outcome =
-      callSites.totalCallSites === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
-    return createAnswer(
-      inquiry,
-      outcome,
-      `Returned ${callSites.callSites.length} of ${callSites.totalCallSites} TypeScript call-site row(s).`,
-      {
-        value: { callSites },
-        basis: [typeScriptCheckerBasis(sourceProject), tsSourceTextBasis(sourceProject)],
-        evidence: callSites.callSites
-          .slice(0, evidenceLimit(inquiry))
-          .map(typeScriptEvidenceForCallSite),
-        page: {
-          size: callSites.limit,
-          cursor: inquiry.page?.cursor,
-          returned: callSites.callSites.length,
-          total: callSites.totalCallSites,
-          nextCursor: callSites.nextOffset === undefined ? undefined : String(callSites.nextOffset),
-        },
-        continuations: typeScriptCallSiteContinuations(inquiry, selector, callSites),
-      },
-    );
-  }
-  if (projection === "diagnostics") {
-    const diagnostics = readDiagnostics(sourceProject, selector, pageOptions);
-    const summary =
-      diagnostics.totalDiagnostics === 0
-        ? "TypeScript diagnostics closed cleanly for the selected scope."
-        : `Returned ${diagnostics.diagnostics.length} of ${diagnostics.totalDiagnostics} TypeScript diagnostic row(s).`;
-    return createAnswer(
-      inquiry,
-      OutcomeKind.Hit,
-      summary,
-      {
-        value: { diagnostics },
-        basis: [typeScriptCheckerBasis(sourceProject)],
-        evidence: diagnostics.diagnostics
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForDiagnostic),
-        page: {
-          size: diagnostics.limit,
-          cursor: inquiry.page?.cursor,
-          returned: diagnostics.diagnostics.length,
-          total: diagnostics.totalDiagnostics,
-          nextCursor: diagnostics.nextOffset === undefined ? undefined : String(diagnostics.nextOffset),
-        },
-        continuations: diagnosticContinuations(inquiry, selector, diagnostics),
-      },
-    );
-  }
-  if (projection === "quick-info") {
-    const quickInfo = readQuickInfo(sourceProject, selector, pageOptions);
-    const outcome =
-      quickInfo.totalEntries === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
-    return createAnswer(
-      inquiry,
-      outcome,
-      `Returned ${quickInfo.entries.length} of ${quickInfo.totalEntries} TypeScript quick-info row(s).`,
-      {
-        value: { quickInfo },
-        basis: [typeScriptCheckerBasis(sourceProject)],
-        evidence: quickInfo.entries
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForQuickInfo),
-        page: {
-          size: quickInfo.limit,
-          cursor: inquiry.page?.cursor,
-          returned: quickInfo.entries.length,
-          total: quickInfo.totalEntries,
-          nextCursor: quickInfo.nextOffset === undefined ? undefined : String(quickInfo.nextOffset),
-        },
-        continuations: quickInfoContinuations(inquiry, selector, quickInfo),
-      },
-    );
-  }
-  if (projection === "signature-help") {
-    const signatureHelp = readSignatureHelp(
-      sourceProject,
-      selector,
-      pageOptions,
-    );
-    const outcome =
-      signatureHelp.totalItems === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
-    return createAnswer(
-      inquiry,
-      outcome,
-      `Returned ${signatureHelp.items.length} of ${signatureHelp.totalItems} TypeScript signature-help item(s).`,
-      {
-        value: { signatureHelp },
-        basis: [typeScriptCheckerBasis(sourceProject)],
-        evidence: signatureHelp.items
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForSignatureHelp),
-        page: {
-          size: signatureHelp.limit,
-          cursor: inquiry.page?.cursor,
-          returned: signatureHelp.items.length,
-          total: signatureHelp.totalItems,
-          nextCursor: signatureHelp.nextOffset === undefined ? undefined : String(signatureHelp.nextOffset),
-        },
-        continuations: signatureHelpContinuations(
-          inquiry,
-          selector,
-          signatureHelp,
-        ),
-      },
-    );
-  }
-  if (projection === "highlights") {
-    const highlights = readHighlights(sourceProject, selector, pageOptions);
-    const outcome =
-      highlights.totalHighlights === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
-    return createAnswer(
-      inquiry,
-      outcome,
-      `Returned ${highlights.highlights.length} of ${highlights.totalHighlights} TypeScript highlight row(s).`,
-      {
-        value: { highlights },
-        basis: [typeScriptCheckerBasis(sourceProject)],
-        evidence: highlights.highlights
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForHighlight),
-        page: {
-          size: highlights.limit,
-          cursor: inquiry.page?.cursor,
-          returned: highlights.highlights.length,
-          total: highlights.totalHighlights,
-          nextCursor: highlights.nextOffset === undefined ? undefined : String(highlights.nextOffset),
-        },
-        continuations: highlightContinuations(inquiry, selector, highlights),
-      },
-    );
-  }
-  if (projection === "rename") {
-    const rename = readRename(sourceProject, selector, pageOptions);
-    const outcome = rename.canRename ? OutcomeKind.Hit : OutcomeKind.Miss;
-    return createAnswer(
-      inquiry,
-      outcome,
-      rename.canRename
-        ? `Returned ${rename.locations.length} of ${rename.totalLocations} TypeScript rename location(s).`
-        : `TypeScript rename is unavailable: ${
-            rename.error ?? "unknown reason"
-          }.`,
-      {
-        value: { rename },
-        basis: [typeScriptCheckerBasis(sourceProject)],
-        evidence: rename.locations
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForRenameLocation),
-        page: {
-          size: rename.limit,
-          cursor: inquiry.page?.cursor,
-          returned: rename.locations.length,
-          total: rename.totalLocations,
-          nextCursor: rename.nextOffset === undefined ? undefined : String(rename.nextOffset),
-        },
-        continuations: renameContinuations(inquiry, selector, rename),
-      },
-    );
-  }
-  if (projection === "refactors") {
-    const refactors = readRefactors(sourceProject, selector, pageOptions);
-    const outcome =
-      refactors.totalActions === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
-    return createAnswer(
-      inquiry,
-      outcome,
-      `Returned ${refactors.actions.length} of ${refactors.totalActions} TypeScript refactor action(s).`,
-      {
-        value: { refactors },
-        basis: [typeScriptCheckerBasis(sourceProject)],
-        evidence: refactors.actions
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForRefactorAction),
-        page: {
-          size: refactors.limit,
-          cursor: inquiry.page?.cursor,
-          returned: refactors.actions.length,
-          total: refactors.totalActions,
-          nextCursor: refactors.nextOffset === undefined ? undefined : String(refactors.nextOffset),
-        },
-        continuations: refactorContinuations(inquiry, selector, refactors),
-      },
-    );
-  }
-  if (projection === "code-fixes") {
-    const codeFixes = readCodeFixes(sourceProject, selector, pageOptions);
-    const outcome =
-      codeFixes.totalActions === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
-    return createAnswer(
-      inquiry,
-      outcome,
-      `Returned ${codeFixes.actions.length} of ${codeFixes.totalActions} TypeScript code-fix action(s).`,
-      {
-        value: { codeFixes },
-        basis: [typeScriptCheckerBasis(sourceProject)],
-        evidence: codeFixes.actions
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForCodeFixAction),
-        page: {
-          size: codeFixes.limit,
-          cursor: inquiry.page?.cursor,
-          returned: codeFixes.actions.length,
-          total: codeFixes.totalActions,
-          nextCursor: codeFixes.nextOffset === undefined ? undefined : String(codeFixes.nextOffset),
-        },
-        continuations: codeFixContinuations(inquiry, selector, codeFixes),
-      },
-    );
-  }
-  if (projection === "refactor-edits") {
-    const refactorEdits = readRefactorEdits(sourceProject, selector, {
-      ...pageOptions,
-      ...stringFilter(inquiry.filters, "refactorName"),
-      ...stringFilter(inquiry.filters, "actionName"),
-      ...stringFilter(inquiry.filters, "targetFile"),
-    });
-    const outcome = refactorEdits.applicable
-      ? OutcomeKind.Hit
-      : OutcomeKind.Miss;
-    return createAnswer(
-      inquiry,
-      outcome,
-      refactorEdits.applicable
-        ? `Returned TypeScript refactor edit plan with ${refactorEdits.changes.length} file edit group(s).`
-        : `TypeScript refactor edits are unavailable: ${
-            refactorEdits.notApplicableReason ?? "unknown reason"
-          }.`,
-      {
-        value: { refactorEdits },
-        basis: [typeScriptCheckerBasis(sourceProject)],
-        evidence: refactorEdits.changes
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForFileEdits),
-        continuations: refactorEditContinuations(
-          inquiry,
-          selector,
-          refactorEdits,
-        ),
-      },
-    );
-  }
-  if (projection === "organize-imports") {
-    const organizeImports = readOrganizeImports(
-      sourceProject,
-      selector,
-      pageOptions,
-    );
-    const outcome =
-      organizeImports.totalFiles === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
-    return createAnswer(
-      inquiry,
-      outcome,
-      `Returned ${organizeImports.changes.length} of ${organizeImports.totalFiles} TypeScript organize-import file edit group(s).`,
-      {
-        value: { organizeImports },
-        basis: [typeScriptCheckerBasis(sourceProject)],
-        evidence: organizeImports.changes
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForFileEdits),
-        page: {
-          size: organizeImports.limit,
-          cursor: inquiry.page?.cursor,
-          returned: organizeImports.changes.length,
-          total: organizeImports.totalFiles,
-          nextCursor: organizeImports.nextOffset === undefined ? undefined : String(organizeImports.nextOffset),
-        },
-        continuations: organizeImportContinuations(
-          inquiry,
-          selector,
-          organizeImports,
-        ),
-      },
-    );
-  }
-  if (projection === "file-rename-edits") {
-    const fileRenameEdits = readFileRenameEdits(sourceProject, selector, {
-      ...pageOptions,
-      ...stringFilter(inquiry.filters, "oldFilePath"),
-      ...stringFilter(inquiry.filters, "newFilePath"),
-    });
-    const outcome = fileRenameEdits.applicable
-      ? OutcomeKind.Hit
-      : OutcomeKind.Miss;
-    return createAnswer(
-      inquiry,
-      outcome,
-      fileRenameEdits.applicable
-        ? `Returned TypeScript file-rename edit plan with ${fileRenameEdits.changes.length} file edit group(s).`
-        : `TypeScript file-rename edits are unavailable: ${
-            fileRenameEdits.notApplicableReason ?? "unknown reason"
-          }.`,
-      {
-        value: { fileRenameEdits },
-        basis: [typeScriptCheckerBasis(sourceProject)],
-        evidence: fileRenameEdits.changes
-          .slice(0, evidenceLimit(inquiry))
-          .map(evidenceForFileEdits),
-        continuations: fileRenameEditContinuations(
-          inquiry,
-          selector,
-          fileRenameEdits,
-        ),
-      },
-    );
-  }
-  const options = typeFactOptions(inquiry);
-  const typeFacts = readTypeFacts(sourceProject, selector, options);
-  const outcome =
-    typeFacts.facts.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit;
+}
+
+function answerTsTypeGuide(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+): Answer<TsTypeValue> {
+  return createAnswer(
+    inquiry,
+    OutcomeKind.Hit,
+    "Returned the compact TypeScript IDE capability guide.",
+    {
+      value: { guide: createTypeScriptIdeGuide(sourceProject) },
+      basis: [
+        tsSourceTextBasis(sourceProject),
+        programBasis(sourceProject),
+        typeScriptCheckerBasis(sourceProject),
+      ],
+      continuations: typeScriptGuideContinuations(inquiry, sourceProject),
+    },
+  );
+}
+
+function answerTsReferences(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsTypeValue> {
+  const references = readReferences(sourceProject, selector, pageOptions);
+  return createPagedTypeScriptAnswer(
+    inquiry,
+    references.totalReferences === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    `Returned ${references.references.length} of ${references.totalReferences} TypeScript reference row(s).`,
+    { references },
+    [typeScriptCheckerBasis(sourceProject)],
+    references.references,
+    references.limit,
+    references.totalReferences,
+    references.nextOffset,
+    evidenceForReference,
+    referenceContinuations(inquiry, selector, references),
+  );
+}
+
+function answerTsNavigation(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsTypeValue> {
+  const navigation = readNavigation(sourceProject, selector, pageOptions);
+  return createPagedTypeScriptAnswer(
+    inquiry,
+    navigation.totalEntries === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    `Returned ${navigation.entries.length} of ${navigation.totalEntries} TypeScript navigation row(s).`,
+    { navigation },
+    [typeScriptCheckerBasis(sourceProject)],
+    navigation.entries,
+    navigation.limit,
+    navigation.totalEntries,
+    navigation.nextOffset,
+    evidenceForNavigation,
+    navigationContinuations(inquiry, selector, navigation),
+  );
+}
+
+function answerTsCallHierarchy(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsTypeValue> {
+  const callHierarchy = readCallHierarchy(sourceProject, selector, pageOptions);
+  return createPagedTypeScriptAnswer(
+    inquiry,
+    callHierarchy.items.length === 0 && callHierarchy.totalEdges === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    `Returned ${callHierarchy.edges.length} of ${callHierarchy.totalEdges} TypeScript call-hierarchy edge(s) from ${callHierarchy.items.length} item(s).`,
+    { callHierarchy },
+    [typeScriptCheckerBasis(sourceProject)],
+    callHierarchy.edges,
+    callHierarchy.limit,
+    callHierarchy.totalEdges,
+    callHierarchy.nextOffset,
+    evidenceForCallHierarchyEdge,
+    callHierarchyContinuations(inquiry, selector, callHierarchy),
+  );
+}
+
+function answerTsCallSites(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsTypeValue> {
+  const callSites = readCallSites(sourceProject, selector, {
+    ...pageOptions,
+    ...stringFilter(inquiry.filters, "calleeName"),
+    ...stringFilter(inquiry.filters, "argumentText"),
+    ...stringFilter(inquiry.filters, "argumentSymbolName"),
+    ...stringFilter(inquiry.filters, "argumentFullyQualifiedName"),
+    ...stringFilter(inquiry.filters, "kind"),
+  });
+  return createPagedTypeScriptAnswer(
+    inquiry,
+    callSites.totalCallSites === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    `Returned ${callSites.callSites.length} of ${callSites.totalCallSites} TypeScript call-site row(s).`,
+    { callSites },
+    [typeScriptCheckerBasis(sourceProject), tsSourceTextBasis(sourceProject)],
+    callSites.callSites,
+    callSites.limit,
+    callSites.totalCallSites,
+    callSites.nextOffset,
+    typeScriptEvidenceForCallSite,
+    typeScriptCallSiteContinuations(inquiry, selector, callSites),
+  );
+}
+
+function answerTsDiagnostics(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsTypeValue> {
+  const diagnostics = readDiagnostics(sourceProject, selector, pageOptions);
+  return createPagedTypeScriptAnswer(
+    inquiry,
+    OutcomeKind.Hit,
+    diagnostics.totalDiagnostics === 0
+      ? "TypeScript diagnostics closed cleanly for the selected scope."
+      : `Returned ${diagnostics.diagnostics.length} of ${diagnostics.totalDiagnostics} TypeScript diagnostic row(s).`,
+    { diagnostics },
+    [typeScriptCheckerBasis(sourceProject)],
+    diagnostics.diagnostics,
+    diagnostics.limit,
+    diagnostics.totalDiagnostics,
+    diagnostics.nextOffset,
+    evidenceForDiagnostic,
+    diagnosticContinuations(inquiry, selector, diagnostics),
+  );
+}
+
+function answerTsQuickInfo(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsTypeValue> {
+  const quickInfo = readQuickInfo(sourceProject, selector, pageOptions);
+  return createPagedTypeScriptAnswer(
+    inquiry,
+    quickInfo.totalEntries === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    `Returned ${quickInfo.entries.length} of ${quickInfo.totalEntries} TypeScript quick-info row(s).`,
+    { quickInfo },
+    [typeScriptCheckerBasis(sourceProject)],
+    quickInfo.entries,
+    quickInfo.limit,
+    quickInfo.totalEntries,
+    quickInfo.nextOffset,
+    evidenceForQuickInfo,
+    quickInfoContinuations(inquiry, selector, quickInfo),
+  );
+}
+
+function answerTsSignatureHelp(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsTypeValue> {
+  const signatureHelp = readSignatureHelp(sourceProject, selector, pageOptions);
+  return createPagedTypeScriptAnswer(
+    inquiry,
+    signatureHelp.totalItems === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    `Returned ${signatureHelp.items.length} of ${signatureHelp.totalItems} TypeScript signature-help item(s).`,
+    { signatureHelp },
+    [typeScriptCheckerBasis(sourceProject)],
+    signatureHelp.items,
+    signatureHelp.limit,
+    signatureHelp.totalItems,
+    signatureHelp.nextOffset,
+    evidenceForSignatureHelp,
+    signatureHelpContinuations(inquiry, selector, signatureHelp),
+  );
+}
+
+function answerTsHighlights(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsTypeValue> {
+  const highlights = readHighlights(sourceProject, selector, pageOptions);
+  return createPagedTypeScriptAnswer(
+    inquiry,
+    highlights.totalHighlights === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    `Returned ${highlights.highlights.length} of ${highlights.totalHighlights} TypeScript highlight row(s).`,
+    { highlights },
+    [typeScriptCheckerBasis(sourceProject)],
+    highlights.highlights,
+    highlights.limit,
+    highlights.totalHighlights,
+    highlights.nextOffset,
+    evidenceForHighlight,
+    highlightContinuations(inquiry, selector, highlights),
+  );
+}
+
+function answerTsRename(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsTypeValue> {
+  const rename = readRename(sourceProject, selector, pageOptions);
+  return createPagedTypeScriptAnswer(
+    inquiry,
+    rename.canRename ? OutcomeKind.Hit : OutcomeKind.Miss,
+    rename.canRename
+      ? `Returned ${rename.locations.length} of ${rename.totalLocations} TypeScript rename location(s).`
+      : `TypeScript rename is unavailable: ${rename.error ?? "unknown reason"}.`,
+    { rename },
+    [typeScriptCheckerBasis(sourceProject)],
+    rename.locations,
+    rename.limit,
+    rename.totalLocations,
+    rename.nextOffset,
+    evidenceForRenameLocation,
+    renameContinuations(inquiry, selector, rename),
+  );
+}
+
+function answerTsRefactors(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsTypeValue> {
+  const refactors = readRefactors(sourceProject, selector, pageOptions);
+  return createPagedTypeScriptAnswer(
+    inquiry,
+    refactors.totalActions === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    `Returned ${refactors.actions.length} of ${refactors.totalActions} TypeScript refactor action(s).`,
+    { refactors },
+    [typeScriptCheckerBasis(sourceProject)],
+    refactors.actions,
+    refactors.limit,
+    refactors.totalActions,
+    refactors.nextOffset,
+    evidenceForRefactorAction,
+    refactorContinuations(inquiry, selector, refactors),
+  );
+}
+
+function answerTsCodeFixes(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsTypeValue> {
+  const codeFixes = readCodeFixes(sourceProject, selector, pageOptions);
+  return createPagedTypeScriptAnswer(
+    inquiry,
+    codeFixes.totalActions === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    `Returned ${codeFixes.actions.length} of ${codeFixes.totalActions} TypeScript code-fix action(s).`,
+    { codeFixes },
+    [typeScriptCheckerBasis(sourceProject)],
+    codeFixes.actions,
+    codeFixes.limit,
+    codeFixes.totalActions,
+    codeFixes.nextOffset,
+    evidenceForCodeFixAction,
+    codeFixContinuations(inquiry, selector, codeFixes),
+  );
+}
+
+function answerTsRefactorEdits(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsTypeValue> {
+  const refactorEdits = readRefactorEdits(sourceProject, selector, {
+    ...pageOptions,
+    ...stringFilter(inquiry.filters, "refactorName"),
+    ...stringFilter(inquiry.filters, "actionName"),
+    ...stringFilter(inquiry.filters, "targetFile"),
+  });
+  return createAnswer(
+    inquiry,
+    refactorEdits.applicable ? OutcomeKind.Hit : OutcomeKind.Miss,
+    refactorEdits.applicable
+      ? `Returned TypeScript refactor edit plan with ${refactorEdits.changes.length} file edit group(s).`
+      : `TypeScript refactor edits are unavailable: ${refactorEdits.notApplicableReason ?? "unknown reason"}.`,
+    {
+      value: { refactorEdits },
+      basis: [typeScriptCheckerBasis(sourceProject)],
+      evidence: evidenceRows(inquiry, refactorEdits.changes, evidenceForFileEdits),
+      continuations: refactorEditContinuations(inquiry, selector, refactorEdits),
+    },
+  );
+}
+
+function answerTsOrganizeImports(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsTypeValue> {
+  const organizeImports = readOrganizeImports(sourceProject, selector, pageOptions);
+  return createPagedTypeScriptAnswer(
+    inquiry,
+    organizeImports.totalFiles === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
+    `Returned ${organizeImports.changes.length} of ${organizeImports.totalFiles} TypeScript organize-import file edit group(s).`,
+    { organizeImports },
+    [typeScriptCheckerBasis(sourceProject)],
+    organizeImports.changes,
+    organizeImports.limit,
+    organizeImports.totalFiles,
+    organizeImports.nextOffset,
+    evidenceForFileEdits,
+    organizeImportContinuations(inquiry, selector, organizeImports),
+  );
+}
+
+function answerTsFileRenameEdits(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+  pageOptions: TypeScriptPageOptions,
+): Answer<TsTypeValue> {
+  const fileRenameEdits = readFileRenameEdits(sourceProject, selector, {
+    ...pageOptions,
+    ...stringFilter(inquiry.filters, "oldFilePath"),
+    ...stringFilter(inquiry.filters, "newFilePath"),
+  });
+  return createAnswer(
+    inquiry,
+    fileRenameEdits.applicable ? OutcomeKind.Hit : OutcomeKind.Miss,
+    fileRenameEdits.applicable
+      ? `Returned TypeScript file-rename edit plan with ${fileRenameEdits.changes.length} file edit group(s).`
+      : `TypeScript file-rename edits are unavailable: ${fileRenameEdits.notApplicableReason ?? "unknown reason"}.`,
+    {
+      value: { fileRenameEdits },
+      basis: [typeScriptCheckerBasis(sourceProject)],
+      evidence: evidenceRows(inquiry, fileRenameEdits.changes, evidenceForFileEdits),
+      continuations: fileRenameEditContinuations(inquiry, selector, fileRenameEdits),
+    },
+  );
+}
+
+function answerTsFacts(
+  inquiry: Inquiry,
+  sourceProject: SourceProject,
+  selector: SourceSelector,
+): Answer<TsTypeValue> {
+  const typeFacts = readTypeFacts(sourceProject, selector, typeFactOptions(inquiry));
 
   return createAnswer(
     inquiry,
-    outcome,
+    typeFacts.facts.length === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
     `Returned ${typeFacts.facts.length} TypeChecker fact row(s).`,
     {
       value: { typeFacts },
       basis: [typeScriptCheckerBasis(sourceProject)],
-      evidence: typeFacts.facts
-        .slice(0, evidenceLimit(inquiry))
-        .map((fact) => evidenceForTarget(fact.target, EvidenceKind.TypeFact)),
+      evidence: evidenceRows(
+        inquiry,
+        typeFacts.facts,
+        (fact) => evidenceForTarget(fact.target, EvidenceKind.TypeFact),
+      ),
       continuations: typeContinuations(inquiry, typeFacts),
     },
   );
+}
+
+function createPagedTypeScriptAnswer<TValue, TRow>(
+  inquiry: Inquiry,
+  outcome: OutcomeKind,
+  summary: string,
+  value: TValue,
+  basis: readonly Basis[],
+  rows: readonly TRow[],
+  limit: number,
+  total: number,
+  nextOffset: number | undefined,
+  evidenceForRow: (row: TRow) => Evidence,
+  continuations: readonly Continuation[],
+): Answer<TValue> {
+  return createAnswer(
+    inquiry,
+    outcome,
+    summary,
+    {
+      value,
+      basis,
+      evidence: evidenceRows(inquiry, rows, evidenceForRow),
+      page: pageInfoForRead(inquiry, limit, rows.length, total, nextOffset),
+      continuations,
+    },
+  );
+}
+
+function evidenceRows<TRow>(
+  inquiry: Inquiry,
+  rows: readonly TRow[],
+  evidenceForRow: (row: TRow) => Evidence,
+): readonly Evidence[] {
+  return rows.slice(0, evidenceLimit(inquiry)).map(evidenceForRow);
+}
+
+function pageInfoForRead(
+  inquiry: Inquiry,
+  limit: number,
+  returned: number,
+  total: number,
+  nextOffset: number | undefined,
+): PageInfo {
+  return {
+    size: limit,
+    cursor: inquiry.page?.cursor,
+    returned,
+    total,
+    nextCursor: nextOffset === undefined ? undefined : String(nextOffset),
+  };
 }
 
 function typeFactOptions(inquiry: Inquiry): TypeFactOptions {
@@ -2284,7 +2312,7 @@ function evidenceForTarget(
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: target.label,
-    ...(source === null ? {} : { source }),
+    source: source ?? undefined,
     handle: handleForTarget(target, kind),
     data: target,
   };
@@ -2385,7 +2413,7 @@ function evidenceForExportSurfaceEntry(
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: `export ${entry.exportName}`,
-    ...(source === null ? {} : { source }),
+    source: source ?? undefined,
     handle,
     data: entry,
   };
@@ -2433,7 +2461,7 @@ function evidenceForCallHierarchyEdge(
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: `${edge.direction} call ${edge.from.name} -> ${edge.to.name}`,
-    ...(source === null ? {} : { source }),
+    source: source ?? undefined,
     handle,
     data: edge,
   };
@@ -2521,9 +2549,7 @@ function evidenceForSignatureHelp(
     label: entry.display,
     summary: "signature-help",
     name: entry.display,
-    ...(entry.target.file === undefined
-      ? {}
-      : { filePath: entry.target.file.repoPath }),
+    filePath: entry.target.file?.repoPath,
   };
   return {
     id: entry.id,
@@ -2531,7 +2557,7 @@ function evidenceForSignatureHelp(
     role: entry.selected ? EvidenceRole.Subject : EvidenceRole.Support,
     confidence: EvidenceConfidence.Exact,
     summary: entry.display,
-    ...(source === null ? {} : { source }),
+    source: source ?? undefined,
     handle,
     data: entry,
   };
@@ -2619,9 +2645,7 @@ function evidenceForCodeFixAction(
     label: action.description,
     summary: action.fixName,
     name: action.fixName,
-    ...(action.diagnostic.file === undefined
-      ? {}
-      : { filePath: action.diagnostic.file.repoPath }),
+    filePath: action.diagnostic.file?.repoPath,
   };
   return {
     id: action.id,
@@ -2629,7 +2653,7 @@ function evidenceForCodeFixAction(
     role: EvidenceRole.Support,
     confidence: EvidenceConfidence.Exact,
     summary: `${action.fixName}: ${action.description}`,
-    ...(source === null ? {} : { source }),
+    source: source ?? undefined,
     handle,
     data: action,
   };
@@ -2651,7 +2675,7 @@ function evidenceForFileEdits(edits: TypeScriptFileEdits): Evidence {
     role: EvidenceRole.Support,
     confidence: EvidenceConfidence.Exact,
     summary: `${edits.file.repoPath}: ${edits.edits.length} edit(s)`,
-    ...(source === null ? {} : { source }),
+    source: source ?? undefined,
     handle,
     data: edits,
   };
@@ -2669,7 +2693,7 @@ function handleForTarget(
       label: target.label,
       summary: target.declarationKind,
       name: target.label,
-      ...(target.file === undefined ? {} : { filePath: target.file.repoPath }),
+      filePath: target.file?.repoPath,
     };
     return handle;
   }
@@ -2685,7 +2709,7 @@ function handleForTarget(
       label: target.label,
       summary: target.declarationKind,
       name: target.label,
-      ...(target.file === undefined ? {} : { filePath: target.file.repoPath }),
+      filePath: target.file?.repoPath,
     };
     return handle;
   }
@@ -2706,10 +2730,18 @@ function handleForTarget(
   return handle;
 }
 
+function sourceTextReadBasis(sourceProject: SourceProject, programTargetCount: number): readonly Basis[] {
+  const basis = [tsSourceTextBasis(sourceProject)];
+  if (programTargetCount > 0) {
+    basis.push(programBasis(sourceProject));
+  }
+  return basis;
+}
+
 function tsSourceTextBasis(sourceProject: SourceProject): Basis {
   return sourceTextBasis(
     sourceProject.snapshot().identity,
-    "Answered from source files admitted into the hot Atlas SourceProject.",
+    "Answered from source text addressable by the hot Atlas SourceProject.",
   );
 }
 function programBasis(sourceProject: SourceProject): Basis {

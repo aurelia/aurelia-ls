@@ -36,6 +36,8 @@ export interface AtlasSelfStringOccurrence {
   readonly packageId: string;
   readonly filePath: string;
   readonly source: SourceRange;
+  /** Const-object member that declares this literal, e.g. `SemanticClaimFamily.Bridge`. */
+  readonly declaredByConstObjectMember: string | null;
 }
 
 /** One grouped string literal value. */
@@ -56,6 +58,8 @@ export interface AtlasSelfStringLiteralRow {
   readonly firstSource: SourceRange;
   /** Enum members that declare this exact string value. */
   readonly declaredByEnumMembers: readonly string[];
+  /** Const-object members that declare this exact string value. */
+  readonly declaredByConstObjectMembers: readonly string[];
   /** True when this value also appears outside enum declarations/imports. */
   readonly reusedOutsideDeclaration: boolean;
   /** Compact row summary. */
@@ -74,6 +78,8 @@ export interface AtlasSelfContractStringRow {
   readonly count: number;
   /** Enum members that declare this string value. */
   readonly declaredByEnumMembers: readonly string[];
+  /** Const-object members that declare this string value. */
+  readonly declaredByConstObjectMembers: readonly string[];
   /** Source files where this value appears. */
   readonly files: readonly string[];
   /** First occurrence source. */
@@ -117,6 +123,13 @@ export function buildAtlasSelfStringRows(
       const files = uniqueSortedStrings(rows.map((row) => row.filePath));
       const packageIds = uniqueSortedStrings(rows.map((row) => row.packageId));
       const declaredByEnumMembers = enumMembersByValue.get(value) ?? [];
+      const declaredByConstObjectMembers = uniqueSortedStrings(
+        rows.flatMap((row) =>
+          row.declaredByConstObjectMember === null
+            ? []
+            : [row.declaredByConstObjectMember],
+        ),
+      );
       const reusedOutsideDeclaration = rows.some((row) =>
         isMagicStringRole(row.role),
       );
@@ -129,6 +142,7 @@ export function buildAtlasSelfStringRows(
         files,
         firstSource: rows[0]!.source,
         declaredByEnumMembers,
+        declaredByConstObjectMembers,
         reusedOutsideDeclaration,
         summary: `"${value}" appears ${rows.length} time(s) across ${files.length} file(s).`,
       };
@@ -177,6 +191,7 @@ export class AtlasSelfContractStringClassifier {
             classes,
             count: row.count,
             declaredByEnumMembers: row.declaredByEnumMembers,
+            declaredByConstObjectMembers: row.declaredByConstObjectMembers,
             files: row.files,
             firstSource: row.firstSource,
             summary: `${JSON.stringify(
@@ -196,6 +211,9 @@ export class AtlasSelfContractStringClassifier {
     const classes = new Set<string>();
     for (const enumMember of row.declaredByEnumMembers) {
       this.#addEnumMemberClasses(classes, enumMember);
+    }
+    for (const constObjectMember of row.declaredByConstObjectMembers) {
+      this.#addConstObjectMemberClasses(classes, constObjectMember);
     }
     if (
       this.#continuationIds.has(row.value) ||
@@ -250,6 +268,43 @@ export class AtlasSelfContractStringClassifier {
         break;
     }
   }
+
+  #addConstObjectMemberClasses(classes: Set<string>, constObjectMember: string): void {
+    const objectName = constObjectMember.split(".")[0];
+    switch (objectName) {
+      case "SemanticClaimFamily":
+        classes.add("semantic-claim-family");
+        classes.add("family-axis-value");
+        break;
+      case "SemanticClaimPredicate":
+        classes.add("semantic-claim-predicate");
+        classes.add("predicate-axis-value");
+        break;
+      case "SemanticClaimMechanism":
+        classes.add("semantic-claim-mechanism");
+        classes.add("mechanism-axis-value");
+        break;
+      case "SemanticClaimPhase":
+        classes.add("semantic-claim-phase");
+        classes.add("phase-axis-value");
+        break;
+      default:
+        if (objectName?.endsWith("Family") === true) {
+          classes.add("family-axis-value");
+        } else if (objectName?.endsWith("Predicate") === true) {
+          classes.add("predicate-axis-value");
+        } else if (objectName?.endsWith("Mechanism") === true) {
+          classes.add("mechanism-axis-value");
+        } else if (objectName?.endsWith("Phase") === true) {
+          classes.add("phase-axis-value");
+        } else if (objectName?.endsWith("Kind") === true) {
+          classes.add("kind-axis-value");
+        } else if (objectName?.endsWith("Relation") === true) {
+          classes.add("relation-axis-value");
+        }
+        break;
+    }
+  }
 }
 
 export function stringRoleForNode(
@@ -289,6 +344,29 @@ export function stringRoleForNode(
   return AtlasSelfStringRole.Other;
 }
 
+export function constObjectMemberForStringLiteral(
+  node: ts.StringLiteralLike,
+  sourceFile: ts.SourceFile,
+): string | null {
+  const property = node.parent;
+  if (!ts.isPropertyAssignment(property) || property.initializer !== node) {
+    return null;
+  }
+  const objectLiteral = property.parent;
+  if (!ts.isObjectLiteralExpression(objectLiteral)) {
+    return null;
+  }
+  const declaration = variableDeclarationForObjectLiteral(objectLiteral);
+  if (declaration === null || !ts.isIdentifier(declaration.name)) {
+    return null;
+  }
+  if (!isConstVariableDeclaration(declaration)) {
+    return null;
+  }
+  const memberName = propertyNameForConstObjectMember(property.name, sourceFile);
+  return memberName === null ? null : `${declaration.name.text}.${memberName}`;
+}
+
 export function isStringLiteralLike(
   node: ts.Node,
 ): node is ts.StringLiteral | ts.NoSubstitutionTemplateLiteral {
@@ -308,4 +386,36 @@ function stableStringId(value: string): string {
     .replace(/^-+|-+$/gu, "")
     .slice(0, 48);
   return `${readable}:${stableTextFingerprint(value)}`;
+}
+
+function variableDeclarationForObjectLiteral(
+  objectLiteral: ts.ObjectLiteralExpression,
+): ts.VariableDeclaration | null {
+  let current: ts.Node = objectLiteral;
+  while (
+    ts.isAsExpression(current.parent) ||
+    ts.isTypeAssertionExpression(current.parent) ||
+    ts.isSatisfiesExpression(current.parent) ||
+    ts.isParenthesizedExpression(current.parent)
+  ) {
+    current = current.parent;
+  }
+  return ts.isVariableDeclaration(current.parent) && current.parent.initializer === current
+    ? current.parent
+    : null;
+}
+
+function isConstVariableDeclaration(declaration: ts.VariableDeclaration): boolean {
+  const declarationList = declaration.parent;
+  return (declarationList.flags & ts.NodeFlags.Const) !== 0;
+}
+
+function propertyNameForConstObjectMember(
+  name: ts.PropertyName,
+  sourceFile: ts.SourceFile,
+): string | null {
+  if (ts.isIdentifier(name) || ts.isStringLiteral(name) || ts.isNumericLiteral(name)) {
+    return name.text;
+  }
+  return name.getText(sourceFile);
 }

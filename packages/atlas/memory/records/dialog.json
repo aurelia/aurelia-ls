@@ -1,0 +1,79 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:dialog-source-diagnostics",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "dialog",
+        "framework-errors",
+        "diagnostics"
+      ],
+      "summary": "DialogSourceIssueMaterializer owns exact @aurelia/dialog source diagnostics for bare DialogConfiguration registration, invalid static DialogService.open(...) settings, and missing child dialog settings keys.",
+      "rationale": "@aurelia/dialog throws some errors from source-authored configuration/service shapes before live dialog activation. Semantic-runtime now owns the closed static subset as DialogIssue products and app diagnostics, while lifecycle and renderer failures remain intentionally separate future substrate.",
+      "guidance": [
+        "Start here before adding dialog diagnostics or changing dialog framework-error dispositions.",
+        "Use framework.errors for the dialog package and the Aurelia dialog sources before spending another AUR09xx authority row.",
+        "Current exact source-owned codes are AUR0903 dialog_settings_invalid, AUR0904 dialog_no_empty_default_configuration, and AUR0910 dialog_child_settings_not_found.",
+        "Do not claim dialog activation, deactivation, or renderer visibility codes until semantic-runtime admits deeper dialog runtime substrate."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/dialog/dialog-source-issue-materializer.ts",
+          "symbolName": "DialogSourceIssueMaterializer",
+          "summary": "Source-backed dialog issue materializer."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/dialog/framework-error-code.ts",
+          "symbolName": "DialogFrameworkErrorCode",
+          "summary": "Exact @aurelia/dialog framework code links."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/dialog/README.md",
+          "summary": "Dialog lane ownership and remaining intentionally unclaimed authorities."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/dialog-source-errors",
+          "summary": "Pressure fixture for the exact dialog source diagnostics."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "diagnostic-codes",
+          "filters": {
+            "packageId": "dialog"
+          },
+          "summary": "Dialog framework-error disposition view."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api",
+          "summary": "Pressure harness includes dialog issue and app-diagnostic summaries."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/dialog/dialog-source-issue-materializer.ts",
+          "symbolName": "DialogSourceIssueMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/dialog/framework-error-code.ts",
+          "symbolName": "DialogFrameworkErrorCode"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/fixtures/pressure/dialog-source-errors/src/main.ts"
+        }
+      ],
+      "createdAt": "2026-05-14",
+      "updatedAt": "2026-05-14"
+    }
+  ]
+}

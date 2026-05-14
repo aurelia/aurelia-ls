@@ -3,8 +3,59 @@ import type {
   BootProjectInput,
 } from '../boot/frames.js';
 import type {
+  AuthoringCapabilityKey,
+  AuthoringConfidence,
+  AuthoringEvidenceAuthority,
+  AuthoringOpenReasonKind,
+  AuthoringAmbiguityResolution,
+  AuthoringOperationAction,
+  AuthoringOperationFamilyKey,
+  AuthoringOperationKind,
+  AuthoringPolicyState,
+  AuthoringStyleKey,
+  AuthoringSupportState,
+  AuthoringTargetKind,
+  AuthoringTasteAxisLayer,
+  AuthoringTasteAxisKey,
+  AuthoringTasteValueKey,
+} from '../authoring/ontology.js';
+import type {
+  AuthoringRepairChangeDomain,
+  AuthoringRepairEvidenceKind,
+  AuthoringRepairKind,
+  AuthoringRepairPlanKind,
+  AuthoringRepairPlanReadiness,
+  AuthoringRepairRuntimeBoundaryKind,
+  AuthoringRepairRuntimeIntentKind,
+} from '../authoring/repair.js';
+import type {
+  ExpectedSemanticEffectCardinality,
+  ExpectedSemanticEffectKind,
+  ExpectedSemanticEffectRole,
+  ExpectedSemanticEffectScope,
+} from '../authoring/expected-effect.js';
+import type {
+  AuthoringPackageToolingPolicy,
+  AuthoringSourceConflictPolicy,
+  AuthoringSourceEditKind,
+  AuthoringSourceFileRole,
+  AuthoringSourceFormattingPolicy,
+  AuthoringSourceLanguage,
+  AuthoringSourceTextAuthority,
+} from '../authoring/source-plan.js';
+import type {
+  AuthoringBuildToolPolicy,
+  AuthoringPackageDependencyScope,
+  AuthoringPackageManager,
+  AuthoringProjectToolingFileKind,
+  AuthoringProjectToolingLanguage,
+} from '../authoring/package-tooling.js';
+import type {
+  SemanticProjectAnalysisKind,
+  SemanticProjectAureliaDependencyOrigin,
   SemanticProjectAureliaDependencyScope,
   SemanticProjectAureliaSourceSignalKind,
+  SemanticProjectShapeReasonKind,
   SemanticProjectShapeKind,
 } from '../boot/project-shape.js';
 import type {
@@ -17,7 +68,48 @@ import type {
   TemplateCompletionSiteKind,
 } from '../inquiry/template-completion.js';
 import type { SemanticAppAnalysisDepth } from '../configuration/app-analysis.js';
+import type { ConfigurationOptionValueKind } from '../configuration/configuration-option.js';
 import type { ControllerPhase } from '../configuration/controller.js';
+import type {
+  StateIssueKind,
+  StateIssuePhase,
+  StateIssueSeverity,
+} from '../state/state-issue.js';
+import type {
+  ValidationIssueKind,
+  ValidationIssuePhase,
+  ValidationIssueSeverity,
+} from '../validation/validation-issue.js';
+import type {
+  FetchClientIssueKind,
+  FetchClientIssuePhase,
+  FetchClientIssueSeverity,
+} from '../fetch-client/fetch-client-issue.js';
+import type {
+  DialogIssueKind,
+  DialogIssuePhase,
+  DialogIssueSeverity,
+} from '../dialog/dialog-issue.js';
+import type {
+  ConfigurationIssueKind,
+  ConfigurationIssuePhase,
+} from '../configuration/configuration-issue.js';
+import type {
+  DiIssueKind,
+  DiIssuePhase,
+  DiIssueSubjectKind,
+} from '../di/di-issue.js';
+import type {
+  EvaluationIssueKind,
+  EvaluationIssuePhase,
+  EvaluationIssueSubjectKind,
+} from '../evaluation/evaluation-issue.js';
+import type { EvaluationValueKind } from '../evaluation/values.js';
+import type {
+  DiResolveActiveContainerExpectation,
+  DiResolveEnclosingMemberKind,
+  DiResolveExecutionContextKind,
+} from '../di/resolve-call-recognition.js';
 import type {
   AddressHandle,
   ClaimHandle,
@@ -43,6 +135,10 @@ import type {
   WatchFlushMode,
   WatchPropertyKeyKind,
 } from '../resources/watch-definition.js';
+import type {
+  ResourceIssueKind,
+  ResourceIssuePhase,
+} from '../resources/resource-issue.js';
 import type { TemplateResourceVisibilityKind } from '../template/compiler-world-reference.js';
 import type { TemplateInstructionKind } from '../template/instruction-ir.js';
 import type {
@@ -54,6 +150,10 @@ import type {
   RuntimeBindingValueChannelKind,
 } from '../observation/runtime-binding-observation.js';
 import type {
+  ObservationIssueKind,
+  ObservationIssuePhase,
+} from '../observation/observation-issue.js';
+import type {
   RuntimeBindingKind,
   RuntimeBindingSourceOperationAuthority,
   RuntimeBindingSourceOperationKind,
@@ -61,10 +161,14 @@ import type {
   RuntimeBindingTargetAccessLookup,
   RuntimeBindingTargetAccessStrategy,
   RuntimeBindingTargetKind,
+  RuntimeBindingTargetTypeSource,
   RuntimeBindingTargetOperationAuthority,
   RuntimeBindingTargetOperationKind,
   RuntimeTargetOperationOwnerKind,
 } from '../template/runtime-binding.js';
+import type {
+  RuntimeBindingBehaviorApplicationPhase,
+} from '../template/runtime-binding-behavior.js';
 import type {
   RuntimeControllerCreationKind,
   RuntimeControllerLifecycleStage,
@@ -76,7 +180,13 @@ import type {
   TemplateExpressionParseState,
   TemplateValueSiteKind,
 } from '../template/value-site.js';
-import type { CheckerTypeMemberKind } from '../type-system/type-shape.js';
+import type {
+  CheckerExpressionTypeOpenKind,
+} from '../type-system/expression-type-evaluation.js';
+import type {
+  CheckerTypeMemberKind,
+  CheckerTypeShapeKind,
+} from '../type-system/type-shape.js';
 import type { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import type {
   BuiltInTemplateControllerChildViewCardinality,
@@ -86,9 +196,15 @@ import type {
   NavigationInstructionKind,
   RouteableComponentKind,
   RouteConfigKind,
+  RouteConfigOriginKind,
+  RouteConfigValueKind,
+  RouteRecognizerIssueKind,
   RouteRecognizerModelKind,
   RouteRecognizerSegmentKind,
   RouteRecognizerStateKind,
+  RouterIssueKind,
+  RouterIssuePhase,
+  RouterIssueSeverity,
   RouterModelKind,
 } from '../router/model.js';
 import type { SemanticSourceReference } from './source-reference.js';
@@ -104,16 +220,30 @@ export const enum SemanticRuntimeAnswerOutcome {
 
 export const enum SemanticAppQueryKind {
   Summary = 'summary',
+  AuthoringCatalog = 'authoring-catalog',
+  AuthoringOrientation = 'authoring-orientation',
   SourceFiles = 'source-files',
   UnresolvedModules = 'unresolved-modules',
   OpenSeams = 'open-seams',
+  AppDiagnostics = 'app-diagnostics',
+  EvaluationIssues = 'evaluation-issues',
+  ConfigurationIssues = 'configuration-issues',
+  DiIssues = 'di-issues',
+  ObservationIssues = 'observation-issues',
   AppTopology = 'app-topology',
+  StateStores = 'state-stores',
+  StateIssues = 'state-issues',
+  ValidationIssues = 'validation-issues',
+  FetchClientIssues = 'fetch-client-issues',
+  DialogIssues = 'dialog-issues',
   RouterOptions = 'router-options',
   Routes = 'routes',
   RouteContexts = 'route-contexts',
   RoutePatterns = 'route-patterns',
   RouteEndpoints = 'route-endpoints',
   RouteRecognizerStates = 'route-recognizer-states',
+  RouteRecognizerIssues = 'route-recognizer-issues',
+  RouterIssues = 'router-issues',
   RecognizedRoutes = 'recognized-routes',
   TypedNavigationInstructions = 'typed-navigation-instructions',
   ViewportInstructions = 'viewport-instructions',
@@ -124,6 +254,7 @@ export const enum SemanticAppQueryKind {
   ViewportAgents = 'viewport-agents',
   ComponentAgents = 'component-agents',
   ResourceDefinitions = 'resource-definitions',
+  ResourceIssues = 'resource-issues',
   ResourceVisibility = 'resource-visibility',
   TemplateCompilations = 'template-compilations',
   TemplateCompletions = 'template-completions',
@@ -134,6 +265,7 @@ export const enum SemanticAppQueryKind {
   TargetOperations = 'target-operations',
   BindingTargetOperations = 'binding-target-operations',
   BindingSourceOperations = 'binding-source-operations',
+  BindingBehaviorApplications = 'binding-behavior-applications',
   BindingValueChannels = 'binding-value-channels',
   BindingDataFlows = 'binding-data-flows',
 }
@@ -164,7 +296,7 @@ export interface SemanticRuntimeOptions {
 }
 
 export interface OpenSemanticAppOptions {
-  /** Project key selected from the booted workspace. Omit to use the first project. */
+  /** Project key selected from the booted workspace. Omit to use the default aurelia-app project. */
   readonly projectKey?: string | null;
   /** Optional source file used to select the owning project when projectKey is omitted. */
   readonly sourceFilePath?: string | null;
@@ -272,8 +404,10 @@ export interface SemanticProjectSummary {
   readonly sourceRoles: readonly SemanticSourceRoleCount[];
   readonly hasAureliaAppEntrypointSignal: boolean;
   readonly shapeKind: SemanticProjectShapeKind | `${SemanticProjectShapeKind}`;
+  readonly analysisKind: SemanticProjectAnalysisKind | `${SemanticProjectAnalysisKind}`;
   readonly aureliaDependencyScopes: readonly SemanticProjectAureliaDependencyScopeCount[];
   readonly aureliaSourceSignals: readonly SemanticProjectAureliaSourceSignalCount[];
+  readonly shapeReasons: readonly SemanticProjectShapeReasonCount[];
 }
 
 export interface SemanticSourceRoleCount {
@@ -283,12 +417,473 @@ export interface SemanticSourceRoleCount {
 
 export interface SemanticProjectAureliaDependencyScopeCount {
   readonly scope: SemanticProjectAureliaDependencyScope | `${SemanticProjectAureliaDependencyScope}`;
+  readonly origin: SemanticProjectAureliaDependencyOrigin | `${SemanticProjectAureliaDependencyOrigin}`;
   readonly count: number;
 }
 
 export interface SemanticProjectAureliaSourceSignalCount {
   readonly signal: SemanticProjectAureliaSourceSignalKind | `${SemanticProjectAureliaSourceSignalKind}`;
   readonly count: number;
+}
+
+export interface SemanticProjectShapeReasonCount {
+  readonly reason: SemanticProjectShapeReasonKind | `${SemanticProjectShapeReasonKind}`;
+  readonly count: number;
+}
+
+export type SemanticAuthoringLocusKind =
+  | 'workspace'
+  | 'project'
+  | 'app'
+  | 'source-file'
+  | 'cursor'
+  | 'resource'
+  | 'route'
+  | 'component'
+  | 'template'
+  | 'style'
+  | 'package';
+
+export type SemanticAuthoringSurfaceKind =
+  | 'project-shape'
+  | 'app-root'
+  | 'source-file'
+  | 'resource-definition'
+  | 'resource-visibility'
+  | 'route'
+  | 'router-topology'
+  | 'template'
+  | 'runtime-controller'
+  | 'component-role'
+  | 'binding-target-access'
+  | 'target-operation'
+  | 'binding-value-channel'
+  | 'binding-behavior-application'
+  | 'binding-data-flow'
+  | 'diagnostic'
+  | 'open-seam'
+  | 'plugin-api'
+  | 'recipe';
+
+export interface SemanticAuthoringEvidenceRow {
+  readonly authority: AuthoringEvidenceAuthority | `${AuthoringEvidenceAuthority}`;
+  readonly locus: SemanticAuthoringLocusKind;
+  readonly summary: string;
+  readonly source: SemanticSourceReference | null;
+  readonly count: number | null;
+}
+
+export interface SemanticAuthoringProjectOrientation {
+  readonly projectKey: string;
+  readonly rootDir: string;
+  readonly shapeKind: SemanticProjectShapeKind | `${SemanticProjectShapeKind}`;
+  readonly analysisKind: SemanticProjectAnalysisKind | `${SemanticProjectAnalysisKind}`;
+  readonly analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
+  readonly sourceFiles: number;
+  readonly sourceRoles: readonly SemanticSourceRoleCount[];
+  readonly aureliaDependencyScopes: readonly SemanticProjectAureliaDependencyScopeCount[];
+  readonly aureliaSourceSignals: readonly SemanticProjectAureliaSourceSignalCount[];
+  readonly shapeReasons: readonly SemanticProjectShapeReasonCount[];
+}
+
+export interface SemanticAuthoringCoverageRow {
+  readonly key: string;
+  readonly title: string;
+  readonly surfaceKind: SemanticAuthoringSurfaceKind;
+  readonly locus: SemanticAuthoringLocusKind;
+  readonly supportState: AuthoringSupportState | `${AuthoringSupportState}`;
+  readonly authority: AuthoringEvidenceAuthority | `${AuthoringEvidenceAuthority}`;
+  readonly observedCount: number;
+  readonly summary: string;
+  readonly openReasonKinds: readonly (AuthoringOpenReasonKind | `${AuthoringOpenReasonKind}`)[];
+  readonly evidence: readonly SemanticAuthoringEvidenceRow[];
+}
+
+export interface SemanticAuthoringOperationFamilyCatalogRow {
+  readonly familyKey: AuthoringOperationFamilyKey | `${AuthoringOperationFamilyKey}`;
+  readonly title: string;
+  readonly summary: string;
+}
+
+export interface SemanticAuthoringTasteAxisCatalogRow {
+  readonly axisKey: AuthoringTasteAxisKey | `${AuthoringTasteAxisKey}`;
+  readonly title: string;
+  readonly layer: AuthoringTasteAxisLayer | `${AuthoringTasteAxisLayer}`;
+  readonly summary: string;
+  readonly commonValueKeys: readonly (AuthoringTasteValueKey | `${AuthoringTasteValueKey}`)[];
+  /** Common values grouped by their own authority layer so callers do not infer policy from observed-shape values. */
+  readonly primitivePolicyValueKeys: readonly (AuthoringTasteValueKey | `${AuthoringTasteValueKey}`)[];
+  readonly observedShapeValueKeys: readonly (AuthoringTasteValueKey | `${AuthoringTasteValueKey}`)[];
+  readonly derivedReadingValueKeys: readonly (AuthoringTasteValueKey | `${AuthoringTasteValueKey}`)[];
+  /** Compact layer/count summary for this axis' common values. */
+  readonly valueLayerCounts: readonly SemanticAuthoringTasteAxisValueLayerCount[];
+}
+
+export interface SemanticAuthoringTasteValueCatalogRow {
+  readonly valueKey: AuthoringTasteValueKey | `${AuthoringTasteValueKey}`;
+  readonly axisKey: AuthoringTasteAxisKey | `${AuthoringTasteAxisKey}`;
+  readonly layer: AuthoringTasteAxisLayer | `${AuthoringTasteAxisLayer}`;
+  readonly summary: string;
+}
+
+export interface SemanticAuthoringTasteAxisValueLayerCount {
+  readonly layer: AuthoringTasteAxisLayer | `${AuthoringTasteAxisLayer}`;
+  readonly count: number;
+}
+
+export interface SemanticAuthoringProfileCatalogRow {
+  readonly profileKey: AuthoringStyleKey | `${AuthoringStyleKey}`;
+  readonly title: string;
+  readonly summary: string;
+  readonly ambiguitySummary: string | null;
+  readonly preferences: readonly SemanticAuthoringPreferenceCatalogRow[];
+}
+
+export interface SemanticAuthoringPreferenceCatalogRow {
+  readonly axisKey: AuthoringTasteAxisKey | `${AuthoringTasteAxisKey}`;
+  readonly valueKey: AuthoringTasteValueKey | `${AuthoringTasteValueKey}`;
+  readonly valueLayer: AuthoringTasteAxisLayer | `${AuthoringTasteAxisLayer}`;
+  readonly valueOntologySummary: string;
+}
+
+export interface SemanticAuthoringCapabilityCatalogRow {
+  readonly capabilityKey: AuthoringCapabilityKey | `${AuthoringCapabilityKey}`;
+  readonly title: string;
+  readonly summary: string;
+  /** Product-level gaps that are known before inspecting a specific app. */
+  readonly productOpenReasonKinds: readonly (AuthoringOpenReasonKind | `${AuthoringOpenReasonKind}`)[];
+}
+
+export interface SemanticAuthoringAmbiguityCatalogRow {
+  readonly key: string;
+  readonly summary: string;
+  readonly resolution: AuthoringAmbiguityResolution | `${AuthoringAmbiguityResolution}`;
+  readonly options: readonly string[];
+}
+
+export interface SemanticAuthoringOperationCatalogRow {
+  readonly operationKind: AuthoringOperationKind | `${AuthoringOperationKind}`;
+  readonly familyKey: AuthoringOperationFamilyKey | `${AuthoringOperationFamilyKey}`;
+  readonly action: AuthoringOperationAction | `${AuthoringOperationAction}`;
+  readonly targetKind: AuthoringTargetKind | `${AuthoringTargetKind}`;
+  readonly summary: string;
+  readonly requiredCapabilityKeys: readonly (AuthoringCapabilityKey | `${AuthoringCapabilityKey}`)[];
+  /** Product-level gaps inherited from required capability descriptors. */
+  readonly productOpenReasonKinds: readonly (AuthoringOpenReasonKind | `${AuthoringOpenReasonKind}`)[];
+  readonly commonAmbiguities: readonly SemanticAuthoringAmbiguityCatalogRow[];
+}
+
+export interface SemanticAuthoringTasteValueRow {
+  readonly valueKey: AuthoringTasteValueKey | `${AuthoringTasteValueKey}`;
+  readonly axisKey: AuthoringTasteAxisKey | `${AuthoringTasteAxisKey}`;
+  readonly layer: AuthoringTasteAxisLayer | `${AuthoringTasteAxisLayer}`;
+  readonly confidence: AuthoringConfidence | `${AuthoringConfidence}`;
+  /** Compact display summary for the current app-specific reading. */
+  readonly summary: string;
+  /** Durable ontology meaning for the value key, independent of the current app. */
+  readonly ontologySummary: string;
+  /** Current app-specific reading that caused this value to appear. */
+  readonly observedSummary: string;
+  readonly evidence: readonly SemanticAuthoringEvidenceRow[];
+}
+
+export interface SemanticAuthoringTasteAxisRow {
+  readonly axisKey: AuthoringTasteAxisKey | `${AuthoringTasteAxisKey}`;
+  readonly title: string;
+  readonly layer: AuthoringTasteAxisLayer | `${AuthoringTasteAxisLayer}`;
+  /** Policy availability for this opened app; observed-shape values alone do not imply policy. */
+  readonly policyState: AuthoringPolicyState | `${AuthoringPolicyState}`;
+  readonly confidence: AuthoringConfidence | `${AuthoringConfidence}`;
+  readonly primitivePolicyValueCount: number;
+  readonly observedShapeValueCount: number;
+  readonly derivedReadingValueCount: number;
+  readonly values: readonly SemanticAuthoringTasteValueRow[];
+  readonly summary: string;
+  readonly openReasonKinds: readonly (AuthoringOpenReasonKind | `${AuthoringOpenReasonKind}`)[];
+}
+
+export interface SemanticAuthoringCapabilityRow {
+  readonly key: AuthoringCapabilityKey | `${AuthoringCapabilityKey}`;
+  readonly title: string;
+  readonly familyKeys: readonly (AuthoringOperationFamilyKey | `${AuthoringOperationFamilyKey}`)[];
+  readonly operationKinds: readonly (AuthoringOperationKind | `${AuthoringOperationKind}`)[];
+  readonly supportState: AuthoringSupportState | `${AuthoringSupportState}`;
+  readonly summary: string;
+  readonly openReasonKinds: readonly (AuthoringOpenReasonKind | `${AuthoringOpenReasonKind}`)[];
+  readonly evidence: readonly SemanticAuthoringEvidenceRow[];
+}
+
+export interface SemanticAuthoringOperationRow {
+  readonly operationKind: AuthoringOperationKind | `${AuthoringOperationKind}`;
+  readonly familyKey: AuthoringOperationFamilyKey | `${AuthoringOperationFamilyKey}`;
+  readonly action: AuthoringOperationAction | `${AuthoringOperationAction}`;
+  readonly targetKind: AuthoringTargetKind | `${AuthoringTargetKind}`;
+  readonly requiredCapabilityKeys: readonly (AuthoringCapabilityKey | `${AuthoringCapabilityKey}`)[];
+  readonly supportState: AuthoringSupportState | `${AuthoringSupportState}`;
+  readonly summary: string;
+  readonly openReasonKinds: readonly (AuthoringOpenReasonKind | `${AuthoringOpenReasonKind}`)[];
+}
+
+export interface SemanticAuthoringAvailableSurfaceRow {
+  readonly key: string;
+  readonly surfaceKind: SemanticAuthoringSurfaceKind;
+  readonly locus: SemanticAuthoringLocusKind;
+  readonly title: string;
+  readonly count: number;
+  readonly supportState: AuthoringSupportState | `${AuthoringSupportState}`;
+  readonly authority: AuthoringEvidenceAuthority | `${AuthoringEvidenceAuthority}`;
+  readonly summary: string;
+  readonly evidence: readonly SemanticAuthoringEvidenceRow[];
+}
+
+export interface SemanticAuthoringExpectedEffectContractRow {
+  readonly effectKind: ExpectedSemanticEffectKind | `${ExpectedSemanticEffectKind}`;
+  readonly scope: ExpectedSemanticEffectScope | `${ExpectedSemanticEffectScope}`;
+  readonly role: ExpectedSemanticEffectRole | `${ExpectedSemanticEffectRole}`;
+  readonly topologyNodeKind: AuthoringTargetKind | `${AuthoringTargetKind}` | null;
+  readonly cardinality: ExpectedSemanticEffectCardinality | `${ExpectedSemanticEffectCardinality}`;
+  readonly count: number | null;
+  /** Compact stable key for grouping this expected target across catalog, orientation, and pressure reports. */
+  readonly semanticTargetKey: string;
+  readonly filterCount: number;
+  readonly filterFields: readonly string[];
+  readonly filters: readonly SemanticAuthoringExpectedEffectFilterRow[];
+  readonly capabilityKey: (AuthoringCapabilityKey | `${AuthoringCapabilityKey}`) | null;
+  readonly minimumSupportState: (AuthoringSupportState | `${AuthoringSupportState}`) | null;
+  readonly tasteAxisKey: (AuthoringTasteAxisKey | `${AuthoringTasteAxisKey}`) | null;
+  readonly tasteValueKey: (AuthoringTasteValueKey | `${AuthoringTasteValueKey}`) | null;
+  /** Layer of the target taste value for `authoring-taste` effects. */
+  readonly tasteValueLayer: (AuthoringTasteAxisLayer | `${AuthoringTasteAxisLayer}`) | null;
+  /** Durable ontology meaning of the target taste value for `authoring-taste` effects. */
+  readonly tasteValueOntologySummary: string | null;
+  readonly summary: string;
+}
+
+export interface SemanticAuthoringExpectedEffectRow extends SemanticAuthoringExpectedEffectContractRow {
+  /** Matching fact count in the currently opened app, using the same verifier semantics as closed-loop verification. */
+  readonly currentObservedCount: number | null;
+  /** Whether the currently opened app satisfies this effect expectation. */
+  readonly currentOutcome: 'satisfied' | 'failed' | 'unsupported';
+}
+
+export interface SemanticAuthoringExpectedEffectFilterRow {
+  readonly field: string;
+  readonly value: string | number | boolean | null;
+}
+
+export interface SemanticAuthoringRecipeCatalogRow {
+  readonly key: string;
+  readonly title: string;
+  readonly operationKinds: readonly (AuthoringOperationKind | `${AuthoringOperationKind}`)[];
+  /** Direct recipe bases whose source/effect shape this recipe intentionally contains. */
+  readonly baseRecipeKeys: readonly string[];
+  /** Transitive base recipes ordered from broadest base to nearest base. */
+  readonly lineageRecipeKeys: readonly string[];
+  /** Transitive recipe depth; higher values are more specific when several satisfied recipes overlap. */
+  readonly specificityRank: number;
+  readonly supportState: AuthoringSupportState | `${AuthoringSupportState}`;
+  readonly summary: string;
+  readonly openReasonKinds: readonly (AuthoringOpenReasonKind | `${AuthoringOpenReasonKind}`)[];
+  readonly preferences: readonly SemanticAuthoringPreferenceCatalogRow[];
+  readonly sourcePlan: SemanticAuthoringSourcePlanCatalogRow | null;
+  readonly expectedEffectKinds: readonly (ExpectedSemanticEffectKind | `${ExpectedSemanticEffectKind}`)[];
+  readonly expectedEffects: readonly SemanticAuthoringExpectedEffectContractRow[];
+  readonly expectedEffectCount: number;
+}
+
+export interface SemanticAuthoringSourcePlanCatalogRow {
+  readonly conflictPolicy: AuthoringSourceConflictPolicy | `${AuthoringSourceConflictPolicy}`;
+  readonly formattingPolicy: AuthoringSourceFormattingPolicy | `${AuthoringSourceFormattingPolicy}`;
+  readonly packageToolingPolicy: AuthoringPackageToolingPolicy | `${AuthoringPackageToolingPolicy}`;
+  readonly projectTooling: SemanticAuthoringProjectToolingCatalogRow | null;
+  readonly hasCompleteFileText: boolean;
+  readonly fileCount: number;
+  readonly fileRoles: readonly (AuthoringSourceFileRole | `${AuthoringSourceFileRole}`)[];
+  readonly languages: readonly (AuthoringSourceLanguage | `${AuthoringSourceLanguage}`)[];
+  readonly editKinds: readonly (AuthoringSourceEditKind | `${AuthoringSourceEditKind}`)[];
+  readonly textAuthorities: readonly (AuthoringSourceTextAuthority | `${AuthoringSourceTextAuthority}`)[];
+  readonly files: readonly SemanticAuthoringSourceFileCatalogRow[];
+}
+
+export interface SemanticAuthoringSourceFileCatalogRow {
+  readonly path: string;
+  readonly role: AuthoringSourceFileRole | `${AuthoringSourceFileRole}`;
+  readonly language: AuthoringSourceLanguage | `${AuthoringSourceLanguage}`;
+  readonly editKind: AuthoringSourceEditKind | `${AuthoringSourceEditKind}`;
+  readonly operationKind: (AuthoringOperationKind | `${AuthoringOperationKind}`) | null;
+  readonly textAuthority: (AuthoringSourceTextAuthority | `${AuthoringSourceTextAuthority}`) | null;
+}
+
+export interface SemanticAuthoringProjectToolingCatalogRow {
+  readonly packageManager: AuthoringPackageManager | `${AuthoringPackageManager}`;
+  readonly buildToolPolicy: AuthoringBuildToolPolicy | `${AuthoringBuildToolPolicy}`;
+  readonly hasCompleteFileText: boolean;
+  readonly dependencyCount: number;
+  readonly dependencySpecifiers: readonly string[];
+  readonly dependencyScopes: readonly (AuthoringPackageDependencyScope | `${AuthoringPackageDependencyScope}`)[];
+  readonly dependencies: readonly SemanticAuthoringPackageDependencyCatalogRow[];
+  readonly scriptCount: number;
+  readonly scriptNames: readonly string[];
+  readonly scripts: readonly SemanticAuthoringPackageScriptCatalogRow[];
+  readonly fileCount: number;
+  readonly fileKinds: readonly (AuthoringProjectToolingFileKind | `${AuthoringProjectToolingFileKind}`)[];
+  readonly fileLanguages: readonly (AuthoringProjectToolingLanguage | `${AuthoringProjectToolingLanguage}`)[];
+  readonly textAuthorities: readonly (AuthoringSourceTextAuthority | `${AuthoringSourceTextAuthority}`)[];
+  readonly files: readonly SemanticAuthoringProjectToolingFileCatalogRow[];
+}
+
+export interface SemanticAuthoringPackageDependencyCatalogRow {
+  readonly specifier: string;
+  readonly versionRange: string;
+  readonly scope: AuthoringPackageDependencyScope | `${AuthoringPackageDependencyScope}`;
+}
+
+export interface SemanticAuthoringPackageScriptCatalogRow {
+  readonly name: string;
+  readonly command: string;
+}
+
+export interface SemanticAuthoringProjectToolingFileCatalogRow {
+  readonly path: string;
+  readonly fileKind: AuthoringProjectToolingFileKind | `${AuthoringProjectToolingFileKind}`;
+  readonly language: AuthoringProjectToolingLanguage | `${AuthoringProjectToolingLanguage}`;
+  readonly textAuthority: AuthoringSourceTextAuthority | `${AuthoringSourceTextAuthority}`;
+}
+
+export interface SemanticAuthoringRecipeSeedRow {
+  readonly key: string;
+  readonly title: string;
+  readonly operationKinds: readonly (AuthoringOperationKind | `${AuthoringOperationKind}`)[];
+  /** Direct recipe bases whose source/effect shape this recipe intentionally contains. */
+  readonly baseRecipeKeys: readonly string[];
+  /** Transitive base recipes ordered from broadest base to nearest base. */
+  readonly lineageRecipeKeys: readonly string[];
+  /** Transitive recipe depth; higher values are more specific when several satisfied recipes overlap. */
+  readonly specificityRank: number;
+  readonly expectedEffectKinds: readonly (ExpectedSemanticEffectKind | `${ExpectedSemanticEffectKind}`)[];
+  readonly expectedEffects: readonly SemanticAuthoringExpectedEffectRow[];
+  readonly expectedEffectCount: number;
+  readonly satisfiedExpectedEffectCount: number;
+  readonly failedExpectedEffectCount: number;
+  readonly unsupportedExpectedEffectCount: number;
+  readonly signatureExpectedEffectCount: number;
+  readonly satisfiedSignatureExpectedEffectCount: number;
+  readonly failedSignatureExpectedEffectCount: number;
+  readonly unsupportedSignatureExpectedEffectCount: number;
+  readonly discriminatorExpectedEffectCount: number;
+  readonly satisfiedDiscriminatorExpectedEffectCount: number;
+  readonly failedDiscriminatorExpectedEffectCount: number;
+  readonly unsupportedDiscriminatorExpectedEffectCount: number;
+  readonly currentFitState: 'satisfied' | 'partial' | 'not-applicable' | 'unsupported';
+  readonly supportState: AuthoringSupportState | `${AuthoringSupportState}`;
+  readonly summary: string;
+  readonly openReasonKinds: readonly (AuthoringOpenReasonKind | `${AuthoringOpenReasonKind}`)[];
+}
+
+export interface SemanticAuthoringCatalogResult {
+  readonly operationFamilies: readonly SemanticAuthoringOperationFamilyCatalogRow[];
+  readonly tasteAxes: readonly SemanticAuthoringTasteAxisCatalogRow[];
+  readonly tasteValues: readonly SemanticAuthoringTasteValueCatalogRow[];
+  readonly profiles: readonly SemanticAuthoringProfileCatalogRow[];
+  readonly capabilities: readonly SemanticAuthoringCapabilityCatalogRow[];
+  readonly operations: readonly SemanticAuthoringOperationCatalogRow[];
+  readonly recipes: readonly SemanticAuthoringRecipeCatalogRow[];
+}
+
+export interface SemanticAuthoringOpenReasonRow {
+  readonly reasonKind: AuthoringOpenReasonKind | `${AuthoringOpenReasonKind}`;
+  readonly locus: SemanticAuthoringLocusKind;
+  readonly summary: string;
+  readonly blockingCapabilityKeys: readonly (AuthoringCapabilityKey | `${AuthoringCapabilityKey}`)[];
+}
+
+export interface SemanticAuthoringRepairRow {
+  readonly key: string;
+  readonly repairKind: AuthoringRepairKind | `${AuthoringRepairKind}`;
+  readonly evidenceKind: AuthoringRepairEvidenceKind | `${AuthoringRepairEvidenceKind}`;
+  readonly operationKind: AuthoringOperationKind | `${AuthoringOperationKind}`;
+  readonly supportState: AuthoringSupportState | `${AuthoringSupportState}`;
+  readonly authority: AuthoringEvidenceAuthority | `${AuthoringEvidenceAuthority}`;
+  readonly locus: SemanticAuthoringLocusKind;
+  readonly source: SemanticSourceReference | null;
+  readonly diagnosticKind: SemanticTemplateCursorDiagnosticKind | null;
+  readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}` | null;
+  readonly valueSiteKind: TemplateValueSiteKind | `${TemplateValueSiteKind}` | null;
+  readonly seamKindKey: OpenSeam['seamKindKey'] | null;
+  readonly missingInputs: readonly string[];
+  readonly openSeamReasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly runtimeBoundaryKinds: readonly (AuthoringRepairRuntimeBoundaryKind | `${AuthoringRepairRuntimeBoundaryKind}`)[];
+  readonly runtimeIntentKinds: readonly (AuthoringRepairRuntimeIntentKind | `${AuthoringRepairRuntimeIntentKind}`)[];
+  readonly suggestion: SemanticTemplateCursorSuggestionRow | null;
+  readonly summary: string;
+  readonly openReasonKinds: readonly (AuthoringOpenReasonKind | `${AuthoringOpenReasonKind}`)[];
+}
+
+export interface SemanticAuthoringRepairMemberHintRow {
+  readonly memberName: string;
+  readonly evidenceCount: number;
+  readonly ownerTypeDisplays: readonly string[];
+  readonly valueTypeDisplays: readonly string[];
+  readonly valueTypeSources: readonly SemanticTemplateCursorSuggestionValueTypeSource[];
+  readonly valueTypeCoverage: 'all' | 'some' | 'none';
+}
+
+export interface SemanticAuthoringRepairActionTargetRow {
+  readonly targetKind: SemanticTemplateCursorSuggestionActionTargetKind;
+  readonly source: SemanticSourceReference | null;
+  readonly typeDisplay: string | null;
+  readonly memberNames: readonly string[];
+  readonly evidenceCount: number;
+}
+
+export interface SemanticAuthoringRepairClusterRow {
+  readonly key: string;
+  readonly repairKind: AuthoringRepairKind | `${AuthoringRepairKind}`;
+  readonly planKind: AuthoringRepairPlanKind | `${AuthoringRepairPlanKind}`;
+  readonly changeDomain: AuthoringRepairChangeDomain | `${AuthoringRepairChangeDomain}`;
+  readonly planReadiness: AuthoringRepairPlanReadiness | `${AuthoringRepairPlanReadiness}`;
+  readonly evidenceKind: AuthoringRepairEvidenceKind | `${AuthoringRepairEvidenceKind}`;
+  readonly operationKind: AuthoringOperationKind | `${AuthoringOperationKind}`;
+  readonly supportState: AuthoringSupportState | `${AuthoringSupportState}`;
+  readonly authority: AuthoringEvidenceAuthority | `${AuthoringEvidenceAuthority}`;
+  readonly locus: SemanticAuthoringLocusKind;
+  readonly diagnosticKind: SemanticTemplateCursorDiagnosticKind | null;
+  readonly siteKinds: readonly (TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`)[];
+  readonly valueSiteKinds: readonly (TemplateValueSiteKind | `${TemplateValueSiteKind}`)[];
+  readonly seamKindKey: OpenSeam['seamKindKey'] | null;
+  readonly suggestionKind: SemanticTemplateCursorSuggestionKind | null;
+  readonly actionKind: SemanticTemplateCursorSuggestionActionKind | null;
+  readonly actionTargetKind: SemanticTemplateCursorSuggestionActionTargetKind | null;
+  readonly actionTargetSourceCoverage: 'all' | 'some' | 'none' | 'not-applicable';
+  readonly actionTargetCount: number;
+  readonly actionTargets: readonly SemanticAuthoringRepairActionTargetRow[];
+  readonly count: number;
+  readonly targetMemberCount: number;
+  readonly targetMemberNames: readonly string[];
+  readonly memberHints: readonly SemanticAuthoringRepairMemberHintRow[];
+  readonly ownerTypeCount: number;
+  readonly ownerTypeDisplays: readonly string[];
+  readonly valueTypeCount: number;
+  readonly valueTypeDisplays: readonly string[];
+  readonly missingInputs: readonly string[];
+  readonly openSeamReasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly runtimeBoundaryKinds: readonly (AuthoringRepairRuntimeBoundaryKind | `${AuthoringRepairRuntimeBoundaryKind}`)[];
+  readonly runtimeIntentKinds: readonly (AuthoringRepairRuntimeIntentKind | `${AuthoringRepairRuntimeIntentKind}`)[];
+  readonly openReasonKinds: readonly (AuthoringOpenReasonKind | `${AuthoringOpenReasonKind}`)[];
+  readonly summary: string;
+}
+
+export interface SemanticAuthoringOrientationResult {
+  readonly project: SemanticAuthoringProjectOrientation;
+  readonly coverage: readonly SemanticAuthoringCoverageRow[];
+  readonly taste: readonly SemanticAuthoringTasteAxisRow[];
+  readonly capabilities: readonly SemanticAuthoringCapabilityRow[];
+  readonly operations: readonly SemanticAuthoringOperationRow[];
+  readonly surfaces: readonly SemanticAuthoringAvailableSurfaceRow[];
+  readonly recipes: readonly SemanticAuthoringRecipeSeedRow[];
+  readonly repairs: readonly SemanticAuthoringRepairRow[];
+  readonly repairClusters: readonly SemanticAuthoringRepairClusterRow[];
+  readonly openReasons: readonly SemanticAuthoringOpenReasonRow[];
 }
 
 export interface SemanticAppSummary {
@@ -298,6 +893,7 @@ export interface SemanticAppSummary {
   readonly sourceFiles: number;
   readonly evaluatedSources: number;
   readonly unresolvedModuleEdges: number;
+  readonly evaluationIssues: number;
   readonly resourceDefinitions: number;
   readonly routerOptions: number;
   readonly routeConfigs: number;
@@ -307,6 +903,8 @@ export interface SemanticAppSummary {
   readonly routePatterns: number;
   readonly routeEndpoints: number;
   readonly routeRecognizerStates: number;
+  readonly routeRecognizerIssues: number;
+  readonly routerIssues: number;
   readonly recognizedRoutes: number;
   readonly typedNavigationInstructions: number;
   readonly viewportInstructions: number;
@@ -321,12 +919,17 @@ export interface SemanticAppSummary {
   readonly appTasks: number;
   readonly appRoots: number;
   readonly registrationAdmissions: number;
+  readonly configurationIssues: number;
+  readonly stateStores: number;
+  readonly stateIssues: number;
   readonly containers: number;
   readonly runtimeChildContainers: number;
   readonly resolverSlots: number;
+  readonly diResolveCallSites: number;
   readonly runtimeChildContextResolverSlots: number;
   readonly runtimeControllers: number;
   readonly resourceSlots: number;
+  readonly diIssues: number;
   readonly diOpenSeams: number;
   readonly compilerWorlds: number;
   readonly visibleResources: number;
@@ -340,6 +943,7 @@ export interface SemanticAppSummary {
   readonly runtimeBindingTargetAccesses: number;
   readonly runtimeBindingTargetOperations: number;
   readonly runtimeBindingSourceOperations: number;
+  readonly runtimeBindingBehaviorApplications: number;
   readonly runtimeBindingValueChannels: number;
   readonly runtimeBindingDataFlows: number;
   readonly runtimeBindingDataFlowSourceTypeGaps: number;
@@ -389,12 +993,42 @@ export interface SemanticOpenSeamsResult {
   readonly rows: readonly SemanticOpenSeamRow[];
 }
 
+export interface SemanticEvaluationIssueRow {
+  readonly projectKey: string;
+  readonly phase: EvaluationIssuePhase | `${EvaluationIssuePhase}`;
+  readonly issueKind: EvaluationIssueKind | `${EvaluationIssueKind}`;
+  readonly subjectKind: EvaluationIssueSubjectKind | `${EvaluationIssueSubjectKind}`;
+  readonly diagnosticAuthority: SemanticTemplateCursorDiagnosticAuthority | 'semantic-runtime-product';
+  readonly frameworkErrorCode: string | null;
+  readonly frameworkRawErrorAuthority: string | null;
+  readonly severity: SemanticTemplateCursorDiagnosticSeverity;
+  readonly message: string;
+  readonly actualValueKind: EvaluationValueKind | `${EvaluationValueKind}` | null;
+  readonly inputExpressionText: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticEvaluationIssuesResult {
+  readonly rows: readonly SemanticEvaluationIssueRow[];
+}
+
 export interface SemanticResourceDefinitionBindableRow {
   readonly name: string;
   readonly attribute: string;
   readonly callback: string;
   readonly mode: BindableBindingMode | `${BindableBindingMode}`;
   readonly setterKind: BindableSetterKind | `${BindableSetterKind}`;
+  readonly valueType: string | null;
+  readonly valueTypeShapeKind: CheckerTypeShapeKind | `${CheckerTypeShapeKind}` | null;
+  readonly effectiveValueTypeShapeKind: CheckerTypeShapeKind | `${CheckerTypeShapeKind}` | null;
+  readonly valueTypeHasCallSignature: boolean | null;
+  readonly valueTypeHasMembers: boolean | null;
+  readonly valueTypeIsWeak: boolean | null;
   readonly source: SemanticSourceReference | null;
 }
 
@@ -408,6 +1042,29 @@ export interface SemanticResourceDefinitionWatchRow {
   readonly callbackPropertyKeyText: string | null;
   readonly callbackSource: SemanticSourceReference | null;
   readonly flush: WatchFlushMode | `${WatchFlushMode}`;
+}
+
+export interface SemanticResourceIssueRow {
+  readonly projectKey: string;
+  readonly phase: ResourceIssuePhase | `${ResourceIssuePhase}`;
+  readonly issueKind: ResourceIssueKind | `${ResourceIssueKind}`;
+  readonly diagnosticAuthority: 'framework-error-code' | 'semantic-runtime-product';
+  readonly frameworkErrorCode: string | null;
+  readonly severity: SemanticTemplateCursorDiagnosticSeverity;
+  readonly message: string;
+  readonly source: SemanticSourceReference | null;
+  readonly resource: {
+    readonly resourceKind: ResourceDefinitionKind | `${ResourceDefinitionKind}` | null;
+    readonly name: string | null;
+    readonly key: string | null;
+    readonly source: SemanticSourceReference | null;
+  };
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly ownerDefinitionIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
 }
 
 export interface SemanticResourceDefinitionDependencyRow {
@@ -427,9 +1084,24 @@ export interface SemanticResourceDefinitionPatternRow {
   readonly source: SemanticSourceReference | null;
 }
 
+export type SemanticResourceDeclarationMode =
+  /** Resource metadata came from an Aurelia decorator. */
+  | 'decorator'
+  /** Resource metadata came from static class-side metadata such as `$au`. */
+  | 'static-property'
+  /** Resource metadata came from an explicit definition object or define call. */
+  | 'definition-object'
+  /** Resource metadata came from a resource factory/create call. */
+  | 'factory-call'
+  /** Resource metadata came from the currently modeled conventions plugin rules. */
+  | 'convention'
+  /** Resource metadata came from a generic header whose more precise carrier is not preserved. */
+  | 'header';
+
 export interface SemanticResourceDefinitionRow {
   readonly projectKey: string;
   readonly resourceKind: ResourceDefinitionKind;
+  readonly declarationModes: readonly SemanticResourceDeclarationMode[];
   readonly name: string | null;
   readonly aliases: readonly string[];
   readonly key: string | null;
@@ -438,6 +1110,7 @@ export interface SemanticResourceDefinitionRow {
   readonly template: SemanticResourceDefinitionTemplateRow | null;
   readonly bindables: readonly SemanticResourceDefinitionBindableRow[];
   readonly watches: readonly SemanticResourceDefinitionWatchRow[];
+  readonly issues: readonly SemanticResourceIssueRow[];
   readonly dependencies: readonly SemanticResourceDefinitionDependencyRow[];
   readonly isTemplateController: boolean | null;
   readonly containerStrategy: CustomAttributeContainerStrategy | `${CustomAttributeContainerStrategy}` | null;
@@ -460,6 +1133,277 @@ export interface SemanticResourceDefinitionRow {
 
 export interface SemanticResourceDefinitionsResult {
   readonly rows: readonly SemanticResourceDefinitionRow[];
+}
+
+export interface SemanticResourceIssuesResult {
+  readonly rows: readonly SemanticResourceIssueRow[];
+}
+
+export interface SemanticConfigurationIssueRow {
+  readonly projectKey: string;
+  readonly phase: ConfigurationIssuePhase | `${ConfigurationIssuePhase}`;
+  readonly issueKind: ConfigurationIssueKind | `${ConfigurationIssueKind}`;
+  readonly diagnosticAuthority: 'framework-error-code' | 'semantic-runtime-product';
+  readonly frameworkErrorCode: string | null;
+  readonly severity: SemanticTemplateCursorDiagnosticSeverity;
+  readonly message: string;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticConfigurationIssuesResult {
+  readonly rows: readonly SemanticConfigurationIssueRow[];
+}
+
+export interface SemanticDiIssueRow {
+  readonly projectKey: string;
+  readonly phase: DiIssuePhase | `${DiIssuePhase}`;
+  readonly issueKind: DiIssueKind | `${DiIssueKind}`;
+  readonly diagnosticAuthority: 'framework-error-code' | 'semantic-runtime-product';
+  readonly frameworkErrorCode: string | null;
+  readonly severity: SemanticTemplateCursorDiagnosticSeverity;
+  readonly message: string;
+  readonly subjectKind: DiIssueSubjectKind | `${DiIssueSubjectKind}`;
+  readonly resourceKey: string | null;
+  readonly resolveCall: {
+    readonly keyExpressionText: string | null;
+    readonly argumentCount: number;
+    readonly nullishKeyArguments: readonly {
+      readonly index: number;
+      readonly kind: string;
+      readonly text: string;
+    }[];
+    readonly enclosingClassName: string | null;
+    readonly enclosingMemberName: string | null;
+    readonly enclosingMemberKind: DiResolveEnclosingMemberKind;
+    readonly enclosingMemberStatic: boolean;
+    readonly executionContextKind: DiResolveExecutionContextKind;
+    readonly activeContainerExpectation: DiResolveActiveContainerExpectation;
+  } | null;
+  readonly injectDecorator: {
+    readonly decoratorName: string;
+    readonly targetKind: string;
+    readonly targetName: string | null;
+  } | null;
+  readonly containerApiCall: {
+    readonly methodKind: string;
+    readonly keyExpressionText: string | null;
+    readonly keyWrapperKind: string | null;
+    readonly wrappedKeyName: string | null;
+    readonly keyKind: string;
+    readonly keyIdentityKind: string;
+    readonly autoRegister: boolean | null;
+    readonly receiverDefaultResolverPolicy: string | null;
+    readonly receiverFreshCreateContainer: boolean;
+    readonly nullishKeyArguments: readonly {
+      readonly index: number;
+      readonly kind: string;
+      readonly text: string;
+    }[];
+    readonly receiverText: string;
+  } | null;
+  readonly dependencyCycle: {
+    readonly entryKeyExpressionText: string | null;
+    readonly entryKeyName: string;
+    readonly cycle: readonly {
+      readonly keyName: string;
+      readonly implementationName: string;
+      readonly dependencyKeyName: string;
+      readonly sourcePath: string | null;
+    }[];
+  } | null;
+  readonly registrationCascade: {
+    readonly stepKind: string;
+    readonly admissionKind: string;
+    readonly strategy: string;
+  } | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly containerIdentityHandle: IdentityHandle | null;
+    readonly containerProductHandle: ProductHandle | null;
+    readonly existingResourceSlotProductHandle: ProductHandle | null;
+    readonly incomingResourceProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticDiIssuesResult {
+  readonly rows: readonly SemanticDiIssueRow[];
+}
+
+export interface SemanticObservationIssueRow {
+  readonly projectKey: string;
+  readonly phase: ObservationIssuePhase | `${ObservationIssuePhase}`;
+  readonly issueKind: ObservationIssueKind | `${ObservationIssueKind}`;
+  readonly diagnosticAuthority: SemanticTemplateCursorDiagnosticAuthority | 'semantic-runtime-product';
+  readonly frameworkErrorCode: string | null;
+  readonly severity: SemanticTemplateCursorDiagnosticSeverity;
+  readonly message: string;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticObservationIssuesResult {
+  readonly rows: readonly SemanticObservationIssueRow[];
+}
+
+export type SemanticAppDiagnosticDomain =
+  | 'evaluation'
+  | 'configuration'
+  | 'di'
+  | 'observation'
+  | 'template'
+  | 'resource'
+  | 'state'
+  | 'validation'
+  | 'fetch-client'
+  | 'dialog'
+  | 'router'
+  | 'route-recognizer';
+
+export interface SemanticAppDiagnosticRow {
+  readonly projectKey: string;
+  readonly diagnosticDomain: SemanticAppDiagnosticDomain;
+  readonly diagnosticKind: string;
+  readonly diagnosticAuthority: SemanticTemplateCursorDiagnosticAuthority | 'semantic-runtime-product';
+  readonly frameworkErrorCode: string | null;
+  readonly frameworkRawErrorAuthority?: string | null;
+  readonly severity: SemanticTemplateCursorDiagnosticSeverity;
+  readonly summary: string;
+  readonly source: SemanticSourceReference | null;
+  readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;
+}
+
+export interface SemanticAppDiagnosticsResult {
+  readonly rows: readonly SemanticAppDiagnosticRow[];
+}
+
+export type SemanticStateStoreOptionsOrHandlerKind =
+  | 'absent'
+  | 'options-object'
+  | 'action-handler'
+  | 'ambiguous';
+
+export interface SemanticStateStoreRow {
+  readonly projectKey: string;
+  readonly name: string | null;
+  readonly isDefault: boolean;
+  readonly initialStateKind: ConfigurationOptionValueKind | `${ConfigurationOptionValueKind}` | null;
+  readonly optionsOrHandlerKind: SemanticStateStoreOptionsOrHandlerKind;
+  readonly actionHandlerCount: number;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly nameSourceAddressHandle: AddressHandle | null;
+    readonly initialStateSourceAddressHandle: AddressHandle | null;
+    readonly optionsOrHandlerSourceAddressHandle: AddressHandle | null;
+    readonly actionHandlerSourceAddressHandles: readonly AddressHandle[];
+  };
+}
+
+export interface SemanticStateStoresResult {
+  readonly rows: readonly SemanticStateStoreRow[];
+}
+
+export interface SemanticStateIssueRow {
+  readonly projectKey: string;
+  readonly phase: StateIssuePhase | `${StateIssuePhase}`;
+  readonly issueKind: StateIssueKind | `${StateIssueKind}`;
+  readonly diagnosticAuthority: 'framework-runtime-behavior';
+  readonly frameworkErrorCode: null;
+  readonly frameworkRawErrorAuthority: string | null;
+  readonly severity: StateIssueSeverity;
+  readonly message: string;
+  readonly storeName: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly ownerIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticStateIssuesResult {
+  readonly rows: readonly SemanticStateIssueRow[];
+}
+
+export interface SemanticValidationIssueRow {
+  readonly projectKey: string;
+  readonly phase: ValidationIssuePhase | `${ValidationIssuePhase}`;
+  readonly issueKind: ValidationIssueKind | `${ValidationIssueKind}`;
+  readonly diagnosticAuthority: 'framework-runtime-behavior';
+  readonly frameworkErrorCode: string;
+  readonly severity: ValidationIssueSeverity;
+  readonly message: string;
+  readonly localName: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly ownerIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticValidationIssuesResult {
+  readonly rows: readonly SemanticValidationIssueRow[];
+}
+
+export interface SemanticFetchClientIssueRow {
+  readonly projectKey: string;
+  readonly phase: FetchClientIssuePhase | `${FetchClientIssuePhase}`;
+  readonly issueKind: FetchClientIssueKind | `${FetchClientIssueKind}`;
+  readonly diagnosticAuthority: 'framework-runtime-behavior';
+  readonly frameworkErrorCode: string;
+  readonly severity: FetchClientIssueSeverity;
+  readonly message: string;
+  readonly localName: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly ownerIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticFetchClientIssuesResult {
+  readonly rows: readonly SemanticFetchClientIssueRow[];
+}
+
+export interface SemanticDialogIssueRow {
+  readonly projectKey: string;
+  readonly phase: DialogIssuePhase | `${DialogIssuePhase}`;
+  readonly issueKind: DialogIssueKind | `${DialogIssueKind}`;
+  readonly diagnosticAuthority: 'framework-runtime-behavior';
+  readonly frameworkErrorCode: string;
+  readonly severity: DialogIssueSeverity;
+  readonly message: string;
+  readonly localName: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly ownerIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticDialogIssuesResult {
+  readonly rows: readonly SemanticDialogIssueRow[];
 }
 
 export interface SemanticRouteConfigComponentRow {
@@ -502,6 +1446,8 @@ export interface SemanticRouterOptionsResult {
 export interface SemanticRouteConfigRow {
   readonly projectKey: string;
   readonly routeKind: RouteConfigKind | `${RouteConfigKind}`;
+  readonly originKind: RouteConfigOriginKind | `${RouteConfigOriginKind}`;
+  readonly valueKind: RouteConfigValueKind | `${RouteConfigValueKind}`;
   readonly id: string | null;
   readonly paths: readonly string[];
   readonly title: string | null;
@@ -651,6 +1597,12 @@ export interface SemanticRouterProductReferenceRow {
 
 export interface SemanticRouteRecognizerReferenceRow {
   readonly recognizerKind: RouteRecognizerModelKind | `${RouteRecognizerModelKind}`;
+  readonly label: string | null;
+  readonly source: SemanticSourceReference | null;
+}
+
+export interface SemanticRouteConfigReferenceRow {
+  readonly routeKind: RouteConfigKind | `${RouteConfigKind}`;
   readonly label: string | null;
   readonly source: SemanticSourceReference | null;
 }
@@ -937,6 +1889,71 @@ export interface SemanticRouteRecognizerStatesResult {
   readonly rows: readonly SemanticRouteRecognizerStateRow[];
 }
 
+export interface SemanticRouteRecognizerIssueRow {
+  readonly projectKey: string;
+  readonly issueKind: RouteRecognizerIssueKind | `${RouteRecognizerIssueKind}`;
+  readonly diagnosticAuthority: 'framework-runtime-behavior';
+  readonly frameworkErrorCode: null;
+  readonly frameworkRawErrorAuthority: string | null;
+  readonly message: string;
+  readonly path: string | null;
+  readonly recognizer: SemanticRouteRecognizerReferenceRow;
+  readonly existingEndpoint: SemanticRouteRecognizerReferenceRow | null;
+  readonly conflictingEndpoint: SemanticRouteRecognizerReferenceRow | null;
+  readonly state: SemanticRouteRecognizerReferenceRow | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly recognizerProductHandle: ProductHandle | null;
+    readonly recognizerIdentityHandle: IdentityHandle | null;
+    readonly existingEndpointProductHandle: ProductHandle | null;
+    readonly existingEndpointIdentityHandle: IdentityHandle | null;
+    readonly conflictingEndpointProductHandle: ProductHandle | null;
+    readonly conflictingEndpointIdentityHandle: IdentityHandle | null;
+    readonly stateProductHandle: ProductHandle | null;
+    readonly stateIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRouteRecognizerIssuesResult {
+  readonly rows: readonly SemanticRouteRecognizerIssueRow[];
+}
+
+export interface SemanticRouterIssueRow {
+  readonly projectKey: string;
+  readonly phase: RouterIssuePhase | `${RouterIssuePhase}`;
+  readonly issueKind: RouterIssueKind | `${RouterIssueKind}`;
+  readonly diagnosticAuthority: 'framework-error-code' | 'semantic-runtime-product';
+  readonly frameworkErrorCode: string | null;
+  readonly severity: RouterIssueSeverity;
+  readonly message: string;
+  readonly property: string | null;
+  readonly expected: string | null;
+  readonly actual: string | null;
+  readonly component: string | null;
+  readonly path: string | null;
+  readonly redirectTo: string | null;
+  readonly unexpectedExpressionKind: string | null;
+  readonly routeConfig: SemanticRouteConfigReferenceRow | null;
+  readonly recognizedRoute: SemanticRouteRecognizerReferenceRow | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly routeConfigProductHandle: ProductHandle | null;
+    readonly routeConfigIdentityHandle: IdentityHandle | null;
+    readonly recognizedRouteProductHandle: ProductHandle | null;
+    readonly recognizedRouteIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRouterIssuesResult {
+  readonly rows: readonly SemanticRouterIssueRow[];
+}
+
 export interface SemanticRecognizedRouteRow {
   readonly projectKey: string;
   readonly path: string;
@@ -1142,6 +2159,17 @@ export type SemanticTemplateCursorDiagnosticSeverity =
 
 export type SemanticTemplateCursorDiagnosticKind =
   | 'weak-expression-member-owner'
+  | 'missing-expression-member'
+  | 'expression-runtime-evaluation-error'
+  | 'expression-parse-error'
+  | 'template-compiler-error'
+  | 'runtime-controller-framework-error'
+  | 'runtime-renderer-framework-error'
+  | 'runtime-binding-framework-error'
+  | 'runtime-binding-behavior-framework-error'
+  | 'runtime-value-converter-framework-error'
+  | 'runtime-binding-scope-framework-error'
+  | 'binding-target-access-framework-error'
   | 'binding-source-assignment-strictness'
   | 'binding-source-assignment-runtime-noop';
 
@@ -1151,24 +2179,52 @@ export type SemanticTemplateCursorDiagnosticAuthority =
   | 'framework-error-code';
 
 export type SemanticTemplateCursorSuggestionKind =
+  | 'use-callable-expression'
+  | 'register-resource'
+  | 'register-di-service'
+  | 'remove-duplicate-binding-behavior'
+  | 'guard-nullish-expression'
+  | 'avoid-observed-increment'
+  | 'resolve-runtime-boundary'
+  | 'use-repeatable-source'
+  | 'use-safe-destructuring-source'
+  | 'fix-expression-syntax'
+  | 'fix-template-syntax'
   | 'declare-explicit-member'
   | 'declare-assignable-member'
   | 'declare-scope-slot-type'
   | 'replace-any-owner'
+  | 'align-assignment-type'
+  | 'make-source-writable'
   | 'use-assignable-expression'
   | 'inspect-owner-type';
 
 export type SemanticTemplateCursorSuggestionActionKind =
+  | 'register-resource'
+  | 'register-service'
+  | 'declare-runtime-boundary'
   | 'declare-member'
   | 'declare-scope-slot'
   | 'replace-owner-type'
+  | 'change-member-type'
+  | 'change-member-mutability'
   | 'rewrite-expression'
+  | 'rewrite-template-syntax'
   | 'inspect-owner-type';
 
+export type SemanticTemplateCursorSuggestionValueTypeSource =
+  | 'selected-member'
+  | 'binding-target'
+  | 'assignment-target';
+
 export type SemanticTemplateCursorSuggestionActionTargetKind =
+  | 'resource'
+  | 'service'
+  | 'runtime-boundary'
   | 'owner-type'
   | 'scope-slot'
-  | 'expression';
+  | 'expression'
+  | 'template-syntax';
 
 export interface SemanticTemplateCursorSuggestionActionTargetRow {
   readonly targetKind: SemanticTemplateCursorSuggestionActionTargetKind;
@@ -1185,6 +2241,7 @@ export interface SemanticTemplateCursorSuggestionRow {
   readonly targetMemberName: string | null;
   readonly ownerTypeDisplay: string | null;
   readonly valueTypeDisplay: string | null;
+  readonly valueTypeSource: SemanticTemplateCursorSuggestionValueTypeSource | null;
 }
 
 export interface SemanticTemplateCursorDiagnosticRow {
@@ -1334,12 +2391,14 @@ export interface SemanticBindingTargetAccessRow {
   readonly strategy: RuntimeBindingTargetAccessStrategy | `${RuntimeBindingTargetAccessStrategy}`;
   readonly eventNames: readonly string[];
   readonly targetType: string | null;
+  readonly targetTypeSource: RuntimeBindingTargetTypeSource | `${RuntimeBindingTargetTypeSource}` | null;
   readonly propertyType: string | null;
   readonly propertyExists: boolean | null;
   readonly isWritable: boolean | null;
   readonly isObservable: boolean;
   readonly authority: RuntimeBindingTargetAccessAuthority | `${RuntimeBindingTargetAccessAuthority}`;
   readonly openReason: string | null;
+  readonly frameworkErrorCode: string | null;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly bindingProductHandle: ProductHandle | null;
@@ -1408,9 +2467,32 @@ export interface SemanticBindingSourceOperationResult {
   readonly rows: readonly SemanticBindingSourceOperationRow[];
 }
 
+export interface SemanticBindingBehaviorApplicationRow {
+  readonly definitionName: string;
+  readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
+  readonly behaviorName: string;
+  readonly phase: RuntimeBindingBehaviorApplicationPhase | `${RuntimeBindingBehaviorApplicationPhase}`;
+  readonly argumentCount: number;
+  readonly staticArgumentValues: readonly string[];
+  readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
+  readonly targetProperty: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly bindingProductHandle: ProductHandle | null;
+    readonly bindingBehaviorApplicationProductHandle: ProductHandle;
+    readonly targetAccessProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticBindingBehaviorApplicationResult {
+  readonly rows: readonly SemanticBindingBehaviorApplicationRow[];
+}
+
 export interface SemanticBindingValueChannelRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
+  readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
   readonly targetProperty: string | null;
   readonly targetOperationKind: RuntimeBindingTargetOperationKind | `${RuntimeBindingTargetOperationKind}` | null;
   readonly sourceOperationKind: RuntimeBindingSourceOperationKind | `${RuntimeBindingSourceOperationKind}` | null;
@@ -1443,13 +2525,18 @@ export interface SemanticBindingDataFlowRow {
   readonly definitionName: string;
   readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
   readonly direction: RuntimeBindingDataFlowDirection | `${RuntimeBindingDataFlowDirection}`;
+  readonly strictBinding: boolean | null;
   readonly expressionParseState: TemplateExpressionParseState | `${TemplateExpressionParseState}` | null;
   readonly expressionParseResultKind: ExpressionParseResultKind | `${ExpressionParseResultKind}` | null;
+  readonly valueSiteKind: TemplateValueSiteKind | `${TemplateValueSiteKind}` | null;
   readonly sourceKind: RuntimeBindingDataFlowSourceKind | `${RuntimeBindingDataFlowSourceKind}`;
   readonly sourceName: string | null;
+  readonly sourceRootName: string | null;
   readonly sourceType: string | null;
   readonly sourceTypeOpenReason: string | null;
+  readonly sourceTypeOpenKind: CheckerExpressionTypeOpenKind | `${CheckerExpressionTypeOpenKind}` | null;
   readonly sourceAssignmentTargetType: string | null;
+  readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
   readonly targetProperty: string | null;
   readonly targetOperationKind: RuntimeBindingTargetOperationKind | `${RuntimeBindingTargetOperationKind}` | null;
   readonly sourceOperationKind: RuntimeBindingSourceOperationKind | `${RuntimeBindingSourceOperationKind}` | null;
@@ -1462,6 +2549,7 @@ export interface SemanticBindingDataFlowRow {
   readonly sourceAssignmentReasonKinds: readonly (RuntimeBindingDataFlowSourceAssignmentReasonKind | `${RuntimeBindingDataFlowSourceAssignmentReasonKind}`)[];
   readonly sourceToTargetAssignable: boolean | null;
   readonly targetToSourceAssignable: boolean | null;
+  readonly frameworkErrorCode: string | null;
   readonly openReason: string | null;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {

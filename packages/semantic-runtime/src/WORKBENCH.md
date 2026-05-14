@@ -119,6 +119,30 @@ Current inferred engineering heuristics:
   `framework.errors` before they are presented as framework diagnostics. TypeChecker strictness, weak app typings, and
   authoring suggestions can still be valuable LSP guidance, but they are product policy unless the framework itself
   throws/logs an equivalent code path.
+- Framework kernel errors should enter through the substrate that owns the runtime behavior. DI world construction now
+  has a `DiIssue` lane for duplicate source/static `$au` resource-key publication
+  (`kernel ErrorNames.resource_already_exists` / `AUR0007`), modeled as the kernel warn-and-skip path. Runtime-html
+  resource-definition registrar duplicates are not DI issues: custom elements (`AUR0153`), custom attributes
+  (`AUR0154`), value converters (`AUR0155`), and binding behaviors (`AUR0156`) now surface as `ResourceIssue`
+  resource-registration warnings from DI registration spending. Keep resolver-backed `registerResolver(...)`
+  resource-key throws separate until resolver publication models that exact path. Ambient `resolve(...)` also enters
+  through DI, but only module/static evaluation contexts spend `kernel ErrorNames.no_active_container_for_resolve` /
+  `AUR0016`; instance activation contexts with statically nullish resolve keys spend
+  `kernel ErrorNames.null_undefined_key` / `AUR0014`; caller-dependent functions/methods stay visible as app-topology
+  facts until controller/activation semantics can prove more. Invalid `@inject`-family decorators also enter through
+  DI when the TC39 decorator target is a method, getter, setter, or accessor; class and field targets are valid
+  injection metadata carriers, and legacy parameter decorators are not claimed by the `AUR0022` lane.
+- Treat same-handle field provenance as false precision unless there is a distinct authored span, symbol, contribution,
+  or lower-level product provenance behind the field. Generated products such as compiler worlds, compiled templates,
+  runtime/DI containers, resolver slots, renderer-created controllers, renderer-produced runtime bindings and target
+  operations, spread-compiled instructions, generated view factories, embedded view definitions, router recognizer rows,
+  and framework catalogs should normally rely on their product/source/evidence records and claims. If Atlas
+  `pressure:product-architecture` reports same-handle fan-out again, inspect whether the row needs exact field sources
+  or whether field-level provenance should disappear.
+- Inline multi-binding is a secondary compiler grammar, not a custom-attribute-only domain. Keep custom attributes and
+  template controllers on the same `MultiBindingValue` value-site lane and let the `AttributeClassification` carry the
+  resource owner. Portal pressure exposed this: `portal="target: ...; position: ..."` must lower to bindable props,
+  while neighboring HTML attributes do not target the portal view model.
 
 ## Active Pressure
 
@@ -177,6 +201,10 @@ being present under the workspace root. Boot now also discovers package/tsconfig
 host does not supply projects, excludes nested project roots from parent source discovery, and opens the default app
 from the first project with import/receiver-grounded Aurelia app bootstrap signals. Keep the classifier conservative; explicit host project
 selection is still the strongest answer when a monorepo has multiple app packages.
+Project shape and project analysis policy are now deliberately separate. `shapeKind` records the discovered source/package
+shape, while `analysisKind` says whether this project should be opened as an app world, opened as a standalone resource
+library authoring world, inspected as an Aurelia package, or skipped as outside Aurelia. Pressure scripts default to the
+app/resource-library policy; use explicit project-shape filters when deliberately stressing non-app packages.
 
 The operational API boundary now lives in `api`. It opens an app by composing source admission, static module
 evaluation, resource recognition, configuration admission, DI world construction, compiler-world formation, template
@@ -197,10 +225,10 @@ the owning project when the caller does not already know a monorepo project key,
 authoring template selection.
 Direct cursor-locus API calls (`templateCompletions(...)` / `templateCursorInfo(...)`) have a slightly different
 context rule: they first reuse an opened app whose compiled template owns the cursor source, even when the file itself
-belongs to a dependency/resource package. If no app contains the cursor, they open the selected project with a stable
-project-wide authoring lane instead of creating one app-world variant per cursor file. Keep that distinction; external
-app pressure showed that file-owner project selection alone can lose app context and can also duplicate shared kernel
-publication when repeated LSP queries walk different templates in one runtime instance.
+belongs to a dependency/resource package. If no app contains the cursor, they open the selected project with an
+authoring lane whose default source selection is the cursor file. Keep that distinction; external app pressure showed
+that file-owner project selection alone can lose app context, while project-wide fallback compilation can make a single
+cursor inquiry pay for an entire resource library.
 Route configuration is now a first authored router layer in that flow. `@route(...)` and `Route.configure(...)` produce
 source-backed route config products and `routes` API rows before route-context, route-tree, or route-recognizer
 emulation exists. The product is anchored to Aurelia's normalized `RouteConfig` class; `IRouteConfig` and
@@ -223,7 +251,10 @@ instruction paths now walk that forward state graph into `RecognizedRoute` produ
 recognizer port follows Aurelia's candidate chain closely enough to preserve optional-state skips, segment-rank
 candidate ordering, residual extraction, and handler-based endpoint grouping; compare endpoints through the owning
 route-config identity, not the configurable-route row, because multiple paths and residual endpoints share the same
-handler in the framework. Closed static redirects now publish re-recognized target rows with `redirectDepth`, which lets
+handler in the framework. Route-recognizer registration failures now cite exact raw framework Error authority through
+`RouteRecognizerRawErrorAuthority` when Aurelia has no mapped AUR code: duplicate paths, reserved `$$residue` dynamic
+or star parameters, and ambiguous endpoint assignment close the corresponding Atlas `semantic-raw-references` rows.
+Closed static redirects now publish re-recognized target rows with `redirectDepth`, which lets
 transition tree compilation skip the redirect route itself and consume the target route node. Resolved routeable
 components also seed template compilation as routeable resources, which lets
 nested routed templates and `au-viewport` / `ViewportAgent` topology surface before a future route-tree/navigation
@@ -294,9 +325,10 @@ App-world project emissions carry aggregate phase timings for pressure lanes. Tr
 orientation, not as product facts: they are useful for deciding whether large-app friction is in static evaluation,
 TypeChecker construction, resource recognition, app-world composition, or template compilation without storing
 app-specific identities.
-Binding data-flow API rows carry the parser publication state and result kind alongside source/target flow facts. That
-keeps open data-flow pressure explainable when the expression parser intentionally published a companion/degraded result
-instead of a canonical AST-bearing success.
+Binding data-flow API rows carry the parser publication state, result kind, and value-site kind alongside source/target
+flow facts. That keeps open data-flow pressure explainable when the expression parser intentionally published a
+companion/degraded result instead of a canonical AST-bearing success, and lets app pressure distinguish weak/null target
+types in binding-command values, text interpolation, attribute interpolation, and multi-binding lanes.
 Known-invalid reverse writes are not open seams. A two-way/default binding whose source expression is a computed
 comparison is fully understood as source-to-target flow plus a runtime-unassignable target-to-source assignment. Keep
 that on `sourceAssignmentKind` / `sourceAssignmentReason` / `sourceAssignmentReasonKinds` and pressure summaries
@@ -353,9 +385,25 @@ typed plan/verification structure instead of drifting into ad hoc scaffold templ
 
 Recent observer work clarified that `CheckedObserver` value channels are source-shape driven. Plain checkbox bindings
 can close as boolean flows without requiring `model`/`value` element closure, while array/set membership sources still
-consume the lowered sibling `model.bind`/`value.bind` products or the platform default input value. Source TypeChecker
-gaps for otherwise closed binding flows should stay on the data-flow row as strictness pressure, not reopen runtime
-binding emulation.
+consume the lowered sibling `model.bind`/`value.bind` products or the platform default input value. Map sources use a
+distinct checked-map keyed-boolean channel: the element model/value is the key, and data-flow assignability checks both
+key compatibility and whether the map value type can accept the checked boolean. Source TypeChecker gaps for otherwise
+closed binding flows should stay on the data-flow row as strictness pressure, not reopen runtime binding emulation.
+
+The value-channel layer is now split by responsibility. `binding-value-channel-drafts.ts` owns observer/accessor/direct
+operation semantics such as select option domains, checked collection/map behavior, class/style channels, ref source
+writes, and lazy source-type reads. Inside that draft layer, direct binding, select, and checked observer collaborators
+depend on explicit TypeChecker/type support rather than on a catch-all materializer-as-service-object. `binding-value-channel-materializer.ts` owns kernel publication only: product
+handles, identities, claims, provenance, materialization records, and open seams. Keep that split intact; future
+observer semantics should move into the draft layer or into framework-shaped observer classes, not back into product
+publication.
+
+The data-flow layer now follows the same publication-vs-semantics split. `binding-data-flow-materializer.ts` still owns
+the `RuntimeBindingDataFlow` product records, claims, and open seams, while local collaborators own draft assembly,
+source-expression projection, `astAssign` write capability, TypeChecker member access, and source/target assignability.
+Do not re-add data-flow policy to the publication owner just because a new observer branch needs one more assignment
+rule; put it near the source/write/assignability collaborator that owns the data-flow question.
+
 Router-resource dynamic binding pressure belongs in the binding-source substrate, not in router-specific expression
 guessing. `binding-source-value-evaluator.ts` now lets router instruction materialization ask the binding layer for a
 static string value, including guarded local getter reads over evaluator-known view-model classes. If the getter depends
@@ -364,6 +412,13 @@ being forced into either an internal route or external-link bucket. Open seam pr
 kinds, not parse summary prose. If the blocked value comes from a runtime/local scope slot, the router seam should carry
 the binding-source slot reason alongside `router-instruction-needs-static-value`; do not hide that under a generic
 router expression failure.
+Parent-to-child controller property values are now carried by `RuntimeBoundControllerValueTable` in the binding-source
+layer. This matters when a child view-model method reads a bindable callback or scalar supplied by a parent template:
+the binding target is the child controller, while the source expression is evaluated in the parent scope. Template
+controller and narrowing scopes can copy a view-model binding context while legitimately changing the scope owner to a
+synthetic view, so value evaluation must be able to fall back from exact controller handles to an unambiguous
+definition/type match. If several call sites bind the same definition property, keep the value open until recursive
+rendering can select the concrete call context; do not collapse that ambiguity in router or diagnostics.
 Host environment and external module reads are now explicit evaluator boundary values. The old object-level
 missing-property reason blurred host state with ordinary object fallbacks, and external package imports blurred
 dependency boundaries with missing lexical bindings. The durable rule is: boundary objects/values propagate through
@@ -454,8 +509,9 @@ answer mismatches, cursor-info source coverage, focused selected-member coverage
 signals, compact LSP envelopes, value-domain gaps, and bucketed missing-input reasons without paths, source text, or candidate names. Use it with
 `SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS` for external roots when a question is about hovers/completion/navigation
 pressure rather than whole app topology. Current sampled behavior is: generic expression scopes, binding-command names,
-resource names, bindable names, expression member owners, and parent repeat scopes are reachable; plain platform
-attribute values can remain empty misses; finite checker-backed static bindable domains offer literal
+resource names, bindable names, expression member owners, and parent repeat scopes are reachable; plain static platform
+attribute values publish `plain-attribute-value` and can remain empty misses, while real platform interpolation values
+publish `plain-attribute-interpolation` and spend expression holes through normal expression completion; finite checker-backed static bindable domains offer literal
 `attribute-value` candidates; open-ended checker-backed scalar bindables are expected-empty completion sites; inline
 multi-binding custom-attribute values can offer bindable segment names from the resource definition; and router
 `load` primary values now offer `router-route` candidates from typed `RouteConfig` product details threaded through
@@ -480,6 +536,13 @@ For `href`, the open seam must also preserve the framework's externality gate. `
 calls `_resolveIsExternal(...)` before it creates viewport instructions; static external URLs and explicit
 `external`/`data-external` markers should not publish router instruction products. Dynamic `href` values that cannot be
 proven external or internal now carry `router-href-externality-open` beside the static-value and binding-source reasons.
+External app pressure then split the dynamic `href` problem into honest lanes. Values that flow through weakly typed
+callbacks, external URL fields, or bare external module imports stay open, because the framework would decide
+externality at runtime. Values whose view-model method body preserves an authored internal route prefix now close
+through evaluator `string-pattern` values:
+runtime binding-scope locals become boundary holes, TypeScript template strings / concatenation preserve static parts,
+and router instruction materialization feeds the placeholder path into route recognition without claiming the concrete
+runtime parameter is known. `fixtures/pressure/router-dynamic-pattern` keeps that distinction alive.
 Listener expression scopes now model Aurelia's transient `$event` override-context slot before the expression is
 evaluated. Member-owner completion uses an offset-aware evaluator walk, so a listener expression can surface event
 members through `$event.foo` and through callback parameters such as `(e) => e.foo()` without adding a second
@@ -559,10 +622,161 @@ Binding assignment diagnostics distinguish TypeScript strictness from runtime no
 Diagnostic rows now carry `diagnosticAuthority` and `frameworkErrorCode`. The existing weak-owner and TypeScript
 strictness rows are `semantic-authoring-policy`; runtime no-op assignment is `framework-runtime-behavior` with no
 framework error code. Do not add `framework-error-code` diagnostics without first checking Aurelia source through Atlas
-`framework.errors` and carrying the exact code.
-The current resource-library pressure exposed a dynamic `SelectValueObserver` multi-select channel; that is modeled as a
-typed `binding-value-channel-dynamic-select-multiple` open reason on the value-channel seam and preserved by dependent
-data-flow seams.
+`framework.errors` and carrying the exact code. Parser-owned hard failures can now carry exact Aurelia parser labels via
+`ExpressionFrameworkErrorCode`, whose table also records the intended framework package/enum/member because AUR labels
+can collide across packages; companion/frontier parser publications preserve those labels and the failure message. Keep
+that bridge low in the completed-input parser so file/app diagnostics receive framework authority from the parse product
+rather than by wording heuristics. The Atlas `framework.errors` pressure lane now separates declared parser-code links
+from links actually spent by semantic-runtime code; do not treat a new `ExpressionFrameworkErrorCode` member as coverage
+until a parser failure path uses it. The expression-parser `parse*` frontier is deliberately 26/27 right now:
+`parse_invalid_empty` belongs to framework `None`/`IsChainable` entry-family behavior that semantic-runtime does not
+expose, so claiming that label would be false precision unless the facade grows those entry families.
+Runtime AST callable diagnostics now follow the same authority rule. `CheckerExpressionTypeEvaluator` is linked to
+framework `astEvaluate`, but it produces TypeChecker-backed expression projections rather than runtime values. Binding
+data-flow rows preserve `sourceTypeOpenKind`, and cursor/file diagnostics spend only the modeled callable error subset:
+missing `$host` context (`AUR0105`), reserved `$host` writeback targets (`AUR0106`), non-callable call targets (`AUR0107`), non-callable tagged-template
+tags (`AUR0110`), non-callable named/member calls (`AUR0111`), connectable-mode increment/compound assignment
+(`AUR0113`), definitely-nullish strict member/keyed access (`AUR0114`, `AUR0115`), and strict member/keyed assignment
+through a definitely-nullish owner (`AUR0116`). `$host` is not a synthetic `$` writeback local: framework
+`astEvaluate` rejects a missing `$host` context, and framework `astAssign` rejects `$host` before ordinary scope lookup,
+so binding data-flow owns those exact diagnostics. Nullish access diagnostics must be
+strictness-gated from the rendering controller because Aurelia's non-strict bindings return `undefined` instead of
+throwing; nullish assignment uses the same gate because framework `astAssign` only throws in strict mode. Repeat destructuring diagnostics are deliberately not data-flow rows: `repeat.ts` spends
+`astAssign(...)` while creating/updating repeat scopes, so scope construction now publishes `RuntimeBindingScopeIssue`
+products for `ast_destruct_null` (`AUR0112`) when checker-backed binding-pattern projection can prove or warn about a
+non-object destructuring item or non-Array array-rest source. The Atlas runtime `ast*` frontier remains partial; leave
+the other runtime evaluator codes unclaimed until the matching expression, assignment, or scope-effect families and
+source spans are modeled. Source-authored `@astTrack` misuse is a sibling observation source-issue lane rather than a
+binding expression evaluator row: non-method decorator targets spend runtime `ast_track_decorator_not_a_method`
+(`AUR0117`) through `ObservationIssue` products.
+
+`@aurelia/state` currently contributes raw framework `Error` rows rather than mapped AUR codes. The state substrate now
+keeps that honest with `StateIssue` products and exact `StateRawErrorAuthority` links: `.withStore('default', ...)`
+is rejected before a store-configuration product is emitted, while duplicate store names are store-registry
+registration issues over otherwise source-visible store configurations. The remaining state raw rows should stay open
+until their owning runtime state is modeled: withStore-after-register needs ordered builder/register receiver state,
+invalid `fromState` decorator usage needs plugin decorator-target recognition, missing store lookup needs store-name
+consumer analysis, and DevTools errors need host extension/dispatch lifecycle semantics.
+
+Observation runtime-effect lifecycle owns `stopping_a_stopped_effect` (`AUR0225`) through the framework-shaped
+`RuntimeEffect` model: first stop transitions, a second stop carries the exact framework code. Runtime
+`method_not_implemented` (`AUR0099`) usages in AST-evaluator mixins and connectable default methods stay intentionally
+unclaimed because semantic-runtime currently models concrete evaluator/observation products, not user-extensible
+framework mixin stubs.
+Runtime `Scope` API diagnostics are configuration-owned source/API issues, not expression lookup misses. Direct
+`Scope.getContext(...)` and `Scope.fromParent(...)` calls with a statically nullish first argument spend `null_scope`
+(`AUR0203`), and direct `Scope.create(...)` calls with a statically nullish binding context spend
+`create_scope_with_null_context` (`AUR0204`). Rendered binding lookup keeps using non-null `BindingScope` products.
+Runtime-html AST resource diagnostics are a sibling binding-utils lane, not another callable-expression bucket.
+`ValueConverter.get(...)` and `BindingBehavior.get(...)` failures now surface as `AUR0103` and `AUR0101`, while duplicate
+authored binding-behavior names surface as `AUR0102`; diagnostics preserve resource-registration and duplicate-rewrite
+suggestions so repair planning does not route them through callable-expression inspection. The remaining runtime-html
+`ast*` names are mostly dormant framework authority at this checkpoint, so do not claim them without an exact framework
+usage row and modeled semantic-runtime owner.
+Runtime-html resource registrar duplicate diagnostics are modeled in the resource-registration lane. Framework source
+shows `CustomElementDefinition.register`, `CustomAttributeDefinition.register`, `ValueConverterDefinition.register`,
+and `BindingBehaviorDefinition.register` warning on duplicate names with `element_existed` (`AUR0153`),
+`attribute_existed` (`AUR0154`), `value_converter_existed` (`AUR0155`), and `binding_behavior_existed` (`AUR0156`).
+DI registration spending now routes these through `ResourceIssue` rows and keeps kernel `resource_already_exists`
+(`AUR0007`) for source/static `$au` resource registration. Runtime-html's duplicate `binding_command_existed`
+(`AUR0157`) label remains dormant, while template-compiler's used `binding_command_existed` / `AUR0157` belongs to
+compiler-world binding-command registration and is modeled as a warning-severity `TemplateCompilerIssue`.
+Runtime-html resource API definition diagnostics are modeled through `ResourceDefinitionApiIssueMaterializer`.
+TypeChecker-resolved direct calls to `CustomElementDefinition.create(...)` with only a string name spend
+`element_only_name` (`AUR0761`), while project-local `getDefinition(...)` calls whose target class has no recognized
+matching resource definition spend `element_def_not_found` (`AUR0760`), `attribute_def_not_found` (`AUR0759`),
+`value_converter_def_not_found` (`AUR0152`), or `binding_behavior_def_not_found` (`AUR0151`). Keep this lane source/API
+owned; renderer named-resource misses stay in `RuntimeControllerIssue`, and expression value-converter/behavior name
+misses stay in the binding-utils/type-system lane.
+Runtime-html repeat diagnostics now split across the modeled framework owners. `RepeatableHandlerResolver` uses built-in
+handlers for arrays, sets, maps, numbers, and nullish; semantic-runtime maps unsupported checker-visible repeat sources
+to `repeat_non_iterable` (`AUR0777`) through scope issues and leaves `IRepeatableHandler` extension points as future
+DI/configuration pressure. The `Repeat` constructor option checks are controller-owned now:
+`repeat_invalid_key_binding_command` (`AUR0775`), `repeat_extraneous_binding` (`AUR0776`), and
+`repeat_invalid_contextual_binding_command` (`AUR0821`) publish `RuntimeControllerIssue` products while renderer
+emulation creates the template-controller frame. The rest of the repeat frontier stays explicit:
+`repeat_mismatch_length` (`AUR0814`) belongs to runtime collection consistency, and dormant `repeat_non_countable`
+(`AUR0778`) is not a current static diagnostic claim.
+Configuration diagnostics follow the same product-owned path. AppTask-time `NodeObserverLocator.useConfig(...)` and
+`useConfigGlobal(...)` duplicates now publish `ConfigurationIssue` rows with exact runtime-html
+`node_observer_mapping_existed` (`AUR0653`) authority. Observer lookup diagnostics now spend the sibling
+`node_observer_strategy_not_found` (`AUR0652`) only when the exact framework path is modeled: dirty checking is disabled,
+the target property exists on a native node type, and no configured observer/data/namespace/class/style branch applies.
+The runtime-html `node*` frontier remains intentionally partial because the remaining host-node controller codes belong
+to controller host/topology semantics.
+Runtime-html binding-behavior diagnostics are bind-time pressure after rendered bindings and target-access
+facts exist. `RuntimeBindingBehaviorIssue` now claims `SelfBindingBehavior.bind(...)` non-listener failures
+(`AUR0801`), `SignalBindingBehavior.bind(...)` invalid-binding/no-signal failures (`AUR0817`, `AUR0818`),
+`UpdateTriggerBindingBehavior.bind(...)` no-trigger/invalid-mode/no-config failures (`AUR0802`, `AUR0803`, `AUR9992`),
+`AttrBindingBehavior.bind(...)` non-property failures (`AUR9994`), and the shared throttle/debounce rate-limit guard
+(`AUR9996`). Custom binding-behavior resources can now contribute direct bind-method
+`PropertyBinding.useTargetSubscriber(...)` effects through `RuntimeBindingBehaviorBindEffectReader`; conflicts claim
+`binding_already_has_target_subscriber` (`AUR9995`) only after the behavior resource is visible in the compiler scope
+and another behavior on the same binding has already claimed the target-subscriber slot. Leave
+`update_trigger_behavior_not_supported` (`AUR9993`) unclaimed until service replacement/custom
+`INodeObserverLocator` semantics are explicit in configuration/world construction; leave binding behavior
+definition/registration failures in the resource/DI catalog lane until that exact framework path is modeled.
+Runtime-html value-converter diagnostics are invocation pressure after rendered bindings and compiler resource scope
+exist. `RuntimeValueConverterIssue` now claims `SanitizeValueConverter.toView(...)` default-sanitizer failure
+(`AUR0099`) only when the `sanitize` value converter is visible and the active container tree has no modeled
+`ISanitizer` resolver. App-provided `ISanitizer` registrations suppress the issue; the sibling runtime-html
+`method_not_implemented` usages in children/projection runtime stubs stay unclaimed until a product path needs them.
+Runtime-html spread `no*` diagnostics are binding-owned. `RuntimeBindingIssue` spends
+`no_spread_scope_context_found` (`AUR9999`) for `SpreadBinding.create` hydration-context transfer failures and
+`no_spread_template_controller` (`AUR9998`) for the `SpreadBinding.addChild` template-controller branch. Keep
+`no_composition_root` (`AUR0770`) unclaimed until `Aurelia.start(...)` app-root lifecycle state is modeled explicitly;
+app-root absence should not be recovered from API wording alone.
+Template-compiler failures now have the same authority rule through compiler issue products. Attribute classification
+publishes exact framework `ErrorNames` authority for reserved spread syntax (`AUR0720`) and reserved `$bindables`
+syntax outside custom-element declarations (`AUR0721`); compiler-world service registration publishes duplicate
+attribute-pattern (`AUR0089`) and duplicate binding-command (`AUR0157`) issues before those duplicate services become
+spendable; binding-command lowering publishes the same issue shape for
+custom-attribute inline bindings to non-bindables (`AUR0707`) and modeled command build failures such as invalid
+class-binding syntax (`AUR0723`); compiled-template assembly publishes it for invalid root `<template>` surrogate
+attributes (`AUR0702`), template controllers on surrogates (`AUR0703`), projection on non-custom elements (`AUR0706`),
+`<slot>` without shadow DOM (`AUR0717`), invalid `<let>` commands (`AUR0704`), and framework local-template checks:
+root local-element templates (`AUR0701`), only-local-template content (`AUR0708`), local templates outside the root
+(`AUR0709`), local bindables outside the local template root (`AUR0710`), missing local bindable names (`AUR0711`),
+duplicate local bindable property/attribute pairs (`AUR0712`), empty local-template names (`AUR0715`), and duplicate
+local-template names (`AUR0716`). The runtime spread compile host also publishes template-compiler
+`no_spread_template_controller` (`AUR9998`) for the `compileSpread(...)`/`SpreadBinding.addChild` path while preserving
+the sibling runtime-html binding issue.
+Cursor/file diagnostics read those products and produce `template-compiler-error` rows plus `template-syntax` repair
+targets, so invalid framework-thrown cases do not need open seams or wording-based API checks. The remaining precision
+issue is source-address depth:
+classification and command failures can still point at the full attribute span when the framework error is about a
+target/name grammar sub-span, so attribute-syntax sub-span provenance is a legitimate next substrate pressure.
+Resource metadata diagnostics now follow the same product-owned rule. `ResourceIssue` products cover malformed
+runtime-html bindable decorator metadata (`AUR0227`, `AUR0228`, `AUR0229`), malformed `@processContent(...)` hooks
+(`AUR0766`), the watch frontier (`AUR0772`, `AUR0773`, `AUR0774`), and the controller watcher callback materialization
+path (`AUR0506`) when TypeChecker/resource convergence can prove the framework error statically. Resource convergence
+also claims the definition-side cause of `controller_no_shadow_on_containerless` (`AUR0501`) for custom elements that
+are statically containerless and shadow/slot-backed. The remaining runtime-html `invalid*` codes are intentionally
+outside this resource pass for now: `invalid_platform_impl` is platform/app-root host state and `invalid_dispose_call`
+is Aurelia instance lifecycle state. `ResourceIssues` exposes those products directly, and `AppDiagnostics` aggregates
+  them with template, router, and route-recognizer diagnostics while preserving `diagnosticDomain`. Do not push future
+controller/resource/configuration/DI/router errors into `TemplateDiagnostics`; first add or reuse the owning product
+issue substrate. The runtime-html controller frontier is still only partially claimed. Renderer resource lookup now
+owns named-resource misses from `CustomElementRenderer`, `CustomAttributeRenderer`, and `TemplateControllerRenderer`
+as `RuntimeControllerIssue` rows (`AUR0752`, `AUR0753`, `AUR0754`), and those misses stop child-controller
+materialization rather than producing null-definition controller frames. Bindable observer setup also has an honest
+owner: observer-locator collection branches expose hook capability, and runtime rendering publishes
+`RuntimeControllerIssue` for `controller_property_not_coercible` (`AUR0507`) and
+`controller_property_no_change_handler` (`AUR0508`) when `createObservers(...)` would ask a collection observer for
+unsupported coercer/callback hooks. The runtime-html `au*` frontier is also intentionally partial: static
+`AuCompose` input failures are controller-owned because lowered `SetPropertyInstruction`s can prove them during
+controller creation. Setter failures (`scopeBehavior` / `AUR0805` and `flushMode` / `AUR0809`) stay on bindable set,
+while static string `component` / `view-model` misses (`AUR0806`) probe the parent hydration-context container.
+Composition controller run/deactivate errors still need runtime composition/lifecycle state before they can be claimed.
+The same controller issue lane now owns switch/case link-hook errors: `case` / `default-case` without a parent switch
+map to `AUR0815`, and duplicate `default-case` under one switch maps to `AUR0816`.
+Lifecycle-state controller errors should remain unclaimed until controller state emulation owns them.
+The current resource-library pressure exposed a dynamic `SelectValueObserver` multi-select channel. This is now modeled
+as `select-dynamic-option-value` when the value source type can carry both runtime branches: scalar single-select
+updates and array-valued multi-select mutation. Keep the typed
+`binding-value-channel-dynamic-select-multiple` open reason for cases where a dynamic `multiple.bind` source cannot
+plausibly accept both branches; dependent data-flow seams should preserve that reason when the channel itself remains
+open.
 Public plugin pressure then exposed the sibling single-select case: a select with no static option domain should report
 `binding-value-channel-select-option-domain-open`, not a summary-only seam. Cursor-pressure public API comparisons are
 now project-scoped in multi-project runs so cache/app-context ambiguity does not masquerade as candidate drift.
@@ -570,8 +784,13 @@ The 2026-05-10 clean-room external app and mixed-monorepo samples still show sta
 app/resource-library shape triage opens bounded app-world emissions, router/controller/resource products materialize,
 unresolved module edges stay closed, cursor completions and cursor-info agree, and public cursor/file calls report no
 exception or template-resource miss classes. Treat remaining rows as typed product pressure: weak owner diagnostics,
-TypeScript assignment strictness, expected-empty plain-attribute interpolation completions, and explicit open seams such
+TypeScript assignment strictness, expected-empty plain static attribute completions, and explicit open seams such
 as dynamic select-multiple value channels or dynamic router-href externality.
+
+Public plugin/resource-library pressure also closed a TypeChecker handoff that should remain substrate, not
+template-specific logic: repeat locals can flow through nullable iterable unions and finite mapped-record keyed access
+before a nested repeat reads item members. The durable fix belongs in checker related-type and expression type
+projection, because the same pattern appears in authored apps, plugin templates, and future LSP cursor inquiries.
 
 TypeSystem construction has its own profile under app pressure. On large mixed roots, TS `program` creation dominates
 the checker phase, with checker creation second and project-options discovery much smaller. Treat future TypeSystem
@@ -588,23 +807,38 @@ cross-area, and product-flow topology:
   Use the KernelStoreRecord module/owner hot spots before opening source: they show which emitters construct the most
   low-level records, which vocabulary expressions are direct versus delegated, and where KernelStoreBatch labels define
   pass boundaries. Treat this as a guide for finding product-flow ownership, not as a mandate to reduce record count.
-- `di/world-constructor.ts` owns real world-construction semantics, so size alone is not the smell. Framework resolver
-  effects now share the source resolver-admission publication path and effect tables have moved out to
-  `di/framework-registration-effects.ts`; remaining pressure is whether registry/AppTask/callback effects and lifecycle
-  output still have one coherent world-constructor model or whether some subproducts should be split along
-  Aurelia-facing interfaces without weakening DI provenance.
+- `di/world-constructor.ts` owns real world-construction semantics, so size alone is not the smell.
+  `di/world-publication.ts` now owns resolver/resource/self-resolver publication, DI key identities, and source/open-seam
+  records, while `di/framework-registration-effects.ts` owns framework effect tables. Remaining DI pressure is whether
+  registry/AppTask/callback effects and lifecycle output still have one coherent world-constructor model or whether some
+  subproducts should be split along Aurelia-facing interfaces without weakening DI provenance.
 - `router/route-tree-materialization.ts` sits on the route-context, viewport-agent, recognizer, instruction, and
   component-agent handoff. Router product record boilerplate now lives in `router/router-product-records.ts`; remaining
   cleanup has to preserve exact route-node provenance and framework-shaped `RouteTree` / `RouteNode` semantics; do not
   flatten this into app-specific navigation shortcuts. Transition-tree construction now runs through a dedicated frame:
   missing instruction-tree / route-context / route-config products are treated as internal invariant failures, while a
   framework redirect handoff that cannot yet be compiled into its target tree is recorded as an explicit router open
-  seam.
-- The expression scanner and completed-input iterator corridor are parser substrate, not incidental helper code. The
-  interpolation parser has been split between boundary extraction and a publication frame, and scanner punctuation/operator
-  recognition now dispatches through token-family helpers instead of one giant switch. Future parser refactors should
-  preserve parser ownership, boundary/frontier semantics, template-literal-aware lookahead, active-hole selection, token
-  family law, and exact source slices before trying to reduce body size.
+  seam. RouteTree redirect-parameter migration now has a first-class `RouterIssue` lane for `exprUnexpectedKind`
+  (`AUR3502`) when the framework RouteExpression tree contains sibling composites or grouped segments where only
+  segment/scoped-segment chains are accepted; keep future router errors in owning router issue products rather than
+  pushing them into route-recognizer rows or template diagnostics.
+- The expression scanner, completed-input binding-pattern corridor, and completed-input iterator corridor are parser
+  substrate, not incidental helper code. Binding declarations for iterator headers now live in their own corridor so
+  array/object destructuring recovery can evolve without making `repeat.for` header parsing own the whole pattern
+  grammar. Closed-subtree prefix witnesses live in `completed-input-prefix-refs.ts`, leaving parser state on cursor,
+  span, and failure handoff mechanics. Parser-local failure retention and companion/hard-failure construction live in
+  `completed-input-failures.ts`; corridors ask `state.failures` so cursor state does not own recovery policy. Delimiter
+  stack law lives in `completed-input-delimiters.ts`; corridors push and pop through `state.delimiters` directly so
+  matched-delimiter snapshots remain a parser-local state facet rather than generic cursor state. The interpolation
+  parser has been split between boundary extraction and a publication frame, and scanner punctuation/operator
+  recognition now dispatches through module-level token-family helpers instead of one giant switch. Scanner character
+  classification and operator token law are module-level substrate, leaving scanner instance methods for mutable
+  cursor/token state plus identifier, number, and string scanning. HTML parsing now has the same front-door/tree split:
+  the parse materializer
+  owns source/document products and commits, while the tree materializer owns recursive node/attribute/recovery
+  publication and source-address mapping. Future parser refactors should preserve parser ownership,
+  boundary/frontier semantics, template-literal-aware lookahead, active-hole selection, token family law, and exact
+  source slices before trying to reduce body size.
 - The default duplicate-helper lane is currently clean. The last pass resolved it by moving real concepts downward:
   instruction expression-handle extraction into `instruction-ir.ts`, element/attribute owner lookup and element lookup
   naming into `html-ir.ts`, source-span containment into `kernel/address.ts`, type-reference equality into
@@ -616,28 +850,79 @@ cross-area, and product-flow topology:
   expansion, registration observation product emission, resource source-span selection, and configuration
   sequence/callback/open-seam publication into named phases. If those rows return, inspect whether a new caller is
   rebuilding product/source/identity envelopes locally before adding another local helper.
-- Runtime rendering now separates renderer-product publication from render-loop/controller orchestration.
-  `runtime-rendered-instruction-recorder.ts` owns renderer-produced runtime bindings, target operations, scope effects,
-  and binding render contexts. `runtime-rendering-materializer.ts` still owns controller, synthetic-view, view-factory,
-  child-container, and render-host orchestration. If more runtime-rendering pressure appears, split along those
-  framework-shaped responsibilities rather than moving record constructors around by file size alone.
+- Runtime rendering now separates renderer-product publication, view-factory materialization, controller creation, and
+  controller-product publication from render-loop orchestration. `runtime-rendered-instruction-recorder.ts` owns
+  renderer-produced runtime bindings, target operations, scope effects, and binding render contexts.
+  `runtime-view-factory-materializer.ts` owns generated embedded custom-element definitions, `IViewFactory` products,
+  synthetic-view aggregate products, and the factory/definition/instruction-sequence claims created by
+  template-controller rendering. `runtime-controller-creation-materializer.ts` owns root, renderer-created child, and
+  synthetic-view controller frame creation, including child-container materialization and controller hydration lifecycle
+  steps. `runtime-controller-publication.ts` owns durable controller products, controller materialization records, and
+  controller-to-template/instruction/binding claims after scope materialization attaches modeled `Scope` references.
+  `runtime-rendering-materializer.ts` still owns render-target planning, render-host dispatch, traversal, and the
+  decision to recursively render embedded instruction sequences. If more runtime-rendering pressure appears, split
+  along those framework-shaped responsibilities rather than moving record constructors around by file size alone.
+- Template-controller scope construction now has a TypeChecker support boundary. `template-scope-type-projector.ts`
+  owns listener event typing, repeat override locals, iterator local projection, let-target types, and promise/value
+  template-controller slot types. `template-controller-flow-scope-materializer.ts` owns built-in controller-flow
+  dispatch, branch/promise/switch link hooks, and narrowed/object child-scope construction for template controllers.
+  `template-controller-scope-materializer.ts` should stay focused on template-order traversal, ordinary scope effects,
+  runtime assignment slots, scope materialization, and claim publication.
+- Controller bind materialization now has a publication boundary. `runtime-controller-bind-materializer.ts` should stay
+  on `Controller.bind` traversal, target-controller lookup from render contexts, target/ref resolution, and
+  `ObserverLocator` lookup requests. `runtime-controller-bind-publication.ts` owns bind-time source records, open seams,
+  target-access products, target-operation products, source-operation products, and runtime-binding-to-product claims.
+  If this area grows again, inspect whether the next split belongs around ref/controller target resolution rather than
+  moving product envelopes back into bind traversal.
+- Binding-command lowering now has the same publication split. `binding-command-lowering-materializer.ts` owns command
+  execution handoff, ordinary classification lowering, and inline multi-binding secondary grammar decisions.
+  `binding-command-lowering-publication.ts` owns command/multi-binding product envelopes, source/open-seam records,
+  instruction identity publication, and produced-instruction/expression claims. The publication module may remain a
+  record-construction hotspot; the smell to watch for is behavior drifting back into it or product envelopes being
+  rebuilt in the materializer.
 - Template API cursor/file readers now delegate weak-owner and binding-assignment diagnostic decisions to
   `api/template-diagnostic-policy.ts`. Keep source selection and cursor context in the API reader, but keep severity,
   diagnostic authority, framework error-code attachment, suggestion/action-target routing, and product-policy wording in
   that policy module until diagnostics become a deeper materialized product.
+- The public app API facade now has a router query boundary. `api/runtime.ts` should stay focused on boot/app opening,
+  project selection, generic app answer dispatch, and non-router query delegation; `api/answer-helpers.ts` owns shared
+  answer/page envelopes, and `api/app-route-queries.ts` owns the router family of answerers from options/configs through
+  route trees, viewport agents, and component agents. If route API pressure returns, first ask whether the router product
+  substrate or route projection rows need a clearer boundary before moving answer assembly back into the facade.
+- The public app API facade now also has a template query boundary. `api/app-template-queries.ts` owns template
+  compilation rows plus template completion, cursor-info, and diagnostic answer handoff. `api/runtime.ts` should keep
+  direct runtime-level cursor methods only because they select/reuse the owning app before delegating; do not move
+  template row assembly back into `SemanticApp` as the API grows.
 
 Treat that cluster as a future substrate pass across DI, router, parser/evaluator boundaries, and product catalog
 identity.
 
-Expression type evaluation now carries a shared per-template-runtime-analysis cache across scope construction,
-binding value-channel, and binding data-flow materializers. App pressure prints aggregate `expression type cache`
+Expression type evaluation now enters runtime analysis through `CheckerExpressionTypeWorld`, a pass-local owner for the
+shared projector, resource-scope-specific evaluator instances, and expression cache used by scope construction, binding
+value-channel, and binding data-flow materializers. App pressure prints aggregate `expression type cache`
 entries/hits/misses/writes plus semantic buckets for binding expressions, member owners, iterator locals, template
 controllers, and contextual keys. If binding observation cost rises again, first inspect whether a materializer is
-bypassing the shared cache or introducing a downstream role into the local key; expression type projections should be
+bypassing the shared world/cache or introducing a downstream role into the local key; expression type projections should be
 keyed by modeled scope plus expression product, not by the materializer lane that asked. Contextual target types should
 only enter the cache key for expression kinds whose evaluator semantics actually consume them. At the moment that means
 arrow-function parameter projection, including paren-wrapped arrows. Do not pay contextual cache cardinality for
 ordinary member/value expressions until the evaluator grows a real contextual semantics for them.
+
+Type-system expression evaluation has started to split around product responsibilities instead of file size.
+`expression-type-evaluation.ts` owns the result/open/cache vocabulary consumed by template, observation, and inquiry
+lanes. `expression-type-world.ts` owns the pass-local expression evaluator lifetime. `expression-type-synthesis.ts`
+owns synthetic expression/template type-shape products such as arrays, objects, arrow functions, unions, unknowns, and
+map-entry tuples. `checker-type-shape-access.ts` owns reusable member/key/index
+reads over projected shapes, including finite keyed access. Keep expression semantics in
+`expression-type-evaluator.ts`; do not duplicate member/index/checker access in cursor answers, binding-pattern locals,
+or diagnostics policy.
+
+Static evaluation literal construction now has the same boundary shape as intrinsics. `evaluation/literals.ts` owns
+array/object literal element and property assembly through a host interface, while `StaticEvaluator` remains the owner
+of expression recursion, property-name interpretation, seam creation, unknown/boundary values, and syntax-kind naming.
+Do not move Aurelia recognition or materializer policy into literal helpers. If later ECMAScript literal pressure
+appears, extend this substrate first and preserve the existing distinction between object-spread boundary carriers and
+array-spread dynamic mutation seams.
 
 Binding data-flow source writeability is demand-driven by flow direction. Source-to-target bindings still project source
 kind/name/type, but they should not ask whether the source expression is assignable because no target-to-source
@@ -645,17 +930,116 @@ kind/name/type, but they should not ask whether the source expression is assigna
 for two-way/from-view flows, but they are wasted TypeChecker work for one-way rendering. If future source-assignment
 pressure changes, verify the direction gate before widening assignment policy.
 
-DI world construction now uses a shared resolver-publication primitive for both source resolver admissions and framework
-resolver effects. Framework registration effect tables live in `di/framework-registration-effects.ts`; keep adding
-capability-keyed framework effects there rather than inlining them into `DiWorldConstructor`.
+DI world construction now uses shared publication primitives for source/open-seam records, resolver/resource/self-resolver
+products, registry and parameterized-registry products, framework-produced AppTask products, and DI key identities. Keep
+those envelopes in `di/world-publication.ts`; keep capability-keyed framework effect tables in
+`di/framework-registration-effects.ts`; keep `DiWorldConstructor` focused on admission spending, registry recursion,
+live container mutation, and the final emission frame.
+
+Registration admission support now distinguishes constructable DI keys from syntax-shaped identifier keys. Plain class
+fallback registration should carry evaluator-proven constructable value shape into `ConstructableDiKeyIdentity`, with a
+source-backed TypeScript declaration identity when available. Do not recover this by name heuristics in DI world
+construction; missing constructable key closure is a registration/evaluator/type-system substrate gap.
+
+Container lookup pressure now has a runtime key-shape boundary. `ContainerLookupKey` carries the identity plus
+constructable/native/intrinsic/registry/resolver/interface/string/resource/object/primitive/nullish classification into
+`Container`, `Resolver`, and registry delegation. This is deliberately below diagnostics: `AUR0009`, `AUR0010`,
+`AUR0012`, `AUR0013`, and `AUR0015` should only be cited when the exact framework branch is modeled. `ContainerResolverLookup`,
+`ContainerFactoryLookup`, and `ContainerInvocation` now expose `frameworkErrorCode` for the lookup failures the emulator
+itself can decide: unable JIT non-constructor, intrinsic-type JIT, interface JIT, and native-function construction. A
+direct `IContainer.invoke(Array)` source call can spend `no_construct_native_fn` because `Container.invoke` checks native
+functions before container state; direct fresh object keys can spend `unable_jit_non_constructor` because the runtime
+identity is created at the call site and must miss resolver/factory maps. Stable keys such as strings, identifiers,
+intrinsic constructors, or interface symbols still need resolver/factory state and should not be inferred from syntax
+alone. Resolver slots now retain the modeled resolver object when DI publication owns it, so `Container.getFactory(...)`
+can follow Aurelia's resolver-backed factory fallback before failing. `InstanceProvider` is now named as an auLink-backed
+runtime-shaped resolver and owns `no_instance_provided` (`AUR0013`) at the provider-resolution answer level. `no_factory`
+(`AUR0004`) is intentionally not claimed for the stock container model: Aurelia's built-in `Container.getFactory(...)`
+returns a factory or throws its own getFactory/JIT error before `Resolver.resolve(...)` can observe a null factory; that
+guard belongs to custom `IContainer` implementations until semantic-runtime admits those as handler products.
+
+Binding-scope materialization now keeps TypeChecker-backed slot projection out of runtime scope publication.
+`binding-scope-slot-projector.ts` spends projected context type members into explicit binding-context slot drafts, while
+`scope-materializer.ts` owns `Scope`, `BindingContext`, `OverrideContext`, identities, claims, materialized products,
+and detail registration. If scope pressure returns, decide whether the next boundary is scope product publication or
+scope-owner/link claims; do not move TypeChecker member reads back into the runtime scope materializer.
+
+Configuration emission now has the same split. `configuration-publication.ts` owns source/evidence/provenance records,
+configuration product envelopes, open seams, and configuration-owned claims. `aurelia-app-frame-materializer.ts` owns
+the runtime-shaped app admission frame: root container, `Aurelia` facade, app-root config, AppRoot, and component target
+convergence. `configuration-step-materializer.ts` owns per-step AppTask, option contribution, callback/key source, and
+registration handoff products. Keep `configuration-kernel-emitter.ts` focused on source-order sequence orchestration;
+if configuration pressure returns, first check whether sequence order, app admission, step materialization, and
+registration handoff have started bleeding into each other again.
+Configuration issues now have a sibling publication path for known framework failures discovered while recognizing
+configuration/AppTask service customization. `configuration-issue-publication.ts` builds the source/evidence/product
+records, and callers must attach `ConfigurationProductDetails.Issue` only after the kernel records are committed.
+`framework-service-customization.ts` currently spends that path for duplicate `NodeObserverLocator` config mappings
+(`AUR0653`) while preserving the non-duplicated service state for observer lookup.
+
+Registration emission now follows the same support/publication split at a smaller scale. `RegistrationKernelEmitter`
+owns admission product classification, materialized-product envelopes, claims, and batch framing. Its support
+materializer owns key/value/registry-parameter source products and recognition open seams. If registration pressure
+returns, avoid folding key/value support back into product classification; decide whether the next boundary is DI-key
+classification, registry body interpretation, or product publication.
+
+Resource recognition emission now mirrors that pattern. `resource-recognition-kernel-emitter.ts` owns observation
+framing, source records, definition-header products, materialization records, product-detail registration, and the batch
+commit. `resource-recognition-publication.ts` owns target references, TypeChecker-backed target type projection,
+resource identity/alias/pattern publication, and recognition open seams. If resource-recognition pressure returns, ask
+whether the next split is header product publication or convergence carrier policy; do not move target/type or identity
+publication back into carrier recognition.
 
 App-world project construction now runs through a construction frame. The frame has a real lifetime, owns timing phase
 state, and gives each project phase a named handoff method. Preserve that shape if adding more router, SSR/SSG, or AOT
-phases; do not grow `constructAndEmit` back into a single long dependency chain.
+phases; do not grow `constructAndEmit` back into a single long dependency chain. If Atlas flags
+`AureliaAppWorldProjectConstructionFrame` as a large class, treat that as intentional orchestration pressure unless
+phase-local behavior starts accumulating inside the measured handoff methods.
 
 Router product record emission is shared by route-instruction and route-tree materialization through
 `router/router-product-records.ts`. Use that primitive for RouterIdentity + materialized-product + materialization-record
 bundles unless a router product needs materially different ownership or provenance semantics.
+
+Template compilation-unit materialization should keep front-door products separate from relationship publication.
+`TemplateCompilationUnitMaterializer` owns authored template source, parse context, root compilation context,
+compilation unit, identities, and materialized-product envelopes. `TemplateCompilationClaimMaterializer` owns the
+source/resource, unit/world/parse/root-context, and root-context service/resource-scope claim families. If this pressure
+returns, decide whether identity/envelope publication deserves a sibling boundary rather than moving claims back into
+product construction.
+
+Framework built-in resource target projection is now part of app-world construction. Built-in full definitions should
+carry checker-projected target types when the current app program can resolve the framework package export, with rare
+documented internal fallbacks only for resources that the framework registers but does not export. If target-access
+pressure regresses to `none` for controller view-model bindings, inspect built-in resource target projection and
+renderer `getTarget(target)` handoff before adding API-side fallback policy.
+
+Standalone resource-library authoring worlds share that same target projection rule. If app-world pressure reports
+typed built-in template-controller targets while authoring/resource-library pressure reports `none`, inspect whether the
+authoring compiler world is threading its current `TypeSystemProject` into built-in resource materialization before
+changing `BuiltInResourceTargetTypeProjector`.
+
+Built-in resource catalog materialization now has a per-resource publication boundary. Catalog materialization owns
+catalog grouping, catalog products, source records, product-detail registration, and configured catalog selections.
+The resource publisher owns individual header/full-definition products, declaration/alias/convergence claims, and
+resource materialization records. Full-definition construction remains in `built-in-resource-definition-materializer.ts`.
+If built-in catalog pressure returns, avoid folding the per-resource publisher back into catalog grouping; decide
+whether the next split is catalog product publication, configured-selection publication, or framework definition
+construction.
+
+Route-config field provenance can share a single authored source node across multiple normalized fields. Group those
+fields under a combined source identity and deduplicate record emission; duplicate kernel records or arbitrary
+`field:id` style locals are a provenance primitive smell, not a route materialization problem.
+
+Dynamic router `href` seams are source-spanned now, but remain real runtime boundaries. `RouterOptions.useHref=false`,
+non-anchor hosts, non-current-window targets, or a co-located `load` custom attribute can disable click interception
+while `HrefCustomAttribute.valueChanged(...)` still classifies non-external values into viewport instructions. Future
+repair/diagnostic work should use the binding value span to explain or propose intent, not close the seam without
+proving external URL or internal route semantics.
+External app pressure confirmed that this needs to survive authoring orientation: source-bearing router open seams now
+publish `runtime-boundary:source` action targets, so repair clusters can point at the value boundary while still
+requiring runtime intent.
+`fixtures/pressure/router-dynamic-pattern` now covers that same repair handoff without external app dependency by
+including an internal string-pattern href, an external-link-like field href, and an unresolved bare-module href.
 
 ## Template Compiler Emulation Notes
 

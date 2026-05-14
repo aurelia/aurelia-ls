@@ -35,6 +35,22 @@ export const enum RegistrationCarrierKind {
   ObjectMapEntry = 'object-map-entry',
 }
 
+export const enum RegistrationKeyObservationKind {
+  /** Source expression observed without a closed runtime key shape. */
+  Expression = 'expression',
+  /** Evaluator-proven constructable key accepted by Aurelia's container JIT path. */
+  Constructable = 'constructable',
+}
+
+export interface RegistrationConstructableKeySource {
+  /** Declaration node that produced the constructable value used as a DI key. */
+  readonly declaration: ts.ClassLikeDeclaration | ts.FunctionLikeDeclaration;
+  /** Evaluator module key that owns the constructable declaration. */
+  readonly moduleKey: string;
+  /** Source-file address admitted for the declaration file when known. */
+  readonly sourceFileAddressHandle: AddressHandle | null;
+}
+
 /** Source-level key expression observed before kernel identity materialization. */
 export class RegistrationKeyObservation {
   constructor(
@@ -42,6 +58,10 @@ export class RegistrationKeyObservation {
     readonly localName: string | null,
     /** Source node that produced the key expression. */
     readonly node: ts.Node,
+    /** Runtime key-shape evidence available before kernel identity materialization. */
+    readonly observationKind: RegistrationKeyObservationKind = RegistrationKeyObservationKind.Expression,
+    /** Declaration source for evaluator-proven constructable keys. */
+    readonly constructableSource: RegistrationConstructableKeySource | null = null,
   ) {}
 }
 
@@ -62,6 +82,8 @@ export class RegistrationValueObservation {
     readonly frameworkKind: FrameworkRegistrationKind | null = null,
     /** Source-file address when the value node belongs to another admitted module. */
     readonly sourceFileAddressHandle: AddressHandle | null = null,
+    /** Module key that owns the value declaration when it differs from the recognizing module. */
+    readonly moduleKey: string | null = null,
   ) {}
 }
 

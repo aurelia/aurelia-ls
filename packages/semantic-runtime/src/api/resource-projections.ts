@@ -3,6 +3,8 @@ import type { KernelStore } from '../kernel/store.js';
 import type { BindableDefinition } from '../resources/bindable-definition.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import { ResourceProductDetails } from '../resources/product-details.js';
+import type { ResourceIssue } from '../resources/resource-issue.js';
 import type { ResourceDependencyReference } from '../resources/resource-reference.js';
 import type {
   WatchCallbackDefinition,
@@ -16,58 +18,176 @@ import {
 import type {
   SemanticResourceDefinitionBindableRow,
   SemanticResourceDefinitionDependencyRow,
+  SemanticResourceDeclarationMode,
   SemanticResourceDefinitionPatternRow,
   SemanticResourceDefinitionRow,
   SemanticResourceDefinitionTemplateRow,
   SemanticResourceDefinitionWatchRow,
+  SemanticResourceIssueRow,
+  SemanticResourceIssuesResult,
 } from './contracts.js';
+import { projectBindableTypeSurface } from './bindable-type-projection.js';
 
 export function readResourceDefinitionRows(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   handles: boolean,
 ): readonly SemanticResourceDefinitionRow[] {
+  const issues = readProjectResourceIssues(emission, store);
   return emission.resources.readDefinitions()
-    .map((definition): SemanticResourceDefinitionRow => ({
-      projectKey: emission.project.projectKey,
-      resourceKind: resourceKindForApi(definition),
-      name: readDefinitionName(definition),
-      aliases: readDefinitionAliases(definition),
-      key: readDefinitionKey(definition),
-      targetName: definition.target.localName,
-      captureKind: 'capture' in definition ? definition.capture.kind : null,
-      template: 'template' in definition ? templateRow(definition.template, store) : null,
-      bindables: 'bindables' in definition ? bindableRows(definition.bindables, store) : [],
-      watches: 'watches' in definition ? watchRows(definition.watches, store) : [],
-      dependencies: 'dependencies' in definition ? dependencyRows(definition.dependencies) : [],
-      isTemplateController: 'isTemplateController' in definition ? definition.isTemplateController : null,
-      containerStrategy: 'containerStrategy' in definition ? definition.containerStrategy : null,
-      defaultProperty: 'defaultProperty' in definition ? definition.defaultProperty : null,
-      containerless: 'containerless' in definition ? definition.containerless : null,
-      shadowMode: 'shadowOptions' in definition ? definition.shadowOptions?.mode ?? null : null,
-      hasSlots: 'hasSlots' in definition ? definition.hasSlots : null,
-      needsCompile: 'needsCompile' in definition ? definition.needsCompile : null,
-      patterns: 'patterns' in definition ? definition.patterns.map((pattern): SemanticResourceDefinitionPatternRow => ({
-        pattern: pattern.pattern,
-        symbols: pattern.symbols,
-        source: describeAddress(store, pattern.addressHandle),
-      })) : [],
-      source: describeAddress(store, definition.sourceAddressHandle),
-      targetSource: describeAddress(store, definition.target.addressHandle),
-      ...(handles ? {
-        handles: {
-          definitionProductHandle: definition.productHandle,
-          identityHandle: definition.identityHandle,
-          targetIdentityHandle: definition.target.identityHandle,
-          sourceAddressHandle: definition.sourceAddressHandle,
-          targetAddressHandle: definition.target.addressHandle,
-        },
-      } : {}),
-    }))
+    .map((definition): SemanticResourceDefinitionRow =>
+      resourceDefinitionRow(emission, store, definition, issues, handles)
+    )
     .sort((left, right) =>
       `${left.resourceKind}:${left.name ?? ''}:${left.targetName ?? ''}:${left.source?.label ?? ''}`
         .localeCompare(`${right.resourceKind}:${right.name ?? ''}:${right.targetName ?? ''}:${right.source?.label ?? ''}`)
     );
+}
+
+export function readResourceIssueRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): SemanticResourceIssuesResult['rows'] {
+  const definitions = emission.resources.readDefinitions();
+  return readProjectResourceIssues(emission, store)
+    .map((issue) => resourceIssueRow(store, issue, definitionForIssue(definitions, issue), handles))
+    .sort((left, right) =>
+      `${left.phase}:${left.issueKind}:${left.resource.name ?? ''}:${left.source?.label ?? ''}`
+        .localeCompare(`${right.phase}:${right.issueKind}:${right.resource.name ?? ''}:${right.source?.label ?? ''}`)
+    );
+}
+
+function resourceDefinitionRow(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  definition: FullResourceDefinition,
+  issues: readonly ResourceIssue[],
+  handles: boolean,
+): SemanticResourceDefinitionRow {
+  return {
+    projectKey: emission.project.projectKey,
+    resourceKind: resourceKindForApi(definition),
+    declarationModes: declarationModesForDefinition(definition),
+    name: readDefinitionName(definition),
+    aliases: readDefinitionAliases(definition),
+    key: readDefinitionKey(definition),
+    targetName: definition.target.localName,
+    captureKind: 'capture' in definition ? definition.capture.kind : null,
+    template: 'template' in definition ? templateRow(definition.template, store) : null,
+    bindables: 'bindables' in definition ? bindableRows(definition.bindables, definition.target, store) : [],
+    watches: 'watches' in definition ? watchRows(definition.watches, store) : [],
+    issues: issues
+      .filter((issue) => issue.ownerDefinitionIdentityHandle === definition.identityHandle)
+      .map((issue) => resourceIssueRow(store, issue, definition, handles)),
+    dependencies: 'dependencies' in definition ? dependencyRows(definition.dependencies) : [],
+    isTemplateController: 'isTemplateController' in definition ? definition.isTemplateController : null,
+    containerStrategy: 'containerStrategy' in definition ? definition.containerStrategy : null,
+    defaultProperty: 'defaultProperty' in definition ? definition.defaultProperty : null,
+    containerless: 'containerless' in definition ? definition.containerless : null,
+    shadowMode: 'shadowOptions' in definition ? definition.shadowOptions?.mode ?? null : null,
+    hasSlots: 'hasSlots' in definition ? definition.hasSlots : null,
+    needsCompile: 'needsCompile' in definition ? definition.needsCompile : null,
+    patterns: 'patterns' in definition ? definition.patterns.map((pattern): SemanticResourceDefinitionPatternRow => ({
+      pattern: pattern.pattern,
+      symbols: pattern.symbols,
+      source: describeAddress(store, pattern.addressHandle),
+    })) : [],
+    source: describeAddress(store, definition.sourceAddressHandle),
+    targetSource: describeAddress(store, definition.target.addressHandle),
+    ...(handles ? {
+      handles: {
+        definitionProductHandle: definition.productHandle,
+        identityHandle: definition.identityHandle,
+        targetIdentityHandle: definition.target.identityHandle,
+        sourceAddressHandle: definition.sourceAddressHandle,
+        targetAddressHandle: definition.target.addressHandle,
+      },
+    } : {}),
+  };
+}
+
+function readProjectResourceIssues(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+): readonly ResourceIssue[] {
+  return store.productDetails.readBySlot(ResourceProductDetails.Issue)
+    .map((entry) => entry.detail)
+    .filter((issue) => issue.projectKey === emission.project.projectKey);
+}
+
+function definitionForIssue(
+  definitions: readonly FullResourceDefinition[],
+  issue: ResourceIssue,
+): FullResourceDefinition | null {
+  return definitions.find((definition) =>
+    definition.identityHandle === issue.ownerDefinitionIdentityHandle
+  ) ?? null;
+}
+
+function resourceIssueRow(
+  store: KernelStore,
+  issue: ResourceIssue,
+  definition: FullResourceDefinition | null,
+  handles: boolean,
+): SemanticResourceIssueRow {
+  return {
+    projectKey: issue.projectKey,
+    phase: issue.phase,
+    issueKind: issue.issueKind,
+    diagnosticAuthority: issue.frameworkErrorCode == null ? 'semantic-runtime-product' : 'framework-error-code',
+    frameworkErrorCode: issue.frameworkErrorCode,
+    severity: issue.severity,
+    message: issue.message,
+    source: describeAddress(store, issue.sourceAddressHandle),
+    resource: {
+      resourceKind: definition == null ? null : resourceKindForApi(definition),
+      name: definition == null ? null : readDefinitionName(definition),
+      key: definition == null ? null : readDefinitionKey(definition),
+      source: definition == null ? null : describeAddress(store, definition.sourceAddressHandle),
+    },
+    ...(handles ? {
+      handles: {
+        productHandle: issue.productHandle,
+        identityHandle: issue.identityHandle,
+        ownerDefinitionIdentityHandle: issue.ownerDefinitionIdentityHandle,
+        sourceAddressHandle: issue.sourceAddressHandle,
+      },
+    } : {}),
+  };
+}
+
+function declarationModesForDefinition(definition: FullResourceDefinition): readonly SemanticResourceDeclarationMode[] {
+  const modes = new Set<SemanticResourceDeclarationMode>();
+  for (const contribution of definition.contributions) {
+    const mode = declarationModeForContributionKind(String(contribution.contributionKind));
+    if (mode != null) {
+      modes.add(mode);
+    }
+  }
+  return [...modes].sort((left, right) => left.localeCompare(right));
+}
+
+function declarationModeForContributionKind(kind: string): SemanticResourceDeclarationMode | null {
+  switch (kind) {
+    case 'annotation':
+      return 'decorator';
+    case 'type-static-property':
+      return 'static-property';
+    case 'definition-object':
+      return 'definition-object';
+    case 'create-call':
+      return 'factory-call';
+    case 'convention':
+      return 'convention';
+    case 'header':
+      return 'header';
+    case 'bindable-metadata':
+    case 'watch-metadata':
+      return null;
+    default:
+      return null;
+  }
 }
 
 function resourceKindForApi(definition: FullResourceDefinition): ResourceDefinitionKind {
@@ -106,6 +226,7 @@ function templateRow(
 
 function bindableRows(
   bindables: readonly BindableDefinition[],
+  target: FullResourceDefinition['target'],
   store: KernelStore,
 ): readonly SemanticResourceDefinitionBindableRow[] {
   return bindables
@@ -115,6 +236,7 @@ function bindableRows(
       callback: bindable.callback,
       mode: bindable.mode,
       setterKind: bindable.set.kind,
+      ...projectBindableTypeSurface(store, target, bindable),
       source: describeAddress(store, bindable.sourceAddressHandle),
     }))
     .sort((left, right) => left.name.localeCompare(right.name));

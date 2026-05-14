@@ -23,7 +23,6 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  compactFieldProvenance,
   FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
@@ -53,7 +52,6 @@ import {
   RuntimeRendererGroup,
   RuntimeRendererPackage,
   StateDefaultRenderers,
-  type ConfiguredBuiltInRuntimeRendererCatalogSelectionField,
   type RuntimeRenderer,
   type RuntimeRendererField,
 } from './runtime-renderer.js';
@@ -523,12 +521,6 @@ export class ConfiguredBuiltInRuntimeRendererCatalogMaterializer {
       frameworkKind,
       catalogs.map((catalog) => catalog.productHandle),
       admission.sourceAddressHandle,
-      compactFieldProvenance<ConfiguredBuiltInRuntimeRendererCatalogSelectionField>([
-        new FieldProvenance('registrationAdmission', source.provenanceHandle),
-        new FieldProvenance('frameworkKind', source.provenanceHandle),
-        new FieldProvenance('catalogs', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
     );
   }
 
@@ -642,6 +634,9 @@ function runtimeRendererCatalogInputsForAdmission(
       case FrameworkRegistrationCapability.I18nTranslationSyntax:
       case FrameworkRegistrationCapability.I18nServiceResolvers:
       case FrameworkRegistrationCapability.I18nLifecycleTasks:
+      case FrameworkRegistrationCapability.ValidationServiceResolvers:
+      case FrameworkRegistrationCapability.ValidationHtmlDefaultResources:
+      case FrameworkRegistrationCapability.ValidationHtmlServiceResolvers:
       case FrameworkRegistrationCapability.RouterDefaultComponents:
       case FrameworkRegistrationCapability.RouterDefaultResources:
       case FrameworkRegistrationCapability.RouterConfigurationResolvers:
@@ -693,6 +688,10 @@ function runtimeRendererCatalogSummaryForFrameworkKind(frameworkKind: FrameworkR
       return 'RuntimeHtml DefaultRenderers spread admitted default runtime renderers.';
     case FrameworkRegistrationKind.I18nConfiguration:
       return 'I18nConfiguration admitted translation runtime renderers.';
+    case FrameworkRegistrationKind.ValidationConfiguration:
+      return 'ValidationConfiguration admitted validation services but no runtime renderers.';
+    case FrameworkRegistrationKind.ValidationHtmlConfiguration:
+      return 'ValidationHtmlConfiguration admitted validation resources and services but no runtime renderers.';
     case FrameworkRegistrationKind.RouterConfiguration:
       return 'RouterConfiguration admitted no runtime renderers in the current catalog.';
     case FrameworkRegistrationKind.RouterDefaultComponents:

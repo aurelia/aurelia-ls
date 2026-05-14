@@ -38,8 +38,6 @@ export const enum ConfigurationStepKind {
   BuilderMutation = 'builder-mutation',
   /** A configuration option is assigned, copied, or defaulted. */
   OptionContribution = 'option-contribution',
-  /** An `AppTask.*(...)` factory creates a deferred lifecycle task. */
-  AppTaskFactory = 'app-task-factory',
   /** A plugin-style `configure` function or export participates in app admission. */
   PluginConfigure = 'plugin-configure',
   /** The step exists, but the source shape is not classified yet. */

@@ -18,6 +18,8 @@ import type {
 export const enum TemplateValueSiteKind {
   /** Text node value owned by interpolation parsing. */
   TextInterpolation = 'text-interpolation',
+  /** Plain platform attribute value that has no interpolation opener and is not parser-owned. */
+  PlainAttributeValue = 'plain-attribute-value',
   /** Plain platform attribute value owned by interpolation parsing. */
   PlainAttributeInterpolation = 'plain-attribute-interpolation',
   /** Custom element bindable value owned by interpolation or command parsing. */
@@ -30,7 +32,7 @@ export const enum TemplateValueSiteKind {
   CapturedValue = 'captured-value',
   /** Binding-command-controlled value owned by the command-selected parser entry family. */
   BindingCommandValue = 'binding-command-value',
-  /** Custom-attribute inline multi-binding value transferred to a secondary grammar. */
+  /** Custom-attribute or template-controller inline multi-binding value transferred to a secondary grammar. */
   MultiBindingValue = 'multi-binding-value',
   /** Direct spread value owned by SpreadValueBindingInstruction lowering. */
   SpreadValue = 'spread-value',

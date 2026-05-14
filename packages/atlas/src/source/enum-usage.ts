@@ -6,12 +6,17 @@ import {
   uniqueByKey,
   uniqueSortedStrings,
 } from "../collections.js";
+import {
+  PhaseProfiler,
+  type PhaseProfileRow,
+} from "../phase-profile.js";
 import type {
   SourceFileIdentity,
   SourceProject,
   SourceSpan,
 } from "./project.js";
 import { SourceProjectKeyedMemo } from "./memo.js";
+import { TypeScriptEnumRawValueContext } from "./enum-raw-value-context.js";
 import {
   hasModifier,
   propertyNameText,
@@ -153,6 +158,9 @@ export interface TypeScriptEnumTranslationEdgeRow {
   readonly summary: string;
 }
 
+/** One measured phase inside a cold TypeScript enum usage index build. */
+export interface TypeScriptEnumUsageIndexPhaseProfileRow extends PhaseProfileRow {}
+
 /** Package-scoped enum usage substrate derived from one hot TypeScript Program. */
 export interface TypeScriptEnumUsageIndex {
   readonly version: typeof TYPESCRIPT_ENUM_USAGE_INDEX_VERSION;
@@ -162,6 +170,7 @@ export interface TypeScriptEnumUsageIndex {
   readonly valueOccurrences: readonly TypeScriptEnumValueOccurrenceRow[];
   readonly valueSpaces: readonly TypeScriptEnumValueSpaceRow[];
   readonly translationEdges: readonly TypeScriptEnumTranslationEdgeRow[];
+  readonly profile: readonly TypeScriptEnumUsageIndexPhaseProfileRow[];
 }
 
 export interface TypeScriptEnumUsageIndexOptions {
@@ -222,6 +231,9 @@ class TypeScriptEnumUsageIndexBuilder {
   readonly #sourceProject: SourceProject;
   readonly #packageId: string | undefined;
   readonly #checker: ts.TypeChecker;
+  readonly #profiler =
+    new PhaseProfiler<TypeScriptEnumUsageIndexPhaseProfileRow>();
+  readonly #rawValueContext: TypeScriptEnumRawValueContext;
   readonly #declarations: EnumDeclarationSeed[] = [];
   readonly #members: EnumMemberSeed[] = [];
   readonly #membersByKey = new Map<string, EnumMemberSeed>();
@@ -230,6 +242,7 @@ class TypeScriptEnumUsageIndexBuilder {
   readonly #membersByValueKey = new Map<string, EnumMemberSeed[]>();
   readonly #enumNames = new Set<string>();
   readonly #memberNames = new Set<string>();
+  readonly #rootEnumNamesByType = new WeakMap<ts.Type, ReadonlySet<string>>();
   readonly #references: TypeScriptEnumMemberReferenceRow[] = [];
   readonly #valueOccurrences: TypeScriptEnumValueOccurrenceRow[] = [];
   readonly #translationEdges = new Map<string, TypeScriptEnumTranslationEdgeRow>();
@@ -238,16 +251,40 @@ class TypeScriptEnumUsageIndexBuilder {
     this.#sourceProject = sourceProject;
     this.#packageId = packageId;
     this.#checker = sourceProject.checker;
+    this.#rawValueContext = new TypeScriptEnumRawValueContext(
+      this.#checker,
+      this.#profiler,
+      (type) => this.#enumNamesForType(type),
+    );
   }
 
   build(): TypeScriptEnumUsageIndex {
-    const contexts = this.#sourceFileContexts();
-    for (const context of contexts) {
-      this.#collectDeclarations(context);
-    }
-    for (const context of contexts) {
-      this.#collectUsage(context);
-    }
+    const contexts = this.#profiler.time(
+      "source-file-contexts",
+      undefined,
+      "Select admitted source files for the requested enum-usage package scope.",
+      () => this.#sourceFileContexts(),
+    );
+    this.#profiler.time(
+      "declaration-pass",
+      contexts.length,
+      "Walk source files to collect enum declaration and member seeds.",
+      () => {
+        for (const context of contexts) {
+          this.#collectDeclarations(context);
+        }
+      },
+    );
+    this.#profiler.time(
+      "usage-pass",
+      contexts.length,
+      "Walk source files to collect enum member references, raw value overlaps, and translation edges.",
+      () => {
+        for (const context of contexts) {
+          this.#collectUsage(context);
+        }
+      },
+    );
     return this.#finalize();
   }
 
@@ -465,18 +502,18 @@ class TypeScriptEnumUsageIndexBuilder {
     if (members === undefined) {
       return null;
     }
+    const role = useRoleForNode(node);
     const span = sourceSpanForNode(context.sourceFile, node);
-    const contextualMemberKeys = this.#contextualMemberKeysForLiteral(
-      node,
-      members,
-    );
+    const contextualMemberKeys = needsContextualRawValueLookup(role)
+      ? this.#contextualMemberKeysForLiteral(node, members, role)
+      : [];
     return {
       id: `typescript-enum-value:${valueKey}:${context.file.repoPath}:${span.start}:${span.end}`,
       packageId: context.file.packageId!,
       value: literal,
       valueKind: typeof literal === "string" ? "string" : "number",
       valueKey,
-      role: useRoleForNode(node),
+      role,
       text: node.getText(context.sourceFile),
       memberKeys: uniqueSortedStrings(members.map((member) => member.key)),
       contextualMemberKeys,
@@ -488,25 +525,83 @@ class TypeScriptEnumUsageIndexBuilder {
   #contextualMemberKeysForLiteral(
     node: ts.StringLiteral | ts.NoSubstitutionTemplateLiteral | ts.NumericLiteral,
     members: readonly EnumMemberSeed[],
+    role: TypeScriptEnumUseRole,
   ): readonly string[] {
-    const contextualType = this.#checker.getContextualType(node);
+    const expectedEnumNames =
+      this.#rawValueContext.expectedEnumNamesForLiteral(node, role);
+    if (expectedEnumNames !== null) {
+      return this.#contextualMemberKeysForEnumNames(
+        members,
+        role,
+        expectedEnumNames,
+      );
+    }
+    const contextualType = this.#profiler.measureRepeated(
+      `checker.getContextualType.${role}`,
+      `TypeChecker contextual type lookups for raw enum-like literals in ${role} positions.`,
+      () => this.#checker.getContextualType(node),
+    );
     if (contextualType === undefined) {
+      this.#countContextualLookupResult(role, "none");
       return [];
     }
-    const enumNames = this.#enumNamesForType(contextualType);
+    return this.#contextualMemberKeysForEnumNames(
+      members,
+      role,
+      this.#enumNamesForType(contextualType),
+    );
+  }
+
+  #contextualMemberKeysForEnumNames(
+    members: readonly EnumMemberSeed[],
+    role: TypeScriptEnumUseRole,
+    enumNames: ReadonlySet<string>,
+  ): readonly string[] {
     if (enumNames.size === 0) {
+      this.#countContextualLookupResult(role, "non-enum");
       return [];
     }
-    return uniqueSortedStrings(
+    const contextualMemberKeys = uniqueSortedStrings(
       members
         .filter((member) => enumNames.has(member.enumName))
         .map((member) => member.key),
+    );
+    this.#countContextualLookupResult(
+      role,
+      contextualMemberKeys.length === 0 ? "enum-miss" : "narrowed",
+    );
+    return contextualMemberKeys;
+  }
+
+  #countContextualLookupResult(
+    role: TypeScriptEnumUseRole,
+    result: "enum-miss" | "narrowed" | "non-enum" | "none",
+  ): void {
+    this.#profiler.countRepeated(
+      `contextualType.result.${role}.${result}`,
+      `Outcome count for raw enum-like literal contextual lookup in ${role} positions.`,
     );
   }
 
   #enumNamesForType(
     type: ts.Type,
     depth = 0,
+  ): ReadonlySet<string> {
+    if (depth === 0) {
+      const cached = this.#rootEnumNamesByType.get(type);
+      if (cached !== undefined) {
+        return cached;
+      }
+      const names = this.#enumNamesForTypeUncached(type, depth);
+      this.#rootEnumNamesByType.set(type, names);
+      return names;
+    }
+    return this.#enumNamesForTypeUncached(type, depth);
+  }
+
+  #enumNamesForTypeUncached(
+    type: ts.Type,
+    depth: number,
   ): ReadonlySet<string> {
     const names = new Set<string>();
     if (depth > 6) {
@@ -528,7 +623,11 @@ class TypeScriptEnumUsageIndexBuilder {
         }
       }
     }
-    const typeText = this.#checker.typeToString(type);
+    const typeText = this.#profiler.measureRepeated(
+      "checker.typeToString",
+      "TypeChecker type display used as a fallback for enum-name overlap.",
+      () => this.#checker.typeToString(type),
+    );
     for (const enumName of this.#enumNames) {
       if (containsWord(typeText, enumName)) {
         names.add(enumName);
@@ -731,14 +830,29 @@ class TypeScriptEnumUsageIndexBuilder {
   ): EnumMemberSeed | null {
     const expressionText = memberReferenceQualifierText(node, sourceFile);
     const memberName = memberReferenceNameText(node);
+    const syntacticMember = this.#uniqueQualifiedMember(
+      expressionText,
+      memberName,
+    );
+    if (syntacticMember !== null) {
+      this.#profiler.countRepeated(
+        "member-reference.syntax-exact",
+        "Exact Enum.Member text resolved without a checker lookup.",
+      );
+      return syntacticMember;
+    }
     if (
       !this.#enumNames.has(expressionText) &&
       !this.#memberNames.has(memberName)
     ) {
       return null;
     }
-    const symbol = this.#checker.getSymbolAtLocation(
-      ts.isPropertyAccessExpression(node) ? node.name : node.right,
+    const symbol = this.#profiler.measureRepeated(
+      "checker.getSymbolAtLocation",
+      "TypeChecker symbol lookups for possible Enum.Member references.",
+      () => this.#checker.getSymbolAtLocation(
+        ts.isPropertyAccessExpression(node) ? node.name : node.right,
+      ),
     );
     const symbolMember = this.#memberForSymbol(symbol);
     if (symbolMember !== null) {
@@ -750,13 +864,28 @@ class TypeScriptEnumUsageIndexBuilder {
     return rows?.length === 1 ? rows[0]! : null;
   }
 
+  #uniqueQualifiedMember(
+    enumName: string,
+    memberName: string,
+  ): EnumMemberSeed | null {
+    if (!this.#enumNames.has(enumName)) {
+      return null;
+    }
+    const rows = this.#membersByQualifiedName.get(`${enumName}.${memberName}`);
+    return rows?.length === 1 ? rows[0]! : null;
+  }
+
   #memberForSymbol(symbol: ts.Symbol | undefined): EnumMemberSeed | null {
     if (symbol === undefined) {
       return null;
     }
     const aliased =
       (symbol.flags & ts.SymbolFlags.Alias) !== 0
-        ? this.#checker.getAliasedSymbol(symbol)
+        ? this.#profiler.measureRepeated(
+          "checker.getAliasedSymbol",
+          "TypeChecker alias resolution for enum member symbols.",
+          () => this.#checker.getAliasedSymbol(symbol),
+        )
         : symbol;
     for (const declaration of aliased.declarations ?? []) {
       const enumMember = nearestEnumMemberDeclaration(declaration);
@@ -854,6 +983,7 @@ class TypeScriptEnumUsageIndexBuilder {
       translationEdges: [...this.#translationEdges.values()].sort(
         compareTranslationEdges,
       ),
+      profile: this.#profiler.rows(),
     };
   }
 
@@ -887,9 +1017,7 @@ class TypeScriptEnumUsageIndexBuilder {
         memberReferenceCount: referenceCount,
         rawValueOccurrenceCount: occurrences.length,
         sourceFiles: uniqueSortedStrings(occurrences.map((row) => row.file.repoPath)),
-        ...(occurrences[0] === undefined
-          ? {}
-          : { firstOccurrence: occurrences[0] }),
+        firstOccurrence: occurrences[0],
         summary: `${formatEnumValue(value)} is declared by ${
           valueMembers.length
         } enum member(s), referenced ${referenceCount} time(s), and appears as a raw value ${occurrences.length} time(s).`,
@@ -1025,6 +1153,25 @@ function memberReferenceNameText(
 
 function isRawValueRole(role: TypeScriptEnumUseRole): boolean {
   return role !== "enum-member-initializer" && role !== "module-specifier";
+}
+
+function needsContextualRawValueLookup(role: TypeScriptEnumUseRole): boolean {
+  switch (role) {
+    case "assignment":
+    case "call-argument":
+    case "case-label":
+    case "comparison":
+    case "expression":
+    case "object-value":
+    case "return-expression":
+      return true;
+    case "enum-member-initializer":
+    case "literal-type":
+    case "module-specifier":
+    case "object-key":
+    case "type-reference":
+      return false;
+  }
 }
 
 function functionLikeName(

@@ -6,19 +6,25 @@ import {
   frameworkRegistrationCapabilitiesForKind,
 } from '../registration/framework-registration-manifest.js';
 import {
-  RegistrationStrategy,
-} from '../registration/registration-admission.js';
-import {
   FrameworkRegistrationKind,
   RegistrationValueKind,
 } from '../registration/registration-reference.js';
+import {
+  ResolverStrategy,
+} from './resolver.js';
 
 export interface FrameworkResolverEffect {
   readonly capability: FrameworkRegistrationCapability;
   readonly keyName: string;
-  readonly strategy: RegistrationStrategy;
+  readonly strategy: ResolverStrategy;
   readonly valueKind: RegistrationValueKind | null;
   readonly valueName: string | null;
+}
+
+export interface FrameworkFactoryEffect {
+  readonly capability: FrameworkRegistrationCapability;
+  readonly keyName: string;
+  readonly factoryName: string;
 }
 
 export interface FrameworkAppTaskEffect {
@@ -30,6 +36,7 @@ export interface FrameworkAppTaskEffect {
 
 export interface FrameworkRegistrationEffects {
   readonly resolvers: readonly FrameworkResolverEffect[];
+  readonly factories: readonly FrameworkFactoryEffect[];
   readonly appTasks: readonly FrameworkAppTaskEffect[];
 }
 
@@ -37,79 +44,129 @@ const frameworkResolverEffects: readonly FrameworkResolverEffect[] = [
   {
     capability: FrameworkRegistrationCapability.I18nServiceResolvers,
     keyName: 'I18nInitOptions',
-    strategy: RegistrationStrategy.Callback,
+    strategy: ResolverStrategy.callback,
     valueKind: RegistrationValueKind.Callback,
     valueName: 'I18nConfiguration init options callback',
   },
   {
     capability: FrameworkRegistrationCapability.I18nServiceResolvers,
     keyName: 'II18nextWrapper',
-    strategy: RegistrationStrategy.Singleton,
+    strategy: ResolverStrategy.singleton,
     valueKind: RegistrationValueKind.Constructable,
     valueName: 'I18nextWrapper',
   },
   {
     capability: FrameworkRegistrationCapability.I18nServiceResolvers,
     keyName: 'I18N',
-    strategy: RegistrationStrategy.Singleton,
+    strategy: ResolverStrategy.singleton,
     valueKind: RegistrationValueKind.Constructable,
     valueName: 'I18nService',
   },
   {
+    capability: FrameworkRegistrationCapability.ValidationServiceResolvers,
+    keyName: 'ICustomMessages',
+    strategy: ResolverStrategy.instance,
+    valueKind: RegistrationValueKind.Instance,
+    valueName: 'Validation custom messages',
+  },
+  {
+    capability: FrameworkRegistrationCapability.ValidationServiceResolvers,
+    keyName: 'IValidator',
+    strategy: ResolverStrategy.singleton,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'StandardValidator',
+  },
+  {
+    capability: FrameworkRegistrationCapability.ValidationServiceResolvers,
+    keyName: 'IValidationMessageProvider',
+    strategy: ResolverStrategy.singleton,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'ValidationMessageProvider',
+  },
+  {
+    capability: FrameworkRegistrationCapability.ValidationServiceResolvers,
+    keyName: 'IValidationExpressionHydrator',
+    strategy: ResolverStrategy.singleton,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'ModelValidationExpressionHydrator',
+  },
+  {
+    capability: FrameworkRegistrationCapability.ValidationServiceResolvers,
+    keyName: 'IValidationRules',
+    strategy: ResolverStrategy.transient,
+    valueKind: RegistrationValueKind.Constructable,
+    valueName: 'ValidationRules',
+  },
+  {
+    capability: FrameworkRegistrationCapability.ValidationHtmlServiceResolvers,
+    keyName: 'IDefaultTrigger',
+    strategy: ResolverStrategy.instance,
+    valueKind: RegistrationValueKind.Instance,
+    valueName: 'ValidationTrigger.focusout',
+  },
+  {
     capability: FrameworkRegistrationCapability.RouterConfigurationResolvers,
     keyName: 'IBaseHref',
-    strategy: RegistrationStrategy.CachedCallback,
+    strategy: ResolverStrategy.callback,
     valueKind: RegistrationValueKind.CachedCallback,
     valueName: 'RouterConfiguration IBaseHref callback',
   },
   {
     capability: FrameworkRegistrationCapability.RouterConfigurationResolvers,
     keyName: 'IRouterOptions',
-    strategy: RegistrationStrategy.Instance,
+    strategy: ResolverStrategy.instance,
     valueKind: RegistrationValueKind.Instance,
     valueName: 'RouterOptions',
   },
   {
     capability: FrameworkRegistrationCapability.RouterConfigurationResolvers,
     keyName: 'RouterOptions',
-    strategy: RegistrationStrategy.Instance,
+    strategy: ResolverStrategy.instance,
     valueKind: RegistrationValueKind.Instance,
     valueName: 'RouterOptions',
   },
   {
     capability: FrameworkRegistrationCapability.RouterDefaultComponents,
     keyName: 'IRouter',
-    strategy: RegistrationStrategy.Singleton,
+    strategy: ResolverStrategy.singleton,
     valueKind: RegistrationValueKind.Constructable,
     valueName: 'Router',
   },
   {
     capability: FrameworkRegistrationCapability.StateStoreResolvers,
     keyName: 'IStoreRegistry',
-    strategy: RegistrationStrategy.Singleton,
+    strategy: ResolverStrategy.singleton,
     valueKind: RegistrationValueKind.Constructable,
     valueName: 'StoreRegistry',
   },
   {
     capability: FrameworkRegistrationCapability.DialogServiceResolvers,
     keyName: 'IDialogGlobalSettings',
-    strategy: RegistrationStrategy.Singleton,
+    strategy: ResolverStrategy.singleton,
     valueKind: RegistrationValueKind.Constructable,
     valueName: 'Dialog global settings',
   },
   {
     capability: FrameworkRegistrationCapability.DialogServiceResolvers,
     keyName: 'DialogService',
-    strategy: RegistrationStrategy.Singleton,
+    strategy: ResolverStrategy.singleton,
     valueKind: RegistrationValueKind.Constructable,
     valueName: 'DialogService',
   },
   {
     capability: FrameworkRegistrationCapability.DialogServiceResolvers,
     keyName: 'IDialogChildSettings',
-    strategy: RegistrationStrategy.Instance,
+    strategy: ResolverStrategy.instance,
     valueKind: RegistrationValueKind.Instance,
     valueName: 'Dialog child settings map',
+  },
+];
+
+const frameworkFactoryEffects: readonly FrameworkFactoryEffect[] = [
+  {
+    capability: FrameworkRegistrationCapability.ValidationHtmlServiceResolvers,
+    keyName: 'IValidationController',
+    factoryName: 'ValidationControllerFactory',
   },
 ];
 
@@ -164,6 +221,7 @@ export function frameworkRegistrationEffectsForKind(
   const capabilities = new Set(frameworkRegistrationCapabilitiesForKind(kind));
   return {
     resolvers: frameworkResolverEffects.filter((effect) => capabilities.has(effect.capability)),
+    factories: frameworkFactoryEffects.filter((effect) => capabilities.has(effect.capability)),
     appTasks: frameworkAppTaskEffects.filter((effect) => capabilities.has(effect.capability)),
   };
 }

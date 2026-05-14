@@ -1,4 +1,4 @@
-import { existsSync } from "node:fs";
+import { existsSync, readFileSync } from "node:fs";
 import path from "node:path";
 
 declare const repoRelativePathBrand: unique symbol;
@@ -121,6 +121,15 @@ export function repoPathIdentity(
   const absolutePath = normalizeAbsolutePath(filePath);
   const repoPath = repoRelativePath(repoRoot, absolutePath);
   return repoPath === null ? null : { absolutePath, repoPath };
+}
+
+/** Read UTF-8 text from a host path, returning null when the file is not readable. */
+export function readTextFileOrNull(fileName: string): string | null {
+  try {
+    return readFileSync(fileName, "utf8");
+  } catch {
+    return null;
+  }
 }
 
 /** Return a case-insensitive absolute path key for source-project maps. */

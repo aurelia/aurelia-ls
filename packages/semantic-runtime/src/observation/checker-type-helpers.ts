@@ -72,6 +72,16 @@ export function arrayElementTypeFor(
   return null;
 }
 
+/** True when every possible checker type part is a runtime Array/tuple instance. */
+export function isRuntimeArrayInstanceType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): boolean {
+  const parts = typeParts(type);
+  return parts.length > 0
+    && parts.every((part) => checker.isArrayType(part) || checker.isTupleType(part));
+}
+
 /** Return the key type for Map or ReadonlyMap shapes. */
 export function mapKeyTypeFor(
   checker: ts.TypeChecker,
@@ -85,6 +95,23 @@ export function mapKeyTypeFor(
   }).filter((part): part is ts.Type => part != null);
   if (keyTypes.length > 0) {
     return keyTypes[0]!;
+  }
+  return null;
+}
+
+/** Return the value type for Map or ReadonlyMap shapes. */
+export function mapValueTypeFor(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): ts.Type | null {
+  const valueTypes = typeParts(type).flatMap((part) => {
+    const name = namedTypeSymbolName(part);
+    return name === 'Map' || name === 'ReadonlyMap'
+      ? [typeReferenceArguments(checker, part)[1] ?? null]
+      : [];
+  }).filter((part): part is ts.Type => part != null);
+  if (valueTypes.length > 0) {
+    return valueTypes[0]!;
   }
   return null;
 }

@@ -546,7 +546,7 @@ function symbolEndpoint(
     name,
     packageId,
     packageName,
-    ...(source === undefined ? {} : { source }),
+    source,
   };
 }
 

@@ -49,6 +49,7 @@ import {
   sourceForRow,
   sourceInspectionContinuations,
 } from "./lens-continuation-utils.js";
+import { maintenanceDiagnosticEvidenceForOneBasedSource } from "./evidence-helpers.js";
 
 export interface ProductVocabularyValue {
   readonly version: ProductVocabularyAnalysis["version"];
@@ -130,7 +131,7 @@ export function answerProductVocabulary(
         filterClaimSignatureIssues(analysis.claimSignatureIssues, inquiry),
         basis,
         (rows) => ({ ...baseValue, claimSignatureIssues: rows }),
-        evidenceForClaimSignatureIssue,
+        maintenanceDiagnosticEvidenceForOneBasedSource,
       );
   }
 }
@@ -153,7 +154,9 @@ function answerProductVocabularySummary(
         claimSignatureIssues: topIssues,
       },
       basis,
-      evidence: topIssues.slice(0, evidenceLimit(inquiry)).map(evidenceForClaimSignatureIssue),
+      evidence: topIssues.slice(0, evidenceLimit(inquiry)).map(
+        maintenanceDiagnosticEvidenceForOneBasedSource,
+      ),
       continuations: productVocabularySummaryContinuations(inquiry),
     },
   );
@@ -368,28 +371,14 @@ function evidenceForClaimGraphEdge(row: ProductClaimGraphEdgeRow): Evidence {
   };
 }
 
-function evidenceForClaimSignatureIssue(row: ProductClaimSignatureIssueRow): Evidence {
-  return {
-    id: row.id,
-    kind: EvidenceKind.MaintenanceSignal,
-    role: EvidenceRole.Diagnostic,
-    confidence: EvidenceConfidence.Exact,
-    summary: row.summary,
-    source: sourceRangeFromOneBasedReference(row.source),
-    data: row,
-  };
-}
-
 function productVocabularySourceContinuations(row: unknown): readonly Continuation[] {
   const source = sourceForRow<ProductClaimSignatureIssueRow["source"]>(row);
   return sourceInspectionContinuations(
     source === undefined ? undefined : sourceRangeFromOneBasedReference(source),
     {
-      ...(source === undefined
-        ? {}
-        : {
-            id: `product.vocabulary:source:${source.filePath}:${source.startLine}:${source.startCharacter}`,
-          }),
+      id: source === undefined
+        ? undefined
+        : `product.vocabulary:source:${source.filePath}:${source.startLine}:${source.startCharacter}`,
       basis: [BasisKind.ProductVocabulary, BasisKind.SourceText],
       rationale: "Inspect the source behind this product-vocabulary row.",
       routeSummary: "Source backing for a product-vocabulary row.",

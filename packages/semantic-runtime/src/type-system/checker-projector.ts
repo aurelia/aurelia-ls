@@ -26,8 +26,6 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  compactFieldProvenance,
-  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -38,6 +36,7 @@ import {
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { TypeSystemProductDetails } from './product-details.js';
 import {
+  CheckerIndexedAccessKeyKind,
   CheckerTypeCarrier,
   CheckerTypeMember,
   CheckerTypeMemberCarrier,
@@ -47,11 +46,9 @@ import {
   CheckerTypeShape,
   CheckerTypeShapeKind,
   classifyCheckerTypeShape,
-  type CheckerTypeMemberField,
-  type CheckerTypeShapeField,
 } from './type-shape.js';
 import {
-  checkerIndexedValueType,
+  checkerIndexedValueTypeInfo,
   checkerIterableElementType,
 } from './checker-related-types.js';
 import {
@@ -110,6 +107,8 @@ export interface CheckerSyntheticTypeProjectionRequest {
   readonly members: readonly CheckerSyntheticTypeMemberRequest[];
   /** Value type reached by dynamic keyed access, when expression semantics can prove one. */
   readonly indexedValueType?: CheckerTypeReference | null;
+  /** Key kind that can reach `indexedValueType`; omitted only when no indexed value type is projected. */
+  readonly indexedAccessKeyKind?: CheckerIndexedAccessKeyKind | null;
   /** Value type yielded by runtime iteration, when expression semantics can prove one. */
   readonly iteratedValueType?: CheckerTypeReference | null;
   /** How this synthetic projection was requested. */
@@ -157,6 +156,7 @@ interface CheckerTypeDescriptor {
 
 interface TypeShapeRelatedTypes {
   readonly indexedValueType: CheckerTypeReference | null;
+  readonly indexedAccessKeyKind: CheckerIndexedAccessKeyKind | null;
   readonly iteratedValueType: CheckerTypeReference | null;
   readonly callReturnType: CheckerTypeReference | null;
   readonly constructReturnType: CheckerTypeReference | null;
@@ -189,6 +189,10 @@ class TypeShapePublicationFrame {
 
   get indexedValueType(): CheckerTypeReference | null {
     return this.relatedTypes.indexedValueType;
+  }
+
+  get indexedAccessKeyKind(): CheckerIndexedAccessKeyKind | null {
+    return this.relatedTypes.indexedAccessKeyKind;
   }
 
   get iteratedValueType(): CheckerTypeReference | null {
@@ -279,7 +283,7 @@ export class CheckerTypeProjector {
       typeProjectionOrigin(input),
       source.sourceAddressHandle,
     );
-    const members = this.membersForType(input, shapeReference, source.provenanceHandle, records);
+    const members = this.membersForType(input, shapeReference, records);
     return new TypeShapePublicationFrame(
       input.localKey,
       source,
@@ -343,7 +347,7 @@ export class CheckerTypeProjector {
       syntheticProjectionOrigin(input),
       source.sourceAddressHandle,
     );
-    const members = this.syntheticMembersForType(input, shapeReference, source.provenanceHandle);
+    const members = this.syntheticMembersForType(input, shapeReference);
     return this.recordsForShapePublication(new TypeShapePublicationFrame(
       input.localKey,
       source,
@@ -356,6 +360,7 @@ export class CheckerTypeProjector {
       members,
       {
         indexedValueType: input.indexedValueType ?? null,
+        indexedAccessKeyKind: input.indexedAccessKeyKind ?? null,
         iteratedValueType: input.iteratedValueType ?? null,
         callReturnType: input.callReturnType ?? null,
         constructReturnType: input.constructReturnType ?? null,
@@ -383,22 +388,12 @@ export class CheckerTypeProjector {
       input.display,
       input.members,
       input.indexedValueType,
+      input.indexedAccessKeyKind,
       input.iteratedValueType,
       input.callReturnType,
       input.constructReturnType,
       input.source.sourceAddressHandle,
-      compactFieldProvenance<CheckerTypeShapeField>([
-        new FieldProvenance('shapeKind', input.source.provenanceHandle),
-        new FieldProvenance('origin', input.source.provenanceHandle),
-        new FieldProvenance('display', input.source.provenanceHandle),
-        input.members.length === 0 ? null : new FieldProvenance('members', input.source.provenanceHandle),
-        input.indexedValueType == null ? null : new FieldProvenance('indexedValueType', input.source.provenanceHandle),
-        input.iteratedValueType == null ? null : new FieldProvenance('iteratedValueType', input.source.provenanceHandle),
-        input.callReturnType == null ? null : new FieldProvenance('callReturnType', input.source.provenanceHandle),
-        input.constructReturnType == null ? null : new FieldProvenance('constructReturnType', input.source.provenanceHandle),
-        input.source.sourceAddressHandle == null ? null : new FieldProvenance('source', input.source.provenanceHandle),
-        input.carrier == null ? null : new FieldProvenance('carrier', input.source.provenanceHandle),
-      ]),
+      [],
       input.carrier,
     );
   }
@@ -486,7 +481,6 @@ export class CheckerTypeProjector {
   private syntheticMembersForType(
     input: CheckerSyntheticTypeProjectionRequest,
     ownerType: CheckerTypeReference,
-    provenanceHandle: ProvenanceHandle,
   ): readonly CheckerTypeMember[] {
     return input.members.map((member, index) => {
       const localKey = `${input.localKey}:member:${index}:${localKeyPart(member.name)}`;
@@ -501,13 +495,7 @@ export class CheckerTypeProjector {
         member.isReadonly ?? false,
         null,
         member.sourceAddressHandle ?? null,
-        compactFieldProvenance<CheckerTypeMemberField>([
-          new FieldProvenance('name', provenanceHandle),
-          new FieldProvenance('memberKind', provenanceHandle),
-          new FieldProvenance('ownerType', provenanceHandle),
-          member.valueType == null ? null : new FieldProvenance('valueType', provenanceHandle),
-          member.sourceAddressHandle == null ? null : new FieldProvenance('source', provenanceHandle),
-        ]),
+        [],
         null,
       );
     });
@@ -516,18 +504,16 @@ export class CheckerTypeProjector {
   private membersForType(
     input: CheckerTypeProjectionRequest,
     ownerType: CheckerTypeReference,
-    provenanceHandle: ProvenanceHandle,
     records: KernelStoreRecord[],
   ): readonly CheckerTypeMember[] {
     return input.type.getProperties().map((symbol) =>
-      this.memberForType(input, ownerType, provenanceHandle, records, symbol)
+      this.memberForType(input, ownerType, records, symbol)
     );
   }
 
   private memberForType(
     input: CheckerTypeProjectionRequest,
     ownerType: CheckerTypeReference,
-    provenanceHandle: ProvenanceHandle,
     records: KernelStoreRecord[],
     symbol: ts.Symbol,
   ): CheckerTypeMember {
@@ -549,7 +535,7 @@ export class CheckerTypeProjector {
       checkerDeclarationsAreReadonly(declarations),
       declarationSource?.identity.handle ?? null,
       declarationSource?.address.handle ?? null,
-      memberFieldProvenance(provenanceHandle, valueTypeReference, declarations),
+      [],
       new CheckerTypeMemberCarrier(input.checker, symbol, valueType, declarations),
     );
   }
@@ -615,12 +601,14 @@ function checkerTypeDescriptor(input: CheckerTypeProjectionRequest): CheckerType
 }
 
 function checkerTypeRelatedTypes(input: CheckerTypeProjectionRequest): TypeShapeRelatedTypes {
+  const indexedValueType = checkerIndexedValueTypeInfo(input.checker, input.type);
   return {
     indexedValueType: typeReferenceForRelatedCheckerType(
       input.checker,
-      checkerIndexedValueType(input.checker, input.type),
+      indexedValueType?.type ?? null,
       input.sourceNode ?? null,
     ),
+    indexedAccessKeyKind: indexedValueType?.keyKind ?? null,
     iteratedValueType: typeReferenceForRelatedCheckerType(
       input.checker,
       checkerIterableElementType(input.checker, input.type),
@@ -749,21 +737,6 @@ function valueTypeReferenceForMember(
     CheckerTypeProjectionOrigin.TypeChecker,
     null,
   );
-}
-
-function memberFieldProvenance(
-  provenanceHandle: ProvenanceHandle,
-  valueTypeReference: CheckerTypeReference | null,
-  declarations: readonly ts.Declaration[],
-): readonly FieldProvenance<CheckerTypeMemberField>[] {
-  return compactFieldProvenance<CheckerTypeMemberField>([
-    new FieldProvenance('name', provenanceHandle),
-    new FieldProvenance('memberKind', provenanceHandle),
-    new FieldProvenance('ownerType', provenanceHandle),
-    valueTypeReference == null ? null : new FieldProvenance('valueType', provenanceHandle),
-    declarations.length === 0 ? null : new FieldProvenance('declaration', provenanceHandle),
-    new FieldProvenance('carrier', provenanceHandle),
-  ]);
 }
 
 function appendDeclarationSourceRecords(

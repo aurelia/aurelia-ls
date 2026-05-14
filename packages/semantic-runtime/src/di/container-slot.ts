@@ -4,8 +4,9 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
-import type { RegistrationStrategy } from '../registration/registration-admission.js';
 import type { ContainerReference } from './container-reference.js';
+import type { InstanceProvider } from './instance-provider.js';
+import type { Resolver, ResolverStrategy } from './resolver.js';
 
 export type ContainerSlotField =
   | 'container'
@@ -24,10 +25,12 @@ export class ContainerResolverSlot {
     readonly container: ContainerReference,
     /** DI key identity for this resolver row. */
     readonly keyIdentityHandle: IdentityHandle,
+    /** Runtime resolver object stored in Aurelia's resolver map, when modeled. */
+    readonly resolver: Resolver | InstanceProvider | null,
     /** Resolver-producing registration admission, explicit resolver, or synthetic resolver product. */
     readonly resolverProductHandle: ProductHandle | null,
     /** Runtime resolver strategy when known from registration spending. */
-    readonly strategy: RegistrationStrategy | null,
+    readonly strategy: ResolverStrategy | null,
     /** Whether this slot came from the disposable resolver path. */
     readonly isDisposable: boolean,
     /** Source address for the operation that produced this row. */

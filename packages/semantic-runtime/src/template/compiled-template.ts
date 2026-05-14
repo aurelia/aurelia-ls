@@ -9,6 +9,8 @@ import type { HtmlNodeReference } from './html-ir.js';
 import type { TemplateInstructionSequence } from './instruction-ir.js';
 
 export const enum CompiledTemplateState {
+  /** The framework compiler would reject this template before producing a usable compiled definition. */
+  Invalid = 'invalid',
   /** Compiler pass-through and instruction row assembly closed over the current substrate. */
   Complete = 'complete',
   /** Useful compiler products were emitted while some runtime compiler semantics stayed visible as seams. */

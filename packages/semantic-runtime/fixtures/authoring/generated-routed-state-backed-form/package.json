@@ -1,0 +1,16 @@
+{
+  "name": "generated-routed-state-backed-form",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "check": "tsc -p tsconfig.json --noEmit"
+  },
+  "dependencies": {
+    "@aurelia/kernel": "^2.0.0-rc.1",
+    "@aurelia/router": "^2.0.0-rc.1",
+    "@aurelia/runtime-html": "^2.0.0-rc.1"
+  },
+  "devDependencies": {
+    "typescript": "^6.0.3"
+  }
+}

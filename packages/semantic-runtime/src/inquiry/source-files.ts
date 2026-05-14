@@ -24,7 +24,7 @@ import {
   InquiryPageInfo,
   InquiryPageRequest,
 } from './page.js';
-import { uniqueValues } from './collections.js';
+import { uniqueValues } from '../collections.js';
 import { isSourceFileAddress } from '../kernel/source-address.js';
 
 export class AdmittedSourcesQuery {

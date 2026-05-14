@@ -8,6 +8,24 @@ static type surfaces rather than hydrated runtime values.
 
 ## Current Shape
 
+- `AstTrackDecoratorIssueMaterializer`, `ComputedDecoratorIssueMaterializer`, and `ObservableDecoratorIssueMaterializer`
+  scan project TypeScript source for observation-owned decorator forms that the runtime rejects before observer setup.
+  This is an observation source-issue lane, not resource metadata: these decorators can appear on ordinary classes as
+  well as Aurelia resources.
+  `@astTrack` currently claims exact runtime `ast_track_decorator_not_a_method` (`AUR0117`) only for source-proved
+  non-method targets. `@computed(...)` currently claims exact runtime `computed_not_getter` (`AUR0228`) only for
+  source-proved call-form decorators on non-getter/non-method targets; bare `@computed` stays tied to the direct method
+  overload until a framework source path proves otherwise. `@observable` currently claims exact runtime
+  `invalid_observable_decorator_usage` (`AUR0224`) only for source-proved forms where the framework throws:
+  zero-argument `@observable()` on non-fields, and object-configuration `@observable({...})` on non-field/non-class
+  targets. Other odd decorator forms stay unclaimed until the framework source shows the same mapped error path. Shared
+  decorator target classification lives in `decorator-target.ts` so new observation decorator lanes do not grow their
+  own class/member taxonomy.
+- `runtime-effect.ts` models the framework-shaped `IEffect` stop lifecycle shared by `Observation.watch(...)` effects
+  and `RunEffect`. The first `stop()` closes as a normal lifecycle transition; a second `stop()` claims exact runtime
+  `stopping_a_stopped_effect` (`AUR0225`). The sibling runtime `method_not_implemented` (`AUR0099`) usages in
+  AST-evaluator mixins and connectable defaults stay intentionally unclaimed until semantic-runtime admits user-extensible
+  evaluator/connectable classes rather than concrete observation products.
 - `observer-locator.ts` models `ObserverLocator.getAccessor/getObserver`, `NodeObserverLocator`, and binding-owned
   accessor paths for property bindings and interpolations. It is framework-shaped and auLink-backed; the current lookup
   mechanics are TypeChecker-backed static semantics rather than hydrated DOM/JS execution. Direct framework nouns such
@@ -24,31 +42,74 @@ static type surfaces rather than hydrated runtime values.
   Dash-cased tag names are not treated as custom elements here; renderer target selection decides whether a binding
   targets a controller view-model or a host node. Unknown host-node tag names fall back to `HTMLElement`/`SVGElement`
   when the TypeScript tag-name maps cannot provide a narrower DOM type.
+- `node-observer-config-reader.ts` owns decoding statically evaluated `NodeObserverLocator` service calls into node
+  config, global config, accessor override, and global accessor override entries. Configuration recognition may discover
+  AppTask-time service calls, but the observation substrate owns what a node observer config means, including observer
+  type constructors, `events`, `readonly`, and primitive defaults. Node-specific config keys preserve the framework's
+  exact `nodeName` lane: built-ins are registered as `INPUT`, `SELECT`, and `TEXTAREA`, and lookup uses the normalized
+  runtime node name rather than an authored-tag heuristic. Lowercase app config for an HTML node is therefore not
+  treated as equivalent to the built-in uppercase mapping.
+  A closed AppTask assignment to `NodeObserverLocator.allowDirtyCheck` is also carried in this service state. When
+  dirty checking is disabled, an observer lookup for an existing native node property with no configured observer
+  publishes the exact runtime-html `node_observer_strategy_not_found` (`AUR0652`) framework code on the target-access
+  product; unknown TypeChecker input stays an open observer-locator seam instead of spending that code.
 - Controller/view-model targets use TypeChecker-backed resource target types when available. Ordinary accessor lookups
   close through Aurelia's runtime-default `PropertyAccessor`; observer lookups use the same framework fallback shape as
   Aurelia, selecting `ComputedObserver` for statically readonly getter-like members and `SetterObserver` for ordinary or
-  missing keys. TypeChecker facts such as property existence and writability remain attached to the target-access row so
-  a later strictness/policy layer can decide whether a framework-valid dynamic write should become a diagnostic.
+  missing keys. Collection-shaped view-model targets also preserve Aurelia's special object-observer branches:
+  array/tuple `length` uses `CollectionLengthObserver`, map/set `size` uses `CollectionSizeObserver`, and numeric array
+  keys use `ArrayIndexObserver`. Lookup results expose whether the selected observer supports controller bindable
+  `useCoercer` and `useCallback` hooks, so controller hydration can report `AUR0507`/`AUR0508` without duplicating
+  observer-locator rules. TypeChecker facts such as property existence and writability remain attached to the
+  target-access row so a later strictness/policy layer can decide whether a framework-valid dynamic write should become
+  a diagnostic.
 - `binding-data-flow-materializer.ts` consumes target-access or target-operation products plus instruction `Scope`
-  applications after template scope construction. It materializes flow rows for property bindings, attribute bindings,
-  and interpolations with direction, source expression lane, source and target property type displays, source
-  writability, TypeChecker assignability checks in each active direction, and a row-local open reason when the runtime
-  data-flow itself cannot be closed honestly. TypeChecker source-expression gaps, such as a missing projected
-  view-model member, stay on the data-flow row as `sourceTypeOpenReason` instead of becoming a binding open seam.
+  applications after template scope construction. The outer materializer owns product/seam publication; the draft
+  collaborators own target value type selection, source-expression projection, source write capability, shared
+  TypeChecker member access, and source/target assignability. It materializes flow rows for property bindings,
+  attribute bindings, and interpolations with direction, source expression lane, source and target property type
+  displays, source writability, TypeChecker assignability checks in each active direction, and a row-local open reason
+  when the runtime data-flow itself cannot be closed honestly. TypeChecker source-expression gaps, such as a missing
+  projected view-model member, stay on the data-flow row as `sourceTypeOpenReason` instead of becoming a binding open
+  seam.
   It asks the template parse-projection layer for runtime-accepted expression ASTs, so authoring-strict companion
   parses remain visible without forcing closed Aurelia runtime data-flow to reopen. Source-expression evaluation
   receives the target value type as contextual type, so callback and function-valued bindables can type arrow
   parameters when the target bindable exposes a callable signature. If the target type is `unknown`, `any`, or
   index-signature-only, the data-flow row stays honest instead of manufacturing members.
-  Runtime-only scope slots created by earlier two-way/from-view bindable assignments remain assignable through
-  Aurelia's runtime `astAssign` path, but data-flow reports them with TypeScript strictness pressure rather than as
-  real TypeChecker members. A runtime-created slot may still carry the target bindable's TypeMember product as a type
-  carrier for expression analysis; assignment policy should not treat that carrier as proof that the scope name is an
-  authored view-model member. Member-expression writes should spend the shared TypeChecker member surface before
+  `$`-prefixed synthetic writeback locals created by from-view/two-way bindable assignments, such as
+  `display-data.bind: $displayData`, are treated as runtime-assignable even when no authored view-model member exists;
+  the target bindable value type is used as the assignment type for later scope analysis. `$host` is reserved by
+  Aurelia runtime and is excluded from this synthetic-local lane: missing `$host` reads report `AUR0105`, while
+  `astAssign` throws `ast_no_assign_$host` before ordinary scope lookup, so data-flow reports `AUR0106` as an exact
+  framework assignment diagnostic. Other runtime-only scope slots can still report TypeScript strictness pressure when
+  the product cannot prove a real TypeChecker member. A
+  runtime-created slot may still carry the target bindable's TypeMember product as a type carrier for expression
+  analysis; assignment policy should not treat that carrier as proof that the scope name is an authored view-model
+  member. Member-expression writes should spend the shared TypeChecker member surface before
   reporting owner-member pressure: first use projected members, then ask the retained checker/apparent type for a
   concrete property, then honor string index-signature writeability. Only after those fail should the row report
   `owner-member-not-projected`; otherwise app pressure will confuse ordinary indexed/dynamic TypeScript surfaces with
   missing Aurelia runtime semantics.
+  Data-flow rows pass rendering-controller `strictBinding` into the TypeChecker evaluator because Aurelia only throws
+  nullish member/keyed/call access errors in strict expression-evaluation mode. The evaluator projects `undefined` for
+  optional and non-strict nullish reads, preserves open nullish results when strictness is unknown, and lets template
+  diagnostics spend `AUR0114`/`AUR0115` or strict call-target runtime codes only when the binding row's strictness is
+  known true.
+  Source writeability uses the same strict gate for `astAssign`: member/keyed writes through a definitely nullish owner
+  report `AUR0116` as runtime-unassignable source-assignment pressure instead of TypeScript assignment strictness.
+  Source-to-target flow evaluates expressions with a connectable evaluation context, so `++`, `--`, and compound
+  assignment report `AUR0113` through the TypeChecker evaluator before the API maps it to a framework diagnostic. Target
+  writes that call `astAssign` with no connectable stay out of that lane.
+  Select observer source-to-target flow also spends target-side channel facts here: a definitely array-valued source
+  flowing into a non-multiple `SelectValueObserver` channel publishes runtime-html
+  `select_observer_array_on_non_multi_select` (`AUR0654`) on the data-flow product. The value channel owns whether the
+  select is single, multiple, or dynamic; data flow owns the source type comparison and the exact framework-code claim.
+  Target-side observer writes also publish exact runtime observation failures here when ObserverLocator has already
+  selected the throwing observer: `CollectionSizeObserver` source-to-target writes spend `assign_readonly_size`
+  (`AUR0220`), and getter-only `ComputedObserver` target writes spend
+  `assign_readonly_readonly_property_from_computed` (`AUR0221`). Keep these on the data-flow edge rather than the
+  target-access row because `getObserver(...)` succeeds and the framework throws only when the binding writes.
 - `binding-source-value-evaluator.ts` is the value-side companion to TypeChecker data flow. It evaluates Aurelia
   binding-source ASTs against modeled `Scope` slots and the shared static ECMAScript evaluator, including guarded local
   class getter reads. Consumers such as router resources can ask for a static source value without moving binding lookup
@@ -58,16 +119,30 @@ static type surfaces rather than hydrated runtime values.
   Open reductions carry typed reason kinds such as runtime-only source value, missing static scope slot value, missing
   static member value, or unsupported expression shape so downstream consumers can keep their own product seam while
   still exposing the binding-layer cause.
-- `binding-value-channel-materializer.ts` sits between target-side products and data flow. It captures the value shape an
-  observer/accessor or direct operation actually transports. Closed observer-specific slices include static
+- `binding-value-channel-materializer.ts` publishes runtime value-channel products, claims, product-level provenance,
+  and open seams between target-side products and data flow. Value-channel fields are generated from binding, target,
+  observer, and checker facts, so they should not receive same-handle field provenance unless a future source product
+  gives an individual field a distinct authored span or contribution.
+- `binding-value-channel-drafts.ts` owns the value shape an observer/accessor or direct operation actually transports
+  before publication. The outer draft materializer dispatches by binding/accessor kind; direct binding, select, and
+  checked observer collaborators own their framework-shaped value-channel branches; local TypeChecker/type-domain
+  support is separate from template/node/value-site lookup support so publication does not become responsible for lazy
+  source-type reads. Closed observer-specific slices include static
   single-select option domains, such as `select.value` carrying `'ship' | 'pickup'` instead of raw DOM `string`, plain
-  checkbox boolean channels, radio element values, and checkbox element values bound to array/set membership sources.
+  checkbox boolean channels, radio element values, checkbox element values bound to array/set membership sources, and
+  checkbox element keys bound to `Map<K, boolean>` sources.
   Element values can come from static `value`/`model` attributes or from lowered sibling `model.bind`/`value.bind`
-  property bindings.
+  property bindings. Dynamic element-property and setter accessors may have no declared TypeScript property type, for
+  example `model` on options or inputs, while still being valid Aurelia runtime writes; those channels use `unknown` as
+  the runtime intake type rather than pretending the missing DOM property is an open observer failure.
 - `runtime-binding-observation.ts` owns `RuntimeBindingValueChannel`, `RuntimeBindingDataFlow`, their references, and
   their value/data-flow enums. The framework-shaped binding classes still live in the template runtime model, but the
   products that explain observer/accessor value shape and source/target data flow are materialized, typed, and
-  registered through the observation substrate.
+  registered through the observation substrate. Data-flow products carry both a display source name and a root source
+  name so downstream app-topology joins can connect member chains and single-root interpolations back to their owning
+  component members without reparsing expression text. They also preserve the expression evaluator's source open kind
+  so diagnostics can distinguish TypeChecker strictness, assignment no-ops, and runtime `astEvaluate` callable errors
+  without reparsing or reclassifying the binding expression at the API boundary.
 - `product-details.ts` owns observation detail slots for those value-channel and data-flow products.
 - `checker-type-helpers.ts` owns shared TypeChecker helpers for string-literal domains, boolean-like lanes, and
   collection/map element projection used by both value-channel and data-flow materializers.
@@ -75,7 +150,10 @@ static type surfaces rather than hydrated runtime values.
   class interpolations, `.class` bindings carry their toggled class-token domain, `StyleAttributeAccessor` channels
   cover `style.bind` and style interpolations, and `.style` bindings carry their targeted style-property domain.
   Direct style operations preserve authored CSS property names, including custom properties such as
-  `--checkout-accent` and logical properties such as `border-inline-start-width`.
+  `--checkout-accent` and logical properties such as `border-inline-start-width`. Direct target operations keep a
+  runtime intake type even when the source expression cannot be typed: Aurelia's attribute/content bindings receive
+  `unknown` and then apply class truthiness, style stringification, attribute removal/stringification, or text-content
+  stringification. Missing source members should remain source diagnostics, not erase target-side operation semantics.
 
 ## Boundaries
 
@@ -84,26 +162,40 @@ strategy, DOM events, target type, property type, observer value channel, writab
 open reason. Future deeper runtime execution should plug in below this boundary by providing richer target values or
 property descriptors, not by teaching template materializers another private observer switch.
 
+Runtime observation lifecycle and service-activation errors stay outside this substrate until their public product paths
+exist. Direct `ObserverLocator.getObserver(null, ...)`, `getExpressionObserver(...)` without `IExpressionParser`,
+connectable stack misuse, dirty-checker service/policy failures, and live effect/computed recursion are runtime API or
+execution-state failures, not current template binding target-access products. Exact framework codes should be claimed
+only after semantic-runtime admits those API/lifecycle products, not because the code exists in `runtime/errors.ts`.
+
 Target observers own the target-to-source edge for from-view/two-way bindings, while accessors own the source-to-target
 write edge. Keep those flow products separate from expression parsing so binding direction does not get flattened into
 ordinary read-expression semantics. Expression parsing says what was authored; observation data flow says how runtime
 binding will spend that expression against target-side products, value channels, and `Scope` lookup.
 
-Select and checked observers are modeled in two layers. `observer-locator.ts` owns the framework-shaped
-`SelectValueObserver` and `CheckedObserver` target-access identities, while `binding-value-channel-materializer.ts` owns
-the value channel they imply. That split matters because the observers select the accessor branch, but the actual value
-domain depends on authored option/input nodes plus TypeChecker-visible source facts. The current value-channel model
+Select and checked observers are modeled in three layers. `observer-locator.ts` owns the framework-shaped
+`SelectValueObserver` and `CheckedObserver` target-access identities, `binding-value-channel-drafts.ts` owns the value
+channel they imply, and `binding-value-channel-materializer.ts` publishes the resulting product records. That split
+matters because the observers select the accessor branch, but the actual value domain depends on authored option/input
+nodes plus TypeChecker-visible source facts. The current value-channel model
 closes the single-select option domain from static `option.value`, static `option.model`, or expression-backed
 `option.model/value` bindings. Static multi-selects close the selected option element domain for TypeChecker-visible
-array sources; `multiple.bind` is only treated as static when the authored expression itself is a boolean literal or
-the TypeChecker projects a single boolean-literal type. Ordinary boolean-valued `multiple.bind` stays open until its
-value is closed and carries the typed
-`binding-value-channel-dynamic-select-multiple` reason through both value-channel and dependent data-flow seams.
+array sources. Dynamic `multiple.bind` is a distinct `select-dynamic-option-value` channel when the source type is
+broad enough to carry both framework branches: single-select scalar updates and multi-select array mutation. This is
+common in wrapper components whose public value is intentionally weak or scalar-or-array; it should stay visible as a
+dynamic select channel rather than an open seam. It still remains an explicit
+`binding-value-channel-dynamic-select-multiple` seam when the bound source type cannot plausibly accept both branches,
+because Aurelia's `SelectValueObserver` branches on the live element `multiple` flag at runtime.
+The exact `AUR0654` single-select/array-source error is deliberately not published by the value-channel draft: the draft
+can prove the single-select channel, but only the later data-flow edge has the TypeChecker source type needed to mirror
+`SelectValueObserver.setValue(...)` and `_observeArray(...)`.
 Other select-channel failures carry their own typed reasons for unclosed option values, absent option domains, missing
 authored select targets, and multi-select source-shape pressure.
-`CheckedObserver` closes plain checkbox boolean flow, radio values, and checkbox values for array/set membership sources
-using static attributes or expression-backed `model/value` bindings. Map key/value flow, custom matcher semantics, and
-non-literal dynamic element values remain explicit pressure.
+`CheckedObserver` closes plain checkbox boolean flow, radio values, checkbox values for array/set membership sources,
+and checkbox keyed-boolean writes for `Map<K, boolean>` sources using static attributes or expression-backed
+`model/value` bindings. The map channel carries the element model/value as the map key and validates the checked state
+against the map value type during data-flow assignability. Custom matcher semantics and non-literal dynamic element
+values remain explicit pressure.
 The checkbox branch must decide from the bound source shape before demanding an element model/value: boolean-like and
 non-collection sources use the checked boolean channel, while collection/map-like sources need the element value channel
 for membership semantics.

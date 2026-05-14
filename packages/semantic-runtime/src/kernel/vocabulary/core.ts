@@ -121,6 +121,16 @@ export const enum KernelVocabularyNamespace {
   RouteRecognizer = 'route-recognizer',
   /** Vocabulary about i18n translation resources and bindings. */
   I18n = 'i18n',
+  /** Vocabulary about @aurelia/state store configuration and state-plugin bindings. */
+  State = 'state',
+  /** Vocabulary about @aurelia/validation rule construction, hydration, and diagnostics. */
+  Validation = 'validation',
+  /** Vocabulary about @aurelia/fetch-client configuration and diagnostics. */
+  FetchClient = 'fetch-client',
+  /** Vocabulary about @aurelia/dialog configuration, services, and diagnostics. */
+  Dialog = 'dialog',
+  /** Vocabulary about Aurelia observation decorators, observers, and accessors outside a single binding. */
+  Observation = 'observation',
   /** Vocabulary about template compiler services, scopes, syntax, and lowering. */
   Compiler = 'compiler',
   /** Vocabulary about template references and scope. */

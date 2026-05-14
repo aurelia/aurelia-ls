@@ -1,6 +1,48 @@
-import type { SourceFileAddress } from './address.js';
+import {
+  SourceSpanAddress,
+  SourceSpanRole,
+  type SourceFileAddress,
+} from './address.js';
 import type { AddressHandle } from './handles.js';
-import type { KernelStore } from './store.js';
+import type {
+  KernelStore,
+  KernelStoreRecord,
+} from './store.js';
+
+export interface SourceSpanSite {
+  readonly sourceFileAddressHandle: AddressHandle;
+  readonly start: number;
+  readonly end: number;
+}
+
+export class SourceSpanAddressPublication {
+  constructor(
+    readonly handle: AddressHandle,
+    readonly records: readonly KernelStoreRecord[],
+  ) {}
+}
+
+/** Materialize an exact source span when the caller already has the boot-admitted source-file handle. */
+export function sourceSpanAddressForSite(
+  store: KernelStore,
+  localKey: string,
+  site: SourceSpanSite,
+  role: SourceSpanRole = SourceSpanRole.Primary,
+): SourceSpanAddressPublication {
+  const handle = store.handles.address(`${localKey}:source`);
+  return new SourceSpanAddressPublication(
+    handle,
+    [
+      new SourceSpanAddress(
+        handle,
+        site.sourceFileAddressHandle,
+        site.start,
+        site.end,
+        role,
+      ),
+    ],
+  );
+}
 
 /** Narrow a kernel address to an admitted source-file address. */
 export function isSourceFileAddress(address: { readonly kind: string }): address is SourceFileAddress {

@@ -1,0 +1,396 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:checker-expression-type-evaluator",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "type-system",
+        "expression",
+        "checker"
+      ],
+      "summary": "CheckerExpressionTypeEvaluator is a deliberately visible large-class frontier for TypeChecker-backed Aurelia expression semantics.",
+      "rationale": "This class carries the static TypeScript side of expression evaluation. Its size is not automatically bad, but future work should inspect whether new expression, binding, or control-flow behavior belongs here, in synthesis helpers, or in a narrower speculative evaluation context.",
+      "guidance": [
+        "Inspect expression-type-evaluator before adding a second local TypeChecker expression evaluator.",
+        "Use CheckerExpressionMemberOwnerProjector for cursor offset/member-owner projection; do not regrow offset walks inside completion or diagnostic answer code.",
+        "If a feature needs lifecycle or template-control-flow context, enter through CheckerExpressionTypeWorld and look for a layered speculative context rather than duplicating global evaluator setup.",
+        "Use the evaluator runtime context for framework evaluation modes such as connectable source-to-target dependency collection and proven IAstEvaluator.strict state; do not fork a second evaluator just to distinguish binding observation from listener/event evaluation.",
+        "Optional and non-strict nullish member/keyed/call reads should project undefined through the evaluator. Unknown strictness should remain open so diagnostics do not claim framework runtime codes prematurely.",
+        "Template completion and file/app diagnostic probes should receive or create a CheckerExpressionTypeWorld; keep TemplateCompletionQuery product-handle-shaped and pass hot evaluator lifetime through cursor-context construction.",
+        "Use this pressure as a prompt to check whether Atlas can reveal the flow clearly before splitting."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-type-evaluator.ts",
+          "symbolName": "CheckerExpressionTypeEvaluator",
+          "line": 98,
+          "summary": "Current large TypeChecker-backed expression evaluator."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-member-owner-projector.ts",
+          "symbolName": "CheckerExpressionMemberOwnerProjector",
+          "line": 31,
+          "summary": "Offset-aware member-owner projector for cursor inquiries."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-type-world.ts",
+          "symbolName": "CheckerExpressionTypeWorld",
+          "summary": "Pass-local owner for evaluator/cache lifetime."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/template-completion.ts",
+          "symbolName": "templateCompletionQueryForCursor",
+          "summary": "Cursor-context construction can share a CheckerExpressionTypeWorld while keeping completion queries durable."
+        },
+        {
+          "kind": "lens",
+          "lensId": "product.architecture",
+          "projection": "classes",
+          "filters": {
+            "className": "CheckerExpressionTypeEvaluator"
+          },
+          "summary": "Live product-architecture class row."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "CheckerExpressionTypeEvaluator",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-type-evaluator.ts",
+          "minLineCount": 80,
+          "minMethodCount": 20
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CheckerExpressionMemberOwnerProjector",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-member-owner-projector.ts",
+          "minLineCount": 80,
+          "minMethodCount": 3
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-14"
+    },
+    {
+      "id": "frontier:completed-input-companion-builder",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "expression",
+        "parser",
+        "completion"
+      ],
+      "summary": "CompletedInputCompanionBuilder is the expression-completion pressure point for completed-input parser companion state.",
+      "rationale": "Expression parser and completion support should avoid local hacks around malformed or partial input. Parser gaps should improve the expression substrate and Atlas projections around it.",
+      "guidance": [
+        "Inspect completed-input corridors and scanner helpers before adding new autocomplete-specific parsing.",
+        "When interpolation or template-expression cases expose gaps, improve parser substrate first.",
+        "Use product.architecture function-shape/duplicate lanes before accepting repeated corridor helpers."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-companion-builder.ts",
+          "symbolName": "CompletedInputCompanionBuilder",
+          "line": 41,
+          "summary": "Completed input companion builder."
+        },
+        {
+          "kind": "lens",
+          "lensId": "product.architecture",
+          "projection": "functions",
+          "filters": {
+            "pathPrefix": "packages/semantic-runtime/src/expression"
+          },
+          "summary": "Expression function pressure rows."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "CompletedInputCompanionBuilder",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-companion-builder.ts",
+          "minLineCount": 80,
+          "minMethodCount": 15
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:completed-input-parser-and-corridors",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "expression",
+        "parser",
+        "completion",
+        "lsp"
+      ],
+      "summary": "Completed input parser and corridor classes are the expression-completion substrate, not autocomplete-local patch points.",
+      "rationale": "External template sampling exposed interpolation and partial-expression cases that can look malformed but are legitimate Aurelia syntax. Parser gaps should improve the completed-input parser/corridor substrate rather than adding feature-local parse smoke paths.",
+      "guidance": [
+        "Start with CompletedInputParser, parser state, scanner, primary/binding-pattern/template corridors, and failure tracking before changing autocomplete behavior.",
+        "Treat equivalent-looking parser helpers as possible split-brain; use product.architecture function-shape rows before adding another corridor helper.",
+        "For template expressions inside interpolation holes, prefer robust parser state/lookahead over permissive EOF shortcuts.",
+        "Use expression-boundary-scanner for interpolation opener and close-boundary logic so template value-site classification and interpolation publication do not drift."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-parser.ts",
+          "symbolName": "CompletedInputParser",
+          "line": 121,
+          "summary": "Completed input parser."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-primary-corridor.ts",
+          "symbolName": "CompletedInputPrimaryCorridor",
+          "line": 81,
+          "summary": "Primary expression corridor."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-template-corridor.ts",
+          "symbolName": "CompletedInputTemplateCorridor",
+          "line": 44,
+          "summary": "Template-expression corridor."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-binding-pattern-corridor.ts",
+          "symbolName": "CompletedInputBindingPatternCorridor",
+          "line": 64,
+          "summary": "Binding-pattern corridor."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-iterator-corridor.ts",
+          "symbolName": "CompletedInputIteratorCorridor",
+          "line": 83,
+          "summary": "Iterator corridor."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-left-hand-side-corridor.ts",
+          "symbolName": "CompletedInputLeftHandSideCorridor",
+          "line": 65,
+          "summary": "Left-hand-side corridor."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-arrow-corridor.ts",
+          "symbolName": "CompletedInputArrowCorridor",
+          "line": 89,
+          "summary": "Arrow/function corridor."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/expression-scanner.ts",
+          "symbolName": "Scanner",
+          "line": 184,
+          "summary": "Expression scanner used by completed-input parsing."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/expression-boundary-scanner.ts",
+          "symbolName": "findTemplateExpressionClose",
+          "summary": "Shared interpolation/template-hole boundary lookahead."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-parser-state.ts",
+          "symbolName": "CompletedInputParserState",
+          "line": 41,
+          "summary": "Shared scanner cursor, checkpoint, delimiter, failure, and span-rebasing state."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-prefix-refs.ts",
+          "symbolName": "CompletedInputPrefixRefBuilder",
+          "line": 33,
+          "summary": "Closed-subtree witness builder for companion recovery."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-failures.ts",
+          "symbolName": "CompletedInputFailureTracker",
+          "line": 29,
+          "summary": "Parser-local retained failure and gap publication support."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-publication.ts",
+          "symbolName": "CompletedInputPublication",
+          "line": 43,
+          "summary": "Lift from parser-local state into public result families."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/parse-companion-state.ts",
+          "symbolName": "ParseCompanionState",
+          "line": 39,
+          "summary": "Companion parse-state envelope."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-tail-corridor.ts",
+          "symbolName": "CompletedInputTailCorridor",
+          "line": 42,
+          "summary": "Value-converter and binding-behavior tail corridor."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "CompletedInputParser",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-parser.ts",
+          "minLineCount": 80,
+          "minMethodCount": 15
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CompletedInputPrimaryCorridor",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-primary-corridor.ts",
+          "minLineCount": 80,
+          "minMethodCount": 15
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CompletedInputTemplateCorridor",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-template-corridor.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CompletedInputBindingPatternCorridor",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-binding-pattern-corridor.ts",
+          "minLineCount": 300,
+          "minMethodCount": 10
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CompletedInputIteratorCorridor",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-iterator-corridor.ts",
+          "minLineCount": 250,
+          "minMethodCount": 8
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CompletedInputLeftHandSideCorridor",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-left-hand-side-corridor.ts",
+          "minLineCount": 250,
+          "minMethodCount": 8
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CompletedInputArrowCorridor",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-arrow-corridor.ts",
+          "minLineCount": 250,
+          "minMethodCount": 8
+        },
+        {
+          "kind": "product-large-class",
+          "className": "Scanner",
+          "filePath": "packages/semantic-runtime/src/expression/expression-scanner.ts",
+          "minLineCount": 250,
+          "minMethodCount": 5
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CompletedInputParserState",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-parser-state.ts",
+          "minLineCount": 80,
+          "minMethodCount": 10
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CompletedInputPrefixRefBuilder",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-prefix-refs.ts",
+          "minLineCount": 100,
+          "minMethodCount": 8
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CompletedInputFailureTracker",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-failures.ts",
+          "minLineCount": 120,
+          "minMethodCount": 6
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CompletedInputPublication",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-publication.ts",
+          "minLineCount": 80,
+          "minMethodCount": 3
+        },
+        {
+          "kind": "product-large-class",
+          "className": "ParseCompanionState",
+          "filePath": "packages/semantic-runtime/src/expression/parse-companion-state.ts",
+          "minLineCount": 80,
+          "minMethodCount": 3
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CompletedInputTailCorridor",
+          "filePath": "packages/semantic-runtime/src/expression/completed-input-tail-corridor.ts",
+          "minLineCount": 80,
+          "minMethodCount": 2
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:expression-parse-result-inspection",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "expression",
+        "parser",
+        "query-surface"
+      ],
+      "summary": "ExpressionParseResultInspector is the stable parser-owned query surface for result family and outcome questions.",
+      "rationale": "Downstream template, binding, scope, and inquiry code should not rebuild sibling switches over parser result kinds. This class is intentionally a focused static inspector over durable family/outcome questions, not a convenience alias layer.",
+      "guidance": [
+        "Start here when a consumer needs parser result family, completion, hard-error, member-owner, or canonical-AST questions.",
+        "Add inspection helpers only for durable parser-owned questions that multiple consumers would otherwise duplicate.",
+        "Do not put product ownership, template lowering, or value-site publication policy in parser result inspection."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/parse-result-inspection.ts",
+          "symbolName": "ExpressionParseResultInspector",
+          "line": 41,
+          "summary": "Parser result family/outcome inspector."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/expression/README.md",
+          "summary": "Expression parser public contract and internal ownership map."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "ExpressionParseResultInspector",
+          "filePath": "packages/semantic-runtime/src/expression/parse-result-inspection.ts",
+          "minLineCount": 100,
+          "minMethodCount": 8
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    }
+  ]
+}

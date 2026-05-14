@@ -8,6 +8,7 @@ interface ParseFailureInit extends ParseCompanionStateInit {
   readonly span: SourceSpan;
   readonly message: string;
   readonly text: string | null;
+  readonly frameworkErrorCode?: string | null;
 }
 
 /**
@@ -21,10 +22,16 @@ export class ParseHardFailure {
     readonly span: SourceSpan,
     readonly message: string,
     readonly text: string | null,
+    readonly frameworkErrorCode: string | null = null,
   ) {}
 
-  static create(span: SourceSpan, message: string, text: string | null): ParseHardFailure {
-    return new ParseHardFailure(span, message, text);
+  static create(
+    span: SourceSpan,
+    message: string,
+    text: string | null,
+    frameworkErrorCode: string | null = null,
+  ): ParseHardFailure {
+    return new ParseHardFailure(span, message, text, frameworkErrorCode);
   }
 }
 
@@ -45,6 +52,7 @@ export class ParseCompanionFailure {
     readonly message: string,
     readonly text: string | null,
     readonly companion: ParseCompanionState,
+    readonly frameworkErrorCode: string | null = null,
   ) {}
 
   static degraded(init: ParseFailureInit): ParseCompanionFailure {
@@ -53,6 +61,7 @@ export class ParseCompanionFailure {
       init.message,
       init.text,
       ParseCompanionState.degraded(init),
+      init.frameworkErrorCode ?? null,
     );
   }
 
@@ -62,6 +71,7 @@ export class ParseCompanionFailure {
       init.message,
       init.text,
       ParseCompanionState.frontierOnly(init),
+      init.frameworkErrorCode ?? null,
     );
   }
 
@@ -71,6 +81,7 @@ export class ParseCompanionFailure {
       this.message,
       this.text,
       companion,
+      this.frameworkErrorCode,
     );
   }
 }

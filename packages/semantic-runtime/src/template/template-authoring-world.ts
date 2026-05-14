@@ -12,6 +12,7 @@ import {
 } from '../resources/built-in-resource-catalog-materializer.js';
 import { RuntimeHtmlBuiltInResourceCatalogs } from '../resources/built-in-resources.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 import { BuiltInSyntaxCatalogMaterializer } from './built-in-syntax-catalog-materializer.js';
 import { RuntimeHtmlBuiltInSyntaxCatalogs } from './built-in-syntax.js';
 import { TemplateCompilerWorldKind } from './compiler-world.js';
@@ -28,13 +29,11 @@ import { visibleResourceForDefinition } from './resource-scope-builder.js';
 import { BuiltInRuntimeRendererCatalogMaterializer } from './runtime-renderer-catalog-materializer.js';
 import { RuntimeHtmlDefaultRenderers, RuntimeRendererGroup, RuntimeRendererPackage } from './runtime-renderer.js';
 
-class AuthoringContainerSourceSet {
-  constructor(
-    readonly records: readonly KernelStoreRecord[],
-    readonly evidenceHandle: EvidenceHandle,
-    readonly provenanceHandle: ProvenanceHandle,
-    readonly sourceAddressHandle: AddressHandle | null,
-  ) {}
+interface AuthoringContainerSourceSet {
+  readonly records: readonly KernelStoreRecord[];
+  readonly evidenceHandle: EvidenceHandle;
+  readonly provenanceHandle: ProvenanceHandle;
+  readonly sourceAddressHandle: AddressHandle | null;
 }
 
 export interface TemplateAuthoringCompilerWorldRequest {
@@ -42,6 +41,8 @@ export interface TemplateAuthoringCompilerWorldRequest {
   readonly projectKey: string;
   /** Resource definitions recognized in the project. */
   readonly resourceDefinitions: readonly FullResourceDefinition[];
+  /** TypeChecker epoch used to project framework-owned built-in target types. */
+  readonly typeSystem: TypeSystemProject | null;
 }
 
 /**
@@ -71,13 +72,9 @@ export class TemplateAuthoringCompilerWorldMaterializer {
     if (containerRecords.length > 0) {
       this.store.commit(new KernelStoreBatch(containerRecords, `template-authoring-container:${request.projectKey}`));
     }
-    const syntax = new BuiltInSyntaxCatalogMaterializer(this.store).materialize(Object.values(RuntimeHtmlBuiltInSyntaxCatalogs));
-    const builtInResources = new BuiltInResourceCatalogMaterializer(this.store).materialize(Object.values(RuntimeHtmlBuiltInResourceCatalogs));
-    const renderers = new BuiltInRuntimeRendererCatalogMaterializer(this.store).materialize([{
-      packageId: RuntimeRendererPackage.RuntimeHtml,
-      group: RuntimeRendererGroup.RuntimeHtmlDefaultRenderers,
-      renderers: RuntimeHtmlDefaultRenderers,
-    }]);
+    const syntax = this.materializeAuthoringSyntax();
+    const builtInResources = this.materializeAuthoringBuiltInResources(request.typeSystem);
+    const renderers = this.materializeAuthoringRenderers();
     return this.compilerWorldMaterializer.construct(new TemplateCompilerWorldConstructionRequest(
       `authoring:${request.projectKey}`,
       TemplateCompilerWorldKind.Component,
@@ -93,6 +90,27 @@ export class TemplateAuthoringCompilerWorldMaterializer {
       TemplateResourceVisibilityKind.Configured,
       sourceAddressHandle,
     ));
+  }
+
+  private materializeAuthoringSyntax(): ReturnType<BuiltInSyntaxCatalogMaterializer['materialize']> {
+    return new BuiltInSyntaxCatalogMaterializer(this.store).materialize(Object.values(RuntimeHtmlBuiltInSyntaxCatalogs));
+  }
+
+  private materializeAuthoringBuiltInResources(
+    typeSystem: TypeSystemProject | null,
+  ): ReturnType<BuiltInResourceCatalogMaterializer['materialize']> {
+    return new BuiltInResourceCatalogMaterializer(this.store).materialize(
+      Object.values(RuntimeHtmlBuiltInResourceCatalogs),
+      typeSystem,
+    );
+  }
+
+  private materializeAuthoringRenderers(): ReturnType<BuiltInRuntimeRendererCatalogMaterializer['materialize']> {
+    return new BuiltInRuntimeRendererCatalogMaterializer(this.store).materialize([{
+      packageId: RuntimeRendererPackage.RuntimeHtml,
+      group: RuntimeRendererGroup.RuntimeHtmlDefaultRenderers,
+      renderers: RuntimeHtmlDefaultRenderers,
+    }]);
   }
 
   private authoringContainer(
@@ -144,7 +162,12 @@ export class TemplateAuthoringCompilerWorldMaterializer {
         [evidenceHandle],
       ),
     ];
-    return new AuthoringContainerSourceSet(records, evidenceHandle, provenanceHandle, sourceAddressHandle);
+    return {
+      records,
+      evidenceHandle,
+      provenanceHandle,
+      sourceAddressHandle,
+    };
   }
 
   private authoringContainerProductRecords(

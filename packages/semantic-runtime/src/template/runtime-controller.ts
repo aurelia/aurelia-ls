@@ -4,7 +4,6 @@ import {
   CustomAttributeController,
   HydratableController,
   SyntheticViewController,
-  type ControllerField,
   type ControllerProduct,
 } from '../configuration/controller.js';
 import type { BindingScopeReference } from '../configuration/scope.js';
@@ -16,10 +15,6 @@ import type {
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
-import {
-  compactFieldProvenance,
-  FieldProvenance,
-} from '../kernel/provenance.js';
 import type { ResourceTargetReference } from '../resources/resource-reference.js';
 import {
   HydrateAttributeInstruction,
@@ -359,17 +354,6 @@ export class RuntimeControllerFrame {
       null,
       null,
       this.sourceAddressHandle,
-      this.fieldProvenance([
-        'container',
-        'vmKind',
-        parent == null ? null : 'parent',
-        this.children.length === 0 ? null : 'children',
-        this.scope == null ? null : 'scope',
-        this.bindings.length === 0 ? null : 'bindings',
-        this.viewFactoryProductHandle == null ? null : 'viewFactory',
-        this.instructionSequenceProductHandle == null ? null : 'instructionSequence',
-        'source',
-      ]),
     );
   }
 
@@ -385,16 +369,6 @@ export class RuntimeControllerFrame {
       this.scope,
       parent,
       this.sourceAddressHandle,
-      this.fieldProvenance([
-        'container',
-        'vmKind',
-        this.definitionProductHandle == null ? null : 'definition',
-        this.viewModel == null ? null : 'viewModel',
-        this.hostAddressHandle == null ? null : 'host',
-        this.scope == null ? null : 'scope',
-        parent == null ? null : 'parent',
-        'source',
-      ]),
     );
   }
 
@@ -413,24 +387,7 @@ export class RuntimeControllerFrame {
       this.readBindingProductHandles(),
       this.strict,
       this.sourceAddressHandle,
-      this.fieldProvenance([
-        'container',
-        'vmKind',
-        this.definitionProductHandle == null ? null : 'definition',
-        this.hostAddressHandle == null ? null : 'host',
-        this.scope == null ? null : 'scope',
-        parent == null ? null : 'parent',
-        this.children.length === 0 ? null : 'children',
-        this.bindings.length === 0 ? null : 'bindings',
-        'source',
-      ]),
     );
-  }
-
-  private fieldProvenance(fields: readonly (ControllerField | null)[]): readonly FieldProvenance<ControllerField>[] {
-    return compactFieldProvenance(fields.map((field) =>
-      field == null ? null : new FieldProvenance(field, this.provenanceHandle)
-    ));
   }
 }
 

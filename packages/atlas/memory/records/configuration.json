@@ -1,0 +1,493 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:configuration-step-materializer",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "configuration",
+        "registration",
+        "world-construction"
+      ],
+      "summary": "ConfigurationStepMaterializer is the per-step configuration frontier for app tasks, option contributions, registration admissions, open seams, and produced product claims.",
+      "rationale": "Configuration is where evaluated app setup, framework registries, plugin registrations, and world construction meet. Future external-app or authoring pressure should preserve the distinction between recognizing configuration sequences, materializing each step, admitting registrations, and composing the app world.",
+      "guidance": [
+        "Start here when a configuration chain step needs app-task products, option contributions, registration admissions, or source-associated open seams.",
+        "Keep receiver/sequence recognition separate from per-step product materialization and app-world composition.",
+        "Use configuration README and workspace/plugin architecture pressure before collapsing project-specific configuration calls into framework bundle assumptions."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-step-materializer.ts",
+          "symbolName": "ConfigurationStepMaterializer",
+          "line": 184,
+          "summary": "Per-step configuration materializer."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/README.md",
+          "summary": "Configuration semantics, ordering, and bundle-admission notes."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "ConfigurationStepMaterializer",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-step-materializer.ts",
+          "minLineCount": 300,
+          "minMethodCount": 10
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:app-world-project-construction-frame",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "configuration",
+        "world-construction",
+        "phase-frame"
+      ],
+      "summary": "AureliaAppWorldProjectConstructionFrame is intentionally large as a named phase frame for app-world construction.",
+      "rationale": "This shape replaced a monolithic construct-and-emit chain with named phase methods. Future refactors should preserve the phase-frame intent unless Atlas shows repeated or misplaced phase ownership.",
+      "guidance": [
+        "Keep phase expansion in the frame instead of rebuilding a monolithic app-world construction method.",
+        "If the frame grows, split by durable phase boundaries and source/project construction responsibilities.",
+        "Use app pressure timings to decide which phase needs a better inquiry algebra or cache point."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
+          "symbolName": "AureliaAppWorldProjectConstructionFrame",
+          "line": 190,
+          "summary": "App-world construction phase frame."
+        },
+        {
+          "kind": "lens",
+          "lensId": "product.architecture",
+          "projection": "classes",
+          "filters": {
+            "className": "AureliaAppWorldProjectConstructionFrame"
+          },
+          "summary": "Live class shape."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "AureliaAppWorldProjectConstructionFrame",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
+          "minLineCount": 80,
+          "minMethodCount": 15
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:configuration-kernel-publication",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "configuration",
+        "kernel-publication",
+        "provenance"
+      ],
+      "summary": "ConfigurationKernelPublication owns the shared kernel-record envelope for configuration products, source evidence, open seams, and configuration claims.",
+      "rationale": "Configuration used to hand-spell product identity/materialization/source triples across emitters and materializers. This publication primitive is the intentional consolidation point; future configuration products should reuse it unless their ownership semantics genuinely differ.",
+      "guidance": [
+        "Start here when configuration needs ConfigurationIdentity, MaterializedProduct, MaterializationRecord, source/evidence/provenance triples, open seams, or configuration-owned claims.",
+        "Keep sequence, step, app-root, app-task, option, and Aurelia facade publication on this shared primitive before introducing a new record helper.",
+        "If provenance feels too field-level for framework-owned configuration facts, inspect this boundary before changing individual materializers."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-publication.ts",
+          "symbolName": "ConfigurationKernelPublication",
+          "line": 100,
+          "summary": "Configuration-owned kernel publication primitive."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/README.md",
+          "summary": "Configuration publication and source/evidence/provenance guidance."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "ConfigurationKernelPublication",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-publication.ts",
+          "minLineCount": 200,
+          "minMethodCount": 8
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:configuration-kernel-emitter",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "configuration",
+        "world-construction",
+        "kernel-publication"
+      ],
+      "summary": "ConfigurationKernelEmitter is the source-order configuration sequence emitter that coordinates app-frame and per-step materialization.",
+      "rationale": "The emitter owns the configuration sequence boundary and batch commit, but should remain thin over publication, app-frame admission, and per-step products. Its size is a watchpoint for sequence orchestration growing back into app-root or registration emulation.",
+      "guidance": [
+        "Start here when sequence ordering, sequence products, app-frame coordination, or configuration batch emission changes.",
+        "Keep per-step product creation in ConfigurationStepMaterializer and record envelopes in ConfigurationKernelPublication.",
+        "If new app admission facts appear, check AureliaAppFrameMaterializer before adding logic directly to the emitter."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-kernel-emitter.ts",
+          "symbolName": "ConfigurationKernelEmitter",
+          "line": 143,
+          "summary": "Configuration sequence emitter."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/README.md",
+          "summary": "Configuration sequence, app-frame, and step materialization split."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "ConfigurationKernelEmitter",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-kernel-emitter.ts",
+          "minLineCount": 150,
+          "minMethodCount": 5
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:binding-scope-semantic-model",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "configuration",
+        "binding",
+        "scope",
+        "type-system"
+      ],
+      "summary": "BindingScope, BindingContext, and OverrideContext are framework-shaped semantic models for runtime Scope lookup and template-visible names.",
+      "rationale": "Binding scope sits between controller activation, template locals, expression lookup, and TypeChecker projection. It is intentionally modeled as a runtime concept with auLink anchors rather than as a TypeScript lexical scope or answer-local completion helper.",
+      "guidance": [
+        "Start here when expression lookup, `$parent`, `$this`, template locals, repeat locals, or branch-local scope overlays change.",
+        "Keep runtime binding scope distinct from compiler resource scope and template-controller flow scope.",
+        "Use Scope product details for inquiry instead of peeking into controller construction or compiler-world internals.",
+        "Direct authored Scope.create/fromParent/getContext nullish-argument failures are configuration-owned source/API issues; do not model them as rendered binding lookup fallbacks."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
+          "symbolName": "BindingScope",
+          "line": 280,
+          "summary": "Runtime Scope semantic model."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
+          "symbolName": "BindingContext",
+          "line": 191,
+          "summary": "Runtime BindingContext semantic model."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
+          "symbolName": "OverrideContext",
+          "line": 230,
+          "summary": "Runtime IOverrideContext semantic model."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/scope-api-issues.ts",
+          "symbolName": "ScopeApiIssueMaterializer",
+          "summary": "Source/API materializer for direct runtime Scope nullish-argument diagnostics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/nullish-expression.ts",
+          "symbolName": "nullishExpressionKind",
+          "summary": "Shared literal-level nullish recognition used by source API diagnostics."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/runtime-scope-api-errors",
+          "summary": "Pressure fixture for direct Scope API AUR0203/AUR0204 configuration diagnostics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/README.md",
+          "summary": "Binding-scope responsibilities and watchpoints."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "BindingScope",
+          "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
+          "minLineCount": 200,
+          "minMethodCount": 5
+        },
+        {
+          "kind": "product-large-class",
+          "className": "ScopeApiIssueMaterializer",
+          "filePath": "packages/semantic-runtime/src/configuration/scope-api-issues.ts",
+          "minLineCount": 100,
+          "minMethodCount": 3
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/scope-api-issues.ts",
+          "symbolName": "ScopeApiIssueMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/evaluation/nullish-expression.ts",
+          "symbolName": "nullishExpressionKind"
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:app-world-resource-visibility",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "configuration",
+        "resources",
+        "compiler-world",
+        "di"
+      ],
+      "summary": "AppWorldResourceVisibilityFrame projects DI resource slots, configured framework resources, app root, and local dependencies into compiler-world resource visibility.",
+      "rationale": "Resource visibility is a configuration-to-DI-to-template join, not private composer glue. Future router, plugin, or view-factory visibility rules should land here as explicit visibility semantics before compiler-world materialization consumes them.",
+      "guidance": [
+        "Start here when compiler-world resource scope depends on container resource slots, configured framework catalogs, app-root resources, or local dependencies.",
+        "Keep visibility projection separate from app-world orchestration and resource definition convergence.",
+        "If router or plugin context changes template resource visibility, add a named visibility rule here rather than broadening compiler-world materializers blindly."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-resource-visibility.ts",
+          "symbolName": "AppWorldResourceVisibilityComposer",
+          "line": 25,
+          "summary": "Public resource visibility composer."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-resource-visibility.ts",
+          "symbolName": "AppWorldResourceVisibilityFrame",
+          "line": 55,
+          "summary": "Visibility projection work frame."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/README.md",
+          "summary": "App-world resource visibility guidance."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "AppWorldResourceVisibilityFrame",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-resource-visibility.ts",
+          "minLineCount": 100,
+          "minMethodCount": 5
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:framework-service-customization",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "configuration",
+        "template",
+        "observation",
+        "auLink"
+      ],
+      "summary": "AppTask-time mutations of framework services must materialize as compiler-world and observer-locator service state.",
+      "rationale": "Framework corpus form pressure exposed AppTask callbacks that call IAttrMapper.useTwoWay(...) and NodeObserverLocator.useConfig(...). These are not fixture quirks: Aurelia applications can customize framework services during configuration, so semantic-runtime needs a durable recognition and threading layer rather than built-in-only AttrMapper/ObserverLocator instances.",
+      "guidance": [
+        "Start here when AppTask callbacks mutate IAttrMapper, NodeObserverLocator, or adjacent framework services.",
+        "Direct or evaluated AppTask registry values must keep their AppTask observation attached; do not let the synthetic registry object erase the lifecycle callback.",
+        "AppTask factory calls are registry value creation, not standalone app configuration effects; registration admission is the boundary that should materialize the AppTask product.",
+        "Keep service customizations framework-shaped and auLink-grounded; do not push one-off rules into compiler or binding materializers.",
+        "Configuration recognition should identify service calls, while observation-owned helpers such as nodeObserverNodeConfigsFromUseConfigCall decode NodeObserverLocator config/accessor entries.",
+        "Duplicate NodeObserverLocator config/global config mappings are configuration-owned diagnostics: publish ConfigurationIssue products with exact runtime-html AUR0653 authority and keep the rest of the valid service state available to compiler-world observer lookup.",
+        "Configuration customization owns duplicate NodeObserverLocator mappings (AUR0653) and the allowDirtyCheck service-state handoff. The sibling node_observer_strategy_not_found code (AUR0652) is spent by observation target-access diagnostics only when observer lookup models the exact dirty-check-disabled framework path; host-node controller codes remain outside this frontier.",
+        "Attach ConfigurationIssue product details only after the issue kernel records are committed; sidecar details without materialized products are invalid.",
+        "When recognition needs more expression closure, improve StaticEvaluator or the expression reader before adding ad hoc callback parsing."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/framework-service-customization.ts",
+          "symbolName": "FrameworkServiceCustomizationRecognitionPass",
+          "line": 77,
+          "summary": "Recognizes AppTask service mutation calls into explicit service state."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/framework-service-customization.ts",
+          "symbolName": "FrameworkServiceCustomizationDraft",
+          "summary": "Pass-local draft with real lifetime for customized AttrMapper/NodeObserverLocator state and configuration issue publication."
+        },
+        {
+          "kind": "auLink",
+          "linkId": "runtime-html:AttrMapper",
+          "symbolName": "TemplateAttributeMapperService",
+          "summary": "Compiler-world AttrMapper service that consumes recognized customization state."
+        },
+        {
+          "kind": "auLink",
+          "linkId": "runtime-html:NodeObserverLocator",
+          "symbolName": "NodeObserverLocator",
+          "summary": "Observer service that consumes recognized node observer customization state."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/node-observer-config-reader.ts",
+          "symbolName": "nodeObserverNodeConfigsFromUseConfigCall",
+          "summary": "Observation-owned decoder for statically evaluated NodeObserverLocator.useConfig call shapes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-issue-publication.ts",
+          "symbolName": "ConfigurationIssuePublisher",
+          "summary": "Source-backed configuration issue product publication for framework-service diagnostics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/framework-error-code.ts",
+          "symbolName": "ConfigurationFrameworkErrorCode",
+          "summary": "Exact framework package/enum/member bridge for configuration-owned framework error codes."
+        },
+        {
+          "kind": "lens",
+          "lensId": "bridge.aulink",
+          "projection": "mirror",
+          "filters": {
+            "linkId": "runtime-html:AttrMapper"
+          },
+          "summary": "Bridge memory back to auLink mirror rows for AttrMapper."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/framework-service-customization.ts",
+          "symbolName": "FrameworkServiceCustomizationRecognitionPass"
+        },
+        {
+          "kind": "product-large-class",
+          "filePath": "packages/semantic-runtime/src/configuration/framework-service-customization.ts",
+          "className": "FrameworkServiceCustomizationDraft",
+          "minLineCount": 70
+        },
+        {
+          "kind": "auLink-exists",
+          "linkId": "runtime-html:AttrMapper",
+          "symbolName": "TemplateAttributeMapperService",
+          "filePath": "packages/semantic-runtime/src/template/compiler-world.ts"
+        },
+        {
+          "kind": "auLink-exists",
+          "linkId": "runtime-html:NodeObserverLocator",
+          "symbolName": "NodeObserverLocator",
+          "filePath": "packages/semantic-runtime/src/observation/observer-locator.ts"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/node-observer-config-reader.ts",
+          "symbolName": "nodeObserverNodeConfigsFromUseConfigCall"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-issue-publication.ts",
+          "symbolName": "ConfigurationIssuePublisher"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/framework-error-code.ts",
+          "symbolName": "ConfigurationFrameworkErrorCode"
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-13"
+    },
+    {
+      "id": "frontier:aurelia-app-world-composer",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "configuration",
+        "di",
+        "template",
+        "world-construction"
+      ],
+      "summary": "AureliaAppWorldComposer is the current app-world orchestration boundary from configuration recognition into DI, built-in catalogs, service customization, and compiler worlds.",
+      "rationale": "The class is not a new semantic model; it composes existing materializers. Keeping it tracked prevents future sessions from adding a parallel world-construction route when app analysis needs more configuration, DI, compiler-world, or source issue products.",
+      "guidance": [
+        "Start here when app-world construction needs another project-level phase, but keep product semantics in the owning materializer below it.",
+        "Do not rebuild DI, built-in syntax/resource/renderer catalogs, compiler-world formation, or framework-service customization outside this composer.",
+        "Source issue products currently append to DI world construction here; if more source-diagnostic lanes appear, decide whether they belong in the owning area first and only then thread their project result through the composer.",
+        "Treat app-world performance pressure as phase-boundary pressure; profile before collapsing or bypassing this orchestration."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-composer.ts",
+          "symbolName": "AureliaAppWorldComposer",
+          "line": 100,
+          "summary": "Configuration-to-app-world orchestration."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
+          "symbolName": "AureliaAppWorldProjectPass",
+          "summary": "Project pass that invokes app-world composition in the broader openApp pipeline."
+        },
+        {
+          "kind": "lens",
+          "lensId": "product.architecture",
+          "projection": "symbol-dependencies",
+          "filters": {
+            "query": "AureliaAppWorldComposer"
+          },
+          "summary": "Product coupling around app-world composition."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "AureliaAppWorldComposer",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-composer.ts",
+          "minLineCount": 80,
+          "minMethodCount": 3
+        }
+      ],
+      "createdAt": "2026-05-14",
+      "updatedAt": "2026-05-14"
+    }
+  ]
+}

@@ -102,6 +102,7 @@ export const KernelClaimPredicates = {
         productEndpoint(
           KernelProductKinds.Di.Resolver,
           KernelProductKinds.Di.ResolverSlot,
+          KernelProductKinds.Di.FactorySlot,
           KernelProductKinds.Di.ResourceSlot,
           KernelProductKinds.Di.SelfResolverSlot,
         ),
@@ -131,12 +132,14 @@ export const KernelClaimPredicates = {
           KernelProductKinds.Di.ContainerRegistration,
         ),
         productEndpoint(
+          KernelProductKinds.Configuration.AppTask,
           KernelProductKinds.Di.Resolver,
           KernelProductKinds.Di.Registry,
           KernelProductKinds.Di.ParameterizedRegistry,
           KernelProductKinds.Di.ResolverSlot,
           KernelProductKinds.Di.SelfResolverSlot,
           KernelProductKinds.Di.ResourceSlot,
+          KernelProductKinds.Di.Issue,
           KernelProductKinds.Di.FactorySlot,
         ),
       ),

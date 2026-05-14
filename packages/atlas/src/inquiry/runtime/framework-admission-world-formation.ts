@@ -102,7 +102,7 @@ function worldFormationRowForMaterializationLink(
     materializationKind: link.materializationKind,
     linkKind: link.linkKind,
     matchBasis: link.matchBasis,
-    ...(link.resourceKind === undefined ? {} : { resourceKind: link.resourceKind }),
+    resourceKind: link.resourceKind,
     materializationSiteKinds: link.materializationSiteKinds,
     closure: link.closure,
     summary: `${link.exportName} spends admitted ${link.admittedTarget.name} into ${link.materializationKind} world evidence via ${link.matchBasis}.`,
@@ -157,7 +157,7 @@ function worldFormationRowForAppTaskExecution(
     formationSource: execution.source,
     lifecycleExecutionId: execution.id,
     appTaskExecutionKind: execution.executionKind,
-    ...(execution.slotName === null ? {} : { slotName: execution.slotName }),
+    slotName: execution.slotName ?? undefined,
     closure: FrameworkRelationshipClosure.Exact,
     summary: `${relationship.exportName} admits AppTask ${relationship.to.name}; AppRoot executes ${execution.summary}`,
   };

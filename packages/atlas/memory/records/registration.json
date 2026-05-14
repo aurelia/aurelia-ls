@@ -1,0 +1,98 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:registration-admission-support-materializer",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "registration",
+        "kernel-publication",
+        "di-key",
+        "provenance"
+      ],
+      "summary": "RegistrationAdmissionSupportMaterializer owns key, value, registry-parameter, and recognition-open-seam support records for registration admissions.",
+      "rationale": "Registration products need source-backed key/value/parameter facts before DI world construction can spend them. This support materializer is the lower publication boundary beneath admission product classification, so future work should not hand-spell registration key/value source records or DI key identities elsewhere.",
+      "guidance": [
+        "Start here when registration key/value/registry-parameter source records, DI key identities, field provenance, or recognition open seams change.",
+        "Keep key provenance separate from provider-key provenance; registry lookup keys such as `Registration.defer(...)` are not ordinary admitted-key claims.",
+        "Use kernel DI key identity records instead of hiding key semantics in descriptions or local strings.",
+        "Constructable DI key identities must come from evaluator- or checker-proven runtime value shape and should carry a TypeScript declaration identity when the declaration is source-backed."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/registration/registration-kernel-emitter.ts",
+          "symbolName": "RegistrationAdmissionSupportMaterializer",
+          "line": 212,
+          "summary": "Support record materializer for registration admission observations."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/di-key-identity.ts",
+          "symbolName": "DiKeyIdentitySeed",
+          "summary": "Kernel DI key identity seed taxonomy, including evaluator-proven constructable keys."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/registration/README.md",
+          "summary": "Registration kernel boundary and support-materializer split."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "RegistrationAdmissionSupportMaterializer",
+          "filePath": "packages/semantic-runtime/src/registration/registration-kernel-emitter.ts",
+          "minLineCount": 200,
+          "minMethodCount": 8
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-13"
+    },
+    {
+      "id": "frontier:registration-kernel-emitter",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "registration",
+        "kernel-publication",
+        "configuration",
+        "di"
+      ],
+      "summary": "RegistrationKernelEmitter owns registration admission product classification, source observation framing, claims, materialized-product envelopes, and batch emission.",
+      "rationale": "The emitter is the registration kernel boundary and should remain the single place where source observations become typed admission products and durable kernel records. Configuration may own a concrete admission scope and DI later spends products, but the admission product shape belongs here.",
+      "guidance": [
+        "Start here when registration admission product classes, strategy-to-product-kind mapping, admission claims, or batch framing changes.",
+        "Keep support records in RegistrationAdmissionSupportMaterializer and runtime container effects in DI world construction.",
+        "Preserve scope-owned emission: source-module inquiry products and configuration-step-owned admission products are related but not interchangeable."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/registration/registration-kernel-emitter.ts",
+          "symbolName": "RegistrationKernelEmitter",
+          "line": 518,
+          "summary": "Registration observation-to-kernel emitter."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/registration/README.md",
+          "summary": "Registration implementation-shape notes."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "RegistrationKernelEmitter",
+          "filePath": "packages/semantic-runtime/src/registration/registration-kernel-emitter.ts",
+          "minLineCount": 300,
+          "minMethodCount": 10
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    }
+  ]
+}

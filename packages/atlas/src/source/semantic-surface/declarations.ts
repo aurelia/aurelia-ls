@@ -174,7 +174,9 @@ function usageOwnerFromDeclaration(
     ownerKind,
     ownerName,
     ownerSource,
-    ...(member === undefined ? {} : member),
+    ownerMemberKind: member?.ownerMemberKind,
+    ownerMemberName: member?.ownerMemberName,
+    ownerMemberSource: member?.ownerMemberSource,
   };
 }
 

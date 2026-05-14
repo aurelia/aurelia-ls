@@ -1,0 +1,7 @@
+<template>
+  <table synthetic-table="data.bind: rows; display-data.bind: $displayData">
+    <tr repeat.for="row of $displayData">
+      <td>${row.label}</td>
+    </tr>
+  </table>
+</template>

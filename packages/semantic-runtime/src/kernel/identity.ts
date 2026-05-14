@@ -23,8 +23,8 @@ export const enum AureliaResourceIdentityKind {
 export const enum DiKeyIdentityKind {
   /** Use when a DI key expression cannot be classified yet. */
   Unknown = 'unknown',
-  /** A class constructor used directly as a DI key. */
-  Class = 'class',
+  /** A constructable value used directly as a DI key. */
+  Constructable = 'constructable',
   /** An interface symbol created by Aurelia's DI helpers. */
   Interface = 'interface',
   /** A JavaScript symbol used as a DI key. */
@@ -186,19 +186,19 @@ export class UnknownDiKeyIdentity {
   ) {}
 }
 
-/** DI key identity for a class constructor used directly as the key. */
-export class ClassDiKeyIdentity {
+/** DI key identity for a constructable value used directly as the key. */
+export class ConstructableDiKeyIdentity {
   /** String discriminator for serialized DI key identity records. */
   readonly kind = 'di-key-identity' as const;
   /** Runtime-relevant key shape discriminator. */
-  readonly keyKind = DiKeyIdentityKind.Class;
+  readonly keyKind = DiKeyIdentityKind.Constructable;
 
   constructor(
     /** Store-local handle for this identity record. */
     readonly handle: IdentityHandle,
-    /** Declaration identity for the class constructor used as the key. */
+    /** Declaration identity for the constructable value used as the key. */
     readonly declarationHandle: IdentityHandle,
-    /** Local class name used for app maps and traces. */
+    /** Local constructable name used for app maps and traces. */
     readonly localName: string | null,
     /** Address handle for the expression or declaration that supplied the key. */
     readonly keyAddressHandle: AddressHandle | null = null,
@@ -301,7 +301,7 @@ export class ResolverDiKeyIdentity {
 /** Concrete DI key identity variants understood by the kernel. */
 export type DiKeyIdentity =
   | UnknownDiKeyIdentity
-  | ClassDiKeyIdentity
+  | ConstructableDiKeyIdentity
   | InterfaceDiKeyIdentity
   | StringDiKeyIdentity
   | SymbolDiKeyIdentity
@@ -320,6 +320,63 @@ export class RegistrationIdentity {
     readonly keyHandle: IdentityHandle | null,
     /** Source address handle for the admission expression or declaration. */
     readonly sourceAddressHandle: AddressHandle | null = null,
+  ) {}
+}
+
+/** Identity for source-backed resource products that are not the resource identity itself. */
+export class ResourceProductIdentity {
+  /** String discriminator for serialized resource product identity records. */
+  readonly kind = 'resource-product-identity' as const;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Controlled product kind represented by this identity. */
+    readonly productKindKey: ProductKindKey,
+    /** Optional resource identity that owns this product. */
+    readonly ownerHandle: IdentityHandle | null,
+    /** Source address for the resource metadata or configuration that supplied the product. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Local resource/product label for traces when one exists. */
+    readonly localName: string | null = null,
+  ) {}
+}
+
+/** Identity for evaluator and module-loader products. */
+export class EvaluationIdentity {
+  /** String discriminator for serialized evaluation identity records. */
+  readonly kind = 'evaluation-identity' as const;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Controlled product kind represented by this identity. */
+    readonly productKindKey: ProductKindKey,
+    /** Optional owner such as a source module address or prior evaluation identity. */
+    readonly ownerHandle: IdentityHandle | AddressHandle | null,
+    /** Source address for the evaluation or module-loader input. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Local source/evaluation label for traces when one exists. */
+    readonly localName: string | null = null,
+  ) {}
+}
+
+/** Identity for observation products that are not owned by one concrete runtime binding. */
+export class ObservationIdentity {
+  /** String discriminator for serialized observation identity records. */
+  readonly kind = 'observation-identity' as const;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Controlled product kind represented by this identity. */
+    readonly productKindKey: ProductKindKey,
+    /** Optional owner identity such as a declaration or binding product. */
+    readonly ownerHandle: IdentityHandle | null,
+    /** Source address for the observation product. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Local source label for traces when one exists. */
+    readonly localName: string | null = null,
   ) {}
 }
 
@@ -395,6 +452,82 @@ export class I18nIdentity {
     /** Source address for the translation resource admission or key owner. */
     readonly sourceAddressHandle: AddressHandle | null = null,
     /** Runtime translation key, namespace, or catalog label. */
+    readonly localName: string | null = null,
+  ) {}
+}
+
+/** Identity for @aurelia/state store configuration products. */
+export class StateIdentity {
+  /** String discriminator for serialized state identity records. */
+  readonly kind = 'state-identity' as const;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Controlled product kind represented by this identity. */
+    readonly productKindKey: ProductKindKey,
+    /** Optional owner identity such as the configuration step that admitted this store. */
+    readonly ownerHandle: IdentityHandle | null,
+    /** Source address for the StateDefaultConfiguration builder call or store argument. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Runtime store name, such as `default` for StateDefaultConfiguration.init(...). */
+    readonly localName: string | null = null,
+  ) {}
+}
+
+/** Identity for @aurelia/validation rule and diagnostic products. */
+export class ValidationIdentity {
+  /** String discriminator for serialized validation identity records. */
+  readonly kind = 'validation-identity' as const;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Controlled product kind represented by this identity. */
+    readonly productKindKey: ProductKindKey,
+    /** Optional owner identity such as a rule-chain or target declaration. */
+    readonly ownerHandle: IdentityHandle | null,
+    /** Source address for the validation API usage or model-rule input. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Runtime validation label such as a property name or rule name. */
+    readonly localName: string | null = null,
+  ) {}
+}
+
+/** Identity for @aurelia/fetch-client configuration and diagnostic products. */
+export class FetchClientIdentity {
+  /** String discriminator for serialized fetch-client identity records. */
+  readonly kind = 'fetch-client-identity' as const;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Controlled product kind represented by this identity. */
+    readonly productKindKey: ProductKindKey,
+    /** Optional owner identity such as a configuration call or client declaration. */
+    readonly ownerHandle: IdentityHandle | null,
+    /** Source address for the fetch-client API usage or configuration input. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Local fetch-client label such as a configure method, option, or interceptor name. */
+    readonly localName: string | null = null,
+  ) {}
+}
+
+/** Identity for @aurelia/dialog configuration, service, and diagnostic products. */
+export class DialogIdentity {
+  /** String discriminator for serialized dialog identity records. */
+  readonly kind = 'dialog-identity' as const;
+
+  constructor(
+    /** Store-local handle for this identity record. */
+    readonly handle: IdentityHandle,
+    /** Controlled product kind represented by this identity. */
+    readonly productKindKey: ProductKindKey,
+    /** Optional owner identity such as a configuration registration or service root. */
+    readonly ownerHandle: IdentityHandle | null,
+    /** Source address for the dialog API usage or configuration input. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Local dialog label such as a settings property or configuration variant. */
     readonly localName: string | null = null,
   ) {}
 }
@@ -512,10 +645,17 @@ export type SemanticIdentity =
   | ContainerIdentity
   | DiProductIdentity
   | RegistrationIdentity
+  | ResourceProductIdentity
+  | EvaluationIdentity
+  | ObservationIdentity
   | ConfigurationIdentity
   | RouterIdentity
   | RouteRecognizerIdentity
   | I18nIdentity
+  | StateIdentity
+  | ValidationIdentity
+  | FetchClientIdentity
+  | DialogIdentity
   | CompilerIdentity
   | TemplateIdentity
   | TemplateNodeIdentity

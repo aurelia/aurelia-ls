@@ -1,6 +1,6 @@
 # External App Pressure Intake
 
-This note defines how proprietary external Aurelia apps may be used as directional
+This note defines how external clean-room Aurelia apps may be used as directional
 pressure for Atlas and semantic-runtime work. It is a clean-room boundary, not a
 place to record app details.
 
@@ -22,7 +22,7 @@ Do not treat these apps as canonical idiom, product spec, or fixture source.
 - Do not copy source, templates, names, routes, domain models, config values, or
   business logic from the external repos into this repo.
 - Do not commit source excerpts, screenshots, file listings that reveal
-  proprietary structure, or detailed prose that would reconstruct the apps.
+  external app structure, or detailed prose that would reconstruct the apps.
 - Do not generate fixtures by translating external app code.
 - Do not use exact repo/package/component names in durable notes unless the user
   explicitly says they are safe to persist.
@@ -33,13 +33,13 @@ Do not treat these apps as canonical idiom, product spec, or fixture source.
 Transient inspection notes belong under ignored `.temp/` files and should be
 deleted or summarized before commit.
 Manual source reads, targeted local scripts, and Atlas inquiries against the
-proprietary roots are allowed as transient testing surfaces. Keep the tool
+external clean-room roots are allowed as transient testing surfaces. Keep the tool
 output local to the session, and promote only generalized patterns when a paper
 trail is needed.
 
 ## Intake Shape
 
-1. Build a high-level surface map without preserving proprietary detail:
+1. Build a high-level surface map without preserving app-specific detail:
    package/runtime versions, framework packages used, routing/configuration
    shape, source layout scale, resource kinds, template-feature families,
    binding/observer families, DI/service patterns, plugin/custom extension
@@ -50,7 +50,7 @@ trail is needed.
    hand-written repo-specific scripts. Keep tracked observations at aggregate
    count and mechanism-category level; workspace row names, paths, source
    ranges, and summaries are local inspection handles and must not be promoted
-   into durable notes for proprietary roots. Prefer the summary rollup's
+   into durable notes for external clean-room roots. Prefer the summary rollup's
    filter-aware surface-kind, mechanism, admission-role, and Aurelia-shape
    distributions, plus package-manager, build-tool-hint, external-package, and
    app-shaped aggregate sub-rollups, before paging row payloads. Treat
@@ -73,7 +73,7 @@ trail is needed.
    Router pressure should prefer aggregate route-config facets before row
    paging: carrier shape, route-object field sets, component value-kind buckets,
    and child-route cardinality buckets. Do not persist route literals,
-   component names, or reconstructed route maps from proprietary roots.
+   component names, or reconstructed route maps from external clean-room roots.
    Use `pressure:plugin-architecture` for the public plugin submodule and
    `pressure:framework-router` when router pressure needs a framework-grounded
    route-flow or route-recognizer substrate check before changing product code.
@@ -85,6 +85,9 @@ trail is needed.
    `pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api` when the
    question is whether semantic-runtime app-world opening, resource
    convergence, route configuration, route-pattern parsing, bindable convergence, or open seams close over the same roots.
+   Add `SEMANTIC_RUNTIME_PRESSURE_OUTPUT=aggregate` for broad sweeps where the
+   useful signal is the combined pressure shape instead of the full per-root
+   transcript.
    That script is transient local pressure output, not a commit artifact. Its
    timing output should stay phase-oriented, not project-identified: use it to
    decide whether large-app friction sits in static evaluation, TypeChecker
@@ -95,7 +98,7 @@ trail is needed.
    pressure without being app startup failures. The default pressure detail mode
    buckets source-assignment and open-seam reasons into generalized categories;
    use the raw detail mode only for local debugging. If any raw open-reason
-   wording from proprietary roots is useful, generalize it manually before
+   wording from external clean-room roots is useful, generalize it manually before
    writing durable notes.
 2. Collapse observations into abstract pressure categories:
    app topology, source admission, resource recognition, configuration
@@ -128,7 +131,7 @@ order:
 3. a product-architecture cleanup surfaced by `pressure:product-architecture`;
 4. an Atlas maintenance cleanup surfaced by `pressure:self`;
 5. documentation alignment that lets the next session recover the intent without
-   seeing proprietary inputs.
+   seeing external clean-room inputs.
 
 Do not switch to filler work. If the next useful task is large, start it and
 leave a durable handoff once the time box ends.
@@ -164,7 +167,7 @@ Commit-worthy output may include:
   views;
 - docs that explain framework/product architecture and abstract pressure;
 - fixtures that are newly designed from public/idiomatic Aurelia understanding,
-  not derived from proprietary source.
+  not derived from external app source.
 
-Commit-worthy output should not include proprietary app facts or a diary of the
+Commit-worthy output should not include external app facts or a diary of the
 inspection process.

@@ -16,7 +16,7 @@ import {
   InquiryProjectionKind,
 } from './answer.js';
 import { KernelExactBasis } from './basis.js';
-import { uniqueValues } from './collections.js';
+import { uniqueValues } from '../collections.js';
 import { KernelRecordInquiryLocus } from './locus.js';
 
 export class ProductDetailQuery {

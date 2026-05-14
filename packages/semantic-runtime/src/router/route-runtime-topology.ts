@@ -17,8 +17,6 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
-  fieldProvenanceEntries,
-  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -47,9 +45,6 @@ import {
   ViewportCustomElementModel,
   ViewportRequestModel,
   type RouteConfigModel,
-  type RouteContextField,
-  type ViewportAgentField,
-  type ViewportField,
 } from './model.js';
 import type { RouteConfigContextMaterializationProjectResult } from './route-context-materialization.js';
 import {
@@ -334,7 +329,7 @@ class RouteRuntimeTopologyFrame {
     const local = `router-viewport:${routeContext.identityHandle}:${draft.localKey}:${index}:${draft.controller.productHandle}`;
     const agentLocal = `${local}:agent`;
     const viewport = materializedViewport(this.store, local, routeContext, draft);
-    const viewportAgent = materializedViewportAgent(this.store, agentLocal, local, routeContext, draft, viewport);
+    const viewportAgent = materializedViewportAgent(this.store, agentLocal, routeContext, draft, viewport);
     return {
       records: viewportRuntimeRecords(this.store, local, agentLocal, owner, draft, viewport, viewportAgent),
       draft,
@@ -393,7 +388,6 @@ function materializedRouteContext(
     hostingViewport?.viewportAgent.toReference() ?? null,
     routeConfigContext.friendlyPath,
     routeConfigContext.sourceAddressHandle,
-    routeContextFieldProvenance(store.handles.provenance(local), parent, container, hostingViewport),
   );
 }
 
@@ -437,14 +431,12 @@ function materializedViewport(
     draft.properties.defaultComponent,
     draft.properties.fallback,
     draft.controller.sourceAddressHandle,
-    viewportFieldProvenance(store.handles.provenance(local), draft.properties),
   );
 }
 
 function materializedViewportAgent(
   store: KernelStore,
   agentLocal: string,
-  provenanceLocal: string,
   routeContext: RouterReference,
   draft: ViewportDraft,
   viewport: ViewportCustomElementModel,
@@ -456,7 +448,6 @@ function materializedViewportAgent(
     routeContext,
     draft.controller.productHandle,
     draft.controller.sourceAddressHandle,
-    viewportAgentFieldProvenance(store.handles.provenance(provenanceLocal)),
   );
 }
 
@@ -742,48 +733,6 @@ function viewportPropertiesFromController(
     defaultComponent: nonEmpty(staticValues.get('default')),
     fallback: nonEmpty(staticValues.get('fallback')),
   };
-}
-
-function routeContextFieldProvenance(
-  provenanceHandle: ProvenanceHandle,
-  parent: RouteRuntimeContextEmission | null,
-  container: Container | null,
-  hostingViewport: ViewportRuntimeEmission | null,
-): readonly FieldProvenance<RouteContextField>[] {
-  return fieldProvenanceEntries<RouteContextField>([
-    parent == null ? null : 'parent',
-    'root',
-    container == null ? null : 'container',
-    'routeConfigContext',
-    hostingViewport == null ? null : 'viewportAgent',
-    'source',
-  ], provenanceHandle);
-}
-
-function viewportFieldProvenance(
-  provenanceHandle: ProvenanceHandle,
-  properties: ViewportProperties,
-): readonly FieldProvenance<ViewportField>[] {
-  return fieldProvenanceEntries<ViewportField>([
-    'routeContext',
-    'controller',
-    'name',
-    properties.usedBy.length === 0 ? null : 'usedBy',
-    properties.defaultComponent == null ? null : 'default',
-    properties.fallback == null ? null : 'fallback',
-    'source',
-  ], provenanceHandle);
-}
-
-function viewportAgentFieldProvenance(
-  provenanceHandle: ProvenanceHandle,
-): readonly FieldProvenance<ViewportAgentField>[] {
-  return fieldProvenanceEntries<ViewportAgentField>([
-    'viewport',
-    'routeContext',
-    'hostController',
-    'source',
-  ], provenanceHandle);
 }
 
 function splitList(value: string | undefined): readonly string[] {

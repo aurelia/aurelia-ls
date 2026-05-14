@@ -6,6 +6,13 @@ import {
 
 export const KernelProductKinds = {
   Evaluation: {
+    /** Product kind for a source-backed TypeScript/module-evaluation issue. */
+    Issue: defineVocabulary(
+      KernelVocabularyNamespace.Evaluation,
+      'issue',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed TypeScript/module-evaluation issue such as a framework ModuleLoader input that Aurelia would reject.',
+    ),
   },
   TypeSystem: {
 
@@ -48,6 +55,14 @@ export const KernelProductKinds = {
       'definition',
       KernelVocabularySlot.ProductKind,
       'A fully converged resource metadata definition before DI admission, scope visibility, or template compilation.',
+    ),
+
+    /** Product kind for a source-backed resource metadata issue. */
+    Issue: defineVocabulary(
+      KernelVocabularyNamespace.Resource,
+      'issue',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed resource metadata issue such as invalid watch metadata or framework-rejected resource configuration.',
     ),
   },
   Di: {
@@ -114,6 +129,14 @@ export const KernelProductKinds = {
       'resource-slot',
       KernelVocabularySlot.ProductKind,
       'A resource resolver slot visible through container resource lookup.',
+    ),
+
+    /** Product kind for a source-backed DI/container issue. */
+    Issue: defineVocabulary(
+      KernelVocabularyNamespace.Di,
+      'issue',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed DI/container issue such as a duplicate resource key discovered during world construction.',
     ),
 
     /** Product kind for a row in a container-tree factory map. */
@@ -208,6 +231,14 @@ export const KernelProductKinds = {
       'A modeled runtime controller at a known controller phase, used to connect resources, containers, and templates.',
     ),
 
+    /** Product kind for a framework-runtime issue discovered while constructing or hydrating a controller. */
+    ControllerIssue: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'controller-issue',
+      KernelVocabularySlot.ProductKind,
+      'A framework-runtime issue discovered while constructing, hydrating, or activating a modeled controller.',
+    ),
+
     /** Product kind for a runtime IViewFactory value that can create synthetic child views. */
     ViewFactory: defineVocabulary(
       KernelVocabularyNamespace.Configuration,
@@ -270,6 +301,14 @@ export const KernelProductKinds = {
       'app-task',
       KernelVocabularySlot.ProductKind,
       'A deferred lifecycle task registered under IAppTask before AppRoot lifecycle emulation spends it.',
+    ),
+
+    /** Product kind for configuration-time framework service issues with source-backed diagnostic authority. */
+    Issue: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'issue',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed configuration or framework-service customization issue discovered before app-world construction.',
     ),
   },
   Router: {
@@ -354,6 +393,14 @@ export const KernelProductKinds = {
       'A RouteTree that owns the current root RouteNode and later transition-compiled child nodes.',
     ),
 
+    /** Product kind for a source-backed router runtime issue. */
+    Issue: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'issue',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed router issue such as RouteTree redirect migration encountering a framework-rejected route expression shape.',
+    ),
+
     /** Product kind for a typed navigation instruction normalized by the router. */
     TypedNavigationInstruction: defineVocabulary(
       KernelVocabularyNamespace.Router,
@@ -385,6 +432,58 @@ export const KernelProductKinds = {
       'translation-key',
       KernelVocabularySlot.ProductKind,
       'One static i18n translation key admitted from I18nConfiguration init resources for template authoring.',
+    ),
+  },
+  State: {
+    /** Product kind for one store configured by StateDefaultConfiguration.init(...) or .withStore(...). */
+    StoreConfiguration: defineVocabulary(
+      KernelVocabularyNamespace.State,
+      'store-configuration',
+      KernelVocabularySlot.ProductKind,
+      'One @aurelia/state store configuration admitted from StateDefaultConfiguration builder calls before AppTask execution.',
+    ),
+    /** Product kind for a source-backed @aurelia/state configuration or store-registry issue. */
+    Issue: defineVocabulary(
+      KernelVocabularyNamespace.State,
+      'issue',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed @aurelia/state issue such as reserved or duplicate store names.',
+    ),
+  },
+  Validation: {
+    /** Product kind for a source-backed @aurelia/validation rule-construction or hydration issue. */
+    Issue: defineVocabulary(
+      KernelVocabularyNamespace.Validation,
+      'issue',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed @aurelia/validation issue such as invalid fluent rule construction or model-rule hydration input.',
+    ),
+  },
+  FetchClient: {
+    /** Product kind for a source-backed @aurelia/fetch-client configuration issue. */
+    Issue: defineVocabulary(
+      KernelVocabularyNamespace.FetchClient,
+      'issue',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed @aurelia/fetch-client issue such as invalid HttpClient.configure(...) or RetryInterceptor configuration input.',
+    ),
+  },
+  Dialog: {
+    /** Product kind for a source-backed @aurelia/dialog configuration or service issue. */
+    Issue: defineVocabulary(
+      KernelVocabularyNamespace.Dialog,
+      'issue',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed @aurelia/dialog issue such as empty DialogConfiguration registration or invalid DialogService.open(...) settings.',
+    ),
+  },
+  Observation: {
+    /** Product kind for a source-backed observation issue outside a single binding target. */
+    Issue: defineVocabulary(
+      KernelVocabularyNamespace.Observation,
+      'issue',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed observation issue such as framework-rejected @observable decorator usage.',
     ),
   },
   RouteRecognizer: {
@@ -427,6 +526,14 @@ export const KernelProductKinds = {
       'recognized-route',
       KernelVocabularySlot.ProductKind,
       'A RecognizedRoute produced by walking a RouteRecognizer state graph for a concrete navigation path.',
+    ),
+
+    /** Product kind for a static route-recognizer condition where the framework would throw. */
+    Issue: defineVocabulary(
+      KernelVocabularyNamespace.RouteRecognizer,
+      'issue',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed route-recognizer issue such as duplicate paths or ambiguous endpoint assignment.',
     ),
   },
   Compiler: {
@@ -528,6 +635,13 @@ export const KernelProductKinds = {
       'Runtime IRenderer product selected by Rendering for one lowered instruction kind.',
     ),
 
+    RuntimeRendererIssue: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'runtime-renderer-issue',
+      KernelVocabularySlot.ProductKind,
+      'Framework-runtime issue discovered while a runtime IRenderer spends a lowered instruction before a binding/controller product exists.',
+    ),
+
     ConfiguredResourceCatalogSelection: defineVocabulary(
       KernelVocabularyNamespace.Compiler,
       'configured-resource-catalog-selection',
@@ -573,6 +687,14 @@ export const KernelProductKinds = {
       'binding-command-lowering',
       KernelVocabularySlot.ProductKind,
       'Result of binding-command lowering before final instruction sequence assembly.',
+    ),
+
+    /** Product kind for a source-backed template-compiler issue. */
+    Issue: defineVocabulary(
+      KernelVocabularyNamespace.Compiler,
+      'issue',
+      KernelVocabularySlot.ProductKind,
+      'Source-backed template-compiler issue produced by classification, lowering, or compiled-template assembly.',
     ),
 
     /** Product kind for one parsed custom-attribute inline multi-binding segment. */
@@ -691,12 +813,28 @@ export const KernelProductKinds = {
       'Runtime binding instance emulated from renderer semantics and lowered instructions.',
     ),
 
+    /** Product kind for a framework-runtime issue discovered while a modeled runtime binding executes its own lifecycle. */
+    RuntimeBindingIssue: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'runtime-binding-issue',
+      KernelVocabularySlot.ProductKind,
+      'Source-backed runtime issue discovered while a modeled binding executes its own lifecycle, such as SpreadBinding captured-attribute transfer.',
+    ),
+
     /** Product kind for a runtime binding effect that creates or mutates template scope. */
     ScopeEffect: defineVocabulary(
       KernelVocabularyNamespace.Binding,
       'scope-effect',
       KernelVocabularySlot.ProductKind,
       'Runtime binding effect that creates or mutates template binding scope.',
+    ),
+
+    /** Product kind for a framework-runtime issue discovered while spending a binding scope effect. */
+    ScopeIssue: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'scope-issue',
+      KernelVocabularySlot.ProductKind,
+      'Source-backed runtime issue discovered while spending a binding scope effect, such as repeat destructuring that can reach astAssign failure paths.',
     ),
 
     /** Product kind for a runtime binding target-side accessor or observer decision. */
@@ -737,6 +875,38 @@ export const KernelProductKinds = {
       'data-flow',
       KernelVocabularySlot.ProductKind,
       'Runtime binding data-flow edge connecting source expression scope lookup to target accessor or observer facts.',
+    ),
+
+    /** Product kind for a binding-behavior application over a runtime binding. */
+    BehaviorApplication: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'behavior-application',
+      KernelVocabularySlot.ProductKind,
+      'Runtime binding-behavior application over an already-rendered binding and its bind-time target facts.',
+    ),
+
+    /** Product kind for a framework-runtime issue discovered while applying a binding behavior. */
+    BehaviorIssue: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'behavior-issue',
+      KernelVocabularySlot.ProductKind,
+      'Source-backed runtime issue discovered while applying a binding behavior such as updateTrigger.',
+    ),
+
+    /** Product kind for a value-converter application over a runtime binding expression. */
+    ValueConverterApplication: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'value-converter-application',
+      KernelVocabularySlot.ProductKind,
+      'Runtime value-converter application over a rendered binding expression and compiler-visible resource scope.',
+    ),
+
+    /** Product kind for a framework-runtime issue discovered while invoking a value converter. */
+    ValueConverterIssue: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'value-converter-issue',
+      KernelVocabularySlot.ProductKind,
+      'Source-backed runtime issue discovered while invoking a value converter such as sanitize.',
     ),
   },
   Instruction: {

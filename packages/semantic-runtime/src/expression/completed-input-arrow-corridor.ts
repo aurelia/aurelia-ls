@@ -18,6 +18,7 @@ import {
 } from './parse-result-algebra.js';
 import { CompletedInputCompanionBuilder } from './completed-input-companion-builder.js';
 import { CompletedInputParserState } from './completed-input-parser-state.js';
+import { ExpressionFrameworkErrorCode } from './framework-error-code.js';
 import { ParseHardFailure, isParseCompanionFailure, isParseFailure } from './parse-failure.js';
 import type { ParseOutcome } from './parse-failure.js';
 
@@ -30,6 +31,12 @@ interface CompletedInputArrowCorridorDependencies {
 
 const enum ParenthesizedArrowHeadStep {
   Continue = 'continue',
+}
+
+const enum InvalidParenthesizedArrowHeadKind {
+  Invalid = 'invalid',
+  DefaultParameter = 'default-parameter',
+  DestructuringParameter = 'destructuring-parameter',
 }
 
 type ParsedParenthesizedArrowHeadStep =
@@ -107,14 +114,27 @@ export class CompletedInputArrowCorridor {
     }
 
     if (identifier == null) {
-      return this.state.error('Invalid arrow parameter list', this.state.peekToken());
+      return this.state.failures.error(
+        'Invalid arrow parameter list',
+        this.state.peekToken(),
+        ExpressionFrameworkErrorCode.ParseInvalidArrowParams,
+      );
     }
 
     const arrowTok = this.state.peekToken();
     if (arrowTok.type !== TokenType.EqualsGreaterThan) {
-      return this.state.error("Expected '=>'", arrowTok);
+      return this.state.failures.error("Expected '=>'", arrowTok);
     }
     this.state.nextToken();
+
+    const bodyStart = this.state.peekToken();
+    if (bodyStart.type === TokenType.OpenBrace) {
+      return this.state.failures.error(
+        'Arrow function bodies are not supported',
+        bodyStart,
+        ExpressionFrameworkErrorCode.ParseNoArrowFnBody,
+      );
+    }
 
     const arg = new BindingIdentifier(
       identifier.span,
@@ -127,7 +147,7 @@ export class CompletedInputArrowCorridor {
         return this.companionBuilder.widenArrowFunctionFailure(
           body,
           this.state.localStart(arg),
-          [this.state.rootPrefix(arg)],
+          [this.state.prefixRefs.root(arg)],
         );
       }
       return this.companionBuilder.missingExpressionGapFailure(
@@ -135,7 +155,7 @@ export class CompletedInputArrowCorridor {
         arrowTok,
         ExpressionCompanionFrameKind.ArrowFunction,
         this.state.span(this.state.localStart(arg), arrowTok.end),
-        [this.state.rootPrefix(arg)],
+        [this.state.prefixRefs.root(arg)],
       );
     }
 
@@ -176,7 +196,7 @@ export class CompletedInputArrowCorridor {
    */
   private parseParenthesized(openParen: Token): ParseOutcome<ArrowFunction> | null {
     this.state.nextToken();
-    this.state.pushDelimiter(MatchedDelimiterKind.Paren, openParen);
+    this.state.delimiters.push(MatchedDelimiterKind.Paren, openParen);
 
     const head = new ParenthesizedArrowHeadState(openParen);
     const emptyHead = this.tryParseEmptyParenthesizedHead(head);
@@ -218,6 +238,16 @@ export class CompletedInputArrowCorridor {
     }
     if (token.type === TokenType.Identifier) {
       return this.parseIdentifierParenthesizedHeadParameter(token);
+    }
+    if (token.type === TokenType.OpenBracket || token.type === TokenType.OpenBrace) {
+      if (!head.committedByHeadShape || head.pendingParameterAnchor == null) {
+        return null;
+      }
+      return this.state.failures.error(
+        'Arrow function destructuring parameters are not supported',
+        token,
+        ExpressionFrameworkErrorCode.ParseNoArrowParamDestructuring,
+      );
     }
     if (!head.committedByHeadShape || head.pendingParameterAnchor == null) {
       return null;
@@ -267,6 +297,16 @@ export class CompletedInputArrowCorridor {
     if (token.type === TokenType.CloseParen) {
       return this.closeAndFinishParenthesizedHead(head);
     }
+    if (token.type === TokenType.Equals) {
+      if (!head.committedByHeadShape) {
+        return null;
+      }
+      return this.state.failures.error(
+        'Arrow function default parameters are not supported',
+        token,
+        ExpressionFrameworkErrorCode.ParseNoArrowParamDefaultValue,
+      );
+    }
     if (!head.committedByHeadShape) {
       return null;
     }
@@ -285,7 +325,11 @@ export class CompletedInputArrowCorridor {
   ): ParsedParenthesizedArrowHeadStep {
     const comma = this.state.nextToken();
     if (head.rest) {
-      return this.state.error('Rest parameter must be last in arrow parameter list', comma);
+      return this.state.failures.error(
+        'Rest parameter must be last in arrow parameter list',
+        comma,
+        ExpressionFrameworkErrorCode.ParseRestMustBeLast,
+      );
     }
     head.expectParameterAfter(comma);
     const next = this.state.peekToken();
@@ -305,7 +349,7 @@ export class CompletedInputArrowCorridor {
     head: ParenthesizedArrowHeadState,
   ): ParseOutcome<ArrowFunction> | null {
     const closeParen = this.state.nextToken();
-    this.state.popDelimiter(MatchedDelimiterKind.Paren);
+    this.state.delimiters.pop(MatchedDelimiterKind.Paren);
     return this.finishParenthesized(
       head.openParen,
       closeParen,
@@ -318,6 +362,7 @@ export class CompletedInputArrowCorridor {
   private tryParseCommittedInvalidParenthesizedHead(): ParseHardFailure | null {
     this.state.nextToken();
     let parenDepth = 1;
+    const headTokens: Token[] = [];
 
     while (true) {
       const token = this.state.peekToken();
@@ -326,6 +371,7 @@ export class CompletedInputArrowCorridor {
       }
 
       this.state.nextToken();
+      headTokens.push(token);
 
       if (token.type === TokenType.OpenParen) {
         parenDepth++;
@@ -343,11 +389,81 @@ export class CompletedInputArrowCorridor {
 
       const arrowTok = this.state.peekToken();
       if (arrowTok.type === TokenType.EqualsGreaterThan) {
-        const failure = this.state.error('Invalid arrow parameter list', arrowTok);
+        const failure = this.invalidParenthesizedArrowHeadFailure(arrowTok, this.classifyInvalidParenthesizedArrowHead(headTokens));
         return failure instanceof ParseHardFailure ? failure : null;
       }
 
       return null;
+    }
+  }
+
+  private classifyInvalidParenthesizedArrowHead(
+    tokens: readonly Token[],
+  ): InvalidParenthesizedArrowHeadKind {
+    let parenDepth = 1;
+    let bracketDepth = 0;
+    let braceDepth = 0;
+    for (const token of tokens) {
+      switch (token.type) {
+        case TokenType.OpenParen:
+          parenDepth++;
+          continue;
+        case TokenType.CloseParen:
+          parenDepth--;
+          continue;
+        case TokenType.OpenBracket:
+          if (parenDepth === 1 && bracketDepth === 0 && braceDepth === 0) {
+            return InvalidParenthesizedArrowHeadKind.DestructuringParameter;
+          }
+          bracketDepth++;
+          continue;
+        case TokenType.CloseBracket:
+          bracketDepth = Math.max(0, bracketDepth - 1);
+          continue;
+        case TokenType.OpenBrace:
+          if (parenDepth === 1 && bracketDepth === 0 && braceDepth === 0) {
+            return InvalidParenthesizedArrowHeadKind.DestructuringParameter;
+          }
+          braceDepth++;
+          continue;
+        case TokenType.CloseBrace:
+          braceDepth = Math.max(0, braceDepth - 1);
+          continue;
+        case TokenType.Equals:
+          if (parenDepth === 1 && bracketDepth === 0 && braceDepth === 0) {
+            return InvalidParenthesizedArrowHeadKind.DefaultParameter;
+          }
+          continue;
+        default:
+          continue;
+      }
+    }
+    return InvalidParenthesizedArrowHeadKind.Invalid;
+  }
+
+  private invalidParenthesizedArrowHeadFailure(
+    token: Token,
+    kind: InvalidParenthesizedArrowHeadKind,
+  ): ParseHardFailure {
+    switch (kind) {
+      case InvalidParenthesizedArrowHeadKind.DefaultParameter:
+        return this.state.failures.error(
+          'Arrow function default parameters are not supported',
+          token,
+          ExpressionFrameworkErrorCode.ParseNoArrowParamDefaultValue,
+        ) as ParseHardFailure;
+      case InvalidParenthesizedArrowHeadKind.DestructuringParameter:
+        return this.state.failures.error(
+          'Arrow function destructuring parameters are not supported',
+          token,
+          ExpressionFrameworkErrorCode.ParseNoArrowParamDestructuring,
+        ) as ParseHardFailure;
+      case InvalidParenthesizedArrowHeadKind.Invalid:
+        return this.state.failures.error(
+          'Invalid arrow parameter list',
+          token,
+          ExpressionFrameworkErrorCode.ParseInvalidArrowParams,
+        ) as ParseHardFailure;
     }
   }
 
@@ -366,6 +482,15 @@ export class CompletedInputArrowCorridor {
       return this.companionBuilder.missingArrowSeparatorFailure(openParen, closeParen, params);
     }
     this.state.nextToken();
+
+    const bodyStart = this.state.peekToken();
+    if (bodyStart.type === TokenType.OpenBrace) {
+      return this.state.failures.error(
+        'Arrow function bodies are not supported',
+        bodyStart,
+        ExpressionFrameworkErrorCode.ParseNoArrowFnBody,
+      );
+    }
 
     const body = this.deps.parseAssignExpr();
     if (isParseFailure(body)) {

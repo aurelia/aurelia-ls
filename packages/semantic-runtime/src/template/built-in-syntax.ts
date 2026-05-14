@@ -20,6 +20,8 @@ import {
 } from './binding-command-execution.js';
 import { camelCaseAttributeName } from './attribute-mapper.js';
 import { BindingCommandExecutableReference } from './binding-command-reference.js';
+import { TemplateCompilerFrameworkErrorCode } from './framework-error-code.js';
+import { TemplateCompilerIssueKind } from './compiler-issue.js';
 import {
   AttributeBindingInstruction,
   DispatchBindingInstruction,
@@ -899,7 +901,11 @@ export class ClassBindingCommand {
         .filter((value) => value.length > 0);
 
       if (classes.length === 0) {
-        return BindingCommandBuildResult.invalid('Invalid class binding syntax.');
+        return BindingCommandBuildResult.invalid(
+          'Invalid class binding syntax.',
+          TemplateCompilerFrameworkErrorCode.CompilerInvalidClassBindingSyntax,
+          TemplateCompilerIssueKind.InvalidClassBindingSyntax,
+        );
       }
 
       target = classes.join(' ');

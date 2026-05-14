@@ -8,6 +8,7 @@ import {
   type TemplateCompletionCursorContext,
 } from '../inquiry/template-completion.js';
 import {
+  InquiryLocusKind,
   SourceCursorInquiryLocus,
   SourceTextCursor,
 } from '../inquiry/locus.js';
@@ -21,11 +22,22 @@ import type { SourceSpanAddress } from '../kernel/address.js';
 import { sourceSpanContainsOffset } from '../kernel/address.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import type { SourceSpan } from '../expression/source-span.js';
+import type { ExpressionAstNode } from '../expression/ast.js';
+import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import { ExpressionParseResultInspector } from '../expression/parse-result-inspection.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from '../template/template-compilation-project-pass.js';
+import type { TemplateCompilerIssue } from '../template/compiler-issue.js';
+import type { RuntimeBindingScopeIssue } from '../template/runtime-binding-scope-issue.js';
+import type { RuntimeBindingIssue } from '../template/runtime-binding-issue.js';
+import type { RuntimeBindingBehaviorIssue } from '../template/runtime-binding-behavior.js';
+import type { RuntimeValueConverterIssue } from '../template/runtime-value-converter.js';
+import type { RuntimeControllerIssue } from '../template/runtime-controller-issue.js';
+import type { RuntimeRendererIssue } from '../template/runtime-renderer-issue.js';
 import type { TemplateExpressionParse } from '../template/value-site.js';
+import { TemplateValueSiteKind } from '../template/value-site.js';
+import { runtimeAcceptedBindingExpressionAstForParse } from '../template/expression-parse-projection.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import type {
   HtmlAttribute,
@@ -35,9 +47,21 @@ import { HtmlElement } from '../template/html-ir.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
+import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
+import { CheckerExpressionTypeOpenKind } from '../type-system/expression-type-evaluation.js';
+import {
+  RuntimeAstFrameworkErrorCode,
+  RuntimeHtmlAstFrameworkErrorCode,
+  type RuntimeHtmlAstFrameworkErrorCode as RuntimeHtmlAstFrameworkErrorCodeValue,
+} from '../type-system/framework-error-code.js';
 import {
   CheckerTypeMemberKind,
+  checkerIndexedAccessSupportsString,
 } from '../type-system/type-shape.js';
+import {
+  RuntimeBindingDataFlowDirection,
+  type RuntimeBindingDataFlow,
+} from '../observation/runtime-binding-observation.js';
 import type { TemplateBindableReference } from '../template/compiler-world-reference.js';
 import { semanticOutcomeForInquiry } from './answer.js';
 import type {
@@ -56,6 +80,7 @@ import type {
   SemanticTemplateCursorMemberRow,
   SemanticTemplateCursorValueSiteRow,
   SemanticTemplateCompletionResult,
+  SemanticTemplateCursorSuggestionValueTypeSource,
 } from './contracts.js';
 import {
   SEMANTIC_RUNTIME_API_VERSION,
@@ -65,15 +90,32 @@ import {
 } from './contracts.js';
 import {
   describeAddress,
+  sourceReferenceForParserSpan,
 } from './source-reference.js';
 import {
   bindingSourceAssignmentDiagnostic,
+  bindingDataFlowFrameworkErrorDiagnostic,
+  bindingTargetAccessFrameworkErrorDiagnostic,
   bindingSourceAssignmentDiagnosticKind,
   bindingSourceAssignmentReasonKinds,
   cursorDiagnosticRows,
+  expressionRuntimeEvaluationErrorDiagnostic,
+  expressionParseErrorDiagnostic,
+  runtimeBindingIssueDiagnostic,
+  runtimeBindingBehaviorIssueDiagnostic,
+  runtimeBindingScopeIssueDiagnostic,
+  runtimeRendererIssueDiagnostic,
+  runtimeValueConverterIssueDiagnostic,
+  runtimeControllerIssueDiagnostic,
+  templateCompilerErrorDiagnostic,
 } from './template-diagnostic-policy.js';
 
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
+
+interface TemplateDiagnosticExpectedValueType {
+  readonly display: string;
+  readonly source: SemanticTemplateCursorSuggestionValueTypeSource;
+}
 
 type TemplateCompletionResourceSelection = {
   readonly resource: TemplateResourceRuntimeAnalysisEmission;
@@ -102,6 +144,7 @@ interface TemplateDiagnosticsScanContext {
   readonly includeHandles: boolean;
   readonly routeConfigProductHandles: readonly ProductHandle[];
   readonly i18nTranslationKeyProductHandles: readonly ProductHandle[];
+  readonly expressionWorld: CheckerExpressionTypeWorld;
   readonly sourceTextCache: Map<string, TemplateSourceText | null>;
   readonly seenRows: Set<string>;
 }
@@ -187,10 +230,6 @@ function bindingSourceAssignmentCursorDiagnostics(
     return [];
   }
   return selection.resource.runtimeAnalysis.bindingDataFlow.dataFlows.flatMap((dataFlow) => {
-    const diagnosticKind = bindingSourceAssignmentDiagnosticKind(dataFlow.sourceAssignmentKind);
-    if (diagnosticKind == null) {
-      return [];
-    }
     const span = sourceSpanForHandle(store, dataFlow.sourceAddressHandle);
     if (span == null || !sourceSpanContainsOffset(span, cursorOffset)) {
       return [];
@@ -199,14 +238,65 @@ function bindingSourceAssignmentCursorDiagnostics(
     if (source == null) {
       return [];
     }
-    return [bindingSourceAssignmentDiagnostic(
-      store,
-      dataFlow,
-      bindingSourceAssignmentReasonKinds(dataFlow),
-      diagnosticKind,
-      source,
-    )];
+    const diagnostics: SemanticTemplateCursorDiagnosticRow[] = [];
+    const assignmentDiagnosticKind = bindingSourceAssignmentDiagnosticKind(dataFlow.sourceAssignmentKind);
+    if (assignmentDiagnosticKind != null) {
+      diagnostics.push(bindingSourceAssignmentDiagnostic(
+        store,
+        dataFlow,
+        bindingSourceAssignmentReasonKinds(dataFlow),
+        assignmentDiagnosticKind,
+        source,
+      ));
+    }
+    const runtimeDiagnostic = expressionRuntimeEvaluationDiagnosticForDataFlow(store, dataFlow, source);
+    if (runtimeDiagnostic != null) {
+      diagnostics.push(runtimeDiagnostic);
+    }
+    const frameworkDiagnostic = bindingDataFlowFrameworkErrorDiagnostic(dataFlow, source);
+    if (frameworkDiagnostic != null) {
+      diagnostics.push(frameworkDiagnostic);
+    }
+    return diagnostics;
   });
+}
+
+function templateDiagnosticExpectedValueTypeForCursor(
+  store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
+  cursorOffset: number | null,
+  valueSiteKind: SemanticTemplateCursorValueSiteRow['siteKind'] | null,
+): TemplateDiagnosticExpectedValueType | null {
+  if (cursorOffset == null || !valueSiteSupportsBindingTargetExpectedType(valueSiteKind)) {
+    return null;
+  }
+  for (const dataFlow of selection.resource.runtimeAnalysis.bindingDataFlow.dataFlows) {
+    const span = sourceSpanForHandle(store, dataFlow.sourceAddressHandle);
+    if (span == null || !sourceSpanContainsOffset(span, cursorOffset)) {
+      continue;
+    }
+    const display = dataFlow.targetValueType?.display ?? dataFlow.targetPropertyType?.display ?? null;
+    if (display != null) {
+      return { display, source: 'binding-target' };
+    }
+  }
+  return null;
+}
+
+function valueSiteSupportsBindingTargetExpectedType(
+  valueSiteKind: SemanticTemplateCursorValueSiteRow['siteKind'] | null,
+): boolean {
+  switch (valueSiteKind) {
+    case TemplateValueSiteKind.BindableValue:
+    case TemplateValueSiteKind.CustomAttributeValue:
+    case TemplateValueSiteKind.BindingCommandValue:
+    case TemplateValueSiteKind.MultiBindingValue:
+    case TemplateValueSiteKind.TextInterpolation:
+    case TemplateValueSiteKind.PlainAttributeInterpolation:
+      return true;
+    default:
+      return false;
+  }
 }
 
 function withCursorAssignmentDiagnostics(
@@ -328,7 +418,7 @@ function readContextForCursor(
   };
 }
 
-function readTemplateDiagnosticRows(
+export function readTemplateDiagnosticRows(
   store: KernelStore,
   workspaceRootDir: string,
   projectRootDir: string,
@@ -336,10 +426,19 @@ function readTemplateDiagnosticRows(
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
   includeHandles: boolean,
 ): readonly SemanticTemplateDiagnosticRow[] {
-  const context = templateDiagnosticsScanContext(emission, includeHandles);
+  const context = templateDiagnosticsScanContext(store, emission, includeHandles);
   const selections = templateResourceSelections(store, emission)
     .filter((selection) => templateDiagnosticSelectionMatchesFile(store, selection, sourceFile));
   const rows = [
+    ...selections.flatMap((selection) => expressionParseDiagnosticRowsForSelection(store, selection, sourceFile, context)),
+    ...selections.flatMap((selection) => templateCompilerIssueDiagnosticRowsForSelection(store, selection, sourceFile, context)),
+    ...selections.flatMap((selection) => runtimeControllerIssueDiagnosticRowsForSelection(store, selection, sourceFile, context)),
+    ...selections.flatMap((selection) => runtimeRendererIssueDiagnosticRowsForSelection(store, selection, sourceFile, context)),
+    ...selections.flatMap((selection) => runtimeBindingIssueDiagnosticRowsForSelection(store, selection, sourceFile, context)),
+    ...selections.flatMap((selection) => runtimeBindingBehaviorIssueDiagnosticRowsForSelection(store, selection, sourceFile, context)),
+    ...selections.flatMap((selection) => runtimeValueConverterIssueDiagnosticRowsForSelection(store, selection, sourceFile, context)),
+    ...selections.flatMap((selection) => runtimeBindingScopeIssueDiagnosticRowsForSelection(store, selection, sourceFile, context)),
+    ...selections.flatMap((selection) => targetAccessDiagnosticRowsForSelection(store, selection, sourceFile, context)),
     ...selections.flatMap((selection) => templateDiagnosticRowsForSelection(store, workspaceRootDir, selection, context)),
     ...selections.flatMap((selection) => bindingDataFlowDiagnosticRowsForSelection(store, selection, sourceFile, context)),
   ];
@@ -354,6 +453,7 @@ function readTemplateDiagnosticRows(
 }
 
 function templateDiagnosticsScanContext(
+  store: KernelStore,
   emission: AureliaAppWorldProjectEmission,
   includeHandles: boolean,
 ): TemplateDiagnosticsScanContext {
@@ -361,6 +461,7 @@ function templateDiagnosticsScanContext(
     includeHandles,
     routeConfigProductHandles: emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
+    expressionWorld: new CheckerExpressionTypeWorld(store),
     sourceTextCache: new Map(),
     seenRows: new Set(),
   };
@@ -406,17 +507,18 @@ function templateDiagnosticRowsForMemberSpan(
   const position = positionForOffset(source, offset);
   const cursorContext = templateCompletionQueryForCursor(store, {
     locus: new SourceCursorInquiryLocus(
-      new SourceTextCursor(source.filePath, position.line, position.character, offset),
+      new SourceTextCursor(source.sourcePath, position.line, position.character, offset),
       selection.resource.compilation.unit.templateSource.sourceAddressHandle,
     ),
     resource: selection.resource,
     page: new InquiryPageRequest(1, null),
     routeConfigProductHandles: context.routeConfigProductHandles,
     i18nTranslationKeyProductHandles: context.i18nTranslationKeyProductHandles,
+    expressionWorld: context.expressionWorld,
   });
   const cursorInfo = templateCursorInfoResult(store, selection, cursorContext, context.includeHandles, [...new Set(cursorContext.missingInputs)]);
   return cursorInfo.diagnostics.flatMap((diagnostic) =>
-    templateDiagnosticRowForDiagnostic(diagnostic, cursorInfo, source.filePath, span, context.seenRows)
+    templateDiagnosticRowForDiagnostic(diagnostic, cursorInfo, source.sourcePath, span, context.seenRows)
   );
 }
 
@@ -473,16 +575,100 @@ function bindingDataFlowDiagnosticRowsForSelection(
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
   return selection.resource.runtimeAnalysis.bindingDataFlow.dataFlows.flatMap((dataFlow) => {
-    const diagnosticKind = bindingSourceAssignmentDiagnosticKind(dataFlow.sourceAssignmentKind);
-    if (diagnosticKind == null) {
-      return [];
-    }
     const source = describeAddress(store, dataFlow.sourceAddressHandle);
     if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
       return [];
     }
-    const reasonKinds = bindingSourceAssignmentReasonKinds(dataFlow);
-    const diagnostic = bindingSourceAssignmentDiagnostic(store, dataFlow, reasonKinds, diagnosticKind, source);
+    const diagnostics: SemanticTemplateCursorDiagnosticRow[] = [];
+    const assignmentDiagnosticKind = bindingSourceAssignmentDiagnosticKind(dataFlow.sourceAssignmentKind);
+    if (assignmentDiagnosticKind != null) {
+      diagnostics.push(bindingSourceAssignmentDiagnostic(
+        store,
+        dataFlow,
+        bindingSourceAssignmentReasonKinds(dataFlow),
+        assignmentDiagnosticKind,
+        source,
+      ));
+    }
+    const runtimeDiagnostic = expressionRuntimeEvaluationDiagnosticForDataFlow(store, dataFlow, source);
+    if (runtimeDiagnostic != null) {
+      diagnostics.push(runtimeDiagnostic);
+    }
+    const frameworkDiagnostic = bindingDataFlowFrameworkErrorDiagnostic(dataFlow, source);
+    if (frameworkDiagnostic != null) {
+      diagnostics.push(frameworkDiagnostic);
+    }
+    return diagnostics.flatMap((diagnostic) => {
+      const key = templateDiagnosticRowKey(diagnostic, source);
+      if (context.seenRows.has(key)) {
+        return [];
+      }
+      context.seenRows.add(key);
+      return [{
+      ...diagnostic,
+      siteKind: TemplateCompletionSiteKind.Expression,
+      valueSiteKind: valueSiteKindForDataFlow(store, dataFlow.expressionProductHandle),
+      template: {
+        compilationLane: selection.lane,
+        source: describeAddress(store, selection.sourceAddressHandle),
+      },
+      }];
+    });
+  });
+}
+
+function targetAccessDiagnosticRowsForSelection(
+  store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+  context: TemplateDiagnosticsScanContext,
+): readonly SemanticTemplateDiagnosticRow[] {
+  return selection.resource.runtimeAnalysis.controllerBind.targetAccesses.flatMap((targetAccess) => {
+    const source = describeAddress(store, targetAccess.sourceAddressHandle);
+    if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
+      return [];
+    }
+    const diagnostic = bindingTargetAccessFrameworkErrorDiagnostic(targetAccess, source);
+    if (diagnostic == null) {
+      return [];
+    }
+    const key = templateDiagnosticRowKey(diagnostic, source);
+    if (context.seenRows.has(key)) {
+      return [];
+    }
+    context.seenRows.add(key);
+    return [{
+      ...diagnostic,
+      siteKind: TemplateCompletionSiteKind.AttributeValue,
+      valueSiteKind: null,
+      template: {
+        compilationLane: selection.lane,
+        source: describeAddress(store, selection.sourceAddressHandle),
+      },
+    }];
+  });
+}
+
+function expressionParseDiagnosticRowsForSelection(
+  store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+  context: TemplateDiagnosticsScanContext,
+): readonly SemanticTemplateDiagnosticRow[] {
+  return templateExpressionParses(selection.resource).flatMap((parse) => {
+    const payload = expressionParseDiagnosticPayload(parse);
+    if (payload == null) {
+      return [];
+    }
+    const source = sourceReferenceForExpressionParseDiagnostic(store, parse, payload.span);
+    if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
+      return [];
+    }
+    const diagnostic = expressionParseErrorDiagnostic(
+      payload.message,
+      payload.frameworkErrorCode,
+      source,
+    );
     const key = templateDiagnosticRowKey(diagnostic, source);
     if (context.seenRows.has(key)) {
       return [];
@@ -491,13 +677,331 @@ function bindingDataFlowDiagnosticRowsForSelection(
     return [{
       ...diagnostic,
       siteKind: TemplateCompletionSiteKind.Expression,
-      valueSiteKind: valueSiteKindForDataFlow(store, dataFlow.expressionProductHandle),
+      valueSiteKind: parse.site.siteKind,
       template: {
         compilationLane: selection.lane,
         source: describeAddress(store, selection.sourceAddressHandle),
       },
     }];
   });
+}
+
+function templateCompilerIssueDiagnosticRowsForSelection(
+  store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+  context: TemplateDiagnosticsScanContext,
+): readonly SemanticTemplateDiagnosticRow[] {
+  return templateCompilerIssues(selection.resource).flatMap((issue) => {
+    const source = describeAddress(store, issue.sourceAddressHandle);
+    if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
+      return [];
+    }
+    const diagnostic = templateCompilerErrorDiagnostic(
+      issue.message,
+      issue.frameworkErrorCode,
+      source,
+      issue.severity,
+    );
+    const key = templateDiagnosticRowKey(diagnostic, source);
+    if (context.seenRows.has(key)) {
+      return [];
+    }
+    context.seenRows.add(key);
+    return [{
+      ...diagnostic,
+      siteKind: TemplateCompletionSiteKind.AttributeValue,
+      valueSiteKind: null,
+      template: {
+        compilationLane: selection.lane,
+        source: describeAddress(store, selection.sourceAddressHandle),
+      },
+    }];
+  });
+}
+
+function runtimeControllerIssueDiagnosticRowsForSelection(
+  store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+  context: TemplateDiagnosticsScanContext,
+): readonly SemanticTemplateDiagnosticRow[] {
+  return selection.resource.runtimeAnalysis.runtimeRendering.controllerIssues.flatMap((issue) => {
+    const source = sourceReferenceForRuntimeControllerIssue(store, issue);
+    if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
+      return [];
+    }
+    const diagnostic = runtimeControllerIssueDiagnostic(issue, source);
+    const key = templateDiagnosticRowKey(diagnostic, source);
+    if (context.seenRows.has(key)) {
+      return [];
+    }
+    context.seenRows.add(key);
+    return [{
+      ...diagnostic,
+      siteKind: TemplateCompletionSiteKind.AttributeValue,
+      valueSiteKind: null,
+      template: {
+        compilationLane: selection.lane,
+        source: describeAddress(store, selection.sourceAddressHandle),
+      },
+    }];
+  });
+}
+
+function runtimeRendererIssueDiagnosticRowsForSelection(
+  store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+  context: TemplateDiagnosticsScanContext,
+): readonly SemanticTemplateDiagnosticRow[] {
+  return selection.resource.runtimeAnalysis.runtimeRendering.rendererIssues.flatMap((issue) => {
+    const source = sourceReferenceForRuntimeRendererIssue(store, issue);
+    if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
+      return [];
+    }
+    const diagnostic = runtimeRendererIssueDiagnostic(issue, source);
+    const key = templateDiagnosticRowKey(diagnostic, source);
+    if (context.seenRows.has(key)) {
+      return [];
+    }
+    context.seenRows.add(key);
+    return [{
+      ...diagnostic,
+      siteKind: TemplateCompletionSiteKind.AttributeValue,
+      valueSiteKind: null,
+      template: {
+        compilationLane: selection.lane,
+        source: describeAddress(store, selection.sourceAddressHandle),
+      },
+    }];
+  });
+}
+
+function runtimeBindingIssueDiagnosticRowsForSelection(
+  store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+  context: TemplateDiagnosticsScanContext,
+): readonly SemanticTemplateDiagnosticRow[] {
+  const issues = [
+    ...selection.resource.runtimeAnalysis.runtimeRendering.bindingIssues,
+    ...selection.resource.runtimeAnalysis.i18nTranslationBinding.issues,
+  ];
+  return issues.flatMap((issue) => {
+    const source = sourceReferenceForRuntimeBindingIssue(store, issue);
+    if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
+      return [];
+    }
+    const diagnostic = runtimeBindingIssueDiagnostic(issue, source);
+    const key = templateDiagnosticRowKey(diagnostic, source);
+    if (context.seenRows.has(key)) {
+      return [];
+    }
+    context.seenRows.add(key);
+    return [{
+      ...diagnostic,
+      siteKind: TemplateCompletionSiteKind.AttributeValue,
+      valueSiteKind: null,
+      template: {
+        compilationLane: selection.lane,
+        source: describeAddress(store, selection.sourceAddressHandle),
+      },
+    }];
+  });
+}
+
+function runtimeBindingBehaviorIssueDiagnosticRowsForSelection(
+  store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+  context: TemplateDiagnosticsScanContext,
+): readonly SemanticTemplateDiagnosticRow[] {
+  return selection.resource.runtimeAnalysis.bindingBehavior.issues.flatMap((issue) => {
+    const source = sourceReferenceForRuntimeBindingBehaviorIssue(store, issue);
+    if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
+      return [];
+    }
+    const diagnostic = runtimeBindingBehaviorIssueDiagnostic(issue, source);
+    const key = templateDiagnosticRowKey(diagnostic, source);
+    if (context.seenRows.has(key)) {
+      return [];
+    }
+    context.seenRows.add(key);
+    return [{
+      ...diagnostic,
+      siteKind: TemplateCompletionSiteKind.AttributeValue,
+      valueSiteKind: null,
+      template: {
+        compilationLane: selection.lane,
+        source: describeAddress(store, selection.sourceAddressHandle),
+      },
+    }];
+  });
+}
+
+function runtimeValueConverterIssueDiagnosticRowsForSelection(
+  store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+  context: TemplateDiagnosticsScanContext,
+): readonly SemanticTemplateDiagnosticRow[] {
+  return selection.resource.runtimeAnalysis.valueConverter.issues.flatMap((issue) => {
+    const source = sourceReferenceForRuntimeValueConverterIssue(store, issue);
+    if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
+      return [];
+    }
+    const diagnostic = runtimeValueConverterIssueDiagnostic(issue, source);
+    const key = templateDiagnosticRowKey(diagnostic, source);
+    if (context.seenRows.has(key)) {
+      return [];
+    }
+    context.seenRows.add(key);
+    return [{
+      ...diagnostic,
+      siteKind: TemplateCompletionSiteKind.AttributeValue,
+      valueSiteKind: null,
+      template: {
+        compilationLane: selection.lane,
+        source: describeAddress(store, selection.sourceAddressHandle),
+      },
+    }];
+  });
+}
+
+function runtimeBindingScopeIssueDiagnosticRowsForSelection(
+  store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+  context: TemplateDiagnosticsScanContext,
+): readonly SemanticTemplateDiagnosticRow[] {
+  return selection.resource.runtimeAnalysis.scopes.scopeIssues.flatMap((issue) => {
+    const source = sourceReferenceForRuntimeBindingScopeIssue(store, issue);
+    if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
+      return [];
+    }
+    const diagnostic = runtimeBindingScopeIssueDiagnostic(issue, source);
+    const key = templateDiagnosticRowKey(diagnostic, source);
+    if (context.seenRows.has(key)) {
+      return [];
+    }
+    context.seenRows.add(key);
+    return [{
+      ...diagnostic,
+      siteKind: TemplateCompletionSiteKind.Expression,
+      valueSiteKind: TemplateValueSiteKind.TemplateControllerValue,
+      template: {
+        compilationLane: selection.lane,
+        source: describeAddress(store, selection.sourceAddressHandle),
+      },
+    }];
+  });
+}
+
+function templateCompilerIssues(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): readonly TemplateCompilerIssue[] {
+  return [
+    ...resource.compilation.attributeClassification.issues,
+    ...resource.compilation.bindingCommandLowering.issues,
+    ...resource.compilation.compiledTemplate.issues,
+  ];
+}
+
+function sourceReferenceForRuntimeControllerIssue(
+  store: KernelStore,
+  issue: RuntimeControllerIssue,
+): NonNullable<SemanticTemplateDiagnosticRow['source']> | null {
+  return describeAddress(store, issue.sourceAddressHandle);
+}
+
+function sourceReferenceForRuntimeBindingIssue(
+  store: KernelStore,
+  issue: RuntimeBindingIssue,
+): NonNullable<SemanticTemplateDiagnosticRow['source']> | null {
+  return describeAddress(store, issue.sourceAddressHandle);
+}
+
+function sourceReferenceForRuntimeRendererIssue(
+  store: KernelStore,
+  issue: RuntimeRendererIssue,
+): NonNullable<SemanticTemplateDiagnosticRow['source']> | null {
+  return describeAddress(store, issue.sourceAddressHandle);
+}
+
+function sourceReferenceForRuntimeBindingBehaviorIssue(
+  store: KernelStore,
+  issue: RuntimeBindingBehaviorIssue,
+): NonNullable<SemanticTemplateDiagnosticRow['source']> | null {
+  return describeAddress(store, issue.sourceAddressHandle);
+}
+
+function sourceReferenceForRuntimeValueConverterIssue(
+  store: KernelStore,
+  issue: RuntimeValueConverterIssue,
+): NonNullable<SemanticTemplateDiagnosticRow['source']> | null {
+  return describeAddress(store, issue.sourceAddressHandle);
+}
+
+function sourceReferenceForRuntimeBindingScopeIssue(
+  store: KernelStore,
+  issue: RuntimeBindingScopeIssue,
+): NonNullable<SemanticTemplateDiagnosticRow['source']> | null {
+  if (issue.sourceSpan?.file?.path != null) {
+    return sourceReferenceForParserSpan(issue.sourceSpan.file.path, issue.sourceSpan, 'range');
+  }
+  return describeAddress(store, issue.sourceAddressHandle);
+}
+
+function expressionParseDiagnosticPayload(
+  parse: TemplateExpressionParse,
+): {
+  readonly frameworkErrorCode: string | null;
+  readonly message: string;
+  readonly span: SourceSpan | null;
+} | null {
+  const result = parse.result;
+  switch (result.kind) {
+    case ExpressionParseResultKind.CompleteInputParseError:
+      return {
+        frameworkErrorCode: result.frameworkErrorCode,
+        message: result.message,
+        span: result.primarySpan,
+      };
+    case ExpressionParseResultKind.PropertyLikeDegradedPublication:
+    case ExpressionParseResultKind.PropertyLikeFrontierPublication:
+    case ExpressionParseResultKind.IteratorDegradedPublication:
+    case ExpressionParseResultKind.IteratorFrontierPublication:
+      return result.frameworkErrorCode == null
+        ? null
+        : {
+            frameworkErrorCode: result.frameworkErrorCode,
+            message: result.diagnosticMessage ?? 'The expression parser stopped at an incomplete expression frontier.',
+            span: result.primarySpan,
+          };
+    case ExpressionParseResultKind.InterpolationDegradedPublication:
+    case ExpressionParseResultKind.InterpolationFrontierPublication:
+      return result.activeHole.frameworkErrorCode == null
+        ? null
+        : {
+            frameworkErrorCode: result.activeHole.frameworkErrorCode,
+            message: result.activeHole.diagnosticMessage ?? 'The interpolation parser stopped at an incomplete expression frontier.',
+            span: result.activeHole.holeSpan,
+          };
+    default:
+      return null;
+  }
+}
+
+function sourceReferenceForExpressionParseDiagnostic(
+  store: KernelStore,
+  parse: TemplateExpressionParse,
+  span: SourceSpan | null,
+): NonNullable<SemanticTemplateDiagnosticRow['source']> | null {
+  if (span?.file != null) {
+    return sourceReferenceForSpan(span.file.path, span);
+  }
+  return describeAddress(store, parse.sourceAddressHandle);
 }
 
 function sourceReferenceMatchesFile(
@@ -512,10 +1016,181 @@ function valueSiteKindForDataFlow(
   store: KernelStore,
   expressionProductHandle: ProductHandle | null,
 ): SemanticTemplateDiagnosticRow['valueSiteKind'] {
-  const parse = expressionProductHandle == null
+  const parse = expressionParseForProductHandle(store, expressionProductHandle);
+  return parse?.site.siteKind ?? null;
+}
+
+function expressionRuntimeEvaluationDiagnosticForDataFlow(
+  store: KernelStore,
+  dataFlow: RuntimeBindingDataFlow,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticTemplateCursorDiagnosticRow | null {
+  const frameworkErrorCode = runtimeAstFrameworkErrorCodeForDataFlow(store, dataFlow);
+  if (frameworkErrorCode == null) {
+    return null;
+  }
+  return expressionRuntimeEvaluationErrorDiagnostic(
+    frameworkErrorCode,
+    dataFlow.sourceTypeOpenReason ?? 'The TypeChecker projection reached a runtime expression-evaluation failure.',
+    source,
+    runtimeAstSelectedMemberName(store, dataFlow),
+  );
+}
+
+function runtimeAstFrameworkErrorCodeForDataFlow(
+  store: KernelStore,
+  dataFlow: RuntimeBindingDataFlow,
+): RuntimeAstFrameworkErrorCode | RuntimeHtmlAstFrameworkErrorCodeValue | null {
+  switch (dataFlow.sourceTypeOpenKind) {
+    case CheckerExpressionTypeOpenKind.HostContextNotFound:
+      return RuntimeAstFrameworkErrorCode.AstHostNotFound;
+    case CheckerExpressionTypeOpenKind.MissingValueConverterResource:
+      return RuntimeHtmlAstFrameworkErrorCode.AstConverterNotFound;
+    case CheckerExpressionTypeOpenKind.MissingBindingBehaviorResource:
+      return RuntimeHtmlAstFrameworkErrorCode.AstBehaviorNotFound;
+    case CheckerExpressionTypeOpenKind.DuplicateBindingBehavior:
+      return RuntimeHtmlAstFrameworkErrorCode.AstBehaviorDuplicated;
+    case CheckerExpressionTypeOpenKind.NullishMemberAccess:
+      return dataFlow.strictBinding === true ? RuntimeAstFrameworkErrorCode.AstNullishMemberAccess : null;
+    case CheckerExpressionTypeOpenKind.NullishKeyedAccess:
+      return dataFlow.strictBinding === true ? RuntimeAstFrameworkErrorCode.AstNullishKeyedAccess : null;
+    case CheckerExpressionTypeOpenKind.NullishCallTarget:
+      return dataFlow.strictBinding === true
+        ? runtimeAstCallTargetFrameworkErrorCode(store, dataFlow)
+        : null;
+    case CheckerExpressionTypeOpenKind.IncrementInConnectableEvaluation:
+      return dataFlowDirectionIncludesSourceToTarget(dataFlow.direction)
+        ? RuntimeAstFrameworkErrorCode.AstIncrementInfiniteLoop
+        : null;
+  }
+  if (
+    dataFlow.sourceTypeOpenKind !== CheckerExpressionTypeOpenKind.UnsupportedCallTarget
+    && dataFlow.sourceTypeOpenKind !== CheckerExpressionTypeOpenKind.UnsupportedConstruct
+  ) {
+    return null;
+  }
+  const expression = runtimeAstDiagnosticExpression(store, dataFlow);
+  if (expression == null) {
+    return null;
+  }
+  switch (expression.$kind) {
+    case 'CallScope':
+    case 'CallMember':
+      return RuntimeAstFrameworkErrorCode.AstNameIsNotAFunction;
+    case 'TaggedTemplate':
+      return RuntimeAstFrameworkErrorCode.AstTaggedNotAFunction;
+    case 'CallFunction':
+    case 'CallGlobal':
+    case 'New':
+      return RuntimeAstFrameworkErrorCode.AstNotAFunction;
+    default:
+      return dataFlow.sourceTypeOpenKind === CheckerExpressionTypeOpenKind.UnsupportedConstruct
+        ? RuntimeAstFrameworkErrorCode.AstNotAFunction
+        : null;
+  }
+}
+
+function runtimeAstCallTargetFrameworkErrorCode(
+  store: KernelStore,
+  dataFlow: RuntimeBindingDataFlow,
+): RuntimeAstFrameworkErrorCode | null {
+  const expression = runtimeAstDiagnosticExpression(store, dataFlow);
+  switch (expression?.$kind) {
+    case 'CallScope':
+    case 'CallMember':
+      return RuntimeAstFrameworkErrorCode.AstNameIsNotAFunction;
+    case 'CallFunction':
+    case 'CallGlobal':
+      return RuntimeAstFrameworkErrorCode.AstNotAFunction;
+    default:
+      return null;
+  }
+}
+
+function dataFlowDirectionIncludesSourceToTarget(
+  direction: RuntimeBindingDataFlowDirection | `${RuntimeBindingDataFlowDirection}`,
+): boolean {
+  return direction === RuntimeBindingDataFlowDirection.SourceToTarget
+    || direction === RuntimeBindingDataFlowDirection.TwoWay;
+}
+
+function runtimeAstSelectedMemberName(
+  store: KernelStore,
+  dataFlow: RuntimeBindingDataFlow,
+): string | null {
+  const expression = runtimeAstDiagnosticExpression(store, dataFlow);
+  switch (expression?.$kind) {
+    case 'CallScope':
+    case 'CallMember':
+    case 'CallGlobal':
+      return expression.name.name;
+    case 'BindingBehavior':
+    case 'ValueConverter':
+      return expression.name.name;
+    default:
+      return dataFlow.sourceName;
+  }
+}
+
+function runtimeAstDiagnosticExpression(
+  store: KernelStore,
+  dataFlow: RuntimeBindingDataFlow,
+): ExpressionAstNode | null {
+  const parse = expressionParseForProductHandle(store, dataFlow.expressionProductHandle);
+  const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+  return ast == null
+    ? null
+    : runtimeAstDiagnosticExpressionForOpenKind(ast, dataFlow.sourceTypeOpenKind);
+}
+
+function runtimeAstDiagnosticExpressionForOpenKind(
+  ast: ExpressionAstNode,
+  openKind: RuntimeBindingDataFlow['sourceTypeOpenKind'],
+): ExpressionAstNode {
+  switch (openKind) {
+    case CheckerExpressionTypeOpenKind.MissingValueConverterResource:
+      return firstRuntimeAstExpressionKind(ast, 'ValueConverter') ?? ast;
+    case CheckerExpressionTypeOpenKind.MissingBindingBehaviorResource:
+    case CheckerExpressionTypeOpenKind.DuplicateBindingBehavior:
+      return firstRuntimeAstExpressionKind(ast, 'BindingBehavior') ?? ast;
+    default:
+      return unwrapRuntimeAstDiagnosticExpression(ast);
+  }
+}
+
+function firstRuntimeAstExpressionKind(
+  expression: ExpressionAstNode,
+  kind: 'BindingBehavior' | 'ValueConverter',
+): ExpressionAstNode | null {
+  if (expression.$kind === kind) {
+    return expression;
+  }
+  switch (expression.$kind) {
+    case 'BindingBehavior':
+    case 'ValueConverter':
+      return firstRuntimeAstExpressionKind(expression.expression, kind);
+    default:
+      return null;
+  }
+}
+
+function unwrapRuntimeAstDiagnosticExpression(expression: ExpressionAstNode): ExpressionAstNode {
+  switch (expression.$kind) {
+    case 'BindingBehavior':
+    case 'ValueConverter':
+      return unwrapRuntimeAstDiagnosticExpression(expression.expression);
+    default:
+      return expression;
+  }
+}
+
+function expressionParseForProductHandle(
+  store: KernelStore,
+  expressionProductHandle: ProductHandle | null,
+): TemplateExpressionParse | null {
+  return expressionProductHandle == null
     ? null
     : store.productDetails.read(TemplateProductDetails.ExpressionParse, expressionProductHandle);
-  return parse?.site.siteKind ?? null;
 }
 
 function templateResourceSelections(
@@ -571,7 +1246,8 @@ function templateExpressionParses(
 }
 
 interface TemplateSourceText {
-  readonly filePath: string;
+  readonly sourcePath: string;
+  readonly hostPath: string;
   readonly text: string;
   readonly lineStarts: readonly number[];
 }
@@ -590,20 +1266,22 @@ function templateSourceText(
   if (file == null || !isSourceFileAddress(file)) {
     return null;
   }
-  const filePath = sourceFileHostPath(workspaceRootDir, file.path);
-  let source = cache.get(filePath);
+  const sourcePath = file.path;
+  const hostPath = sourceFileHostPath(workspaceRootDir, sourcePath);
+  let source = cache.get(hostPath);
   if (source === undefined) {
     try {
-      const text = readFileSync(filePath, 'utf8');
+      const text = readFileSync(hostPath, 'utf8');
       source = {
-        filePath,
+        sourcePath,
+        hostPath,
         text,
         lineStarts: lineStartsForText(text),
       };
     } catch {
       source = null;
     }
-    cache.set(filePath, source);
+    cache.set(hostPath, source);
   }
   return source;
 }
@@ -829,6 +1507,12 @@ function templateCursorInfoResult(
   const valueSite = cursorValueSiteRow(store, cursorContext, includeHandles);
   const selectedMember = cursorSelectedMemberRow(store, cursorContext, includeHandles);
   const memberOwnerType = cursorMemberOwnerTypeRow(store, query.memberOwnerTypeProductHandle, includeHandles);
+  const expectedValueType = templateDiagnosticExpectedValueTypeForCursor(
+    store,
+    selection,
+    query.locus.kind === InquiryLocusKind.SourceCursor ? query.locus.cursor.offset : null,
+    valueSite?.siteKind ?? null,
+  );
   return {
     siteKind: query.siteKind,
     expressionFrontier: cursorContext.expressionFrontier == null
@@ -857,7 +1541,10 @@ function templateCursorInfoResult(
       selectedMember,
       memberOwnerType,
       query.memberOwnerTypeProductHandle,
+      cursorContext.memberOwnerTypeOpenSubject,
       valueSite?.source ?? html.attributeSource ?? html.source ?? describeAddress(store, selection.sourceAddressHandle),
+      expectedValueType?.display ?? null,
+      expectedValueType?.source ?? null,
     ),
   };
 }
@@ -1012,7 +1699,11 @@ function cursorSelectedMemberRow(
   }
   const ownerType = store.productDetails.read(TypeSystemProductDetails.TypeShape, cursorContext.query.memberOwnerTypeProductHandle);
   const member = ownerType?.members.find((candidate) => candidate.name === memberName) ?? null;
-  if (member == null && ownerType?.indexedValueType != null) {
+  if (
+    member == null
+    && ownerType?.indexedValueType != null
+    && checkerIndexedAccessSupportsString(ownerType.indexedAccessKeyKind)
+  ) {
     return {
       name: memberName,
       memberKind: CheckerTypeMemberKind.IndexSignature,

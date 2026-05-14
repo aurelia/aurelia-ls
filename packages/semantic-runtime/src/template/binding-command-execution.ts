@@ -20,6 +20,9 @@ import {
   TemplateCompilerServiceReference,
   type TemplateBindableReference,
 } from './compiler-world-reference.js';
+import type {
+  TemplateCompilerIssueKind,
+} from './compiler-issue.js';
 
 export const enum BindingCommandExecutionKind {
   /** Runtime built-in command whose build behavior can be modeled directly. */
@@ -80,6 +83,7 @@ export type BindingCommandLoweringField =
   | 'command'
   | 'input'
   | 'state'
+  | 'frameworkErrorCode'
   | 'instructions'
   | 'source';
 
@@ -197,14 +201,20 @@ export class BindingCommandBuildResult {
     readonly state: BindingCommandLoweringState,
     readonly instructions: readonly TemplateInstruction[],
     readonly message: string | null = null,
+    readonly frameworkErrorCode: string | null = null,
+    readonly issueKind: TemplateCompilerIssueKind | null = null,
   ) {}
 
   static complete(instructions: readonly TemplateInstruction[]): BindingCommandBuildResult {
     return new BindingCommandBuildResult(BindingCommandLoweringState.Complete, instructions);
   }
 
-  static invalid(message: string): BindingCommandBuildResult {
-    return new BindingCommandBuildResult(BindingCommandLoweringState.Invalid, [], message);
+  static invalid(
+    message: string,
+    frameworkErrorCode: string | null = null,
+    issueKind: TemplateCompilerIssueKind | null = null,
+  ): BindingCommandBuildResult {
+    return new BindingCommandBuildResult(BindingCommandLoweringState.Invalid, [], message, frameworkErrorCode, issueKind);
   }
 
   static open(message: string): BindingCommandBuildResult {
@@ -342,6 +352,10 @@ export class BindingCommandLowering {
     readonly inputProductHandle: ProductHandle,
     /** Lowering outcome. */
     readonly state: BindingCommandLoweringState,
+    /** Command-owned invalid/open summary, when the build did not close. */
+    readonly message: string | null,
+    /** Exact Aurelia framework error code when this lowering models a framework compiler failure. */
+    readonly frameworkErrorCode: string | null,
     /** Instruction products produced by the command build. */
     readonly instructionProductHandles: readonly ProductHandle[],
     /** Source address for the command lowering site. */

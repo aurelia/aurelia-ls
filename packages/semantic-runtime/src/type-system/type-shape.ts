@@ -44,6 +44,33 @@ export const enum CheckerTypeMemberKind {
   IndexSignature = 'index-signature',
 }
 
+export const enum CheckerIndexedAccessKeyKind {
+  String = 'string',
+  Number = 'number',
+  StringAndNumber = 'string-and-number',
+}
+
+export function checkerIndexedAccessSupportsString(
+  kind: CheckerIndexedAccessKeyKind | null,
+): boolean {
+  return kind === CheckerIndexedAccessKeyKind.String
+    || kind === CheckerIndexedAccessKeyKind.StringAndNumber;
+}
+
+export function checkerIndexedAccessSupportsNumber(
+  kind: CheckerIndexedAccessKeyKind | null,
+): boolean {
+  return kind === CheckerIndexedAccessKeyKind.Number
+    || kind === CheckerIndexedAccessKeyKind.StringAndNumber;
+}
+
+export function checkerTypeShapeIsPrimitiveDisplay(
+  typeShape: CheckerTypeShape,
+  primitive: 'string' | 'number' | 'boolean' | 'undefined',
+): boolean {
+  return typeShape.shapeKind === CheckerTypeShapeKind.Primitive && typeShape.display === primitive;
+}
+
 export function classifyCheckerTypeShape(
   type: ts.Type,
   symbol: ts.Symbol | null = type.symbol ?? null,
@@ -107,6 +134,7 @@ export type CheckerTypeShapeField =
   | 'display'
   | 'members'
   | 'indexedValueType'
+  | 'indexedAccessKeyKind'
   | 'iteratedValueType'
   | 'callReturnType'
   | 'constructReturnType'
@@ -238,6 +266,8 @@ export class CheckerTypeShape {
     readonly members: readonly CheckerTypeMember[],
     /** Value type reached by dynamic keyed access, when the projection can prove one. */
     readonly indexedValueType: CheckerTypeReference | null,
+    /** Key kind that can reach `indexedValueType`; dot-member fallback is valid only for string-capable indexes. */
+    readonly indexedAccessKeyKind: CheckerIndexedAccessKeyKind | null,
     /** Value type yielded by runtime iteration, when the projection can prove one. */
     readonly iteratedValueType: CheckerTypeReference | null,
     /** Return type reached by calling this shape, when the projection can prove one. */

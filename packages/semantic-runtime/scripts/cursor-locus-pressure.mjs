@@ -3,6 +3,7 @@ import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   createSemanticRuntime,
+  SemanticProjectAnalysisKind,
   SemanticProjectShapeKind,
 } from '../out/index.js';
 import {
@@ -34,12 +35,17 @@ const diagnosticReadLimitPerProject = integerEnv(
   'SEMANTIC_RUNTIME_CURSOR_PRESSURE_DIAGNOSTIC_READ_LIMIT_PER_PROJECT',
   Math.max(1000, diagnosticLocusLimitPerProject * 4),
 );
+const defaultCursorPressureAnalysisKinds = new Set([
+  SemanticProjectAnalysisKind.AppWorld,
+  SemanticProjectAnalysisKind.ResourceLibraryAuthoring,
+]);
 
 console.log('semantic-runtime cursor locus pressure');
 console.log('scope: transient template-cursor pressure; paths, source text, and candidate names are omitted');
-console.log('note: missing-input values are bucketed so proprietary resource or domain names are not printed');
+console.log('note: missing-input values are bucketed so external app resource or domain names are not printed');
 console.log(`analysis-depth: ${analysisDepth}`);
 console.log(`project-shapes: ${projectShapeFilter == null ? 'all' : [...projectShapeFilter].join(',')}`);
+console.log(`default-analysis-policy: ${projectShapeFilter == null ? 'app-world,resource-library-authoring' : 'shape-filter-explicit'}`);
 console.log(`project-limit: ${projectLimit}`);
 console.log(`template-limit: ${templateLimit}`);
 console.log(`sample-limit: ${sampleLimit}`);
@@ -76,6 +82,9 @@ for (const [index, root] of roots.entries()) {
   console.log(`- candidate rows read: ${aggregate.candidateRows}`);
   printCounts('project shape kinds', aggregate.projectShapeKinds);
   printCounts('skipped project shape kinds', aggregate.skippedProjectShapeKinds);
+  printCounts('project analysis kinds', aggregate.projectAnalysisKinds);
+  printCounts('skipped project analysis kinds', aggregate.skippedProjectAnalysisKinds);
+  printCounts('project shape reasons', aggregate.projectShapeReasons);
   printCounts('sample lanes', aggregate.sampleLanes);
   printCounts('site kinds', aggregate.siteKinds);
   printCounts('outcomes', aggregate.outcomes);
@@ -145,6 +154,9 @@ async function readCursorPressureForRoot(root) {
     candidateRows: 0,
     projectShapeKinds: {},
     skippedProjectShapeKinds: {},
+    projectAnalysisKinds: {},
+    skippedProjectAnalysisKinds: {},
+    projectShapeReasons: {},
     sampleLanes: {},
     siteKinds: {},
     outcomes: {},
@@ -194,8 +206,16 @@ async function readCursorPressureForRoot(root) {
   for (const project of summary.projects.slice(0, projectLimit)) {
     const projectFrame = runtime.workspace.projects.find((candidate) => candidate.projectKey === project.projectKey);
     increment(aggregate.projectShapeKinds, project.shapeKind);
+    increment(aggregate.projectAnalysisKinds, project.analysisKind);
+    for (const shapeReason of project.shapeReasons ?? []) {
+      increment(aggregate.projectShapeReasons, shapeReason.reason, shapeReason.count);
+    }
     if (projectShapeFilter != null && !projectShapeFilter.has(project.shapeKind)) {
       increment(aggregate.skippedProjectShapeKinds, project.shapeKind);
+      continue;
+    }
+    if (projectShapeFilter == null && !defaultCursorPressureAnalysisKinds.has(project.analysisKind)) {
+      increment(aggregate.skippedProjectAnalysisKinds, project.analysisKind);
       continue;
     }
     aggregate.selectedProjects += 1;
@@ -430,8 +450,8 @@ function diagnosticMissingInputs(diagnostic) {
 
 function recordCursorInfoSourceCoverage(aggregate, value) {
   increment(aggregate.apiCursorInfoSourceCoverage, `template:${sourceReferenceState(value.template.source)}`);
-  increment(aggregate.apiCursorInfoSourceCoverage, `html-node:${sourceReferenceState(value.html.source)}`);
-  increment(aggregate.apiCursorInfoSourceCoverage, `html-attribute:${sourceReferenceState(value.html.attributeSource)}`);
+  increment(aggregate.apiCursorInfoSourceCoverage, `html-node:${htmlNodeSourceState(value.html)}`);
+  increment(aggregate.apiCursorInfoSourceCoverage, `html-attribute:${htmlAttributeSourceState(value.html)}`);
   increment(aggregate.apiCursorInfoSourceCoverage, `value-site:${rowSourceState(value.valueSite)}`);
   increment(aggregate.apiCursorInfoSourceCoverage, `definition:${rowSourceState(value.selectedDefinition)}`);
   increment(aggregate.apiCursorInfoSourceCoverage, `bindable:${rowSourceState(value.selectedBindable)}`);
@@ -473,6 +493,14 @@ function rowSourceState(row) {
 
 function sourceReferenceState(source) {
   return source == null ? 'no-source' : 'source';
+}
+
+function htmlNodeSourceState(html) {
+  return html.nodeKind == null ? 'none' : sourceReferenceState(html.source);
+}
+
+function htmlAttributeSourceState(html) {
+  return html.attributeName == null ? 'none' : sourceReferenceState(html.attributeSource);
 }
 
 function suggestionTargetKey(suggestion) {
@@ -1212,7 +1240,10 @@ function weakTypeCompletionPressureClass(answer, missingInputBuckets) {
 
 function isExpectedEmptyAttributeValue(answer, valueSite) {
   return answer.value.siteKind === 'attribute-value'
-    && valueSite?.siteKind === 'plain-attribute-interpolation'
+    && (
+      valueSite?.siteKind === 'plain-attribute-value'
+      || valueSite?.siteKind === 'plain-attribute-interpolation'
+    )
     && answer.value.candidates.length === 0
     && answer.value.missingInputs.length === 0;
 }

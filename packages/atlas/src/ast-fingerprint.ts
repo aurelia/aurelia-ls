@@ -90,6 +90,18 @@ function canonicalStatements(
       index += assignedConditionalReturn.consumed;
       continue;
     }
+    const defaultedConditionalReturn = foldedDefaultedConditionalReturn(
+      statement,
+      next,
+      afterNext,
+      sourceFile,
+      scope,
+    );
+    if (defaultedConditionalReturn != null) {
+      parts.push(defaultedConditionalReturn.text);
+      index += defaultedConditionalReturn.consumed;
+      continue;
+    }
     const folded = foldedIfCompletion(statement, next, sourceFile, scope);
     if (folded != null) {
       parts.push(folded.text);
@@ -208,29 +220,9 @@ function canonicalExpression(
   scope: CanonicalScope,
 ): string {
   const current = unwrapExpression(expression);
-  if (ts.isIdentifier(current)) {
-    return scope.resolve(current.text) ?? `id:${current.text}`;
-  }
-  if (ts.isStringLiteralLike(current)) {
-    return `str:${current.text}`;
-  }
-  if (ts.isNumericLiteral(current)) {
-    return `num:${current.text}`;
-  }
-  if (ts.isRegularExpressionLiteral(current)) {
-    return `regexp:${current.text}`;
-  }
-  if (current.kind === ts.SyntaxKind.TrueKeyword || current.kind === ts.SyntaxKind.FalseKeyword) {
-    return current.kind === ts.SyntaxKind.TrueKeyword ? "bool:true" : "bool:false";
-  }
-  if (current.kind === ts.SyntaxKind.NullKeyword) {
-    return "null";
-  }
-  if (current.kind === ts.SyntaxKind.ThisKeyword) {
-    return "this";
-  }
-  if (current.kind === ts.SyntaxKind.SuperKeyword) {
-    return "super";
+  const atom = canonicalAtomicExpression(current, scope);
+  if (atom !== null) {
+    return atom;
   }
   if (ts.isConditionalExpression(current)) {
     return canonicalConditionalExpression(
@@ -245,39 +237,43 @@ function canonicalExpression(
     return `prop(${canonicalExpression(current.expression, sourceFile, scope)},${current.name.text})`;
   }
   if (ts.isElementAccessExpression(current)) {
-    return `elem(${canonicalExpression(current.expression, sourceFile, scope)},${
-      current.argumentExpression == null ? "" : canonicalExpression(current.argumentExpression, sourceFile, scope)
-    })`;
+    return `elem(${canonicalExpression(current.expression, sourceFile, scope)},${canonicalMaybeExpression(current.argumentExpression, sourceFile, scope)})`;
   }
   if (ts.isCallExpression(current)) {
-    return `call(${canonicalExpression(current.expression, sourceFile, scope)},${current.arguments.map((argument) =>
-      canonicalExpression(argument, sourceFile, scope)
-    ).join(",")})`;
+    return canonicalInvocationExpression(
+      "call",
+      current.expression,
+      current.arguments,
+      sourceFile,
+      scope,
+    );
   }
   if (ts.isNewExpression(current)) {
-    return `new(${canonicalExpression(current.expression, sourceFile, scope)},${(current.arguments ?? []).map((argument) =>
-      canonicalExpression(argument, sourceFile, scope)
-    ).join(",")})`;
+    return canonicalInvocationExpression(
+      "new",
+      current.expression,
+      current.arguments ?? [],
+      sourceFile,
+      scope,
+    );
   }
   if (ts.isBinaryExpression(current)) {
-    return `bin(${ts.tokenToString(current.operatorToken.kind) ?? ts.SyntaxKind[current.operatorToken.kind]},${canonicalExpression(current.left, sourceFile, scope)},${canonicalExpression(current.right, sourceFile, scope)})`;
+    return canonicalBinaryExpression(current, sourceFile, scope);
   }
   if (ts.isPrefixUnaryExpression(current)) {
-    return `prefix(${ts.tokenToString(current.operator) ?? ts.SyntaxKind[current.operator]},${canonicalExpression(current.operand, sourceFile, scope)})`;
+    return `prefix(${canonicalTokenText(current.operator)},${canonicalExpression(current.operand, sourceFile, scope)})`;
   }
   if (ts.isPostfixUnaryExpression(current)) {
-    return `postfix(${ts.tokenToString(current.operator) ?? ts.SyntaxKind[current.operator]},${canonicalExpression(current.operand, sourceFile, scope)})`;
+    return `postfix(${canonicalTokenText(current.operator)},${canonicalExpression(current.operand, sourceFile, scope)})`;
   }
   if (ts.isArrayLiteralExpression(current)) {
-    return `array(${current.elements.map((element) => canonicalExpression(element, sourceFile, scope)).join(",")})`;
+    return `array(${canonicalExpressionList(current.elements, sourceFile, scope)})`;
   }
   if (ts.isObjectLiteralExpression(current)) {
     return `object(${current.properties.map((property) => canonicalObjectLiteralElement(property, sourceFile, scope)).join(",")})`;
   }
   if (ts.isTemplateExpression(current)) {
-    return `template(${current.head.text};${current.templateSpans.map((span) =>
-      `${canonicalExpression(span.expression, sourceFile, scope)}:${span.literal.text}`
-    ).join(";")})`;
+    return canonicalTemplateExpression(current, sourceFile, scope);
   }
   if (ts.isTaggedTemplateExpression(current)) {
     return `tagged-template(${canonicalExpression(current.tag, sourceFile, scope)},${canonicalNode(current.template, sourceFile, scope)})`;
@@ -292,6 +288,85 @@ function canonicalExpression(
     return canonicalFunctionLikeWithParentScope(current, sourceFile, scope);
   }
   return canonicalNode(current, sourceFile, scope);
+}
+
+function canonicalAtomicExpression(
+  expression: ts.Expression,
+  scope: CanonicalScope,
+): string | null {
+  if (ts.isIdentifier(expression)) {
+    return scope.resolve(expression.text) ?? `id:${expression.text}`;
+  }
+  if (ts.isStringLiteralLike(expression)) {
+    return `str:${expression.text}`;
+  }
+  if (ts.isNumericLiteral(expression)) {
+    return `num:${expression.text}`;
+  }
+  if (ts.isRegularExpressionLiteral(expression)) {
+    return `regexp:${expression.text}`;
+  }
+  if (expression.kind === ts.SyntaxKind.TrueKeyword || expression.kind === ts.SyntaxKind.FalseKeyword) {
+    return expression.kind === ts.SyntaxKind.TrueKeyword ? "bool:true" : "bool:false";
+  }
+  if (expression.kind === ts.SyntaxKind.NullKeyword) {
+    return "null";
+  }
+  if (expression.kind === ts.SyntaxKind.ThisKeyword) {
+    return "this";
+  }
+  if (expression.kind === ts.SyntaxKind.SuperKeyword) {
+    return "super";
+  }
+  return null;
+}
+
+function canonicalInvocationExpression(
+  kind: "call" | "new",
+  target: ts.Expression,
+  args: readonly ts.Expression[],
+  sourceFile: ts.SourceFile,
+  scope: CanonicalScope,
+): string {
+  return `${kind}(${canonicalExpression(target, sourceFile, scope)},${canonicalExpressionList(args, sourceFile, scope)})`;
+}
+
+function canonicalBinaryExpression(
+  expression: ts.BinaryExpression,
+  sourceFile: ts.SourceFile,
+  scope: CanonicalScope,
+): string {
+  return `bin(${canonicalTokenText(expression.operatorToken.kind)},${canonicalExpression(expression.left, sourceFile, scope)},${canonicalExpression(expression.right, sourceFile, scope)})`;
+}
+
+function canonicalTemplateExpression(
+  expression: ts.TemplateExpression,
+  sourceFile: ts.SourceFile,
+  scope: CanonicalScope,
+): string {
+  return `template(${expression.head.text};${expression.templateSpans.map((span) =>
+    `${canonicalExpression(span.expression, sourceFile, scope)}:${span.literal.text}`
+  ).join(";")})`;
+}
+
+function canonicalExpressionList(
+  expressions: readonly ts.Expression[],
+  sourceFile: ts.SourceFile,
+  scope: CanonicalScope,
+): string {
+  return expressions.map((expression) => canonicalExpression(expression, sourceFile, scope)).join(",");
+}
+
+function canonicalMaybeExpression(
+  expression: ts.Expression | undefined,
+  sourceFile: ts.SourceFile,
+  scope: CanonicalScope,
+): string {
+  return expression == null ? "" : canonicalExpression(expression, sourceFile, scope);
+}
+
+function canonicalTokenText(kind: ts.SyntaxKind): string {
+  return ts.tokenToString(kind) ?? ts.SyntaxKind[kind];
 }
 
 function canonicalConditionalExpression(
@@ -376,6 +451,12 @@ function foldedAliasReturn(
   };
 }
 
+interface InitializedIdentifierDeclaration {
+  readonly name: string;
+  readonly initializer: ts.Expression;
+  readonly isMutable: boolean;
+}
+
 function foldedAssignedConditionalReturn(
   statement: ts.Statement,
   next: ts.Statement | undefined,
@@ -403,6 +484,56 @@ function foldedAssignedConditionalReturn(
       next.expression,
       thenAssignment,
       elseAssignment,
+      sourceFile,
+      scope,
+    )})`,
+    consumed: 2,
+  };
+}
+
+function foldedDefaultedConditionalReturn(
+  statement: ts.Statement,
+  next: ts.Statement | undefined,
+  afterNext: ts.Statement | undefined,
+  sourceFile: ts.SourceFile,
+  scope: CanonicalScope,
+): { readonly text: string; readonly consumed: number } | null {
+  // Equivalent helper shapes often start with a default local, override one
+  // branch, then return the local. Fold that to the same ternary shape, but only
+  // when the default expression is stable enough not to hide side effects.
+  const declaration = singleInitializedIdentifierDeclaration(statement);
+  if (
+    declaration == null ||
+    !declaration.isMutable ||
+    next == null ||
+    afterNext == null ||
+    !ts.isIfStatement(next) ||
+    !isStableControlFlowDefault(declaration.initializer)
+  ) {
+    return null;
+  }
+
+  const returnedIdentifier = returnedIdentifierName(afterNext);
+  if (returnedIdentifier !== declaration.name) {
+    return null;
+  }
+
+  const thenAssignment = branchAssignmentToIdentifier(
+    next.thenStatement,
+    declaration.name,
+  );
+  const elseAssignment = next.elseStatement == null
+    ? null
+    : branchAssignmentToIdentifier(next.elseStatement, declaration.name);
+  if (thenAssignment == null && elseAssignment == null) {
+    return null;
+  }
+
+  return {
+    text: `return(${canonicalConditionalExpression(
+      next.expression,
+      thenAssignment ?? declaration.initializer,
+      elseAssignment ?? declaration.initializer,
       sourceFile,
       scope,
     )})`,
@@ -513,7 +644,7 @@ function canonicalCompletionText(kind: StatementCompletion["kind"], expressionTe
 
 function singleInitializedIdentifierDeclaration(
   statement: ts.Statement,
-): { readonly name: string; readonly initializer: ts.Expression } | null {
+): InitializedIdentifierDeclaration | null {
   if (!ts.isVariableStatement(statement) || statement.declarationList.declarations.length !== 1) {
     return null;
   }
@@ -521,7 +652,25 @@ function singleInitializedIdentifierDeclaration(
   if (!ts.isIdentifier(declaration.name) || declaration.initializer == null) {
     return null;
   }
-  return { name: declaration.name.text, initializer: declaration.initializer };
+  return {
+    name: declaration.name.text,
+    initializer: declaration.initializer,
+    isMutable: (statement.declarationList.flags & ts.NodeFlags.Const) === 0,
+  };
+}
+
+function isStableControlFlowDefault(expression: ts.Expression): boolean {
+  const current = unwrapExpression(expression);
+  return (
+    ts.isIdentifier(current) ||
+    ts.isStringLiteralLike(current) ||
+    ts.isNumericLiteral(current) ||
+    current.kind === ts.SyntaxKind.TrueKeyword ||
+    current.kind === ts.SyntaxKind.FalseKeyword ||
+    current.kind === ts.SyntaxKind.NullKeyword ||
+    current.kind === ts.SyntaxKind.ThisKeyword ||
+    current.kind === ts.SyntaxKind.SuperKeyword
+  );
 }
 
 function singleUninitializedIdentifierDeclaration(statement: ts.Statement): string | null {

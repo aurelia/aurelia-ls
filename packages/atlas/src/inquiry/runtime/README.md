@@ -68,6 +68,9 @@ This is not a compatibility layer for old readers and not the default caller sur
   framework symbol through several product concepts, such as a built-in resource definition plus template-controller
   semantics. The bridge gap lane scopes duplicate-placement checks by facet; multi-facet groups remain visible in the
   rollup, while same-facet duplicate decorators still surface as gaps.
+  `bridge.aulink` rows also continue into `atlas.memory` by `auLinkId`. This keeps the framework-shape mirror and the
+  durable work/decision index from becoming competing mechanisms: start from either side, then jump to the other when a
+  semantic-runtime mirror row has already accumulated guidance or still-live pressure.
 - [product-vocabulary-analysis.ts](product-vocabulary-analysis.ts) and
   [product-vocabulary-lenses.ts](product-vocabulary-lenses.ts) expose `product.vocabulary`. They walk the
   semantic-runtime vocabulary package through the hot TypeScript Program, then return the declared catalog, exact
@@ -91,7 +94,9 @@ This is not a compatibility layer for old readers and not the default caller sur
   across files with both normalized body fingerprints and AST/control-flow body-shape fingerprints, so the duplicate
   pressure script does not need to page every function row and regroup outside the lens. `atlas.self:function-shapes`
   groups repeated canonical function body shapes across different names, which catches split-brain helpers that would
-  be invisible to duplicate-name scans. `functions`,
+  be invisible to duplicate-name scans. `atlas.self:function-wrappers` surfaces direct constructor-return and
+  simple-call-return helpers with local direct-call, value-reference, and total-usage counts; it is a source-navigation lane for spotting
+  possible one-off wrapper soup, not a verdict that a wrapper should be inlined or extracted. `functions`,
   `call-sites`, and `call-dependencies` use compact call-site topology by default; `call-sites` accepts
   `includeCallDetails=true` when a caller needs checker callee type/signature displays. Without a detail `query`, those
   displays are materialized only for the returned page; with a detail `query`, Atlas performs the whole-set exact call
@@ -109,9 +114,12 @@ This is not a compatibility layer for old readers and not the default caller sur
   `hasAuLinkCatalogNameMatch`/`auLinkCatalogIdForName` filters, which finds semantic-runtime classes whose name exactly
   matches a cataloged framework symbol but lacks an anchor. `kernel-records`,
   `kernel-batches`, and `field-provenance` expose exact source-level
-  semantic-runtime product record and provenance construction sites. Use them
-  when a refactor question is about how the kernel model is being populated
-  rather than just which files are large. Class property counts use the shared TypeScript
+  semantic-runtime product record and provenance construction sites. Field
+  provenance rows include both direct `new FieldProvenance(...)` construction
+  and `fieldProvenanceEntries([...], handle)` helper call sites, including
+  literal, conditional, spread, and dynamic field origins. Use them when a
+  refactor question is about how the kernel model is being populated rather
+  than just which files are large. Class property counts use the shared TypeScript
   member-surface substrate, so constructor parameter properties count as real property surfaces instead of making
   constructor-property records look empty.
   Use this lens when semantic-runtime architecture or refactor pressure would otherwise require source spelunking; it
@@ -148,6 +156,8 @@ This is not a compatibility layer for old readers and not the default caller sur
 - [lens-filter-utils.ts](lens-filter-utils.ts) owns generic filter field copying for runtime lens adapters: string
   filters, boolean filters, renamed string fields, and singleton count-record filters. Domain-specific
   `filtersFromRecord` functions still choose their accepted field list, but they should not clone the raw mechanics.
+  Subject-level and `filters`-level fragments must be merged through `mergeDefinedFilters`/`readInquiryFilters` so an
+  empty filter object cannot erase a precise subject-derived filter such as an exact auLink id.
   Bridge support helpers such as `auLinkModelFilters` should make projection policy differences explicit, for example
   whether a free-text query should be forwarded to the underlying auLink model.
 - [framework-route-catalog.ts](framework-route-catalog.ts) declares the current framework semantic endpoints and route
@@ -249,7 +259,7 @@ This is not a compatibility layer for old readers and not the default caller sur
   carrier shape (`route` decorator, static `routes`, `getRouteConfig`, or static route property), route-object field
   sets, field value-kind buckets such as identifier or dynamic import, and child-route array cardinality buckets. Do
   not promote route literals, component names, or app route maps into durable docs; use these aggregate facets before
-  paging router rows from proprietary roots. When a facet count deserves source inspection, `workspace.architecture`
+  paging router rows from external clean-room roots. When a facet count deserves source inspection, `workspace.architecture`
   surface filters accept exact `facet` and `facetPrefix` values so callers can page only rows matching a clean-room
   category such as `route-config.component.value-kind:dynamic-import-call`. Filtered package and surface projections
   carry a filtered rollup for one selected row set, while the row payload itself remains paged. Surface filters narrow

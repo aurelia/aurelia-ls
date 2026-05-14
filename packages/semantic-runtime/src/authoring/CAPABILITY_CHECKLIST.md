@@ -7,20 +7,39 @@ that every item belongs in one API surface. Update it when capability boundaries
 ## Core Loop
 
 - [ ] Capability query: report supported, partial, and open authoring operations from typed descriptors.
+  `api.AuthoringOrientation` is the first observational version and now includes operation rows derived from required
+  capabilities; edit application and repair capability are still open.
 - [ ] Profile negotiation: expose decorator, convention, explicit-registration, and hybrid choices with ambiguity
   points.
-- [ ] Recipe model: compose operations into named flows without turning large requests into magic primitives.
+- [ ] Recipe model: compose operations into named flows without turning large requests into magic primitives. The
+  minimal, state-backed form, validated state-backed form, service-backed form, and routed state-backed form recipes
+  produce typed operations and expected effects; the state-backed, validated state-backed, service-backed, and routed
+  state-backed form recipes also produce concrete source edits that are reopened from temporary apps during smoke
+  verification. Minimal app now uses the same source-plan lane; richer repair recipes remain open.
 - [ ] Plan builder: produce semantic operations, preconditions, expected effects, and topology expectations before file
   edits.
 - [ ] Source edit boundary: define how plans become concrete file edits without hiding formatting, package-manager, or
-  user-taste policy inside semantic records.
+  user-taste policy inside semantic records. `source-plan.ts` now models file-level edit kind, role, language, text
+  authority, conflict policy, formatting policy, and package-tooling policy. `package-tooling.ts` now models
+  recipe-baseline package manifest, TypeScript config, and declaration-file artifacts; package-manager execution,
+  build-tool selection, and project conflict application are still host-owned.
 - [ ] Reopen loop: apply edits externally, reopen through `api`, compare observed facts with expected effects.
-- [ ] Repair loop: turn verification failures and open seams into follow-up operations.
+- [ ] Repair loop: turn verification failures and open seams into follow-up operations. `api.AuthoringOrientation` now
+  exposes first-pass repair rows from template diagnostics and app open seams; concrete edit application remains open.
 
 ## App Shell And Tooling
 
 - [ ] Package manifest, dependency, script, and package-manager authoring.
+- [ ] Package/typecheck baseline contracts. Current generated recipes expose package manifest dependencies, a `check`
+  script, `tsconfig.json`, and HTML/CSS module declarations through project-tooling plans; package-manager execution and
+  build-tool/browser runner policy remain open. The same recipes verify those artifacts after reopen through
+  `project-tooling` expected effects over project source-role rows, and verify the observed
+  `build-tool-profile:typecheck-only-tooling` taste separately from the `host-selected-build-tool` recipe preference.
 - [ ] Build-tool profile selection and asset pipeline expectations.
+  `build-tool-profile` is now a taste/policy axis: generated recipes explicitly prefer host-selected build tooling while
+  project orientation can observe typecheck-only or bundler-config tooling shapes. The `package-tooling` capability is
+  partial without source-role evidence and observable when package/tooling/declaration source roles are admitted, but
+  it keeps package-manager and build-tool execution policy open.
 - [ ] TypeScript config, path aliases, module resolution, and `.html` or `.css` module declaration support.
 - [ ] Folder structure and naming convention policy.
 - [ ] Entrypoint creation through real Aurelia imports and runtime-shaped startup.
@@ -29,10 +48,13 @@ that every item belongs in one API surface. Update it when capability boundaries
 
 ## Application Topology
 
-- [ ] App files, imports, entrypoints, root components, external templates, styles, services, registrations, routes, and
-  assets are represented as topology nodes. Minimal root entrypoint/configuration, component source, and external
-  template file roles are exposed by `api.AppTopology`. Conventional state, service, and model files are exposed as
-  source roles; imports, DI injection edges, state composition edges, styles, routes, and host assets remain open.
+- [ ] App files, imports, entrypoints, root components, component-local dependencies, external templates, styles,
+  services, registrations, routes, and assets are represented as topology nodes. Minimal root entrypoint/configuration,
+  component source, external template file roles, source-backed style asset rows, and component-local style ownership are
+  exposed by `api.AppTopology`. Component roles are now derived from app roots, route facts,
+  controller/template-controller materialization, listener operations, native form value flows, and captured-attribute
+  forwarding. Conventional state, service, and model files are exposed as source roles; richer route and host assets
+  remain open.
 - [ ] Existing app analysis can recover topology from source instead of only consuming topology generated by authoring.
   The external-template and storefront fixtures now reopen into recovered root/component/template topology slices.
 - [ ] Topology nodes can map to source addresses for navigation, rename, and repair.
@@ -63,14 +85,18 @@ that every item belongs in one API surface. Update it when capability boundaries
   materialized for native controls, controller/view-model targets, class/style attribute bindings, and class/style
   interpolations. Source/target data-flow rows now expose source writability plus TypeChecker assignability through
   observer value channels. Static single-select option domains, static multi-select array element domains,
-  `CheckedObserver` boolean/radio/array-membership flow, class token/toggle channels, and style rule/property channels
-  are closed; validation semantics, dynamic multi-select mode, richer `CheckedObserver` modes, value
+  dynamic repeated select option value types, separate select model/value orientation, `CheckedObserver` boolean/radio/array-membership flow, class token/toggle
+  channels, and style rule/property channels are closed. Validation-html positive ownership is now visible through
+  `BindingBehaviorApplications` and the validated state-backed recipe, while source-authored validation rule failures
+  are a diagnostics lane; live validation execution, dynamic multi-select mode, richer `CheckedObserver` modes, value
   conversion/coercion policy, custom matcher semantics, richer class/style value-shape checking, and setter-body flow
   into composed state remain open.
 - [ ] Component composition, content projection or slot-like patterns, and nested resource visibility.
 - [ ] Template-to-TypeChecker handoff for member lookup, autocomplete, diagnostics, and speculative synthetic views.
 - [ ] ID-based component boundaries where app components receive primitive identity/configuration inputs and resolve
   domain state themselves. The storefront fixture avoids object/function bindables across app-component boundaries.
+  App/resource bindable projections now carry value type surfaces, and the pressure fixture proves object and
+  callback-function bindables are observable as non-ideal component-interface pressure.
 - [ ] Accessibility-relevant template obligations such as labels, roles, names, focus, and keyboard paths.
 
 ## Domain, Dependency Injection, And Integration
@@ -81,7 +107,13 @@ that every item belongs in one API surface. Update it when capability boundaries
 - [ ] DI keys, registrations, lifetimes, aliases, factories, injection sites, and container visibility. Runtime
   child containers for renderer-created controllers now materialize with self/context resolver slots; view-model
   instance providers, definition dependency registration, and cross-template parent container chains remain open.
-- [ ] Service-to-component wiring with constructor injection and expected dependency reads.
+- [ ] Service-to-component wiring with DI resolution and expected dependency reads. The service-backed form fixture now
+  proves a component resolving an app service, that service resolving DI-owned state, and the authoring verifier
+  checking state/service topology rows plus source-backed component-to-service and service-to-state read/call
+  interaction rows. Interaction rows carry consumer role and self-interaction state so internal support-class operations
+  do not masquerade as cross-layer architecture. Binding-to-interaction rows now connect template form reads/writes to
+  the component member and service/state/model operation that carries the data across the layer boundary, including
+  single-root interpolations whose display expression is a member chain.
 - [ ] Backend or platform integration boundaries, including client adapters and environment-dependent configuration.
 - [ ] App state strategy that starts with vanilla classes and admits framework packages only when the operation requires
   them.
@@ -98,6 +130,9 @@ that every item belongs in one API surface. Update it when capability boundaries
 
 ## Design And UI Policy
 
+- [ ] Style asset authoring for component/global stylesheets, CSS modules, and Shadow DOM styles. Generated form recipes
+  already use `create-style-asset` plus `style-resource` expected effects for the component stylesheet slice; broader
+  style strategy and design-system policy remain separate.
 - [ ] Authoring profiles for visual density, layout system, styling strategy, and component-library use.
 - [ ] Theme tokens, responsive behavior, dark/light/system mode, and durable CSS ownership.
 - [ ] Accessibility defaults and verification expectations.
@@ -118,7 +153,8 @@ that every item belongs in one API surface. Update it when capability boundaries
   `tsconfig.json` ownership, default bundler-style resolution, local Aurelia checkout type paths, and a `*.html` module
   shim for fixtures; package-manager dependency authoring and arbitrary third-party package discovery remain open.
 - [ ] External template and stylesheet recognition with source-address and provenance records. Default `.html` imports for
-  custom element `template` metadata are closed; conventions, stylesheets, query variants, and virtual assets remain open.
+  custom element `template` metadata are closed; local CSS imports, CSS modules, and shadow CSS registry calls are visible
+  in app topology; conventions, query variants, and virtual assets remain open.
 - [ ] Convention recognition for components, templates, styles, and resources.
 - [ ] Package/plugin admission recognition for router, i18n, validation, state, fetch-client, and other common Aurelia
   packages.
@@ -127,18 +163,30 @@ that every item belongs in one API surface. Update it when capability boundaries
 - [ ] Runtime binding target access can be queried without internal emissions. The binding bind-time materializer emits
   the target-access products, and `api.BindingTargetAccesses` reports accessor/observer lookup, target kind, target
   property, selected strategy, DOM events, target/property type displays, writability, observability, authority, source
-  address, and handles for property bindings, attribute bindings, and interpolations.
+  address, and handles for property bindings, attribute bindings, and interpolations. Authoring expected effects can now
+  filter this row family by stable fields such as `targetProperty`.
 - [ ] Runtime binding value channels can be queried without internal emissions. `api.BindingValueChannels` reports raw
   target property type, runtime observer/accessor value type, static option/class/style domains when available, channel
-  authority, collection shape, source address, row-local open pressure, and handles.
+  authority, collection shape, source address, row-local open pressure, and handles. Form recipes verify native
+  `value` channels with structured filters instead of relying on aggregate channel counts.
+- [ ] Bindable value type surfaces are queryable from resource and app-topology rows. These surfaces distinguish raw
+  shape, nullable-effective shape, callability, weak types, and member presence for authoring orientation and future
+  diagnostics.
 - [ ] Runtime binding data flow can be queried without internal emissions. `api.BindingDataFlows` reports binding
   direction, source expression lane/name/type, raw target property type, runtime target value type, source writability,
-  TypeChecker assignability in active directions, source address, row-local open pressure, and handles.
+  TypeChecker assignability in active directions, source address, row-local open pressure, and handles. Expected-effect
+  observation can apply field filters when verification snapshots carry row-level data-flow facts.
+- [ ] Runtime binding behavior applications can be queried without internal emissions. `api.BindingBehaviorApplications`
+  reports successfully materialized behavior applications such as validation-html `& validate`, including static
+  scalar/template literal argument values; diagnostics remain in the runtime binding-behavior issue lane.
 - [ ] Open seams are actionable enough to drive repair operations rather than only diagnostics.
+- [ ] Repair rows distinguish app-source repairs from semantic-runtime substrate repairs, so legitimate framework/app
+  shapes do not get papered over as user source mistakes.
 
 ## Fixtures And Pressure
 
 - [ ] Authoring fixtures contain idiomatic apps we would recommend to users.
-- [ ] Stress fixtures are separate and may be dense or artificial.
+- [ ] Stress fixtures are separate and may be dense or artificial. `fixtures/pressure/mixed-form-surfaces` is the first
+  mixed/user-authored pressure fixture.
 - [ ] Fixtures are used to pressure semantic closure and repair, not brittle snapshots.
 - [ ] Each fixture documents which capability families it exercises.

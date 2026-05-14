@@ -1,5 +1,22 @@
 import { CharCode } from './expression-scanner.js';
 
+/** True when the source contains an unescaped interpolation/template hole opener. */
+export function hasInterpolationStart(source: string): boolean {
+  for (let i = 0; i < source.length - 1; i++) {
+    if (isInterpolationStart(source, i)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** True when `source[index]` begins an unescaped `${...}` hole opener. */
+export function isInterpolationStart(source: string, index: number): boolean {
+  return source.charCodeAt(index) === CharCode.Dollar &&
+    source.charCodeAt(index + 1) === CharCode.OpenBrace &&
+    !isEscapedInterpolationStart(source, index);
+}
+
 /**
  * Find the `}` that closes a `${...}` expression hole.
  *
@@ -92,6 +109,10 @@ export function findTemplateLiteralEnd(
   }
 
   return null;
+}
+
+function isEscapedInterpolationStart(source: string, dollarIndex: number): boolean {
+  return dollarIndex > 0 && source.charCodeAt(dollarIndex - 1) === CharCode.Backslash;
 }
 
 function skipStringLiteral(

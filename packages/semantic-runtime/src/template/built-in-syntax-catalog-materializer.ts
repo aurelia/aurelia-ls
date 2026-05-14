@@ -24,7 +24,6 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  compactFieldProvenance,
   FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
@@ -69,7 +68,6 @@ import {
   TranslationBindingCommand,
   TranslationParametersAttributePattern,
   TranslationParametersBindingCommand,
-  type ConfiguredBuiltInSyntaxCatalogSelectionField,
   type BuiltInAttributePattern,
   type BuiltInAttributePatternField,
   type BuiltInBindingCommand,
@@ -846,12 +844,6 @@ export class ConfiguredBuiltInSyntaxCatalogMaterializer {
       frameworkKind,
       catalogs.map((catalog) => catalog.productHandle),
       admission.sourceAddressHandle,
-      compactFieldProvenance<ConfiguredBuiltInSyntaxCatalogSelectionField>([
-        new FieldProvenance('registrationAdmission', source.provenanceHandle),
-        new FieldProvenance('frameworkKind', source.provenanceHandle),
-        new FieldProvenance('catalogs', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
     );
   }
 
@@ -975,6 +967,9 @@ function syntaxCatalogInputsForAdmission(
       case FrameworkRegistrationCapability.I18nTranslationRenderers:
       case FrameworkRegistrationCapability.I18nServiceResolvers:
       case FrameworkRegistrationCapability.I18nLifecycleTasks:
+      case FrameworkRegistrationCapability.ValidationServiceResolvers:
+      case FrameworkRegistrationCapability.ValidationHtmlDefaultResources:
+      case FrameworkRegistrationCapability.ValidationHtmlServiceResolvers:
       case FrameworkRegistrationCapability.RouterDefaultComponents:
       case FrameworkRegistrationCapability.RouterDefaultResources:
       case FrameworkRegistrationCapability.RouterConfigurationResolvers:
@@ -1130,6 +1125,10 @@ function syntaxCatalogSummaryForFrameworkKind(frameworkKind: FrameworkRegistrati
       return 'RuntimeHtml DefaultComponents admitted compiler services but no template syntax catalogs.';
     case FrameworkRegistrationKind.I18nConfiguration:
       return 'I18nConfiguration admitted translation template syntax catalogs.';
+    case FrameworkRegistrationKind.ValidationConfiguration:
+      return 'ValidationConfiguration admitted validation services but no template syntax catalogs.';
+    case FrameworkRegistrationKind.ValidationHtmlConfiguration:
+      return 'ValidationHtmlConfiguration admitted validation resources and services but no additional template syntax catalogs.';
     case FrameworkRegistrationKind.RouterConfiguration:
       return 'RouterConfiguration admitted no template syntax catalogs in the current materializer.';
     case FrameworkRegistrationKind.RouterDefaultComponents:

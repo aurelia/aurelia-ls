@@ -62,6 +62,8 @@ export class CompletedInputPublication {
           failure.companion.preservedSpan,
           failure.companion.closedSubtreeRefs,
           failure.companion.gapDescriptors,
+          failure.frameworkErrorCode,
+          failure.message,
         );
       case ParseCompanionPublicationKind.FrontierOnly:
         return new PropertyLikeFrontierPublication(
@@ -74,6 +76,8 @@ export class CompletedInputPublication {
           failure.companion.surroundingFrameKind,
           failure.companion.preservedSpan,
           failure.companion.closedSubtreeRefs,
+          failure.frameworkErrorCode,
+          failure.message,
         );
     }
   }
@@ -108,6 +112,8 @@ export class CompletedInputPublication {
           iterableClosedSubtreeRefs,
           failure.companion.gapDescriptors,
           trailingSplit,
+          failure.frameworkErrorCode,
+          failure.message,
         );
       case ParseCompanionPublicationKind.FrontierOnly:
         return new IteratorFrontierPublication(
@@ -123,6 +129,8 @@ export class CompletedInputPublication {
           iterable,
           iterableClosedSubtreeRefs,
           trailingSplit,
+          failure.frameworkErrorCode,
+          failure.message,
         );
     }
   }
@@ -136,6 +144,7 @@ export class CompletedInputPublication {
       failure.span,
       failure.message,
       failure.text,
+      failure.frameworkErrorCode,
     );
   }
 

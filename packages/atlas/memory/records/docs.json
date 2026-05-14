@@ -1,0 +1,284 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "doc:product-pressures-provenance-evidence",
+      "kind": "doc-shard",
+      "domains": [
+        "semantic-runtime",
+        "atlas",
+        "provenance",
+        "evidence",
+        "product-architecture"
+      ],
+      "summary": "Product-specific pressures distinguish authored source provenance from framework-fixed catalog facts and warn against false field-level edit precision.",
+      "rationale": "The user explicitly noticed AI-generated provenance records that did not look thought through, especially framework property provenance. This shard makes that pressure queryable without rereading the entire product-specific pressure document.",
+      "guidance": [
+        "Use product.architecture field-provenance rows before deciding that a fact needs field-level provenance.",
+        "Authored TS/HTML/configuration facts may need exact field spans; framework-fixed catalog facts often need product/source provenance instead.",
+        "If a provenance fallback appears, trace the lower-level identity threading before accepting defensive source broadening."
+      ],
+      "anchors": [
+        {
+          "kind": "doc",
+          "path": "packages/atlas/workbench/product-specific-pressures.md",
+          "heading": "Provenance And Evidence",
+          "summary": "Product obligation notes for provenance and evidence."
+        },
+        {
+          "kind": "lens",
+          "lensId": "product.architecture",
+          "projection": "field-provenance",
+          "summary": "Live field-provenance construction pressure."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/atlas/workbench/product-specific-pressures.md"
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "doc:product-pressures-context-economics",
+      "kind": "doc-shard",
+      "domains": [
+        "semantic-runtime",
+        "atlas",
+        "inquiry-algebra",
+        "performance",
+        "external-apps"
+      ],
+      "summary": "Context economics is an inquiry-algebra pressure: callers should pay for the minimum honest substrate needed for the product question.",
+      "rationale": "Multiple long runs found that slow phases can mean either ordinary product-feature cost or missing low-level indexes. This shard preserves the distinction so future performance work does not collapse back into generic caching or smoke tests.",
+      "guidance": [
+        "Profile deep enough to separate repeated primitive costs from product-feature costs.",
+        "When a product question does not need binding observation, TypeChecker projection, router activation, or full app-world construction, expose that as inquiry algebra.",
+        "For mixed monorepos and external roots, run workspace/app-shape lanes before expensive semantic-runtime opening."
+      ],
+      "anchors": [
+        {
+          "kind": "doc",
+          "path": "packages/atlas/workbench/product-specific-pressures.md",
+          "heading": "Context Economics",
+          "summary": "Product obligation notes for multi-resolution answers and cost boundaries."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas profile:product-architecture",
+          "summary": "Product architecture profile lane."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas profile:workspace-architecture",
+          "summary": "Workspace architecture profile lane."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/atlas/workbench/product-specific-pressures.md"
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "doc:agent-handoff-fast-local-lanes",
+      "kind": "doc-shard",
+      "domains": [
+        "atlas",
+        "orientation",
+        "agent-handoff",
+        "workflow"
+      ],
+      "summary": "Agent handoff is the compact post-orient index of Atlas commands and when to use each lane.",
+      "rationale": "Future sessions should not rediscover the available Atlas handles by scanning package scripts or old workbench prose. This shard makes the handoff document findable from memory queries.",
+      "guidance": [
+        "Run orient first, then memory, then the pressure/profile lane that matches the current domain.",
+        "Prefer Atlas lanes over au-mcp or ad hoc repo mapping.",
+        "When a lane feels too expensive or too noisy, improve Atlas rather than storing a manual workaround in markdown."
+      ],
+      "anchors": [
+        {
+          "kind": "doc",
+          "path": "packages/atlas/workbench/agent-handoff.md",
+          "heading": "Fast Local Lanes",
+          "summary": "Compact Atlas command map."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas orient",
+          "summary": "Initial compact orientation lane."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas memory",
+          "summary": "Durable memory lane."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/atlas/workbench/agent-handoff.md"
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "decision:mcp-comes-after-public-product-api",
+      "kind": "decision",
+      "domains": [
+        "atlas",
+        "semantic-runtime",
+        "mcp",
+        "authoring",
+        "public-api"
+      ],
+      "summary": "MCP is a late stable public API surface; Atlas remains the internal self-improving development map.",
+      "rationale": "The operator corrected an earlier suggestion to put legacy-replacement and internal development utility into MCP. MCP requires restarts and is meant for end users, so it cannot be the autonomous-loop workbench. Internal corpus, legacy, and product-pressure lenses belong in Atlas until the semantic-runtime public API is stable enough to expose.",
+      "guidance": [
+        "Do not expose Atlas workbench lenses, framework corpus lenses, or legacy replacement maps directly as MCP resources.",
+        "Use Atlas for internal self-improving inquiry because it can be changed and exercised during autonomous loops.",
+        "Treat MCP package work as a packaging step over stable user-facing semantic-runtime concepts, not as a substrate-discovery tool.",
+        "When mining old packages or docs/tests, record the internal Atlas/product pressure separately from eventual public MCP shape."
+      ],
+      "anchors": [
+        {
+          "kind": "doc",
+          "path": "packages/atlas/workbench/product-specific-pressures.md",
+          "heading": "MCP Packaging",
+          "summary": "MCP packaging pressure and public API framing."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/atlas/workbench/agent-handoff.md",
+          "heading": "Autonomous Loop Posture",
+          "summary": "Atlas-first internal development posture."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/api/README.md",
+          "summary": "Semantic-runtime public API boundary."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/atlas/workbench/product-specific-pressures.md"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/api/README.md"
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-13"
+    },
+    {
+      "id": "frontier:atlas-framework-corpus-lenses",
+      "kind": "pressure-frontier",
+      "domains": [
+        "atlas",
+        "framework-docs",
+        "framework-tests",
+        "authoring",
+        "corpus"
+      ],
+      "summary": "Framework corpus docs/tests pressure now has an internal Atlas lens with expected-effect contracts, fixture-seed rows, and `ts.source` continuations for non-Program docs/tests ranges.",
+      "rationale": "The north-star review pack and user steering both point at Aurelia docs/tests as pressure inputs for authoring taste and behavior grounding, but not as direct semantic truth or MCP API shape. The `framework.corpus` lens classifies docs, doc code fences, framework test files, test call snippets, legacy package rows, source-backed semantic-runtime expected-effect contract rows, and fixture seeds joined to those expected-effect descriptors so future Codex can inspect patterns without rereading large markdown/test corpora or inventing a parallel effect vocabulary. `ts.source` can now read exact file/range/position/token text from source files outside the TypeScript Program, and corpus row pages expose source-inspection continuations, while checker-backed projections remain Program-only.",
+      "guidance": [
+        "Use `framework.corpus` projections before opening the raw docs or framework tests: docs/doc-snippets for authoring taste, tests/test-snippets for behavior grounding, and legacy for replacement pressure.",
+        "Use `expected-effects` to inspect the source-backed semantic-runtime expected-effect contract, including effect-kind rows, effect-role rows such as `baseline`, `signature`, and `discriminator`, and effect-kind seed policy; filter with `effectKind`, `effectRole`, or `effectSeedPolicy` when needed.",
+        "Treat `project-tooling` as an app-shell reopen baseline in corpus pressure, not a docs/tests corpus-pattern seed; generated source plans own package manifest, TypeScript config, and declaration file pressure.",
+        "Use `fixture-seeds` with `effectKind`, `recipeKey`, `expectedEffectFilterField`, and `expectedEffectFilterValue` filters when choosing the next authoring fixture pressure target; seed classifiers read the exact snippet source range, not the display preview, and service-interaction-binding seeds require binding plus DI plus form/state pressure and a service/state surface signal because concept-only matching was too broad.",
+        "Binding-behavior fixture seeds are source-text classified from actual `& behavior` syntax; `& validate` and validate-binding-behavior prose may also hint `validated-state-backed-form`, while the `binding-behavior-application` effect requires an application-shaped snippet. When a seed has exactly one behavior name or static literal argument, the expected-effect row carries compact filters such as `behaviorName=validate` or `staticArgumentValues=blur`.",
+        "Binding target/value/data-flow fixture seeds carry `targetProperty` filters only when source text has a single value-channel binding target such as `value.bind`, `checked.two-way`, or `model.bind`; listener commands such as `click.trigger` and `submit.trigger` stay unfiltered because they are event surfaces, not value channels. Multi-target snippets intentionally stay unfiltered rather than implying a conjunction the source did not mean.",
+        "Style fixture seeds should classify stylesheet/style-binding snippets separately: stylesheet/style registry snippets attach the `style-resource` effect, direct class/style/css renderer or `.class`/`.style` binding surfaces attach `target-operation` only when found inside HTML-like tag spans, and binding value-channel effects attach only when source text contains class/style/value-channel syntax such as class/style interpolation, `.class`, `.style`, or value/model/checked binding commands.",
+        "Use `seedUse=authoring-taste` or `seedUse=behavior-grounding` to choose docs/tests as taste pressure or behavior pressure; `authoring-taste` expected effects are orientation contracts and should not be expected to have direct corpus fixture rows.",
+        "Use `query` for source/content concepts after structural filters; fixture-seed relevance ranks path, preview, concepts, and effect hints without letting recipe names such as `state-backed-form` satisfy every form query. Broad `minimal-app` recipe hints should stay out of snippets that already carry more specific form, DI, state, validation, or router pressure. Use `expectedEffectFilterField` plus `expectedEffectFilterValue` instead of query text when you need a concrete structured fact such as `staticArgumentValues=blur` or `targetProperty=value`.",
+        "Follow fixture seed source ranges with `ts.source`/`projection=text` when a snippet needs context; filesystem-backed source text should report source-text basis only, not TypeScript Program basis.",
+        "Fixture seeds already join effect hints to the semantic-runtime expected-effect contract; seedable corpus-pattern descriptor gaps are useful pressure, while reopen-baseline/orientation/closure contracts without snippets are expected. Deepen next by linking snippets to more exact framework source concepts rather than adding unbounded text dumps.",
+        "Keep docs frequency separate from idiom policy; docs are a pressure signal that must be checked against framework source and product semantics.",
+        "Use framework corpus pressure for authoring/taste work and framework test corpus pressure for behavior grounding.",
+        "Do not make these corpus lenses public MCP surfaces."
+      ],
+      "anchors": [
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas pressure:framework-corpus",
+          "summary": "Current aggregate corpus pressure lane."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas framework:corpus -- --projection=doc-snippets --concept=forms",
+          "summary": "Targeted query lane over the framework.corpus lens."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.corpus",
+          "projection": "doc-snippets",
+          "summary": "Queryable classified documentation snippet seeds."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.corpus",
+          "projection": "test-snippets",
+          "summary": "Queryable classified framework test snippet seeds."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.corpus",
+          "projection": "expected-effects",
+          "summary": "Queryable source-backed semantic-runtime expected-effect contracts."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.corpus",
+          "projection": "fixture-seeds",
+          "summary": "Queryable expected-effect contract and recipe pressure seeds."
+        },
+        {
+          "kind": "lens",
+          "lensId": "ts.source",
+          "projection": "text",
+          "summary": "Exact source text inspection for corpus docs/tests ranges, including files outside the TypeScript Program."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/atlas/workbench/agent-handoff.md",
+          "heading": "Fast Local Lanes",
+          "summary": "Current Atlas corpus pressure script orientation."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/authoring/README.md",
+          "summary": "Authoring loop boundary that corpus lenses should pressure, not replace."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/atlas/src/scripts/framework-corpus-pressure.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-corpus-lenses.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-corpus-analysis.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/atlas/src/source/typescript.ts"
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-14"
+    }
+  ]
+}

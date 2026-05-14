@@ -465,9 +465,7 @@ export function syntaxProductRow(
     producerName: values.producerName,
     producerKind: values.producerKind,
     productKind: values.productKind,
-    ...(values.resourceCarrier === undefined
-      ? {}
-      : { resourceCarrier: values.resourceCarrier }),
+    resourceCarrier: values.resourceCarrier,
     instructionName: values.instructionName,
     instructionTarget: values.instructionTarget,
     bindingName: values.bindingName,

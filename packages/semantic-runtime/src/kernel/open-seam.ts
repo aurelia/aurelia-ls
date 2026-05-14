@@ -21,10 +21,13 @@ export const enum OpenSeamReasonKind {
   RouterInstructionNeedsRouteContext = 'router-instruction-needs-route-context',
   RouterInstructionNeedsStaticValue = 'router-instruction-needs-static-value',
   RouterHrefExternalityOpen = 'router-href-externality-open',
+  RouterHrefClickInterceptionDisabled = 'router-href-click-interception-disabled',
+  RouterHrefClickInterceptionTargetOpen = 'router-href-click-interception-target-open',
   RouterInstructionMissingValue = 'router-instruction-missing-value',
   RouterInstructionParseFailure = 'router-instruction-parse-failure',
   RouterViewportResolutionOpen = 'router-viewport-resolution-open',
   RouterRedirectTargetOpen = 'router-redirect-target-open',
+  SpreadHydrationContextOpen = 'spread-hydration-context-open',
 }
 
 /** First-class unresolved point that must not disappear behind nulls or missing arrays. */

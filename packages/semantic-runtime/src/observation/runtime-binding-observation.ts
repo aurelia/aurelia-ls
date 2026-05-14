@@ -13,6 +13,8 @@ import type {
   RuntimeBindingTargetOperationReference,
 } from '../template/runtime-binding.js';
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
+import type { CheckerExpressionTypeOpenKind } from '../type-system/expression-type-evaluation.js';
+import type { ObservationFrameworkErrorCode } from './framework-error-code.js';
 
 export const enum RuntimeBindingValueChannelKind {
   RawProperty = 'raw-property',
@@ -25,9 +27,11 @@ export const enum RuntimeBindingValueChannelKind {
   StylePropertyValue = 'style-property-value',
   SelectSingleOptionValue = 'select-single-option-value',
   SelectMultipleOptionValues = 'select-multiple-option-values',
+  SelectDynamicOptionValue = 'select-dynamic-option-value',
   CheckedBoolean = 'checked-boolean',
   CheckedRadioValue = 'checked-radio-value',
   CheckedCollectionMembership = 'checked-collection-membership',
+  CheckedMapKeyedBoolean = 'checked-map-keyed-boolean',
   CheckedModel = 'checked-model',
   Open = 'open',
 }
@@ -79,6 +83,8 @@ export const enum RuntimeBindingDataFlowSourceAssignmentReasonKind {
   SourceMemberGetterWithoutSetter = 'source-member-getter-without-setter',
   SourceMemberReadonly = 'source-member-readonly',
   SourceMemberDeclarationMissing = 'source-member-declaration-missing',
+  HostAccessScopeAssignment = 'host-access-scope-assignment',
+  NullishAssignment = 'nullish-assignment',
   RuntimeExpressionUnassignable = 'runtime-expression-unassignable',
   SpreadSourceMemberPolicyOpen = 'spread-source-member-policy-open',
   TargetToSourceTypeMismatch = 'target-to-source-type-mismatch',
@@ -93,10 +99,13 @@ export type RuntimeBindingDataFlowField =
   | 'expression'
   | 'scope'
   | 'direction'
+  | 'strictBinding'
   | 'sourceKind'
   | 'sourceName'
+  | 'sourceRootName'
   | 'sourceType'
   | 'sourceTypeOpenReason'
+  | 'sourceTypeOpenKind'
   | 'sourceAssignmentTargetType'
   | 'targetPropertyType'
   | 'targetValueType'
@@ -106,6 +115,7 @@ export type RuntimeBindingDataFlowField =
   | 'sourceAssignmentReasonKinds'
   | 'sourceToTargetAssignable'
   | 'targetToSourceAssignable'
+  | 'frameworkErrorCode'
   | 'openReason'
   | 'source';
 
@@ -188,10 +198,13 @@ export class RuntimeBindingDataFlow {
     readonly expressionProductHandle: ProductHandle | null,
     readonly bindingScope: BindingScopeReference | null,
     readonly direction: RuntimeBindingDataFlowDirection,
+    readonly strictBinding: boolean | null,
     readonly sourceKind: RuntimeBindingDataFlowSourceKind,
     readonly sourceName: string | null,
+    readonly sourceRootName: string | null,
     readonly sourceType: CheckerTypeReference | null,
     readonly sourceTypeOpenReason: string | null,
+    readonly sourceTypeOpenKind: CheckerExpressionTypeOpenKind | `${CheckerExpressionTypeOpenKind}` | null,
     readonly sourceAssignmentTargetType: CheckerTypeReference | null,
     readonly targetPropertyType: CheckerTypeReference | null,
     readonly targetValueType: CheckerTypeReference | null,
@@ -201,6 +214,7 @@ export class RuntimeBindingDataFlow {
     readonly sourceAssignmentReasonKinds: readonly RuntimeBindingDataFlowSourceAssignmentReasonKind[],
     readonly sourceToTargetAssignable: boolean | null,
     readonly targetToSourceAssignable: boolean | null,
+    readonly frameworkErrorCode: ObservationFrameworkErrorCode | null,
     readonly openReason: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingDataFlowField>[] = [],

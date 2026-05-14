@@ -164,7 +164,7 @@ export function navigationRoute(
     relation,
     basis,
     summary,
-    ...(basisTransition === undefined ? {} : { basisTransition }),
+    basisTransition,
   };
 }
 

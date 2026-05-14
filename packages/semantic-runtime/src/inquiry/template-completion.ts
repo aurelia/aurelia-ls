@@ -34,16 +34,21 @@ import {
 } from '../template/product-details.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import {
-  CheckerExpressionTypeEvaluator,
   CheckerExpressionTypeEvaluationResultKind,
-} from '../type-system/expression-type-evaluator.js';
-import { CheckerTypeProjector } from '../type-system/checker-projector.js';
+  type CheckerExpressionTypeOpenSubject,
+  type CheckerExpressionTypeEvaluation,
+} from '../type-system/expression-type-evaluation.js';
+import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import { checkerNullishType } from '../type-system/checker-related-types.js';
 import type {
+  CheckerIndexedAccessKeyKind,
   CheckerTypeMember,
   CheckerTypeReference,
 } from '../type-system/type-shape.js';
-import { CheckerTypeShapeKind } from '../type-system/type-shape.js';
+import {
+  CheckerTypeShapeKind,
+  checkerIndexedAccessSupportsString,
+} from '../type-system/type-shape.js';
 import {
   RouteConfigKind,
   type RouteConfigModel,
@@ -90,7 +95,7 @@ import {
   InquiryProjectionKind,
 } from './answer.js';
 import { KernelExactBasis } from './basis.js';
-import { uniqueValues } from './collections.js';
+import { uniqueValues } from '../collections.js';
 import { InquiryLocusKind, type InquiryLocus } from './locus.js';
 import type { SourceCursorInquiryLocus } from './locus.js';
 import {
@@ -277,6 +282,8 @@ export interface TemplateCompletionCursorContextRequest {
   readonly routeConfigProductHandles?: readonly ProductHandle[];
   /** Static i18n translation keys visible to the app/template context. */
   readonly i18nTranslationKeyProductHandles?: readonly ProductHandle[];
+  /** Hot expression-evaluation world shared by broader cursor/file scans. */
+  readonly expressionWorld?: CheckerExpressionTypeWorld;
 }
 
 export class TemplateCompletionCursorContext {
@@ -295,6 +302,8 @@ export class TemplateCompletionCursorContext {
     readonly selectedMemberName: string | null,
     /** Parser frontier under the cursor, when the cursor selected an expression parse. */
     readonly expressionFrontier: TemplateExpressionCompletionFrontier | null,
+    /** Evaluator-owned subject for an open member-owner type, when narrower than the selected member token. */
+    readonly memberOwnerTypeOpenSubject: CheckerExpressionTypeOpenSubject | null,
     /** Extra context gaps found while turning a cursor into product handles. */
     readonly missingInputs: readonly string[] = [],
   ) {}
@@ -303,6 +312,7 @@ export class TemplateCompletionCursorContext {
 interface TemplateCompletionAnswerFrame {
   readonly store: KernelStore;
   readonly query: TemplateCompletionQuery;
+  readonly expressionWorld: CheckerExpressionTypeWorld;
   readonly missingInputs: string[];
   readonly candidates: TemplateCompletionCandidate[];
   readonly expressionParse: TemplateExpressionParse | null;
@@ -318,6 +328,13 @@ interface TemplateCompletionCandidatePage {
   readonly info: InquiryPageInfo;
 }
 
+type TemplateCompletionExpressionEvaluator = ReturnType<CheckerExpressionTypeWorld['evaluator']>;
+
+interface DerivedMemberOwnerType {
+  readonly productHandle: ProductHandle | null;
+  readonly openSubject: CheckerExpressionTypeOpenSubject | null;
+}
+
 /** Resolve a materialized template cursor into the product-handle completion query shape. */
 export function templateCompletionQueryForCursor(
   store: KernelStore,
@@ -329,6 +346,7 @@ export function templateCompletionQueryForCursor(
 class TemplateCompletionCursorContextBuilder {
   private readonly page: InquiryPageRequest;
   private readonly projection: InquiryProjection;
+  private readonly expressionWorld: CheckerExpressionTypeWorld;
 
   constructor(
     private readonly store: KernelStore,
@@ -336,6 +354,7 @@ class TemplateCompletionCursorContextBuilder {
   ) {
     this.page = input.page ?? new InquiryPageRequest();
     this.projection = input.projection ?? new InquiryProjection(InquiryProjectionKind.Compact);
+    this.expressionWorld = input.expressionWorld ?? new CheckerExpressionTypeWorld(store);
   }
 
   build(): TemplateCompletionCursorContext {
@@ -367,6 +386,7 @@ class TemplateCompletionCursorContextBuilder {
       null,
       null,
       null,
+      null,
       ['source-offset'],
     );
   }
@@ -387,7 +407,7 @@ class TemplateCompletionCursorContextBuilder {
     const selectedDefinitionProductHandle = selectedDefinitionForCursor(this.input.resource, activeElement, classification);
     const selectedBindable = selectedBindableForCursor(classification, valueSite);
     const missingInputs: string[] = [];
-    const memberOwnerTypeProductHandle = this.memberOwnerTypeProductHandle(
+    const memberOwnerType = this.memberOwnerType(
       offset,
       siteKind,
       expressionParse,
@@ -407,7 +427,7 @@ class TemplateCompletionCursorContextBuilder {
         this.input.resource.compilation.compilerWorld.resourceScope.productHandle,
         selectedDefinitionProductHandle,
         siteKindUsesExpressionParse(siteKind) ? expressionParse?.productHandle ?? null : null,
-        memberOwnerTypeProductHandle,
+        memberOwnerType.productHandle,
         valueSite?.productHandle ?? null,
         this.projection,
         this.input.routeConfigProductHandles ?? [],
@@ -419,6 +439,7 @@ class TemplateCompletionCursorContextBuilder {
       selectedBindable,
       selectedMemberName,
       expressionResult == null ? null : expressionCompletionFrontier(expressionResult),
+      memberOwnerType.openSubject,
       uniqueValues(missingInputs),
     );
   }
@@ -491,7 +512,7 @@ class TemplateCompletionCursorContextBuilder {
     );
   }
 
-  private memberOwnerTypeProductHandle(
+  private memberOwnerType(
     offset: number,
     siteKind: TemplateCompletionSiteKind,
     expressionParse: TemplateExpressionParse | null,
@@ -499,11 +520,11 @@ class TemplateCompletionCursorContextBuilder {
     bindingScope: BindingScope | null,
     valueSite: TemplateValueSite | null,
     missingInputs: string[],
-  ): ProductHandle | null {
+  ): DerivedMemberOwnerType {
     return siteKind === TemplateCompletionSiteKind.ExpressionMember
       && bindingScope != null
       && expressionParse != null
-      ? deriveMemberOwnerTypeProductHandleForExpression(
+      ? deriveMemberOwnerTypeForExpression(
         this.store,
         this.input.locus.key,
         expressionResult,
@@ -512,9 +533,10 @@ class TemplateCompletionCursorContextBuilder {
         bindingScope,
         this.input.resource.compilation.compilerWorld.resourceScope,
         valueSite == null ? null : bindableTypeMember(this.store, valueSite)?.valueType ?? null,
+        this.expressionWorld,
         missingInputs,
       )
-      : null;
+      : missingDerivedMemberOwnerType();
   }
 }
 
@@ -568,6 +590,7 @@ function createTemplateCompletionAnswerFrame(
   return {
     store,
     query,
+    expressionWorld: new CheckerExpressionTypeWorld(store),
     missingInputs,
     candidates: [],
     expressionParse,
@@ -631,6 +654,7 @@ function collectExpressionMemberCandidates(
     frame.expressionParse,
     frame.bindingScope,
     frame.resourceScope,
+    frame.expressionWorld,
     frame.missingInputs,
   );
   const members = readTypeMembers(frame.store, frame.memberOwnerTypeProductHandle, frame.missingInputs);
@@ -890,7 +914,11 @@ function readTypeMembers(
     return null;
   }
   if (detail.members.length === 0) {
-    missingInputs.push(expressionMemberSurfaceMissingInput(detail.shapeKind, detail.indexedValueType));
+    missingInputs.push(expressionMemberSurfaceMissingInput(
+      detail.shapeKind,
+      detail.indexedValueType,
+      detail.indexedAccessKeyKind,
+    ));
   }
   return detail.members;
 }
@@ -939,7 +967,7 @@ function attributeValueCompletionMissingInput(
       }
       return `attribute-value-domain:custom-attribute:${site.classification?.resource?.name ?? 'unknown'}`;
     case TemplateValueSiteKind.MultiBindingValue:
-      return `attribute-value-domain:custom-attribute:${site.classification?.resource?.name ?? 'unknown'}`;
+      return `attribute-value-domain:inline-multi-binding:${site.classification?.resource?.name ?? 'unknown'}`;
     case TemplateValueSiteKind.TemplateControllerValue:
       if (templateControllerPrimaryValueHasOpenEndedDomain(site)) {
         return null;
@@ -949,6 +977,7 @@ function attributeValueCompletionMissingInput(
       return `attribute-value-domain:captured:${site.syntax?.target ?? 'unknown'}`;
     case TemplateValueSiteKind.SpreadValue:
       return 'attribute-value-domain:spread';
+    case TemplateValueSiteKind.PlainAttributeValue:
     case TemplateValueSiteKind.PlainAttributeInterpolation:
     case TemplateValueSiteKind.TextInterpolation:
       return null;
@@ -1276,11 +1305,12 @@ function isBooleanType(type: ts.Type): boolean {
 function expressionMemberSurfaceMissingInput(
   shapeKind: CheckerTypeShapeKind,
   indexedValueType: CheckerTypeReference | null,
+  indexedAccessKeyKind: CheckerIndexedAccessKeyKind | null,
 ): string {
   if (shapeKind === CheckerTypeShapeKind.Any) {
     return 'expression-member-owner-type:any';
   }
-  if (indexedValueType != null) {
+  if (indexedValueType != null && checkerIndexedAccessSupportsString(indexedAccessKeyKind)) {
     return 'expression-member-owner-type:index-signature-only';
   }
   return `expression-member-owner-type:no-members:${shapeKind}`;
@@ -1312,6 +1342,7 @@ function deriveMemberOwnerTypeProductHandle(
   expressionParse: TemplateExpressionParse | null,
   bindingScope: BindingScope | null,
   resourceScope: TemplateResourceScope | null,
+  expressionWorld: CheckerExpressionTypeWorld,
   missingInputs: string[],
 ): ProductHandle | null {
   if (expressionParse == null || bindingScope == null) {
@@ -1325,7 +1356,7 @@ function deriveMemberOwnerTypeProductHandle(
   }
 
   if (query.locus.kind === InquiryLocusKind.SourceCursor && query.locus.cursor.offset != null) {
-    return deriveMemberOwnerTypeProductHandleForExpression(
+    return deriveMemberOwnerTypeForExpression(
       store,
       query.locus.key,
       expressionResult,
@@ -1334,8 +1365,9 @@ function deriveMemberOwnerTypeProductHandle(
       bindingScope,
       resourceScope,
       contextualExpressionTypeForQuery(store, query),
+      expressionWorld,
       missingInputs,
-    );
+    ).productHandle;
   }
 
   const owner = ExpressionParseResultInspector.memberOwner(expressionResult);
@@ -1352,6 +1384,7 @@ function deriveMemberOwnerTypeProductHandle(
       bindingScope,
       resourceScope,
       contextualExpressionTypeForQuery(store, query),
+      expressionWorld,
     ),
     missingInputs,
   );
@@ -1365,8 +1398,9 @@ function evaluateMemberOwnerExpression(
   bindingScope: BindingScope,
   resourceScope: TemplateResourceScope | null,
   contextualType: CheckerTypeReference | null = null,
-): ReturnType<CheckerExpressionTypeEvaluator['evaluateWithScope']> {
-  return checkerExpressionEvaluator(store, resourceScope).evaluateWithScope(
+  expressionWorld: CheckerExpressionTypeWorld,
+): CheckerExpressionTypeEvaluation {
+  return expressionWorld.evaluator(resourceScope).evaluateWithScope(
     owner,
     bindingScope,
     memberOwnerLocalKey(locusKey),
@@ -1375,22 +1409,11 @@ function evaluateMemberOwnerExpression(
   );
 }
 
-function checkerExpressionEvaluator(
-  store: KernelStore,
-  resourceScope: TemplateResourceScope | null,
-): CheckerExpressionTypeEvaluator {
-  return new CheckerExpressionTypeEvaluator(
-    store,
-    new CheckerTypeProjector(store),
-    resourceScope,
-  );
-}
-
 function memberOwnerLocalKey(locusKey: string): string {
   return `template-completion:${locusKey}:member-owner`;
 }
 
-function deriveMemberOwnerTypeProductHandleForExpression(
+function deriveMemberOwnerTypeForExpression(
   store: KernelStore,
   locusKey: string,
   result: ExpressionParseResult | null,
@@ -1399,8 +1422,9 @@ function deriveMemberOwnerTypeProductHandleForExpression(
   bindingScope: BindingScope,
   resourceScope: TemplateResourceScope | null,
   contextualType: CheckerTypeReference | null,
+  expressionWorld: CheckerExpressionTypeWorld,
   missingInputs: string[],
-): ProductHandle | null {
+): DerivedMemberOwnerType {
   const evaluation = evaluateMemberOwnerExpressionAtOffset(
     store,
     locusKey,
@@ -1410,13 +1434,14 @@ function deriveMemberOwnerTypeProductHandleForExpression(
     bindingScope,
     resourceScope,
     contextualType,
+    expressionWorld,
     missingInputs,
   );
   if (evaluation == null) {
-    return null;
+    return missingDerivedMemberOwnerType();
   }
 
-  return deriveMemberOwnerTypeProductHandleFromEvaluation(evaluation, missingInputs);
+  return deriveMemberOwnerTypeFromEvaluation(evaluation, missingInputs);
 }
 
 function evaluateMemberOwnerExpressionAtOffset(
@@ -1428,9 +1453,10 @@ function evaluateMemberOwnerExpressionAtOffset(
   bindingScope: BindingScope,
   resourceScope: TemplateResourceScope | null,
   contextualType: CheckerTypeReference | null,
+  expressionWorld: CheckerExpressionTypeWorld,
   missingInputs: string[],
-): ReturnType<CheckerExpressionTypeEvaluator['evaluateWithScope']> | null {
-  const evaluator = checkerExpressionEvaluator(store, resourceScope);
+): CheckerExpressionTypeEvaluation | null {
+  const evaluator = expressionWorld.evaluator(resourceScope);
   if (result != null && 'ast' in result) {
     return evaluator.evaluateMemberOwnerAtOffset(
       result.ast,
@@ -1454,7 +1480,7 @@ function evaluateMemberOwnerExpressionAtOffset(
 }
 
 function evaluateMemberOwnerFrontierAtOffset(
-  evaluator: CheckerExpressionTypeEvaluator,
+  evaluator: TemplateCompletionExpressionEvaluator,
   locusKey: string,
   result: ExpressionParseResult | null,
   offset: number,
@@ -1462,7 +1488,7 @@ function evaluateMemberOwnerFrontierAtOffset(
   bindingScope: BindingScope,
   contextualType: CheckerTypeReference | null,
   missingInputs: string[],
-): ReturnType<CheckerExpressionTypeEvaluator['evaluateWithScope']> | null {
+): CheckerExpressionTypeEvaluation | null {
   const owner = result == null ? null : ExpressionParseResultInspector.memberOwnerAtOffset(result, offset);
   if (owner == null) {
     missingInputs.push('expression-member-owner');
@@ -1478,15 +1504,35 @@ function evaluateMemberOwnerFrontierAtOffset(
 }
 
 function deriveMemberOwnerTypeProductHandleFromEvaluation(
-  evaluation: ReturnType<CheckerExpressionTypeEvaluator['evaluateWithScope']>,
+  evaluation: CheckerExpressionTypeEvaluation,
   missingInputs: string[],
 ): ProductHandle | null {
+  return deriveMemberOwnerTypeFromEvaluation(evaluation, missingInputs).productHandle;
+}
+
+function deriveMemberOwnerTypeFromEvaluation(
+  evaluation: CheckerExpressionTypeEvaluation,
+  missingInputs: string[],
+): DerivedMemberOwnerType {
   if (evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type) {
-    return evaluation.typeReference.productHandle;
+    return {
+      productHandle: evaluation.typeReference.productHandle,
+      openSubject: null,
+    };
   }
 
   missingInputs.push(`expression-member-owner-type:${evaluation.openKind}`);
-  return null;
+  return {
+    productHandle: null,
+    openSubject: evaluation.subject,
+  };
+}
+
+function missingDerivedMemberOwnerType(): DerivedMemberOwnerType {
+  return {
+    productHandle: null,
+    openSubject: null,
+  };
 }
 
 function expressionContainsValueConverter(expression: ExpressionAstNode): boolean {

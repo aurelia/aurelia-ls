@@ -1,5 +1,19 @@
 import { AttributeParserMachine, AttributeParserService } from './attribute-syntax.js';
-import { BindingCommandResolverService } from './binding-command-execution.js';
+import {
+  BindingCommandResolverService,
+  type BindingCommandExecutable,
+} from './binding-command-execution.js';
+import {
+  TemplateCompilerIssue,
+  TemplateCompilerIssueKind,
+  TemplateCompilerIssuePhase,
+  type TemplateCompilerIssueSeverity,
+} from './compiler-issue.js';
+import {
+  TemplateCompilerIssuePublisher,
+} from './compiler-issue-publication.js';
+import type { NodeObserverLocatorConfiguration } from '../observation/observer-locator.js';
+import { AttributeMapperConfiguration } from './attribute-mapper.js';
 import {
   TemplateCompilerService,
   TemplateCompilerWorld,
@@ -20,6 +34,9 @@ import type {
   BuiltInBindingCommandEmission,
 } from './built-in-syntax-catalog-materializer.js';
 import type { BuiltInRuntimeRendererEmission } from './runtime-renderer-catalog-materializer.js';
+import {
+  TemplateCompilerFrameworkErrorCode,
+} from './framework-error-code.js';
 import type { AppRoot } from '../configuration/app-root.js';
 import type { Container } from '../di/container.js';
 import { SemanticClaim } from '../kernel/claim.js';
@@ -42,8 +59,6 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  compactFieldProvenance,
-  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -56,6 +71,7 @@ import {
   type ProductKindKey,
 } from '../kernel/vocabulary.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import type { AttributePatternDefinitionEntry } from '../resources/attribute-pattern-definition.js';
 import { TemplateProductDetails } from './product-details.js';
 
 export class TemplateCompilerWorldConstructionRequest {
@@ -80,6 +96,10 @@ export class TemplateCompilerWorldConstructionRequest {
     readonly syntaxVisibilityKind: TemplateResourceVisibilityKind,
     /** Address of the app/root/component boundary that owns this world. */
     readonly sourceAddressHandle: AddressHandle | null,
+    /** App-authored AttrMapper service state visible to this compiler world. */
+    readonly attributeMapperConfiguration: AttributeMapperConfiguration = AttributeMapperConfiguration.empty,
+    /** App-authored NodeObserverLocator service state visible to runtime binding analysis for this world. */
+    readonly nodeObserverLocatorConfiguration: NodeObserverLocatorConfiguration | null = null,
   ) {}
 }
 
@@ -92,6 +112,7 @@ export class TemplateCompilerWorldEmission {
     readonly resourceResolver: TemplateResourceResolverService,
     readonly expressionParser: TemplateExpressionParserService,
     readonly attributeMapper: TemplateAttributeMapperService,
+    readonly nodeObserverLocatorConfiguration: NodeObserverLocatorConfiguration | null,
     readonly rendering: TemplateRenderingService,
     readonly attributeParser: AttributeParserService,
     readonly attributeParserMachine: AttributeParserMachine,
@@ -99,6 +120,7 @@ export class TemplateCompilerWorldEmission {
     readonly attributePatterns: readonly BuiltInAttributePatternEmission[],
     readonly bindingCommands: readonly BuiltInBindingCommandEmission[],
     readonly runtimeRenderers: readonly BuiltInRuntimeRendererEmission[],
+    readonly issues: readonly TemplateCompilerIssue[],
     readonly syntaxResources: readonly TemplateVisibleResource[],
     readonly records: readonly KernelStoreRecord[],
   ) {}
@@ -121,6 +143,45 @@ class CompilerWorldClaims {
 
   get allClaims(): readonly SemanticClaim[] {
     return [...this.worldClaims, ...this.scopeClaims, ...this.serviceClaims];
+  }
+}
+
+class CompilerWorldIssueSet {
+  private readonly publisher: TemplateCompilerIssuePublisher;
+  readonly issues: TemplateCompilerIssue[] = [];
+  readonly records: KernelStoreRecord[] = [];
+
+  constructor(
+    store: KernelStore,
+    private readonly localKey: string,
+    private readonly provenanceHandle: ProvenanceHandle,
+  ) {
+    this.publisher = new TemplateCompilerIssuePublisher(store);
+  }
+
+  publish(
+    local: string,
+    ownerIdentityHandle: IdentityHandle,
+    phase: TemplateCompilerIssuePhase,
+    issueKind: TemplateCompilerIssueKind,
+    message: string,
+    frameworkErrorCode: string,
+    sourceAddressHandle: AddressHandle | null,
+    severity: TemplateCompilerIssueSeverity = 'error',
+  ): void {
+    const publication = this.publisher.publish(
+      `compiler-world:${this.localKey}:issue:${local}`,
+      ownerIdentityHandle,
+      this.provenanceHandle,
+      phase,
+      issueKind,
+      message,
+      frameworkErrorCode,
+      sourceAddressHandle,
+      severity,
+    );
+    this.issues.push(publication.issue);
+    this.records.push(...publication.records);
   }
 }
 
@@ -178,6 +239,8 @@ class CompilerWorldProducts {
     readonly bindingCommandResolver: BindingCommandResolverService,
     readonly syntaxResources: readonly TemplateVisibleResource[],
     readonly serviceReferences: readonly TemplateCompilerServiceReference[],
+    readonly issues: readonly TemplateCompilerIssue[],
+    readonly issueRecords: readonly KernelStoreRecord[],
   ) {}
 
   toEmission(
@@ -192,6 +255,7 @@ class CompilerWorldProducts {
       this.resourceResolver,
       this.expressionParser,
       this.attributeMapper,
+      input.nodeObserverLocatorConfiguration,
       this.rendering,
       this.attributeParser,
       this.attributeParserMachine,
@@ -199,8 +263,9 @@ class CompilerWorldProducts {
       input.attributePatterns,
       input.bindingCommands,
       input.runtimeRenderers,
+      this.issues,
       this.syntaxResources,
-      records,
+      [...records, ...this.issueRecords],
     );
   }
 }
@@ -254,6 +319,13 @@ export class TemplateCompilerWorldMaterializer {
       emission.rendering.productHandle,
       emission.rendering,
     );
+    for (const issue of emission.issues) {
+      this.store.productDetails.add(
+        TemplateProductDetails.CompilerIssue,
+        issue.productHandle,
+        issue,
+      );
+    }
   }
 
   private registerAttributeParserProductDetails(emission: TemplateCompilerWorldEmission): void {
@@ -338,13 +410,15 @@ export class TemplateCompilerWorldMaterializer {
     const syntaxResources = syntaxResourcesForInput(input);
     const resourceScope = this.resourceScopeForWorld(input, handles, source, syntaxResources);
     const attributeParserMachine = this.attributeParserMachineForWorld(handles, source);
+    const issues = new CompilerWorldIssueSet(this.store, input.localKey, source.provenanceHandle);
     const attributeParser = this.attributeParserForWorld(
       input,
       handles,
       source,
       attributeParserMachine,
+      issues,
     );
-    const bindingCommandResolver = this.bindingCommandResolverForWorld(input, handles, source);
+    const bindingCommandResolver = this.bindingCommandResolverForWorld(input, handles, source, issues);
     const templateCompiler = this.templateCompilerServiceForWorld(input, handles, source);
     const resourceResolver = this.resourceResolverForWorld(input, handles, source);
     const expressionParser = this.expressionParserForWorld(input, handles, source);
@@ -380,6 +454,8 @@ export class TemplateCompilerWorldMaterializer {
       bindingCommandResolver,
       syntaxResources,
       services,
+      issues.issues,
+      issues.records,
     );
   }
 
@@ -396,12 +472,7 @@ export class TemplateCompilerWorldMaterializer {
       input.resources,
       syntaxResources,
       source.addressHandle,
-      compactFieldProvenance([
-        new FieldProvenance('container', source.provenanceHandle),
-        input.resources.length === 0 ? null : new FieldProvenance('resources', source.provenanceHandle),
-        syntaxResources.length === 0 ? null : new FieldProvenance('syntaxResources', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -415,10 +486,7 @@ export class TemplateCompilerWorldMaterializer {
       [],
       [],
       source.addressHandle,
-      compactFieldProvenance([
-        new FieldProvenance('compiledPatterns', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -427,6 +495,7 @@ export class TemplateCompilerWorldMaterializer {
     handles: CompilerWorldHandleSet,
     source: CompilerWorldSourceSet,
     attributeParserMachine: AttributeParserMachine,
+    issues: CompilerWorldIssueSet,
   ): AttributeParserService {
     const attributeParser = new AttributeParserService(
       handles.attributeParserProductHandle,
@@ -434,15 +503,28 @@ export class TemplateCompilerWorldMaterializer {
       [],
       attributeParserMachine,
       source.addressHandle,
-      compactFieldProvenance([
-        new FieldProvenance('patterns', source.provenanceHandle),
-        new FieldProvenance('machine', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
-    for (const pattern of input.attributePatterns) {
+    const registeredPatterns = new Set<string>();
+    input.attributePatterns.forEach((pattern, index) => {
+      const duplicate = firstDuplicateAttributePattern(pattern.executable.patterns, registeredPatterns);
+      if (duplicate != null) {
+        issues.publish(
+          `attribute-pattern-duplicate:${index}`,
+          attributeParser.identityHandle,
+          TemplateCompilerIssuePhase.CompilerWorld,
+          TemplateCompilerIssueKind.AttributePatternDuplicate,
+          `AttributeParser.registerPattern cannot register duplicate attribute pattern "${duplicate.pattern}".`,
+          TemplateCompilerFrameworkErrorCode.AttributePatternDuplicate,
+          duplicate.addressHandle ?? pattern.executable.sourceAddressHandle,
+        );
+        return;
+      }
+      for (const entry of pattern.executable.patterns) {
+        registeredPatterns.add(entry.pattern);
+      }
       attributeParser.registerPattern(pattern.executable, pattern.compiledPatterns);
-    }
+    });
     return attributeParser;
   }
 
@@ -450,16 +532,19 @@ export class TemplateCompilerWorldMaterializer {
     input: TemplateCompilerWorldConstructionRequest,
     handles: CompilerWorldHandleSet,
     source: CompilerWorldSourceSet,
+    issues: CompilerWorldIssueSet,
   ): BindingCommandResolverService {
+    const commands = bindingCommandsWithRegistrationIssues(
+      input.bindingCommands,
+      handles.bindingResolverIdentityHandle,
+      issues,
+    );
     return new BindingCommandResolverService(
       handles.bindingResolverProductHandle,
       handles.bindingResolverIdentityHandle,
-      input.bindingCommands.map((command) => command.executable),
+      commands,
       source.addressHandle,
-      compactFieldProvenance([
-        new FieldProvenance('commands', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -473,13 +558,7 @@ export class TemplateCompilerWorldMaterializer {
       handles.templateCompilerIdentityHandle,
       input.container.toReference(),
       source.addressHandle,
-      compactFieldProvenance([
-        new FieldProvenance('serviceKind', source.provenanceHandle),
-        new FieldProvenance('container', source.provenanceHandle),
-        new FieldProvenance('debug', source.provenanceHandle),
-        new FieldProvenance('resolveResources', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -494,12 +573,7 @@ export class TemplateCompilerWorldMaterializer {
       input.container.toReference(),
       input.resources,
       source.addressHandle,
-      compactFieldProvenance([
-        new FieldProvenance('serviceKind', source.provenanceHandle),
-        new FieldProvenance('container', source.provenanceHandle),
-        input.resources.length === 0 ? null : new FieldProvenance('resources', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -513,11 +587,7 @@ export class TemplateCompilerWorldMaterializer {
       handles.expressionParserIdentityHandle,
       input.container.toReference(),
       source.addressHandle,
-      compactFieldProvenance([
-        new FieldProvenance('serviceKind', source.provenanceHandle),
-        new FieldProvenance('container', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -531,11 +601,8 @@ export class TemplateCompilerWorldMaterializer {
       handles.attributeMapperIdentityHandle,
       input.container.toReference(),
       source.addressHandle,
-      compactFieldProvenance([
-        new FieldProvenance('serviceKind', source.provenanceHandle),
-        new FieldProvenance('container', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      input.attributeMapperConfiguration,
+      [],
     );
   }
 
@@ -550,12 +617,7 @@ export class TemplateCompilerWorldMaterializer {
       input.container.toReference(),
       input.runtimeRenderers.map((renderer) => renderer.renderer),
       source.addressHandle,
-      compactFieldProvenance([
-        new FieldProvenance('serviceKind', source.provenanceHandle),
-        new FieldProvenance('container', source.provenanceHandle),
-        input.runtimeRenderers.length === 0 ? null : new FieldProvenance('renderers', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -575,14 +637,7 @@ export class TemplateCompilerWorldMaterializer {
       resourceScope.productHandle,
       services,
       source.addressHandle,
-      compactFieldProvenance([
-        new FieldProvenance('worldKind', source.provenanceHandle),
-        input.appRoot == null ? null : new FieldProvenance('appRoot', source.provenanceHandle),
-        new FieldProvenance('container', source.provenanceHandle),
-        new FieldProvenance('resourceScope', source.provenanceHandle),
-        new FieldProvenance('services', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -806,6 +861,60 @@ export class TemplateCompilerWorldMaterializer {
         provenanceHandle,
       )]);
   }
+}
+
+function firstDuplicateAttributePattern(
+  entries: readonly AttributePatternDefinitionEntry[],
+  registeredPatterns: ReadonlySet<string>,
+): AttributePatternDefinitionEntry | null {
+  const localPatterns = new Set<string>();
+  for (const entry of entries) {
+    if (registeredPatterns.has(entry.pattern) || localPatterns.has(entry.pattern)) {
+      return entry;
+    }
+    localPatterns.add(entry.pattern);
+  }
+  return null;
+}
+
+function bindingCommandsWithRegistrationIssues(
+  emissions: readonly BuiltInBindingCommandEmission[],
+  ownerIdentityHandle: IdentityHandle,
+  issues: CompilerWorldIssueSet,
+): readonly BindingCommandExecutable[] {
+  const registeredKeys = new Set<string>();
+  const commands: BindingCommandExecutable[] = [];
+  emissions.forEach((emission, index) => {
+    const command = emission.executable;
+    if (registeredKeys.has(command.key)) {
+      issues.publish(
+        `binding-command-existed:${index}`,
+        ownerIdentityHandle,
+        TemplateCompilerIssuePhase.CompilerWorld,
+        TemplateCompilerIssueKind.BindingCommandAlreadyRegistered,
+        `BindingCommandDefinition.register found an existing command key for "${command.name}".`,
+        TemplateCompilerFrameworkErrorCode.BindingCommandExisted,
+        command.sourceAddressHandle,
+        'warning',
+      );
+      return;
+    }
+    registeredKeys.add(command.key);
+    for (const alias of command.aliases) {
+      registeredKeys.add(bindingCommandKeyFor(command, alias));
+    }
+    commands.push(command);
+  });
+  return commands;
+}
+
+function bindingCommandKeyFor(
+  command: BindingCommandExecutable,
+  name: string,
+): string {
+  return command.key.endsWith(command.name)
+    ? `${command.key.slice(0, command.key.length - command.name.length)}${name}`
+    : `au:resource:binding-command:${name}`;
 }
 
 function syntaxResourcesForInput(

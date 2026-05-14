@@ -662,6 +662,21 @@ export const LensCatalog: readonly LensSpec[] = [
         summary: "Filter class rows by class declaration name suffix, such as Input.",
       },
       {
+        id: "surfaceRole",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter class rows by source-backed class role for navigation pressure.",
+        values: [
+          "product-owner",
+          "publisher",
+          "work-frame",
+          "data-carrier",
+          "service-surface",
+          "semantic-model",
+          "other",
+        ],
+      },
+      {
         id: "methodName",
         role: ParameterRole.Filter,
         summary: "Filter class rows to classes exposing an exact instance or static method name.",
@@ -3157,6 +3172,21 @@ export const LensCatalog: readonly LensSpec[] = [
           "Framework package rows with error-code, mapped-message, usage, throw, warning, and raw Error counts.",
       },
       {
+        id: "families",
+        summary:
+          "Grouped framework error-code families by package, enum, and member prefix for choosing diagnostic substrate work.",
+      },
+      {
+        id: "diagnostic-frontiers",
+        summary:
+          "Framework error-code families joined to semantic-runtime exact AUR-link coverage, raw authority pressure, and recommended diagnostic substrate next steps.",
+      },
+      {
+        id: "diagnostic-codes",
+        summary:
+          "Code-level diagnostic intake rows classifying each framework code as modeled, unmodeled, dormant, raw-authority, declared-unspent, or link-broken.",
+      },
+      {
         id: "codes",
         summary:
           "Source-backed ErrorNames/Events member rows with code labels, mapped messages, and usage counts.",
@@ -3165,6 +3195,16 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "usages",
         summary:
           "Source-backed createMappedError/getMessage/raw Error usage rows with effect classification.",
+      },
+      {
+        id: "semantic-references",
+        summary:
+          "Semantic-runtime references to framework error-code labels and whether those labels resolve to framework definitions.",
+      },
+      {
+        id: "semantic-raw-references",
+        summary:
+          "Semantic-runtime references to raw framework Error usage sites and whether they resolve to exact public framework source rows.",
       },
     ],
     parameters: [
@@ -3179,14 +3219,35 @@ export const LensCatalog: readonly LensSpec[] = [
         summary: "Filter definitions/usages to ErrorNames or Events.",
       },
       {
+        id: "codeNamePrefix",
+        role: ParameterRole.Filter,
+        summary: "Filter definitions/usages by the enum member prefix before the first underscore, such as parse, ast, compiler, or router.",
+      },
+      {
         id: "mechanism",
         role: ParameterRole.Filter,
-        summary: "Filter usage rows by mechanism such as createMappedError, getMessage, or raw-new-error.",
+        summary: "Filter usage rows by mechanism such as createMappedError, getMessage, mapped-error-wrapper-call, raw-new-error, or raw-error-factory-call.",
       },
       {
         id: "effect",
         role: ParameterRole.Filter,
         summary: "Filter usage rows by effect such as throw, warning, return, new-error, or call.",
+      },
+      {
+        id: "rawErrorKind",
+        role: ParameterRole.Filter,
+        summary: "Filter raw Error rows by shape such as mapped-error-factory-implementation, inline-aur-code, message-expression, or empty.",
+      },
+      {
+        id: "inlineCodeLabel",
+        role: ParameterRole.Filter,
+        summary: "Filter raw Error rows by extracted hard-coded AUR label such as AUR1005.",
+      },
+      {
+        id: "gap",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter diagnostic-authority gap rows: code-without-message, unused-code, unresolved-usage-code, raw-new-error, raw-error-factory-call, raw-error-usage, raw-error-authority-gap, intentionally-unclaimed-raw-authority, unresolved-semantic-runtime-reference, or unresolved-semantic-runtime-raw-reference.",
       },
       {
         id: "query",
@@ -3558,6 +3619,146 @@ export const LensCatalog: readonly LensSpec[] = [
     defaultBudget: { rows: 80, evidencePerSubject: 4 },
   },
   {
+    id: LensId.FrameworkCorpus,
+    family: LensFamily.Framework,
+    stage: LensStage.Implemented,
+    summary:
+      "Read Aurelia documentation, framework tests, documentation snippets, test snippets, and legacy replacement package inventory as internal fixture and authoring pressure.",
+    supportedLoci: [LocusKind.Repo, LocusKind.RepoArea, LocusKind.Package],
+    requiredSubstrates: [SubstrateId.FrameworkCorpus, SubstrateId.SourceFiles],
+    projections: [
+      {
+        id: "summary",
+        summary:
+          "Corpus rollup with sample docs and tests for fixture and authoring pressure.",
+      },
+      {
+        id: "docs",
+        summary:
+          "Aurelia documentation file rows with lexical concept tags, code-fence counts, package imports, and source ranges.",
+      },
+      {
+        id: "doc-snippets",
+        summary:
+          "Aurelia documentation code fences suitable as fixture recipe and authoring taste seeds.",
+      },
+      {
+        id: "tests",
+        summary:
+          "Aurelia framework test file rows with test-helper counts and lexical concept tags.",
+      },
+      {
+        id: "test-snippets",
+        summary:
+          "Framework test describe/it/createFixture call-site snippets suitable for behavior-grounding pressure.",
+      },
+      {
+        id: "legacy",
+        summary:
+          "Old package inventory used to steer semantic-runtime replacement pressure.",
+      },
+      {
+        id: "expected-effects",
+        summary:
+          "Source-backed semantic-runtime ExpectedSemanticEffectKind contract rows used to interpret fixture seed hints.",
+      },
+      {
+        id: "fixture-seeds",
+        summary:
+          "Docs/test snippet rows promoted into authoring fixture seeds with expected-effect contract and recipe hints.",
+      },
+    ],
+    parameters: [
+      {
+        id: "query",
+        role: ParameterRole.Filter,
+        summary:
+          "Token-aware filter across paths, titles, package imports, snippet previews, and summaries.",
+      },
+      {
+        id: "concept",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter corpus rows by lexical pressure concept such as forms, router, templates, di, observation, resources, state, or i18n.",
+      },
+      {
+        id: "group",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter documentation or framework test rows by first path segment under the corpus root.",
+      },
+      {
+        id: "path",
+        role: ParameterRole.Filter,
+        summary: "Filter corpus rows by path substring.",
+      },
+      {
+        id: "language",
+        role: ParameterRole.Filter,
+        summary: "Filter documentation snippet rows by code-fence language.",
+      },
+      {
+        id: "snippetKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter snippet rows by code-fence, describe-call, it-call, or create-fixture-call.",
+      },
+      {
+        id: "generated",
+        role: ParameterRole.Filter,
+        summary: "Filter framework test file rows by generated-test status.",
+      },
+      {
+        id: "sourceKind",
+        role: ParameterRole.Filter,
+        summary: "Filter fixture-seed rows by doc-snippet or test-snippet origin.",
+      },
+      {
+        id: "seedUse",
+        role: ParameterRole.Filter,
+        summary: "Filter fixture-seed rows by authoring-taste or behavior-grounding use.",
+      },
+      {
+        id: "effectKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter fixture-seed or expected-effect rows by expected semantic effect kind such as binding-data-flow, route, or dependency-injection.",
+      },
+      {
+        id: "effectRole",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter expected-effect descriptor rows by role such as baseline, signature, or discriminator.",
+      },
+      {
+        id: "effectSeedPolicy",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter expected-effect descriptor rows by seed policy such as corpus-pattern, reopen-baseline, orientation-contract, or closure-contract.",
+      },
+      {
+        id: "expectedEffectFilterField",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter fixture-seed rows by the field name of a structured expected-effect filter, such as behaviorName, staticArgumentValues, or targetProperty.",
+      },
+      {
+        id: "expectedEffectFilterValue",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter fixture-seed rows by the exact value of a structured expected-effect filter; pair with expectedEffectFilterField and effectKind for precise fixture seed selection.",
+      },
+      {
+        id: "recipeKey",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter fixture-seed rows by authoring recipe hint such as state-backed-form, service-backed-form, routed-state-backed-form, or pressure-fixture.",
+      },
+    ],
+    outputKinds: [EvidenceKind.MaintenanceSignal, EvidenceKind.SourceSpan],
+    defaultBudget: { rows: 80, evidencePerSubject: 4 },
+  },
+  {
     id: LensId.AtlasSelf,
     family: LensFamily.Atlas,
     stage: LensStage.Implemented,
@@ -3637,6 +3838,11 @@ export const LensCatalog: readonly LensSpec[] = [
           "Enum member value spaces with raw literal overlap and shared values.",
       },
       {
+        id: "enum-value-occurrences",
+        summary:
+          "Exact raw literal occurrences whose values overlap enum member values, including checker-backed contextual narrowing.",
+      },
+      {
         id: "enum-mappings",
         summary:
           "Exact enum-to-enum translation edges from case returns, object entries, assignments, and member initializers.",
@@ -3679,6 +3885,11 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "function-shapes",
         summary:
           "Repeated canonical AST/control-flow function body-shape groups for finding split-brain helpers.",
+      },
+      {
+        id: "function-wrappers",
+        summary:
+          "Shallow constructor/call wrappers with local direct-call and value-reference counts for spotting extraction-as-obfuscation pressure.",
       },
     ],
     parameters: [
@@ -3830,18 +4041,25 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "enumName",
         role: ParameterRole.Filter,
         summary:
-          "Filter enum declarations, references, value spaces, or mappings by exact enum declaration name.",
+          "Filter enum declarations, references, value spaces, raw value occurrences, or mappings by exact enum declaration name.",
       },
       {
         id: "memberName",
         role: ParameterRole.Filter,
         summary:
-          "Filter enum references, value spaces, or mappings by exact enum member name.",
+          "Filter enum references, value spaces, raw value occurrences, or mappings by exact enum member name.",
       },
       {
         id: "value",
         role: ParameterRole.Filter,
-        summary: "Filter enum value-space rows by exact raw string/number value.",
+        summary:
+          "Filter enum value-space or raw value occurrence rows by exact raw string/number value.",
+      },
+      {
+        id: "contextualOnly",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter enum raw value occurrence rows to literal sites with checker-backed contextual enum narrowing.",
       },
       {
         id: "fromEnum",
@@ -3869,7 +4087,7 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "role",
         role: ParameterRole.Filter,
         summary:
-          "Filter enum reference rows by syntactic role such as case-label, return-expression, or call-argument.",
+          "Filter enum reference or raw value occurrence rows by syntactic role such as case-label, return-expression, object-value, or call-argument.",
       },
       {
         id: "stringRole",
@@ -4006,6 +4224,196 @@ export const LensCatalog: readonly LensSpec[] = [
       EvidenceKind.OpenSeam,
     ],
     defaultBudget: { rows: 80 },
+  },
+  {
+    id: LensId.AtlasMemory,
+    family: LensFamily.Atlas,
+    stage: LensStage.Implemented,
+    summary:
+      "Query durable Atlas memory records joined to live source, product-architecture pressure, atlas.self pressure, and stale/resolved status.",
+    supportedLoci: [
+      LocusKind.Repo,
+      LocusKind.RepoArea,
+      LocusKind.Package,
+      LocusKind.SourceFile,
+      LocusKind.Symbol,
+    ],
+    requiredSubstrates: [
+      SubstrateId.AtlasMemory,
+      SubstrateId.ProductArchitecture,
+      SubstrateId.TypeScriptProgram,
+    ],
+    projections: [
+      {
+        id: "summary",
+        summary:
+          "Compact rollup of durable records, live frontiers, untracked pressure, and storage issues.",
+      },
+      {
+        id: "records",
+        summary:
+          "Durable records joined to computed live status.",
+      },
+      {
+        id: "frontiers",
+        summary:
+          "Live active, intentional, stale, and untracked work frontiers.",
+      },
+      {
+        id: "next",
+        summary:
+          "Ranked next actions computed from storage issues, stale records, live frontiers, and untracked product pressure.",
+      },
+      {
+        id: "guidance",
+        summary:
+          "Reuse guidance records for deciding what source, lens, or script to inspect before solving a problem.",
+      },
+      {
+        id: "stale",
+        summary:
+          "Resolved or stale records that should not be trusted as active work without re-checking.",
+      },
+      {
+        id: "schema",
+        summary:
+          "Machine-readable memory record shape and authoring guidance.",
+      },
+    ],
+    parameters: [
+      {
+        id: "query",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter memory rows by exact substring across ids, summaries, domains, guidance, anchors, and live check summaries.",
+      },
+      {
+        id: "domain",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter memory rows by one or more broad problem domains such as evaluator, router, authoring, or product-architecture. Multiple domains default to all-of matching.",
+      },
+      {
+        id: "domainMode",
+        role: ParameterRole.Filter,
+        summary:
+          "Choose all-of or any-of semantics for multi-domain memory filters.",
+        values: [
+          "all",
+          "any",
+        ],
+      },
+      {
+        id: "kind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter durable records by memory kind or frontier discriminator.",
+        values: [
+          "pressure-frontier",
+          "intentional-shape",
+          "reuse-guide",
+          "decision",
+          "doc-shard",
+          "memory-record",
+          "untracked-product-class",
+          "repair-storage",
+          "review-stale-memory",
+          "seed-untracked-area",
+          "inspect-untracked-frontier",
+          "continue-live-frontier",
+          "consult-reuse-guide",
+        ],
+      },
+      {
+        id: "status",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter rows by computed status.",
+        values: [
+          "active",
+          "intentional-live",
+          "reference",
+          "resolved",
+          "stale-source",
+          "stale-check",
+          "untracked",
+          "storage-issue",
+        ],
+      },
+      {
+        id: "recordId",
+        role: ParameterRole.Filter,
+        summary: "Filter rows by exact durable memory record id.",
+      },
+      {
+        id: "path",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter memory rows by source/doc anchor path, durable shard path, live-check path, or untracked frontier source path.",
+      },
+      {
+        id: "surfaceRole",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter untracked product class frontier rows by product.architecture class role.",
+        values: [
+          "product-owner",
+          "publisher",
+          "work-frame",
+          "data-carrier",
+          "service-surface",
+          "epoch-context",
+          "semantic-model",
+          "other",
+        ],
+      },
+      {
+        id: "liveCheckKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter durable memory records and computed next actions by the live-check mechanism that keeps the record honest.",
+        values: [
+          "product-large-class",
+          "source-file-exists",
+          "source-declaration-exists",
+          "atlas-self-source-file",
+          "atlas-self-class",
+          "atlas-self-function",
+          "auLink-exists",
+        ],
+      },
+      {
+        id: "anchorKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter durable memory records by structural anchor kind such as source, lens, script, doc, or auLink.",
+        values: ["source", "lens", "script", "doc", "auLink"],
+      },
+      {
+        id: "anchorLensId",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter durable memory records and computed next actions by exact lens anchor id.",
+      },
+      {
+        id: "symbolName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter durable memory records and computed next actions by source anchor or live-check symbol name.",
+      },
+      {
+        id: "auLinkId",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter durable memory records and computed next actions by auLink anchor or auLink-exists live check id.",
+      },
+    ],
+    outputKinds: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.SourceSpan,
+      EvidenceKind.OpenSeam,
+    ],
+    defaultBudget: { rows: 80, evidencePerSubject: 3 },
   },
 ];
 

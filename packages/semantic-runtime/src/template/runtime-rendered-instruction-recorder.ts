@@ -38,7 +38,7 @@ import type {
 } from './runtime-renderer.js';
 import type {
   RuntimeRenderingSourceSet,
-} from './runtime-spread-compile-host.js';
+} from './runtime-rendering-source.js';
 
 export class RuntimeBindingRenderContext {
   constructor(

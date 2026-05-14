@@ -115,6 +115,12 @@ export class ResourceDefinitionIndex {
     return matching.length === 1 ? matching[0]! : null;
   }
 
+  lookupByModule(moduleKey: string | null): readonly FullResourceDefinition[] {
+    return moduleKey == null
+      ? []
+      : this.byModule.get(normalizeModuleKey(moduleKey)) ?? [];
+  }
+
   lookupByTargetReference(reference: ResourceTargetReference | null): FullResourceDefinition | null {
     if (reference == null) {
       return null;

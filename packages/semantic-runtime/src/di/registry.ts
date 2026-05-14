@@ -10,6 +10,9 @@ import type {
   RegistrationValueReference,
 } from '../registration/registration-reference.js';
 import type { Container } from './container.js';
+import {
+  containerLookupKeyForRegistrationKey,
+} from './container-key.js';
 import type { ContainerReference } from './container-reference.js';
 import type { ContainerResolverLookup } from './container-lookup.js';
 
@@ -97,7 +100,8 @@ export class ParameterizedRegistry {
 
   /** Runtime `register(container)` shape represented as a branch result. */
   register(container: Container): RegistryRegistrationResult {
-    if (this.key.identityHandle == null) {
+    const lookupKey = containerLookupKeyForRegistrationKey(this.key);
+    if (lookupKey == null) {
       return new RegistryRegistrationResult(
         RegistryRegistrationState.Open,
         this,
@@ -107,12 +111,12 @@ export class ParameterizedRegistry {
       );
     }
 
-    if (container.has(this.key.identityHandle, true)) {
+    if (container.has(lookupKey, true)) {
       return new RegistryRegistrationResult(
         RegistryRegistrationState.Delegated,
         this,
         container.toReference(),
-        container.getResolver(this.key.identityHandle, false),
+        container.getResolver(lookupKey, false),
         this.params,
       );
     }

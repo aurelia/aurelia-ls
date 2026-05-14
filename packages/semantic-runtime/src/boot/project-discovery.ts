@@ -11,6 +11,7 @@ import {
   readPackageName,
   safeIsDirectory,
   safeReadDirectory,
+  isHostPathWithin,
 } from './host-files.js';
 
 const DISCOVERY_EXCLUDED_DIRECTORIES = new Set([
@@ -47,7 +48,7 @@ export function discoverBootProjects(
     keyCounts.set(baseKey, count + 1);
     const projectKey = count === 0 ? baseKey : `${baseKey}:${count + 1}`;
     const nestedPackageRoots = packageRoots
-      .filter((candidate) => candidate !== projectRoot && isDescendantPath(projectRoot, candidate));
+      .filter((candidate) => candidate !== projectRoot && isHostPathWithin(candidate, projectRoot));
     return {
       rootDir: projectRoot,
       projectKey,
@@ -103,9 +104,4 @@ function relativeProjectPath(workspaceRoot: string, projectRoot: string): string
 function sanitizeProjectKey(value: string): string {
   const sanitized = value.replace(/[^a-zA-Z0-9_.:@/-]+/g, '-').replace(/^-+|-+$/g, '');
   return sanitized.length === 0 ? 'project' : sanitized;
-}
-
-function isDescendantPath(parent: string, child: string): boolean {
-  const relative = path.relative(parent, child);
-  return relative.length > 0 && !relative.startsWith('..') && !path.isAbsolute(relative);
 }

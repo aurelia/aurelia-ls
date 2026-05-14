@@ -128,7 +128,7 @@ export class ConfigurationRecognitionProjectPass {
   }
 }
 
-function readSourceFileAddressHandlesByFileName(
+export function readSourceFileAddressHandlesByFileName(
   evaluation: StaticProjectEvaluationResult,
 ): ReadonlyMap<string, AddressHandle> {
   const result = new Map<string, AddressHandle>();

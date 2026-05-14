@@ -22,8 +22,6 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  compactFieldProvenance,
-  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -35,11 +33,7 @@ import {
   type ProductKindKey,
 } from '../kernel/vocabulary.js';
 import {
-  RegistrationStrategy,
-} from '../registration/registration-admission.js';
-import {
   Container,
-  type ContainerField,
 } from './container.js';
 import {
   ContainerConfiguration,
@@ -48,8 +42,10 @@ import {
 import {
   ContainerResolverSlot,
   ContainerSelfResolverSlot,
-  type ContainerSlotField,
 } from './container-slot.js';
+import {
+  ResolverStrategy,
+} from './resolver.js';
 
 export class ContainerContextResolverSlotRequest {
   constructor(
@@ -144,7 +140,7 @@ export class ContainerChildMaterializer {
       'Runtime child container created from a parent controller/container boundary.',
       input.sourceAddressHandle,
     );
-    const child = this.createChildContainer(input, local, source);
+    const child = this.createChildContainer(input, local);
     const selfResolver = this.recordsForContainerSelfResolver(child, source.provenanceHandle);
     child.registerSelfResolver(selfResolver.slot);
     const contextResolvers = this.recordsForContextResolverSlots(child, input, local, source.provenanceHandle);
@@ -168,7 +164,6 @@ export class ContainerChildMaterializer {
   private createChildContainer(
     input: ContainerChildMaterializationRequest,
     local: string,
-    source: ContainerMaterializationSourceSet,
   ): Container {
     const productHandle = this.store.handles.product(local);
     const identityHandle = this.store.handles.identity(local);
@@ -182,12 +177,7 @@ export class ContainerChildMaterializer {
         parentReference,
         rootReference,
         input.sourceAddressHandle,
-        compactFieldProvenance<ContainerField>([
-          new FieldProvenance('containerKind', source.provenanceHandle),
-          new FieldProvenance('parent', source.provenanceHandle),
-          new FieldProvenance('root', source.provenanceHandle),
-          new FieldProvenance('source', source.provenanceHandle),
-        ]),
+        [],
         configuration,
         parent,
       ),
@@ -257,7 +247,7 @@ export class ContainerChildMaterializer {
     this.emitInterfaceKeyIdentity(records, keyIdentityHandle, 'IContainer', container.sourceAddressHandle);
 
     const handles = this.containerSlotProductHandles(local, keyIdentityHandle);
-    const slot = this.containerSelfResolverSlot(container, handles, provenanceHandle);
+    const slot = this.containerSelfResolverSlot(container, handles);
     records.push(
       ...this.recordsForContainerSlotProduct(
         local,
@@ -274,14 +264,13 @@ export class ContainerChildMaterializer {
   private containerSelfResolverSlot(
     container: Container,
     handles: ContainerSlotProductHandles,
-    provenanceHandle: ProvenanceHandle,
   ): ContainerSelfResolverSlot {
     return new ContainerSelfResolverSlot(
       handles.productHandle,
       container.toReference(),
       handles.keyIdentityHandle,
       container.sourceAddressHandle,
-      containerSlotFieldProvenance(provenanceHandle),
+      [],
     );
   }
 
@@ -296,7 +285,7 @@ export class ContainerChildMaterializer {
     this.emitInterfaceKeyIdentity(records, keyIdentityHandle, input.interfaceName, input.sourceAddressHandle);
 
     const handles = this.containerSlotProductHandles(local, keyIdentityHandle);
-    const slot = this.contextResolverSlot(container, input, handles, provenanceHandle);
+    const slot = this.contextResolverSlot(container, input, handles);
     records.push(
       ...this.recordsForContainerSlotProduct(
         local,
@@ -314,17 +303,17 @@ export class ContainerChildMaterializer {
     container: Container,
     input: ContainerContextResolverSlotRequest,
     handles: ContainerSlotProductHandles,
-    provenanceHandle: ProvenanceHandle,
   ): ContainerResolverSlot {
     return new ContainerResolverSlot(
       handles.productHandle,
       container.toReference(),
       handles.keyIdentityHandle,
       null,
-      RegistrationStrategy.Instance,
+      null,
+      ResolverStrategy.instance,
       false,
       input.sourceAddressHandle,
-      containerSlotFieldProvenance(provenanceHandle),
+      [],
     );
   }
 
@@ -464,14 +453,4 @@ export class ContainerChildMaterializer {
       addressHandle,
     ));
   }
-}
-
-function containerSlotFieldProvenance(
-  provenanceHandle: ProvenanceHandle,
-): readonly FieldProvenance<ContainerSlotField>[] {
-  return compactFieldProvenance<ContainerSlotField>([
-    new FieldProvenance('container', provenanceHandle),
-    new FieldProvenance('key', provenanceHandle),
-    new FieldProvenance('source', provenanceHandle),
-  ]);
 }

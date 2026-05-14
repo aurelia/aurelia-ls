@@ -26,6 +26,7 @@ export type ApplicationFileRole =
   | 'component-source'
   | 'component-template'
   | 'component-style'
+  | 'global-style'
   | 'resource-source'
   | 'service-source'
   | 'state-source'
@@ -86,13 +87,31 @@ export class ApplicationTemplateAsset {
   ) {}
 }
 
+export type ApplicationStyleOwnerKind =
+  | 'component'
+  | 'global';
+
+export type ApplicationStyleAssetKind =
+  | 'component-stylesheet'
+  | 'css-module-style'
+  | 'shadow-dom-styles'
+  | 'global-stylesheet';
+
+export type ApplicationStyleSourceKind =
+  | 'css-import'
+  | 'css-module-call'
+  | 'shadow-css-call';
+
 /** Authored stylesheet associated with a component or app shell. */
 export class ApplicationStyleAsset {
   readonly kind = 'application-style-asset' as const;
 
   constructor(
-    readonly file: ApplicationFile,
-    readonly importSpecifier: ApplicationModuleSpecifier,
+    readonly ownerKind: ApplicationStyleOwnerKind,
+    readonly assetKind: ApplicationStyleAssetKind,
+    readonly sourceKind: ApplicationStyleSourceKind,
+    readonly file: ApplicationFile | null,
+    readonly importSpecifier: ApplicationModuleSpecifier | null,
   ) {}
 }
 
@@ -106,6 +125,8 @@ export class ApplicationComponent {
     readonly elementName: string,
     readonly template: ApplicationTemplateAsset | null,
     readonly styles: readonly ApplicationStyleAsset[] = [],
+    /** Local resource dependencies that should be admitted to this component's compiler world. */
+    readonly dependencies: readonly ApplicationComponentReference[] = [],
   ) {}
 }
 
@@ -161,6 +182,7 @@ export class ApplicationTopology {
     readonly components: readonly ApplicationComponent[] = [],
     readonly services: readonly ApplicationService[] = [],
     readonly registrations: readonly ApplicationRegistration[] = [],
+    readonly styles: readonly ApplicationStyleAsset[] = [],
     readonly routes: readonly ApplicationRoute[] = [],
   ) {}
 }

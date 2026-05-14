@@ -23,6 +23,17 @@ export function countEntriesBy<TValue>(
     );
 }
 
+/** Count rows by a string key and return count-ranked entries with display-oriented names. */
+export function countNamedEntriesBy<TValue>(
+  rows: readonly TValue[],
+  keyFor: (row: TValue) => string,
+): readonly { readonly name: string; readonly count: number }[] {
+  return countEntriesBy(rows, keyFor).map((row) => ({
+    name: row.key,
+    count: row.count,
+  }));
+}
+
 /** Count rows by any Map-compatible key while preserving first-seen key order. */
 export function countByMap<TValue, TKey>(
   rows: readonly TValue[],
@@ -51,6 +62,11 @@ export function countWhere<TValue>(
   predicate: (row: TValue) => boolean,
 ): number {
   return rows.filter(predicate).length;
+}
+
+/** Narrow an unknown value to a non-array object with string keys. */
+export function isRecord(value: unknown): value is Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value);
 }
 
 /** Group rows by any Map-compatible key while preserving first-seen key order. */

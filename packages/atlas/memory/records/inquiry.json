@@ -1,0 +1,49 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:template-completion-cursor-context-builder",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "inquiry",
+        "template",
+        "completion",
+        "lsp"
+      ],
+      "summary": "TemplateCompletionCursorContextBuilder resolves a materialized template cursor locus into the product-handle query shape used by template completion.",
+      "rationale": "Cursor-locus inquiry is where HTML spans, attribute syntax, classification, value sites, expression parses, binding scopes, resource scopes, route/i18n context, and TypeChecker member-owner projection meet. This builder is the locus-to-query boundary and should not be bypassed by answer-local cursor heuristics.",
+      "guidance": [
+        "Start here when cursor completion needs to choose site kind, active element, selected bindable, expression parse, binding scope, resource scope, or member-owner type.",
+        "Keep source-span precision and missing-input reporting explicit; broad carrier/header spans should be treated as provenance pressure.",
+        "If another LSP-like feature needs similar cursor context, consider extracting a shared cursor-context substrate before duplicating this builder."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/template-completion.ts",
+          "symbolName": "TemplateCompletionCursorContextBuilder",
+          "line": 335,
+          "summary": "Template cursor-to-completion-query context builder."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.memory",
+          "projection": "next",
+          "summary": "Use memory:next to discover active cursor/inquiry pressure before adding answer-local heuristics."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "TemplateCompletionCursorContextBuilder",
+          "filePath": "packages/semantic-runtime/src/inquiry/template-completion.ts",
+          "minLineCount": 150,
+          "minMethodCount": 8
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    }
+  ]
+}

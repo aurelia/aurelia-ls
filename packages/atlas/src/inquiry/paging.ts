@@ -18,7 +18,7 @@ export function pageInfo(
     cursor: inquiry.page?.cursor,
     returned,
     total,
-    ...(nextOffset === undefined ? {} : { nextCursor: String(nextOffset) }),
+    nextCursor: nextOffset === undefined ? undefined : String(nextOffset),
   };
 }
 
@@ -32,7 +32,7 @@ export function pageRows<TValue>(
     offset + page.length < rows.length ? offset + page.length : undefined;
   return {
     rows: page,
-    ...(nextOffset === undefined ? {} : { nextOffset }),
+    nextOffset,
   };
 }
 

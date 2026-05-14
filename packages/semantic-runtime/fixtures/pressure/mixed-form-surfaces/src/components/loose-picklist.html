@@ -1,0 +1,8 @@
+<label>
+  ${label}
+  <select value.bind="value">
+    <option repeat.for="option of options" model.bind="option">
+      ${option.label || option}
+    </option>
+  </select>
+</label>

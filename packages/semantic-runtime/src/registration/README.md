@@ -85,8 +85,9 @@ generic kernel product record.
 `framework-registration-manifest.ts` is the framework registration descriptor table. It maps known configuration
 exports, decomposed registration groups, chain methods, roles, and semantic capabilities such as runtime-html compiler
 services, default syntax, default resources, default renderers, i18n resource/syntax/renderer/service/task effects,
-router default components/resources, router option resolvers, router lifecycle tasks, and state
-resource/syntax/renderer/service/task effects, plus dialog service resolvers and the dialog settings-provider task.
+validation service resolvers, validation-html resources and service/factory effects, router default
+components/resources, router option resolvers, router lifecycle tasks, and state resource/syntax/renderer/service/task
+effects, plus dialog service resolvers and the dialog settings-provider task.
 `StandardConfiguration` is one broad capability bundle and discovery canary, not the only way those capabilities can
 enter an app world.
 
@@ -104,7 +105,9 @@ so the same linked source can be analyzed under several project frames without d
 
 `registration-kernel-emitter.ts` is the current kernel boundary. It turns admission observations into source spans,
 evidence, provenance, typed DI key identities, registration identities, registration claims, materialized-product
-envelopes, materialization records, and open seams.
+envelopes, materialization records, and open seams. Keep product admission framing separate from support
+materialization: the emitter owns admission/product classification and batch framing, while
+`RegistrationAdmissionSupportMaterializer` owns key, value, registry-parameter, and recognition-open-seam records.
 
 Registration emission is scope-owned. Standalone source-module recognition is useful for inquiry and low-level
 registration analysis. Configuration emission owns the registration products admitted by a concrete configuration
@@ -116,5 +119,7 @@ factory calls from `aurelia` or `@aurelia/kernel`, including namespace imports s
 `Aurelia.Registration.singleton(...)`. This is source-shape recognition, not container reachability. Configuration and
 later DI world construction still decide whether a registration product participates in an app/container world.
 
-DI key identities are split in the kernel by runtime key shape: class, interface symbol, string, symbol, resource,
-resolver, or unknown. Materializers should use those records rather than hiding key semantics in descriptions.
+DI key identities are split in the kernel by runtime key shape: constructable, interface symbol, string, symbol,
+resource, resolver, or unknown. Constructable key identity must come from evaluator- or checker-proven runtime value
+shape, with a declaration identity when available; materializers should use those records rather than hiding key
+semantics in descriptions.

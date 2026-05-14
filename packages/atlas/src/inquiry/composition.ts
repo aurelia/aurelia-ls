@@ -52,26 +52,13 @@ export interface SemanticEntityRef {
   readonly aliases?: readonly string[];
 }
 
-/** Answer-level claim families known to the composition algebra. */
+/** Composition-only claim families that are not produced by framework relationship atoms. */
 export const SemanticClaimFamily = {
-  Identity: "identity",
-  Di: "di",
-  Resource: "resource",
-  Rendering: "rendering",
-  Compiler: "compiler",
-  Lifecycle: "lifecycle",
-  Observation: "observation",
-  Expression: "expression",
-  Router: "router",
-  Materialization: "materialization",
-  Admission: "admission",
+  /** Product-to-framework mirror claims emitted from auLink anchors. */
   Bridge: "bridge",
-  Framework: "framework",
-  Product: "product",
-  App: "app",
 } as const;
 
-/** Answer-level claim family; framework families are preserved by value and bridge/product/app are explicit extension points. */
+/** Claim family; framework families stay in the framework enum and composition adds only non-framework bridges. */
 export type SemanticClaimFamily =
   | FrameworkRelationshipFamily
   | (typeof SemanticClaimFamily)[keyof typeof SemanticClaimFamily];

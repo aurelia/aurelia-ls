@@ -204,7 +204,7 @@ export function observerEntityRowForPackageExport(
       exportShape: observerEntityShapeForPackageExport(row, diInterface),
       observerCapabilities,
       matchedBy,
-      ...(diInterface === undefined ? {} : { diInterface }),
+      diInterface,
       defaultImplementationNames:
         diInterface === undefined
           ? []

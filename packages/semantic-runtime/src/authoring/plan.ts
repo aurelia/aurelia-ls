@@ -1,9 +1,11 @@
 import type { ApplicationTopology } from '../application/index.js';
 import type {
+  AuthoringPreference,
   AuthoringProfileDescriptor,
-  AuthoringTargetKind,
 } from './ontology.js';
 import type { AnyAuthoringOperation } from './operation.js';
+import type { ExpectedSemanticEffect } from './expected-effect.js';
+import type { AuthoringSourceEditPlan } from './source-plan.js';
 
 /** User or AI request after it has been normalized into semantic authoring intent. */
 export class AuthoringIntent {
@@ -21,16 +23,6 @@ export class AuthoringIntent {
   ) {}
 }
 
-/** A user- or AI-owned preference that can influence authoring shape without becoming semantic truth. */
-export class AuthoringPreference {
-  readonly kind = 'authoring-preference' as const;
-
-  constructor(
-    readonly name: string,
-    readonly value: string,
-  ) {}
-}
-
 /** Condition that should be true before applying an authoring plan. */
 export class AuthoringPrecondition {
   readonly kind = 'authoring-precondition' as const;
@@ -38,18 +30,6 @@ export class AuthoringPrecondition {
   constructor(
     readonly summary: string,
     readonly required: boolean = true,
-  ) {}
-}
-
-/** Semantic effect an authoring plan expects after its edits are applied and the app is reopened. */
-export class ExpectedSemanticEffect {
-  readonly kind = 'expected-semantic-effect' as const;
-
-  constructor(
-    /** Product-facing expectation, not a file snapshot assertion. */
-    readonly summary: string,
-    /** Optional app topology node this expectation belongs to. */
-    readonly topologyNodeKind: AuthoringTargetKind | null = null,
   ) {}
 }
 
@@ -72,5 +52,7 @@ export class AuthoringPlan {
     readonly preconditions: readonly AuthoringPrecondition[],
     readonly steps: readonly AuthoringPlanStep[],
     readonly expectedTopology: ApplicationTopology | null,
+    /** Concrete source files or source contracts produced by the plan, before any host applies them. */
+    readonly sourcePlan: AuthoringSourceEditPlan | null = null,
   ) {}
 }

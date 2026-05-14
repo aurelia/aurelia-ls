@@ -1,5 +1,8 @@
 import ts from 'typescript';
 
+import type { AddressHandle } from '../kernel/handles.js';
+import type { SourceSpanSite } from '../kernel/source-address.js';
+
 export const REFERENCE_SEED_KINDS = [
   'identifier-name',
   'property-access-name',
@@ -18,6 +21,30 @@ export interface ReferenceSeed {
 export interface ImportedAureliaExpressionBindings {
   readonly aureliaIdentifiers: ReadonlySet<string>;
   readonly aureliaNamespaces: ReadonlySet<string>;
+}
+
+export interface TypeScriptSourceSiteContext {
+  readonly sourcePath: string;
+  readonly sourceFileAddressHandle: AddressHandle;
+  readonly sourceFile: ts.SourceFile;
+}
+
+export interface TypeScriptNodeSourceSite extends SourceSpanSite {
+  readonly sourcePath: string;
+}
+
+export function sourceSiteForNode<TDetails extends object>(
+  context: TypeScriptSourceSiteContext,
+  node: ts.Node,
+  details: TDetails,
+): TypeScriptNodeSourceSite & TDetails {
+  return {
+    sourcePath: context.sourcePath,
+    sourceFileAddressHandle: context.sourceFileAddressHandle,
+    start: node.getStart(context.sourceFile),
+    end: node.getEnd(),
+    ...details,
+  };
 }
 
 export function guessScriptKind(
@@ -124,6 +151,23 @@ export function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
 
 export function hasStaticModifier(node: ts.Node): boolean {
   return hasModifier(node, ts.SyntaxKind.StaticKeyword);
+}
+
+export function hasAccessorModifier(node: ts.Node): boolean {
+  return hasModifier(node, ts.SyntaxKind.AccessorKeyword);
+}
+
+export function isParameterProperty(
+  parameter: ts.ParameterDeclaration,
+): boolean {
+  return hasModifier(parameter, ts.SyntaxKind.PublicKeyword)
+    || hasModifier(parameter, ts.SyntaxKind.ProtectedKeyword)
+    || hasModifier(parameter, ts.SyntaxKind.PrivateKeyword)
+    || hasModifier(parameter, ts.SyntaxKind.ReadonlyKeyword);
+}
+
+export function isAssignmentOperator(kind: ts.SyntaxKind): boolean {
+  return kind >= ts.SyntaxKind.FirstAssignment && kind <= ts.SyntaxKind.LastAssignment;
 }
 
 export function readCallCalleeText(

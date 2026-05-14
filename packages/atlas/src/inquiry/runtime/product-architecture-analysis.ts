@@ -320,6 +320,35 @@ export interface ProductArchitectureCycleRow {
   readonly summary: string;
 }
 
+export type ProductArchitectureClassSurfaceRoleId =
+  | "product-owner"
+  | "publisher"
+  | "work-frame"
+  | "data-carrier"
+  | "service-surface"
+  | "epoch-context"
+  | "semantic-model"
+  | "other";
+
+export const ProductArchitectureClassSurfaceRole = {
+  /** Class owns a product phase, materialization pass, construction pass, or broad semantic workflow. */
+  ProductOwner: "product-owner",
+  /** Class publishes or records products for a phase owned elsewhere. */
+  Publisher: "publisher",
+  /** Class carries mutable per-pass or per-invocation state with a bounded lifetime. */
+  WorkFrame: "work-frame",
+  /** Class is primarily an input/output/result/config envelope or immutable product carrier. */
+  DataCarrier: "data-carrier",
+  /** Class exposes reusable parser/projector/evaluator/catalog/service-like behavior. */
+  ServiceSurface: "service-surface",
+  /** Class owns a reusable program, project, graph, store, world, or checker epoch consumed by multiple phases. */
+  EpochContext: "epoch-context",
+  /** Class directly models a framework or semantic-runtime domain concept, often through auLink. */
+  SemanticModel: "semantic-model",
+  /** Class has no confident role from current source shape signals. */
+  Other: "other",
+} as const satisfies Readonly<Record<string, ProductArchitectureClassSurfaceRoleId>>;
+
 /** Source-level class surface inside semantic-runtime. */
 export interface ProductArchitectureClassSurfaceRow {
   /** Stable row id. */
@@ -350,6 +379,10 @@ export interface ProductArchitectureClassSurfaceRow {
   readonly auLinkIds: readonly string[];
   /** auLink catalog ids whose framework symbol name exactly matches this product class name. */
   readonly auLinkCatalogIdsForName: readonly string[];
+  /** Coarse role inferred from class name, auLink identity, and member shape for navigation pressure. */
+  readonly surfaceRole: ProductArchitectureClassSurfaceRoleId;
+  /** Human-readable reason for the inferred surface role. */
+  readonly surfaceRoleReason: string;
   /** Number of constructor declarations. */
   readonly constructorCount: number;
   /** Number of instance and static method declarations. */
@@ -1549,6 +1582,7 @@ function productClassSurfaceForDeclaration(
   const lineCount = lineCountForSource(source);
   const auLinkIds = auLinkClassIds.get(classSurfaceKey(entry.filePath, surface.name)) ?? [];
   const auLinkCatalogIdsForName = auLinkCatalogIds.get(surface.name) ?? [];
+  const surfaceRole = classSurfaceRole(surface, auLinkIds, auLinkCatalogIdsForName);
   return {
     id: `product.arch:class:${entry.filePath}:${surface.name}:${node.getStart(entry.sourceFile)}`,
     name: surface.name,
@@ -1564,13 +1598,91 @@ function productClassSurfaceForDeclaration(
     properties: surface.properties,
     auLinkIds,
     auLinkCatalogIdsForName,
+    surfaceRole: surfaceRole.role,
+    surfaceRoleReason: surfaceRole.reason,
     constructorCount: surface.constructorCount,
     methodCount: surface.methodCount,
     propertyCount: surface.propertyCount,
     lineCount,
     source,
-    summary: `${surface.name} spans ${lineCount} line(s), ${surface.methodCount} method(s), ${surface.propertyCount} property/accessor surface(s), ${surface.constructorCount} constructor declaration(s), ${auLinkIds.length} auLink anchor(s), and ${auLinkCatalogIdsForName.length} auLink catalog name match(es).`,
+    summary: `${surface.name} spans ${lineCount} line(s), ${surface.methodCount} method(s), ${surface.propertyCount} property/accessor surface(s), ${surface.constructorCount} constructor declaration(s), ${auLinkIds.length} auLink anchor(s), ${auLinkCatalogIdsForName.length} auLink catalog name match(es), and is classified as ${surfaceRole.role}.`,
   };
+}
+
+function classSurfaceRole(
+  surface: ReturnType<typeof classDeclarationSurface>,
+  auLinkIds: readonly string[],
+  auLinkCatalogIdsForName: readonly string[],
+): { readonly role: ProductArchitectureClassSurfaceRoleId; readonly reason: string } {
+  const name = surface.name;
+  if (auLinkIds.length > 0 || auLinkCatalogIdsForName.length > 0) {
+    return {
+      role: ProductArchitectureClassSurfaceRole.SemanticModel,
+      reason: "auLink-backed class or exact auLink catalog name match",
+    };
+  }
+  if (endsWithAny(name, ["Materializer", "Constructor", "ProjectPass", "Pass", "Builder"])) {
+    return {
+      role: ProductArchitectureClassSurfaceRole.ProductOwner,
+      reason: "phase-owning materializer, constructor, pass, or builder suffix",
+    };
+  }
+  if (endsWithAny(name, ["Publisher", "Publication", "Recorder", "Emitter"])) {
+    return {
+      role: ProductArchitectureClassSurfaceRole.Publisher,
+      reason: "publisher, publication, recorder, or emitter suffix",
+    };
+  }
+  if (endsWithAny(name, ["Parser", "Projector", "Evaluator", "Service", "Catalog", "Factory", "Creator", "Host", "Locator", "Analyzer", "Recognizer", "Index"])) {
+    return {
+      role: ProductArchitectureClassSurfaceRole.ServiceSurface,
+      reason: "reusable parser, projector, evaluator, catalog, factory, creator, host, locator, analyzer, recognizer, or index suffix",
+    };
+  }
+  if (endsWithAny(name, ["Access", "Narrower", "Synthesizer"])) {
+    return {
+      role: ProductArchitectureClassSurfaceRole.ServiceSurface,
+      reason: "reusable access, narrowing, or synthesis service suffix",
+    };
+  }
+  if (endsWithAny(name, ["Project", "Store"])) {
+    return {
+      role: ProductArchitectureClassSurfaceRole.EpochContext,
+      reason: "project or store suffix for a reusable program/checker/world epoch",
+    };
+  }
+  if (endsWithAny(name, ["Record"]) && surface.methodCount > 0) {
+    return {
+      role: ProductArchitectureClassSurfaceRole.SemanticModel,
+      reason: "domain record suffix with behavior rather than a property-only carrier",
+    };
+  }
+  if (
+    name === "Candidate" ||
+    endsWithAny(name, ["Frame", "Run", "Context", "State", "Traversal", "Invocation", "Requirement"])
+  ) {
+    return {
+      role: ProductArchitectureClassSurfaceRole.WorkFrame,
+      reason: "bounded pass, invocation, context, requirement, candidate, or traversal state shape",
+    };
+  }
+  if (
+    endsWithAny(name, ["Emission", "Request", "Result", "Options", "Input", "Config", "Selection", "Allocation", "Descriptor", "Reference"]) ||
+    (surface.methodCount === 0 && surface.propertyCount > 0)
+  ) {
+    return {
+      role: ProductArchitectureClassSurfaceRole.DataCarrier,
+      reason: "carrier suffix or property-only class shape",
+    };
+  }
+  return {
+    role: ProductArchitectureClassSurfaceRole.Other,
+    reason: "no current class-surface role rule matched",
+  };
+}
+
+function endsWithAny(value: string, suffixes: readonly string[]): boolean {
+  return suffixes.some((suffix) => value.endsWith(suffix));
 }
 
 function productFunctionSurfaceForFunctionDeclaration(

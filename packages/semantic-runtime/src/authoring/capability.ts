@@ -1,12 +1,9 @@
 import type {
   AuthoringCapabilityKey,
+  AuthoringOpenReasonKind,
   AuthoringOperationKind,
+  AuthoringSupportState,
 } from './ontology.js';
-
-export type AuthoringCapabilityStatus =
-  | 'supported'
-  | 'partial'
-  | 'open';
 
 /** One advertised authoring capability with explicit uncertainty. */
 export class AuthoringCapability {
@@ -14,11 +11,12 @@ export class AuthoringCapability {
 
   constructor(
     readonly key: AuthoringCapabilityKey,
-    readonly status: AuthoringCapabilityStatus,
+    readonly supportState: AuthoringSupportState,
     /** Operations needed to exercise this capability. */
     readonly operations: readonly AuthoringOperationKind[],
-    /** Why the capability is partial or open, if it is not fully supported. */
-    readonly openSummary: string | null = null,
+    /** Why the capability is partial or open, if it is not fully supported or verifiable. */
+    readonly openReasonKinds: readonly AuthoringOpenReasonKind[] = [],
+    readonly summary: string | null = null,
   ) {}
 }
 

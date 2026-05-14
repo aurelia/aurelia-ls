@@ -1,0 +1,374 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:static-evaluator",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "evaluation",
+        "world-construction"
+      ],
+      "summary": "StaticEvaluator is the ECMAScript evaluator frontier for world construction, configuration, and explicit open seams.",
+      "rationale": "Evaluator gaps should usually trigger low-level substrate improvement, not local smoke-test shims. Keep this as the first reuse point when a feature needs module variables, imports, static closures, or evaluator policy.",
+      "guidance": [
+        "Prefer extending evaluator capabilities and open-seam modeling over adding feature-local evaluator shortcuts.",
+        "When a gap appears, also check whether Atlas needs better flow or capability projection to expose the evaluator route.",
+        "Keep evaluator policy explicit; do not bury dynamic-runtime uncertainty in defensive fallbacks.",
+        "Guardrails belong on StaticEvaluationPolicy; speculative intrinsic attempts should checkpoint/restore seams and guardrail counters so abandoned callback evaluation degrades to imprecise values instead of poisoning the module.",
+        "Collection callback budget exhaustion should usually return imprecise evaluator values such as unknown membership/order; emit product-specific open seams later only when a consumer needs exact membership or order.",
+        "Binding patterns belong in evaluator environment construction. Variable declarations, function/constructor parameters, defaults, rest bindings, and loop declaration initializers should bind environment cells before recognizers inspect evaluated values."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/evaluator.ts",
+          "symbolName": "StaticEvaluator",
+          "line": 135,
+          "summary": "Static ECMAScript evaluator implementation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/expression-reader.ts",
+          "summary": "Expression-reading helper adjacent to evaluator expansion."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/intrinsics.ts",
+          "symbolName": "evaluateArraySort",
+          "summary": "Collection intrinsic guardrail behavior that should degrade to imprecise array values."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.evaluator",
+          "projection": "effects",
+          "summary": "Framework evaluator effect surface for comparison."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "StaticEvaluator",
+          "filePath": "packages/semantic-runtime/src/evaluation/evaluator.ts",
+          "minLineCount": 80,
+          "minMethodCount": 20
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-14"
+    },
+    {
+      "id": "frontier:static-module-graph-evaluator",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "evaluation",
+        "module-graph",
+        "world-construction"
+      ],
+      "summary": "StaticModuleGraphEvaluator owns local module evaluation order, import/export linkage, CommonJS exports, re-exports, and external boundary values.",
+      "rationale": "Feature pressure that needs imported values, plugin registry bodies, source package linking, or module namespaces should reuse the module graph evaluator instead of invoking StaticEvaluator over isolated files. This class is the boundary where ECMAScript module linking becomes evaluator-local values.",
+      "guidance": [
+        "Start here when a feature needs static import values, re-export resolution, namespace imports, CommonJS carriers, or dynamic import boundary propagation.",
+        "Keep Aurelia-specific ownership in evaluation policy, runtimeHost, or downstream recognizers; the module graph evaluator should stay ECMAScript-shaped.",
+        "If external app analysis loses product-specific intrinsics during follow-up expression reads, check that callers reuse this graph result and runtime host."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/module-evaluator.ts",
+          "symbolName": "StaticModuleGraphEvaluator",
+          "line": 51,
+          "summary": "Module graph evaluator with import/export linkage."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/README.md",
+          "summary": "Static evaluation module graph and expression-reader guidance."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "StaticModuleGraphEvaluator",
+          "filePath": "packages/semantic-runtime/src/evaluation/module-evaluator.ts",
+          "minLineCount": 200,
+          "minMethodCount": 8
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:evaluation-module-source-host",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "evaluation",
+        "module-resolution",
+        "external-packages"
+      ],
+      "summary": "FileSystemEvaluationModuleSourceHost is the source-resolution boundary for recursive evaluator module graph construction.",
+      "rationale": "External app and plugin pressure depends on resolving authored TS/JS, local JSON/HTML/CSS assets, emitted JS specifiers, path aliases, and package declarations that can map back to source. This host should stay the single module-source admission point instead of growing separate package/source readers in recognizers.",
+      "guidance": [
+        "Start here when local asset modules, package declaration-to-source mapping, path aliases, or module graph admission rules change.",
+        "Reuse the shared boot host-file cache for package manifest reads; do not add independent manifest readers inside feature code.",
+        "Keep Aurelia framework packages on the framework-emulation path rather than pulling `aurelia` or `@aurelia/*` from node_modules into app evaluation."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/module-host.ts",
+          "symbolName": "FileSystemEvaluationModuleSourceHost",
+          "line": 51,
+          "summary": "File-system implementation of the evaluation module source host."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/README.md",
+          "summary": "Watchpoints for package and module-source resolution."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "FileSystemEvaluationModuleSourceHost",
+          "filePath": "packages/semantic-runtime/src/evaluation/module-host.ts",
+          "minLineCount": 100,
+          "minMethodCount": 4
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:static-project-evaluation-pass",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "evaluation",
+        "boot",
+        "world-construction"
+      ],
+      "summary": "StaticProjectEvaluationPass is the shared project-level evaluation pass over boot-admitted app source files.",
+      "rationale": "Resource, configuration, DI, template, and type-system work need one shared evaluation envelope over app sources and linked source dependencies. Project-level evaluation should remain evaluator substrate and kernel open-seam emission, not an Aurelia recognizer.",
+      "guidance": [
+        "Start here when app-source admission, linked source admission, unresolved module capture, or evaluator open-seam emission changes.",
+        "Keep source roles authoritative: tests, declarations, templates, styles, manifests, and tooling configs should not enter app-world static evaluation by accident.",
+        "If a downstream materializer needs another evaluation loop, inspect whether it should consume StaticProjectEvaluationResult instead."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
+          "symbolName": "StaticProjectEvaluationPass",
+          "line": 84,
+          "summary": "Project-level static evaluation pass."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/README.md",
+          "summary": "Project-level evaluation envelope notes."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "StaticProjectEvaluationPass",
+          "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
+          "minLineCount": 80,
+          "minMethodCount": 3
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:evaluation-module-loader",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "evaluation",
+        "framework-errors",
+        "resources"
+      ],
+      "summary": "ModuleLoader is the framework-shaped evaluator service for kernel module transform-input semantics and AUR0021 diagnostics.",
+      "rationale": "The generic evaluator should stay ECMAScript-shaped, but Aurelia's IModuleLoader is itself an evaluation handoff. ModuleLoader issue materialization should spend invalid_module_transform_input only after evaluating source inputs, and downstream registry/resource materializers should handle analyzed module exports instead of duplicating transform checks.",
+      "guidance": [
+        "Start here when `aliasedResourcesRegistry(...)`, `IModuleLoader.load(...)`, or analyzed module export pressure appears.",
+        "Keep direct-input versus promise-fulfillment behavior aligned with `kernel:ModuleLoader`: direct primitive/function/nullish inputs reject, promise nullish fulfillments reject, and non-null non-object promise fulfillments analyze to an empty module.",
+        "Do not suppress `di.open-registry-body` for aliased registries with a shim; the honest next layer is resource-export and registry-body materialization from analyzed module items."
+      ],
+      "anchors": [
+        {
+          "kind": "auLink",
+          "linkId": "kernel:ModuleLoader",
+          "symbolName": "ModuleLoader",
+          "summary": "Semantic-runtime mirror of the kernel module loader transform semantics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/module-loader.ts",
+          "symbolName": "ModuleLoader",
+          "summary": "Framework-shaped evaluator service for module transform input analysis."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/module-loader-issues.ts",
+          "symbolName": "ModuleLoaderIssueMaterializer",
+          "summary": "Source-backed issue materializer for aliasedResourcesRegistry and IModuleLoader.load calls."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "semantic-references",
+          "filters": {
+            "packageId": "kernel",
+            "query": "invalid_module_transform_input"
+          },
+          "summary": "Exact framework-error link check for AUR0021."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "auLink-exists",
+          "linkId": "kernel:ModuleLoader",
+          "symbolName": "ModuleLoader",
+          "filePath": "packages/semantic-runtime/src/evaluation/module-loader.ts"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/evaluation/module-loader-issues.ts",
+          "symbolName": "ModuleLoaderIssueMaterializer"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "ModuleLoaderIssueMaterializer",
+          "filePath": "packages/semantic-runtime/src/evaluation/module-loader-issues.ts",
+          "minLineCount": 80,
+          "minMethodCount": 4
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-13"
+    },
+    {
+      "id": "frontier:evaluation-framework-api-issues",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "evaluation",
+        "framework-errors",
+        "framework-api",
+        "kernel-api",
+        "metadata-api"
+      ],
+      "summary": "FrameworkApiIssueMaterializer owns exact source-local framework API diagnostics for kernel utilities and metadata calls.",
+      "rationale": "Some framework errors are not DI, resource, template, or configuration behavior; they are source-visible utility/API guards. They still belong below higher Aurelia recognizers because TypeChecker/import grounding can prove the same framework branch without running user code.",
+      "guidance": [
+        "Start here when framework ErrorNames or raw Error rows point at direct source API calls rather than container, registration, resource, template, routing, or validation semantics.",
+        "Keep claims source-local and conservative: EventAggregator publish/subscribe requires a framework-grounded receiver plus a statically falsy first argument; firstDefined requires no arguments or all statically undefined arguments; Metadata.define requires a framework-imported Metadata receiver and statically empty metadata keys.",
+        "Use frameworkRawErrorAuthority for exact raw framework API guards such as Metadata.define-without-key instead of inventing AUR labels.",
+        "Do not make the generic StaticEvaluator recognize Aurelia framework APIs unless the framework behavior is actually an evaluator service like ModuleLoader."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/framework-api-issues.ts",
+          "symbolName": "FrameworkApiIssueMaterializer",
+          "line": 87,
+          "summary": "Source-backed issue materializer for framework utility/API calls."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "diagnostic-codes",
+          "filters": {
+            "packageId": "kernel",
+            "query": "event_aggregator"
+          },
+          "summary": "Framework error-code grounding for EventAggregator source API guards."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "diagnostic-codes",
+          "filters": {
+            "packageId": "kernel",
+            "query": "first_defined_no_value"
+          },
+          "summary": "Framework error-code grounding for firstDefined."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "semantic-raw-references",
+          "filters": {
+            "packageId": "metadata"
+          },
+          "summary": "Exact raw Error authority grounding for Metadata.define without a key."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "FrameworkApiIssueMaterializer",
+          "filePath": "packages/semantic-runtime/src/evaluation/framework-api-issues.ts",
+          "minLineCount": 90,
+          "minMethodCount": 3
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-14"
+    },
+    {
+      "id": "frontier:module-environment-record",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "evaluation",
+        "ecmascript",
+        "environment-record"
+      ],
+      "summary": "ModuleEnvironmentRecord is the ECMAScript-like binding-cell model for module and evaluator-local function environments.",
+      "rationale": "Environment records are evaluator machinery, not durable kernel products, but they are central to correct static execution: declaration, initialization, assignment, open state, CommonJS carriers, and cloned branch/function frames all share this model.",
+      "guidance": [
+        "Start here when lexical binding state, assignment mutability, CommonJS carriers, function-call frames, or branch clones change.",
+        "Keep evaluator-local binding cells out of durable kernel records unless a specific fact earns a product identity.",
+        "Do not replace environment lookup with ad hoc maps inside expression or module evaluators."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/environment.ts",
+          "symbolName": "ModuleEnvironmentRecord",
+          "line": 54,
+          "summary": "Evaluator-local ECMAScript-like environment record."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/environment.ts",
+          "symbolName": "EvaluationBinding",
+          "line": 26,
+          "summary": "One binding cell inside an environment record."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/README.md",
+          "summary": "Module environment responsibilities."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "ModuleEnvironmentRecord",
+          "filePath": "packages/semantic-runtime/src/evaluation/environment.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    }
+  ]
+}

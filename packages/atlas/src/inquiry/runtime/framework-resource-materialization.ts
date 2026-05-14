@@ -321,9 +321,7 @@ function materializationSiteForCall(
     packageName,
     callSite,
     subjectText: descriptor.subjectText,
-    ...(descriptor.producerName === undefined
-      ? {}
-      : { producerName: descriptor.producerName }),
+    producerName: descriptor.producerName,
     source,
     summary: descriptor.summary,
   };

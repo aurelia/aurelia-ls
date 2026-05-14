@@ -37,6 +37,7 @@ export enum TokenType {
   Colon,           // :
   Semicolon,       // ;
   Dot,             // .
+  DotDot,          // ..
   Ellipsis,        // ...
   Question,        // ?
   QuestionDot,     // ?.
@@ -239,15 +240,15 @@ export class Scanner {
       return new Token(TokenType.EOF, undefined, start, start);
     }
 
-    const ch = this.charCodeAt(this.index);
+    const ch = charCodeAt(this.source, this.index);
 
     // Identifiers / keywords / specials
-    if (this.isIdentifierStart(ch)) {
+    if (isIdentifierStart(ch)) {
       return this.scanIdentifierOrKeyword();
     }
 
     // Numbers: decimal integer/float/exponent, with optional leading dot
-    if (this.isDigit(ch) || (ch === CharCode.Dot && this.isDigit(this.charCodeAt(this.index + 1)))) {
+    if (isDigit(ch) || (ch === CharCode.Dot && isDigit(charCodeAt(this.source, this.index + 1)))) {
       return this.scanNumber(ch === CharCode.Dot);
     }
 
@@ -256,215 +257,9 @@ export class Scanner {
       return this.scanString();
     }
 
-    return this.scanPunctuationOrOperator(ch, start);
-  }
-
-  private scanPunctuationOrOperator(ch: number, start: number): Token {
-    switch (ch) {
-      case CharCode.OpenParen:
-        return this.scanOneChar(TokenType.OpenParen, start);
-      case CharCode.CloseParen:
-        return this.scanOneChar(TokenType.CloseParen, start);
-      case CharCode.OpenBracket:
-        return this.scanOneChar(TokenType.OpenBracket, start);
-      case CharCode.CloseBracket:
-        return this.scanOneChar(TokenType.CloseBracket, start);
-      case CharCode.OpenBrace:
-        return this.scanOneChar(TokenType.OpenBrace, start);
-      case CharCode.CloseBrace:
-        return this.scanOneChar(TokenType.CloseBrace, start);
-      case CharCode.Comma:
-        return this.scanOneChar(TokenType.Comma, start);
-      case CharCode.Colon:
-        return this.scanOneChar(TokenType.Colon, start);
-      case CharCode.Semicolon:
-        return this.scanOneChar(TokenType.Semicolon, start);
-      case CharCode.Backtick:
-        return this.scanOneChar(TokenType.Backtick, start);
-      case CharCode.Percent:
-        return this.scanOneChar(TokenType.Percent, start);
-      case CharCode.Dot:
-        return this.scanDot(start);
-      case CharCode.Question:
-        return this.scanQuestion(start);
-      case CharCode.Plus:
-        return this.scanPlus(start);
-      case CharCode.Minus:
-        return this.scanMinus(start);
-      case CharCode.Asterisk:
-        return this.scanAsterisk(start);
-      case CharCode.Slash:
-        return this.scanSlash(start);
-      case CharCode.Exclamation:
-        return this.scanExclamation(start);
-      case CharCode.Ampersand:
-        return this.scanAmpersand(start);
-      case CharCode.Bar:
-        return this.scanBar(start);
-      case CharCode.LessThan:
-        return this.scanLessThan(start);
-      case CharCode.GreaterThan:
-        return this.scanGreaterThan(start);
-      case CharCode.Equals:
-        return this.scanEquals(start);
-      default:
-        return this.scanUnknown(start);
-    }
-  }
-
-  private scanOneChar(type: TokenType, start: number): Token {
-    this.index++;
-    return new Token(type, undefined, start, this.index);
-  }
-
-  private scanDot(start: number): Token {
-    const next = this.charCodeAt(this.index + 1);
-    const next2 = this.charCodeAt(this.index + 2);
-    // Leading-dot numeric literals are handled before punctuation scanning.
-    if (next === CharCode.Dot && next2 === CharCode.Dot) {
-      this.index += 3;
-      return new Token(TokenType.Ellipsis, undefined, start, this.index);
-    }
-    return this.scanOneChar(TokenType.Dot, start);
-  }
-
-  private scanQuestion(start: number): Token {
-    const next = this.charCodeAt(this.index + 1);
-    if (next === CharCode.Question) {
-      this.index += 2;
-      return new Token(TokenType.QuestionQuestion, undefined, start, this.index);
-    }
-    if (next === CharCode.Dot) {
-      this.index += 2;
-      return new Token(TokenType.QuestionDot, undefined, start, this.index);
-    }
-    return this.scanOneChar(TokenType.Question, start);
-  }
-
-  private scanPlus(start: number): Token {
-    const next = this.charCodeAt(this.index + 1);
-    if (next === CharCode.Plus) {
-      this.index += 2;
-      return new Token(TokenType.PlusPlus, undefined, start, this.index);
-    }
-    if (next === CharCode.Equals) {
-      this.index += 2;
-      return new Token(TokenType.PlusEquals, undefined, start, this.index);
-    }
-    return this.scanOneChar(TokenType.Plus, start);
-  }
-
-  private scanMinus(start: number): Token {
-    const next = this.charCodeAt(this.index + 1);
-    if (next === CharCode.Minus) {
-      this.index += 2;
-      return new Token(TokenType.MinusMinus, undefined, start, this.index);
-    }
-    if (next === CharCode.Equals) {
-      this.index += 2;
-      return new Token(TokenType.MinusEquals, undefined, start, this.index);
-    }
-    return this.scanOneChar(TokenType.Minus, start);
-  }
-
-  private scanAsterisk(start: number): Token {
-    const next = this.charCodeAt(this.index + 1);
-    if (next === CharCode.Asterisk) {
-      this.index += 2;
-      return new Token(TokenType.StarStar, undefined, start, this.index);
-    }
-    if (next === CharCode.Equals) {
-      this.index += 2;
-      return new Token(TokenType.AsteriskEquals, undefined, start, this.index);
-    }
-    return this.scanOneChar(TokenType.Asterisk, start);
-  }
-
-  private scanSlash(start: number): Token {
-    const next = this.charCodeAt(this.index + 1);
-    if (next === CharCode.Equals) {
-      this.index += 2;
-      return new Token(TokenType.SlashEquals, undefined, start, this.index);
-    }
-    return this.scanOneChar(TokenType.Slash, start);
-  }
-
-  private scanExclamation(start: number): Token {
-    const next = this.charCodeAt(this.index + 1);
-    if (next === CharCode.Equals) {
-      const next2 = this.charCodeAt(this.index + 2);
-      if (next2 === CharCode.Equals) {
-        this.index += 3;
-        return new Token(TokenType.ExclamationEqualsEquals, undefined, start, this.index);
-      }
-      this.index += 2;
-      return new Token(TokenType.ExclamationEquals, undefined, start, this.index);
-    }
-    return this.scanOneChar(TokenType.Exclamation, start);
-  }
-
-  private scanAmpersand(start: number): Token {
-    const next = this.charCodeAt(this.index + 1);
-    if (next === CharCode.Ampersand) {
-      this.index += 2;
-      return new Token(TokenType.AmpersandAmpersand, undefined, start, this.index);
-    }
-    return this.scanOneChar(TokenType.Ampersand, start);
-  }
-
-  private scanBar(start: number): Token {
-    const next = this.charCodeAt(this.index + 1);
-    if (next === CharCode.Bar) {
-      this.index += 2;
-      return new Token(TokenType.BarBar, undefined, start, this.index);
-    }
-    return this.scanOneChar(TokenType.Bar, start);
-  }
-
-  private scanLessThan(start: number): Token {
-    const next = this.charCodeAt(this.index + 1);
-    if (next === CharCode.Equals) {
-      this.index += 2;
-      return new Token(TokenType.LessThanOrEqual, undefined, start, this.index);
-    }
-    return this.scanOneChar(TokenType.LessThan, start);
-  }
-
-  private scanGreaterThan(start: number): Token {
-    const next = this.charCodeAt(this.index + 1);
-    if (next === CharCode.Equals) {
-      this.index += 2;
-      return new Token(TokenType.GreaterThanOrEqual, undefined, start, this.index);
-    }
-    return this.scanOneChar(TokenType.GreaterThan, start);
-  }
-
-  private scanEquals(start: number): Token {
-    const next = this.charCodeAt(this.index + 1);
-    if (next === CharCode.GreaterThan) {
-      this.index += 2;
-      return new Token(TokenType.EqualsGreaterThan, undefined, start, this.index);
-    }
-    if (next === CharCode.Equals) {
-      const next2 = this.charCodeAt(this.index + 2);
-      if (next2 === CharCode.Equals) {
-        this.index += 3;
-        return new Token(TokenType.EqualsEqualsEquals, undefined, start, this.index);
-      }
-      this.index += 2;
-      return new Token(TokenType.EqualsEquals, undefined, start, this.index);
-    }
-    return this.scanOneChar(TokenType.Equals, start);
-  }
-
-  private scanUnknown(start: number): Token {
-    this.index++;
-    return new Token(
-      TokenType.Unknown,
-      this.source.slice(start, this.index),
-      start,
-      this.index,
-    );
+    const token = scanExpressionPunctuationOrOperator(this.source, ch, start);
+    this.index = token.end;
+    return token;
   }
 
   // --------------------------------------------------------------------------------------
@@ -473,19 +268,19 @@ export class Scanner {
 
   private skipWhitespaceAndComments(): void {
     while (this.index < this.length) {
-      const ch = this.charCodeAt(this.index);
+      const ch = charCodeAt(this.source, this.index);
 
       // Whitespace
-      if (this.isWhitespace(ch)) {
+      if (isEcmascriptWhitespaceCode(ch)) {
         this.index++;
         continue;
       }
 
       // Line comment: // ...
-      if (ch === CharCode.Slash && this.charCodeAt(this.index + 1) === CharCode.Slash) {
+      if (ch === CharCode.Slash && charCodeAt(this.source, this.index + 1) === CharCode.Slash) {
         this.index += 2;
         while (this.index < this.length) {
-          const c = this.charCodeAt(this.index);
+          const c = charCodeAt(this.source, this.index);
           if (c === CharCode.LineFeed || c === CharCode.CarriageReturn) break;
           this.index++;
         }
@@ -493,11 +288,11 @@ export class Scanner {
       }
 
       // Block comment: /* ... */
-      if (ch === CharCode.Slash && this.charCodeAt(this.index + 1) === CharCode.Asterisk) {
+      if (ch === CharCode.Slash && charCodeAt(this.source, this.index + 1) === CharCode.Asterisk) {
         this.index += 2;
         while (this.index < this.length) {
-          const c = this.charCodeAt(this.index);
-          if (c === CharCode.Asterisk && this.charCodeAt(this.index + 1) === CharCode.Slash) {
+          const c = charCodeAt(this.source, this.index);
+          if (c === CharCode.Asterisk && charCodeAt(this.source, this.index + 1) === CharCode.Slash) {
             this.index += 2;
             break;
           }
@@ -514,7 +309,7 @@ export class Scanner {
     const start = this.index;
     this.index++; // consume first char
 
-    while (this.index < this.length && this.isIdentifierPart(this.charCodeAt(this.index))) {
+    while (this.index < this.length && isIdentifierPart(charCodeAt(this.source, this.index))) {
       this.index++;
     }
 
@@ -564,29 +359,29 @@ export class Scanner {
     }
 
     // Integer part
-    while (this.index < this.length && this.isDigit(this.charCodeAt(this.index))) {
+    while (this.index < this.length && isDigit(charCodeAt(this.source, this.index))) {
       this.index++;
     }
 
     // Fractional part ('.' digits)
-    if (!startsWithDot && this.charCodeAt(this.index) === CharCode.Dot && this.isDigit(this.charCodeAt(this.index + 1))) {
+    if (!startsWithDot && charCodeAt(this.source, this.index) === CharCode.Dot && isDigit(charCodeAt(this.source, this.index + 1))) {
       this.index++; // consume '.'
-      while (this.index < this.length && this.isDigit(this.charCodeAt(this.index))) {
+      while (this.index < this.length && isDigit(charCodeAt(this.source, this.index))) {
         this.index++;
       }
     }
 
     // Exponent part (e/E [+-]? digits)
-    const e = this.charCodeAt(this.index);
+    const e = charCodeAt(this.source, this.index);
     if (e === CharCode.LowercaseE || e === CharCode.UppercaseE) {
-      const sign = this.charCodeAt(this.index + 1);
-      const afterSign = sign === CharCode.Plus || sign === CharCode.Minus ? this.charCodeAt(this.index + 2) : this.charCodeAt(this.index + 1);
-      if (this.isDigit(afterSign)) {
+      const sign = charCodeAt(this.source, this.index + 1);
+      const afterSign = sign === CharCode.Plus || sign === CharCode.Minus ? charCodeAt(this.source, this.index + 2) : charCodeAt(this.source, this.index + 1);
+      if (isDigit(afterSign)) {
         this.index++; // consume 'e' / 'E'
         if (sign === CharCode.Plus || sign === CharCode.Minus) {
           this.index++; // consume sign
         }
-        while (this.index < this.length && this.isDigit(this.charCodeAt(this.index))) {
+        while (this.index < this.length && isDigit(charCodeAt(this.source, this.index))) {
           this.index++;
         }
       }
@@ -599,7 +394,7 @@ export class Scanner {
   }
 
   private scanString(): Token {
-    const quote = this.charCodeAt(this.index); // ' or "
+    const quote = charCodeAt(this.source, this.index); // ' or "
     const start = this.index;
     this.index++; // consume opening quote
 
@@ -607,7 +402,7 @@ export class Scanner {
     let closed = false;
 
     while (this.index < this.length) {
-      const ch = this.charCodeAt(this.index);
+      const ch = charCodeAt(this.source, this.index);
 
       if (ch === quote) {
         this.index++; // consume closing quote
@@ -617,7 +412,7 @@ export class Scanner {
 
       if (ch === CharCode.Backslash) {
         // Escape sequence
-        const next = this.charCodeAt(this.index + 1);
+        const next = charCodeAt(this.source, this.index + 1);
         if (next < 0) {
           // Backslash at end of input; treat as unterminated
           this.index++;
@@ -683,51 +478,209 @@ export class Scanner {
     const end = this.index;
     return new Token(TokenType.StringLiteral, result, start, end, !closed);
   }
+}
 
-  // --------------------------------------------------------------------------------------
-  // Char helpers
-  // --------------------------------------------------------------------------------------
-
-  private charCodeAt(index: number): number {
-    if (index < 0 || index >= this.length) return -1;
-    return this.source.charCodeAt(index);
+function scanExpressionPunctuationOrOperator(source: string, ch: number, start: number): Token {
+  switch (ch) {
+    case CharCode.OpenParen:
+      return expressionSingleCharacterToken(TokenType.OpenParen, start);
+    case CharCode.CloseParen:
+      return expressionSingleCharacterToken(TokenType.CloseParen, start);
+    case CharCode.OpenBracket:
+      return expressionSingleCharacterToken(TokenType.OpenBracket, start);
+    case CharCode.CloseBracket:
+      return expressionSingleCharacterToken(TokenType.CloseBracket, start);
+    case CharCode.OpenBrace:
+      return expressionSingleCharacterToken(TokenType.OpenBrace, start);
+    case CharCode.CloseBrace:
+      return expressionSingleCharacterToken(TokenType.CloseBrace, start);
+    case CharCode.Comma:
+      return expressionSingleCharacterToken(TokenType.Comma, start);
+    case CharCode.Colon:
+      return expressionSingleCharacterToken(TokenType.Colon, start);
+    case CharCode.Semicolon:
+      return expressionSingleCharacterToken(TokenType.Semicolon, start);
+    case CharCode.Backtick:
+      return expressionSingleCharacterToken(TokenType.Backtick, start);
+    case CharCode.Percent:
+      return expressionSingleCharacterToken(TokenType.Percent, start);
+    case CharCode.Dot:
+      return scanExpressionDotOperator(source, start);
+    case CharCode.Question:
+      return scanExpressionQuestionOperator(source, start);
+    case CharCode.Plus:
+      return scanExpressionPlusOperator(source, start);
+    case CharCode.Minus:
+      return scanExpressionMinusOperator(source, start);
+    case CharCode.Asterisk:
+      return scanExpressionAsteriskOperator(source, start);
+    case CharCode.Slash:
+      return scanExpressionSlashOperator(source, start);
+    case CharCode.Exclamation:
+      return scanExpressionExclamationOperator(source, start);
+    case CharCode.Ampersand:
+      return scanExpressionAmpersandOperator(source, start);
+    case CharCode.Bar:
+      return scanExpressionBarOperator(source, start);
+    case CharCode.LessThan:
+      return scanExpressionLessThanOperator(source, start);
+    case CharCode.GreaterThan:
+      return scanExpressionGreaterThanOperator(source, start);
+    case CharCode.Equals:
+      return scanExpressionEqualsOperator(source, start);
+    default:
+      return new Token(TokenType.Unknown, source.slice(start, start + 1), start, start + 1);
   }
+}
 
-  private isWhitespace(ch: number): boolean {
-    return (
-      ch === CharCode.Space ||
-      ch === CharCode.Tab ||
-      ch === CharCode.CarriageReturn ||
-      ch === CharCode.LineFeed ||
-      ch === CharCode.VerticalTab ||
-      ch === CharCode.FormFeed ||
-      ch === CharCode.NonBreakingSpace
-    );
+function expressionSingleCharacterToken(type: TokenType, start: number): Token {
+  return new Token(type, undefined, start, start + 1);
+}
+
+function scanExpressionDotOperator(source: string, start: number): Token {
+  const next = charCodeAt(source, start + 1);
+  const next2 = charCodeAt(source, start + 2);
+  // Leading-dot numeric literals are handled before punctuation scanning.
+  if (next !== CharCode.Dot) {
+    return expressionSingleCharacterToken(TokenType.Dot, start);
   }
-
-  private isDigit(ch: number): boolean {
-    return ch >= CharCode.Zero && ch <= CharCode.Nine;
+  if (next2 === CharCode.Dot) {
+    return new Token(TokenType.Ellipsis, undefined, start, start + 3);
   }
+  return new Token(TokenType.DotDot, undefined, start, start + 2);
+}
 
-  private isIdentifierStart(ch: number): boolean {
-    if (ch < 0) return false;
-    if (
-      (ch >= CharCode.UppercaseA && ch <= CharCode.UppercaseZ) ||
-      (ch >= CharCode.LowercaseA && ch <= CharCode.LowercaseZ) ||
-      ch === CharCode.Dollar ||
-      ch === CharCode.Underscore
-    ) {
-      return true;
-    }
-    return isInRanges(ch, IdentifierStartBmpRanges);
+function scanExpressionQuestionOperator(source: string, start: number): Token {
+  const next = charCodeAt(source, start + 1);
+  if (next === CharCode.Question) {
+    return new Token(TokenType.QuestionQuestion, undefined, start, start + 2);
   }
-
-  private isIdentifierPart(ch: number): boolean {
-    if (this.isIdentifierStart(ch)) return true;
-    if (this.isDigit(ch)) return true;
-    return false;
+  if (next === CharCode.Dot) {
+    return new Token(TokenType.QuestionDot, undefined, start, start + 2);
   }
+  return expressionSingleCharacterToken(TokenType.Question, start);
+}
 
+function scanExpressionPlusOperator(source: string, start: number): Token {
+  const next = charCodeAt(source, start + 1);
+  if (next === CharCode.Plus) {
+    return new Token(TokenType.PlusPlus, undefined, start, start + 2);
+  }
+  if (next === CharCode.Equals) {
+    return new Token(TokenType.PlusEquals, undefined, start, start + 2);
+  }
+  return expressionSingleCharacterToken(TokenType.Plus, start);
+}
+
+function scanExpressionMinusOperator(source: string, start: number): Token {
+  const next = charCodeAt(source, start + 1);
+  if (next === CharCode.Minus) {
+    return new Token(TokenType.MinusMinus, undefined, start, start + 2);
+  }
+  if (next === CharCode.Equals) {
+    return new Token(TokenType.MinusEquals, undefined, start, start + 2);
+  }
+  return expressionSingleCharacterToken(TokenType.Minus, start);
+}
+
+function scanExpressionAsteriskOperator(source: string, start: number): Token {
+  const next = charCodeAt(source, start + 1);
+  if (next === CharCode.Asterisk) {
+    return new Token(TokenType.StarStar, undefined, start, start + 2);
+  }
+  if (next === CharCode.Equals) {
+    return new Token(TokenType.AsteriskEquals, undefined, start, start + 2);
+  }
+  return expressionSingleCharacterToken(TokenType.Asterisk, start);
+}
+
+function scanExpressionSlashOperator(source: string, start: number): Token {
+  return charCodeAt(source, start + 1) === CharCode.Equals
+    ? new Token(TokenType.SlashEquals, undefined, start, start + 2)
+    : expressionSingleCharacterToken(TokenType.Slash, start);
+}
+
+function scanExpressionExclamationOperator(source: string, start: number): Token {
+  if (charCodeAt(source, start + 1) !== CharCode.Equals) {
+    return expressionSingleCharacterToken(TokenType.Exclamation, start);
+  }
+  return charCodeAt(source, start + 2) === CharCode.Equals
+    ? new Token(TokenType.ExclamationEqualsEquals, undefined, start, start + 3)
+    : new Token(TokenType.ExclamationEquals, undefined, start, start + 2);
+}
+
+function scanExpressionAmpersandOperator(source: string, start: number): Token {
+  return charCodeAt(source, start + 1) === CharCode.Ampersand
+    ? new Token(TokenType.AmpersandAmpersand, undefined, start, start + 2)
+    : expressionSingleCharacterToken(TokenType.Ampersand, start);
+}
+
+function scanExpressionBarOperator(source: string, start: number): Token {
+  return charCodeAt(source, start + 1) === CharCode.Bar
+    ? new Token(TokenType.BarBar, undefined, start, start + 2)
+    : expressionSingleCharacterToken(TokenType.Bar, start);
+}
+
+function scanExpressionLessThanOperator(source: string, start: number): Token {
+  return charCodeAt(source, start + 1) === CharCode.Equals
+    ? new Token(TokenType.LessThanOrEqual, undefined, start, start + 2)
+    : expressionSingleCharacterToken(TokenType.LessThan, start);
+}
+
+function scanExpressionGreaterThanOperator(source: string, start: number): Token {
+  return charCodeAt(source, start + 1) === CharCode.Equals
+    ? new Token(TokenType.GreaterThanOrEqual, undefined, start, start + 2)
+    : expressionSingleCharacterToken(TokenType.GreaterThan, start);
+}
+
+function scanExpressionEqualsOperator(source: string, start: number): Token {
+  const next = charCodeAt(source, start + 1);
+  if (next === CharCode.GreaterThan) {
+    return new Token(TokenType.EqualsGreaterThan, undefined, start, start + 2);
+  }
+  if (next !== CharCode.Equals) {
+    return expressionSingleCharacterToken(TokenType.Equals, start);
+  }
+  return charCodeAt(source, start + 2) === CharCode.Equals
+    ? new Token(TokenType.EqualsEqualsEquals, undefined, start, start + 3)
+    : new Token(TokenType.EqualsEquals, undefined, start, start + 2);
+}
+
+function charCodeAt(source: string, index: number): number {
+  return index < 0 || index >= source.length ? -1 : source.charCodeAt(index);
+}
+
+function isEcmascriptWhitespaceCode(ch: number): boolean {
+  return (
+    ch === CharCode.Space ||
+    ch === CharCode.Tab ||
+    ch === CharCode.CarriageReturn ||
+    ch === CharCode.LineFeed ||
+    ch === CharCode.VerticalTab ||
+    ch === CharCode.FormFeed ||
+    ch === CharCode.NonBreakingSpace
+  );
+}
+
+function isDigit(ch: number): boolean {
+  return ch >= CharCode.Zero && ch <= CharCode.Nine;
+}
+
+function isIdentifierStart(ch: number): boolean {
+  if (ch < 0) return false;
+  if (
+    (ch >= CharCode.UppercaseA && ch <= CharCode.UppercaseZ) ||
+    (ch >= CharCode.LowercaseA && ch <= CharCode.LowercaseZ) ||
+    ch === CharCode.Dollar ||
+    ch === CharCode.Underscore
+  ) {
+    return true;
+  }
+  return isInRanges(ch, IdentifierStartBmpRanges);
+}
+
+function isIdentifierPart(ch: number): boolean {
+  return isIdentifierStart(ch) || isDigit(ch);
 }
 
 // ----------------------------------------------------------------------------------------

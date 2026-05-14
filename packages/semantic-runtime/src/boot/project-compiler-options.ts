@@ -8,6 +8,7 @@ import {
   normalizePosixPath,
   readPackageManifest,
   readPackageName,
+  readPackageWorkspacePatterns,
   safeIsDirectory,
   safeReadDirectory,
 } from './host-files.js';
@@ -194,7 +195,7 @@ function discoverPackageWorkspaceRoot(rootDir: string): string | null {
 
 function discoverWorkspacePackageRoots(workspaceRoot: string): readonly string[] {
   const manifest = readPackageManifest(workspaceRoot);
-  const patterns = workspacePatterns(manifest?.workspaces)
+  const patterns = readPackageWorkspacePatterns(manifest)
     .filter((pattern) => !pattern.startsWith('!'));
   const roots = new Set<string>();
   for (const pattern of patterns) {
@@ -203,19 +204,6 @@ function discoverWorkspacePackageRoots(workspaceRoot: string): readonly string[]
     }
   }
   return [...roots].sort((left, right) => left.localeCompare(right));
-}
-
-function workspacePatterns(workspaces: unknown): readonly string[] {
-  if (Array.isArray(workspaces)) {
-    return workspaces.filter((value): value is string => typeof value === 'string');
-  }
-  if (workspaces != null && typeof workspaces === 'object') {
-    const packages = (workspaces as { readonly packages?: unknown }).packages;
-    if (Array.isArray(packages)) {
-      return packages.filter((value): value is string => typeof value === 'string');
-    }
-  }
-  return [];
 }
 
 function packageRootsForWorkspacePattern(workspaceRoot: string, pattern: string): readonly string[] {

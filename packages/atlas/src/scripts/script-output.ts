@@ -151,6 +151,69 @@ export function countLabel(count: number, singular: string, plural: string): str
   return count === 1 ? singular : plural;
 }
 
+/** Read the value following a prefix-style script argument such as `--query=`. */
+export function scriptArgumentValue(
+  prefix: string,
+  args: readonly string[] = process.argv,
+): string | undefined {
+  return scriptArgumentValues(prefix, args)[0];
+}
+
+/** Read all values following a prefix-style or separated script argument such as `--domain=x` or `--domain x`. */
+export function scriptArgumentValues(
+  prefix: string,
+  args: readonly string[] = process.argv,
+): readonly string[] {
+  const values: string[] = [];
+  for (const entry of args) {
+    if (entry.startsWith(prefix)) {
+      const value = entry.slice(prefix.length);
+      if (value.length > 0) {
+        values.push(value);
+      }
+    }
+  }
+  if (!prefix.endsWith("=")) {
+    return values;
+  }
+  const separatedFlag = prefix.slice(0, -1);
+  for (let index = 0; index < args.length - 1; index += 1) {
+    if (args[index] !== separatedFlag) {
+      continue;
+    }
+    const value = args[index + 1];
+    if (value !== undefined && value.length > 0 && !value.startsWith("--")) {
+      values.push(value);
+    }
+  }
+  return values;
+}
+
+/** Read a positive integer prefix-style script argument. */
+export function scriptNumberArgumentValue(
+  prefix: string,
+  args: readonly string[] = process.argv,
+): number | undefined {
+  const value = scriptArgumentValue(prefix, args);
+  if (value === undefined) {
+    return undefined;
+  }
+  const parsed = Number(value);
+  return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
+}
+
+/** Require a prefix-style script argument. */
+export function requiredScriptArgumentValue(
+  prefix: string,
+  args: readonly string[] = process.argv,
+): string {
+  const value = scriptArgumentValue(prefix, args);
+  if (value === undefined || value.length === 0) {
+    throw new Error(`Missing required ${prefix} argument.`);
+  }
+  return value;
+}
+
 /** Compact source label for rows that carry filePath directly or through source. */
 export function sourceLabel(row: {
   readonly filePath?: string;

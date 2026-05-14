@@ -1,0 +1,373 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:authoring-ontology",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "authoring",
+        "ontology",
+        "app-building"
+      ],
+      "summary": "Authoring ontology is an intentional policy and capability spine, not a literal copy of user prose or a generator-local enum dump.",
+      "rationale": "The user called out early ontology sketches that combined primitive policy, compound recipe shape, and heuristics. Keep this file as a first-principles authoring vocabulary with comments on keys and visible separation between semantic truth, taste, capability, and recipe policy.",
+      "guidance": [
+        "Before adding authoring operations or taste keys, read ONTOLOGY.md and ontology.ts together.",
+        "Annotate ontology keys with intent so future corrections can target the model rather than reverse-engineering names.",
+        "Authoring profiles are taste-preference bundles over the same axis/value descriptors used by recipe preferences and orientation rows; keep profile policy out of separate prose-only vocabulary.",
+        "Keep support-state rank strict: `observable` means readable app facts, while `plannable` means semantic plans can be constructed. Capability minimum checks should not flatten those promises even if operation support may become plannable once required capabilities are observable.",
+        "Capability descriptors may carry product-level open reasons for gaps that are true before opening an app. Keep those global reasons in the ontology/catalog and app-specific reasons in AuthoringOrientation.",
+        "Taste axes have a dominant layer, while taste value descriptors carry the exact layer and summary; check value-level layer/confidence/evidence before using a value as policy.",
+        "AuthoringOrientation axis rows split primitive-policy, observed-shape, and derived-reading value counts; axis `policyState` is inferred only from primitive-policy values, not from observed-shape facts alone.",
+        "AuthoringOrientation taste rows separate ontologySummary from observedSummary; do not collapse durable taste meaning into the current app reading.",
+        "Resource admission taste should use the framework-registration substrate: a direct `.register(...)` call can still admit a runtime-html bundle or plugin configuration, so do not classify it only from call syntax. App-wide resource-registration facts are observed admission shape, not weaker derived style.",
+        "Keep modern convention resource declaration out of active ontology until the semantic-runtime actually specifies it.",
+        "Keep topology axes narrow: `package-topology` is package/workspace shape, while `source-layout` is roleful source organization. `single-app-package` is observed from source/project shape; feature/bounded-context layout stays a weaker source-organization reading.",
+        "Keep template/form/style axes narrow: `template-source-ownership`, `template-rendering-boundary`, `form-value-channel`, `validation-ownership`, `form-type-surface`, `style-resource-ownership`, and `style-binding-model` each answer one question. Recipes can combine them, but the ontology should not.",
+        "Keep `style-asset-authoring` separate from broad `design-system` policy. Generated recipes may create and verify component stylesheets through `style-resource` effects without claiming theme tokens, layout policy, accessibility defaults, or component-library integration are solved.",
+        "`form-type-surface` should distinguish strict form-like value channels from weak/open TypeChecker surfaces so well-typed forms do not look unobserved.",
+        "`style-binding-model` values should stay aligned with observer value-channel semantics: whole class-token bindings, per-class toggles, whole style-rule bindings, and per-property style bindings are distinct observed shapes."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/ontology.ts",
+          "symbolName": "AuthoringOperationOntology",
+          "line": 970,
+          "summary": "Authoring ontology aggregate."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/authoring/ONTOLOGY.md",
+          "summary": "Human explanation for ontology axes and operation vocabulary."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/authoring/ontology.ts",
+          "symbolName": "AuthoringOperationOntology"
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-14"
+    },
+    {
+      "id": "frontier:expected-semantic-effect",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "authoring",
+        "verification",
+        "app-building"
+      ],
+      "summary": "ExpectedSemanticEffect is the current authoring verification pressure point for describing what authored apps should prove after reopening.",
+      "rationale": "Authoring should not stop at file generation. Recipe and repair plans need expected semantic effects that can disappear, pass, or fail against reopened app facts without turning into brittle snapshots.",
+      "guidance": [
+        "This frontier is nextActionPolicy=when-touched after the expected-effect algebra moved out of `plan.ts`; consult it when adding recipes, repair verification, or new row-backed effect kinds rather than treating the still-large factory class as a standalone cleanup target.",
+        "If a recipe cannot name expected semantic effects, its operation is probably still too textual.",
+        "Keep semantic effects tied to app facts, topology, bindings, routes, DI, resources, and open seams rather than source snapshots.",
+        "Recipe expected-effect coverage is visible through AuthoringCatalog rows as static contracts and through AuthoringOrientation rows as current app observations; rows carry kind sets, counts, `semanticTargetKey`, filter fields and values, while orientation rows add the opened-app observation outcome and observed count from the shared verification primitive. `semanticTargetKey` is for reporting/grouping; recipe-local deduplication uses `expectedSemanticEffectContractKey(...)` so stricter cardinality, filter, capability, or taste variants do not disappear.",
+        "Route expected effects preserve the broad topology count when unfiltered, and support row filters such as `originKind` and `valueKind` when recipes need to prove a specific route authoring lane. Use this for routed authoring fixtures before adding route-specific verification code.",
+        "Use the explicit `ExpectedSemanticEffect.atLeast(...)`, `exactly(...)`, and role-specific cardinality constructors for count-sensitive contracts; reserve broad `fact(...)` calls for plain present/absent-like facts or genuinely uncommon combinations.",
+        "Use `expectedSemanticEffectsForPlan(plan)` for concrete fixture and repair verification so step-local signature/discriminator effects are checked with the same semantic-target compression as the catalog.",
+        "Recipe source-plan coverage is visible through AuthoringCatalog rows without source text: policy fields, complete-text state, file roles, languages, edit kinds, text authorities, file operation ownership, and project-tooling rows. All current recipe builders expose source and package/typecheck tooling contracts; build-tool profile selection remains host-owned product pressure.",
+        "AuthoringCatalog taste-axis rows group common values by `primitive-policy`, `observed-shape`, and `derived-reading` so a caller can see whether an axis has policy-bearing values without reopening ontology.ts.",
+        "For authoring-taste expected effects, rows carry the target value layer and ontology summary so recipe-fit pressure can separate primitive policy targets from observed-shape signatures without reopening ontology.ts.",
+        "Expected effects carry a role: baseline effects are general app-health checks, signature effects identify candidate recipe shape, and discriminator effects are required recipe-identifying facts. A recipe with no satisfied signature-like effects, or an unsatisfied discriminator, is not-applicable rather than a failed verification.",
+        "ExpectedSemanticEffectFilter predicates match scalar row fields by equality and array row fields by inclusion. Use that for compact fact checks such as `BindingBehaviorApplications.staticArgumentValues`, direct `target-operation` renderer writes, or binding `targetProperty=value` without adding source-text assertions.",
+        "Keep repeated form/style expected-effect concepts in `form-expected-effects.ts`; generated recipes should reuse those constructors for component stylesheet ownership, class-token style binding, native value channels, and select model taste instead of restating the same ontology rows locally.",
+        "Use `readAuthoringVerificationSnapshot(app)` for closed-loop verification from an opened app; it paginates and carries summary, topology, orientation, open seams, binding-behavior applications, target accesses, target operations, value channels, and data-flow rows so filtered expected effects do not silently fall back to count-only snapshots. Unsupported row-backed projections should fail snapshot construction rather than masquerade as zero observed facts.",
+        "`project-tooling` expected effects are backed by project source-role rows. Use them to verify package manifests, TypeScript config files, and module declarations after source plans are applied without comparing file text.",
+        "`style-resource` is the fact-level expected effect for stylesheet/style asset ownership rows; keep it separate from `style-resource-ownership`, which is the orientation taste reading derived from those rows.",
+        "Treat expected-effect rows as the verifier-facing contract between fixture generation and reopened app facts.",
+        "Use missing effect coverage as a signal to improve semantic-runtime/API projection, not as a reason to generate less ambitious fixtures."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/expected-effect.ts",
+          "symbolName": "ExpectedSemanticEffect",
+          "line": 108,
+          "summary": "Expected semantic effect model used by authoring plans."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/verification.ts",
+          "symbolName": "AuthoringVerificationResult",
+          "summary": "Verification result model."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/verification.ts",
+          "symbolName": "readAuthoringVerificationSnapshot",
+          "summary": "API-facing verification snapshot collector for row-backed expected effects."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/effect-observation.ts",
+          "symbolName": "observeExpectedSemanticEffect",
+          "summary": "Shared expected-effect observation primitive used by verification and AuthoringOrientation current-fit rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/recipe.ts",
+          "symbolName": "expectedSemanticEffectsForPlan",
+          "summary": "Plan-local expected-effect compression used by recipe catalog rows and fixture verification."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "ExpectedSemanticEffect",
+          "filePath": "packages/semantic-runtime/src/authoring/expected-effect.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        }
+      ],
+      "nextActionPolicy": "when-touched",
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-14"
+    },
+    {
+      "id": "reuse:authoring-fixture-flywheel",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "authoring",
+        "fixtures",
+        "app-building",
+        "external-apps",
+        "framework-docs",
+        "framework-tests",
+        "expected-effects"
+      ],
+      "summary": "Use the authoring API, generated fixtures, hand-authored pressure fixtures, external app analysis, official Aurelia docs, and framework tests as one fixture feedback flywheel.",
+      "rationale": "The authoring API should generate recommendable fixtures while the analyzer also learns from stress fixtures and external app patterns that should not become authoring recommendations. Official docs provide promoted-pattern pressure, framework tests provide behavior-grounding examples, and expected semantic effects make generated fixtures meaningful instead of passive snapshots. All lanes should pressure semantic-runtime and Atlas while keeping external app source details out of tracked files.",
+      "guidance": [
+        "Keep generated/recommendable fixtures and stress pressure fixtures in separate folders.",
+        "Use AuthoringOrientation before fixture expansion so recipes, capability gaps, taste/policy choices, and expected semantic effects are visible.",
+        "Use `SemanticRuntime.authoringCatalog()` or the equivalent AuthoringCatalog app query when the question is static vocabulary or recipe contracts; use AuthoringOrientation when the question is how a currently opened app satisfies those contracts.",
+        "For broad fixture sweeps, run semantic-runtime `pressure:app-api`; it discovers generated authoring fixtures and pressure fixture folders, then defaults to aggregate output so expected-effect target outcome buckets explain recipe-fit failures without per-root transcript noise. The all-recipe outcome lane intentionally keeps cross-recipe failed effects, while the applicable-recipe lane filters out `not-applicable` recipes and is the cleaner generated-fixture health signal. Use `SEMANTIC_RUNTIME_PRESSURE_OUTPUT=inputs` only for isolated-root inspection.",
+        "Read the axis-keyed authoring taste pressure rows before opening raw orientation payloads; they show which narrow axes are unobserved, which values appeared under which axis, and where a recipe-fit failure is only a missing signature value. `pressure:app-api` reports `policyState` under primitive-policy headings because observed-shape and derived-reading values can verify recipe signatures without becoming edit policy. It also prints focused taste sections for style binding, style ownership, form value channels, state ownership, validation ownership, and build-tool profile so low-count but important values do not disappear under the compact top-N rollup.",
+        "Generated state/validated-state/service/routed form recipes intentionally include a root component stylesheet via `create-style-asset`, a `canSubmit` class-token binding, and native `value` form bindings, with `style-resource`, `component-stylesheet`, `class-token-binding`, and filtered binding target-access/value-channel/data-flow verification. Native value filters use `targetKind=node` plus `targetProperty=value` so custom element `value` bindables do not satisfy native-control expectations; treat failures there as topology/style-recognition or binding value-channel pressure, not as expendable decoration.",
+        "Durable generated authoring fixtures should materialize the full recipe source plan, including package manifest, TypeScript config, and local asset declarations, so app-pressure sees project-tooling expected effects and the observed `build-tool-profile:typecheck-only-tooling` taste instead of only the `src/` tree. The fixture materializer derives from `AuthoringRecipeDescriptors`, resets each generated fixture folder before writing, and should be run with `pnpm --filter @aurelia-ls/semantic-runtime fixtures:authoring` after recipe source-plan changes.",
+        "`validated-state-backed-form` is the recommendable validation recipe: it adds ValidationHtmlConfiguration, validation service resolution, source-authored rules, `& validate` bindings, fact-level `binding-behavior-application` verification for `validate`, and a `validation-controller-usage` discriminator taste while keeping the plain form recipe unopinionated. When the recipe emits a static validation trigger such as `& validate:'blur'`, verify it through `BindingBehaviorApplications.staticArgumentValues` rather than source text.",
+        "When a generated fixture exposes a substrate gap, deepen the substrate before papering over the recipe.",
+        "Use official Aurelia docs and framework tests as pressure inputs through Atlas corpus lenses; docs frequency is not idiom policy and tests are not fixture source to copy wholesale.",
+        "When an external app or stress fixture exposes weak typing or plugin/router/i18n pressure, generalize the pattern into Atlas or semantic-runtime without committing external app paths or templates."
+      ],
+      "anchors": [
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/fixtures/authoring/README.md",
+          "summary": "Recommendable authoring fixture lane."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/authoring-orientation.ts",
+          "symbolName": "readSemanticAuthoringOrientation",
+          "summary": "Authoring-facing orientation read surface."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/expected-effect.ts",
+          "symbolName": "ExpectedSemanticEffect",
+          "summary": "Expected semantic effects used to compare generated intent with reopened app facts."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/atlas pressure:framework-corpus",
+          "summary": "Current aggregate docs/tests corpus pressure lane."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime smoke:state-backed-form",
+          "summary": "Generated state-backed form pressure smoke."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime smoke:validated-state-backed-form",
+          "summary": "Generated validated state-backed form pressure smoke."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api",
+          "summary": "Combined app API pressure surface with authoring expected-effect target outcomes."
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-14"
+    },
+    {
+      "id": "decision:authoring-source-plan-is-edit-boundary",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "authoring",
+        "source-edits",
+        "app-building"
+      ],
+      "summary": "Authoring source plans are the explicit source-edit boundary until concrete edit application, formatting, and host tooling policy are modeled.",
+      "rationale": "Recipes can attach file-level source plans, but source edit application is still outside semantic-runtime. Keeping this boundary explicit prevents operation prose from silently becoming a generator or code-action engine.",
+      "guidance": [
+        "Use source-plan.ts for recipe-owned source text authority, conflict policy, formatting policy, and package-tooling policy.",
+        "Use package-tooling.ts for recipe-baseline package manifests, TypeScript config, declaration files, dependencies, and scripts; build-tool profile and package-manager execution policy remain host-owned until modeled.",
+        "Do not hide edit application policy inside operation names or recipe prose.",
+        "When edit application becomes real, first model the host boundary and verification effects rather than bolting writes onto recipes."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/source-plan.ts",
+          "symbolName": "AuthoringSourceEditPlan",
+          "line": 94,
+          "summary": "Current source edit plan boundary."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/package-tooling.ts",
+          "symbolName": "AuthoringProjectToolingPlan",
+          "summary": "Structured project-tooling boundary for recipe-baseline package/typecheck artifacts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/recipe.ts",
+          "symbolName": "AuthoringRecipeDescriptor",
+          "summary": "Recipe descriptor surface."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/authoring/source-plan.ts",
+          "symbolName": "AuthoringSourceEditPlan"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/authoring/package-tooling.ts",
+          "symbolName": "AuthoringProjectToolingPlan"
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-14"
+    },
+    {
+      "id": "frontier:semantic-authoring-orientation",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "api",
+        "authoring",
+        "fixtures",
+        "north-star"
+      ],
+      "summary": "AuthoringCatalog and AuthoringOrientation split static authoring contracts from opened-app evidence over capability, taste, recipe, repair, and fixture expected-effect rows.",
+      "rationale": "The north-star correction is that authoring, generated fixtures, semantic-runtime analysis, and Atlas visibility form one bootstrapping loop. The stable read side now has two lanes: a static catalog for ontology and recipe contracts, and orientation for what the opened app can observe, author, verify, or repair before source-edit/generator machinery grows.",
+      "guidance": [
+        "Start here before widening authoring operations, fixture generation, or MCP packaging.",
+        "Read `SemanticRuntime.authoringCatalog()` or `SemanticAppQueryKind.AuthoringCatalog` before orientation when future work needs the static ontology/recipe contract without app-specific evidence.",
+        "Use the catalog taste-axis value-layer splits before treating an observed-shape taste value as policy. Primitive-policy values may guide generation; observed-shape and derived-reading values are evidence unless a profile or user preference elevates them.",
+        "Use catalog profile preference rows for decorator, convention, and explicit-registration policy. If a profile has no preference rows, treat it as an ambiguity summary, not hidden generation policy.",
+        "Use catalog recipe preference rows for the seed plan's intended taste choices, then compare them with opened-app orientation taste rows before deciding whether a fixture matched, drifted, or needs repair.",
+        "Build-tool selection lives on the `build-tool-profile` taste axis. Current generated recipes prefer `host-selected-build-tool`; project tooling may observe typecheck-only or bundler config shapes, but semantic-runtime should not choose a runnable build profile until that contract is explicit.",
+        "Use catalog capability/operation product open reasons to identify global source-edit, package-tooling, or product-area gaps before treating opened-app capability open reasons as fixture-specific pressure.",
+        "Keep orientation rows evidence-backed by current app facts, resources, bindings, routes, DI, diagnostics, and open seams.",
+        "Keep orientation coverage/surface rows aligned with verifier row-backed effects and app-opening facts: resource visibility, runtime controllers, binding target accesses, direct target operations, binding value channels, binding behavior applications, and binding data flows should remain separate surfaces because they answer different authoring questions.",
+        "Recipe rows should expose compact expected-effect rows from concrete builders, including scope, cardinality, filter fields and values, capability targets, taste targets, current observed count, and current outcome, so fixture expansion can compare recipe ambition with verifier/API coverage.",
+        "Fixture smokes should verify `expectedSemanticEffectsForPlan(plan)` rather than only the last plan step; otherwise catalog-visible signature and discriminator effects can be skipped accidentally.",
+        "Use `readAuthoringVerificationSnapshot(app)` when a fixture, repair, or authoring loop needs closed-loop verification; do not reassemble the row-backed verification basis in individual smoke scripts.",
+        "Recipe rows should expose source-plan contract rows when a plan has concrete source artifacts, but not file text; use those rows to separate editable recipe coverage from host-owned source edit/package tooling policy.",
+        "Recipe source templates should fail closed on missing or unused placeholders so source-plan drift is caught before generated fixtures are reopened.",
+        "Recipe source-plan rows now carry project-tooling subrows for package dependencies, scripts, config file kinds, and build-tool policy. Current recipes provide package/typecheck baselines while leaving build-tool profile selection open.",
+        "Package-tooling capability state should be partial or observable, not fully open, once recipe-baseline package/typecheck tooling exists; keep build-tool and package-manager execution open through product reasons instead of blocking all app-shell operations.",
+        "Generated recipes should verify both project-tooling source roles and the observed `build-tool-profile:typecheck-only-tooling` taste, while keeping `host-selected-build-tool` as the primitive recipe preference.",
+        "Navigation ownership taste is split across route origin and value-shape dimensions. Origin-shaped values include `decorator-route-config`, `configure-call-route-config`, `class-static-default-route-config`, and `child-routes-property-route-config`; `static-route-config` is the closed value-shape reading, not proof of one source syntax.",
+        "When reading recipe rows from arbitrary opened apps, prefer applicable-recipe and candidate-signature outcome buckets before interpreting all-recipe baseline missing facts as product pressure.",
+        "Use recipe `currentFitState` plus signature and discriminator satisfied/failed/unsupported counts as a first-pass orientation signal. `not-applicable` means no signature-like effect matched or a discriminator failed; it is not a verification failure. Recipe rows also carry base recipes, lineage, and specificity rank so richer recipes can satisfy base shapes without becoming indistinguishable from them. This is not a replacement for source planning or repair policy.",
+        "Separate recommendable generated fixtures from stress pressure fixtures, then compare expected semantic effects against reopened app facts.",
+        "Repair clusters must split by concrete action-target source when one exists; high-volume weak-owner diagnostics that all display as any still need one source-owner-type-strengthening cluster per actionable owner surface.",
+        "For missing scope-slot typing, use the evaluator's open subject as the repair action target. The diagnostic member span and selected member names are evidence; the scope slot is the surface to repair.",
+        "If orientation cannot explain a recipe or repair gap, improve semantic-runtime substrate or Atlas visibility before adding generator-local policy."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/authoring-orientation.ts",
+          "symbolName": "readSemanticAuthoringOrientation",
+          "summary": "Read-only authoring orientation query."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/authoring-catalog.ts",
+          "symbolName": "readSemanticAuthoringCatalog",
+          "summary": "Static authoring ontology and recipe contract projection."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/authoring/README.md",
+          "summary": "Semantic authoring loop boundary."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/authoring/CAPABILITY_CHECKLIST.md",
+          "summary": "Flexible authoring scope map."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/authoring-catalog.ts",
+          "symbolName": "readSemanticAuthoringCatalog"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/authoring-orientation.ts",
+          "symbolName": "readSemanticAuthoringOrientation"
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-14"
+    },
+    {
+      "id": "decision:authoring-catalog-open-reasons",
+      "kind": "decision",
+      "domains": [
+        "semantic-runtime",
+        "api",
+        "authoring",
+        "fixtures"
+      ],
+      "summary": "AuthoringCatalog product open reasons are static product gaps, not app-specific recipe failures.",
+      "rationale": "The catalog intentionally reports package-tooling/source-edit policy gaps before an app is opened, while recipe fit and verification outcomes live in AuthoringOrientation and verification snapshots. A recipe can therefore be editable and still carry `package-tooling-policy-open` until runnable build-tool/package-manager execution policy has a contract.",
+      "guidance": [
+        "Do not treat editable recipes with only `package-tooling-policy-open` as stale or failed; use that reason to remember that recipe-baseline package/typecheck tooling is not a runnable build profile.",
+        "`routed-state-backed-form` remains partial for router, viewport, and routeable-component semantics; that is semantic-runtime/router substrate pressure, not package-tooling pressure.",
+        "If catalog open reasons feel surprising, inspect `AuthoringCatalog` first for static product gaps and `AuthoringOrientation` second for opened-app evidence before adding recipe-local workaround policy."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/authoring-catalog.ts",
+          "symbolName": "readSemanticAuthoringCatalog",
+          "summary": "Static authoring ontology and recipe contract projection."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/recipe.ts",
+          "symbolName": "AuthoringRecipeDescriptors",
+          "summary": "Recipe support states and product open reasons."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/authoring/ONTOLOGY.md",
+          "heading": "Algebra",
+          "summary": "Authoring ontology explanation for support states, taste policy, and package-tooling policy."
+        }
+      ],
+      "createdAt": "2026-05-14",
+      "updatedAt": "2026-05-14"
+    }
+  ]
+}

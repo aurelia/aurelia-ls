@@ -1,15 +1,33 @@
 import type { Inquiry } from "../inquiry.js";
 import { LocusKind } from "../locus.js";
 
+/** Merge filter fragments while ignoring absent fields instead of overwriting earlier values with `undefined`. */
+export function mergeDefinedFilters<TFilters extends object>(
+  ...fragments: readonly (TFilters | undefined)[]
+): TFilters {
+  const merged: Record<string, unknown> = {};
+  for (const fragment of fragments) {
+    if (fragment === undefined) {
+      continue;
+    }
+    for (const [key, value] of Object.entries(fragment)) {
+      if (value !== undefined) {
+        merged[key] = value;
+      }
+    }
+  }
+  return merged as TFilters;
+}
+
 /** Merge subject-level and filter-level records through one domain-specific parser. */
-export function readInquiryFilters<TFilters>(
+export function readInquiryFilters<TFilters extends object>(
   inquiry: Inquiry,
   filtersFromRecord: (value: unknown) => TFilters,
 ): TFilters {
-  return {
-    ...filtersFromRecord(inquiry.subject),
-    ...filtersFromRecord(inquiry.filters),
-  } as TFilters;
+  return mergeDefinedFilters(
+    filtersFromRecord(inquiry.subject),
+    filtersFromRecord(inquiry.filters),
+  );
 }
 
 /** Copy a non-empty string field from a raw inquiry filter record into a typed filter object fragment. */
@@ -49,6 +67,21 @@ export function inquiryStringFilter(
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+/** Read one or more non-empty strings from a runtime filter; comma-separated strings are accepted for script ergonomics. */
+export function inquiryStringListFilter(
+  inquiry: Inquiry,
+  key: string,
+): readonly string[] {
+  const value = inquiry.filters?.[key];
+  if (typeof value === "string") {
+    return stringListFilterValues([value]);
+  }
+  if (Array.isArray(value)) {
+    return stringListFilterValues(value.filter((entry): entry is string => typeof entry === "string"));
+  }
+  return [];
+}
+
 /** Return true when any listed runtime filter carries a non-empty string. */
 export function hasAnyInquiryStringFilter(
   inquiry: Inquiry,
@@ -82,7 +115,112 @@ export function queryMatches(
     return true;
   }
   const normalized = query.toLowerCase();
-  return values.some((value) => value.toLowerCase().includes(normalized));
+  if (values.some((value) => value.toLowerCase().includes(normalized))) {
+    return true;
+  }
+
+  const queryTokens = normalizedSearchTokens(query);
+  if (queryTokens.length === 0) {
+    return true;
+  }
+  const valueTokens = new Set(values.flatMap(normalizedSearchTokens));
+  return queryTokens.every((token) => valueTokens.has(token));
+}
+
+/** Query token coverage against candidate values, used by lenses that can safely show adjacent partial hits. */
+export interface QueryTokenCoverage {
+  /** Distinct normalized query tokens after camel-case and punctuation splitting. */
+  readonly queryTokenCount: number;
+  /** Query tokens present in at least one candidate value. */
+  readonly matchedTokenCount: number;
+  /** Matched normalized query tokens. */
+  readonly matchedTokens: readonly string[];
+}
+
+/** Count how many distinct query tokens appear across the candidate values. */
+export function queryTokenCoverage(
+  query: string | undefined,
+  values: readonly string[],
+): QueryTokenCoverage {
+  const queryTokens = query === undefined ? [] : normalizedSearchTokens(query);
+  if (queryTokens.length === 0) {
+    return { queryTokenCount: 0, matchedTokenCount: 0, matchedTokens: [] };
+  }
+  const valueTokens = new Set(values.flatMap(normalizedSearchTokens));
+  const matchedTokens = queryTokens.filter((token) => valueTokens.has(token));
+  return {
+    queryTokenCount: queryTokens.length,
+    matchedTokenCount: matchedTokens.length,
+    matchedTokens,
+  };
+}
+
+/** Return true when a row is close enough to an explicit query to be useful as adjacent memory. */
+export function querySignificantPartialMatches(
+  query: string | undefined,
+  values: readonly string[],
+): boolean {
+  const coverage = queryTokenCoverage(query, values);
+  if (coverage.queryTokenCount === 0) {
+    return true;
+  }
+  if (coverage.matchedTokenCount === coverage.queryTokenCount) {
+    return true;
+  }
+  if (coverage.queryTokenCount <= 2) {
+    return false;
+  }
+  return coverage.matchedTokenCount >= Math.max(
+    2,
+    Math.ceil(coverage.queryTokenCount / 2),
+  );
+}
+
+/** Weighted text group used when a query should rank exact structural hits before incidental prose hits. */
+export interface QueryRelevanceTextGroup {
+  /** Relative importance of this text family. */
+  readonly weight: number;
+  /** Candidate values in this text family. */
+  readonly values: readonly string[];
+}
+
+/** Score how strongly a query matches grouped text. */
+export function queryRelevanceScore(
+  query: string | undefined,
+  groups: readonly QueryRelevanceTextGroup[],
+): number {
+  if (query === undefined) {
+    return 0;
+  }
+  const normalized = query.toLowerCase().trim();
+  if (normalized.length === 0) {
+    return 0;
+  }
+  const queryTokens = normalizedSearchTokens(query);
+  return groups.reduce((score, group) => {
+    const values = group.values.filter((value) => value.length > 0);
+    if (values.length === 0) {
+      return score;
+    }
+    const lowerValues = values.map((value) => value.toLowerCase());
+    if (lowerValues.some((value) => value === normalized)) {
+      return score + group.weight * 4;
+    }
+    if (lowerValues.some((value) => value.includes(normalized))) {
+      return score + group.weight * 3;
+    }
+    if (queryTokens.length === 0) {
+      return score;
+    }
+    const valueTokens = new Set(values.flatMap(normalizedSearchTokens));
+    const matchedTokenCount = queryTokens.filter((token) => valueTokens.has(token)).length;
+    if (matchedTokenCount === queryTokens.length) {
+      return score + group.weight * 2;
+    }
+    return matchedTokenCount > 0
+      ? score + group.weight * (matchedTokenCount / queryTokens.length)
+      : score;
+  }, 0);
 }
 
 /** Match values against the inquiry's `query` filter. */
@@ -93,12 +231,89 @@ export function inquiryQueryMatches(
   return queryMatches(inquiryStringFilter(inquiry, "query"), values);
 }
 
+function stringListFilterValues(values: readonly string[]): readonly string[] {
+  return values
+    .flatMap((value) => value.split(","))
+    .map((value) => value.trim())
+    .filter((value, index, all) => value.length > 0 && all.indexOf(value) === index);
+}
+
+function searchTokens(value: string): readonly string[] {
+  return value
+    .replace(/([a-z0-9])([A-Z])/gu, "$1 $2")
+    .replace(/([A-Z]+)([A-Z][a-z])/gu, "$1 $2")
+    .toLowerCase()
+    .split(/[^a-z0-9]+/u)
+    .filter(Boolean);
+}
+
+function normalizedSearchTokens(value: string): readonly string[] {
+  return [...new Set(searchTokens(value).map(normalizedSearchToken))];
+}
+
+function normalizedSearchToken(token: string): string {
+  const irregular = irregularSearchToken(token);
+  if (irregular !== undefined) {
+    return irregular;
+  }
+  if (token.length > 4 && token.endsWith("ies")) {
+    return `${token.slice(0, -3)}y`;
+  }
+  if (token.length > 4 && token.endsWith("sses")) {
+    return token.slice(0, -2);
+  }
+  if (
+    token.length > 4 &&
+    (token.endsWith("ches") ||
+      token.endsWith("shes") ||
+      token.endsWith("xes") ||
+      token.endsWith("zes"))
+  ) {
+    return token.slice(0, -2);
+  }
+  if (
+    token.length > 3 &&
+    token.endsWith("s") &&
+    !token.endsWith("ss") &&
+    !token.endsWith("us") &&
+    !token.endsWith("is")
+  ) {
+    return token.slice(0, -1);
+  }
+  return token;
+}
+
+function irregularSearchToken(token: string): string | undefined {
+  switch (token) {
+    case "axes":
+      return "axis";
+    case "analyses":
+      return "analysis";
+    case "bases":
+      return "basis";
+    case "indices":
+      return "index";
+    case "matrices":
+      return "matrix";
+    default:
+      return undefined;
+  }
+}
+
 /** Return true when an exact scalar filter is absent or equal to the value. */
 export function matchesFilterValue<TValue extends boolean | string>(
   value: TValue,
   expected: TValue | undefined,
 ): boolean {
   return expected === undefined || value === expected;
+}
+
+/** Return true when an exact scalar filter is absent or included in a row's value set. */
+export function matchesAnyFilterValue(
+  values: readonly string[],
+  expected: string | undefined,
+): boolean {
+  return expected === undefined || values.includes(expected);
 }
 
 /** Read a finite number scalar from an inquiry's runtime filters. */

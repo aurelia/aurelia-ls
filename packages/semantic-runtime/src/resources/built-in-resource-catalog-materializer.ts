@@ -24,7 +24,6 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  compactFieldProvenance,
   FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
@@ -49,51 +48,24 @@ import {
   BuiltInResourceCatalog,
   type BuiltInResourceCatalogInput,
   ConfiguredBuiltInResourceCatalogSelection,
-  type ConfiguredBuiltInResourceCatalogSelectionField,
   I18nBuiltInResourceCatalogs,
   RuntimeHtmlBuiltInResourceCatalogs,
   RouterBuiltInResourceCatalogs,
   StateBuiltInResourceCatalogs,
+  ValidationHtmlBuiltInResourceCatalogs,
   type BuiltInResource,
   type BuiltInResourceField,
   type BuiltInResourceGroup,
   type BuiltInResourcePackage,
 } from './built-in-resources.js';
-import {
-  BindableBindingMode,
-  BindableDefinition,
-  BindableSetterDefinition,
-  BindableSetterKind,
-} from './bindable-definition.js';
-import {
-  BindingBehaviorDefinition,
-} from './binding-behavior-definition.js';
-import {
-  CustomAttributeContainerStrategy,
-  CustomAttributeDefinition,
-} from './custom-attribute-definition.js';
-import {
-  CustomElementCaptureDefinition,
-  CustomElementCaptureKind,
-  CustomElementDefinition,
-  CustomElementTemplateDefinition,
-  CustomElementTemplateKind,
-} from './custom-element-definition.js';
 import type { FullResourceDefinition } from './resource-definition.js';
+import { materializeBuiltInResourceDefinition } from './built-in-resource-definition-materializer.js';
+import { BuiltInResourceTargetTypeProjector } from './built-in-resource-target-type.js';
 import {
-  ResourceDefinitionKind,
-  runtimeResourceKeyForKind,
   toAureliaResourceIdentityKind,
 } from './resource-kind.js';
-import {
-  ResourceAliasDefinition,
-  ResourceTargetReference,
-} from './resource-reference.js';
-import {
-  ValueConverterDefinition,
-} from './value-converter-definition.js';
 import { ResourceProductDetails } from './product-details.js';
-import { bindableAttributeNameForProperty } from './bindable-attribute.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 
 class BuiltInResourceSourceSet {
   constructor(
@@ -177,237 +149,16 @@ interface BuiltInResourcePublication {
   readonly definition: FullResourceDefinition | null;
 }
 
-/** Materializes framework-owned resource headers and static full definitions before compiler-world visibility is decided. */
-export class BuiltInResourceCatalogMaterializer {
+class BuiltInResourcePublicationMaterializer {
   constructor(
-    /** Hot analysis store that receives built-in resource records. */
     readonly store: KernelStore,
   ) {}
 
-  materialize(catalogInputs: readonly BuiltInResourceCatalogInput[]): BuiltInResourceCatalogEmission {
-    const records: KernelStoreRecord[] = [];
-    const catalogs: BuiltInResourceCatalog[] = [];
-    const resources: BuiltInResourceEmission[] = [];
-
-    for (const input of catalogInputs) {
-      const emission = this.recordsForCatalog(input);
-      if (this.store.readProduct(emission.catalog.productHandle) == null) {
-        records.push(...emission.records);
-      }
-      catalogs.push(emission.catalog);
-      resources.push(...emission.resources);
-    }
-
-    if (records.length > 0) {
-      this.store.commit(new KernelStoreBatch(records, 'built-in-resource-catalogs'));
-    }
-
-    const emission = new BuiltInResourceCatalogEmission(catalogs, resources, records);
-    this.registerProductDetails(emission);
-    return emission;
-  }
-
-  private registerProductDetails(emission: BuiltInResourceCatalogEmission): void {
-    for (const catalog of emission.catalogs) {
-      this.store.productDetails.addIfAbsent(ResourceProductDetails.BuiltInCatalog, catalog.productHandle, catalog);
-    }
-    for (const resource of emission.resources) {
-      if (resource.resource.productHandle != null) {
-        this.store.productDetails.addIfAbsent(
-          ResourceProductDetails.DefinitionHeader,
-          resource.resource.productHandle,
-          resource.resource,
-        );
-      }
-      if (resource.definition?.productHandle != null) {
-        this.store.productDetails.addIfAbsent(
-          ResourceProductDetails.Definition,
-          resource.definition.productHandle,
-          resource.definition,
-        );
-      }
-    }
-  }
-
-  private recordsForCatalog(input: BuiltInResourceCatalogInput): {
-    readonly records: readonly KernelStoreRecord[];
-    readonly catalog: BuiltInResourceCatalog;
-    readonly resources: readonly BuiltInResourceEmission[];
-  } {
-    const local = resourceCatalogLocal(input);
-    const source = this.recordsForSource(
-      `${local}:source`,
-      input.packageId,
-      input.group,
-      `Framework built-in resource catalog ${input.packageId}/${input.group}.`,
-    );
-    const handles = this.catalogHandles(local);
-    const resourceEmissions = this.resourceEmissionsForCatalog(input, local, source);
-    const materializedResources = resourceEmissions.map((emission) => emission.resource);
-    const catalog = this.createCatalog(input, handles, source, materializedResources);
-    const catalogClaims = this.catalogClaimsForResources(local, handles.productHandle, resourceEmissions, source);
-    const records = [
-      ...source.records,
-      ...resourceEmissions.flatMap((emission) => emission.records),
-      ...this.recordsForCatalogProduct(
-        local,
-        input,
-        source,
-        handles,
-        catalog,
-        resourceEmissions,
-        catalogClaims,
-      ),
-    ];
-
-    return {
-      records,
-      catalog,
-      resources: resourceEmissions.map((emission) =>
-        new BuiltInResourceEmission(catalog.productHandle, emission.resource, emission.definition)
-      ),
-    };
-  }
-
-  private catalogHandles(local: string): BuiltInResourceCatalogHandles {
-    return new BuiltInResourceCatalogHandles(
-      this.store.handles.product(local),
-      this.store.handles.identity(local),
-    );
-  }
-
-  private resourceEmissionsForCatalog(
-    input: BuiltInResourceCatalogInput,
-    local: string,
-    source: BuiltInResourceSourceSet,
-  ): readonly BuiltInResourcePublication[] {
-    return input.resources.map((resource, index) =>
-      this.recordsForResource(
-        resource,
-        `${local}:resource:${localKeyPart(resource.resourceKind)}:${localKeyPart(resource.name)}:${index}`,
-        source,
-      )
-    );
-  }
-
-  private createCatalog(
-    input: BuiltInResourceCatalogInput,
-    handles: BuiltInResourceCatalogHandles,
-    source: BuiltInResourceSourceSet,
-    resources: readonly BuiltInResource[],
-  ): BuiltInResourceCatalog {
-    return new BuiltInResourceCatalog(
-      handles.productHandle,
-      handles.identityHandle,
-      input.packageId,
-      input.group,
-      resources,
-      source.addressHandle,
-      [],
-    );
-  }
-
-  private catalogClaimsForResources(
-    local: string,
-    catalogProductHandle: ProductHandle,
-    resourceEmissions: readonly {
-      readonly resource: BuiltInResource;
-    }[],
-    source: BuiltInResourceSourceSet,
-  ): readonly SemanticClaim[] {
-    return resourceEmissions.map((emission, index) => new SemanticClaim(
-      this.store.handles.claim(`${local}:contains-resource:${index}`),
-      catalogProductHandle,
-      KernelVocabulary.Resource.ContainsDefinitionHeader.key,
-      emission.resource.productHandle!,
-      source.provenanceHandle,
-    ));
-  }
-
-  private recordsForCatalogProduct(
-    local: string,
-    input: BuiltInResourceCatalogInput,
-    source: BuiltInResourceSourceSet,
-    handles: BuiltInResourceCatalogHandles,
-    catalog: BuiltInResourceCatalog,
-    resourceEmissions: readonly {
-      readonly resource: BuiltInResource;
-      readonly definition: FullResourceDefinition | null;
-    }[],
-    claims: readonly SemanticClaim[],
-  ): readonly KernelStoreRecord[] {
-    return [
-      ...claims,
-      this.catalogIdentity(input, source, handles),
-      this.catalogProduct(source, handles),
-      this.catalogMaterialization(local, handles, catalog, resourceEmissions, claims),
-    ];
-  }
-
-  private catalogIdentity(
-    input: BuiltInResourceCatalogInput,
-    source: BuiltInResourceSourceSet,
-    handles: BuiltInResourceCatalogHandles,
-  ): CompilerIdentity {
-    return new CompilerIdentity(
-      handles.identityHandle,
-      KernelVocabulary.Resource.BuiltInCatalog.key,
-      null,
-      source.addressHandle,
-      `${input.packageId}:${input.group}`,
-    );
-  }
-
-  private catalogProduct(
-    source: BuiltInResourceSourceSet,
-    handles: BuiltInResourceCatalogHandles,
-  ): MaterializedProduct {
-    return new MaterializedProduct(
-      handles.productHandle,
-      KernelVocabulary.Resource.BuiltInCatalog.key,
-      handles.identityHandle,
-      source.addressHandle,
-      source.provenanceHandle,
-    );
-  }
-
-  private catalogMaterialization(
-    local: string,
-    handles: BuiltInResourceCatalogHandles,
-    catalog: BuiltInResourceCatalog,
-    resourceEmissions: readonly {
-      readonly definition: FullResourceDefinition | null;
-    }[],
-    claims: readonly SemanticClaim[],
-  ): MaterializationRecord {
-    return new MaterializationRecord(
-      this.store.handles.materialization(local),
-      handles.identityHandle,
-      this.catalogMaterializedProductHandles(handles, catalog, resourceEmissions),
-      claims.map((claim) => claim.handle),
-    );
-  }
-
-  private catalogMaterializedProductHandles(
-    handles: BuiltInResourceCatalogHandles,
-    catalog: BuiltInResourceCatalog,
-    resourceEmissions: readonly {
-      readonly definition: FullResourceDefinition | null;
-    }[],
-  ): readonly ProductHandle[] {
-    return [
-      handles.productHandle,
-      ...catalog.resources.map((resource) => resource.productHandle!),
-      ...resourceEmissions.flatMap((emission) =>
-        emission.definition?.productHandle == null ? [] : [emission.definition.productHandle]
-      ),
-    ];
-  }
-
-  private recordsForResource(
+  recordsForResource(
     resource: BuiltInResource,
     local: string,
     source: BuiltInResourceSourceSet,
+    targetTypes: BuiltInResourceTargetTypeProjector | null,
   ): BuiltInResourcePublication {
     const handles = this.resourceHandles(local);
     const materializedResource = materializeResource(
@@ -419,9 +170,11 @@ export class BuiltInResourceCatalogMaterializer {
     );
     const definition = materializeBuiltInResourceDefinition(
       materializedResource,
+      local,
       handles.definitionProductHandle,
       handles.identityHandle,
       source,
+      targetTypes,
     );
     return this.resourcePublication(local, handles, materializedResource, definition, source);
   }
@@ -595,6 +348,249 @@ export class BuiltInResourceCatalogMaterializer {
       claimHandles,
     );
   }
+}
+
+/** Materializes framework-owned resource headers and static full definitions before compiler-world visibility is decided. */
+export class BuiltInResourceCatalogMaterializer {
+  private readonly resourcePublication: BuiltInResourcePublicationMaterializer;
+
+  constructor(
+    /** Hot analysis store that receives built-in resource records. */
+    readonly store: KernelStore,
+  ) {
+    this.resourcePublication = new BuiltInResourcePublicationMaterializer(store);
+  }
+
+  materialize(
+    catalogInputs: readonly BuiltInResourceCatalogInput[],
+    typeSystem: TypeSystemProject | null = null,
+  ): BuiltInResourceCatalogEmission {
+    const records: KernelStoreRecord[] = [];
+    const catalogs: BuiltInResourceCatalog[] = [];
+    const resources: BuiltInResourceEmission[] = [];
+    const targetTypes = typeSystem == null
+      ? null
+      : new BuiltInResourceTargetTypeProjector(this.store, typeSystem);
+
+    for (const input of catalogInputs) {
+      const emission = this.recordsForCatalog(input, targetTypes);
+      if (this.store.readProduct(emission.catalog.productHandle) == null) {
+        records.push(...emission.records);
+      }
+      catalogs.push(emission.catalog);
+      resources.push(...emission.resources);
+    }
+
+    if (records.length > 0) {
+      this.store.commit(new KernelStoreBatch(records, 'built-in-resource-catalogs'));
+    }
+
+    const emission = new BuiltInResourceCatalogEmission(catalogs, resources, records);
+    this.registerProductDetails(emission);
+    return emission;
+  }
+
+  private registerProductDetails(emission: BuiltInResourceCatalogEmission): void {
+    for (const catalog of emission.catalogs) {
+      this.store.productDetails.addIfAbsent(ResourceProductDetails.BuiltInCatalog, catalog.productHandle, catalog);
+    }
+    for (const resource of emission.resources) {
+      if (resource.resource.productHandle != null) {
+        this.store.productDetails.addIfAbsent(
+          ResourceProductDetails.DefinitionHeader,
+          resource.resource.productHandle,
+          resource.resource,
+        );
+      }
+      if (resource.definition?.productHandle != null) {
+        this.store.productDetails.addIfAbsent(
+          ResourceProductDetails.Definition,
+          resource.definition.productHandle,
+          resource.definition,
+        );
+      }
+    }
+  }
+
+  private recordsForCatalog(
+    input: BuiltInResourceCatalogInput,
+    targetTypes: BuiltInResourceTargetTypeProjector | null,
+  ): {
+    readonly records: readonly KernelStoreRecord[];
+    readonly catalog: BuiltInResourceCatalog;
+    readonly resources: readonly BuiltInResourceEmission[];
+  } {
+    const local = resourceCatalogLocal(input);
+    const source = this.recordsForSource(
+      `${local}:source`,
+      input.packageId,
+      input.group,
+      `Framework built-in resource catalog ${input.packageId}/${input.group}.`,
+    );
+    const handles = this.catalogHandles(local);
+    const resourceEmissions = this.resourceEmissionsForCatalog(input, local, source, targetTypes);
+    const materializedResources = resourceEmissions.map((emission) => emission.resource);
+    const catalog = this.createCatalog(input, handles, source, materializedResources);
+    const catalogClaims = this.catalogClaimsForResources(local, handles.productHandle, resourceEmissions, source);
+    const records = [
+      ...source.records,
+      ...resourceEmissions.flatMap((emission) => emission.records),
+      ...this.recordsForCatalogProduct(
+        local,
+        input,
+        source,
+        handles,
+        catalog,
+        resourceEmissions,
+        catalogClaims,
+      ),
+    ];
+
+    return {
+      records,
+      catalog,
+      resources: resourceEmissions.map((emission) =>
+        new BuiltInResourceEmission(catalog.productHandle, emission.resource, emission.definition)
+      ),
+    };
+  }
+
+  private catalogHandles(local: string): BuiltInResourceCatalogHandles {
+    return new BuiltInResourceCatalogHandles(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+    );
+  }
+
+  private resourceEmissionsForCatalog(
+    input: BuiltInResourceCatalogInput,
+    local: string,
+    source: BuiltInResourceSourceSet,
+    targetTypes: BuiltInResourceTargetTypeProjector | null,
+  ): readonly BuiltInResourcePublication[] {
+    return input.resources.map((resource, index) =>
+      this.resourcePublication.recordsForResource(
+        resource,
+        `${local}:resource:${localKeyPart(resource.resourceKind)}:${localKeyPart(resource.name)}:${index}`,
+        source,
+        targetTypes,
+      )
+    );
+  }
+
+  private createCatalog(
+    input: BuiltInResourceCatalogInput,
+    handles: BuiltInResourceCatalogHandles,
+    source: BuiltInResourceSourceSet,
+    resources: readonly BuiltInResource[],
+  ): BuiltInResourceCatalog {
+    return new BuiltInResourceCatalog(
+      handles.productHandle,
+      handles.identityHandle,
+      input.packageId,
+      input.group,
+      resources,
+      source.addressHandle,
+      [],
+    );
+  }
+
+  private catalogClaimsForResources(
+    local: string,
+    catalogProductHandle: ProductHandle,
+    resourceEmissions: readonly {
+      readonly resource: BuiltInResource;
+    }[],
+    source: BuiltInResourceSourceSet,
+  ): readonly SemanticClaim[] {
+    return resourceEmissions.map((emission, index) => new SemanticClaim(
+      this.store.handles.claim(`${local}:contains-resource:${index}`),
+      catalogProductHandle,
+      KernelVocabulary.Resource.ContainsDefinitionHeader.key,
+      emission.resource.productHandle!,
+      source.provenanceHandle,
+    ));
+  }
+
+  private recordsForCatalogProduct(
+    local: string,
+    input: BuiltInResourceCatalogInput,
+    source: BuiltInResourceSourceSet,
+    handles: BuiltInResourceCatalogHandles,
+    catalog: BuiltInResourceCatalog,
+    resourceEmissions: readonly {
+      readonly resource: BuiltInResource;
+      readonly definition: FullResourceDefinition | null;
+    }[],
+    claims: readonly SemanticClaim[],
+  ): readonly KernelStoreRecord[] {
+    return [
+      ...claims,
+      this.catalogIdentity(input, source, handles),
+      this.catalogProduct(source, handles),
+      this.catalogMaterialization(local, handles, catalog, resourceEmissions, claims),
+    ];
+  }
+
+  private catalogIdentity(
+    input: BuiltInResourceCatalogInput,
+    source: BuiltInResourceSourceSet,
+    handles: BuiltInResourceCatalogHandles,
+  ): CompilerIdentity {
+    return new CompilerIdentity(
+      handles.identityHandle,
+      KernelVocabulary.Resource.BuiltInCatalog.key,
+      null,
+      source.addressHandle,
+      `${input.packageId}:${input.group}`,
+    );
+  }
+
+  private catalogProduct(
+    source: BuiltInResourceSourceSet,
+    handles: BuiltInResourceCatalogHandles,
+  ): MaterializedProduct {
+    return new MaterializedProduct(
+      handles.productHandle,
+      KernelVocabulary.Resource.BuiltInCatalog.key,
+      handles.identityHandle,
+      source.addressHandle,
+      source.provenanceHandle,
+    );
+  }
+
+  private catalogMaterialization(
+    local: string,
+    handles: BuiltInResourceCatalogHandles,
+    catalog: BuiltInResourceCatalog,
+    resourceEmissions: readonly {
+      readonly definition: FullResourceDefinition | null;
+    }[],
+    claims: readonly SemanticClaim[],
+  ): MaterializationRecord {
+    return new MaterializationRecord(
+      this.store.handles.materialization(local),
+      handles.identityHandle,
+      this.catalogMaterializedProductHandles(handles, catalog, resourceEmissions),
+      claims.map((claim) => claim.handle),
+    );
+  }
+
+  private catalogMaterializedProductHandles(
+    handles: BuiltInResourceCatalogHandles,
+    catalog: BuiltInResourceCatalog,
+    resourceEmissions: readonly {
+      readonly definition: FullResourceDefinition | null;
+    }[],
+  ): readonly ProductHandle[] {
+    return [
+      handles.productHandle,
+      ...catalog.resources.map((resource) => resource.productHandle!),
+      ...resourceEmissions.flatMap((emission) =>
+        emission.definition?.productHandle == null ? [] : [emission.definition.productHandle]
+      ),
+    ];
+  }
 
   private recordsForSource(
     local: string,
@@ -644,9 +640,12 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
     this.catalogMaterializer = new BuiltInResourceCatalogMaterializer(store);
   }
 
-  materialize(configuration: ConfigurationKernelEmission): ConfiguredBuiltInResourceCatalogEmission {
+  materialize(
+    configuration: ConfigurationKernelEmission,
+    typeSystem: TypeSystemProject | null = null,
+  ): ConfiguredBuiltInResourceCatalogEmission {
     const selectionRequests = readConfiguredResourceCatalogRequests(configuration);
-    const catalogEmission = this.catalogEmissionForRequests(selectionRequests);
+    const catalogEmission = this.catalogEmissionForRequests(selectionRequests, typeSystem);
     const selectionEmission = this.selectionEmissionForRequests(selectionRequests, catalogEmission);
     this.commitSelectionRecords(selectionEmission.records);
     this.registerSelectionDetails(selectionEmission.selections);
@@ -660,12 +659,13 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
 
   private catalogEmissionForRequests(
     selectionRequests: readonly ConfiguredResourceCatalogRequest[],
+    typeSystem: TypeSystemProject | null,
   ): BuiltInResourceCatalogEmission {
     const catalogInputs = uniqueByKey(
       selectionRequests.flatMap((request) => request.catalogInputs),
       resourceCatalogInputKey,
     );
-    return this.catalogMaterializer.materialize(catalogInputs);
+    return this.catalogMaterializer.materialize(catalogInputs, typeSystem);
   }
 
   private selectionEmissionForRequests(
@@ -773,12 +773,6 @@ export class ConfiguredBuiltInResourceCatalogMaterializer {
       frameworkKind,
       catalogs.map((catalog) => catalog.productHandle),
       admission.sourceAddressHandle,
-      compactFieldProvenance<ConfiguredBuiltInResourceCatalogSelectionField>([
-        new FieldProvenance('registrationAdmission', source.provenanceHandle),
-        new FieldProvenance('frameworkKind', source.provenanceHandle),
-        new FieldProvenance('catalogs', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-      ]),
     );
   }
 
@@ -886,6 +880,9 @@ function catalogInputsForFrameworkKind(
       case FrameworkRegistrationCapability.StateDefaultResources:
         inputs.push(StateBuiltInResourceCatalogs.DefaultResources);
         break;
+      case FrameworkRegistrationCapability.ValidationHtmlDefaultResources:
+        inputs.push(ValidationHtmlBuiltInResourceCatalogs.DefaultResources);
+        break;
       case FrameworkRegistrationCapability.RuntimeHtmlCompilerServices:
       case FrameworkRegistrationCapability.RuntimeHtmlDefaultBindingSyntax:
       case FrameworkRegistrationCapability.RuntimeHtmlShortHandBindingSyntax:
@@ -895,6 +892,8 @@ function catalogInputsForFrameworkKind(
       case FrameworkRegistrationCapability.I18nTranslationRenderers:
       case FrameworkRegistrationCapability.I18nServiceResolvers:
       case FrameworkRegistrationCapability.I18nLifecycleTasks:
+      case FrameworkRegistrationCapability.ValidationServiceResolvers:
+      case FrameworkRegistrationCapability.ValidationHtmlServiceResolvers:
       case FrameworkRegistrationCapability.RouterDefaultComponents:
       case FrameworkRegistrationCapability.RouterConfigurationResolvers:
       case FrameworkRegistrationCapability.RouterLifecycleTasks:
@@ -939,6 +938,10 @@ function resourceCatalogSummaryForFrameworkKind(frameworkKind: FrameworkRegistra
       return 'RuntimeHtml DefaultResources spread admitted framework default resource headers.';
     case FrameworkRegistrationKind.I18nConfiguration:
       return 'I18nConfiguration admitted i18n value-converter and binding-behavior resource headers.';
+    case FrameworkRegistrationKind.ValidationConfiguration:
+      return 'ValidationConfiguration admitted validation services but no resource headers.';
+    case FrameworkRegistrationKind.ValidationHtmlConfiguration:
+      return 'ValidationHtmlConfiguration admitted validation binding-behavior, subscriber custom-attribute, and container custom-element resource headers.';
     case FrameworkRegistrationKind.RouterConfiguration:
       return 'RouterConfiguration admitted router custom-attribute and viewport resource headers.';
     case FrameworkRegistrationKind.RouterDefaultComponents:
@@ -958,246 +961,6 @@ function resourceCatalogSummaryForFrameworkKind(frameworkKind: FrameworkRegistra
     case FrameworkRegistrationKind.AppTask:
       return 'AppTask registry does not admit resource catalogs.';
   }
-}
-
-interface BuiltInBindableInput {
-  readonly name: string;
-  readonly attribute?: string;
-  readonly callback?: string;
-  readonly mode?: BindableBindingMode;
-  readonly setterKind?: BindableSetterKind;
-  readonly setterName?: string;
-}
-
-function materializeBuiltInResourceDefinition(
-  resource: BuiltInResource,
-  productHandle: ProductHandle,
-  identityHandle: IdentityHandle,
-  source: BuiltInResourceSourceSet,
-): FullResourceDefinition | null {
-  const target = new ResourceTargetReference(null, source.addressHandle, resource.targetName);
-  const aliases = resource.aliases.map((alias) =>
-    new ResourceAliasDefinition(alias, source.addressHandle, source.provenanceHandle)
-  );
-  const key = runtimeResourceKeyForKind(resource.resourceKind, resource.name);
-  if (key == null) {
-    return null;
-  }
-
-  switch (resource.resourceKind) {
-    case ResourceDefinitionKind.CustomElement:
-      return new CustomElementDefinition(
-        productHandle,
-        identityHandle,
-        source.addressHandle,
-        target,
-        resource.name,
-        aliases,
-        key,
-        new CustomElementCaptureDefinition(resource.targetName === 'AuCompose'
-          ? CustomElementCaptureKind.All
-          : CustomElementCaptureKind.None),
-        new CustomElementTemplateDefinition(CustomElementTemplateKind.None),
-        [],
-        [],
-        null,
-        false,
-        [],
-        builtInElementBindables(resource.targetName, source),
-        resource.targetName === 'AuCompose' || resource.targetName === 'AuSlot',
-        null,
-        false,
-        false,
-        [],
-        null,
-        resource.targetName === 'AuSlot'
-          ? new ResourceTargetReference(null, source.addressHandle, 'AuSlot.processContent')
-          : null,
-        [],
-        [],
-      );
-    case ResourceDefinitionKind.CustomAttribute:
-    case ResourceDefinitionKind.TemplateController:
-      return new CustomAttributeDefinition(
-        productHandle,
-        identityHandle,
-        source.addressHandle,
-        target,
-        resource.name,
-        aliases,
-        key,
-        resource.resourceKind === ResourceDefinitionKind.TemplateController,
-        builtInAttributeBindables(resource.targetName, source),
-        builtInNoMultiBindings(resource.targetName),
-        [],
-        [],
-        CustomAttributeContainerStrategy.Reuse,
-        builtInDefaultProperty(resource.targetName),
-        [],
-        [],
-      );
-    case ResourceDefinitionKind.ValueConverter:
-      return new ValueConverterDefinition(
-        productHandle,
-        identityHandle,
-        source.addressHandle,
-        target,
-        resource.name,
-        aliases,
-        key,
-        [],
-        [],
-      );
-    case ResourceDefinitionKind.BindingBehavior:
-      return new BindingBehaviorDefinition(
-        productHandle,
-        identityHandle,
-        source.addressHandle,
-        target,
-        resource.name,
-        aliases,
-        key,
-        [],
-        [],
-      );
-  }
-}
-
-function builtInElementBindables(
-  targetName: string,
-  source: BuiltInResourceSourceSet,
-): readonly BindableDefinition[] {
-  switch (targetName) {
-    case 'AuCompose':
-      return bindables(source, [
-        { name: 'template' },
-        { name: 'component' },
-        { name: 'model' },
-        { name: 'scopeBehavior', setterKind: BindableSetterKind.Function, setterName: 'AuCompose.scopeBehavior.set' },
-        { name: 'composing', mode: BindableBindingMode.FromView },
-        { name: 'composition', mode: BindableBindingMode.FromView },
-        { name: 'tag' },
-        { name: 'flushMode', setterKind: BindableSetterKind.Function, setterName: 'AuCompose.flushMode.set' },
-      ]);
-    case 'AuSlot':
-      return bindables(source, [
-        { name: 'expose' },
-        { name: 'slotchange' },
-      ]);
-    case 'ViewportCustomElement':
-      return bindables(source, [
-        { name: 'name' },
-        { name: 'usedBy' },
-        { name: 'default' },
-        { name: 'fallback' },
-      ]);
-    default:
-      return [];
-  }
-}
-
-function builtInAttributeBindables(
-  targetName: string,
-  source: BuiltInResourceSourceSet,
-): readonly BindableDefinition[] {
-  switch (targetName) {
-    case 'If':
-      return bindables(source, [
-        { name: 'value' },
-        { name: 'cache', setterKind: BindableSetterKind.Function, setterName: 'If.cache.set' },
-      ]);
-    case 'Repeat':
-      return bindables(source, [{ name: 'items' }]);
-    case 'With':
-    case 'Switch':
-    case 'PromiseTemplateController':
-    case 'Show':
-      return bindables(source, [{ name: 'value' }]);
-    case 'PendingTemplateController':
-      return bindables(source, [{ name: 'value', mode: BindableBindingMode.ToView }]);
-    case 'FulfilledTemplateController':
-    case 'RejectedTemplateController':
-      return bindables(source, [{ name: 'value', mode: BindableBindingMode.FromView }]);
-    case 'Case':
-    case 'DefaultCase':
-      return bindables(source, [
-        { name: 'value' },
-        {
-          name: 'fallThrough',
-          mode: BindableBindingMode.OneTime,
-          setterKind: BindableSetterKind.Function,
-          setterName: `${targetName}.fallThrough.set`,
-        },
-      ]);
-    case 'Portal':
-      return bindables(source, [
-        { name: 'target' },
-        { name: 'position' },
-        { name: 'activated' },
-        { name: 'activating' },
-        { name: 'callbackContext' },
-        { name: 'renderContext', callback: 'targetChanged' },
-        { name: 'strict' },
-        { name: 'deactivated' },
-        { name: 'deactivating' },
-      ]);
-    case 'Focus':
-      return bindables(source, [{ name: 'value', mode: BindableBindingMode.TwoWay }]);
-    case 'LoadCustomAttribute':
-      return bindables(source, [
-        { name: 'route' },
-        { name: 'params' },
-        { name: 'attribute' },
-        { name: 'active', mode: BindableBindingMode.FromView },
-        { name: 'context' },
-      ]);
-    case 'HrefCustomAttribute':
-      return bindables(source, [{ name: 'value' }]);
-    case 'Else':
-    default:
-      return [];
-  }
-}
-
-function builtInDefaultProperty(targetName: string): string {
-  switch (targetName) {
-    case 'Repeat':
-      return 'items';
-    case 'Portal':
-      return 'target';
-    case 'LoadCustomAttribute':
-      return 'route';
-    default:
-      return 'value';
-  }
-}
-
-function builtInNoMultiBindings(targetName: string): boolean {
-  switch (targetName) {
-    case 'HrefCustomAttribute':
-      return true;
-    default:
-      return false;
-  }
-}
-
-function bindables(
-  source: BuiltInResourceSourceSet,
-  inputs: readonly BuiltInBindableInput[],
-): readonly BindableDefinition[] {
-  return inputs.map((input) => new BindableDefinition(
-    input.attribute ?? bindableAttributeNameForProperty(input.name),
-    input.callback ?? `${input.name}Changed`,
-    input.mode ?? BindableBindingMode.ToView,
-    input.name,
-    new BindableSetterDefinition(
-      input.setterKind ?? BindableSetterKind.Default,
-      input.setterName == null
-        ? null
-        : new ResourceTargetReference(null, source.addressHandle, input.setterName),
-    ),
-    source.addressHandle,
-  ));
 }
 
 type BuiltInResourceConstructor = new (

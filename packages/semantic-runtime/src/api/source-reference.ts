@@ -1,4 +1,5 @@
 import type { AddressHandle } from '../kernel/handles.js';
+import type { SourceSpan } from '../expression/source-span.js';
 import type {
   ExternalAddress,
   GeneratedAddress,
@@ -48,6 +49,21 @@ export function describeAddress(
     };
   }
   return describeStoredAddress(store, address);
+}
+
+export function sourceReferenceForParserSpan(
+  filePath: string,
+  span: SourceSpan,
+  role: string = 'range',
+): SemanticSourceReference {
+  return {
+    kind: 'source-span-address',
+    label: `${filePath}@${span.start}..${span.end}`,
+    path: filePath,
+    start: span.start,
+    end: span.end,
+    role,
+  };
 }
 
 function describeStoredAddress(

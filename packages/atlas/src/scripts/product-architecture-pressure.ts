@@ -40,6 +40,8 @@ interface ProductArchitecturePressureValue {
     readonly propertyCount: number;
     readonly auLinkIds: readonly string[];
     readonly auLinkCatalogIdsForName: readonly string[];
+    readonly surfaceRole: string;
+    readonly surfaceRoleReason: string;
     readonly source?: SourceRef;
   }[];
   readonly functionSurfaces?: readonly {
@@ -85,6 +87,14 @@ interface ProductArchitecturePressureValue {
     readonly source?: SourceRef;
   }[];
   readonly fieldProvenanceConstructions?: readonly {
+    readonly constructionKind: "new-expression" | "fieldProvenanceEntries-call";
+    readonly fieldNameOrigin:
+      | "constructor-argument"
+      | "array-literal-element"
+      | "array-conditional-element"
+      | "array-spread-element"
+      | "array-dynamic-element"
+      | "dynamic-field-collection";
     readonly fieldNameExpression: string | null;
     readonly fieldNameLiteral: string | null;
     readonly provenanceExpression: string | null;
@@ -224,6 +234,10 @@ const unanchoredAuLinkNameMatches =
   answerValue<ProductArchitecturePressureValue>(auLinkNameMatchAnswer)?.classSurfaces ?? [];
 const duplicateFunctionNameGroups =
   answerValue<ProductArchitecturePressureValue>(duplicateFunctionAnswer)?.functionDuplicateGroups ?? [];
+const duplicateFunctionPressureGroups = duplicateFunctionNameGroups.filter((group) =>
+  (group.repeatedBodyShapeFingerprintCount ?? 0) > 0 ||
+  (group.repeatedBodyFingerprintCount ?? 0) > 0
+);
 const kernelRecordKindGroups = countEntriesBy(kernelRecordRows, (row) => row.recordKind);
 const kernelProductKindGroups = countEntriesBy(
   kernelRecordRows.filter((row) => row.productKindExpression !== null),
@@ -243,6 +257,15 @@ const fieldProvenanceFieldGroups = countEntriesBy(
 );
 const fieldProvenanceFileGroups = fieldProvenanceFilePressureRows(fieldProvenanceRows);
 const fieldProvenanceOwnerGroups = fieldProvenanceOwnerPressureRows(fieldProvenanceRows);
+const fieldProvenanceFanOutGroups = fieldProvenanceFanOutPressureRows(fieldProvenanceRows);
+const fieldProvenanceConstructionGroups = countEntriesBy(
+  fieldProvenanceRows,
+  (row) => row.constructionKind,
+);
+const fieldProvenanceOriginGroups = countEntriesBy(
+  fieldProvenanceRows,
+  (row) => row.fieldNameOrigin,
+);
 
 console.log("product.architecture structure pressure");
 console.log(
@@ -276,7 +299,7 @@ console.log("large class pressure");
 printEmptyRows(classes);
 for (const row of classes.slice(0, structureDisplayRows)) {
   console.log(
-    `- ${row.name}: ${row.methodCount} method(s), ${row.propertyCount} property/accessor(s), ${row.lineCount} line(s) at ${sourceLabel(row)}`,
+    `- ${row.name} {${classRoleLabel(row)}}: ${row.methodCount} method(s), ${row.propertyCount} property/accessor(s), ${row.lineCount} line(s) at ${sourceLabel(row)}`,
   );
 }
 
@@ -286,7 +309,7 @@ console.log("filters: classNameSuffix=Input/orderBy=lineCount, printed rows requ
 printEmptyRows(inputEnvelopeClasses);
 for (const row of inputEnvelopeClasses.slice(0, inputEnvelopeDisplayRows)) {
   console.log(
-    `- ${row.name}: ${row.methodCount} method(s), ${row.propertyCount} property/accessor(s), ${row.lineCount} line(s) at ${sourceLabel(row)}`,
+    `- ${row.name} {${classRoleLabel(row)}}: ${row.methodCount} method(s), ${row.propertyCount} property/accessor(s), ${row.lineCount} line(s) at ${sourceLabel(row)}`,
   );
 }
 
@@ -296,7 +319,7 @@ console.log("filters: classNameSuffix=Input/orderBy=lineCount, printed rows requ
 printEmptyRows(auLinkInputClasses);
 for (const row of auLinkInputClasses.slice(0, inputEnvelopeDisplayRows)) {
   console.log(
-    `- ${row.name}: ${row.auLinkIds.join(", ")}, ${row.propertyCount} property/accessor(s), ${row.lineCount} line(s) at ${sourceLabel(row)}`,
+    `- ${row.name} {${classRoleLabel(row)}}: ${row.auLinkIds.join(", ")}, ${row.propertyCount} property/accessor(s), ${row.lineCount} line(s) at ${sourceLabel(row)}`,
   );
 }
 
@@ -306,7 +329,7 @@ console.log("filters: hasAuLinkCatalogNameMatch=true/hasAuLink=false; exact clas
 printEmptyRows(unanchoredAuLinkNameMatches);
 for (const row of unanchoredAuLinkNameMatches.slice(0, inputEnvelopeDisplayRows)) {
   console.log(
-    `- ${row.name}: catalog ${row.auLinkCatalogIdsForName.join(", ")}, ${row.methodCount} method(s), ${row.propertyCount} property/accessor(s), ${row.lineCount} line(s) at ${sourceLabel(row)}`,
+    `- ${row.name} {${classRoleLabel(row)}}: catalog ${row.auLinkCatalogIdsForName.join(", ")}, ${row.methodCount} method(s), ${row.propertyCount} property/accessor(s), ${row.lineCount} line(s) at ${sourceLabel(row)}`,
   );
 }
 
@@ -315,15 +338,18 @@ console.log("behavioral Input suffix classes");
 printEmptyRows(behavioralInputClasses);
 for (const row of behavioralInputClasses.slice(0, behavioralInputDisplayRows)) {
   console.log(
-    `- ${row.name}: ${row.methodCount} method(s), ${row.propertyCount} property/accessor(s), ${row.lineCount} line(s) at ${sourceLabel(row)}`,
+    `- ${row.name} {${classRoleLabel(row)}}: ${row.methodCount} method(s), ${row.propertyCount} property/accessor(s), ${row.lineCount} line(s) at ${sourceLabel(row)}`,
   );
 }
 
 console.log("");
 console.log("duplicate top-level helper-name pressure");
-console.log("filters: functionKind=top-level; same function name appears in more than one file; AST body-shape fingerprint groups equivalent control-flow shapes before exact body text");
-printEmptyRows(duplicateFunctionNameGroups);
-for (const group of duplicateFunctionNameGroups.slice(0, duplicateDisplayRows)) {
+console.log("filters: functionKind=top-level; same function name appears in more than one file; only repeated AST body-shape/body fingerprints are printed by default");
+printEmptyRows(duplicateFunctionPressureGroups);
+if (duplicateFunctionNameGroups.length > duplicateFunctionPressureGroups.length) {
+  console.log(`- ${duplicateFunctionNameGroups.length - duplicateFunctionPressureGroups.length} same-name group(s) have distinct bodies and are hidden from this pressure lane`);
+}
+for (const group of duplicateFunctionPressureGroups.slice(0, duplicateDisplayRows)) {
   const shapeSignal = group.distinctBodyShapeFingerprintCount === null
     ? "no body-shape fingerprint"
     : `${group.distinctBodyShapeFingerprintCount} distinct body-shape fingerprint(s), ${group.repeatedBodyShapeFingerprintCount} repeated shape(s) across files`;
@@ -409,6 +435,17 @@ if (detail) {
 console.log("");
 console.log("FieldProvenance construction pressure");
 console.log("source-level field provenance sites grouped by field name, module, and owner");
+console.log("construction forms");
+printEmptyRows(fieldProvenanceConstructionGroups);
+for (const group of fieldProvenanceConstructionGroups.slice(0, structureDisplayRows)) {
+  console.log(`- ${group.key}: ${group.count} construction site(s)`);
+}
+console.log("field-name origins");
+printEmptyRows(fieldProvenanceOriginGroups);
+for (const group of fieldProvenanceOriginGroups.slice(0, structureDisplayRows)) {
+  console.log(`- ${group.key}: ${group.count} construction site(s)`);
+}
+console.log("field names");
 printEmptyRows(fieldProvenanceFieldGroups);
 for (const group of fieldProvenanceFieldGroups.slice(0, structureDisplayRows)) {
   console.log(`- ${group.key}: ${group.count} construction site(s)`);
@@ -427,12 +464,19 @@ for (const group of fieldProvenanceOwnerGroups.slice(0, structureDisplayRows)) {
     `- ${group.owner}: ${group.count} construction site(s), fields ${group.fields}, provenance handles ${group.provenanceExpressions}, first ${group.firstSource}`,
   );
 }
+console.log("field provenance same-handle fan-out pressure");
+printEmptyRows(fieldProvenanceFanOutGroups);
+for (const group of fieldProvenanceFanOutGroups.slice(0, structureDisplayRows)) {
+  console.log(
+    `- ${group.owner}: ${group.count} field(s) share ${group.provenanceExpression} across ${group.fieldCount} distinct field(s); fields ${group.fields}, first ${group.firstSource}`,
+  );
+}
 if (detail) {
   console.log("field provenance source samples");
   printEmptyRows(fieldProvenanceRows);
   for (const row of fieldProvenanceRows.slice(0, structureDisplayRows)) {
     console.log(
-      `- ${fieldProvenanceFieldLabel(row)} in ${kernelOwnerLabel(row)} at ${sourceLabel(row)}; handle ${row.provenanceExpression ?? "(unknown provenance expression)"}`,
+      `- ${fieldProvenanceFieldLabel(row)} via ${row.constructionKind}/${row.fieldNameOrigin} in ${kernelOwnerLabel(row)} at ${sourceLabel(row)}; handle ${row.provenanceExpression ?? "(unknown provenance expression)"}`,
     );
   }
 }
@@ -514,6 +558,15 @@ interface FieldProvenanceOwnerPressureRow {
   readonly count: number;
   readonly fields: string;
   readonly provenanceExpressions: string;
+  readonly firstSource: string;
+}
+
+interface FieldProvenanceFanOutPressureRow {
+  readonly owner: string;
+  readonly provenanceExpression: string;
+  readonly count: number;
+  readonly fieldCount: number;
+  readonly fields: string;
   readonly firstSource: string;
 }
 
@@ -637,6 +690,33 @@ function fieldProvenanceOwnerPressureRows(
     );
 }
 
+function fieldProvenanceFanOutPressureRows(
+  rows: readonly NonNullable<ProductArchitecturePressureValue["fieldProvenanceConstructions"]>[number][],
+): readonly FieldProvenanceFanOutPressureRow[] {
+  return [...groupBy(rows, (row) =>
+    `${kernelOwnerLabel(row)}\u0000${row.provenanceExpression ?? "(unknown provenance expression)"}`
+  )]
+    .map(([, group]) => {
+      const first = group[0]!;
+      const fieldCount = new Set(group.map(fieldProvenanceFieldLabel)).size;
+      return {
+        owner: kernelOwnerLabel(first),
+        provenanceExpression: first.provenanceExpression ?? "(unknown provenance expression)",
+        count: group.length,
+        fieldCount,
+        fields: compactCountSummary(group, fieldProvenanceFieldLabel),
+        firstSource: sourceLabel(first),
+      };
+    })
+    .filter((row) => row.count >= 4 && row.fieldCount >= 2)
+    .sort((left, right) =>
+      right.count - left.count ||
+      right.fieldCount - left.fieldCount ||
+      left.owner.localeCompare(right.owner) ||
+      left.provenanceExpression.localeCompare(right.provenanceExpression),
+    );
+}
+
 function kernelOwnerLabel(row: { readonly filePath: string; readonly ownerFunctionName: string | null }): string {
   return `${row.filePath} :: ${row.ownerFunctionName ?? "(module top level)"}`;
 }
@@ -645,6 +725,14 @@ function fieldProvenanceFieldLabel(
   row: NonNullable<ProductArchitecturePressureValue["fieldProvenanceConstructions"]>[number],
 ): string {
   return row.fieldNameLiteral ?? row.fieldNameExpression ?? "(dynamic field name)";
+}
+
+function classRoleLabel(
+  row: NonNullable<ProductArchitecturePressureValue["classSurfaces"]>[number],
+): string {
+  return row.surfaceRoleReason.length === 0
+    ? row.surfaceRole
+    : `${row.surfaceRole}; ${row.surfaceRoleReason}`;
 }
 
 function compactCountSummary<TRow>(

@@ -3,39 +3,41 @@ import {
   EvidenceKind,
   EvidenceRole,
 } from '../kernel/evidence.js';
-import type { IdentityHandle, ProvenanceHandle } from '../kernel/handles.js';
-import {
-  compactFieldProvenance,
-  FieldProvenance,
-} from '../kernel/provenance.js';
+import type { IdentityHandle } from '../kernel/handles.js';
 import {
   KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
+import { localKeyPart } from '../kernel/local-key.js';
 import {
   NavigationInstructionKind,
   RecognizedRouteModel,
   RouteConfigKind,
   RouteRecognizerModelKind,
+  RouterIssueKind,
+  RouterIssueModel,
+  RouterIssuePhase,
   RouteRecognizerStateKind,
   type ConfigurableRouteModel,
   type EndpointModel,
   type RouteConfigModel,
   type RouteConfigContextModel,
   type RouteContextModel,
-  type RouteRecognizerField,
   type RouteRecognizerReference,
   type StateModel,
   type TypedNavigationInstructionModel,
   type ViewportInstructionModel,
   type ViewportInstructionTreeModel,
 } from './model.js';
+import { RouterFrameworkErrorCode } from './framework-error-code.js';
 import type { RouteConfigContextMaterializationProjectResult } from './route-context-materialization.js';
 import type { RouteInstructionMaterializationProjectResult } from './route-instruction-materialization.js';
 import type { RouteRecognizerMaterializationProjectResult } from './route-recognizer-materialization.js';
 import type { RouteRuntimeTopologyProjectResult } from './route-runtime-topology.js';
+import { migrateRedirectPath } from './route-redirect-migration.js';
+import { routerIssueProductRecords } from './router-issue-publication.js';
 import { routeRecognizerProductRecords } from './router-product-records.js';
 
 const RESIDUE = '$$residue';
@@ -43,6 +45,7 @@ const RESIDUE = '$$residue';
 interface RouteRecognitionEmission {
   readonly records: readonly KernelStoreRecord[];
   readonly recognizedRoutes: readonly RecognizedRouteModel[];
+  readonly issues: readonly RouterIssueModel[];
 }
 
 interface RecognizerGraph {
@@ -62,6 +65,18 @@ interface RecognizedRouteDraft {
   readonly redirectDepth: number;
 }
 
+interface RedirectExpansionResult {
+  readonly routes: readonly RecognizedRouteDraft[];
+  readonly issues: readonly RedirectExpansionIssueDraft[];
+}
+
+interface RedirectExpansionIssueDraft {
+  readonly routeConfig: RouteConfigModel;
+  readonly sourcePath: string;
+  readonly redirectPath: string;
+  readonly depth: number;
+}
+
 interface RouteRecognitionIndexes {
   readonly routeContextsByIdentity: ReadonlyMap<RouteContextModel['identityHandle'], RouteContextModel>;
   readonly routeConfigContextsByIdentity: ReadonlyMap<RouteConfigContextModel['identityHandle'], RouteConfigContextModel>;
@@ -76,10 +91,15 @@ export class RouteRecognitionMaterializationProjectResult {
   constructor(
     readonly project: ProjectBootFrame,
     readonly recognizedRoutes: readonly RecognizedRouteModel[],
+    readonly issues: readonly RouterIssueModel[],
   ) {}
 
   readRecognizedRoutes(): readonly RecognizedRouteModel[] {
     return this.recognizedRoutes;
+  }
+
+  readIssues(): readonly RouterIssueModel[] {
+    return this.issues;
   }
 }
 
@@ -105,6 +125,7 @@ export class RouteRecognitionMaterializationProjectPass {
     return new RouteRecognitionMaterializationProjectResult(
       project,
       emissions.flatMap((emission) => emission.recognizedRoutes),
+      emissions.flatMap((emission) => emission.issues),
     );
   }
 
@@ -115,9 +136,10 @@ export class RouteRecognitionMaterializationProjectPass {
   ): readonly RouteRecognitionEmission[] {
     const routeContext = routeContextForInstructionTree(tree, indexes.routeContextsByIdentity);
     const routeConfigContext = routeConfigContextForRouteContext(routeContext, indexes.routeConfigContextsByIdentity);
+    const routeConfig = routeConfigForRouteConfigContext(routeConfigContext, indexes.routeConfigsByIdentity);
     const recognizerIdentity = routeConfigContext?.recognizer.identityHandle ?? null;
     const graph = recognizerIdentity == null ? null : indexes.recognizerGraphs.get(recognizerIdentity) ?? null;
-    if (graph == null) {
+    if (graph == null || routeConfig == null || routeConfigContext == null) {
       return [];
     }
 
@@ -138,16 +160,17 @@ export class RouteRecognitionMaterializationProjectPass {
       }
       const recognizedRoutes = recognizePath(graph, path);
       if (recognizedRoutes == null) {
-        return [];
+        return this.noFallbackEmission(store, routeConfigContext, routeConfig, viewportInstruction, path, index);
       }
-      const expandedRoutes = expandRedirectTargets(graph, recognizedRoutes, indexes.routeConfigsByIdentity);
+      const expanded = expandRedirectTargets(graph, recognizedRoutes, indexes.routeConfigsByIdentity);
       return [
         this.materializeRecognizedRoutes(
           store,
           graph,
           tree,
           viewportInstruction,
-          expandedRoutes,
+          expanded.routes,
+          expanded.issues,
           index,
         ),
       ];
@@ -160,6 +183,7 @@ export class RouteRecognitionMaterializationProjectPass {
     tree: ViewportInstructionTreeModel,
     viewportInstruction: ViewportInstructionModel,
     routes: readonly RecognizedRouteDraft[],
+    redirectIssues: readonly RedirectExpansionIssueDraft[],
     instructionIndex: number,
   ): RouteRecognitionEmission {
     const recognizedRoutes = routes.map((route, routeIndex) =>
@@ -174,20 +198,151 @@ export class RouteRecognitionMaterializationProjectPass {
       )
     );
     return {
-      records: recognizedRoutes.flatMap((route, routeIndex) =>
-        recognizedRouteRecords(
-          store,
-          graph,
-          tree,
-          viewportInstruction,
-          route,
-          instructionIndex,
-          routeIndex,
-        )
-      ),
+      records: [
+        ...recognizedRoutes.flatMap((route, routeIndex) =>
+          recognizedRouteRecords(
+            store,
+            graph,
+            tree,
+            viewportInstruction,
+            route,
+            instructionIndex,
+            routeIndex,
+          )
+        ),
+        ...redirectIssues.flatMap((issue, issueIndex) =>
+          unknownRedirectIssueRecords(store, tree, viewportInstruction, issue, instructionIndex, issueIndex)
+        ),
+      ],
       recognizedRoutes,
+      issues: redirectIssues.map((issue, issueIndex) =>
+        unknownRedirectIssueModel(store, tree, viewportInstruction, issue, instructionIndex, issueIndex)
+      ),
     };
   }
+
+  private noFallbackEmission(
+    store: KernelStore,
+    routeConfigContext: RouteConfigContextModel,
+    routeConfig: RouteConfigModel,
+    viewportInstruction: ViewportInstructionModel,
+    path: string,
+    instructionIndex: number,
+  ): readonly RouteRecognitionEmission[] {
+    if (path.length === 0 || routeConfig.fallback != null) {
+      return [];
+    }
+    const local = [
+      'router-recognition-issue',
+      'no-fallback',
+      routeConfigContext.identityHandle,
+      instructionIndex,
+      localKeyPart(path),
+    ].join(':');
+    const issue = new RouterIssueModel(
+      store.handles.product(local),
+      store.handles.identity(local),
+      RouterIssuePhase.RouteRecognition,
+      RouterIssueKind.InstructionNoFallback,
+      `Neither the route '${path}' matched any configured route nor is a fallback configured for the active route context.`,
+      'error',
+      RouterFrameworkErrorCode.InstructionNoFallback,
+      routeConfig.toReference(),
+      null,
+      'fallback',
+      'configured fallback or matching route',
+      'missing',
+      path,
+      path,
+      null,
+      null,
+      viewportInstruction.sourceAddressHandle,
+    );
+    return [{
+      records: routerIssueProductRecords(store, {
+        local,
+        issue,
+        ownerHandle: routeConfigContext.identityHandle,
+        sourceAddressHandle: viewportInstruction.sourceAddressHandle,
+        localName: path,
+        evidenceSummary: issue.message,
+      }),
+      recognizedRoutes: [],
+      issues: [issue],
+    }];
+  }
+}
+
+function unknownRedirectIssueRecords(
+  store: KernelStore,
+  tree: ViewportInstructionTreeModel,
+  viewportInstruction: ViewportInstructionModel,
+  draft: RedirectExpansionIssueDraft,
+  instructionIndex: number,
+  issueIndex: number,
+): readonly KernelStoreRecord[] {
+  const issue = unknownRedirectIssueModel(store, tree, viewportInstruction, draft, instructionIndex, issueIndex);
+  return routerIssueProductRecords(store, {
+    local: unknownRedirectIssueLocal(tree, viewportInstruction, draft, instructionIndex, issueIndex),
+    issue,
+    ownerHandle: draft.routeConfig.identityHandle,
+    sourceAddressHandle: issue.sourceAddressHandle,
+    localName: draft.routeConfig.id ?? draft.sourcePath,
+    evidenceSummary: issue.message,
+  });
+}
+
+function unknownRedirectIssueModel(
+  store: KernelStore,
+  tree: ViewportInstructionTreeModel,
+  viewportInstruction: ViewportInstructionModel,
+  draft: RedirectExpansionIssueDraft,
+  instructionIndex: number,
+  issueIndex: number,
+): RouterIssueModel {
+  const local = unknownRedirectIssueLocal(tree, viewportInstruction, draft, instructionIndex, issueIndex);
+  const sourceAddressHandle = draft.routeConfig.redirectToSourceAddressHandle
+    ?? draft.routeConfig.sourceAddressHandle
+    ?? viewportInstruction.sourceAddressHandle;
+  const message = `Redirect target '${draft.redirectPath}' from route '${draft.sourcePath}' did not match any configured route.`;
+  return new RouterIssueModel(
+    store.handles.product(local),
+    store.handles.identity(local),
+    RouterIssuePhase.RouteTreeRedirectResolution,
+    RouterIssueKind.InstructionUnknownRedirect,
+    message,
+    'error',
+    RouterFrameworkErrorCode.InstructionUnknownRedirect,
+    draft.routeConfig.toReference(),
+    null,
+    'redirectTo',
+    'configured route or registered component name',
+    'unmatched redirect target',
+    draft.redirectPath,
+    draft.sourcePath,
+    draft.redirectPath,
+    null,
+    sourceAddressHandle,
+  );
+}
+
+function unknownRedirectIssueLocal(
+  tree: ViewportInstructionTreeModel,
+  viewportInstruction: ViewportInstructionModel,
+  draft: RedirectExpansionIssueDraft,
+  instructionIndex: number,
+  issueIndex: number,
+): string {
+  return [
+    'router-recognition-issue',
+    'unknown-redirect',
+    tree.identityHandle,
+    viewportInstruction.identityHandle,
+    instructionIndex,
+    issueIndex,
+    draft.routeConfig.identityHandle,
+    localKeyPart(draft.redirectPath),
+  ].join(':');
 }
 
 function routeRecognitionIndexes(
@@ -270,6 +425,14 @@ function routeConfigContextForRouteContext(
 ): RouteConfigContextModel | null {
   const identityHandle = routeContext?.routeConfigContext?.identityHandle ?? null;
   return identityHandle == null ? null : routeConfigContextsByIdentity.get(identityHandle) ?? null;
+}
+
+function routeConfigForRouteConfigContext(
+  routeConfigContext: RouteConfigContextModel | null,
+  routeConfigsByIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>,
+): RouteConfigModel | null {
+  const identityHandle = routeConfigContext?.config.identityHandle ?? null;
+  return identityHandle == null ? null : routeConfigsByIdentity.get(identityHandle) ?? null;
 }
 
 function collapsedStringPath(
@@ -654,13 +817,16 @@ function expandRedirectTargets(
   graph: RecognizerGraph,
   routes: readonly RecognizedRouteDraft[],
   routeConfigsByIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>,
-): readonly RecognizedRouteDraft[] {
+): RedirectExpansionResult {
   const expanded: RecognizedRouteDraft[] = [];
+  const issues: RedirectExpansionIssueDraft[] = [];
   for (const route of routes) {
     expanded.push(route);
-    expanded.push(...redirectTargetsFor(graph, route, routeConfigsByIdentity, new Set(), 1));
+    const targets = redirectTargetsFor(graph, route, routeConfigsByIdentity, new Set(), 1);
+    expanded.push(...targets.routes);
+    issues.push(...targets.issues);
   }
-  return expanded;
+  return { routes: expanded, issues };
 }
 
 function redirectTargetsFor(
@@ -669,28 +835,49 @@ function redirectTargetsFor(
   routeConfigsByIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>,
   seenRedirects: Set<string>,
   depth: number,
-): readonly RecognizedRouteDraft[] {
+): RedirectExpansionResult {
   const routeConfig = routeConfigForEndpoint(route.endpoint, graph, routeConfigsByIdentity);
   if (routeConfig?.routeKind !== RouteConfigKind.Redirect || routeConfig.redirectTo == null) {
-    return [];
+    return emptyRedirectExpansion();
   }
   if (seenRedirects.has(routeConfig.identityHandle)) {
-    return [];
+    return emptyRedirectExpansion();
   }
   seenRedirects.add(routeConfig.identityHandle);
-  const redirectPath = redirectPathFor(routeConfig.redirectTo, route.parameters);
+  const configurableRoute = configurableRouteForEndpoint(route.endpoint, graph);
+  const redirectPath = migrateRedirectPath(configurableRoute?.path ?? route.path, routeConfig.redirectTo, route.parameters).path;
+  if (redirectPath == null) {
+    return emptyRedirectExpansion();
+  }
   const recognized = recognizePath(graph, redirectPath);
   if (recognized == null) {
-    return [];
+    return {
+      routes: [],
+      issues: [{
+        routeConfig,
+        sourcePath: configurableRoute?.path ?? route.path,
+        redirectPath,
+        depth,
+      }],
+    };
   }
   const targets = recognized.map((target) => ({
     ...target,
     redirectDepth: depth,
   }));
-  return targets.flatMap((target) => [
-    target,
-    ...redirectTargetsFor(graph, target, routeConfigsByIdentity, seenRedirects, depth + 1),
-  ]);
+  const expanded: RecognizedRouteDraft[] = [];
+  const issues: RedirectExpansionIssueDraft[] = [];
+  for (const target of targets) {
+    expanded.push(target);
+    const nested = redirectTargetsFor(graph, target, routeConfigsByIdentity, seenRedirects, depth + 1);
+    expanded.push(...nested.routes);
+    issues.push(...nested.issues);
+  }
+  return { routes: expanded, issues };
+}
+
+function emptyRedirectExpansion(): RedirectExpansionResult {
+  return { routes: [], issues: [] };
 }
 
 function routeConfigForEndpoint(
@@ -706,34 +893,6 @@ function routeConfigForEndpoint(
   return routeConfigIdentity == null
     ? null
     : routeConfigsByIdentity.get(routeConfigIdentity) ?? null;
-}
-
-function redirectPathFor(
-  redirectTo: string,
-  parameters: ReadonlyMap<string, string | undefined>,
-): string {
-  return redirectTo
-    .split('/')
-    .map((segment) => {
-      if (segment.startsWith(':')) {
-        return parameters.get(parameterName(segment.slice(1))) ?? '';
-      }
-      if (segment.startsWith('*')) {
-        return parameters.get(parameterName(segment.slice(1))) ?? '';
-      }
-      return segment;
-    })
-    .filter((segment) => segment.length > 0)
-    .join('/');
-}
-
-function parameterName(segment: string): string {
-  const constraintIndex = segment.indexOf('{{');
-  const optionalIndex = segment.indexOf('?');
-  const end = [constraintIndex, optionalIndex]
-    .filter((index) => index >= 0)
-    .sort((left, right) => left - right)[0] ?? segment.length;
-  return segment.slice(0, end);
 }
 
 function stateMatches(state: StateModel, ch: string): boolean {
@@ -789,6 +948,16 @@ function routeConfigIdentityForEndpoint(
     throw new Error(`Endpoint '${endpoint.identityHandle}' references an unmaterialized ConfigurableRoute '${configurableRouteIdentity}'.`);
   }
   return routeConfigIdentity;
+}
+
+function configurableRouteForEndpoint(
+  endpoint: EndpointModel,
+  graph: RecognizerGraph,
+): ConfigurableRouteModel | null {
+  const configurableRouteIdentity = endpoint.configurableRoute.identityHandle;
+  return configurableRouteIdentity == null
+    ? null
+    : graph.configurableRoutesByIdentity.get(configurableRouteIdentity) ?? null;
 }
 
 function collectSkippedStates(
@@ -847,7 +1016,6 @@ function recognizedRouteModel(
   routeIndex: number,
 ): RecognizedRouteModel {
   const local = recognizedRouteLocal(tree, viewportInstruction, instructionIndex, routeIndex);
-  const provenanceHandle = store.handles.provenance(local);
   return new RecognizedRouteModel(
     store.handles.product(local),
     store.handles.identity(local),
@@ -861,7 +1029,6 @@ function recognizedRouteModel(
     route.parameterCount,
     route.redirectDepth,
     viewportInstruction.sourceAddressHandle,
-    recognizedRouteFieldProvenance(provenanceHandle, route),
   );
 }
 
@@ -911,21 +1078,4 @@ function recognizedRouteLocal(
   routeIndex: number,
 ): string {
   return `router-recognition:${tree.identityHandle}:instruction:${viewportInstruction.identityHandle}:${instructionIndex}:route:${routeIndex}`;
-}
-
-function recognizedRouteFieldProvenance(
-  provenanceHandle: ProvenanceHandle,
-  route: RecognizedRouteDraft,
-): readonly FieldProvenance<RouteRecognizerField>[] {
-  return compactFieldProvenance<RouteRecognizerField>([
-    new FieldProvenance('recognizer', provenanceHandle),
-    new FieldProvenance('endpoint', provenanceHandle),
-    new FieldProvenance('viewportInstruction', provenanceHandle),
-    new FieldProvenance('viewportInstructionTree', provenanceHandle),
-    new FieldProvenance('recognizedPath', provenanceHandle),
-    route.residue == null ? null : new FieldProvenance('residue', provenanceHandle),
-    route.parameterCount === 0 ? null : new FieldProvenance('parameterCount', provenanceHandle),
-    route.redirectDepth === 0 ? null : new FieldProvenance('redirectDepth', provenanceHandle),
-    new FieldProvenance('source', provenanceHandle),
-  ]);
 }

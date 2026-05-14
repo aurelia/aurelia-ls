@@ -1,0 +1,22 @@
+<template>
+  <nav aria-label="Breadcrumb">
+    <a
+      repeat.for="crumb of crumbs"
+      href.bind="crumb.path"
+      active.class="crumb.active"
+      aria-current.bind="crumb.active ? 'page' : null"
+    >${crumb.title}</a>
+  </nav>
+
+  <section repeat.for="lane of lanes" data-lane.bind="lane">
+    <article repeat.for="alert of alertsByLane[lane]" class.bind="alert.active ? 'is-active' : ''">
+      <h2>${alert.title}</h2>
+      <p>${alert.lane}</p>
+      <button
+        repeat.for="action of alert.actions"
+        class.bind="action.tone === 'danger' ? 'action-danger' : 'action-neutral'"
+        type="button"
+      >${action.label}</button>
+    </article>
+  </section>
+</template>

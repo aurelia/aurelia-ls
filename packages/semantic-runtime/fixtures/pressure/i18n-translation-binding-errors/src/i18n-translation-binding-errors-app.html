@@ -1,0 +1,9 @@
+<template>
+  <div t-params.bind="{ name: customerName }"></div>
+  <p t.bind="numericKey"></p>
+  <section
+    t="greeting"
+    t-params.bind="{ name: customerName }"
+    t-params.bind="{ other: otherName }"
+  ></section>
+</template>

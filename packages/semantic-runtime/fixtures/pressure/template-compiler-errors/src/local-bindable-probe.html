@@ -1,0 +1,19 @@
+<template>
+  <template as-custom-element="bindable-child">
+    <bindable></bindable>
+    <div>
+      <bindable name="nested"></bindable>
+    </div>
+    <bindable name="title" attribute="label"></bindable>
+    <bindable name="title"></bindable>
+    <bindable name="other" attribute="label"></bindable>
+  </template>
+  <template as-custom-element=""></template>
+  <template as-custom-element="duplicate-child">
+    <p>One</p>
+  </template>
+  <template as-custom-element="duplicate-child">
+    <p>Two</p>
+  </template>
+  <p>Content</p>
+</template>

@@ -46,6 +46,8 @@ import { answerProductArchitecture } from "./product-architecture-lenses.js";
 import { answerWorkspaceArchitecture } from "./workspace-architecture-lenses.js";
 import { answerPluginArchitecture } from "./plugin-architecture-lenses.js";
 import { answerFrameworkRouter } from "./framework-router-lenses.js";
+import { answerFrameworkCorpus } from "./framework-corpus-lenses.js";
+import { answerAtlasMemory } from "./atlas-memory-lenses.js";
 import type { InquiryWorld } from "./world.js";
 
 /** Hot substrate context shared by runtime lens implementations. */
@@ -79,6 +81,7 @@ export class InquiryEngine {
     LensId.RepoMap,
     LensId.RepoTerrain,
     LensId.AtlasSelf,
+    LensId.AtlasMemory,
     LensId.TsSource,
     LensId.TsStructure,
     LensId.TsType,
@@ -101,6 +104,7 @@ export class InquiryEngine {
     LensId.FrameworkErrors,
     LensId.FrameworkAdmission,
     LensId.FrameworkComposition,
+    LensId.FrameworkCorpus,
   ]);
 
   constructor(
@@ -140,6 +144,11 @@ export class InquiryEngine {
           this.world,
           normalized.inquiry,
           this.#implementedLensIds,
+          this.substrates.sourceProject,
+        );
+      case LensId.AtlasMemory:
+        return answerAtlasMemory(
+          normalized.inquiry,
           this.substrates.sourceProject,
         );
       case LensId.TsSource:
@@ -246,6 +255,11 @@ export class InquiryEngine {
         );
       case LensId.FrameworkComposition:
         return answerFrameworkComposition(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
+      case LensId.FrameworkCorpus:
+        return answerFrameworkCorpus(
           normalized.inquiry,
           this.substrates.sourceProject,
         );

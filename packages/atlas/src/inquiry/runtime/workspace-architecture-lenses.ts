@@ -377,7 +377,7 @@ function workspaceEvidenceForSurface(row: WorkspaceSurfaceRow): Evidence {
     basis: workspaceSourceBasis(
       "Workspace surface rows are source-shape observations; app-entrypoint rows are import/receiver-grounded Aurelia bootstrap signals, not complete runtime proof.",
     ),
-    ...(row.source === undefined ? {} : { source: row.source }),
+    source: row.source,
     data: row,
   };
 }

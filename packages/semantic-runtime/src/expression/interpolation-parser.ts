@@ -9,7 +9,10 @@ import {
   type SourceSpan,
   type TextSpan,
 } from "./source-span.js";
-import { findTemplateExpressionClose } from "./expression-boundary-scanner.js";
+import {
+  findTemplateExpressionClose,
+  isInterpolationStart,
+} from "./expression-boundary-scanner.js";
 import {
   ClosedSubtreeRef,
   ExpressionCompanionFrameKind,
@@ -147,14 +150,7 @@ export class InterpolationParser {
     const holes: InterpolationHoleSegment[] = [];
 
     while (index < text.length) {
-      const char = text[index];
-
-      if (char === "\\" && text[index + 1] === "$") {
-        index += 2;
-        continue;
-      }
-
-      if (char === "$" && text[index + 1] === "{") {
+      if (isInterpolationStart(text, index)) {
         sawHole = true;
         parts.push(text.slice(partStart, index));
 
@@ -426,6 +422,8 @@ class InterpolationPublicationFrame {
         expr.preservedSpan,
         expr.closedSubtreeRefs,
         expr.gapDescriptors,
+        expr.frameworkErrorCode,
+        expr.diagnosticMessage,
       );
     }
 
@@ -440,6 +438,8 @@ class InterpolationPublicationFrame {
       expr.preservedSpan,
       expr.closedSubtreeRefs,
       [],
+      expr.frameworkErrorCode,
+      expr.diagnosticMessage,
     );
   }
 
@@ -469,6 +469,8 @@ class InterpolationPublicationFrame {
           [ExpressionExpectedContinuationClass.InterpolationHoleClose],
         ),
       ],
+      null,
+      "Expected '}' to close interpolation hole",
     );
   }
 
@@ -496,6 +498,8 @@ class InterpolationPublicationFrame {
       boundaryState.openSpan,
       [],
       [],
+      null,
+      "Expected expression in interpolation hole",
     );
   }
 

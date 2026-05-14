@@ -18,6 +18,7 @@ import {
 } from './parse-failure.js';
 import { CompletedInputParserState } from './completed-input-parser-state.js';
 import type { Token } from './expression-scanner.js';
+import { ExpressionFrameworkErrorCode } from './framework-error-code.js';
 
 /**
  * Companion publication and frame-widening builder for completed-input parsing.
@@ -52,8 +53,9 @@ export class CompletedInputCompanionBuilder {
     preservedSpan: SourceSpan | null,
     closedSubtreeRefs: readonly ClosedSubtreeRef[],
     gapDescriptors: readonly ExpressionGapDescriptor[],
+    frameworkErrorCode: string | null = null,
   ): ParseCompanionFailure {
-    return this.state.degradedFailure(
+    return this.state.failures.degradedFailure(
       message,
       blocked,
       frontierKind,
@@ -62,6 +64,7 @@ export class CompletedInputCompanionBuilder {
       preservedSpan,
       closedSubtreeRefs,
       gapDescriptors,
+      frameworkErrorCode,
     );
   }
 
@@ -76,8 +79,9 @@ export class CompletedInputCompanionBuilder {
     closedSubtreeRefs: readonly ClosedSubtreeRef[],
     gapDescriptors: readonly ExpressionGapDescriptor[],
     matchedDelimiterStack: readonly MatchedDelimiterEntry[],
+    frameworkErrorCode: string | null = null,
   ): ParseCompanionFailure {
-    return this.state.degradedFailureAt(
+    return this.state.failures.degradedFailureAt(
       span,
       message,
       text,
@@ -88,6 +92,7 @@ export class CompletedInputCompanionBuilder {
       closedSubtreeRefs,
       gapDescriptors,
       matchedDelimiterStack,
+      frameworkErrorCode,
     );
   }
 
@@ -99,8 +104,9 @@ export class CompletedInputCompanionBuilder {
     surroundingFrameKind: ExpressionCompanionFrameKind,
     preservedSpan: SourceSpan | null,
     closedSubtreeRefs: readonly ClosedSubtreeRef[] = [],
+    frameworkErrorCode: string | null = null,
   ): ParseCompanionFailure {
-    return this.state.frontierOnlyFailure(
+    return this.state.failures.frontierOnlyFailure(
       message,
       blocked,
       frontierKind,
@@ -108,6 +114,7 @@ export class CompletedInputCompanionBuilder {
       surroundingFrameKind,
       preservedSpan,
       closedSubtreeRefs,
+      frameworkErrorCode,
     );
   }
 
@@ -121,8 +128,9 @@ export class CompletedInputCompanionBuilder {
     preservedSpan: SourceSpan | null,
     matchedDelimiterStack: readonly MatchedDelimiterEntry[],
     closedSubtreeRefs: readonly ClosedSubtreeRef[] = [],
+    frameworkErrorCode: string | null = null,
   ): ParseCompanionFailure {
-    return this.state.frontierOnlyFailureAt(
+    return this.state.failures.frontierOnlyFailureAt(
       span,
       message,
       text,
@@ -132,6 +140,7 @@ export class CompletedInputCompanionBuilder {
       preservedSpan,
       matchedDelimiterStack,
       closedSubtreeRefs,
+      frameworkErrorCode,
     );
   }
 
@@ -155,7 +164,7 @@ export class CompletedInputCompanionBuilder {
         ...ParseFailureInspector.closedSubtreeRefs(failure),
       ],
       [
-        this.state.gapDescriptor(
+        this.state.failures.gapDescriptor(
           ExpressionGapKind.MissingExpression,
           this.state.spanFromToken(anchor),
           surroundingFrameKind,
@@ -163,6 +172,7 @@ export class CompletedInputCompanionBuilder {
         ),
         ...ParseFailureInspector.gapDescriptors(failure),
       ],
+      failure.frameworkErrorCode,
     );
   }
 
@@ -184,7 +194,7 @@ export class CompletedInputCompanionBuilder {
         ...ParseFailureInspector.closedSubtreeRefs(failure),
       ],
       [
-        this.state.gapDescriptor(
+        this.state.failures.gapDescriptor(
           ExpressionGapKind.MissingBindingDeclaration,
           this.state.spanFromToken(anchor),
           ExpressionCompanionFrameKind.IteratorDeclaration,
@@ -192,6 +202,7 @@ export class CompletedInputCompanionBuilder {
         ),
         ...ParseFailureInspector.gapDescriptors(failure),
       ],
+      failure.frameworkErrorCode,
     );
   }
 
@@ -211,7 +222,7 @@ export class CompletedInputCompanionBuilder {
       this.state.span(start, anchor.end),
       this.arrowParameterRefs(params),
       [
-        this.state.gapDescriptor(
+        this.state.failures.gapDescriptor(
           ExpressionGapKind.MissingBindingDeclaration,
           this.state.spanFromToken(anchor),
           ExpressionCompanionFrameKind.ArrowParameterList,
@@ -237,7 +248,7 @@ export class CompletedInputCompanionBuilder {
       this.state.span(openParen.start, closeParen.end),
       this.arrowParameterRefs(params),
       [
-        this.state.gapDescriptor(
+        this.state.failures.gapDescriptor(
           ExpressionGapKind.MissingArrowSeparator,
           closeSpan,
           ExpressionCompanionFrameKind.ArrowParameterList,
@@ -272,7 +283,7 @@ export class CompletedInputCompanionBuilder {
         ...ParseFailureInspector.closedSubtreeRefs(failure),
       ],
       [
-        this.state.gapDescriptor(
+        this.state.failures.gapDescriptor(
           ExpressionGapKind.MissingCallArgument,
           this.state.spanFromToken(anchor),
           ExpressionCompanionFrameKind.CallArguments,
@@ -280,6 +291,7 @@ export class CompletedInputCompanionBuilder {
         ),
         ...ParseFailureInspector.gapDescriptors(failure),
       ],
+      failure.frameworkErrorCode,
     );
   }
 
@@ -296,9 +308,9 @@ export class CompletedInputCompanionBuilder {
       [ExpressionExpectedContinuationClass.MemberName],
       ExpressionCompanionFrameKind.MemberAccess,
       this.state.span(this.state.localStart(receiver), anchor.end),
-      [this.state.rootPrefix(receiver)],
+      [this.state.prefixRefs.root(receiver)],
       [
-        this.state.gapDescriptor(
+        this.state.failures.gapDescriptor(
           ExpressionGapKind.MissingMemberName,
           this.state.spanFromToken(anchor),
           ExpressionCompanionFrameKind.MemberAccess,
@@ -313,6 +325,7 @@ export class CompletedInputCompanionBuilder {
     blocked: Token,
     anchor: Token,
     receiver: CompletedInputExpressionNode,
+    frameworkErrorCode: string | null = null,
   ): ParseCompanionFailure {
     return this.frontierOnlyFailure(
       message,
@@ -325,7 +338,8 @@ export class CompletedInputCompanionBuilder {
       ],
       ExpressionCompanionFrameKind.OptionalChain,
       this.state.span(this.state.localStart(receiver), anchor.end),
-      [this.state.rootPrefix(receiver)],
+      [this.state.prefixRefs.root(receiver)],
+      frameworkErrorCode,
     );
   }
 
@@ -345,7 +359,7 @@ export class CompletedInputCompanionBuilder {
       ],
       ExpressionCompanionFrameKind.ScopePath,
       this.state.span(this.state.localStart(receiver), anchor.end),
-      [this.state.rootPrefix(receiver)],
+      [this.state.prefixRefs.root(receiver)],
     );
   }
 
@@ -357,6 +371,9 @@ export class CompletedInputCompanionBuilder {
     surroundingFrameKind: ExpressionCompanionFrameKind.ValueConverterTail | ExpressionCompanionFrameKind.BindingBehaviorTail,
     expectedName: ExpressionExpectedContinuationClass.ValueConverterName | ExpressionExpectedContinuationClass.BindingBehaviorName,
   ): ParseCompanionFailure {
+    const frameworkErrorCode = expectedName === ExpressionExpectedContinuationClass.ValueConverterName
+      ? ExpressionFrameworkErrorCode.ParseExpectedConverterIdentifier
+      : ExpressionFrameworkErrorCode.ParseExpectedBehaviorIdentifier;
     return this.degradedFailure(
       message,
       blocked,
@@ -364,15 +381,16 @@ export class CompletedInputCompanionBuilder {
       [expectedName],
       surroundingFrameKind,
       this.state.span(this.state.localStart(receiver), anchor.end),
-      [this.state.rootPrefix(receiver)],
+      [this.state.prefixRefs.root(receiver)],
       [
-        this.state.gapDescriptor(
+        this.state.failures.gapDescriptor(
           ExpressionGapKind.MissingTailName,
           this.state.spanFromToken(anchor),
           surroundingFrameKind,
           [expectedName],
         ),
       ],
+      frameworkErrorCode,
     );
   }
 
@@ -394,7 +412,7 @@ export class CompletedInputCompanionBuilder {
         ...ParseFailureInspector.closedSubtreeRefs(failure),
       ],
       [
-        this.state.gapDescriptor(
+        this.state.failures.gapDescriptor(
           ExpressionGapKind.MissingTernaryArm,
           this.state.spanFromToken(anchor),
           ExpressionCompanionFrameKind.ConditionalExpression,
@@ -402,6 +420,7 @@ export class CompletedInputCompanionBuilder {
         ),
         ...ParseFailureInspector.gapDescriptors(failure),
       ],
+      failure.frameworkErrorCode,
     );
   }
 
@@ -422,13 +441,14 @@ export class CompletedInputCompanionBuilder {
       preservedSpan,
       closedSubtreeRefs,
       [
-        this.state.gapDescriptor(
+        this.state.failures.gapDescriptor(
           ExpressionGapKind.MissingClosingDelimiter,
           this.state.tokenSpan(blocked),
           surroundingFrameKind,
           [expectedDelimiter],
         ),
       ],
+      ExpressionFrameworkErrorCode.ParseMissingExpectedToken,
     );
   }
 
@@ -448,7 +468,7 @@ export class CompletedInputCompanionBuilder {
       preservedSpan,
       closedSubtreeRefs,
       [
-        this.state.gapDescriptor(
+        this.state.failures.gapDescriptor(
           ExpressionGapKind.MissingObjectValueSeparator,
           this.state.spanFromToken(keyToken),
           ExpressionCompanionFrameKind.ObjectLiteral,
@@ -484,7 +504,7 @@ export class CompletedInputCompanionBuilder {
       failure,
       ExpressionCompanionFrameKind.CallArguments,
       preservedSpan,
-      [this.state.rootPrefix(callee)],
+      [this.state.prefixRefs.root(callee)],
     );
   }
 
@@ -519,8 +539,8 @@ export class CompletedInputCompanionBuilder {
   ): readonly ClosedSubtreeRef[] {
     return params.map((param, index) => (
       index === 0
-        ? this.state.rootPrefix(param)
-        : this.state.siblingRef(param)
+        ? this.state.prefixRefs.root(param)
+        : this.state.prefixRefs.sibling(param)
     ));
   }
 }

@@ -820,9 +820,7 @@ function routeForConfigurationWorldSlot(
     relationshipAtomId: slot.id,
     closure: route.routeClosure(slot.closure),
     source,
-    ...(slot.provider.source === undefined
-      ? {}
-      : { providerSource: slot.provider.source }),
+    providerSource: slot.provider.source,
     dependencies,
     summary: route.summarizeRoute(
       slot.key.name,
@@ -997,7 +995,7 @@ function materializesThroughRelationship(
     relation: FrameworkRelationshipRelation.MaterializesThrough,
     key: row.key,
     routeKind: row.routeKind,
-    ...(row.strategy === undefined ? {} : { strategy: row.strategy }),
+    strategy: row.strategy,
     from: row.keyEndpoint,
     to: row.provider,
     providerIdentity: row.providerIdentity,
@@ -1024,7 +1022,7 @@ function instantiatesKeyRelationships(
       relation: FrameworkRelationshipRelation.InstantiatesKey,
       key: row.key,
       routeKind: row.routeKind,
-      ...(row.strategy === undefined ? {} : { strategy: row.strategy }),
+      strategy: row.strategy,
       from: row.keyEndpoint,
       to: row.provider,
       providerIdentity: row.providerIdentity,

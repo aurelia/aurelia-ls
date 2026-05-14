@@ -25,6 +25,10 @@ import {
   requiredSourceRangeForNode,
   SourcePackageId,
   SourceProjectMemo,
+  isPathWithin,
+  readTextFileOrNull,
+  resolveRepoPath,
+  toPosixPath,
   type SourcePackageSummary,
   type SourceProject,
 } from "../../source/index.js";
@@ -281,6 +285,13 @@ function buildWorkspaceArchitectureAnalysis(
     (counts) => counts.size,
   );
   const mutablePackages = new Map<string, MutableWorkspacePackageRow>();
+  const fileInventories = new Map<string, WorkspacePackageFileInventory>();
+  const packageRoots = new Map(
+    summary.packages.map((sourcePackage) => [
+      sourcePackage.id,
+      resolveRepoPath(sourceProject.repoRoot, sourcePackage.rootPath),
+    ]),
+  );
   const surfaces: WorkspaceSurfaceRow[] = [];
 
   measureWorkspaceArchitecturePhase(
@@ -289,7 +300,9 @@ function buildWorkspaceArchitectureAnalysis(
     () => {
       for (const sourcePackage of summary.packages) {
         const manifest = readWorkspacePackageManifest(sourceProject, sourcePackage);
-        const fileInventory = readWorkspacePackageFileInventory(sourceProject, sourcePackage.rootPath);
+        const packageRoot = packageRoots.get(sourcePackage.id) ?? resolveRepoPath(sourceProject.repoRoot, sourcePackage.rootPath);
+        const fileInventory = readWorkspacePackageFileInventory(packageRoot, nestedWorkspacePackageRoots(sourcePackage, packageRoot, summary.packages, packageRoots));
+        fileInventories.set(sourcePackage.id, fileInventory);
         const packageRow: MutableWorkspacePackageRow = {
           id: sourcePackage.id,
           packageName: sourcePackage.packageName,
@@ -340,18 +353,54 @@ function buildWorkspaceArchitectureAnalysis(
     "source file scans",
     () => {
       let scannedFiles = 0;
+      const scannedSourceFileKeysByPackage = new Map<string, Set<string>>();
       for (const sourcePackage of summary.packages) {
         const packageRow = mutablePackages.get(sourcePackage.id);
         if (packageRow === undefined) {
           continue;
         }
+        const scannedSourceFileKeys = new Set<string>();
+        scannedSourceFileKeysByPackage.set(sourcePackage.id, scannedSourceFileKeys);
         for (const sourceFile of sourceProject.ownedSourceFilesForPackage(sourcePackage.id)) {
           scannedFiles += 1;
+          scannedSourceFileKeys.add(workspaceInventoryFileKey(sourceFile.fileName));
           const sourceRole = inferWorkspaceSourceRole(sourceFile.fileName);
           countSourceRole(packageRow, sourceRole);
           surfaces.push(
             ...scanWorkspaceSourceFile(
               sourceProject,
+              sourceFile,
+              sourcePackage.id,
+              sourcePackage.packageName,
+              sourceRole,
+            ),
+          );
+        }
+      }
+      for (const sourcePackage of summary.packages) {
+        const packageRow = mutablePackages.get(sourcePackage.id);
+        const fileInventory = fileInventories.get(sourcePackage.id);
+        if (packageRow === undefined || fileInventory === undefined) {
+          continue;
+        }
+        const scannedSourceFileKeys = scannedSourceFileKeysByPackage.get(sourcePackage.id) ?? new Set<string>();
+        for (const fileName of fileInventory.scriptSourceFiles) {
+          const fileKey = workspaceInventoryFileKey(fileName);
+          if (scannedSourceFileKeys.has(fileKey)) {
+            continue;
+          }
+          const sourceText = readTextFileOrNull(fileName);
+          if (sourceText === null) {
+            continue;
+          }
+          scannedFiles += 1;
+          packageRow.sourceFileCount += 1;
+          const sourceFile = ts.createSourceFile(fileName, sourceText, ts.ScriptTarget.Latest, true, scriptKindForWorkspacePath(fileName));
+          const sourceRole = inferWorkspaceSourceRole(fileName);
+          countSourceRole(packageRow, sourceRole);
+          surfaces.push(
+            ...scanWorkspaceSourceFile(
+              null,
               sourceFile,
               sourcePackage.id,
               sourcePackage.packageName,
@@ -601,19 +650,18 @@ function declarationCountsByPackage(sourceProject: SourceProject): ReadonlyMap<s
 interface WorkspacePackageFileInventory {
   readonly templateFileCount: number;
   readonly styleFileCount: number;
+  readonly scriptSourceFiles: readonly string[];
 }
 
 function readWorkspacePackageFileInventory(
-  sourceProject: SourceProject,
-  rootPath: string,
+  packageRoot: string,
+  excludedSubtrees: ReadonlySet<string>,
 ): WorkspacePackageFileInventory {
-  const packageRoot = path.isAbsolute(rootPath)
-    ? path.resolve(rootPath)
-    : path.join(sourceProject.repoRoot, rootPath);
   let templateFileCount = 0;
   let styleFileCount = 0;
+  const scriptSourceFiles: string[] = [];
   const visit = (directory: string, depth: number): void => {
-    if (depth > 8) {
+    if (depth > 8 || excludedSubtrees.has(workspaceInventoryFileKey(directory))) {
       return;
     }
     for (const entry of safeReadDirectoryEntries(directory)) {
@@ -634,10 +682,36 @@ function readWorkspacePackageFileInventory(
       if (isStyleFileExtension(extension)) {
         styleFileCount += 1;
       }
+      if (isWorkspaceScriptSourceFile(entry.name)) {
+        scriptSourceFiles.push(absolutePath);
+      }
     }
   };
   visit(packageRoot, 0);
-  return { templateFileCount, styleFileCount };
+  return { templateFileCount, styleFileCount, scriptSourceFiles };
+}
+
+function nestedWorkspacePackageRoots(
+  sourcePackage: SourcePackageSummary,
+  packageRoot: string,
+  packages: readonly SourcePackageSummary[],
+  packageRoots: ReadonlyMap<string, string>,
+): ReadonlySet<string> {
+  const result = new Set<string>();
+  for (const candidate of packages) {
+    if (candidate.id === sourcePackage.id) {
+      continue;
+    }
+    const candidateRoot = packageRoots.get(candidate.id);
+    if (candidateRoot !== undefined && isPathWithin(candidateRoot, packageRoot)) {
+      result.add(workspaceInventoryFileKey(candidateRoot));
+    }
+  }
+  return result;
+}
+
+function workspaceInventoryFileKey(fileName: string): string {
+  return toPosixPath(path.resolve(fileName)).toLowerCase();
 }
 
 function safeReadDirectoryEntries(directory: string): readonly DirentLike[] {
@@ -671,18 +745,58 @@ function isStyleFileExtension(extension: string): boolean {
   }
 }
 
+function isWorkspaceScriptSourceFile(fileName: string): boolean {
+  const baseName = path.basename(fileName).toLowerCase();
+  if (isDeclarationFileName(baseName)) {
+    return true;
+  }
+  const extension = path.extname(baseName);
+  return (
+    extension === ".ts" ||
+    extension === ".tsx" ||
+    extension === ".js" ||
+    extension === ".jsx" ||
+    extension === ".mjs" ||
+    extension === ".cjs"
+  );
+}
+
+function scriptKindForWorkspacePath(fileName: string): ts.ScriptKind {
+  const extension = path.extname(fileName).toLowerCase();
+  if (extension === ".tsx") {
+    return ts.ScriptKind.TSX;
+  }
+  if (extension === ".jsx") {
+    return ts.ScriptKind.JSX;
+  }
+  if (extension === ".js" || extension === ".mjs" || extension === ".cjs") {
+    return ts.ScriptKind.JS;
+  }
+  return ts.ScriptKind.TS;
+}
+
 function manifestSurfacesForPackage(
   sourcePackage: SourcePackageSummary,
   manifest: WorkspacePackageManifestSummary,
 ): readonly WorkspaceSurfaceRow[] {
   const rows: WorkspaceSurfaceRow[] = [];
-  for (const name of manifest.aureliaDependencyNames) {
+  for (const name of manifest.localAureliaDependencyNames) {
     rows.push(manifestSurface(
       sourcePackage,
       "manifest-dependency",
       isAureliaPluginSpecifier(name)
         ? "aurelia-plugin-dependency"
         : "aurelia-framework-dependency",
+      name,
+    ));
+  }
+  for (const name of manifest.workspaceAureliaDependencyNames) {
+    rows.push(manifestSurface(
+      sourcePackage,
+      "manifest-dependency",
+      isAureliaPluginSpecifier(name)
+        ? "workspace-aurelia-plugin-dependency"
+        : "workspace-aurelia-framework-dependency",
       name,
     ));
   }
@@ -877,7 +991,7 @@ function workspaceDeclarationHasRouterReceiverShape(
 }
 
 function scanWorkspaceSourceFile(
-  sourceProject: SourceProject,
+  sourceProject: SourceProject | null,
   sourceFile: ts.SourceFile,
   packageId: string,
   packageName: string,
@@ -907,7 +1021,7 @@ function shouldScanWorkspaceAureliaSurfaces(role: WorkspaceSourceRole): boolean 
 }
 
 function sourceRoleSurfacesForFile(
-  sourceProject: SourceProject,
+  sourceProject: SourceProject | null,
   sourceFile: ts.SourceFile,
   packageId: string,
   packageName: string,
@@ -936,7 +1050,7 @@ function sourceRoleSurfacesForFile(
 }
 
 function workspaceSurfacesForNode(
-  sourceProject: SourceProject,
+  sourceProject: SourceProject | null,
   sourceFile: ts.SourceFile,
   packageId: string,
   packageName: string,
@@ -959,7 +1073,7 @@ function workspaceSurfacesForNode(
 }
 
 function aureliaImportRowsForNode(
-  sourceProject: SourceProject,
+  sourceProject: SourceProject | null,
   sourceFile: ts.SourceFile,
   packageId: string,
   packageName: string,
@@ -1002,7 +1116,7 @@ function aureliaImportRowsForNode(
 }
 
 function resourceRowsForNode(
-  sourceProject: SourceProject,
+  sourceProject: SourceProject | null,
   sourceFile: ts.SourceFile,
   packageId: string,
   packageName: string,
@@ -1060,7 +1174,7 @@ function resourceRowsForNode(
 }
 
 function entrypointRowForNode(
-  sourceProject: SourceProject,
+  sourceProject: SourceProject | null,
   sourceFile: ts.SourceFile,
   packageId: string,
   packageName: string,
@@ -1082,7 +1196,7 @@ function entrypointRowForNode(
 }
 
 function routerRowsForNode(
-  sourceProject: SourceProject,
+  sourceProject: SourceProject | null,
   sourceFile: ts.SourceFile,
   packageId: string,
   packageName: string,
@@ -1186,7 +1300,7 @@ function routerRowsForNode(
 }
 
 function templateReferenceRowForNode(
-  sourceProject: SourceProject,
+  sourceProject: SourceProject | null,
   sourceFile: ts.SourceFile,
   packageId: string,
   packageName: string,
@@ -1208,7 +1322,7 @@ function templateReferenceRowForNode(
 }
 
 function workspaceConventionResourceRowForClass(
-  sourceProject: SourceProject,
+  sourceProject: SourceProject | null,
   sourceFile: ts.SourceFile,
   packageId: string,
   packageName: string,
@@ -1232,7 +1346,7 @@ function workspaceConventionResourceRowForClass(
 }
 
 function workspaceSurfaceRowForDecorator(
-  sourceProject: SourceProject,
+  sourceProject: SourceProject | null,
   sourceFile: ts.SourceFile,
   packageId: string,
   packageName: string,
@@ -1301,7 +1415,7 @@ function workspaceSurfaceRowForDecorator(
 }
 
 function workspaceSurfaceRowsForCallExpression(
-  sourceProject: SourceProject,
+  sourceProject: SourceProject | null,
   sourceFile: ts.SourceFile,
   packageId: string,
   packageName: string,
@@ -1355,7 +1469,7 @@ function workspaceSurfaceRowsForCallExpression(
 }
 
 function workspaceSourceRowForNode(
-  sourceProject: SourceProject,
+  sourceProject: SourceProject | null,
   sourceFile: ts.SourceFile,
   packageId: string,
   packageName: string,
@@ -1365,8 +1479,12 @@ function workspaceSourceRowForNode(
   name: string | null,
   facets: readonly string[] = [],
 ): WorkspaceSurfaceRow | null {
-  const source = requiredSourceRangeForNode(sourceProject, node);
-  const file = requiredSourceFileIdentity(sourceProject, sourceFile);
+  const source = sourceProject === null
+    ? sourceRangeForUnadmittedNode(sourceFile, node)
+    : requiredSourceRangeForNode(sourceProject, node);
+  const filePath = sourceProject === null
+    ? toPosixPath(sourceFile.fileName)
+    : requiredSourceFileIdentity(sourceProject, sourceFile).repoPath;
   return {
     id: [
       "workspace-surface",
@@ -1383,10 +1501,20 @@ function workspaceSourceRowForNode(
     kind,
     mechanism,
     name,
-    ...(facets.length === 0 ? {} : { facets: uniqueSortedStrings(facets) }),
-    filePath: file.repoPath,
+    facets: facets.length === 0 ? undefined : uniqueSortedStrings(facets),
+    filePath,
     source,
     summary: `${packageName} ${kind} via ${mechanism}${name === null ? "" : ` (${name})`}.`,
+  };
+}
+
+function sourceRangeForUnadmittedNode(sourceFile: ts.SourceFile, node: ts.Node): SourceRange {
+  const start = sourceFile.getLineAndCharacterOfPosition(node.getStart(sourceFile));
+  const end = sourceFile.getLineAndCharacterOfPosition(node.getEnd());
+  return {
+    filePath: toPosixPath(sourceFile.fileName),
+    start,
+    end,
   };
 }
 

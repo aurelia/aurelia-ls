@@ -493,9 +493,7 @@ function readResourceAdmissionRows(
 ): readonly ResourceAdmissionWithCarrier[] {
   const bundles = readFrameworkBundles(sourceProject, {
     packageId: filters.packageId,
-    ...(filters.bundleExportName === undefined
-      ? {}
-      : { exportName: filters.bundleExportName }),
+    exportName: filters.bundleExportName,
   });
   return bundles.flatMap((bundle) =>
     bundle.associations.flatMap((association) =>
@@ -542,6 +540,8 @@ function convergenceRowMatches(
   filters: FrameworkResourceFilters,
 ): boolean {
   return (
+    (filters.packageId === undefined || row.packageId === filters.packageId) &&
+    (filters.resourceKind === undefined || row.resourceKind === filters.resourceKind) &&
     (filters.exportName === undefined ||
       row.sourceExportName === filters.exportName ||
       row.publicExportNames.includes(filters.exportName)) &&

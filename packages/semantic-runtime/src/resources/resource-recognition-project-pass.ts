@@ -12,7 +12,10 @@ import {
   type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
 import type { TypeSystemProject } from '../type-system/project.js';
-import { ResourceRecognitionContext } from './resource-recognition-context.js';
+import {
+  ResourceRecognitionContext,
+  ResourceRecognitionContextIndex,
+} from './resource-recognition-context.js';
 import type { ResourceRecognitionObservation } from './resource-observation.js';
 import { ResourceRecognitionPass } from './resource-recognition-pass.js';
 import type {
@@ -107,9 +110,10 @@ export class ResourceRecognitionProjectPass {
     const sourceFiles = measureResourceRecognitionProjectPhase(phases, 'source-file-selection', () =>
       resourceRecognitionSourceFiles(project, projectEvaluation)
     );
+    const contexts = evaluatedResourceRecognitionContexts(project, projectEvaluation, typeSystem, sourceFiles);
     const sources = projectEvaluation.sources.map((source) => {
       const sourceStarted = performance.now();
-      const result = this.recognizeSource(store, project, recognition, source, typeSystem, sourceFiles);
+      const result = this.recognizeSource(store, recognition, source, contexts);
       phases.push({
         name: isEvaluatedProjectSource(source) ? 'evaluated-source' : 'open-source',
         milliseconds: performance.now() - sourceStarted,
@@ -129,27 +133,20 @@ export class ResourceRecognitionProjectPass {
 
   private recognizeSource(
     store: KernelStore,
-    project: ProjectBootFrame,
     recognition: ResourceRecognitionPass,
     source: StaticProjectEvaluationResult['sources'][number],
-    typeSystem: TypeSystemProject | null,
-    sourceFiles: readonly SourceFileAdmission[],
+    contexts: ReadonlyMap<string, ResourceRecognitionContext>,
   ): ResourceRecognitionSourceResult {
     if (!isEvaluatedProjectSource(source)) {
       return this.openSourceResult(source);
     }
+    const context = contexts.get(source.moduleKey);
+    if (context == null) {
+      return this.openSourceResult(source);
+    }
     const result = recognition.recognizeAndEmit(
       store,
-      new ResourceRecognitionContext(
-        source.sourceFile,
-        source.moduleKey,
-        source.admission.addressHandle,
-        project.projectKey,
-        source.evaluation,
-        typeSystem,
-        project.rootDir,
-        sourceFiles,
-      ),
+      context,
     );
     return new ResourceRecognitionSourceResult(
       source.admission,
@@ -177,6 +174,35 @@ export class ResourceRecognitionProjectPass {
   }
 }
 
+function evaluatedResourceRecognitionContexts(
+  project: ProjectBootFrame,
+  evaluation: StaticProjectEvaluationResult,
+  typeSystem: TypeSystemProject | null,
+  sourceFiles: readonly SourceFileAdmission[],
+): ReadonlyMap<string, ResourceRecognitionContext> {
+  const index = new ResourceRecognitionContextIndex();
+  const contexts = new Map<string, ResourceRecognitionContext>();
+  for (const source of evaluation.sources) {
+    if (!isEvaluatedProjectSource(source)) {
+      continue;
+    }
+    const context = new ResourceRecognitionContext(
+      source.sourceFile,
+      source.moduleKey,
+      source.admission.addressHandle,
+      project.projectKey,
+      source.evaluation,
+      typeSystem,
+      project.rootDir,
+      sourceFiles,
+      index,
+    );
+    index.add(context);
+    contexts.set(source.moduleKey, context);
+  }
+  return contexts;
+}
+
 function resourceRecognitionSourceFiles(
   project: ProjectBootFrame,
   evaluation: StaticProjectEvaluationResult,
@@ -193,7 +219,7 @@ function emptyResourceEmission(): ResourceRecognitionKernelEmission {
 }
 
 function emptyDefinitionConvergence(): ResourceDefinitionConvergenceEmission {
-  return new ResourceDefinitionConvergenceEmission([], []);
+  return new ResourceDefinitionConvergenceEmission([], [], []);
 }
 
 function emptyResourceRecognitionProfile(): ResourceRecognitionProfile {

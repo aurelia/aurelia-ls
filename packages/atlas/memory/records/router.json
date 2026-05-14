@@ -1,0 +1,489 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "reuse:router-world-and-viewport-semantics",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "router",
+        "world-construction",
+        "external-apps"
+      ],
+      "summary": "Router work needs route-config, route-tree, route-context, viewport, viewport-agent, routeable-component, and route-recognizer semantics before product features rely on it.",
+      "rationale": "External apps are pressure floors, not literal specs. Router modeling must be grounded in the Aurelia framework router architecture because semantic-runtime will eventually support MCP, IDE, AOT, SSR, and SSG.",
+      "guidance": [
+        "Start with framework.router flow and relationship projections before deriving product router behavior from an app sample.",
+        "Model au-viewport explicitly when route rendering semantics are in scope.",
+        "Treat route-recognizer as a potentially wide substrate task, similar in complexity to expression or attribute parsing.",
+        "Router raw Error rows in ComponentAgent, ViewportInstructionTree.toUrl, and ViewportAgent._canUnload are intentionally unclaimed live state-machine guards as of 2026-05-14; do not turn them into diagnostics unless semantic-runtime grows the corresponding imperative navigation/controller-state emulator."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-runtime-topology.ts",
+          "summary": "Product-side route runtime topology."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-tree-materialization.ts",
+          "summary": "Route tree materialization."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.router",
+          "projection": "summary",
+          "summary": "Framework router architecture map."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.router",
+          "projection": "relationships",
+          "summary": "Normalized router relationships."
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:route-config-kernel-emitter",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "router",
+        "route-config",
+        "routeable-component"
+      ],
+      "summary": "RouteConfigKernelEmitter is the route-config convergence frontier for route config products, routeable components, validation issues, fallback components, child routes, field provenance, and kernel records.",
+      "rationale": "External app pressure often starts from authored route arrays or decorators, but product semantics need the route-config model before route tree, route context, viewport, or route-recognizer layers can consume it. Keep this emitter explicit so RouteableComponent can become a convergeable thing rather than an app-shape heuristic, and so router validation failures are source-backed before normalized route facts flow downstream.",
+      "guidance": [
+        "Start here when authored route configs, child routes, component/fallback values, RouteableComponent products, or route-config and child-route configuration diagnostics need better provenance or type handling.",
+        "Spend router validation codes only for statically closed values matching validation.ts: rtInvalidConfigProperty / AUR3554 for invalid property values and rtInvalidConfig / AUR3555 for null config objects. Weak/external route config values should stay open instead of becoming guessed diagnostics.",
+        "Route object vocabulary is validation authority too: unknown ordinary route-config keys spend rtUnknownConfigProperty / AUR3556, while redirect route objects only allow path and redirectTo and spend rtUnknownRedirectConfigProperty / AUR3557 for everything else.",
+        "Spend RouteConfigContext._configureChildRoutes authority for source-backed child route objects whose component is a lazy import and whose path property is absent: rcNoPathLazyImport / AUR3173 belongs here, not in route-tree materialization.",
+        "Spend RouteContext._resolveLazy invalid-import authority only for definitely invalid lazy-import fulfillments: rcInvalidLazyImport / AUR3175 is exact when a closed module has no resource definition, no partial custom-element-definition name, and no class/function export that a stronger resource-recognition pass might later identify.",
+        "String routeable component misses split into a closed global subset and a context-local frontier. Semantic-runtime can spend rtNoComponent / AUR3552 when a source-backed string component or fallback resolves to no known custom-element resource at all; the remaining frontier is comparing authored string names against the actual RouteConfigContext dependency/resource scope before judging context-local misses.",
+        "RouteConfig rows now carry separate origin and value-shape dimensions. Use originKind to distinguish @route, Route.configure, class static defaults, and child-route sources; use valueKind to distinguish object/path/routeable/static-default/open shapes. Authoring navigation taste should expose origin-shaped values separately from static/dynamic value-shape readings instead of inferring policy from route existence.",
+        "Preserve framework property paths such as `routes[0].path` and source ranges on validation issues; these are diagnostics and future repair anchors, not only pressure counts.",
+        "Keep route-config convergence separate from route-tree transition and route-recognizer state graph semantics.",
+        "Use framework.router route-config, routeable-component, route-context, and viewport-agent projections before changing product router behavior."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-config-recognition.ts",
+          "symbolName": "RouteConfigKernelEmitter",
+          "line": 270,
+          "summary": "Route config kernel emitter."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.router",
+          "projection": "relationships",
+          "summary": "Framework router relationship grounding lane."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "RouteConfigKernelEmitter",
+          "filePath": "packages/semantic-runtime/src/router/route-config-recognition.ts",
+          "minLineCount": 250,
+          "minMethodCount": 8
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-14"
+    },
+    {
+      "id": "frontier:route-recognizer-state-graph-builder",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "router",
+        "route-recognizer"
+      ],
+      "summary": "RouteRecognizerStateGraphBuilder is the current product pressure point for route-recognizer graph semantics.",
+      "rationale": "Route-recognizer has a high complexity ceiling similar to parsers. Product behavior should be grounded in framework.router recognizer rows before app samples drive assumptions.",
+      "guidance": [
+        "Start from framework.router recognizer and recognizer-issues projections.",
+        "Check `framework.errors` with `gap=raw-error-usage` and `projection=semantic-raw-references` when route-recognizer semantics become diagnostic or policy work; route-recognizer currently exposes message-expression raw Error usage rather than framework ErrorNames.",
+        "Known framework-throwing recognizer registration conditions should become RouteRecognizerIssue products and API rows, not open seams or silently accepted graphs. Since @aurelia/route-recognizer throws raw Error instances rather than mapped AUR codes, expose modeled issues as framework-runtime-behavior, keep framework-error-code null, and cite exact `frameworkRawErrorAuthority(...)` constants when the framework throw site is part of `framework.errors`.",
+        "Reserved `$$residue` parameter usage and invalid route-parameter regex constraints are registration issues; do not materialize endpoint/state graph products for paths the framework would reject during `RouteRecognizer.$add(...)`.",
+        "Treat endpoint registration, path grammar, state graph, candidate selection, and cache behavior as separate semantic axes.",
+        "Do not collapse recognizer work into generic route-config traversal."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-recognizer-materialization.ts",
+          "symbolName": "RouteRecognizerStateGraphBuilder",
+          "line": 245,
+          "summary": "Route-recognizer state graph builder."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-recognizer-materialization.ts",
+          "symbolName": "RouteRecognizerMaterializationProjectPass",
+          "line": 87,
+          "summary": "Project pass that parses configurable routes and emits recognizer state graphs."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.router",
+          "projection": "recognizer",
+          "summary": "Framework route-recognizer projection."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "RouteRecognizerStateGraphBuilder",
+          "filePath": "packages/semantic-runtime/src/router/route-recognizer-materialization.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        },
+        {
+          "kind": "product-large-class",
+          "className": "RouteRecognizerMaterializationProjectPass",
+          "filePath": "packages/semantic-runtime/src/router/route-recognizer-materialization.ts",
+          "minLineCount": 180,
+          "minMethodCount": 5
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-13"
+    },
+    {
+      "id": "frontier:route-tree-transition-frame",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "router",
+        "route-tree",
+        "controller"
+      ],
+      "summary": "RouteTreeTransitionMaterializationFrame is a live pressure point for route tree transition semantics, redirect migration diagnostics, and route-node handoff.",
+      "rationale": "Route tree work overlaps controller semantics, viewport agents, routeable components, recursive rendering, and framework-thrown router errors. It should be tracked as a first-class frontier rather than inferred from broad router notes.",
+      "guidance": [
+        "Check framework.router route-tree, viewport-agent, and relationship rows before changing product route-tree materialization.",
+        "RouteableComponent should be treated as a convergeable thing like CustomElement when component discovery is in scope.",
+        "Keep au-viewport semantics explicit when route rendering or recursive hydration is involved.",
+        "RouteTree redirect-parameter migration accepts only Segment / slash-scoped Segment RouteExpression chains. Sibling composites and grouped expressions belong in RouterIssue rows with exact router exprUnexpectedKind / AUR3502 authority, not route-recognizer rows or generic open seams.",
+        "A closed ViewportRequest with no matching available ViewportAgent is both a route-tree open seam for repair intent and an exact router issue with rcNoAvailableVpa / AUR3174 authority. Do not publish a partial transition tree for that chain."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-tree-materialization.ts",
+          "symbolName": "RouteTreeTransitionMaterializationFrame",
+          "line": 331,
+          "summary": "Route tree transition materialization frame."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.router",
+          "projection": "relationships",
+          "summary": "Framework router relationship rows."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "RouteTreeMaterializationFrame",
+          "filePath": "packages/semantic-runtime/src/router/route-tree-materialization.ts",
+          "minLineCount": 70,
+          "minMethodCount": 4
+        },
+        {
+          "kind": "product-large-class",
+          "className": "RouteTreeTransitionMaterializationFrame",
+          "filePath": "packages/semantic-runtime/src/router/route-tree-materialization.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-13"
+    },
+    {
+      "id": "frontier:route-config-context-materialization-project-pass",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "router",
+        "route-config",
+        "route-context"
+      ],
+      "summary": "RouteConfigContextMaterializationProjectPass materializes RouteConfigContext topology and owned RouteRecognizer instances from route configs.",
+      "rationale": "Route contexts sit between authored route configs, recognizer ownership, eager-loading policy, and later runtime topology. Keep this layer explicit instead of folding route-context construction into recognizer or route-tree passes.",
+      "guidance": [
+        "Start here when route-config roots, child context trees, eager-loading recognizer ownership, or RouteConfigContext products change.",
+        "Keep RouteConfigContext materialization separate from authored route-config convergence and runtime RouteContext/ViewportAgent topology.",
+        "Use framework.router route-context and route-tree rows before changing context ownership semantics."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-context-materialization.ts",
+          "symbolName": "RouteConfigContextMaterializationProjectPass",
+          "line": 133,
+          "summary": "RouteConfigContext materialization project pass."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.router",
+          "projection": "relationships",
+          "summary": "Framework router relationship rows for route-context semantics."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "RouteConfigContextMaterializationProjectPass",
+          "filePath": "packages/semantic-runtime/src/router/route-context-materialization.ts",
+          "minLineCount": 120,
+          "minMethodCount": 4
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:route-runtime-topology",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "router",
+        "route-context",
+        "viewport",
+        "controller"
+      ],
+      "summary": "RouteRuntimeTopologyProjectPass and RouteRuntimeTopologyFrame materialize RouteContext, au-viewport, ViewportCustomElement, ViewportAgent, and route child-container topology.",
+      "rationale": "The user called out au-viewport and ViewportAgent as first-class router semantics. This topology lane is the bridge from static template rendering/controller products into route runtime context products before navigation or activation.",
+      "guidance": [
+        "Start here when work touches au-viewport, ViewportAgent, RouteContext, route child containers, or static router/rendering topology.",
+        "Keep runtime topology separate from route-config contexts, route instruction parsing, recognition, and route-tree transition materialization.",
+        "Use framework.router viewport-agent and framework.rendering controller rows before changing route rendering semantics."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-runtime-topology.ts",
+          "symbolName": "RouteRuntimeTopologyProjectPass",
+          "line": 174,
+          "summary": "Route runtime topology project pass."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-runtime-topology.ts",
+          "symbolName": "RouteRuntimeTopologyFrame",
+          "line": 219,
+          "summary": "Route runtime topology work frame."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.router",
+          "projection": "relationships",
+          "summary": "Framework router viewport-agent and route-context relationship rows."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "RouteRuntimeTopologyFrame",
+          "filePath": "packages/semantic-runtime/src/router/route-runtime-topology.ts",
+          "minLineCount": 100,
+          "minMethodCount": 5
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:route-instruction-materialization-project-pass",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "router",
+        "viewport-instruction",
+        "template",
+        "observation"
+      ],
+      "summary": "RouteInstructionMaterializationProjectPass closes static load/href router resource values into typed navigation and viewport instruction products.",
+      "rationale": "Route instruction materialization depends on rendered router resources, binding source value evaluation, route contexts, and router options. Keep this as an explicit router/template bridge instead of treating load/href as plain attribute strings.",
+      "guidance": [
+        "Start here when load/href custom attributes, object navigation instructions, typed navigation instructions, viewport instruction trees, or open route-expression seams change.",
+        "Use observation source-value evaluation and template controller/rendering products before changing static router instruction closure.",
+        "For dynamic href seams, mirror HrefCustomAttribute exactly: `_resolveIsExternal(...)` gates URL generation, while RouterOptions.useHref=false, non-anchor hosts, or a co-located load attribute only disable click interception and must not be treated as proof of external URL intent.",
+        "Anchor `target` values other than `_self` are not automatically disabled in the semantic model: the framework compares them with the runtime window name. Use `router-href-click-interception-target-open` for that host-contract boundary instead of collapsing it into disabled click handling.",
+        "When an open router instruction seam has a binding/value source address, authoring orientation should preserve it as a `runtime-boundary` action target. The target is for intent collection and future planning, not proof that a source edit is already safe.",
+        "Use the synthetic `router-dynamic-pattern` pressure fixture before external app pressure when changing href repair behavior; it covers internal string-pattern closure, external-link-like field openness, and bare external-module value boundaries.",
+        "Keep route instruction materialization separate from recognizer path matching and route-tree transition compilation.",
+        "Closed primitive router-resource values that cannot be route strings, routeable components, or viewport instructions are TypedNavigationInstruction creation issues with instrInvalid / AUR3400 authority. Do not spend this code on classes/functions/promises that are valid framework routeable lanes but currently under-modeled.",
+        "Object-form router resource values belong to RouteConfigContext eager path generation before they re-enter the RouteExpression instruction-tree lane. Missing required params for RouteConfig/class components are RouterIssue rows with exact AUR3166 authority; string route ids are framework non-throwing and should not spend that code.",
+        "Use `route-expression-parser.ts` when framework semantics branch on RouteExpression node kind. It exposes the expression tree, lowered viewport instructions, and source-backed parser failures for exprUnexpectedSegment / AUR3500 and exprNotDone / AUR3501; do not reparse route strings with ad hoc split logic."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-instruction-materialization.ts",
+          "symbolName": "RouteInstructionMaterializationProjectPass",
+          "line": 138,
+          "summary": "Static router instruction materialization pass."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-eager-path-generation.ts",
+          "symbolName": "RouteEagerPathGenerationIndex",
+          "summary": "Framework-shaped RouteConfigContext eager path-generation substrate for object navigation instructions."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.router",
+          "projection": "flow",
+          "summary": "Framework viewport-instruction flow rows."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "RouteInstructionMaterializationProjectPass",
+          "filePath": "packages/semantic-runtime/src/router/route-instruction-materialization.ts",
+          "minLineCount": 90,
+          "minMethodCount": 4
+        },
+        {
+          "kind": "product-large-class",
+          "className": "RouteEagerPathGenerationIndex",
+          "filePath": "packages/semantic-runtime/src/router/route-eager-path-generation.ts",
+          "minLineCount": 120,
+          "minMethodCount": 3
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-13"
+    },
+    {
+      "id": "frontier:route-recognition-materialization-project-pass",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "router",
+        "route-recognizer",
+        "viewport-instruction"
+      ],
+      "summary": "RouteRecognitionMaterializationProjectPass walks route-recognizer graphs for static viewport instruction paths and publishes RecognizedRoute products.",
+      "rationale": "Recognition is algorithmic router substrate: candidates, endpoint requirements, redirect expansion, parameter extraction, and path collapse all need to remain grounded in route-recognizer semantics before route-tree compilation consumes them.",
+      "guidance": [
+        "Start here when static route recognition, candidate selection, redirect expansion, endpoint requirements, or recognized-route products change.",
+        "Cross-check framework.router recognizer mechanics before changing Candidate or EndpointRequirement behavior.",
+        "Redirect expansion must use the shared route redirect migration substrate rather than splitting redirect strings on `/`; RouteTree is the diagnostic owner for unsupported RouteExpression node kinds.",
+        "A closed static viewport-instruction path with a materialized recognizer, no matching configured route, and no owning route-config fallback is a recognition issue with instrNoFallback / AUR3401 authority.",
+        "A recognized redirect route whose migrated target path cannot be recognized is a redirect-resolution issue with instrUnknownRedirect / AUR3402 authority; semantic-runtime records it during redirect expansion even though the framework throws while creating the RouteTree node.",
+        "Keep recognition separate from route-recognizer graph construction and route-tree transition materialization."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-recognition-materialization.ts",
+          "symbolName": "RouteRecognitionMaterializationProjectPass",
+          "line": 82,
+          "summary": "Static route recognition materialization pass."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-recognition-materialization.ts",
+          "symbolName": "Candidate",
+          "line": 367,
+          "summary": "Recognition candidate algorithm state."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-recognition-materialization.ts",
+          "symbolName": "EndpointRequirement",
+          "line": 548,
+          "summary": "Endpoint requirement accumulator for recognized route drafts."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.router",
+          "projection": "recognizer",
+          "summary": "Framework route-recognizer mechanics."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "RouteRecognitionMaterializationProjectPass",
+          "filePath": "packages/semantic-runtime/src/router/route-recognition-materialization.ts",
+          "minLineCount": 100,
+          "minMethodCount": 3
+        },
+        {
+          "kind": "product-large-class",
+          "className": "Candidate",
+          "filePath": "packages/semantic-runtime/src/router/route-recognition-materialization.ts",
+          "minLineCount": 160,
+          "minMethodCount": 4
+        },
+        {
+          "kind": "product-large-class",
+          "className": "EndpointRequirement",
+          "filePath": "packages/semantic-runtime/src/router/route-recognition-materialization.ts",
+          "minLineCount": 90,
+          "minMethodCount": 5
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-13"
+    },
+    {
+      "id": "frontier:semantic-app-route-query-facade",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "api",
+        "router",
+        "query-surface"
+      ],
+      "summary": "SemanticAppRouteQueries is the focused public query-method surface for route, recognizer, viewport, and component-agent projections.",
+      "rationale": "Router modeling is broad enough that routing answerers should stay visible as their own public API pressure point. The class is large because it keeps route-family query methods out of runtime.ts; if it grows further, split by router concept rather than moving methods back into the facade.",
+      "guidance": [
+        "Start here when a public API query touches route configs, route contexts, recognizer rows, viewport instructions/agents, route trees/nodes, or component agents.",
+        "Keep row construction in route-projections and answer-envelope mechanics in answer-helpers; this class should stay a public query-method facade.",
+        "If router query pressure expands, split along route-config, recognizer, viewport, route-tree, or agent concepts."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-route-queries.ts",
+          "symbolName": "SemanticAppRouteQueries",
+          "line": 47,
+          "summary": "Route-family public query facade."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/route-projections.ts",
+          "summary": "Route-family row projection helpers."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/api/README.md",
+          "summary": "API split guidance for route-family answerers."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "SemanticAppRouteQueries",
+          "filePath": "packages/semantic-runtime/src/api/app-route-queries.ts",
+          "minLineCount": 180,
+          "minMethodCount": 10
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    }
+  ]
+}

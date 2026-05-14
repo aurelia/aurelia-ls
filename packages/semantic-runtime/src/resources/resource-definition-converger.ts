@@ -32,8 +32,6 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  compactFieldProvenance,
-  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -67,7 +65,6 @@ import {
   AttributePatternDefinitionContribution,
   AttributePatternDefinitionContributionKind,
   AttributePatternDefinitionEntry,
-  type AttributePatternDefinitionField,
 } from './attribute-pattern-definition.js';
 import {
   BindableBindingMode,
@@ -76,27 +73,23 @@ import {
   BindableDefinitionContribution,
   BindableSetterDefinition,
   BindableSetterKind,
-  type BindableDefinitionField,
 } from './bindable-definition.js';
 import { bindableAttributeNameForProperty } from './bindable-attribute.js';
 import {
   BindingBehaviorDefinition,
   BindingBehaviorDefinitionContribution,
   BindingBehaviorDefinitionContributionKind,
-  type BindingBehaviorDefinitionField,
 } from './binding-behavior-definition.js';
 import {
   BindingCommandDefinition,
   BindingCommandDefinitionContribution,
   BindingCommandDefinitionContributionKind,
-  type BindingCommandDefinitionField,
 } from './binding-command-definition.js';
 import {
   CustomAttributeContainerStrategy,
   CustomAttributeDefinition,
   CustomAttributeDefinitionContribution,
   CustomAttributeDefinitionContributionKind,
-  type CustomAttributeDefinitionField,
 } from './custom-attribute-definition.js';
 import {
   CustomElementCaptureDefinition,
@@ -104,7 +97,6 @@ import {
   CustomElementDefinition,
   CustomElementDefinitionContribution,
   CustomElementDefinitionContributionKind,
-  type CustomElementDefinitionField,
   CustomElementTemplateDefinition,
   CustomElementTemplateKind,
   ShadowOptionsDefinition,
@@ -149,12 +141,21 @@ import {
   ResourceDependencyReference,
   ResourceTargetReference,
 } from './resource-reference.js';
+import { ResourceFrameworkErrorCode } from './framework-error-code.js';
+import {
+  ResourceIssue,
+  ResourceIssueKind,
+  ResourceIssuePhase,
+} from './resource-issue.js';
+import {
+  ResourceIssuePublication,
+  ResourceIssuePublisher,
+} from './resource-issue-publication.js';
 import { ResourceProductDetails } from './product-details.js';
 import {
   ValueConverterDefinition,
   ValueConverterDefinitionContribution,
   ValueConverterDefinitionContributionKind,
-  type ValueConverterDefinitionField,
 } from './value-converter-definition.js';
 import {
   WatchCallbackDefinition,
@@ -162,7 +163,6 @@ import {
   WatchContributionKind,
   WatchDefinition,
   WatchDefinitionContribution,
-  type WatchDefinitionField,
   WatchExpressionDefinition,
   WatchExpressionKind,
   WatchFlushMode,
@@ -174,6 +174,8 @@ export class ResourceDefinitionConvergenceEmission {
   constructor(
     /** Full resource definitions converged from recognized source headers. */
     readonly definitions: readonly FullResourceDefinition[],
+    /** Source-backed resource metadata issues produced by this convergence pass. */
+    readonly issues: readonly ResourceIssue[],
     /** Kernel records committed by this convergence pass. */
     readonly records: readonly KernelStoreRecord[],
   ) {}
@@ -183,6 +185,7 @@ class ResourceDefinitionConvergenceProduct {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly definition: FullResourceDefinition | null,
+    readonly issues: readonly ResourceIssue[] = [],
   ) {}
 }
 
@@ -191,6 +194,7 @@ class ConvergedResourceDefinition {
     readonly definition: FullResourceDefinition,
     readonly open: readonly ConvergenceOpen[],
     readonly records: readonly KernelStoreRecord[] = [],
+    readonly issues: readonly ResourceIssue[] = [],
   ) {}
 }
 
@@ -253,6 +257,15 @@ class BindableRead {
     readonly contributions: readonly BindableDefinitionContribution[],
     readonly open: readonly ConvergenceOpen[],
     readonly records: readonly KernelStoreRecord[] = [],
+    readonly issues: readonly ResourceIssue[] = [],
+  ) {}
+}
+
+class ProcessContentRead {
+  constructor(
+    readonly target: ResourceTargetReference | null,
+    readonly records: readonly KernelStoreRecord[] = [],
+    readonly issues: readonly ResourceIssue[] = [],
   ) {}
 }
 
@@ -262,6 +275,14 @@ class WatchRead {
     readonly contributions: readonly WatchDefinitionContribution[],
     readonly open: readonly ConvergenceOpen[],
     readonly records: readonly KernelStoreRecord[] = [],
+    readonly issues: readonly ResourceIssue[] = [],
+  ) {}
+}
+
+class ResourceIssueRead {
+  constructor(
+    readonly records: readonly KernelStoreRecord[] = [],
+    readonly issues: readonly ResourceIssue[] = [],
   ) {}
 }
 
@@ -342,8 +363,9 @@ interface CustomElementConvergenceFacts {
   readonly needsCompile: boolean;
   readonly strict: boolean | null;
   readonly processContent: ResourceTargetReference | null;
+  readonly issueRecords: readonly KernelStoreRecord[];
+  readonly issues: readonly ResourceIssue[];
   readonly open: readonly ConvergenceOpen[];
-  readonly fieldProvenance: readonly FieldProvenance<CustomElementDefinitionField>[];
 }
 
 function emptyResourceAliasClaims(): ResourceAliasClaimsEmission {
@@ -396,6 +418,7 @@ export class ResourceDefinitionConverger {
   ): ResourceDefinitionConvergenceEmission {
     const records: KernelStoreRecord[] = [];
     const definitions: FullResourceDefinition[] = [];
+    const issues: ResourceIssue[] = [];
 
     for (const header of headerEmission.definitions) {
       const observation = observations[header.observationIndex] ?? null;
@@ -404,6 +427,7 @@ export class ResourceDefinitionConverger {
       }
       const product = this.recordsForDefinition(context, observation, header);
       records.push(...product.records);
+      issues.push(...product.issues);
       if (product.definition != null) {
         definitions.push(product.definition);
       }
@@ -417,8 +441,11 @@ export class ResourceDefinitionConverger {
         this.store.productDetails.add(ResourceProductDetails.Definition, definition.productHandle, definition);
       }
     }
+    for (const issue of issues) {
+      this.store.productDetails.add(ResourceProductDetails.Issue, issue.productHandle, issue);
+    }
 
-    return new ResourceDefinitionConvergenceEmission(definitions, records);
+    return new ResourceDefinitionConvergenceEmission(definitions, issues, records);
   }
 
   private recordsForDefinition(
@@ -464,7 +491,7 @@ export class ResourceDefinitionConverger {
         ...aliasClaims.claimHandles,
       ], openSeams.handles),
     ];
-    return new ResourceDefinitionConvergenceProduct(records, definition);
+    return new ResourceDefinitionConvergenceProduct(records, definition, converged.issues);
   }
 
   private convergenceClaimForDefinition(
@@ -555,7 +582,7 @@ export class ResourceDefinitionConverger {
       case ResourceDefinitionKind.BindingCommand:
         return this.convergeThinNamedResource(definition, observation, header, productHandle, provenanceHandle);
       case ResourceDefinitionKind.AttributePattern:
-        return this.convergeAttributePattern(definition, header, productHandle, provenanceHandle);
+        return this.convergeAttributePattern(definition, observation, header, productHandle, provenanceHandle);
     }
   }
 
@@ -579,7 +606,9 @@ export class ResourceDefinitionConverger {
         ...facts.template.records,
         ...facts.bindables.records,
         ...facts.watches.records,
+        ...facts.issueRecords,
       ],
+      facts.issues,
     );
   }
 
@@ -604,6 +633,7 @@ export class ResourceDefinitionConverger {
       `resource-definition-converged:${header.localKey}:bindable`,
       definitionExpression,
       targetClass,
+      header.primaryIdentityHandle,
       provenanceHandle,
     );
     const watches = readWatches(
@@ -612,6 +642,7 @@ export class ResourceDefinitionConverger {
       `resource-definition-converged:${header.localKey}:watch`,
       definitionExpression,
       targetClass,
+      header.primaryIdentityHandle,
       provenanceHandle,
     );
     const aliases = mergeAliases(definition.aliases, readStaticStringArrayClassProperty(context, targetClass, 'aliases'));
@@ -631,10 +662,38 @@ export class ResourceDefinitionConverger {
     const containerless = readBooleanField(context, definitionExpression, targetClass, 'containerless') ?? false;
     const shadowOptions = readShadowOptions(context, definitionExpression, targetClass);
     const hasSlots = readBooleanField(context, definitionExpression, targetClass, 'hasSlots') ?? false;
+    const controllerIssue = readCustomElementControllerNoShadowOnContainerlessIssue(
+      this.store,
+      context,
+      `resource-definition-converged:${header.localKey}:controller`,
+      definitionExpression,
+      targetClass,
+      header.primaryIdentityHandle,
+      provenanceHandle,
+      containerless,
+      shadowOptions,
+      hasSlots,
+    );
     const enhance = readBooleanField(context, definitionExpression, targetClass, 'enhance') ?? false;
     const needsCompile = readBooleanField(context, definitionExpression, targetClass, 'needsCompile') ?? true;
     const strict = readBooleanField(context, definitionExpression, targetClass, 'strict');
-    const processContent = readTargetField(context, definitionExpression, targetClass, 'processContent');
+    const processContent = readCustomElementProcessContent(
+      this.store,
+      context,
+      `resource-definition-converged:${header.localKey}:process-content`,
+      definitionExpression,
+      targetClass,
+      header.primaryIdentityHandle,
+      provenanceHandle,
+    );
+    const decoratorIssues = readCustomElementDecoratorIssues(
+      this.store,
+      context,
+      `resource-definition-converged:${header.localKey}:decorator`,
+      targetClass,
+      header.primaryIdentityHandle,
+      provenanceHandle,
+    );
     const open = [
       ...bindables.open,
       ...watches.open,
@@ -660,9 +719,20 @@ export class ResourceDefinitionConverger {
       enhance,
       needsCompile,
       strict,
-      processContent,
+      processContent: processContent.target,
+      issueRecords: [
+        ...(controllerIssue?.records ?? []),
+        ...processContent.records,
+        ...decoratorIssues.records,
+      ],
+      issues: [
+        ...bindables.issues,
+        ...watches.issues,
+        ...processContent.issues,
+        ...decoratorIssues.issues,
+        ...(controllerIssue == null ? [] : [controllerIssue.issue]),
+      ],
       open,
-      fieldProvenance: customElementFieldProvenance(provenanceHandle),
     };
   }
 
@@ -696,7 +766,6 @@ export class ResourceDefinitionConverger {
       facts.strict,
       facts.processContent,
       [this.customElementContribution(observation, facts)],
-      facts.fieldProvenance,
     );
   }
 
@@ -725,7 +794,6 @@ export class ResourceDefinitionConverger {
       facts.watches.contributions,
       facts.strict,
       facts.processContent,
-      facts.fieldProvenance,
     );
   }
 
@@ -752,6 +820,7 @@ export class ResourceDefinitionConverger {
       `resource-definition-converged:${header.localKey}:bindable`,
       definitionExpression,
       targetClass,
+      header.primaryIdentityHandle,
       provenanceHandle,
     );
     const watches = readWatches(
@@ -760,6 +829,7 @@ export class ResourceDefinitionConverger {
       `resource-definition-converged:${header.localKey}:watch`,
       definitionExpression,
       targetClass,
+      header.primaryIdentityHandle,
       provenanceHandle,
     );
     const aliases = mergeAliases(definition.aliases, readStaticStringArrayClassProperty(context, targetClass, 'aliases'));
@@ -774,20 +844,6 @@ export class ResourceDefinitionConverger {
       ...watches.open,
       ...dependencies.open,
     ];
-    const fieldProvenance = fieldProvenanceFor<CustomAttributeDefinitionField>(provenanceHandle, [
-      'target',
-      'name',
-      'aliases',
-      'key',
-      'isTemplateController',
-      'bindables',
-      'noMultiBindings',
-      'watches',
-      'dependencies',
-      'containerStrategy',
-      'defaultProperty',
-    ]);
-
     const aliasDefinitions = aliases.map((alias) => new ResourceAliasDefinition(alias, header.sourceAddressHandle, provenanceHandle));
     return new ConvergedResourceDefinition(
       new CustomAttributeDefinition(
@@ -819,13 +875,12 @@ export class ResourceDefinitionConverger {
             dependencies.dependencies,
             containerStrategy,
             defaultProperty,
-            fieldProvenance,
           ),
         ],
-        fieldProvenance,
       ),
       open,
       [...bindables.records, ...watches.records],
+      [...bindables.issues, ...watches.issues],
     );
   }
 
@@ -854,7 +909,6 @@ export class ResourceDefinitionConverger {
     const aliases = definition.aliases.map((alias) => new ResourceAliasDefinition(alias, header.sourceAddressHandle, provenanceHandle));
     switch (definition.type) {
       case ResourceDefinitionKind.ValueConverter: {
-        const fieldProvenance = fieldProvenanceFor<ValueConverterDefinitionField>(provenanceHandle, ['target', 'name', 'aliases', 'key']);
         return new ConvergedResourceDefinition(
           new ValueConverterDefinition(
             productHandle,
@@ -864,14 +918,12 @@ export class ResourceDefinitionConverger {
             name,
             aliases,
             key,
-            [new ValueConverterDefinitionContribution(valueConverterContributionKind(observation), target, name, aliases, key, fieldProvenance)],
-            fieldProvenance,
+            [new ValueConverterDefinitionContribution(valueConverterContributionKind(observation), target, name, aliases, key)],
           ),
           [],
         );
       }
       case ResourceDefinitionKind.BindingBehavior: {
-        const fieldProvenance = fieldProvenanceFor<BindingBehaviorDefinitionField>(provenanceHandle, ['target', 'name', 'aliases', 'key']);
         return new ConvergedResourceDefinition(
           new BindingBehaviorDefinition(
             productHandle,
@@ -881,14 +933,12 @@ export class ResourceDefinitionConverger {
             name,
             aliases,
             key,
-            [new BindingBehaviorDefinitionContribution(bindingBehaviorContributionKind(observation), target, name, aliases, key, fieldProvenance)],
-            fieldProvenance,
+            [new BindingBehaviorDefinitionContribution(bindingBehaviorContributionKind(observation), target, name, aliases, key)],
           ),
           [],
         );
       }
       case ResourceDefinitionKind.BindingCommand: {
-        const fieldProvenance = fieldProvenanceFor<BindingCommandDefinitionField>(provenanceHandle, ['target', 'name', 'aliases', 'key']);
         return new ConvergedResourceDefinition(
           new BindingCommandDefinition(
             productHandle,
@@ -898,8 +948,7 @@ export class ResourceDefinitionConverger {
             name,
             aliases,
             key,
-            [new BindingCommandDefinitionContribution(bindingCommandContributionKind(observation), target, name, aliases, key, fieldProvenance)],
-            fieldProvenance,
+            [new BindingCommandDefinitionContribution(bindingCommandContributionKind(observation), target, name, aliases, key)],
           ),
           [],
         );
@@ -911,6 +960,7 @@ export class ResourceDefinitionConverger {
 
   private convergeAttributePattern(
     definition: AttributePatternDefinitionHeader,
+    observation: ResourceRecognitionObservation,
     header: ResourceDefinitionHeaderEmission,
     productHandle: ProductHandle,
     provenanceHandle: ProvenanceHandle,
@@ -926,7 +976,6 @@ export class ResourceDefinitionConverger {
       header.sourceAddressHandle,
       provenanceHandle,
     ));
-    const fieldProvenance = fieldProvenanceFor<AttributePatternDefinitionField>(provenanceHandle, ['target', 'patterns']);
     return new ConvergedResourceDefinition(
       new AttributePatternDefinition(
         productHandle,
@@ -935,12 +984,10 @@ export class ResourceDefinitionConverger {
         target,
         entries,
         [new AttributePatternDefinitionContribution(
-          AttributePatternDefinitionContributionKind.Header,
+          attributePatternContributionKind(observation),
           target,
           entries,
-          fieldProvenance,
         )],
-        fieldProvenance,
       ),
       [],
     );
@@ -1010,6 +1057,9 @@ export class ResourceDefinitionConverger {
     const handles: OpenSeamHandle[] = [];
     opens.forEach((open, index) => {
       const emission = this.recordsForOpenSeam(context, header, open, index);
+      if (emission == null) {
+        return;
+      }
       records.push(...emission.records);
       handles.push(emission.handle);
     });
@@ -1024,15 +1074,23 @@ export class ResourceDefinitionConverger {
   ): {
     readonly records: readonly KernelStoreRecord[];
     readonly handle: OpenSeamHandle;
-  } {
+  } | null {
+    const sourceFileAddressHandle = sourceFileAddressHandleForNode(this.store, context, open.node);
+    const sourceFile = open.node.getSourceFile();
+    const span = sourceFileAddressHandle == null
+      ? null
+      : sourceSpanRangeForNode(sourceFile, open.node);
+    if (sourceFileAddressHandle == null || span == null) {
+      return null;
+    }
     const local = `resource-definition-converged:${header.localKey}:open:${index}`;
     return recordsForSourceOpenSeam(this.store, {
       localKey: local,
       openKind: KernelVocabulary.Resource.OpenDefinitionField.key,
       summary: open.summary,
-      sourceFileAddressHandle: context.sourceFileAddressHandle,
-      start: open.node.getStart(context.sourceFile),
-      end: open.node.end,
+      sourceFileAddressHandle,
+      start: span.start,
+      end: span.end,
       evidenceRoles: [EvidenceRole.Diagnostic],
     });
   }
@@ -1051,70 +1109,104 @@ function classNodeForTarget(
   return ts.isClassDeclaration(parent) || ts.isClassExpression(parent) ? parent : null;
 }
 
+function attributePatternContributionKind(
+  observation: ResourceRecognitionObservation,
+): AttributePatternDefinitionContributionKind {
+  switch (observation.carrierKind) {
+    case ResourceCarrierKind.AttributePatternCreate:
+      return AttributePatternDefinitionContributionKind.CreateCall;
+    case ResourceCarrierKind.Convention:
+      return AttributePatternDefinitionContributionKind.Convention;
+    case ResourceCarrierKind.Decorator:
+    case ResourceCarrierKind.StaticAu:
+    case ResourceCarrierKind.DefineCall:
+      return AttributePatternDefinitionContributionKind.Header;
+  }
+}
+
 function customElementContributionKind(
   observation: ResourceRecognitionObservation,
 ): CustomElementDefinitionContributionKind {
-  return observation.carrierKind === ResourceCarrierKind.Convention
-    ? CustomElementDefinitionContributionKind.Convention
-    : CustomElementDefinitionContributionKind.Header;
-}
-
-function customElementFieldProvenance(
-  provenanceHandle: ProvenanceHandle,
-): readonly FieldProvenance<CustomElementDefinitionField>[] {
-  return fieldProvenanceFor<CustomElementDefinitionField>(provenanceHandle, [
-    'target',
-    'name',
-    'aliases',
-    'key',
-    'capture',
-    'template',
-    'instructions',
-    'dependencies',
-    'injectable',
-    'needsCompile',
-    'surrogates',
-    'bindables',
-    'containerless',
-    'shadowOptions',
-    'hasSlots',
-    'enhance',
-    'watches',
-    'strict',
-    'processContent',
-  ]);
+  switch (observation.carrierKind) {
+    case ResourceCarrierKind.Decorator:
+      return CustomElementDefinitionContributionKind.Annotation;
+    case ResourceCarrierKind.StaticAu:
+      return CustomElementDefinitionContributionKind.TypeStaticProperty;
+    case ResourceCarrierKind.DefineCall:
+      return CustomElementDefinitionContributionKind.DefinitionObject;
+    case ResourceCarrierKind.AttributePatternCreate:
+      return CustomElementDefinitionContributionKind.Header;
+    case ResourceCarrierKind.Convention:
+      return CustomElementDefinitionContributionKind.Convention;
+  }
 }
 
 function customAttributeContributionKind(
   observation: ResourceRecognitionObservation,
 ): CustomAttributeDefinitionContributionKind {
-  return observation.carrierKind === ResourceCarrierKind.Convention
-    ? CustomAttributeDefinitionContributionKind.Convention
-    : CustomAttributeDefinitionContributionKind.Header;
+  switch (observation.carrierKind) {
+    case ResourceCarrierKind.Decorator:
+      return CustomAttributeDefinitionContributionKind.Annotation;
+    case ResourceCarrierKind.StaticAu:
+      return CustomAttributeDefinitionContributionKind.TypeStaticProperty;
+    case ResourceCarrierKind.DefineCall:
+      return CustomAttributeDefinitionContributionKind.DefinitionObject;
+    case ResourceCarrierKind.AttributePatternCreate:
+      return CustomAttributeDefinitionContributionKind.Header;
+    case ResourceCarrierKind.Convention:
+      return CustomAttributeDefinitionContributionKind.Convention;
+  }
 }
 
 function valueConverterContributionKind(
   observation: ResourceRecognitionObservation,
 ): ValueConverterDefinitionContributionKind {
-  return observation.carrierKind === ResourceCarrierKind.Convention
-    ? ValueConverterDefinitionContributionKind.Convention
-    : ValueConverterDefinitionContributionKind.Header;
+  switch (observation.carrierKind) {
+    case ResourceCarrierKind.Decorator:
+      return ValueConverterDefinitionContributionKind.Annotation;
+    case ResourceCarrierKind.StaticAu:
+      return ValueConverterDefinitionContributionKind.TypeStaticProperty;
+    case ResourceCarrierKind.DefineCall:
+      return ValueConverterDefinitionContributionKind.DefinitionObject;
+    case ResourceCarrierKind.AttributePatternCreate:
+      return ValueConverterDefinitionContributionKind.Header;
+    case ResourceCarrierKind.Convention:
+      return ValueConverterDefinitionContributionKind.Convention;
+  }
 }
 
 function bindingBehaviorContributionKind(
   observation: ResourceRecognitionObservation,
 ): BindingBehaviorDefinitionContributionKind {
-  return observation.carrierKind === ResourceCarrierKind.Convention
-    ? BindingBehaviorDefinitionContributionKind.Convention
-    : BindingBehaviorDefinitionContributionKind.Header;
+  switch (observation.carrierKind) {
+    case ResourceCarrierKind.Decorator:
+      return BindingBehaviorDefinitionContributionKind.Annotation;
+    case ResourceCarrierKind.StaticAu:
+      return BindingBehaviorDefinitionContributionKind.TypeStaticProperty;
+    case ResourceCarrierKind.DefineCall:
+      return BindingBehaviorDefinitionContributionKind.DefinitionObject;
+    case ResourceCarrierKind.AttributePatternCreate:
+      return BindingBehaviorDefinitionContributionKind.Header;
+    case ResourceCarrierKind.Convention:
+      return BindingBehaviorDefinitionContributionKind.Convention;
+  }
 }
 
 function bindingCommandContributionKind(
   observation: ResourceRecognitionObservation,
 ): BindingCommandDefinitionContributionKind {
-  return observation.carrierKind === ResourceCarrierKind.Convention
-    ? BindingCommandDefinitionContributionKind.Convention
-    : BindingCommandDefinitionContributionKind.Header;
+  switch (observation.carrierKind) {
+    case ResourceCarrierKind.Decorator:
+      return BindingCommandDefinitionContributionKind.Annotation;
+    case ResourceCarrierKind.StaticAu:
+      return BindingCommandDefinitionContributionKind.TypeStaticProperty;
+    case ResourceCarrierKind.DefineCall:
+      return BindingCommandDefinitionContributionKind.DefinitionObject;
+    case ResourceCarrierKind.AttributePatternCreate:
+      return BindingCommandDefinitionContributionKind.Header;
+    case ResourceCarrierKind.Convention:
+      return BindingCommandDefinitionContributionKind.Convention;
+  }
 }
 
 function expressionNode(node: ts.Node | null): ts.Expression | null {
@@ -1134,6 +1226,19 @@ function readStaticClassProperty(
     }
     if (readPropertyName(member.name) === propertyName) {
       return member.initializer;
+    }
+  }
+  return null;
+}
+
+function readNearestStaticClassProperty(
+  classPrototypeChain: readonly ts.ClassLikeDeclarationBase[],
+  propertyName: string,
+): ts.Expression | null {
+  for (const classNode of classPrototypeChain) {
+    const expression = readStaticClassProperty(classNode, propertyName);
+    if (expression != null) {
+      return expression;
     }
   }
   return null;
@@ -1655,7 +1760,15 @@ function sourceSpanAddressForNode(
   local: string,
   role: SourceSpanRole,
 ): SourceSpanAddressSet | null {
-  const span = sourceSpanRangeForNode(context.sourceFile, node);
+  if (node == null) {
+    return null;
+  }
+  const sourceFile = node.getSourceFile();
+  const sourceFileAddressHandle = sourceFileAddressHandleForNode(store, context, node);
+  if (sourceFileAddressHandle == null) {
+    return null;
+  }
+  const span = sourceSpanRangeForNode(sourceFile, node);
   if (span == null) {
     return null;
   }
@@ -1664,7 +1777,7 @@ function sourceSpanAddressForNode(
     [
       new SourceSpanAddress(
         addressHandle,
-        context.sourceFileAddressHandle,
+        sourceFileAddressHandle,
         span.start,
         span.end,
         role,
@@ -1672,6 +1785,17 @@ function sourceSpanAddressForNode(
     ],
     addressHandle,
   );
+}
+
+function sourceFileAddressHandleForNode(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  node: ts.Node,
+): AddressHandle | null {
+  const sourceFile = node.getSourceFile();
+  return sourceFile === context.sourceFile
+    ? context.sourceFileAddressHandle
+    : store.readBestSourceFileAddressForFileName(sourceFile.fileName)?.handle ?? null;
 }
 
 interface SourceSpanRange {
@@ -1733,6 +1857,290 @@ function readShadowOptions(
     default:
       return null;
   }
+}
+
+function readCustomElementControllerNoShadowOnContainerlessIssue(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  definitionExpression: ts.Expression | null,
+  targetClass: ts.ClassLikeDeclarationBase | null,
+  ownerIdentityHandle: IdentityHandle | null,
+  provenanceHandle: ProvenanceHandle,
+  containerless: boolean,
+  shadowOptions: ShadowOptionsDefinition | null,
+  hasSlots: boolean,
+): ResourceIssuePublication | null {
+  if (!containerless || (shadowOptions == null && !hasSlots)) {
+    return null;
+  }
+  const sourceNode = shadowOptions != null
+    ? readFieldValue(context, definitionExpression, targetClass, 'shadowOptions')?.node ?? null
+    : readFieldValue(context, definitionExpression, targetClass, 'hasSlots')?.node ?? null;
+  const source = sourceSpanAddressForNode(
+    store,
+    context,
+    sourceNode ?? definitionExpression ?? targetClass,
+    `${local}:source`,
+    SourceSpanRole.Value,
+  );
+  const publisher = new ResourceIssuePublisher(store);
+  const publication = publisher.publish(
+    `${local}:issue`,
+    context.projectKey,
+    ownerIdentityHandle,
+    provenanceHandle,
+    ResourceIssuePhase.CustomElementDefinition,
+    ResourceIssueKind.ControllerNoShadowOnContainerless,
+    'Containerless custom elements cannot request Shadow DOM or slot projection.',
+    ResourceFrameworkErrorCode.ControllerNoShadowOnContainerless,
+    source?.addressHandle ?? null,
+  );
+  return new ResourceIssuePublication(
+    publication.issue,
+    [...source?.records ?? [], ...publication.records],
+  );
+}
+
+function readCustomElementProcessContent(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  definitionExpression: ts.Expression | null,
+  targetClass: ts.ClassLikeDeclarationBase | null,
+  ownerIdentityHandle: IdentityHandle | null,
+  provenanceHandle: ProvenanceHandle,
+): ProcessContentRead {
+  const records: KernelStoreRecord[] = [];
+  const issues: ResourceIssue[] = [];
+  let target = readTargetField(context, definitionExpression, targetClass, 'processContent');
+  if (targetClass == null) {
+    return new ProcessContentRead(target);
+  }
+
+  for (const [index, decorator] of (ts.canHaveDecorators(targetClass) ? ts.getDecorators(targetClass) ?? [] : []).entries()) {
+    const call = decoratorCallNamed(decorator, 'processContent');
+    if (call == null) {
+      continue;
+    }
+    const argument = call.arguments[0] ?? null;
+    if (argument == null) {
+      const issue = publishResourceIssue(
+        store,
+        context,
+        `${local}:class:${index}`,
+        ResourceIssuePhase.ProcessContentDecorator,
+        ResourceIssueKind.InvalidProcessContentHook,
+        'Class-level @processContent must provide a static function hook.',
+        ResourceFrameworkErrorCode.InvalidProcessContentHook,
+        decorator,
+        SourceSpanRole.Name,
+        ownerIdentityHandle,
+        provenanceHandle,
+      );
+      records.push(...issue.records);
+      issues.push(issue.issue);
+      continue;
+    }
+    const hook = readProcessContentHookArgument(store, context, `${local}:class:${index}:hook`, targetClass, argument);
+    if (hook.target != null) {
+      target = hook.target;
+      records.push(...hook.records);
+      continue;
+    }
+    if (hook.issueNode != null) {
+      const issue = publishResourceIssue(
+        store,
+        context,
+        `${local}:class:${index}`,
+        ResourceIssuePhase.ProcessContentDecorator,
+        ResourceIssueKind.InvalidProcessContentHook,
+        'Class-level @processContent did not resolve to a static function hook.',
+        ResourceFrameworkErrorCode.InvalidProcessContentHook,
+        hook.issueNode,
+        SourceSpanRole.Value,
+        ownerIdentityHandle,
+        provenanceHandle,
+      );
+      records.push(...issue.records);
+      issues.push(issue.issue);
+    }
+  }
+
+  for (const [memberIndex, member] of targetClass.members.entries()) {
+    if (!ts.canHaveDecorators(member)) {
+      continue;
+    }
+    for (const [decoratorIndex, decorator] of (ts.getDecorators(member) ?? []).entries()) {
+      const call = decoratorCallNamed(decorator, 'processContent');
+      if (call == null) {
+        continue;
+      }
+      const localKey = `${local}:member:${memberIndex}:${decoratorIndex}`;
+      if (call.arguments.length === 0 && ts.isMethodDeclaration(member) && hasStaticModifier(member)) {
+        const source = sourceSpanAddressForNode(store, context, memberNameNode(member) ?? member, `${localKey}:source`, SourceSpanRole.Name);
+        records.push(...source?.records ?? []);
+        target = new ResourceTargetReference(null, source?.addressHandle ?? null, memberName(member));
+        continue;
+      }
+      const issue = publishResourceIssue(
+        store,
+        context,
+        localKey,
+        ResourceIssuePhase.ProcessContentDecorator,
+        ResourceIssueKind.InvalidProcessContentHook,
+        '@processContent() must decorate a static method when used as a method decorator.',
+        ResourceFrameworkErrorCode.InvalidProcessContentHook,
+        memberNameNode(member) ?? decorator,
+        SourceSpanRole.Name,
+        ownerIdentityHandle,
+        provenanceHandle,
+      );
+      records.push(...issue.records);
+      issues.push(issue.issue);
+    }
+  }
+
+  return new ProcessContentRead(target, records, issues);
+}
+
+function readCustomElementDecoratorIssues(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  targetClass: ts.ClassLikeDeclarationBase | null,
+  ownerIdentityHandle: IdentityHandle | null,
+  provenanceHandle: ProvenanceHandle,
+): ResourceIssueRead {
+  if (targetClass == null) {
+    return new ResourceIssueRead();
+  }
+  const records: KernelStoreRecord[] = [];
+  const issues: ResourceIssue[] = [];
+
+  for (const [decoratorIndex, decorator] of (ts.canHaveDecorators(targetClass) ? ts.getDecorators(targetClass) ?? [] : []).entries()) {
+    if (!isSlottedDecorator(decorator)) {
+      continue;
+    }
+    const publication = publishResourceIssue(
+      store,
+      context,
+      `${local}:class-slotted:${decoratorIndex}`,
+      ResourceIssuePhase.SlottedDecorator,
+      ResourceIssueKind.SlottedDecoratorInvalidUsage,
+      '@slotted can only decorate a class field.',
+      ResourceFrameworkErrorCode.SlottedDecoratorInvalidUsage,
+      decorator,
+      SourceSpanRole.Name,
+      ownerIdentityHandle,
+      provenanceHandle,
+    );
+    records.push(...publication.records);
+    issues.push(publication.issue);
+  }
+
+  for (const [memberIndex, member] of targetClass.members.entries()) {
+    const decorators = ts.canHaveDecorators(member) ? ts.getDecorators(member) ?? [] : [];
+    for (const [decoratorIndex, decorator] of decorators.entries()) {
+      const childrenQuery = readChildrenDecoratorQuery(context, decorator);
+      if (childrenQuery != null && /[\s>]/.test(childrenQuery.query)) {
+        const publication = publishResourceIssue(
+          store,
+          context,
+          `${local}:children:${memberIndex}:${decoratorIndex}`,
+          ResourceIssuePhase.ChildrenDecorator,
+          ResourceIssueKind.ChildrenInvalidQuery,
+          `@children query '${childrenQuery.query}' is rejected by Aurelia because it contains whitespace or '>'.`,
+          ResourceFrameworkErrorCode.ChildrenInvalidQuery,
+          childrenQuery.sourceNode,
+          SourceSpanRole.Value,
+          ownerIdentityHandle,
+          provenanceHandle,
+        );
+        records.push(...publication.records);
+        issues.push(publication.issue);
+      }
+
+      if (isSlottedDecorator(decorator) && !ts.isPropertyDeclaration(member)) {
+        const publication = publishResourceIssue(
+          store,
+          context,
+          `${local}:slotted:${memberIndex}:${decoratorIndex}`,
+          ResourceIssuePhase.SlottedDecorator,
+          ResourceIssueKind.SlottedDecoratorInvalidUsage,
+          '@slotted can only decorate a class field.',
+          ResourceFrameworkErrorCode.SlottedDecoratorInvalidUsage,
+          decorator,
+          SourceSpanRole.Name,
+          ownerIdentityHandle,
+          provenanceHandle,
+        );
+        records.push(...publication.records);
+        issues.push(publication.issue);
+      }
+    }
+  }
+
+  return new ResourceIssueRead(records, issues);
+}
+
+function readChildrenDecoratorQuery(
+  context: ResourceRecognitionContext,
+  decorator: ts.Decorator,
+): { readonly query: string; readonly sourceNode: ts.Node } | null {
+  const call = decoratorCallNamed(decorator, 'children');
+  if (call == null) {
+    return null;
+  }
+  const argument = call.arguments[0] ?? null;
+  if (argument == null) {
+    return null;
+  }
+  const queryRead = readObjectProperty(context.expressionReader, argument, 'query')
+    ?? context.expressionReader.evaluateExpression(argument);
+  const query = queryRead.value == null ? null : readStaticStringValue(queryRead.value);
+  return query == null
+    ? null
+    : { query, sourceNode: queryRead.node ?? argument };
+}
+
+function readProcessContentHookArgument(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  targetClass: ts.ClassLikeDeclarationBase,
+  argument: ts.Expression,
+): { readonly target: ResourceTargetReference | null; readonly records: readonly KernelStoreRecord[]; readonly issueNode: ts.Node | null } {
+  const read = context.expressionReader.evaluateExpression(argument);
+  const value = read.value;
+  if (value?.kind === EvaluationValueKind.Function) {
+    const source = sourceSpanAddressForNode(store, context, argument, `${local}:source`, SourceSpanRole.Value);
+    return { target: targetReferenceForFunction(value, source?.addressHandle ?? null), records: source?.records ?? [], issueNode: null };
+  }
+  if (value?.kind === EvaluationValueKind.String) {
+    const member = readStaticMethod(targetClass, value.value);
+    if (member == null) {
+      return { target: null, records: [], issueNode: argument };
+    }
+    const source = sourceSpanAddressForNode(store, context, memberNameNode(member) ?? member, `${local}:source`, SourceSpanRole.Name);
+    return { target: new ResourceTargetReference(null, source?.addressHandle ?? null, value.value), records: source?.records ?? [], issueNode: null };
+  }
+  if (value == null || value.kind === EvaluationValueKind.Unknown || value.kind === EvaluationValueKind.BoundaryValue) {
+    return { target: null, records: [], issueNode: null };
+  }
+  return { target: null, records: [], issueNode: argument };
+}
+
+function readStaticMethod(
+  targetClass: ts.ClassLikeDeclarationBase,
+  propertyName: string,
+): ts.MethodDeclaration | null {
+  for (const member of targetClass.members) {
+    if (ts.isMethodDeclaration(member) && hasStaticModifier(member) && readPropertyName(member.name) === propertyName) {
+      return member;
+    }
+  }
+  return null;
 }
 
 function readTargetField(
@@ -1970,17 +2378,40 @@ function readBindables(
   local: string,
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
+  ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
 ): BindableRead {
+  const classPrototypeChain = readClassPrototypeChain(context, targetClass);
+  const bindableMetadataChain = [...classPrototypeChain].reverse();
+  const staticBindables = readNearestStaticClassProperty(classPrototypeChain, 'bindables');
   const reads = [
-    ...readDecoratorBindables(store, context, `${local}:decorator`, targetClass, provenanceHandle),
-    ...readBindableListExpression(store, context, `${local}:static`, readStaticClassProperty(targetClass, 'bindables'), provenanceHandle, BindableContributionKind.StaticBindables),
+    ...bindableMetadataChain.flatMap((classNode, index) => {
+      const classContext = context.readNodeContext(classNode);
+      return readDecoratorBindables(
+        store,
+        classContext,
+        `${local}:decorator:${index}`,
+        classNode,
+        ownerIdentityHandle,
+        provenanceHandle,
+        classNode === targetClass ? BindableContributionKind.Decorator : BindableContributionKind.InheritedMetadata,
+      );
+    }),
+    ...readBindableListExpression(
+      store,
+      context.readNodeContext(staticBindables),
+      `${local}:static`,
+      staticBindables,
+      provenanceHandle,
+      BindableContributionKind.StaticBindables,
+    ),
     ...readBindableListValue(store, context, `${local}:definition-object`, readObjectProperty(context.expressionReader, definitionExpression, 'bindables'), provenanceHandle, BindableContributionKind.RuntimePartial),
   ];
   const byName = new Map<string, BindableDefinition>();
   const contributions: BindableDefinitionContribution[] = [];
   const open: ConvergenceOpen[] = [];
   const records: KernelStoreRecord[] = [];
+  const issues: ResourceIssue[] = [];
   for (const read of reads) {
     if (read.bindable != null) {
       byName.set(read.bindable.name, read.bindable);
@@ -1992,8 +2423,19 @@ function readBindables(
       open.push(read.open);
     }
     records.push(...read.records);
+    issues.push(...read.issues);
   }
-  return new BindableRead([...byName.values()], contributions, open, records);
+  return new BindableRead([...byName.values()], contributions, open, records, issues);
+}
+
+function readClassPrototypeChain(
+  context: ResourceRecognitionContext,
+  targetClass: ts.ClassLikeDeclarationBase | null,
+): readonly ts.ClassLikeDeclarationBase[] {
+  if (targetClass == null) {
+    return [];
+  }
+  return context.typeSystem?.readClassPrototypeChain(targetClass) ?? [targetClass];
 }
 
 class BindableEntryRead {
@@ -2002,6 +2444,7 @@ class BindableEntryRead {
     readonly contribution: BindableDefinitionContribution | null,
     readonly open: ConvergenceOpen | null,
     readonly records: readonly KernelStoreRecord[] = [],
+    readonly issues: readonly ResourceIssue[] = [],
   ) {}
 }
 
@@ -2010,25 +2453,27 @@ function readDecoratorBindables(
   context: ResourceRecognitionContext,
   local: string,
   targetClass: ts.ClassLikeDeclarationBase | null,
+  ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
+  contributionKind: BindableContributionKind,
 ): readonly BindableEntryRead[] {
   if (targetClass == null) {
     return [];
   }
   const entries: BindableEntryRead[] = [];
   for (const [index, decorator] of (ts.canHaveDecorators(targetClass) ? ts.getDecorators(targetClass) ?? [] : []).entries()) {
-    const entry = readClassBindableDecorator(store, context, `${local}:class:${index}`, decorator, provenanceHandle);
+    const entry = readClassBindableDecorator(store, context, `${local}:class:${index}`, decorator, ownerIdentityHandle, provenanceHandle, contributionKind);
     if (entry != null) {
       entries.push(entry);
     }
   }
   for (const member of targetClass.members) {
     const propertyName = memberName(member);
-    if (propertyName == null || !ts.canHaveDecorators(member)) {
+    if (!ts.canHaveDecorators(member)) {
       continue;
     }
     for (const [index, decorator] of (ts.getDecorators(member) ?? []).entries()) {
-      const entry = readMemberBindableDecorator(store, context, `${local}:member:${propertyName}:${index}`, decorator, member, propertyName, provenanceHandle);
+      const entry = readMemberBindableDecorator(store, context, `${local}:member:${propertyName ?? 'computed'}:${index}`, decorator, member, propertyName, ownerIdentityHandle, provenanceHandle, contributionKind);
       if (entry != null) {
         entries.push(entry);
       }
@@ -2042,30 +2487,94 @@ function readClassBindableDecorator(
   context: ResourceRecognitionContext,
   local: string,
   decorator: ts.Decorator,
+  ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
+  contributionKind: BindableContributionKind,
 ): BindableEntryRead | null {
+  if (decoratorIdentifierNamed(decorator, 'bindable')) {
+    return publishBindableIssueEntry(
+      store,
+      context,
+      local,
+      ResourceIssueKind.InvalidBindableDecoratorUsageClassWithoutPropertyNameConfiguration,
+      'Class-level @bindable must provide a property name in its configuration.',
+      ResourceFrameworkErrorCode.InvalidBindableDecoratorUsageClassWithoutPropertyNameConfiguration,
+      decorator,
+      SourceSpanRole.Name,
+      ownerIdentityHandle,
+      provenanceHandle,
+    );
+  }
   const call = decoratorCallNamed(decorator, 'bindable');
   if (call == null) {
     return null;
   }
   const argument = call.arguments[0] ?? null;
   if (argument == null) {
-    return new BindableEntryRead(
-      null,
-      null,
-      new ConvergenceOpen('Class-level @bindable requires a static property name argument.', decorator),
+    return publishBindableIssueEntry(
+      store,
+      context,
+      local,
+      ResourceIssueKind.InvalidBindableDecoratorUsageClassWithoutPropertyNameConfiguration,
+      'Class-level @bindable must provide a property name in its configuration.',
+      ResourceFrameworkErrorCode.InvalidBindableDecoratorUsageClassWithoutPropertyNameConfiguration,
+      decorator,
+      SourceSpanRole.Name,
+      ownerIdentityHandle,
+      provenanceHandle,
     );
   }
   const value = context.expressionReader.evaluateExpression(argument).value;
   const source = sourceSpanAddressForNode(store, context, argument, local, SourceSpanRole.Name);
+  if (value?.kind === EvaluationValueKind.Null) {
+    return publishBindableIssueEntry(
+      store,
+      context,
+      local,
+      ResourceIssueKind.InvalidBindableDecoratorUsageClassWithoutConfiguration,
+      'Class-level @bindable cannot use a null configuration.',
+      ResourceFrameworkErrorCode.InvalidBindableDecoratorUsageClassWithoutConfiguration,
+      argument,
+      SourceSpanRole.Value,
+      ownerIdentityHandle,
+      provenanceHandle,
+    );
+  }
   if (value?.kind === EvaluationValueKind.String) {
-    return bindableEntry(value.value, null, BindableContributionKind.Decorator, provenanceHandle, source);
+    return bindableEntry(value.value, null, contributionKind, provenanceHandle, source);
   }
   if (value?.kind === EvaluationValueKind.Object) {
-    const name = readObjectString(value, 'name');
-    if (name != null) {
-      return bindableEntry(name, value, BindableContributionKind.Decorator, provenanceHandle, source);
+    const nameProperty = value.properties.get('name') ?? null;
+    const name = nameProperty == null ? null : readStaticStringValue(nameProperty.value);
+    if (name != null && name.length > 0) {
+      return bindableEntry(name, value, contributionKind, provenanceHandle, source);
     }
+    if (nameProperty != null && nameProperty.value.kind !== EvaluationValueKind.String) {
+      return publishBindableIssueEntry(
+        store,
+        context,
+        local,
+        ResourceIssueKind.InvalidBindableDecoratorUsageSymbol,
+        'Class-level @bindable property names must be strings.',
+        ResourceFrameworkErrorCode.InvalidBindableDecoratorUsageSymbol,
+        nameProperty.node,
+        SourceSpanRole.Value,
+        ownerIdentityHandle,
+        provenanceHandle,
+      );
+    }
+    return publishBindableIssueEntry(
+      store,
+      context,
+      local,
+      ResourceIssueKind.InvalidBindableDecoratorUsageClassWithoutPropertyNameConfiguration,
+      'Class-level @bindable must provide a property name in its configuration.',
+      ResourceFrameworkErrorCode.InvalidBindableDecoratorUsageClassWithoutPropertyNameConfiguration,
+      nameProperty?.node ?? argument,
+      SourceSpanRole.Value,
+      ownerIdentityHandle,
+      provenanceHandle,
+    );
   }
   return new BindableEntryRead(
     null,
@@ -2080,13 +2589,32 @@ function readMemberBindableDecorator(
   local: string,
   decorator: ts.Decorator,
   member: ts.ClassElement,
-  propertyName: string,
+  propertyName: string | null,
+  ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
+  contributionKind: BindableContributionKind,
 ): BindableEntryRead | null {
   const source = sourceSpanAddressForNode(store, context, memberNameNode(member) ?? member, local, SourceSpanRole.Name);
   const expression = decorator.expression;
+  if (propertyName == null && isBindableDecorator(decorator)) {
+    return publishBindableIssueEntry(
+      store,
+      context,
+      local,
+      ResourceIssueKind.InvalidBindableDecoratorUsageSymbol,
+      '@bindable cannot target a symbol or computed property name.',
+      ResourceFrameworkErrorCode.InvalidBindableDecoratorUsageSymbol,
+      memberNameNode(member) ?? member,
+      SourceSpanRole.Name,
+      ownerIdentityHandle,
+      provenanceHandle,
+    );
+  }
+  if (propertyName == null) {
+    return null;
+  }
   if (ts.isIdentifier(expression) && expression.text === 'bindable') {
-    return bindableEntry(propertyName, null, BindableContributionKind.Decorator, provenanceHandle, source);
+    return bindableEntry(propertyName, null, contributionKind, provenanceHandle, source);
   }
   const call = decoratorCallNamed(decorator, 'bindable');
   if (call == null) {
@@ -2094,14 +2622,14 @@ function readMemberBindableDecorator(
   }
   const argument = call.arguments[0] ?? null;
   if (argument == null) {
-    return bindableEntry(propertyName, null, BindableContributionKind.Decorator, provenanceHandle, source);
+    return bindableEntry(propertyName, null, contributionKind, provenanceHandle, source);
   }
   const value = context.expressionReader.evaluateExpression(argument).value;
   if (value == null || value.kind !== EvaluationValueKind.Object) {
     const fallback = bindableEntry(
       propertyName,
       null,
-      BindableContributionKind.Decorator,
+      contributionKind,
       provenanceHandle,
       source,
       readCheckerBindableSetter(context, argument),
@@ -2113,7 +2641,7 @@ function readMemberBindableDecorator(
       fallback.records,
     );
   }
-  return bindableEntry(propertyName, value, BindableContributionKind.Decorator, provenanceHandle, source);
+  return bindableEntry(propertyName, value, contributionKind, provenanceHandle, source);
 }
 
 function readBindableListExpression(
@@ -2212,7 +2740,6 @@ function bindableEntry(
   const mode = readBindableMode(partial?.properties.get('mode')?.value) ?? BindableBindingMode.ToView;
   const name = readObjectString(partial, 'name') ?? propertyName;
   const setter = setterOverride ?? readBindableSetter(partial);
-  const fieldProvenance = fieldProvenanceFor<BindableDefinitionField>(provenanceHandle, ['attribute', 'callback', 'mode', 'name', 'set', 'source']);
   return new BindableEntryRead(
     new BindableDefinition(
       attribute,
@@ -2221,7 +2748,6 @@ function bindableEntry(
       name,
       setter,
       source?.addressHandle ?? null,
-      fieldProvenance,
     ),
     new BindableDefinitionContribution(
       contributionKind,
@@ -2232,7 +2758,6 @@ function bindableEntry(
       name,
       setter,
       source?.addressHandle ?? null,
-      fieldProvenance,
     ),
     null,
     source?.records ?? [],
@@ -2311,6 +2836,7 @@ class WatchEntryRead {
     readonly contribution: WatchDefinitionContribution | null,
     readonly open: ConvergenceOpen | null,
     readonly records: readonly KernelStoreRecord[] = [],
+    readonly issues: readonly ResourceIssue[] = [],
   ) {}
 }
 
@@ -2320,12 +2846,14 @@ function readWatches(
   local: string,
   definitionExpression: ts.Expression | null,
   targetClass: ts.ClassLikeDeclarationBase | null,
+  ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
 ): WatchRead {
+  const publisher = new ResourceIssuePublisher(store);
   const reads = [
-    ...readDecoratorWatches(store, context, `${local}:decorator`, targetClass, provenanceHandle),
-    ...readWatchListExpression(store, context, `${local}:static`, readStaticClassProperty(targetClass, 'watches'), provenanceHandle, WatchContributionKind.StaticWatches),
-    ...readWatchListValue(store, context, `${local}:definition-object`, readObjectProperty(context.expressionReader, definitionExpression, 'watches'), provenanceHandle, WatchContributionKind.DefinitionObject),
+    ...readDecoratorWatches(store, context, publisher, `${local}:decorator`, targetClass, ownerIdentityHandle, provenanceHandle),
+    ...readWatchListExpression(store, context, publisher, `${local}:static`, readStaticClassProperty(targetClass, 'watches'), targetClass, ownerIdentityHandle, provenanceHandle, WatchContributionKind.StaticWatches),
+    ...readWatchListValue(store, context, publisher, `${local}:definition-object`, readObjectProperty(context.expressionReader, definitionExpression, 'watches'), targetClass, ownerIdentityHandle, provenanceHandle, WatchContributionKind.DefinitionObject),
   ];
   return watchReadFromEntries(reads);
 }
@@ -2335,6 +2863,7 @@ function watchReadFromEntries(reads: readonly WatchEntryRead[]): WatchRead {
   const contributions: WatchDefinitionContribution[] = [];
   const open: ConvergenceOpen[] = [];
   const records: KernelStoreRecord[] = [];
+  const issues: ResourceIssue[] = [];
   for (const read of reads) {
     if (read.watch != null) {
       watches.push(read.watch);
@@ -2346,24 +2875,27 @@ function watchReadFromEntries(reads: readonly WatchEntryRead[]): WatchRead {
       open.push(read.open);
     }
     records.push(...read.records);
+    issues.push(...read.issues);
   }
-  return new WatchRead(watches, contributions, open, records);
+  return new WatchRead(watches, contributions, open, records, issues);
 }
 
 function readDecoratorWatches(
   store: KernelStore,
   context: ResourceRecognitionContext,
+  publisher: ResourceIssuePublisher,
   local: string,
   targetClass: ts.ClassLikeDeclarationBase | null,
+  ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
 ): readonly WatchEntryRead[] {
   if (targetClass == null) {
     return [];
   }
   return [
-    ...readClassWatchDecorators(store, context, `${local}:class`, targetClass, provenanceHandle),
+    ...readClassWatchDecorators(store, context, publisher, `${local}:class`, targetClass, ownerIdentityHandle, provenanceHandle),
     ...targetClass.members.flatMap((member) =>
-      readMemberWatchDecorators(store, context, `${local}:member`, member, provenanceHandle)
+      readMemberWatchDecorators(store, context, publisher, `${local}:member`, member, targetClass, ownerIdentityHandle, provenanceHandle)
     ),
   ];
 }
@@ -2371,21 +2903,26 @@ function readDecoratorWatches(
 function readClassWatchDecorators(
   store: KernelStore,
   context: ResourceRecognitionContext,
+  publisher: ResourceIssuePublisher,
   local: string,
   targetClass: ts.ClassLikeDeclarationBase,
+  ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
 ): readonly WatchEntryRead[] {
   const decorators = ts.canHaveDecorators(targetClass) ? ts.getDecorators(targetClass) ?? [] : [];
   return decorators
-    .map((decorator, index) => readClassWatchDecorator(store, context, `${local}:${index}`, decorator, provenanceHandle))
+    .map((decorator, index) => readClassWatchDecorator(store, context, publisher, `${local}:${index}`, decorator, targetClass, ownerIdentityHandle, provenanceHandle))
     .filter((entry): entry is WatchEntryRead => entry != null);
 }
 
 function readMemberWatchDecorators(
   store: KernelStore,
   context: ResourceRecognitionContext,
+  publisher: ResourceIssuePublisher,
   local: string,
   member: ts.ClassElement,
+  targetClass: ts.ClassLikeDeclarationBase,
+  ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
 ): readonly WatchEntryRead[] {
   const name = memberName(member);
@@ -2393,30 +2930,63 @@ function readMemberWatchDecorators(
     return [];
   }
   return (ts.getDecorators(member) ?? [])
-    .map((decorator, index) => readMethodWatchDecorator(store, context, `${local}:${name}:${index}`, decorator, member, name, provenanceHandle))
+    .map((decorator, index) => readMethodWatchDecorator(store, context, publisher, `${local}:${name}:${index}`, decorator, member, targetClass, name, ownerIdentityHandle, provenanceHandle))
     .filter((entry): entry is WatchEntryRead => entry != null);
 }
 
 function readClassWatchDecorator(
   store: KernelStore,
   context: ResourceRecognitionContext,
+  publisher: ResourceIssuePublisher,
   local: string,
   decorator: ts.Decorator,
+  targetClass: ts.ClassLikeDeclarationBase,
+  ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
 ): WatchEntryRead | null {
   const call = decoratorCallNamed(decorator, 'watch');
   if (call == null) {
     return null;
   }
+  const expressionIssue = readWatchNullConfigIssue(
+    store,
+    context,
+    publisher,
+    `${local}:expression`,
+    call.arguments[0] ?? null,
+    call,
+    ownerIdentityHandle,
+    provenanceHandle,
+  );
+  if (expressionIssue != null) {
+    return expressionIssue;
+  }
+  const callbackIssue = readClassWatchInvalidChangeHandlerIssue(
+    store,
+    context,
+    publisher,
+    `${local}:callback`,
+    call.arguments[1] ?? null,
+    call,
+    targetClass,
+    ownerIdentityHandle,
+    provenanceHandle,
+  );
+  if (callbackIssue != null) {
+    return callbackIssue;
+  }
   return readWatchCall(
     store,
     context,
+    publisher,
     local,
     call.arguments[0] ?? null,
     call.arguments[1] ?? null,
     call.arguments[2] ?? null,
     call,
+    targetClass,
     WatchContributionKind.Decorator,
+    ownerIdentityHandle,
     provenanceHandle,
   );
 }
@@ -2424,26 +2994,61 @@ function readClassWatchDecorator(
 function readMethodWatchDecorator(
   store: KernelStore,
   context: ResourceRecognitionContext,
+  publisher: ResourceIssuePublisher,
   local: string,
   decorator: ts.Decorator,
   member: ts.ClassElement,
+  targetClass: ts.ClassLikeDeclarationBase,
   methodName: string,
+  ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
 ): WatchEntryRead | null {
   const call = decoratorCallNamed(decorator, 'watch');
   if (call == null) {
     return null;
   }
+  if (!ts.isMethodDeclaration(member) || hasStaticModifier(member)) {
+    return publishWatchIssueEntry(
+      store,
+      context,
+      publisher,
+      local,
+      ResourceIssuePhase.WatchDecorator,
+      ResourceIssueKind.WatchNonMethodDecoratorUsage,
+      'The @watch decorator can only be used on instance methods.',
+      ResourceFrameworkErrorCode.WatchNonMethodDecoratorUsage,
+      memberNameNode(member) ?? member,
+      SourceSpanRole.Name,
+      ownerIdentityHandle,
+      provenanceHandle,
+    );
+  }
+  const expressionIssue = readWatchNullConfigIssue(
+    store,
+    context,
+    publisher,
+    `${local}:expression`,
+    call.arguments[0] ?? null,
+    call,
+    ownerIdentityHandle,
+    provenanceHandle,
+  );
+  if (expressionIssue != null) {
+    return expressionIssue;
+  }
   const callbackSource = sourceSpanAddressForNode(store, context, memberNameNode(member) ?? member, `${local}:callback`, SourceSpanRole.Name);
   return readWatchCall(
     store,
     context,
+    publisher,
     local,
     call.arguments[0] ?? null,
     watchMethodNameExpression(methodName, callbackSource?.addressHandle ?? null),
     call.arguments[1] ?? null,
     call,
+    targetClass,
     WatchContributionKind.Decorator,
+    ownerIdentityHandle,
     provenanceHandle,
     callbackSource?.records ?? [],
   );
@@ -2452,28 +3057,385 @@ function readMethodWatchDecorator(
 function readWatchCall(
   store: KernelStore,
   context: ResourceRecognitionContext,
+  publisher: ResourceIssuePublisher,
   local: string,
   expressionNode: ts.Expression | null,
   callbackNode: ts.Expression | WatchCallbackDefinition | null,
   optionsNode: ts.Expression | null,
   carrierNode: ts.Node,
+  targetClass: ts.ClassLikeDeclarationBase | null,
   contributionKind: WatchContributionKind,
+  ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
   extraRecords: readonly KernelStoreRecord[] = [],
 ): WatchEntryRead {
   if (expressionNode == null || callbackNode == null) {
     return new WatchEntryRead(null, null, new ConvergenceOpen('@watch requires static expression and callback metadata.', expressionNode ?? optionsNode ?? carrierNode));
   }
-  const source = sourceSpanAddressForNode(store, context, expressionNode, `${local}:expression`, SourceSpanRole.Value);
-  const expression = readWatchExpression(context.expressionReader.evaluateExpression(expressionNode).value, source?.addressHandle ?? null);
+  const expressionSource = sourceSpanAddressForNode(store, context, expressionNode, `${local}:expression`, SourceSpanRole.Value);
+  const callbackSource = callbackNode instanceof WatchCallbackDefinition
+    ? null
+    : sourceSpanAddressForNode(store, context, callbackNode, `${local}:callback`, SourceSpanRole.Value);
+  const expression = readWatchExpression(context.expressionReader.evaluateExpression(expressionNode).value, expressionSource?.addressHandle ?? null);
   const callback = callbackNode instanceof WatchCallbackDefinition
     ? callbackNode
-    : readWatchCallback(context.expressionReader.evaluateExpression(callbackNode).value, source?.addressHandle ?? null);
+    : readWatchCallback(context.expressionReader.evaluateExpression(callbackNode).value, callbackSource?.addressHandle ?? null);
   const flush = readWatchFlush(context, optionsNode);
   if (expression == null || callback == null || flush == null) {
     return new WatchEntryRead(null, null, nullableConvergenceOpenForNode('Watch metadata did not close to a static expression, callback, and flush mode.', expressionNode));
   }
-  return watchEntry(expression, callback, flush, contributionKind, provenanceHandle, [...extraRecords, ...source?.records ?? []]);
+  return watchEntry(
+    store,
+    context,
+    publisher,
+    local,
+    expression,
+    callback,
+    flush,
+    contributionKind,
+    targetClass,
+    ownerIdentityHandle,
+    provenanceHandle,
+    [...extraRecords, ...expressionSource?.records ?? [], ...callbackSource?.records ?? []],
+  );
+}
+
+function readWatchNullConfigIssue(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  publisher: ResourceIssuePublisher,
+  local: string,
+  expressionNode: ts.Expression | null,
+  carrierNode: ts.Node,
+  ownerIdentityHandle: IdentityHandle | null,
+  provenanceHandle: ProvenanceHandle,
+): WatchEntryRead | null {
+  if (expressionNode != null) {
+    const value = context.expressionReader.evaluateExpression(expressionNode).value;
+    if (value?.kind !== EvaluationValueKind.Null && value?.kind !== EvaluationValueKind.Undefined) {
+      return null;
+    }
+  }
+  return publishWatchIssueEntry(
+    store,
+    context,
+    publisher,
+    local,
+    ResourceIssuePhase.WatchDecorator,
+    ResourceIssueKind.WatchNullConfig,
+    '@watch requires a non-null expression or property key.',
+    ResourceFrameworkErrorCode.WatchNullConfig,
+    expressionNode ?? carrierNode,
+    SourceSpanRole.Value,
+    ownerIdentityHandle,
+    provenanceHandle,
+  );
+}
+
+function readClassWatchInvalidChangeHandlerIssue(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  publisher: ResourceIssuePublisher,
+  local: string,
+  callbackNode: ts.Expression | null,
+  carrierNode: ts.Node,
+  targetClass: ts.ClassLikeDeclarationBase,
+  ownerIdentityHandle: IdentityHandle | null,
+  provenanceHandle: ProvenanceHandle,
+): WatchEntryRead | null {
+  if (callbackNode == null) {
+    return publishWatchIssueEntry(
+      store,
+      context,
+      publisher,
+      local,
+      ResourceIssuePhase.WatchDecorator,
+      ResourceIssueKind.WatchInvalidChangeHandler,
+      'Class @watch requires a callable callback or a method name present on the prototype.',
+      ResourceFrameworkErrorCode.WatchInvalidChangeHandler,
+      carrierNode,
+      SourceSpanRole.Value,
+      ownerIdentityHandle,
+      provenanceHandle,
+    );
+  }
+  const callback = readWatchCallback(
+    context.expressionReader.evaluateExpression(callbackNode).value,
+    null,
+  );
+  if (callback == null) {
+    return publishWatchIssueEntry(
+      store,
+      context,
+      publisher,
+      local,
+      ResourceIssuePhase.WatchDecorator,
+      ResourceIssueKind.WatchInvalidChangeHandler,
+      'Class @watch callback metadata did not close to a function or prototype method name.',
+      ResourceFrameworkErrorCode.WatchInvalidChangeHandler,
+      callbackNode,
+      SourceSpanRole.Value,
+      ownerIdentityHandle,
+      provenanceHandle,
+    );
+  }
+  if (callback.kind === WatchCallbackKind.Function) {
+    return null;
+  }
+  const propertyName = watchPropertyKeyText(callback.methodName);
+  if (propertyName == null) {
+    return publishWatchIssueEntry(
+      store,
+      context,
+      publisher,
+      local,
+      ResourceIssuePhase.WatchDecorator,
+      ResourceIssueKind.WatchInvalidChangeHandler,
+      'Class @watch callback method name could not be reduced to a prototype property key.',
+      ResourceFrameworkErrorCode.WatchInvalidChangeHandler,
+      callbackNode,
+      SourceSpanRole.Value,
+      ownerIdentityHandle,
+      provenanceHandle,
+    );
+  }
+  return readPrototypeCallbackState(context, targetClass, propertyName) === WatchCallbackResolution.Missing
+    ? publishWatchIssueEntry(
+      store,
+      context,
+      publisher,
+      local,
+      ResourceIssuePhase.WatchDecorator,
+      ResourceIssueKind.WatchInvalidChangeHandler,
+      `Class @watch callback '${propertyName}' is not present on the resource prototype.`,
+      ResourceFrameworkErrorCode.WatchInvalidChangeHandler,
+      callbackNode,
+      SourceSpanRole.Value,
+      ownerIdentityHandle,
+      provenanceHandle,
+    )
+    : null;
+}
+
+function readControllerWatchInvalidCallbackIssue(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  publisher: ResourceIssuePublisher,
+  local: string,
+  callback: WatchCallbackDefinition,
+  targetClass: ts.ClassLikeDeclarationBase | null,
+  ownerIdentityHandle: IdentityHandle | null,
+  provenanceHandle: ProvenanceHandle,
+): ResourceIssuePublication | null {
+  if (targetClass == null || callback.kind !== WatchCallbackKind.MethodName) {
+    return null;
+  }
+  const propertyName = watchPropertyKeyText(callback.methodName);
+  if (propertyName == null) {
+    return null;
+  }
+  const state = readInstanceCallbackState(context, targetClass, propertyName);
+  if (state !== WatchCallbackResolution.Missing && state !== WatchCallbackResolution.NonCallable) {
+    return null;
+  }
+  return publisher.publish(
+    `${local}:issue`,
+    context.projectKey,
+    ownerIdentityHandle,
+    provenanceHandle,
+    ResourceIssuePhase.WatchMetadata,
+    ResourceIssueKind.ControllerWatchInvalidCallback,
+    state === WatchCallbackResolution.Missing
+      ? `Watch callback '${propertyName}' is not declared on the resource instance.`
+      : `Watch callback '${propertyName}' is not callable on the resource instance.`,
+    ResourceFrameworkErrorCode.ControllerWatchInvalidCallback,
+    callback.methodName?.target?.addressHandle ?? null,
+  );
+}
+
+function publishWatchIssueEntry(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  publisher: ResourceIssuePublisher,
+  local: string,
+  phase: ResourceIssuePhase,
+  issueKind: ResourceIssueKind,
+  message: string,
+  frameworkErrorCode: string,
+  sourceNode: ts.Node,
+  sourceRole: SourceSpanRole,
+  ownerIdentityHandle: IdentityHandle | null,
+  provenanceHandle: ProvenanceHandle,
+): WatchEntryRead {
+  const source = sourceSpanAddressForNode(store, context, sourceNode, `${local}:source`, sourceRole);
+  const publication = publisher.publish(
+    `${local}:issue`,
+    context.projectKey,
+    ownerIdentityHandle,
+    provenanceHandle,
+    phase,
+    issueKind,
+    message,
+    frameworkErrorCode,
+    source?.addressHandle ?? null,
+  );
+  return new WatchEntryRead(
+    null,
+    null,
+    null,
+    [...source?.records ?? [], ...publication.records],
+    [publication.issue],
+  );
+}
+
+function publishBindableIssueEntry(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  issueKind: ResourceIssueKind,
+  message: string,
+  frameworkErrorCode: string,
+  sourceNode: ts.Node,
+  sourceRole: SourceSpanRole,
+  ownerIdentityHandle: IdentityHandle | null,
+  provenanceHandle: ProvenanceHandle,
+): BindableEntryRead {
+  const publication = publishResourceIssue(
+    store,
+    context,
+    local,
+    ResourceIssuePhase.BindableDecorator,
+    issueKind,
+    message,
+    frameworkErrorCode,
+    sourceNode,
+    sourceRole,
+    ownerIdentityHandle,
+    provenanceHandle,
+  );
+  return new BindableEntryRead(
+    null,
+    null,
+    null,
+    publication.records,
+    [publication.issue],
+  );
+}
+
+function publishResourceIssue(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  local: string,
+  phase: ResourceIssuePhase,
+  issueKind: ResourceIssueKind,
+  message: string,
+  frameworkErrorCode: string,
+  sourceNode: ts.Node,
+  sourceRole: SourceSpanRole,
+  ownerIdentityHandle: IdentityHandle | null,
+  provenanceHandle: ProvenanceHandle,
+): ResourceIssuePublication {
+  const source = sourceSpanAddressForNode(store, context, sourceNode, `${local}:source`, sourceRole);
+  const publisher = new ResourceIssuePublisher(store);
+  const publication = publisher.publish(
+    `${local}:issue`,
+    context.projectKey,
+    ownerIdentityHandle,
+    provenanceHandle,
+    phase,
+    issueKind,
+    message,
+    frameworkErrorCode,
+    source?.addressHandle ?? null,
+  );
+  return new ResourceIssuePublication(
+    publication.issue,
+    [...source?.records ?? [], ...publication.records],
+  );
+}
+
+const enum WatchCallbackResolution {
+  Callable = 'callable',
+  NonCallable = 'non-callable',
+  Missing = 'missing',
+  Unknown = 'unknown',
+}
+
+function readPrototypeCallbackState(
+  context: ResourceRecognitionContext,
+  targetClass: ts.ClassLikeDeclarationBase,
+  propertyName: string,
+): WatchCallbackResolution {
+  if (context.typeSystem == null) {
+    return WatchCallbackResolution.Unknown;
+  }
+  const symbol = readInstanceMemberSymbol(context, targetClass, propertyName);
+  if (symbol == null) {
+    return WatchCallbackResolution.Missing;
+  }
+  return hasPrototypeMemberDeclaration(symbol)
+    ? readMemberCallableState(context, targetClass, symbol)
+    : WatchCallbackResolution.Missing;
+}
+
+function readInstanceCallbackState(
+  context: ResourceRecognitionContext,
+  targetClass: ts.ClassLikeDeclarationBase,
+  propertyName: string,
+): WatchCallbackResolution {
+  if (context.typeSystem == null) {
+    return WatchCallbackResolution.Unknown;
+  }
+  const symbol = readInstanceMemberSymbol(context, targetClass, propertyName);
+  return symbol == null
+    ? WatchCallbackResolution.Missing
+    : readMemberCallableState(context, targetClass, symbol);
+}
+
+function readInstanceMemberSymbol(
+  context: ResourceRecognitionContext,
+  targetClass: ts.ClassLikeDeclarationBase,
+  propertyName: string,
+): ts.Symbol | null {
+  if (context.typeSystem == null) {
+    return null;
+  }
+  const checker = context.typeSystem.checker;
+  const classSymbol = targetClass.name == null ? null : checker.getSymbolAtLocation(targetClass.name) ?? null;
+  const instanceType = classSymbol == null
+    ? checker.getTypeAtLocation(targetClass)
+    : checker.getDeclaredTypeOfSymbol(classSymbol);
+  return checker.getPropertyOfType(instanceType, propertyName) ?? null;
+}
+
+function hasPrototypeMemberDeclaration(symbol: ts.Symbol): boolean {
+  return (symbol.declarations ?? []).some((declaration) =>
+    ts.isMethodDeclaration(declaration)
+    || ts.isGetAccessorDeclaration(declaration)
+    || ts.isSetAccessorDeclaration(declaration)
+    || ts.isMethodSignature(declaration)
+  );
+}
+
+function readMemberCallableState(
+  context: ResourceRecognitionContext,
+  targetClass: ts.ClassLikeDeclarationBase,
+  symbol: ts.Symbol,
+): WatchCallbackResolution {
+  if (context.typeSystem == null) {
+    return WatchCallbackResolution.Unknown;
+  }
+  const type = context.typeSystem.checker.getTypeOfSymbolAtLocation(symbol, targetClass);
+  if ((type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0) {
+    return WatchCallbackResolution.Unknown;
+  }
+  return type.getCallSignatures().length > 0
+    ? WatchCallbackResolution.Callable
+    : WatchCallbackResolution.NonCallable;
+}
+
+function watchPropertyKeyText(propertyKey: WatchPropertyKeyDefinition | null): string | null {
+  return propertyKey?.text ?? null;
 }
 
 function watchMethodNameExpression(methodName: string, addressHandle: AddressHandle | null): WatchCallbackDefinition {
@@ -2486,21 +3448,27 @@ function watchMethodNameExpression(methodName: string, addressHandle: AddressHan
 function readWatchListExpression(
   store: KernelStore,
   context: ResourceRecognitionContext,
+  publisher: ResourceIssuePublisher,
   local: string,
   expression: ts.Expression | null,
+  targetClass: ts.ClassLikeDeclarationBase | null,
+  ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
   contributionKind: WatchContributionKind,
 ): readonly WatchEntryRead[] {
   return expression == null
     ? []
-    : readWatchListValue(store, context, local, context.expressionReader.evaluateExpression(expression), provenanceHandle, contributionKind);
+    : readWatchListValue(store, context, publisher, local, context.expressionReader.evaluateExpression(expression), targetClass, ownerIdentityHandle, provenanceHandle, contributionKind);
 }
 
 function readWatchListValue(
   store: KernelStore,
   context: ResourceRecognitionContext,
+  publisher: ResourceIssuePublisher,
   local: string,
   read: EvaluationRead<EvaluationValue> | null,
+  targetClass: ts.ClassLikeDeclarationBase | null,
+  ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
   contributionKind: WatchContributionKind,
 ): readonly WatchEntryRead[] {
@@ -2512,7 +3480,7 @@ function readWatchListValue(
     return [new WatchEntryRead(null, null, nullableConvergenceOpenForRead('Watch list did not close to a static array.', read))];
   }
   const entries = value.elements.map((element, index) =>
-    readWatchListEntry(store, context, `${local}:array:${index}`, element.value, element.expression, provenanceHandle, contributionKind)
+    readWatchListEntry(store, context, publisher, `${local}:array:${index}`, element.value, element.expression, targetClass, ownerIdentityHandle, provenanceHandle, contributionKind)
   );
   return value.mayHaveUnknownElements || value.mayHaveUnknownOrder
     ? [...entries, new WatchEntryRead(null, null, nullableConvergenceOpenForNode('Watch array includes open spread, hole, or unknown-order entries.', value.node))]
@@ -2522,9 +3490,12 @@ function readWatchListValue(
 function readWatchListEntry(
   store: KernelStore,
   context: ResourceRecognitionContext,
+  publisher: ResourceIssuePublisher,
   local: string,
   value: EvaluationValue,
   node: ts.Expression | null,
+  targetClass: ts.ClassLikeDeclarationBase | null,
+  ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
   contributionKind: WatchContributionKind,
 ): WatchEntryRead {
@@ -2537,23 +3508,52 @@ function readWatchListEntry(
   const flush = readWatchFlushValue(value.properties.get('flush')?.value ?? null);
   return expression == null || callback == null || flush == null
     ? new WatchEntryRead(null, null, nullableConvergenceOpenForNode('Watch entry did not expose static expression, callback, and flush fields.', node))
-    : watchEntry(expression, callback, flush, contributionKind, provenanceHandle, source?.records ?? []);
+    : watchEntry(
+      store,
+      context,
+      publisher,
+      local,
+      expression,
+      callback,
+      flush,
+      contributionKind,
+      targetClass,
+      ownerIdentityHandle,
+      provenanceHandle,
+      source?.records ?? [],
+    );
 }
 
 function watchEntry(
+  store: KernelStore,
+  context: ResourceRecognitionContext,
+  publisher: ResourceIssuePublisher,
+  local: string,
   expression: WatchExpressionDefinition,
   callback: WatchCallbackDefinition,
   flush: WatchFlushMode,
   contributionKind: WatchContributionKind,
+  targetClass: ts.ClassLikeDeclarationBase | null,
+  ownerIdentityHandle: IdentityHandle | null,
   provenanceHandle: ProvenanceHandle,
   records: readonly KernelStoreRecord[],
 ): WatchEntryRead {
-  const fieldProvenance = fieldProvenanceFor<WatchDefinitionField>(provenanceHandle, ['expression', 'callback', 'flush']);
+  const callbackIssue = readControllerWatchInvalidCallbackIssue(
+    store,
+    context,
+    publisher,
+    `${local}:callback`,
+    callback,
+    targetClass,
+    ownerIdentityHandle,
+    provenanceHandle,
+  );
   return new WatchEntryRead(
-    new WatchDefinition(expression, callback, flush, fieldProvenance),
-    new WatchDefinitionContribution(contributionKind, expression, callback, flush, fieldProvenance),
+    new WatchDefinition(expression, callback, flush),
+    new WatchDefinitionContribution(contributionKind, expression, callback, flush),
     null,
-    records,
+    [...records, ...callbackIssue?.records ?? []],
+    callbackIssue == null ? [] : [callbackIssue.issue],
   );
 }
 
@@ -2678,6 +3678,22 @@ function decoratorCallNamed(decorator: ts.Decorator, name: string): ts.CallExpre
   return null;
 }
 
+function decoratorIdentifierNamed(decorator: ts.Decorator, name: string): boolean {
+  const expression = decorator.expression;
+  if (ts.isIdentifier(expression)) {
+    return expression.text === name;
+  }
+  return ts.isPropertyAccessExpression(expression) && expression.name.text === name;
+}
+
+function isBindableDecorator(decorator: ts.Decorator): boolean {
+  return decoratorIdentifierNamed(decorator, 'bindable') || decoratorCallNamed(decorator, 'bindable') != null;
+}
+
+function isSlottedDecorator(decorator: ts.Decorator): boolean {
+  return decoratorIdentifierNamed(decorator, 'slotted') || decoratorCallNamed(decorator, 'slotted') != null;
+}
+
 function memberName(member: ts.ClassElement): string | null {
   if (
     ts.isPropertyDeclaration(member)
@@ -2731,11 +3747,4 @@ function mergeAliases(
     result.push(alias);
   }
   return result;
-}
-
-function fieldProvenanceFor<TField extends string>(
-  provenanceHandle: ProvenanceHandle,
-  fields: readonly TField[],
-): readonly FieldProvenance<TField>[] {
-  return compactFieldProvenance(fields.map((field) => new FieldProvenance(field, provenanceHandle)));
 }

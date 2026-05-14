@@ -159,7 +159,7 @@ export function scanFrameworkBundlePackageRows(
   profileFrameworkBundles({
     event: "atlas.framework.bundles.package.profile",
     packageId,
-    ...(exportName === undefined ? {} : { exportName }),
+    exportName,
     candidateMs: Math.round(afterCandidates - startedAt),
     registryBundleMs: Math.round(afterRegistryBundles - afterCandidates),
     catalogMs: Math.round(afterCatalogs - afterRegistryBundles),
@@ -224,7 +224,7 @@ function readFrameworkBundleCandidates(
   profileFrameworkBundles({
     event: "atlas.framework.bundles.candidates.profile",
     packageId,
-    ...(exportName === undefined ? {} : { exportName }),
+    exportName,
     publicSurfaceMs: Math.round(afterPublicSurface - startedAt),
     declarationMs: Math.round(afterDeclarations - afterPublicSurface),
     evaluationMs: Math.round(afterEvaluation - afterDeclarations),

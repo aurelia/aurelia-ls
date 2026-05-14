@@ -67,8 +67,9 @@ string handling. Expression-member queries also carry the active value-site prod
 contextualize arrow parameters when the target surface exposes a callable type. That is an answer-local type
 projection over the same shared type-shape access path used by repeat destructuring, not runtime execution and not
 completion ranking. Static
-attribute-value completion stays honest about ownership: plain
-platform values may remain empty misses, finite checker-backed bindable domains can offer literal `attribute-value`
+attribute-value completion stays honest about ownership: plain static platform values publish
+`plain-attribute-value` sites and may remain empty misses, platform attributes that actually enter interpolation publish
+`plain-attribute-interpolation` sites whose expression holes use the normal expression completion path, finite checker-backed bindable domains can offer literal `attribute-value`
 candidates, open-ended checker-backed scalar bindables are expected-empty completion sites, inline multi-binding
 custom-attribute values can offer bindable segment-name candidates from the resource definition, and router `load`
 and `href` primary values can offer `router-route` candidates from the app's modeled `RouteConfig` products while
@@ -139,6 +140,11 @@ pressure can distinguish TypeChecker/app-typing weakness from synthetic template
 whether a future code action should target an owner type, a scope slot, or the authored expression. Missing owner-type
 rows such as `missing-slot-type` should remain diagnostic pressure: they say the template scope did not provide enough
 TypeChecker footing for the owner expression, not that completion should invent members.
+Cursor-info also reports `missing-expression-member` when the selected member token is absent on a known owner type.
+This is distinct from weak-owner completion pressure: the owner was found, but the authored member does not belong to
+that projected surface. String index signatures can still produce synthetic selected members, but number-only indexed
+access cannot. That distinction keeps primitive and array-like owners from looking like broad records during hover,
+diagnostics, and future code-action planning.
 Diagnostics are not cursor-only. Cursor loci remain the highest-pressure way to force template/resource/value-site
 selection to be exact, but file/app loci now aggregate the same cursor-info diagnostic substrate through
 `SemanticAppQueryKind.TemplateDiagnostics`. Use that batch answer when the product question is editor diagnostics, CI,

@@ -1,0 +1,83 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:state-store-configuration",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "state",
+        "configuration",
+        "framework-errors"
+      ],
+      "summary": "StateProjectResult owns @aurelia/state builder flow, source decorator issues, store lookup issues, and exact raw Error authority rows.",
+      "rationale": "@aurelia/state is plugin-backed framework state, not an ordinary DI state class. Its store configuration starts in StateDefaultConfiguration builder chains, then the framework creating AppTask creates Store instances and registers them with IStoreRegistry. Raw framework Error sites should be modeled with StateIssue products and exact StateRawErrorAuthority links only when semantic-runtime owns the corresponding phase; live DevTools host/lifecycle errors remain intentionally unclaimed.",
+      "guidance": [
+        "Use StateStores for valid StateDefaultConfiguration.init(...) and .withStore(...) builder facts before AppTask execution.",
+        "Use StateIssues for builder/store-registry raw Error rows: withStore after registration, reserved default store names, duplicate store registration, missing named-store lookup, and invalid @fromState(...) target contexts.",
+        "State store lookup issues are post-template because state/dispatch binding commands and & state:'name' binding behaviors are visible only after template runtime products and expression parses exist.",
+        "Keep @fromState(...) target validation source-owned, not observation-owned; the shared decorator-target helper lives under type-system for this reason.",
+        "Leave DevTools dispatch errors to runtime host/lifecycle substrates; semantic-runtime does not model browser extension availability or live DevTools message payloads."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/state/state-store-materialization.ts",
+          "symbolName": "StateStoreConfigurationMaterializationProjectPass",
+          "summary": "Materializes @aurelia/state store configuration and issue products."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/state/framework-raw-error-authority.ts",
+          "symbolName": "StateRawErrorAuthority",
+          "summary": "Exact raw @aurelia/state Error authority links."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/state/store-lookup-issues.ts",
+          "symbolName": "StateStoreLookupIssueMaterializer",
+          "summary": "Materializes named-store lookup failures from @fromState(...), state/dispatch binding commands, and state binding behavior arguments."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/state/with-store-registration-order-issues.ts",
+          "symbolName": "WithStoreAfterRegistrationIssueMaterializer",
+          "summary": "Materializes source-order failures where StateDefaultConfiguration.withStore(...) follows registration of the same config object."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "semantic-raw-references",
+          "filters": {
+            "packageId": "state"
+          },
+          "summary": "Verify exact used raw Error references for @aurelia/state."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/state/state-store-materialization.ts",
+          "symbolName": "StateStoreConfigurationMaterializationProjectPass"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/state/framework-raw-error-authority.ts",
+          "symbolName": "StateRawErrorAuthority"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/state/store-lookup-issues.ts",
+          "symbolName": "StateStoreLookupIssueMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/state/with-store-registration-order-issues.ts",
+          "symbolName": "WithStoreAfterRegistrationIssueMaterializer"
+        }
+      ],
+      "createdAt": "2026-05-14",
+      "updatedAt": "2026-05-14"
+    }
+  ]
+}

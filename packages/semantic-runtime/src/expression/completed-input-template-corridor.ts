@@ -16,6 +16,7 @@ import { isParseCompanionFailure, isParseFailure } from './parse-failure.js';
 import type { ParseCompanionFailure, ParseFailure, ParseOutcome } from './parse-failure.js';
 import { CompletedInputCompanionBuilder } from './completed-input-companion-builder.js';
 import { CompletedInputParserState } from './completed-input-parser-state.js';
+import { ExpressionFrameworkErrorCode } from './framework-error-code.js';
 
 interface CompletedInputTemplateCorridorDependencies {
   readonly state: CompletedInputParserState;
@@ -55,7 +56,7 @@ export class CompletedInputTemplateCorridor {
   parseTemplateLiteral(): ParseOutcome<TemplateExpression> {
     const open = this.state.peekToken();
     if (open.type !== TokenType.Backtick) {
-      return this.state.error("Expected '`' to start template literal", open);
+      return this.state.failures.error("Expected '`' to start template literal", open);
     }
     this.state.nextToken(); // consume '`'
 
@@ -146,9 +147,9 @@ export class CompletedInputTemplateCorridor {
       [ExpressionExpectedContinuationClass.TemplateClose],
       ExpressionCompanionFrameKind.TemplateLiteral,
       this.state.span(open.start, this.state.source.length),
-      this.state.templatePrefixRefs(open.start, fullCooked, expressions, this.state.source.length),
+      this.state.prefixRefs.templateRefs(open.start, fullCooked, expressions, this.state.source.length),
       [
-        this.state.gapDescriptor(
+        this.state.failures.gapDescriptor(
           ExpressionGapKind.MissingClosingDelimiter,
           eofSpan,
           ExpressionCompanionFrameKind.TemplateLiteral,
@@ -156,6 +157,7 @@ export class CompletedInputTemplateCorridor {
         ),
       ],
       this.templateMatchedDelimiterEntries(open),
+      ExpressionFrameworkErrorCode.ParseUnterminatedTemplateString,
     );
   }
 
@@ -166,7 +168,7 @@ export class CompletedInputTemplateCorridor {
     expressions: readonly IsAssign[],
     holeSource: string,
   ): ParseCompanionFailure {
-    const prefixRefs = this.state.templatePrefixRefs(open.start, cooked, expressions, holeOpenStart);
+    const prefixRefs = this.state.prefixRefs.templateRefs(open.start, cooked, expressions, holeOpenStart);
     const holeOpenSpan = this.state.span(holeOpenStart, holeOpenStart + 2);
     const matchedDelimiterStack = this.templateMatchedDelimiterEntries(open, holeOpenStart);
     const holeCodeStart = holeOpenStart + 2;
@@ -214,7 +216,7 @@ export class CompletedInputTemplateCorridor {
         this.state.span(open.start, holeCodeStart),
         prefixRefs,
         [
-          this.state.gapDescriptor(
+          this.state.failures.gapDescriptor(
             ExpressionGapKind.MissingExpression,
             holeOpenSpan,
             ExpressionCompanionFrameKind.TemplateHole,
@@ -222,6 +224,7 @@ export class CompletedInputTemplateCorridor {
           ),
         ],
         matchedDelimiterStack,
+        node.frameworkErrorCode,
       );
     }
 
@@ -235,10 +238,10 @@ export class CompletedInputTemplateCorridor {
       this.state.span(open.start, this.state.localEnd(node)),
       [
         ...prefixRefs,
-        this.state.rootPrefix(node),
+        this.state.prefixRefs.root(node),
       ],
       [
-        this.state.gapDescriptor(
+        this.state.failures.gapDescriptor(
           ExpressionGapKind.MissingClosingDelimiter,
           holeCodeSpan,
           ExpressionCompanionFrameKind.TemplateHole,
@@ -266,9 +269,9 @@ export class CompletedInputTemplateCorridor {
         [ExpressionExpectedContinuationClass.Expression],
         ExpressionCompanionFrameKind.TemplateHole,
         this.state.span(open.start, holeOpenStart + 2),
-        this.state.templatePrefixRefs(open.start, cooked, expressions, holeOpenStart),
+        this.state.prefixRefs.templateRefs(open.start, cooked, expressions, holeOpenStart),
         [
-          this.state.gapDescriptor(
+          this.state.failures.gapDescriptor(
             ExpressionGapKind.MissingExpression,
             holeOpenSpan,
             ExpressionCompanionFrameKind.TemplateHole,
@@ -276,13 +279,14 @@ export class CompletedInputTemplateCorridor {
           ),
         ],
         this.templateMatchedDelimiterEntries(open),
+        failure.frameworkErrorCode,
       );
     }
 
     return this.templateFailureFromInnerCompanion(
       open,
       holeOpenStart,
-      this.state.templatePrefixRefs(open.start, cooked, expressions, holeOpenStart),
+      this.state.prefixRefs.templateRefs(open.start, cooked, expressions, holeOpenStart),
       failure,
       false,
     );

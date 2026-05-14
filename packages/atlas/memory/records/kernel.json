@@ -1,0 +1,126 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:kernel-store",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "provenance",
+        "product-records"
+      ],
+      "summary": "KernelStore is large, central, and currently intentional as the product-record substrate.",
+      "rationale": "Large-class pressure should not automatically split the store. The important question is whether higher-level publication helpers and provenance concepts keep record construction precise and explainable.",
+      "guidance": [
+        "Treat KernelStore size as intentional unless new work adds unrelated policy or source-specific publication behavior.",
+        "Prefer improving product-record publication helpers before pushing more responsibilities into KernelStore.",
+        "Use product.vocabulary and product.architecture kernel-records when judging whether record shapes are coherent."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/store.ts",
+          "symbolName": "KernelStore",
+          "line": 88,
+          "summary": "Central kernel product-record store."
+        },
+        {
+          "kind": "lens",
+          "lensId": "product.vocabulary",
+          "projection": "summary",
+          "summary": "Vocabulary rows that define record/product language."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "KernelStore",
+          "filePath": "packages/semantic-runtime/src/kernel/store.ts",
+          "minLineCount": 80,
+          "minMethodCount": 20
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:product-detail-catalog",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "product-details",
+        "inquiry"
+      ],
+      "summary": "ProductDetailCatalog is the hot in-memory sidecar for typed product details keyed by durable MaterializedProduct handles.",
+      "rationale": "Rich TypeScript checker objects, framework models, and current-run materializer details do not belong in durable kernel records, but inquiry and downstream materializers need typed access to them. ProductDetailCatalog is the explicit product-owned contract layer between durable handles and hot details.",
+      "guidance": [
+        "Start here when a materializer or inquiry needs to attach, read, or enumerate rich details for a materialized product.",
+        "Define a ProductDetailSlot for a product-owned contract instead of using generic payload escape hatches.",
+        "Keep duplicate-detail and product-kind checks strict so hot details remain tied to committed durable products."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/product-details.ts",
+          "symbolName": "ProductDetailCatalog",
+          "line": 47,
+          "summary": "Hot typed product-detail catalog."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/product-details.ts",
+          "symbolName": "ProductDetailSlot",
+          "line": 12,
+          "summary": "Typed product-detail slot contract."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "ProductDetailCatalog",
+          "filePath": "packages/semantic-runtime/src/kernel/product-details.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "reuse:source-backed-issue-publication",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "diagnostics",
+        "kernel-publication"
+      ],
+      "summary": "Source-backed diagnostics that become semantic issue products should reuse the kernel issue-publication primitive.",
+      "rationale": "Dialog, fetch-client, state, and validation issue publishers share the same evidence/provenance/identity/materialized-product/materialization envelope while retaining domain-specific issue objects and identity records. The shared primitive keeps product publication coherent without forcing every package to grow one-off publication classes.",
+      "guidance": [
+        "Use publishIssueProduct when a diagnostic is a materialized semantic product with domain-owned issue details.",
+        "Keep source-span creation in the caller when the caller owns exact authored source ranges; pass the resulting address handle into the issue product publication.",
+        "Use issue-publication type aliases or object literals for pure publication envelopes; add a class only when the publication object has behavior or state across calls.",
+        "If a new issue identity kind is added, make sure KernelStore indexes that identity kind in both pending batch validation and committed record expansion."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/issue-publication.ts",
+          "symbolName": "publishIssueProduct",
+          "summary": "Shared issue product publication primitive."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/kernel/README.md",
+          "heading": "Record Families",
+          "summary": "Kernel-local guidance for source-backed open seams and issue publication."
+        }
+      ],
+      "createdAt": "2026-05-14",
+      "updatedAt": "2026-05-14"
+    }
+  ]
+}

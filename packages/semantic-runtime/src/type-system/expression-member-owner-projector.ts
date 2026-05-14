@@ -1,0 +1,168 @@
+import type {
+  AccessMemberExpression,
+  ArrowFunction,
+  CallMemberExpression,
+  ExpressionAstNode,
+} from '../expression/ast.js';
+import type { BindingScope } from '../configuration/scope.js';
+import type { AddressHandle } from '../kernel/handles.js';
+import type { CheckerTypeReference } from './type-shape.js';
+import type { CheckerExpressionTypeEvaluation } from './expression-type-evaluation.js';
+
+export interface CheckerExpressionMemberOwnerProjectorHost {
+  evaluateNode(
+    expression: ExpressionAstNode,
+    scope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+    contextualType?: CheckerTypeReference | null,
+  ): CheckerExpressionTypeEvaluation;
+
+  arrowFunctionScope(
+    expression: ArrowFunction,
+    scope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+    contextualType?: CheckerTypeReference | null,
+  ): BindingScope;
+}
+
+/** Offset-aware projector for the owner expression behind a member-access cursor. */
+export class CheckerExpressionMemberOwnerProjector {
+  constructor(
+    private readonly host: CheckerExpressionMemberOwnerProjectorHost,
+  ) {}
+
+  evaluateAtOffset(
+    expression: ExpressionAstNode,
+    offset: number,
+    scope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null = null,
+    contextualType: CheckerTypeReference | null = null,
+  ): CheckerExpressionTypeEvaluation | null {
+    switch (expression.$kind) {
+      case 'AccessMember':
+        return this.memberNameContainsOffset(expression, offset)
+          ? this.host.evaluateNode(expression.object, scope, `${localKey}:owner:${expression.name.name}`, sourceAddressHandle)
+          : this.evaluateAtOffset(expression.object, offset, scope, `${localKey}:object`, sourceAddressHandle);
+      case 'CallMember':
+        return this.memberNameContainsOffset(expression, offset)
+          ? this.host.evaluateNode(expression.object, scope, `${localKey}:owner:${expression.name.name}`, sourceAddressHandle)
+          : this.evaluateAtOffset(expression.object, offset, scope, `${localKey}:object`, sourceAddressHandle)
+            ?? this.evaluateListAtOffset(expression.args, offset, scope, `${localKey}:args`, sourceAddressHandle);
+      case 'Paren':
+      case 'Unary':
+        return this.evaluateAtOffset(expression.expression, offset, scope, `${localKey}:expression`, sourceAddressHandle, contextualType);
+      case 'AccessKeyed':
+        return this.evaluateAtOffset(expression.object, offset, scope, `${localKey}:object`, sourceAddressHandle)
+          ?? this.evaluateAtOffset(expression.key, offset, scope, `${localKey}:key`, sourceAddressHandle);
+      case 'CallFunction':
+        return this.evaluateAtOffset(expression.func, offset, scope, `${localKey}:func`, sourceAddressHandle)
+          ?? this.evaluateListAtOffset(expression.args, offset, scope, `${localKey}:args`, sourceAddressHandle);
+      case 'CallScope':
+      case 'CallGlobal':
+        return this.evaluateListAtOffset(expression.args, offset, scope, `${localKey}:args`, sourceAddressHandle);
+      case 'New':
+        return this.evaluateAtOffset(expression.func, offset, scope, `${localKey}:func`, sourceAddressHandle)
+          ?? this.evaluateListAtOffset(expression.args, offset, scope, `${localKey}:args`, sourceAddressHandle);
+      case 'TaggedTemplate':
+        return this.evaluateAtOffset(expression.func, offset, scope, `${localKey}:func`, sourceAddressHandle)
+          ?? this.evaluateListAtOffset(expression.expressions, offset, scope, `${localKey}:expressions`, sourceAddressHandle);
+      case 'Binary':
+        return this.evaluateAtOffset(expression.left, offset, scope, `${localKey}:left`, sourceAddressHandle)
+          ?? this.evaluateAtOffset(expression.right, offset, scope, `${localKey}:right`, sourceAddressHandle);
+      case 'Conditional':
+        return this.evaluateAtOffset(expression.condition, offset, scope, `${localKey}:condition`, sourceAddressHandle)
+          ?? this.evaluateAtOffset(expression.yes, offset, scope, `${localKey}:yes`, sourceAddressHandle)
+          ?? this.evaluateAtOffset(expression.no, offset, scope, `${localKey}:no`, sourceAddressHandle);
+      case 'Assign':
+        return this.evaluateAtOffset(expression.target, offset, scope, `${localKey}:target`, sourceAddressHandle)
+          ?? this.evaluateAtOffset(expression.value, offset, scope, `${localKey}:value`, sourceAddressHandle);
+      case 'ArrowFunction': {
+        if (!this.expressionContainsOffset(expression.body, offset)) {
+          return null;
+        }
+        return this.evaluateAtOffset(
+          expression.body,
+          offset,
+          this.host.arrowFunctionScope(expression, scope, `${localKey}:arrow`, sourceAddressHandle, contextualType),
+          `${localKey}:arrow-body`,
+          sourceAddressHandle,
+        );
+      }
+      case 'ArrayLiteral':
+        return this.evaluateListAtOffset(expression.elements, offset, scope, `${localKey}:elements`, sourceAddressHandle);
+      case 'ObjectLiteral':
+        return this.evaluateListAtOffset(expression.values, offset, scope, `${localKey}:values`, sourceAddressHandle);
+      case 'Template':
+      case 'Interpolation':
+        return this.evaluateListAtOffset(expression.expressions, offset, scope, `${localKey}:expressions`, sourceAddressHandle);
+      case 'ForOfStatement':
+        return this.evaluateAtOffset(expression.iterable, offset, scope, `${localKey}:iterable`, sourceAddressHandle);
+      case 'BindingPatternDefault':
+        return this.evaluateAtOffset(expression.target, offset, scope, `${localKey}:target`, sourceAddressHandle)
+          ?? this.evaluateAtOffset(expression.default, offset, scope, `${localKey}:default`, sourceAddressHandle);
+      case 'ArrayBindingPattern':
+        return this.evaluateListAtOffset(expression.elements, offset, scope, `${localKey}:elements`, sourceAddressHandle)
+          ?? (expression.rest == null ? null : this.evaluateAtOffset(expression.rest, offset, scope, `${localKey}:rest`, sourceAddressHandle));
+      case 'ObjectBindingPattern':
+        return this.evaluateListAtOffset(expression.properties.map((property) => property.value), offset, scope, `${localKey}:properties`, sourceAddressHandle)
+          ?? (expression.rest == null ? null : this.evaluateAtOffset(expression.rest, offset, scope, `${localKey}:rest`, sourceAddressHandle));
+      case 'DestructuringAssignment':
+        return this.evaluateAtOffset(expression.pattern, offset, scope, `${localKey}:pattern`, sourceAddressHandle)
+          ?? this.evaluateAtOffset(expression.source, offset, scope, `${localKey}:source`, sourceAddressHandle);
+      case 'AccessThis':
+      case 'AccessBoundary':
+      case 'AccessScope':
+      case 'AccessGlobal':
+      case 'PrimitiveLiteral':
+      case 'Identifier':
+      case 'BindingIdentifier':
+      case 'BindingPatternHole':
+      case 'Custom':
+        return null;
+    }
+    return null;
+  }
+
+  private evaluateListAtOffset(
+    expressions: readonly ExpressionAstNode[],
+    offset: number,
+    scope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerExpressionTypeEvaluation | null {
+    for (const [index, expression] of expressions.entries()) {
+      if (!this.expressionContainsOffset(expression, offset)) {
+        continue;
+      }
+      const evaluation = this.evaluateAtOffset(
+        expression,
+        offset,
+        scope,
+        `${localKey}:${index}`,
+        sourceAddressHandle,
+      );
+      if (evaluation != null) {
+        return evaluation;
+      }
+    }
+    return null;
+  }
+
+  private memberNameContainsOffset(
+    expression: AccessMemberExpression | CallMemberExpression,
+    offset: number,
+  ): boolean {
+    return offset >= expression.object.span.end
+      && offset <= expression.name.span.end;
+  }
+
+  private expressionContainsOffset(
+    expression: ExpressionAstNode,
+    offset: number,
+  ): boolean {
+    return expression.span.start <= offset && offset <= expression.span.end;
+  }
+}

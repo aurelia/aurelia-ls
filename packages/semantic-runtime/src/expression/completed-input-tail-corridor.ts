@@ -137,7 +137,7 @@ export class CompletedInputTailCorridor {
           colon,
           surroundingFrameKind,
           this.state.span(this.state.localStart(receiver), colon.end),
-          [this.state.rootPrefix(receiver)],
+          [this.state.prefixRefs.root(receiver)],
         );
       }
 

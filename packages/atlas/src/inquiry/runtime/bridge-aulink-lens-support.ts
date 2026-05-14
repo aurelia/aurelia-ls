@@ -144,6 +144,36 @@ export function mirrorProjectionContinuation(
   };
 }
 
+/** Switch from an auLink bridge row into durable memory records for the same framework-shaped concept. */
+export function auLinkMemoryContinuation(
+  inquiry: Inquiry,
+  id: string,
+  linkId: string,
+  rationale: string,
+  evidence?: Evidence,
+): Continuation {
+  return {
+    id,
+    kind: ContinuationKind.SwitchLens,
+    priority: ContinuationPriority.Secondary,
+    rationale,
+    inquiry: {
+      lens: LensId.AtlasMemory,
+      locus: inquiry.locus,
+      projection: "records",
+      filters: { auLinkId: linkId },
+      budget: inquiry.budget ?? AULINK_MIRROR_DETAIL_BUDGET,
+    },
+    evidence: evidence === undefined ? undefined : [evidence],
+    route: navigationRoute(
+      NavigationPlane.Maintenance,
+      NavigationRelation.RefinementOf,
+      [BasisKind.AuLink, BasisKind.AtlasContract, BasisKind.TypeScriptProgram],
+      "Durable Atlas memory records for this auLink id.",
+    ),
+  };
+}
+
 /** Switch to the framework projection that produced a bridge evidence row. */
 export function ownerProjectionContinuation(
   inquiry: Inquiry,

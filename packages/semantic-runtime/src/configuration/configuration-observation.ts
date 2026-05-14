@@ -27,8 +27,6 @@ export const enum ConfigurationCarrierKind {
   ContainerRegisterCall = 'container-register-call',
   /** Registration call inside an `IRegistry.register(container, ...)` body. */
   RegistryRegisterMethod = 'registry-register-method',
-  /** AppTask slot factory call such as `AppTask.creating(...)`. */
-  AppTaskFactoryCall = 'app-task-factory-call',
   /** Configuration customization call such as `StandardConfiguration.customize(...)`. */
   CustomizeCall = 'customize-call',
   /** Builder-style configuration method such as `StateDefaultConfiguration.init(...)` or `.withStore(...)`. */

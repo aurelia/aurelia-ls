@@ -42,6 +42,10 @@ export const enum FrameworkRegistrationKind {
   StandardConfiguration = 'standard-configuration',
   /** I18n plugin configuration registry. */
   I18nConfiguration = 'i18n-configuration',
+  /** Validation core configuration registry. */
+  ValidationConfiguration = 'validation-configuration',
+  /** Validation HTML configuration registry. */
+  ValidationHtmlConfiguration = 'validation-html-configuration',
   /** Router plugin configuration registry. */
   RouterConfiguration = 'router-configuration',
   /** Router DefaultComponents registration group. */

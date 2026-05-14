@@ -1,5 +1,6 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
+import { readDiResolveCallSites } from '../di/resolve-call-recognition.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { TemplateCompilerWorldEmission } from '../template/compiler-world-materializer.js';
 import { readAppOpenSeams } from './open-seam-projections.js';
@@ -16,6 +17,7 @@ interface AppSummaryProjectCounts {
 interface AppSummaryEvaluationCounts {
   readonly evaluatedSources: number;
   readonly unresolvedModuleEdges: number;
+  readonly evaluationIssues: number;
 }
 
 interface AppSummaryRouterCounts {
@@ -27,6 +29,8 @@ interface AppSummaryRouterCounts {
   readonly routePatterns: number;
   readonly routeEndpoints: number;
   readonly routeRecognizerStates: number;
+  readonly routeRecognizerIssues: number;
+  readonly routerIssues: number;
   readonly recognizedRoutes: number;
   readonly typedNavigationInstructions: number;
   readonly viewportInstructions: number;
@@ -43,15 +47,20 @@ interface AppSummaryConfigurationCounts {
   readonly configurationSteps: number;
   readonly appRoots: number;
   readonly registrationAdmissions: number;
+  readonly configurationIssues: number;
+  readonly stateStores: number;
+  readonly stateIssues: number;
 }
 
 interface AppSummaryDiCounts {
   readonly containers: number;
   readonly runtimeChildContainers: number;
   readonly resolverSlots: number;
+  readonly diResolveCallSites: number;
   readonly runtimeChildContextResolverSlots: number;
   readonly runtimeControllers: number;
   readonly resourceSlots: number;
+  readonly diIssues: number;
   readonly diOpenSeams: number;
 }
 
@@ -71,6 +80,7 @@ interface AppSummaryTemplateCounts {
   readonly runtimeBindingTargetAccesses: number;
   readonly runtimeBindingTargetOperations: number;
   readonly runtimeBindingSourceOperations: number;
+  readonly runtimeBindingBehaviorApplications: number;
   readonly runtimeBindingValueChannels: number;
   readonly runtimeBindingDataFlows: number;
   readonly runtimeBindingDataFlowSourceTypeGaps: number;
@@ -128,6 +138,7 @@ function evaluationSummaryCounts(emission: AureliaAppWorldProjectEmission): AppS
   return {
     evaluatedSources: emission.evaluation.readEvaluatedSources().length,
     unresolvedModuleEdges: emission.evaluation.readUnresolvedModules().length,
+    evaluationIssues: emission.evaluationIssues.readIssues().length,
   };
 }
 
@@ -141,6 +152,8 @@ function routerSummaryCounts(emission: AureliaAppWorldProjectEmission): AppSumma
     routePatterns: emission.routeRecognizer.readConfigurableRoutes().length,
     routeEndpoints: emission.routeRecognizer.readEndpoints().length,
     routeRecognizerStates: emission.routeRecognizer.readStates().length,
+    routeRecognizerIssues: emission.routeRecognizer.readIssues().length,
+    routerIssues: emission.routes.readIssues().length + emission.routeInstructions.readIssues().length + emission.routeRecognition.readIssues().length + emission.routeTree.readIssues().length,
     recognizedRoutes: emission.routeRecognition.readRecognizedRoutes().length,
     typedNavigationInstructions: emission.routeInstructions.readTypedNavigationInstructions().length,
     viewportInstructions: emission.routeInstructions.readViewportInstructions().length,
@@ -154,7 +167,10 @@ function routerSummaryCounts(emission: AureliaAppWorldProjectEmission): AppSumma
 }
 
 function appTaskSummaryCount(emission: AureliaAppWorldProjectEmission): number {
-  return emission.configuration.readConfiguration().appTasks.length + emission.appWorld.diWorld.appTasks.length;
+  return new Set([
+    ...emission.configuration.readConfiguration().appTasks,
+    ...emission.appWorld.diWorld.appTasks,
+  ].map((task) => task.productHandle)).size;
 }
 
 function configurationSummaryCounts(emission: AureliaAppWorldProjectEmission): AppSummaryConfigurationCounts {
@@ -164,6 +180,9 @@ function configurationSummaryCounts(emission: AureliaAppWorldProjectEmission): A
     configurationSteps: configuration.steps.length,
     appRoots: configuration.appRoots.length,
     registrationAdmissions: configuration.registrationAdmissions.length,
+    configurationIssues: emission.appWorld.frameworkServiceCustomizations.issues.length,
+    stateStores: emission.state.readStores().length,
+    stateIssues: emission.state.readIssues().length,
   };
 }
 
@@ -178,6 +197,7 @@ function diSummaryCounts(
       resource.runtimeAnalysis.runtimeRendering.childContainers.length
     ),
     resolverSlots: diWorld.resolverSlots.length,
+    diResolveCallSites: readDiResolveCallSites(emission.project, emission.typeSystem).length,
     runtimeChildContextResolverSlots: sumTemplates(templates, (resource) =>
       resource.runtimeAnalysis.runtimeRendering.childContextResolverSlots.length
     ),
@@ -185,6 +205,7 @@ function diSummaryCounts(
       resource.runtimeAnalysis.runtimeRendering.controllers.length
     ) + emission.routeComponentAgents.readControllers().length,
     resourceSlots: diWorld.resourceSlots.length,
+    diIssues: diWorld.issues.length,
     diOpenSeams: diWorld.openSeams.length,
   };
 }
@@ -223,6 +244,9 @@ function templateSummaryCounts(templates: readonly TemplateResourceEmission[]): 
     runtimeBindingTargetOperations,
     runtimeBindingSourceOperations: sumTemplates(templates, (resource) =>
       resource.runtimeAnalysis.controllerBind.sourceOperations.length
+    ),
+    runtimeBindingBehaviorApplications: sumTemplates(templates, (resource) =>
+      resource.runtimeAnalysis.bindingBehavior.applications.length
     ),
     runtimeBindingValueChannels: sumTemplates(templates, (resource) =>
       resource.runtimeAnalysis.bindingValueChannel.valueChannels.length

@@ -11,10 +11,6 @@ import type {
 } from '../kernel/handles.js';
 import { CompilerIdentity } from '../kernel/identity.js';
 import { MaterializedProduct } from '../kernel/materialization.js';
-import {
-  compactFieldProvenance,
-  FieldProvenance,
-} from '../kernel/provenance.js';
 import type {
   KernelStore,
   KernelStoreRecord,
@@ -39,8 +35,6 @@ import {
   expressionParseStateForResult,
   TemplateExpressionParse,
   TemplateValueSite,
-  type TemplateExpressionParseField,
-  type TemplateValueSiteField,
   type TemplateValueSiteKind,
 } from './value-site.js';
 
@@ -166,7 +160,7 @@ export class TemplateValueSitePublisher {
       request.bindingCommand,
       request.bindable,
       request.sourceAddressHandle,
-      this.valueSiteProvenance(request),
+      [],
     );
   }
 
@@ -258,7 +252,7 @@ export class TemplateValueSitePublisher {
       resolved.result.kind,
       resolved.result,
       request.sourceAddressHandle,
-      this.expressionParseProvenance(request.provenanceHandle),
+      [],
     );
   }
 
@@ -301,35 +295,6 @@ export class TemplateValueSitePublisher {
       ),
       parseClaim,
     ];
-  }
-
-  private valueSiteProvenance(
-    request: TemplateValueSitePublicationRequest,
-  ): readonly FieldProvenance<TemplateValueSiteField>[] {
-    return compactFieldProvenance<TemplateValueSiteField>([
-      new FieldProvenance('siteKind', request.provenanceHandle),
-      new FieldProvenance('rawValue', request.provenanceHandle),
-      request.entryFamily == null ? null : new FieldProvenance('entryFamily', request.provenanceHandle),
-      new FieldProvenance('node', request.provenanceHandle),
-      request.attribute == null ? null : new FieldProvenance('attribute', request.provenanceHandle),
-      request.syntax == null ? null : new FieldProvenance('syntax', request.provenanceHandle),
-      request.classification == null ? null : new FieldProvenance('classification', request.provenanceHandle),
-      request.bindingCommand == null ? null : new FieldProvenance('bindingCommand', request.provenanceHandle),
-      request.bindable == null ? null : new FieldProvenance('bindable', request.provenanceHandle),
-      new FieldProvenance('source', request.provenanceHandle),
-    ]);
-  }
-
-  private expressionParseProvenance(
-    provenanceHandle: ProvenanceHandle,
-  ): readonly FieldProvenance<TemplateExpressionParseField>[] {
-    return compactFieldProvenance<TemplateExpressionParseField>([
-      new FieldProvenance('site', provenanceHandle),
-      new FieldProvenance('parser', provenanceHandle),
-      new FieldProvenance('state', provenanceHandle),
-      new FieldProvenance('resultKind', provenanceHandle),
-      new FieldProvenance('source', provenanceHandle),
-    ]);
   }
 
   private expressionParseContext(addressHandle: AddressHandle | null): ExpressionParseContext | undefined {

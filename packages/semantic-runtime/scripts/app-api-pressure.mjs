@@ -1,91 +1,695 @@
+import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
   createSemanticRuntime,
   SemanticAppQueryKind,
+  SemanticProjectAnalysisKind,
   SemanticProjectShapeKind,
 } from '../out/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const workspaceRoot = path.resolve(packageRoot, '../..');
-const defaultRoot = path.join(workspaceRoot, 'packages/semantic-runtime/fixtures/authoring/storefront');
+const authoringFixtureRoot = path.join(workspaceRoot, 'packages/semantic-runtime/fixtures/authoring');
+const pressureFixtureRoot = path.join(workspaceRoot, 'packages/semantic-runtime/fixtures/pressure');
+const defaultRoots = [
+  ...fixtureChildRoots(authoringFixtureRoot, (name) => name.startsWith('generated-') || name === 'storefront'),
+  ...fixtureChildRoots(pressureFixtureRoot),
+];
+const defaultAppApiPressureAnalysisKinds = new Set([
+  SemanticProjectAnalysisKind.AppWorld,
+  SemanticProjectAnalysisKind.ResourceLibraryAuthoring,
+]);
 const roots = pressureRoots();
 const analysisDepth = pressureAnalysisDepth();
 const projectShapeFilter = pressureProjectShapeFilter();
 const detailMode = pressureDetailMode();
+const outputMode = pressureOutputMode();
 const authoringSourceFileLimitPerProject = integerEnv('SEMANTIC_RUNTIME_APP_AUTHORING_SOURCE_FILE_LIMIT_PER_PROJECT', 12);
 
 console.log('semantic-runtime app API pressure');
 console.log('scope: transient app-world API pressure; project keys, paths, and source text are omitted');
 console.log('note: default summary detail buckets source-assignment and open-seam reasons into generalized pressure');
-console.log('note: raw detail may include source-level names; do not promote it from proprietary roots without manual abstraction');
+console.log('note: raw detail may include source-level names; do not promote it from external clean-room roots without manual abstraction');
 console.log(`analysis-depth: ${analysisDepth}`);
 console.log(`project-shapes: ${projectShapeFilter == null ? 'all' : [...projectShapeFilter].join(',')}`);
+console.log(`default-analysis-policy: ${projectShapeFilter == null ? 'app-world,resource-library-authoring' : 'shape-filter-explicit'}`);
 console.log(`detail-mode: ${detailMode}`);
+console.log(`output-mode: ${outputMode}`);
+console.log('summary-output: empty count sections, one-page query counts, and all-hit query outcomes are omitted');
 console.log(`authoring-source-file-limit-per-project: ${authoringSourceFileLimitPerProject}`);
 console.log(`inputs: ${roots.length}`);
 
+const aggregateStart = performance.now();
+const rootAggregates = [];
 for (const [index, root] of roots.entries()) {
   const started = performance.now();
   const aggregate = await readPressureForRoot(root);
+  rootAggregates.push(aggregate);
+  if (outputMode !== 'aggregate') {
+    console.log('');
+    console.log(`input ${index + 1}`);
+    printInputSummary(aggregate, performance.now() - started);
+    printTimings('timings', aggregate.timings);
+    printAggregateCounts(aggregate);
+  }
+}
+
+function fixtureChildRoots(rootDir, includeName = () => true) {
+  return readdirSync(rootDir, { withFileTypes: true })
+    .filter((entry) => {
+      const childRoot = path.join(rootDir, entry.name);
+      return entry.isDirectory() && includeName(entry.name) && fixtureRootHasFiles(childRoot);
+    })
+    .map((entry) => path.join(rootDir, entry.name))
+    .sort((left, right) => path.basename(left).localeCompare(path.basename(right)));
+}
+
+function fixtureRootHasFiles(rootDir) {
+  const pending = [rootDir];
+  while (pending.length > 0) {
+    const currentDir = pending.pop();
+    for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
+      if (entry.isFile()) {
+        return true;
+      }
+      if (entry.isDirectory()) {
+        pending.push(path.join(currentDir, entry.name));
+      }
+    }
+  }
+  return false;
+}
+
+if (outputMode !== 'inputs' && rootAggregates.length > 0) {
+  const aggregate = combinePressureAggregates(rootAggregates);
   console.log('');
-  console.log(`input ${index + 1}`);
-  console.log(`- request: ${(performance.now() - started).toFixed(1)}ms`);
-  console.log(`- projects: ${aggregate.projects}`);
-  console.log(`- source files: ${aggregate.sourceFiles}`);
-  console.log(`- projects with Aurelia app entrypoint signals: ${aggregate.projectsWithAureliaAppEntrypointSignal}`);
-  console.log(`- selected projects: ${aggregate.selectedProjects}`);
-  console.log(`- opened app-world emissions: ${aggregate.openedAppWorlds}`);
-  console.log(`- projects with app roots: ${aggregate.projectsWithAppRoots}`);
-  console.log(`- projects without app roots: ${aggregate.projectsWithoutAppRoots}`);
-  console.log(`- resource libraries without app roots: ${aggregate.resourceLibrariesWithoutAppRoots}`);
-  console.log(`- resource definitions: ${aggregate.resourceDefinitions}`);
-  console.log(`- authoring source files requested: ${aggregate.authoringSourceFilesRequested}`);
-  console.log(`- app/runtime templates seen: ${aggregate.appRuntimeTemplatesSeen}`);
-  console.log(`- authoring templates seen: ${aggregate.authoringTemplatesSeen}`);
-  console.log(`- router options: ${aggregate.routerOptions}`);
-  console.log(`- route configs: ${aggregate.routeConfigs}`);
-  console.log(`- route config contexts: ${aggregate.routeConfigContexts}`);
-  console.log(`- route contexts: ${aggregate.routeContexts}`);
-  console.log(`- route recognizers: ${aggregate.routeRecognizers}`);
-  console.log(`- route patterns: ${aggregate.routePatterns}`);
-  console.log(`- route endpoints: ${aggregate.routeEndpoints}`);
-  console.log(`- route-recognizer states: ${aggregate.routeRecognizerStates}`);
-  console.log(`- recognized routes: ${aggregate.recognizedRoutes}`);
-  console.log(`- typed navigation instructions: ${aggregate.typedNavigationInstructions}`);
-  console.log(`- viewport instructions: ${aggregate.viewportInstructions}`);
-  console.log(`- viewport instruction trees: ${aggregate.viewportInstructionTrees}`);
-  console.log(`- route trees: ${aggregate.routeTrees}`);
-  console.log(`- route nodes: ${aggregate.routeNodes}`);
-  console.log(`- router viewports: ${aggregate.routerViewports}`);
-  console.log(`- viewport agents: ${aggregate.viewportAgents}`);
-  console.log(`- component agents: ${aggregate.componentAgents}`);
-  console.log(`- app tasks: ${aggregate.appTasks}`);
-  console.log(`- runtime controllers: ${aggregate.runtimeControllers}`);
-  console.log(`- bindables: ${aggregate.bindables}`);
-  console.log(`- watches: ${aggregate.watches}`);
-  console.log(`- template diagnostics: ${aggregate.templateDiagnostics}`);
-  console.log(`- binding data flows: ${aggregate.bindingDataFlows}`);
-  console.log(`- open binding data flows: ${aggregate.openBindingDataFlows}`);
-  console.log(`- binding data-flow source assignment pressures: ${aggregate.bindingDataFlowSourceAssignmentPressures}`);
-  console.log(`- unresolved module edges: ${aggregate.unresolvedModuleEdges}`);
-  console.log(`- open seams: ${aggregate.openSeams}`);
-  console.log(`- app-root project open seams: ${aggregate.appRootProjectOpenSeams}`);
-  console.log(`- non-app-root project open seams: ${aggregate.nonAppRootProjectOpenSeams}`);
-  printTimings('timings', aggregate.timings);
-  printCounts('page counts', aggregate.pageCounts);
+  console.log(`combined inputs (${rootAggregates.length})`);
+  printInputSummary(aggregate, performance.now() - aggregateStart);
+  printTimings('combined timings', aggregate.timings);
+  printAggregateCounts(aggregate);
+}
+
+function printInputSummary(aggregate, requestMilliseconds) {
+  console.log(`- request: ${requestMilliseconds.toFixed(1)}ms`);
+  console.log(
+    `- source/app: projects=${aggregate.projects}, selected=${aggregate.selectedProjects}, ` +
+    `opened=${aggregate.openedAppWorlds}, files=${aggregate.sourceFiles}, templates=${aggregate.appRuntimeTemplatesSeen}, ` +
+    `resources=${aggregate.resourceDefinitions}, controllers=${aggregate.runtimeControllers}, ` +
+    `targetAccesses=${aggregate.bindingTargetAccesses}, behaviorApps=${aggregate.bindingBehaviorApplications}, valueChannels=${aggregate.bindingValueChannels}, dataFlows=${aggregate.bindingDataFlows}`,
+  );
+  console.log(
+    `- authoring: coverage=${aggregate.authoringOrientationCoverageRows}, taste=${aggregate.authoringOrientationTasteValues}, ` +
+    `capabilities=${aggregate.authoringOrientationCapabilities}, operations=${aggregate.authoringOrientationOperations}, ` +
+    `repairs=${aggregate.authoringOrientationRepairs}, repairClusters=${aggregate.authoringOrientationRepairClusters}, ` +
+    `openReasons=${aggregate.authoringOrientationOpenReasons}`,
+  );
+  const auxiliaryParts = [
+    metricPart('appTasks', aggregate.appTasks),
+    metricPart('diKeys', aggregate.diKeyIdentities),
+    metricPart('stateStores', aggregate.stateStores),
+    metricPart('diResolve', aggregate.diResolveCallSites),
+    metricPart('diIssues', aggregate.diIssues),
+    metricPart('bindables', aggregate.bindables),
+    metricPart('watches', aggregate.watches),
+    metricPart('topologyServices', aggregate.appTopologyServices),
+    metricPart('topologyInjections', aggregate.appTopologyInjections),
+    metricPart('topologyServiceInteractions', aggregate.appTopologyServiceInteractions),
+    metricPart('topologyServiceInteractionBindings', aggregate.appTopologyServiceInteractionBindings),
+    metricPart('stateCompositions', aggregate.appTopologyStateCompositions),
+    metricPart('topologyStyles', aggregate.appTopologyStyles),
+    metricPart('componentRoles', aggregate.appTopologyComponentRoles),
+    metricPart('authoringSources', aggregate.authoringSourceFilesRequested),
+    metricPart('authoringTemplates', aggregate.authoringTemplatesSeen),
+  ].filter(Boolean);
+  if (auxiliaryParts.length > 0) {
+    console.log(`- auxiliary: ${auxiliaryParts.join(', ')}`);
+  }
+  const routerParts = [
+    metricPart('options', aggregate.routerOptions),
+    metricPart('configs', aggregate.routeConfigs),
+    metricPart('contexts', aggregate.routeContexts),
+    metricPart('recognizers', aggregate.routeRecognizers),
+    metricPart('patterns', aggregate.routePatterns),
+    metricPart('endpoints', aggregate.routeEndpoints),
+    metricPart('states', aggregate.routeRecognizerStates),
+    metricPart('issues', aggregate.routeRecognizerIssues),
+    metricPart('routerIssues', aggregate.routerIssues),
+    metricPart('recognized', aggregate.recognizedRoutes),
+    metricPart('typedNav', aggregate.typedNavigationInstructions),
+    metricPart('viewportInstructions', aggregate.viewportInstructions),
+    metricPart('instructionTrees', aggregate.viewportInstructionTrees),
+    metricPart('routeTrees', aggregate.routeTrees),
+    metricPart('nodes', aggregate.routeNodes),
+    metricPart('viewports', aggregate.routerViewports),
+    metricPart('viewportAgents', aggregate.viewportAgents),
+    metricPart('componentAgents', aggregate.componentAgents),
+  ].filter(Boolean);
+  if (routerParts.length > 0) {
+    console.log(`- router: ${routerParts.join(', ')}`);
+  }
+  const pressureParts = [
+    metricPart('configurationIssues', aggregate.configurationIssues),
+    metricPart('evaluationIssues', aggregate.evaluationIssues),
+    metricPart('diIssues', aggregate.diIssues),
+    metricPart('observationIssues', aggregate.observationIssues),
+    metricPart('validationIssues', aggregate.validationIssues),
+    metricPart('fetchClientIssues', aggregate.fetchClientIssues),
+    metricPart('dialogIssues', aggregate.dialogIssues),
+    metricPart('diagnostics', aggregate.templateDiagnostics),
+    metricPart('appDiagnostics', aggregate.appDiagnostics),
+    metricPart('resourceIssues', aggregate.resourceIssues),
+    metricPart('openFlows', aggregate.openBindingDataFlows),
+    metricPart('assignmentPressure', aggregate.bindingDataFlowSourceAssignmentPressures),
+    metricPart('unresolvedEdges', aggregate.unresolvedModuleEdges),
+    metricPart('openSeams', aggregate.openSeams),
+    metricPart('appRootOpenSeams', aggregate.appRootProjectOpenSeams),
+    metricPart('nonAppRootOpenSeams', aggregate.nonAppRootProjectOpenSeams),
+    metricPart('missingAppRoots', aggregate.projectsWithoutAppRoots),
+    metricPart('resourceLibraries', aggregate.resourceLibrariesWithoutAppRoots),
+  ].filter(Boolean);
+  console.log(pressureParts.length > 0 ? `- pressure: ${pressureParts.join(', ')}` : '- pressure: closed');
+}
+
+function metricPart(label, value) {
+  return value > 0 ? `${label}=${value}` : null;
+}
+
+function combinePressureAggregates(aggregates) {
+  const combined = {
+    timings: createTimingAccumulator(),
+  };
+  for (const aggregate of aggregates) {
+    mergePressureAggregate(combined, aggregate);
+  }
+  return combined;
+}
+
+function mergePressureAggregate(target, source) {
+  for (const [key, value] of Object.entries(source)) {
+    if (key === 'timings') {
+      mergeTimingAccumulator(target.timings, value);
+    } else if (typeof value === 'number') {
+      target[key] = staticCatalogAggregateKey(key)
+        ? Math.max(target[key] ?? 0, value)
+        : (target[key] ?? 0) + value;
+    } else if (value instanceof Set) {
+      const targetSet = target[key] instanceof Set ? target[key] : new Set();
+      for (const item of value) {
+        targetSet.add(item);
+      }
+      target[key] = targetSet;
+    } else if (isCountMap(value)) {
+      target[key] ??= {};
+      if (staticCatalogAggregateKey(key)) {
+        mergeMaxCounts(target[key], value);
+      } else {
+        incrementAll(target[key], value);
+      }
+    }
+  }
+}
+
+function staticCatalogAggregateKey(key) {
+  return key.startsWith('authoringCatalog');
+}
+
+function mergeTimingAccumulator(target, source) {
+  incrementAll(target.totals, source.totals);
+  incrementAll(target.expressionTypeCache, source.expressionTypeCache);
+  incrementAll(target.expressionTypeCacheEntriesByBucket, source.expressionTypeCacheEntriesByBucket);
+  incrementAll(target.expressionTypeCacheHitsByBucket, source.expressionTypeCacheHitsByBucket);
+  incrementAll(target.expressionTypeCacheMissesByBucket, source.expressionTypeCacheMissesByBucket);
+  incrementAll(target.expressionTypeCacheWritesByBucket, source.expressionTypeCacheWritesByBucket);
+  incrementAll(target.projectBuckets, source.projectBuckets);
+  target.slowestProjectMilliseconds = Math.max(
+    target.slowestProjectMilliseconds,
+    source.slowestProjectMilliseconds ?? 0,
+  );
+}
+
+function isCountMap(value) {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function printAggregateCounts(aggregate) {
+  if (detailMode === 'raw') {
+    printRawAggregateCounts(aggregate);
+    return;
+  }
   printCounts('project shape kinds', aggregate.projectShapeKinds);
-  printCounts('skipped project shape kinds', aggregate.skippedProjectShapeKinds);
-  printCounts('project Aurelia dependency scopes', aggregate.projectAureliaDependencyScopes);
-  printCounts('project Aurelia source signals', aggregate.projectAureliaSourceSignals);
+  printCounts('project analysis kinds', aggregate.projectAnalysisKinds);
+  printCounts('skipped project analysis kinds', aggregate.skippedProjectAnalysisKinds);
   printCounts('project source roles', aggregate.projectSourceRoles);
+  printCounts('project Aurelia dependency origins', aggregate.projectAureliaDependencyOrigins);
+  printCounts('project Aurelia dependency scope origins', aggregate.projectAureliaDependencyScopeOrigins);
+  printCounts('project Aurelia source signals', aggregate.projectAureliaSourceSignals);
+  printCounts('project shape reasons', aggregate.projectShapeReasons);
+  printCounts('app topology service roles', aggregate.appTopologyServiceRoles);
+  printCounts('app topology service export states', aggregate.appTopologyServiceExportStates);
+  printCounts('app topology service resolve call counts', aggregate.appTopologyServiceResolveCallCounts);
+  printCounts('app topology injection mechanisms', aggregate.appTopologyInjectionMechanisms);
+  printCounts('app topology injection key declaration kinds', aggregate.appTopologyInjectionKeyDeclarationKinds);
+  printCounts('app topology injection key declaration roles', aggregate.appTopologyInjectionKeyDeclarationRoles);
+  printCounts('app topology injection key import kinds', aggregate.appTopologyInjectionKeyImportKinds);
+  printCounts('app topology injection key import scopes', aggregate.appTopologyInjectionKeyImportScopes);
+  printCounts('app topology injection consumer classes', aggregate.appTopologyInjectionConsumerClasses);
+  printCounts('app topology injection consumer member kinds', aggregate.appTopologyInjectionConsumerMemberKinds);
+  printCounts('app topology injection execution contexts', aggregate.appTopologyInjectionExecutionContexts);
+  printCounts('app topology injection active-container expectations', aggregate.appTopologyInjectionActiveContainerExpectations);
+  printCounts('app topology injection nullish key argument counts', aggregate.appTopologyInjectionNullishKeyArgumentCounts);
+  printCounts('app topology injection nullish key argument kinds', aggregate.appTopologyInjectionNullishKeyArgumentKinds);
+  printCounts('app topology injection source coverage', aggregate.appTopologyInjectionSourceCoverage);
+  printCounts('app topology service interaction operation kinds', aggregate.appTopologyServiceInteractionOperationKinds);
+  printCounts('app topology service interaction target roles', aggregate.appTopologyServiceInteractionTargetRoles);
+  printCounts('app topology service interaction consumer roles', aggregate.appTopologyServiceInteractionConsumerRoles);
+  printCounts('app topology service interaction consumer classes', aggregate.appTopologyServiceInteractionConsumerClasses);
+  printCounts('app topology service interaction consumer members', aggregate.appTopologyServiceInteractionConsumerMembers);
+  printCounts('app topology service interaction argument counts', aggregate.appTopologyServiceInteractionArgumentCounts);
+  printCounts('app topology service interaction self states', aggregate.appTopologyServiceInteractionSelfStates);
+  printCounts('app topology service interaction source coverage', aggregate.appTopologyServiceInteractionSourceCoverage);
+  printCounts('app topology service interaction binding source kinds', aggregate.appTopologyServiceInteractionBindingSourceKinds);
+  printCounts('app topology service interaction binding source roots', aggregate.appTopologyServiceInteractionBindingSourceRoots);
+  printCounts('app topology service interaction binding directions', aggregate.appTopologyServiceInteractionBindingDirections);
+  printCounts('app topology service interaction binding target properties', aggregate.appTopologyServiceInteractionBindingTargetProperties);
+  printCounts('app topology service interaction binding operation kinds', aggregate.appTopologyServiceInteractionBindingOperationKinds);
+  printCounts('app topology service interaction binding target roles', aggregate.appTopologyServiceInteractionBindingTargetRoles);
+  printCounts('app topology service interaction binding self states', aggregate.appTopologyServiceInteractionBindingSelfStates);
+  printCounts('app topology component roles', aggregate.appTopologyComponentRolesByKind);
+  printCounts('app topology component role evidence', aggregate.appTopologyComponentRoleEvidence);
+  printCounts('app topology component role source coverage', aggregate.appTopologyComponentRoleSourceCoverage);
+  printCounts('app topology state composition roles', aggregate.appTopologyStateCompositionRoles);
+  printCounts('app topology state composition value type shapes', aggregate.appTopologyStateCompositionValueTypeShapes);
+  printCounts('app topology state composition source coverage', aggregate.appTopologyStateCompositionSourceCoverage);
+  printCounts('app topology style asset kinds', aggregate.appTopologyStyleAssetKinds);
+  printCounts('app topology style source kinds', aggregate.appTopologyStyleSourceKinds);
+  printCounts('app topology style owner kinds', aggregate.appTopologyStyleOwnerKinds);
+  printCounts('app topology style source coverage', aggregate.appTopologyStyleSourceCoverage);
+  printCounts('app topology style evidence coverage', aggregate.appTopologyStyleEvidenceCoverage);
+  printCounts('state store defaultness', aggregate.stateStoreDefaultness);
+  printCounts('state store initial-state kinds', aggregate.stateStoreInitialStateKinds);
+  printCounts('state store options-or-handler kinds', aggregate.stateStoreOptionsOrHandlerKinds);
+  printCounts('state store action-handler counts', aggregate.stateStoreActionHandlerCounts);
+  printCounts('authoring catalog taste axis layers', aggregate.authoringCatalogTasteAxisLayers);
+  printCounts('authoring catalog taste axis value layers', aggregate.authoringCatalogTasteAxisValueLayers, 36);
+  printCounts('authoring catalog taste axis primitive-policy value counts', aggregate.authoringCatalogTasteAxisPrimitivePolicyValueCounts);
+  printCounts('authoring catalog taste axis observed-shape value counts', aggregate.authoringCatalogTasteAxisObservedShapeValueCounts);
+  printCounts('authoring catalog taste axis derived-reading value counts', aggregate.authoringCatalogTasteAxisDerivedReadingValueCounts);
+  printCounts('authoring catalog taste value layers', aggregate.authoringCatalogTasteValueLayers);
+  printCounts('authoring catalog profile preference counts', aggregate.authoringCatalogProfilePreferenceCounts, 18);
+  printCounts('authoring catalog profile preference axes', aggregate.authoringCatalogProfilePreferenceAxes, 18);
+  printCounts('authoring catalog profile preference values', aggregate.authoringCatalogProfilePreferenceValues, 18);
+  printCounts('authoring catalog profile preference layers', aggregate.authoringCatalogProfilePreferenceLayers, 18);
+  printCounts('authoring catalog operation families', aggregate.authoringCatalogOperationFamiliesByKey, 18);
+  printCounts('authoring catalog operation actions', aggregate.authoringCatalogOperationActions, 18);
+  printCounts('authoring catalog operation targets', aggregate.authoringCatalogOperationTargetKinds, 18);
+  printCounts('authoring catalog operation capability counts', aggregate.authoringCatalogOperationCapabilityCounts, 18);
+  printCounts('authoring catalog capability product open reasons', aggregate.authoringCatalogCapabilityProductOpenReasons, 18);
+  printCounts('authoring catalog operation product open reasons', aggregate.authoringCatalogOperationProductOpenReasons, 18);
+  printCounts('authoring catalog recipe support states', aggregate.authoringCatalogRecipeSupportStates, 18);
+  printCounts('authoring catalog recipe base keys', aggregate.authoringCatalogRecipeBaseKeys, 18);
+  printCounts('authoring catalog recipe specificity ranks', aggregate.authoringCatalogRecipeSpecificityRanks, 18);
+  printCounts('authoring catalog recipe preference counts', aggregate.authoringCatalogRecipePreferenceCounts, 18);
+  printCounts('authoring catalog recipe preference axes', aggregate.authoringCatalogRecipePreferenceAxes, 18);
+  printCounts('authoring catalog recipe preference values', aggregate.authoringCatalogRecipePreferenceValues, 18);
+  printCounts('authoring catalog recipe preference layers', aggregate.authoringCatalogRecipePreferenceLayers, 18);
+  printCounts('authoring catalog recipe source plan presence', aggregate.authoringCatalogRecipeSourcePlanPresence, 18);
+  printCounts('authoring catalog recipe source plan conflict policies', aggregate.authoringCatalogRecipeSourcePlanConflictPolicies, 18);
+  printCounts('authoring catalog recipe source plan formatting policies', aggregate.authoringCatalogRecipeSourcePlanFormattingPolicies, 18);
+  printCounts('authoring catalog recipe source plan package-tooling policies', aggregate.authoringCatalogRecipeSourcePlanPackageToolingPolicies, 18);
+  printCounts('authoring catalog recipe source plan file counts', aggregate.authoringCatalogRecipeSourcePlanFileCounts, 18);
+  printCounts('authoring catalog recipe project tooling presence', aggregate.authoringCatalogRecipeProjectToolingPresence, 18);
+  printCounts('authoring catalog recipe project tooling package managers', aggregate.authoringCatalogRecipeProjectToolingPackageManagers, 18);
+  printCounts('authoring catalog recipe project tooling build-tool policies', aggregate.authoringCatalogRecipeProjectToolingBuildToolPolicies, 18);
+  printCounts('authoring catalog recipe project tooling dependency scopes', aggregate.authoringCatalogRecipeProjectToolingDependencyScopes, 18);
+  printCounts('authoring catalog recipe project tooling dependency specifiers', aggregate.authoringCatalogRecipeProjectToolingDependencySpecifiers, 18);
+  printCounts('authoring catalog recipe project tooling script names', aggregate.authoringCatalogRecipeProjectToolingScriptNames, 18);
+  printCounts('authoring catalog recipe project tooling file kinds', aggregate.authoringCatalogRecipeProjectToolingFileKinds, 18);
+  printCounts('authoring catalog recipe project tooling file languages', aggregate.authoringCatalogRecipeProjectToolingFileLanguages, 18);
+  printCounts('authoring catalog recipe project tooling text authorities', aggregate.authoringCatalogRecipeProjectToolingTextAuthorities, 18);
+  printCounts('authoring catalog recipe source file roles', aggregate.authoringCatalogRecipeSourceFileRoles, 18);
+  printCounts('authoring catalog recipe source file languages', aggregate.authoringCatalogRecipeSourceFileLanguages, 18);
+  printCounts('authoring catalog recipe source file edit kinds', aggregate.authoringCatalogRecipeSourceFileEditKinds, 18);
+  printCounts('authoring catalog recipe source file text authorities', aggregate.authoringCatalogRecipeSourceFileTextAuthorities, 18);
+  printCounts('authoring catalog recipe expected effects', aggregate.authoringCatalogRecipeExpectedEffectKinds, 18);
+  printCounts('authoring catalog recipe expected effect roles', aggregate.authoringCatalogRecipeExpectedEffectRoles, 18);
+  printCounts('authoring catalog recipe expected effect targets', aggregate.authoringCatalogRecipeExpectedEffectTargets, 18);
+  printCounts('authoring catalog recipe expected effect filter counts', aggregate.authoringCatalogRecipeExpectedEffectFilterCounts, 18);
+  printCounts('authoring catalog recipe expected effect filter fields', aggregate.authoringCatalogRecipeExpectedEffectFilterFields, 18);
+  printCounts('authoring taste axis primitive-policy state', aggregate.authoringTasteAxisPolicyStates);
+  printCounts('authoring taste axis keys', aggregate.authoringTasteAxisKeys, 24);
+  printCounts('authoring taste axis key primitive-policy state', aggregate.authoringTasteAxisKeyPolicyStates, 24);
+  printCounts('authoring taste axis key value counts', aggregate.authoringTasteAxisKeyValueCounts, 24);
+  printCounts('authoring taste axis key open reasons', aggregate.authoringTasteAxisKeyOpenReasons, 24);
+  printCounts('authoring taste axis primitive-policy value counts', aggregate.authoringTasteAxisPrimitivePolicyValueCounts);
+  printCounts('authoring taste axis observed-shape value counts', aggregate.authoringTasteAxisObservedShapeValueCounts);
+  printCounts('authoring taste axis derived-reading value counts', aggregate.authoringTasteAxisDerivedReadingValueCounts);
+  printCounts('authoring taste value layers', aggregate.authoringTasteValueLayers);
+  printCounts('authoring taste axis values', aggregate.authoringTasteAxisValues, 24);
+  printAuthoringTasteFocus(aggregate);
+  printCounts('authoring taste values', aggregate.authoringTasteValues, 24);
+  printCounts('authoring capability support states', aggregate.authoringCapabilitySupportStates);
+  printCounts('authoring capability open reasons', aggregate.authoringCapabilityOpenReasons, 18);
+  printCounts('authoring operation support states', aggregate.authoringOperationSupportStates);
+  printCounts('authoring operation open reasons', aggregate.authoringOperationOpenReasons, 18);
+  printCounts('authoring repair kinds', aggregate.authoringRepairKinds, 18);
+  printCounts('authoring repair evidence kinds', aggregate.authoringRepairEvidenceKinds);
+  printCounts('authoring repair support states', aggregate.authoringRepairSupportStates);
+  printCounts('authoring repair open reasons', aggregate.authoringRepairOpenReasons, 18);
+  printCounts('authoring repair action targets', aggregate.authoringRepairActionTargets, 18);
+  printCounts('authoring repair cluster kinds', aggregate.authoringRepairClusterKinds, 18);
+  printCounts('authoring repair cluster plan kinds', aggregate.authoringRepairClusterPlanKinds, 18);
+  printCounts('authoring repair cluster change domains', aggregate.authoringRepairClusterChangeDomains, 18);
+  printCounts('authoring repair cluster plan readiness', aggregate.authoringRepairClusterPlanReadiness, 18);
+  printCounts('authoring repair cluster action targets', aggregate.authoringRepairClusterActionTargets, 18);
+  printCounts('authoring repair cluster action-target counts', aggregate.authoringRepairClusterActionTargetCounts, 18);
+  printCounts('authoring repair cluster site kinds', aggregate.authoringRepairClusterSiteKinds, 18);
+  printCounts('authoring repair cluster value-site kinds', aggregate.authoringRepairClusterValueSiteKinds, 18);
+  printCounts('authoring repair cluster runtime boundary kinds', aggregate.authoringRepairClusterRuntimeBoundaryKinds, 18);
+  printCounts('authoring repair cluster runtime intent kinds', aggregate.authoringRepairClusterRuntimeIntentKinds, 18);
+  printCounts('authoring repair cluster target-member counts', aggregate.authoringRepairClusterTargetMemberCounts, 18);
+  printCounts('authoring repair cluster owner-type counts', aggregate.authoringRepairClusterOwnerTypeCounts, 18);
+  printCounts('authoring repair cluster value-type counts', aggregate.authoringRepairClusterValueTypeCounts, 18);
+  printCounts('authoring repair cluster member-hint counts', aggregate.authoringRepairClusterMemberHintCounts, 18);
+  printCounts('authoring repair cluster member-hint value-type coverage', aggregate.authoringRepairClusterMemberHintValueTypeCoverage, 18);
+  printCounts('authoring repair cluster member-hint value-type sources', aggregate.authoringRepairClusterMemberHintValueTypeSources, 18);
+  printCounts('authoring repair cluster target source coverage', aggregate.authoringRepairClusterActionTargetSourceCoverage, 18);
+  printCounts('authoring recipe keys', aggregate.authoringRecipeKeys, 18);
+  printCounts('authoring recipe expected effects', aggregate.authoringRecipeExpectedEffects, 18);
+  printCounts('authoring recipe current fit states', aggregate.authoringRecipeCurrentFitStates, 18);
+  printCounts('authoring recipe current fit specificity', aggregate.authoringRecipeCurrentFitSpecificity, 18);
+  printCounts('authoring recipe expected effect roles', aggregate.authoringRecipeExpectedEffectRoles, 18);
+  printCounts('authoring recipe expected effect current outcomes', aggregate.authoringRecipeExpectedEffectCurrentOutcomes, 18);
+  printCounts('authoring applicable recipe expected effect current outcomes', aggregate.authoringRecipeApplicableExpectedEffectCurrentOutcomes, 18);
+  printCounts('authoring recipe expected effect taste value layers', aggregate.authoringRecipeExpectedEffectTasteValueLayers, 18);
+  printCounts('authoring recipe expected effect taste layer outcomes', aggregate.authoringRecipeExpectedEffectTasteLayerOutcomes, 18);
+  printCounts('authoring recipe expected effect targets', aggregate.authoringRecipeExpectedEffectTargets, 18);
+  printCounts('authoring recipe expected effect target outcomes', aggregate.authoringRecipeExpectedEffectTargetOutcomes, 18);
+  printCounts('authoring recipe expected effect recipe target outcomes', aggregate.authoringRecipeExpectedEffectRecipeTargetOutcomes, 18);
+  printCounts('authoring applicable recipe expected effect target outcomes', aggregate.authoringRecipeApplicableExpectedEffectTargetOutcomes, 18);
+  printCounts('authoring applicable recipe expected effect recipe target outcomes', aggregate.authoringRecipeApplicableExpectedEffectRecipeTargetOutcomes, 18);
+  printCounts('authoring recipe signature target outcomes', aggregate.authoringRecipeSignatureEffectTargetOutcomes, 18);
+  printCounts('authoring recipe signature recipe target outcomes', aggregate.authoringRecipeSignatureEffectRecipeTargetOutcomes, 18);
+  printCounts('authoring recipe discriminator target outcomes', aggregate.authoringRecipeDiscriminatorEffectTargetOutcomes, 18);
+  printCounts('authoring recipe discriminator recipe target outcomes', aggregate.authoringRecipeDiscriminatorEffectRecipeTargetOutcomes, 18);
+  printCounts('authoring recipe candidate signature target outcomes', aggregate.authoringRecipeCandidateSignatureEffectTargetOutcomes, 18);
+  printCounts('authoring recipe candidate signature recipe target outcomes', aggregate.authoringRecipeCandidateSignatureEffectRecipeTargetOutcomes, 18);
+  printCounts('authoring recipe expected effect scopes', aggregate.authoringRecipeExpectedEffectScopes, 18);
+  printCounts('authoring recipe expected effect cardinalities', aggregate.authoringRecipeExpectedEffectCardinalities, 18);
+  printCounts('authoring recipe expected effect filter counts', aggregate.authoringRecipeExpectedEffectFilterCounts, 18);
+  printCounts('authoring recipe open reasons', aggregate.authoringRecipeOpenReasons, 18);
   printCounts('resource kinds', aggregate.resourceKinds);
+  printCounts('resource declaration modes', aggregate.resourceDeclarationModes);
+  printCounts('DI key identity kinds', aggregate.diKeyIdentityKinds);
+  printCounts('DI key identity declaration coverage', aggregate.diKeyIdentityDeclarationCoverage);
+  printCounts('DI key identity declaration address coverage', aggregate.diKeyIdentityDeclarationAddressCoverage);
+  printCounts('configuration issue kinds', aggregate.configurationIssueKinds);
+  printCounts('configuration issue framework error codes', aggregate.configurationIssueFrameworkErrorCodes, 18);
+  printCounts('evaluation issue kinds', aggregate.evaluationIssueKinds);
+  printCounts('evaluation issue framework error codes', aggregate.evaluationIssueFrameworkErrorCodes, 18);
+  printCounts('evaluation issue subjects', aggregate.evaluationIssueSubjectKinds);
+  printCounts('evaluation issue actual values', aggregate.evaluationIssueActualValueKinds);
+  printCounts('di issue kinds', aggregate.diIssueKinds);
+  printCounts('di issue subjects', aggregate.diIssueSubjectKinds);
+  printCounts('di issue severities', aggregate.diIssueSeverities);
+  printCounts('di issue resolve execution contexts', aggregate.diIssueResolveExecutionContexts);
+  printCounts('di issue active-container expectations', aggregate.diIssueActiveContainerExpectations);
+  printCounts('di issue resolve nullish key argument counts', aggregate.diIssueResolveNullishKeyArgumentCounts);
+  printCounts('di issue resolve nullish key argument kinds', aggregate.diIssueResolveNullishKeyArgumentKinds);
+  printCounts('di issue inject decorator target kinds', aggregate.diIssueInjectDecoratorTargetKinds);
+  printCounts('di issue inject decorator names', aggregate.diIssueInjectDecoratorNames);
+  printCounts('di issue container API methods', aggregate.diIssueContainerApiMethods);
+  printCounts('di issue container API key kinds', aggregate.diIssueContainerApiKeyKinds);
+  printCounts('di issue container API key identities', aggregate.diIssueContainerApiKeyIdentities);
+  printCounts('di issue container API auto-register', aggregate.diIssueContainerApiAutoRegister);
+  printCounts('di issue framework error codes', aggregate.diIssueFrameworkErrorCodes, 18);
+  printCounts('observation issue kinds', aggregate.observationIssueKinds);
+  printCounts('observation issue framework error codes', aggregate.observationIssueFrameworkErrorCodes, 18);
+  printCounts('validation issue kinds', aggregate.validationIssueKinds);
+  printCounts('validation issue framework error codes', aggregate.validationIssueFrameworkErrorCodes, 18);
+  printCounts('fetch-client issue kinds', aggregate.fetchClientIssueKinds);
+  printCounts('fetch-client issue framework error codes', aggregate.fetchClientIssueFrameworkErrorCodes, 18);
+  printCounts('dialog issue kinds', aggregate.dialogIssueKinds);
+  printCounts('dialog issue framework error codes', aggregate.dialogIssueFrameworkErrorCodes, 18);
+  printCounts('resource issue kinds', aggregate.resourceIssueKinds);
+  printCounts('resource issue framework error codes', aggregate.resourceIssueFrameworkErrorCodes, 18);
+  printRouterPressureCounts(aggregate);
+  printCounts('runtime controllers: creation kinds', aggregate.runtimeControllerCreationKinds);
+  printCounts('runtime controllers: hydration handoff', aggregate.runtimeControllerHydrationHandoff);
+  printCounts('bindable modes', aggregate.bindableModes);
+  printCounts('bindable effective value type shapes', aggregate.bindableEffectiveValueTypeShapes);
+  printCounts('bindable value type weak', aggregate.bindableValueTypeWeak);
+  printCounts('binding target-access strategies', aggregate.bindingTargetAccessStrategies);
+  printCounts('binding target-access target type sources', aggregate.bindingTargetAccessTargetTypeSources);
+  printCounts('binding target-access target type surfaces', aggregate.bindingTargetAccessTargetTypeSurfaces, 18);
+  printCounts('binding target-access property type surfaces', aggregate.bindingTargetAccessPropertyTypeSurfaces, 18);
+  printCounts('binding target-access type surface classes', aggregate.bindingTargetAccessTypeSurfaceClasses, 18);
+  printCounts('binding target-access type-source surface classes', aggregate.bindingTargetAccessTypeSourceSurfaceClasses, 18);
+  printCounts('binding target-access framework error codes', aggregate.bindingTargetAccessFrameworkErrorCodes, 18);
+  printCounts('binding behavior application names', aggregate.bindingBehaviorApplicationNames);
+  printCounts('binding behavior application target properties', aggregate.bindingBehaviorApplicationTargetProperties, 18);
+  printCounts('binding value-channel kinds', aggregate.bindingValueChannelKinds);
+  printCounts('binding value-channel target kinds', aggregate.bindingValueChannelTargetKinds);
+  printCounts('binding value-channel runtime type surfaces', aggregate.bindingValueChannelRuntimeTypeSurfaces, 18);
+  printCounts('template diagnostic authorities', aggregate.templateDiagnosticAuthorities);
+  printCounts('template diagnostic kinds', aggregate.templateDiagnosticKinds);
+  printCounts('template diagnostic framework error codes', aggregate.templateDiagnosticFrameworkErrorCodes, 18);
+  printCounts('template diagnostic missing inputs', aggregate.templateDiagnosticMissingInputs, 18);
+  printCounts('template diagnostic suggestions', aggregate.templateDiagnosticSuggestions, 18);
+  printCounts('app diagnostic domains', aggregate.appDiagnosticDomains);
+  printCounts('app diagnostic kinds', aggregate.appDiagnosticKinds, 18);
+  printCounts('app diagnostic framework error codes', aggregate.appDiagnosticFrameworkErrorCodes, 18);
+  printCounts('binding data-flow binding kinds', aggregate.bindingDataFlowBindingKinds);
+  printCounts('binding data-flow directions', aggregate.bindingDataFlowDirections);
+  printCounts('binding data-flow strict bindings', aggregate.bindingDataFlowStrictBindings);
+  printCounts('binding data-flow parse result kinds', aggregate.bindingDataFlowParseResultKinds);
+  printCounts('binding data-flow value-site kinds', aggregate.bindingDataFlowValueSiteKinds);
+  printCounts('binding data-flow source kinds', aggregate.bindingDataFlowSourceKinds);
+  printCounts('binding data-flow target kinds', aggregate.bindingDataFlowTargetKinds);
+  printCounts('binding data-flow source type open kinds', aggregate.bindingDataFlowSourceTypeOpenKinds);
+  printCounts('binding data-flow source type surfaces', aggregate.bindingDataFlowSourceTypeSurfaces, 18);
+  printCounts('binding data-flow target type surfaces', aggregate.bindingDataFlowTargetTypeSurfaces, 18);
+  printCounts('binding data-flow value-site type surfaces', aggregate.bindingDataFlowValueSiteTypeSurfaces, 18);
+  printCounts('binding data-flow source assignment kinds', aggregate.bindingDataFlowSourceAssignmentKinds);
+  printCounts('binding data-flow framework error codes', aggregate.bindingDataFlowFrameworkErrorCodes, 18);
+  printCounts('binding data-flow source assignment pressure classes', aggregate.bindingDataFlowSourceAssignmentPressureClasses, 18);
+  printCounts('binding data-flow open reasons', aggregate.bindingDataFlowOpenReasons, 12);
+  printCounts('open seam kinds', aggregate.openSeamKinds);
+  printCounts('open seam reason kinds', aggregate.openSeamReasonKinds, 12);
+  printQueryOutcomes('query outcomes', aggregate.outcomes);
+}
+
+function printRouterPressureCounts(aggregate) {
   printCounts('router options: useHref', aggregate.routerOptionsUseHref);
   printCounts('router options: useUrlFragmentHash', aggregate.routerOptionsUseUrlFragmentHash);
   printCounts('router options: useEagerLoading', aggregate.routerOptionsUseEagerLoading);
   printCounts('route kinds', aggregate.routeKinds);
+  printCounts('route origin kinds', aggregate.routeOriginKinds);
+  printCounts('route value kinds', aggregate.routeValueKinds);
   printCounts('route component kinds', aggregate.routeComponentKinds);
   printCounts('route component resolution', aggregate.routeComponentResolution);
+  printCounts('route viewport fields', aggregate.routeViewportPresence);
+  printCounts('route child cardinality', aggregate.routeChildCardinality);
+  printCounts('route contexts: viewport agent', aggregate.routeContextViewportAgents);
+  printCounts('route trees: node count', aggregate.routeTreeNodeCount);
+  printCounts('route nodes: children', aggregate.routeNodeChildren);
+  printCounts('route nodes: viewport', aggregate.routeNodeViewport);
+  printCounts('route pattern segment kinds', aggregate.routePatternSegmentKinds);
+  printCounts('route endpoint residuals', aggregate.routeEndpointResiduals);
+  printCounts('route-recognizer state kinds', aggregate.routeRecognizerStateKinds);
+  printCounts('route-recognizer state endpoints', aggregate.routeRecognizerStateEndpoints);
+  printCounts('route-recognizer issue kinds', aggregate.routeRecognizerIssueKinds);
+  printCounts('router issue kinds', aggregate.routerIssueKinds);
+  printCounts('router issue framework error codes', aggregate.routerIssueFrameworkErrorCodes, 18);
+  printCounts('recognized route route context', aggregate.recognizedRouteRouteContext);
+  printCounts('typed navigation instruction kinds', aggregate.typedNavigationInstructionKinds);
+  printCounts('viewport instruction component kinds', aggregate.viewportInstructionComponentKinds);
+  printCounts('viewport instruction tree route context', aggregate.viewportInstructionTreeRouteContext);
+}
+
+function printRawAggregateCounts(aggregate) {
+  printPageCounts('page counts', aggregate.pageCounts);
+  printCounts('project shape kinds', aggregate.projectShapeKinds);
+  printCounts('skipped project shape kinds', aggregate.skippedProjectShapeKinds);
+  printCounts('project analysis kinds', aggregate.projectAnalysisKinds);
+  printCounts('skipped project analysis kinds', aggregate.skippedProjectAnalysisKinds);
+  printCounts('project Aurelia dependency scopes', aggregate.projectAureliaDependencyScopes);
+  printCounts('project Aurelia dependency origins', aggregate.projectAureliaDependencyOrigins);
+  printCounts('project Aurelia dependency scope origins', aggregate.projectAureliaDependencyScopeOrigins);
+  printCounts('project Aurelia source signals', aggregate.projectAureliaSourceSignals);
+  printCounts('project shape reasons', aggregate.projectShapeReasons);
+  printCounts('project source roles', aggregate.projectSourceRoles);
+  printCounts('app topology service roles', aggregate.appTopologyServiceRoles);
+  printCounts('app topology service export states', aggregate.appTopologyServiceExportStates);
+  printCounts('app topology service resolve call counts', aggregate.appTopologyServiceResolveCallCounts);
+  printCounts('app topology injection mechanisms', aggregate.appTopologyInjectionMechanisms);
+  printCounts('app topology injection key declaration kinds', aggregate.appTopologyInjectionKeyDeclarationKinds);
+  printCounts('app topology injection key declaration roles', aggregate.appTopologyInjectionKeyDeclarationRoles);
+  printCounts('app topology injection key import kinds', aggregate.appTopologyInjectionKeyImportKinds);
+  printCounts('app topology injection key import scopes', aggregate.appTopologyInjectionKeyImportScopes);
+  printCounts('app topology injection consumer classes', aggregate.appTopologyInjectionConsumerClasses);
+  printCounts('app topology injection consumer member kinds', aggregate.appTopologyInjectionConsumerMemberKinds);
+  printCounts('app topology injection execution contexts', aggregate.appTopologyInjectionExecutionContexts);
+  printCounts('app topology injection active-container expectations', aggregate.appTopologyInjectionActiveContainerExpectations);
+  printCounts('app topology injection nullish key argument counts', aggregate.appTopologyInjectionNullishKeyArgumentCounts);
+  printCounts('app topology injection nullish key argument kinds', aggregate.appTopologyInjectionNullishKeyArgumentKinds);
+  printCounts('app topology injection source coverage', aggregate.appTopologyInjectionSourceCoverage);
+  printCounts('app topology component roles', aggregate.appTopologyComponentRolesByKind);
+  printCounts('app topology component role evidence', aggregate.appTopologyComponentRoleEvidence);
+  printCounts('app topology component role source coverage', aggregate.appTopologyComponentRoleSourceCoverage);
+  printCounts('app topology state composition roles', aggregate.appTopologyStateCompositionRoles);
+  printCounts('app topology state composition value type shapes', aggregate.appTopologyStateCompositionValueTypeShapes);
+  printCounts('app topology state composition source coverage', aggregate.appTopologyStateCompositionSourceCoverage);
+  printCounts('app topology style asset kinds', aggregate.appTopologyStyleAssetKinds);
+  printCounts('app topology style source kinds', aggregate.appTopologyStyleSourceKinds);
+  printCounts('app topology style owner kinds', aggregate.appTopologyStyleOwnerKinds);
+  printCounts('app topology style source coverage', aggregate.appTopologyStyleSourceCoverage);
+  printCounts('app topology style evidence coverage', aggregate.appTopologyStyleEvidenceCoverage);
+  printCounts('state store defaultness', aggregate.stateStoreDefaultness);
+  printCounts('state store initial-state kinds', aggregate.stateStoreInitialStateKinds);
+  printCounts('state store options-or-handler kinds', aggregate.stateStoreOptionsOrHandlerKinds);
+  printCounts('state store action-handler counts', aggregate.stateStoreActionHandlerCounts);
+  printCounts('authoring catalog taste axis layers', aggregate.authoringCatalogTasteAxisLayers);
+  printCounts('authoring catalog taste axis value layers', aggregate.authoringCatalogTasteAxisValueLayers, 36);
+  printCounts('authoring catalog taste axis primitive-policy value counts', aggregate.authoringCatalogTasteAxisPrimitivePolicyValueCounts);
+  printCounts('authoring catalog taste axis observed-shape value counts', aggregate.authoringCatalogTasteAxisObservedShapeValueCounts);
+  printCounts('authoring catalog taste axis derived-reading value counts', aggregate.authoringCatalogTasteAxisDerivedReadingValueCounts);
+  printCounts('authoring catalog taste value layers', aggregate.authoringCatalogTasteValueLayers);
+  printCounts('authoring catalog profile preference counts', aggregate.authoringCatalogProfilePreferenceCounts, 18);
+  printCounts('authoring catalog profile preference axes', aggregate.authoringCatalogProfilePreferenceAxes, 18);
+  printCounts('authoring catalog profile preference values', aggregate.authoringCatalogProfilePreferenceValues, 18);
+  printCounts('authoring catalog profile preference layers', aggregate.authoringCatalogProfilePreferenceLayers, 18);
+  printCounts('authoring catalog operation families', aggregate.authoringCatalogOperationFamiliesByKey, 18);
+  printCounts('authoring catalog operation actions', aggregate.authoringCatalogOperationActions, 18);
+  printCounts('authoring catalog operation targets', aggregate.authoringCatalogOperationTargetKinds, 18);
+  printCounts('authoring catalog operation capability counts', aggregate.authoringCatalogOperationCapabilityCounts, 18);
+  printCounts('authoring catalog capability product open reasons', aggregate.authoringCatalogCapabilityProductOpenReasons, 18);
+  printCounts('authoring catalog operation product open reasons', aggregate.authoringCatalogOperationProductOpenReasons, 18);
+  printCounts('authoring catalog recipe support states', aggregate.authoringCatalogRecipeSupportStates, 18);
+  printCounts('authoring catalog recipe base keys', aggregate.authoringCatalogRecipeBaseKeys, 18);
+  printCounts('authoring catalog recipe specificity ranks', aggregate.authoringCatalogRecipeSpecificityRanks, 18);
+  printCounts('authoring catalog recipe preference counts', aggregate.authoringCatalogRecipePreferenceCounts, 18);
+  printCounts('authoring catalog recipe preference axes', aggregate.authoringCatalogRecipePreferenceAxes, 18);
+  printCounts('authoring catalog recipe preference values', aggregate.authoringCatalogRecipePreferenceValues, 18);
+  printCounts('authoring catalog recipe preference layers', aggregate.authoringCatalogRecipePreferenceLayers, 18);
+  printCounts('authoring catalog recipe source plan presence', aggregate.authoringCatalogRecipeSourcePlanPresence, 18);
+  printCounts('authoring catalog recipe source plan conflict policies', aggregate.authoringCatalogRecipeSourcePlanConflictPolicies, 18);
+  printCounts('authoring catalog recipe source plan formatting policies', aggregate.authoringCatalogRecipeSourcePlanFormattingPolicies, 18);
+  printCounts('authoring catalog recipe source plan package-tooling policies', aggregate.authoringCatalogRecipeSourcePlanPackageToolingPolicies, 18);
+  printCounts('authoring catalog recipe source plan file counts', aggregate.authoringCatalogRecipeSourcePlanFileCounts, 18);
+  printCounts('authoring catalog recipe project tooling presence', aggregate.authoringCatalogRecipeProjectToolingPresence, 18);
+  printCounts('authoring catalog recipe project tooling package managers', aggregate.authoringCatalogRecipeProjectToolingPackageManagers, 18);
+  printCounts('authoring catalog recipe project tooling build-tool policies', aggregate.authoringCatalogRecipeProjectToolingBuildToolPolicies, 18);
+  printCounts('authoring catalog recipe project tooling dependency scopes', aggregate.authoringCatalogRecipeProjectToolingDependencyScopes, 18);
+  printCounts('authoring catalog recipe project tooling dependency specifiers', aggregate.authoringCatalogRecipeProjectToolingDependencySpecifiers, 18);
+  printCounts('authoring catalog recipe project tooling script names', aggregate.authoringCatalogRecipeProjectToolingScriptNames, 18);
+  printCounts('authoring catalog recipe project tooling file kinds', aggregate.authoringCatalogRecipeProjectToolingFileKinds, 18);
+  printCounts('authoring catalog recipe project tooling file languages', aggregate.authoringCatalogRecipeProjectToolingFileLanguages, 18);
+  printCounts('authoring catalog recipe project tooling text authorities', aggregate.authoringCatalogRecipeProjectToolingTextAuthorities, 18);
+  printCounts('authoring catalog recipe source file roles', aggregate.authoringCatalogRecipeSourceFileRoles, 18);
+  printCounts('authoring catalog recipe source file languages', aggregate.authoringCatalogRecipeSourceFileLanguages, 18);
+  printCounts('authoring catalog recipe source file edit kinds', aggregate.authoringCatalogRecipeSourceFileEditKinds, 18);
+  printCounts('authoring catalog recipe source file text authorities', aggregate.authoringCatalogRecipeSourceFileTextAuthorities, 18);
+  printCounts('authoring catalog recipe expected effects', aggregate.authoringCatalogRecipeExpectedEffectKinds, 18);
+  printCounts('authoring catalog recipe expected effect roles', aggregate.authoringCatalogRecipeExpectedEffectRoles, 18);
+  printCounts('authoring catalog recipe expected effect targets', aggregate.authoringCatalogRecipeExpectedEffectTargets, 18);
+  printCounts('authoring catalog recipe expected effect filter counts', aggregate.authoringCatalogRecipeExpectedEffectFilterCounts, 18);
+  printCounts('authoring catalog recipe expected effect filter fields', aggregate.authoringCatalogRecipeExpectedEffectFilterFields, 18);
+  printCounts('authoring coverage surface kinds', aggregate.authoringCoverageSurfaceKinds);
+  printCounts('authoring coverage support states', aggregate.authoringCoverageSupportStates);
+  printCounts('authoring taste axis layers', aggregate.authoringTasteAxisLayers);
+  printCounts('authoring taste axis primitive-policy state', aggregate.authoringTasteAxisPolicyStates);
+  printCounts('authoring taste axis keys', aggregate.authoringTasteAxisKeys, 24);
+  printCounts('authoring taste axis key primitive-policy state', aggregate.authoringTasteAxisKeyPolicyStates, 24);
+  printCounts('authoring taste axis key value counts', aggregate.authoringTasteAxisKeyValueCounts, 24);
+  printCounts('authoring taste axis key open reasons', aggregate.authoringTasteAxisKeyOpenReasons, 24);
+  printCounts('authoring taste axis confidences', aggregate.authoringTasteAxisConfidences);
+  printCounts('authoring taste axis primitive-policy value counts', aggregate.authoringTasteAxisPrimitivePolicyValueCounts);
+  printCounts('authoring taste axis observed-shape value counts', aggregate.authoringTasteAxisObservedShapeValueCounts);
+  printCounts('authoring taste axis derived-reading value counts', aggregate.authoringTasteAxisDerivedReadingValueCounts);
+  printCounts('authoring taste value layers', aggregate.authoringTasteValueLayers);
+  printCounts('authoring taste axis values', aggregate.authoringTasteAxisValues, 24);
+  printAuthoringTasteFocus(aggregate);
+  printCounts('authoring taste values', aggregate.authoringTasteValues, 24);
+  printCounts('authoring capability keys', aggregate.authoringCapabilityKeys, 24);
+  printCounts('authoring capability support states', aggregate.authoringCapabilitySupportStates);
+  printCounts('authoring capability open reasons', aggregate.authoringCapabilityOpenReasons, 18);
+  printCounts('authoring operation actions', aggregate.authoringOperationActions);
+  printCounts('authoring operation support states', aggregate.authoringOperationSupportStates);
+  printCounts('authoring operation open reasons', aggregate.authoringOperationOpenReasons, 18);
+  printCounts('authoring repair kinds', aggregate.authoringRepairKinds, 18);
+  printCounts('authoring repair evidence kinds', aggregate.authoringRepairEvidenceKinds);
+  printCounts('authoring repair support states', aggregate.authoringRepairSupportStates);
+  printCounts('authoring repair authorities', aggregate.authoringRepairAuthorities);
+  printCounts('authoring repair loci', aggregate.authoringRepairLoci);
+  printCounts('authoring repair diagnostic kinds', aggregate.authoringRepairDiagnosticKinds, 18);
+  printCounts('authoring repair seam kinds', aggregate.authoringRepairSeamKinds, 18);
+  printCounts('authoring repair open reasons', aggregate.authoringRepairOpenReasons, 18);
+  printCounts('authoring repair action targets', aggregate.authoringRepairActionTargets, 18);
+  printCounts('authoring repair cluster kinds', aggregate.authoringRepairClusterKinds, 18);
+  printCounts('authoring repair cluster plan kinds', aggregate.authoringRepairClusterPlanKinds, 18);
+  printCounts('authoring repair cluster change domains', aggregate.authoringRepairClusterChangeDomains, 18);
+  printCounts('authoring repair cluster plan readiness', aggregate.authoringRepairClusterPlanReadiness, 18);
+  printCounts('authoring repair cluster action targets', aggregate.authoringRepairClusterActionTargets, 18);
+  printCounts('authoring repair cluster action-target counts', aggregate.authoringRepairClusterActionTargetCounts, 18);
+  printCounts('authoring repair cluster site kinds', aggregate.authoringRepairClusterSiteKinds, 18);
+  printCounts('authoring repair cluster value-site kinds', aggregate.authoringRepairClusterValueSiteKinds, 18);
+  printCounts('authoring repair cluster runtime boundary kinds', aggregate.authoringRepairClusterRuntimeBoundaryKinds, 18);
+  printCounts('authoring repair cluster runtime intent kinds', aggregate.authoringRepairClusterRuntimeIntentKinds, 18);
+  printCounts('authoring repair cluster target-member counts', aggregate.authoringRepairClusterTargetMemberCounts, 18);
+  printCounts('authoring repair cluster owner-type counts', aggregate.authoringRepairClusterOwnerTypeCounts, 18);
+  printCounts('authoring repair cluster value-type counts', aggregate.authoringRepairClusterValueTypeCounts, 18);
+  printCounts('authoring repair cluster member-hint counts', aggregate.authoringRepairClusterMemberHintCounts, 18);
+  printCounts('authoring repair cluster member-hint value-type coverage', aggregate.authoringRepairClusterMemberHintValueTypeCoverage, 18);
+  printCounts('authoring repair cluster member-hint value-type sources', aggregate.authoringRepairClusterMemberHintValueTypeSources, 18);
+  printCounts('authoring repair cluster target source coverage', aggregate.authoringRepairClusterActionTargetSourceCoverage, 18);
+  printCounts('authoring surface support states', aggregate.authoringSurfaceSupportStates);
+  printCounts('authoring recipe keys', aggregate.authoringRecipeKeys, 18);
+  printCounts('authoring recipe support states', aggregate.authoringRecipeSupportStates);
+  printCounts('authoring recipe expected effects', aggregate.authoringRecipeExpectedEffects, 18);
+  printCounts('authoring recipe current fit states', aggregate.authoringRecipeCurrentFitStates, 18);
+  printCounts('authoring recipe current fit specificity', aggregate.authoringRecipeCurrentFitSpecificity, 18);
+  printCounts('authoring recipe expected effect roles', aggregate.authoringRecipeExpectedEffectRoles, 18);
+  printCounts('authoring recipe expected effect current outcomes', aggregate.authoringRecipeExpectedEffectCurrentOutcomes, 18);
+  printCounts('authoring applicable recipe expected effect current outcomes', aggregate.authoringRecipeApplicableExpectedEffectCurrentOutcomes, 18);
+  printCounts('authoring recipe expected effect taste value layers', aggregate.authoringRecipeExpectedEffectTasteValueLayers, 18);
+  printCounts('authoring recipe expected effect taste layer outcomes', aggregate.authoringRecipeExpectedEffectTasteLayerOutcomes, 18);
+  printCounts('authoring recipe expected effect targets', aggregate.authoringRecipeExpectedEffectTargets, 24);
+  printCounts('authoring recipe expected effect target outcomes', aggregate.authoringRecipeExpectedEffectTargetOutcomes, 24);
+  printCounts('authoring recipe expected effect recipe target outcomes', aggregate.authoringRecipeExpectedEffectRecipeTargetOutcomes, 24);
+  printCounts('authoring applicable recipe expected effect target outcomes', aggregate.authoringRecipeApplicableExpectedEffectTargetOutcomes, 24);
+  printCounts('authoring applicable recipe expected effect recipe target outcomes', aggregate.authoringRecipeApplicableExpectedEffectRecipeTargetOutcomes, 24);
+  printCounts('authoring recipe signature target outcomes', aggregate.authoringRecipeSignatureEffectTargetOutcomes, 24);
+  printCounts('authoring recipe signature recipe target outcomes', aggregate.authoringRecipeSignatureEffectRecipeTargetOutcomes, 24);
+  printCounts('authoring recipe discriminator target outcomes', aggregate.authoringRecipeDiscriminatorEffectTargetOutcomes, 24);
+  printCounts('authoring recipe discriminator recipe target outcomes', aggregate.authoringRecipeDiscriminatorEffectRecipeTargetOutcomes, 24);
+  printCounts('authoring recipe candidate signature target outcomes', aggregate.authoringRecipeCandidateSignatureEffectTargetOutcomes, 24);
+  printCounts('authoring recipe candidate signature recipe target outcomes', aggregate.authoringRecipeCandidateSignatureEffectRecipeTargetOutcomes, 24);
+  printCounts('authoring recipe expected effect observed counts', aggregate.authoringRecipeExpectedEffectObservedCounts, 18);
+  printCounts('authoring recipe expected effect scopes', aggregate.authoringRecipeExpectedEffectScopes, 18);
+  printCounts('authoring recipe expected effect cardinalities', aggregate.authoringRecipeExpectedEffectCardinalities, 18);
+  printCounts('authoring recipe expected effect filter counts', aggregate.authoringRecipeExpectedEffectFilterCounts, 18);
+  printCounts('authoring recipe expected effect filter fields', aggregate.authoringRecipeExpectedEffectFilterFields, 18);
+  printCounts('authoring recipe open reasons', aggregate.authoringRecipeOpenReasons, 18);
+  printCounts('authoring open reason loci', aggregate.authoringOpenReasonLoci);
+  printCounts('resource kinds', aggregate.resourceKinds);
+  printCounts('resource declaration modes', aggregate.resourceDeclarationModes);
+  printCounts('resource issue kinds', aggregate.resourceIssueKinds);
+  printCounts('resource issue framework error codes', aggregate.resourceIssueFrameworkErrorCodes, 18);
+  printCounts('observation issue kinds', aggregate.observationIssueKinds);
+  printCounts('observation issue framework error codes', aggregate.observationIssueFrameworkErrorCodes, 18);
+  printCounts('DI key identity kinds', aggregate.diKeyIdentityKinds);
+  printCounts('DI key identity declaration coverage', aggregate.diKeyIdentityDeclarationCoverage);
+  printCounts('DI key identity declaration address coverage', aggregate.diKeyIdentityDeclarationAddressCoverage);
+  printCounts('router options: useHref', aggregate.routerOptionsUseHref);
+  printCounts('router options: useUrlFragmentHash', aggregate.routerOptionsUseUrlFragmentHash);
+  printCounts('router options: useEagerLoading', aggregate.routerOptionsUseEagerLoading);
+  printCounts('route kinds', aggregate.routeKinds);
+  printCounts('route origin kinds', aggregate.routeOriginKinds);
+  printCounts('route value kinds', aggregate.routeValueKinds);
+  printCounts('route component kinds', aggregate.routeComponentKinds);
+  printCounts('route component resolution', aggregate.routeComponentResolution);
+  printCounts('route viewport fields', aggregate.routeViewportPresence);
   printCounts('route child cardinality', aggregate.routeChildCardinality);
   printCounts('route contexts: container', aggregate.routeContextContainers);
   printCounts('route contexts: viewport agent', aggregate.routeContextViewportAgents);
@@ -121,6 +725,9 @@ for (const [index, root] of roots.entries()) {
   printCounts('route-recognizer state endpoints', aggregate.routeRecognizerStateEndpoints);
   printCounts('route-recognizer state dynamic', aggregate.routeRecognizerStateDynamic);
   printCounts('route-recognizer state constrained', aggregate.routeRecognizerStateConstrained);
+  printCounts('route-recognizer issue kinds', aggregate.routeRecognizerIssueKinds);
+  printCounts('router issue kinds', aggregate.routerIssueKinds);
+  printCounts('router issue framework error codes', aggregate.routerIssueFrameworkErrorCodes, 18);
   printCounts('recognized route residue', aggregate.recognizedRouteResidue);
   printCounts('recognized route parameters', aggregate.recognizedRouteParameters);
   printCounts('recognized route redirect depth', aggregate.recognizedRouteRedirectDepth);
@@ -144,6 +751,36 @@ for (const [index, root] of roots.entries()) {
   printCounts('viewport instruction tree fragment', aggregate.viewportInstructionTreeFragment);
   printCounts('bindable modes', aggregate.bindableModes);
   printCounts('setter kinds', aggregate.setterKinds);
+  printCounts('bindable value type shapes', aggregate.bindableValueTypeShapes);
+  printCounts('bindable effective value type shapes', aggregate.bindableEffectiveValueTypeShapes);
+  printCounts('bindable value type weak', aggregate.bindableValueTypeWeak);
+  printCounts('bindable value type call signatures', aggregate.bindableValueTypeCallSignatures);
+  printCounts('bindable value type members', aggregate.bindableValueTypeMembers);
+  printCounts('binding target-access lookups', aggregate.bindingTargetAccessLookups);
+  printCounts('binding target-access target kinds', aggregate.bindingTargetAccessTargetKinds);
+  printCounts('binding target-access strategies', aggregate.bindingTargetAccessStrategies);
+  printCounts('binding target-access authorities', aggregate.bindingTargetAccessAuthorities);
+  printCounts('binding target-access target type sources', aggregate.bindingTargetAccessTargetTypeSources);
+  printCounts('binding target-access target type surfaces', aggregate.bindingTargetAccessTargetTypeSurfaces, 18);
+  printCounts('binding target-access property type surfaces', aggregate.bindingTargetAccessPropertyTypeSurfaces, 18);
+  printCounts('binding target-access type surface classes', aggregate.bindingTargetAccessTypeSurfaceClasses, 18);
+  printCounts('binding target-access type-source surface classes', aggregate.bindingTargetAccessTypeSourceSurfaceClasses, 18);
+  printCounts('binding target-access framework error codes', aggregate.bindingTargetAccessFrameworkErrorCodes, 18);
+  printCounts('binding target-access open reasons', aggregate.bindingTargetAccessOpenReasons, 12);
+  printCounts('binding behavior application names', aggregate.bindingBehaviorApplicationNames);
+  printCounts('binding behavior application phases', aggregate.bindingBehaviorApplicationPhases);
+  printCounts('binding behavior application binding kinds', aggregate.bindingBehaviorApplicationBindingKinds);
+  printCounts('binding behavior application target kinds', aggregate.bindingBehaviorApplicationTargetKinds);
+  printCounts('binding behavior application target properties', aggregate.bindingBehaviorApplicationTargetProperties, 18);
+  printCounts('binding behavior application argument counts', aggregate.bindingBehaviorApplicationArgumentCounts, 18);
+  printCounts('binding behavior application static argument counts', aggregate.bindingBehaviorApplicationStaticArgumentCounts, 18);
+  printCounts('binding value-channel kinds', aggregate.bindingValueChannelKinds);
+  printCounts('binding value-channel target kinds', aggregate.bindingValueChannelTargetKinds);
+  printCounts('binding value-channel authorities', aggregate.bindingValueChannelAuthorities);
+  printCounts('binding value-channel raw target type surfaces', aggregate.bindingValueChannelRawTypeSurfaces, 18);
+  printCounts('binding value-channel runtime type surfaces', aggregate.bindingValueChannelRuntimeTypeSurfaces, 18);
+  printCounts('binding value-channel domain counts', aggregate.bindingValueChannelDomainCounts, 18);
+  printCounts('binding value-channel open reasons', aggregate.bindingValueChannelOpenReasons, 12);
   printCounts('watch expression kinds', aggregate.watchExpressionKinds);
   printCounts('watch expression property-key kinds', aggregate.watchExpressionPropertyKeyKinds);
   printCounts('watch callback kinds', aggregate.watchCallbackKinds);
@@ -160,12 +797,30 @@ for (const [index, root] of roots.entries()) {
   printCounts('template diagnostic owner origins', aggregate.templateDiagnosticOwnerOrigins, 18);
   printCounts('template diagnostic site kinds', aggregate.templateDiagnosticSiteKinds, 18);
   printCounts('template diagnostic value-site kinds', aggregate.templateDiagnosticValueSiteKinds, 18);
+  printCounts('validation issue kinds', aggregate.validationIssueKinds);
+  printCounts('validation issue framework error codes', aggregate.validationIssueFrameworkErrorCodes, 18);
+  printCounts('fetch-client issue kinds', aggregate.fetchClientIssueKinds);
+  printCounts('fetch-client issue framework error codes', aggregate.fetchClientIssueFrameworkErrorCodes, 18);
+  printCounts('dialog issue kinds', aggregate.dialogIssueKinds);
+  printCounts('dialog issue framework error codes', aggregate.dialogIssueFrameworkErrorCodes, 18);
+  printCounts('app diagnostic domains', aggregate.appDiagnosticDomains);
+  printCounts('app diagnostic authorities', aggregate.appDiagnosticAuthorities);
+  printCounts('app diagnostic kinds', aggregate.appDiagnosticKinds, 18);
+  printCounts('app diagnostic framework error codes', aggregate.appDiagnosticFrameworkErrorCodes, 18);
   printCounts('binding data-flow binding kinds', aggregate.bindingDataFlowBindingKinds);
   printCounts('binding data-flow directions', aggregate.bindingDataFlowDirections);
+  printCounts('binding data-flow strict bindings', aggregate.bindingDataFlowStrictBindings);
   printCounts('binding data-flow parse states', aggregate.bindingDataFlowParseStates);
   printCounts('binding data-flow parse result kinds', aggregate.bindingDataFlowParseResultKinds);
+  printCounts('binding data-flow value-site kinds', aggregate.bindingDataFlowValueSiteKinds);
   printCounts('binding data-flow source kinds', aggregate.bindingDataFlowSourceKinds);
+  printCounts('binding data-flow target kinds', aggregate.bindingDataFlowTargetKinds);
+  printCounts('binding data-flow source type open kinds', aggregate.bindingDataFlowSourceTypeOpenKinds);
+  printCounts('binding data-flow source type surfaces', aggregate.bindingDataFlowSourceTypeSurfaces, 18);
+  printCounts('binding data-flow target type surfaces', aggregate.bindingDataFlowTargetTypeSurfaces, 18);
+  printCounts('binding data-flow value-site type surfaces', aggregate.bindingDataFlowValueSiteTypeSurfaces, 18);
   printCounts('binding data-flow source assignment kinds', aggregate.bindingDataFlowSourceAssignmentKinds);
+  printCounts('binding data-flow framework error codes', aggregate.bindingDataFlowFrameworkErrorCodes, 18);
   printCounts('binding data-flow source assignment reason kinds', aggregate.bindingDataFlowSourceAssignmentReasons, 12);
   printCounts('binding data-flow source assignment pressure classes', aggregate.bindingDataFlowSourceAssignmentPressureClasses, 18);
   printCounts('binding data-flow source assignment by binding kind', aggregate.bindingDataFlowSourceAssignmentBindingKinds, 18);
@@ -181,7 +836,7 @@ for (const [index, root] of roots.entries()) {
   printCounts('app-root project open seam kinds', aggregate.appRootOpenSeamKinds);
   printCounts('non-app-root project open seam kinds', aggregate.nonAppRootOpenSeamKinds);
   printCounts('open seam summaries', aggregate.openSeamSummaries, 12);
-  printCounts('query outcomes', aggregate.outcomes);
+  printQueryOutcomes('query outcomes', aggregate.outcomes);
 }
 
 async function readPressureForRoot(root) {
@@ -207,6 +862,30 @@ async function readPressureForRoot(root) {
     authoringSourceFilesRequested: 0,
     appRuntimeTemplatesSeen: 0,
     authoringTemplatesSeen: 0,
+    appTopologyServices: 0,
+    appTopologyInjections: 0,
+    appTopologyServiceInteractions: 0,
+    appTopologyServiceInteractionBindings: 0,
+    appTopologyComponentRoles: 0,
+    appTopologyStateCompositions: 0,
+    appTopologyStyles: 0,
+    stateStores: 0,
+    authoringOrientationCoverageRows: 0,
+    authoringOrientationTasteAxes: 0,
+    authoringOrientationTasteValues: 0,
+    authoringOrientationCapabilities: 0,
+    authoringOrientationOperations: 0,
+    authoringOrientationRepairs: 0,
+    authoringOrientationRepairClusters: 0,
+    authoringOrientationOpenReasons: 0,
+    authoringCatalogOperationFamilies: 0,
+    authoringCatalogTasteAxes: 0,
+    authoringCatalogTasteValues: 0,
+    authoringCatalogProfiles: 0,
+    authoringCatalogCapabilities: 0,
+    authoringCatalogOperations: 0,
+    authoringCatalogRecipes: 0,
+    authoringCatalogRecipeExpectedEffects: 0,
     routerOptions: 0,
     routeConfigs: 0,
     routeConfigContexts: 0,
@@ -215,6 +894,8 @@ async function readPressureForRoot(root) {
     routePatterns: 0,
     routeEndpoints: 0,
     routeRecognizerStates: 0,
+    routeRecognizerIssues: 0,
+    routerIssues: 0,
     recognizedRoutes: 0,
     typedNavigationInstructions: 0,
     viewportInstructions: 0,
@@ -225,10 +906,24 @@ async function readPressureForRoot(root) {
     viewportAgents: 0,
     componentAgents: 0,
     appTasks: 0,
+    diKeyIdentities: 0,
+    diResolveCallSites: 0,
     runtimeControllers: 0,
     bindables: 0,
     watches: 0,
     templateDiagnostics: 0,
+    appDiagnostics: 0,
+    configurationIssues: 0,
+    evaluationIssues: 0,
+    diIssues: 0,
+    observationIssues: 0,
+    validationIssues: 0,
+    fetchClientIssues: 0,
+    dialogIssues: 0,
+    resourceIssues: 0,
+    bindingTargetAccesses: 0,
+    bindingBehaviorApplications: 0,
+    bindingValueChannels: 0,
     bindingDataFlows: 0,
     openBindingDataFlows: 0,
     bindingDataFlowSourceAssignmentPressures: 0,
@@ -237,12 +932,50 @@ async function readPressureForRoot(root) {
     appRootProjectOpenSeams: 0,
     nonAppRootProjectOpenSeams: 0,
     resourceKinds: {},
+    resourceDeclarationModes: {},
+    diKeyIdentityKinds: {},
+    diKeyIdentityDeclarationCoverage: {},
+    diKeyIdentityDeclarationAddressCoverage: {},
+    seenDiKeyIdentityHandles: new Set(),
+    configurationIssueKinds: {},
+    configurationIssueFrameworkErrorCodes: {},
+    evaluationIssueKinds: {},
+    evaluationIssueFrameworkErrorCodes: {},
+    evaluationIssueSubjectKinds: {},
+    evaluationIssueActualValueKinds: {},
+    diIssueKinds: {},
+    diIssueSubjectKinds: {},
+    diIssueSeverities: {},
+    diIssueResolveExecutionContexts: {},
+    diIssueActiveContainerExpectations: {},
+    diIssueResolveNullishKeyArgumentCounts: {},
+    diIssueResolveNullishKeyArgumentKinds: {},
+    diIssueInjectDecoratorTargetKinds: {},
+    diIssueInjectDecoratorNames: {},
+    diIssueContainerApiMethods: {},
+    diIssueContainerApiKeyKinds: {},
+    diIssueContainerApiKeyIdentities: {},
+    diIssueContainerApiAutoRegister: {},
+    diIssueFrameworkErrorCodes: {},
+    observationIssueKinds: {},
+    observationIssueFrameworkErrorCodes: {},
+    validationIssueKinds: {},
+    validationIssueFrameworkErrorCodes: {},
+    fetchClientIssueKinds: {},
+    fetchClientIssueFrameworkErrorCodes: {},
+    dialogIssueKinds: {},
+    dialogIssueFrameworkErrorCodes: {},
+    resourceIssueKinds: {},
+    resourceIssueFrameworkErrorCodes: {},
     routerOptionsUseHref: {},
     routerOptionsUseUrlFragmentHash: {},
     routerOptionsUseEagerLoading: {},
     routeKinds: {},
+    routeOriginKinds: {},
+    routeValueKinds: {},
     routeComponentKinds: {},
     routeComponentResolution: {},
+    routeViewportPresence: {},
     routeChildCardinality: {},
     routeContextContainers: {},
     routeContextViewportAgents: {},
@@ -278,6 +1011,9 @@ async function readPressureForRoot(root) {
     routeRecognizerStateEndpoints: {},
     routeRecognizerStateDynamic: {},
     routeRecognizerStateConstrained: {},
+    routeRecognizerIssueKinds: {},
+    routerIssueKinds: {},
+    routerIssueFrameworkErrorCodes: {},
     recognizedRouteResidue: {},
     recognizedRouteParameters: {},
     recognizedRouteRedirectDepth: {},
@@ -301,6 +1037,36 @@ async function readPressureForRoot(root) {
     viewportInstructionTreeFragment: {},
     bindableModes: {},
     setterKinds: {},
+    bindableValueTypeShapes: {},
+    bindableEffectiveValueTypeShapes: {},
+    bindableValueTypeWeak: {},
+    bindableValueTypeCallSignatures: {},
+    bindableValueTypeMembers: {},
+    bindingTargetAccessLookups: {},
+    bindingTargetAccessTargetKinds: {},
+    bindingTargetAccessStrategies: {},
+    bindingTargetAccessAuthorities: {},
+    bindingTargetAccessTargetTypeSources: {},
+    bindingTargetAccessTargetTypeSurfaces: {},
+    bindingTargetAccessPropertyTypeSurfaces: {},
+    bindingTargetAccessTypeSurfaceClasses: {},
+    bindingTargetAccessTypeSourceSurfaceClasses: {},
+    bindingTargetAccessOpenReasons: {},
+    bindingTargetAccessFrameworkErrorCodes: {},
+    bindingBehaviorApplicationNames: {},
+    bindingBehaviorApplicationPhases: {},
+    bindingBehaviorApplicationBindingKinds: {},
+    bindingBehaviorApplicationTargetKinds: {},
+    bindingBehaviorApplicationTargetProperties: {},
+    bindingBehaviorApplicationArgumentCounts: {},
+    bindingBehaviorApplicationStaticArgumentCounts: {},
+    bindingValueChannelKinds: {},
+    bindingValueChannelTargetKinds: {},
+    bindingValueChannelAuthorities: {},
+    bindingValueChannelRawTypeSurfaces: {},
+    bindingValueChannelRuntimeTypeSurfaces: {},
+    bindingValueChannelDomainCounts: {},
+    bindingValueChannelOpenReasons: {},
     watchExpressionKinds: {},
     watchExpressionPropertyKeyKinds: {},
     watchCallbackKinds: {},
@@ -317,12 +1083,24 @@ async function readPressureForRoot(root) {
     templateDiagnosticOwnerOrigins: {},
     templateDiagnosticSiteKinds: {},
     templateDiagnosticValueSiteKinds: {},
+    appDiagnosticDomains: {},
+    appDiagnosticAuthorities: {},
+    appDiagnosticKinds: {},
+    appDiagnosticFrameworkErrorCodes: {},
     bindingDataFlowBindingKinds: {},
     bindingDataFlowDirections: {},
+    bindingDataFlowStrictBindings: {},
     bindingDataFlowParseStates: {},
     bindingDataFlowParseResultKinds: {},
+    bindingDataFlowValueSiteKinds: {},
     bindingDataFlowSourceKinds: {},
+    bindingDataFlowTargetKinds: {},
+    bindingDataFlowSourceTypeOpenKinds: {},
+    bindingDataFlowSourceTypeSurfaces: {},
+    bindingDataFlowTargetTypeSurfaces: {},
+    bindingDataFlowValueSiteTypeSurfaces: {},
     bindingDataFlowSourceAssignmentKinds: {},
+    bindingDataFlowFrameworkErrorCodes: {},
     bindingDataFlowSourceAssignmentReasons: {},
     bindingDataFlowSourceAssignmentPressureClasses: {},
     bindingDataFlowSourceAssignmentBindingKinds: {},
@@ -340,9 +1118,181 @@ async function readPressureForRoot(root) {
     openSeamSummaries: {},
     projectShapeKinds: {},
     skippedProjectShapeKinds: {},
+    projectAnalysisKinds: {},
+    skippedProjectAnalysisKinds: {},
     projectAureliaDependencyScopes: {},
+    projectAureliaDependencyOrigins: {},
+    projectAureliaDependencyScopeOrigins: {},
     projectAureliaSourceSignals: {},
+    projectShapeReasons: {},
     projectSourceRoles: {},
+    appTopologyServiceRoles: {},
+    appTopologyServiceExportStates: {},
+    appTopologyServiceResolveCallCounts: {},
+    appTopologyInjectionMechanisms: {},
+    appTopologyInjectionKeyDeclarationKinds: {},
+    appTopologyInjectionKeyDeclarationRoles: {},
+    appTopologyInjectionKeyImportKinds: {},
+    appTopologyInjectionKeyImportScopes: {},
+    appTopologyInjectionConsumerClasses: {},
+    appTopologyInjectionConsumerMemberKinds: {},
+    appTopologyInjectionExecutionContexts: {},
+    appTopologyInjectionActiveContainerExpectations: {},
+    appTopologyInjectionNullishKeyArgumentCounts: {},
+    appTopologyInjectionNullishKeyArgumentKinds: {},
+    appTopologyInjectionSourceCoverage: {},
+    appTopologyServiceInteractionOperationKinds: {},
+    appTopologyServiceInteractionTargetRoles: {},
+    appTopologyServiceInteractionConsumerRoles: {},
+    appTopologyServiceInteractionConsumerClasses: {},
+    appTopologyServiceInteractionConsumerMembers: {},
+    appTopologyServiceInteractionArgumentCounts: {},
+    appTopologyServiceInteractionSelfStates: {},
+    appTopologyServiceInteractionSourceCoverage: {},
+    appTopologyServiceInteractionBindingSourceKinds: {},
+    appTopologyServiceInteractionBindingSourceRoots: {},
+    appTopologyServiceInteractionBindingDirections: {},
+    appTopologyServiceInteractionBindingTargetProperties: {},
+    appTopologyServiceInteractionBindingOperationKinds: {},
+    appTopologyServiceInteractionBindingTargetRoles: {},
+    appTopologyServiceInteractionBindingSelfStates: {},
+    appTopologyComponentRolesByKind: {},
+    appTopologyComponentRoleEvidence: {},
+    appTopologyComponentRoleSourceCoverage: {},
+    appTopologyStateCompositionRoles: {},
+    appTopologyStateCompositionValueTypeShapes: {},
+    appTopologyStateCompositionSourceCoverage: {},
+    appTopologyStyleAssetKinds: {},
+    appTopologyStyleSourceKinds: {},
+    appTopologyStyleOwnerKinds: {},
+    appTopologyStyleSourceCoverage: {},
+    appTopologyStyleEvidenceCoverage: {},
+    stateStoreDefaultness: {},
+    stateStoreInitialStateKinds: {},
+    stateStoreOptionsOrHandlerKinds: {},
+    stateStoreActionHandlerCounts: {},
+    authoringCatalogTasteAxisLayers: {},
+    authoringCatalogTasteAxisValueLayers: {},
+    authoringCatalogTasteAxisPrimitivePolicyValueCounts: {},
+    authoringCatalogTasteAxisObservedShapeValueCounts: {},
+    authoringCatalogTasteAxisDerivedReadingValueCounts: {},
+    authoringCatalogTasteValueLayers: {},
+    authoringCatalogProfilePreferenceCounts: {},
+    authoringCatalogProfilePreferenceAxes: {},
+    authoringCatalogProfilePreferenceValues: {},
+    authoringCatalogProfilePreferenceLayers: {},
+    authoringCatalogOperationFamiliesByKey: {},
+    authoringCatalogOperationActions: {},
+    authoringCatalogOperationTargetKinds: {},
+    authoringCatalogOperationCapabilityCounts: {},
+    authoringCatalogCapabilityProductOpenReasons: {},
+    authoringCatalogOperationProductOpenReasons: {},
+    authoringCatalogRecipeSupportStates: {},
+    authoringCatalogRecipeBaseKeys: {},
+    authoringCatalogRecipeSpecificityRanks: {},
+    authoringCatalogRecipePreferenceCounts: {},
+    authoringCatalogRecipePreferenceAxes: {},
+    authoringCatalogRecipePreferenceValues: {},
+    authoringCatalogRecipePreferenceLayers: {},
+    authoringCatalogRecipeSourcePlanPresence: {},
+    authoringCatalogRecipeSourcePlanConflictPolicies: {},
+    authoringCatalogRecipeSourcePlanFormattingPolicies: {},
+    authoringCatalogRecipeSourcePlanPackageToolingPolicies: {},
+    authoringCatalogRecipeSourcePlanFileCounts: {},
+    authoringCatalogRecipeProjectToolingPresence: {},
+    authoringCatalogRecipeProjectToolingPackageManagers: {},
+    authoringCatalogRecipeProjectToolingBuildToolPolicies: {},
+    authoringCatalogRecipeProjectToolingDependencyScopes: {},
+    authoringCatalogRecipeProjectToolingDependencySpecifiers: {},
+    authoringCatalogRecipeProjectToolingScriptNames: {},
+    authoringCatalogRecipeProjectToolingFileKinds: {},
+    authoringCatalogRecipeProjectToolingFileLanguages: {},
+    authoringCatalogRecipeProjectToolingTextAuthorities: {},
+    authoringCatalogRecipeSourceFileRoles: {},
+    authoringCatalogRecipeSourceFileLanguages: {},
+    authoringCatalogRecipeSourceFileEditKinds: {},
+    authoringCatalogRecipeSourceFileTextAuthorities: {},
+    authoringCatalogRecipeExpectedEffectKinds: {},
+    authoringCatalogRecipeExpectedEffectRoles: {},
+    authoringCatalogRecipeExpectedEffectTargets: {},
+    authoringCatalogRecipeExpectedEffectFilterCounts: {},
+    authoringCatalogRecipeExpectedEffectFilterFields: {},
+    authoringCoverageSurfaceKinds: {},
+    authoringCoverageSupportStates: {},
+    authoringTasteAxisKeys: {},
+    authoringTasteAxisLayers: {},
+    authoringTasteAxisPolicyStates: {},
+    authoringTasteAxisKeyPolicyStates: {},
+    authoringTasteAxisKeyValueCounts: {},
+    authoringTasteAxisKeyOpenReasons: {},
+    authoringTasteAxisConfidences: {},
+    authoringTasteAxisPrimitivePolicyValueCounts: {},
+    authoringTasteAxisObservedShapeValueCounts: {},
+    authoringTasteAxisDerivedReadingValueCounts: {},
+    authoringTasteValueLayers: {},
+    authoringTasteAxisValues: {},
+    authoringTasteValues: {},
+    authoringCapabilityKeys: {},
+    authoringCapabilitySupportStates: {},
+    authoringCapabilityOpenReasons: {},
+    authoringOperationActions: {},
+    authoringOperationSupportStates: {},
+    authoringOperationOpenReasons: {},
+    authoringRepairKinds: {},
+    authoringRepairEvidenceKinds: {},
+    authoringRepairSupportStates: {},
+    authoringRepairAuthorities: {},
+    authoringRepairLoci: {},
+    authoringRepairDiagnosticKinds: {},
+    authoringRepairSeamKinds: {},
+    authoringRepairOpenReasons: {},
+    authoringRepairActionTargets: {},
+    authoringRepairClusterKinds: {},
+    authoringRepairClusterPlanKinds: {},
+    authoringRepairClusterChangeDomains: {},
+    authoringRepairClusterPlanReadiness: {},
+    authoringRepairClusterActionTargets: {},
+    authoringRepairClusterActionTargetCounts: {},
+    authoringRepairClusterSiteKinds: {},
+    authoringRepairClusterValueSiteKinds: {},
+    authoringRepairClusterRuntimeBoundaryKinds: {},
+    authoringRepairClusterRuntimeIntentKinds: {},
+    authoringRepairClusterTargetMemberCounts: {},
+    authoringRepairClusterOwnerTypeCounts: {},
+    authoringRepairClusterValueTypeCounts: {},
+    authoringRepairClusterMemberHintCounts: {},
+    authoringRepairClusterMemberHintValueTypeCoverage: {},
+    authoringRepairClusterMemberHintValueTypeSources: {},
+    authoringRepairClusterActionTargetSourceCoverage: {},
+    authoringSurfaceSupportStates: {},
+    authoringRecipeKeys: {},
+    authoringRecipeSupportStates: {},
+    authoringRecipeExpectedEffects: {},
+    authoringRecipeCurrentFitStates: {},
+    authoringRecipeCurrentFitSpecificity: {},
+    authoringRecipeExpectedEffectRoles: {},
+    authoringRecipeExpectedEffectCurrentOutcomes: {},
+    authoringRecipeApplicableExpectedEffectCurrentOutcomes: {},
+    authoringRecipeExpectedEffectTasteValueLayers: {},
+    authoringRecipeExpectedEffectTasteLayerOutcomes: {},
+    authoringRecipeExpectedEffectTargets: {},
+    authoringRecipeExpectedEffectTargetOutcomes: {},
+    authoringRecipeExpectedEffectRecipeTargetOutcomes: {},
+    authoringRecipeApplicableExpectedEffectTargetOutcomes: {},
+    authoringRecipeApplicableExpectedEffectRecipeTargetOutcomes: {},
+    authoringRecipeSignatureEffectTargetOutcomes: {},
+    authoringRecipeSignatureEffectRecipeTargetOutcomes: {},
+    authoringRecipeDiscriminatorEffectTargetOutcomes: {},
+    authoringRecipeDiscriminatorEffectRecipeTargetOutcomes: {},
+    authoringRecipeCandidateSignatureEffectTargetOutcomes: {},
+    authoringRecipeCandidateSignatureEffectRecipeTargetOutcomes: {},
+    authoringRecipeExpectedEffectObservedCounts: {},
+    authoringRecipeExpectedEffectScopes: {},
+    authoringRecipeExpectedEffectCardinalities: {},
+    authoringRecipeExpectedEffectFilterCounts: {},
+    authoringRecipeExpectedEffectFilterFields: {},
+    authoringRecipeOpenReasons: {},
+    authoringOpenReasonLoci: {},
     outcomes: {},
     pageCounts: {},
     timings,
@@ -353,17 +1303,31 @@ async function readPressureForRoot(root) {
       aggregate.projectsWithAureliaAppEntrypointSignal += 1;
     }
     increment(aggregate.projectShapeKinds, project.shapeKind);
+    increment(aggregate.projectAnalysisKinds, project.analysisKind);
     for (const dependencyScope of project.aureliaDependencyScopes ?? []) {
       increment(aggregate.projectAureliaDependencyScopes, dependencyScope.scope, dependencyScope.count);
+      increment(aggregate.projectAureliaDependencyOrigins, dependencyScope.origin ?? 'unknown', dependencyScope.count);
+      increment(
+        aggregate.projectAureliaDependencyScopeOrigins,
+        `${dependencyScope.scope}:${dependencyScope.origin ?? 'unknown'}`,
+        dependencyScope.count,
+      );
     }
     for (const sourceSignal of project.aureliaSourceSignals ?? []) {
       increment(aggregate.projectAureliaSourceSignals, sourceSignal.signal, sourceSignal.count);
+    }
+    for (const shapeReason of project.shapeReasons ?? []) {
+      increment(aggregate.projectShapeReasons, shapeReason.reason, shapeReason.count);
     }
     for (const sourceRole of project.sourceRoles ?? []) {
       increment(aggregate.projectSourceRoles, sourceRole.role, sourceRole.count);
     }
     if (projectShapeFilter != null && !projectShapeFilter.has(project.shapeKind)) {
       increment(aggregate.skippedProjectShapeKinds, project.shapeKind);
+      continue;
+    }
+    if (projectShapeFilter == null && !defaultAppApiPressureAnalysisKinds.has(project.analysisKind)) {
+      increment(aggregate.skippedProjectAnalysisKinds, project.analysisKind);
       continue;
     }
     aggregate.selectedProjects += 1;
@@ -412,6 +1376,8 @@ async function readPressureForRoot(root) {
       aggregate.routePatterns += appSummary.routePatterns;
       aggregate.routeEndpoints += appSummary.routeEndpoints;
       aggregate.routeRecognizerStates += appSummary.routeRecognizerStates;
+      aggregate.routeRecognizerIssues += appSummary.routeRecognizerIssues;
+      aggregate.routerIssues += appSummary.routerIssues;
       aggregate.recognizedRoutes += appSummary.recognizedRoutes;
       aggregate.typedNavigationInstructions += appSummary.typedNavigationInstructions;
       aggregate.viewportInstructions += appSummary.viewportInstructions;
@@ -422,9 +1388,44 @@ async function readPressureForRoot(root) {
       aggregate.viewportAgents += appSummary.viewportAgents;
       aggregate.componentAgents += appSummary.componentAgents;
       aggregate.appTasks += appSummary.appTasks;
+      recordDiKeyIdentities(aggregate, runtime.workspace.store);
+      aggregate.stateStores += appSummary.stateStores;
+      aggregate.diResolveCallSites += appSummary.diResolveCallSites;
+      aggregate.evaluationIssues += appSummary.evaluationIssues;
+      aggregate.diIssues += appSummary.diIssues;
       aggregate.runtimeControllers += appSummary.runtimeControllers;
       aggregate.unresolvedModuleEdges += appSummary.unresolvedModuleEdges;
       aggregate.openSeams += appSummary.kernelOpenSeams;
+
+      const topologyAnswer = await measure(timings, 'query-app-topology', () =>
+        app.ask({ kind: SemanticAppQueryKind.AppTopology }),
+      );
+      increment(aggregate.outcomes, `app-topology:${topologyAnswer.outcome}`);
+      observeAppTopologyPressure(aggregate, topologyAnswer.value);
+
+      const authoringCatalogAnswer = await measure(timings, 'query-authoring-catalog', () =>
+        app.ask({ kind: SemanticAppQueryKind.AuthoringCatalog }),
+      );
+      increment(aggregate.outcomes, `authoring-catalog:${authoringCatalogAnswer.outcome}`);
+      observeAuthoringCatalogPressure(aggregate, authoringCatalogAnswer.value);
+
+      const authoringOrientationAnswer = await measure(timings, 'query-authoring-orientation', () =>
+        app.ask({ kind: SemanticAppQueryKind.AuthoringOrientation }),
+      );
+      increment(aggregate.outcomes, `authoring-orientation:${authoringOrientationAnswer.outcome}`);
+      observeAuthoringOrientationPressure(aggregate, authoringOrientationAnswer.value);
+
+      const stateStoreRows = await measure(timings, 'query-state-stores', () =>
+        pagedRows(app, SemanticAppQueryKind.StateStores),
+      );
+      increment(aggregate.outcomes, `state-stores:${stateStoreRows.outcome}`);
+      increment(aggregate.pageCounts, 'state-stores', stateStoreRows.pages);
+      for (const row of stateStoreRows.rows) {
+        increment(aggregate.stateStoreDefaultness, row.isDefault ? 'default' : 'named');
+        increment(aggregate.stateStoreInitialStateKinds, row.initialStateKind ?? 'none');
+        increment(aggregate.stateStoreOptionsOrHandlerKinds, row.optionsOrHandlerKind);
+        increment(aggregate.stateStoreActionHandlerCounts, cardinalityBucket(row.actionHandlerCount));
+      }
 
       const resourceRows = await measure(timings, 'query-resources', () =>
         pagedRows(app, SemanticAppQueryKind.ResourceDefinitions),
@@ -433,11 +1434,19 @@ async function readPressureForRoot(root) {
       increment(aggregate.pageCounts, 'resources', resourceRows.pages);
       for (const row of resourceRows.rows) {
         increment(aggregate.resourceKinds, row.resourceKind);
+        for (const mode of row.declarationModes ?? []) {
+          increment(aggregate.resourceDeclarationModes, mode);
+        }
         const bindables = row.bindables ?? [];
         aggregate.bindables += bindables.length;
         for (const bindable of bindables) {
           increment(aggregate.bindableModes, bindable.mode);
           increment(aggregate.setterKinds, bindable.setterKind);
+          increment(aggregate.bindableValueTypeShapes, bindable.valueTypeShapeKind ?? 'none');
+          increment(aggregate.bindableEffectiveValueTypeShapes, bindable.effectiveValueTypeShapeKind ?? 'none');
+          increment(aggregate.bindableValueTypeWeak, String(bindable.valueTypeIsWeak));
+          increment(aggregate.bindableValueTypeCallSignatures, String(bindable.valueTypeHasCallSignature));
+          increment(aggregate.bindableValueTypeMembers, String(bindable.valueTypeHasMembers));
         }
         const watches = row.watches ?? [];
         aggregate.watches += watches.length;
@@ -448,6 +1457,108 @@ async function readPressureForRoot(root) {
           increment(aggregate.watchCallbackPropertyKeyKinds, watch.callbackPropertyKeyKind ?? 'none');
           increment(aggregate.watchFlushModes, watch.flush);
         }
+      }
+
+      const resourceIssueRows = await measure(timings, 'query-resource-issues', () =>
+        pagedRows(app, SemanticAppQueryKind.ResourceIssues),
+      );
+      increment(aggregate.outcomes, `resource-issues:${resourceIssueRows.outcome}`);
+      increment(aggregate.pageCounts, 'resource-issues', resourceIssueRows.pages);
+      aggregate.resourceIssues += resourceIssueRows.rows.length;
+      for (const row of resourceIssueRows.rows) {
+        increment(aggregate.resourceIssueKinds, row.issueKind);
+        increment(aggregate.resourceIssueFrameworkErrorCodes, row.frameworkErrorCode ?? 'none');
+      }
+
+      const configurationIssueRows = await measure(timings, 'query-configuration-issues', () =>
+        pagedRows(app, SemanticAppQueryKind.ConfigurationIssues),
+      );
+      increment(aggregate.outcomes, `configuration-issues:${configurationIssueRows.outcome}`);
+      increment(aggregate.pageCounts, 'configuration-issues', configurationIssueRows.pages);
+      aggregate.configurationIssues += configurationIssueRows.rows.length;
+      for (const row of configurationIssueRows.rows) {
+        increment(aggregate.configurationIssueKinds, row.issueKind);
+        increment(aggregate.configurationIssueFrameworkErrorCodes, row.frameworkErrorCode ?? 'none');
+      }
+
+      const evaluationIssueRows = await measure(timings, 'query-evaluation-issues', () =>
+        pagedRows(app, SemanticAppQueryKind.EvaluationIssues),
+      );
+      increment(aggregate.outcomes, `evaluation-issues:${evaluationIssueRows.outcome}`);
+      increment(aggregate.pageCounts, 'evaluation-issues', evaluationIssueRows.pages);
+      for (const row of evaluationIssueRows.rows) {
+        increment(aggregate.evaluationIssueKinds, row.issueKind);
+        increment(aggregate.evaluationIssueFrameworkErrorCodes, row.frameworkErrorCode ?? 'none');
+        increment(aggregate.evaluationIssueSubjectKinds, row.subjectKind);
+        increment(aggregate.evaluationIssueActualValueKinds, row.actualValueKind ?? 'none');
+      }
+
+      const diIssueRows = await measure(timings, 'query-di-issues', () =>
+        pagedRows(app, SemanticAppQueryKind.DiIssues),
+      );
+      increment(aggregate.outcomes, `di-issues:${diIssueRows.outcome}`);
+      increment(aggregate.pageCounts, 'di-issues', diIssueRows.pages);
+      for (const row of diIssueRows.rows) {
+        increment(aggregate.diIssueKinds, row.issueKind);
+        increment(aggregate.diIssueSubjectKinds, row.subjectKind ?? 'unknown');
+        increment(aggregate.diIssueSeverities, row.severity);
+        increment(aggregate.diIssueResolveExecutionContexts, row.resolveCall?.executionContextKind ?? 'none');
+        increment(aggregate.diIssueActiveContainerExpectations, row.resolveCall?.activeContainerExpectation ?? 'none');
+        increment(aggregate.diIssueResolveNullishKeyArgumentCounts, cardinalityBucket(row.resolveCall?.nullishKeyArguments?.length ?? 0));
+        for (const argument of row.resolveCall?.nullishKeyArguments ?? []) {
+          increment(aggregate.diIssueResolveNullishKeyArgumentKinds, argument.kind ?? 'unknown');
+        }
+        increment(aggregate.diIssueInjectDecoratorTargetKinds, row.injectDecorator?.targetKind ?? 'none');
+        increment(aggregate.diIssueInjectDecoratorNames, row.injectDecorator?.decoratorName ?? 'none');
+        increment(aggregate.diIssueContainerApiMethods, row.containerApiCall?.methodKind ?? 'none');
+        increment(aggregate.diIssueContainerApiKeyKinds, row.containerApiCall?.keyKind ?? 'none');
+        increment(aggregate.diIssueContainerApiKeyIdentities, row.containerApiCall?.keyIdentityKind ?? 'none');
+        increment(aggregate.diIssueContainerApiAutoRegister, row.containerApiCall?.autoRegister == null ? 'none' : String(row.containerApiCall.autoRegister));
+        increment(aggregate.diIssueFrameworkErrorCodes, row.frameworkErrorCode ?? 'none');
+      }
+
+      const observationIssueRows = await measure(timings, 'query-observation-issues', () =>
+        pagedRows(app, SemanticAppQueryKind.ObservationIssues),
+      );
+      increment(aggregate.outcomes, `observation-issues:${observationIssueRows.outcome}`);
+      increment(aggregate.pageCounts, 'observation-issues', observationIssueRows.pages);
+      aggregate.observationIssues += observationIssueRows.rows.length;
+      for (const row of observationIssueRows.rows) {
+        increment(aggregate.observationIssueKinds, row.issueKind);
+        increment(aggregate.observationIssueFrameworkErrorCodes, row.frameworkErrorCode ?? 'none');
+      }
+
+      const validationIssueRows = await measure(timings, 'query-validation-issues', () =>
+        pagedRows(app, SemanticAppQueryKind.ValidationIssues),
+      );
+      increment(aggregate.outcomes, `validation-issues:${validationIssueRows.outcome}`);
+      increment(aggregate.pageCounts, 'validation-issues', validationIssueRows.pages);
+      aggregate.validationIssues += validationIssueRows.rows.length;
+      for (const row of validationIssueRows.rows) {
+        increment(aggregate.validationIssueKinds, row.issueKind);
+        increment(aggregate.validationIssueFrameworkErrorCodes, row.frameworkErrorCode ?? 'none');
+      }
+
+      const fetchClientIssueRows = await measure(timings, 'query-fetch-client-issues', () =>
+        pagedRows(app, SemanticAppQueryKind.FetchClientIssues),
+      );
+      increment(aggregate.outcomes, `fetch-client-issues:${fetchClientIssueRows.outcome}`);
+      increment(aggregate.pageCounts, 'fetch-client-issues', fetchClientIssueRows.pages);
+      aggregate.fetchClientIssues += fetchClientIssueRows.rows.length;
+      for (const row of fetchClientIssueRows.rows) {
+        increment(aggregate.fetchClientIssueKinds, row.issueKind);
+        increment(aggregate.fetchClientIssueFrameworkErrorCodes, row.frameworkErrorCode ?? 'none');
+      }
+
+      const dialogIssueRows = await measure(timings, 'query-dialog-issues', () =>
+        pagedRows(app, SemanticAppQueryKind.DialogIssues),
+      );
+      increment(aggregate.outcomes, `dialog-issues:${dialogIssueRows.outcome}`);
+      increment(aggregate.pageCounts, 'dialog-issues', dialogIssueRows.pages);
+      aggregate.dialogIssues += dialogIssueRows.rows.length;
+      for (const row of dialogIssueRows.rows) {
+        increment(aggregate.dialogIssueKinds, row.issueKind);
+        increment(aggregate.dialogIssueFrameworkErrorCodes, row.frameworkErrorCode ?? 'none');
       }
 
       const templateDiagnosticRows = await measure(timings, 'query-template-diagnostics', () =>
@@ -472,6 +1583,19 @@ async function readPressureForRoot(root) {
         increment(aggregate.templateDiagnosticValueSiteKinds, row.valueSiteKind ?? 'none');
       }
 
+      const appDiagnosticRows = await measure(timings, 'query-app-diagnostics', () =>
+        pagedRows(app, SemanticAppQueryKind.AppDiagnostics),
+      );
+      increment(aggregate.outcomes, `app-diagnostics:${appDiagnosticRows.outcome}`);
+      increment(aggregate.pageCounts, 'app-diagnostics', appDiagnosticRows.pages);
+      aggregate.appDiagnostics += appDiagnosticRows.rows.length;
+      for (const row of appDiagnosticRows.rows) {
+        increment(aggregate.appDiagnosticDomains, row.diagnosticDomain);
+        increment(aggregate.appDiagnosticAuthorities, row.diagnosticAuthority);
+        increment(aggregate.appDiagnosticKinds, row.diagnosticKind);
+        increment(aggregate.appDiagnosticFrameworkErrorCodes, row.frameworkErrorCode ?? 'none');
+      }
+
       const routerOptionsRows = await measure(timings, 'query-router-options', () =>
         pagedRows(app, SemanticAppQueryKind.RouterOptions),
       );
@@ -490,6 +1614,9 @@ async function readPressureForRoot(root) {
       increment(aggregate.pageCounts, 'routes', routeRows.pages);
       for (const row of routeRows.rows) {
         increment(aggregate.routeKinds, row.routeKind);
+        increment(aggregate.routeOriginKinds, row.originKind ?? 'unknown');
+        increment(aggregate.routeValueKinds, row.valueKind ?? 'unknown');
+        increment(aggregate.routeViewportPresence, row.viewport == null ? 'none' : 'present');
         if (row.component != null) {
           increment(aggregate.routeComponentKinds, row.component.componentKind);
           increment(aggregate.routeComponentResolution, row.component.resolved ? 'resolved' : 'unresolved');
@@ -617,6 +1744,25 @@ async function readPressureForRoot(root) {
         increment(aggregate.routeRecognizerStateConstrained, String(row.isConstrained));
       }
 
+      const routeRecognizerIssueRows = await measure(timings, 'query-route-recognizer-issues', () =>
+        pagedRows(app, SemanticAppQueryKind.RouteRecognizerIssues),
+      );
+      increment(aggregate.outcomes, `route-recognizer-issues:${routeRecognizerIssueRows.outcome}`);
+      increment(aggregate.pageCounts, 'route-recognizer-issues', routeRecognizerIssueRows.pages);
+      for (const row of routeRecognizerIssueRows.rows) {
+        increment(aggregate.routeRecognizerIssueKinds, row.issueKind);
+      }
+
+      const routerIssueRows = await measure(timings, 'query-router-issues', () =>
+        pagedRows(app, SemanticAppQueryKind.RouterIssues),
+      );
+      increment(aggregate.outcomes, `router-issues:${routerIssueRows.outcome}`);
+      increment(aggregate.pageCounts, 'router-issues', routerIssueRows.pages);
+      for (const row of routerIssueRows.rows) {
+        increment(aggregate.routerIssueKinds, row.issueKind);
+        increment(aggregate.routerIssueFrameworkErrorCodes, row.frameworkErrorCode ?? 'none');
+      }
+
       const recognizedRouteRows = await measure(timings, 'query-recognized-routes', () =>
         pagedRows(app, SemanticAppQueryKind.RecognizedRoutes),
       );
@@ -671,6 +1817,66 @@ async function readPressureForRoot(root) {
       }
 
       if (analysisDepth === 'binding-observation') {
+        const targetAccessRows = await measure(timings, 'query-binding-target-accesses', () =>
+          pagedRows(app, SemanticAppQueryKind.BindingTargetAccesses),
+        );
+        increment(aggregate.outcomes, `binding-target-accesses:${targetAccessRows.outcome}`);
+        increment(aggregate.pageCounts, 'binding-target-accesses', targetAccessRows.pages);
+        aggregate.bindingTargetAccesses += targetAccessRows.rows.length;
+        for (const row of targetAccessRows.rows) {
+          const targetTypeSurface = typeSurfaceKey(row.targetType);
+          const propertyTypeSurface = typeSurfaceKey(row.propertyType);
+          increment(aggregate.bindingTargetAccessLookups, row.lookup);
+          increment(aggregate.bindingTargetAccessTargetKinds, row.targetKind);
+          increment(aggregate.bindingTargetAccessStrategies, row.strategy);
+          increment(aggregate.bindingTargetAccessAuthorities, row.authority);
+          increment(aggregate.bindingTargetAccessTargetTypeSources, row.targetTypeSource ?? 'none');
+          increment(aggregate.bindingTargetAccessTargetTypeSurfaces, targetTypeSurface);
+          increment(aggregate.bindingTargetAccessPropertyTypeSurfaces, propertyTypeSurface);
+          increment(aggregate.bindingTargetAccessTypeSurfaceClasses, `${row.targetKind}:${row.strategy}:${targetTypeSurface}->${propertyTypeSurface}`);
+          increment(aggregate.bindingTargetAccessTypeSourceSurfaceClasses, `${row.targetKind}:${row.strategy}:${row.targetTypeSource ?? 'none'}:${targetTypeSurface}->${propertyTypeSurface}`);
+          if (row.frameworkErrorCode != null) {
+            increment(aggregate.bindingTargetAccessFrameworkErrorCodes, row.frameworkErrorCode);
+          }
+          if (row.openReason != null) {
+            increment(aggregate.bindingTargetAccessOpenReasons, row.openReason);
+          }
+        }
+
+        const bindingBehaviorRows = await measure(timings, 'query-binding-behavior-applications', () =>
+          pagedRows(app, SemanticAppQueryKind.BindingBehaviorApplications),
+        );
+        increment(aggregate.outcomes, `binding-behavior-applications:${bindingBehaviorRows.outcome}`);
+        increment(aggregate.pageCounts, 'binding-behavior-applications', bindingBehaviorRows.pages);
+        aggregate.bindingBehaviorApplications += bindingBehaviorRows.rows.length;
+        for (const row of bindingBehaviorRows.rows) {
+          increment(aggregate.bindingBehaviorApplicationNames, row.behaviorName);
+          increment(aggregate.bindingBehaviorApplicationPhases, row.phase);
+          increment(aggregate.bindingBehaviorApplicationBindingKinds, row.bindingKind);
+          increment(aggregate.bindingBehaviorApplicationTargetKinds, row.targetKind ?? 'none');
+          increment(aggregate.bindingBehaviorApplicationTargetProperties, row.targetProperty ?? 'none');
+          increment(aggregate.bindingBehaviorApplicationArgumentCounts, cardinalityBucket(row.argumentCount));
+          increment(aggregate.bindingBehaviorApplicationStaticArgumentCounts, cardinalityBucket(row.staticArgumentValues?.length ?? 0));
+        }
+
+        const valueChannelRows = await measure(timings, 'query-binding-value-channels', () =>
+          pagedRows(app, SemanticAppQueryKind.BindingValueChannels),
+        );
+        increment(aggregate.outcomes, `binding-value-channels:${valueChannelRows.outcome}`);
+        increment(aggregate.pageCounts, 'binding-value-channels', valueChannelRows.pages);
+        aggregate.bindingValueChannels += valueChannelRows.rows.length;
+        for (const row of valueChannelRows.rows) {
+          increment(aggregate.bindingValueChannelKinds, row.channelKind);
+          increment(aggregate.bindingValueChannelTargetKinds, row.targetKind ?? 'none');
+          increment(aggregate.bindingValueChannelAuthorities, row.authority);
+          increment(aggregate.bindingValueChannelRawTypeSurfaces, typeSurfaceKey(row.rawTargetPropertyType));
+          increment(aggregate.bindingValueChannelRuntimeTypeSurfaces, typeSurfaceKey(row.runtimeValueType));
+          increment(aggregate.bindingValueChannelDomainCounts, cardinalityBucket(row.valueDomain?.length ?? 0));
+          if (row.openReason != null) {
+            increment(aggregate.bindingValueChannelOpenReasons, row.openReason);
+          }
+        }
+
         const dataFlowRows = await measure(timings, 'query-binding-data-flows', () =>
           pagedRows(app, SemanticAppQueryKind.BindingDataFlows),
         );
@@ -680,11 +1886,28 @@ async function readPressureForRoot(root) {
         for (const row of dataFlowRows.rows) {
           increment(aggregate.bindingDataFlowBindingKinds, row.bindingKind);
           increment(aggregate.bindingDataFlowDirections, row.direction);
+          increment(aggregate.bindingDataFlowStrictBindings, strictBindingLabel(row.strictBinding));
           increment(aggregate.bindingDataFlowParseStates, row.expressionParseState ?? 'none');
           increment(aggregate.bindingDataFlowParseResultKinds, row.expressionParseResultKind ?? 'none');
+          increment(aggregate.bindingDataFlowValueSiteKinds, row.valueSiteKind ?? 'none');
           increment(aggregate.bindingDataFlowSourceKinds, row.sourceKind);
+          increment(aggregate.bindingDataFlowTargetKinds, row.targetKind ?? 'none');
+          if (row.sourceTypeOpenKind != null) {
+            increment(aggregate.bindingDataFlowSourceTypeOpenKinds, row.sourceTypeOpenKind);
+          }
+          const sourceTypeSurface = typeSurfaceKey(row.sourceType);
+          const targetTypeSurface = typeSurfaceKey(row.targetValueType ?? row.targetPropertyType);
+          increment(aggregate.bindingDataFlowSourceTypeSurfaces, sourceTypeSurface);
+          increment(aggregate.bindingDataFlowTargetTypeSurfaces, targetTypeSurface);
+          increment(
+            aggregate.bindingDataFlowValueSiteTypeSurfaces,
+            `${row.valueSiteKind ?? 'none'}:${sourceTypeSurface}->${targetTypeSurface}`,
+          );
           if (row.sourceAssignmentKind != null) {
             increment(aggregate.bindingDataFlowSourceAssignmentKinds, row.sourceAssignmentKind);
+          }
+          if (row.frameworkErrorCode != null) {
+            increment(aggregate.bindingDataFlowFrameworkErrorCodes, row.frameworkErrorCode);
           }
           if (row.sourceAssignmentReason != null) {
             aggregate.bindingDataFlowSourceAssignmentPressures += 1;
@@ -733,6 +1956,9 @@ async function readPressureForRoot(root) {
           }
         }
       } else {
+        increment(aggregate.outcomes, 'binding-target-accesses:skipped-by-analysis-depth');
+        increment(aggregate.outcomes, 'binding-behavior-applications:skipped-by-analysis-depth');
+        increment(aggregate.outcomes, 'binding-value-channels:skipped-by-analysis-depth');
         increment(aggregate.outcomes, 'binding-data-flows:skipped-by-analysis-depth');
       }
 
@@ -756,6 +1982,496 @@ async function readPressureForRoot(root) {
   }
 
   return aggregate;
+}
+
+function observeAuthoringCatalogPressure(aggregate, catalog) {
+  if (catalog == null) {
+    return;
+  }
+  const operationFamilies = catalog.operationFamilies ?? [];
+  const tasteAxes = catalog.tasteAxes ?? [];
+  const tasteValues = catalog.tasteValues ?? [];
+  const profiles = catalog.profiles ?? [];
+  const capabilities = catalog.capabilities ?? [];
+  const operations = catalog.operations ?? [];
+  const recipes = catalog.recipes ?? [];
+  aggregate.authoringCatalogOperationFamilies += operationFamilies.length;
+  aggregate.authoringCatalogTasteAxes += tasteAxes.length;
+  aggregate.authoringCatalogTasteValues += tasteValues.length;
+  aggregate.authoringCatalogProfiles += profiles.length;
+  aggregate.authoringCatalogCapabilities += capabilities.length;
+  aggregate.authoringCatalogOperations += operations.length;
+  aggregate.authoringCatalogRecipes += recipes.length;
+  for (const axis of tasteAxes) {
+    increment(aggregate.authoringCatalogTasteAxisLayers, axis.layer ?? 'unknown');
+    increment(
+      aggregate.authoringCatalogTasteAxisPrimitivePolicyValueCounts,
+      cardinalityBucket(axis.primitivePolicyValueKeys?.length ?? 0),
+    );
+    increment(
+      aggregate.authoringCatalogTasteAxisObservedShapeValueCounts,
+      cardinalityBucket(axis.observedShapeValueKeys?.length ?? 0),
+    );
+    increment(
+      aggregate.authoringCatalogTasteAxisDerivedReadingValueCounts,
+      cardinalityBucket(axis.derivedReadingValueKeys?.length ?? 0),
+    );
+    for (const layerCount of axis.valueLayerCounts ?? []) {
+      increment(
+        aggregate.authoringCatalogTasteAxisValueLayers,
+        `${axis.axisKey ?? 'unknown'}:${layerCount.layer ?? 'unknown'}`,
+        layerCount.count ?? 0,
+      );
+    }
+  }
+  for (const value of tasteValues) {
+    increment(aggregate.authoringCatalogTasteValueLayers, value.layer ?? 'unknown');
+  }
+  for (const profile of profiles) {
+    const preferences = profile.preferences ?? [];
+    increment(aggregate.authoringCatalogProfilePreferenceCounts, cardinalityBucket(preferences.length));
+    for (const preference of preferences) {
+      increment(aggregate.authoringCatalogProfilePreferenceAxes, preference.axisKey ?? 'unknown');
+      increment(aggregate.authoringCatalogProfilePreferenceValues, `${preference.axisKey ?? 'unknown'}:${preference.valueKey ?? 'unknown'}`);
+      increment(aggregate.authoringCatalogProfilePreferenceLayers, preference.valueLayer ?? 'unknown');
+    }
+  }
+  for (const capability of capabilities) {
+    for (const reasonKind of capability.productOpenReasonKinds ?? []) {
+      increment(aggregate.authoringCatalogCapabilityProductOpenReasons, reasonKind);
+    }
+  }
+  for (const operation of operations) {
+    increment(aggregate.authoringCatalogOperationFamiliesByKey, operation.familyKey ?? 'unknown');
+    increment(aggregate.authoringCatalogOperationActions, operation.action ?? 'unknown');
+    increment(aggregate.authoringCatalogOperationTargetKinds, operation.targetKind ?? 'unknown');
+    increment(
+      aggregate.authoringCatalogOperationCapabilityCounts,
+      cardinalityBucket(operation.requiredCapabilityKeys?.length ?? 0),
+    );
+    for (const reasonKind of operation.productOpenReasonKinds ?? []) {
+      increment(aggregate.authoringCatalogOperationProductOpenReasons, reasonKind);
+    }
+  }
+  for (const recipe of recipes) {
+    increment(aggregate.authoringCatalogRecipeSupportStates, recipe.supportState ?? 'unknown');
+    const baseRecipeKeys = recipe.baseRecipeKeys ?? [];
+    increment(aggregate.authoringCatalogRecipeSpecificityRanks, String(recipe.specificityRank ?? 0));
+    if (baseRecipeKeys.length === 0) {
+      increment(aggregate.authoringCatalogRecipeBaseKeys, `${recipe.key ?? 'unknown'}<-none`);
+    } else {
+      for (const baseRecipeKey of baseRecipeKeys) {
+        increment(aggregate.authoringCatalogRecipeBaseKeys, `${recipe.key ?? 'unknown'}<-${baseRecipeKey}`);
+      }
+    }
+    const preferences = recipe.preferences ?? [];
+    increment(aggregate.authoringCatalogRecipePreferenceCounts, cardinalityBucket(preferences.length));
+    for (const preference of preferences) {
+      increment(aggregate.authoringCatalogRecipePreferenceAxes, preference.axisKey ?? 'unknown');
+      increment(aggregate.authoringCatalogRecipePreferenceValues, `${preference.axisKey ?? 'unknown'}:${preference.valueKey ?? 'unknown'}`);
+      increment(aggregate.authoringCatalogRecipePreferenceLayers, preference.valueLayer ?? 'unknown');
+    }
+    const sourcePlan = recipe.sourcePlan ?? null;
+    increment(aggregate.authoringCatalogRecipeSourcePlanPresence, sourcePlan == null ? 'absent' : 'present');
+    if (sourcePlan != null) {
+      increment(aggregate.authoringCatalogRecipeSourcePlanConflictPolicies, sourcePlan.conflictPolicy ?? 'unknown');
+      increment(aggregate.authoringCatalogRecipeSourcePlanFormattingPolicies, sourcePlan.formattingPolicy ?? 'unknown');
+      increment(aggregate.authoringCatalogRecipeSourcePlanPackageToolingPolicies, sourcePlan.packageToolingPolicy ?? 'unknown');
+      increment(aggregate.authoringCatalogRecipeSourcePlanFileCounts, cardinalityBucket(sourcePlan.fileCount ?? 0));
+      const projectTooling = sourcePlan.projectTooling ?? null;
+      increment(aggregate.authoringCatalogRecipeProjectToolingPresence, projectTooling == null ? 'absent' : 'present');
+      if (projectTooling != null) {
+        increment(aggregate.authoringCatalogRecipeProjectToolingPackageManagers, projectTooling.packageManager ?? 'unknown');
+        increment(aggregate.authoringCatalogRecipeProjectToolingBuildToolPolicies, projectTooling.buildToolPolicy ?? 'unknown');
+        for (const dependency of projectTooling.dependencies ?? []) {
+          increment(aggregate.authoringCatalogRecipeProjectToolingDependencyScopes, dependency.scope ?? 'unknown');
+          increment(aggregate.authoringCatalogRecipeProjectToolingDependencySpecifiers, dependency.specifier ?? 'unknown');
+        }
+        for (const script of projectTooling.scripts ?? []) {
+          increment(aggregate.authoringCatalogRecipeProjectToolingScriptNames, script.name ?? 'unknown');
+        }
+        for (const file of projectTooling.files ?? []) {
+          increment(aggregate.authoringCatalogRecipeProjectToolingFileKinds, file.fileKind ?? 'unknown');
+          increment(aggregate.authoringCatalogRecipeProjectToolingFileLanguages, file.language ?? 'unknown');
+          increment(aggregate.authoringCatalogRecipeProjectToolingTextAuthorities, file.textAuthority ?? 'unknown');
+        }
+      }
+      for (const file of sourcePlan.files ?? []) {
+        increment(aggregate.authoringCatalogRecipeSourceFileRoles, file.role ?? 'unknown');
+        increment(aggregate.authoringCatalogRecipeSourceFileLanguages, file.language ?? 'unknown');
+        increment(aggregate.authoringCatalogRecipeSourceFileEditKinds, file.editKind ?? 'unknown');
+        increment(aggregate.authoringCatalogRecipeSourceFileTextAuthorities, file.textAuthority ?? 'none');
+      }
+    }
+    aggregate.authoringCatalogRecipeExpectedEffects += recipe.expectedEffectCount ?? 0;
+    for (const effectKind of recipe.expectedEffectKinds ?? []) {
+      increment(aggregate.authoringCatalogRecipeExpectedEffectKinds, effectKind);
+    }
+    for (const effect of recipe.expectedEffects ?? []) {
+      increment(aggregate.authoringCatalogRecipeExpectedEffectRoles, effect.role ?? 'baseline');
+      increment(aggregate.authoringCatalogRecipeExpectedEffectTargets, expectedEffectTargetKey(effect));
+      increment(aggregate.authoringCatalogRecipeExpectedEffectFilterCounts, cardinalityBucket(effect.filterCount ?? 0));
+      for (const field of effect.filterFields ?? []) {
+        increment(aggregate.authoringCatalogRecipeExpectedEffectFilterFields, field);
+      }
+    }
+  }
+}
+
+function observeAuthoringOrientationPressure(aggregate, orientation) {
+  if (orientation == null) {
+    return;
+  }
+  const coverage = orientation.coverage ?? [];
+  const taste = orientation.taste ?? [];
+  const capabilities = orientation.capabilities ?? [];
+  const operations = orientation.operations ?? [];
+  const surfaces = orientation.surfaces ?? [];
+  const recipes = orientation.recipes ?? [];
+  const repairs = orientation.repairs ?? [];
+  const repairClusters = orientation.repairClusters ?? [];
+  const openReasons = orientation.openReasons ?? [];
+  aggregate.authoringOrientationCoverageRows += coverage.length;
+  aggregate.authoringOrientationTasteAxes += taste.length;
+  aggregate.authoringOrientationCapabilities += capabilities.length;
+  aggregate.authoringOrientationOperations += operations.length;
+  aggregate.authoringOrientationRepairs += repairs.length;
+  aggregate.authoringOrientationRepairClusters += repairClusters.length;
+  aggregate.authoringOrientationOpenReasons += openReasons.length;
+
+  for (const row of coverage) {
+    increment(aggregate.authoringCoverageSurfaceKinds, row.surfaceKind);
+    increment(aggregate.authoringCoverageSupportStates, row.supportState);
+  }
+  for (const axis of taste) {
+    const axisKey = axis.axisKey ?? 'unknown';
+    const values = axis.values ?? [];
+    increment(aggregate.authoringTasteAxisKeys, axisKey);
+    increment(aggregate.authoringTasteAxisLayers, axis.layer);
+    increment(aggregate.authoringTasteAxisPolicyStates, axis.policyState);
+    increment(aggregate.authoringTasteAxisKeyPolicyStates, `${axisKey}:${axis.policyState ?? 'unknown'}`);
+    increment(aggregate.authoringTasteAxisKeyValueCounts, `${axisKey}:${cardinalityBucket(values.length)}`);
+    for (const reasonKind of axis.openReasonKinds ?? []) {
+      increment(aggregate.authoringTasteAxisKeyOpenReasons, `${axisKey}:${reasonKind}`);
+    }
+    increment(aggregate.authoringTasteAxisConfidences, axis.confidence);
+    increment(aggregate.authoringTasteAxisPrimitivePolicyValueCounts, cardinalityBucket(axis.primitivePolicyValueCount ?? 0));
+    increment(aggregate.authoringTasteAxisObservedShapeValueCounts, cardinalityBucket(axis.observedShapeValueCount ?? 0));
+    increment(aggregate.authoringTasteAxisDerivedReadingValueCounts, cardinalityBucket(axis.derivedReadingValueCount ?? 0));
+    aggregate.authoringOrientationTasteValues += values.length;
+    for (const value of values) {
+      increment(aggregate.authoringTasteValueLayers, value.layer);
+      increment(aggregate.authoringTasteAxisValues, `${axisKey}:${value.valueKey ?? 'unknown'}`);
+      increment(aggregate.authoringTasteValues, value.valueKey);
+    }
+  }
+  for (const capability of capabilities) {
+    increment(aggregate.authoringCapabilityKeys, `${capability.key}:${capability.supportState}`);
+    increment(aggregate.authoringCapabilitySupportStates, capability.supportState);
+    for (const reasonKind of capability.openReasonKinds ?? []) {
+      increment(aggregate.authoringCapabilityOpenReasons, reasonKind);
+    }
+  }
+  for (const operation of operations) {
+    increment(aggregate.authoringOperationActions, operation.action);
+    increment(aggregate.authoringOperationSupportStates, operation.supportState);
+    for (const reasonKind of operation.openReasonKinds ?? []) {
+      increment(aggregate.authoringOperationOpenReasons, reasonKind);
+    }
+  }
+  for (const repair of repairs) {
+    increment(aggregate.authoringRepairKinds, repair.repairKind);
+    increment(aggregate.authoringRepairEvidenceKinds, repair.evidenceKind);
+    increment(aggregate.authoringRepairSupportStates, repair.supportState);
+    increment(aggregate.authoringRepairAuthorities, repair.authority);
+    increment(aggregate.authoringRepairLoci, repair.locus);
+    increment(aggregate.authoringRepairDiagnosticKinds, repair.diagnosticKind ?? 'none');
+    increment(aggregate.authoringRepairSeamKinds, repair.seamKindKey ?? 'none');
+    for (const reasonKind of repair.openReasonKinds ?? []) {
+      increment(aggregate.authoringRepairOpenReasons, reasonKind);
+    }
+    increment(aggregate.authoringRepairActionTargets, suggestionTargetKey(repair.suggestion));
+  }
+  for (const cluster of repairClusters) {
+    increment(aggregate.authoringRepairClusterKinds, cluster.repairKind);
+    increment(aggregate.authoringRepairClusterPlanKinds, cluster.planKind ?? 'unknown');
+    increment(aggregate.authoringRepairClusterChangeDomains, cluster.changeDomain ?? 'unknown');
+    increment(aggregate.authoringRepairClusterPlanReadiness, cluster.planReadiness ?? 'unknown');
+    increment(aggregate.authoringRepairClusterActionTargets, cluster.actionTargetKind ?? 'none');
+    increment(aggregate.authoringRepairClusterActionTargetCounts, cardinalityBucket(cluster.actionTargetCount ?? 0));
+    increment(aggregate.authoringRepairClusterTargetMemberCounts, cardinalityBucket(cluster.targetMemberCount ?? 0));
+    increment(aggregate.authoringRepairClusterOwnerTypeCounts, cardinalityBucket(cluster.ownerTypeCount ?? 0));
+    increment(aggregate.authoringRepairClusterValueTypeCounts, cardinalityBucket(cluster.valueTypeCount ?? 0));
+    increment(aggregate.authoringRepairClusterMemberHintCounts, cardinalityBucket(cluster.memberHints?.length ?? 0));
+    increment(aggregate.authoringRepairClusterActionTargetSourceCoverage, cluster.actionTargetSourceCoverage ?? 'unknown');
+    for (const memberHint of cluster.memberHints ?? []) {
+      increment(aggregate.authoringRepairClusterMemberHintValueTypeCoverage, memberHint.valueTypeCoverage ?? 'unknown');
+      for (const valueTypeSource of memberHint.valueTypeSources ?? []) {
+        increment(aggregate.authoringRepairClusterMemberHintValueTypeSources, valueTypeSource);
+      }
+    }
+    for (const siteKind of cluster.siteKinds ?? []) {
+      increment(aggregate.authoringRepairClusterSiteKinds, siteKind);
+    }
+    for (const valueSiteKind of cluster.valueSiteKinds ?? []) {
+      increment(aggregate.authoringRepairClusterValueSiteKinds, valueSiteKind);
+    }
+    for (const runtimeBoundaryKind of cluster.runtimeBoundaryKinds ?? []) {
+      increment(aggregate.authoringRepairClusterRuntimeBoundaryKinds, runtimeBoundaryKind);
+    }
+    for (const runtimeIntentKind of cluster.runtimeIntentKinds ?? []) {
+      increment(aggregate.authoringRepairClusterRuntimeIntentKinds, runtimeIntentKind);
+    }
+  }
+  for (const surface of surfaces) {
+    increment(aggregate.authoringSurfaceSupportStates, surface.supportState);
+  }
+  for (const recipe of recipes) {
+    const isApplicableRecipe = recipe.currentFitState !== 'not-applicable';
+    increment(aggregate.authoringRecipeKeys, `${recipe.key}:${recipe.supportState}`);
+    increment(aggregate.authoringRecipeSupportStates, recipe.supportState);
+    increment(aggregate.authoringRecipeCurrentFitStates, `${recipe.key}:${recipe.currentFitState ?? 'unknown'}`);
+    increment(
+      aggregate.authoringRecipeCurrentFitSpecificity,
+      `${recipe.specificityRank ?? 0}:${recipe.currentFitState ?? 'unknown'}`,
+    );
+    for (const effectKind of recipe.expectedEffectKinds ?? []) {
+      increment(aggregate.authoringRecipeExpectedEffects, effectKind);
+    }
+    for (const effect of recipe.expectedEffects ?? []) {
+      const targetKey = expectedEffectTargetKey(effect);
+      const role = effect.role ?? 'baseline';
+      increment(aggregate.authoringRecipeExpectedEffectRoles, role);
+      increment(aggregate.authoringRecipeExpectedEffectTargets, targetKey);
+      increment(
+        aggregate.authoringRecipeExpectedEffectCurrentOutcomes,
+        `${effect.effectKind}:${effect.currentOutcome ?? 'unknown'}`,
+      );
+      if (effect.effectKind === 'authoring-taste') {
+        const tasteValueLayer = effect.tasteValueLayer ?? 'none';
+        increment(aggregate.authoringRecipeExpectedEffectTasteValueLayers, tasteValueLayer);
+        increment(
+          aggregate.authoringRecipeExpectedEffectTasteLayerOutcomes,
+          `${tasteValueLayer}:${effect.currentOutcome ?? 'unknown'}`,
+        );
+      }
+      increment(
+        aggregate.authoringRecipeExpectedEffectTargetOutcomes,
+        `${targetKey}:${effect.currentOutcome ?? 'unknown'}`,
+      );
+      increment(
+        aggregate.authoringRecipeExpectedEffectRecipeTargetOutcomes,
+        `${recipe.key}:${targetKey}:${effect.currentOutcome ?? 'unknown'}`,
+      );
+      if (isApplicableRecipe) {
+        increment(
+          aggregate.authoringRecipeApplicableExpectedEffectCurrentOutcomes,
+          `${effect.effectKind}:${effect.currentOutcome ?? 'unknown'}`,
+        );
+        increment(
+          aggregate.authoringRecipeApplicableExpectedEffectTargetOutcomes,
+          `${targetKey}:${effect.currentOutcome ?? 'unknown'}`,
+        );
+        increment(
+          aggregate.authoringRecipeApplicableExpectedEffectRecipeTargetOutcomes,
+          `${recipe.key}:${targetKey}:${effect.currentOutcome ?? 'unknown'}`,
+        );
+      }
+      if (isRecipeSignatureRole(role)) {
+        increment(
+          aggregate.authoringRecipeSignatureEffectTargetOutcomes,
+          `${targetKey}:${effect.currentOutcome ?? 'unknown'}`,
+        );
+        increment(
+          aggregate.authoringRecipeSignatureEffectRecipeTargetOutcomes,
+          `${recipe.key}:${targetKey}:${effect.currentOutcome ?? 'unknown'}`,
+        );
+        if (isApplicableRecipe) {
+          increment(
+            aggregate.authoringRecipeCandidateSignatureEffectTargetOutcomes,
+            `${targetKey}:${effect.currentOutcome ?? 'unknown'}`,
+          );
+          increment(
+            aggregate.authoringRecipeCandidateSignatureEffectRecipeTargetOutcomes,
+            `${recipe.key}:${targetKey}:${effect.currentOutcome ?? 'unknown'}`,
+          );
+        }
+      }
+      if (role === 'discriminator') {
+        increment(
+          aggregate.authoringRecipeDiscriminatorEffectTargetOutcomes,
+          `${targetKey}:${effect.currentOutcome ?? 'unknown'}`,
+        );
+        increment(
+          aggregate.authoringRecipeDiscriminatorEffectRecipeTargetOutcomes,
+          `${recipe.key}:${targetKey}:${effect.currentOutcome ?? 'unknown'}`,
+        );
+      }
+      increment(
+        aggregate.authoringRecipeExpectedEffectObservedCounts,
+        cardinalityBucket(effect.currentObservedCount ?? 0),
+      );
+      increment(aggregate.authoringRecipeExpectedEffectScopes, `${effect.effectKind}:${effect.scope}`);
+      increment(
+        aggregate.authoringRecipeExpectedEffectCardinalities,
+        `${effect.effectKind}:${effect.cardinality}`,
+      );
+      increment(aggregate.authoringRecipeExpectedEffectFilterCounts, cardinalityBucket(effect.filterCount ?? 0));
+      for (const field of effect.filterFields ?? []) {
+        increment(aggregate.authoringRecipeExpectedEffectFilterFields, field);
+      }
+    }
+    for (const reasonKind of recipe.openReasonKinds ?? []) {
+      increment(aggregate.authoringRecipeOpenReasons, reasonKind);
+    }
+  }
+  for (const reason of openReasons) {
+    increment(aggregate.authoringOpenReasonLoci, reason.locus);
+  }
+}
+
+function recordDiKeyIdentities(aggregate, store) {
+  for (const identity of store.readIdentities()) {
+    if (identity.kind !== 'di-key-identity' || aggregate.seenDiKeyIdentityHandles.has(identity.handle)) {
+      continue;
+    }
+    aggregate.seenDiKeyIdentityHandles.add(identity.handle);
+    aggregate.diKeyIdentities += 1;
+    increment(aggregate.diKeyIdentityKinds, identity.keyKind ?? 'unknown');
+
+    const declarationHandle = identity.declarationHandle ?? null;
+    increment(aggregate.diKeyIdentityDeclarationCoverage, declarationHandle == null ? 'no-declaration' : 'declaration');
+    if (declarationHandle == null) {
+      continue;
+    }
+
+    const declaration = store.readIdentity(declarationHandle);
+    increment(
+      aggregate.diKeyIdentityDeclarationAddressCoverage,
+      declaration?.declarationAddressHandle == null ? 'no-address' : 'address',
+    );
+  }
+}
+
+function observeAppTopologyPressure(aggregate, topology) {
+  if (topology == null) {
+    return;
+  }
+  const components = topology.components ?? [];
+  for (const component of components) {
+    const roles = component.roles ?? [];
+    aggregate.appTopologyComponentRoles += roles.length;
+    for (const role of roles) {
+      increment(aggregate.appTopologyComponentRolesByKind, role.roleKind ?? 'unknown');
+      increment(aggregate.appTopologyComponentRoleEvidence, role.evidenceKind ?? 'unknown');
+      increment(aggregate.appTopologyComponentRoleSourceCoverage, sourceReferenceState(role.source));
+    }
+  }
+  const services = topology.services ?? [];
+  aggregate.appTopologyServices += services.length;
+  for (const service of services) {
+    increment(aggregate.appTopologyServiceRoles, service.role ?? 'unknown');
+    increment(aggregate.appTopologyServiceExportStates, service.isExported === true ? 'exported' : 'local');
+    increment(aggregate.appTopologyServiceResolveCallCounts, cardinalityBucket(service.resolveCallCount ?? 0));
+  }
+  const injections = topology.injections ?? [];
+  aggregate.appTopologyInjections += injections.length;
+  for (const injection of injections) {
+    increment(aggregate.appTopologyInjectionMechanisms, injection.mechanism ?? 'unknown');
+    increment(aggregate.appTopologyInjectionKeyDeclarationKinds, injection.keyDeclarationKind ?? 'unknown');
+    increment(aggregate.appTopologyInjectionKeyDeclarationRoles, injection.keyDeclarationRole ?? 'none');
+    increment(aggregate.appTopologyInjectionKeyImportKinds, injection.keyImportKind ?? 'none');
+    increment(aggregate.appTopologyInjectionKeyImportScopes, moduleSpecifierScope(injection.keyImportModuleSpecifier));
+    increment(aggregate.appTopologyInjectionConsumerClasses, injection.consumerClassName == null ? 'none' : 'class');
+    increment(aggregate.appTopologyInjectionConsumerMemberKinds, injection.consumerMemberKind ?? 'none');
+    increment(aggregate.appTopologyInjectionExecutionContexts, injection.executionContextKind ?? 'unknown');
+    increment(aggregate.appTopologyInjectionActiveContainerExpectations, injection.activeContainerExpectation ?? 'unknown');
+    increment(aggregate.appTopologyInjectionNullishKeyArgumentCounts, cardinalityBucket(injection.nullishKeyArguments?.length ?? 0));
+    for (const argument of injection.nullishKeyArguments ?? []) {
+      increment(aggregate.appTopologyInjectionNullishKeyArgumentKinds, argument.kind ?? 'unknown');
+    }
+    increment(aggregate.appTopologyInjectionSourceCoverage, sourceReferenceState(injection.source));
+  }
+  const serviceInteractions = topology.serviceInteractions ?? [];
+  aggregate.appTopologyServiceInteractions += serviceInteractions.length;
+  for (const interaction of serviceInteractions) {
+    increment(aggregate.appTopologyServiceInteractionOperationKinds, interaction.operationKind ?? 'unknown');
+    increment(aggregate.appTopologyServiceInteractionTargetRoles, interaction.targetRole ?? 'unknown');
+    increment(aggregate.appTopologyServiceInteractionConsumerRoles, interaction.consumerRole ?? 'unknown');
+    increment(aggregate.appTopologyServiceInteractionConsumerClasses, interaction.consumerClassName == null ? 'none' : 'class');
+    increment(aggregate.appTopologyServiceInteractionConsumerMembers, interaction.consumerMemberName == null ? 'none' : 'member');
+    increment(aggregate.appTopologyServiceInteractionArgumentCounts, cardinalityBucket(interaction.argumentCount ?? 0));
+    increment(aggregate.appTopologyServiceInteractionSelfStates, interaction.isSelfInteraction === true ? 'self' : 'cross');
+    increment(aggregate.appTopologyServiceInteractionSourceCoverage, sourceReferenceState(interaction.source));
+  }
+  const serviceInteractionBindings = topology.serviceInteractionBindings ?? [];
+  aggregate.appTopologyServiceInteractionBindings += serviceInteractionBindings.length;
+  for (const binding of serviceInteractionBindings) {
+    increment(aggregate.appTopologyServiceInteractionBindingSourceKinds, binding.bindingSourceKind ?? 'unknown');
+    increment(aggregate.appTopologyServiceInteractionBindingSourceRoots, binding.bindingSourceRootName == null ? 'none' : 'present');
+    increment(aggregate.appTopologyServiceInteractionBindingDirections, binding.bindingDirection ?? 'unknown');
+    increment(aggregate.appTopologyServiceInteractionBindingTargetProperties, binding.bindingTargetProperty ?? 'none');
+    increment(aggregate.appTopologyServiceInteractionBindingOperationKinds, binding.interactionOperationKind ?? 'unknown');
+    increment(aggregate.appTopologyServiceInteractionBindingTargetRoles, binding.interactionTargetRole ?? 'unknown');
+    increment(aggregate.appTopologyServiceInteractionBindingSelfStates, binding.interactionIsSelfInteraction === true ? 'self' : 'cross');
+  }
+  const stateCompositions = topology.stateCompositions ?? [];
+  aggregate.appTopologyStateCompositions += stateCompositions.length;
+  for (const composition of stateCompositions) {
+    increment(aggregate.appTopologyStateCompositionRoles, composition.valueDeclarationRole ?? 'none');
+    increment(aggregate.appTopologyStateCompositionValueTypeShapes, composition.valueTypeShapeKind ?? 'unknown');
+    increment(aggregate.appTopologyStateCompositionSourceCoverage, sourceReferenceState(composition.source));
+  }
+  const styles = topology.styles ?? [];
+  aggregate.appTopologyStyles += styles.length;
+  for (const style of styles) {
+    increment(aggregate.appTopologyStyleAssetKinds, style.assetKind ?? 'unknown');
+    increment(aggregate.appTopologyStyleSourceKinds, style.sourceKind ?? 'unknown');
+    increment(aggregate.appTopologyStyleOwnerKinds, style.ownerKind ?? 'unknown');
+    increment(aggregate.appTopologyStyleSourceCoverage, sourceReferenceState(style.source));
+    increment(aggregate.appTopologyStyleEvidenceCoverage, sourceReferenceState(style.evidenceSource));
+  }
+}
+
+function moduleSpecifierScope(moduleSpecifier) {
+  if (moduleSpecifier == null) {
+    return 'none';
+  }
+  if (moduleSpecifier === 'aurelia' || moduleSpecifier.startsWith('@aurelia/')) {
+    return 'aurelia-package';
+  }
+  if (moduleSpecifier.startsWith('.') || moduleSpecifier.startsWith('/')) {
+    return 'local-module';
+  }
+  return 'package';
+}
+
+function expectedEffectTargetKey(effect) {
+  if (effect.semanticTargetKey != null) {
+    return effect.semanticTargetKey;
+  }
+  if (effect.effectKind === 'authoring-taste') {
+    return `taste:${effect.tasteAxisKey ?? 'none'}:${effect.tasteValueKey ?? 'none'}`;
+  }
+  if (effect.effectKind === 'authoring-capability') {
+    return `capability:${effect.capabilityKey ?? 'none'}:${effect.minimumSupportState ?? 'none'}`;
+  }
+  const filters = effect.filters ?? [];
+  if (filters.length > 0) {
+    return `${effect.effectKind}:${filters
+      .map((filter) => `${filter.field}=${expectedEffectValueKey(filter.value)}`)
+      .join('&')}`;
+  }
+  const countPart = effect.count == null ? '' : `:${effect.count}`;
+  return `${effect.effectKind}:${effect.cardinality}${countPart}`;
+}
+
+function expectedEffectValueKey(value) {
+  return value == null ? 'null' : String(value);
+}
+
+function isRecipeSignatureRole(role) {
+  return role === 'signature' || role === 'discriminator';
 }
 
 function diagnosticMissingInputs(diagnostic) {
@@ -799,13 +2515,13 @@ async function pagedRows(app, kind) {
 function pressureRoots() {
   const raw = process.env.SEMANTIC_RUNTIME_PRESSURE_ROOTS;
   if (raw == null || raw.trim().length === 0) {
-    return [defaultRoot];
+    return defaultRoots;
   }
   return raw
     .split(path.delimiter)
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0)
-    .map((entry) => path.resolve(entry));
+    .map((entry) => path.isAbsolute(entry) ? path.resolve(entry) : path.resolve(workspaceRoot, entry));
 }
 
 function pressureAnalysisDepth() {
@@ -852,6 +2568,18 @@ function pressureDetailMode() {
     return value;
   }
   throw new Error(`Unsupported SEMANTIC_RUNTIME_PRESSURE_DETAIL '${raw}'.`);
+}
+
+function pressureOutputMode() {
+  const raw = process.env.SEMANTIC_RUNTIME_PRESSURE_OUTPUT;
+  if (raw == null || raw.trim().length === 0) {
+    return 'aggregate';
+  }
+  const value = raw.trim();
+  if (value === 'inputs' || value === 'aggregate' || value === 'both') {
+    return value;
+  }
+  throw new Error(`Unsupported SEMANTIC_RUNTIME_PRESSURE_OUTPUT '${raw}'.`);
 }
 
 function authoringTemplateSourceFilesForProject(project, projectFrame) {
@@ -943,13 +2671,24 @@ function writeabilityKey(value) {
   return value == null ? 'unknown' : String(value);
 }
 
+function strictBindingLabel(value) {
+  return value == null ? 'unknown' : String(value);
+}
+
 function integerEnv(name, fallback) {
   const value = Number.parseInt(process.env[name] ?? '', 10);
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
 function increment(counts, key, amount = 1) {
-  counts[key] = (counts[key] ?? 0) + amount;
+  const propertyKey = String(key);
+  const current = Object.hasOwn(counts, propertyKey) ? counts[propertyKey] : 0;
+  Object.defineProperty(counts, propertyKey, {
+    value: current + amount,
+    enumerable: true,
+    configurable: true,
+    writable: true,
+  });
 }
 
 function incrementAll(target, values) {
@@ -958,6 +2697,21 @@ function incrementAll(target, values) {
   }
   for (const [key, value] of Object.entries(values)) {
     increment(target, key, value);
+  }
+}
+
+function mergeMaxCounts(target, values) {
+  if (values == null) {
+    return;
+  }
+  for (const [key, value] of Object.entries(values)) {
+    const current = Object.hasOwn(target, key) ? target[key] : 0;
+    Object.defineProperty(target, key, {
+      value: Math.max(current, value),
+      enumerable: true,
+      configurable: true,
+      writable: true,
+    });
   }
 }
 
@@ -981,15 +2735,83 @@ function printCounts(label, counts, limit = 20) {
     )
     .slice(0, limit);
 
-  console.log('');
-  console.log(label);
   if (entries.length === 0) {
-    console.log('- none');
+    if (detailMode === 'raw') {
+      console.log('');
+      console.log(label);
+      console.log('- none');
+    }
     return;
   }
+  console.log('');
+  console.log(label);
   for (const [key, count] of entries) {
     console.log(`- ${key}: ${count}`);
   }
+}
+
+function printAuthoringTasteFocus(aggregate) {
+  printCountsByPrefix(
+    'authoring taste style-binding-model values',
+    aggregate.authoringTasteAxisValues,
+    'style-binding-model:',
+  );
+  printCountsByPrefix(
+    'authoring taste style-resource-ownership values',
+    aggregate.authoringTasteAxisValues,
+    'style-resource-ownership:',
+  );
+  printCountsByPrefix(
+    'authoring taste form-value-channel values',
+    aggregate.authoringTasteAxisValues,
+    'form-value-channel:',
+  );
+  printCountsByPrefix(
+    'authoring taste state-ownership values',
+    aggregate.authoringTasteAxisValues,
+    'state-ownership:',
+  );
+  printCountsByPrefix(
+    'authoring taste validation-ownership values',
+    aggregate.authoringTasteAxisValues,
+    'validation-ownership:',
+  );
+  printCountsByPrefix(
+    'authoring taste build-tool-profile values',
+    aggregate.authoringTasteAxisValues,
+    'build-tool-profile:',
+  );
+}
+
+function printCountsByPrefix(label, counts, prefix) {
+  const scopedCounts = Object.fromEntries(
+    Object.entries(counts ?? {})
+      .filter(([key]) => key.startsWith(prefix))
+      .map(([key, value]) => [key.slice(prefix.length), value]),
+  );
+  printCounts(label, scopedCounts);
+}
+
+function printPageCounts(label, counts) {
+  if (detailMode === 'raw') {
+    printCounts(label, counts);
+    return;
+  }
+  const multiPageCounts = Object.fromEntries(
+    Object.entries(counts).filter(([, count]) => count > 1),
+  );
+  printCounts(label, multiPageCounts);
+}
+
+function printQueryOutcomes(label, counts) {
+  if (detailMode === 'raw') {
+    printCounts(label, counts);
+    return;
+  }
+  const pressureOutcomes = Object.fromEntries(
+    Object.entries(counts).filter(([key]) => !key.endsWith(':hit')),
+  );
+  printCounts(label, pressureOutcomes);
 }
 
 function createTimingAccumulator() {
@@ -1112,15 +2934,27 @@ function printTimings(label, timings) {
   if (entries.length === 0) {
     console.log('- none');
   } else {
-    for (const [key, milliseconds] of entries) {
+    const printedEntries = entries.slice(0, detailMode === 'raw' ? entries.length : 14);
+    for (const [key, milliseconds] of printedEntries) {
       console.log(`- ${key}: ${milliseconds.toFixed(1)}ms`);
+    }
+    if (printedEntries.length < entries.length) {
+      console.log(`- ... ${entries.length - printedEntries.length} lower timing bucket(s) omitted`);
     }
   }
   console.log(`- slowest project: ${timings.slowestProjectMilliseconds.toFixed(1)}ms`);
-  printCounts(`${label}: expression type cache`, timings.expressionTypeCache, 10);
-  printCounts(`${label}: expression type cache entries by bucket`, timings.expressionTypeCacheEntriesByBucket, 10);
-  printCounts(`${label}: expression type cache hits by bucket`, timings.expressionTypeCacheHitsByBucket, 10);
-  printCounts(`${label}: expression type cache misses by bucket`, timings.expressionTypeCacheMissesByBucket, 10);
-  printCounts(`${label}: expression type cache writes by bucket`, timings.expressionTypeCacheWritesByBucket, 10);
+  if (detailMode === 'raw') {
+    printCounts(`${label}: expression type cache`, timings.expressionTypeCache, 10);
+    printCounts(`${label}: expression type cache entries by bucket`, timings.expressionTypeCacheEntriesByBucket, 10);
+    printCounts(`${label}: expression type cache hits by bucket`, timings.expressionTypeCacheHitsByBucket, 10);
+    printCounts(`${label}: expression type cache misses by bucket`, timings.expressionTypeCacheMissesByBucket, 10);
+    printCounts(`${label}: expression type cache writes by bucket`, timings.expressionTypeCacheWritesByBucket, 10);
+  } else if (Object.keys(timings.expressionTypeCache).length > 0) {
+    console.log(
+      `- expression cache: entries=${timings.expressionTypeCache.entries ?? 0}, ` +
+      `hits=${timings.expressionTypeCache.hits ?? 0}, misses=${timings.expressionTypeCache.misses ?? 0}, ` +
+      `writes=${timings.expressionTypeCache.writes ?? 0}`,
+    );
+  }
   printCounts(`${label}: project buckets`, timings.projectBuckets, 10);
 }

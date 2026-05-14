@@ -17,6 +17,8 @@ export const enum BuiltInResourcePackage {
   Router = 'router',
   /** State package. */
   State = 'state',
+  /** Validation HTML package. */
+  ValidationHtml = 'validation-html',
 }
 
 export const enum BuiltInResourceGroup {
@@ -657,6 +659,57 @@ export class StateBindingBehaviorResource {
   ) {}
 }
 
+@auLink('validation-html:ValidateBindingBehavior', { facet: 'resource-definition' })
+export class ValidationHtmlValidateBindingBehaviorResource {
+  readonly targetName = 'ValidateBindingBehavior';
+  readonly resourceKind = ResourceDefinitionKind.BindingBehavior;
+  readonly name = 'validate';
+  readonly aliases: readonly string[] = [];
+  readonly packageId = BuiltInResourcePackage.ValidationHtml;
+  readonly group = BuiltInResourceGroup.DefaultResources;
+
+  constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    readonly fieldProvenance: readonly FieldProvenance<BuiltInResourceField>[] = [],
+  ) {}
+}
+
+@auLink('validation-html:ValidationErrorsCustomAttribute', { facet: 'resource-definition' })
+export class ValidationHtmlValidationErrorsCustomAttributeResource {
+  readonly targetName = 'ValidationErrorsCustomAttribute';
+  readonly resourceKind = ResourceDefinitionKind.CustomAttribute;
+  readonly name = 'validation-errors';
+  readonly aliases: readonly string[] = [];
+  readonly packageId = BuiltInResourcePackage.ValidationHtml;
+  readonly group = BuiltInResourceGroup.DefaultResources;
+
+  constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    readonly fieldProvenance: readonly FieldProvenance<BuiltInResourceField>[] = [],
+  ) {}
+}
+
+@auLink('validation-html:ValidationContainerCustomElement', { facet: 'resource-definition' })
+export class ValidationHtmlValidationContainerCustomElementResource {
+  readonly targetName = 'ValidationContainerCustomElement';
+  readonly resourceKind = ResourceDefinitionKind.CustomElement;
+  readonly name = 'validation-container';
+  readonly aliases: readonly string[] = [];
+  readonly packageId = BuiltInResourcePackage.ValidationHtml;
+  readonly group = BuiltInResourceGroup.DefaultResources;
+
+  constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    readonly fieldProvenance: readonly FieldProvenance<BuiltInResourceField>[] = [],
+  ) {}
+}
+
 export type BuiltInResource =
   | RuntimeHtmlDebounceBindingBehaviorResource
   | RuntimeHtmlOneTimeBindingBehaviorResource
@@ -696,7 +749,10 @@ export type BuiltInResource =
   | RouterLoadCustomAttributeResource
   | RouterHrefCustomAttributeResource
   | RouterViewportCustomElementResource
-  | StateBindingBehaviorResource;
+  | StateBindingBehaviorResource
+  | ValidationHtmlValidateBindingBehaviorResource
+  | ValidationHtmlValidationErrorsCustomAttributeResource
+  | ValidationHtmlValidationContainerCustomElementResource;
 
 export interface BuiltInResourceCatalogInput {
   readonly packageId: BuiltInResourcePackage;
@@ -792,6 +848,18 @@ export const I18nBuiltInResourceCatalogs = {
       new I18nNumberFormatBindingBehaviorResource(),
       new I18nRelativeTimeValueConverterResource(),
       new I18nRelativeTimeBindingBehaviorResource(),
+    ],
+  },
+} as const satisfies Record<string, BuiltInResourceCatalogInput>;
+
+export const ValidationHtmlBuiltInResourceCatalogs = {
+  DefaultResources: {
+    packageId: BuiltInResourcePackage.ValidationHtml,
+    group: BuiltInResourceGroup.DefaultResources,
+    resources: [
+      new ValidationHtmlValidateBindingBehaviorResource(),
+      new ValidationHtmlValidationErrorsCustomAttributeResource(),
+      new ValidationHtmlValidationContainerCustomElementResource(),
     ],
   },
 } as const satisfies Record<string, BuiltInResourceCatalogInput>;

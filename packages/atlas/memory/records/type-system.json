@@ -1,0 +1,382 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:type-system-project-epoch",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "type-system",
+        "checker",
+        "world-construction"
+      ],
+      "summary": "TypeSystemProject is the shared TypeScript Program/checker epoch that bridges static evaluation, framework resource projection, template scope, and inquiry.",
+      "rationale": "The semantic runtime should not grow isolated TypeChecker setup paths when a feature needs app-local checker facts. TypeSystemProject is the reusable epoch boundary over evaluated source files, ambient app declarations, compiler host setup, module export lookup, and runtime target type reads.",
+      "guidance": [
+        "Start here when a feature needs a checker epoch, source-file lookup, module export type lookup, or runtime target instance type for a resource.",
+        "Keep evaluator source admission and TypeChecker Program construction threaded through this epoch instead of rebuilding local programs.",
+        "If external app loading is slow, inspect TypeSystemProject phase timings before guessing at semantic-runtime bulk cost."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject",
+          "line": 35,
+          "summary": "Current app-local TypeScript Program/checker epoch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProjectBuilder",
+          "line": 161,
+          "summary": "Builds the TypeSystemProject epoch from evaluated app sources."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project-options.ts",
+          "symbolName": "TypeSystemProjectOptions",
+          "line": 5,
+          "summary": "Checker compiler-options carrier for the app-local epoch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/README.md",
+          "summary": "Type-system substrate responsibilities and watchpoints."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "TypeSystemProject",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "minLineCount": 80,
+          "minMethodCount": 8
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "reuse:checker-expression-type-world",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "type-system",
+        "expression",
+        "checker",
+        "template"
+      ],
+      "summary": "CheckerExpressionTypeWorld owns pass-local expression TypeChecker lifetime: shared projector, evaluator cache, and resource-scope-specific evaluators.",
+      "rationale": "Runtime-analysis phases need expression facts in scope construction, value-channel projection, and data-flow. A named world keeps those phases from reconstructing evaluator stacks or losing the shared cache when lifecycle, template-control-flow, or authoring inquiry needs a speculative expression context.",
+      "guidance": [
+        "Start here when a template/runtime-analysis phase needs a CheckerExpressionTypeEvaluator.",
+        "Thread this world through new speculative lifecycle or control-flow contexts instead of adding another expression evaluator constructor path.",
+        "CheckerExpressionTypeEvaluator is `auLink`ed to runtime `astEvaluate`; keep it isomorphic to Aurelia expression semantics while returning TypeChecker-backed type-shape facts rather than runtime values.",
+        "Preserve callable open kinds when expression evaluation cannot close a call/construct target so observation and diagnostics can map only the modeled subset to exact runtime AST error codes.",
+        "Preserve value-converter and binding-behavior resource-lookup open kinds separately from callable open kinds. Missing converter/behavior resources and duplicate authored binding-behavior names map to runtime-html binding-utils codes and repair differently from non-callable expression targets.",
+        "When an open result has a repairable subject narrower than the expression span, preserve it on CheckerExpressionTypeOpen. Scope-slot typing pressure should cross into diagnostics as a scope-slot action target, not as a selected-member heuristic.",
+        "Keep the evaluator itself in expression-type-evaluator.ts; the world owns lifetime and shared cache, not expression semantics."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-type-world.ts",
+          "symbolName": "CheckerExpressionTypeWorld",
+          "summary": "Pass-local expression TypeChecker world."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-runtime-analysis.ts",
+          "symbolName": "TemplateRuntimeAnalysisFrame",
+          "summary": "Creates the per-template-runtime-analysis expression world."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/type-system/README.md",
+          "summary": "Type-system substrate responsibilities and expression-world watchpoints."
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-13"
+    },
+    {
+      "id": "frontier:checker-type-shape-access",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "type-system",
+        "checker",
+        "expression",
+        "template"
+      ],
+      "summary": "CheckerTypeShapeAccess is the shared resolver for member, finite-key, index-signature, and numeric-index value shapes over projected checker products.",
+      "rationale": "Expression evaluation, cursor owner projection, binding-pattern locals, and diagnostics all need to read values through type-shape products. Keeping this as a named substrate avoids regrowing small TypeChecker access paths in answer code or template-specific helpers.",
+      "guidance": [
+        "Start here when a feature needs member value type, dynamic keyed access, finite literal-key access, or array/tuple numeric access from a type-shape product.",
+        "Do not collapse index-signature, finite-key, numeric-key, and dot-member semantics into one fuzzy member lookup.",
+        "If a missing member looks like a weak-typing diagnostic, preserve the open reason rather than synthesizing a misleading member."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-type-shape-access.ts",
+          "symbolName": "CheckerTypeShapeAccess",
+          "line": 32,
+          "summary": "Shared TypeChecker-backed access service for projected type shapes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/README.md",
+          "summary": "Watchpoints about finite keyed access and projected type-shape access."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "CheckerTypeShapeAccess",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-type-shape-access.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:checker-expression-type-synthesizer",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "type-system",
+        "expression",
+        "template",
+        "synthetic-type"
+      ],
+      "summary": "CheckerExpressionTypeSynthesizer owns product-owned synthetic type shapes for expression and template-runtime constructs.",
+      "rationale": "Some Aurelia expression/runtime results have real member surfaces without a stable checker-owned source type. Synthetic object, array, tuple, union, arrow-function, and unknown shapes should stay explicit and reusable instead of being created ad hoc by each evaluator branch.",
+      "guidance": [
+        "Start here when a runtime-shaped expression result needs a durable synthetic type-shape product.",
+        "Keep synthesis separate from expression execution; evaluators should decide what was produced, while this class publishes the reusable type-shape product.",
+        "If branch-aware completion needs more than common union members, add an explicit continuation instead of weakening union synthesis."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-type-synthesis.ts",
+          "symbolName": "CheckerExpressionTypeSynthesizer",
+          "line": 19,
+          "summary": "Synthetic expression/template type-shape publisher."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/README.md",
+          "summary": "Watchpoints for synthetic expression and template type products."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "CheckerExpressionTypeSynthesizer",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-type-synthesis.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:checker-expression-scope-narrower",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "type-system",
+        "template",
+        "controller",
+        "scope"
+      ],
+      "summary": "CheckerExpressionScopeNarrower is the branch-local TypeChecker bridge for template-controller control-flow scopes.",
+      "rationale": "Recursive rendering and nested template controllers need checker-backed local scope changes without pretending the runtime hydrated every view. Branch narrowing belongs in a named semantic profile over Aurelia expression ASTs and BindingScope slots, not in cursor-answer logic.",
+      "guidance": [
+        "Start here when `if`, adjacent `else`, boolean negation, exact nullish/non-nullish lanes, or simple logical branch semantics need to alter template-visible slot types.",
+        "Keep broader control-flow analysis as named semantic profiles rather than accidental evaluator behavior.",
+        "If recursive controller semantics need deeper scope state, thread it through controller/template scope materializers before adding inquiry-local lookup."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-scope-narrower.ts",
+          "symbolName": "CheckerExpressionScopeNarrower",
+          "line": 59,
+          "summary": "TypeChecker-backed branch-local scope narrowing service."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/README.md",
+          "summary": "Template-controller branch narrowing watchpoints."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+          "symbolName": "TemplateControllerScopeMaterializer",
+          "line": 239,
+          "summary": "Consumes branch narrowing while materializing template-controller scopes."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "CheckerExpressionScopeNarrower",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-scope-narrower.ts",
+          "minLineCount": 120,
+          "minMethodCount": 5
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:checker-binding-pattern-local-type-projector",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "type-system",
+        "template",
+        "repeat",
+        "binding-pattern"
+      ],
+      "summary": "CheckerBindingPatternLocalTypeProjector owns destructuring local type projection for `repeat.for` and other binding-pattern scopes.",
+      "rationale": "Binding-pattern locals follow Aurelia runtime destructuring paths but need TypeChecker-backed value-shape access to keep tuple, object, map-entry, and index semantics precise. This service is the reuse point between repeat semantics and checker shape access.",
+      "guidance": [
+        "Start here when a binding-pattern local needs a type through array, object, default, hole, or rest syntax.",
+        "Spend CheckerTypeShapeAccess for property and index value resolution instead of duplicating member lookup in repeat/template code.",
+        "Keep rest-pattern gaps explicit until the product owns a precise array/object rest taxonomy."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/binding-pattern-locals.ts",
+          "symbolName": "CheckerBindingPatternLocalTypeProjector",
+          "line": 28,
+          "summary": "Binding-pattern local type projection service."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/README.md",
+          "summary": "Binding-pattern local projection watchpoints."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "CheckerBindingPatternLocalTypeProjector",
+          "filePath": "packages/semantic-runtime/src/type-system/binding-pattern-locals.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        }
+      ],
+      "createdAt": "2026-05-12",
+      "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:checker-expression-branch-scope-projector",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "type-system",
+        "expression",
+        "scope",
+        "template"
+      ],
+      "summary": "CheckerExpressionBranchScopeProjector intentionally owns expression-local branch Scope projection between scope narrowing and uncommitted speculative overlays.",
+      "rationale": "Conditional expressions and short-circuit right operands need TypeChecker branch facts without publishing durable template-controller Scope products. Keeping that handoff in a named projector prevents cursor/completion code from inventing inquiry-local narrowing logic and keeps CheckerExpressionTypeEvaluator from absorbing more branch-scope machinery.",
+      "guidance": [
+        "Start here when ordinary expression constructs need truthy/falsy branch-local Scope projection.",
+        "Use CheckerExpressionScopeNarrower for the actual narrowing rules and speculativeBindingScopeOverlay for the uncommitted lookup overlay.",
+        "Keep template-controller branch products in TemplateControllerFlowScopeMaterializer; this projector is for expression-local speculation inside a larger evaluation.",
+        "Nullish coalescing uses the exact nullish branch lane; keep future nullish/non-nullish behavior in this narrowing profile instead of approximating it as generic falsy narrowing."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-branch-scope.ts",
+          "symbolName": "CheckerExpressionBranchScopeProjector",
+          "summary": "Branch-local Scope projector used by CheckerExpressionTypeEvaluator."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-scope-narrower.ts",
+          "symbolName": "CheckerExpressionScopeNarrower",
+          "summary": "TypeChecker-backed narrowing rule owner."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/speculative-binding-scope.ts",
+          "symbolName": "speculativeBindingScopeOverlay",
+          "summary": "Uncommitted Scope overlay for branch-local lookup."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "CheckerExpressionBranchScopeProjector",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-branch-scope.ts",
+          "minLineCount": 70,
+          "minMethodCount": 3
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-13"
+    },
+    {
+      "id": "reuse:checker-expression-call-projector",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "type-system",
+        "expression",
+        "call-signature",
+        "value-converter"
+      ],
+      "summary": "CheckerExpressionCallProjector owns TypeChecker call/construct return projection, lazy overload narrowing, and value-converter toView argument semantics.",
+      "rationale": "Call and construct semantics were previously embedded inside CheckerExpressionTypeEvaluator. External app pressure did not need another local evaluator shortcut, but future callback/value-converter/completion work needs a named substrate that can evolve toward argument-sensitive contexts without adding cost to simple calls.",
+      "guidance": [
+        "Start here when a feature touches call return types, construct return types, overload arity, argument assignability, or value-converter toView signatures.",
+        "Keep ordinary single-signature calls lazy; do not evaluate arguments just to re-prove a fixed return type.",
+        "Use this projector as the grounding point before adding cursor-aware call-argument contexts for callback bodies such as collection methods.",
+        "Keep fromView, generic inference from synthetic arguments, custom expression plugins, and richer collection prototype semantics explicit until their missing facts are modeled."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-call-projector.ts",
+          "symbolName": "CheckerExpressionCallProjector",
+          "summary": "TypeChecker call/construct signature projector used by the expression evaluator."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-type-evaluator.ts",
+          "symbolName": "CheckerExpressionTypeEvaluator",
+          "summary": "Runtime-shaped evaluator that delegates call and construct projection to the call projector."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/README.md",
+          "summary": "Type-system watchpoints for call signatures and value-converter toView semantics."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-call-projector.ts",
+          "className": "CheckerExpressionCallProjector",
+          "minLineCount": 250,
+          "minMethodCount": 8
+        }
+      ],
+      "createdAt": "2026-05-13",
+      "updatedAt": "2026-05-13"
+    }
+  ]
+}

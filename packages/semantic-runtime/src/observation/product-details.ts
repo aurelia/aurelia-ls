@@ -4,6 +4,7 @@ import type {
   RuntimeBindingDataFlow,
   RuntimeBindingValueChannel,
 } from './runtime-binding-observation.js';
+import type { ObservationIssue } from './observation-issue.js';
 
 /**
  * Typed detail slots for observer, value-channel, and binding data-flow products.
@@ -13,6 +14,11 @@ import type {
  * broader template product-detail surface.
  */
 export const ObservationProductDetails = {
+  Issue: defineProductDetailSlot<ObservationIssue>(
+    KernelVocabulary.Observation.Issue.key,
+    'observation.issue',
+    'Source-backed observation issue detail.',
+  ),
   RuntimeBindingValueChannel: defineProductDetailSlot<RuntimeBindingValueChannel>(
     KernelVocabulary.Binding.ValueChannel.key,
     'binding.value-channel',

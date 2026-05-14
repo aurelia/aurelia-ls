@@ -1,5 +1,6 @@
-import { existsSync, readFileSync, statSync } from "node:fs";
+import { existsSync, statSync } from "node:fs";
 import path from "node:path";
+import { readTextFileOrNull } from "../../source/index.js";
 
 /** Source baseline for the curated framework.router descriptor maps. */
 export const FRAMEWORK_ROUTER_SOURCE_BASELINE = {
@@ -66,7 +67,7 @@ function readGitHead(workTreeRoot: string): string | null {
   if (gitDir === null) {
     return null;
   }
-  const headText = readTextFile(path.join(gitDir, "HEAD"));
+  const headText = readTextFileOrNull(path.join(gitDir, "HEAD"));
   if (headText === null) {
     return null;
   }
@@ -86,7 +87,7 @@ function readGitDir(workTreeRoot: string): string | null {
   if (statSync(gitPath).isDirectory()) {
     return gitPath;
   }
-  const text = readTextFile(gitPath);
+  const text = readTextFileOrNull(gitPath);
   const prefix = "gitdir:";
   if (text === null || !text.startsWith(prefix)) {
     return null;
@@ -96,11 +97,11 @@ function readGitDir(workTreeRoot: string): string | null {
 }
 
 function readGitRef(gitDir: string, ref: string): string | null {
-  const looseRef = readTextFile(path.join(gitDir, ref))?.trim();
+  const looseRef = readTextFileOrNull(path.join(gitDir, ref))?.trim();
   if (looseRef !== undefined && looseRef !== null && looksLikeSha(looseRef)) {
     return looseRef;
   }
-  const packedRefs = readTextFile(path.join(gitDir, "packed-refs"));
+  const packedRefs = readTextFileOrNull(path.join(gitDir, "packed-refs"));
   if (packedRefs === null) {
     return null;
   }
@@ -114,14 +115,6 @@ function readGitRef(gitDir: string, ref: string): string | null {
     }
   }
   return null;
-}
-
-function readTextFile(fileName: string): string | null {
-  try {
-    return readFileSync(fileName, "utf8");
-  } catch {
-    return null;
-  }
 }
 
 function looksLikeSha(value: string): boolean {

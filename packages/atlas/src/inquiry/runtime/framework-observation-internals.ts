@@ -1784,7 +1784,7 @@ function flowSiteRow(
     expressionText,
     from,
     to,
-    ...(callSite === undefined ? {} : { callSite }),
+    callSite,
     source,
     summary: `${executable.ownerName}.${executable.methodName} ${summaryVerb(
       classification,
@@ -2418,7 +2418,7 @@ function flowEntityLinkRow(
     entityResolvedName: entity.exportEntry.resolvedName,
     entityObserverKinds: entity.observerKinds,
     entityObserverCapabilities: entity.observerCapabilities,
-    ...(entitySource === null ? {} : { entitySource }),
+    entitySource: entitySource ?? undefined,
     source: site.source,
     summary: `${site.ownerName}.${site.methodName} ${summaryVerb(
       site,

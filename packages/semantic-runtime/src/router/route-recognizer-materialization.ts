@@ -11,10 +11,6 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import {
-  compactFieldProvenance,
-  FieldProvenance,
-} from '../kernel/provenance.js';
-import {
   KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
@@ -24,6 +20,8 @@ import {
   ConfigurableRouteModel,
   DynamicSegmentModel,
   EndpointModel,
+  RouteRecognizerIssueKind,
+  RouteRecognizerIssueModel,
   ParameterModel,
   RouteRecognizerModelKind,
   RouteRecognizerReference,
@@ -33,8 +31,6 @@ import {
   type RouteRecognizerSegmentModel,
   StarSegmentModel,
   StaticSegmentModel,
-  type ConfigurableRouteField,
-  type RouteRecognizerField,
   type RouteConfigContextModel,
   type RouteConfigModel,
 } from './model.js';
@@ -44,6 +40,10 @@ import {
   routeConfigContextIndex,
   routeConfigIndex,
 } from './route-topology-index.js';
+import {
+  RouteRecognizerRawErrorAuthority,
+  type RouteRecognizerRawErrorAuthority as RouteRecognizerRawErrorAuthorityValue,
+} from './framework-raw-error-authority.js';
 import { routeRecognizerProductRecords } from './router-product-records.js';
 
 const RESIDUE = '$$residue';
@@ -55,6 +55,7 @@ class ConfigurableRouteEmission {
     readonly routeConfigContext: RouteConfigContextModel,
     readonly configurableRoute: ConfigurableRouteModel,
     readonly endpoints: readonly EndpointModel[],
+    readonly issues: readonly RouteRecognizerIssueModel[],
   ) {}
 }
 
@@ -74,6 +75,7 @@ export class RouteRecognizerMaterializationProjectResult {
     readonly configurableRoutes: readonly ConfigurableRouteModel[],
     readonly endpoints: readonly EndpointModel[],
     readonly states: readonly StateModel[],
+    readonly issues: readonly RouteRecognizerIssueModel[],
   ) {}
 
   readConfigurableRoutes(): readonly ConfigurableRouteModel[] {
@@ -86,6 +88,10 @@ export class RouteRecognizerMaterializationProjectResult {
 
   readStates(): readonly StateModel[] {
     return this.states;
+  }
+
+  readIssues(): readonly RouteRecognizerIssueModel[] {
+    return this.issues;
   }
 }
 
@@ -122,6 +128,10 @@ export class RouteRecognizerMaterializationProjectPass {
       routeEmissions.map((emission) => emission.configurableRoute),
       routeEmissions.flatMap((emission) => emission.endpoints),
       stateGraphs.flatMap((stateGraph) => stateGraph.states),
+      [
+        ...routeEmissions.flatMap((emission) => emission.issues),
+        ...stateGraphs.flatMap((stateGraph) => stateGraph.issues),
+      ],
     );
   }
 
@@ -197,6 +207,7 @@ export class RouteRecognizerMaterializationProjectPass {
       routeConfigContext,
       routeSite.configurableRoute,
       endpointEmission.endpoints,
+      endpointEmission.issues,
     );
   }
 
@@ -228,7 +239,6 @@ export class RouteRecognizerMaterializationProjectPass {
         routeConfigContext,
         parse,
         sourceAddressHandle,
-        provenanceHandle,
       ),
     };
   }
@@ -242,6 +252,29 @@ export class RouteRecognizerMaterializationProjectPass {
     sourceAddressHandle: RouteConfigModel['sourceAddressHandle'],
   ): ConfigurableRouteEndpointEmission {
     const primaryPath = recognizerPathFor(configurableRoute);
+    if (parse.issues.length > 0) {
+      const issues = parse.issues.map((issue, index) =>
+        routeRecognizerIssueModel(
+          store,
+          `${configurableRouteLocal}:issue:${index}`,
+          routeConfigContext.recognizer,
+          issue.kind,
+          issue.frameworkRawErrorAuthority,
+          issue.message,
+          issue.path,
+          null,
+          null,
+          null,
+          sourceAddressHandle,
+        )
+      );
+      return new ConfigurableRouteEndpointEmission(
+        issues.flatMap((issue) => issueRecordsForPublication(store, routeConfigContext, issue)),
+        [],
+        issues,
+      );
+    }
+
     const hasResidualEndpoint = shouldAddResidualEndpoint(parse.parameters);
     const primaryLocal = `${configurableRouteLocal}:endpoint:primary`;
     const residualLocal = `${configurableRouteLocal}:endpoint:residual`;
@@ -265,7 +298,7 @@ export class RouteRecognizerMaterializationProjectPass {
     const primaryRecords = recordsForEndpointPublication(store, primaryLocal, primaryEndpoint, routeConfigContext, 'primary');
 
     if (!hasResidualEndpoint) {
-      return new ConfigurableRouteEndpointEmission(primaryRecords, [primaryEndpoint]);
+      return new ConfigurableRouteEndpointEmission(primaryRecords, [primaryEndpoint], []);
     }
 
     const residualEndpoint = endpointModel(
@@ -286,6 +319,7 @@ export class RouteRecognizerMaterializationProjectPass {
         ...recordsForEndpointPublication(store, residualLocal, residualEndpoint, routeConfigContext, 'residual'),
       ],
       [primaryEndpoint, residualEndpoint],
+      [],
     );
   }
 }
@@ -299,7 +333,6 @@ function configurableRouteModel(
   routeConfigContext: RouteConfigContextModel,
   parse: ConfigurableRouteParse,
   sourceAddressHandle: RouteConfigModel['sourceAddressHandle'],
-  provenanceHandle: ProvenanceHandle,
 ): ConfigurableRouteModel {
   return new ConfigurableRouteModel(
     productHandle,
@@ -313,7 +346,6 @@ function configurableRouteModel(
     parse.segments,
     parse.parameters,
     sourceAddressHandle,
-    configurableRouteFieldProvenance(provenanceHandle, parse, parentPath),
   );
 }
 
@@ -445,7 +477,6 @@ function endpointModel(
     primaryEndpoint,
     residualEndpoint,
     sourceAddressHandle,
-    endpointFieldProvenance(store.handles.provenance(local), parameters, isResidual, residualEndpoint != null),
   );
 }
 
@@ -488,6 +519,7 @@ class ConfigurableRouteEndpointEmission {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly endpoints: readonly EndpointModel[],
+    readonly issues: readonly RouteRecognizerIssueModel[],
   ) {}
 }
 
@@ -520,12 +552,15 @@ class RouteRecognizerStateGraphEmission {
   constructor(
     readonly records: readonly KernelStoreRecord[],
     readonly states: readonly StateModel[],
+    readonly issues: readonly RouteRecognizerIssueModel[],
   ) {}
 }
 
 class RouteRecognizerStateGraphBuilder {
   private readonly states: MutableRouteRecognizerState[] = [];
   private readonly statesByTransition = new Map<string, MutableRouteRecognizerState>();
+  private readonly endpointsByPath = new Map<string, EndpointModel>();
+  private readonly issues: RouteRecognizerIssueModel[] = [];
   private readonly root: MutableRouteRecognizerState;
 
   constructor(
@@ -556,16 +591,37 @@ class RouteRecognizerStateGraphBuilder {
       this.addEndpoint(endpoint, configurableRoute.caseSensitive);
     }
     const states = this.states.map((state) => state.toModel(this.routeConfigContext.recognizer));
+    const issueRecords = this.issues.flatMap((issue) => issueRecordsForPublication(this.store, this.routeConfigContext, issue));
     return new RouteRecognizerStateGraphEmission(
-      this.states.flatMap((mutable, index) =>
-        stateRecords(this.store, this.routeConfigContext, states[index]!, mutable)
-      ),
+      [
+        ...this.states.flatMap((mutable, index) =>
+          stateRecords(this.store, this.routeConfigContext, states[index]!, mutable)
+        ),
+        ...issueRecords,
+      ],
       states,
+      this.issues,
     );
   }
 
   private addEndpoint(endpoint: EndpointModel, caseSensitive: boolean): void {
-    const parse = parseConfigurableRoutePath(endpoint.path, caseSensitive);
+    const existingEndpoint = this.endpointsByPath.get(endpoint.path);
+    if (existingEndpoint != null) {
+      this.recordIssue(
+        RouteRecognizerIssueKind.DuplicatePath,
+        RouteRecognizerRawErrorAuthority.DuplicatePath,
+        `Cannot add duplicate path '${endpoint.path}'.`,
+        endpoint.path,
+        existingEndpoint.toReference(),
+        endpoint.toReference(),
+        null,
+        endpoint.sourceAddressHandle,
+      );
+      return;
+    }
+    this.endpointsByPath.set(endpoint.path, endpoint);
+
+    const parse = parseConfigurableRoutePath(endpoint.path, caseSensitive, endpoint.isResidual);
     let state = this.root;
     for (const segment of parse.segments) {
       state = this.appendSeparator(state, endpoint.sourceAddressHandle);
@@ -732,9 +788,20 @@ class RouteRecognizerStateGraphBuilder {
     state: MutableRouteRecognizerState,
     endpoint: RouteRecognizerReference,
   ): void {
-    if (state.endpoint == null) {
-      state.endpoint = endpoint;
+    if (state.endpoint != null) {
+      this.recordIssue(
+        RouteRecognizerIssueKind.AmbiguousEndpoint,
+        RouteRecognizerRawErrorAuthority.AmbiguousEndpoint,
+        `Cannot add ambiguous route. The pattern '${endpoint.localName ?? 'unknown'}' clashes with '${state.endpoint.localName ?? 'unknown'}'.`,
+        endpoint.localName,
+        state.endpoint,
+        endpoint,
+        state.toReference(),
+        endpoint.sourceAddressHandle,
+      );
+      return;
     }
+    state.endpoint = endpoint;
     if (!state.isOptional || state.previous == null) {
       return;
     }
@@ -742,6 +809,32 @@ class RouteRecognizerStateGraphBuilder {
     if (state.previous.isSeparator && state.previous.previous != null) {
       this.setEndpoint(state.previous.previous, endpoint);
     }
+  }
+
+  private recordIssue(
+    issueKind: RouteRecognizerIssueKind,
+    frameworkRawErrorAuthority: RouteRecognizerRawErrorAuthorityValue | null,
+    message: string,
+    path: string | null,
+    existingEndpoint: RouteRecognizerReference | null,
+    conflictingEndpoint: RouteRecognizerReference | null,
+    state: RouteRecognizerReference | null,
+    sourceAddressHandle: RouteConfigModel['sourceAddressHandle'],
+  ): void {
+    const local = `${this.routeConfigContext.recognizer.identityHandle}:issue:${this.issues.length}`;
+    this.issues.push(new RouteRecognizerIssueModel(
+      this.store.handles.product(local),
+      this.store.handles.identity(local),
+      this.routeConfigContext.recognizer,
+      issueKind,
+      frameworkRawErrorAuthority,
+      message,
+      path,
+      existingEndpoint,
+      conflictingEndpoint,
+      state,
+      sourceAddressHandle,
+    ));
   }
 }
 
@@ -804,7 +897,6 @@ class MutableRouteRecognizerState {
       this.isOptional,
       this.isConstrained,
       this.sourceAddressHandle,
-      stateFieldProvenance(this.provenanceHandle, this),
     );
   }
 }
@@ -846,18 +938,78 @@ function stateRecords(
   });
 }
 
+function issueRecordsForPublication(
+  store: KernelStore,
+  routeConfigContext: RouteConfigContextModel,
+  issue: RouteRecognizerIssueModel,
+): readonly KernelStoreRecord[] {
+  const local = `${issue.recognizer.identityHandle}:issue-record:${issue.identityHandle}`;
+  return routeRecognizerProductRecords(store, {
+    local,
+    evidenceHandle: store.handles.evidence(local),
+    provenanceHandle: store.handles.provenance(local),
+    productHandle: issue.productHandle,
+    identityHandle: issue.identityHandle,
+    productKindKey: KernelVocabulary.RouteRecognizer.Issue.key,
+    ownerHandle: routeConfigContext.recognizer.identityHandle ?? routeConfigContext.identityHandle,
+    sourceAddressHandle: issue.sourceAddressHandle,
+    localName: issue.path,
+    evidenceKind: EvidenceKind.SemanticObservation,
+    evidenceRoles: [EvidenceRole.Configuration, EvidenceRole.Diagnostic],
+    evidenceSummary: issue.message,
+  });
+}
+
+function routeRecognizerIssueModel(
+  store: KernelStore,
+  local: string,
+  recognizer: RouteRecognizerReference,
+  issueKind: RouteRecognizerIssueKind,
+  frameworkRawErrorAuthority: RouteRecognizerRawErrorAuthorityValue | null,
+  message: string,
+  path: string | null,
+  existingEndpoint: RouteRecognizerReference | null,
+  conflictingEndpoint: RouteRecognizerReference | null,
+  state: RouteRecognizerReference | null,
+  sourceAddressHandle: RouteConfigModel['sourceAddressHandle'],
+): RouteRecognizerIssueModel {
+  return new RouteRecognizerIssueModel(
+    store.handles.product(local),
+    store.handles.identity(local),
+    recognizer,
+    issueKind,
+    frameworkRawErrorAuthority,
+    message,
+    path,
+    existingEndpoint,
+    conflictingEndpoint,
+    state,
+    sourceAddressHandle,
+  );
+}
+
 interface ConfigurableRouteParse {
   readonly segments: readonly RouteRecognizerSegmentModel[];
   readonly parameters: readonly ParameterModel[];
+  readonly issues: readonly ConfigurableRouteParseIssue[];
+}
+
+interface ConfigurableRouteParseIssue {
+  readonly kind: RouteRecognizerIssueKind;
+  readonly frameworkRawErrorAuthority: RouteRecognizerRawErrorAuthorityValue | null;
+  readonly message: string;
+  readonly path: string;
 }
 
 function parseConfigurableRoutePath(
   path: string,
   caseSensitive: boolean,
+  allowGeneratedResidueStar: boolean = false,
 ): ConfigurableRouteParse {
   const parts = path === '' ? [''] : path.split('/').filter(isNotEmpty);
   const segments: RouteRecognizerSegmentModel[] = [];
   const parameters: ParameterModel[] = [];
+  const issues: ConfigurableRouteParseIssue[] = [];
 
   for (const part of parts) {
     if (part.startsWith(':')) {
@@ -866,6 +1018,14 @@ function parseConfigurableRoutePath(
       const name = match?.groups?.name ?? part.slice(1);
       const optional = match?.groups?.optional === '?';
       const pattern = match?.groups?.constraint ?? null;
+      if (name === RESIDUE) {
+        issues.push(reservedParameterNameIssue(path, RouteRecognizerRawErrorAuthority.ReservedParameterNameDynamic));
+        continue;
+      }
+      if (pattern != null && !isValidRouteParameterConstraint(pattern)) {
+        issues.push(invalidParameterConstraintIssue(path, name, pattern));
+        continue;
+      }
       if (name !== RESIDUE) {
         parameters.push(new ParameterModel(name, optional, false, pattern));
       }
@@ -880,6 +1040,10 @@ function parseConfigurableRoutePath(
 
     if (part.startsWith('*')) {
       const name = part.slice(1);
+      if (name === RESIDUE && !allowGeneratedResidueStar) {
+        issues.push(reservedParameterNameIssue(path, RouteRecognizerRawErrorAuthority.ReservedParameterNameStar));
+        continue;
+      }
       const segmentKind = name === RESIDUE
         ? RouteRecognizerSegmentKind.Residue
         : RouteRecognizerSegmentKind.Star;
@@ -899,7 +1063,41 @@ function parseConfigurableRoutePath(
     ));
   }
 
-  return { segments, parameters };
+  return { segments, parameters, issues };
+}
+
+function reservedParameterNameIssue(
+  path: string,
+  frameworkRawErrorAuthority: RouteRecognizerRawErrorAuthorityValue,
+): ConfigurableRouteParseIssue {
+  return {
+    kind: RouteRecognizerIssueKind.ReservedParameterName,
+    frameworkRawErrorAuthority,
+    message: `Invalid parameter name; usage of the reserved parameter name '${RESIDUE}' is used.`,
+    path,
+  };
+}
+
+function invalidParameterConstraintIssue(
+  path: string,
+  name: string,
+  pattern: string,
+): ConfigurableRouteParseIssue {
+  return {
+    kind: RouteRecognizerIssueKind.InvalidParameterConstraint,
+    frameworkRawErrorAuthority: null,
+    message: `Invalid route parameter constraint for '${name}': ${pattern}`,
+    path,
+  };
+}
+
+function isValidRouteParameterConstraint(pattern: string): boolean {
+  try {
+    void new RegExp(pattern);
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 function isNotEmpty(segment: string): boolean {
@@ -908,58 +1106,4 @@ function isNotEmpty(segment: string): boolean {
 
 function shouldAddResidualEndpoint(parameters: readonly ParameterModel[]): boolean {
   return parameters[parameters.length - 1]?.isStar !== true;
-}
-
-function configurableRouteFieldProvenance(
-  provenanceHandle: ProvenanceHandle,
-  parse: ConfigurableRouteParse,
-  parentPath: string | null,
-): readonly FieldProvenance<ConfigurableRouteField>[] {
-  return compactFieldProvenance<ConfigurableRouteField>([
-    new FieldProvenance('routeConfig', provenanceHandle),
-    parentPath == null ? null : new FieldProvenance('parentPath', provenanceHandle),
-    new FieldProvenance('path', provenanceHandle),
-    new FieldProvenance('caseSensitive', provenanceHandle),
-    parse.segments.length === 0 ? null : new FieldProvenance('segments', provenanceHandle),
-    parse.parameters.length === 0 ? null : new FieldProvenance('parameters', provenanceHandle),
-    new FieldProvenance('source', provenanceHandle),
-  ]);
-}
-
-function endpointFieldProvenance(
-  provenanceHandle: ProvenanceHandle,
-  parameters: readonly ParameterModel[],
-  isResidual: boolean,
-  hasResidualEndpoint: boolean,
-): readonly FieldProvenance<RouteRecognizerField>[] {
-  return compactFieldProvenance<RouteRecognizerField>([
-    new FieldProvenance('configurableRoute', provenanceHandle),
-    new FieldProvenance('path', provenanceHandle),
-    new FieldProvenance('isResidual', provenanceHandle),
-    parameters.length === 0 ? null : new FieldProvenance('parameters', provenanceHandle),
-    isResidual ? new FieldProvenance('primaryEndpoint', provenanceHandle) : null,
-    hasResidualEndpoint ? new FieldProvenance('residualEndpoint', provenanceHandle) : null,
-    new FieldProvenance('source', provenanceHandle),
-  ]);
-}
-
-function stateFieldProvenance(
-  provenanceHandle: ProvenanceHandle,
-  state: MutableRouteRecognizerState,
-): readonly FieldProvenance<RouteRecognizerField>[] {
-  return compactFieldProvenance<RouteRecognizerField>([
-    state.previous == null ? null : new FieldProvenance('previousState', provenanceHandle),
-    state.nextStates.length === 0 ? null : new FieldProvenance('nextStates', provenanceHandle),
-    state.endpoint == null ? null : new FieldProvenance('endpoint', provenanceHandle),
-    new FieldProvenance('stateKind', provenanceHandle),
-    state.segmentName == null ? null : new FieldProvenance('segmentName', provenanceHandle),
-    state.pattern == null ? null : new FieldProvenance('pattern', provenanceHandle),
-    new FieldProvenance('value', provenanceHandle),
-    new FieldProvenance('length', provenanceHandle),
-    new FieldProvenance('isSeparator', provenanceHandle),
-    new FieldProvenance('isDynamic', provenanceHandle),
-    new FieldProvenance('isOptional', provenanceHandle),
-    new FieldProvenance('isConstrained', provenanceHandle),
-    new FieldProvenance('source', provenanceHandle),
-  ]);
 }

@@ -9,6 +9,7 @@ import type {
   ControllerProduct,
   ViewFactory,
 } from './controller.js';
+import type { ConfigurationIssue } from './configuration-issue.js';
 
 /** Typed detail slots for configuration products used by later inquiry and compiler-world passes. */
 export const ConfigurationProductDetails = {
@@ -36,5 +37,10 @@ export const ConfigurationProductDetails = {
     KernelVocabulary.Configuration.BindingScope.key,
     'configuration.binding-scope',
     'Runtime-shaped Scope detail used by controller activation and binding expression lookup.',
+  ),
+  Issue: defineProductDetailSlot<ConfigurationIssue>(
+    KernelVocabulary.Configuration.Issue.key,
+    'configuration.issue',
+    'Source-backed configuration issue with diagnostic authority.',
   ),
 } as const;

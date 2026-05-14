@@ -1,26 +1,8 @@
-import { SemanticClaim } from '../kernel/claim.js';
-import {
-  EvidenceKind,
-  EvidenceRecord,
-  EvidenceRole,
-} from '../kernel/evidence.js';
+import type { SemanticClaim } from '../kernel/claim.js';
 import type {
-  AddressHandle,
-  EvidenceHandle,
-  IdentityHandle,
   ProductHandle,
-  ProvenanceHandle,
 } from '../kernel/handles.js';
-import { CompilerIdentity } from '../kernel/identity.js';
-import {
-  MaterializationRecord,
-  MaterializedProduct,
-} from '../kernel/materialization.js';
 import { OpenSeam } from '../kernel/open-seam.js';
-import {
-  FieldProvenance,
-  ProvenanceRecord,
-} from '../kernel/provenance.js';
 import {
   KernelStoreBatch,
   type KernelStore,
@@ -28,11 +10,9 @@ import {
 } from '../kernel/store.js';
 import {
   KernelVocabulary,
-  type ClaimPredicateKey,
-  type OpenSeamKindKey,
-  type ProductKindKey,
 } from '../kernel/vocabulary.js';
 import {
+  NodeObserverLocatorConfiguration,
   ObserverLocator,
   ObserverLocatorLookupRequest,
   ObserverLocatorLookupResult,
@@ -44,26 +24,21 @@ import { HtmlElement, HtmlText } from './html-ir.js';
 import { TemplateProductDetails } from './product-details.js';
 import {
   PropertyBinding,
+  InterpolationBinding,
   RefBinding,
   type RuntimeBinding,
   type RuntimeBindingBindHost,
   RuntimeBindingBindContext,
   RuntimeBindingTargetAccess,
   RuntimeBindingTargetAccessLookup,
-  type RuntimeBindingTargetAccessField,
   RuntimeBindingTarget,
   type RuntimeBindingTargetAccessRequest,
   RuntimeBindingTargetOperation,
-  RuntimeBindingTargetOperationAuthority,
-  type RuntimeBindingTargetOperationField,
   type RuntimeBindingTargetOperationRequest,
   RuntimeBindingTargetOperationKind,
   RuntimeBindingSourceOperation,
-  RuntimeBindingSourceOperationAuthority,
-  type RuntimeBindingSourceOperationField,
   type RuntimeBindingSourceOperationRequest,
   RuntimeBindingSourceOperationKind,
-  RuntimeTargetOperationOwnerKind,
   RuntimeBindingTargetKind,
   SpreadValueBinding,
 } from './runtime-binding.js';
@@ -82,6 +57,11 @@ import {
   HydrateAttributeInstruction,
   HydrateElementInstruction,
 } from './instruction-ir.js';
+import {
+  RuntimeBindingSourceOperationTarget,
+  RuntimeControllerBindPublisher,
+  type RuntimeControllerBindSourceSet,
+} from './runtime-controller-bind-publication.js';
 
 export interface RuntimeControllerBindMaterializationRequest {
   /** Store-local key shared with the template compilation pass. */
@@ -92,6 +72,8 @@ export interface RuntimeControllerBindMaterializationRequest {
   readonly scopes: TemplateScopeConstructionEmission;
   /** Current TypeChecker epoch used by ObserverLocator lookup, when available. */
   readonly typeSystem: TypeSystemProject | null;
+  /** App-authored NodeObserverLocator service state visible to this runtime binding analysis. */
+  readonly nodeObserverLocatorConfiguration?: NodeObserverLocatorConfiguration | null;
 }
 
 export class RuntimeControllerBindEmission {
@@ -156,40 +138,6 @@ export class RuntimeControllerBindEmission {
 
   readSourceOperationsForBinding(productHandle: ProductHandle): readonly RuntimeBindingSourceOperation[] {
     return this.sourceOperationsByBinding.get(productHandle) ?? [];
-  }
-}
-
-class RuntimeControllerBindSourceSet {
-  constructor(
-    readonly records: readonly KernelStoreRecord[],
-    readonly evidenceHandle: EvidenceHandle,
-    readonly provenanceHandle: ProvenanceHandle,
-  ) {}
-}
-
-class RuntimeControllerBindProductHandles {
-  constructor(
-    readonly local: string,
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
-  ) {}
-}
-
-class RuntimeControllerBindProductPublication<TProduct> {
-  constructor(
-    readonly product: TProduct,
-    readonly claim: SemanticClaim,
-    readonly records: readonly KernelStoreRecord[],
-  ) {}
-
-  appendTo(
-    records: KernelStoreRecord[],
-    claims: SemanticClaim[],
-    products: TProduct[],
-  ): void {
-    claims.push(this.claim);
-    products.push(this.product);
-    records.push(...this.records);
   }
 }
 
@@ -268,16 +216,22 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
 
 /** Materializes Controller.bind target-access products after renderer dispatch has created runtime bindings. */
 export class RuntimeControllerBindMaterializer {
-  private readonly observerLocator: ObserverLocator;
+  private observerLocator: ObserverLocator;
+  private readonly publisher: RuntimeControllerBindPublisher;
 
   constructor(
     /** Hot analysis store that receives controller bind-time products. */
     readonly store: KernelStore,
   ) {
     this.observerLocator = new ObserverLocator(store);
+    this.publisher = new RuntimeControllerBindPublisher(store);
   }
 
   materialize(input: RuntimeControllerBindMaterializationRequest): RuntimeControllerBindEmission {
+    this.observerLocator = new ObserverLocator(
+      this.store,
+      input.nodeObserverLocatorConfiguration ?? NodeObserverLocatorConfiguration.empty,
+    );
     const emission = this.recordsForControllerBind(input);
     if (emission.records.length > 0) {
       this.store.commit(new KernelStoreBatch(emission.records, `runtime-controller-bind:${input.localKey}`));
@@ -319,7 +273,7 @@ export class RuntimeControllerBindMaterializer {
     const sourceOperations: RuntimeBindingSourceOperation[] = [];
     const openSeams: OpenSeam[] = [];
     const claims: SemanticClaim[] = [];
-    const source = this.recordsForSource(input.localKey);
+    const source = this.publisher.recordsForSource(input.localKey);
     records.push(...source.records);
     const host = new RuntimeControllerBindMaterializationHost(
       this,
@@ -356,11 +310,10 @@ export class RuntimeControllerBindMaterializer {
   ): RuntimeBindingTargetAccess {
     const target = this.targetAccessTarget(request.binding, targetController);
     const lookup = this.resolveTargetAccess(this.targetAccessLookupRequest(input, request, target));
-    const handles = this.productHandles(`${request.localKey}:target-access`);
-    const publication = this.targetAccessPublication(handles, request, target, lookup, source);
+    const publication = this.publisher.targetAccessPublication(`${request.localKey}:target-access`, request, target, lookup, source);
     if (lookup.openReason != null) {
-      this.recordOpenSeam(
-        `${handles.local}:open`,
+      this.publisher.recordOpenSeam(
+        `${publication.local}:open`,
         lookup.openReason,
         request.binding.sourceAddressHandle,
         source,
@@ -389,11 +342,10 @@ export class RuntimeControllerBindMaterializer {
     const operationKind = openReason == null
       ? request.operationKind
       : RuntimeBindingTargetOperationKind.Open;
-    const handles = this.productHandles(`${request.localKey}:target-operation`);
-    const publication = this.targetOperationPublication(handles, request, target, operationKind, openReason, source);
+    const publication = this.publisher.targetOperationPublication(`${request.localKey}:target-operation`, request, target, operationKind, openReason, source);
     if (openReason != null) {
-      this.recordOpenSeam(
-        `${handles.local}:open`,
+      this.publisher.recordOpenSeam(
+        `${publication.local}:open`,
         openReason,
         request.binding.sourceAddressHandle,
         source,
@@ -421,11 +373,10 @@ export class RuntimeControllerBindMaterializer {
     const operationKind = openReason == null
       ? request.operationKind
       : RuntimeBindingSourceOperationKind.Open;
-    const handles = this.productHandles(`${request.localKey}:source-operation`);
-    const publication = this.sourceOperationPublication(handles, request, target, operationKind, openReason, source);
+    const publication = this.publisher.sourceOperationPublication(`${request.localKey}:source-operation`, request, target, operationKind, openReason, source);
     if (openReason != null) {
-      this.recordOpenSeam(
-        `${handles.local}:open`,
+      this.publisher.recordOpenSeam(
+        `${publication.local}:open`,
         openReason,
         request.binding.sourceAddressHandle,
         source,
@@ -436,14 +387,6 @@ export class RuntimeControllerBindMaterializer {
     }
     publication.appendTo(records, claims, sourceOperations);
     return publication.product;
-  }
-
-  private productHandles(local: string): RuntimeControllerBindProductHandles {
-    return new RuntimeControllerBindProductHandles(
-      local,
-      this.store.handles.product(local),
-      this.store.handles.identity(local),
-    );
   }
 
   private targetAccessLookupRequest(
@@ -462,307 +405,6 @@ export class RuntimeControllerBindMaterializer {
       target.namespace,
       request.sourceAddressHandle,
     );
-  }
-
-  private targetAccessPublication(
-    handles: RuntimeControllerBindProductHandles,
-    request: RuntimeBindingTargetAccessRequest,
-    target: RuntimeBindingTarget,
-    lookup: ObserverLocatorLookupResult,
-    source: RuntimeControllerBindSourceSet,
-  ): RuntimeControllerBindProductPublication<RuntimeBindingTargetAccess> {
-    const access = this.targetAccessProduct(handles, request, target, lookup, source);
-    const claim = this.runtimeBindingProductClaim(
-      `${handles.local}:runtime-binding-uses-target-access`,
-      request.binding.productHandle,
-      KernelVocabulary.Binding.RuntimeBindingUsesTargetAccess.key,
-      handles.productHandle,
-      source,
-    );
-    const records = this.runtimeBindingProductRecords(
-      handles,
-      KernelVocabulary.Binding.TargetAccess.key,
-      request.binding.identityHandle,
-      request.binding.sourceAddressHandle,
-      source,
-      `${request.lookup}:${target.targetKind}:${request.targetProperty}`,
-      'target-access',
-      claim,
-    );
-    return new RuntimeControllerBindProductPublication(access, claim, records);
-  }
-
-  private targetAccessProduct(
-    handles: RuntimeControllerBindProductHandles,
-    request: RuntimeBindingTargetAccessRequest,
-    target: RuntimeBindingTarget,
-    lookup: ObserverLocatorLookupResult,
-    source: RuntimeControllerBindSourceSet,
-  ): RuntimeBindingTargetAccess {
-    return new RuntimeBindingTargetAccess(
-      handles.productHandle,
-      handles.identityHandle,
-      request.binding.toReference(),
-      request.lookup,
-      lookup.targetKind,
-      target.targetNode,
-      target.targetControllerProductHandle,
-      request.targetProperty,
-      lookup.strategy,
-      lookup.eventNames,
-      lookup.targetType,
-      lookup.propertyType,
-      lookup.propertyExists,
-      lookup.isWritable,
-      lookup.isObservable,
-      lookup.authority,
-      lookup.openReason,
-      request.binding.sourceAddressHandle,
-      this.targetAccessFieldProvenance(this.targetAccessFields(target, lookup), source),
-    );
-  }
-
-  private targetOperationPublication(
-    handles: RuntimeControllerBindProductHandles,
-    request: RuntimeBindingTargetOperationRequest,
-    target: RuntimeBindingTarget,
-    operationKind: RuntimeBindingTargetOperationKind,
-    openReason: string | null,
-    source: RuntimeControllerBindSourceSet,
-  ): RuntimeControllerBindProductPublication<RuntimeBindingTargetOperation> {
-    const operation = this.targetOperationProduct(handles, request, target, operationKind, openReason, source);
-    const claim = this.runtimeBindingProductClaim(
-      `${handles.local}:runtime-binding-uses-target-operation`,
-      request.binding.productHandle,
-      KernelVocabulary.Binding.RuntimeBindingUsesTargetOperation.key,
-      handles.productHandle,
-      source,
-    );
-    const records = this.runtimeBindingProductRecords(
-      handles,
-      KernelVocabulary.Binding.TargetOperation.key,
-      request.binding.identityHandle,
-      request.binding.sourceAddressHandle,
-      source,
-      `${operationKind}:${target.targetKind}:${request.targetAttribute}:${request.targetProperty}`,
-      'target-operation',
-      claim,
-    );
-    return new RuntimeControllerBindProductPublication(operation, claim, records);
-  }
-
-  private targetOperationProduct(
-    handles: RuntimeControllerBindProductHandles,
-    request: RuntimeBindingTargetOperationRequest,
-    target: RuntimeBindingTarget,
-    operationKind: RuntimeBindingTargetOperationKind,
-    openReason: string | null,
-    source: RuntimeControllerBindSourceSet,
-  ): RuntimeBindingTargetOperation {
-    return new RuntimeBindingTargetOperation(
-      handles.productHandle,
-      handles.identityHandle,
-      RuntimeTargetOperationOwnerKind.RuntimeBinding,
-      request.binding.toReference(),
-      null,
-      request.binding.instructionProductHandle,
-      request.binding.instructionIdentityHandle,
-      target.targetKind,
-      target.targetNode,
-      target.targetControllerProductHandle,
-      request.targetAttribute,
-      request.targetProperty,
-      null,
-      operationKind,
-      request.affectedNames,
-      this.targetOperationAuthority(openReason),
-      openReason,
-      request.binding.sourceAddressHandle,
-      this.targetOperationFieldProvenance(this.targetOperationFields(request, target, openReason), source),
-    );
-  }
-
-  private sourceOperationPublication(
-    handles: RuntimeControllerBindProductHandles,
-    request: RuntimeBindingSourceOperationRequest,
-    target: RuntimeBindingSourceOperationTarget,
-    operationKind: RuntimeBindingSourceOperationKind,
-    openReason: string | null,
-    source: RuntimeControllerBindSourceSet,
-  ): RuntimeControllerBindProductPublication<RuntimeBindingSourceOperation> {
-    const operation = this.sourceOperationProduct(handles, request, target, operationKind, openReason, source);
-    const claim = this.runtimeBindingProductClaim(
-      `${handles.local}:runtime-binding-uses-source-operation`,
-      request.binding.productHandle,
-      KernelVocabulary.Binding.RuntimeBindingUsesSourceOperation.key,
-      handles.productHandle,
-      source,
-    );
-    const records = this.runtimeBindingProductRecords(
-      handles,
-      KernelVocabulary.Binding.SourceOperation.key,
-      request.binding.identityHandle,
-      request.binding.sourceAddressHandle,
-      source,
-      `${operationKind}:${target.targetKind}:${request.targetName}`,
-      'source-operation',
-      claim,
-    );
-    return new RuntimeControllerBindProductPublication(operation, claim, records);
-  }
-
-  private sourceOperationProduct(
-    handles: RuntimeControllerBindProductHandles,
-    request: RuntimeBindingSourceOperationRequest,
-    target: RuntimeBindingSourceOperationTarget,
-    operationKind: RuntimeBindingSourceOperationKind,
-    openReason: string | null,
-    source: RuntimeControllerBindSourceSet,
-  ): RuntimeBindingSourceOperation {
-    return new RuntimeBindingSourceOperation(
-      handles.productHandle,
-      handles.identityHandle,
-      request.binding.toReference(),
-      request.binding.instructionProductHandle,
-      request.binding.instructionIdentityHandle,
-      target.targetKind,
-      target.targetNode,
-      target.targetControllerProductHandle,
-      request.targetName,
-      target.targetType,
-      operationKind,
-      this.sourceOperationAuthority(openReason),
-      openReason,
-      request.binding.sourceAddressHandle,
-      this.sourceOperationFieldProvenance(this.sourceOperationFields(target, openReason), source),
-    );
-  }
-
-  private runtimeBindingProductClaim(
-    local: string,
-    bindingProductHandle: ProductHandle,
-    predicateKey: ClaimPredicateKey,
-    productHandle: ProductHandle,
-    source: RuntimeControllerBindSourceSet,
-  ): SemanticClaim {
-    return new SemanticClaim(
-      this.store.handles.claim(local),
-      bindingProductHandle,
-      predicateKey,
-      productHandle,
-      source.provenanceHandle,
-    );
-  }
-
-  private runtimeBindingProductRecords(
-    handles: RuntimeControllerBindProductHandles,
-    productKindKey: ProductKindKey,
-    parentIdentityHandle: IdentityHandle,
-    sourceAddressHandle: AddressHandle | null,
-    source: RuntimeControllerBindSourceSet,
-    identityValue: string,
-    materializationSlot: string,
-    claim: SemanticClaim,
-  ): readonly KernelStoreRecord[] {
-    return [
-      new CompilerIdentity(
-        handles.identityHandle,
-        productKindKey,
-        parentIdentityHandle,
-        sourceAddressHandle,
-        identityValue,
-      ),
-      new MaterializedProduct(
-        handles.productHandle,
-        productKindKey,
-        handles.identityHandle,
-        sourceAddressHandle,
-        source.provenanceHandle,
-      ),
-      new MaterializationRecord(
-        this.store.handles.materialization(`${handles.local}:${materializationSlot}`),
-        handles.identityHandle,
-        [handles.productHandle],
-        [claim.handle],
-      ),
-    ];
-  }
-
-  private targetAccessFields(
-    target: RuntimeBindingTarget,
-    lookup: ObserverLocatorLookupResult,
-  ): readonly (RuntimeBindingTargetAccessField | null)[] {
-    return [
-      'binding',
-      'lookup',
-      'targetKind',
-      target.targetNode == null ? null : 'targetNode',
-      target.targetControllerProductHandle == null ? null : 'targetController',
-      'targetProperty',
-      'strategy',
-      lookup.eventNames.length === 0 ? null : 'events',
-      lookup.targetType == null ? null : 'targetType',
-      lookup.propertyType == null ? null : 'propertyType',
-      lookup.propertyExists == null ? null : 'propertyExists',
-      lookup.isWritable == null ? null : 'isWritable',
-      'isObservable',
-      'authority',
-      lookup.openReason == null ? null : 'openReason',
-      'source',
-    ];
-  }
-
-  private targetOperationFields(
-    request: RuntimeBindingTargetOperationRequest,
-    target: RuntimeBindingTarget,
-    openReason: string | null,
-  ): readonly (RuntimeBindingTargetOperationField | null)[] {
-    return [
-      'ownerKind',
-      'binding',
-      'instruction',
-      'targetKind',
-      target.targetNode == null ? null : 'targetNode',
-      target.targetControllerProductHandle == null ? null : 'targetController',
-      'targetAttribute',
-      'targetProperty',
-      'operationKind',
-      request.affectedNames.length === 0 ? null : 'affectedNames',
-      'authority',
-      openReason == null ? null : 'openReason',
-      'source',
-    ];
-  }
-
-  private sourceOperationFields(
-    target: RuntimeBindingSourceOperationTarget,
-    openReason: string | null,
-  ): readonly (RuntimeBindingSourceOperationField | null)[] {
-    return [
-      'binding',
-      'instruction',
-      'targetKind',
-      target.targetNode == null ? null : 'targetNode',
-      target.targetControllerProductHandle == null ? null : 'targetController',
-      'targetName',
-      target.targetType == null ? null : 'targetType',
-      'operationKind',
-      'authority',
-      openReason == null ? null : 'openReason',
-      'source',
-    ];
-  }
-
-  private targetOperationAuthority(openReason: string | null): RuntimeBindingTargetOperationAuthority {
-    return openReason == null
-      ? RuntimeBindingTargetOperationAuthority.RuntimeBindingImplementation
-      : RuntimeBindingTargetOperationAuthority.Open;
-  }
-
-  private sourceOperationAuthority(openReason: string | null): RuntimeBindingSourceOperationAuthority {
-    return openReason == null
-      ? RuntimeBindingSourceOperationAuthority.RuntimeBindingImplementation
-      : RuntimeBindingSourceOperationAuthority.Open;
   }
 
   spreadValueTargetProperties(
@@ -784,7 +426,10 @@ export class RuntimeControllerBindMaterializer {
   ): RuntimeBindingTarget {
     // Runtime renderer getTarget(...) uses a controller view-model when renderer dispatch supplied a target controller.
     // Otherwise the binding target is the authored host node, even when the tag name is dash-cased.
-    if ((binding instanceof PropertyBinding || binding instanceof SpreadValueBinding) && targetController != null) {
+    if ((binding instanceof PropertyBinding
+      || binding instanceof InterpolationBinding
+      || binding instanceof SpreadValueBinding)
+      && targetController != null) {
       return new RuntimeBindingTarget(
         RuntimeBindingTargetKind.ControllerViewModel,
         null,
@@ -1030,94 +675,6 @@ export class RuntimeControllerBindMaterializer {
     return node instanceof HtmlElement || node instanceof HtmlText ? node : null;
   }
 
-  private targetAccessFieldProvenance(
-    fields: readonly (RuntimeBindingTargetAccessField | null)[],
-    source: RuntimeControllerBindSourceSet,
-  ): readonly FieldProvenance<RuntimeBindingTargetAccessField>[] {
-    return fields
-      .filter((field): field is RuntimeBindingTargetAccessField => field != null)
-      .map((field) => new FieldProvenance(field, source.provenanceHandle));
-  }
-
-  private targetOperationFieldProvenance(
-    fields: readonly (RuntimeBindingTargetOperationField | null)[],
-    source: RuntimeControllerBindSourceSet,
-  ): readonly FieldProvenance<RuntimeBindingTargetOperationField>[] {
-    return fields
-      .filter((field): field is RuntimeBindingTargetOperationField => field != null)
-      .map((field) => new FieldProvenance(field, source.provenanceHandle));
-  }
-
-  private sourceOperationFieldProvenance(
-    fields: readonly (RuntimeBindingSourceOperationField | null)[],
-    source: RuntimeControllerBindSourceSet,
-  ): readonly FieldProvenance<RuntimeBindingSourceOperationField>[] {
-    return fields
-      .filter((field): field is RuntimeBindingSourceOperationField => field != null)
-      .map((field) => new FieldProvenance(field, source.provenanceHandle));
-  }
-
-  private recordOpenSeam(
-    local: string,
-    summary: string,
-    addressHandle: AddressHandle | null,
-    source: RuntimeControllerBindSourceSet,
-    records: KernelStoreRecord[],
-    openSeams: OpenSeam[],
-    seamKindKey: OpenSeamKindKey = KernelVocabulary.Binding.OpenTargetAccess.key,
-  ): void {
-    const seam = new OpenSeam(
-      this.store.handles.openSeam(local),
-      seamKindKey,
-      summary,
-      addressHandle,
-      source.evidenceHandle,
-    );
-    openSeams.push(seam);
-    records.push(seam);
-  }
-
-  private recordsForSource(local: string): RuntimeControllerBindSourceSet {
-    const evidenceHandle = this.store.handles.evidence(`runtime-controller-bind:${local}`);
-    const provenanceHandle = this.store.handles.provenance(`runtime-controller-bind:${local}`);
-    return new RuntimeControllerBindSourceSet(
-      [
-        new EvidenceRecord(
-          evidenceHandle,
-          EvidenceKind.SemanticObservation,
-          [EvidenceRole.TransformInput, EvidenceRole.TransformOutput],
-          'Runtime Controller.bind materialization from rendered controller bindings and binding-owned target semantics.',
-          null,
-        ),
-        new ProvenanceRecord(
-          provenanceHandle,
-          [evidenceHandle],
-        ),
-      ],
-      evidenceHandle,
-      provenanceHandle,
-    );
-  }
-}
-
-class RuntimeBindingSourceOperationTarget {
-  constructor(
-    readonly targetKind: RuntimeBindingTargetKind,
-    readonly targetNode: RuntimeBindingSourceOperation['targetNode'],
-    readonly targetControllerProductHandle: ProductHandle | null,
-    readonly targetType: RuntimeBindingSourceOperation['targetType'],
-    readonly openReason: string | null,
-  ) {}
-
-  static open(openReason: string): RuntimeBindingSourceOperationTarget {
-    return new RuntimeBindingSourceOperationTarget(
-      RuntimeBindingTargetKind.Unknown,
-      null,
-      null,
-      null,
-      openReason,
-    );
-  }
 }
 
 function targetControllerForContext(

@@ -150,6 +150,16 @@ export interface SourceFileIdentity extends RepoPathIdentity {
   readonly packageId: string | null;
 }
 
+/** Source text file addressable in the current source epoch, whether or not TypeScript admitted it. */
+export interface SourceTextFile {
+  /** Stable file identity for this source epoch. */
+  readonly file: SourceFileIdentity;
+  /** Full UTF-8 source text. */
+  readonly text: string;
+  /** True when the text is backed by a TypeScript Program source file. */
+  readonly programBacked: boolean;
+}
+
 /** Compiler-facing source package summary. */
 export interface SourcePackageSummary {
   /** Stable package id inside the source project. */
@@ -212,7 +222,7 @@ export interface SourceDeclarationRow {
   readonly name: string | null;
   /** File identity that contains the declaration. */
   readonly file: SourceFileIdentity;
-  /** Source span for the declaration node. */
+  /** Source span for the stable declaration site; variable rows use the declared binding name. */
   readonly span: SourceSpan;
   /** TypeChecker symbol key when the declaration has a checker-visible symbol. */
   readonly symbolKey: string | null;
@@ -355,6 +365,56 @@ export class SourceProject {
       : resolveRepoPath(this.repoRoot, filePath);
     const normalized = normalizeFileKey(absolutePath);
     return this.currentIndex().sourceFileByKey.get(normalized) ?? null;
+  }
+
+  /** Return stable file identity for a path in this source epoch, without requiring TypeScript admission. */
+  sourceFileIdentityForPath(
+    /** Repository-relative or absolute file path. */
+    filePath: string,
+  ): SourceFileIdentity {
+    const sourceFile = this.readSourceFile(filePath);
+    if (sourceFile !== null) {
+      return this.requiredSourceFileIdentity(sourceFile);
+    }
+    const absolutePath = path.isAbsolute(filePath)
+      ? path.resolve(filePath)
+      : resolveRepoPath(this.repoRoot, filePath);
+    const packageDefinition = packageForFileNameFromDefinitions(
+      this.#packageDefinitions,
+      absolutePath,
+    );
+    return sourceFileIdentityFor(
+      this.repoRoot,
+      absolutePath,
+      packageDefinition?.id ?? null,
+    );
+  }
+
+  /** Read source text for a path in this source epoch, including non-Program docs/tests. */
+  readTextFile(
+    /** Repository-relative or absolute file path. */
+    filePath: string,
+  ): SourceTextFile | null {
+    const sourceFile = this.readSourceFile(filePath);
+    if (sourceFile !== null) {
+      return {
+        file: this.requiredSourceFileIdentity(sourceFile),
+        text: sourceFile.getFullText(),
+        programBacked: true,
+      };
+    }
+    const absolutePath = path.isAbsolute(filePath)
+      ? path.resolve(filePath)
+      : resolveRepoPath(this.repoRoot, filePath);
+    const text = this.#fileCache.readFile(absolutePath);
+    if (text === undefined) {
+      return null;
+    }
+    return {
+      file: this.sourceFileIdentityForPath(absolutePath),
+      text,
+      programBacked: false,
+    };
   }
 
   /** Read a source file by a stable source identity, failing if the identity is stale or not admitted. */
@@ -566,7 +626,7 @@ export class SourceProject {
         implementationPackageFiles.push(sourceFile);
       }
 
-      visitSourceDeclarations(sourceFile, (node, kind, nameNode) => {
+      visitSourceDeclarations(sourceFile, (node, kind, nameNode, spanNode) => {
         declarationRows.push(
           declarationRowFor(
             checker,
@@ -575,14 +635,11 @@ export class SourceProject {
             node,
             kind,
             nameNode,
+            spanNode,
           ),
         );
       });
-      for (const node of topLevelSourceDeclarations(sourceFile)) {
-        const kind = sourceDeclarationKindForNode(node);
-        if (kind === null) {
-          continue;
-        }
+      visitTopLevelSourceDeclarations(sourceFile, (node, kind, nameNode, spanNode) => {
         topLevelDeclarationRows.push(
           declarationRowFor(
             checker,
@@ -590,10 +647,11 @@ export class SourceProject {
             identity,
             node,
             kind,
-            declarationNameNode(node),
+            nameNode,
+            spanNode,
           ),
         );
-      }
+      });
     }
 
     ownedSourceFiles.sort((left, right) =>
@@ -836,31 +894,34 @@ function declarationRowFor(
   node: ts.Node,
   kind: SourceDeclarationKind,
   nameNode: ts.Node | undefined,
+  spanNode: ts.Node = node,
 ): SourceDeclarationRow {
   return {
     kind,
     name: nameNode?.getText(sourceFile) ?? null,
     file,
-    span: sourceSpanForNode(sourceFile, node),
+    span: sourceSpanForNode(sourceFile, spanNode),
     symbolKey: symbolKeyForDeclaration(checker, nameNode ?? node),
     exported: isExportedDeclaration(node),
   };
 }
 
-function topLevelSourceDeclarations(
+function visitTopLevelSourceDeclarations(
   sourceFile: ts.SourceFile,
-): readonly ts.Node[] {
-  const declarations: ts.Node[] = [];
+  visit: SourceDeclarationVisitor,
+): void {
   for (const statement of sourceFile.statements) {
-    if (sourceDeclarationKindForNode(statement) !== null) {
-      declarations.push(statement);
+    const statementKind = sourceDeclarationKindForNode(statement);
+    if (statementKind !== null) {
+      visit(statement, statementKind, declarationNameNode(statement));
       continue;
     }
     if (ts.isVariableStatement(statement)) {
-      declarations.push(...statement.declarationList.declarations);
+      for (const declaration of statement.declarationList.declarations) {
+        visitVariableDeclaration(declaration, visit);
+      }
     }
   }
-  return declarations;
 }
 
 function defaultAureliaFrameworkPackageDefinitions(
@@ -1109,19 +1170,51 @@ function defaultCompilerOptions(): ts.CompilerOptions {
   };
 }
 
+type SourceDeclarationVisitor = (
+  node: ts.Node,
+  kind: SourceDeclarationKind,
+  nameNode: ts.Node | undefined,
+  spanNode?: ts.Node,
+) => void;
+
 function visitSourceDeclarations(
   node: ts.Node,
-  visit: (
-    node: ts.Node,
-    kind: SourceDeclarationKind,
-    nameNode: ts.Node | undefined,
-  ) => void,
+  visit: SourceDeclarationVisitor,
 ): void {
+  if (ts.isVariableDeclaration(node)) {
+    visitVariableDeclaration(node, visit);
+    ts.forEachChild(node, (child) => visitSourceDeclarations(child, visit));
+    return;
+  }
   const declaration = sourceDeclarationKindForNode(node);
   if (declaration !== null) {
     visit(node, declaration, declarationNameNode(node));
   }
   ts.forEachChild(node, (child) => visitSourceDeclarations(child, visit));
+}
+
+function visitVariableDeclaration(
+  declaration: ts.VariableDeclaration,
+  visit: SourceDeclarationVisitor,
+): void {
+  visitBindingNameDeclarations(declaration.name, declaration, visit);
+}
+
+function visitBindingNameDeclarations(
+  bindingName: ts.BindingName,
+  declaration: ts.VariableDeclaration,
+  visit: SourceDeclarationVisitor,
+): void {
+  if (ts.isIdentifier(bindingName)) {
+    visit(declaration, SourceDeclarationKind.Variable, bindingName, bindingName);
+    return;
+  }
+  for (const element of bindingName.elements) {
+    if (!ts.isBindingElement(element)) {
+      continue;
+    }
+    visitBindingNameDeclarations(element.name, declaration, visit);
+  }
 }
 
 export function sourceDeclarationKindForNode(node: ts.Node): SourceDeclarationKind | null {

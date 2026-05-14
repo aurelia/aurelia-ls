@@ -121,7 +121,7 @@ export function frameworkFlowAnchorContinuations(
       inquiry: {
         lens: LensId.TsSource,
         locus: sourceLocus,
-        ...(firstCandidate === undefined ? { subject: selector } : {}),
+        subject: firstCandidate === undefined ? selector : undefined,
         projection: firstCandidate === undefined ? "summary" : "text",
         budget: inquiry.budget,
       },
@@ -147,7 +147,7 @@ export function frameworkFlowAnchorContinuations(
                 kind: LocusKind.SourceRange as const,
                 range: sourceRangeForFrameworkAnchorCandidate(firstCandidate),
               },
-        ...(firstCandidate === undefined ? { subject: selector } : {}),
+        subject: firstCandidate === undefined ? selector : undefined,
         projection: "facts",
         budget: inquiry.budget,
       },

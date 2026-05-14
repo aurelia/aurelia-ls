@@ -783,7 +783,7 @@ function evidenceForDiGraphEdge(row: FrameworkDiGraphEdgeRow): Evidence {
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Strong,
     summary: row.summary,
-    ...(row.source === undefined ? {} : { source: row.source }),
+    source: row.source,
     data: row,
   };
 }

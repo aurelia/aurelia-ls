@@ -1,5 +1,6 @@
 import ts from 'typescript';
 import type { ModuleEnvironmentRecord } from './environment.js';
+import type { StaticEvaluationGuardrails } from './policy.js';
 import { EvaluationOpenSeamKind } from './seams.js';
 import {
   EvaluationArrayElement,
@@ -31,6 +32,8 @@ import {
 } from './ts-syntax.js';
 
 export interface StaticIntrinsicEvaluationHost {
+  readonly guardrails: StaticEvaluationGuardrails;
+
   evaluateExpression(
     expression: ts.Expression,
     environment: ModuleEnvironmentRecord,
@@ -60,9 +63,9 @@ export interface StaticIntrinsicEvaluationHost {
     seamKind: EvaluationOpenSeamKind,
   ): EvaluationUnknownValue;
 
-  markOpenSeams(): number;
+  checkpoint(): StaticIntrinsicEvaluationCheckpoint;
 
-  restoreOpenSeams(mark: number): void;
+  restore(checkpoint: StaticIntrinsicEvaluationCheckpoint): void;
 
   resolveCommonJsRequire(
     moduleKey: string,
@@ -83,6 +86,11 @@ export interface StaticIntrinsicEvaluationHost {
     depth: number,
     host: StaticIntrinsicEvaluationHost,
   ): EvaluationValue | null;
+}
+
+export interface StaticIntrinsicEvaluationCheckpoint {
+  readonly openSeamCount: number;
+  readonly statementCount: number;
 }
 
 export function evaluateKnownConstructor(
@@ -170,6 +178,16 @@ export function evaluateKnownIntrinsic(
         return evaluateArrayFill(call, callee.expression, environment, moduleKey, depth + 1, host);
       case 'slice':
         return evaluateArrayOrStringSlice(call, callee.expression, environment, moduleKey, depth + 1, host);
+      case 'toUpperCase':
+        return evaluateStringTransform(call, callee.expression, environment, moduleKey, depth + 1, host, 'toUpperCase');
+      case 'toLowerCase':
+        return evaluateStringTransform(call, callee.expression, environment, moduleKey, depth + 1, host, 'toLowerCase');
+      case 'trim':
+        return evaluateStringTransform(call, callee.expression, environment, moduleKey, depth + 1, host, 'trim');
+      case 'startsWith':
+      case 'endsWith':
+      case 'includes':
+        return evaluateStringPredicate(call, callee.expression, environment, moduleKey, depth + 1, host, callee.name.text);
       case 'sort':
         return evaluateArraySort(call, callee.expression, environment, moduleKey, depth + 1, host);
       case 'localeCompare':
@@ -456,10 +474,10 @@ function evaluateMapGet(
   depth: number,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue | null {
-  const mark = host.markOpenSeams();
+  const checkpoint = host.checkpoint();
   const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
   if (receiver.kind !== EvaluationValueKind.Map) {
-    host.restoreOpenSeams(mark);
+    host.restore(checkpoint);
     return null;
   }
   const key = call.arguments[0] == null
@@ -485,10 +503,10 @@ function evaluateMapSet(
   depth: number,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue | null {
-  const mark = host.markOpenSeams();
+  const checkpoint = host.checkpoint();
   const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
   if (receiver.kind !== EvaluationValueKind.Map) {
-    host.restoreOpenSeams(mark);
+    host.restore(checkpoint);
     return null;
   }
   const key = call.arguments[0] == null
@@ -520,10 +538,10 @@ function evaluateCollectionHas(
   depth: number,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue | null {
-  const mark = host.markOpenSeams();
+  const checkpoint = host.checkpoint();
   const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
   if (receiver.kind !== EvaluationValueKind.Map && receiver.kind !== EvaluationValueKind.Set) {
-    host.restoreOpenSeams(mark);
+    host.restore(checkpoint);
     return null;
   }
   const key = call.arguments[0] == null
@@ -551,10 +569,10 @@ function evaluateSetAdd(
   depth: number,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue | null {
-  const mark = host.markOpenSeams();
+  const checkpoint = host.checkpoint();
   const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
   if (receiver.kind !== EvaluationValueKind.Set) {
-    host.restoreOpenSeams(mark);
+    host.restore(checkpoint);
     return null;
   }
   const value = call.arguments[0] == null
@@ -577,10 +595,10 @@ function evaluateCollectionDelete(
   depth: number,
   host: StaticIntrinsicEvaluationHost,
 ): EvaluationValue | null {
-  const mark = host.markOpenSeams();
+  const checkpoint = host.checkpoint();
   const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
   if (receiver.kind !== EvaluationValueKind.Map && receiver.kind !== EvaluationValueKind.Set) {
-    host.restoreOpenSeams(mark);
+    host.restore(checkpoint);
     return null;
   }
   const key = call.arguments[0] == null
@@ -731,14 +749,21 @@ function evaluateArrayFilter(
     return host.unknown('Array.filter predicate did not reduce to a known function.', predicateExpression, moduleKey, EvaluationOpenSeamKind.DynamicCall);
   }
 
+  const checkpoint = host.checkpoint();
   const elements: EvaluationArrayElement[] = [];
   let mayHaveUnknownElements = receiver.mayHaveUnknownElements;
   let mayHaveUnknownOrder = receiver.mayHaveUnknownOrder;
+  let predicateEvaluations = 0;
   for (let index = 0; index < receiver.elements.length; index++) {
     const element = receiver.elements[index];
     if (element == null) {
       continue;
     }
+    if (predicateEvaluations >= host.guardrails.maxIntrinsicCallbackEvaluations) {
+      host.restore(checkpoint);
+      return new EvaluationArrayValue([], true, call, true);
+    }
+    predicateEvaluations++;
     const predicateResult = host.evaluateFunctionWithArguments(
       predicate,
       call,
@@ -939,17 +964,22 @@ function sortArrayElements(
     return sortWithComparator(elements, defaultArraySortCompare);
   }
 
-  const mark = host.markOpenSeams();
+  const checkpoint = host.checkpoint();
   const compareValue = host.evaluateExpression(compareExpression, environment, moduleKey, depth + 1);
   if (compareValue.kind !== EvaluationValueKind.Function) {
-    host.restoreOpenSeams(mark);
+    host.restore(checkpoint);
     return {
       elements,
       mayHaveUnknownOrder: true,
     };
   }
 
+  let comparatorEvaluations = 0;
   const sorted = sortWithComparator(elements, (left, right) => {
+    if (comparatorEvaluations >= host.guardrails.maxIntrinsicCallbackEvaluations) {
+      return null;
+    }
+    comparatorEvaluations++;
     const result = host.evaluateFunctionWithArguments(
       compareValue,
       call,
@@ -962,7 +992,7 @@ function sortArrayElements(
       : null;
   });
   if (sorted.mayHaveUnknownOrder) {
-    host.restoreOpenSeams(mark);
+    host.restore(checkpoint);
   }
   return sorted;
 }
@@ -1024,6 +1054,61 @@ function evaluateStringLocaleCompare(
     return new EvaluationNumberValue(receiver.value.localeCompare(comparison.value), call);
   }
   return host.unknown('String.localeCompare receiver or comparison value did not reduce to a known string.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+}
+
+function evaluateStringTransform(
+  call: ts.CallExpression,
+  receiverExpression: ts.Expression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+  operation: 'toUpperCase' | 'toLowerCase' | 'trim',
+): EvaluationValue {
+  const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
+  if (isBoundaryEvaluationValue(receiver)) {
+    return boundaryIntrinsicCallValue(receiver, operation, call);
+  }
+  if (receiver.kind !== EvaluationValueKind.String) {
+    return host.unknown(`String.${operation} receiver did not reduce to a known string.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  switch (operation) {
+    case 'toUpperCase':
+      return new EvaluationStringValue(receiver.value.toUpperCase(), call);
+    case 'toLowerCase':
+      return new EvaluationStringValue(receiver.value.toLowerCase(), call);
+    case 'trim':
+      return new EvaluationStringValue(receiver.value.trim(), call);
+  }
+}
+
+function evaluateStringPredicate(
+  call: ts.CallExpression,
+  receiverExpression: ts.Expression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+  operation: 'startsWith' | 'endsWith' | 'includes',
+): EvaluationValue {
+  const receiver = host.evaluateExpression(receiverExpression, environment, moduleKey, depth + 1);
+  if (isBoundaryEvaluationValue(receiver)) {
+    return boundaryIntrinsicCallValue(receiver, operation, call);
+  }
+  const search = call.arguments[0] == null
+    ? EvaluationUndefined
+    : host.evaluateExpression(call.arguments[0], environment, moduleKey, depth + 1);
+  if (receiver.kind !== EvaluationValueKind.String || search.kind !== EvaluationValueKind.String) {
+    return host.unknown(`String.${operation} receiver or search value did not reduce to a known string.`, call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+  switch (operation) {
+    case 'startsWith':
+      return new EvaluationBooleanValue(receiver.value.startsWith(search.value), call);
+    case 'endsWith':
+      return new EvaluationBooleanValue(receiver.value.endsWith(search.value), call);
+    case 'includes':
+      return new EvaluationBooleanValue(receiver.value.includes(search.value), call);
+  }
 }
 
 function evaluateCallArgumentValues(

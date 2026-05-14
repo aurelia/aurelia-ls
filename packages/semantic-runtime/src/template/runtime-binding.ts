@@ -54,6 +54,9 @@ export const enum RuntimeBindingTargetAccessStrategy {
   PropertyAccessor = 'property-accessor',
   SetterObserver = 'setter-observer',
   ComputedObserver = 'computed-observer',
+  CollectionLengthObserver = 'collection-length-observer',
+  CollectionSizeObserver = 'collection-size-observer',
+  ArrayIndexObserver = 'array-index-observer',
   ValueAttributeObserver = 'value-attribute-observer',
   CheckedObserver = 'checked-observer',
   SelectValueObserver = 'select-value-observer',
@@ -71,6 +74,15 @@ export const enum RuntimeBindingTargetAccessAuthority {
   TypeChecker = 'type-checker',
   FrameworkConfigAndTypeChecker = 'framework-config-and-type-checker',
   Open = 'open',
+}
+
+export const enum RuntimeBindingTargetTypeSource {
+  /** Type supplied by the controller/resource model or another already-projected checker reference. */
+  Reference = 'reference',
+  /** Native node type resolved through HTMLElementTagNameMap or SVGElementTagNameMap for the exact tag. */
+  DomTagNameMap = 'dom-tag-name-map',
+  /** Native node type fell back to broad HTMLElement/SVGElement because the exact tag was not in the DOM maps. */
+  DomGlobalFallback = 'dom-global-fallback',
 }
 
 export const enum RuntimeBindingTargetOperationKind {
@@ -143,6 +155,7 @@ export type RuntimeBindingTargetAccessField =
   | 'strategy'
   | 'events'
   | 'targetType'
+  | 'targetTypeSource'
   | 'propertyType'
   | 'propertyExists'
   | 'isWritable'
@@ -504,12 +517,14 @@ export class RuntimeBindingTargetAccess {
     readonly strategy: RuntimeBindingTargetAccessStrategy,
     readonly eventNames: readonly string[],
     readonly targetType: CheckerTypeReference | null,
+    readonly targetTypeSource: RuntimeBindingTargetTypeSource | null,
     readonly propertyType: CheckerTypeReference | null,
     readonly propertyExists: boolean | null,
     readonly isWritable: boolean | null,
     readonly isObservable: boolean,
     readonly authority: RuntimeBindingTargetAccessAuthority,
     readonly openReason: string | null,
+    readonly frameworkErrorCode: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingTargetAccessField>[] = [],
   ) {}

@@ -9,10 +9,17 @@ import type { FieldProvenance } from '../kernel/provenance.js';
 import { ContainerRegistrationOperation } from './container-registration.js';
 import {
   ContainerConfiguration,
+  ContainerDefaultResolverPolicy,
   type ContainerConfigurationRequest,
 } from './container-configuration.js';
 import {
+  ContainerLookupKey,
+  ContainerLookupKeyKind,
+} from './container-key.js';
+import {
   ContainerFactoryLookup,
+  ContainerInvocation,
+  ContainerLookupFailureKind,
   ContainerLookupState,
   ContainerResourceLookup,
   ContainerResolverLookup,
@@ -186,10 +193,10 @@ export class Container {
   }
 
   /** True when a resolver row exists locally, or in ancestors when requested. */
-  has(keyIdentityHandle: IdentityHandle, searchAncestors: boolean = false): boolean {
-    return this.readResolverSlots(keyIdentityHandle).length > 0
-      || this.readResourceSlots().some((slot) => slot.keyIdentityHandle === keyIdentityHandle)
-      || (searchAncestors && (this._parent?.has(keyIdentityHandle, true) ?? false));
+  has(key: ContainerLookupKey, searchAncestors: boolean = false): boolean {
+    return this.readResolverSlots(key.identityHandle).length > 0
+      || this.readResourceSlots().some((slot) => slot.keyIdentityHandle === key.identityHandle)
+      || (searchAncestors && (this._parent?.has(key, true) ?? false));
   }
 
   /** True when a runtime resource key is visible in this container or optionally its ancestors. */
@@ -199,11 +206,11 @@ export class Container {
   }
 
   /** Runtime-shaped resolver lookup with explicit search path and auto-registration pressure. */
-  getResolver(keyIdentityHandle: IdentityHandle, autoRegister: boolean = true): ContainerResolverLookup {
+  getResolver(key: ContainerLookupKey, autoRegister: boolean = true): ContainerResolverLookup {
     if (this.disposed) {
       return new ContainerResolverLookup(
         ContainerLookupState.Disposed,
-        keyIdentityHandle,
+        key,
         this.toReference(),
         null,
         [],
@@ -216,11 +223,11 @@ export class Container {
     let current: Container | null = this;
     while (current != null) {
       searchPath.push(current.toReference());
-      const slots = current.readResolverSlots(keyIdentityHandle);
+      const slots = current.readResolverSlots(key.identityHandle);
       if (slots.length > 0) {
         return new ContainerResolverLookup(
           ContainerLookupState.Hit,
-          keyIdentityHandle,
+          key,
           this.toReference(),
           current.toReference(),
           slots,
@@ -231,11 +238,11 @@ export class Container {
 
       if (current._parent == null) {
         if (autoRegister) {
-          return this._jitRegister(keyIdentityHandle, current, searchPath);
+          return this._jitRegister(key, current, searchPath);
         }
         return new ContainerResolverLookup(
           ContainerLookupState.Miss,
-          keyIdentityHandle,
+          key,
           this.toReference(),
           null,
           [],
@@ -248,7 +255,7 @@ export class Container {
 
     return new ContainerResolverLookup(
       ContainerLookupState.Miss,
-      keyIdentityHandle,
+      key,
       this.toReference(),
       null,
       [],
@@ -258,25 +265,25 @@ export class Container {
   }
 
   /** Runtime `get` shape, represented as a resolver lookup rather than executing user constructors or callbacks. */
-  get(keyIdentityHandle: IdentityHandle): ContainerResolverLookup {
-    return this.getResolver(keyIdentityHandle, true);
+  get(key: ContainerLookupKey): ContainerResolverLookup {
+    return this.getResolver(key, true);
   }
 
   /** Runtime `getAll` shape. Search ancestors concatenates every resolver row; local search returns first hit. */
-  getAll(keyIdentityHandle: IdentityHandle, searchAncestors: boolean = false): readonly ContainerResolverLookup[] {
+  getAll(key: ContainerLookupKey, searchAncestors: boolean = false): readonly ContainerResolverLookup[] {
     if (!searchAncestors) {
-      const lookup = this.getResolver(keyIdentityHandle, false);
+      const lookup = this.getResolver(key, false);
       return lookup.state === ContainerLookupState.Hit ? [lookup] : [];
     }
 
     const lookups: ContainerResolverLookup[] = [];
     let current: Container | null = this;
     while (current != null) {
-      const slots = current.readResolverSlots(keyIdentityHandle);
+      const slots = current.readResolverSlots(key.identityHandle);
       if (slots.length > 0) {
         lookups.push(new ContainerResolverLookup(
           ContainerLookupState.Hit,
-          keyIdentityHandle,
+          key,
           this.toReference(),
           current.toReference(),
           slots,
@@ -290,37 +297,118 @@ export class Container {
   }
 
   /** True when the root-shared factory map has a row for the key. */
-  hasFactory(keyIdentityHandle: IdentityHandle): boolean {
-    return this._factories.has(keyIdentityHandle);
+  hasFactory(key: ContainerLookupKey): boolean {
+    return this._factories.has(key.identityHandle);
   }
 
-  /** Read a root-shared factory row without constructing a factory. */
-  getFactory(keyIdentityHandle: IdentityHandle): ContainerFactoryLookup {
+  /** Runtime `getFactory` shape over the root-shared factory map and constructable admission boundary. */
+  getFactory(key: ContainerLookupKey): ContainerFactoryLookup {
     if (this.disposed) {
       return new ContainerFactoryLookup(
         ContainerLookupState.Disposed,
-        keyIdentityHandle,
+        key,
         this.toReference(),
         null,
       );
     }
-    const slot = this._factories.get(keyIdentityHandle) ?? null;
+    const slot = this._factories.get(key.identityHandle) ?? null;
+    if (slot != null) {
+      return new ContainerFactoryLookup(
+        ContainerLookupState.Hit,
+        key,
+        this.toReference(),
+        slot,
+      );
+    }
+    const resolverFactoryLookup = this.factoryLookupFromRegisteredResolver(key);
+    if (resolverFactoryLookup != null) {
+      return resolverFactoryLookup;
+    }
+    const failureKind = factoryFailureKind(key);
+    if (failureKind != null) {
+      return new ContainerFactoryLookup(
+        ContainerLookupState.Failed,
+        key,
+        this.toReference(),
+        null,
+        failureKind,
+      );
+    }
     return new ContainerFactoryLookup(
-      slot == null ? ContainerLookupState.Miss : ContainerLookupState.Hit,
-      keyIdentityHandle,
+      key.keyKind === ContainerLookupKeyKind.Constructable
+        ? ContainerLookupState.FactoryConstruction
+        : ContainerLookupState.Miss,
+      key,
       this.toReference(),
-      slot,
+      null,
     );
   }
 
-  /** Runtime `registerTransformer` shape. Transformer bodies are not executed; the factory row remains the carrier. */
-  registerTransformer(keyIdentityHandle: IdentityHandle): ContainerFactoryLookup {
-    return this.getFactory(keyIdentityHandle);
+  private factoryLookupFromRegisteredResolver(key: ContainerLookupKey): ContainerFactoryLookup | null {
+    if (!containerFactoryLookupMayConsultResolver(key)) {
+      return null;
+    }
+    const lookup = this.getResolver(key, false);
+    if (lookup.state !== ContainerLookupState.Hit) {
+      return null;
+    }
+    if (lookup.resolverSlots.length !== 1) {
+      return new ContainerFactoryLookup(
+        ContainerLookupState.Failed,
+        key,
+        this.toReference(),
+        null,
+        ContainerLookupFailureKind.UnableJitNonConstructor,
+      );
+    }
+    const [slot] = lookup.resolverSlots;
+    if (!(slot instanceof ContainerResolverSlot) || slot.resolver == null) {
+      return new ContainerFactoryLookup(
+        ContainerLookupState.Failed,
+        key,
+        this.toReference(),
+        null,
+        ContainerLookupFailureKind.UnableJitNonConstructor,
+      );
+    }
+    return slot.resolver.getFactory(this)
+      ?? new ContainerFactoryLookup(
+        ContainerLookupState.Failed,
+        key,
+        this.toReference(),
+        null,
+        ContainerLookupFailureKind.UnableJitNonConstructor,
+      );
   }
 
-  /** Runtime `invoke` shape. Constructor execution is deferred; factory lookup exposes the activation pressure. */
-  invoke(typeIdentityHandle: IdentityHandle): ContainerFactoryLookup {
-    return this.getFactory(typeIdentityHandle);
+  /** Runtime `registerTransformer` shape. Transformer bodies are not executed; the factory row remains the carrier. */
+  registerTransformer(key: ContainerLookupKey): ContainerFactoryLookup {
+    return this.getFactory(key);
+  }
+
+  /** Runtime `invoke` shape. Constructor execution is deferred; invoke does not use the factory/JIT branch. */
+  invoke(type: ContainerLookupKey): ContainerInvocation {
+    if (this.disposed) {
+      return new ContainerInvocation(
+        ContainerLookupState.Disposed,
+        type,
+        this.toReference(),
+      );
+    }
+    const failureKind = invokeFailureKind(type);
+    if (failureKind != null) {
+      return new ContainerInvocation(
+        ContainerLookupState.Failed,
+        type,
+        this.toReference(),
+        failureKind,
+      );
+    }
+    return new ContainerInvocation(
+      ContainerLookupState.ConstructorInvocation,
+      type,
+      this.toReference(),
+    );
   }
 
   /** Product-aware child creation. The caller supplies the child factory because it owns handle/provenance minting. */
@@ -431,15 +519,15 @@ export class Container {
 
   /** Runtime `_jitRegister` boundary. Default resolver and registry bodies are modeled by later materializers. */
   private _jitRegister(
-    keyIdentityHandle: IdentityHandle,
+    key: ContainerLookupKey,
     handler: Container,
     searchPath: readonly ContainerReference[],
   ): ContainerResolverLookup {
-    const slots = handler.readResolverSlots(keyIdentityHandle);
+    const slots = handler.readResolverSlots(key.identityHandle);
     if (slots.length > 0) {
       return new ContainerResolverLookup(
         ContainerLookupState.Hit,
-        keyIdentityHandle,
+        key,
         this.toReference(),
         handler.toReference(),
         slots,
@@ -448,9 +536,36 @@ export class Container {
       );
     }
 
+    const failureKind = jitRegistrationFailureKind(key);
+    if (failureKind != null) {
+      return new ContainerResolverLookup(
+        ContainerLookupState.Failed,
+        key,
+        this.toReference(),
+        handler.toReference(),
+        [],
+        searchPath,
+        true,
+        failureKind,
+      );
+    }
+
+    if (handler.config.defaultResolverPolicy === ContainerDefaultResolverPolicy.None) {
+      return new ContainerResolverLookup(
+        ContainerLookupState.Failed,
+        key,
+        this.toReference(),
+        handler.toReference(),
+        [],
+        searchPath,
+        true,
+        ContainerLookupFailureKind.NoneResolverFound,
+      );
+    }
+
     return new ContainerResolverLookup(
       ContainerLookupState.JitRegistration,
-      keyIdentityHandle,
+      key,
       this.toReference(),
       handler.toReference(),
       [],
@@ -474,5 +589,96 @@ export class Container {
       } satisfies ContainerConfigurationRequest);
     }
     return ContainerConfiguration.from(input ?? this.config);
+  }
+}
+
+function jitRegistrationFailureKind(
+  key: ContainerLookupKey,
+): ContainerLookupFailureKind | null {
+  switch (key.keyKind) {
+    case ContainerLookupKeyKind.IntrinsicConstructable:
+      return ContainerLookupFailureKind.NoJitIntrinsicType;
+    case ContainerLookupKeyKind.String:
+    case ContainerLookupKeyKind.Symbol:
+    case ContainerLookupKeyKind.Resource:
+    case ContainerLookupKeyKind.Object:
+    case ContainerLookupKeyKind.Primitive:
+    case ContainerLookupKeyKind.Nullish:
+      return ContainerLookupFailureKind.UnableJitNonConstructor;
+    case ContainerLookupKeyKind.Interface:
+      return ContainerLookupFailureKind.NoJitInterface;
+    case ContainerLookupKeyKind.Unknown:
+    case ContainerLookupKeyKind.Constructable:
+    case ContainerLookupKeyKind.NativeFunction:
+    case ContainerLookupKeyKind.Registry:
+    case ContainerLookupKeyKind.Resolver:
+      return null;
+  }
+}
+
+function factoryFailureKind(
+  key: ContainerLookupKey,
+): ContainerLookupFailureKind | null {
+  switch (key.keyKind) {
+    case ContainerLookupKeyKind.NativeFunction:
+    case ContainerLookupKeyKind.IntrinsicConstructable:
+      return ContainerLookupFailureKind.NoConstructNativeFunction;
+    case ContainerLookupKeyKind.String:
+    case ContainerLookupKeyKind.Symbol:
+    case ContainerLookupKeyKind.Resource:
+    case ContainerLookupKeyKind.Object:
+    case ContainerLookupKeyKind.Primitive:
+    case ContainerLookupKeyKind.Nullish:
+    case ContainerLookupKeyKind.Interface:
+    case ContainerLookupKeyKind.Registry:
+    case ContainerLookupKeyKind.Resolver:
+      return ContainerLookupFailureKind.UnableJitNonConstructor;
+    case ContainerLookupKeyKind.Unknown:
+    case ContainerLookupKeyKind.Constructable:
+      return null;
+  }
+}
+
+function containerFactoryLookupMayConsultResolver(
+  key: ContainerLookupKey,
+): boolean {
+  switch (key.keyKind) {
+    case ContainerLookupKeyKind.String:
+    case ContainerLookupKeyKind.Symbol:
+    case ContainerLookupKeyKind.Resource:
+    case ContainerLookupKeyKind.Object:
+    case ContainerLookupKeyKind.Primitive:
+    case ContainerLookupKeyKind.Nullish:
+    case ContainerLookupKeyKind.Interface:
+    case ContainerLookupKeyKind.Registry:
+    case ContainerLookupKeyKind.Resolver:
+    case ContainerLookupKeyKind.Unknown:
+      return true;
+    case ContainerLookupKeyKind.Constructable:
+    case ContainerLookupKeyKind.NativeFunction:
+    case ContainerLookupKeyKind.IntrinsicConstructable:
+      return false;
+  }
+}
+
+function invokeFailureKind(
+  key: ContainerLookupKey,
+): ContainerLookupFailureKind | null {
+  switch (key.keyKind) {
+    case ContainerLookupKeyKind.NativeFunction:
+    case ContainerLookupKeyKind.IntrinsicConstructable:
+      return ContainerLookupFailureKind.NoConstructNativeFunction;
+    case ContainerLookupKeyKind.String:
+    case ContainerLookupKeyKind.Symbol:
+    case ContainerLookupKeyKind.Resource:
+    case ContainerLookupKeyKind.Object:
+    case ContainerLookupKeyKind.Primitive:
+    case ContainerLookupKeyKind.Nullish:
+    case ContainerLookupKeyKind.Unknown:
+    case ContainerLookupKeyKind.Constructable:
+    case ContainerLookupKeyKind.Registry:
+    case ContainerLookupKeyKind.Resolver:
+    case ContainerLookupKeyKind.Interface:
+      return null;
   }
 }

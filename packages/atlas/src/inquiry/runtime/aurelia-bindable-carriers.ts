@@ -17,7 +17,7 @@ import {
 
 /** Return the framework-shaped mechanism for one `@bindable` decorator carrier. */
 export function aureliaBindableDecoratorMechanism(
-  sourceProject: SourceProject,
+  sourceProject: SourceProject | null,
   call: ts.CallExpression | undefined,
   decoratedNode: ts.Node,
 ): string {
@@ -68,7 +68,7 @@ function bindableDecoratorTargetKind(decoratedNode: ts.Node): string {
 }
 
 function bindableDecoratorArgumentKind(
-  sourceProject: SourceProject,
+  sourceProject: SourceProject | null,
   call: ts.CallExpression | undefined,
 ): string {
   if (call === undefined) {
@@ -86,6 +86,9 @@ function bindableDecoratorArgumentKind(
     return "config-object";
   }
   if (ts.isIdentifier(expression)) {
+    if (sourceProject === null) {
+      return "identifier.unadmitted-source";
+    }
     return `identifier.${identifierBindableArgumentKind(sourceProject, expression)}`;
   }
   if (ts.isPropertyAccessExpression(expression)) {

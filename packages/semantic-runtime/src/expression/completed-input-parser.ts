@@ -9,8 +9,10 @@ import {
   ExpressionCompanionFrameKind,
   ExpressionExpectedContinuationClass,
   ExpressionFrontierKind,
+  ExpressionParseResultFlags,
   ExpressionParseResultKind,
   ExpressionSuccess,
+  hasExpressionParseResultKindFlag,
 } from "./parse-result-algebra.js";
 import type {
   EmptyExpressionAst,
@@ -54,6 +56,7 @@ import { CompletedInputPrimaryCorridor } from "./completed-input-primary-corrido
 import { CompletedInputTemplateCorridor } from "./completed-input-template-corridor.js";
 import { CompletedInputParserState } from "./completed-input-parser-state.js";
 import { CompletedInputPublication } from "./completed-input-publication.js";
+import { ExpressionFrameworkErrorCode } from "./framework-error-code.js";
 import {
   isParseCompanionFailure,
   isParseFailure,
@@ -159,9 +162,13 @@ export class CompletedInputParser {
         const expr = inner.parseAssignExpr();
         const trailing = inner.state.peekToken();
         if (trailing.type !== TokenType.EOF) {
-          inner.state.error("Unexpected token after end of template expression", trailing);
+          inner.state.failures.error(
+            "Unexpected token after end of template expression",
+            trailing,
+            ExpressionFrameworkErrorCode.ParseUnconsumedToken,
+          );
         }
-        return inner.state.retainedFailure ?? expr;
+        return inner.state.failures.retainedFailure ?? expr;
       },
     });
     this.primaryCorridor = new CompletedInputPrimaryCorridor({
@@ -222,12 +229,22 @@ export class CompletedInputParser {
     if (result.kind === ExpressionParseResultKind.CompleteInputParseError) {
       return result;
     }
+    if (hasExpressionParseResultKindFlag(result.kind, ExpressionParseResultFlags.Companion)) {
+      return result;
+    }
 
     const eof = this.state.peekToken();
     if (eof.type !== TokenType.EOF) {
+      const frameworkErrorCode = eof.type === TokenType.KeywordOf
+        ? ExpressionFrameworkErrorCode.ParseUnexpectedKeywordOf
+        : ExpressionFrameworkErrorCode.ParseUnconsumedToken;
       return CompletedInputPublication.toParseError(
         entryFamily,
-        this.state.hardError("Unexpected token after end of expression", eof),
+        this.state.failures.hardError(
+          "Unexpected token after end of expression",
+          eof,
+          frameworkErrorCode,
+        ),
       );
     }
 
@@ -250,8 +267,8 @@ export class CompletedInputParser {
       return CompletedInputPublication.toPropertyLikeResult(entryFamily, withTails);
     }
 
-    if (this.state.retainedFailure) {
-      return CompletedInputPublication.toPropertyLikeResult(entryFamily, this.state.retainedFailure);
+    if (this.state.failures.retainedFailure) {
+      return CompletedInputPublication.toPropertyLikeResult(entryFamily, this.state.failures.retainedFailure);
     }
 
     return new ExpressionSuccess(
@@ -324,7 +341,7 @@ export class CompletedInputParser {
           next,
           ExpressionCompanionFrameKind.AssignmentExpression,
           this.state.span(this.state.localStart(target), next.end),
-          [this.state.rootPrefix(target)],
+          [this.state.prefixRefs.root(target)],
         );
       }
     const span = this.state.spanFrom(target, value);
@@ -360,7 +377,7 @@ export class CompletedInputParser {
         yes,
         q,
         this.state.span(this.state.localStart(test), q.end),
-        [this.state.rootPrefix(test)],
+        [this.state.prefixRefs.root(test)],
       );
     }
     const colon = this.state.peekToken();
@@ -373,8 +390,8 @@ export class CompletedInputParser {
         ExpressionCompanionFrameKind.ConditionalExpression,
         this.state.span(this.state.localStart(test), this.state.localEnd(yes)),
         [
-          this.state.rootPrefix(test),
-          this.state.childRef(yes),
+          this.state.prefixRefs.root(test),
+          this.state.prefixRefs.child(yes),
         ],
       );
     }
@@ -389,8 +406,8 @@ export class CompletedInputParser {
         colon,
         this.state.span(this.state.localStart(test), colon.end),
         [
-          this.state.rootPrefix(test),
-          this.state.childRef(yes),
+          this.state.prefixRefs.root(test),
+          this.state.prefixRefs.child(yes),
         ],
       );
     }
@@ -432,7 +449,7 @@ export class CompletedInputParser {
           look,
           ExpressionCompanionFrameKind.BinaryExpression,
           this.state.span(this.state.localStart(left), look.end),
-          [this.state.rootPrefix(left)],
+          [this.state.prefixRefs.root(left)],
         );
       }
 
@@ -548,7 +565,11 @@ export class CompletedInputParser {
   private bindingIdentifierFromToken(t: Token): ParseOutcome<BindingIdentifier> {
     const name = t.value as string;
     if (name === "import") {
-      return this.state.error("Bare 'import' is not allowed in binding expressions", t);
+      return this.state.failures.error(
+        "Bare 'import' is not allowed in binding expressions",
+        t,
+        ExpressionFrameworkErrorCode.ParseUnexpectedKeywordImport,
+      );
     }
     const identifier = this.identifierFromToken(t);
     const id: BindingIdentifier = new BindingIdentifier(
@@ -683,7 +704,11 @@ export class CompletedInputParser {
           | AccessMemberExpression
           | AssignExpression;
       default:
-        return this.state.error("Left-hand side is not assignable", opToken);
+        return this.state.failures.error(
+          "Left-hand side is not assignable",
+          opToken,
+          ExpressionFrameworkErrorCode.ParseLeftHandSideNotAssignable,
+        );
     }
   }
 

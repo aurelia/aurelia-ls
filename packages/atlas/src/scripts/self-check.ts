@@ -7,13 +7,14 @@ import { OutcomeKind } from "../inquiry/answer.js";
 import { LensId, LensStage } from "../inquiry/lens.js";
 import { LocusKind } from "../inquiry/locus.js";
 import { isRouterExportName } from "../inquiry/runtime/aurelia-source-imports.js";
+import type { AtlasMemoryValue } from "../inquiry/runtime/atlas-memory-lenses.js";
 import type { FrameworkRouterValue } from "../inquiry/runtime/framework-router-lenses.js";
 import {
   FrameworkBundleKind,
   type FrameworkDiscoveryValue,
 } from "../inquiry/runtime/framework-entities.js";
 import type { FrameworkResourcesValue } from "../inquiry/runtime/framework-resource-lenses.js";
-import type { SelfValue } from "../inquiry/runtime/lenses.js";
+import type { SelfValue } from "../inquiry/runtime/self-value.js";
 import type { PluginArchitectureValue } from "../inquiry/runtime/plugin-architecture-lenses.js";
 import type { WorkspaceArchitectureValue } from "../inquiry/runtime/workspace-architecture-lenses.js";
 import { createApi } from "../session/index.js";
@@ -59,6 +60,12 @@ const semanticRouteSummary = await api.ask({
   locus: { kind: LocusKind.Repo },
   projection: "semantic-routes",
   budget: { rows: 1_000, evidencePerSubject: 0 },
+});
+const atlasMemorySummary = await api.ask({
+  lens: LensId.AtlasMemory,
+  locus: { kind: LocusKind.Repo },
+  projection: "summary",
+  budget: { rows: 1, evidencePerSubject: 0 },
 });
 
 if (mapAnswer.outcome !== OutcomeKind.Hit || map === undefined) {
@@ -269,6 +276,21 @@ if (semanticRouteSummary.outcome !== OutcomeKind.Hit || selfValue == null) {
   throw new Error("Atlas semantic route summary did not return a hit.");
 }
 
+const atlasMemoryValue = atlasMemorySummary.value as AtlasMemoryValue | null | undefined;
+if (atlasMemorySummary.outcome !== OutcomeKind.Hit || atlasMemoryValue?.rollup == null) {
+  throw new Error("Atlas memory summary did not return a hit.");
+}
+
+if (atlasMemoryValue.rollup.recordCount === 0) {
+  throw new Error("Atlas memory store did not expose any durable records.");
+}
+
+if (atlasMemoryValue.rollup.storageIssueCount !== 0) {
+  throw new Error(
+    `Atlas memory store reported ${atlasMemoryValue.rollup.storageIssueCount} storage issue(s).`,
+  );
+}
+
 const semanticRouteIds = new Set(
   (selfValue.semanticRoutes ?? []).map((row) => row.semanticRouteId),
 );
@@ -284,7 +306,7 @@ for (const routeId of [
 }
 
 console.log(
-  `atlas self-check passed through session ${sessionCheck.status.pid}: ${map.lenses.length} lens contract(s), ${map.substrates.length} substrate contract(s), ${map.terrain.length} terrain area(s), ${map.vocabulary.length} vocabulary definition(s), ${map.navigation.routes.length} navigation route(s), ${semanticRouteIds.size} semantic route(s).`,
+  `atlas self-check passed through session ${sessionCheck.status.pid}: ${map.lenses.length} lens contract(s), ${map.substrates.length} substrate contract(s), ${map.terrain.length} terrain area(s), ${map.vocabulary.length} vocabulary definition(s), ${map.navigation.routes.length} navigation route(s), ${semanticRouteIds.size} semantic route(s), ${atlasMemoryValue.rollup.recordCount} memory record(s).`,
 );
 
 function routerPublicExportNames(): readonly string[] {

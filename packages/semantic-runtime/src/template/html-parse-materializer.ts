@@ -24,8 +24,6 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  compactFieldProvenance,
-  FieldProvenance,
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -42,15 +40,11 @@ import {
 } from './compilation-unit.js';
 import {
   HtmlAttribute,
-  type HtmlAttributeField,
   HtmlComment,
-  type HtmlCommentField,
   HtmlCommentSemanticKind,
   HtmlDocument,
-  type HtmlDocumentField,
   HtmlDoctype,
   HtmlElement,
-  type HtmlElementField,
   type HtmlIrNode,
   HtmlIrNodeKind,
   HtmlNamespaceKind,
@@ -58,7 +52,6 @@ import {
   HtmlRecovery,
   HtmlRecoveryKind,
   HtmlText,
-  type HtmlTextField,
 } from './html-ir.js';
 import {
   TemplateParseContext,
@@ -189,10 +182,14 @@ class HtmlDocumentHandles {
 
 /** Parses authored template markup into HTML IR records without performing Aurelia syntax classification. */
 export class HtmlParseMaterializer {
+  private readonly treeMaterializer: HtmlParseTreeMaterializer;
+
   constructor(
     /** Hot analysis store that receives HTML IR records. */
     readonly store: KernelStore,
-  ) {}
+  ) {
+    this.treeMaterializer = new HtmlParseTreeMaterializer(store);
+  }
 
   parse(input: HtmlParseRequest): HtmlParseEmission {
     const emission = this.recordsForParse(input);
@@ -220,10 +217,8 @@ export class HtmlParseMaterializer {
 
     const draft = this.parseDocumentDraft(input);
     const handles = this.documentHandles(input);
-    const rootNodes = draft.rootNodes.map((node) =>
-      this.materializeNode(input, state, node, handles.productHandle)
-    );
-    const documentRecoveries = this.materializeDocumentRecoveries(state, draft);
+    const rootNodes = this.treeMaterializer.materializeRootNodes(input, state, draft.rootNodes, handles.productHandle);
+    const documentRecoveries = this.treeMaterializer.materializeDocumentRecoveries(state, draft);
     state.recoveries.push(...documentRecoveries);
 
     const document = this.createDocument(handles, source, rootNodes, documentRecoveries);
@@ -257,15 +252,6 @@ export class HtmlParseMaterializer {
     );
   }
 
-  private materializeDocumentRecoveries(
-    state: HtmlMaterializationState,
-    draft: ParsedHtmlDocumentDraft,
-  ): readonly HtmlRecovery[] {
-    return draft.recoveries.map((recovery, index) =>
-      this.materializeRecovery(state, recovery, `document-recovery:${index}`)
-    );
-  }
-
   private createDocument(
     handles: HtmlDocumentHandles,
     source: HtmlParseSourceSet,
@@ -278,11 +264,7 @@ export class HtmlParseMaterializer {
       rootNodes,
       recoveries,
       source.sourceAddressHandle,
-      compactFieldProvenance<HtmlDocumentField>([
-        new FieldProvenance('rootNodes', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
-        recoveries.length === 0 ? null : new FieldProvenance('recovery', source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -350,6 +332,30 @@ export class HtmlParseMaterializer {
     ];
     return new HtmlParseSourceSet(records, provenanceHandle, input.templateSource.sourceAddressHandle);
   }
+}
+
+class HtmlParseTreeMaterializer {
+  constructor(
+    private readonly store: KernelStore,
+  ) {}
+
+  materializeRootNodes(
+    input: HtmlParseRequest,
+    state: HtmlMaterializationState,
+    drafts: readonly ParsedHtmlNodeDraft[],
+    documentProductHandle: ProductHandle,
+  ): readonly HtmlNodeReference[] {
+    return drafts.map((node) => this.materializeNode(input, state, node, documentProductHandle));
+  }
+
+  materializeDocumentRecoveries(
+    state: HtmlMaterializationState,
+    draft: ParsedHtmlDocumentDraft,
+  ): readonly HtmlRecovery[] {
+    return draft.recoveries.map((recovery, index) =>
+      this.materializeRecovery(state, recovery, `document-recovery:${index}`)
+    );
+  }
 
   private materializeNode(
     input: HtmlParseRequest,
@@ -412,10 +418,7 @@ export class HtmlParseMaterializer {
           frame.identityHandle,
           draft.text ?? '',
           frame.sourceAddressHandle,
-          compactFieldProvenance<HtmlTextField>([
-            new FieldProvenance('text', state.source.provenanceHandle),
-            new FieldProvenance('source', state.source.provenanceHandle),
-          ]),
+          [],
         );
     }
   }
@@ -440,15 +443,7 @@ export class HtmlParseMaterializer {
       draft.selfClosing,
       frame.sourceAddressHandle,
       frame.recoveries,
-      compactFieldProvenance<HtmlElementField>([
-        new FieldProvenance('tagName', state.source.provenanceHandle),
-        new FieldProvenance('namespace', state.source.provenanceHandle),
-        attributes.length === 0 ? null : new FieldProvenance('attributes', state.source.provenanceHandle),
-        children.length === 0 ? null : new FieldProvenance('children', state.source.provenanceHandle),
-        new FieldProvenance('selfClosing', state.source.provenanceHandle),
-        new FieldProvenance('source', state.source.provenanceHandle),
-        frame.recoveries.length === 0 ? null : new FieldProvenance('recovery', state.source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -464,12 +459,7 @@ export class HtmlParseMaterializer {
       HtmlCommentSemanticKind.Plain,
       frame.sourceAddressHandle,
       frame.recoveries,
-      compactFieldProvenance<HtmlCommentField>([
-        new FieldProvenance('text', state.source.provenanceHandle),
-        new FieldProvenance('semanticKind', state.source.provenanceHandle),
-        new FieldProvenance('source', state.source.provenanceHandle),
-        frame.recoveries.length === 0 ? null : new FieldProvenance('recovery', state.source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -558,12 +548,7 @@ export class HtmlParseMaterializer {
       frame.valueAddressHandle,
       frame.sourceAddressHandle,
       frame.recoveries,
-      compactFieldProvenance<HtmlAttributeField>([
-        new FieldProvenance('name', state.source.provenanceHandle),
-        new FieldProvenance('value', state.source.provenanceHandle),
-        new FieldProvenance('source', state.source.provenanceHandle),
-        frame.recoveries.length === 0 ? null : new FieldProvenance('recovery', state.source.provenanceHandle),
-      ]),
+      [],
     );
   }
 
@@ -943,7 +928,7 @@ class HtmlScanner {
     }
 
     const valueStart = this.pos;
-    while (!this.eof() && !isWhitespace(this.peek()) && this.peek() !== '>' && !this.startsWith('/>')) {
+    while (!this.eof() && !isHtmlSpaceCharacter(this.peek()) && this.peek() !== '>' && !this.startsWith('/>')) {
       this.pos++;
     }
     const valueEnd = this.pos;
@@ -982,7 +967,7 @@ class HtmlScanner {
   }
 
   private skipWhitespace(): void {
-    while (!this.eof() && isWhitespace(this.peek())) {
+    while (!this.eof() && isHtmlSpaceCharacter(this.peek())) {
       this.pos++;
     }
   }
@@ -1039,13 +1024,13 @@ function isVoidElement(tagName: string): boolean {
 
 function isNameCharacter(value: string): boolean {
   return value !== ''
-    && !isWhitespace(value)
+    && !isHtmlSpaceCharacter(value)
     && value !== '/'
     && value !== '>'
     && value !== '=';
 }
 
-function isWhitespace(value: string): boolean {
+function isHtmlSpaceCharacter(value: string): boolean {
   return value === ' ' || value === '\t' || value === '\r' || value === '\n' || value === '\f';
 }
 

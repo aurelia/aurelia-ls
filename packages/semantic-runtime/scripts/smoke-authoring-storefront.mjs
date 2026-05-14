@@ -1,6 +1,13 @@
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createSemanticRuntime } from '../out/index.js';
+import {
+  AuthoringVerificationRequest,
+  createSemanticRuntime,
+  ExpectedSemanticEffect,
+  ExpectedSemanticEffectFilter,
+  readAuthoringVerificationSnapshot,
+  verifyAuthoringEffects,
+} from '../out/index.js';
 import { KernelVocabulary } from '../out/kernel/vocabulary/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -25,6 +32,59 @@ const rows = (kind) => app.ask({
 }).value.rows;
 
 const openSeams = rows('open-seams');
+const verificationSnapshot = readAuthoringVerificationSnapshot(app);
+const verification = verifyAuthoringEffects(
+  new AuthoringVerificationRequest(null, [
+    expectFact('Storefront reopens as an Aurelia app project.', 'project-shape'),
+    expectFact('Storefront has an app root.', 'app-root'),
+    expectFact('Storefront has component resource definitions.', 'component', 'at-least', 6),
+    expectFact('Storefront has external component templates.', 'external-template', 'at-least', 6),
+    expectFact('Storefront has compiled template rows.', 'template-compilation', 'at-least', 6),
+    expectFact('Storefront has runtime controller/hydration facts.', 'runtime-controller', 'present'),
+    expectFact('Storefront has binding value-channel facts.', 'binding-value-channel', 'present'),
+    expectFact('Storefront has binding data-flow facts.', 'binding-data-flow', 'present'),
+    expectFact('Storefront forwards captured static field-shell attributes as renderer target operations.', 'target-operation', 'present', null, [
+      filter('ownerKind', 'runtime-renderer'),
+      filter('operationKind', 'attribute-set'),
+      filter('targetAttribute', 'data-field-kind'),
+    ]),
+    expectFact('Storefront forwards captured field-shell input values through native value observers.', 'binding-target-access', 'present', null, [
+      filter('targetKind', 'node'),
+      filter('targetProperty', 'value'),
+      filter('strategy', 'value-attribute-observer'),
+      filter('targetType', 'HTMLInputElement'),
+    ]),
+    expectFact('Storefront forwards captured field-shell disabled state through native input accessors.', 'binding-target-access', 'present', null, [
+      filter('targetKind', 'node'),
+      filter('targetProperty', 'disabled'),
+      filter('strategy', 'element-property-accessor'),
+      filter('targetType', 'HTMLInputElement'),
+    ]),
+    expectFact('Storefront preserves captured field-shell parent value flow.', 'binding-data-flow', 'present', null, [
+      filter('sourceName', 'email'),
+      filter('targetKind', 'node'),
+      filter('targetProperty', 'value'),
+      filter('targetValueType', 'string'),
+    ]),
+    expectFact('Storefront preserves captured field-shell branch value flow.', 'binding-data-flow', 'present', null, [
+      filter('sourceName', 'postalCode'),
+      filter('targetKind', 'node'),
+      filter('targetProperty', 'value'),
+      filter('targetValueType', 'string'),
+    ]),
+    expectFact('Storefront preserves captured field-shell disabled data flow.', 'binding-data-flow', 'present', null, [
+      filter('sourceName', null),
+      filter('targetKind', 'node'),
+      filter('targetProperty', 'disabled'),
+      filter('targetValueType', 'boolean'),
+    ]),
+    expectFact('Storefront has no open semantic seams.', 'open-seam-closure', 'absent'),
+    expectCapability('Storefront exposes verifiable template-composition authoring.', 'template-composition', 'verifiable'),
+    expectTaste('Storefront uses native control value binding.', 'form-value-channel', 'native-control-value-binding'),
+    expectTaste('Storefront uses scalar ID-shaped component inputs.', 'component-interface', 'scalar-id-inputs'),
+  ]),
+  verificationSnapshot,
+);
 const templateRows = rows('template-compilations');
 const runtimeControllers = rows('runtime-controllers');
 const targetOperations = rows('target-operations');
@@ -71,6 +131,12 @@ const assert = (condition, message) => {
     failures.push(message);
   }
 };
+for (const result of verification.effectResults) {
+  assert(
+    result.outcome === 'satisfied',
+    `Expected semantic effect failed: ${result.summary}`,
+  );
+}
 
 const productList = templateRows.find((row) => row.definitionName === 'product-list');
 const checkoutForm = templateRows.find((row) => row.definitionName === 'checkout-form');
@@ -100,14 +166,14 @@ const refOperations = sourceOperations.filter((row) =>
 const rendererOperations = targetOperations.filter((row) =>
   row.ownerKind === 'runtime-renderer'
 );
-const fieldShellOperations = targetOperations.filter((row) =>
-  row.definitionName === 'field-shell'
+const capturedFieldShellOperations = targetOperations.filter((row) =>
+  row.source?.path?.endsWith('checkout-form.html')
 );
-const fieldShellAccesses = targetAccesses.filter((row) =>
-  row.definitionName === 'field-shell'
+const capturedFieldShellAccesses = targetAccesses.filter((row) =>
+  row.source?.path?.endsWith('checkout-form.html')
 );
-const fieldShellFlows = dataFlows.filter((row) =>
-  row.definitionName === 'field-shell'
+const capturedFieldShellFlows = dataFlows.filter((row) =>
+  row.source?.path?.endsWith('checkout-form.html')
 );
 const syntheticControllerRows = runtimeControllers.filter((row) =>
   row.creationKind === 'synthetic-view'
@@ -170,26 +236,28 @@ assert(rendererOperations.some((row) =>
   row.definitionName === 'product-card'
   && row.operationKind === 'attribute-set'
 ), 'Expected product-card surrogate SetAttributeRenderer target operation.');
-assert(fieldShellOperations.some((row) =>
+assert(capturedFieldShellOperations.some((row) =>
   row.ownerKind === 'runtime-renderer'
   && row.operationKind === 'attribute-set'
   && row.targetAttribute === 'data-field-kind'
   && row.openReason == null
-), 'Expected field-shell ...$attrs to compile captured static attributes into renderer target operations.');
-assert(fieldShellAccesses.some((row) =>
+), 'Expected field-shell ...$attrs to compile captured static attributes into renderer target operations at the parent capture source.');
+assert(capturedFieldShellAccesses.some((row) =>
   row.bindingKind === 'property'
   && row.targetProperty === 'value'
   && row.lookup === 'observer'
   && row.strategy === 'value-attribute-observer'
+  && row.targetType === 'HTMLInputElement'
   && row.openReason == null
-), 'Expected field-shell ...$attrs to compile captured parent value.bind into a closed input value observer.');
-assert(fieldShellAccesses.some((row) =>
+), 'Expected field-shell ...$attrs to compile captured parent value.bind into a closed input value observer at the parent capture source.');
+assert(capturedFieldShellAccesses.some((row) =>
   row.bindingKind === 'property'
   && row.targetProperty === 'disabled'
   && row.lookup === 'accessor'
+  && row.targetType === 'HTMLInputElement'
   && row.openReason == null
-), 'Expected field-shell ...$attrs to compile captured disabled.bind into a closed input target access.');
-assert(fieldShellFlows.some((row) =>
+), 'Expected field-shell ...$attrs to compile captured disabled.bind into a closed input target access at the parent capture source.');
+assert(capturedFieldShellFlows.some((row) =>
   row.bindingKind === 'property'
   && row.targetProperty === 'value'
   && row.sourceName === 'email'
@@ -199,7 +267,7 @@ assert(fieldShellFlows.some((row) =>
   && row.source?.path?.endsWith('checkout-form.html')
   && row.openReason == null
 ), 'Expected field-shell ...$attrs to compile captured value.bind against the parent checkout-form scope.');
-assert(fieldShellFlows.some((row) =>
+assert(capturedFieldShellFlows.some((row) =>
   row.bindingKind === 'property'
   && row.targetProperty === 'value'
   && row.sourceName === 'postalCode'
@@ -209,13 +277,14 @@ assert(fieldShellFlows.some((row) =>
   && row.source?.path?.endsWith('checkout-form.html')
   && row.openReason == null
 ), 'Expected field-shell ...$attrs under if.bind to compile captured value.bind against the nested checkout-form usage scope.');
-assert(fieldShellFlows.some((row) =>
+assert(capturedFieldShellFlows.some((row) =>
   row.bindingKind === 'property'
   && row.targetProperty === 'disabled'
+  && row.targetKind === 'node'
   && row.sourceType === 'boolean'
   && row.targetValueType === 'boolean'
   && row.openReason == null
-), 'Expected field-shell ...$attrs to compile captured disabled.bind into closed data flow.');
+), 'Expected field-shell ...$attrs to compile captured disabled.bind into closed data flow at the parent capture source.');
 assert(runtimeControllers.length >= templateRows.length, 'Expected runtime controller rows for compiled template render passes.');
 assert(runtimeControllers.some((row) =>
   row.creationKind === 'root-custom-element'
@@ -340,6 +409,11 @@ const summary = {
   viewFactoryDefinitionClaims: viewFactoryDefinitionClaims.length,
   viewFactoryCreatesSyntheticViewClaims: viewFactoryCreatesSyntheticViewClaims.length,
   controllerTemplateControllerLinkClaims: controllerTemplateControllerLinkClaims.length,
+  authoringVerification: verification.effectResults.map((result) => ({
+    effectKind: result.expectedEffect.effectKind,
+    outcome: result.outcome,
+    summary: result.summary,
+  })),
   openSeams: openSeams.length,
 };
 
@@ -348,4 +422,20 @@ if (failures.length > 0) {
   process.exitCode = 1;
 } else {
   console.log(JSON.stringify({ ok: true, summary }, null, 2));
+}
+
+function expectFact(summary, effectKind, cardinality = 'present', count = null, filters = []) {
+  return ExpectedSemanticEffect.fact(summary, effectKind, 'app', null, cardinality, count, filters);
+}
+
+function expectCapability(summary, capabilityKey, minimumSupportState) {
+  return ExpectedSemanticEffect.capability(summary, capabilityKey, minimumSupportState);
+}
+
+function expectTaste(summary, tasteAxisKey, tasteValueKey) {
+  return ExpectedSemanticEffect.taste(summary, tasteAxisKey, tasteValueKey);
+}
+
+function filter(field, value) {
+  return new ExpectedSemanticEffectFilter(field, value);
 }

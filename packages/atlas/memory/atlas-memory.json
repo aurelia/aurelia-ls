@@ -1,0 +1,97 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "shards": [
+    {
+      "path": "packages/atlas/memory/records/api.json",
+      "summary": "api memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/atlas.json",
+      "summary": "atlas self-memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/application.json",
+      "summary": "application memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/authoring.json",
+      "summary": "authoring memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/configuration.json",
+      "summary": "configuration memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/di.json",
+      "summary": "di memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/docs.json",
+      "summary": "docs memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/evaluation.json",
+      "summary": "evaluation memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/expression.json",
+      "summary": "expression memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/fetch-client.json",
+      "summary": "fetch-client memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/dialog.json",
+      "summary": "dialog memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/inquiry.json",
+      "summary": "inquiry memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/i18n.json",
+      "summary": "i18n memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/kernel.json",
+      "summary": "kernel memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/observation.json",
+      "summary": "observation memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/registration.json",
+      "summary": "registration memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/resources.json",
+      "summary": "resources memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/router.json",
+      "summary": "router memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/state.json",
+      "summary": "state memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/template.json",
+      "summary": "template memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/validation.json",
+      "summary": "validation memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/type-system.json",
+      "summary": "type-system memory records."
+    },
+    {
+      "path": "packages/atlas/memory/records/product.json",
+      "summary": "product memory records."
+    }
+  ]
+}

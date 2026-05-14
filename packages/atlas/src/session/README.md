@@ -40,7 +40,9 @@ direct-call pressure filters such as `minCallCount`, `minUniqueCallTargetCount`,
 and high multi-axis pressure rows in one terminal view. Use
 `pnpm --filter @aurelia-ls/atlas pressure:self:detail` when the compact source-file rows hide a needed metric. The
 script prints source line anchors when rows carry exact spans, so pressure triage can usually jump directly into the
-relevant declaration.
+relevant declaration. Use `pnpm --filter @aurelia-ls/atlas profile:self` when the question is hot projection cost or
+whether an Atlas self-analysis split/cache boundary is worth paying for; the profile script also prints the cold
+self-analysis phase timings carried by the summary answer.
 
 `product.architecture` is the source-architecture counterpart for semantic-runtime work. Ask it for `summary`,
 `areas`, `modules`, `dependencies`, `area-dependencies`, `cycles`, `declarations`, `classes`, `functions`,

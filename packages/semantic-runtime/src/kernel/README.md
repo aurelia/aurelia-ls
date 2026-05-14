@@ -67,6 +67,11 @@ Do not hide uncertainty behind `null`, empty arrays, or best-effort guesses. Use
 claim predicates that say what was actually observed or produced. Confidence, ranking, completeness, severity,
 and user-specific belief policy belong in query answers or consumer projections, not in first-order kernel facts.
 
+Framework diagnostic authority is source-shaped. Use `frameworkErrorCode(...)` only for mapped Aurelia
+`ErrorNames`/`Events` labels, and use `frameworkRawErrorAuthority(...)` for exact public framework raw `Error`
+throw sites that have no AUR code. Do not mint fake codes or collapse raw framework behavior into generic product
+policy just to make a diagnostic row look framework-grounded.
+
 Evidence is a deliberate pressure surface. It is expected to evolve as real materializers are
 implemented, but it must not become catch-all storage for facts that belong in identities, addresses, claims,
 products, open seams, or inquiry answers. Treat it as a high-leverage unstable surface: useful because it sits
@@ -174,7 +179,15 @@ generic generated identity bucket.
 `source-open-seam.ts` is the shared publication primitive for source-backed open seams. Use it when a materializer has a
 source-file address plus an exact node/span and needs the standard source-span, evidence, optional provenance, and
 open-seam record bundle. Evaluation, resource recognition, and registration seams should share this path instead of
-locally minting parallel address/evidence/provenance/open-seam envelopes.
+locally minting parallel address/evidence/provenance/open-seam envelopes. When the unresolved boundary has a
+machine-readable reason, pass it through the shared primitive as `reasonKinds`; source precision and repair intent
+should travel together.
+
+`issue-publication.ts` is the shared publication primitive for source-backed diagnostics that are themselves modeled as
+semantic products. Use it when a domain issue needs the standard evidence, provenance, identity, materialized-product,
+and optional materialization records, while keeping the domain-specific issue object and identity class in the owning
+package. Do not wrap those results in one-off publication classes unless the publication object has behavior or a real
+lifetime.
 
 `materialization.ts` records products emitted around one owner:
 

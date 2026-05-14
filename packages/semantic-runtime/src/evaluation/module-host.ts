@@ -5,7 +5,7 @@ import {
 } from 'node:fs';
 import path from 'node:path';
 import ts from 'typescript';
-import { readPackageManifest } from '../boot/host-files.js';
+import { isHostPathWithin, readPackageManifest, sameHostPath } from '../boot/host-files.js';
 import { buildProjectCompilerOptions } from '../boot/project-compiler-options.js';
 import {
   EvaluationModuleGraph,
@@ -164,7 +164,7 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
   ): boolean {
     const fromExternalPackageRoot = externalPackageRootForPath(fromAbsolute);
     if (fromExternalPackageRoot != null) {
-      if (samePath(fromExternalPackageRoot, externalPackageRoot)) {
+      if (sameHostPath(fromExternalPackageRoot, externalPackageRoot)) {
         return isRelativeModuleSpecifier(moduleSpecifier) && isAuthoredPackageSourceModule(resolvedFileName, externalPackageRoot);
       }
       return !isRelativeModuleSpecifier(moduleSpecifier)
@@ -182,7 +182,7 @@ export class FileSystemEvaluationModuleSourceHost implements EvaluationModuleSou
 
   private moduleKeyForAbsolutePath(absolutePath: string): string {
     const absolute = path.resolve(absolutePath);
-    return isPathWithin(absolute, this.rootDir)
+    return isHostPathWithin(absolute, this.rootDir)
       ? normalizeModuleKey(path.relative(this.rootDir, absolute))
       : normalizeModuleKey(absolute);
   }
@@ -450,16 +450,4 @@ function externalPackageRootForPath(fileName: string): string | null {
   return endIndex <= segments.length
     ? segments.slice(0, endIndex).join('/')
     : null;
-}
-
-function samePath(left: string, right: string): boolean {
-  return normalizeModuleKey(path.resolve(left)).toLowerCase() === normalizeModuleKey(path.resolve(right)).toLowerCase();
-}
-
-function isPathWithin(fileName: string, rootDir: string): boolean {
-  const relativePath = path.relative(path.resolve(rootDir), path.resolve(fileName));
-  return (
-    relativePath === ''
-    || (!relativePath.startsWith('..') && !path.isAbsolute(relativePath))
-  );
 }

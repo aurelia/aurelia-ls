@@ -34,6 +34,9 @@ Keep the runtime-emulation split visible. Module evaluation, configuration admis
 - `registration`: normalized registration admissions before DI world construction spends them into container state.
 - `di`: abstract container world construction, registration spending, resolver/resource/factory slots, and lookup substrate.
 - `i18n`: translation-key catalog products admitted from statically visible i18n configuration resources.
+- `validation`: source-authored validation rule-construction and model-rule hydration diagnostics.
+- `fetch-client`: source-backed `HttpClient.configure(...)` and `RetryInterceptor` diagnostics.
+- `dialog`: source-backed `DialogConfiguration` and `DialogService.open(...)` diagnostics.
 - `template`: compiler world contracts, authored HTML IR, attribute syntax/classification, binding-command execution, and lowered instruction IR.
 - `expression`: Aurelia expression parser and parser-owned recovery/candidate algebra.
 - `router`: router configuration, route config, route context, viewport instruction, and router-owned resource model anchors.
@@ -51,7 +54,44 @@ When Atlas cannot cheaply stitch an important product path, prefer strengthening
 
 ## Documentation Ownership
 
-This README owns the folder-level map, product priorities, and Atlas/auLink rule. Folder READMEs own local boundaries, watchpoints, and current shape. [kernel/README.md](./kernel/README.md) owns kernel record-family rules. [application/README.md](./application/README.md) owns app topology. [authoring/README.md](./authoring/README.md) owns the semantic authoring loop, [authoring/ONTOLOGY.md](./authoring/ONTOLOGY.md) owns operation taxonomy orientation, and [authoring/CAPABILITY_CHECKLIST.md](./authoring/CAPABILITY_CHECKLIST.md) owns the flexible authoring scope map. [api/README.md](./api/README.md) owns the operational API boundary. [i18n/README.md](./i18n/README.md) owns translation-key catalog materialization. [observation/README.md](./observation/README.md) owns observer-locator, value-channel, and binding data-flow emulation boundaries. [expression/README.md](./expression/README.md) owns the parser contract, while [expression/INTEGRATION.md](./expression/INTEGRATION.md) owns parser/compiler handoff notes. [WORKBENCH.md](./WORKBENCH.md) owns recent context that is useful while this substrate is still settling, and [WORKBENCH-controller-binding-lifecycle.md](./WORKBENCH-controller-binding-lifecycle.md) owns the current controller, binding, target-operation, and recursive hydration pressure note.
+This README owns the folder-level map, product priorities, and Atlas/auLink rule. Folder READMEs own local boundaries,
+watchpoints, and current shape:
+
+- [kernel/README.md](./kernel/README.md) owns kernel record-family rules.
+- [boot/README.md](./boot/README.md) owns project discovery, source admission, compiler options, and project-shape
+  boundaries before Aurelia interpretation.
+- [application/README.md](./application/README.md) owns app topology.
+- [authoring/README.md](./authoring/README.md) owns the semantic authoring loop,
+  [authoring/ONTOLOGY.md](./authoring/ONTOLOGY.md) owns operation taxonomy orientation, and
+  [authoring/CAPABILITY_CHECKLIST.md](./authoring/CAPABILITY_CHECKLIST.md) owns the flexible authoring scope map.
+- [api/README.md](./api/README.md) owns the operational API boundary.
+- [configuration/README.md](./configuration/README.md) owns app-world composition and configuration issue publication.
+- [registration/README.md](./registration/README.md) owns normalized registration admission before DI spending.
+- [di/README.md](./di/README.md) owns container world construction and lookup substrate.
+- [resources/README.md](./resources/README.md) owns resource recognition and definition convergence.
+- [template/README.md](./template/README.md) owns compiler-world, authored HTML IR, renderer, binding, and controller
+  materialization boundaries.
+- [expression/README.md](./expression/README.md) owns the parser contract, while
+  [expression/INTEGRATION.md](./expression/INTEGRATION.md) owns parser/compiler handoff notes.
+- [evaluation/README.md](./evaluation/README.md) owns ECMAScript-shaped static evaluation, module loading, value
+  modeling, and evaluator issue publication.
+- [type-system/README.md](./type-system/README.md) owns TypeChecker-backed expression, scope, member, and type-surface
+  projection.
+- [observation/README.md](./observation/README.md) owns observer-locator, value-channel, and binding data-flow emulation
+  boundaries.
+- [router/README.md](./router/README.md) owns route config, route expression, route context, route recognizer, and
+  route-tree materialization.
+- [state/README.md](./state/README.md) owns plugin-backed state-store discovery.
+- [i18n/README.md](./i18n/README.md) owns translation-key catalog materialization.
+- [validation/README.md](./validation/README.md) owns validation rule-construction and model-rule hydration diagnostics.
+- [fetch-client/README.md](./fetch-client/README.md) owns fetch-client configuration diagnostics.
+- [dialog/README.md](./dialog/README.md) owns dialog configuration/service diagnostics.
+- [inquiry/README.md](./inquiry/README.md) owns semantic-runtime-local query helper boundaries.
+- [WORKBENCH.md](./WORKBENCH.md) owns recent context that is useful while this substrate is still settling, and
+  [WORKBENCH-controller-binding-lifecycle.md](./WORKBENCH-controller-binding-lifecycle.md) owns the current controller,
+  binding, target-operation, and recursive hydration pressure note.
+
+Queryable cross-package intent lives in [../../atlas/memory](../../atlas/memory/README.md). When a workbench note becomes durable enough that future Codex should find it by domain, path, symbol, or lens, add an Atlas memory record and keep the README/workbench as the explanatory backing.
 
 When text starts repeating across files, prefer linking to the owner and keeping only the local consequence.
 

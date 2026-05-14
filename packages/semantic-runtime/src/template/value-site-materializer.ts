@@ -17,6 +17,7 @@ import {
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import type { ExpressionType } from '../expression/ast.js';
+import { hasInterpolationStart } from '../expression/expression-boundary-scanner.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { AttributeClassificationEmission } from './attribute-classification-materializer.js';
@@ -296,12 +297,7 @@ function siteForAttributeClassification(
 
   switch (classification.classificationKind) {
     case AttributeClassificationKind.Plain:
-      return interpolationAttributeSite(
-        TemplateValueSiteKind.PlainAttributeInterpolation,
-        classification,
-        syntax,
-        attribute,
-      );
+      return plainAttributeValueSite(classification, syntax, attribute);
     case AttributeClassificationKind.Bindable:
       return interpolationAttributeSite(
         TemplateValueSiteKind.BindableValue,
@@ -343,6 +339,37 @@ function siteForAttributeClassification(
   }
 }
 
+function plainAttributeValueSite(
+  classification: AttributeClassification,
+  syntax: AttributeSyntax,
+  attribute: HtmlAttribute,
+): PendingValueSite {
+  return hasInterpolationOpener(syntax.rawValue)
+    ? interpolationAttributeSite(
+      TemplateValueSiteKind.PlainAttributeInterpolation,
+      classification,
+      syntax,
+      attribute,
+    )
+    : new PendingValueSite(
+      TemplateValueSiteKind.PlainAttributeValue,
+      syntax.rawValue,
+      null,
+      classification.ownerNode,
+      attribute.toReference(),
+      syntax,
+      classification,
+      null,
+      null,
+      attribute.valueAddressHandle ?? attribute.sourceAddressHandle,
+    );
+}
+
+function hasInterpolationOpener(value: string): boolean {
+  // Interpolation parsing is only meaningful after an unescaped grammar opener appears; the parser still owns the full hole grammar.
+  return hasInterpolationStart(value);
+}
+
 function interpolationAttributeSite(
   siteKind: TemplateValueSiteKind,
   classification: AttributeClassification,
@@ -374,9 +401,7 @@ function customAttributeOrTemplateControllerSite(
     && hasInlineBindings(syntax.rawValue);
   if (isMultiBinding) {
     return new PendingValueSite(
-      classification.classificationKind === AttributeClassificationKind.TemplateController
-        ? TemplateValueSiteKind.TemplateControllerValue
-        : TemplateValueSiteKind.MultiBindingValue,
+      TemplateValueSiteKind.MultiBindingValue,
       syntax.rawValue,
       null,
       classification.ownerNode,

@@ -1,4 +1,5 @@
 import { auLink } from '../kernel/au-link.js';
+import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type {
   AddressHandle,
   IdentityHandle,
@@ -60,11 +61,17 @@ import {
   type RuntimeRenderingRun,
 } from './runtime-renderer.js';
 import type { RuntimeRendererReference } from './runtime-renderer-reference.js';
+import type { RuntimeHtmlRendererFrameworkErrorCode } from './framework-error-code.js';
+import type {
+  RuntimeRendererIssueKind,
+  RuntimeRendererIssuePhase,
+} from './runtime-renderer-issue.js';
 import type {
   RuntimeControllerCreationRequest,
   RuntimeControllerFrame,
 } from './runtime-controller.js';
 import {
+  AttributeMapperConfiguration,
   mapAttribute,
   shouldDefaultToTwoWay,
   type TemplateAttributeMapperNode,
@@ -213,6 +220,17 @@ export interface TemplateRenderingRunHost {
   createChildController(input: RuntimeControllerCreationRequest): RuntimeControllerFrame | null;
 
   compileSpread(input: RuntimeRendererSpreadCompileRequest): RuntimeRendererSpreadCompileResult;
+
+  recordRendererIssue(
+    local: string,
+    renderer: RuntimeRendererReference,
+    instruction: TemplateInstruction,
+    phase: RuntimeRendererIssuePhase,
+    issueKind: RuntimeRendererIssueKind,
+    message: string,
+    frameworkErrorCode: RuntimeHtmlRendererFrameworkErrorCode | null,
+    sourceAddressHandle: AddressHandle | null,
+  ): void;
 }
 
 /** Request to the runtime Rendering service dispatch loop. */
@@ -269,6 +287,7 @@ export class TemplateRenderingOpenInstruction {
     readonly local: string,
     readonly summary: string,
     readonly addressHandle: AddressHandle | null,
+    readonly reasonKinds: readonly OpenSeamReasonKind[] = [],
   ) {}
 }
 
@@ -596,18 +615,22 @@ export class TemplateAttributeMapperService {
     readonly container: ContainerReference,
     /** Source address for the service registration or lookup. */
     readonly sourceAddressHandle: AddressHandle | null,
+    /** App-authored AttrMapper service state recognized from configuration AppTasks. */
+    readonly configuration: AttributeMapperConfiguration = AttributeMapperConfiguration.empty,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<TemplateCompilerServiceField>[] = [],
   ) {}
 
   /** Runtime `IAttrMapper.map(node, attr)` shape over product-authored HTML nodes. */
   map(node: TemplateAttributeMapperNode, attr: string): string | null {
-    return mapAttribute(node, attr);
+    return mapAttribute(node, attr)
+      ?? this.configuration.map(node, attr);
   }
 
   /** Runtime `IAttrMapper.isTwoWay(node, attrName)` shape over product-authored HTML nodes. */
   isTwoWay(node: TemplateAttributeMapperNode, attrName: string): boolean {
-    return shouldDefaultToTwoWay(node, attrName);
+    return shouldDefaultToTwoWay(node, attrName)
+      || this.configuration.isTwoWay(node, attrName);
   }
 
   toReference(): TemplateCompilerServiceReference {
@@ -705,6 +728,7 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
         surrogateSequence.sourceAddressHandle,
         [],
       );
+      const surrogateSequenceInstructions = this.instructionsForSequence(surrogateSequence);
       surrogateSequence.instructions.forEach((reference, instructionIndex) => {
         const instruction = reference.productHandle == null
           ? null
@@ -731,6 +755,9 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
           this.input.rootController,
           this.input.rootController,
           surrogateTarget,
+          null,
+          undefined,
+          surrogateSequenceInstructions,
         );
       });
     }
@@ -751,6 +778,9 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
           this.input.rootController,
           this.input.rootController,
           target.target,
+          null,
+          undefined,
+          target.instructions,
         );
       });
     });
@@ -780,8 +810,35 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
     return result;
   }
 
-  recordOpenInstruction(local: string, summary: string, addressHandle: AddressHandle | null): void {
-    this.openInstructions.push(new TemplateRenderingOpenInstruction(local, summary, addressHandle));
+  recordOpenInstruction(
+    local: string,
+    summary: string,
+    addressHandle: AddressHandle | null,
+    reasonKinds: readonly OpenSeamReasonKind[] = [],
+  ): void {
+    this.openInstructions.push(new TemplateRenderingOpenInstruction(local, summary, addressHandle, reasonKinds));
+  }
+
+  recordRendererIssue(
+    local: string,
+    renderer: RuntimeRendererReference,
+    instruction: TemplateInstruction,
+    phase: RuntimeRendererIssuePhase,
+    issueKind: RuntimeRendererIssueKind,
+    message: string,
+    frameworkErrorCode: RuntimeHtmlRendererFrameworkErrorCode | null,
+    sourceAddressHandle: AddressHandle | null,
+  ): void {
+    this.input.host.recordRendererIssue(
+      local,
+      renderer,
+      instruction,
+      phase,
+      issueKind,
+      message,
+      frameworkErrorCode,
+      sourceAddressHandle,
+    );
   }
 
   readInstruction(productHandle: ProductHandle): TemplateInstruction | null {
@@ -800,6 +857,8 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
     targetController: RuntimeControllerFrame,
     target = this.defaultTarget(),
     bindingOwner: RuntimeBinding | null = null,
+    hydrationContextController: RuntimeControllerFrame | null = targetController,
+    targetInstructions: readonly TemplateInstruction[] = [instruction],
   ): void {
     if (instruction instanceof SpreadElementPropBindingInstruction) {
       const wrappedInstruction = this.readInstruction(instruction.instructionProductHandle);
@@ -820,6 +879,8 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
         targetController,
         target,
         bindingOwner,
+        hydrationContextController,
+        targetInstructions,
       );
       return;
     }
@@ -843,6 +904,8 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
       targetController,
       target,
       this,
+      hydrationContextController,
+      targetInstructions,
     ));
     for (const binding of result.bindings) {
       if (bindingOwner instanceof SpreadBinding) {
@@ -869,6 +932,20 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
   private defaultTarget(): TemplateRenderTarget {
     return this.input.targets[0]?.target
       ?? this.input.compiledTemplate.targets[0]!;
+  }
+
+  private instructionsForSequence(sequence: TemplateInstructionSequence): readonly TemplateInstruction[] {
+    const instructions: TemplateInstruction[] = [];
+    for (const reference of sequence.instructions) {
+      if (reference.productHandle == null) {
+        continue;
+      }
+      const instruction = this.readInstruction(reference.productHandle);
+      if (instruction != null) {
+        instructions.push(instruction);
+      }
+    }
+    return instructions;
   }
 }
 

@@ -734,7 +734,7 @@ function evidenceForAdmissionBundle(row: FrameworkAdmissionBundleSummaryRow): Ev
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Strong,
     summary: row.summary,
-    ...(row.source === undefined ? {} : { source: row.source }),
+    source: row.source,
     data: row,
   };
 }
@@ -821,7 +821,7 @@ function evidenceForFlowEdge(row: FrameworkAdmissionFlowEdgeRow): Evidence {
         ? EvidenceConfidence.Strong
         : EvidenceConfidence.Exact,
     summary: row.summary,
-    ...(row.source === undefined ? {} : { source: row.source }),
+    source: row.source,
   };
 }
 
@@ -854,7 +854,7 @@ function evidenceForFlowNode(row: FrameworkAdmissionFlowNodeRow): Evidence {
     role: EvidenceRole.Subject,
     confidence: EvidenceConfidence.Exact,
     summary: row.summary,
-    ...(row.source === undefined ? {} : { source: row.source }),
+    source: row.source,
   };
 }
 

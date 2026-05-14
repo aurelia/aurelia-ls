@@ -8,6 +8,7 @@ import {
 } from './source-reference.js';
 import type {
   SemanticBindingDataFlowRow,
+  SemanticBindingBehaviorApplicationRow,
   SemanticBindingSourceOperationRow,
   SemanticBindingTargetAccessRow,
   SemanticBindingValueChannelRow,
@@ -30,12 +31,14 @@ export function readBindingTargetAccessRows(
         strategy: access.strategy,
         eventNames: access.eventNames,
         targetType: access.targetType?.display ?? null,
+        targetTypeSource: access.targetTypeSource,
         propertyType: access.propertyType?.display ?? null,
         propertyExists: access.propertyExists,
         isWritable: access.isWritable,
         isObservable: access.isObservable,
         authority: access.authority,
         openReason: access.openReason,
+        frameworkErrorCode: access.frameworkErrorCode,
         source: describeAddress(store, access.sourceAddressHandle),
         ...(handles ? {
           handles: {
@@ -129,6 +132,39 @@ export function readBindingSourceOperationRows(
     );
 }
 
+export function readBindingBehaviorApplicationRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): readonly SemanticBindingBehaviorApplicationRow[] {
+  return bindingProjectionResources(emission)
+    .flatMap((resource): readonly SemanticBindingBehaviorApplicationRow[] =>
+      resource.runtimeAnalysis.bindingBehavior.applications.map((application) => ({
+        definitionName: resource.compilation.definition.name,
+        bindingKind: application.binding.bindingKind,
+        behaviorName: application.behaviorName,
+        phase: application.phase,
+        argumentCount: application.argumentCount,
+        staticArgumentValues: application.staticArgumentValues,
+        targetKind: application.targetAccess?.targetKind ?? null,
+        targetProperty: application.targetAccess?.targetProperty ?? null,
+        source: describeAddress(store, application.sourceAddressHandle),
+        ...(handles ? {
+          handles: {
+            bindingProductHandle: application.binding.productHandle,
+            bindingBehaviorApplicationProductHandle: application.productHandle,
+            targetAccessProductHandle: application.targetAccess?.productHandle ?? null,
+            sourceAddressHandle: application.sourceAddressHandle,
+          },
+        } : {}),
+      }))
+    )
+    .sort((left, right) =>
+      `${left.definitionName}:${left.behaviorName}:${left.targetProperty ?? ''}:${left.bindingKind}`
+        .localeCompare(`${right.definitionName}:${right.behaviorName}:${right.targetProperty ?? ''}:${right.bindingKind}`)
+    );
+}
+
 export function readBindingValueChannelRows(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
@@ -139,6 +175,10 @@ export function readBindingValueChannelRows(
       resource.runtimeAnalysis.bindingValueChannel.valueChannels.map((valueChannel) => ({
         definitionName: resource.compilation.definition.name,
         bindingKind: valueChannel.binding.bindingKind,
+        targetKind: valueChannel.targetAccess?.targetKind
+          ?? valueChannel.targetOperation?.targetKind
+          ?? valueChannel.sourceOperation?.targetKind
+          ?? null,
         targetProperty: valueChannel.targetAccess?.targetProperty
           ?? valueChannel.targetOperation?.targetProperty
           ?? valueChannel.sourceOperation?.targetName
@@ -211,13 +251,21 @@ function bindingDataFlowRow(
     definitionName,
     bindingKind: dataFlow.binding.bindingKind,
     direction: dataFlow.direction,
+    strictBinding: dataFlow.strictBinding,
     expressionParseState: parse?.state ?? null,
     expressionParseResultKind: parse?.resultKind ?? null,
+    valueSiteKind: parse?.site.siteKind ?? null,
     sourceKind: dataFlow.sourceKind,
     sourceName: dataFlow.sourceName,
+    sourceRootName: dataFlow.sourceRootName,
     sourceType: dataFlow.sourceType?.display ?? null,
     sourceTypeOpenReason: dataFlow.sourceTypeOpenReason,
+    sourceTypeOpenKind: dataFlow.sourceTypeOpenKind,
     sourceAssignmentTargetType: dataFlow.sourceAssignmentTargetType?.display ?? null,
+    targetKind: dataFlow.targetAccess?.targetKind
+      ?? dataFlow.targetOperation?.targetKind
+      ?? dataFlow.sourceOperation?.targetKind
+      ?? null,
     targetProperty: dataFlow.targetAccess?.targetProperty
       ?? dataFlow.targetOperation?.targetProperty
       ?? dataFlow.sourceOperation?.targetName
@@ -233,6 +281,7 @@ function bindingDataFlowRow(
     sourceAssignmentReasonKinds: dataFlow.sourceAssignmentReasonKinds,
     sourceToTargetAssignable: dataFlow.sourceToTargetAssignable,
     targetToSourceAssignable: dataFlow.targetToSourceAssignable,
+    frameworkErrorCode: dataFlow.frameworkErrorCode,
     openReason: dataFlow.openReason,
     source: describeAddress(store, dataFlow.sourceAddressHandle),
     ...(handles ? {

@@ -1,10 +1,53 @@
 const ROUTE_EXPRESSION_TERMINALS = new Set(['?', '#', '/', '+', '(', ')', '@', '!', '=', ',', '&', "'", '~', ';']);
 
+export type ParsedRouteExpressionKind =
+  | 'CompositeSegment'
+  | 'ScopedSegment'
+  | 'SegmentGroup'
+  | 'Segment';
+
 export interface ParsedRouteExpression {
   readonly isAbsolute: boolean;
+  readonly root: ParsedCompositeSegmentExpressionOrHigher;
   readonly instructions: readonly ParsedViewportInstruction[];
   readonly queryParamCount: number;
   readonly fragment: string | null;
+}
+
+export type ParsedCompositeSegmentExpressionOrHigher =
+  | ParsedScopedSegmentExpressionOrHigher
+  | ParsedCompositeSegmentExpression;
+
+export interface ParsedCompositeSegmentExpression {
+  readonly kind: 'CompositeSegment';
+  readonly siblings: readonly ParsedScopedSegmentExpressionOrHigher[];
+}
+
+export type ParsedScopedSegmentExpressionOrHigher =
+  | ParsedSegmentGroupExpressionOrHigher
+  | ParsedScopedSegmentExpression;
+
+export interface ParsedScopedSegmentExpression {
+  readonly kind: 'ScopedSegment';
+  readonly left: ParsedSegmentGroupExpressionOrHigher;
+  readonly right: ParsedScopedSegmentExpressionOrHigher;
+}
+
+export type ParsedSegmentGroupExpressionOrHigher =
+  | ParsedSegmentExpression
+  | ParsedSegmentGroupExpression;
+
+export interface ParsedSegmentGroupExpression {
+  readonly kind: 'SegmentGroup';
+  readonly expression: ParsedCompositeSegmentExpressionOrHigher;
+}
+
+export interface ParsedSegmentExpression {
+  readonly kind: 'Segment';
+  readonly component: string;
+  readonly viewport: string | null;
+  readonly parameterCount: number;
+  readonly scoped: boolean;
 }
 
 export interface ParsedViewportInstruction {
@@ -14,6 +57,22 @@ export interface ParsedViewportInstruction {
   readonly children: readonly ParsedViewportInstruction[];
   readonly open: number;
   readonly close: number;
+}
+
+export type RouteExpressionParseFailureKind =
+  | 'unexpected-segment'
+  | 'not-done';
+
+export class RouteExpressionParseFailure extends Error {
+  constructor(
+    readonly failureKind: RouteExpressionParseFailureKind,
+    readonly expected: string,
+    readonly offset: number,
+    readonly input: string,
+    readonly rest: string,
+  ) {
+    super(routeExpressionParseFailureMessage(failureKind, expected, offset, input, rest));
+  }
 }
 
 class ParserState {
@@ -54,14 +113,38 @@ class ParserState {
   }
 
   fail(expected: string): never {
-    throw new Error(`Expected ${expected} at route-expression offset ${this.index}.`);
+    throw new RouteExpressionParseFailure(
+      'unexpected-segment',
+      expected,
+      this.index,
+      this.input,
+      this.input.slice(this.index),
+    );
   }
 
   ensureDone(): void {
     if (!this.done) {
-      this.fail('end of route expression');
+      throw new RouteExpressionParseFailure(
+        'not-done',
+        'end of route expression',
+        this.index,
+        this.input,
+        this.input.slice(this.index),
+      );
     }
   }
+}
+
+function routeExpressionParseFailureMessage(
+  failureKind: RouteExpressionParseFailureKind,
+  expected: string,
+  offset: number,
+  input: string,
+  rest: string,
+): string {
+  return failureKind === 'not-done'
+    ? `Unexpected '${rest}' at route-expression offset ${offset} of '${input}'.`
+    : `Expected ${expected} at route-expression offset ${offset} of '${input}', but got '${rest}'.`;
 }
 
 interface ParsedUrlParts {
@@ -73,9 +156,11 @@ interface ParsedUrlParts {
 export function parseRouteExpression(value: string): ParsedRouteExpression {
   const url = parseRouteUrl(value);
   if (url.path.length === 0) {
+    const root = emptySegmentExpression();
     return {
       isAbsolute: false,
-      instructions: [viewportInstruction('', null, 0, [], 0, 0)],
+      root,
+      instructions: instructionsForRouteExpression(root),
       queryParamCount: url.queryParamCount,
       fragment: url.fragment,
     };
@@ -84,21 +169,76 @@ export function parseRouteExpression(value: string): ParsedRouteExpression {
   const state = new ParserState(url.path);
   const isAbsolute = state.consumeOptional('/');
   if (state.done) {
+    const root = emptySegmentExpression();
     return {
       isAbsolute,
-      instructions: [viewportInstruction('', null, 0, [], 0, 0)],
+      root,
+      instructions: instructionsForRouteExpression(root),
       queryParamCount: url.queryParamCount,
       fragment: url.fragment,
     };
   }
-  const instructions = parseComposite(state, 0, 0);
+  const root = parseCompositeExpression(state);
   state.ensureDone();
   return {
     isAbsolute,
-    instructions,
+    root,
+    instructions: instructionsForRouteExpression(root),
     queryParamCount: url.queryParamCount,
     fragment: url.fragment,
   };
+}
+
+export function redirectMigrationSegmentsForRouteExpression(
+  root: ParsedCompositeSegmentExpressionOrHigher,
+): readonly ParsedSegmentExpression[] | null {
+  if (root.kind === 'Segment') {
+    return [root];
+  }
+  if (root.kind !== 'ScopedSegment') {
+    return null;
+  }
+
+  const segments: ParsedSegmentExpression[] = [];
+  let current: ParsedScopedSegmentExpressionOrHigher = root;
+  while (current.kind === 'ScopedSegment') {
+    if (current.left.kind !== 'Segment') {
+      return null;
+    }
+    segments.push(current.left);
+    current = current.right;
+  }
+  if (current.kind !== 'Segment') {
+    return null;
+  }
+  segments.push(current);
+  return segments;
+}
+
+export function firstUnexpectedRedirectMigrationExpressionKind(
+  root: ParsedCompositeSegmentExpressionOrHigher,
+): ParsedRouteExpressionKind | null {
+  if (root.kind === 'Segment') {
+    return null;
+  }
+  if (root.kind !== 'ScopedSegment') {
+    return root.kind;
+  }
+
+  let current: ParsedScopedSegmentExpressionOrHigher = root;
+  while (current.kind === 'ScopedSegment') {
+    if (current.left.kind !== 'Segment') {
+      return current.left.kind;
+    }
+    if (current.right.kind === 'Segment') {
+      return null;
+    }
+    if (current.right.kind !== 'ScopedSegment') {
+      return current.right.kind;
+    }
+    current = current.right;
+  }
+  return null;
 }
 
 function parseRouteUrl(value: string): ParsedUrlParts {
@@ -128,72 +268,65 @@ function countQueryParams(query: string): number {
   return count;
 }
 
-function parseComposite(
+function parseCompositeExpression(
   state: ParserState,
-  open: number,
-  close: number,
-): ParsedViewportInstruction[] {
-  state.consumeOptional('+');
-  const siblings: ParsedViewportInstruction[][] = [];
+): ParsedCompositeSegmentExpressionOrHigher {
+  const append = state.consumeOptional('+');
+  const siblings: ParsedScopedSegmentExpressionOrHigher[] = [];
   do {
-    siblings.push(parseScoped(state, siblings.length === 0 ? open : 0, 0));
+    siblings.push(parseScopedExpression(state));
   } while (state.consumeOptional('+'));
 
-  if (siblings.length === 0) {
-    state.fail('route segment');
+  if (!append && siblings.length === 1) {
+    return siblings[0]!;
   }
-
-  const flattened = siblings.flat();
-  const last = flattened.length - 1;
-  flattened[last] = addGrouping(flattened[last]!, 0, close);
-  return flattened;
+  return {
+    kind: 'CompositeSegment',
+    siblings,
+  };
 }
 
-function parseScoped(
+function parseScopedExpression(
   state: ParserState,
-  open: number,
-  close: number,
-): ParsedViewportInstruction[] {
-  const left = parseSegmentGroup(state, open, 0);
+): ParsedScopedSegmentExpressionOrHigher {
+  const left = parseSegmentGroupExpression(state);
   if (!state.consumeOptional('/')) {
-    return addCloseToLast(left, close);
+    return left;
   }
-  const right = parseScoped(state, 0, close);
-  const leftCopy = left.slice();
-  const lastLeft = leftCopy[leftCopy.length - 1]!;
-  leftCopy[leftCopy.length - 1] = withDeepestChild(lastLeft, right);
-  return leftCopy;
+  return {
+    kind: 'ScopedSegment',
+    left,
+    right: parseScopedExpression(state),
+  };
 }
 
-function parseSegmentGroup(
+function parseSegmentGroupExpression(
   state: ParserState,
-  open: number,
-  close: number,
-): ParsedViewportInstruction[] {
+): ParsedSegmentGroupExpressionOrHigher {
   if (!state.consumeOptional('(')) {
-    return [parseSegment(state, open, close)];
+    return parseSegmentExpression(state);
   }
-  const instructions = parseComposite(state, open + 1, close + 1);
+  const expression = parseCompositeExpression(state);
   state.consume(')');
-  return instructions;
+  return {
+    kind: 'SegmentGroup',
+    expression,
+  };
 }
 
-function parseSegment(
+function parseSegmentExpression(
   state: ParserState,
-  open: number,
-  close: number,
-): ParsedViewportInstruction {
+): ParsedSegmentExpression {
   const component = parseComponent(state);
   const viewport = parseViewport(state);
-  state.consumeOptional('!');
-  return viewportInstruction(
-    component.name,
+  const scoped = !state.consumeOptional('!');
+  return {
+    kind: 'Segment',
+    component: component.name,
     viewport,
-    component.parameterCount,
-    [],
-    open,
-    close,
-  );
+    parameterCount: component.parameterCount,
+    scoped,
+  };
 }
 
 function parseComponent(
@@ -258,6 +391,75 @@ function parseViewport(state: ParserState): string | null {
   return name;
 }
 
+function instructionsForRouteExpression(
+  expression: ParsedCompositeSegmentExpressionOrHigher,
+): readonly ParsedViewportInstruction[] {
+  return instructionsForExpression(expression, 0, 0);
+}
+
+function instructionsForExpression(
+  expression: ParsedCompositeSegmentExpressionOrHigher,
+  open: number,
+  close: number,
+): readonly ParsedViewportInstruction[] {
+  switch (expression.kind) {
+    case 'CompositeSegment':
+      return instructionsForCompositeExpression(expression, open, close);
+    case 'ScopedSegment':
+      return instructionsForScopedExpression(expression, open, close);
+    case 'SegmentGroup':
+      return instructionsForExpression(expression.expression, open + 1, close + 1);
+    case 'Segment':
+      return [viewportInstruction(
+        expression.component,
+        expression.viewport,
+        expression.parameterCount,
+        [],
+        open,
+        close,
+      )];
+  }
+}
+
+function instructionsForCompositeExpression(
+  expression: ParsedCompositeSegmentExpression,
+  open: number,
+  close: number,
+): readonly ParsedViewportInstruction[] {
+  switch (expression.siblings.length) {
+    case 0:
+      return [];
+    case 1:
+      return instructionsForExpression(expression.siblings[0]!, open, close);
+    case 2:
+      return [
+        ...instructionsForExpression(expression.siblings[0]!, open, 0),
+        ...instructionsForExpression(expression.siblings[1]!, 0, close),
+      ];
+    default:
+      return [
+        ...instructionsForExpression(expression.siblings[0]!, open, 0),
+        ...expression.siblings.slice(1, -1).flatMap((sibling) =>
+          instructionsForExpression(sibling, 0, 0)
+        ),
+        ...instructionsForExpression(expression.siblings[expression.siblings.length - 1]!, 0, close),
+      ];
+  }
+}
+
+function instructionsForScopedExpression(
+  expression: ParsedScopedSegmentExpression,
+  open: number,
+  close: number,
+): readonly ParsedViewportInstruction[] {
+  const left = instructionsForExpression(expression.left, open, 0);
+  const right = instructionsForExpression(expression.right, 0, close);
+  const leftCopy = left.slice();
+  const last = leftCopy.length - 1;
+  leftCopy[last] = withDeepestChild(leftCopy[last]!, right);
+  return leftCopy;
+}
+
 function withDeepestChild(
   instruction: ParsedViewportInstruction,
   children: readonly ParsedViewportInstruction[],
@@ -277,31 +479,13 @@ function withDeepestChild(
   };
 }
 
-function addCloseToLast(
-  instructions: readonly ParsedViewportInstruction[],
-  close: number,
-): ParsedViewportInstruction[] {
-  if (close === 0) {
-    return instructions.slice();
-  }
-  const copy = instructions.slice();
-  const last = copy.length - 1;
-  copy[last] = addGrouping(copy[last]!, 0, close);
-  return copy;
-}
-
-function addGrouping(
-  instruction: ParsedViewportInstruction,
-  open: number,
-  close: number,
-): ParsedViewportInstruction {
-  if (open === 0 && close === 0) {
-    return instruction;
-  }
+function emptySegmentExpression(): ParsedSegmentExpression {
   return {
-    ...instruction,
-    open: instruction.open + open,
-    close: instruction.close + close,
+    kind: 'Segment',
+    component: '',
+    viewport: null,
+    parameterCount: 0,
+    scoped: true,
   };
 }
 

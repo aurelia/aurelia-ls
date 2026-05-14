@@ -25,10 +25,6 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
-  compactFieldProvenance,
-  FieldProvenance,
-} from '../kernel/provenance.js';
-import {
   KernelStoreBatch,
   type KernelStore,
   type KernelStoreRecord,
@@ -38,7 +34,6 @@ import { CustomElementDefinition } from '../resources/custom-element-definition.
 import { ResourceProductDetails } from '../resources/product-details.js';
 import {
   ComponentAgentModel,
-  type ComponentAgentField,
   type RouteContextModel,
   type RouteNodeModel,
 } from './model.js';
@@ -223,13 +218,11 @@ function componentAgentEmission(
     handles.productHandle,
     handles.identityHandle,
     handles.sourceAddressHandle,
-    handles.provenanceHandle,
     routeContext.toReference(),
     routeNode.toReference(),
     routeContext.viewportAgent,
     controllerEmission?.controller ?? null,
     routeNode,
-    routeContext,
   );
   return {
     records: recordsForComponentAgent(
@@ -290,13 +283,11 @@ function componentAgentModel(
   productHandle: ProductHandle,
   identityHandle: IdentityHandle,
   sourceAddressHandle: RouteNodeModel['sourceAddressHandle'],
-  provenanceHandle: ProvenanceHandle,
   routeContext: ComponentAgentModel['routeContext'],
   routeNodeReference: ComponentAgentModel['routeNode'],
   viewportAgent: ComponentAgentModel['viewportAgent'],
   controller: RuntimeControllerFrame | null,
   routeNode: RouteNodeModel,
-  routeContextModel: RouteContextModel,
 ): ComponentAgentModel {
   return new ComponentAgentModel(
     productHandle,
@@ -307,7 +298,6 @@ function componentAgentModel(
     controller?.productHandle ?? null,
     routeNode.component,
     sourceAddressHandle,
-    componentAgentFieldProvenance(provenanceHandle, routeContextModel, controller, routeNode),
   );
 }
 
@@ -517,20 +507,4 @@ function customElementDefinitionForRouteNode(
   }
   const definition = store.productDetails.read(ResourceProductDetails.Definition, productHandle);
   return definition instanceof CustomElementDefinition ? definition : null;
-}
-
-function componentAgentFieldProvenance(
-  provenanceHandle: ProvenanceHandle,
-  routeContext: RouteContextModel,
-  controller: RuntimeControllerFrame | null,
-  routeNode: RouteNodeModel,
-): readonly FieldProvenance<ComponentAgentField>[] {
-  return compactFieldProvenance<ComponentAgentField>([
-    new FieldProvenance('routeContext', provenanceHandle),
-    new FieldProvenance('routeNode', provenanceHandle),
-    routeContext.viewportAgent == null ? null : new FieldProvenance('viewportAgent', provenanceHandle),
-    controller == null ? null : new FieldProvenance('controller', provenanceHandle),
-    routeNode.component == null ? null : new FieldProvenance('component', provenanceHandle),
-    new FieldProvenance('source', provenanceHandle),
-  ]);
 }

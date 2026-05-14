@@ -63,6 +63,7 @@ import {
   inquiryQueryMatches,
   inquiryNumberFilter,
   inquiryStringFilter,
+  matchesAnyFilterValue,
   matchesFilterValue,
 } from "./lens-filter-utils.js";
 import {
@@ -573,7 +574,7 @@ function productArchitectureBaseValue(
 ): ProductArchitectureValue {
   return {
     version: analysis.version,
-    ...(includeRollup ? { rollup: analysis.rollup } : {}),
+    rollup: includeRollup ? analysis.rollup : undefined,
   };
 }
 
@@ -813,6 +814,7 @@ function filterClassSurfaces(
 ): readonly ProductArchitectureClassSurfaceRow[] {
   const className = inquiryStringFilter(inquiry, "className");
   const classNameSuffix = inquiryStringFilter(inquiry, "classNameSuffix");
+  const surfaceRole = inquiryStringFilter(inquiry, "surfaceRole");
   const methodName = inquiryStringFilter(inquiry, "methodName");
   const auLinkId = inquiryStringFilter(inquiry, "auLinkId");
   const auLinkCatalogIdForName = inquiryStringFilter(inquiry, "auLinkCatalogIdForName");
@@ -822,6 +824,7 @@ function filterClassSurfaces(
     matchesFilterValue(row.filePath, inquiryStringFilter(inquiry, "filePath")) &&
     matchesPathPrefix(row.filePath, pathPrefix) &&
     matchesFilterValue(row.name, className) &&
+    matchesFilterValue(row.surfaceRole, surfaceRole) &&
     (classNameSuffix === undefined || row.name.endsWith(classNameSuffix)) &&
     matchesFilterValue(row.exported, inquiryBooleanFilter(inquiry, "exported")) &&
     matchesFilterValue(row.auLinkIds.length > 0, inquiryBooleanFilter(inquiry, "hasAuLink")) &&
@@ -829,8 +832,8 @@ function filterClassSurfaces(
       row.auLinkCatalogIdsForName.length > 0,
       inquiryBooleanFilter(inquiry, "hasAuLinkCatalogNameMatch"),
     ) &&
-    matchesAny(row.auLinkIds, auLinkId) &&
-    matchesAny(row.auLinkCatalogIdsForName, auLinkCatalogIdForName) &&
+    matchesAnyFilterValue(row.auLinkIds, auLinkId) &&
+    matchesAnyFilterValue(row.auLinkCatalogIdsForName, auLinkCatalogIdForName) &&
     atLeast(row.lineCount, inquiryNumberFilter(inquiry, "minLineCount")) &&
     atLeast(row.methodCount, inquiryNumberFilter(inquiry, "minMethodCount")) &&
     atLeast(row.propertyCount, inquiryNumberFilter(inquiry, "minPropertyCount")) &&
@@ -844,6 +847,8 @@ function filterClassSurfaces(
       row.name,
       row.extendsType ?? "",
       row.summary,
+      row.surfaceRole,
+      row.surfaceRoleReason,
       ...row.implementsTypes,
       ...row.methods,
       ...row.staticMethods,
@@ -1073,8 +1078,8 @@ function filterCallDependencies(
     matchesFilterValue(row.fromArea, inquiryStringFilter(inquiry, "fromArea")) &&
     matchesFilterValue(row.targetArea ?? "", inquiryStringFilter(inquiry, "toArea")) &&
     matchesFilterValue(row.targetPackageId ?? "", inquiryStringFilter(inquiry, "targetPackageId")) &&
-    matchesAny(row.classNames, inquiryStringFilter(inquiry, "className")) &&
-    matchesAny(row.functionNames, inquiryStringFilter(inquiry, "functionName")) &&
+    matchesAnyFilterValue(row.classNames, inquiryStringFilter(inquiry, "className")) &&
+    matchesAnyFilterValue(row.functionNames, inquiryStringFilter(inquiry, "functionName")) &&
     matchesFilterValue(row.resolved, inquiryBooleanFilter(inquiry, "resolved")) &&
     matchesFilterValue(row.local, inquiryBooleanFilter(inquiry, "local")) &&
     matchesFilterValue(row.crossesArea, inquiryBooleanFilter(inquiry, "crossesArea")) &&
@@ -1273,6 +1278,8 @@ function filterFieldProvenanceConstructions(
     matchesFilterValue(row.area, inquiryStringFilter(inquiry, "area")) &&
     matchesFilterValue(row.filePath, inquiryStringFilter(inquiry, "filePath")) &&
     matchesPathPrefix(row.filePath, pathPrefix) &&
+    matchesFilterValue(row.constructionKind, inquiryStringFilter(inquiry, "constructionKind")) &&
+    matchesFilterValue(row.fieldNameOrigin, inquiryStringFilter(inquiry, "fieldNameOrigin")) &&
     matchesFilterValue(row.fieldNameLiteral ?? "", inquiryStringFilter(inquiry, "fieldName")) &&
     matchesFilterValue(row.fieldNameExpression ?? "", inquiryStringFilter(inquiry, "fieldNameExpression")) &&
     matchesFilterValue(row.provenanceExpression ?? "", inquiryStringFilter(inquiry, "provenanceExpression")) &&
@@ -1285,6 +1292,8 @@ function filterFieldProvenanceConstructions(
       row.id,
       row.area,
       row.filePath,
+      row.constructionKind,
+      row.fieldNameOrigin,
       row.fieldNameExpression ?? "",
       row.fieldNameLiteral ?? "",
       row.provenanceExpression ?? "",
@@ -1521,11 +1530,9 @@ function productArchitectureSourceContinuations(row: unknown): readonly Continua
   return sourceInspectionContinuations(
     source === undefined ? undefined : sourceRangeFromOneBasedReference(source),
     {
-      ...(source === undefined
-        ? {}
-        : {
-            id: `product.architecture:source:${source.filePath}:${source.startLine}:${source.startCharacter}`,
-          }),
+      id: source === undefined
+        ? undefined
+        : `product.architecture:source:${source.filePath}:${source.startLine}:${source.startCharacter}`,
       basis: [BasisKind.TypeScriptProgram, BasisKind.SourceText],
       rationale: "Inspect the source behind this semantic-runtime architecture row.",
       routeSummary: "Source backing for a product architecture row.",
@@ -1577,10 +1584,6 @@ function productArchitectureBasis(sourceProject: SourceProject): readonly Basis[
 
 function atLeast(value: number, minimum: number | undefined): boolean {
   return minimum === undefined || value >= minimum;
-}
-
-function matchesAny(values: readonly string[], expected: string | undefined): boolean {
-  return expected === undefined || values.includes(expected);
 }
 
 function pathPrefixFilter(inquiry: Inquiry): string | undefined {
@@ -2122,6 +2125,13 @@ function orderFieldProvenanceConstructions(
   orderBy: string | undefined,
 ): readonly ProductArchitectureFieldProvenanceConstructionRow[] {
   switch (orderBy) {
+    case "constructionKind":
+      return [...rows].sort((left, right) =>
+        left.constructionKind.localeCompare(right.constructionKind) ||
+        left.fieldNameOrigin.localeCompare(right.fieldNameOrigin) ||
+        left.filePath.localeCompare(right.filePath) ||
+        left.source.startLine - right.source.startLine,
+      );
     case "fieldName":
       return [...rows].sort((left, right) =>
         (left.fieldNameLiteral ?? left.fieldNameExpression ?? "").localeCompare(

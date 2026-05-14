@@ -374,12 +374,12 @@ export class BindingScope {
       input.base.parent,
       input.base.bindingContext.contextKind,
       input.base.bindingContext.contextType,
-      mergeContextSlotDrafts(
+      mergeBindingContextSlotDrafts(
         input.base.bindingContext.slots.map((slot) => BindingContextSlotDraft.fromSlot(slot)),
         input.bindingContextSlots ?? [],
       ),
       input.base.overrideContext.contextType,
-      mergeContextSlotDrafts(
+      mergeBindingContextSlotDrafts(
         input.base.overrideContext.slots.map((slot) => BindingContextSlotDraft.fromSlot(slot)),
         input.overrideContextSlots ?? [],
       ),
@@ -521,7 +521,7 @@ export class BindingScope {
   }
 }
 
-function mergeContextSlotDrafts(
+export function mergeBindingContextSlotDrafts(
   base: readonly BindingContextSlotDraft[],
   overrides: readonly BindingContextSlotDraft[],
 ): readonly BindingContextSlotDraft[] {

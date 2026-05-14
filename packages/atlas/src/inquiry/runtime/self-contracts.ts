@@ -145,9 +145,7 @@ export class SelfContractReader {
       declaredParameterIds,
       duplicateParameterIds,
       coherenceFacts,
-      ...(implementation?.source === undefined
-        ? {}
-        : { source: implementation.source }),
+      source: implementation?.source,
       summary: `${lens.id} declares ${
         declaredProjectionIds.length
       } projection(s), has ${
@@ -204,9 +202,7 @@ export class SelfContractReader {
           "The ontology may need a stage between contracted and fully implemented.",
         ],
         nextInquiries: [contractInquiry(lens.id)],
-        ...(implementationSource === undefined
-          ? {}
-          : { source: implementationSource }),
+        source: implementationSource,
         summary: `${lens.id} stage and runtime implementation status disagree; inspect whether this is stale metadata or a missing stage primitive.`,
       },
     ];
@@ -239,7 +235,7 @@ export class SelfContractReader {
         contractInquiry(lens.id),
         projectionInquiry(lens.id, projectionId),
       ],
-      ...(branchSource === undefined ? {} : { source: branchSource }),
+      source: branchSource,
       summary: `${lens.id} exposes runtime projection ${projectionId} outside the declared lens contract; decide whether to promote, narrow, or relocate that surface.`,
     };
   }

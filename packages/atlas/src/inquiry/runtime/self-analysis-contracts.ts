@@ -1,9 +1,11 @@
 import type { SourceRange } from "../locus.js";
+import type { PhaseProfileRow } from "../../phase-profile.js";
 import type { NavigationRelation } from "../navigation.js";
 import type {
   AtlasSelfEnumMappingRow,
   AtlasSelfEnumReferenceRow,
   AtlasSelfEnumRow,
+  AtlasSelfEnumValueOccurrenceRow,
   AtlasSelfEnumValueSpaceRow,
 } from "./self-enums.js";
 import type {
@@ -16,6 +18,7 @@ export type {
   AtlasSelfEnumMemberRow,
   AtlasSelfEnumReferenceRow,
   AtlasSelfEnumRow,
+  AtlasSelfEnumValueOccurrenceRow,
   AtlasSelfEnumValueSpaceRow,
 } from "./self-enums.js";
 export type {
@@ -172,6 +175,48 @@ export interface AtlasSelfFunctionShapeGroupRow {
   /** Bounded file samples for compact review. */
   readonly fileSamples: readonly string[];
   /** Exact source of the first grouped declaration. */
+  readonly source: SourceRange;
+  /** Compact row summary. */
+  readonly summary: string;
+}
+
+export type AtlasSelfFunctionWrapperKind =
+  | "constructor-return"
+  | "call-return";
+
+/** Shallow function/method body that mainly forwards to one constructor or call expression. */
+export interface AtlasSelfFunctionWrapperRow {
+  /** Stable row id. */
+  readonly id: string;
+  /** Package that owns the function declaration. */
+  readonly packageId: string;
+  /** Function or method name. Class methods use ClassName.methodName. */
+  readonly name: string;
+  /** Declaration family. */
+  readonly functionKind: "top-level" | "class-method";
+  /** Owning class name for class methods. */
+  readonly className: string | null;
+  /** True when exported from the source module, or when the owning class is exported for methods. */
+  readonly exported: boolean;
+  /** Source file that owns the declaration. */
+  readonly filePath: string;
+  /** Declaration span line count. */
+  readonly lineCount: number;
+  /** Exact wrapper shape detected from the function body. */
+  readonly wrapperKind: AtlasSelfFunctionWrapperKind;
+  /** Textual target of the wrapped call/constructor expression. */
+  readonly wrappedTarget: string;
+  /** Number of arguments forwarded into the wrapped call/constructor. */
+  readonly argumentCount: number;
+  /** Top-level statement count in the wrapper body. */
+  readonly statementCount: number;
+  /** Number of local direct call sites Atlas can resolve to this function/method. */
+  readonly incomingCallCount: number;
+  /** Number of local value/callback references Atlas can resolve to this function/method, excluding direct call callees. */
+  readonly incomingValueReferenceCount: number;
+  /** Direct calls plus value/callback references. */
+  readonly incomingUsageCount: number;
+  /** Exact declaration source. */
   readonly source: SourceRange;
   /** Compact row summary. */
   readonly summary: string;
@@ -409,6 +454,9 @@ export interface AtlasSelfAxisPressureRow {
   readonly summary: string;
 }
 
+/** One measured phase inside a cold Atlas self-analysis build. */
+export interface AtlasSelfAnalysisPhaseProfileRow extends PhaseProfileRow {}
+
 /** Compact self-analysis rollup. */
 export interface AtlasSelfAnalysis {
   /** Schema marker. */
@@ -421,6 +469,8 @@ export interface AtlasSelfAnalysis {
   readonly enumReferences: readonly AtlasSelfEnumReferenceRow[];
   /** Enum value-space rows. */
   readonly enumValueSpaces: readonly AtlasSelfEnumValueSpaceRow[];
+  /** Exact raw literal occurrences whose values overlap enum member values. */
+  readonly enumValueOccurrences: readonly AtlasSelfEnumValueOccurrenceRow[];
   /** Enum-to-enum mapping rows. */
   readonly enumMappings: readonly AtlasSelfEnumMappingRow[];
   /** Grouped string literal rows. */
@@ -435,6 +485,8 @@ export interface AtlasSelfAnalysis {
   readonly functionSurfaces: readonly AtlasSelfFunctionSurfaceRow[];
   /** Repeated AST/control-flow body shape groups for finding split-brain helpers. */
   readonly functionShapeGroups: readonly AtlasSelfFunctionShapeGroupRow[];
+  /** Shallow constructor/call wrapper rows for spotting extraction-as-obfuscation pressure. */
+  readonly functionWrapperRows: readonly AtlasSelfFunctionWrapperRow[];
   /** Source file module surfaces. */
   readonly sourceFileSurfaces: readonly AtlasSelfSourceFileSurfaceRow[];
   /** Engine lens implementation rows. */
@@ -453,6 +505,8 @@ export interface AtlasSelfAnalysis {
   readonly contractStrings: readonly AtlasSelfContractStringRow[];
   /** Exact rows that identify axis, mapper, and stringly-surface pressure. */
   readonly axisPressure: readonly AtlasSelfAxisPressureRow[];
+  /** Cold-build phase timings for Atlas self-analysis substrate work. */
+  readonly profile: readonly AtlasSelfAnalysisPhaseProfileRow[];
   /** Rollup counts. */
   readonly rollup: {
     readonly enumCount: number;
@@ -476,6 +530,8 @@ export interface AtlasSelfAnalysis {
     readonly topLevelFunctionCount: number;
     readonly classMethodFunctionCount: number;
     readonly functionShapeGroupCount: number;
+    readonly functionWrapperCount: number;
+    readonly singleUseFunctionWrapperCount: number;
     readonly sourceFileSurfaceCount: number;
     readonly sourceFileLineCount: number;
     readonly lensImplementationCount: number;

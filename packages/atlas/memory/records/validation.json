@@ -1,0 +1,87 @@
+{
+  "schemaVersion": "atlas-memory.v1",
+  "records": [
+    {
+      "id": "frontier:validation-rule-source-diagnostics",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "validation",
+        "framework-errors",
+        "diagnostics"
+      ],
+      "summary": "ValidationSourceIssueMaterializer owns exact @aurelia/validation source-rule DSL and model-rule hydration diagnostics.",
+      "rationale": "@aurelia/validation throws several framework errors from source-authored fluent rule construction, property-accessor parsing, model-rule hydration, and group-rule callback shapes. Semantic-runtime now owns the closed static subset as ValidationIssue products and app diagnostics, while live custom rule execution and serialized payload surfaces remain intentionally separate future products.",
+      "guidance": [
+        "Start here before adding validation diagnostics or changing validation framework-error dispositions.",
+        "Use framework.errors for the validation package and the framework validation sources before spending another AUR41xx authority row.",
+        "Keep validation source-rule diagnostics separate from validation-html binding behavior; validation-html template semantics should stay in template/binding lanes unless the issue is genuinely rule-source owned.",
+        "AuthoringOrientation may report validation ownership from positive validation-html `& validate` applications, validation package configuration admissions, validation service resolve sites, or validation source-rule issue rows; do not confuse that taste signal with the narrower ValidationIssue diagnostic product lane.",
+        "The generated `validated-state-backed-form` authoring recipe is the positive ownership canary for validation-html: it should materialize `validate` through `BindingBehaviorApplications`, expose any static validation trigger through `staticArgumentValues`, satisfy `validation-controller-usage`, and avoid producing ValidationIssue diagnostics.",
+        "Current exact source-owned codes are AUR4101 rule_provider_no_rule_found, AUR4102 unable_to_parse_accessor_function, AUR4105 hydrate_rule_unsupported, AUR4106 hydrate_rule_invalid_name, and AUR4108 group_rule_invalid_execution_result.",
+        "Do not claim AUR4100, AUR4103, or AUR4104 until semantic-runtime admits serialized validation payloads; do not claim AUR4107 or AUR4109 until it admits live validation rule execution or custom rule return values."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/validation/validation-source-issue-materializer.ts",
+          "symbolName": "ValidationSourceIssueMaterializer",
+          "summary": "Source-backed validation issue materializer."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/validation/framework-error-code.ts",
+          "symbolName": "ValidationFrameworkErrorCode",
+          "summary": "Exact @aurelia/validation framework code links."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/validation/README.md",
+          "summary": "Validation lane ownership and remaining intentionally unclaimed authorities."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/authoring/generated-validated-state-backed-form",
+          "summary": "Recommendable validation-html authoring fixture with positive validation ownership."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/validation-rule-source-errors",
+          "summary": "Pressure fixture for the exact validation source-rule diagnostics."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.errors",
+          "projection": "diagnostic-codes",
+          "filters": {
+            "packageId": "validation"
+          },
+          "summary": "Validation framework-error disposition view."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api",
+          "summary": "Pressure harness includes validation issue and app-diagnostic summaries."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/validation/validation-source-issue-materializer.ts",
+          "symbolName": "ValidationSourceIssueMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/validation/framework-error-code.ts",
+          "symbolName": "ValidationFrameworkErrorCode"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/fixtures/pressure/validation-rule-source-errors/src/validation-rule-source-errors-app.ts"
+        }
+      ],
+      "createdAt": "2026-05-14",
+      "updatedAt": "2026-05-14"
+    }
+  ]
+}

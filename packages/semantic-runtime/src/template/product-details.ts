@@ -17,6 +17,9 @@ import type {
   MultiBindingSegment,
 } from './binding-command-execution.js';
 import type {
+  TemplateCompilerIssue,
+} from './compiler-issue.js';
+import type {
   BuiltInSyntaxCatalog,
   ConfiguredBuiltInSyntaxCatalogSelection,
 } from './built-in-syntax.js';
@@ -56,10 +59,26 @@ import type {
   RuntimeBindingTargetOperation,
 } from './runtime-binding.js';
 import type {
+  RuntimeBindingIssue as RuntimeBindingIssueProduct,
+} from './runtime-binding-issue.js';
+import type {
+  RuntimeBindingBehaviorApplication as RuntimeBindingBehaviorApplicationProduct,
+  RuntimeBindingBehaviorIssue as RuntimeBindingBehaviorIssueProduct,
+} from './runtime-binding-behavior.js';
+import type {
+  RuntimeValueConverterApplication as RuntimeValueConverterApplicationProduct,
+  RuntimeValueConverterIssue as RuntimeValueConverterIssueProduct,
+} from './runtime-value-converter.js';
+import type {
+  RuntimeBindingScopeIssue as RuntimeBindingScopeIssueProduct,
+} from './runtime-binding-scope-issue.js';
+import type { RuntimeControllerIssue } from './runtime-controller-issue.js';
+import type {
   BuiltInRuntimeRendererCatalog,
   ConfiguredBuiltInRuntimeRendererCatalogSelection,
   RuntimeRenderer,
 } from './runtime-renderer.js';
+import type { RuntimeRendererIssue } from './runtime-renderer-issue.js';
 import type {
   TemplateExpressionParse,
   TemplateValueSite,
@@ -167,6 +186,11 @@ export const TemplateProductDetails = {
     'compiler.runtime-renderer',
     'Runtime IRenderer detail selected by Rendering.',
   ),
+  RuntimeRendererIssue: defineProductDetailSlot<RuntimeRendererIssue>(
+    KernelVocabulary.Compiler.RuntimeRendererIssue.key,
+    'compiler.runtime-renderer-issue',
+    'Framework-runtime issue discovered while a runtime IRenderer spends a lowered instruction.',
+  ),
   CompiledAttributePattern: defineProductDetailSlot<CompiledAttributePattern>(
     KernelVocabulary.Compiler.CompiledAttributePattern.key,
     'compiler.compiled-attribute-pattern',
@@ -237,6 +261,11 @@ export const TemplateProductDetails = {
     'compiler.binding-command-lowering',
     'Binding-command lowering result detail.',
   ),
+  CompilerIssue: defineProductDetailSlot<TemplateCompilerIssue>(
+    KernelVocabulary.Compiler.Issue.key,
+    'compiler.issue',
+    'Source-backed template-compiler issue detail.',
+  ),
   MultiBindingSegment: defineProductDetailSlot<MultiBindingSegment>(
     KernelVocabulary.Compiler.MultiBindingSegment.key,
     'compiler.multi-binding-segment',
@@ -262,10 +291,45 @@ export const TemplateProductDetails = {
     'binding.runtime-binding',
     'Runtime binding instance detail emulated from renderer semantics.',
   ),
+  RuntimeBindingIssue: defineProductDetailSlot<RuntimeBindingIssueProduct>(
+    KernelVocabulary.Binding.RuntimeBindingIssue.key,
+    'binding.runtime-binding-issue',
+    'Framework-runtime issue discovered while a modeled runtime binding executes its own lifecycle.',
+  ),
+  RuntimeBindingBehaviorApplication: defineProductDetailSlot<RuntimeBindingBehaviorApplicationProduct>(
+    KernelVocabulary.Binding.BehaviorApplication.key,
+    'binding.behavior-application',
+    'Runtime binding-behavior application detail over a rendered binding and bind-time target facts.',
+  ),
+  RuntimeBindingBehaviorIssue: defineProductDetailSlot<RuntimeBindingBehaviorIssueProduct>(
+    KernelVocabulary.Binding.BehaviorIssue.key,
+    'binding.behavior-issue',
+    'Framework-runtime issue discovered while applying a binding behavior.',
+  ),
+  RuntimeValueConverterApplication: defineProductDetailSlot<RuntimeValueConverterApplicationProduct>(
+    KernelVocabulary.Binding.ValueConverterApplication.key,
+    'binding.value-converter-application',
+    'Runtime value-converter application detail over a rendered binding expression.',
+  ),
+  RuntimeValueConverterIssue: defineProductDetailSlot<RuntimeValueConverterIssueProduct>(
+    KernelVocabulary.Binding.ValueConverterIssue.key,
+    'binding.value-converter-issue',
+    'Framework-runtime issue discovered while invoking a value converter.',
+  ),
   RuntimeBindingScopeEffect: defineProductDetailSlot<RuntimeBindingScopeEffect>(
     KernelVocabulary.Binding.ScopeEffect.key,
     'binding.scope-effect',
     'Runtime binding scope-effect detail consumed by template scope construction.',
+  ),
+  RuntimeBindingScopeIssue: defineProductDetailSlot<RuntimeBindingScopeIssueProduct>(
+    KernelVocabulary.Binding.ScopeIssue.key,
+    'binding.scope-issue',
+    'Framework-runtime issue discovered while spending a runtime binding scope effect.',
+  ),
+  RuntimeControllerIssue: defineProductDetailSlot<RuntimeControllerIssue>(
+    KernelVocabulary.Configuration.ControllerIssue.key,
+    'configuration.controller-issue',
+    'Framework-runtime issue discovered while constructing or hydrating a controller.',
   ),
   RuntimeBindingTargetAccess: defineProductDetailSlot<RuntimeBindingTargetAccess>(
     KernelVocabulary.Binding.TargetAccess.key,

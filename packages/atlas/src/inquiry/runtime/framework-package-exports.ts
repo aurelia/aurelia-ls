@@ -307,7 +307,7 @@ export function scanFrameworkRegistryPackageRows(
   return readFrameworkPackageExports(sourceProject, {
     packageId,
     memberName,
-    ...(exportName === undefined ? {} : { exportName }),
+    exportName,
   })
     .map((row) => ({
       ...row,
@@ -638,9 +638,7 @@ export function exportSurfaceEntryForNamedDeclaration(
         file: targetFile,
         span,
         declarationKind,
-        ...(symbol === undefined
-          ? {}
-          : { symbolKey: checker.getFullyQualifiedName(symbol) }),
+        symbolKey: symbol === undefined ? undefined : checker.getFullyQualifiedName(symbol),
       },
     ],
   };

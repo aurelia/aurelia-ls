@@ -415,11 +415,9 @@ function frameworkRelationshipRows(
         sourceProjection: "relationships",
         sourceRowId: row.id,
         basis: [BasisKind.StaticEvaluator, BasisKind.TypeScriptChecker],
-        detailFilters: {
-          key: row.key,
-          relation: row.relation,
-          ...(row.access === undefined ? {} : { access: row.access }),
-        },
+        detailFilters: row.access === undefined
+          ? { key: row.key, relation: row.relation }
+          : { key: row.key, relation: row.relation, access: row.access },
       }),
     ),
     ...readFrameworkCompilerRelationships(sourceProject, filters).map((row) =>
