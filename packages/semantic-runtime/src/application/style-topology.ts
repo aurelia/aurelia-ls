@@ -4,6 +4,10 @@ import ts from 'typescript';
 import type { ProjectBootFrame, SourceFileAdmission } from '../boot/frames.js';
 import { SourceFileRole } from '../kernel/address.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import {
+  AureliaStyleRegistryCallKind,
+  aureliaStyleRegistryCallKind,
+} from '../resources/style-registry-call.js';
 import type {
   ApplicationStyleAssetKind,
   ApplicationStyleSourceKind,
@@ -39,19 +43,12 @@ interface CssImportSite {
   readonly end: number;
 }
 
-interface FrameworkStyleImports {
-  readonly cssModulesNames: ReadonlySet<string>;
-  readonly shadowCssNames: ReadonlySet<string>;
-  readonly runtimeNamespaces: ReadonlySet<string>;
-}
-
 interface StyleSourceReadContext {
   readonly source: SourceFileAdmission;
   readonly sourceFile: ts.SourceFile;
   readonly owner: StyleOwner;
   readonly imports: readonly CssImportSite[];
   readonly importByLocalName: ReadonlyMap<string, CssImportSite>;
-  readonly frameworkImports: FrameworkStyleImports;
   readonly rows: ApplicationStyleAssetSite[];
   readonly seen: Set<string>;
   readonly specializedImportKeys: Set<string>;
@@ -63,11 +60,6 @@ interface StyleOwner {
   readonly ownerClassName: string | null;
   readonly ownerElementName: string | null;
 }
-
-const AURELIA_STYLE_MODULES = new Set([
-  'aurelia',
-  '@aurelia/runtime-html',
-]);
 
 export function readApplicationStyleAssetSites(
   project: ProjectBootFrame,
@@ -113,7 +105,6 @@ function readSourceStyleAssetSites(
     owner,
     imports,
     importByLocalName: cssImportByLocalName(imports),
-    frameworkImports: readFrameworkStyleImports(sourceFile),
     rows: [],
     seen: new Set(),
     specializedImportKeys: new Set(),
@@ -175,48 +166,12 @@ function importLocalNames(importClause: ts.ImportClause | undefined): readonly s
   return names;
 }
 
-function readFrameworkStyleImports(sourceFile: ts.SourceFile): FrameworkStyleImports {
-  const cssModulesNames = new Set<string>();
-  const shadowCssNames = new Set<string>();
-  const runtimeNamespaces = new Set<string>();
-  for (const statement of sourceFile.statements) {
-    if (!ts.isImportDeclaration(statement) || !ts.isStringLiteral(statement.moduleSpecifier)) {
-      continue;
-    }
-    if (!AURELIA_STYLE_MODULES.has(statement.moduleSpecifier.text)) {
-      continue;
-    }
-    const importClause = statement.importClause;
-    const namedBindings = importClause?.namedBindings;
-    if (namedBindings == null) {
-      continue;
-    }
-    if (ts.isNamespaceImport(namedBindings)) {
-      runtimeNamespaces.add(namedBindings.name.text);
-      continue;
-    }
-    for (const element of namedBindings.elements) {
-      const importedName = (element.propertyName ?? element.name).text;
-      if (importedName === 'cssModules') {
-        cssModulesNames.add(element.name.text);
-      } else if (importedName === 'shadowCSS') {
-        shadowCssNames.add(element.name.text);
-      }
-    }
-  }
-  return {
-    cssModulesNames,
-    shadowCssNames,
-    runtimeNamespaces,
-  };
-}
-
 function visitStyleSource(
   context: StyleSourceReadContext,
   node: ts.Node,
 ): void {
   if (ts.isCallExpression(node)) {
-    const callKind = styleCallKind(context.frameworkImports, node.expression);
+    const callKind = aureliaStyleRegistryCallKind(context.sourceFile, node.expression);
     if (callKind != null) {
       for (const argument of node.arguments) {
         const cssImport = ts.isIdentifier(argument)
@@ -234,35 +189,6 @@ function visitStyleSource(
     }
   }
   ts.forEachChild(node, (child) => visitStyleSource(context, child));
-}
-
-function styleCallKind(
-  frameworkImports: FrameworkStyleImports,
-  expression: ts.Expression,
-): Extract<ApplicationStyleSourceKind, 'css-module-call' | 'shadow-css-call'> | null {
-  const callee = unwrapExpression(expression);
-  if (ts.isIdentifier(callee)) {
-    if (frameworkImports.cssModulesNames.has(callee.text)) {
-      return 'css-module-call';
-    }
-    if (frameworkImports.shadowCssNames.has(callee.text)) {
-      return 'shadow-css-call';
-    }
-    return null;
-  }
-  if (
-    ts.isPropertyAccessExpression(callee)
-    && ts.isIdentifier(callee.expression)
-    && frameworkImports.runtimeNamespaces.has(callee.expression.text)
-  ) {
-    if (callee.name.text === 'cssModules') {
-      return 'css-module-call';
-    }
-    if (callee.name.text === 'shadowCSS') {
-      return 'shadow-css-call';
-    }
-  }
-  return null;
 }
 
 function addInlineStyleRegistrySite(
@@ -439,27 +365,13 @@ function assetKindForPlainCssImport(
 }
 
 function assetKindForStyleCall(
-  sourceKind: Extract<ApplicationStyleSourceKind, 'css-module-call' | 'shadow-css-call'>,
+  sourceKind: AureliaStyleRegistryCallKind,
 ): ApplicationStyleAssetKind {
-  return sourceKind === 'css-module-call'
+  return sourceKind === AureliaStyleRegistryCallKind.CssModules
     ? 'css-module-style'
     : 'shadow-dom-styles';
 }
 
 function normalizeProjectPath(value: string): string {
   return value.replace(/\\/gu, '/').replace(/^\.\//u, '');
-}
-
-function unwrapExpression(expression: ts.Expression): ts.Expression {
-  let current = expression;
-  while (
-    ts.isParenthesizedExpression(current)
-    || ts.isAsExpression(current)
-    || ts.isTypeAssertionExpression(current)
-    || ts.isSatisfiesExpression(current)
-    || ts.isNonNullExpression(current)
-  ) {
-    current = current.expression;
-  }
-  return current;
 }

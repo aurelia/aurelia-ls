@@ -92,6 +92,7 @@ export class ObserverLocatorLookupResult {
       RuntimeBindingTargetAccessAuthority.Open,
       reason,
       null,
+      null,
     );
   }
 
@@ -110,6 +111,7 @@ export class ObserverLocatorLookupResult {
     readonly authority: RuntimeBindingTargetAccessAuthority,
     readonly openReason: string | null = null,
     readonly frameworkErrorCode: RuntimeHtmlObservationFrameworkErrorCode | null = null,
+    readonly diagnosticReason: string | null = null,
   ) {}
 
   get supportsCallback(): boolean {
@@ -840,7 +842,10 @@ export class ObserverLocator {
     )
       ? RuntimeHtmlObservationFrameworkErrorCode.NodeObserverStrategyNotFound
       : null;
-    const openReason = targetAccessOpenReason(tagName, input.targetProperty, strategy, frameworkErrorCode);
+    const openReason = frameworkErrorCode == null
+      ? targetAccessOpenReason(tagName, input.targetProperty, strategy)
+      : null;
+    const diagnosticReason = targetAccessDiagnosticReason(tagName, input.targetProperty, frameworkErrorCode);
 
     return new ObserverLocatorLookupResult(
       input.lookup,
@@ -854,9 +859,10 @@ export class ObserverLocator {
       property?.exists ?? null,
       property?.isWritable ?? null,
       isSubscribableStrategy(strategy),
-      authorityFor(strategy, targetType, true),
+      authorityFor(strategy, targetType, true, frameworkErrorCode),
       openReason,
       frameworkErrorCode,
+      diagnosticReason,
     );
   }
 
@@ -882,7 +888,9 @@ export class ObserverLocator {
         targetType,
         input.lookup === RuntimeBindingTargetAccessLookup.Accessor
           && strategy === RuntimeBindingTargetAccessStrategy.PropertyAccessor,
+        null,
       ),
+      null,
       null,
       null,
     );
@@ -1085,14 +1093,20 @@ function targetAccessOpenReason(
   tagName: string,
   targetProperty: string,
   strategy: RuntimeBindingTargetAccessStrategy,
-  frameworkErrorCode: RuntimeHtmlObservationFrameworkErrorCode | null,
 ): string | null {
-  if (frameworkErrorCode != null) {
-    return `Aurelia runtime ${frameworkErrorCode} cannot observe '${tagName}.${targetProperty}' because dirty checking is disabled and no node observer strategy is configured.`;
-  }
   return strategy === RuntimeBindingTargetAccessStrategy.Unknown
     ? `NodeObserverLocator could not close '${tagName}.${targetProperty}' through built-in config or TypeChecker surface.`
     : null;
+}
+
+function targetAccessDiagnosticReason(
+  tagName: string,
+  targetProperty: string,
+  frameworkErrorCode: RuntimeHtmlObservationFrameworkErrorCode | null,
+): string | null {
+  return frameworkErrorCode == null
+    ? null
+    : `Aurelia runtime ${frameworkErrorCode} cannot observe '${tagName}.${targetProperty}' because dirty checking is disabled and no node observer strategy is configured.`;
 }
 
 function nodeObserverStrategyNotFound(
@@ -1229,7 +1243,11 @@ function authorityFor(
   strategy: RuntimeBindingTargetAccessStrategy,
   targetType: TypeResolution | null,
   frameworkConfig: boolean,
+  frameworkErrorCode: RuntimeHtmlObservationFrameworkErrorCode | null,
 ): RuntimeBindingTargetAccessAuthority {
+  if (frameworkErrorCode != null) {
+    return RuntimeBindingTargetAccessAuthority.FrameworkErrorCode;
+  }
   if (strategy === RuntimeBindingTargetAccessStrategy.Unknown) {
     return RuntimeBindingTargetAccessAuthority.Open;
   }

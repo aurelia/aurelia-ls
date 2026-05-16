@@ -110,8 +110,12 @@ for (const row of fixtureSeedValue?.fixtureSeeds ?? []) {
   const filters = row.expectedEffects.flatMap((effect) =>
     effect.filters.map((filter) => `${effect.effectKind}.${filter.field}=${String(filter.value ?? "")}`)
   );
+  const reasons = row.classificationReasons
+    .slice(0, 5)
+    .map((reason) => `${reason.kind}:${reason.key}`)
+    .join(", ") || "<none>";
   console.log(
-    `- ${row.filePath}:${row.source.start.line + 1} ${row.sourceKind}; use=${row.seedUse}; expectedEffects=${row.effectHints.join(", ") || "<none>"}; filters=${filters.join(", ") || "<none>"}; recipes=${row.recipeHints.join(", ") || "<none>"}`,
+    `- ${row.filePath}:${row.source.start.line + 1} ${row.sourceKind}; use=${row.seedUse}; expectedEffects=${row.effectHints.join(", ") || "<none>"}; filters=${filters.join(", ") || "<none>"}; recipes=${row.recipeHints.join(", ") || "<none>"}; reasons=${reasons}`,
   );
 }
 

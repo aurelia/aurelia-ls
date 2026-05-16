@@ -2,6 +2,7 @@ import ts from 'typescript';
 
 import type { ProjectBootFrame } from '../boot/frames.js';
 import { unwrapExpression } from '../evaluation/ts-syntax.js';
+import type { AddressHandle } from '../kernel/handles.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   normalizeTypeSystemSourceFileName,
@@ -42,6 +43,7 @@ export class DiResolveCallSite {
 
   constructor(
     readonly sourcePath: string,
+    readonly sourceFileAddressHandle: AddressHandle,
     readonly start: number,
     readonly end: number,
     readonly keyExpressionText: string | null,
@@ -147,18 +149,20 @@ export function readDiResolveCallSites(
     const sourceFile = typeSystem.readSourceFileByPath(source.path);
     return sourceFile == null
       ? []
-      : readSourceFileDiResolveCallSites(source.path, sourceFile, typeSystem, sourcePathByFileName);
+      : readSourceFileDiResolveCallSites(source.path, source.addressHandle, sourceFile, typeSystem, sourcePathByFileName);
   });
 }
 
 function readSourceFileDiResolveCallSites(
   sourcePath: string,
+  sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
   typeSystem: TypeSystemProject,
   sourcePathByFileName: ReadonlyMap<string, string>,
 ): readonly DiResolveCallSite[] {
   const context: DiResolveReadContext = {
     sourcePath,
+    sourceFileAddressHandle,
     sourceFile,
     checker: typeSystem.checker,
     sourcePathByFileName,
@@ -172,6 +176,7 @@ function readSourceFileDiResolveCallSites(
 
 interface DiResolveReadContext {
   readonly sourcePath: string;
+  readonly sourceFileAddressHandle: AddressHandle;
   readonly sourceFile: ts.SourceFile;
   readonly checker: ts.TypeChecker;
   readonly sourcePathByFileName: ReadonlyMap<string, string>;
@@ -234,6 +239,7 @@ function recordDiResolveCallSite(
   );
   context.sites.push(new DiResolveCallSite(
     context.sourcePath,
+    context.sourceFileAddressHandle,
     node.getStart(context.sourceFile),
     node.end,
     node.arguments[0]?.getText(context.sourceFile) ?? null,

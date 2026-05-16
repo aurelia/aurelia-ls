@@ -1,4 +1,4 @@
-import { CharCode } from './expression-scanner.js';
+import { CharCode, isEscapedByOddBackslashRun } from './expression-scanner.js';
 
 /** True when the source contains an unescaped interpolation/template hole opener. */
 export function hasInterpolationStart(source: string): boolean {
@@ -112,7 +112,7 @@ export function findTemplateLiteralEnd(
 }
 
 function isEscapedInterpolationStart(source: string, dollarIndex: number): boolean {
-  return dollarIndex > 0 && source.charCodeAt(dollarIndex - 1) === CharCode.Backslash;
+  return isEscapedByOddBackslashRun(source, dollarIndex);
 }
 
 function skipStringLiteral(

@@ -1,4 +1,5 @@
 import { productVendorUrl } from 'router-pressure-vendor-links';
+import { ProductDetailsRoute } from './product-details-route';
 
 interface ProductSummary {
   readonly id: string;
@@ -7,6 +8,15 @@ interface ProductSummary {
 }
 
 export class ProductsRoute {
+  static routes = [
+    {
+      id: 'product-detail',
+      path: ':productId',
+      component: ProductDetailsRoute,
+      title: 'Product Details',
+    },
+  ];
+
   readonly products: readonly ProductSummary[] = [
     { id: 'coffee', name: 'Coffee', externalUrl: 'https://example.invalid/products/coffee' },
     { id: 'tea', name: 'Tea', externalUrl: 'https://example.invalid/products/tea' },

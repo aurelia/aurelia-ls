@@ -27,10 +27,15 @@ import {
 } from "../navigation.js";
 import { createSurfaceMap, type InquirySurfaceMap } from "../surface-map.js";
 import { RepoAreaStatus } from "../terrain.js";
-import type { SourceProject } from "../../source/index.js";
+import type {
+  SourceProject,
+  TypeScriptEnumRawValueRoleSelection,
+} from "../../source/index.js";
 import {
+  ATLAS_SELF_STANDARD_ENUM_CONTEXT_ROLES,
   readAtlasSelfAnalysis,
   type AtlasSelfAnalysis,
+  type AtlasSelfAnalysisOptions,
 } from "./self-analysis.js";
 import {
   filterAtlasSelfRecipes,
@@ -43,6 +48,7 @@ import {
   answerSelfEnumValueOccurrencesProjection,
   answerSelfEnumValueSpacesProjection,
 } from "./self-enum-lenses.js";
+import { answerSelfPhaseProfileProjection } from "./self-phase-profile-lenses.js";
 import {
   buildSelfBaseValue,
   type SelfValue,
@@ -56,6 +62,7 @@ import {
   answerSelfAxisPressureProjection,
   answerSelfClassesProjection,
   answerSelfContractStringsProjection,
+  answerSelfFunctionControlFlowShapesProjection,
   answerSelfFunctionShapesProjection,
   answerSelfFunctionWrappersProjection,
   answerSelfFunctionsProjection,
@@ -63,6 +70,7 @@ import {
   answerSelfRowSurfaceProjection,
   answerSelfSourceFilesProjection,
   answerSelfStringProjection,
+  answerSelfVariablesProjection,
 } from "./self-source-surface-lenses.js";
 import {
   answerSelfContinuationsProjection,
@@ -73,7 +81,10 @@ import {
   answerSelfSubstrateSurfacesProjection,
 } from "./self-topology-lenses.js";
 import {
+  inquiryBooleanFilter,
   inquiryBooleanFilterOrDefault,
+  inquiryNumberFilter,
+  inquiryStringFilter,
 } from "./lens-filter-utils.js";
 import type { InquiryWorld } from "./world.js";
 
@@ -517,7 +528,10 @@ class AtlasSelfAnswerer {
       (lens) =>
         lens.stage === LensStage.Contracted && !implementedLensIds.has(lens.id),
     );
-    this.#analysis = readAtlasSelfAnalysis(sourceProject);
+    this.#analysis = readAtlasSelfAnalysis(
+      sourceProject,
+      atlasSelfAnalysisOptionsForInquiry(inquiry),
+    );
     this.#value = buildSelfBaseValue(
       world,
       implementedLensIds,
@@ -525,6 +539,7 @@ class AtlasSelfAnswerer {
       this.#unimplemented,
       this.#analysis,
       inquiryBooleanFilterOrDefault(inquiry, "includeSourceProject", false),
+      atlasSelfValueNeedsTaxonomy(inquiry),
     );
   }
 
@@ -624,6 +639,12 @@ class AtlasSelfAnswerer {
           this.#value,
           this.#analysis,
         );
+      case "phase-profile":
+        return answerSelfPhaseProfileProjection(
+          this.#inquiry,
+          this.#value,
+          this.#analysis,
+        );
       case "row-surfaces":
         return answerSelfRowSurfaceProjection(
           this.#inquiry,
@@ -648,8 +669,20 @@ class AtlasSelfAnswerer {
           this.#value,
           this.#analysis,
         );
+      case "variables":
+        return answerSelfVariablesProjection(
+          this.#inquiry,
+          this.#value,
+          this.#analysis,
+        );
       case "function-shapes":
         return answerSelfFunctionShapesProjection(
+          this.#inquiry,
+          this.#value,
+          this.#analysis,
+        );
+      case "function-control-flow-shapes":
+        return answerSelfFunctionControlFlowShapesProjection(
           this.#inquiry,
           this.#value,
           this.#analysis,
@@ -681,6 +714,104 @@ class AtlasSelfAnswerer {
   #openSeams(): readonly OpenSeam[] {
     return selfOpenSeams(this.#unimplemented);
   }
+}
+
+function atlasSelfAnalysisOptionsForInquiry(
+  inquiry: Inquiry,
+): AtlasSelfAnalysisOptions {
+  return {
+    enumRawValueContextRoles: enumRawValueContextRolesForInquiry(inquiry),
+    includeFunctionBodyAnalysis: atlasSelfProjectionNeedsFunctionBodyAnalysis(inquiry),
+    includeSemanticTaxonomyAnalysis: atlasSelfProjectionNeedsSemanticTaxonomyAnalysis(inquiry),
+  };
+}
+
+function atlasSelfValueNeedsTaxonomy(inquiry: Inquiry): boolean {
+  const projection = inquiry.projection ?? "summary";
+  return projection === "summary" || projection === "taxonomy";
+}
+
+function atlasSelfProjectionNeedsSemanticTaxonomyAnalysis(
+  inquiry: Inquiry,
+): boolean {
+  const explicit = inquiryBooleanFilter(inquiry, "includeSemanticTaxonomyAnalysis");
+  if (explicit !== undefined) {
+    return explicit;
+  }
+  switch (inquiry.projection ?? "summary") {
+    case "summary":
+    case "taxonomy":
+    case "contracts":
+    case "projections":
+    case "continuations":
+    case "semantic-routes":
+    case "contract-strings":
+    case "enums":
+    case "enum-references":
+    case "enum-value-spaces":
+    case "enum-value-occurrences":
+    case "enum-mappings":
+    case "strings":
+    case "axis-pressure":
+    case "phase-profile":
+      return true;
+    default:
+      return false;
+  }
+}
+
+function atlasSelfProjectionNeedsFunctionBodyAnalysis(
+  inquiry: Inquiry,
+): boolean {
+  const explicit = inquiryBooleanFilter(inquiry, "includeFunctionBodyAnalysis");
+  if (explicit !== undefined) {
+    return explicit;
+  }
+  const projection = inquiry.projection ?? "summary";
+  if (
+    projection === "function-shapes" ||
+    projection === "function-control-flow-shapes"
+  ) {
+    return true;
+  }
+  if (projection !== "functions") {
+    return false;
+  }
+  const orderBy = inquiryStringFilter(inquiry, "orderBy");
+  return inquiryStringFilter(inquiry, "bodyFingerprint") !== undefined ||
+    inquiryStringFilter(inquiry, "bodyShapeFingerprint") !== undefined ||
+    inquiryStringFilter(inquiry, "switchTopologyFingerprint") !== undefined ||
+    inquiryNumberFilter(inquiry, "minSwitchTopologyCount") !== undefined ||
+    orderBy === "bodyFingerprint" ||
+    orderBy === "bodyShapeFingerprint" ||
+    orderBy === "switchTopologyCount" ||
+    orderBy === "switchTopologyFingerprint";
+}
+
+function enumRawValueContextRolesForInquiry(
+  inquiry: Inquiry,
+): TypeScriptEnumRawValueRoleSelection {
+  const filters = inquiry.filters as Record<string, unknown> | undefined;
+  if (filters?.enumContext === "all") {
+    return "all";
+  }
+  if (filters?.enumContext === "none") {
+    return "none";
+  }
+  if (filters?.enumContext === "standard") {
+    return ATLAS_SELF_STANDARD_ENUM_CONTEXT_ROLES;
+  }
+  const projection = inquiry.projection ?? "summary";
+  if (projection === "enum-value-occurrences" && filters?.role === "call-argument") {
+    return "all";
+  }
+  if (projection === "phase-profile") {
+    const query = typeof filters?.query === "string" ? filters.query : "";
+    return query.includes("call-argument") || query.includes("getResolvedSignature.call-expression")
+      ? "all"
+      : ATLAS_SELF_STANDARD_ENUM_CONTEXT_ROLES;
+  }
+  return ATLAS_SELF_STANDARD_ENUM_CONTEXT_ROLES;
 }
 
 function answerSelfRecipesProjection(
@@ -892,6 +1023,12 @@ function answerSelfTaxonomyProjection(
     ),
     atlasProjectionContinuation(
       inquiry,
+      "atlas.self:phase-profile",
+      "phase-profile",
+      "Inspect measured self-analysis phase costs before cache or split work.",
+    ),
+    atlasProjectionContinuation(
+      inquiry,
       "atlas.self:row-surfaces",
       "row-surfaces",
       "Inspect structural row/interface/type surfaces without treating every row as a relationship.",
@@ -907,6 +1044,12 @@ function answerSelfTaxonomyProjection(
       "atlas.self:functions",
       "functions",
       "Inspect top-level function and class-method surfaces.",
+    ),
+    atlasProjectionContinuation(
+      inquiry,
+      "atlas.self:variables",
+      "variables",
+      "Inspect top-level variable declarations and initializer shapes.",
     ),
     atlasProjectionContinuation(
       inquiry,

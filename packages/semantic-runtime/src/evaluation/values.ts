@@ -170,13 +170,18 @@ export class EvaluationArrayValue {
     /** Concrete element values in array order. */
     elements: readonly EvaluationArrayElement[],
     /** Whether a spread or hole prevented exact element closure. */
-    readonly mayHaveUnknownElements: boolean,
+    public mayHaveUnknownElements: boolean,
     /** Syntax node that produced the value, when one exists. */
     readonly node: ts.Node | null = null,
     /** Whether membership is known but order was affected by an unclosed ordering operation. */
     public mayHaveUnknownOrder: boolean = false,
   ) {
     this.elements = [...elements];
+  }
+
+  /** Mark the array as having element membership or values that static evaluation could not close. */
+  markUnknownElements(): void {
+    this.mayHaveUnknownElements = true;
   }
 
   /** Replace known element order after a mutating array operation such as sort. */

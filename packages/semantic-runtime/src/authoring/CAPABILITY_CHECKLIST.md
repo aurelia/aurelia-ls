@@ -107,12 +107,12 @@ that every item belongs in one API surface. Update it when capability boundaries
 - [ ] DI keys, registrations, lifetimes, aliases, factories, injection sites, and container visibility. Runtime
   child containers for renderer-created controllers now materialize with self/context resolver slots; view-model
   instance providers, definition dependency registration, and cross-template parent container chains remain open.
-- [ ] Service-to-component wiring with DI resolution and expected dependency reads. The service-backed form fixture now
-  proves a component resolving an app service, that service resolving DI-owned state, and the authoring verifier
-  checking state/service topology rows plus source-backed component-to-service and service-to-state read/call
-  interaction rows. Interaction rows carry consumer role and self-interaction state so internal support-class operations
-  do not masquerade as cross-layer architecture. Binding-to-interaction rows now connect template form reads/writes to
-  the component member and service/state/model operation that carries the data across the layer boundary, including
+- [ ] State-owned service wiring with DI resolution and expected dependency reads. The service-backed form fixture now
+  proves components resolving DI-owned state, state resolving an app service boundary, and the authoring verifier
+  checking state/service topology rows plus source-backed component-to-state and state-to-service read/call interaction
+  rows. Interaction rows carry consumer role and self-interaction state so internal support-class operations do not
+  masquerade as cross-layer architecture. Binding-to-interaction rows now connect template form reads/writes to the
+  component member and state/service/model operation that carries the data across the layer boundary, including
   single-root interpolations whose display expression is a member chain.
 - [ ] Backend or platform integration boundaries, including client adapters and environment-dependent configuration.
 - [ ] App state strategy that starts with vanilla classes and admits framework packages only when the operation requires

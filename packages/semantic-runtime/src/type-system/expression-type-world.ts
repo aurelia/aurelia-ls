@@ -4,6 +4,7 @@ import { CheckerTypeProjector } from './checker-projector.js';
 import { CheckerExpressionTypeEvaluator } from './expression-type-evaluator.js';
 import {
   CheckerExpressionTypeEvaluationCache,
+  type CheckerExpressionTypeEvaluationCacheMarker,
   type CheckerExpressionTypeEvaluationCacheStats,
 } from './expression-type-evaluation.js';
 
@@ -41,5 +42,13 @@ export class CheckerExpressionTypeWorld {
 
   cacheSnapshot(): CheckerExpressionTypeEvaluationCacheStats {
     return this.cache.snapshot();
+  }
+
+  cacheMarker(): CheckerExpressionTypeEvaluationCacheMarker {
+    return this.cache.mark();
+  }
+
+  cacheSnapshotSince(marker: CheckerExpressionTypeEvaluationCacheMarker): CheckerExpressionTypeEvaluationCacheStats {
+    return this.cache.snapshotSince(marker);
   }
 }

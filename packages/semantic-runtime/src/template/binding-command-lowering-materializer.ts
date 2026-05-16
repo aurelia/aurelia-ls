@@ -30,6 +30,7 @@ import type {
 import {
   ExpressionParseResultKind,
 } from '../expression/parse-result-algebra.js';
+import { visitExpressionAstNodes } from '../expression/parse-result-inspection.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import type { AttributeSyntaxParseEmission } from './attribute-syntax-materializer.js';
 import type {
@@ -607,33 +608,15 @@ export class BindingCommandLoweringMaterializer {
   }
 
   private registerProductDetails(emission: BindingCommandLoweringEmission): void {
-    for (const buildInput of emission.buildInputs) {
-      this.store.productDetails.add(TemplateProductDetails.BindingCommandBuildInput, buildInput.productHandle, buildInput);
-    }
-    for (const lowering of emission.lowerings) {
-      this.store.productDetails.add(TemplateProductDetails.BindingCommandLowering, lowering.productHandle, lowering);
-    }
-    for (const issue of emission.issues) {
-      this.store.productDetails.add(TemplateProductDetails.CompilerIssue, issue.productHandle, issue);
-    }
-    for (const syntax of emission.attributeSyntaxes) {
-      this.store.productDetails.add(TemplateProductDetails.AttributeSyntax, syntax.productHandle, syntax);
-    }
-    for (const segment of emission.multiBindingSegments) {
-      this.store.productDetails.add(TemplateProductDetails.MultiBindingSegment, segment.productHandle, segment);
-    }
-    for (const lowering of emission.multiBindingLowerings) {
-      this.store.productDetails.add(TemplateProductDetails.MultiBindingLowering, lowering.productHandle, lowering);
-    }
-    for (const instruction of emission.instructions) {
-      this.store.productDetails.add(TemplateProductDetails.Instruction, instruction.productHandle, instruction);
-    }
-    for (const site of emission.valueSites) {
-      this.store.productDetails.add(TemplateProductDetails.ValueSite, site.productHandle, site);
-    }
-    for (const parse of emission.expressionParses) {
-      this.store.productDetails.add(TemplateProductDetails.ExpressionParse, parse.productHandle, parse);
-    }
+    this.store.productDetails.addAll(TemplateProductDetails.BindingCommandBuildInput, emission.buildInputs);
+    this.store.productDetails.addAll(TemplateProductDetails.BindingCommandLowering, emission.lowerings);
+    this.store.productDetails.addAll(TemplateProductDetails.CompilerIssue, emission.issues);
+    this.store.productDetails.addAll(TemplateProductDetails.AttributeSyntax, emission.attributeSyntaxes);
+    this.store.productDetails.addAll(TemplateProductDetails.MultiBindingSegment, emission.multiBindingSegments);
+    this.store.productDetails.addAll(TemplateProductDetails.MultiBindingLowering, emission.multiBindingLowerings);
+    this.store.productDetails.addAll(TemplateProductDetails.Instruction, emission.instructions);
+    this.store.productDetails.addAll(TemplateProductDetails.ValueSite, emission.valueSites);
+    this.store.productDetails.addAll(TemplateProductDetails.ExpressionParse, emission.expressionParses);
   }
 
   private recordsForLowering(input: BindingCommandLoweringRequest): BindingCommandLoweringEmission {
@@ -1380,24 +1363,13 @@ function iteratorLocalNames(result: IteratorParseResult): readonly string[] {
 }
 
 function bindingNames(pattern: BindingIdentifierOrPattern): readonly string[] {
-  switch (pattern.$kind) {
-    case 'BindingIdentifier':
-      return [pattern.name.name];
-    case 'BindingPatternDefault':
-      return bindingNames(pattern.target);
-    case 'BindingPatternHole':
-      return [];
-    case 'ArrayBindingPattern':
-      return [
-        ...pattern.elements.flatMap((element) => bindingNames(element)),
-        ...(pattern.rest == null ? [] : bindingNames(pattern.rest)),
-      ];
-    case 'ObjectBindingPattern':
-      return [
-        ...pattern.properties.flatMap((property) => bindingNames(property.value)),
-        ...(pattern.rest == null ? [] : bindingNames(pattern.rest)),
-      ];
-  }
+  const names: string[] = [];
+  visitExpressionAstNodes(pattern, (expression) => {
+    if (expression.$kind === 'BindingIdentifier') {
+      names.push(expression.name.name);
+    }
+  });
+  return names;
 }
 
 function iteratorRawTailText(result: IteratorParseResult): string | null {

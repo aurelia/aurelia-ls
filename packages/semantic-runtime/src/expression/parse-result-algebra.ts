@@ -589,13 +589,13 @@ export class InterpolationSuppressedHole {
  * Dedicated interpolation companion envelope.
  *
  * Atlas pressure here is different from the property/function corridor:
- * interpolation owns raw text segments, closed hole order, and one active hole
+ * interpolation owns cooked text segments, closed hole order, and one active hole
  * frontier. That extra structure should stay explicit instead of being
  * compressed into the generic property-like companion carrier.
  *
  * `closedHoles`, `activeHole`, and `suppressedHoles` are all ordered by the
  * original hole index and together explain the scanner-owned segmentation
- * represented by `rawParts`.
+ * represented by `parts`.
  */
 export class InterpolationDegradedPublication {
   readonly kind = ExpressionParseResultKind.InterpolationDegradedPublication;
@@ -604,7 +604,7 @@ export class InterpolationDegradedPublication {
 
   constructor(
     readonly primarySpan: SourceSpan | null,
-    readonly rawParts: readonly string[],
+    readonly parts: readonly string[],
     readonly closedHoles: readonly InterpolationClosedHole[],
     readonly activeHole: InterpolationActiveHoleCompanion,
     readonly suppressedHoles: readonly InterpolationSuppressedHole[],
@@ -616,7 +616,7 @@ export class InterpolationDegradedPublication {
  * cannot preserve a larger degraded hole structure without bluffing closure.
  *
  * `closedHoles`, `activeHole`, and `suppressedHoles` still preserve the
- * scanner-owned hole ordering that explains `rawParts`.
+ * scanner-owned hole ordering that explains `parts`.
  */
 export class InterpolationFrontierPublication {
   readonly kind = ExpressionParseResultKind.InterpolationFrontierPublication;
@@ -625,7 +625,7 @@ export class InterpolationFrontierPublication {
 
   constructor(
     readonly primarySpan: SourceSpan | null,
-    readonly rawParts: readonly string[],
+    readonly parts: readonly string[],
     readonly closedHoles: readonly InterpolationClosedHole[],
     readonly activeHole: InterpolationActiveHoleCompanion,
     readonly suppressedHoles: readonly InterpolationSuppressedHole[],

@@ -44,6 +44,61 @@
       "updatedAt": "2026-05-12"
     },
     {
+      "id": "frontier:configuration-option-shape-issues",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "configuration",
+        "diagnostics",
+        "framework-options"
+      ],
+      "summary": "ConfigurationOptionShapeIssueMaterializer owns source-backed diagnostics for statically impossible framework configuration option paths.",
+      "rationale": "Framework configuration customize callbacks can look structurally valid in JavaScript while still assigning an option path that the framework API does not accept. Keep those diagnostics in configuration recognition, not in downstream feature materializers such as i18n catalogs or router route construction.",
+      "guidance": [
+        "Start here when a recognized framework configuration contribution looks semantically invalid even though the assignment itself evaluates.",
+        "Keep product-specific consumers strict: i18n translation catalogs should read valid initOptions.resources, while top-level I18nConfiguration.resources remains a configuration option-shape diagnostic.",
+        "Extend the option schema from exact framework API grounding before adding a new allowed shortcut or diagnostic.",
+        "Use dedicated pressure fixtures for invalid-but-common configuration shapes so valid fixtures can keep proving downstream semantic behavior."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-option-shape-issues.ts",
+          "symbolName": "ConfigurationOptionShapeIssueMaterializer",
+          "summary": "Configuration-owned materializer for framework option-shape diagnostics."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/i18n-configuration-option-shape-errors",
+          "summary": "Pressure fixture for invalid top-level I18nConfiguration.resources assignment."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/README.md",
+          "summary": "Configuration issue ownership and option-shape notes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/i18n/README.md",
+          "summary": "I18n catalog guidance that keeps initOptions.resources distinct from invalid top-level resources."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-option-shape-issues.ts",
+          "symbolName": "ConfigurationOptionShapeIssueMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-issue.ts",
+          "symbolName": "ConfigurationIssueKind"
+        }
+      ],
+      "createdAt": "2026-05-15",
+      "updatedAt": "2026-05-15"
+    },
+    {
       "id": "frontier:app-world-project-construction-frame",
       "kind": "intentional-shape",
       "domains": [
@@ -103,6 +158,7 @@
       "guidance": [
         "Start here when configuration needs ConfigurationIdentity, MaterializedProduct, MaterializationRecord, source/evidence/provenance triples, open seams, or configuration-owned claims.",
         "Keep sequence, step, app-root, app-task, option, and Aurelia facade publication on this shared primitive before introducing a new record helper.",
+        "ConfigurationIssuePublisher wraps the shared kernel publishIssueProduct primitive for issue products; source scanners may prepend scanner-owned source-span records, but they should not hand-spell issue evidence/provenance/identity/product envelopes.",
         "If provenance feels too field-level for framework-owned configuration facts, inspect this boundary before changing individual materializers."
       ],
       "anchors": [
@@ -112,6 +168,12 @@
           "symbolName": "ConfigurationKernelPublication",
           "line": 100,
           "summary": "Configuration-owned kernel publication primitive."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/configuration-issue-publication.ts",
+          "symbolName": "ConfigurationIssuePublisher",
+          "summary": "Configuration issue product publisher over the shared kernel issue-publication primitive."
         },
         {
           "kind": "source",
@@ -129,7 +191,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "frontier:configuration-kernel-emitter",
@@ -189,7 +251,9 @@
         "Start here when expression lookup, `$parent`, `$this`, template locals, repeat locals, or branch-local scope overlays change.",
         "Keep runtime binding scope distinct from compiler resource scope and template-controller flow scope.",
         "Use Scope product details for inquiry instead of peeking into controller construction or compiler-world internals.",
-        "Direct authored Scope.create/fromParent/getContext nullish-argument failures are configuration-owned source/API issues; do not model them as rendered binding lookup fallbacks."
+        "Direct authored Scope.create/fromParent/getContext nullish-argument failures are configuration-owned source/API issues; do not model them as rendered binding lookup fallbacks.",
+        "Scope API issue spans should carry the boot-admitted source-file handle through sourceSiteForNode/sourceSpanAddressForSite. Do not fall back to filename re-resolution for this scanner-owned path.",
+        "Scope API issue products should publish through ConfigurationIssuePublisher after the scanner-owned source span is created."
       ],
       "anchors": [
         {
@@ -217,6 +281,7 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/scope-api-issues.ts",
           "symbolName": "ScopeApiIssueMaterializer",
+          "line": 110,
           "summary": "Source/API materializer for direct runtime Scope nullish-argument diagnostics."
         },
         {
@@ -248,7 +313,7 @@
           "kind": "product-large-class",
           "className": "ScopeApiIssueMaterializer",
           "filePath": "packages/semantic-runtime/src/configuration/scope-api-issues.ts",
-          "minLineCount": 100,
+          "minLineCount": 80,
           "minMethodCount": 3
         },
         {
@@ -263,7 +328,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "frontier:app-world-resource-visibility",

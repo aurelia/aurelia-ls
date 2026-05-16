@@ -1,14 +1,14 @@
 import {
-  SourceSpanAddress,
-  SourceSpanRole,
-} from '../kernel/address.js';
-import type { AddressHandle } from '../kernel/handles.js';
-import {
   KernelStore,
   KernelStoreBatch,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import {
+  sourceSpanAddressForSite,
+  type SourceSpanAddressPublication,
+  type SourceSpanSite,
+} from '../kernel/source-address.js';
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
@@ -54,13 +54,7 @@ export class DiResolveCallIssueMaterializer {
     if (records.length > 0) {
       this.store.commit(new KernelStoreBatch(records, 'di-resolve-call-issues'));
     }
-    for (const publication of publications) {
-      this.store.productDetails.add(
-        DiProductDetails.Issue,
-        publication.issue.productHandle,
-        publication.issue,
-      );
-    }
+    this.store.productDetails.addAll(DiProductDetails.Issue, publications.map((publication) => publication.issue));
 
     return new DiResolveCallIssueMaterialization(
       publications.map((publication) => publication.issue),
@@ -75,7 +69,7 @@ export class DiResolveCallIssueMaterializer {
   ): readonly DiIssuePublication[] {
     if (site.activeContainerExpectation === 'definitely-absent') {
       const local = resolveCallIssueLocalKey(project, site, index, DiIssueKind.NoActiveContainerForResolve, null);
-      const source = this.sourceAddress(local, site.sourcePath, site.start, site.end);
+      const source = this.sourceAddress(local, site);
       const publication = this.publisher.publishNoActiveContainerForResolve(local, site, source.handle);
       return [withDiIssueSourceAddressRecords(publication, source.records)];
     }
@@ -89,7 +83,11 @@ export class DiResolveCallIssueMaterializer {
         DiIssueKind.NullUndefinedKey,
         firstNullish.index,
       );
-      const source = this.sourceAddress(local, site.sourcePath, firstNullish.start, firstNullish.end);
+      const source = this.sourceAddress(local, {
+        sourceFileAddressHandle: site.sourceFileAddressHandle,
+        start: firstNullish.start,
+        end: firstNullish.end,
+      });
       const publication = this.publisher.publishNullUndefinedKeyForResolve(local, site, source.handle);
       return [withDiIssueSourceAddressRecords(publication, source.records)];
     }
@@ -99,33 +97,9 @@ export class DiResolveCallIssueMaterializer {
 
   private sourceAddress(
     local: string,
-    sourcePath: string,
-    start: number,
-    end: number,
-  ): {
-    readonly handle: AddressHandle | null;
-    readonly records: readonly KernelStoreRecord[];
-  } {
-    const file = this.store.readBestSourceFileAddressForFileName(sourcePath);
-    if (file == null) {
-      return {
-        handle: null,
-        records: [],
-      };
-    }
-    const handle = this.store.handles.address(`${local}:source`);
-    return {
-      handle,
-      records: [
-        new SourceSpanAddress(
-          handle,
-          file.handle,
-          start,
-          end,
-          SourceSpanRole.Primary,
-        ),
-      ],
-    };
+    site: SourceSpanSite,
+  ): SourceSpanAddressPublication {
+    return sourceSpanAddressForSite(this.store, local, site);
   }
 }
 

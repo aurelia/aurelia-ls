@@ -4,10 +4,12 @@ import { countBy, countByWhere, countWhere, uniqueSortedStrings } from "../../co
 import {
   AURELIA_FRAMEWORK_PACKAGE_IDS,
   compactExpressionText as compactSourceExpressionText,
+  numericLiteralArgument,
   propertyNameText,
   requiredSourceFileIdentity,
   requiredSourceRangeForNode,
   SourceProjectMemo,
+  stringLiteralArgument,
   symbolForDeclaration,
   symbolForExpressionName,
   unwrapExpression,
@@ -239,6 +241,7 @@ export interface FrameworkErrorDiagnosticCodeRow {
   readonly semanticRuntimeAmbiguousLabelReferenceCount: number;
   readonly diagnosticDisposition: FrameworkErrorDiagnosticCodeDisposition;
   readonly intentionalUnclaimedReason: string | null;
+  readonly intentionalUnclaimedKind: FrameworkErrorIntentionalUnclaimedKind | null;
   readonly diagnosticScore: number;
   readonly likelySemanticRuntimeOwner: string | null;
   readonly recommendedNextStep: string;
@@ -563,7 +566,7 @@ export function frameworkErrorFamiliesForRows(
 ): readonly FrameworkErrorFamilyRow[] {
   const groups = new Map<string, FrameworkErrorCodeRow[]>();
   for (const code of codes) {
-    const key = frameworkErrorFamilyKey(code.packageId, code.enumName, code.namePrefix);
+    const key = frameworkErrorScopedKey(code.packageId, code.enumName, code.namePrefix);
     groups.set(key, [...groups.get(key) ?? [], code]);
   }
 
@@ -598,7 +601,7 @@ export function frameworkErrorDiagnosticCodeRowsForRows(
 ): readonly FrameworkErrorDiagnosticCodeRow[] {
   const ownerHintsByFamily = new Map(
     frameworkErrorFamiliesForRows(codes, usages).map((family) => [
-      frameworkErrorFamilyKey(family.packageId, family.enumName, family.namePrefix),
+      frameworkErrorScopedKey(family.packageId, family.enumName, family.namePrefix),
       diagnosticFrontierOwnerHint(family),
     ]),
   );
@@ -610,7 +613,7 @@ export function frameworkErrorDiagnosticCodeRowsForRows(
       semanticRuntimeRawReferences,
       diagnosticCodeOwnerHint(
         code,
-        ownerHintsByFamily.get(frameworkErrorFamilyKey(code.packageId, code.enumName, code.namePrefix)) ?? null,
+        ownerHintsByFamily.get(frameworkErrorScopedKey(code.packageId, code.enumName, code.namePrefix)) ?? null,
       ),
     ))
     .sort(compareDiagnosticCodeRows);
@@ -848,26 +851,6 @@ function semanticRuntimeFrameworkErrorLinkForCodeLiteral(
     };
 }
 
-function stringLiteralArgument(
-  node: ts.CallExpression,
-  index: number,
-): string | null {
-  const argument = node.arguments[index];
-  return argument != null && ts.isStringLiteral(argument)
-    ? argument.text
-    : null;
-}
-
-function numericLiteralArgument(
-  node: ts.CallExpression,
-  index: number,
-): number | null {
-  const argument = node.arguments[index];
-  return argument != null && ts.isNumericLiteral(argument)
-    ? Number(argument.text)
-    : null;
-}
-
 function semanticRuntimeFrameworkRawErrorReferenceForCall(
   node: ts.CallExpression,
 ): SemanticRuntimeFrameworkRawErrorReference | null {
@@ -1084,7 +1067,7 @@ function readEnumCodes(
     const code = numeric ?? nextValue;
     nextValue = code + 1;
     const enumName = declaration.name.text as FrameworkErrorEnumName;
-    codes.set(errorCodeKey(packageId, enumName, name), {
+    codes.set(frameworkErrorScopedKey(packageId, enumName, name), {
       packageId,
       packageName,
       enumName,
@@ -1178,7 +1161,7 @@ function usageForCall(
   if (codeName == null) {
     return null;
   }
-  const code = codeNumbers.get(errorCodeKey(packageId, codeName.enumName, codeName.name)) ?? null;
+  const code = codeNumbers.get(frameworkErrorScopedKey(packageId, codeName.enumName, codeName.name)) ?? null;
   const expressionText = compactFrameworkErrorUsageExpressionText(node, sourceFile);
   return {
     id: `framework-error-usage:${packageId}:${file.repoPath}:${node.getStart(sourceFile)}:${mechanism}`,
@@ -1206,7 +1189,7 @@ function applyMessageAssignments(
   messages: readonly FrameworkErrorMessageAssignment[],
 ): void {
   for (const message of messages) {
-    const existing = codes.get(errorCodeKey(message.packageId, message.enumName, message.name));
+    const existing = codes.get(frameworkErrorScopedKey(message.packageId, message.enumName, message.name));
     if (existing != null) {
       existing.message = message.message;
     }
@@ -1366,7 +1349,7 @@ function usageForMappedErrorWrapperCall(
   if (codeName == null) {
     return null;
   }
-  const code = codeNumbers.get(errorCodeKey(packageId, codeName.enumName, codeName.name)) ?? null;
+  const code = codeNumbers.get(frameworkErrorScopedKey(packageId, codeName.enumName, codeName.name)) ?? null;
   const expressionText = compactFrameworkErrorUsageExpressionText(node, sourceFile);
   return {
     id: `framework-error-usage:${packageId}:${filePath}:${node.getStart(sourceFile)}:mapped-error-wrapper-call`,
@@ -1502,7 +1485,7 @@ function finalizeCodeRow(
   const codeLabelValue = codeLabel(row.code);
   return {
     ...row,
-    id: errorCodeKey(row.packageId, row.enumName, row.name),
+    id: frameworkErrorScopedKey(row.packageId, row.enumName, row.name),
     codeLabel: codeLabelValue,
     usageCount: matchingUsages.length,
     thrownUsageCount: countWhere(matchingUsages, (usage) => usage.effect === "throw"),
@@ -1736,6 +1719,7 @@ function frameworkErrorDiagnosticCodeForCode(
     semanticRuntimeReferenceHasAmbiguousLabel,
   );
   const intentionalUnclaimedReason = intentionalUnclaimedFrameworkErrorReason(code);
+  const intentionalUnclaimedKind = intentionalUnclaimedFrameworkErrorKind(code);
   const diagnosticDisposition = diagnosticCodeDisposition(
     code,
     rawAuthorityGaps.length,
@@ -1776,6 +1760,7 @@ function frameworkErrorDiagnosticCodeForCode(
     semanticRuntimeAmbiguousLabelReferenceCount: ambiguousLabelReferenceCount,
     diagnosticDisposition,
     intentionalUnclaimedReason,
+    intentionalUnclaimedKind,
     diagnosticScore,
     likelySemanticRuntimeOwner: ownerHint,
     recommendedNextStep: diagnosticCodeRecommendation(
@@ -2902,20 +2887,12 @@ function frameworkErrorNamePrefix(name: string): string {
   return name.split("_", 1)[0] ?? name;
 }
 
-function errorCodeKey(
+function frameworkErrorScopedKey(
   packageId: string,
   enumName: FrameworkErrorEnumName,
-  name: string,
+  nameOrPrefix: string,
 ): string {
-  return `${packageId}:${enumName}:${name}`;
-}
-
-function frameworkErrorFamilyKey(
-  packageId: string,
-  enumName: FrameworkErrorEnumName,
-  namePrefix: string,
-): string {
-  return `${packageId}:${enumName}:${namePrefix}`;
+  return `${packageId}:${enumName}:${nameOrPrefix}`;
 }
 
 function compareCodeRows(left: FrameworkErrorCodeRow, right: FrameworkErrorCodeRow): number {

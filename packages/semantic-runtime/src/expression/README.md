@@ -94,7 +94,8 @@ open seams, or inquiry answers.
   Public result families, frontier/gap vocabulary, interpolation and iterator
   companion envelopes.
 - `parse-result-inspection.ts`
-  Stable family/outcome inspection helpers for consumers.
+  Stable family/outcome inspection helpers for consumers. Member-owner and member-name reads share one AST traversal
+  primitive so new expression kinds do not require parallel recursive switches in cursor, diagnostic, and hover paths.
 - `completed-input-parser-state.ts`
   Parser state engine: scanner cursor, checkpoints, rebasing, and local/global
   offset translation.
@@ -165,6 +166,11 @@ state, with special corridors split out by ownership:
   corridor and should stay focused on repeat-header publication. Stray `of`
   outside the separator position carries Aurelia's `AUR0161` parse code, both
   for property-like expressions and for iterator iterable tails.
+- `parse-result-inspection.ts`
+  Parser-owned result and AST inspection helpers. Use `visitExpressionAstNodes`
+  for caller-side collection and `expressionAstNodeContainsKind` for predicate
+  checks over an expression subtree instead of growing new switches over
+  expression or binding-pattern node kinds in template, inquiry, or diagnostic code.
 
 If another parser feature arrives, the first question should be "which corridor
 owns this?" rather than "which giant parser method do we patch?"
@@ -177,6 +183,14 @@ hands the completed-input parser only the expression slice it owns. The same
 lookahead is shared by `completed-input-template-corridor.ts`, so HTML
 interpolation and JavaScript template literals agree on `${...}` delimiter
 truth without asking EOF to stand in for a maybe-closed hole.
+
+Escaped text uses the framework parser's cooked string law. A `${` opener is
+escaped only when preceded by an odd run of backslashes; even runs leave a
+cooked backslash part and still open interpolation. Interpolation parts,
+template-literal cooked chunks, and string literal escapes all share
+`unescapeExpressionCode` / `cookExpressionStringSegment` from
+`expression-scanner.ts` so runtime-shaped `Interpolation.parts` and
+`TemplateExpression.cooked` do not drift from Aurelia's parser tests.
 
 Interpolation publication is a separate frame from boundary extraction. The
 frame owns active-hole selection, suppressed-hole promotion when the cursor is

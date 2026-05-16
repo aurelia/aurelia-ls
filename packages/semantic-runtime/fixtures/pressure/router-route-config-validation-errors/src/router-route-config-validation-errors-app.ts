@@ -26,6 +26,11 @@ import { NullConfigRoute } from './routes/null-config-route';
       path: 'not-a-component',
       component: import('./routes/not-a-component'),
     },
+    {
+      path: 'missing-string-component',
+      component: 'missing-string-route',
+      fallback: 'missing-string-fallback',
+    },
     NullConfigRoute,
   ],
 })

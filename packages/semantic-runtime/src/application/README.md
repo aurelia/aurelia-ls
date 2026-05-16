@@ -14,6 +14,9 @@ configuration, DI, resource, and template layers.
 `ApplicationTopologyBuilder` is the app-level construction helper for recipes and future authoring operations. Keep
 file/component/template/service/route assembly there when it is topology structure rather than recipe taste; recipes
 should name intent and preferences, not rebuild the same topology product graph by hand.
+For larger recipes, keep the recipe topology function as a short phase assembler and use named helpers for each
+topology artifact it contributes. This keeps root components, child components, state/service rows, routes, and
+entrypoints visible to Atlas without turning the builder into a recipe-specific DSL.
 When a recipe allows custom source paths, topology references and template/style import specifiers must be derived from
 those paths in the same way the source plan derives authored imports. `ApplicationTopologyBuilder.component(...)`
 therefore accepts the importer path as `referenceFromPath` and derives the component reference module specifier from
@@ -73,9 +76,12 @@ A minimal good Aurelia app topology includes:
   conveniences. A roleful support file and a DI-owned class are separate facts: topology may record both, but should
   not promote a folder name into a service/state class without a class declaration.
 - Service topology should show both ownership and usage. A service-backed app is not proved only because a class exists:
-  topology should also expose `resolve(...)` consumers and source-backed calls from components into services and from
-  services into state/model classes when TypeChecker identity can prove the receiver. Where a template binding sources
-  a component member that performs one of those operations, topology should also expose the binding-to-interaction join.
+  topology should expose `resolve(...)` consumers and source-backed calls across the actual app boundary, such as
+  components reading/mutating DI state and state calling a service/repository for loading or submission side effects.
+  Direct component-to-service facades and service-to-state calls are still valid app shapes when the source uses them,
+  but they should be verified as the observed architecture rather than assumed as the only service-backed pattern. Where
+  a template binding sources a component member that performs one of those operations, topology should also expose the
+  binding-to-interaction join.
 - Component-local resource visibility is part of topology. If a recipe expects recursive child-component compilation,
   the parent component should list the child resource dependency instead of relying on fixture source to carry hidden
   `dependencies: [...]` knowledge.

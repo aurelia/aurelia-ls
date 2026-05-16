@@ -1,5 +1,6 @@
 import {
   AuthoringSourceEditPlan,
+  type AuthoringSourceFileEdit,
   recipeSourceEditPolicy,
   recipeSourceFile,
 } from './source-plan.js';
@@ -33,95 +34,133 @@ export function serviceBackedFormSourcePlan(model: ServiceBackedFormSourcePlanMo
   return new AuthoringSourceEditPlan(
     model.rootDir,
     recipeSourceEditPolicy('recipe-baseline'),
-    [
-      recipeSourceFile(
-        model.entrypointPath,
-        'entrypoint',
-        'typescript',
-        'create-entrypoint',
-        fillSourceTemplate(ENTRYPOINT_SOURCE, {
-          ROOT_COMPONENT_CLASS: model.rootComponentClassName,
-          ROOT_COMPONENT_MODULE: moduleSpecifier(model.entrypointPath, model.rootComponentPath, false),
-        }),
-      ),
-      recipeSourceFile(
-        model.rootComponentPath,
-        'root-component',
-        'typescript',
-        'create-root-component',
-        fillSourceTemplate(ROOT_COMPONENT_SOURCE, {
-          FORM_COMPONENT_CLASS: model.formComponentClassName,
-          FORM_COMPONENT_MODULE: moduleSpecifier(model.rootComponentPath, model.formComponentPath, false),
-          ROOT_COMPONENT_CLASS: model.rootComponentClassName,
-          ROOT_ELEMENT_NAME: model.rootElementName,
-          ROOT_STYLE_MODULE: moduleSpecifier(model.rootComponentPath, model.rootStylePath, true),
-          ROOT_TEMPLATE_MODULE: moduleSpecifier(model.rootComponentPath, model.rootTemplatePath, true),
-          STATE_CLASS: model.stateClassName,
-          STATE_MODULE: moduleSpecifier(model.rootComponentPath, model.statePath, false),
-        }),
-      ),
-      recipeSourceFile(
-        model.rootTemplatePath,
-        'template',
-        'html',
-        'create-external-template',
-        fillSourceTemplate(ROOT_TEMPLATE_SOURCE, {
-          FORM_ELEMENT_NAME: model.formElementName,
-        }),
-      ),
-      recipeSourceFile(
-        model.rootStylePath,
-        'component-style',
-        'css',
-        'create-style-asset',
-        ROOT_STYLE_SOURCE,
-      ),
-      recipeSourceFile(
-        model.statePath,
-        'state-model',
-        'typescript',
-        'create-state-model',
-        fillSourceTemplate(STATE_SOURCE, {
-          STATE_CLASS: model.stateClassName,
-        }),
-      ),
-      recipeSourceFile(
-        model.servicePath,
-        'service',
-        'typescript',
-        'create-service',
-        fillSourceTemplate(SERVICE_SOURCE, {
-          SERVICE_CLASS: model.serviceClassName,
-          STATE_CLASS: model.stateClassName,
-          STATE_MODULE: moduleSpecifier(model.servicePath, model.statePath, false),
-        }),
-      ),
-      recipeSourceFile(
-        model.formComponentPath,
-        'component',
-        'typescript',
-        'create-form-component',
-        fillSourceTemplate(FORM_COMPONENT_SOURCE, {
-          FORM_COMPONENT_CLASS: model.formComponentClassName,
-          FORM_ELEMENT_NAME: model.formElementName,
-          FORM_TEMPLATE_MODULE: moduleSpecifier(model.formComponentPath, model.formTemplatePath, true),
-          SERVICE_CLASS: model.serviceClassName,
-          SERVICE_MODULE: moduleSpecifier(model.formComponentPath, model.servicePath, false),
-          STATE_MODULE: moduleSpecifier(model.formComponentPath, model.statePath, false),
-        }),
-      ),
-      recipeSourceFile(
-        model.formTemplatePath,
-        'template',
-        'html',
-        'create-external-template',
-        FORM_TEMPLATE_SOURCE,
-      ),
-    ],
+    serviceBackedFormSourceFiles(model),
     aureliaRecipeProjectToolingPlan({
       appName: model.appName,
       dependencySpecifiers: ['@aurelia/kernel'],
     }),
+  );
+}
+
+function serviceBackedFormSourceFiles(
+  model: ServiceBackedFormSourcePlanModel,
+): readonly AuthoringSourceFileEdit[] {
+  return [
+    serviceBackedFormEntrypointFile(model),
+    serviceBackedFormRootComponentFile(model),
+    serviceBackedFormRootTemplateFile(model),
+    serviceBackedFormRootStyleFile(model),
+    serviceBackedFormStateFile(model),
+    serviceBackedFormServiceFile(model),
+    serviceBackedFormComponentFile(model),
+    serviceBackedFormTemplateFile(model),
+  ];
+}
+
+function serviceBackedFormEntrypointFile(model: ServiceBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.entrypointPath,
+    'entrypoint',
+    'typescript',
+    'create-entrypoint',
+    fillSourceTemplate(ENTRYPOINT_SOURCE, {
+      ROOT_COMPONENT_CLASS: model.rootComponentClassName,
+      ROOT_COMPONENT_MODULE: moduleSpecifier(model.entrypointPath, model.rootComponentPath, false),
+    }),
+  );
+}
+
+function serviceBackedFormRootComponentFile(model: ServiceBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.rootComponentPath,
+    'root-component',
+    'typescript',
+    'create-root-component',
+    fillSourceTemplate(ROOT_COMPONENT_SOURCE, {
+      FORM_COMPONENT_CLASS: model.formComponentClassName,
+      FORM_COMPONENT_MODULE: moduleSpecifier(model.rootComponentPath, model.formComponentPath, false),
+      ROOT_COMPONENT_CLASS: model.rootComponentClassName,
+      ROOT_ELEMENT_NAME: model.rootElementName,
+      ROOT_STYLE_MODULE: moduleSpecifier(model.rootComponentPath, model.rootStylePath, true),
+      ROOT_TEMPLATE_MODULE: moduleSpecifier(model.rootComponentPath, model.rootTemplatePath, true),
+      STATE_CLASS: model.stateClassName,
+      STATE_MODULE: moduleSpecifier(model.rootComponentPath, model.statePath, false),
+    }),
+  );
+}
+
+function serviceBackedFormRootTemplateFile(model: ServiceBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.rootTemplatePath,
+    'template',
+    'html',
+    'create-external-template',
+    fillSourceTemplate(ROOT_TEMPLATE_SOURCE, {
+      FORM_ELEMENT_NAME: model.formElementName,
+    }),
+  );
+}
+
+function serviceBackedFormRootStyleFile(model: ServiceBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.rootStylePath,
+    'component-style',
+    'css',
+    'create-style-asset',
+    ROOT_STYLE_SOURCE,
+  );
+}
+
+function serviceBackedFormStateFile(model: ServiceBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.statePath,
+    'state-model',
+    'typescript',
+    'create-state-model',
+    fillSourceTemplate(STATE_SOURCE, {
+      SERVICE_CLASS: model.serviceClassName,
+      SERVICE_MODULE: moduleSpecifier(model.statePath, model.servicePath, false),
+      STATE_CLASS: model.stateClassName,
+    }),
+  );
+}
+
+function serviceBackedFormServiceFile(model: ServiceBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.servicePath,
+    'service',
+    'typescript',
+    'create-service',
+    fillSourceTemplate(SERVICE_SOURCE, {
+      SERVICE_CLASS: model.serviceClassName,
+      STATE_MODULE: moduleSpecifier(model.servicePath, model.statePath, false),
+    }),
+  );
+}
+
+function serviceBackedFormComponentFile(model: ServiceBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.formComponentPath,
+    'component',
+    'typescript',
+    'create-form-component',
+    fillSourceTemplate(FORM_COMPONENT_SOURCE, {
+      FORM_COMPONENT_CLASS: model.formComponentClassName,
+      FORM_ELEMENT_NAME: model.formElementName,
+      FORM_TEMPLATE_MODULE: moduleSpecifier(model.formComponentPath, model.formTemplatePath, true),
+      STATE_CLASS: model.stateClassName,
+      STATE_MODULE: moduleSpecifier(model.formComponentPath, model.statePath, false),
+    }),
+  );
+}
+
+function serviceBackedFormTemplateFile(model: ServiceBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.formTemplatePath,
+    'template',
+    'html',
+    'create-external-template',
+    FORM_TEMPLATE_SOURCE,
   );
 }
 
@@ -167,6 +206,10 @@ export class __ROOT_COMPONENT_CLASS__ {
   get submittedCount(): number {
     return this.state.submittedCount;
   }
+
+  binding(): void {
+    void this.state.loadRequests();
+  }
 }
 `);
 
@@ -200,7 +243,10 @@ const ROOT_STYLE_SOURCE = sourceText(`main {
 }
 `);
 
-const STATE_SOURCE = sourceText(`export type ContactPreference = 'email' | 'phone';
+const STATE_SOURCE = sourceText(`import { resolve } from '@aurelia/kernel';
+import { __SERVICE_CLASS__ } from '__SERVICE_MODULE__';
+
+export type ContactPreference = 'email' | 'phone';
 export type RequestTopic = 'hardware' | 'billing' | 'support';
 
 export interface RequestTopicSummary {
@@ -220,8 +266,11 @@ export interface ServiceRequest {
 }
 
 export class __STATE_CLASS__ {
-  readonly requestIds = ['request-1', 'request-2'];
-  selectedRequestId = 'request-1';
+  private readonly requestService = resolve(__SERVICE_CLASS__);
+  private readonly requests = new Map<string, ServiceRequest>();
+
+  selectedRequestId = '';
+  isLoadingRequests = false;
 
   readonly emailPreference: ContactPreference = 'email';
   readonly phonePreference: ContactPreference = 'phone';
@@ -230,10 +279,9 @@ export class __STATE_CLASS__ {
   readonly supportTopic: RequestTopic = 'support';
   readonly supportTopicSummary: RequestTopicSummary = { id: 'support', label: 'Support' };
 
-  private readonly requests = new Map<string, ServiceRequest>([
-    ['request-1', createRequest('request-1', 'Ada Lovelace')],
-    ['request-2', createRequest('request-2', 'Grace Hopper')],
-  ]);
+  get requestIds(): readonly string[] {
+    return [...this.requests.keys()];
+  }
 
   get submittedCount(): number {
     let count = 0;
@@ -247,60 +295,18 @@ export class __STATE_CLASS__ {
     return this.requests.get(requestId) ?? null;
   }
 
-  markSubmitted(requestId: string): void {
-    const request = this.readRequest(requestId);
-    if (request != null) {
-      request.submitCount += 1;
+  async loadRequests(): Promise<void> {
+    if (this.requests.size > 0 || this.isLoadingRequests) {
+      return;
     }
-  }
-}
 
-function createRequest(id: string, customerName: string): ServiceRequest {
-  return {
-    id,
-    customerName,
-    email: \`\${customerName.toLowerCase().replace(' ', '.')}@example.test\`,
-    urgent: false,
-    contactPreference: 'email',
-    topics: ['support'],
-    notes: '',
-    submitCount: 0,
-  };
-}
-`);
-
-const SERVICE_SOURCE = sourceText(`import { resolve } from '@aurelia/kernel';
-import { __STATE_CLASS__, type ContactPreference, type RequestTopic, type RequestTopicSummary, type ServiceRequest } from '__STATE_MODULE__';
-
-export class __SERVICE_CLASS__ {
-  private readonly state = resolve(__STATE_CLASS__);
-
-  get emailPreference(): ContactPreference {
-    return this.state.emailPreference;
-  }
-
-  get phonePreference(): ContactPreference {
-    return this.state.phonePreference;
-  }
-
-  get hardwareTopic(): RequestTopic {
-    return this.state.hardwareTopic;
-  }
-
-  get billingTopic(): RequestTopic {
-    return this.state.billingTopic;
-  }
-
-  get supportTopic(): RequestTopic {
-    return this.state.supportTopic;
-  }
-
-  get supportTopicSummary(): RequestTopicSummary {
-    return this.state.supportTopicSummary;
-  }
-
-  readRequest(requestId: string): ServiceRequest | null {
-    return this.state.readRequest(requestId);
+    this.isLoadingRequests = true;
+    try {
+      this.replaceRequests(await this.requestService.loadRequests());
+      this.selectedRequestId = this.requestIds[0] ?? '';
+    } finally {
+      this.isLoadingRequests = false;
+    }
   }
 
   updateCustomerName(requestId: string, value: string): void {
@@ -338,16 +344,55 @@ export class __SERVICE_CLASS__ {
     }
   }
 
-  submitRequest(requestId: string): void {
-    this.state.markSubmitted(requestId);
+  async submitRequest(requestId: string): Promise<void> {
+    const request = this.readRequest(requestId);
+    if (request != null) {
+      request.submitCount += 1;
+      await this.requestService.submitRequest(request);
+    }
   }
+
+  private replaceRequests(requests: readonly ServiceRequest[]): void {
+    this.requests.clear();
+    for (const request of requests) {
+      this.requests.set(request.id, request);
+    }
+  }
+}
+`);
+
+const SERVICE_SOURCE = sourceText(`import type { ServiceRequest } from '__STATE_MODULE__';
+
+export class __SERVICE_CLASS__ {
+  async loadRequests(): Promise<readonly ServiceRequest[]> {
+    return [
+      createRequest('request-1', 'Ada Lovelace'),
+      createRequest('request-2', 'Grace Hopper'),
+    ];
+  }
+
+  async submitRequest(_request: ServiceRequest): Promise<void> {
+    return;
+  }
+}
+
+function createRequest(id: string, customerName: string): ServiceRequest {
+  return {
+    id,
+    customerName,
+    email: \`\${customerName.toLowerCase().replace(' ', '.')}@example.test\`,
+    urgent: false,
+    contactPreference: 'email',
+    topics: ['support'],
+    notes: '',
+    submitCount: 0,
+  };
 }
 `);
 
 const FORM_COMPONENT_SOURCE = sourceText(`import { bindable, customElement } from '@aurelia/runtime-html';
 import { resolve } from '@aurelia/kernel';
-import { __SERVICE_CLASS__ } from '__SERVICE_MODULE__';
-import { type ContactPreference, type RequestTopic, type RequestTopicSummary } from '__STATE_MODULE__';
+import { __STATE_CLASS__, type ContactPreference, type RequestTopic, type RequestTopicSummary } from '__STATE_MODULE__';
 import template from '__FORM_TEMPLATE_MODULE__';
 
 @customElement({
@@ -355,7 +400,7 @@ import template from '__FORM_TEMPLATE_MODULE__';
   template,
 })
 export class __FORM_COMPONENT_CLASS__ {
-  private readonly requests = resolve(__SERVICE_CLASS__);
+  private readonly state = resolve(__STATE_CLASS__);
 
   @bindable requestId = '';
 
@@ -364,7 +409,7 @@ export class __FORM_COMPONENT_CLASS__ {
   }
 
   set customerName(value: string) {
-    this.requests.updateCustomerName(this.requestId, value);
+    this.state.updateCustomerName(this.requestId, value);
   }
 
   get email(): string {
@@ -372,7 +417,7 @@ export class __FORM_COMPONENT_CLASS__ {
   }
 
   set email(value: string) {
-    this.requests.updateEmail(this.requestId, value);
+    this.state.updateEmail(this.requestId, value);
   }
 
   get urgent(): boolean {
@@ -380,7 +425,7 @@ export class __FORM_COMPONENT_CLASS__ {
   }
 
   set urgent(value: boolean) {
-    this.requests.updateUrgency(this.requestId, value);
+    this.state.updateUrgency(this.requestId, value);
   }
 
   get contactPreference(): ContactPreference {
@@ -388,7 +433,7 @@ export class __FORM_COMPONENT_CLASS__ {
   }
 
   set contactPreference(value: ContactPreference) {
-    this.requests.updateContactPreference(this.requestId, value);
+    this.state.updateContactPreference(this.requestId, value);
   }
 
   get topics(): RequestTopic[] {
@@ -400,31 +445,31 @@ export class __FORM_COMPONENT_CLASS__ {
   }
 
   set notes(value: string) {
-    this.requests.updateNotes(this.requestId, value);
+    this.state.updateNotes(this.requestId, value);
   }
 
   get emailPreference(): ContactPreference {
-    return this.requests.emailPreference;
+    return this.state.emailPreference;
   }
 
   get phonePreference(): ContactPreference {
-    return this.requests.phonePreference;
+    return this.state.phonePreference;
   }
 
   get hardwareTopic(): RequestTopic {
-    return this.requests.hardwareTopic;
+    return this.state.hardwareTopic;
   }
 
   get billingTopic(): RequestTopic {
-    return this.requests.billingTopic;
+    return this.state.billingTopic;
   }
 
   get supportTopic(): RequestTopic {
-    return this.requests.supportTopic;
+    return this.state.supportTopic;
   }
 
   get supportTopicSummary(): RequestTopicSummary {
-    return this.requests.supportTopicSummary;
+    return this.state.supportTopicSummary;
   }
 
   get canSubmit(): boolean {
@@ -432,11 +477,11 @@ export class __FORM_COMPONENT_CLASS__ {
   }
 
   submit(): void {
-    this.requests.submitRequest(this.requestId);
+    void this.state.submitRequest(this.requestId);
   }
 
   private get request() {
-    return this.requests.readRequest(this.requestId);
+    return this.state.readRequest(this.requestId);
   }
 }
 `);

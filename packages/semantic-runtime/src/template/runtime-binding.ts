@@ -73,6 +73,7 @@ export const enum RuntimeBindingTargetAccessAuthority {
   FrameworkConfig = 'framework-config',
   TypeChecker = 'type-checker',
   FrameworkConfigAndTypeChecker = 'framework-config-and-type-checker',
+  FrameworkErrorCode = 'framework-error-code',
   Open = 'open',
 }
 
@@ -162,6 +163,7 @@ export type RuntimeBindingTargetAccessField =
   | 'isObservable'
   | 'authority'
   | 'openReason'
+  | 'diagnosticReason'
   | 'source';
 
 export type RuntimeBindingTargetOperationField =
@@ -525,6 +527,7 @@ export class RuntimeBindingTargetAccess {
     readonly authority: RuntimeBindingTargetAccessAuthority,
     readonly openReason: string | null,
     readonly frameworkErrorCode: string | null,
+    readonly diagnosticReason: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingTargetAccessField>[] = [],
   ) {}
@@ -690,12 +693,13 @@ export class AttributeBinding {
   }
 
   updateTarget(input: RuntimeBindingBindContext): RuntimeBindingBindContribution {
+    const targetOperation = attributeBindingTargetOperation(this.attr, this.target);
     return input.targetOperation(
       this,
       this.attr,
       this.target,
-      targetOperationKindForAttributeBinding(this.attr),
-      affectedNamesForAttributeBinding(this.attr, this.target),
+      targetOperation.kind,
+      targetOperation.affectedNames,
     );
   }
 }
@@ -1104,29 +1108,32 @@ function targetAccessLookupForBindingMode(
   }
 }
 
-function targetOperationKindForAttributeBinding(
-  targetAttribute: string,
-): RuntimeBindingTargetOperationKind {
-  switch (targetAttribute) {
-    case 'class':
-      return RuntimeBindingTargetOperationKind.ClassListToggle;
-    case 'style':
-      return RuntimeBindingTargetOperationKind.StyleSetProperty;
-    default:
-      return RuntimeBindingTargetOperationKind.AttributeSetOrRemove;
-  }
+interface RuntimeBindingAttributeTargetOperation {
+  readonly kind: RuntimeBindingTargetOperationKind;
+  readonly affectedNames: readonly string[];
 }
 
-function affectedNamesForAttributeBinding(
+function attributeBindingTargetOperation(
   targetAttribute: string,
   targetProperty: string,
-): readonly string[] {
+): RuntimeBindingAttributeTargetOperation {
   switch (targetAttribute) {
     case 'class':
-      return splitWhitespace(targetProperty);
+      return {
+        kind: RuntimeBindingTargetOperationKind.ClassListToggle,
+        affectedNames: splitWhitespace(targetProperty),
+      };
     case 'style':
-      return targetProperty.trim().length === 0 ? [] : [targetProperty.trim()];
+      return {
+        kind: RuntimeBindingTargetOperationKind.StyleSetProperty,
+        affectedNames: targetProperty.trim().length === 0
+          ? []
+          : [targetProperty.trim()],
+      };
     default:
-      return [targetAttribute];
+      return {
+        kind: RuntimeBindingTargetOperationKind.AttributeSetOrRemove,
+        affectedNames: [targetAttribute],
+      };
   }
 }

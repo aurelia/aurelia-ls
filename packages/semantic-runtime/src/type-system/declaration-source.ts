@@ -4,6 +4,7 @@ import {
   SourceSpanAddress,
   SourceSpanRole,
 } from '../kernel/address.js';
+import type { AddressHandle } from '../kernel/handles.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -51,6 +52,19 @@ export function sourceSpanForCheckerDeclaration(
     return null;
   }
   return declarationSourcePublication(store, symbol, span, role);
+}
+
+/**
+ * Read an already-admitted source-file address for a checker node.
+ *
+ * Use this for diagnostics that scan app-authored declarations through TypeChecker carriers but should not publish
+ * issues against checker-only framework, ambient, or dependency files.
+ */
+export function admittedSourceFileAddressHandleForCheckerNode(
+  store: KernelStore,
+  node: ts.Node,
+): AddressHandle | null {
+  return store.readBestSourceFileAddressForFileName(node.getSourceFile().fileName)?.handle ?? null;
 }
 
 function declarationSourcePublication(
@@ -124,6 +138,9 @@ function sourceFileAddressForDeclaration(
   store: KernelStore,
   sourceFile: ts.SourceFile,
 ): SourceFileAddressPublication {
+  // TypeChecker declarations can come from boot-admitted app sources, ambient declarations, framework declarations, or
+  // dependency declarations. Reuse an admitted source-file address when one exists; otherwise deliberately admit a
+  // checker-program source address for declaration navigation without treating it as discovered app source.
   const existing = store.readBestSourceFileAddressForFileName(sourceFile.fileName);
   if (existing != null) {
     return { address: existing, records: [] };

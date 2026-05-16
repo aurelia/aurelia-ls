@@ -1,4 +1,4 @@
-import { readFileSync } from 'node:fs';
+import { readFileSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -19,8 +19,9 @@ import { TemplateProductDetails } from '../out/template/product-details.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const workspaceRoot = path.resolve(packageRoot, '../..');
+const authoringFixtureRoot = path.join(workspaceRoot, 'packages/semantic-runtime/fixtures/authoring');
+const pressureFixtureRoot = path.join(workspaceRoot, 'packages/semantic-runtime/fixtures/pressure');
 const defaultRoot = path.join(workspaceRoot, 'packages/semantic-runtime/fixtures/authoring/storefront');
-const roots = pressureRoots();
 const analysisDepth = process.env.SEMANTIC_RUNTIME_CURSOR_PRESSURE_DEPTH ?? 'binding-observation';
 const projectShapeFilter = pressureProjectShapeFilter();
 const pageSize = integerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_PAGE_SIZE', 40);
@@ -28,6 +29,9 @@ const projectLimit = integerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_PROJECT_LIMIT'
 const templateLimit = integerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_TEMPLATE_LIMIT', 120);
 const sampleLimit = integerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_SAMPLE_LIMIT', 900);
 const perResourceLimit = integerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_PER_RESOURCE_LIMIT', 18);
+const inputLimit = optionalPositiveIntegerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_INPUT_LIMIT');
+const outputMode = cursorPressureOutputMode();
+const roots = limitedPressureRoots(pressureRoots(), inputLimit);
 const authoringTemplateLimitPerProject = integerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_AUTHORING_TEMPLATE_LIMIT_PER_PROJECT', 12);
 const authoringSourceFileLimitPerProject = integerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_AUTHORING_SOURCE_FILE_LIMIT_PER_PROJECT', 12);
 const diagnosticLocusLimitPerProject = integerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_DIAGNOSTIC_LOCUS_LIMIT_PER_PROJECT', 120);
@@ -50,18 +54,35 @@ console.log(`project-limit: ${projectLimit}`);
 console.log(`template-limit: ${templateLimit}`);
 console.log(`sample-limit: ${sampleLimit}`);
 console.log(`per-resource-limit: ${perResourceLimit}`);
+console.log(`input-limit: ${inputLimit ?? 'none'}`);
+console.log(`output-mode: ${outputMode}`);
 console.log(`authoring-template-limit-per-project: ${authoringTemplateLimitPerProject}`);
 console.log(`authoring-source-file-limit-per-project: ${authoringSourceFileLimitPerProject}`);
 console.log(`diagnostic-locus-limit-per-project: ${diagnosticLocusLimitPerProject}`);
 console.log(`diagnostic-read-limit-per-project: ${diagnosticReadLimitPerProject}`);
 console.log(`inputs: ${roots.length}`);
 
+const aggregateStart = performance.now();
+const rootAggregates = [];
 for (const [index, root] of roots.entries()) {
   const started = performance.now();
   const aggregate = await readCursorPressureForRoot(root);
+  rootAggregates.push(aggregate);
+  if (outputMode !== 'aggregate') {
+    console.log('');
+    console.log(`input ${index + 1}`);
+    printCursorAggregate(aggregate, performance.now() - started);
+  }
+}
+
+if (outputMode !== 'inputs' && rootAggregates.length > 0) {
   console.log('');
-  console.log(`input ${index + 1}`);
-  console.log(`- request: ${(performance.now() - started).toFixed(1)}ms`);
+  console.log(`combined inputs (${rootAggregates.length})`);
+  printCursorAggregate(combineCursorAggregates(rootAggregates), performance.now() - aggregateStart);
+}
+
+function printCursorAggregate(aggregate, requestMilliseconds) {
+  console.log(`- request: ${requestMilliseconds.toFixed(1)}ms`);
   console.log(`- projects: ${aggregate.projects}`);
   console.log(`- selected projects: ${aggregate.selectedProjects}`);
   console.log(`- opened app-world emissions: ${aggregate.openedAppWorlds}`);
@@ -270,7 +291,12 @@ async function readCursorPressureForRoot(root) {
       if (source == null) {
         continue;
       }
-      const diagnosticRows = diagnosticRowsForSource(diagnosticRowsBySourcePath, source.filePath);
+      const diagnosticRows = diagnosticRowsForResourceSource(
+        runtime.workspace.store,
+        resource,
+        diagnosticRowsBySourcePath,
+        source.filePath,
+      );
       const loci = cursorLociForResource(runtime.workspace.store, resource, diagnosticRows, perResourceLimit);
       if (loci.length === 0) {
         continue;
@@ -315,7 +341,7 @@ async function readCursorPressureForRoot(root) {
           answer,
           valueSite,
         );
-        await recordPublicApiCursorInfoPressure(
+        const apiCursorInfoAnswer = await recordPublicApiCursorInfoPressure(
           aggregate,
           runtime,
           app.project.projectKey,
@@ -326,12 +352,18 @@ async function readCursorPressureForRoot(root) {
           valueSite,
           apiCompletionAnswer ?? answer,
         );
+        if (apiCompletionAnswer != null) {
+          increment(
+            aggregate.apiCompletionPressureClasses,
+            completionPressureClass(apiCompletionAnswer, valueSite, apiCursorInfoAnswer?.value ?? null),
+          );
+        }
         aggregate.candidateRows += rows.length;
         increment(aggregate.outcomes, answer.outcome);
         increment(aggregate.siteKinds, answer.value.siteKind);
         increment(aggregate.outcomeSiteKinds, `${answer.outcome}:${answer.value.siteKind}`);
         increment(aggregate.outcomeSampleLanes, `${answer.outcome}:${locusSpec.lane}`);
-        const pressureClass = completionPressureClass(answer, valueSite);
+        const pressureClass = completionPressureClass(answer, valueSite, apiCursorInfoAnswer?.value ?? null);
         increment(aggregate.completionPressureClasses, pressureClass);
         increment(aggregate.outcomeCompletionPressureClasses, `${answer.outcome}:${pressureClass}`);
         if (valueSite != null) {
@@ -425,6 +457,7 @@ async function recordPublicApiCursorInfoPressure(
   for (const missing of apiAnswer.value.missingInputs) {
     increment(aggregate.apiCursorInfoMissingInputs, bucketMissingInput(missing));
   }
+  return apiAnswer;
 }
 
 function recordCursorInfoDiagnostics(aggregate, value) {
@@ -457,6 +490,7 @@ function recordCursorInfoSourceCoverage(aggregate, value) {
   increment(aggregate.apiCursorInfoSourceCoverage, `bindable:${rowSourceState(value.selectedBindable)}`);
   increment(aggregate.apiCursorInfoSourceCoverage, `selected-member:${selectedMemberSourceState(value)}`);
   increment(aggregate.apiCursorInfoSourceCoverage, `member-owner:${rowSourceState(value.memberOwnerType)}`);
+  increment(aggregate.apiCursorInfoSourceCoverage, `member-owner-declaration:${memberOwnerDeclarationSourceState(value)}`);
   increment(aggregate.apiCursorInfoSelectedMemberCoverage, selectedMemberCoverageState(value));
   increment(aggregate.apiCursorInfoMemberOwnerOrigins, value.memberOwnerType?.origin ?? 'none');
 }
@@ -482,6 +516,12 @@ function selectedMemberSourceState(value) {
     return 'synthetic-index-signature';
   }
   return sourceReferenceState(value.selectedMember.source);
+}
+
+function memberOwnerDeclarationSourceState(value) {
+  return value.memberOwnerType == null
+    ? 'none'
+    : sourceReferenceState(value.memberOwnerType.declarationSource);
 }
 
 function rowSourceState(row) {
@@ -548,7 +588,11 @@ function cursorInfoHoverTargets(value) {
     targets.push(`selected-member:${selectedMemberSourceState(value)}`);
   }
   if (value.memberOwnerType != null) {
-    targets.push(`member-owner:${value.memberOwnerType.shapeKind ?? 'unknown'}:${sourceReferenceState(value.memberOwnerType.source)}`);
+    targets.push(
+      `member-owner:${value.memberOwnerType.shapeKind ?? 'unknown'}:` +
+      `projection=${sourceReferenceState(value.memberOwnerType.source)}:` +
+      `declaration=${sourceReferenceState(value.memberOwnerType.declarationSource)}`,
+    );
   }
   if (value.valueSite != null) {
     targets.push(`value-site:${value.valueSite.siteKind}:${sourceReferenceState(value.valueSite.source)}`);
@@ -574,7 +618,11 @@ function cursorInfoNavigationTargets(value) {
     targets.push(`selected-member:${sourceReferenceState(value.selectedMember.source)}`);
   }
   if (value.memberOwnerType != null) {
-    targets.push(`member-owner:${sourceReferenceState(value.memberOwnerType.source)}`);
+    targets.push(
+      `member-owner:` +
+      `projection=${sourceReferenceState(value.memberOwnerType.source)}:` +
+      `declaration=${sourceReferenceState(value.memberOwnerType.declarationSource)}`,
+    );
   }
   return targets.length === 0 ? ['none'] : targets;
 }
@@ -602,7 +650,7 @@ function cursorInfoDiagnosticSignals(value, completionAnswer, valueSite) {
   }
   const completionPressure = completionAnswer == null
     ? null
-    : completionPressureClass(completionAnswer, valueSite);
+    : completionPressureClass(completionAnswer, valueSite, value);
   if (completionPressure != null
     && completionPressure !== 'complete'
     && !completionPressure.startsWith('expected-empty:')) {
@@ -674,7 +722,6 @@ async function recordPublicApiCompletionPressure(
 
   increment(aggregate.apiOutcomes, apiAnswer.outcome);
   increment(aggregate.apiSiteKinds, apiAnswer.value.siteKind);
-  increment(aggregate.apiCompletionPressureClasses, completionPressureClass(apiAnswer, valueSite));
   compareCompletionAnswers(aggregate, inquiryAnswer, apiAnswer);
 
   for (const missing of apiAnswer.value.missingInputs) {
@@ -865,6 +912,46 @@ function diagnosticRowsForSource(rowsBySourcePath, filePath) {
     }
   }
   return suffixMatches;
+}
+
+function diagnosticRowsForResourceSource(store, resource, rowsBySourcePath, filePath) {
+  const rows = diagnosticRowsForSource(rowsBySourcePath, filePath);
+  if (rows.length === 0) {
+    return rows;
+  }
+  const spans = cursorCandidateSpansForResource(store, resource);
+  return rows.filter((row) => diagnosticRowBelongsToResource(store, row, spans));
+}
+
+function diagnosticRowBelongsToResource(store, row, spans) {
+  const start = row.source?.start;
+  const end = row.source?.end;
+  const filePath = row.source?.path;
+  if (!Number.isInteger(start) || !Number.isInteger(end) || end <= start || filePath == null) {
+    return false;
+  }
+  const midpoint = start + Math.floor((end - start) / 2);
+  return spans.some((span) =>
+    sourceSpanFileMatches(store, span, filePath) && sourceSpanContainsOffset(span, midpoint)
+  );
+}
+
+function cursorCandidateSpansForResource(store, resource) {
+  return [
+    templateSourceSpan(store, resource),
+    sourceSpanFor(store, resource.compilation.html.document.sourceAddressHandle),
+    ...resource.compilation.html.nodes.map((node) => sourceSpanFor(store, node.sourceAddressHandle)),
+    ...resource.compilation.html.attributes.flatMap((attribute) => [
+      sourceSpanFor(store, attribute.sourceAddressHandle),
+      sourceSpanFor(store, attribute.nameAddressHandle),
+      sourceSpanFor(store, attribute.valueAddressHandle),
+    ]),
+  ].filter((span) => span != null);
+}
+
+function sourceSpanFileMatches(store, span, filePath) {
+  const file = store.readAddress(span.fileHandle);
+  return file?.kind === 'source-file-address' && hostPathMatches(file.path, filePath);
 }
 
 function normalizedSourcePath(filePath) {
@@ -1079,7 +1166,7 @@ function walkExpression(value, visit, seen = new Set()) {
 }
 
 function addLocus(loci, seen, lane, sourceOffset, fromDiagnostic = false) {
-  const key = `${lane}:${sourceOffset}`;
+  const key = `${sourceOffset}`;
   if (seen.has(key)) {
     return false;
   }
@@ -1187,7 +1274,7 @@ function bucketMissingInput(value) {
   return value;
 }
 
-function completionPressureClass(answer, valueSite) {
+function completionPressureClass(answer, valueSite, cursorInfoValue = null) {
   if (answer.outcome === 'hit' && answer.value.missingInputs.length === 0) {
     return 'complete';
   }
@@ -1209,6 +1296,10 @@ function completionPressureClass(answer, valueSite) {
   if (weakType != null) {
     return weakType;
   }
+  const diagnosticBacked = diagnosticBackedCompletionPressureClass(cursorInfoValue, missingInputBuckets[0] ?? null);
+  if (diagnosticBacked != null) {
+    return diagnosticBacked;
+  }
   const expectedContinuation = answer.value.expressionFrontier?.expectedContinuationClasses?.[0] ?? null;
   if (expectedContinuation != null) {
     return `expected-continuation:${expectedContinuation}`;
@@ -1220,6 +1311,15 @@ function completionPressureClass(answer, valueSite) {
     return 'complete-with-pressure';
   }
   return `unexplained-${answer.outcome}:${answer.value.siteKind}`;
+}
+
+function diagnosticBackedCompletionPressureClass(cursorInfoValue, missingInput = null) {
+  const diagnostic = cursorInfoValue?.diagnostics?.[0] ?? null;
+  if (diagnostic == null) {
+    return null;
+  }
+  const missingSuffix = missingInput == null ? '' : `:${missingInput}`;
+  return `diagnostic-backed:${diagnostic.diagnosticKind}${missingSuffix}`;
 }
 
 function weakTypeCompletionPressureClass(answer, missingInputBuckets) {
@@ -1262,15 +1362,92 @@ function isExpectedEmptyOpenTemplateControllerValue(answer, valueSite) {
     && answer.value.missingInputs.length === 0;
 }
 
+function combineCursorAggregates(aggregates) {
+  const combined = {};
+  for (const aggregate of aggregates) {
+    mergeCursorAggregate(combined, aggregate);
+  }
+  return combined;
+}
+
+function mergeCursorAggregate(target, source) {
+  for (const [key, value] of Object.entries(source)) {
+    if (typeof value === 'number') {
+      target[key] = (target[key] ?? 0) + value;
+      continue;
+    }
+    if (isCountMap(value)) {
+      target[key] ??= {};
+      incrementAll(target[key], value);
+    }
+  }
+}
+
+function isCountMap(value) {
+  return value != null && typeof value === 'object' && !Array.isArray(value);
+}
+
+function incrementAll(target, source) {
+  for (const [key, value] of Object.entries(source)) {
+    target[key] = (target[key] ?? 0) + value;
+  }
+}
+
+function limitedPressureRoots(allRoots, limit) {
+  return limit == null ? allRoots : allRoots.slice(0, limit);
+}
+
 function pressureRoots() {
   const raw = process.env.SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS
     ?? process.env.SEMANTIC_RUNTIME_PRESSURE_ROOTS
     ?? defaultRoot;
-  return raw
-    .split(';')
+  const expanded = raw
+    .split(path.delimiter)
     .map((root) => root.trim())
     .filter((root) => root.length > 0)
-    .map((root) => path.resolve(root));
+    .map((root) => path.isAbsolute(root) ? path.resolve(root) : path.resolve(workspaceRoot, root))
+    .flatMap((root) => fixturePressureRootsFor(root));
+  return [...new Set(expanded)];
+}
+
+function fixturePressureRootsFor(root) {
+  if (samePath(root, pressureFixtureRoot)) {
+    return fixtureChildRoots(pressureFixtureRoot);
+  }
+  if (samePath(root, authoringFixtureRoot)) {
+    return fixtureChildRoots(authoringFixtureRoot, (name) => name.startsWith('generated-') || name === 'storefront');
+  }
+  return [root];
+}
+
+function fixtureChildRoots(rootDir, includeName = () => true) {
+  return readdirSync(rootDir, { withFileTypes: true })
+    .filter((entry) => {
+      const childRoot = path.join(rootDir, entry.name);
+      return entry.isDirectory() && includeName(entry.name) && fixtureRootHasFiles(childRoot);
+    })
+    .map((entry) => path.join(rootDir, entry.name))
+    .sort((left, right) => path.basename(left).localeCompare(path.basename(right)));
+}
+
+function fixtureRootHasFiles(rootDir) {
+  const pending = [rootDir];
+  while (pending.length > 0) {
+    const currentDir = pending.pop();
+    for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
+      if (entry.isFile()) {
+        return true;
+      }
+      if (entry.isDirectory()) {
+        pending.push(path.join(currentDir, entry.name));
+      }
+    }
+  }
+  return false;
+}
+
+function samePath(left, right) {
+  return path.resolve(left) === path.resolve(right);
 }
 
 function pressureProjectShapeFilter() {
@@ -1292,9 +1469,30 @@ function pressureProjectShapeFilter() {
   return new Set(values);
 }
 
+function cursorPressureOutputMode() {
+  const raw = process.env.SEMANTIC_RUNTIME_CURSOR_PRESSURE_OUTPUT ?? 'inputs';
+  const mode = raw.trim();
+  if (mode === 'inputs' || mode === 'aggregate' || mode === 'both') {
+    return mode;
+  }
+  throw new Error(`Unsupported cursor pressure output mode '${raw}'. Use inputs, aggregate, or both.`);
+}
+
 function integerEnv(name, fallback) {
   const value = Number.parseInt(process.env[name] ?? '', 10);
   return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function optionalPositiveIntegerEnv(name) {
+  const raw = process.env[name];
+  if (raw == null || raw.trim().length === 0) {
+    return null;
+  }
+  const value = Number.parseInt(raw, 10);
+  if (!Number.isFinite(value) || value <= 0) {
+    throw new Error(`Expected ${name} to be a positive integer when provided.`);
+  }
+  return value;
 }
 
 function normalizeHostPath(value) {

@@ -73,7 +73,9 @@ The tooling model keeps those consequences distinct:
   field/constructor sites are container-activation contexts; they can spend `null_undefined_key` when an authored
   resolve argument is statically nullish, but ordinary functions/methods remain caller-dependent topology facts.
   Source decorators that call Aurelia's `inject(...)` helper model `invalid_inject_decorator_usage` when the target is
-  a method, getter, setter, or accessor rather than a class or field. Direct source calls to an Aurelia `IContainer`
+  a method, getter, setter, or accessor rather than a class or field. Decorator target names spend the shared
+  `type-system/decorator-target.ts` helper, the same source-target substrate used by observation and plugin decorator
+  diagnostics. Direct source calls to an Aurelia `IContainer`
   receiver enter through `DiContainerApiCallSite`; only method-local failures whose framework outcome is independent of
   modeled container state should become issues there, such as `invoke(Array)` and `getFactory(Array)` spending `no_construct_native_fn`,
   key-validating container APIs spending `null_undefined_key`, and direct fresh object keys spending
@@ -100,7 +102,8 @@ The tooling model keeps those consequences distinct:
   modeled stock `Container` returns a factory lookup or an earlier framework failure instead, so that guard is not a
   source diagnostic today.
 - `DiResolveCallSite` names import-aware source calls to Aurelia's ambient `resolve(...)` helper. It records the
-  consuming class/member, member kind/staticness, execution context, active-container expectation, source span, key
+  consuming class/member, member kind/staticness, execution context, active-container expectation, admitted source-file
+  handle, source span, key
   expression, nullish key arguments, TypeChecker declaration when the key belongs to the opened project, and authored
   import identity when the key comes from framework/plugin packages. It is a source/type recognition surface for authoring and diagnostics;
   turning those sites into resolved container answers still belongs to controller hydration/activation semantics because
@@ -111,6 +114,9 @@ The tooling model keeps those consequences distinct:
 - `DiInjectDecoratorSite` names import-aware `@inject`-family decorator sites that the kernel decorator will reject.
   It currently claims only TC39 decorator contexts whose runtime `context.kind` maps to method/getter/setter/accessor;
   legacy parameter decorators are deliberately not claimed as mapped framework errors.
+  Source-backed DI issue scanners must carry boot-admitted source-file handles on their site records and publish spans
+  through `sourceSpanAddressForSite(...)`; do not re-resolve spans from filenames when the scanner already owns the
+  project source admission.
 - `ContainerLookupState.JitRegistration` names the `_jitRegister` boundary: runtime would execute a registry or
   default resolver, but the tooling model has not yet spent that pressure into slots, claims, or seams. Failed lookup
   records carry exact framework error authority for the branches the container itself can decide:

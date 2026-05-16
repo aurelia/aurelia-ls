@@ -1,19 +1,12 @@
 import {
+  type ApplicationComponentTopologyResult,
   ApplicationImport,
   ApplicationTopology,
   ApplicationTopologyBuilder,
 } from '../application/index.js';
 import {
-  AddTemplateBindingOperation,
-  CreateEntrypointOperation,
-  CreateExternalTemplateOperation,
-  CreateFormComponentOperation,
-  CreateProjectFilesOperation,
-  CreateRootComponentOperation,
-  CreateStyleAssetOperation,
   CreateStateModelOperation,
   ConfigurePluginOperation,
-  VerifyAppOperation,
 } from './operation.js';
 import {
   AuthoringIntent,
@@ -30,17 +23,20 @@ import {
   stateBackedFormSourcePlan,
   type StateBackedFormValidationTriggerName,
 } from './state-backed-form-source-plan.js';
-import { projectToolingExpectedEffects } from './project-tooling-expected-effects.js';
 import {
-  classTokenStyleTasteEffect,
-  componentStylesheetCapabilityEffect,
-  componentStylesheetEffect,
-  componentStylesheetTasteEffect,
-  nativeFormValueTasteEffects,
-  nativeValueChannelEffect,
-  nativeValueDataFlowEffect,
-  nativeValueTargetAccessEffect,
-} from './form-expected-effects.js';
+  standardFormAppExpectedEffects,
+  standardFormTemplateBindingExpectedEffects,
+} from './form-recipe-expected-effects.js';
+import {
+  componentStyleAssetPlanStep,
+  entrypointPlanStep,
+  externalTemplatePlanStep,
+  formComponentPlanStep,
+  projectFilesPlanStep,
+  rootComponentPlanStep,
+  templateBindingPlanStep,
+  verifyAppPlanStep,
+} from './form-recipe-plan-steps.js';
 
 export interface StateBackedFormRecipeRequest {
   /** Project root that the authored app should occupy. */
@@ -161,6 +157,8 @@ function stateBackedFormPreferences(model: StateBackedFormRecipeModel): readonly
     new AuthoringPreference('style-resource-ownership', 'component-stylesheet'),
     new AuthoringPreference('style-binding-model', 'class-token-binding'),
     new AuthoringPreference('form-value-channel', 'native-control-value-binding'),
+    new AuthoringPreference('form-value-channel', 'checked-model-binding'),
+    new AuthoringPreference('form-value-channel', 'select-model-binding'),
     new AuthoringPreference('build-tool-profile', 'host-selected-build-tool'),
     ...(model.validationEnabled
       ? [new AuthoringPreference('validation-ownership', 'validation-controller-usage')]
@@ -180,20 +178,15 @@ function stateBackedFormPlanSteps(
   topology: ApplicationTopology,
 ): readonly AuthoringPlanStep[] {
   return [
-    new AuthoringPlanStep(
-      new CreateProjectFilesOperation([
-        model.entrypointPath,
-        model.rootComponentPath,
-        model.rootTemplatePath,
-        model.rootStylePath,
-        model.statePath,
-        model.formComponentPath,
-        model.formTemplatePath,
-      ]),
-      [
-        ExpectedSemanticEffect.fact('Project should reopen as an Aurelia app.', 'project-shape'),
-      ],
-    ),
+    projectFilesPlanStep([
+      model.entrypointPath,
+      model.rootComponentPath,
+      model.rootTemplatePath,
+      model.rootStylePath,
+      model.statePath,
+      model.formComponentPath,
+      model.formTemplatePath,
+    ]),
     ...(model.validationEnabled
       ? [new AuthoringPlanStep(
         new ConfigurePluginOperation('ValidationHtmlConfiguration', '@aurelia/validation-html'),
@@ -210,87 +203,59 @@ function stateBackedFormPlanSteps(
         ExpectedSemanticEffect.signatureTaste('Authoring orientation should recognize DI-owned state.', 'state-ownership', 'di-owned-state-class', 'state-model'),
       ],
     ),
-    new AuthoringPlanStep(
-      new CreateEntrypointOperation(model.entrypointPath, model.rootComponentClassName),
-      [
-        ExpectedSemanticEffect.fact('App root should be visible after reopen.', 'app-root', 'app', 'entrypoint'),
-      ],
+    entrypointPlanStep(model.entrypointPath, model.rootComponentClassName),
+    rootComponentPlanStep(model.rootComponentPath, model.rootComponentClassName, model.rootElementName),
+    componentStyleAssetPlanStep(model.rootStylePath),
+    externalTemplatePlanStep(model.rootTemplatePath, model.rootComponentClassName, 'Root component'),
+    formComponentPlanStep(model.formComponentPath, model.formComponentClassName, model.formElementName),
+    externalTemplatePlanStep(model.formTemplatePath, model.formComponentClassName, 'Form component'),
+    templateBindingPlanStep(
+      model.formTemplatePath,
+      model.validationEnabled
+        ? 'native value binding, validation behavior, checked/model binding, submit trigger, and form diagnostics surface'
+        : 'native value binding, checked/model binding, submit trigger, and form diagnostics surface',
+      standardFormTemplateBindingExpectedEffects({
+        validation: model.validationEnabled
+          ? {
+            filters: validateBindingBehaviorExpectedFilters(model),
+            bindingBehaviorSummary: 'Validate binding behavior should materialize as a runtime application.',
+            tasteSummary: 'Authoring orientation should recognize validation controller usage.',
+          }
+          : null,
+      }),
     ),
-    new AuthoringPlanStep(
-      new CreateRootComponentOperation(model.rootComponentPath, model.rootComponentClassName, model.rootElementName),
-      [
-        ExpectedSemanticEffect.fact('Root component should be a custom element.', 'component', 'resource', 'app-root'),
-      ],
-    ),
-    new AuthoringPlanStep(
-      new CreateStyleAssetOperation(model.rootStylePath, 'component'),
-      [
-        componentStylesheetEffect('Root component stylesheet should be visible as a style resource.'),
-        componentStylesheetCapabilityEffect('Authoring orientation should expose style asset authoring.'),
-        componentStylesheetTasteEffect('Authoring orientation should recognize component stylesheet ownership.'),
-      ],
-    ),
-    new AuthoringPlanStep(
-      new CreateExternalTemplateOperation(model.rootTemplatePath, model.rootComponentClassName),
-      [
-        ExpectedSemanticEffect.fact('Root component should use an external template.', 'external-template', 'template', 'template'),
-      ],
-    ),
-    new AuthoringPlanStep(
-      new CreateFormComponentOperation(model.formComponentPath, model.formComponentClassName, model.formElementName),
-      [
-        ExpectedSemanticEffect.fact('Form component should be a custom element.', 'component', 'resource', 'component'),
-      ],
-    ),
-    new AuthoringPlanStep(
-      new CreateExternalTemplateOperation(model.formTemplatePath, model.formComponentClassName),
-      [
-        ExpectedSemanticEffect.fact('Form component should use an external template.', 'external-template', 'template', 'template'),
-      ],
-    ),
-    new AuthoringPlanStep(
-      new AddTemplateBindingOperation(
-        model.formTemplatePath,
-        model.validationEnabled
-          ? 'native value binding, validation behavior, checked/model binding, submit trigger, and form diagnostics surface'
-          : 'native value binding, checked/model binding, submit trigger, and form diagnostics surface',
-      ),
-      [
-        nativeValueTargetAccessEffect('Form should expose target access for native value bindings.'),
-        nativeValueChannelEffect('Form should expose observer-backed value channels for native value bindings.'),
-        nativeValueDataFlowEffect('Form should expose TypeChecker-backed data flow for native value bindings.'),
-        ...nativeFormValueTasteEffects(
-          'Authoring orientation should recognize native form value binding.',
-          'Authoring orientation should recognize select model binding.',
-        ),
-        classTokenStyleTasteEffect('Authoring orientation should recognize class-token style binding.'),
-        ...(model.validationEnabled
-          ? [
-            ExpectedSemanticEffect.discriminatorFact('Validate binding behavior should materialize as a runtime application.', 'binding-behavior-application', 'template', 'binding-behavior', 'present', null, [
-              ...validateBindingBehaviorExpectedFilters(model),
-            ]),
-            ExpectedSemanticEffect.discriminatorTaste('Authoring orientation should recognize validation controller usage.', 'validation-ownership', 'validation-controller-usage', 'template-binding'),
-          ]
-          : []),
-      ],
-    ),
-    new AuthoringPlanStep(
-      new VerifyAppOperation(topology),
-      stateBackedFormExpectedEffects(model),
-    ),
+    verifyAppPlanStep(topology, stateBackedFormExpectedEffects(model)),
   ];
 }
 
 function stateBackedFormTopology(model: StateBackedFormRecipeModel): ApplicationTopology {
   const builder = new ApplicationTopologyBuilder(model.rootDir);
-  const form = builder.component({
+  const form = addStateBackedFormComponent(builder, model);
+  const root = addStateBackedFormRoot(builder, model, form);
+  addStateBackedFormState(builder, model);
+  addStateBackedFormEntrypoint(builder, model, root);
+  return builder.toTopology();
+}
+
+function addStateBackedFormComponent(
+  builder: ApplicationTopologyBuilder,
+  model: StateBackedFormRecipeModel,
+): ApplicationComponentTopologyResult {
+  return builder.component({
     className: model.formComponentClassName,
     referenceFromPath: model.rootComponentPath,
     sourcePath: model.formComponentPath,
     elementName: model.formElementName,
     templatePath: model.formTemplatePath,
   });
-  const root = builder.component({
+}
+
+function addStateBackedFormRoot(
+  builder: ApplicationTopologyBuilder,
+  model: StateBackedFormRecipeModel,
+  form: ApplicationComponentTopologyResult,
+): ApplicationComponentTopologyResult {
+  return builder.component({
     className: model.rootComponentClassName,
     referenceFromPath: model.entrypointPath,
     sourcePath: model.rootComponentPath,
@@ -303,11 +268,24 @@ function stateBackedFormTopology(model: StateBackedFormRecipeModel): Application
     }],
     dependencies: [form.reference],
   });
+}
+
+function addStateBackedFormState(
+  builder: ApplicationTopologyBuilder,
+  model: StateBackedFormRecipeModel,
+): void {
   builder.service({
     className: model.stateClassName,
     sourcePath: model.statePath,
     role: 'state-source',
   });
+}
+
+function addStateBackedFormEntrypoint(
+  builder: ApplicationTopologyBuilder,
+  model: StateBackedFormRecipeModel,
+  root: ApplicationComponentTopologyResult,
+): void {
   builder.entrypoint({
     path: model.entrypointPath,
     startupLane: 'new Aurelia().register(StandardConfiguration).app(...).start()',
@@ -320,41 +298,17 @@ function stateBackedFormTopology(model: StateBackedFormRecipeModel): Application
       new ApplicationImport(root.reference.moduleSpecifier, [model.rootComponentClassName]),
     ],
   });
-  return builder.toTopology();
 }
 
 function stateBackedFormExpectedEffects(model: StateBackedFormRecipeModel): readonly ExpectedSemanticEffect[] {
   return [
-    ExpectedSemanticEffect.fact('Generated form app reopens as an Aurelia project.', 'project-shape'),
-    ...projectToolingExpectedEffects('Generated form app'),
-    ExpectedSemanticEffect.fact('Generated form app has an app root.', 'app-root'),
-    ExpectedSemanticEffect.atLeast('Generated form app has root and form custom elements.', 'component', 'resource', 2, 'component'),
-    ExpectedSemanticEffect.fact('Generated form app has an app-root component role.', 'component-role', 'resource', 'app-root', 'present', null, [
-      new ExpectedSemanticEffectFilter('roleKind', 'app-root'),
-    ]),
-    ExpectedSemanticEffect.fact('Generated form app has a component-composition host role.', 'component-role', 'resource', 'component', 'present', null, [
-      new ExpectedSemanticEffectFilter('roleKind', 'component-composition-host'),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Generated form app has a data-entry component role.', 'component-role', 'template', 'template-binding', 'present', null, [
-      new ExpectedSemanticEffectFilter('roleKind', 'data-entry-surface'),
-    ]),
-    ExpectedSemanticEffect.atLeast('Generated form app has external templates.', 'external-template', 'template', 2, 'template'),
-    componentStylesheetEffect('Generated form app has a component stylesheet.'),
-    componentStylesheetCapabilityEffect('Generated form app exposes verifiable style asset authoring.'),
-    ExpectedSemanticEffect.atLeast('Generated form app has compiled template facts.', 'template-compilation', 'template', 2, 'template'),
-    ExpectedSemanticEffect.fact('Generated form app has runtime controller facts.', 'runtime-controller', 'template', 'component'),
-    nativeValueTargetAccessEffect('Generated form app has native value binding target access.'),
-    nativeValueChannelEffect('Generated form app has native value binding channels.'),
-    nativeValueDataFlowEffect('Generated form app has native value binding data flows.'),
-    ExpectedSemanticEffect.absent('Generated form app has no open semantic seams.', 'open-seam-closure'),
-    ExpectedSemanticEffect.capability('Generated form app exposes verifiable template composition.', 'template-composition', 'verifiable'),
-    ExpectedSemanticEffect.signatureTaste('Generated form app reports DI-owned state taste.', 'state-ownership', 'di-owned-state-class', 'state-model'),
-    componentStylesheetTasteEffect('Generated form app reports component stylesheet taste.'),
-    classTokenStyleTasteEffect('Generated form app reports class-token style binding taste.'),
-    ...nativeFormValueTasteEffects(
-      'Generated form app reports native form value binding taste.',
-      'Generated form app reports select model binding taste.',
-    ),
+    ...standardFormAppExpectedEffects({
+      summaryPrefix: 'Generated form app',
+      componentCount: 2,
+      componentCountSummary: 'root and form custom elements',
+      externalTemplateCount: 2,
+      compiledTemplateCount: 2,
+    }),
     ...(model.validationEnabled
       ? [
         ExpectedSemanticEffect.discriminatorFact('Validated form app materializes validate binding behavior applications.', 'binding-behavior-application', 'template', 'binding-behavior', 'present', null, [

@@ -68,14 +68,20 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   not a custom-element type, a module with a resource definition, or a partial custom-element-definition-like object.
   If the module exports a class/function but resource recognition cannot prove the definition, the routeable stays
   unresolved rather than guessing.
-  String component/fallback values publish `rtNoComponent` / `AUR3552` only for the closed global miss subset: the
-  authored string resolves to no known custom-element resource at all. Context-local misses against a specific
-  `RouteConfigContext` dependency/resource scope remain an open routeable-resolution frontier until that scope-specific
-  resolver is modeled.
+  String component/fallback values first use the current route context component's converged custom-element
+  `dependencies`, matching the first branch of `resolveCustomElementDefinition(...)`. This closes the common
+  dependency-scoped case where multiple same-named resources exist but the parent component admits one of them. After
+  that scoped pass, string routeables fall back to unique project-visible custom-element names and aliases. The model
+  publishes `rtNoComponent` / `AUR3552` only when the authored string resolves to no known custom-element definition at
+  all; full root-container/global-registration visibility is still a separate resource-scope frontier.
 - Treat string entries in child `routes` arrays as routeable component inputs. When a string routeable resolves to a
   custom-element definition in the current resource index, semantic-runtime can derive the same fallback path lane that
   `RouteConfig.path` derives from the custom-element name and aliases; unresolved strings remain open routeable
   components rather than pretending to be closed route paths.
+- String routeable lookup should consume converged custom-element names, aliases, and dependency-scope entries through
+  `ResourceDefinitionIndex`. If a routeable string misses while the component source is present, first inspect shared
+  static evaluation and resource recognition admission, especially local side-effect imports, before adding
+  router-local discovery.
 - Materialize `RouteConfigContext` parent/root/config/child-route topology from app roots when available, falling back
   to graph roots for library-like analysis. Explicit child route configs win; otherwise a route whose component has
   static route metadata borrows that component route config's child routes, matching the framework's
@@ -140,14 +146,20 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   router-resource values that cannot be a route string, routeable component, or viewport instruction publish
   `instrInvalid` / `AUR3400`; routeable classes/functions/promises that are not yet modeled stay open so this
   diagnostic does not mask missing routeable-instruction support.
+- Keep router issue ownership in router products even when the source span is a template value. API template diagnostics
+  and cursor-info may project template-locus copies of router failures for LSP surfaces, but the owning rows remain
+  `RouterIssues` / router-domain `AppDiagnostics`. Route-instruction issue provenance should prefer the narrowest
+  expression or HTML attribute-value source address; the full custom-attribute carrier is fallback evidence, not the
+  edit locus, once a value span is available.
 - Materialize object navigation instructions as the eager path-generation handoff owned by
   `RouteConfigContext._generateViewportInstruction(...)`. When a `load.bind`/internal `href.bind` object closes to a
   routeable component plus `params`, semantic-runtime asks the route-config context and recognizer endpoint graph to
   produce the path before lowering back into the ordinary RouteExpression instruction-tree lane. RouteConfig/class
   components that cannot satisfy endpoint requirements publish `RouterIssue` products with exact
   `rcEagerPathGenerationFailed` / `AUR3166` authority; string route ids still follow the framework's non-throwing
-  branch and stay open/not-eager when they cannot close. Instruction `children` remain an explicit open seam until the
-  child traversal branch is modeled.
+  branch and stay open/not-eager when they cannot close. Closed object instruction `children` recurse through the
+  generated component's `RouteConfigContext`, merge child query params, preserve viewport suffixes, and then re-enter
+  the ordinary static instruction-tree lane.
 - Resolve the owning router-resource `RouteContext` through modeled controller/container ancestry before falling back to
   route-config component-definition matching. `load` and `href` resolve `IContextRouter` / `IRouteContext` from the
   custom-attribute controller's container chain; ordinary child components inside a routed component can therefore
@@ -161,8 +173,9 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   `RouteRecognizer.recognize(...)`: state traversal uses the forward `State.nextStates` graph, candidate selection
   compares segment ranks, optional-state skips are preserved, and endpoint grouping compares the route-config handler
   identity rather than the configurable-route row so multi-path and residual endpoints stay attached to one route
-  handler. Closed static redirects are re-recognized as additional `RecognizedRoute` facts with `redirectDepth` so
-  route-tree compilation can consume the redirect target instead of pretending the redirect route has a `RouteNode`.
+  handler. Closed static redirects are re-recognized as additional `RecognizedRoute` facts with `redirectDepth` and
+  `redirectSourceRouteConfig` so route-tree compilation can consume the exact redirect target instead of pretending the
+  redirect route has a `RouteNode`.
   A closed static instruction path that reaches the recognizer, matches no configured route, and has no fallback on the
   owning route config publishes `instrNoFallback` / `AUR3401` as a route-recognition issue. Dynamic/open instructions
   and contexts without a materialized recognizer remain open seams instead of spending this framework code.
@@ -179,14 +192,17 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   recognized route, params/query/fragment counts, viewport name, residue count, parent/child node references, component,
   title, path, and final path. A transition chain emits a route tree only when every `ViewportRequest` can resolve
   through the parent route context's available `ViewportAgent`s and the resulting context pair is materialized. A closed
-  request with no matching viewport agent publishes `rcNoAvailableVpa` / `AUR3174` and still records a router open seam
-  for authoring/repair intent; other unresolved handoffs stay as open seams instead of publishing partial route trees as
-  if they had closed. Initial root, transition root, and transition child nodes all publish through the same route-node
+  request with no matching viewport agent publishes `rcNoAvailableVpa` / `AUR3174` as an exact router issue without also
+  recording a router open seam; missing request pieces and missing route-context pairs stay as open seams instead of
+  publishing partial route trees as if they had closed. Initial root, transition root, and transition child nodes all
+  publish through the same route-node
   materialization primitive so route-node handles and config references stay aligned as the router tree substrate grows.
 - Preserve the framework RouteExpression tree shape, not only flattened viewport instructions. Redirect parameter
   migration in `RouteTree.createConfiguredNode(...)` accepts only `Segment` / slash-scoped `Segment` chains; sibling
   composites and grouped expressions are known framework failures and should publish router issue products with
   `exprUnexpectedKind` / `AUR3502` instead of being treated as recognizer misses or generic redirect open seams.
+  Redirect route configs should only produce `router-redirect-target-open` when redirect expansion genuinely did not
+  close and no exact framework issue was published.
 - Materialize the first `ComponentAgent` handoff for recognized route nodes with resolved custom-element components.
   The framework creates a child container with inherited parent resources before `Controller.$el(...)`; semantic-runtime
   mirrors that as a `ComponentAgent` product and a `RuntimeControllerCreationKind.RoutedCustomElement` controller row
@@ -205,9 +221,10 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   `AUR3558` stays unclaimed because navigation-strategy routeables remain referential/open until navigation supplies
   the instruction context.
 - Resolving string or lazy-import routeables through a full `RouteConfigContext` dependency/resource scope. The current
-  model can claim the closed global string miss (`rtNoComponent` / `AUR3552`), but context-specific string visibility
-  and `resolveCustomElementDefinition(...)` guards such as `AUR3551` and `AUR3553` stay unclaimed until
-  semantic-runtime has a scope-specific routeable resolver product.
+  model handles dependency-array custom-element names for child route contexts and can claim the closed string miss
+  where no component is known (`rtNoComponent` / `AUR3552`), but root-container registration visibility, imported view
+  resources, inline templates, and `resolveCustomElementDefinition(...)` guards such as `AUR3551` and `AUR3553` stay
+  unclaimed until semantic-runtime has a fuller scope-specific routeable resolver product.
 - Emulating imperative router path-generation API calls such as `generateRootedPath(...)` /
   `generateRelativePath(...)`; `createEagerInstructions(...)` / `AUR3404` belongs to that public API surface, while
   router-resource object values are modeled through `RouteConfigContext._generateViewportInstruction(...)`.

@@ -1,5 +1,6 @@
 import {
   AuthoringSourceEditPlan,
+  type AuthoringSourceFileEdit,
   recipeSourceEditPolicy,
   recipeSourceFile,
 } from './source-plan.js';
@@ -47,94 +48,138 @@ export function stateBackedFormSourcePlan(model: StateBackedFormSourcePlanModel)
   return new AuthoringSourceEditPlan(
     model.rootDir,
     recipeSourceEditPolicy('recipe-baseline'),
-    [
-      recipeSourceFile(
-        model.entrypointPath,
-        'entrypoint',
-        'typescript',
-        'create-entrypoint',
-        fillSourceTemplate(ENTRYPOINT_SOURCE, {
-          ROOT_COMPONENT_CLASS: model.rootComponentClassName,
-          ROOT_COMPONENT_MODULE: moduleSpecifier(model.entrypointPath, model.rootComponentPath, false),
-          VALIDATION_CONFIGURATION_IMPORT: validation.entrypointImport,
-          VALIDATION_REGISTRATION: validation.registrationArgument,
-        }),
-      ),
-      recipeSourceFile(
-        model.rootComponentPath,
-        'root-component',
-        'typescript',
-        'create-root-component',
-        fillSourceTemplate(ROOT_COMPONENT_SOURCE, {
-          FORM_COMPONENT_CLASS: model.formComponentClassName,
-          FORM_COMPONENT_MODULE: moduleSpecifier(model.rootComponentPath, model.formComponentPath, false),
-          ROOT_COMPONENT_CLASS: model.rootComponentClassName,
-          ROOT_ELEMENT_NAME: model.rootElementName,
-          ROOT_STYLE_MODULE: moduleSpecifier(model.rootComponentPath, model.rootStylePath, true),
-          ROOT_TEMPLATE_MODULE: moduleSpecifier(model.rootComponentPath, model.rootTemplatePath, true),
-          STATE_CLASS: model.stateClassName,
-          STATE_MODULE: moduleSpecifier(model.rootComponentPath, model.statePath, false),
-        }),
-      ),
-      recipeSourceFile(
-        model.rootTemplatePath,
-        'template',
-        'html',
-        'create-external-template',
-        fillSourceTemplate(ROOT_TEMPLATE_SOURCE, {
-          FORM_ELEMENT_NAME: model.formElementName,
-        }),
-      ),
-      recipeSourceFile(
-        model.rootStylePath,
-        'component-style',
-        'css',
-        'create-style-asset',
-        ROOT_STYLE_SOURCE,
-      ),
-      recipeSourceFile(
-        model.statePath,
-        'state-model',
-        'typescript',
-        'create-state-model',
-        fillSourceTemplate(STATE_SOURCE, {
-          STATE_CLASS: model.stateClassName,
-        }),
-      ),
-      recipeSourceFile(
-        model.formComponentPath,
-        'component',
-        'typescript',
-        'create-form-component',
-        fillSourceTemplate(FORM_COMPONENT_SOURCE, {
-          FORM_COMPONENT_CLASS: model.formComponentClassName,
-          FORM_ELEMENT_NAME: model.formElementName,
-          FORM_TEMPLATE_MODULE: moduleSpecifier(model.formComponentPath, model.formTemplatePath, true),
-          STATE_CLASS: model.stateClassName,
-          STATE_MODULE: moduleSpecifier(model.formComponentPath, model.statePath, false),
-          SUBMIT_BODY: validation.submitBody,
-          SUBMIT_RETURN_TYPE: validation.submitReturnType,
-          VALIDATION_CONSTRUCTOR: validation.constructorBody,
-          VALIDATION_FORM_IMPORT: validation.formImport,
-          VALIDATION_FIELDS: validation.formFields,
-        }),
-      ),
-      recipeSourceFile(
-        model.formTemplatePath,
-        'template',
-        'html',
-        'create-external-template',
-        fillSourceTemplate(FORM_TEMPLATE_SOURCE, {
-          CUSTOMER_NAME_BINDING: validation.customerNameBinding,
-          EMAIL_BINDING: validation.emailBinding,
-        }),
-      ),
-    ],
+    stateBackedFormSourceFiles(model, validation),
     aureliaRecipeProjectToolingPlan({
       appName: model.appName,
       dependencySpecifiers: model.validationEnabled === true
         ? ['@aurelia/kernel', '@aurelia/validation-html']
         : ['@aurelia/kernel'],
+    }),
+  );
+}
+
+function stateBackedFormSourceFiles(
+  model: StateBackedFormSourcePlanModel,
+  validation: StateBackedFormValidationTokens,
+): readonly AuthoringSourceFileEdit[] {
+  return [
+    stateBackedFormEntrypointFile(model, validation),
+    stateBackedFormRootComponentFile(model),
+    stateBackedFormRootTemplateFile(model),
+    stateBackedFormRootStyleFile(model),
+    stateBackedFormStateFile(model),
+    stateBackedFormComponentFile(model, validation),
+    stateBackedFormTemplateFile(model, validation),
+  ];
+}
+
+function stateBackedFormEntrypointFile(
+  model: StateBackedFormSourcePlanModel,
+  validation: StateBackedFormValidationTokens,
+): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.entrypointPath,
+    'entrypoint',
+    'typescript',
+    'create-entrypoint',
+    fillSourceTemplate(ENTRYPOINT_SOURCE, {
+      ROOT_COMPONENT_CLASS: model.rootComponentClassName,
+      ROOT_COMPONENT_MODULE: moduleSpecifier(model.entrypointPath, model.rootComponentPath, false),
+      VALIDATION_CONFIGURATION_IMPORT: validation.entrypointImport,
+      VALIDATION_REGISTRATION: validation.registrationArgument,
+    }),
+  );
+}
+
+function stateBackedFormRootComponentFile(model: StateBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.rootComponentPath,
+    'root-component',
+    'typescript',
+    'create-root-component',
+    fillSourceTemplate(ROOT_COMPONENT_SOURCE, {
+      FORM_COMPONENT_CLASS: model.formComponentClassName,
+      FORM_COMPONENT_MODULE: moduleSpecifier(model.rootComponentPath, model.formComponentPath, false),
+      ROOT_COMPONENT_CLASS: model.rootComponentClassName,
+      ROOT_ELEMENT_NAME: model.rootElementName,
+      ROOT_STYLE_MODULE: moduleSpecifier(model.rootComponentPath, model.rootStylePath, true),
+      ROOT_TEMPLATE_MODULE: moduleSpecifier(model.rootComponentPath, model.rootTemplatePath, true),
+      STATE_CLASS: model.stateClassName,
+      STATE_MODULE: moduleSpecifier(model.rootComponentPath, model.statePath, false),
+    }),
+  );
+}
+
+function stateBackedFormRootTemplateFile(model: StateBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.rootTemplatePath,
+    'template',
+    'html',
+    'create-external-template',
+    fillSourceTemplate(ROOT_TEMPLATE_SOURCE, {
+      FORM_ELEMENT_NAME: model.formElementName,
+    }),
+  );
+}
+
+function stateBackedFormRootStyleFile(model: StateBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.rootStylePath,
+    'component-style',
+    'css',
+    'create-style-asset',
+    ROOT_STYLE_SOURCE,
+  );
+}
+
+function stateBackedFormStateFile(model: StateBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.statePath,
+    'state-model',
+    'typescript',
+    'create-state-model',
+    fillSourceTemplate(STATE_SOURCE, {
+      STATE_CLASS: model.stateClassName,
+    }),
+  );
+}
+
+function stateBackedFormComponentFile(
+  model: StateBackedFormSourcePlanModel,
+  validation: StateBackedFormValidationTokens,
+): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.formComponentPath,
+    'component',
+    'typescript',
+    'create-form-component',
+    fillSourceTemplate(FORM_COMPONENT_SOURCE, {
+      FORM_COMPONENT_CLASS: model.formComponentClassName,
+      FORM_ELEMENT_NAME: model.formElementName,
+      FORM_TEMPLATE_MODULE: moduleSpecifier(model.formComponentPath, model.formTemplatePath, true),
+      STATE_CLASS: model.stateClassName,
+      STATE_MODULE: moduleSpecifier(model.formComponentPath, model.statePath, false),
+      SUBMIT_BODY: validation.submitBody,
+      SUBMIT_RETURN_TYPE: validation.submitReturnType,
+      VALIDATION_CONSTRUCTOR: validation.constructorBody,
+      VALIDATION_FORM_IMPORT: validation.formImport,
+      VALIDATION_FIELDS: validation.formFields,
+    }),
+  );
+}
+
+function stateBackedFormTemplateFile(
+  model: StateBackedFormSourcePlanModel,
+  validation: StateBackedFormValidationTokens,
+): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.formTemplatePath,
+    'template',
+    'html',
+    'create-external-template',
+    fillSourceTemplate(FORM_TEMPLATE_SOURCE, {
+      CUSTOMER_NAME_BINDING: validation.customerNameBinding,
+      EMAIL_BINDING: validation.emailBinding,
     }),
   );
 }

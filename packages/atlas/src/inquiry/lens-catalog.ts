@@ -443,6 +443,11 @@ export const LensCatalog: readonly LensSpec[] = [
           "Grouped duplicate top-level helper names across files with exact body and AST body-shape fingerprint signals.",
       },
       {
+        id: "function-control-flow-shapes",
+        summary:
+          "Grouped function bodies that share switch-dispatch topology across names/files; a structural canary for parallel walkers and dispatch surfaces.",
+      },
+      {
         id: "call-sites",
         summary:
           "Exact semantic-runtime call and constructor invocations resolved through the TypeScript checker, with owner function/class and target declaration.",
@@ -649,6 +654,8 @@ export const LensCatalog: readonly LensSpec[] = [
           "functionCount",
           "bodyFingerprint",
           "bodyShapeFingerprint",
+          "switchTopologyFingerprint",
+          "switchTopologyCount",
         ],
       },
       {
@@ -697,6 +704,18 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Filter,
         summary:
           "Filter function rows by AST/control-flow body fingerprint; useful for following duplicate-shape pressure.",
+      },
+      {
+        id: "switchTopologyFingerprint",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter function rows or control-flow shape groups by stable switch-dispatch topology fingerprint.",
+      },
+      {
+        id: "minSwitchTopologyCount",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter function rows or control-flow shape groups to bodies with at least this many switch statements in their topology.",
       },
       {
         id: "parentFunctionName",
@@ -3788,6 +3807,11 @@ export const LensCatalog: readonly LensSpec[] = [
           "Source-backed self taxonomy rollup for enum, string, row, and relationship surfaces.",
       },
       {
+        id: "phase-profile",
+        summary:
+          "Measured Atlas self-analysis phase costs as queryable rows for choosing cache, split, and substrate work.",
+      },
+      {
         id: "contracts",
         summary:
           "Lens contracts joined to runtime implementation paths and projection branches.",
@@ -3882,9 +3906,19 @@ export const LensCatalog: readonly LensSpec[] = [
         summary: "Top-level function and class-method declaration surfaces.",
       },
       {
+        id: "variables",
+        summary:
+          "Top-level variable declaration surfaces with export status and initializer shape.",
+      },
+      {
         id: "function-shapes",
         summary:
           "Repeated canonical AST/control-flow function body-shape groups for finding split-brain helpers.",
+      },
+      {
+        id: "function-control-flow-shapes",
+        summary:
+          "Repeated switch-dispatch topology groups for finding parallel walkers and dispatch surfaces.",
       },
       {
         id: "function-wrappers",
@@ -3933,6 +3967,23 @@ export const LensCatalog: readonly LensSpec[] = [
           "Filter projection or function-surface rows by exact function name.",
       },
       {
+        id: "variableName",
+        role: ParameterRole.Filter,
+        summary: "Filter variable-surface rows by exact top-level variable name.",
+      },
+      {
+        id: "initializerKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter variable-surface rows by broad initializer kind such as array-literal, object-literal, call, or none.",
+      },
+      {
+        id: "minInitializerEntryCount",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter array/object variable initializers to declarations with at least this many entries.",
+      },
+      {
         id: "bodyFingerprint",
         role: ParameterRole.Filter,
         summary:
@@ -3943,6 +3994,18 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Filter,
         summary:
           "Filter function-surface rows by AST/control-flow body fingerprint; useful for following duplicate-shape pressure.",
+      },
+      {
+        id: "switchTopologyFingerprint",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter function-surface or control-flow-shape rows by stable switch-dispatch topology fingerprint.",
+      },
+      {
+        id: "minSwitchTopologyCount",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter function-surface or control-flow-shape rows to bodies with at least this many switch statements in their topology.",
       },
       {
         id: "targetLens",
@@ -4005,6 +4068,24 @@ export const LensCatalog: readonly LensSpec[] = [
         summary: "Filter axis-pressure rows by low, medium, or high pressure.",
       },
       {
+        id: "phase",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter phase-profile rows by exact self-analysis phase id.",
+      },
+      {
+        id: "minMilliseconds",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter phase-profile rows to phases whose inclusive wall-clock time is at least this many milliseconds.",
+      },
+      {
+        id: "minExclusiveMilliseconds",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter phase-profile rows to phases whose exclusive wall-clock time is at least this many milliseconds.",
+      },
+      {
         id: "fromArea",
         role: ParameterRole.Filter,
         summary: "Filter module dependency rows by Atlas source area.",
@@ -4054,6 +4135,13 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Filter,
         summary:
           "Filter enum value-space or raw value occurrence rows by exact raw string/number value.",
+      },
+      {
+        id: "valueKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter enum value-space or raw value occurrence rows by raw value kind.",
+        values: ["string", "number"],
       },
       {
         id: "contextualOnly",
@@ -4414,6 +4502,171 @@ export const LensCatalog: readonly LensSpec[] = [
       EvidenceKind.OpenSeam,
     ],
     defaultBudget: { rows: 80, evidencePerSubject: 3 },
+  },
+  {
+    id: LensId.AtlasWorkRouter,
+    family: LensFamily.Atlas,
+    stage: LensStage.Implemented,
+    summary:
+      "Route autonomous work through typed domains, roles, source anchors, lens anchors, memory domains, auLink ids, and framework corpus concepts before falling back to visibly weak prose matches.",
+    supportedLoci: [
+      LocusKind.Repo,
+      LocusKind.RepoArea,
+      LocusKind.Package,
+      LocusKind.SourceFile,
+      LocusKind.Symbol,
+    ],
+    requiredSubstrates: [
+      SubstrateId.AtlasWorkRouter,
+      SubstrateId.AtlasMemory,
+      SubstrateId.ProductArchitecture,
+      SubstrateId.FrameworkCorpus,
+      SubstrateId.TypeScriptProgram,
+    ],
+    projections: [
+      {
+        id: "summary",
+        summary:
+          "Compact matched route rows plus a small number of live route plans for orientation.",
+      },
+      {
+        id: "routes",
+        summary:
+          "Paged route rows with explicit match authority and anchor counts.",
+      },
+      {
+        id: "route-plan",
+        summary:
+          "Selected routes joined to live source anchors, Atlas memory, and framework corpus seeds.",
+      },
+      {
+        id: "next-questions",
+        summary:
+          "Selected route plans with route-specific next questions foregrounded for autonomous continuation.",
+      },
+      {
+        id: "route-health",
+        summary:
+          "Selected routes checked for missing source anchors and empty memory/corpus joins.",
+      },
+      {
+        id: "workset",
+        summary:
+          "Current git worktree files joined to work routes through source/doc anchors and memory shards.",
+      },
+      {
+        id: "memory-coverage",
+        summary:
+          "Atlas memory next actions joined back to typed work routes, exposing unrouted live frontiers.",
+      },
+      {
+        id: "schema",
+        summary:
+          "Machine-readable route schema, catalog definitions, anchor vocabulary, and match semantics.",
+      },
+    ],
+    parameters: [
+      {
+        id: "routeId",
+        role: ParameterRole.Filter,
+        summary:
+          "Select an exact typed work route by id; this is the strongest route match.",
+      },
+      {
+        id: "relatedTo",
+        role: ParameterRole.Filter,
+        summary:
+          "Select routes that explicitly declare adjacency to another route id.",
+      },
+      {
+        id: "query",
+        role: ParameterRole.Filter,
+        summary:
+          "Match declared route vocabulary first and descriptive prose only as a weak-text open seam.",
+      },
+      {
+        id: "domain",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter by route-owned product/problem domains such as authoring, forms, router, evaluator, or atlas.",
+      },
+      {
+        id: "domainMode",
+        role: ParameterRole.Filter,
+        summary:
+          "Choose all-of or any-of semantics for multi-domain route filters.",
+        values: ["all", "any"],
+      },
+      {
+        id: "role",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter by work role such as orient, author, analyze, refactor, verify, document, or improve-atlas.",
+        values: [
+          "orient",
+          "author",
+          "analyze",
+          "refactor",
+          "verify",
+          "document",
+          "improve-atlas",
+        ],
+      },
+      {
+        id: "lensId",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter routes that declare an exact Atlas lens anchor.",
+      },
+      {
+        id: "path",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter routes that declare a matching source or documentation path anchor.",
+      },
+      {
+        id: "symbolName",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter routes that declare a matching source symbol, auLink symbol, or memory symbol anchor.",
+      },
+      {
+        id: "auLinkId",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter routes that declare a matching auLink or memory auLink anchor.",
+      },
+      {
+        id: "concept",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter routes that declare a framework corpus concept anchor such as forms, router, observation, or templates.",
+      },
+      {
+        id: "effectKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter routes that declare an expected semantic effect kind anchor.",
+      },
+      {
+        id: "recipeKey",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter routes that declare an authoring recipe key anchor.",
+      },
+      {
+        id: "seedUse",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter routes and fixture seeds by corpus authority lane, such as authoring-taste or behavior-grounding.",
+      },
+    ],
+    outputKinds: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.SourceSpan,
+      EvidenceKind.OpenSeam,
+    ],
+    defaultBudget: { rows: 24, evidencePerSubject: 4 },
   },
 ];
 

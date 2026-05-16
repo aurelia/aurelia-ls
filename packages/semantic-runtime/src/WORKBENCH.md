@@ -503,6 +503,17 @@ project because it is intentionally pressure-oriented; product APIs should make 
 topology rather than all-package stress. The accepted tokens are the runtime enum values: `aurelia-app`,
 `aurelia-resource-library`, `aurelia-package`, and `non-aurelia`.
 
+`pressure:app-api` defaults to checkpoint-friendly compact aggregate output: request shape, fixture lanes, timing
+buckets, expression-type cache buckets, and one-line pressure buckets for authoring, router, binding, observation,
+diagnostics, and open seams. Use compact first during fixture flywheel work, then open
+summary/raw detail only for the pressure family being changed. Treat `inputs.fixture-lanes` as part of the reading:
+generated authoring fixtures, hand-authored authoring fixtures, and stress pressure fixtures intentionally answer
+different questions. The same compact output carries safe `inputs.fixture-keys` and fixture-owner cross-tabs for
+source-assignment reasons, framework error codes, template missing inputs, and open-seam reasons; internal fixtures use
+`authoring:<folder>` / `pressure:<folder>`, while custom roots collapse to `custom-root`. Use those rows to choose the
+next public fixture to open before doing isolated per-fixture runs. The error-code fixture rows are the preferred first
+read when a broad diagnostic count such as `AUR0654`, `AUR0813`, or a router code needs a concrete owner.
+
 Cursor/LSP pressure has its own script now: `pressure:cursor-loci`. It samples bounded template cursor positions and
 prints aggregate site kinds, outcomes, completion pressure classes, value-site kinds, candidate lanes, public API
 answer mismatches, cursor-info source coverage, focused selected-member coverage, hover/navigation targets, diagnostic
@@ -522,7 +533,9 @@ Static i18n resources now have their own product lane: `I18nConfiguration` `init
 materialize `I18nTranslationKey` products, and `t="..."` value completion spends those product handles through the same
 cursor adapter as router/resource/scope candidates. Keep this as configuration-owned i18n substrate, not an answer-local
 string scan. Imported JSON key spans use the evaluator's asset-module source mapping so i18n key products can point at
-authored JSON property spans rather than the generated default-export wrapper.
+authored JSON property spans rather than the generated default-export wrapper. If pressure shows top-level
+`I18nConfiguration.resources`, treat that as a configuration option-shape diagnostic instead of widening the catalog:
+the framework callback receives `I18nConfigurationOptions`, whose resources live under `initOptions.resources`.
 Built-in template-controller primary values now read the framework-shaped semantics profile before reporting a domain
 gap. Open primary values such as `case="..."` are expected-empty completion sites because the framework accepts broad
 runtime values; secondary bindables and custom/plugin template-controller grammars should still surface value-domain
@@ -910,8 +923,10 @@ ordinary member/value expressions until the evaluator grows a real contextual se
 
 Type-system expression evaluation has started to split around product responsibilities instead of file size.
 `expression-type-evaluation.ts` owns the result/open/cache vocabulary consumed by template, observation, and inquiry
-lanes. `expression-type-world.ts` owns the pass-local expression evaluator lifetime. `expression-type-synthesis.ts`
-owns synthetic expression/template type-shape products such as arrays, objects, arrow functions, unions, unknowns, and
+lanes. `expression-type-world.ts` owns the pass-local expression evaluator lifetime. `expression-type-support.ts`
+owns shared project/open/resolve/union primitives for evaluator-adjacent projectors so call projection, cursor owner
+projection, and future expression inquiries do not grow their own result factories. `expression-type-synthesis.ts` owns
+synthetic expression/template type-shape products such as arrays, objects, arrow functions, unions, unknowns, and
 map-entry tuples. `checker-type-shape-access.ts` owns reusable member/key/index
 reads over projected shapes, including finite keyed access. Keep expression semantics in
 `expression-type-evaluator.ts`; do not duplicate member/index/checker access in cursor answers, binding-pattern locals,

@@ -392,7 +392,7 @@ export class RuntimeControllerCreationMaterializer {
         RuntimeControllerIssueKind.ViewFactoryProviderNotReady,
         'Resource view model resolves IViewFactory where runtime-html has not prepared a template-controller view factory provider.',
         RuntimeHtmlControllerFrameworkErrorCode.ViewFactoryProviderNotReady,
-        site.sourceAddressHandle ?? creation.instruction.sourceAddressHandle,
+        site.sourceAddressHandle,
       );
       records.push(...site.records, ...publication.records);
       controllerIssues.push(publication.issue);

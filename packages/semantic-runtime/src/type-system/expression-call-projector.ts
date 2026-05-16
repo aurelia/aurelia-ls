@@ -2,27 +2,19 @@ import ts from 'typescript';
 import type { BindingScope } from '../configuration/scope.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import type { AddressHandle } from '../kernel/handles.js';
-import type { KernelStore } from '../kernel/store.js';
 import {
   type CheckerTypeProjectionRequest,
-  type CheckerTypeProjector,
 } from './checker-projector.js';
 import {
   checkerIterableElementType,
 } from './checker-related-types.js';
 import {
-  CheckerExpressionType,
   type CheckerExpressionTypeEvaluation,
   CheckerExpressionTypeEvaluationResultKind,
-  CheckerExpressionTypeOpen,
   CheckerExpressionTypeOpenKind,
 } from './expression-type-evaluation.js';
-import {
-  CheckerExpressionTypeSynthesizer,
-  commonTypeReference,
-} from './expression-type-synthesis.js';
-import { TypeSystemProductDetails } from './product-details.js';
-import { CheckerTypeShapeAccess } from './checker-type-shape-access.js';
+import { commonTypeReference } from './expression-type-synthesis.js';
+import { CheckerExpressionTypeSupport } from './expression-type-support.js';
 import {
   CheckerTypeProjectionOrigin,
   type CheckerTypeReference,
@@ -34,6 +26,23 @@ export interface CheckerExpressionCallArgument {
   readonly expression: ExpressionAstNode;
   readonly localKey: string;
   readonly precomputedEvaluation?: CheckerExpressionTypeEvaluation;
+}
+
+export function checkerExpressionCallArguments(
+  expressions: readonly ExpressionAstNode[],
+  localKey: string,
+): readonly CheckerExpressionCallArgument[] {
+  return expressions.map((expression, index) => ({
+    expression,
+    localKey: `${localKey}:${index}`,
+  }));
+}
+
+export const enum CheckerExpressionCallableParameterKind {
+  /** A declared callback parameter receives one runtime argument value. Target rest parameters project to their element type. */
+  Positional = 'positional',
+  /** A declared callback rest parameter receives an array or tuple of the remaining runtime argument values. */
+  Rest = 'rest',
 }
 
 export interface CheckerExpressionCallProjectorHost {
@@ -56,10 +65,7 @@ interface CheckerExpressionSignatureCandidate {
 /** Projects TypeChecker call/construct signatures through Aurelia expression argument semantics. */
 export class CheckerExpressionCallProjector {
   constructor(
-    private readonly store: KernelStore,
-    private readonly projector: CheckerTypeProjector,
-    private readonly typeAccess: CheckerTypeShapeAccess,
-    private readonly synthesis: CheckerExpressionTypeSynthesizer,
+    private readonly support: CheckerExpressionTypeSupport,
     private readonly host: CheckerExpressionCallProjectorHost,
   ) {}
 
@@ -72,10 +78,10 @@ export class CheckerExpressionCallProjector {
     sourceAddressHandle: AddressHandle | null = null,
   ): CheckerExpressionTypeEvaluation {
     if (calleeType.shapeKind === CheckerTypeShapeKind.Any) {
-      return this.type(calleeType, 'Calling any remains any.');
+      return this.support.type(calleeType, 'Calling any remains any.');
     }
     if (calleeType.callReturnType?.productHandle != null) {
-      return this.resolveReference(
+      return this.support.resolveReference(
         expression,
         calleeType.callReturnType,
         `${localKey}:synthetic-return`,
@@ -87,7 +93,7 @@ export class CheckerExpressionCallProjector {
     const type = calleeType.carrier?.type ?? null;
     const checker = calleeType.carrier?.checker ?? null;
     if (type == null || checker == null) {
-      return this.open(
+      return this.support.open(
         calleeType.callReturnType == null
           ? CheckerExpressionTypeOpenKind.MissingChecker
           : CheckerExpressionTypeOpenKind.UnsupportedCallTarget,
@@ -101,7 +107,7 @@ export class CheckerExpressionCallProjector {
 
     const signatures = type.getCallSignatures();
     if (signatures.length === 0) {
-      return this.open(
+      return this.support.open(
         CheckerExpressionTypeOpenKind.UnsupportedCallTarget,
         expression,
         `Type '${calleeType.display}' has no call signature to project.`,
@@ -111,7 +117,7 @@ export class CheckerExpressionCallProjector {
 
     const candidates = this.selectSignatureCandidates(checker, signatures, args, scope, localKey, sourceAddressHandle);
     const returns = candidates.map((candidate) =>
-      this.projectType(
+      this.support.projectType(
         expression,
         checker,
         checker.getReturnTypeOfSignature(candidate.signature),
@@ -119,11 +125,33 @@ export class CheckerExpressionCallProjector {
         sourceAddressHandle,
       )
     );
-    return this.evaluateTypeUnion(
+    return this.support.evaluateTypeUnion(
       returns,
       `${localKey}:return`,
       sourceAddressHandle,
       `Projected call return type for '${calleeType.display}'.`,
+    );
+  }
+
+  contextualCallArgumentType(
+    calleeType: CheckerTypeShape,
+    signatureArgumentIndex: number,
+    runtimeArgumentCount: number,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null = null,
+  ): CheckerTypeReference | null {
+    const type = calleeType.carrier?.type ?? null;
+    const checker = calleeType.carrier?.checker ?? null;
+    if (type == null || checker == null) {
+      return null;
+    }
+    return this.contextualSignatureParameterType(
+      checker,
+      type.getCallSignatures(),
+      signatureArgumentIndex,
+      runtimeArgumentCount,
+      localKey,
+      sourceAddressHandle,
     );
   }
 
@@ -136,7 +164,7 @@ export class CheckerExpressionCallProjector {
     sourceAddressHandle: AddressHandle | null = null,
   ): CheckerExpressionTypeEvaluation {
     if (constructorType.constructReturnType?.productHandle != null) {
-      return this.resolveReference(
+      return this.support.resolveReference(
         expression,
         constructorType.constructReturnType,
         `${localKey}:synthetic-construct-return`,
@@ -148,7 +176,7 @@ export class CheckerExpressionCallProjector {
     const type = constructorType.carrier?.type ?? null;
     const checker = constructorType.carrier?.checker ?? null;
     if (type == null || checker == null) {
-      return this.open(
+      return this.support.open(
         constructorType.constructReturnType == null
           ? CheckerExpressionTypeOpenKind.MissingChecker
           : CheckerExpressionTypeOpenKind.UnsupportedConstruct,
@@ -162,7 +190,7 @@ export class CheckerExpressionCallProjector {
 
     const signatures = type.getConstructSignatures();
     if (signatures.length === 0) {
-      return this.open(
+      return this.support.open(
         CheckerExpressionTypeOpenKind.UnsupportedConstruct,
         expression,
         `Type '${constructorType.display}' has no construct signature to project.`,
@@ -172,7 +200,7 @@ export class CheckerExpressionCallProjector {
 
     const candidates = this.selectSignatureCandidates(checker, signatures, args, scope, localKey, sourceAddressHandle);
     const returns = candidates.map((candidate) =>
-      this.projectType(
+      this.support.projectType(
         expression,
         checker,
         checker.getReturnTypeOfSignature(candidate.signature),
@@ -180,12 +208,67 @@ export class CheckerExpressionCallProjector {
         sourceAddressHandle,
       )
     );
-    return this.evaluateTypeUnion(
+    return this.support.evaluateTypeUnion(
       returns,
       `${localKey}:construct-return`,
       sourceAddressHandle,
       `Projected construct return type for '${constructorType.display}'.`,
     );
+  }
+
+  contextualConstructArgumentType(
+    constructorType: CheckerTypeShape,
+    argumentIndex: number,
+    runtimeArgumentCount: number,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null = null,
+  ): CheckerTypeReference | null {
+    const type = constructorType.carrier?.type ?? null;
+    const checker = constructorType.carrier?.checker ?? null;
+    if (type == null || checker == null) {
+      return null;
+    }
+    return this.contextualSignatureParameterType(
+      checker,
+      type.getConstructSignatures(),
+      argumentIndex,
+      runtimeArgumentCount,
+      localKey,
+      sourceAddressHandle,
+    );
+  }
+
+  contextualCallableParameterType(
+    callableType: CheckerTypeShape,
+    parameterIndex: number,
+    runtimeParameterCount: number,
+    parameterKind: CheckerExpressionCallableParameterKind,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null = null,
+  ): CheckerTypeReference | null {
+    const type = callableType.carrier?.type ?? null;
+    const checker = callableType.carrier?.checker ?? null;
+    if (type == null || checker == null) {
+      return null;
+    }
+    const signatures = type.getCallSignatures();
+    return parameterKind === CheckerExpressionCallableParameterKind.Rest
+      ? this.contextualRestBindingParameterType(
+        checker,
+        signatures,
+        parameterIndex,
+        runtimeParameterCount,
+        localKey,
+        sourceAddressHandle,
+      )
+      : this.contextualSignatureParameterType(
+        checker,
+        signatures,
+        parameterIndex,
+        runtimeParameterCount,
+        localKey,
+        sourceAddressHandle,
+      );
   }
 
   private selectSignatureCandidates(
@@ -196,12 +279,7 @@ export class CheckerExpressionCallProjector {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): readonly CheckerExpressionSignatureCandidate[] {
-    const arityCandidates = signatures
-      .map((signature, signatureIndex) => ({ signature, signatureIndex }))
-      .filter((candidate) => signatureAcceptsArgumentCount(candidate.signature, args.length));
-    const basis = arityCandidates.length > 0
-      ? arityCandidates
-      : signatures.map((signature, signatureIndex) => ({ signature, signatureIndex }));
+    const basis = signatureCandidateBasis(signatures, args.length);
     if (basis.length === 1) {
       const [candidate] = basis;
       return [{
@@ -223,6 +301,50 @@ export class CheckerExpressionCallProjector {
     }
     const notRejected = candidates.filter((candidate) => !candidate.hasRejectedArgument);
     return notRejected.length > 0 ? notRejected : candidates;
+  }
+
+  private contextualSignatureParameterType(
+    checker: ts.TypeChecker,
+    signatures: readonly ts.Signature[],
+    argumentIndex: number,
+    runtimeArgumentCount: number,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    const basis = signatureCandidateBasis(signatures, runtimeArgumentCount);
+    const parameterTypes = basis
+      .map((candidate) => this.parameterTypeReference(
+        checker,
+        candidate.signature,
+        candidate.signatureIndex,
+        argumentIndex,
+        `${localKey}:signature:${candidate.signatureIndex}:arg:${argumentIndex}:contextual`,
+        sourceAddressHandle,
+      ))
+      .filter((reference): reference is CheckerTypeReference => reference != null);
+    return commonTypeReference(parameterTypes, basis.length);
+  }
+
+  private contextualRestBindingParameterType(
+    checker: ts.TypeChecker,
+    signatures: readonly ts.Signature[],
+    parameterIndex: number,
+    runtimeParameterCount: number,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    const basis = signatureCandidateBasis(signatures, runtimeParameterCount);
+    const parameterTypes = basis
+      .map((candidate) => this.restBindingParameterTypeReference(
+        checker,
+        candidate.signature,
+        candidate.signatureIndex,
+        parameterIndex,
+        `${localKey}:signature:${candidate.signatureIndex}:rest:${parameterIndex}:contextual`,
+        sourceAddressHandle,
+      ))
+      .filter((reference): reference is CheckerTypeReference => reference != null);
+    return commonTypeReference(parameterTypes, basis.length);
   }
 
   private signatureCandidate(
@@ -272,15 +394,105 @@ export class CheckerExpressionCallProjector {
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeReference | null {
     const parameter = parameterForArgumentIndex(signature, argIndex);
-    const declaration = parameter?.valueDeclaration ?? parameter?.declarations?.[0] ?? null;
-    if (parameter == null || declaration == null) {
+    if (parameter == null) {
+      return null;
+    }
+    const declaration = parameter.valueDeclaration ?? parameter.declarations?.[0] ?? null;
+    if (declaration == null) {
       return null;
     }
     const rawParameterType = checker.getTypeOfSymbolAtLocation(parameter, declaration);
     const parameterType = isRestParameter(parameter)
       ? checkerIterableElementType(checker, rawParameterType) ?? rawParameterType
       : rawParameterType;
-    return this.projector.ensureProjection({
+    return this.projectParameterTypeReference(checker, parameter, parameterType, localKey, sourceAddressHandle);
+  }
+
+  private restBindingParameterTypeReference(
+    checker: ts.TypeChecker,
+    signature: ts.Signature,
+    signatureIndex: number,
+    parameterIndex: number,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    const parameters = signature.getParameters();
+    const restIndex = parameters.findIndex((parameter) => isRestParameter(parameter));
+    if (restIndex === parameterIndex) {
+      return this.rawParameterTypeReference(
+        checker,
+        parameters[restIndex]!,
+        `${localKey}:signature:${signatureIndex}:parameter:${parameterIndex}:rest-array`,
+        sourceAddressHandle,
+      );
+    }
+
+    const remainingFixedParameters = restIndex === -1
+      ? parameters.slice(parameterIndex)
+      : parameters.slice(parameterIndex, restIndex);
+    const fixedElements = remainingFixedParameters
+      .map((parameter, offset) => {
+        const absoluteIndex = parameterIndex + offset;
+        const reference = this.rawParameterTypeReference(
+          checker,
+          parameter,
+          `${localKey}:signature:${signatureIndex}:parameter:${absoluteIndex}:fixed`,
+          sourceAddressHandle,
+        );
+        return reference == null
+          ? null
+          : { name: parameter.getName(), valueType: reference };
+      })
+      .filter((element): element is { readonly name: string; readonly valueType: CheckerTypeReference } => element != null);
+    const restElement = restIndex > parameterIndex
+      ? this.rawParameterTypeReference(
+        checker,
+        parameters[restIndex]!,
+        `${localKey}:signature:${signatureIndex}:parameter:${restIndex}:trailing-rest`,
+        sourceAddressHandle,
+      )
+      : null;
+
+    if (fixedElements.length !== remainingFixedParameters.length || (restIndex > parameterIndex && restElement == null)) {
+      return null;
+    }
+    if (fixedElements.length === 0 && restElement == null) {
+      return null;
+    }
+
+    return this.support.synthesis.tupleType(
+      restElement == null
+        ? fixedElements
+        : [...fixedElements, { name: parameters[restIndex]!.getName(), valueType: restElement, isRest: true }],
+      null,
+      `${localKey}:remaining`,
+      sourceAddressHandle,
+    ).toReference();
+  }
+
+  private rawParameterTypeReference(
+    checker: ts.TypeChecker,
+    parameter: ts.Symbol,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    const declaration = parameter.valueDeclaration ?? parameter.declarations?.[0] ?? null;
+    if (declaration == null) {
+      return null;
+    }
+    const parameterType = checker.getTypeOfSymbolAtLocation(parameter, declaration);
+    return this.projectParameterTypeReference(checker, parameter, parameterType, localKey, sourceAddressHandle);
+  }
+
+  private projectParameterTypeReference(
+    checker: ts.TypeChecker,
+    parameter: ts.Symbol,
+    parameterType: ts.Type,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference {
+    const declaration = parameter.valueDeclaration ?? parameter.declarations?.[0] ?? null;
+    return this.support.projector.ensureProjection({
       localKey,
       checker,
       type: parameterType,
@@ -298,7 +510,7 @@ export class CheckerExpressionCallProjector {
     if (parameterType == null || argumentType.shapeKind === CheckerTypeShapeKind.Any || argumentType.shapeKind === CheckerTypeShapeKind.Unknown) {
       return true;
     }
-    const parameterShape = this.typeShapeForReference(parameterType);
+    const parameterShape = this.support.typeShapeForReference(parameterType);
     const argumentCarrier = argumentType.carrier;
     const parameterCarrier = parameterShape?.carrier ?? null;
     if (argumentCarrier == null || parameterCarrier == null || argumentCarrier.checker !== parameterCarrier.checker) {
@@ -307,90 +519,18 @@ export class CheckerExpressionCallProjector {
     return argumentCarrier.checker.isTypeAssignableTo(argumentCarrier.type, parameterCarrier.type);
   }
 
-  private typeShapeForReference(reference: CheckerTypeReference | null): CheckerTypeShape | null {
-    return reference?.productHandle == null
-      ? null
-      : this.store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle);
-  }
+}
 
-  private resolveReference(
-    expression: ExpressionAstNode,
-    reference: CheckerTypeReference,
-    localKey: string,
-    openKind: CheckerExpressionTypeOpenKind,
-    openSummary: string,
-  ): CheckerExpressionTypeEvaluation {
-    if (reference.productHandle == null) {
-      return this.open(openKind, expression, openSummary, reference);
-    }
-    const typeShape = this.typeAccess.resolveReference(reference);
-    if (typeShape == null) {
-      return this.open(
-        CheckerExpressionTypeOpenKind.MissingTypeDetail,
-        expression,
-        openSummary,
-        reference,
-      );
-    }
-    return this.type(typeShape, `Resolved type reference for ${localKey}.`);
-  }
-
-  private evaluateTypeUnion(
-    alternatives: readonly CheckerExpressionType[],
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null,
-    summary: string,
-  ): CheckerExpressionTypeEvaluation {
-    const commonReference = commonTypeReference(
-      alternatives.map((alternative) => alternative.typeReference),
-      alternatives.length,
-    );
-    if (commonReference != null) {
-      return alternatives[0]!;
-    }
-
-    const typeShape = this.synthesis.unionType(
-      alternatives.map((alternative) => alternative.typeShape),
-      localKey,
-      sourceAddressHandle,
-    );
-    return this.type(typeShape, summary);
-  }
-
-  private projectType(
-    expression: ExpressionAstNode,
-    checker: ts.TypeChecker,
-    type: ts.Type,
-    localKey: string,
-    sourceAddressHandle: AddressHandle | null = null,
-    summary: string = `Projected ${expression.$kind} through the TypeChecker.`,
-  ): CheckerExpressionType {
-    const typeShape = this.projector.ensureProjection({
-      localKey,
-      checker,
-      type,
-      origin: CheckerTypeProjectionOrigin.TypeChecker,
-      sourceAddressHandle,
-      display: checker.typeToString(type),
-    } satisfies CheckerTypeProjectionRequest);
-    return this.type(typeShape, summary);
-  }
-
-  private type(
-    typeShape: CheckerTypeShape,
-    summary: string,
-  ): CheckerExpressionType {
-    return new CheckerExpressionType(typeShape, typeShape.toReference(), summary);
-  }
-
-  private open(
-    openKind: CheckerExpressionTypeOpenKind,
-    expression: ExpressionAstNode,
-    summary: string,
-    partialTypeReference: CheckerTypeReference | null = null,
-  ): CheckerExpressionTypeOpen {
-    return new CheckerExpressionTypeOpen(openKind, expression.$kind, summary, partialTypeReference);
-  }
+function signatureCandidateBasis(
+  signatures: readonly ts.Signature[],
+  argumentCount: number,
+): readonly { readonly signature: ts.Signature; readonly signatureIndex: number }[] {
+  const arityCandidates = signatures
+    .map((signature, signatureIndex) => ({ signature, signatureIndex }))
+    .filter((candidate) => signatureAcceptsArgumentCount(candidate.signature, argumentCount));
+  return arityCandidates.length > 0
+    ? arityCandidates
+    : signatures.map((signature, signatureIndex) => ({ signature, signatureIndex }));
 }
 
 function signatureAcceptsArgumentCount(

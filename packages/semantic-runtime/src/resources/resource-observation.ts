@@ -1,23 +1,11 @@
 import type ts from 'typescript';
 import type { OpenSeamKindKey } from '../kernel/vocabulary.js';
 import type { ResourceDefinitionHeader } from './resource-definition.js';
+import type { ResourceCarrierKind } from './resource-kind.js';
 export {
   AttributePatternObservation,
   ResourceTargetObservation,
 } from './resource-observation-primitives.js';
-
-export const enum ResourceCarrierKind {
-  /** Class decorator such as @customElement(...) or @valueConverter(...). */
-  Decorator = 'decorator',
-  /** Static class-side `$au` definition metadata. */
-  StaticAu = 'static-$au',
-  /** Imperative definition call such as CustomElement.define(...). */
-  DefineCall = 'define-call',
-  /** Syntax-resource factory call such as AttributePattern.create(...). */
-  AttributePatternCreate = 'attribute-pattern-create',
-  /** Name derived from a conventions layer known to be active. */
-  Convention = 'convention',
-}
 
 /** Explicit unresolved pressure from a resource carrier. */
 export class ResourceRecognitionOpen {

@@ -16,9 +16,9 @@ import {
 } from './resource-convention.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
 import {
-  createNamedResourceDefinitionHeader,
   type NamedResourceDefinitionHeader,
 } from './resource-definition.js';
+import { createNamedResourceDefinitionHeader } from './named-resource-kind.js';
 import {
   readDecoratorCalleeName,
   readDefineCallKind,
@@ -31,12 +31,12 @@ import {
   RESOURCE_DECORATOR_KIND,
 } from './resource-field-readers.js';
 import {
-  ResourceCarrierKind,
   ResourceRecognitionObservation,
   ResourceRecognitionOpen,
   ResourceTargetObservation,
 } from './resource-observation.js';
 import {
+  ResourceCarrierKind,
   ResourceDefinitionKind,
   type NamedResourceDefinitionKind,
 } from './resource-kind.js';

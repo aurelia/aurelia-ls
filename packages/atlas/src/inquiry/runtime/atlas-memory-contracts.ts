@@ -8,6 +8,7 @@ import type {
   AtlasSelfFunctionSurfaceRow,
   AtlasSelfSourceFileModuleShape,
   AtlasSelfSourceFileSurfaceRow,
+  AtlasSelfVariableSurfaceRow,
 } from "./self-analysis.js";
 /** Schema marker for the filesystem-backed Atlas memory store. */
 export const ATLAS_MEMORY_SCHEMA_VERSION = "atlas-memory.v1";
@@ -149,6 +150,46 @@ export type AtlasMemoryAnchor =
   | AtlasMemoryFixtureAnchor
   | AtlasMemoryAuLinkAnchor;
 
+/** Exact query/search tokens contributed by a durable memory anchor. */
+export function atlasMemoryAnchorQueryValues(
+  anchor: AtlasMemoryAnchor,
+): readonly string[] {
+  switch (anchor.kind) {
+    case "source":
+      return [
+        anchor.filePath,
+        anchor.symbolName,
+        anchor.summary,
+      ].filter(isDefinedMemorySearchValue);
+    case "lens":
+      return [
+        anchor.lensId,
+        anchor.projection,
+        anchor.summary,
+        ...Object.entries(anchor.filters ?? {}).map(([key, value]) =>
+          `${key}:${String(value)}`
+        ),
+      ].filter(isDefinedMemorySearchValue);
+    case "script":
+      return [anchor.command, anchor.summary].filter(isDefinedMemorySearchValue);
+    case "doc":
+      return [anchor.path, anchor.heading, anchor.summary].filter(isDefinedMemorySearchValue);
+    case "fixture":
+      return [anchor.path, anchor.scenario, anchor.summary].filter(isDefinedMemorySearchValue);
+    case "auLink":
+      return [anchor.linkId, anchor.symbolName, anchor.summary].filter(isDefinedMemorySearchValue);
+  }
+}
+
+/** Compact single-string form for anchor search surfaces that do not need weighted tokens. */
+export function atlasMemoryAnchorSearchText(anchor: AtlasMemoryAnchor): string {
+  return atlasMemoryAnchorQueryValues(anchor).join(" ");
+}
+
+export function isDefinedMemorySearchValue(value: string | undefined): value is string {
+  return value !== undefined && value.length > 0;
+}
+
 /** Live check that joins memory to semantic-runtime class pressure. */
 export interface AtlasMemoryProductLargeClassCheck {
   /** Live check discriminator. */
@@ -227,6 +268,22 @@ export interface AtlasMemoryAtlasSelfFunctionCheck {
   readonly minCallCount?: number;
 }
 
+/** Live check that joins memory to Atlas self-analysis variable pressure. */
+export interface AtlasMemoryAtlasSelfVariableCheck {
+  /** Live check discriminator. */
+  readonly kind: "atlas-self-variable";
+  /** Top-level variable declaration name to find in atlas.self. */
+  readonly variableName: string;
+  /** Optional repository-relative file path to disambiguate the declaration. */
+  readonly filePath?: string;
+  /** Optional variable line threshold that keeps variable-density pressure live. */
+  readonly minLineCount?: number;
+  /** Optional large initializer threshold for table/catalog-shaped declarations. */
+  readonly minInitializerEntryCount?: number;
+  /** Optional initializer kind expected by the live check. */
+  readonly initializerKind?: AtlasSelfVariableSurfaceRow["initializerKind"];
+}
+
 /** Live check that joins memory to a semantic-runtime auLink decorator placement. */
 export interface AtlasMemoryAuLinkExistsCheck {
   /** Live check discriminator. */
@@ -247,6 +304,7 @@ export type AtlasMemoryLiveCheck =
   | AtlasMemoryAtlasSelfSourceFileCheck
   | AtlasMemoryAtlasSelfClassCheck
   | AtlasMemoryAtlasSelfFunctionCheck
+  | AtlasMemoryAtlasSelfVariableCheck
   | AtlasMemoryAuLinkExistsCheck;
 
 /** Durable memory record loaded from the JSON store. */
@@ -344,7 +402,7 @@ export interface AtlasMemoryLiveCheckResult {
   /** Original live check. */
   readonly check: AtlasMemoryLiveCheck;
   /** Check-local status before record-level reduction. */
-  readonly status: "active" | "resolved" | "stale-source" | "stale-check";
+  readonly status: "active" | "present" | "resolved" | "stale-source" | "stale-check";
   /** Grounded summary of the observed live fact. */
   readonly summary: string;
   /** Product class source when available. */
@@ -357,6 +415,8 @@ export interface AtlasMemoryLiveCheckResult {
   readonly atlasSelfClass?: AtlasSelfClassSurfaceRow;
   /** Matched Atlas function row when available. */
   readonly atlasSelfFunction?: AtlasSelfFunctionSurfaceRow;
+  /** Matched Atlas variable row when available. */
+  readonly atlasSelfVariable?: AtlasSelfVariableSurfaceRow;
 }
 
 /** Durable memory record joined to live checks. */

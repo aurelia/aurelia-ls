@@ -1,4 +1,4 @@
-import { CharCode, type Token, TokenType } from './expression-scanner.js';
+import { CharCode, cookExpressionStringSegment, type Token, TokenType } from './expression-scanner.js';
 import { TemplateExpression } from './ast.js';
 import type { SourceSpan } from './source-span.js';
 import type { IsAssign } from './ast.js';
@@ -68,7 +68,7 @@ export class CompletedInputTemplateCorridor {
     const src = this.state.source;
 
     const flushChunk = (end: number) => {
-      cooked.push(src.slice(chunkStart, end));
+      cooked.push(cookExpressionStringSegment(src, chunkStart, end));
     };
 
     while (i < src.length) {
@@ -137,7 +137,7 @@ export class CompletedInputTemplateCorridor {
     const eofSpan = this.state.span(this.state.source.length, this.state.source.length);
     const fullCooked = [
       ...cooked,
-      this.state.source.slice(chunkStart),
+      cookExpressionStringSegment(this.state.source, chunkStart),
     ];
     return this.companionBuilder.degradedFailureAt(
       eofSpan,

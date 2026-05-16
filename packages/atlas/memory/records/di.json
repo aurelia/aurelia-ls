@@ -348,6 +348,7 @@
         "Use DiResolveCallSite nullish key arguments before citing kernel ErrorNames.null_undefined_key / AUR0014; only container-activation contexts can spend that exact authority for ambient resolve because definitely-absent contexts throw AUR0016 first.",
         "Use DiInjectDecoratorSite target-kind recognition before citing kernel ErrorNames.invalid_inject_decorator_usage / AUR0022; class and field targets are valid, method/getter/setter/accessor targets are exact invalid contexts under the TC39 decorator runtime, and legacy parameter decorators stay unclaimed until modeled separately.",
         "Use DiDependencyCycleIssueMaterializer for source-visible singleton activation cycles reached from concrete container.get(...) entries before citing cyclic_dependency / AUR0003.",
+        "DI source API issue sites should carry boot-admitted source-file handles and publish spans through sourceSpanAddressForSite; do not re-resolve issue source from filenames on scanner-owned paths.",
         "Use DiRegistrationSpendingCascade recursion detection before citing unable_auto_register / AUR0006; this is a registration-cascade guard, not a generic container API syntax issue.",
         "Do not add more kernel framework-error constants until the DI, registration, resolver, or evaluator substrate owns the exact framework behavior."
       ],
@@ -425,7 +426,7 @@
           "kind": "product-large-class",
           "className": "DiResolveCallIssueMaterializer",
           "filePath": "packages/semantic-runtime/src/di/resolve-call-issues.ts",
-          "minLineCount": 80,
+          "minLineCount": 65,
           "minMethodCount": 3
         },
         {
@@ -437,7 +438,7 @@
           "kind": "product-large-class",
           "className": "DiInjectDecoratorIssueMaterializer",
           "filePath": "packages/semantic-runtime/src/di/inject-decorator-issues.ts",
-          "minLineCount": 80,
+          "minLineCount": 45,
           "minMethodCount": 3
         },
         {
@@ -446,7 +447,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "decision:container-api-key-shape-before-diagnostics",
@@ -535,7 +536,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "frontier:di-dependency-cycle-issues",
@@ -578,12 +579,12 @@
           "kind": "product-large-class",
           "className": "DiDependencyCycleIssueMaterializer",
           "filePath": "packages/semantic-runtime/src/di/dependency-cycle-issues.ts",
-          "minLineCount": 80,
+          "minLineCount": 55,
           "minMethodCount": 3
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-05-15"
     }
   ]
 }

@@ -30,7 +30,7 @@ import {
   sourceRangeFromOneBasedReference,
   type SourceProject,
 } from "../../source/index.js";
-import { groupByDefined } from "../../collections.js";
+import { groupByDefined, uniqueSortedStrings } from "../../collections.js";
 import {
   callDependencyRows,
   enrichProductArchitectureCallSiteRows,
@@ -71,6 +71,7 @@ import {
   sourceForRow,
   sourceInspectionContinuations,
 } from "./lens-continuation-utils.js";
+import { orderClassSurfaceRows } from "./class-surface-order.js";
 
 /** Value returned by the product.architecture lens. */
 export interface ProductArchitectureValue {
@@ -96,6 +97,8 @@ export interface ProductArchitectureValue {
   readonly functionSurfaces?: readonly ProductArchitectureFunctionSurfaceRow[];
   /** Top-level helper-name duplicate groups when requested. */
   readonly functionDuplicateGroups?: readonly ProductArchitectureFunctionDuplicateGroupRow[];
+  /** Function groups that share switch-dispatch topology when requested. */
+  readonly functionControlFlowShapeGroups?: readonly ProductArchitectureFunctionControlFlowShapeGroupRow[];
   /** Checker-backed call or constructor invocation rows when requested. */
   readonly callSites?: readonly ProductArchitectureCallSiteRow[];
   /** Grouped checker-backed call dependency rows when requested. */
@@ -112,6 +115,8 @@ export interface ProductArchitectureValue {
   readonly fieldProvenanceConstructions?: readonly ProductArchitectureFieldProvenanceConstructionRow[];
   /** Cold build phase timings when requested. */
   readonly profile?: {
+    /** True when function body fingerprints and switch topology facts were included. */
+    readonly includeFunctionBodyAnalysis: boolean;
     /** True when checker-backed call-site and call dependency rows were included. */
     readonly includeCallSites: boolean;
     /** True when call-site rows include expensive checker type/signature displays. */
@@ -149,6 +154,7 @@ type ProductArchitectureProjection =
   | "classes"
   | "functions"
   | "function-duplicates"
+  | "function-control-flow-shapes"
   | "call-sites"
   | "call-dependencies"
   | "symbol-references"
@@ -158,17 +164,74 @@ type ProductArchitectureProjection =
   | "field-provenance"
   | "profile";
 
+type ProductArchitectureUsageFamily =
+  | "call"
+  | "import-export"
+  | "runtime"
+  | "type"
+  | "value";
+
+interface ProductArchitectureUsageFamilyPolicy {
+  readonly referenceRoles: readonly ProductArchitectureSymbolReferenceRow["usageRole"][];
+  readonly dependencyReferenceCount: (row: ProductArchitectureSymbolDependencyRow) => number;
+}
+
+const productArchitectureUsageFamilyPolicies: Readonly<Record<ProductArchitectureUsageFamily, ProductArchitectureUsageFamilyPolicy>> = {
+  "import-export": {
+    referenceRoles: ["import", "export"],
+    dependencyReferenceCount: (row) => row.importExportReferenceCount,
+  },
+  type: {
+    referenceRoles: ["type-reference", "heritage"],
+    dependencyReferenceCount: (row) => row.typeReferenceCount,
+  },
+  value: {
+    referenceRoles: ["value-reference", "member-reference"],
+    dependencyReferenceCount: (row) => row.valueReferenceCount,
+  },
+  call: {
+    referenceRoles: ["call-expression", "member-call", "new-expression"],
+    dependencyReferenceCount: (row) => row.callReferenceCount,
+  },
+  runtime: {
+    referenceRoles: [
+      "value-reference",
+      "member-reference",
+      "call-expression",
+      "member-call",
+      "new-expression",
+    ],
+    dependencyReferenceCount: (row) => row.runtimeReferenceCount,
+  },
+};
+
 export interface ProductArchitectureFunctionDuplicateGroupRow {
   readonly id: string;
   readonly name: string;
   readonly functionCount: number;
   readonly fileCount: number;
   readonly lineCount: number;
+  readonly filePaths: readonly string[];
   readonly distinctBodyFingerprintCount: number | null;
   readonly repeatedBodyFingerprintCount: number;
   readonly distinctBodyShapeFingerprintCount: number | null;
   readonly repeatedBodyShapeFingerprintCount: number;
   readonly samples: readonly string[];
+  readonly source: ProductArchitectureSourceReference;
+  readonly summary: string;
+}
+
+export interface ProductArchitectureFunctionControlFlowShapeGroupRow {
+  readonly id: string;
+  readonly switchTopologyFingerprint: string;
+  readonly functionCount: number;
+  readonly nameCount: number;
+  readonly fileCount: number;
+  readonly lineCount: number;
+  readonly switchTopologyCount: number;
+  readonly functionKinds: readonly ProductArchitectureFunctionSurfaceRow["functionKind"][];
+  readonly nameSamples: readonly string[];
+  readonly fileSamples: readonly string[];
   readonly source: ProductArchitectureSourceReference;
   readonly summary: string;
 }
@@ -186,6 +249,7 @@ export function answerProductArchitecture(
   const includeCallDetails = productArchitectureProjectionNeedsCallDetails(projection, inquiry);
 
   const analysis = readProductArchitectureAnalysis(sourceProject, {
+    includeFunctionBodyAnalysis: productArchitectureProjectionNeedsFunctionBodyAnalysis(projection, inquiry),
     includeCallSites: productArchitectureProjectionNeedsCallSites(projection, inquiry),
     includeCallDetails,
     includeSymbols: productArchitectureProjectionNeedsSymbols(projection),
@@ -283,6 +347,19 @@ export function answerProductArchitecture(
         filterFunctionDuplicateGroups(functionDuplicateGroups(analysis.functionSurfaces), inquiry),
         basis,
         (rows) => ({ ...productArchitectureBaseValue(analysis), functionDuplicateGroups: rows }),
+        productArchitectureMaintenanceEvidence,
+      );
+    case "function-control-flow-shapes":
+      return answerProductArchitectureRows(
+        inquiry,
+        "product.architecture:function-control-flow-shapes",
+        "semantic-runtime function control-flow shape group(s)",
+        filterFunctionControlFlowShapeGroups(functionControlFlowShapeGroups(analysis.functionSurfaces), inquiry),
+        basis,
+        (rows) => ({
+          ...productArchitectureBaseValue(analysis),
+          functionControlFlowShapeGroups: rows,
+        }),
         productArchitectureMaintenanceEvidence,
       );
     case "call-sites":
@@ -407,7 +484,7 @@ function productArchitectureSummaryRows(
   inquiry: Inquiry,
   analysis: ProductArchitectureAnalysis,
 ): ProductArchitectureSummaryRows {
-  const limit = Math.min(rowLimit(inquiry), 12);
+  const limit = rowLimit(inquiry);
   return {
     largeModules: [...analysis.modules]
       .filter((row) => filterModules([row], inquiry).length === 1)
@@ -495,7 +572,9 @@ function answerProductArchitectureProfile(
   const includeCallDetails = inquiryBooleanFilter(inquiry, "includeCallDetails") ?? false;
   const includeSymbols = inquiryBooleanFilter(inquiry, "includeSymbols") ?? true;
   const includeKernelRecords = inquiryBooleanFilter(inquiry, "includeKernelRecords") ?? true;
+  const includeFunctionBodyAnalysis = inquiryBooleanFilter(inquiry, "includeFunctionBodyAnalysis") ?? false;
   const profile = profileProductArchitectureAnalysis(sourceProject, {
+    includeFunctionBodyAnalysis,
     includeCallSites,
     includeCallDetails,
     includeSymbols,
@@ -506,6 +585,7 @@ function answerProductArchitectureProfile(
     .slice(0, evidenceLimit(inquiry));
   const slowest = slowestPhases[0] ?? null;
   const lane = productArchitectureProfileLaneName(
+    profile.includeFunctionBodyAnalysis,
     profile.includeCallSites,
     profile.includeCallDetails,
     profile.includeSymbols,
@@ -520,6 +600,7 @@ function answerProductArchitectureProfile(
         ...productArchitectureBaseValue(profile.analysis, true),
         profile: {
           includeCallSites: profile.includeCallSites,
+          includeFunctionBodyAnalysis: profile.includeFunctionBodyAnalysis,
           includeCallDetails: profile.includeCallDetails,
           includeSymbols: profile.includeSymbols,
           includeKernelRecords: profile.includeKernelRecords,
@@ -594,6 +675,7 @@ function productArchitectureProjection(
     case "classes":
     case "functions":
     case "function-duplicates":
+    case "function-control-flow-shapes":
     case "call-sites":
     case "call-dependencies":
     case "symbol-references":
@@ -623,6 +705,34 @@ function productArchitectureProjectionNeedsKernelRecords(
     projection === "kernel-records" ||
     projection === "kernel-batches" ||
     projection === "field-provenance";
+}
+
+function productArchitectureProjectionNeedsFunctionBodyAnalysis(
+  projection: ProductArchitectureProjection,
+  inquiry: Inquiry,
+): boolean {
+  const explicit = inquiryBooleanFilter(inquiry, "includeFunctionBodyAnalysis");
+  if (explicit !== undefined) {
+    return explicit;
+  }
+  if (
+    projection === "function-duplicates" ||
+    projection === "function-control-flow-shapes"
+  ) {
+    return true;
+  }
+  if (projection !== "functions") {
+    return false;
+  }
+  const orderBy = inquiryStringFilter(inquiry, "orderBy");
+  return inquiryStringFilter(inquiry, "bodyFingerprint") !== undefined ||
+    inquiryStringFilter(inquiry, "bodyShapeFingerprint") !== undefined ||
+    inquiryStringFilter(inquiry, "switchTopologyFingerprint") !== undefined ||
+    inquiryNumberFilter(inquiry, "minSwitchTopologyCount") !== undefined ||
+    orderBy === "bodyFingerprint" ||
+    orderBy === "bodyShapeFingerprint" ||
+    orderBy === "switchTopologyCount" ||
+    orderBy === "switchTopologyFingerprint";
 }
 
 function productArchitectureProjectionNeedsCallSites(
@@ -858,7 +968,7 @@ function filterClassSurfaces(
       ...row.auLinkCatalogIdsForName,
     ]),
   );
-  return orderClassSurfaces(filtered, inquiryStringFilter(inquiry, "orderBy"));
+  return orderClassSurfaceRows(filtered, inquiryStringFilter(inquiry, "orderBy"));
 }
 
 function filterFunctionSurfaces(
@@ -877,12 +987,14 @@ function filterFunctionSurfaces(
       inquiryStringFilter(inquiry, "parentFunctionName"),
     ) &&
     matchesFilterValue(row.name, inquiryStringFilter(inquiry, "functionName")) &&
-    matchesFilterValue(row.bodyFingerprint, inquiryStringFilter(inquiry, "bodyFingerprint")) &&
-    matchesFilterValue(row.bodyShapeFingerprint, inquiryStringFilter(inquiry, "bodyShapeFingerprint")) &&
+    matchesFilterValue(row.bodyFingerprint ?? "", inquiryStringFilter(inquiry, "bodyFingerprint")) &&
+    matchesFilterValue(row.bodyShapeFingerprint ?? "", inquiryStringFilter(inquiry, "bodyShapeFingerprint")) &&
+    matchesFilterValue(row.switchTopologyFingerprint ?? "", inquiryStringFilter(inquiry, "switchTopologyFingerprint")) &&
     matchesFilterValue(row.exported, inquiryBooleanFilter(inquiry, "exported")) &&
     matchesFilterValue(row.static, inquiryBooleanFilter(inquiry, "static")) &&
     matchesFilterValue(row.async, inquiryBooleanFilter(inquiry, "async")) &&
     atLeast(row.lineCount, inquiryNumberFilter(inquiry, "minLineCount")) &&
+    atLeast(row.switchTopologyCount, inquiryNumberFilter(inquiry, "minSwitchTopologyCount")) &&
     atLeast(row.callSiteCount, inquiryNumberFilter(inquiry, "minCallSiteCount")) &&
     atLeast(
       row.distinctCalleeCount,
@@ -900,8 +1012,11 @@ function filterFunctionSurfaces(
       row.className ?? "",
       row.parentFunctionName ?? "",
       row.name,
-      row.bodyFingerprint,
-      row.bodyShapeFingerprint,
+      row.bodyFingerprint ?? "",
+      row.bodyShapeFingerprint ?? "",
+      row.switchTopologyFingerprint ?? "",
+      ...row.sampleCalleeNames,
+      ...row.sampleCalleeTexts,
       row.summary,
     ]),
   );
@@ -941,8 +1056,14 @@ function functionDuplicateGroupRow(
   if (fileCount <= 1) {
     return null;
   }
-  const rowsByBodyFingerprint = groupByDefined(group, (row) => row.bodyFingerprint);
-  const rowsByBodyShapeFingerprint = groupByDefined(group, (row) => row.bodyShapeFingerprint);
+  const rowsByBodyFingerprint = groupByDefined(
+    group,
+    (row) => row.bodyFingerprint ?? undefined,
+  );
+  const rowsByBodyShapeFingerprint = groupByDefined(
+    group,
+    (row) => row.bodyShapeFingerprint ?? undefined,
+  );
   const first = group[0];
   if (first === undefined) {
     return null;
@@ -956,6 +1077,7 @@ function functionDuplicateGroupRow(
     functionCount: group.length,
     fileCount,
     lineCount,
+    filePaths: uniqueSortedStrings(group.map((row) => row.filePath)),
     distinctBodyFingerprintCount: rowsByBodyFingerprint.size === 0 ? null : rowsByBodyFingerprint.size,
     repeatedBodyFingerprintCount,
     distinctBodyShapeFingerprintCount: rowsByBodyShapeFingerprint.size === 0 ? null : rowsByBodyShapeFingerprint.size,
@@ -970,8 +1092,10 @@ function filterFunctionDuplicateGroups(
   rows: readonly ProductArchitectureFunctionDuplicateGroupRow[],
   inquiry: Inquiry,
 ): readonly ProductArchitectureFunctionDuplicateGroupRow[] {
+  const pathPrefix = pathPrefixFilter(inquiry);
   const filtered = rows.filter((row) =>
     matchesFilterValue(row.name, inquiryStringFilter(inquiry, "functionName")) &&
+    (pathPrefix === undefined || row.filePaths.some((filePath) => matchesPathPrefix(filePath, pathPrefix))) &&
     atLeast(row.functionCount, inquiryNumberFilter(inquiry, "minFunctionCount")) &&
     atLeast(row.fileCount, inquiryNumberFilter(inquiry, "minFileCount")) &&
     atLeast(row.repeatedBodyFingerprintCount, inquiryNumberFilter(inquiry, "minRepeatedBodyFingerprintCount")) &&
@@ -992,6 +1116,84 @@ function repeatedFingerprintCount(
   return [...groups.values()]
     .filter((rows) => new Set(rows.map((row) => row.filePath)).size > 1)
     .length;
+}
+
+function compareFunctionSurfaceRows(
+  left: ProductArchitectureFunctionSurfaceRow,
+  right: ProductArchitectureFunctionSurfaceRow,
+): number {
+  return left.filePath.localeCompare(right.filePath) ||
+    left.source.startLine - right.source.startLine ||
+    left.name.localeCompare(right.name);
+}
+
+type ProductArchitectureFunctionSurfaceWithSwitchTopology =
+  ProductArchitectureFunctionSurfaceRow & {
+    readonly switchTopologyFingerprint: string;
+  };
+
+function functionControlFlowShapeGroups(
+  rows: readonly ProductArchitectureFunctionSurfaceRow[],
+): readonly ProductArchitectureFunctionControlFlowShapeGroupRow[] {
+  const keyedRows = rows.filter(
+    (row): row is ProductArchitectureFunctionSurfaceWithSwitchTopology =>
+      row.switchTopologyFingerprint !== null,
+  );
+  const bySwitchTopology = groupByDefined(keyedRows, (row) => row.switchTopologyFingerprint);
+  return [...bySwitchTopology.entries()]
+    .flatMap(([switchTopologyFingerprint, group]) => {
+      if (group.length < 2) {
+        return [];
+      }
+      const sortedRows = [...group].sort(compareFunctionSurfaceRows);
+      const names = uniqueSortedStrings(sortedRows.map((row) => row.name));
+      const files = uniqueSortedStrings(sortedRows.map((row) => row.filePath));
+      const functionKinds = uniqueSortedStrings(sortedRows.map((row) => row.functionKind));
+      return [{
+        id: `product.architecture:function-control-flow-shape:${switchTopologyFingerprint}`,
+        switchTopologyFingerprint,
+        functionCount: sortedRows.length,
+        nameCount: names.length,
+        fileCount: files.length,
+        lineCount: sortedRows.reduce((sum, row) => sum + row.lineCount, 0),
+        switchTopologyCount: Math.max(...sortedRows.map((row) => row.switchTopologyCount)),
+        functionKinds,
+        nameSamples: names.slice(0, 8),
+        fileSamples: files.slice(0, 5),
+        source: sortedRows[0]!.source,
+        summary: `${sortedRows.length} function surface(s) share one switch-dispatch topology across ${names.length} name(s) and ${files.length} file(s).`,
+      } satisfies ProductArchitectureFunctionControlFlowShapeGroupRow];
+    })
+    .sort((left, right) =>
+      right.functionCount - left.functionCount ||
+      right.nameCount - left.nameCount ||
+      right.fileCount - left.fileCount ||
+      right.lineCount - left.lineCount ||
+      left.switchTopologyFingerprint.localeCompare(right.switchTopologyFingerprint)
+    );
+}
+
+function filterFunctionControlFlowShapeGroups(
+  rows: readonly ProductArchitectureFunctionControlFlowShapeGroupRow[],
+  inquiry: Inquiry,
+): readonly ProductArchitectureFunctionControlFlowShapeGroupRow[] {
+  const filtered = rows.filter((row) =>
+    matchesFilterValue(row.switchTopologyFingerprint, inquiryStringFilter(inquiry, "switchTopologyFingerprint")) &&
+    atLeast(row.functionCount, inquiryNumberFilter(inquiry, "minFunctionCount")) &&
+    atLeast(row.nameCount, inquiryNumberFilter(inquiry, "minNameCount")) &&
+    atLeast(row.fileCount, inquiryNumberFilter(inquiry, "minFileCount")) &&
+    atLeast(row.lineCount, inquiryNumberFilter(inquiry, "minLineCount")) &&
+    atLeast(row.switchTopologyCount, inquiryNumberFilter(inquiry, "minSwitchTopologyCount")) &&
+    inquiryQueryMatches(inquiry, [
+      row.id,
+      row.switchTopologyFingerprint,
+      row.summary,
+      ...row.functionKinds,
+      ...row.nameSamples,
+      ...row.fileSamples,
+    ]),
+  );
+  return orderFunctionControlFlowShapeGroups(filtered, inquiryStringFilter(inquiry, "orderBy"));
 }
 
 function filterCallSites(
@@ -1664,52 +1866,24 @@ function matchesUsageFamily(
   role: ProductArchitectureSymbolReferenceRow["usageRole"],
   family: string | undefined,
 ): boolean {
-  if (family === undefined) {
-    return true;
-  }
-  switch (family) {
-    case "import-export":
-      return role === "import" || role === "export";
-    case "type":
-      return role === "type-reference" || role === "heritage";
-    case "value":
-      return role === "value-reference" || role === "member-reference";
-    case "call":
-      return role === "call-expression" ||
-        role === "member-call" ||
-        role === "new-expression";
-    case "runtime":
-      return role === "value-reference" ||
-        role === "member-reference" ||
-        role === "call-expression" ||
-        role === "member-call" ||
-        role === "new-expression";
-    default:
-      return true;
-  }
+  const policy = productArchitectureUsageFamilyPolicy(family);
+  return policy == null || policy.referenceRoles.includes(role);
 }
 
 function matchesSymbolDependencyUsageFamily(
   row: ProductArchitectureSymbolDependencyRow,
   family: string | undefined,
 ): boolean {
-  if (family === undefined) {
-    return true;
-  }
-  switch (family) {
-    case "import-export":
-      return row.importExportReferenceCount > 0;
-    case "type":
-      return row.typeReferenceCount > 0;
-    case "value":
-      return row.valueReferenceCount > 0;
-    case "call":
-      return row.callReferenceCount > 0;
-    case "runtime":
-      return row.runtimeReferenceCount > 0;
-    default:
-      return true;
-  }
+  const policy = productArchitectureUsageFamilyPolicy(family);
+  return policy == null || policy.dependencyReferenceCount(row) > 0;
+}
+
+function productArchitectureUsageFamilyPolicy(
+  family: string | undefined,
+): ProductArchitectureUsageFamilyPolicy | null {
+  return family == null
+    ? null
+    : productArchitectureUsageFamilyPolicies[family as ProductArchitectureUsageFamily] ?? null;
 }
 
 function orderModules(
@@ -1812,37 +1986,6 @@ function orderCycles(
   }
 }
 
-function orderClassSurfaces(
-  rows: readonly ProductArchitectureClassSurfaceRow[],
-  orderBy: string | undefined,
-): readonly ProductArchitectureClassSurfaceRow[] {
-  switch (orderBy) {
-    case "size":
-    case "lineCount":
-      return [...rows].sort((left, right) =>
-        right.lineCount - left.lineCount ||
-        left.filePath.localeCompare(right.filePath) ||
-        left.name.localeCompare(right.name),
-      );
-    case "methodCount":
-      return [...rows].sort((left, right) =>
-        right.methodCount - left.methodCount ||
-        left.filePath.localeCompare(right.filePath) ||
-        left.name.localeCompare(right.name),
-      );
-    case "propertyCount":
-      return [...rows].sort((left, right) =>
-        right.propertyCount - left.propertyCount ||
-        left.filePath.localeCompare(right.filePath) ||
-        left.name.localeCompare(right.name),
-      );
-    case undefined:
-    case "source":
-    default:
-      return rows;
-  }
-}
-
 function orderFunctionSurfaces(
   rows: readonly ProductArchitectureFunctionSurfaceRow[],
   orderBy: string | undefined,
@@ -1880,6 +2023,13 @@ function orderFunctionSurfaces(
       return [...rows].sort((left, right) =>
         right.crossAreaCallSiteCount - left.crossAreaCallSiteCount ||
         right.callSiteCount - left.callSiteCount ||
+        left.filePath.localeCompare(right.filePath) ||
+        left.source.startLine - right.source.startLine,
+      );
+    case "switchTopologyCount":
+      return [...rows].sort((left, right) =>
+        right.switchTopologyCount - left.switchTopologyCount ||
+        right.lineCount - left.lineCount ||
         left.filePath.localeCompare(right.filePath) ||
         left.source.startLine - right.source.startLine,
       );
@@ -1923,6 +2073,54 @@ function orderFunctionDuplicateGroups(
         right.functionCount - left.functionCount ||
         right.lineCount - left.lineCount ||
         left.name.localeCompare(right.name),
+      );
+  }
+}
+
+function orderFunctionControlFlowShapeGroups(
+  rows: readonly ProductArchitectureFunctionControlFlowShapeGroupRow[],
+  orderBy: string | undefined,
+): readonly ProductArchitectureFunctionControlFlowShapeGroupRow[] {
+  switch (orderBy) {
+    case "nameCount":
+      return [...rows].sort((left, right) =>
+        right.nameCount - left.nameCount ||
+        right.functionCount - left.functionCount ||
+        right.lineCount - left.lineCount ||
+        left.switchTopologyFingerprint.localeCompare(right.switchTopologyFingerprint),
+      );
+    case "fileCount":
+      return [...rows].sort((left, right) =>
+        right.fileCount - left.fileCount ||
+        right.functionCount - left.functionCount ||
+        right.lineCount - left.lineCount ||
+        left.switchTopologyFingerprint.localeCompare(right.switchTopologyFingerprint),
+      );
+    case "lineCount":
+    case "size":
+      return [...rows].sort((left, right) =>
+        right.lineCount - left.lineCount ||
+        right.functionCount - left.functionCount ||
+        right.nameCount - left.nameCount ||
+        left.switchTopologyFingerprint.localeCompare(right.switchTopologyFingerprint),
+      );
+    case "switchTopologyCount":
+      return [...rows].sort((left, right) =>
+        right.switchTopologyCount - left.switchTopologyCount ||
+        right.functionCount - left.functionCount ||
+        right.lineCount - left.lineCount ||
+        left.switchTopologyFingerprint.localeCompare(right.switchTopologyFingerprint),
+      );
+    case "functionCount":
+    case "switchTopologyFingerprint":
+    case undefined:
+    default:
+      return [...rows].sort((left, right) =>
+        right.functionCount - left.functionCount ||
+        right.nameCount - left.nameCount ||
+        right.fileCount - left.fileCount ||
+        right.lineCount - left.lineCount ||
+        left.switchTopologyFingerprint.localeCompare(right.switchTopologyFingerprint),
       );
   }
 }

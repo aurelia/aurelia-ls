@@ -17,6 +17,7 @@
         "Start here when authoring operations need to assemble entrypoints, components, templates, styles, services, registrations, routes, or component dependencies.",
         "Keep generator taste, formatting policy, and recipe-specific preferences out of application topology.",
         "When recipe requests allow custom paths, derive topology component references and template/style import specifiers from the same paths used by source plans; `ApplicationTopologyBuilder.component(...)` owns component reference specifier derivation through `referenceFromPath`, and default-layout specifiers such as `./app` should not leak into custom-path topology.",
+        "Large recipe topology builders should stay as short phase assemblers plus named topology artifact helpers, such as adding a root component, form component, state service, route, or entrypoint. That gives Atlas stable handles for topology intent without pushing recipe taste into `ApplicationTopologyBuilder`.",
         "This frontier is nextActionPolicy=when-touched: use it as topology grounding when app-building, fixture, or authoring-operation work needs topology assembly, not as default autonomous work just because the builder is live.",
         "`ApplicationTopology` and reopened `AppTopology` share the same style asset vocabulary: owner kind, asset kind, source kind, optional style file, and optional import specifier.",
         "`AppTopology.styles` and component `styles` rows are source-backed by local CSS imports and inline Aurelia `cssModules(...)` / `shadowCSS(...)` registry arguments. They distinguish plain component/global stylesheets from CSS module and Shadow DOM style registries. Use those rows for the `style-resource` expected effect and `style-resource-ownership` taste; dynamic class/style bindings are a separate template binding lane.",
@@ -58,7 +59,7 @@
       ],
       "nextActionPolicy": "when-touched",
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-14"
+      "updatedAt": "2026-05-15"
     }
   ]
 }

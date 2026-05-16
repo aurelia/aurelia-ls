@@ -13,6 +13,7 @@ import {
   findTemplateExpressionClose,
   isInterpolationStart,
 } from "./expression-boundary-scanner.js";
+import { cookExpressionStringSegment } from "./expression-scanner.js";
 import {
   ClosedSubtreeRef,
   ExpressionCompanionFrameKind,
@@ -152,7 +153,7 @@ export class InterpolationParser {
     while (index < text.length) {
       if (isInterpolationStart(text, index)) {
         sawHole = true;
-        parts.push(text.slice(partStart, index));
+        parts.push(cookExpressionStringSegment(text, partStart, index));
 
         const holeOpenStart = index;
         index += 2;
@@ -197,7 +198,7 @@ export class InterpolationParser {
       return null;
     }
 
-    parts.push(text.slice(partStart));
+    parts.push(cookExpressionStringSegment(text, partStart));
     return { parts, holes };
   }
 }

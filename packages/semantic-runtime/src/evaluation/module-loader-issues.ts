@@ -2,34 +2,25 @@ import ts from 'typescript';
 
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
-  SourceSpanAddress,
-  SourceSpanRole,
-} from '../kernel/address.js';
-import {
-  EvidenceKind,
-  EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
-import type { AddressHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
-import { ProvenanceRecord } from '../kernel/provenance.js';
+import { sourceSpanAddressForSite } from '../kernel/source-address.js';
 import {
   KernelStore,
   KernelStoreBatch,
-  type KernelStoreRecord,
 } from '../kernel/store.js';
 import {
   StaticEvaluationExpressionReader,
 } from './expression-reader.js';
 import {
-  EvaluationIssue,
   EvaluationIssueKind,
   EvaluationIssuePhase,
   EvaluationIssueSubjectKind,
 } from './evaluation-issue.js';
-import type { EvaluationIssuePublication } from './evaluation-issue-publication.js';
 import {
-  evaluationIssueProductRecords,
+  EvaluationIssuePublication,
+  EvaluationIssuePublisher,
 } from './evaluation-issue-publication.js';
 import {
   EvaluationIssueProjectResult,
@@ -68,22 +59,18 @@ class ModuleLoaderIssueSite {
   ) {}
 }
 
-class ModuleLoaderIssueSourceAddress {
-  constructor(
-    readonly handle: AddressHandle | null,
-    readonly records: readonly KernelStoreRecord[],
-  ) {}
-}
-
 export class ModuleLoaderIssueProjectResult extends EvaluationIssueProjectResult {}
 
 /** Materializes exact framework ModuleLoader diagnostics over statically evaluated source inputs. */
 export class ModuleLoaderIssueMaterializer {
   private readonly moduleLoader = new ModuleLoader();
+  private readonly issuePublisher: EvaluationIssuePublisher;
 
   constructor(
     readonly store: KernelStore,
-  ) {}
+  ) {
+    this.issuePublisher = new EvaluationIssuePublisher(store);
+  }
 
   materializeAndEmit(
     project: ProjectBootFrame,
@@ -95,9 +82,10 @@ export class ModuleLoaderIssueMaterializer {
     if (records.length > 0) {
       this.store.commit(new KernelStoreBatch(records, `module-loader-issues:${project.projectKey}`));
     }
-    for (const publication of publications) {
-      this.store.productDetails.add(EvaluationProductDetails.Issue, publication.issue.productHandle, publication.issue);
-    }
+    this.store.productDetails.addAll(
+      EvaluationProductDetails.Issue,
+      publications.map((publication) => publication.issue),
+    );
     return new ModuleLoaderIssueProjectResult(publications.map((publication) => publication.issue), records);
   }
 
@@ -132,63 +120,30 @@ export class ModuleLoaderIssueMaterializer {
       return [];
     }
     const local = moduleLoaderIssueLocalKey(project, source, site, index);
-    const span = this.sourceAddress(local, source.sourceFile, site.input);
-    const evidenceHandle = this.store.handles.evidence(`${local}:evidence`);
-    const provenanceHandle = this.store.handles.provenance(`${local}:provenance`);
+    const span = sourceSpanAddressForSite(this.store, local, {
+      sourceFileAddressHandle: source.admission.addressHandle,
+      start: site.input.getStart(source.sourceFile),
+      end: site.input.end,
+    });
     const message = moduleLoaderIssueMessage(site, result.issue.position, result.issue.value.kind);
-    const issue = new EvaluationIssue(
-      this.store.handles.product(local),
-      this.store.handles.identity(local),
-      project.projectKey,
-      EvaluationIssuePhase.ModuleLoaderTransform,
-      EvaluationIssueKind.InvalidModuleTransformInput,
-      site.subjectKind,
+    const publication = this.issuePublisher.publish({
+      local,
+      projectKey: project.projectKey,
+      phase: EvaluationIssuePhase.ModuleLoaderTransform,
+      issueKind: EvaluationIssueKind.InvalidModuleTransformInput,
+      subjectKind: site.subjectKind,
       message,
-      EvaluationFrameworkErrorCode.InvalidModuleTransformInput,
-      null,
-      result.issue.value.kind,
-      site.input.getText(source.sourceFile),
-      span.handle,
-    );
-    const records = [
-      ...span.records,
-      new EvidenceRecord(
-        evidenceHandle,
-        EvidenceKind.SemanticObservation,
-        [EvidenceRole.TransformInput, EvidenceRole.Diagnostic],
-        message,
-        span.handle,
-      ),
-      new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
-      ...evaluationIssueProductRecords(this.store, issue, source.admission.addressHandle, provenanceHandle),
-    ];
+      frameworkErrorCode: EvaluationFrameworkErrorCode.InvalidModuleTransformInput,
+      frameworkRawErrorAuthority: null,
+      actualValueKind: result.issue.value.kind,
+      rejectedValueText: site.input.getText(source.sourceFile),
+      sourceAddressHandle: span.handle,
+      ownerHandle: source.admission.addressHandle,
+      evidenceRoles: [EvidenceRole.TransformInput, EvidenceRole.Diagnostic],
+    });
     return [
-      {
-        issue,
-        records,
-      },
+      new EvaluationIssuePublication(publication.issue, [...span.records, ...publication.records]),
     ];
-  }
-
-  private sourceAddress(
-    local: string,
-    sourceFile: ts.SourceFile,
-    node: ts.Node,
-  ): ModuleLoaderIssueSourceAddress {
-    const file = this.store.readBestSourceFileAddressForFileName(sourceFile.fileName);
-    if (file == null) {
-      return new ModuleLoaderIssueSourceAddress(null, []);
-    }
-    const handle = this.store.handles.address(`${local}:source`);
-    return new ModuleLoaderIssueSourceAddress(handle, [
-      new SourceSpanAddress(
-        handle,
-        file.handle,
-        node.getStart(sourceFile),
-        node.end,
-        SourceSpanRole.Primary,
-      ),
-    ]);
   }
 }
 

@@ -9,6 +9,11 @@ interface EnumRawValueContextProfiler {
     summary: string,
     read: () => T,
   ): T;
+  countRepeated(
+    phase: string,
+    summary: string,
+    count?: number,
+  ): void;
 }
 
 const emptyEnumNameSet: ReadonlySet<string> = new Set<string>();
@@ -26,6 +31,13 @@ export class TypeScriptEnumRawValueContext {
     ts.CallExpression | ts.NewExpression,
     ts.Signature | null
   >();
+  readonly #functionSignatures = new WeakMap<
+    ts.SignatureDeclaration,
+    ts.Signature | null
+  >();
+  readonly #signatureReturnTypes = new WeakMap<ts.Signature, ts.Type>();
+  readonly #typeAtLocationCache = new WeakMap<ts.Node, ts.Type>();
+  readonly #contextualTypes = new WeakMap<ts.Expression, ts.Type | null>();
   readonly #objectLiteralContextualTypes = new WeakMap<
     ts.ObjectLiteralExpression,
     ts.Type | null
@@ -120,6 +132,14 @@ export class TypeScriptEnumRawValueContext {
     if (argumentIndex < 0) {
       return emptyEnumNameSet;
     }
+    const contextualEnumNames = this.#enumNamesForContextualType(
+      node,
+      "checker.getContextualType.call-argument",
+      "TypeChecker contextual type lookup for raw enum-like call arguments.",
+    );
+    if (contextualEnumNames !== null) {
+      return contextualEnumNames;
+    }
     const signature = this.#signatureForCallExpression(call);
     if (signature === null) {
       return emptyEnumNameSet;
@@ -141,6 +161,10 @@ export class TypeScriptEnumRawValueContext {
   ): ts.Signature | null {
     const cached = this.#callExpressionSignatures.get(node);
     if (cached !== undefined) {
+      this.#countCacheHit(
+        "checker.getResolvedSignature.call-expression",
+        "Resolved signature lookup served from the enum raw-value context cache.",
+      );
       return cached;
     }
     const signature = this.#profiler.measureRepeated(
@@ -188,6 +212,13 @@ export class TypeScriptEnumRawValueContext {
     if (counterpart === undefined) {
       return emptyEnumNameSet;
     }
+    if (expressionCannotCarryEnumValueType(counterpart)) {
+      this.#profiler.countRepeated(
+        "checker.getTypeAtLocation.comparison-counterpart.syntax-skipped",
+        "Skipped comparison counterpart type lookup because the expression syntax cannot carry an enum value type.",
+      );
+      return emptyEnumNameSet;
+    }
     return this.#enumNamesForTypeAtLocation(
       counterpart,
       "checker.getTypeAtLocation.comparison-counterpart",
@@ -229,6 +260,10 @@ export class TypeScriptEnumRawValueContext {
   ): ts.Type | null {
     const cached = this.#objectLiteralContextualTypes.get(node);
     if (cached !== undefined) {
+      this.#countCacheHit(
+        "checker.getContextualType.object-literal",
+        "Contextual object type lookup served from the enum raw-value context cache.",
+      );
       return cached;
     }
     const type = this.#profiler.measureRepeated(
@@ -238,6 +273,26 @@ export class TypeScriptEnumRawValueContext {
     );
     this.#objectLiteralContextualTypes.set(node, type);
     return type;
+  }
+
+  #enumNamesForContextualType(
+    node: ts.Expression,
+    phase: string,
+    summary: string,
+  ): ReadonlySet<string> | null {
+    const cached = this.#contextualTypes.get(node);
+    if (cached !== undefined) {
+      this.#countCacheHit(
+        phase,
+        "Contextual type lookup served from the enum raw-value context cache.",
+      );
+      return cached === null ? null : this.#enumNamesForType(cached);
+    }
+    const type = this.#profiler.measureRepeated(phase, summary, () =>
+      this.#checker.getContextualType(node) ?? null,
+    );
+    this.#contextualTypes.set(node, type);
+    return type === null ? null : this.#enumNamesForType(type);
   }
 
   #returnExpressionEnumNames(node: ts.Node): ReadonlySet<string> {
@@ -253,20 +308,50 @@ export class TypeScriptEnumRawValueContext {
     if (owner === null) {
       return emptyEnumNameSet;
     }
+    const signature = this.#signatureForFunctionLikeDeclaration(owner);
+    if (signature === null) {
+      return emptyEnumNameSet;
+    }
+    const returnType = this.#returnTypeForSignature(signature);
+    return this.#enumNamesForType(returnType);
+  }
+
+  #signatureForFunctionLikeDeclaration(
+    node: ts.SignatureDeclaration,
+  ): ts.Signature | null {
+    const cached = this.#functionSignatures.get(node);
+    if (cached !== undefined) {
+      this.#countCacheHit(
+        "checker.getSignatureFromDeclaration.return-expression",
+        "Function signature lookup served from the enum raw-value context cache.",
+      );
+      return cached;
+    }
     const signature = this.#profiler.measureRepeated(
       "checker.getSignatureFromDeclaration.return-expression",
       "TypeChecker signature lookup for raw enum-like return literals.",
-      () => this.#checker.getSignatureFromDeclaration(owner),
+      () => this.#checker.getSignatureFromDeclaration(node) ?? null,
     );
-    if (signature === undefined) {
-      return emptyEnumNameSet;
+    this.#functionSignatures.set(node, signature);
+    return signature;
+  }
+
+  #returnTypeForSignature(signature: ts.Signature): ts.Type {
+    const cached = this.#signatureReturnTypes.get(signature);
+    if (cached !== undefined) {
+      this.#countCacheHit(
+        "checker.getReturnTypeOfSignature.return-expression",
+        "Return type lookup served from the enum raw-value context cache.",
+      );
+      return cached;
     }
     const returnType = this.#profiler.measureRepeated(
       "checker.getReturnTypeOfSignature.return-expression",
       "TypeChecker return type lookup for raw enum-like return literals.",
       () => this.#checker.getReturnTypeOfSignature(signature),
     );
-    return this.#enumNamesForType(returnType);
+    this.#signatureReturnTypes.set(signature, returnType);
+    return returnType;
   }
 
   #enumNamesForTypeAtLocation(
@@ -274,12 +359,23 @@ export class TypeScriptEnumRawValueContext {
     phase: string,
     summary: string,
   ): ReadonlySet<string> {
-    const type = this.#profiler.measureRepeated(
-      phase,
-      summary,
-      () => this.#checker.getTypeAtLocation(node),
+    const cached = this.#typeAtLocationCache.get(node);
+    if (cached !== undefined) {
+      this.#countCacheHit(
+        phase,
+        "Type-at-location lookup served from the enum raw-value context cache.",
+      );
+      return this.#enumNamesForType(cached);
+    }
+    const type = this.#profiler.measureRepeated(phase, summary, () =>
+      this.#checker.getTypeAtLocation(node),
     );
+    this.#typeAtLocationCache.set(node, type);
     return this.#enumNamesForType(type);
+  }
+
+  #countCacheHit(phase: string, summary: string): void {
+    this.#profiler.countRepeated(`${phase}.cache-hit`, summary);
   }
 }
 
@@ -307,6 +403,30 @@ function isEnumRawValueComparisonOperator(kind: ts.SyntaxKind): boolean {
     default:
       return false;
   }
+}
+
+function expressionCannotCarryEnumValueType(node: ts.Expression): boolean {
+  const expression = skipParentheses(node);
+  if (
+    ts.isTypeOfExpression(expression) ||
+    ts.isStringLiteralLike(expression) ||
+    ts.isNumericLiteral(expression) ||
+    expression.kind === ts.SyntaxKind.TrueKeyword ||
+    expression.kind === ts.SyntaxKind.FalseKeyword ||
+    expression.kind === ts.SyntaxKind.NullKeyword ||
+    expression.kind === ts.SyntaxKind.RegularExpressionLiteral
+  ) {
+    return true;
+  }
+  return ts.isPrefixUnaryExpression(expression) && ts.isNumericLiteral(expression.operand);
+}
+
+function skipParentheses(node: ts.Expression): ts.Expression {
+  let current = node;
+  while (ts.isParenthesizedExpression(current)) {
+    current = current.expression;
+  }
+  return current;
 }
 
 function nearestFunctionLikeDeclaration(

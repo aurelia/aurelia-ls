@@ -737,8 +737,8 @@ function recognizeRouteDecorators(
     : [];
   const observations: RouteConfigObservation[] = [];
   const classTarget = readClassTarget(classNode);
-  const typeDefaults = readRouteTypeDefaults(context, classNode);
   const component = routeableComponentForClass(context, classNode);
+  const typeDefaults = readRouteTypeDefaults(context, classNode, component);
 
   for (const decorator of decorators) {
     const call = routeDecoratorCall(decorator, bindings);
@@ -755,6 +755,7 @@ function recognizeRouteDecorators(
         component,
         decorator,
         typeDefaults,
+        component,
       )
     );
   }
@@ -807,6 +808,7 @@ function readRouteConfigObservation(
   fallbackComponent: RouteableComponentObservation | null,
   sourceNode: ts.Node,
   typeDefaults: RouteTypeDefaults | null,
+  routeContextComponent: RouteableComponentObservation | null = null,
 ): RouteConfigObservation {
   if (expression == null || ts.isSpreadElement(expression)) {
     return openRouteConfigObservation(routeKind, originKind, fallbackComponent, sourceNode);
@@ -816,19 +818,19 @@ function readRouteConfigObservation(
     return routeConfigFromPathExpression(context, current, routeKind, originKind, fallbackComponent, sourceNode, typeDefaults);
   }
   if (ts.isObjectLiteralExpression(current)) {
-    return routeConfigFromObject(context, current, routeKind, originKind, fallbackComponent, typeDefaults, '');
+    return routeConfigFromObject(context, current, routeKind, originKind, fallbackComponent, typeDefaults, '', routeContextComponent);
   }
   const validationValue = evaluatedRouteConfigValidationValue(context, current);
   if (validationValue?.kind === EvaluationValueKind.Null) {
     return openRouteConfigObservation(
       routeKind,
       originKind,
-      routeableComponentForExpression(context, current) ?? fallbackComponent,
+      routeableComponentForExpression(context, current, routeContextComponent) ?? fallbackComponent,
       current,
       [invalidRouteConfigIssue(current, validationValue)],
     );
   }
-  return openRouteConfigObservation(routeKind, originKind, routeableComponentForExpression(context, current) ?? fallbackComponent, current);
+  return openRouteConfigObservation(routeKind, originKind, routeableComponentForExpression(context, current, routeContextComponent) ?? fallbackComponent, current);
 }
 
 function routeConfigFromPathExpression(
@@ -880,8 +882,9 @@ function routeConfigFromObject(
   fallbackComponent: RouteableComponentObservation | null,
   typeDefaults: RouteTypeDefaults | null,
   parentPath: string,
+  routeContextComponent: RouteableComponentObservation | null,
 ): RouteConfigObservation {
-  const read = readRouteObjectConfig(context, object, routeKind, fallbackComponent, typeDefaults, parentPath);
+  const read = readRouteObjectConfig(context, object, routeKind, fallbackComponent, typeDefaults, parentPath, routeContextComponent);
   return {
     routeKind: routeObjectKind(routeKind, read),
     originKind,
@@ -913,13 +916,14 @@ function readRouteObjectConfig(
   fallbackComponent: RouteableComponentObservation | null,
   typeDefaults: RouteTypeDefaults | null,
   parentPath: string,
+  routeContextComponent: RouteableComponentObservation | null,
 ): RouteObjectConfigRead {
   const expressions = readRouteObjectPropertyExpressions(object);
   const path = readRouteObjectPaths(context, object, typeDefaults);
-  const component = readRouteObjectComponent(context, object, fallbackComponent);
-  const fallback = readRouteObjectFallback(context, object, typeDefaults);
+  const component = readRouteObjectComponent(context, object, fallbackComponent, routeContextComponent);
+  const fallback = readRouteObjectFallback(context, object, typeDefaults, routeContextComponent);
   const redirectTo = readStringValueOrNull(context, expressions.redirectTo) ?? typeDefaults?.redirectTo ?? null;
-  const childRoutes = readRouteObjectChildRoutes(context, object, typeDefaults, propertyPath(parentPath, 'routes'));
+  const childRoutes = readRouteObjectChildRoutes(context, object, typeDefaults, propertyPath(parentPath, 'routes'), component);
   const objectId = readStringValueOrNull(context, expressions.id);
   const id = objectId ?? typeDefaults?.id ?? path.paths[0] ?? null;
 
@@ -1381,11 +1385,12 @@ function readRouteObjectComponent(
   context: RouteConfigRecognitionContext,
   object: ts.ObjectLiteralExpression,
   fallbackComponent: RouteableComponentObservation | null,
+  routeContextComponent: RouteableComponentObservation | null,
 ): RouteableComponentObservation | null {
   const componentExpression = readObjectPropertyExpression(object, 'component');
   return componentExpression == null
     ? fallbackComponent
-    : routeableComponentForExpression(context, componentExpression);
+    : routeableComponentForExpression(context, componentExpression, routeContextComponent);
 }
 
 function readRouteObjectChildRoutes(
@@ -1393,9 +1398,10 @@ function readRouteObjectChildRoutes(
   object: ts.ObjectLiteralExpression,
   typeDefaults: RouteTypeDefaults | null,
   parentPath: string,
+  routeContextComponent: RouteableComponentObservation | null,
 ): readonly RouteConfigObservation[] {
   return [
-    ...readChildRouteObservations(context, readObjectPropertyExpression(object, 'routes'), parentPath),
+    ...readChildRouteObservations(context, readObjectPropertyExpression(object, 'routes'), parentPath, routeContextComponent),
     ...(typeDefaults?.childRoutes ?? []),
   ];
 }
@@ -1404,8 +1410,9 @@ function readRouteObjectFallback(
   context: RouteConfigRecognitionContext,
   object: ts.ObjectLiteralExpression,
   typeDefaults: RouteTypeDefaults | null,
+  routeContextComponent: RouteableComponentObservation | null,
 ): RouteableComponentObservation | null {
-  return routeableComponentForExpression(context, readObjectPropertyExpression(object, 'fallback'))
+  return routeableComponentForExpression(context, readObjectPropertyExpression(object, 'fallback'), routeContextComponent)
     ?? typeDefaults?.fallback
     ?? null;
 }
@@ -1491,16 +1498,17 @@ function readChildRouteObservations(
   context: RouteConfigRecognitionContext,
   expression: ts.Expression | null,
   parentPath: string,
+  routeContextComponent: RouteableComponentObservation | null,
 ): readonly RouteConfigObservation[] {
   if (expression == null) {
     return [];
   }
   const current = unwrapExpression(expression);
   if (!ts.isArrayLiteralExpression(current)) {
-    return [childRouteObservationForRouteable(context, current)];
+    return [childRouteObservationForRouteable(context, current, routeContextComponent)];
   }
   return current.elements.map((element, index) =>
-    readChildRouteElementObservation(context, element, `${parentPath}[${index}]`)
+    readChildRouteElementObservation(context, element, `${parentPath}[${index}]`, routeContextComponent)
   );
 }
 
@@ -1508,6 +1516,7 @@ function readChildRouteElementObservation(
   context: RouteConfigRecognitionContext,
   element: ts.Expression,
   parentPath: string,
+  routeContextComponent: RouteableComponentObservation | null,
 ): RouteConfigObservation {
   if (ts.isSpreadElement(element)) {
     return openRouteConfigObservation(
@@ -1528,16 +1537,18 @@ function readChildRouteElementObservation(
       null,
       null,
       parentPath,
+      routeContextComponent,
     );
   }
-  return childRouteObservationForRouteable(context, expression);
+  return childRouteObservationForRouteable(context, expression, routeContextComponent);
 }
 
 function childRouteObservationForRouteable(
   context: RouteConfigRecognitionContext,
   expression: ts.Expression,
+  routeContextComponent: RouteableComponentObservation | null,
 ): RouteConfigObservation {
-  const component = routeableComponentForExpression(context, expression);
+  const component = routeableComponentForExpression(context, expression, routeContextComponent);
   const paths = routeableComponentDefaultPaths(component);
   const validationIssues = invalidLazyImportIssues('component', component);
   if (component == null || paths.length === 0) {
@@ -1606,6 +1617,7 @@ interface RouteTypeDefaults {
 function readRouteTypeDefaults(
   context: RouteConfigRecognitionContext,
   classNode: ts.ClassLikeDeclarationBase,
+  routeContextComponent: RouteableComponentObservation | null,
 ): RouteTypeDefaults {
   const id = readStaticPropertyInitializer(classNode, 'id');
   const path = readStaticPropertyInitializer(classNode, 'path');
@@ -1628,8 +1640,8 @@ function readRouteTypeDefaults(
     transitionPlan: readStringValueOrNull(context, transitionPlan),
     viewport: readStringValueOrNull(context, viewport),
     hasData: data != null ? true : null,
-    childRoutes: readChildRouteObservations(context, routes, 'routes'),
-    fallback: routeableComponentForExpression(context, fallback),
+    childRoutes: readChildRouteObservations(context, routes, 'routes', routeContextComponent),
+    fallback: routeableComponentForExpression(context, fallback, routeContextComponent),
     nav: readBooleanValueOrNull(context, nav),
     fieldSourceNodes: routeConfigFieldSourceNodes([
       ['id', id],
@@ -1681,13 +1693,14 @@ function routeableComponentForClass(
 function routeableComponentForExpression(
   context: RouteConfigRecognitionContext,
   expression: ts.Expression | null,
+  routeContextComponent: RouteableComponentObservation | null = null,
 ): RouteableComponentObservation | null {
   if (expression == null || ts.isSpreadElement(expression)) {
     return null;
   }
   const current = unwrapExpression(expression);
   if (ts.isStringLiteral(current) || ts.isNoSubstitutionTemplateLiteral(current)) {
-    return stringRouteableComponent(context, current);
+    return stringRouteableComponent(context, current, routeContextComponent);
   }
   const dynamicImportSpecifier = readDynamicImportSpecifier(current);
   const read = context.expressionReader.evaluateExpression(current);
@@ -1703,12 +1716,17 @@ function routeableComponentForExpression(
 function stringRouteableComponent(
   context: RouteConfigRecognitionContext,
   expression: ts.StringLiteral | ts.NoSubstitutionTemplateLiteral,
+  routeContextComponent: RouteableComponentObservation | null,
 ): RouteableComponentObservation {
+  const routeContextDefinition = routeContextComponent?.resourceDefinition ?? null;
+  const scopedDefinition = routeContextDefinition?.type === ResourceDefinitionKind.CustomElement
+    ? context.resourceIndex.lookupCustomElementByResourceNameInDependencies(expression.text, routeContextDefinition.dependencies)
+    : null;
   return {
     componentKind: RouteableComponentKind.CustomElementName,
     localName: expression.text,
     sourceNode: expression,
-    resourceDefinition: context.resourceIndex.lookupByResourceName(expression.text),
+    resourceDefinition: scopedDefinition ?? context.resourceIndex.lookupCustomElementByResourceName(expression.text),
     invalidLazyImport: false,
   };
 }

@@ -1,6 +1,7 @@
 import ts from 'typescript';
 
 import type { ProjectBootFrame } from '../boot/frames.js';
+import type { AddressHandle } from '../kernel/handles.js';
 import {
   readPropertyName,
   unwrapExpression,
@@ -43,6 +44,7 @@ export class DiContainerApiCallSite {
 
   constructor(
     readonly sourcePath: string,
+    readonly sourceFileAddressHandle: AddressHandle,
     readonly start: number,
     readonly end: number,
     readonly methodKind: DiContainerApiMethodKind,
@@ -70,19 +72,26 @@ export function readDiContainerApiCallSites(
     const sourceFile = typeSystem.readSourceFileByPath(source.path);
     return sourceFile == null
       ? []
-      : readSourceFileContainerApiCallSites(source.path, sourceFile, typeSystem.checker, sourcePathByFileName);
+      : readSourceFileContainerApiCallSites(
+        source.path,
+        source.addressHandle,
+        sourceFile,
+        typeSystem.checker,
+        sourcePathByFileName,
+      );
   });
 }
 
 function readSourceFileContainerApiCallSites(
   sourcePath: string,
+  sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
   checker: ts.TypeChecker,
   sourcePathByFileName: ReadonlyMap<string, string>,
 ): readonly DiContainerApiCallSite[] {
   const sites: DiContainerApiCallSite[] = [];
   const visit = (node: ts.Node): void => {
-    recordContainerApiCallSite(sites, sourcePath, sourceFile, checker, sourcePathByFileName, node);
+    recordContainerApiCallSite(sites, sourcePath, sourceFileAddressHandle, sourceFile, checker, sourcePathByFileName, node);
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
@@ -92,6 +101,7 @@ function readSourceFileContainerApiCallSites(
 function recordContainerApiCallSite(
   sites: DiContainerApiCallSite[],
   sourcePath: string,
+  sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
   checker: ts.TypeChecker,
   sourcePathByFileName: ReadonlyMap<string, string>,
@@ -111,6 +121,7 @@ function recordContainerApiCallSite(
     : readAureliaResolverWrapperCall(checker, keyExpression);
   sites.push(new DiContainerApiCallSite(
     sourcePath,
+    sourceFileAddressHandle,
     node.getStart(sourceFile),
     node.end,
     methodKind,

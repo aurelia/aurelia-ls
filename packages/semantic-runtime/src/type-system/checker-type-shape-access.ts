@@ -9,6 +9,7 @@ import type {
 import { TypeSystemProductDetails } from './product-details.js';
 import {
   CheckerTypeMember,
+  CheckerTypeMemberKind,
   CheckerTypeProjectionOrigin,
   CheckerTypeReference,
   CheckerTypeShape,
@@ -20,8 +21,46 @@ import {
 import {
   checkerIndexKindForKeyType,
   checkerNullishType,
-  checkerStringIndexValueType,
 } from './checker-related-types.js';
+import {
+  checkerDeclarationsAreReadonly,
+  checkerSymbolMemberKind,
+  declarationsForCheckerSymbol,
+} from './checker-member-surface.js';
+
+export const enum CheckerTypeShapeMemberWriteAccessKind {
+  Writable = 'writable',
+  Readonly = 'readonly',
+  GetterWithoutSetter = 'getter-without-setter',
+  MethodLike = 'method-like',
+  DeclarationMissing = 'declaration-missing',
+  StringIndexWritable = 'string-index-writable',
+  StringIndexReadonly = 'string-index-readonly',
+  Missing = 'missing',
+}
+
+export const enum CheckerTypeShapeMemberValueAccessKind {
+  Type = 'type',
+  Missing = 'missing',
+  MissingValueType = 'missing-value-type',
+}
+
+export interface CheckerTypeShapeMemberWriteAccess {
+  readonly accessKind: CheckerTypeShapeMemberWriteAccessKind;
+  readonly memberName: string;
+  readonly memberKind: CheckerTypeMemberKind | null;
+  readonly declarations: readonly ts.Declaration[];
+  readonly checkerWritable: boolean | null;
+}
+
+export interface CheckerTypeShapeMemberValueAccess {
+  readonly accessKind: CheckerTypeShapeMemberValueAccessKind;
+  readonly memberName: string;
+  readonly memberKind: CheckerTypeMemberKind | null;
+  readonly valueType: CheckerTypeShape | null;
+  readonly valueReference: CheckerTypeReference | null;
+  readonly declarations: readonly ts.Declaration[];
+}
 
 /**
  * Shared TypeChecker-backed value-shape access for expression evaluation and pattern-local projection.
@@ -46,16 +85,134 @@ export class CheckerTypeShapeAccess {
     memberName: string,
     localKey: string,
   ): CheckerTypeShape | null {
+    return this.memberValueAccess(ownerType, memberName, localKey).valueType;
+  }
+
+  memberValueAccess(
+    ownerType: CheckerTypeShape,
+    memberName: string,
+    localKey: string,
+  ): CheckerTypeShapeMemberValueAccess {
     if (ownerType.shapeKind === CheckerTypeShapeKind.Any) {
-      return ownerType;
+      return checkerTypeMemberValueAccessResult(
+        CheckerTypeShapeMemberValueAccessKind.Type,
+        memberName,
+        CheckerTypeMemberKind.Property,
+        ownerType,
+        ownerType.toReference(),
+        [],
+      );
     }
 
     const member = ownerType.members.find((candidate) => candidate.name === memberName) ?? null;
     if (member != null) {
-      return this.declaredMemberValueType(member, localKey);
+      const valueType = this.declaredMemberValueType(member, localKey);
+      return checkerTypeMemberValueAccessResult(
+        valueType == null
+          ? CheckerTypeShapeMemberValueAccessKind.MissingValueType
+          : CheckerTypeShapeMemberValueAccessKind.Type,
+        memberName,
+        member.memberKind,
+        valueType,
+        valueType?.toReference() ?? member.valueType,
+        member.carrier?.declarations ?? [],
+      );
     }
 
-    return this.stringIndexMemberValueType(ownerType, memberName, `${localKey}:string-index`);
+    const checkerMember = checkerMemberForOwnerType(ownerType, memberName);
+    if (checkerMember != null) {
+      const checkerMemberType = this.checkerMemberValueType(ownerType, checkerMember, memberName, localKey);
+      if (checkerMemberType != null) {
+        return checkerTypeMemberValueAccessResult(
+          CheckerTypeShapeMemberValueAccessKind.Type,
+          memberName,
+          checkerSymbolMemberKind(checkerMember.symbol, checkerMember.declarations),
+          checkerMemberType,
+          checkerMemberType.toReference(),
+          checkerMember.declarations,
+        );
+      }
+      return checkerTypeMemberValueAccessResult(
+        CheckerTypeShapeMemberValueAccessKind.MissingValueType,
+        memberName,
+        checkerSymbolMemberKind(checkerMember.symbol, checkerMember.declarations),
+        null,
+        null,
+        checkerMember.declarations,
+      );
+    }
+
+    const stringIndexMemberType = this.stringIndexMemberValueType(ownerType, memberName, `${localKey}:string-index`);
+    if (stringIndexMemberType != null) {
+      return checkerTypeMemberValueAccessResult(
+        CheckerTypeShapeMemberValueAccessKind.Type,
+        memberName,
+        CheckerTypeMemberKind.IndexSignature,
+        stringIndexMemberType,
+        stringIndexMemberType.toReference(),
+        [],
+      );
+    }
+
+    return checkerTypeMemberValueAccessResult(
+      CheckerTypeShapeMemberValueAccessKind.Missing,
+      memberName,
+      null,
+      null,
+      null,
+      [],
+    );
+  }
+
+  memberWriteAccess(
+    ownerType: CheckerTypeShape,
+    memberName: string,
+  ): CheckerTypeShapeMemberWriteAccess {
+    if (ownerType.shapeKind === CheckerTypeShapeKind.Any) {
+      return checkerTypeMemberWriteAccessResult(
+        CheckerTypeShapeMemberWriteAccessKind.Writable,
+        memberName,
+        CheckerTypeMemberKind.Property,
+        [],
+        true,
+      );
+    }
+
+    const member = ownerType.members.find((candidate) => candidate.name === memberName) ?? null;
+    if (member != null) {
+      return checkerTypeMemberWriteAccess(member);
+    }
+
+    const checkerMember = checkerMemberForOwnerType(ownerType, memberName);
+    if (checkerMember != null) {
+      return checkerTypeMemberWriteAccessFromSurface(
+        checkerMember.symbol.getName(),
+        checkerSymbolMemberKind(checkerMember.symbol, checkerMember.declarations),
+        checkerDeclarationsAreReadonly(checkerMember.declarations),
+        checkerMember.declarations,
+      );
+    }
+
+    const stringIndexInfo = checkerTypeShapeIndexInfo(ownerType, ts.IndexKind.String);
+    if (stringIndexInfo != null) {
+      return {
+        accessKind: stringIndexInfo.isReadonly
+          ? CheckerTypeShapeMemberWriteAccessKind.StringIndexReadonly
+          : CheckerTypeShapeMemberWriteAccessKind.StringIndexWritable,
+        memberName,
+        memberKind: CheckerTypeMemberKind.IndexSignature,
+        declarations: [],
+        checkerWritable: stringIndexInfo.isReadonly ? false : true,
+      };
+    }
+
+    return {
+      accessKind: CheckerTypeShapeMemberWriteAccessKind.Missing,
+      memberName,
+      memberKind: null,
+      declarations: [],
+      checkerWritable: null,
+    };
   }
 
   numericIndexValueType(
@@ -69,8 +226,11 @@ export class CheckerTypeShapeAccess {
       return memberType;
     }
 
-    if (ownerType.indexedValueType != null && checkerIndexedAccessSupportsNumber(ownerType.indexedAccessKeyKind)) {
-      return this.resolveReference(ownerType.indexedValueType);
+    if (ownerType.indexedValueType?.productHandle != null && checkerIndexedAccessSupportsNumber(ownerType.indexedAccessKeyKind)) {
+      const indexedValueType = this.resolveReference(ownerType.indexedValueType);
+      if (indexedValueType != null) {
+        return indexedValueType;
+      }
     }
 
     const checker = ownerType.carrier?.checker ?? null;
@@ -132,18 +292,18 @@ export class CheckerTypeShapeAccess {
       return null;
     }
 
-    const valueType = checker.getIndexTypeOfType(type, indexKind);
-    if (valueType == null) {
+    const indexInfo = checkerTypeShapeIndexInfo(ownerType, indexKind);
+    if (indexInfo == null) {
       return null;
     }
 
     return this.projector.ensureProjection({
       localKey: `${localKey}:index:${indexKind}`,
       checker,
-      type: valueType,
+      type: indexInfo.type,
       origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceAddressHandle,
-      display: checker.typeToString(valueType),
+      display: checker.typeToString(indexInfo.type),
     } satisfies CheckerTypeProjectionRequest);
   }
 
@@ -183,18 +343,18 @@ export class CheckerTypeShapeAccess {
       return null;
     }
 
-    const valueType = checkerStringIndexValueType(checker, type);
-    if (valueType == null) {
+    const indexInfo = checkerTypeShapeIndexInfo(ownerType, ts.IndexKind.String);
+    if (indexInfo == null) {
       return null;
     }
 
     return this.projector.ensureProjection({
       localKey,
       checker,
-      type: valueType,
+      type: indexInfo.type,
       origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceAddressHandle: ownerType.sourceAddressHandle,
-      display: checker.typeToString(valueType),
+      display: checker.typeToString(indexInfo.type),
     } satisfies CheckerTypeProjectionRequest);
   }
 
@@ -224,6 +384,173 @@ export class CheckerTypeShapeAccess {
       display: member.valueType?.display ?? null,
     } satisfies CheckerTypeProjectionRequest);
   }
+
+  private checkerMemberValueType(
+    ownerType: CheckerTypeShape,
+    member: CheckerTypeShapeCheckerMember,
+    memberName: string,
+    localKey: string,
+  ): CheckerTypeShape | null {
+    const carrier = ownerType.carrier;
+    if (carrier == null) {
+      return null;
+    }
+    const location = carrier.declarations[0]
+      ?? member.symbol.valueDeclaration
+      ?? member.declarations[0]
+      ?? null;
+    if (location == null) {
+      return null;
+    }
+    const valueType = carrier.checker.getTypeOfSymbolAtLocation(member.symbol, location);
+    return this.projector.ensureProjection({
+      localKey: `${localKey}:checker-member`,
+      checker: carrier.checker,
+      type: valueType,
+      origin: CheckerTypeProjectionOrigin.TypeChecker,
+      sourceNode: location,
+      sourceAddressHandle: ownerType.sourceAddressHandle,
+      ownerIdentityHandle: ownerType.identityHandle,
+      display: carrier.checker.typeToString(valueType),
+    } satisfies CheckerTypeProjectionRequest);
+  }
+}
+
+export function checkerTypeMemberWriteAccess(
+  member: CheckerTypeMember,
+): CheckerTypeShapeMemberWriteAccess {
+  return checkerTypeMemberWriteAccessFromSurface(
+    member.name,
+    member.memberKind,
+    member.isReadonly,
+    member.carrier?.declarations ?? [],
+  );
+}
+
+function checkerTypeMemberWriteAccessFromSurface(
+  memberName: string,
+  memberKind: CheckerTypeMemberKind,
+  isReadonly: boolean,
+  declarations: readonly ts.Declaration[],
+): CheckerTypeShapeMemberWriteAccess {
+  if (memberKind === CheckerTypeMemberKind.Method
+    || memberKind === CheckerTypeMemberKind.Constructor
+    || memberKind === CheckerTypeMemberKind.CallSignature) {
+    return checkerTypeMemberWriteAccessResult(
+      CheckerTypeShapeMemberWriteAccessKind.MethodLike,
+      memberName,
+      memberKind,
+      declarations,
+      false,
+    );
+  }
+  if (declarations.some((declaration) => ts.isSetAccessorDeclaration(declaration))) {
+    return checkerTypeMemberWriteAccessResult(
+      CheckerTypeShapeMemberWriteAccessKind.Writable,
+      memberName,
+      memberKind,
+      declarations,
+      true,
+    );
+  }
+  if (declarations.some((declaration) => ts.isGetAccessorDeclaration(declaration))) {
+    return checkerTypeMemberWriteAccessResult(
+      CheckerTypeShapeMemberWriteAccessKind.GetterWithoutSetter,
+      memberName,
+      memberKind,
+      declarations,
+      false,
+    );
+  }
+  if (isReadonly) {
+    return checkerTypeMemberWriteAccessResult(
+      CheckerTypeShapeMemberWriteAccessKind.Readonly,
+      memberName,
+      memberKind,
+      declarations,
+      false,
+    );
+  }
+  return checkerTypeMemberWriteAccessResult(
+    declarations.length === 0
+      ? CheckerTypeShapeMemberWriteAccessKind.DeclarationMissing
+      : CheckerTypeShapeMemberWriteAccessKind.Writable,
+    memberName,
+    memberKind,
+    declarations,
+    declarations.length === 0 ? null : true,
+  );
+}
+
+function checkerTypeMemberWriteAccessResult(
+  accessKind: CheckerTypeShapeMemberWriteAccessKind,
+  memberName: string,
+  memberKind: CheckerTypeMemberKind | null,
+  declarations: readonly ts.Declaration[],
+  checkerWritable: boolean | null,
+): CheckerTypeShapeMemberWriteAccess {
+  return {
+    accessKind,
+    memberName,
+    memberKind,
+    declarations,
+    checkerWritable,
+  };
+}
+
+function checkerTypeMemberValueAccessResult(
+  accessKind: CheckerTypeShapeMemberValueAccessKind,
+  memberName: string,
+  memberKind: CheckerTypeMemberKind | null,
+  valueType: CheckerTypeShape | null,
+  valueReference: CheckerTypeReference | null,
+  declarations: readonly ts.Declaration[],
+): CheckerTypeShapeMemberValueAccess {
+  return {
+    accessKind,
+    memberName,
+    memberKind,
+    valueType,
+    valueReference,
+    declarations,
+  };
+}
+
+interface CheckerTypeShapeCheckerMember {
+  readonly symbol: ts.Symbol;
+  readonly declarations: readonly ts.Declaration[];
+}
+
+function checkerMemberForOwnerType(
+  ownerType: CheckerTypeShape,
+  memberName: string,
+): CheckerTypeShapeCheckerMember | null {
+  const carrier = ownerType.carrier;
+  if (carrier == null) {
+    return null;
+  }
+  const symbol = carrier.checker.getPropertyOfType(carrier.type, memberName)
+    ?? carrier.checker.getPropertyOfType(carrier.checker.getApparentType(carrier.type), memberName);
+  if (symbol == null) {
+    return null;
+  }
+  return {
+    symbol,
+    declarations: declarationsForCheckerSymbol(symbol),
+  };
+}
+
+function checkerTypeShapeIndexInfo(
+  ownerType: CheckerTypeShape,
+  indexKind: ts.IndexKind,
+): ts.IndexInfo | null {
+  const carrier = ownerType.carrier;
+  if (carrier == null) {
+    return null;
+  }
+  return carrier.checker.getIndexInfoOfType(carrier.type, indexKind)
+    ?? carrier.checker.getIndexInfoOfType(carrier.checker.getApparentType(carrier.type), indexKind)
+    ?? null;
 }
 
 function indexKindForKeyType(typeShape: CheckerTypeShape): ts.IndexKind | null {

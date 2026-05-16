@@ -1595,18 +1595,10 @@ export class CompiledTemplateMaterializer {
       emission.compiledTemplate.productHandle,
       emission.compiledTemplate,
     );
-    for (const sequence of emission.instructionSequences) {
-      this.store.productDetails.add(TemplateProductDetails.InstructionSequence, sequence.productHandle, sequence);
-    }
-    for (const target of emission.renderTargets) {
-      this.store.productDetails.add(TemplateProductDetails.RenderTarget, target.productHandle, target);
-    }
-    for (const instruction of emission.instructions) {
-      this.store.productDetails.addIfAbsent(TemplateProductDetails.Instruction, instruction.productHandle, instruction);
-    }
-    for (const issue of emission.issues) {
-      this.store.productDetails.add(TemplateProductDetails.CompilerIssue, issue.productHandle, issue);
-    }
+    this.store.productDetails.addAll(TemplateProductDetails.InstructionSequence, emission.instructionSequences);
+    this.store.productDetails.addAll(TemplateProductDetails.RenderTarget, emission.renderTargets);
+    this.store.productDetails.addAllIfAbsent(TemplateProductDetails.Instruction, emission.instructions);
+    this.store.productDetails.addAll(TemplateProductDetails.CompilerIssue, emission.issues);
   }
 
   private recordsForCompiledTemplate(input: CompiledTemplateMaterializationRequest): CompiledTemplateEmission {

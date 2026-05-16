@@ -4,7 +4,10 @@ import { uniqueSortedStrings } from "../../collections.js";
 import { PhaseProfiler } from "../../phase-profile.js";
 import { normalizedSourceFingerprint, stableTextFingerprint } from "../../text-fingerprint.js";
 import { lowerFirst } from "../../text-case.js";
-import { functionBodyShapeFingerprint } from "../../ast-fingerprint.js";
+import {
+  functionBodyShapeFingerprint,
+  functionSwitchTopologyFingerprint,
+} from "../../ast-fingerprint.js";
 import {
   classDeclarationSurface,
   requiredSourceFileIdentity,
@@ -16,12 +19,14 @@ import {
   readTypeScriptEnumUsageIndex,
   sourceRangeFromFileSpan,
   sourceSpanForNode,
-  SourceProjectMemo,
+  SourceProjectKeyedMemo,
   stringLiteralArgument,
   unwrapExpression,
   type SourceProject,
   type TypeScriptEnumDeclarationRow,
+  type TypeScriptEnumRawValueRoleSelection,
   type TypeScriptEnumUsageIndex,
+  type TypeScriptEnumUseRole,
 } from "../../source/index.js";
 import { LensCatalog } from "../lens.js";
 import type { SourceRange } from "../locus.js";
@@ -31,6 +36,7 @@ import {
   frameworkSemanticRouteSpecByPropertyName,
 } from "./framework-route-catalog.js";
 import {
+  type AtlasSelfEnumAnalysis,
   buildAtlasSelfEnumAnalysis,
   enumMemberNameByValue,
   enumMemberValueByName,
@@ -57,6 +63,7 @@ import type {
   AtlasSelfEnumReferenceRow,
   AtlasSelfEnumRow,
   AtlasSelfEnumValueSpaceRow,
+  AtlasSelfFunctionControlFlowShapeGroupRow,
   AtlasSelfFunctionShapeGroupRow,
   AtlasSelfFunctionSurfaceRow,
   AtlasSelfFunctionWrapperRow,
@@ -72,9 +79,15 @@ import type {
   AtlasSelfStringLiteralRow,
   AtlasSelfStringOccurrence,
   AtlasSelfSubstrateSurfaceRow,
+  AtlasSelfVariableSurfaceRow,
 } from "./self-analysis-contracts.js";
 
 export * from "./self-analysis-contracts.js";
+
+type FunctionDeclarationSeed = Omit<
+  AtlasSelfFunctionSurfaceRow,
+  "callCount" | "uniqueCallTargetCount" | "summary"
+>;
 
 type FunctionDeclarationRow = AtlasSelfFunctionSurfaceRow;
 type FunctionWrapperSeed = Omit<
@@ -93,6 +106,13 @@ interface FunctionValueReference {
   readonly functionName: string;
 }
 
+interface PropertyCallCandidate {
+  readonly filePath: string;
+  readonly fromFunction: string | null;
+  readonly nameNode: ts.MemberName;
+  readonly methodName: string;
+}
+
 interface FunctionImportBinding {
   readonly filePath: string;
   readonly localName: string;
@@ -105,6 +125,7 @@ interface SelfAnalysisVisitContext {
   readonly packageId: string;
   readonly filePath: string;
   readonly currentFunction: string | null;
+  readonly directCallOwner: string | null;
   readonly currentClass: string | null;
 }
 
@@ -123,36 +144,97 @@ interface MutableProjectionBranchRow
 interface MutableContinuationRow
   extends Omit<AtlasSelfContinuationRow, "lensIds" | "summary"> {}
 
-const atlasSelfAnalysisMemo = new SourceProjectMemo<AtlasSelfAnalysis>();
+export const ATLAS_SELF_STANDARD_ENUM_CONTEXT_ROLES: readonly TypeScriptEnumUseRole[] = [
+  "assignment",
+  "case-label",
+  "comparison",
+  "expression",
+  "object-value",
+  "return-expression",
+];
+
+export interface AtlasSelfAnalysisOptions {
+  readonly enumRawValueContextRoles?: TypeScriptEnumRawValueRoleSelection;
+  readonly includeFunctionBodyAnalysis?: boolean;
+  readonly includeSemanticTaxonomyAnalysis?: boolean;
+}
+
+const atlasSelfAnalysisMemo = new SourceProjectKeyedMemo<string, AtlasSelfAnalysis>();
 
 /** Read or build the Atlas self-analysis model for the current Program epoch. */
 export function readAtlasSelfAnalysis(
   /** Hot source project owned by the runtime. */
   sourceProject: SourceProject,
+  options: AtlasSelfAnalysisOptions = {},
 ): AtlasSelfAnalysis {
-  return atlasSelfAnalysisMemo.read(sourceProject, () =>
-    buildAtlasSelfAnalysis(sourceProject),
+  const enumRawValueContextRoles =
+    options.enumRawValueContextRoles ?? ATLAS_SELF_STANDARD_ENUM_CONTEXT_ROLES;
+  const includeFunctionBodyAnalysis = options.includeFunctionBodyAnalysis ?? false;
+  const includeSemanticTaxonomyAnalysis = options.includeSemanticTaxonomyAnalysis ?? true;
+  return atlasSelfAnalysisMemo.read(
+    sourceProject,
+    atlasSelfAnalysisCacheKey(
+      enumRawValueContextRoles,
+      includeFunctionBodyAnalysis,
+      includeSemanticTaxonomyAnalysis,
+    ),
+    () => buildAtlasSelfAnalysis(sourceProject, {
+      enumRawValueContextRoles,
+      includeFunctionBodyAnalysis,
+      includeSemanticTaxonomyAnalysis,
+    }),
   );
 }
 
 function buildAtlasSelfAnalysis(
   sourceProject: SourceProject,
+  options: Required<AtlasSelfAnalysisOptions>,
 ): AtlasSelfAnalysis {
   const profiler = new PhaseProfiler<AtlasSelfAnalysisPhaseProfileRow>();
-  return new AtlasSelfAnalysisBuilder(sourceProject, profiler).build();
+  return new AtlasSelfAnalysisBuilder(sourceProject, profiler, options).build();
+}
+
+function atlasSelfAnalysisCacheKey(
+  enumRawValueContextRoles: TypeScriptEnumRawValueRoleSelection,
+  includeFunctionBodyAnalysis: boolean,
+  includeSemanticTaxonomyAnalysis: boolean,
+): string {
+  const bodyLane = includeFunctionBodyAnalysis ? "body-analysis" : "no-body-analysis";
+  const taxonomyLane = includeSemanticTaxonomyAnalysis
+    ? "semantic-taxonomy"
+    : "source-surfaces";
+  if (enumRawValueContextRoles === "all" || enumRawValueContextRoles === "none") {
+    return `${taxonomyLane}:${bodyLane}:raw-context:${enumRawValueContextRoles}`;
+  }
+  return `${taxonomyLane}:${bodyLane}:raw-context:${uniqueSortedStrings(enumRawValueContextRoles).join(",")}`;
+}
+
+function emptyAtlasSelfEnumAnalysis(): AtlasSelfEnumAnalysis {
+  return {
+    enums: [],
+    enumReferences: [],
+    enumValueSpaces: [],
+    enumValueOccurrences: [],
+    enumMappings: [],
+  };
 }
 
 class AtlasSelfAnalysisBuilder {
   readonly #sourceProject: SourceProject;
   readonly #profiler: PhaseProfiler<AtlasSelfAnalysisPhaseProfileRow>;
-  readonly #enumUsage: TypeScriptEnumUsageIndex;
+  readonly #includeFunctionBodyAnalysis: boolean;
+  readonly #includeSemanticTaxonomyAnalysis: boolean;
+  readonly #enumUsage: TypeScriptEnumUsageIndex | null;
   readonly #stringOccurrences: AtlasSelfStringOccurrence[] = [];
   readonly #rowSurfaces: AtlasSelfRowSurfaceRow[] = [];
   readonly #classSurfaces: AtlasSelfClassSurfaceRow[] = [];
+  readonly #variableSurfaces: AtlasSelfVariableSurfaceRow[] = [];
   readonly #sourceFileSurfaces: AtlasSelfSourceFileSurfaceRow[] = [];
-  readonly #functionDeclarations: FunctionDeclarationRow[] = [];
+  readonly #functionDeclarations: FunctionDeclarationSeed[] = [];
+  readonly #functionDirectCallCounts = new Map<string, number>();
   readonly #functionWrapperSeeds: FunctionWrapperSeed[] = [];
   readonly #functionCallEdges: FunctionCallEdge[] = [];
+  readonly #propertyCallCandidates: PropertyCallCandidate[] = [];
   readonly #topLevelFunctionCallReferences: FunctionValueReference[] = [];
   readonly #functionValueReferences: FunctionValueReference[] = [];
   readonly #functionImportBindings: FunctionImportBinding[] = [];
@@ -169,19 +251,28 @@ class AtlasSelfAnalysisBuilder {
   constructor(
     sourceProject: SourceProject,
     profiler: PhaseProfiler<AtlasSelfAnalysisPhaseProfileRow>,
+    options: Required<AtlasSelfAnalysisOptions>,
   ) {
     this.#sourceProject = sourceProject;
     this.#profiler = profiler;
-    const enumUsage = this.#profiler.time(
-      "enum-usage-index",
-      undefined,
-      "Build the TypeScript enum usage index for Atlas source.",
-      () => readTypeScriptEnumUsageIndex(sourceProject, {
-        packageId: "atlas",
-      }),
-    );
-    this.#profiler.addNestedRows("enum-usage", enumUsage.profile);
-    this.#enumUsage = enumUsage;
+    this.#includeFunctionBodyAnalysis = options.includeFunctionBodyAnalysis;
+    this.#includeSemanticTaxonomyAnalysis =
+      options.includeSemanticTaxonomyAnalysis;
+    if (this.#includeSemanticTaxonomyAnalysis) {
+      const enumUsage = this.#profiler.time(
+        "enum-usage-index",
+        undefined,
+        "Build the TypeScript enum usage index for Atlas source.",
+        () => readTypeScriptEnumUsageIndex(sourceProject, {
+          packageId: "atlas",
+          contextualRawValueRoles: options.enumRawValueContextRoles,
+        }),
+      );
+      this.#profiler.addNestedRows("enum-usage", enumUsage.profile);
+      this.#enumUsage = enumUsage;
+    } else {
+      this.#enumUsage = null;
+    }
   }
 
   build(): AtlasSelfAnalysis {
@@ -219,21 +310,40 @@ class AtlasSelfAnalysisBuilder {
       "unknown";
     const filePath = identity.repoPath;
     this.#functionImportBindings.push(
-      ...functionImportBindings(sourceFile, filePath),
+      ...this.#profiler.measureRepeated(
+        "source-file-collection.function-imports",
+        "Collect top-level function import bindings for Atlas self call/value-reference analysis.",
+        () => functionImportBindings(sourceFile, filePath),
+      ),
     );
     this.#sourceFileSurfaces.push(
-      sourceFileSurfaceForSourceFile(sourceFile, packageId, filePath),
+      this.#profiler.measureRepeated(
+        "source-file-collection.source-file-surface",
+        "Collect one source-file surface row before final dependency count attachment.",
+        () => sourceFileSurfaceForSourceFile(sourceFile, packageId, filePath),
+      ),
     );
     this.#moduleDependencies.push(
-      ...moduleDependencyRows(sourceFile, filePath),
+      ...this.#profiler.measureRepeated(
+        "source-file-collection.module-dependencies",
+        "Collect static import/export module dependency rows for one Atlas source file.",
+        () => moduleDependencyRows(sourceFile, filePath),
+      ),
     );
-    this.#collectDeclarations({
-      sourceFile,
-      packageId,
-      filePath,
-      currentFunction: null,
-      currentClass: null,
-    }, sourceFile);
+    this.#profiler.measureRepeated(
+      "source-file-collection.declaration-walk",
+      "Walk one Atlas source file to collect declarations, strings, continuations, relationships, and call edges.",
+      () => {
+        this.#collectDeclarations({
+          sourceFile,
+          packageId,
+          filePath,
+          currentFunction: null,
+          directCallOwner: null,
+          currentClass: null,
+        }, sourceFile);
+      },
+    );
   }
 
   #collectDeclarations(
@@ -252,6 +362,11 @@ class AtlasSelfAnalysisBuilder {
       this.#collectMethodDeclaration(context, node);
       return;
     }
+    if (isInlineExecutableDeclaration(node)) {
+      this.#collectNodeSurfaces(context, node);
+      this.#collectChildren(contextWithoutDirectCallOwner(context), node);
+      return;
+    }
     this.#collectNodeSurfaces(context, node);
     this.#collectChildren(context, node);
   }
@@ -262,32 +377,52 @@ class AtlasSelfAnalysisBuilder {
   ): void {
     const functionName = node.name!.text;
     this.#functionDeclarations.push(
-      atlasSelfFunctionSurfaceForFunctionDeclaration(
+      this.#profiler.measureRepeated(
+        "source-file-collection.function-surface",
+        "Collect function surface rows for top-level Atlas functions.",
+        () => atlasSelfFunctionSurfaceForFunctionDeclaration(
+          context.sourceFile,
+          context.packageId,
+          context.filePath,
+          node,
+          this.#includeFunctionBodyAnalysis,
+          this.#profiler,
+        ),
+      ),
+    );
+    const wrapper = this.#profiler.measureRepeated(
+      "source-file-collection.function-wrapper",
+      "Detect shallow constructor/call wrappers for top-level Atlas functions.",
+      () => atlasSelfFunctionWrapperForFunctionDeclaration(
         context.sourceFile,
         context.packageId,
         context.filePath,
         node,
       ),
     );
-    const wrapper = atlasSelfFunctionWrapperForFunctionDeclaration(
-      context.sourceFile,
-      context.packageId,
-      context.filePath,
-      node,
-    );
     if (wrapper !== null) {
       this.#functionWrapperSeeds.push(wrapper);
     }
-    this.#axisMapperPressure.push(
-      ...axisMapperPressureForFunctionLike(
-        context.sourceFile,
-        context.filePath,
-        functionName,
-        node,
-      ),
-    );
+    if (this.#includeSemanticTaxonomyAnalysis) {
+      this.#axisMapperPressure.push(
+        ...this.#profiler.measureRepeated(
+          "source-file-collection.function-axis-pressure",
+          "Collect enum/relationship/mapper pressure for function-like bodies.",
+          () => axisMapperPressureForFunctionLike(
+            context.sourceFile,
+            context.filePath,
+            functionName,
+            node,
+          ),
+        ),
+      );
+    }
     this.#substrateSurfaces.push(
-      ...substrateSurfacesForFunction(context.sourceFile, context.filePath, node),
+      ...this.#profiler.measureRepeated(
+        "source-file-collection.function-substrate-surfaces",
+        "Collect substrate reader/builder/schema surfaces for top-level functions.",
+        () => substrateSurfacesForFunction(context.sourceFile, context.filePath, node),
+      ),
     );
     this.#collectChildren(contextWithFunction(context, functionName), node);
   }
@@ -298,11 +433,15 @@ class AtlasSelfAnalysisBuilder {
   ): void {
     const className = node.name!.text;
     this.#classSurfaces.push(
-      atlasSelfClassSurfaceForDeclaration(
-        context.sourceFile,
-        context.packageId,
-        context.filePath,
-        node,
+      this.#profiler.measureRepeated(
+        "source-file-collection.class-surface",
+        "Collect class surface rows for Atlas classes.",
+        () => atlasSelfClassSurfaceForDeclaration(
+          context.sourceFile,
+          context.packageId,
+          context.filePath,
+          node,
+        ),
       ),
     );
     this.#collectChildren(contextWithClass(context, className), node);
@@ -321,7 +460,25 @@ class AtlasSelfAnalysisBuilder {
         : `${context.currentClass}.${methodName}`;
     if (functionName !== null) {
       this.#functionDeclarations.push(
-        functionSurfaceForMethodDeclaration(
+        this.#profiler.measureRepeated(
+          "source-file-collection.method-surface",
+          "Collect function surface rows for Atlas class methods.",
+          () => functionSurfaceForMethodDeclaration(
+            context.sourceFile,
+            context.packageId,
+            context.filePath,
+            node,
+            functionName,
+            context.currentClass,
+            this.#includeFunctionBodyAnalysis,
+            this.#profiler,
+          ),
+        ),
+      );
+      const wrapper = this.#profiler.measureRepeated(
+        "source-file-collection.method-wrapper",
+        "Detect shallow constructor/call wrappers for Atlas class methods.",
+        () => atlasSelfFunctionWrapperForMethodDeclaration(
           context.sourceFile,
           context.packageId,
           context.filePath,
@@ -330,25 +487,23 @@ class AtlasSelfAnalysisBuilder {
           context.currentClass,
         ),
       );
-      const wrapper = atlasSelfFunctionWrapperForMethodDeclaration(
-        context.sourceFile,
-        context.packageId,
-        context.filePath,
-        node,
-        functionName,
-        context.currentClass,
-      );
       if (wrapper !== null) {
         this.#functionWrapperSeeds.push(wrapper);
       }
-      this.#axisMapperPressure.push(
-        ...axisMapperPressureForFunctionLike(
-          context.sourceFile,
-          context.filePath,
-          functionName,
-          node,
-        ),
-      );
+      if (this.#includeSemanticTaxonomyAnalysis) {
+        this.#axisMapperPressure.push(
+          ...this.#profiler.measureRepeated(
+            "source-file-collection.method-axis-pressure",
+            "Collect enum/relationship/mapper pressure for method bodies.",
+            () => axisMapperPressureForFunctionLike(
+              context.sourceFile,
+              context.filePath,
+              functionName,
+              node,
+            ),
+          ),
+        );
+      }
     }
     this.#collectChildren(
       contextWithFunction(context, functionName ?? context.currentFunction),
@@ -361,26 +516,48 @@ class AtlasSelfAnalysisBuilder {
     node: ts.Node,
   ): void {
     if (ts.isVariableStatement(node)) {
+      this.#variableSurfaces.push(
+        ...this.#profiler.measureRepeated(
+          "source-file-collection.variable-surfaces",
+          "Collect top-level variable surface rows for Atlas source.",
+          () => atlasSelfVariableSurfacesForStatement(
+            context.sourceFile,
+            context.packageId,
+            context.filePath,
+            node,
+          ),
+        ),
+      );
       this.#substrateSurfaces.push(
-        ...substrateSurfacesForVariableStatement(
-          context.sourceFile,
-          context.filePath,
-          node,
+        ...this.#profiler.measureRepeated(
+          "source-file-collection.variable-substrate-surfaces",
+          "Collect substrate surfaces from top-level variable declarations.",
+          () => substrateSurfacesForVariableStatement(
+            context.sourceFile,
+            context.filePath,
+            node,
+          ),
         ),
       );
     }
-    if (isStringLiteralLike(node)) {
-      this.#stringOccurrences.push({
-        value: node.text,
-        role: stringRoleForNode(node),
-        packageId: context.packageId,
-        filePath: context.filePath,
-        source: sourceRangeForNode(context.sourceFile, context.filePath, node),
-        declaredByConstObjectMember: constObjectMemberForStringLiteral(
-          node,
-          context.sourceFile,
+    if (this.#includeSemanticTaxonomyAnalysis && isStringLiteralLike(node)) {
+      this.#stringOccurrences.push(
+        this.#profiler.measureRepeated(
+          "source-file-collection.string-occurrence",
+          "Collect one string literal occurrence with role, source, and const-object declaration context.",
+          () => ({
+            value: node.text,
+            role: stringRoleForNode(node),
+            packageId: context.packageId,
+            filePath: context.filePath,
+            source: sourceRangeForNode(context.sourceFile, context.filePath, node),
+            declaredByConstObjectMember: constObjectMemberForStringLiteral(
+              node,
+              context.sourceFile,
+            ),
+          }),
         ),
-      });
+      );
     }
     if (ts.isPropertyAccessExpression(node)) {
       // Counted in a second pass after every enum declaration in the project is indexed.
@@ -390,38 +567,64 @@ class AtlasSelfAnalysisBuilder {
         functionName: node.text,
       });
     } else if (ts.isCallExpression(node)) {
-      const calledFunction = calledFunctionName(node, context.currentClass);
-      if (calledFunction !== null) {
-        if (context.currentFunction === null) {
-          this.#topLevelFunctionCallReferences.push({
-            filePath: context.filePath,
-            functionName: calledFunction,
-          });
-        } else {
-          this.#functionCallEdges.push({
-            filePath: context.filePath,
-            fromFunction: context.currentFunction,
-            toFunction: calledFunction,
-          });
-        }
-      }
+      this.#profiler.measureRepeated(
+        "source-file-collection.call-edge",
+        "Classify one call expression into wrapper counts, top-level references, or function call edges.",
+        () => {
+          const calledFunction = calledFunctionName(node, context.currentClass);
+          if (context.directCallOwner !== null) {
+            incrementMap(
+              this.#functionDirectCallCounts,
+              functionIdentityKey(context.filePath, context.directCallOwner),
+            );
+          }
+          if (calledFunction !== null) {
+            if (context.currentFunction === null) {
+              this.#topLevelFunctionCallReferences.push({
+                filePath: context.filePath,
+                functionName: calledFunction,
+              });
+            } else {
+              this.#functionCallEdges.push({
+                filePath: context.filePath,
+                fromFunction: context.currentFunction,
+                toFunction: calledFunction,
+              });
+            }
+          } else {
+            const candidate = propertyCallCandidate(context, node);
+            if (candidate !== null) {
+              this.#propertyCallCandidates.push(candidate);
+            }
+          }
+        },
+      );
       if (context.currentFunction === null) {
         return;
       }
-      const continuation = continuationForHelperCall(
-        context.sourceFile,
-        context.filePath,
-        context.currentFunction,
-        node,
+      const currentFunction = context.currentFunction;
+      const continuation = this.#profiler.measureRepeated(
+        "source-file-collection.helper-call-continuation",
+        "Collect continuation rows from helper call expressions.",
+        () => continuationForHelperCall(
+          context.sourceFile,
+          context.filePath,
+          currentFunction,
+          node,
+        ),
       );
       if (continuation !== null) {
         this.#continuationSeeds.push(continuation);
       }
     } else if (ts.isCaseClause(node)) {
-      const implementation = lensImplementationSeedForCase(
-        context.sourceFile,
-        context.filePath,
-        node,
+      const implementation = this.#profiler.measureRepeated(
+        "source-file-collection.lens-case-implementation",
+        "Collect lens implementation seed rows from projection switch cases.",
+        () => lensImplementationSeedForCase(
+          context.sourceFile,
+          context.filePath,
+          node,
+        ),
       );
       if (implementation !== null) {
         this.#lensImplementationSeeds.push(implementation);
@@ -431,57 +634,83 @@ class AtlasSelfAnalysisBuilder {
       isProjectionExpression(node.expression)
     ) {
       this.#projectionBranchSeeds.push(
-        ...projectionBranchesForSwitch(
-          context.sourceFile,
-          context.filePath,
-          context.currentFunction,
-          node,
+        ...this.#profiler.measureRepeated(
+          "source-file-collection.projection-switch-branches",
+          "Collect projection branch rows from switch statements.",
+          () => projectionBranchesForSwitch(
+            context.sourceFile,
+            context.filePath,
+            context.currentFunction,
+            node,
+          ),
         ),
       );
     } else if (ts.isBinaryExpression(node) && context.currentFunction !== null) {
-      const projectionBranch = projectionBranchForBinaryExpression(
-        context.sourceFile,
-        context.filePath,
-        context.currentFunction,
-        node,
+      const currentFunction = context.currentFunction;
+      const projectionBranch = this.#profiler.measureRepeated(
+        "source-file-collection.projection-binary-branch",
+        "Collect projection branch rows from binary projection comparisons.",
+        () => projectionBranchForBinaryExpression(
+          context.sourceFile,
+          context.filePath,
+          currentFunction,
+          node,
+        ),
       );
       if (projectionBranch !== null) {
         this.#projectionBranchSeeds.push(projectionBranch);
       }
     } else if (ts.isObjectLiteralExpression(node) && context.currentFunction !== null) {
-      const continuation = continuationForObjectLiteral(
-        context.sourceFile,
-        context.filePath,
-        context.currentFunction,
-        node,
+      const currentFunction = context.currentFunction;
+      const continuation = this.#profiler.measureRepeated(
+        "source-file-collection.object-literal-continuation",
+        "Collect continuation rows from object literals.",
+        () => continuationForObjectLiteral(
+          context.sourceFile,
+          context.filePath,
+          currentFunction,
+          node,
+        ),
       );
       if (continuation !== null) {
         this.#continuationSeeds.push(continuation);
       }
       this.#axisMapperPressure.push(
-        ...optionalObjectSpreadPressureForObjectLiteral(
-          context.sourceFile,
-          context.filePath,
-          context.currentFunction,
-          node,
+        ...this.#profiler.measureRepeated(
+          "source-file-collection.optional-object-spread-pressure",
+          "Collect optional object-spread pressure rows from object literals.",
+          () => optionalObjectSpreadPressureForObjectLiteral(
+            context.sourceFile,
+            context.filePath,
+            currentFunction,
+            node,
+          ),
         ),
       );
     } else if (ts.isInterfaceDeclaration(node)) {
-      const row = rowSurfaceForInterface(
-        context.sourceFile,
-        context.packageId,
-        context.filePath,
-        node,
+      const row = this.#profiler.measureRepeated(
+        "source-file-collection.interface-row-surface",
+        "Collect row surface metadata from Atlas interfaces.",
+        () => rowSurfaceForInterface(
+          context.sourceFile,
+          context.packageId,
+          context.filePath,
+          node,
+        ),
       );
       if (row !== null) {
         this.#rowSurfaces.push(row);
       }
     } else if (ts.isTypeAliasDeclaration(node)) {
-      const row = rowSurfaceForTypeAlias(
-        context.sourceFile,
-        context.packageId,
-        context.filePath,
-        node,
+      const row = this.#profiler.measureRepeated(
+        "source-file-collection.type-alias-row-surface",
+        "Collect row surface metadata from Atlas type aliases.",
+        () => rowSurfaceForTypeAlias(
+          context.sourceFile,
+          context.packageId,
+          context.filePath,
+          node,
+        ),
       );
       if (row !== null) {
         this.#rowSurfaces.push(row);
@@ -496,27 +725,32 @@ class AtlasSelfAnalysisBuilder {
   }
 
   #finalize(sourceFileCount: number): AtlasSelfAnalysis {
-    const strings = this.#profiler.time(
-      "string-row-grouping",
-      this.#stringOccurrences.length,
-      "Group string literal occurrences and classify enum-backed declarations.",
-      () => buildAtlasSelfStringRows(
-        this.#stringOccurrences,
-        this.#enumUsage,
-      ),
-    );
+    const enumUsage = this.#enumUsage;
+    const enumDeclarations = enumUsage?.enumDeclarations ?? [];
+    const strings = this.#includeSemanticTaxonomyAnalysis
+      ? this.#profiler.time(
+        "string-row-grouping",
+        this.#stringOccurrences.length,
+        "Group string literal occurrences and classify enum-backed declarations.",
+        () => buildAtlasSelfStringRows(
+          this.#stringOccurrences,
+          enumDeclarations,
+        ),
+      )
+      : [];
     const {
       enums,
       enumReferences,
       enumValueSpaces,
       enumValueOccurrences,
       enumMappings,
-    } =
-      this.#profiler.time(
+    } = enumUsage === null
+      ? emptyAtlasSelfEnumAnalysis()
+      : this.#profiler.time(
         "enum-analysis",
-        this.#enumUsage.enumDeclarations.length,
+        enumDeclarations.length,
         "Build enum declaration, reference, raw value occurrence, value-space, and mapping rows.",
-        () => buildAtlasSelfEnumAnalysis(this.#enumUsage),
+        () => buildAtlasSelfEnumAnalysis(enumUsage),
       );
     const lensIdByMemberName = enumMemberValueByName(enums, "LensId");
     const navigationRelationMemberByValue = enumMemberNameByValue(
@@ -526,6 +760,26 @@ class AtlasSelfAnalysisBuilder {
     const rowSurfaces = this.#rowSurfaces.sort(compareByName);
     const relationshipSurfaces = rowSurfaces.filter(isRelationshipSurface);
     const classSurfaces = this.#classSurfaces.sort(compareClassSurface);
+    const variableSurfaces = this.#variableSurfaces.sort(compareVariableSurface);
+    const resolvedPropertyCalls = this.#profiler.time(
+      "property-call-target-resolution",
+      this.#propertyCallCandidates.length,
+      "Resolve unresolved property-call targets only when they could affect shallow wrapper usage rows.",
+      () => resolvePropertyCallCandidates(
+        this.#propertyCallCandidates,
+        this.#functionWrapperSeeds,
+        this.#sourceProject,
+        this.#profiler,
+      ),
+    );
+    const functionCallEdges = [
+      ...this.#functionCallEdges,
+      ...resolvedPropertyCalls.callEdges,
+    ];
+    const topLevelFunctionCallReferences = [
+      ...this.#topLevelFunctionCallReferences,
+      ...resolvedPropertyCalls.topLevelCallReferences,
+    ];
     const sourceFileSurfaces = this.#profiler.time(
       "source-file-surface-finalization",
       this.#sourceFileSurfaces.length,
@@ -537,15 +791,34 @@ class AtlasSelfAnalysisBuilder {
         ),
       ].sort(compareSourceFileSurface),
     );
-    const functionSurfaces = this.#functionDeclarations.sort(
-      compareFunctionSurface,
+    const functionSurfaces = this.#profiler.time(
+      "function-surface-finalization",
+      this.#functionDeclarations.length,
+      "Attach direct call counts gathered during source traversal to function surface rows.",
+      () => [
+        ...finalizeFunctionSurfaceRows(
+          this.#functionDeclarations,
+          this.#functionDirectCallCounts,
+          functionCallEdges,
+        ),
+      ].sort(compareFunctionSurface),
     );
-    const functionShapeGroups = this.#profiler.time(
-      "function-shape-grouping",
-      functionSurfaces.length,
-      "Group equivalent function body/control-flow shapes for split-brain helper pressure.",
-      () => atlasSelfFunctionShapeGroups(functionSurfaces),
-    );
+    const functionShapeGroups = this.#includeFunctionBodyAnalysis
+      ? this.#profiler.time(
+        "function-shape-grouping",
+        functionSurfaces.length,
+        "Group equivalent function body/control-flow shapes for split-brain helper pressure.",
+        () => atlasSelfFunctionShapeGroups(functionSurfaces),
+      )
+      : [];
+    const functionControlFlowShapeGroups = this.#includeFunctionBodyAnalysis
+      ? this.#profiler.time(
+        "function-control-flow-shape-grouping",
+        functionSurfaces.length,
+        "Group shared switch-dispatch topologies for parallel walker and dispatch pressure.",
+        () => atlasSelfFunctionControlFlowShapeGroups(functionSurfaces),
+      )
+      : [];
     const functionWrapperRows = this.#profiler.time(
       "function-wrapper-finalization",
       this.#functionWrapperSeeds.length,
@@ -553,8 +826,8 @@ class AtlasSelfAnalysisBuilder {
       () => [
         ...finalizeFunctionWrapperRows(
           this.#functionWrapperSeeds,
-          this.#functionCallEdges,
-          this.#topLevelFunctionCallReferences,
+          functionCallEdges,
+          topLevelFunctionCallReferences,
           this.#functionValueReferences,
           this.#functionImportBindings,
         ),
@@ -566,9 +839,9 @@ class AtlasSelfAnalysisBuilder {
       "Close lens implementation seeds through function call and import edges.",
       () => finalizeLensImplementations(
         this.#lensImplementationSeeds,
-        this.#enumUsage.enumDeclarations,
-        this.#functionDeclarations,
-        this.#functionCallEdges,
+        enumDeclarations,
+        functionSurfaces,
+        functionCallEdges,
         this.#functionImportBindings,
       ),
     );
@@ -592,37 +865,43 @@ class AtlasSelfAnalysisBuilder {
         navigationRelationMemberByValue,
       ),
     );
-    const semanticRoutes = this.#profiler.time(
-      "semantic-route-materialization",
-      FRAMEWORK_SEMANTIC_ROUTE_SPECS.length,
-      "Materialize declared framework semantic route topology rows from route specs and source strings.",
-      () => atlasSemanticRouteRows(
-        this.#stringOccurrences,
-        navigationRelationMemberByValue,
-      ),
-    );
-    const contractStrings = this.#profiler.time(
-      "contract-string-classification",
-      strings.length,
-      "Classify contract-bearing string literals across enum, schema, continuation, and lens contract roles.",
-      () => new AtlasSelfContractStringClassifier(
-        strings,
-        continuations,
-        this.#substrateSurfaces,
-      ).rows(),
-    );
-    const axisPressure = this.#profiler.time(
-      "axis-pressure-classification",
-      rowSurfaces.length,
-      "Classify enum, relationship, continuation, mapper, and object-spread pressure rows.",
-      () => new AtlasSelfAxisPressureClassifier(
-        enums,
-        rowSurfaces,
-        relationshipSurfaces,
-        continuations,
-        this.#axisMapperPressure,
-      ).rows(),
-    );
+    const semanticRoutes = this.#includeSemanticTaxonomyAnalysis
+      ? this.#profiler.time(
+        "semantic-route-materialization",
+        FRAMEWORK_SEMANTIC_ROUTE_SPECS.length,
+        "Materialize declared framework semantic route topology rows from route specs and source strings.",
+        () => atlasSemanticRouteRows(
+          this.#stringOccurrences,
+          navigationRelationMemberByValue,
+        ),
+      )
+      : [];
+    const contractStrings = this.#includeSemanticTaxonomyAnalysis
+      ? this.#profiler.time(
+        "contract-string-classification",
+        strings.length,
+        "Classify contract-bearing string literals across enum, schema, continuation, and lens contract roles.",
+        () => new AtlasSelfContractStringClassifier(
+          strings,
+          continuations,
+          this.#substrateSurfaces,
+        ).rows(),
+      )
+      : [];
+    const axisPressure = this.#includeSemanticTaxonomyAnalysis
+      ? this.#profiler.time(
+        "axis-pressure-classification",
+        rowSurfaces.length,
+        "Classify enum, relationship, continuation, mapper, and object-spread pressure rows.",
+        () => new AtlasSelfAxisPressureClassifier(
+          enums,
+          rowSurfaces,
+          relationshipSurfaces,
+          continuations,
+          this.#axisMapperPressure,
+        ).rows(),
+      )
+      : [];
     const rollup = {
       enumCount: enums.length,
       enumMemberCount: enums.reduce((sum, row) => sum + row.memberCount, 0),
@@ -668,7 +947,14 @@ class AtlasSelfAnalysisBuilder {
       classMethodFunctionCount: functionSurfaces.filter(
         (row) => row.functionKind === "class-method",
       ).length,
+      variableSurfaceCount: variableSurfaces.length,
+      exportedVariableSurfaceCount: variableSurfaces.filter((row) => row.exported)
+        .length,
+      largeLiteralVariableSurfaceCount: variableSurfaces.filter((row) =>
+        row.initializerEntryCount !== null && row.initializerEntryCount >= 20
+      ).length,
       functionShapeGroupCount: functionShapeGroups.length,
+      functionControlFlowShapeGroupCount: functionControlFlowShapeGroups.length,
       functionWrapperCount: functionWrapperRows.length,
       singleUseFunctionWrapperCount: functionWrapperRows.filter((row) =>
         row.incomingUsageCount <= 1
@@ -705,7 +991,9 @@ class AtlasSelfAnalysisBuilder {
       classSurfaces,
       sourceFileSurfaces,
       functionSurfaces,
+      variableSurfaces,
       functionShapeGroups,
+      functionControlFlowShapeGroups,
       functionWrapperRows,
       lensImplementations,
       projectionBranches,
@@ -732,6 +1020,20 @@ function contextWithFunction(
     packageId: context.packageId,
     filePath: context.filePath,
     currentFunction,
+    directCallOwner: currentFunction,
+    currentClass: context.currentClass,
+  };
+}
+
+function contextWithoutDirectCallOwner(
+  context: SelfAnalysisVisitContext,
+): SelfAnalysisVisitContext {
+  return {
+    sourceFile: context.sourceFile,
+    packageId: context.packageId,
+    filePath: context.filePath,
+    currentFunction: context.currentFunction,
+    directCallOwner: null,
     currentClass: context.currentClass,
   };
 }
@@ -745,8 +1047,17 @@ function contextWithClass(
     packageId: context.packageId,
     filePath: context.filePath,
     currentFunction: context.currentFunction,
+    directCallOwner: context.directCallOwner,
     currentClass,
   };
+}
+
+function isInlineExecutableDeclaration(node: ts.Node): boolean {
+  return ts.isFunctionExpression(node) ||
+    ts.isArrowFunction(node) ||
+    ts.isGetAccessor(node) ||
+    ts.isSetAccessor(node) ||
+    ts.isConstructorDeclaration(node);
 }
 
 function atlasSemanticRouteRows(
@@ -782,10 +1093,13 @@ function atlasSemanticRouteRows(
 }
 
 function atlasSelfFunctionShapeGroups(
-  functions: readonly AtlasSelfFunctionSurfaceRow[],
+  functions: readonly FunctionDeclarationRow[],
 ): readonly AtlasSelfFunctionShapeGroupRow[] {
-  const byShape = new Map<string, AtlasSelfFunctionSurfaceRow[]>();
+  const byShape = new Map<string, FunctionDeclarationRow[]>();
   for (const row of functions) {
+    if (row.bodyShapeFingerprint === null) {
+      continue;
+    }
     const group = byShape.get(row.bodyShapeFingerprint);
     if (group === undefined) {
       byShape.set(row.bodyShapeFingerprint, [row]);
@@ -825,6 +1139,87 @@ function atlasSelfFunctionShapeGroups(
     );
 }
 
+function atlasSelfFunctionControlFlowShapeGroups(
+  functions: readonly FunctionDeclarationRow[],
+): readonly AtlasSelfFunctionControlFlowShapeGroupRow[] {
+  const bySwitchTopology = new Map<string, FunctionDeclarationRow[]>();
+  for (const row of functions) {
+    if (row.switchTopologyFingerprint === null) {
+      continue;
+    }
+    const group = bySwitchTopology.get(row.switchTopologyFingerprint);
+    if (group === undefined) {
+      bySwitchTopology.set(row.switchTopologyFingerprint, [row]);
+    } else {
+      group.push(row);
+    }
+  }
+  return [...bySwitchTopology.entries()]
+    .flatMap(([switchTopologyFingerprint, rows]) => {
+      if (rows.length < 2) {
+        return [];
+      }
+      const sortedRows = [...rows].sort(compareFunctionSurface);
+      const names = uniqueSortedStrings(sortedRows.map((row) => row.name));
+      const files = uniqueSortedStrings(sortedRows.map((row) => row.filePath));
+      const functionKinds = uniqueSortedStrings(sortedRows.map((row) => row.functionKind));
+      return [{
+        id: `atlas-self:function-control-flow-shape:${switchTopologyFingerprint}`,
+        switchTopologyFingerprint,
+        functionCount: sortedRows.length,
+        nameCount: names.length,
+        fileCount: files.length,
+        lineCount: sortedRows.reduce((sum, row) => sum + row.lineCount, 0),
+        switchTopologyCount: Math.max(...sortedRows.map((row) => row.switchTopologyCount)),
+        functionKinds,
+        nameSamples: names.slice(0, 8),
+        fileSamples: files.slice(0, 5),
+        source: sortedRows[0]!.source,
+        summary: `${sortedRows.length} function surface(s) share one switch-dispatch topology across ${names.length} name(s) and ${files.length} file(s).`,
+      } satisfies AtlasSelfFunctionControlFlowShapeGroupRow];
+    })
+    .sort((left, right) =>
+      right.functionCount - left.functionCount ||
+      right.nameCount - left.nameCount ||
+      right.fileCount - left.fileCount ||
+      right.lineCount - left.lineCount ||
+      left.switchTopologyFingerprint.localeCompare(right.switchTopologyFingerprint)
+    );
+}
+
+function finalizeFunctionSurfaceRows(
+  seeds: readonly FunctionDeclarationSeed[],
+  directCallCounts: ReadonlyMap<string, number>,
+  callEdges: readonly FunctionCallEdge[],
+): readonly FunctionDeclarationRow[] {
+  const uniqueTargetsByFunction = new Map<string, Set<string>>();
+  for (const edge of callEdges) {
+    const key = functionIdentityKey(edge.filePath, edge.fromFunction);
+    const targets = uniqueTargetsByFunction.get(key) ?? new Set<string>();
+    targets.add(edge.toFunction);
+    uniqueTargetsByFunction.set(key, targets);
+  }
+  return seeds.map((seed) => {
+    const key = functionIdentityKey(seed.filePath, seed.name);
+    const callCount = directCallCounts.get(key) ?? 0;
+    const uniqueCallTargetCount = uniqueTargetsByFunction.get(key)?.size ?? 0;
+    return {
+      ...seed,
+      callCount,
+      uniqueCallTargetCount,
+      summary: `${seed.name} is a ${functionKindSummary(seed)} in ${seed.filePath} with ${callCount} direct call(s).`,
+    };
+  });
+}
+
+function functionKindSummary(
+  seed: FunctionDeclarationSeed,
+): "top-level function" | "class method" {
+  return seed.functionKind === "top-level"
+    ? "top-level function"
+    : "class method";
+}
+
 function finalizeFunctionWrapperRows(
   seeds: readonly FunctionWrapperSeed[],
   callEdges: readonly FunctionCallEdge[],
@@ -836,33 +1231,33 @@ function finalizeFunctionWrapperRows(
   const incomingValueReferences = new Map<string, number>();
   const importedByLocalName = new Map<string, FunctionImportBinding>();
   for (const binding of importBindings) {
-    importedByLocalName.set(functionWrapperKey(binding.filePath, binding.localName), binding);
+    importedByLocalName.set(functionIdentityKey(binding.filePath, binding.localName), binding);
   }
   for (const edge of callEdges) {
-    incrementMap(incoming, functionWrapperKey(edge.filePath, edge.toFunction));
-    const imported = importedByLocalName.get(functionWrapperKey(edge.filePath, edge.toFunction));
+    incrementMap(incoming, functionIdentityKey(edge.filePath, edge.toFunction));
+    const imported = importedByLocalName.get(functionIdentityKey(edge.filePath, edge.toFunction));
     if (imported !== undefined) {
-      incrementMap(incoming, functionWrapperKey(imported.importedFilePath, imported.importedName));
+      incrementMap(incoming, functionIdentityKey(imported.importedFilePath, imported.importedName));
     }
   }
   for (const reference of topLevelCallReferences) {
-    incrementMap(incoming, functionWrapperKey(reference.filePath, reference.functionName));
-    const imported = importedByLocalName.get(functionWrapperKey(reference.filePath, reference.functionName));
+    incrementMap(incoming, functionIdentityKey(reference.filePath, reference.functionName));
+    const imported = importedByLocalName.get(functionIdentityKey(reference.filePath, reference.functionName));
     if (imported !== undefined) {
-      incrementMap(incoming, functionWrapperKey(imported.importedFilePath, imported.importedName));
+      incrementMap(incoming, functionIdentityKey(imported.importedFilePath, imported.importedName));
     }
   }
   for (const reference of valueReferences) {
-    incrementMap(incomingValueReferences, functionWrapperKey(reference.filePath, reference.functionName));
-    const imported = importedByLocalName.get(functionWrapperKey(reference.filePath, reference.functionName));
+    incrementMap(incomingValueReferences, functionIdentityKey(reference.filePath, reference.functionName));
+    const imported = importedByLocalName.get(functionIdentityKey(reference.filePath, reference.functionName));
     if (imported !== undefined) {
-      incrementMap(incomingValueReferences, functionWrapperKey(imported.importedFilePath, imported.importedName));
+      incrementMap(incomingValueReferences, functionIdentityKey(imported.importedFilePath, imported.importedName));
     }
   }
   return seeds.map((seed) => {
-    const incomingCallCount = incoming.get(functionWrapperKey(seed.filePath, seed.name)) ?? 0;
+    const incomingCallCount = incoming.get(functionIdentityKey(seed.filePath, seed.name)) ?? 0;
     const incomingValueReferenceCount =
-      incomingValueReferences.get(functionWrapperKey(seed.filePath, seed.name)) ?? 0;
+      incomingValueReferences.get(functionIdentityKey(seed.filePath, seed.name)) ?? 0;
     const incomingUsageCount = incomingCallCount + incomingValueReferenceCount;
     return {
       ...seed,
@@ -876,7 +1271,7 @@ function finalizeFunctionWrapperRows(
   });
 }
 
-function functionWrapperKey(filePath: string, functionName: string): string {
+function functionIdentityKey(filePath: string, functionName: string): string {
   return `${filePath}:${functionName}`;
 }
 
@@ -1086,14 +1481,136 @@ function atlasSelfClassSurfaceForDeclaration(
   };
 }
 
+function atlasSelfVariableSurfacesForStatement(
+  sourceFile: ts.SourceFile,
+  packageId: string,
+  filePath: string,
+  node: ts.VariableStatement,
+): readonly AtlasSelfVariableSurfaceRow[] {
+  if (!ts.isSourceFile(node.parent)) {
+    return [];
+  }
+  const declarationKind = variableDeclarationKind(node.declarationList);
+  const exported = hasModifier(node, ts.SyntaxKind.ExportKeyword);
+  return node.declarationList.declarations
+    .filter((declaration) => ts.isIdentifier(declaration.name))
+    .map((declaration) => {
+      const name = (declaration.name as ts.Identifier).text;
+      const source = sourceRangeForNode(sourceFile, filePath, declaration);
+      const initializer = initializerSummary(declaration.initializer);
+      return {
+        id: `atlas-self:variable:${packageId}:${filePath}:${name}`,
+        packageId,
+        name,
+        declarationKind,
+        exported,
+        filePath,
+        lineCount: lineCountForSourceRange(source),
+        initializerKind: initializer.initializerKind,
+        initializerEntryCount: initializer.initializerEntryCount,
+        source,
+        summary:
+          `${name} is an exported=${exported} top-level ${declarationKind} declaration in ${filePath} with ${initializer.initializerKind} initializer.`,
+      };
+    });
+}
+
+function variableDeclarationKind(
+  declarationList: ts.VariableDeclarationList,
+): AtlasSelfVariableSurfaceRow["declarationKind"] {
+  if ((declarationList.flags & ts.NodeFlags.Const) !== 0) {
+    return "const";
+  }
+  if ((declarationList.flags & ts.NodeFlags.Let) !== 0) {
+    return "let";
+  }
+  return "var";
+}
+
+function initializerSummary(
+  initializer: ts.Expression | undefined,
+): Pick<AtlasSelfVariableSurfaceRow, "initializerKind" | "initializerEntryCount"> {
+  if (initializer === undefined) {
+    return { initializerKind: "none", initializerEntryCount: null };
+  }
+  const expression = unwrapExpression(initializer);
+  if (ts.isArrayLiteralExpression(expression)) {
+    return {
+      initializerKind: "array-literal",
+      initializerEntryCount: expression.elements.length,
+    };
+  }
+  if (ts.isObjectLiteralExpression(expression)) {
+    return {
+      initializerKind: "object-literal",
+      initializerEntryCount: expression.properties.length,
+    };
+  }
+  if (
+    ts.isArrowFunction(expression) ||
+    ts.isFunctionExpression(expression)
+  ) {
+    return { initializerKind: "function-like", initializerEntryCount: null };
+  }
+  if (ts.isCallExpression(expression)) {
+    return { initializerKind: "call", initializerEntryCount: null };
+  }
+  if (ts.isNewExpression(expression)) {
+    return { initializerKind: "new", initializerEntryCount: null };
+  }
+  if (isLiteralExpression(expression)) {
+    return { initializerKind: "literal", initializerEntryCount: null };
+  }
+  if (ts.isIdentifier(expression)) {
+    return { initializerKind: "identifier", initializerEntryCount: null };
+  }
+  if (ts.isPropertyAccessExpression(expression)) {
+    return { initializerKind: "property-access", initializerEntryCount: null };
+  }
+  return { initializerKind: "other", initializerEntryCount: null };
+}
+
+function isLiteralExpression(node: ts.Expression): boolean {
+  return (
+    isStringLiteralLike(node) ||
+    ts.isNumericLiteral(node) ||
+    node.kind === ts.SyntaxKind.TrueKeyword ||
+    node.kind === ts.SyntaxKind.FalseKeyword ||
+    node.kind === ts.SyntaxKind.NullKeyword
+  );
+}
+
 function atlasSelfFunctionSurfaceForFunctionDeclaration(
   sourceFile: ts.SourceFile,
   packageId: string,
   filePath: string,
   node: ts.FunctionDeclaration,
-): AtlasSelfFunctionSurfaceRow {
+  includeBodyAnalysis: boolean,
+  profiler: PhaseProfiler<AtlasSelfAnalysisPhaseProfileRow>,
+): FunctionDeclarationSeed {
   const source = sourceRangeForNode(sourceFile, filePath, node);
-  const callStats = callStatsForFunctionLike(node, null);
+  const lineCount = lineCountForSourceRange(source);
+  const bodyFingerprint = includeBodyAnalysis
+    ? profiler.measureRepeated(
+      "source-file-collection.function-surface.body-fingerprint",
+      "Compute normalized text fingerprints for top-level function bodies.",
+      () => normalizedSourceFingerprint((node.body ?? node).getText(sourceFile)),
+    )
+    : null;
+  const bodyShapeFingerprint = includeBodyAnalysis
+    ? profiler.measureRepeated(
+      "source-file-collection.function-surface.body-shape",
+      "Compute canonical AST/control-flow body-shape fingerprints for top-level functions.",
+      () => functionBodyShapeFingerprint(node, sourceFile),
+    )
+    : null;
+  const switchTopology = includeBodyAnalysis
+    ? profiler.measureRepeated(
+      "source-file-collection.function-surface.switch-topology",
+      "Compute switch-dispatch topology fingerprints for top-level functions.",
+      () => functionSwitchTopologyFingerprint(node, sourceFile),
+    )
+    : null;
   return {
     id: `atlas-self:function:${packageId}:${filePath}:${node.name!.text}`,
     packageId,
@@ -1102,15 +1619,12 @@ function atlasSelfFunctionSurfaceForFunctionDeclaration(
     className: null,
     exported: hasModifier(node, ts.SyntaxKind.ExportKeyword),
     filePath,
-    lineCount: lineCountForSourceRange(source),
-    bodyFingerprint: normalizedSourceFingerprint(
-      (node.body ?? node).getText(sourceFile),
-    ),
-    bodyShapeFingerprint: functionBodyShapeFingerprint(node, sourceFile),
-    callCount: callStats.callCount,
-    uniqueCallTargetCount: callStats.uniqueCallTargetCount,
+    lineCount,
+    bodyFingerprint,
+    bodyShapeFingerprint,
+    switchTopologyFingerprint: switchTopology?.fingerprint ?? null,
+    switchTopologyCount: switchTopology?.switchCount ?? 0,
     source,
-    summary: `${node.name!.text} is a top-level function in ${filePath} with ${callStats.callCount} direct call(s).`,
   };
 }
 
@@ -1121,9 +1635,32 @@ function functionSurfaceForMethodDeclaration(
   node: ts.MethodDeclaration,
   functionName: string,
   className: string | null,
-): AtlasSelfFunctionSurfaceRow {
+  includeBodyAnalysis: boolean,
+  profiler: PhaseProfiler<AtlasSelfAnalysisPhaseProfileRow>,
+): FunctionDeclarationSeed {
   const source = sourceRangeForNode(sourceFile, filePath, node);
-  const callStats = callStatsForFunctionLike(node, className);
+  const lineCount = lineCountForSourceRange(source);
+  const bodyFingerprint = includeBodyAnalysis
+    ? profiler.measureRepeated(
+      "source-file-collection.method-surface.body-fingerprint",
+      "Compute normalized text fingerprints for method bodies.",
+      () => normalizedSourceFingerprint((node.body ?? node).getText(sourceFile)),
+    )
+    : null;
+  const bodyShapeFingerprint = includeBodyAnalysis
+    ? profiler.measureRepeated(
+      "source-file-collection.method-surface.body-shape",
+      "Compute canonical AST/control-flow body-shape fingerprints for methods.",
+      () => functionBodyShapeFingerprint(node, sourceFile),
+    )
+    : null;
+  const switchTopology = includeBodyAnalysis
+    ? profiler.measureRepeated(
+      "source-file-collection.method-surface.switch-topology",
+      "Compute switch-dispatch topology fingerprints for methods.",
+      () => functionSwitchTopologyFingerprint(node, sourceFile),
+    )
+    : null;
   return {
     id: `atlas-self:function:${packageId}:${filePath}:${functionName}`,
     packageId,
@@ -1132,15 +1669,12 @@ function functionSurfaceForMethodDeclaration(
     className,
     exported: methodOwningClassIsExported(node),
     filePath,
-    lineCount: lineCountForSourceRange(source),
-    bodyFingerprint: normalizedSourceFingerprint(
-      (node.body ?? node).getText(sourceFile),
-    ),
-    bodyShapeFingerprint: functionBodyShapeFingerprint(node, sourceFile),
-    callCount: callStats.callCount,
-    uniqueCallTargetCount: callStats.uniqueCallTargetCount,
+    lineCount,
+    bodyFingerprint,
+    bodyShapeFingerprint,
+    switchTopologyFingerprint: switchTopology?.fingerprint ?? null,
+    switchTopologyCount: switchTopology?.switchCount ?? 0,
     source,
-    summary: `${functionName} is a class method in ${filePath} with ${callStats.callCount} direct call(s).`,
   };
 }
 
@@ -1447,43 +1981,6 @@ function finalizeSourceFileSurfaces(
   }));
 }
 
-function callStatsForFunctionLike(
-  node: ts.FunctionDeclaration | ts.MethodDeclaration,
-  currentClass: string | null,
-): { readonly callCount: number; readonly uniqueCallTargetCount: number } {
-  let callCount = 0;
-  const targets = new Set<string>();
-  const visit = (child: ts.Node): void => {
-    if (child !== node && isNestedExecutableDeclaration(child)) {
-      return;
-    }
-    if (ts.isCallExpression(child)) {
-      callCount += 1;
-      const target = calledFunctionName(child, currentClass);
-      if (target !== null) {
-        targets.add(target);
-      }
-    }
-    ts.forEachChild(child, visit);
-  };
-  visit(node);
-  return {
-    callCount,
-    uniqueCallTargetCount: targets.size,
-  };
-}
-
-function isNestedExecutableDeclaration(node: ts.Node): boolean {
-  return ts.isFunctionDeclaration(node) ||
-    ts.isFunctionExpression(node) ||
-    ts.isArrowFunction(node) ||
-    ts.isMethodDeclaration(node) ||
-    ts.isGetAccessor(node) ||
-    ts.isSetAccessor(node) ||
-    ts.isConstructorDeclaration(node) ||
-    ts.isClassDeclaration(node);
-}
-
 function methodOwningClassIsExported(node: ts.MethodDeclaration): boolean {
   return (
     ts.isClassDeclaration(node.parent) &&
@@ -1780,6 +2277,105 @@ function calledFunctionName(
     }
   }
   return null;
+}
+
+function propertyCallCandidate(
+  context: SelfAnalysisVisitContext,
+  node: ts.CallExpression,
+): PropertyCallCandidate | null {
+  if (!ts.isPropertyAccessExpression(node.expression)) {
+    return null;
+  }
+  const methodName = propertyNameText(
+    node.expression.name,
+    context.sourceFile,
+  ) ?? node.expression.name.getText(context.sourceFile);
+  return {
+    filePath: context.filePath,
+    fromFunction: context.currentFunction,
+    nameNode: node.expression.name,
+    methodName,
+  };
+}
+
+interface ResolvedPropertyCallCandidates {
+  readonly callEdges: readonly FunctionCallEdge[];
+  readonly topLevelCallReferences: readonly FunctionValueReference[];
+}
+
+function resolvePropertyCallCandidates(
+  candidates: readonly PropertyCallCandidate[],
+  wrapperSeeds: readonly FunctionWrapperSeed[],
+  sourceProject: SourceProject,
+  profiler: PhaseProfiler<AtlasSelfAnalysisPhaseProfileRow>,
+): ResolvedPropertyCallCandidates {
+  const wrapperMethodNames = new Set(
+    wrapperSeeds
+      .filter((seed) => seed.functionKind === "class-method")
+      .map((seed) => seed.name.slice(seed.name.lastIndexOf(".") + 1)),
+  );
+  if (wrapperMethodNames.size === 0) {
+    return { callEdges: [], topLevelCallReferences: [] };
+  }
+  const callEdges: FunctionCallEdge[] = [];
+  const topLevelCallReferences: FunctionValueReference[] = [];
+  for (const candidate of candidates) {
+    if (!wrapperMethodNames.has(candidate.methodName)) {
+      continue;
+    }
+    const resolvedName = profiler.measureRepeated(
+      "property-call-target-resolution.checker-symbol",
+      "Resolve candidate property-call symbols after narrowing to shallow wrapper method names.",
+      () => checkerResolvedPropertyCallName(candidate.nameNode, sourceProject),
+    );
+    if (resolvedName === null) {
+      continue;
+    }
+    if (candidate.fromFunction === null) {
+      topLevelCallReferences.push({
+        filePath: candidate.filePath,
+        functionName: resolvedName,
+      });
+    } else {
+      callEdges.push({
+        filePath: candidate.filePath,
+        fromFunction: candidate.fromFunction,
+        toFunction: resolvedName,
+      });
+    }
+  }
+  return { callEdges, topLevelCallReferences };
+}
+
+function checkerResolvedPropertyCallName(
+  nameNode: ts.MemberName,
+  sourceProject: SourceProject,
+): string | null {
+  const symbol = sourceProject.checker.getSymbolAtLocation(nameNode);
+  const declaration = symbol?.declarations?.find((candidate) =>
+    ts.isMethodDeclaration(candidate) ||
+    ts.isGetAccessor(candidate) ||
+    ts.isSetAccessor(candidate) ||
+    ts.isPropertyDeclaration(candidate),
+  );
+  if (declaration === undefined) {
+    return null;
+  }
+  const classDeclaration = declaration.parent;
+  if (
+    !ts.isClassDeclaration(classDeclaration) ||
+    classDeclaration.name === undefined
+  ) {
+    return null;
+  }
+  const declarationPackage =
+    sourceProject.packageForFileName(declaration.getSourceFile().fileName);
+  if (declarationPackage?.id !== "atlas") {
+    return null;
+  }
+  const methodName = propertyNameText(nameNode, nameNode.getSourceFile()) ??
+    nameNode.getText(nameNode.getSourceFile());
+  return `${classDeclaration.name.text}.${methodName}`;
 }
 
 function isFunctionValueReferenceIdentifier(node: ts.Identifier): boolean {
@@ -2396,14 +2992,14 @@ class AtlasSelfFunctionGraph {
     }
     const calls = new Map<string, string[]>();
     for (const edge of callEdges) {
-      const key = this.#callKey(edge.filePath, edge.fromFunction);
+      const key = functionIdentityKey(edge.filePath, edge.fromFunction);
       const targets = calls.get(key) ?? [];
       targets.push(edge.toFunction);
       calls.set(key, targets);
     }
     const imports = new Map<string, FunctionImportBinding>();
     for (const binding of importBindings) {
-      imports.set(this.#callKey(binding.filePath, binding.localName), binding);
+      imports.set(functionIdentityKey(binding.filePath, binding.localName), binding);
     }
     return new AtlasSelfFunctionGraph(
       fileByFunctionName,
@@ -2424,7 +3020,7 @@ class AtlasSelfFunctionGraph {
     ];
     while (queue.length > 0) {
       const next = queue.shift()!;
-      const key = AtlasSelfFunctionGraph.#callKey(
+      const key = functionIdentityKey(
         next.filePath,
         next.functionName,
       );
@@ -2453,7 +3049,7 @@ class AtlasSelfFunctionGraph {
       return { filePath, functionName: targetName };
     }
     const binding = this.#importsByFileAndLocalName.get(
-      AtlasSelfFunctionGraph.#callKey(filePath, targetName),
+      functionIdentityKey(filePath, targetName),
     );
     if (binding !== undefined) {
       return {
@@ -2464,9 +3060,6 @@ class AtlasSelfFunctionGraph {
     return null;
   }
 
-  static #callKey(filePath: string, functionName: string): string {
-    return `${filePath}:${functionName}`;
-  }
 }
 
 function finalizeProjectionBranches(
@@ -3480,6 +4073,17 @@ function compareFunctionSurface(
   return (
     left.filePath.localeCompare(right.filePath) ||
     left.functionKind.localeCompare(right.functionKind) ||
+    left.name.localeCompare(right.name)
+  );
+}
+
+function compareVariableSurface(
+  left: AtlasSelfVariableSurfaceRow,
+  right: AtlasSelfVariableSurfaceRow,
+): number {
+  return (
+    left.filePath.localeCompare(right.filePath) ||
+    left.declarationKind.localeCompare(right.declarationKind) ||
     left.name.localeCompare(right.name)
   );
 }

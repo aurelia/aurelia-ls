@@ -205,6 +205,9 @@ lifetime.
   TypeScript checker objects in the type-system substrate.
 - The catalog validates that a product was committed and that its product kind matches the slot before accepting a
   detail.
+- Use `ProductDetailCatalog.addAll(...)` / `addAllIfAbsent(...)` when a materializer attaches a homogeneous emission
+  row family whose members carry product handles. Keep one-off conditional details explicit, especially when a product
+  handle can be absent or a different slot owns the fallback.
 - Details support inquiry and tooling expansion, but they are not a shortcut around kernel vocabulary, claims, or
   provenance when a relationship needs to become semantic.
 

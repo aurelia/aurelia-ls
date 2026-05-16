@@ -175,7 +175,13 @@ export interface TypeScriptEnumUsageIndex {
 
 export interface TypeScriptEnumUsageIndexOptions {
   readonly packageId?: string;
+  readonly contextualRawValueRoles?: TypeScriptEnumRawValueRoleSelection;
 }
+
+export type TypeScriptEnumRawValueRoleSelection =
+  | "all"
+  | "none"
+  | readonly TypeScriptEnumUseRole[];
 
 interface EnumDeclarationSeed {
   readonly key: string;
@@ -218,11 +224,13 @@ export function readTypeScriptEnumUsageIndex(
   sourceProject: SourceProject,
   options: TypeScriptEnumUsageIndexOptions = {},
 ): TypeScriptEnumUsageIndex {
-  const cacheKey = options.packageId ?? "*";
+  const contextualRawValueRoles = options.contextualRawValueRoles ?? "all";
+  const cacheKey = `${options.packageId ?? "*"}|raw-context:${contextualRawValueRoleKey(contextualRawValueRoles)}`;
   return enumUsageMemo.read(sourceProject, cacheKey, () =>
     new TypeScriptEnumUsageIndexBuilder(
       sourceProject,
       options.packageId,
+      contextualRawValueRoles,
     ).build(),
   );
 }
@@ -234,6 +242,7 @@ class TypeScriptEnumUsageIndexBuilder {
   readonly #profiler =
     new PhaseProfiler<TypeScriptEnumUsageIndexPhaseProfileRow>();
   readonly #rawValueContext: TypeScriptEnumRawValueContext;
+  readonly #contextualRawValueRoles: ReadonlySet<TypeScriptEnumUseRole> | null;
   readonly #declarations: EnumDeclarationSeed[] = [];
   readonly #members: EnumMemberSeed[] = [];
   readonly #membersByKey = new Map<string, EnumMemberSeed>();
@@ -247,9 +256,16 @@ class TypeScriptEnumUsageIndexBuilder {
   readonly #valueOccurrences: TypeScriptEnumValueOccurrenceRow[] = [];
   readonly #translationEdges = new Map<string, TypeScriptEnumTranslationEdgeRow>();
 
-  constructor(sourceProject: SourceProject, packageId: string | undefined) {
+  constructor(
+    sourceProject: SourceProject,
+    packageId: string | undefined,
+    contextualRawValueRoles: TypeScriptEnumRawValueRoleSelection,
+  ) {
     this.#sourceProject = sourceProject;
     this.#packageId = packageId;
+    this.#contextualRawValueRoles = contextualRawValueRoleSet(
+      contextualRawValueRoles,
+    );
     this.#checker = sourceProject.checker;
     this.#rawValueContext = new TypeScriptEnumRawValueContext(
       this.#checker,
@@ -504,7 +520,7 @@ class TypeScriptEnumUsageIndexBuilder {
     }
     const role = useRoleForNode(node);
     const span = sourceSpanForNode(context.sourceFile, node);
-    const contextualMemberKeys = needsContextualRawValueLookup(role)
+    const contextualMemberKeys = this.#shouldReadContextualRawValue(role)
       ? this.#contextualMemberKeysForLiteral(node, members, role)
       : [];
     return {
@@ -527,6 +543,13 @@ class TypeScriptEnumUsageIndexBuilder {
     members: readonly EnumMemberSeed[],
     role: TypeScriptEnumUseRole,
   ): readonly string[] {
+    if (ts.isNumericLiteral(node)) {
+      // Numeric enum raw values collide with ordinary counters and sentinel values too broadly.
+      // Direct Enum.Member references still carry numeric enum usage; contextual raw-value
+      // narrowing is reserved for string-like values unless a future caller opts into numerics.
+      this.#countContextualLookupResult(role, "numeric-skipped");
+      return [];
+    }
     const expectedEnumNames =
       this.#rawValueContext.expectedEnumNamesForLiteral(node, role);
     if (expectedEnumNames !== null) {
@@ -573,9 +596,23 @@ class TypeScriptEnumUsageIndexBuilder {
     return contextualMemberKeys;
   }
 
+  #shouldReadContextualRawValue(role: TypeScriptEnumUseRole): boolean {
+    if (!needsContextualRawValueLookup(role)) {
+      return false;
+    }
+    if (this.#contextualRawValueRoles === null) {
+      return true;
+    }
+    if (!this.#contextualRawValueRoles.has(role)) {
+      this.#countContextualLookupResult(role, "policy-skipped");
+      return false;
+    }
+    return true;
+  }
+
   #countContextualLookupResult(
     role: TypeScriptEnumUseRole,
-    result: "enum-miss" | "narrowed" | "non-enum" | "none",
+    result: "enum-miss" | "narrowed" | "non-enum" | "none" | "numeric-skipped" | "policy-skipped",
   ): void {
     this.#profiler.countRepeated(
       `contextualType.result.${role}.${result}`,
@@ -1080,7 +1117,7 @@ function isLiteralLike(
   );
 }
 
-function enumValueKey(value: string | number): string {
+export function enumValueKey(value: string | number): string {
   return `${typeof value}:${String(value)}`;
 }
 
@@ -1172,6 +1209,27 @@ function needsContextualRawValueLookup(role: TypeScriptEnumUseRole): boolean {
     case "type-reference":
       return false;
   }
+}
+
+function contextualRawValueRoleKey(
+  selection: TypeScriptEnumRawValueRoleSelection,
+): string {
+  if (selection === "all" || selection === "none") {
+    return selection;
+  }
+  return uniqueSortedStrings(selection).join(",");
+}
+
+function contextualRawValueRoleSet(
+  selection: TypeScriptEnumRawValueRoleSelection,
+): ReadonlySet<TypeScriptEnumUseRole> | null {
+  if (selection === "all") {
+    return null;
+  }
+  if (selection === "none") {
+    return new Set<TypeScriptEnumUseRole>();
+  }
+  return new Set(selection);
 }
 
 function functionLikeName(

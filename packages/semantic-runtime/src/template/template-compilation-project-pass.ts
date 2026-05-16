@@ -18,6 +18,8 @@ import type { ResourceDefinitionIndex } from '../resources/resource-definition-i
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
+import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
 import {
   AttributeClassificationMaterializer,
   type AttributeClassificationEmission,
@@ -149,6 +151,7 @@ export interface TemplateCompilationProjectProfile {
 
 export interface TemplateCompilationProjectOptions {
   readonly runtimeAnalysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
+  readonly evaluation?: StaticProjectEvaluationResult | null;
   readonly includeAuthoringTemplates?: boolean;
   readonly authoringTemplateSourceFiles?: readonly string[];
   readonly authoringTemplateLimit?: number | null;
@@ -252,8 +255,25 @@ export class TemplateCompilationProjectPass {
       ...appCompilations,
       ...authoringCompilations,
     ]);
-    const resources = this.analyzeCompiledResources(appCompilations, projectContext, typeSystem, runtimeAnalysisDepth, phases);
-    const authoringResources = this.analyzeCompiledResources(authoringCompilations, projectContext, typeSystem, runtimeAnalysisDepth, phases);
+    const expressionWorld = new CheckerExpressionTypeWorld(this.store);
+    const resources = this.analyzeCompiledResources(
+      appCompilations,
+      projectContext,
+      options.evaluation ?? null,
+      typeSystem,
+      runtimeAnalysisDepth,
+      expressionWorld,
+      phases,
+    );
+    const authoringResources = this.analyzeCompiledResources(
+      authoringCompilations,
+      projectContext,
+      options.evaluation ?? null,
+      typeSystem,
+      runtimeAnalysisDepth,
+      expressionWorld,
+      phases,
+    );
 
     const profile: TemplateCompilationProjectProfile = {
       totalMilliseconds: performance.now() - started,
@@ -387,8 +407,10 @@ export class TemplateCompilationProjectPass {
   private analyzeCompiledResources(
     compilations: readonly TemplateResourceCompilationEmission[],
     projectContext: TemplateRuntimeAnalysisProjectContext,
+    evaluation: StaticProjectEvaluationResult | null,
     typeSystem: TypeSystemProject | null,
     runtimeAnalysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`,
+    expressionWorld: CheckerExpressionTypeWorld,
     phases: TemplateCompilationProjectPhaseTiming[],
   ): readonly TemplateResourceRuntimeAnalysisEmission[] {
     return compilations.map((compilation) =>
@@ -397,7 +419,7 @@ export class TemplateCompilationProjectPass {
         measureTemplateCompilationPhase(
           phases,
           'runtime-analysis',
-          () => this.analyzeResource(compilation, projectContext, typeSystem, runtimeAnalysisDepth),
+          () => this.analyzeResource(compilation, projectContext, evaluation, typeSystem, runtimeAnalysisDepth, expressionWorld),
         ),
       )
     );
@@ -654,8 +676,10 @@ export class TemplateCompilationProjectPass {
   analyzeResource(
     compilation: TemplateResourceCompilationEmission,
     projectContext: TemplateRuntimeAnalysisProjectContext,
+    evaluation: StaticProjectEvaluationResult | null,
     typeSystem: TypeSystemProject | null,
     analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` = DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
+    expressionWorld: CheckerExpressionTypeWorld | null = null,
   ): TemplateRuntimeAnalysisEmission {
     return this.runtimeAnalysis.materialize(new TemplateRuntimeAnalysisRequest(
       compilation.localKey,
@@ -664,8 +688,10 @@ export class TemplateCompilationProjectPass {
       compilation.attributeSyntax,
       compilation.compilerWorld,
       projectContext,
+      evaluation,
       typeSystem,
       analysisDepth,
+      expressionWorld,
     ));
   }
 }

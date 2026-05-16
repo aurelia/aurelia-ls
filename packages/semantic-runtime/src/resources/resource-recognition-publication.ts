@@ -54,8 +54,8 @@ import {
 } from './resource-observation.js';
 import {
   type NamedResourceDefinitionKind,
-  toAureliaResourceIdentityKind,
 } from './resource-kind.js';
+import { toAureliaResourceIdentityKind } from './named-resource-kind.js';
 import { ResourceTargetReference } from './resource-reference.js';
 
 class ResourceIdentityPublication {

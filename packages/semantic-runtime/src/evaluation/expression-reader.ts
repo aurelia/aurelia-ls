@@ -42,6 +42,8 @@ export class EvaluationTargetRead {
 
 /** Generic expression reader over an already-built module environment. */
 export class StaticEvaluationExpressionReader {
+  private evaluator: StaticEvaluator | null = null;
+
   constructor(
     readonly environment: ModuleEnvironmentRecord,
     readonly moduleKey: string,
@@ -50,7 +52,7 @@ export class StaticEvaluationExpressionReader {
   ) {}
 
   evaluateExpression(expression: ts.Expression): EvaluationRead<EvaluationValue> {
-    const result = new StaticEvaluator(this.policy, this.runtimeHost).evaluateExpressionInEnvironment(expression, this.environment, this.moduleKey);
+    const result = this.evaluatorForReader().evaluateExpressionInEnvironment(expression, this.environment, this.moduleKey);
     return new EvaluationRead(result.value, expression, result.openSeams);
   }
 
@@ -94,6 +96,11 @@ export class StaticEvaluationExpressionReader {
       return readClassTarget(classDeclarationForTargetValue(value), result.openSeams);
     }
     return readSyntaxTarget(expression, result.openSeams);
+  }
+
+  private evaluatorForReader(): StaticEvaluator {
+    this.evaluator ??= new StaticEvaluator(this.policy, this.runtimeHost);
+    return this.evaluator;
   }
 }
 

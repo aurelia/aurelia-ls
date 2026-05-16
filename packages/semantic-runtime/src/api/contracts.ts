@@ -119,6 +119,7 @@ import type {
 import type { OpenSeam } from '../kernel/open-seam.js';
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { ResourceDefinitionKind } from '../resources/resource-kind.js';
+import type { ResourceDependencyReferenceKind } from '../resources/resource-reference.js';
 import type {
   BindableBindingMode,
   BindableSetterKind,
@@ -1068,7 +1069,10 @@ export interface SemanticResourceIssueRow {
 }
 
 export interface SemanticResourceDefinitionDependencyRow {
+  readonly dependencyKind: ResourceDependencyReferenceKind | `${ResourceDependencyReferenceKind}`;
   readonly keyName: string | null;
+  readonly localName: string | null;
+  readonly registryKind: string | null;
   readonly hasIdentity: boolean;
 }
 
@@ -1961,6 +1965,7 @@ export interface SemanticRecognizedRouteRow {
   readonly hasResidue: boolean;
   readonly parameterCount: number;
   readonly redirectDepth: number;
+  readonly redirectSourceRouteConfig: SemanticRouteConfigReferenceRow | null;
   readonly recognizer: SemanticRouteRecognizerReferenceRow;
   readonly viewportInstruction: SemanticRouterProductReferenceRow;
   readonly viewportInstructionTree: SemanticRouterProductReferenceRow;
@@ -1987,6 +1992,8 @@ export interface SemanticRecognizedRouteRow {
     readonly routeContextIdentityHandle: IdentityHandle | null;
     readonly endpointProductHandle: ProductHandle | null;
     readonly endpointIdentityHandle: IdentityHandle | null;
+    readonly redirectSourceRouteConfigProductHandle: ProductHandle | null;
+    readonly redirectSourceRouteConfigIdentityHandle: IdentityHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
   };
 }
@@ -2169,6 +2176,7 @@ export type SemanticTemplateCursorDiagnosticKind =
   | 'runtime-binding-behavior-framework-error'
   | 'runtime-value-converter-framework-error'
   | 'runtime-binding-scope-framework-error'
+  | 'router-framework-error'
   | 'binding-target-access-framework-error'
   | 'binding-source-assignment-strictness'
   | 'binding-source-assignment-runtime-noop';
@@ -2190,6 +2198,7 @@ export type SemanticTemplateCursorSuggestionKind =
   | 'use-safe-destructuring-source'
   | 'fix-expression-syntax'
   | 'fix-template-syntax'
+  | 'fix-router-instruction'
   | 'declare-explicit-member'
   | 'declare-assignable-member'
   | 'declare-scope-slot-type'
@@ -2197,6 +2206,7 @@ export type SemanticTemplateCursorSuggestionKind =
   | 'align-assignment-type'
   | 'make-source-writable'
   | 'use-assignable-expression'
+  | 'configure-node-observer'
   | 'inspect-owner-type';
 
 export type SemanticTemplateCursorSuggestionActionKind =
@@ -2208,6 +2218,7 @@ export type SemanticTemplateCursorSuggestionActionKind =
   | 'replace-owner-type'
   | 'change-member-type'
   | 'change-member-mutability'
+  | 'configure-observer'
   | 'rewrite-expression'
   | 'rewrite-template-syntax'
   | 'inspect-owner-type';
@@ -2221,6 +2232,7 @@ export type SemanticTemplateCursorSuggestionActionTargetKind =
   | 'resource'
   | 'service'
   | 'runtime-boundary'
+  | 'observer-config'
   | 'owner-type'
   | 'scope-slot'
   | 'expression'
@@ -2291,11 +2303,15 @@ export interface SemanticTemplateCursorInfoResult {
     readonly display: string | null;
     readonly shapeKind: string | null;
     readonly origin: string | null;
+    /** Source site that caused the owner type projection, usually the template expression locus. */
     readonly source: SemanticSourceReference | null;
+    /** Best TypeScript declaration source for the projected owner type, when checker declarations can name one. */
+    readonly declarationSource: SemanticSourceReference | null;
     readonly handles?: {
       readonly productHandle: ProductHandle | null;
       readonly identityHandle: IdentityHandle | null;
       readonly sourceAddressHandle: AddressHandle | null;
+      readonly declarationSourceAddressHandle: AddressHandle | null;
     };
   } | null;
   readonly diagnostics: readonly SemanticTemplateCursorDiagnosticRow[];
@@ -2399,6 +2415,7 @@ export interface SemanticBindingTargetAccessRow {
   readonly authority: RuntimeBindingTargetAccessAuthority | `${RuntimeBindingTargetAccessAuthority}`;
   readonly openReason: string | null;
   readonly frameworkErrorCode: string | null;
+  readonly diagnosticReason: string | null;
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly bindingProductHandle: ProductHandle | null;
@@ -2502,6 +2519,7 @@ export interface SemanticBindingValueChannelRow {
   readonly runtimeValueType: string | null;
   readonly valueDomain: readonly string[];
   readonly isCollection: boolean | null;
+  readonly usesCustomMatcher: boolean;
   readonly openReason: string | null;
   readonly openReasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
   readonly source: SemanticSourceReference | null;

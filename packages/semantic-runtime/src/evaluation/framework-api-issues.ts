@@ -2,34 +2,29 @@ import ts from 'typescript';
 
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
-  SourceSpanAddress,
-  SourceSpanRole,
-} from '../kernel/address.js';
-import {
-  EvidenceKind,
-  EvidenceRecord,
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
-import { ProvenanceRecord } from '../kernel/provenance.js';
 import {
   KernelStore,
   KernelStoreBatch,
-  type KernelStoreRecord,
 } from '../kernel/store.js';
+import {
+  sourceSpanAddressForSite,
+  type SourceSpanAddressPublication,
+} from '../kernel/source-address.js';
 import {
   nullishExpressionKind,
 } from './nullish-expression.js';
 import {
-  EvaluationIssue,
   EvaluationIssueKind,
   EvaluationIssuePhase,
   EvaluationIssueSubjectKind,
 } from './evaluation-issue.js';
-import type { EvaluationIssuePublication } from './evaluation-issue-publication.js';
 import {
-  evaluationIssueProductRecords,
+  EvaluationIssuePublication,
+  EvaluationIssuePublisher,
 } from './evaluation-issue-publication.js';
 import {
   EvaluationIssueProjectResult,
@@ -74,20 +69,17 @@ class FrameworkApiIssueSite {
   ) {}
 }
 
-class FrameworkApiIssueSourceAddress {
-  constructor(
-    readonly handle: AddressHandle | null,
-    readonly records: readonly KernelStoreRecord[],
-  ) {}
-}
-
 export class FrameworkApiIssueProjectResult extends EvaluationIssueProjectResult {}
 
 /** Materializes source-backed diagnostics for exact Aurelia framework utility/API calls. */
 export class FrameworkApiIssueMaterializer {
+  private readonly issuePublisher: EvaluationIssuePublisher;
+
   constructor(
     readonly store: KernelStore,
-  ) {}
+  ) {
+    this.issuePublisher = new EvaluationIssuePublisher(store);
+  }
 
   materializeAndEmit(
     project: ProjectBootFrame,
@@ -97,93 +89,71 @@ export class FrameworkApiIssueMaterializer {
       const sourceFile = typeSystem.readSourceFileByPath(source.path);
       return sourceFile == null
         ? []
-        : this.publicationsForSource(project, source.path, sourceFile, typeSystem.checker);
+        : this.publicationsForSource(project, source.path, source.addressHandle, sourceFile, typeSystem.checker);
     });
     const records = publications.flatMap((publication) => publication.records);
     if (records.length > 0) {
       this.store.commit(new KernelStoreBatch(records, `framework-api-issues:${project.projectKey}`));
     }
-    for (const publication of publications) {
-      this.store.productDetails.add(EvaluationProductDetails.Issue, publication.issue.productHandle, publication.issue);
-    }
+    this.store.productDetails.addAll(EvaluationProductDetails.Issue, publications.map((publication) => publication.issue));
     return new FrameworkApiIssueProjectResult(publications.map((publication) => publication.issue), records);
   }
 
   private publicationsForSource(
     project: ProjectBootFrame,
     sourcePath: string,
+    sourceFileAddressHandle: AddressHandle,
     sourceFile: ts.SourceFile,
     checker: ts.TypeChecker,
   ): readonly EvaluationIssuePublication[] {
     const bindings = readFrameworkApiImportedBindings(sourceFile);
     return readFrameworkApiIssueSites(sourceFile, checker, bindings)
-      .map((site, index) => this.publicationForSite(project, sourcePath, sourceFile, site, index));
+      .map((site, index) =>
+        this.publicationForSite(project, sourcePath, sourceFileAddressHandle, sourceFile, site, index)
+      );
   }
 
   private publicationForSite(
     project: ProjectBootFrame,
     sourcePath: string,
+    sourceFileAddressHandle: AddressHandle,
     sourceFile: ts.SourceFile,
     site: FrameworkApiIssueSite,
     index: number,
   ): EvaluationIssuePublication {
     const sourceNode = site.rejectedExpression ?? site.call;
     const local = frameworkApiIssueLocalKey(project, sourcePath, site, index);
-    const span = this.sourceAddress(local, sourcePath, sourceNode.getStart(sourceFile), sourceNode.end);
-    const evidenceHandle = this.store.handles.evidence(`${local}:evidence`);
-    const provenanceHandle = this.store.handles.provenance(`${local}:provenance`);
+    const span = this.sourceAddress(local, sourceFileAddressHandle, sourceNode.getStart(sourceFile), sourceNode.end);
     const message = frameworkApiIssueMessage(site);
-    const issue = new EvaluationIssue(
-      this.store.handles.product(local),
-      this.store.handles.identity(local),
-      project.projectKey,
-      site.phase,
-      site.issueKind,
-      site.subjectKind,
+    const publication = this.issuePublisher.publish({
+      local,
+      projectKey: project.projectKey,
+      phase: site.phase,
+      issueKind: site.issueKind,
+      subjectKind: site.subjectKind,
       message,
-      site.frameworkErrorCode,
-      site.frameworkRawErrorAuthority,
-      site.actualValueKind,
-      site.rejectedExpression?.getText(sourceFile) ?? null,
-      span.handle,
-    );
-    return {
-      issue,
-      records: [
-        ...span.records,
-        new EvidenceRecord(
-          evidenceHandle,
-          EvidenceKind.SemanticObservation,
-          [EvidenceRole.Usage, EvidenceRole.Diagnostic],
-          message,
-          span.handle,
-        ),
-        new ProvenanceRecord(provenanceHandle, [evidenceHandle]),
-        ...evaluationIssueProductRecords(this.store, issue, span.handle, provenanceHandle),
-      ],
-    };
+      frameworkErrorCode: site.frameworkErrorCode,
+      frameworkRawErrorAuthority: site.frameworkRawErrorAuthority,
+      actualValueKind: site.actualValueKind,
+      rejectedValueText: site.rejectedExpression?.getText(sourceFile) ?? null,
+      sourceAddressHandle: span.handle,
+      ownerHandle: span.handle,
+      evidenceRoles: [EvidenceRole.Usage, EvidenceRole.Diagnostic],
+    });
+    return new EvaluationIssuePublication(publication.issue, [...span.records, ...publication.records]);
   }
 
   private sourceAddress(
     local: string,
-    sourcePath: string,
+    sourceFileAddressHandle: AddressHandle,
     start: number,
     end: number,
-  ): FrameworkApiIssueSourceAddress {
-    const file = this.store.readBestSourceFileAddressForFileName(sourcePath);
-    if (file == null) {
-      return new FrameworkApiIssueSourceAddress(null, []);
-    }
-    const handle = this.store.handles.address(`${local}:source`);
-    return new FrameworkApiIssueSourceAddress(handle, [
-      new SourceSpanAddress(
-        handle,
-        file.handle,
-        start,
-        end,
-        SourceSpanRole.Primary,
-      ),
-    ]);
+  ): SourceSpanAddressPublication {
+    return sourceSpanAddressForSite(this.store, local, {
+      sourceFileAddressHandle,
+      start,
+      end,
+    });
   }
 }
 

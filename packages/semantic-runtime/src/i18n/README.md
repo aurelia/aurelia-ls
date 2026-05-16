@@ -6,7 +6,8 @@ template syntax.
 ## Current Shape
 
 `translation-catalog-materialization.ts` reads static `I18nConfiguration` `initOptions.resources` contributions after
-configuration recognition. When the static evaluator can close the resource object, nested resource entries become
+configuration recognition, including direct `customize(...)` assignments such as
+`options.initOptions = { resources: ... }` and `options.initOptions.resources = ...`. When the static evaluator can close the resource object, nested resource entries become
 `I18nTranslationKey` products with locale, namespace, key, source address, identity, provenance, and a typed product
 detail slot. `translation-key-product-records.ts` owns the kernel record envelope for those products so catalog
 discovery stays separate from identity/provenance/materialization emission.
@@ -29,6 +30,9 @@ the i18n folder: the failure boundary is the i18n runtime binding lifecycle, whi
   aliases change the compiler syntax catalog.
 - Translation-key catalog materialization belongs here, because it is configuration-owned data that later template
   inquiries consume.
+- Top-level `I18nConfiguration` option shape belongs to `configuration/configuration-option-shape-issues.ts`. Do not
+  make the catalog accept invalid shortcuts such as top-level `resources`; the framework places translation resources
+  under `initOptions.resources`.
 - Translation-binding lifecycle diagnostics belong here, but only after renderer output has established the target
   element and parameter/key bindings that Aurelia would join through `TranslationBinding.useParameter(...)`.
 - Dynamic loaders, backend plugins, and runtime language switching should remain open seams until a framework-grounded

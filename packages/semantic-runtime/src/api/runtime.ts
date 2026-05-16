@@ -469,6 +469,10 @@ export class SemanticApp {
   }
 
   ask(query: SemanticAppQuery): SemanticRuntimeAnswer<unknown> {
+    const routeAnswer = this.routeQueries.answer(query.kind, query.page, query.detail);
+    if (routeAnswer != null) {
+      return routeAnswer;
+    }
     switch (query.kind) {
       case SemanticAppQueryKind.Summary:
         return this.summary();
@@ -504,40 +508,6 @@ export class SemanticApp {
         return this.fetchClientIssues(query.page, query.detail);
       case SemanticAppQueryKind.DialogIssues:
         return this.dialogIssues(query.page, query.detail);
-      case SemanticAppQueryKind.RouterOptions:
-        return this.routeQueries.routerOptions(query.page, query.detail);
-      case SemanticAppQueryKind.Routes:
-        return this.routeQueries.routes(query.page, query.detail);
-      case SemanticAppQueryKind.RouteContexts:
-        return this.routeQueries.routeContexts(query.page, query.detail);
-      case SemanticAppQueryKind.RoutePatterns:
-        return this.routeQueries.routePatterns(query.page, query.detail);
-      case SemanticAppQueryKind.RouteEndpoints:
-        return this.routeQueries.routeEndpoints(query.page, query.detail);
-      case SemanticAppQueryKind.RouteRecognizerStates:
-        return this.routeQueries.routeRecognizerStates(query.page, query.detail);
-      case SemanticAppQueryKind.RouteRecognizerIssues:
-        return this.routeQueries.routeRecognizerIssues(query.page, query.detail);
-      case SemanticAppQueryKind.RouterIssues:
-        return this.routeQueries.routerIssues(query.page, query.detail);
-      case SemanticAppQueryKind.RecognizedRoutes:
-        return this.routeQueries.recognizedRoutes(query.page, query.detail);
-      case SemanticAppQueryKind.TypedNavigationInstructions:
-        return this.routeQueries.typedNavigationInstructions(query.page, query.detail);
-      case SemanticAppQueryKind.ViewportInstructions:
-        return this.routeQueries.viewportInstructions(query.page, query.detail);
-      case SemanticAppQueryKind.ViewportInstructionTrees:
-        return this.routeQueries.viewportInstructionTrees(query.page, query.detail);
-      case SemanticAppQueryKind.RouteTrees:
-        return this.routeQueries.routeTrees(query.page, query.detail);
-      case SemanticAppQueryKind.RouteNodes:
-        return this.routeQueries.routeNodes(query.page, query.detail);
-      case SemanticAppQueryKind.RouterViewports:
-        return this.routeQueries.routerViewports(query.page, query.detail);
-      case SemanticAppQueryKind.ViewportAgents:
-        return this.routeQueries.viewportAgents(query.page, query.detail);
-      case SemanticAppQueryKind.ComponentAgents:
-        return this.routeQueries.componentAgents(query.page, query.detail);
       case SemanticAppQueryKind.ResourceDefinitions:
         return this.resourceDefinitions(query.page, query.detail);
       case SemanticAppQueryKind.ResourceIssues:

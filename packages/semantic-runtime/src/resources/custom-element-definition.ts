@@ -7,6 +7,7 @@ import type { FieldProvenance } from '../kernel/provenance.js';
 import { auLink } from '../kernel/au-link.js';
 import type { BindableDefinition, BindableDefinitionContribution } from './bindable-definition.js';
 import { ResourceDefinitionKind } from './resource-kind.js';
+import type { ComponentResourceDefinitionContributionKind } from './resource-kind.js';
 import type {
   InstructionReference,
   ResourceAliasDefinition,
@@ -92,21 +93,11 @@ export class ShadowOptionsDefinition {
   ) {}
 }
 
-export const enum CustomElementDefinitionContributionKind {
-  Header = 'header',
-  DefinitionObject = 'definition-object',
-  TypeStaticProperty = 'type-static-property',
-  Annotation = 'annotation',
-  BindableMetadata = 'bindable-metadata',
-  WatchMetadata = 'watch-metadata',
-  Convention = 'convention',
-}
-
 // TODO(resource-convergence): This is a provisional field-contribution envelope. Once convergence has real materializers,
 // decide whether contributions should become per-origin variants, per-field patches, or another tighter shape.
 export class CustomElementDefinitionContribution {
   constructor(
-    readonly contributionKind: CustomElementDefinitionContributionKind,
+    readonly contributionKind: ComponentResourceDefinitionContributionKind,
     readonly target: ResourceTargetReference | null = null,
     readonly name: string | null = null,
     readonly aliases: readonly ResourceAliasDefinition[] = [],

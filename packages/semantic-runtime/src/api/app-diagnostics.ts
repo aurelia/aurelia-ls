@@ -50,7 +50,9 @@ export function appDiagnosticRows(
     ...observationRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
       .map(observationAppDiagnosticRow),
-    ...templateRows.map((row) => templateAppDiagnosticRow(projectKey, row)),
+    ...templateRows
+      .filter(templateDiagnosticContributesToAppDiagnostics)
+      .map((row) => templateAppDiagnosticRow(projectKey, row)),
     ...resourceRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
       .map(resourceAppDiagnosticRow),
@@ -76,6 +78,12 @@ export function appDiagnosticRows(
     `${left.source?.path ?? ''}:${left.source?.start ?? 0}:${left.diagnosticDomain}:${left.diagnosticKind}`
       .localeCompare(`${right.source?.path ?? ''}:${right.source?.start ?? 0}:${right.diagnosticDomain}:${right.diagnosticKind}`)
       );
+}
+
+function templateDiagnosticContributesToAppDiagnostics(
+  row: SemanticTemplateDiagnosticRow,
+): boolean {
+  return row.diagnosticKind !== 'router-framework-error';
 }
 
 function evaluationAppDiagnosticRow(

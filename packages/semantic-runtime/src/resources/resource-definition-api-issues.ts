@@ -2,10 +2,6 @@ import ts from 'typescript';
 
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
-  SourceSpanAddress,
-  SourceSpanRole,
-} from '../kernel/address.js';
-import {
   EvidenceKind,
   EvidenceRecord,
   EvidenceRole,
@@ -13,6 +9,10 @@ import {
 import type { AddressHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
+import {
+  sourceSpanAddressForSite,
+  type SourceSpanAddressPublication,
+} from '../kernel/source-address.js';
 import {
   KernelStore,
   KernelStoreBatch,
@@ -64,6 +64,7 @@ class SourceDeclarationReference {
 class ResourceDefinitionApiCallSite {
   constructor(
     readonly sourcePath: string,
+    readonly sourceFileAddressHandle: AddressHandle,
     readonly start: number,
     readonly end: number,
     readonly kind: ResourceDefinitionApiCallKind,
@@ -110,9 +111,7 @@ export class ResourceDefinitionApiIssueMaterializer {
     if (records.length > 0) {
       this.store.commit(new KernelStoreBatch(records, `resource-definition-api-issues:${project.projectKey}`));
     }
-    for (const publication of publications) {
-      this.store.productDetails.add(ResourceProductDetails.Issue, publication.issue.productHandle, publication.issue);
-    }
+    this.store.productDetails.addAll(ResourceProductDetails.Issue, publications.map((publication) => publication.issue));
     return new ResourceDefinitionApiIssueProjectResult(
       publications.map((publication) => publication.issue),
       records,
@@ -131,7 +130,7 @@ export class ResourceDefinitionApiIssueMaterializer {
       return [];
     }
     const local = resourceDefinitionApiIssueLocalKey(project, site, index, issue.issueKind);
-    const span = this.sourceAddress(local, site.sourcePath, site.start, site.end);
+    const span = this.sourceAddress(local, site);
     const publication = this.publisher.publish(
       local,
       project.projectKey,
@@ -171,33 +170,9 @@ export class ResourceDefinitionApiIssueMaterializer {
 
   private sourceAddress(
     local: string,
-    sourcePath: string,
-    start: number,
-    end: number,
-  ): {
-    readonly handle: AddressHandle | null;
-    readonly records: readonly KernelStoreRecord[];
-  } {
-    const file = this.store.readBestSourceFileAddressForFileName(sourcePath);
-    if (file == null) {
-      return {
-        handle: null,
-        records: [],
-      };
-    }
-    const handle = this.store.handles.address(`${local}:source`);
-    return {
-      handle,
-      records: [
-        new SourceSpanAddress(
-          handle,
-          file.handle,
-          start,
-          end,
-          SourceSpanRole.Primary,
-        ),
-      ],
-    };
+    site: ResourceDefinitionApiCallSite,
+  ): SourceSpanAddressPublication {
+    return sourceSpanAddressForSite(this.store, local, site);
   }
 }
 
@@ -210,19 +185,34 @@ function readResourceDefinitionApiCallSites(
     const sourceFile = typeSystem.readSourceFileByPath(source.path);
     return sourceFile == null
       ? []
-      : readSourceFileResourceDefinitionApiCallSites(source.path, sourceFile, typeSystem.checker, sourcePathByFileName);
+      : readSourceFileResourceDefinitionApiCallSites(
+        source.path,
+        source.addressHandle,
+        sourceFile,
+        typeSystem.checker,
+        sourcePathByFileName,
+      );
   });
 }
 
 function readSourceFileResourceDefinitionApiCallSites(
   sourcePath: string,
+  sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
   checker: ts.TypeChecker,
   sourcePathByFileName: ReadonlyMap<string, string>,
 ): readonly ResourceDefinitionApiCallSite[] {
   const sites: ResourceDefinitionApiCallSite[] = [];
   const visit = (node: ts.Node): void => {
-    recordResourceDefinitionApiCallSite(sites, sourcePath, sourceFile, checker, sourcePathByFileName, node);
+    recordResourceDefinitionApiCallSite(
+      sites,
+      sourcePath,
+      sourceFileAddressHandle,
+      sourceFile,
+      checker,
+      sourcePathByFileName,
+      node,
+    );
     ts.forEachChild(node, visit);
   };
   visit(sourceFile);
@@ -232,6 +222,7 @@ function readSourceFileResourceDefinitionApiCallSites(
 function recordResourceDefinitionApiCallSite(
   sites: ResourceDefinitionApiCallSite[],
   sourcePath: string,
+  sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
   checker: ts.TypeChecker,
   sourcePathByFileName: ReadonlyMap<string, string>,
@@ -250,6 +241,7 @@ function recordResourceDefinitionApiCallSite(
   if (owner === 'CustomElementDefinition' && method === 'create' && isCustomElementDefinitionCreateOnlyName(node)) {
     sites.push(new ResourceDefinitionApiCallSite(
       sourcePath,
+      sourceFileAddressHandle,
       node.getStart(sourceFile),
       node.end,
       ResourceDefinitionApiCallKind.CustomElementDefinitionCreateOnlyName,
@@ -264,6 +256,7 @@ function recordResourceDefinitionApiCallSite(
   }
   sites.push(new ResourceDefinitionApiCallSite(
     sourcePath,
+    sourceFileAddressHandle,
     node.getStart(sourceFile),
     node.end,
     getDefinitionKind,

@@ -1,0 +1,70 @@
+<section>
+  <label repeat.for="item of items">
+    <input
+      type="checkbox"
+      model.bind="item"
+      checked.bind="selectedItems"
+      matcher.bind="matchItems">
+    ${item.label}
+  </label>
+
+  <label repeat.for="item of items">
+    <input
+      type="radio"
+      name="matched-item"
+      matcher.bind="matchItems"
+      model.bind="item"
+      checked.bind="selectedItem">
+    ${item.label}
+  </label>
+
+  <fieldset>
+    <legend>Static radio values</legend>
+    <label>
+      <input type="radio" name="static-choice" value="alpha" checked.bind="staticChoice">
+      Alpha static
+    </label>
+    <label>
+      <input type="radio" name="static-choice" value="beta" checked.bind="staticChoice">
+      Beta static
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Static checkbox values</legend>
+    <label>
+      <input type="checkbox" value="expedite" checked.bind="staticTags">
+      Expedite
+    </label>
+    <label>
+      <input type="checkbox" value="archive" checked.bind="staticTags">
+      Archive
+    </label>
+  </fieldset>
+
+  <label repeat.for="item of items">
+    <input
+      type="checkbox"
+      model.bind="item"
+      checked.bind="selectedItemSet"
+      matcher.bind="matchItems">
+    ${item.label}
+  </label>
+
+  <label repeat.for="item of items">
+    <input
+      type="checkbox"
+      model.bind="item"
+      checked.bind="selectedItemMap"
+      matcher.bind="matchItems">
+    ${item.label}
+  </label>
+
+  <select value.bind="selectedOption" matcher.bind="matchItems">
+    <option repeat.for="item of items" model.bind="item">${item.label}</option>
+  </select>
+
+  <select multiple value.bind="selectedOptions" matcher.bind="matchItems">
+    <option repeat.for="item of items" model.bind="item">${item.label}</option>
+  </select>
+</section>

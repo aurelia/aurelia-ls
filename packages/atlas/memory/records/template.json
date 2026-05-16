@@ -42,7 +42,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "frontier:compiled-template-materializer",
@@ -261,30 +261,32 @@
         "Start here when work touches full template compilation, authoring template compilation, runtime-analysis depth, or phase profiling.",
         "Use child materializer records for local behavior, but keep project-pass orchestration in this front-door pass.",
         "TemplateRuntimeAnalysisProjectContext carries compiled-template emissions so runtime rendering and scope construction can expand child custom-element views without re-running the compiler front door.",
+        "The project pass owns one CheckerExpressionTypeWorld for app and authoring resource runtime analysis, while each TemplateRuntimeAnalysisFrame records expression-cache deltas from a marker. Keep runtime/checker lifetime work here instead of recreating the world per resource.",
         "Captured `...$attrs` work should keep the parent usage scope through dynamic instruction origin claims; do not fall back to definition-wide captured attribute buckets.",
         "This frontier is nextActionPolicy=when-touched after the aggregate child custom-element render/scope bridge closed; use it as front-door grounding, while instance-precise recursive hydration belongs to runtime rendering/controller records.",
         "If a future inquiry only needs part of this pass, model that as inquiry depth/scope pressure instead of cloning a partial compiler pipeline."
       ],
+      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
           "symbolName": "TemplateCompilationProjectPass",
-          "line": 192,
+          "line": 196,
           "summary": "Template compilation project front-door pass."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
           "symbolName": "TemplateResourceCompilationEmission",
-          "line": 75,
+          "line": 95,
           "summary": "Compiler-front-door emission shape for one resource."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/template/template-runtime-analysis.ts",
           "symbolName": "TemplateRuntimeAnalysisFrame",
-          "line": 150,
+          "line": 192,
           "summary": "Template runtime-analysis work frame."
         },
         {
@@ -318,7 +320,6 @@
           "minMethodCount": 8
         }
       ],
-      "nextActionPolicy": "when-touched",
       "createdAt": "2026-05-12",
       "updatedAt": "2026-05-14"
     },
@@ -464,14 +465,15 @@
       ],
       "summary": "BindingScopeMaterializer is the runtime binding-scope frontier for BindingContext, OverrideContext, Scope products, slot projection, and expression lookup.",
       "rationale": "Binding scope is a runtime/checker bridge, not compiler resource scope. Future template, controller, form, and LSP inquiries should preserve this layer when projecting viewmodel state, locals, and override-context semantics.",
-      "guidance": [
-        "Start here when a feature needs runtime binding context, override context, scope products, or checker-facing slot projection.",
-        "Keep runtime binding scope distinct from compiler resource scope and template-controller flow scope.",
-        "If a new inquiry needs partial scope data, expose scope depth or projection controls instead of re-materializing local scope objects."
-      ],
-      "anchors": [
-        {
-          "kind": "source",
+        "guidance": [
+          "Start here when a feature needs runtime binding context, override context, scope products, or checker-facing slot projection.",
+          "Keep runtime binding scope distinct from compiler resource scope and template-controller flow scope.",
+          "Use BindingScope.lookup for reference-shaped expression consumers and BindingScope.locate when a materializer needs the concrete resolved Scope/context; do not reimplement parent/override/boundary traversal locally.",
+          "If a new inquiry needs partial scope data, expose scope depth or projection controls instead of re-materializing local scope objects."
+        ],
+        "anchors": [
+          {
+            "kind": "source",
           "filePath": "packages/semantic-runtime/src/configuration/scope-materializer.ts",
           "symbolName": "BindingScopeMaterializer",
           "line": 93,
@@ -479,10 +481,17 @@
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/configuration/README.md",
-          "summary": "Runtime binding scope vs compiler resource scope notes."
-        }
-      ],
+            "filePath": "packages/semantic-runtime/src/configuration/README.md",
+            "summary": "Runtime binding scope vs compiler resource scope notes."
+          },
+          {
+            "kind": "source",
+            "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
+            "symbolName": "BindingScopeLocatedLookup",
+            "line": 287,
+            "summary": "Concrete Scope lookup result for materializers that need the resolved modeled Scope/context."
+          }
+        ],
       "liveChecks": [
         {
           "kind": "product-large-class",
@@ -493,8 +502,8 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
-    },
+        "updatedAt": "2026-05-15"
+      },
     {
       "id": "frontier:runtime-controller-bind-materializer",
       "kind": "pressure-frontier",
@@ -675,6 +684,7 @@
         "Start here when a template feature involves command-bearing attributes, multi-binding segments, command executable lookup, expression parses, or command-specific instruction emission.",
         "Use MultiBindingSegmentLoweringFrame for secondary inline custom-attribute segment accumulation; do not add parallel arrays in the materializer when a segment-local product needs records, claims, issues, value sites, parses, or open seams.",
         "Keep product publication concerns in BindingCommandLoweringPublisher and orchestration/data-flow concerns in BindingCommandLoweringMaterializer unless the framework suggests a sharper split.",
+        "Empty command values infer source expressions from the authored target before DOM target-property mapping; `implicit-binding-expression-inference` preserves cases such as `minlength.bind` flowing from `minlength` into target `minLength`.",
         "Cross-check framework.compiler and framework.rendering before adding a new binding-command product or target operation."
       ],
       "anchors": [
@@ -712,6 +722,12 @@
           "symbolName": "CommandLoweringExecutionContext",
           "line": 424,
           "summary": "Binding-command execution context frame."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/implicit-binding-expression-inference",
+          "scenario": "empty binding command value source inference",
+          "summary": "Pressure fixture for empty `.bind`, `.two-way`, and `.from-view` values where authored source inference stays distinct from target-property mapping."
         }
       ],
       "liveChecks": [
@@ -996,6 +1012,7 @@
       "guidance": [
         "Check runtime-view-factory and runtime-controller materializers before adding another rendering handoff.",
         "Use framework.rendering relationships to decide whether a behavior belongs in renderer dispatch, hydration, binding setup, or controller creation.",
+        "Controller-activation diagnostics that scan view-model class bodies should anchor spans through the checker declaration's already-admitted source-file address via the type-system declaration-source bridge. Do not borrow the resource target span; imported/factory-backed targets can point at a different authored site than the class body.",
         "If the class grows, split along Aurelia phase/interface boundaries rather than invented product categories."
       ],
       "anchors": [
@@ -1381,6 +1398,7 @@
         "This frontier is nextActionPolicy=when-touched: keep it as grounding for resource-library/cursor-locus authoring templates, not as default autonomous work when the next pressure is authoring verification or taste ontology.",
         "If this lane grows, check whether the missing concept belongs in app-world construction, resource recognition, or inquiry depth rather than cloning compiler-world construction."
       ],
+      "nextActionPolicy": "when-touched",
       "anchors": [
         {
           "kind": "source",
@@ -1409,7 +1427,6 @@
           "minMethodCount": 6
         }
       ],
-      "nextActionPolicy": "when-touched",
       "createdAt": "2026-05-12",
       "updatedAt": "2026-05-14"
     },
@@ -1735,6 +1752,91 @@
       ],
       "createdAt": "2026-05-14",
       "updatedAt": "2026-05-14"
+    },
+    {
+      "id": "reuse:repeat-scope-value-carriers",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "template",
+        "controller",
+        "scope",
+        "repeat",
+        "binding",
+        "evaluation"
+      ],
+      "summary": "Repeat-local value carriers bridge Aurelia Repeat BindingContext semantics into checker-backed template source evaluation.",
+      "rationale": "A repeat local can have a useful static representative value even when the recursive rendered view is not materialized per item. Future router, binding, and authoring work should reuse the scope materializer and binding-source evaluator handoff instead of patching feature-local static values.",
+      "guidance": [
+        "Start from TemplateControllerScopeMaterializer when repeat.for locals need value-side semantics; it owns the BindingContextSlot creation and can attach representative static values.",
+        "Use repeatStaticLocalValue to project conservative representative values from statically known iterables, including common string-pattern property values.",
+        "RuntimeBindingSourceValueEvaluator should consume BindingContextSlot.staticValue before falling back to TypeChecker member access; local object/property evaluation belongs there rather than in router or authoring code.",
+        "This pass closes the binding-source-slot-no-static-value pressure for static repeat arrays, but it is not recursive per-view hydration. Treat per-item child rendering and controller-bind-value timing as separate future substrate work."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/repeat-static-value.ts",
+          "symbolName": "repeatStaticLocalValue",
+          "summary": "Projects representative value-side Repeat local carriers from static iterable sources."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+          "symbolName": "TemplateControllerScopeMaterializer",
+          "summary": "Constructs template-controller scopes and assigns repeat local static values."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
+          "symbolName": "BindingContextSlot",
+          "summary": "Runtime binding-context slot now carries optional staticValue."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/binding-source-value-evaluator.ts",
+          "summary": "Binding source evaluator consumes slot static values and local property access."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/router-dynamic-pattern",
+          "scenario": "repeat-local router href value carrier",
+          "summary": "Pressure fixture where a repeat local object feeds router href/value-source evaluation."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api",
+          "summary": "Pressure harness that showed binding-source-slot-no-static-value disappeared after the pass."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.work-router",
+          "projection": "route-plan",
+          "filters": {
+            "query": "recursive hydration repeat value"
+          },
+          "summary": "Work Router query that should route repeat-value work into template recursive-rendering semantics."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/repeat-static-value.ts",
+          "symbolName": "repeatStaticLocalValue"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/template-controller-scope-materializer.ts",
+          "symbolName": "TemplateControllerScopeMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/scope.ts",
+          "symbolName": "BindingContextSlot"
+        }
+      ],
+      "createdAt": "2026-05-15",
+      "updatedAt": "2026-05-15"
     }
   ]
 }

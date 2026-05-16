@@ -202,12 +202,8 @@ export class HtmlParseMaterializer {
 
   private registerProductDetails(emission: HtmlParseEmission): void {
     this.store.productDetails.add(TemplateProductDetails.HtmlDocument, emission.document.productHandle, emission.document);
-    for (const node of emission.nodes) {
-      this.store.productDetails.add(TemplateProductDetails.HtmlNode, node.productHandle, node);
-    }
-    for (const attribute of emission.attributes) {
-      this.store.productDetails.add(TemplateProductDetails.HtmlAttribute, attribute.productHandle, attribute);
-    }
+    this.store.productDetails.addAll(TemplateProductDetails.HtmlNode, emission.nodes);
+    this.store.productDetails.addAll(TemplateProductDetails.HtmlAttribute, emission.attributes);
   }
 
   private recordsForParse(input: HtmlParseRequest): HtmlParseEmission {

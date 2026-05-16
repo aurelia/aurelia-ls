@@ -30,6 +30,104 @@ import type {
   FrameworkEmulationObligationRow,
 } from "./framework-emulation-view.js";
 
+type FrameworkEmulationClosure = FrameworkEmulationObligationRow["closure"];
+
+interface FrameworkRelationshipObligationPolicy {
+  readonly layer: FrameworkEmulationLayer;
+  readonly mode: FrameworkEmulationMode;
+  readonly obligationKind: FrameworkEmulationObligationKind;
+  readonly closure: FrameworkEmulationClosure;
+}
+
+const defaultStructuralRelationshipPolicy: FrameworkRelationshipObligationPolicy = {
+  layer: "rendering-runtime",
+  mode: "semantic-runtime-emulator",
+  obligationKind: "model-rendering",
+  closure: "modeled",
+};
+
+const structuralRelationshipPolicies = new Map<FrameworkRelationshipRelation, FrameworkRelationshipObligationPolicy>([
+  [FrameworkRelationshipRelation.DefinesObserver, {
+    layer: "typechecker-reactivity",
+    mode: "typescript-handoff",
+    obligationKind: "model-observation",
+    closure: "modeled",
+  }],
+  [FrameworkRelationshipRelation.DefinesRouterEntity, {
+    layer: "router-runtime",
+    mode: "semantic-runtime-emulator",
+    obligationKind: "model-router",
+    closure: "modeled",
+  }],
+  [FrameworkRelationshipRelation.DefinesRenderingStructure, defaultStructuralRelationshipPolicy],
+]);
+
+const defaultRenderingRelationshipPolicy: FrameworkRelationshipObligationPolicy = {
+  layer: "rendering-runtime",
+  mode: "semantic-runtime-emulator",
+  obligationKind: "model-rendering",
+  closure: "modeled",
+};
+
+const renderingRelationshipPolicies = new Map<FrameworkRelationshipRelation, FrameworkRelationshipObligationPolicy>([
+  [FrameworkRelationshipRelation.ProducesBinding, {
+    layer: "typechecker-reactivity",
+    mode: "typescript-handoff",
+    obligationKind: "model-binding",
+    closure: "handoff",
+  }],
+  [FrameworkRelationshipRelation.AdmitsBinding, {
+    layer: "typechecker-reactivity",
+    mode: "typescript-handoff",
+    obligationKind: "model-binding",
+    closure: "handoff",
+  }],
+  [FrameworkRelationshipRelation.PerformsBindingEffect, {
+    layer: "typechecker-reactivity",
+    mode: "typescript-handoff",
+    obligationKind: "model-binding",
+    closure: "handoff",
+  }],
+  [FrameworkRelationshipRelation.LooksUpObserver, {
+    layer: "typechecker-reactivity",
+    mode: "typescript-handoff",
+    obligationKind: "model-observation",
+    closure: "handoff",
+  }],
+  [FrameworkRelationshipRelation.DefinesRenderingStructure, defaultRenderingRelationshipPolicy],
+  [FrameworkRelationshipRelation.DispatchesInstruction, defaultRenderingRelationshipPolicy],
+  [FrameworkRelationshipRelation.CreatesController, defaultRenderingRelationshipPolicy],
+  [FrameworkRelationshipRelation.AdmitsChildController, defaultRenderingRelationshipPolicy],
+]);
+
+const defaultLifecycleRelationshipPolicy: FrameworkRelationshipObligationPolicy = {
+  layer: "resolved-hydration",
+  mode: "semantic-runtime-emulator",
+  obligationKind: "hydrate-runtime",
+  closure: "modeled",
+};
+
+const lifecycleRelationshipPolicies = new Map<FrameworkRelationshipRelation, FrameworkRelationshipObligationPolicy>([
+  [FrameworkRelationshipRelation.LooksUpKey, {
+    layer: "application-world",
+    mode: "ecmascript-evaluation",
+    obligationKind: "resolve-dependency",
+    closure: "modeled",
+  }],
+  [FrameworkRelationshipRelation.ResolvesKey, {
+    layer: "application-world",
+    mode: "ecmascript-evaluation",
+    obligationKind: "resolve-dependency",
+    closure: "modeled",
+  }],
+  [FrameworkRelationshipRelation.PerformsBindingEffect, {
+    layer: "typechecker-reactivity",
+    mode: "typescript-handoff",
+    obligationKind: "model-binding",
+    closure: "modeled",
+  }],
+]);
+
 /** Relationship-derived framework obligations that attach auLink mirrors to emulation work. */
 export function readFrameworkRelationshipEmulationObligations(
   sourceProject: SourceProject,
@@ -320,101 +418,64 @@ function lifecycleRelationshipObligations(
     }));
 }
 
+function structuralRelationshipPolicy(
+  relation: FrameworkRelationshipRelation,
+): FrameworkRelationshipObligationPolicy {
+  return structuralRelationshipPolicies.get(relation) ?? defaultStructuralRelationshipPolicy;
+}
+
+function renderingRelationshipPolicy(
+  relation: FrameworkRelationshipRelation,
+): FrameworkRelationshipObligationPolicy {
+  return renderingRelationshipPolicies.get(relation) ?? defaultRenderingRelationshipPolicy;
+}
+
+function lifecycleRelationshipPolicy(
+  relation: FrameworkRelationshipRelation,
+): FrameworkRelationshipObligationPolicy {
+  return lifecycleRelationshipPolicies.get(relation) ?? defaultLifecycleRelationshipPolicy;
+}
+
 function layerForStructuralRelation(
   relation: FrameworkRelationshipRelation,
 ): FrameworkEmulationLayer {
-  switch (relation) {
-    case FrameworkRelationshipRelation.DefinesObserver:
-      return "typechecker-reactivity";
-    case FrameworkRelationshipRelation.DefinesRouterEntity:
-      return "router-runtime";
-    case FrameworkRelationshipRelation.DefinesRenderingStructure:
-    default:
-      return "rendering-runtime";
-  }
+  return structuralRelationshipPolicy(relation).layer;
 }
 
 function modeForStructuralRelation(
   relation: FrameworkRelationshipRelation,
 ): FrameworkEmulationMode {
-  return relation === FrameworkRelationshipRelation.DefinesObserver
-    ? "typescript-handoff"
-    : "semantic-runtime-emulator";
+  return structuralRelationshipPolicy(relation).mode;
 }
 
 function obligationForStructuralRelation(
   relation: FrameworkRelationshipRelation,
 ): FrameworkEmulationObligationKind {
-  switch (relation) {
-    case FrameworkRelationshipRelation.DefinesObserver:
-      return "model-observation";
-    case FrameworkRelationshipRelation.DefinesRouterEntity:
-      return "model-router";
-    case FrameworkRelationshipRelation.DefinesRenderingStructure:
-    default:
-      return "model-rendering";
-  }
+  return structuralRelationshipPolicy(relation).obligationKind;
 }
 
 function layerForRenderingRelation(
   relation: FrameworkRelationshipRelation,
 ): FrameworkEmulationLayer {
-  switch (relation) {
-    case FrameworkRelationshipRelation.ProducesBinding:
-    case FrameworkRelationshipRelation.AdmitsBinding:
-    case FrameworkRelationshipRelation.PerformsBindingEffect:
-    case FrameworkRelationshipRelation.LooksUpObserver:
-      return "typechecker-reactivity";
-    default:
-      return "rendering-runtime";
-  }
+  return renderingRelationshipPolicy(relation).layer;
 }
 
 function modeForRenderingRelation(
   relation: FrameworkRelationshipRelation,
 ): FrameworkEmulationMode {
-  switch (relation) {
-    case FrameworkRelationshipRelation.ProducesBinding:
-    case FrameworkRelationshipRelation.AdmitsBinding:
-    case FrameworkRelationshipRelation.PerformsBindingEffect:
-    case FrameworkRelationshipRelation.LooksUpObserver:
-      return "typescript-handoff";
-    default:
-      return "semantic-runtime-emulator";
-  }
+  return renderingRelationshipPolicy(relation).mode;
 }
 
 function obligationForRenderingRelation(
   relation: FrameworkRelationshipRelation,
 ): FrameworkEmulationObligationKind {
-  switch (relation) {
-    case FrameworkRelationshipRelation.ProducesBinding:
-    case FrameworkRelationshipRelation.AdmitsBinding:
-    case FrameworkRelationshipRelation.PerformsBindingEffect:
-      return "model-binding";
-    case FrameworkRelationshipRelation.LooksUpObserver:
-      return "model-observation";
-    case FrameworkRelationshipRelation.DefinesRenderingStructure:
-    case FrameworkRelationshipRelation.DispatchesInstruction:
-    case FrameworkRelationshipRelation.CreatesController:
-    case FrameworkRelationshipRelation.AdmitsChildController:
-    default:
-      return "model-rendering";
-  }
+  return renderingRelationshipPolicy(relation).obligationKind;
 }
 
 function closureForRenderingRelation(
   relation: FrameworkRelationshipRelation,
 ): FrameworkEmulationObligationRow["closure"] {
-  switch (relation) {
-    case FrameworkRelationshipRelation.ProducesBinding:
-    case FrameworkRelationshipRelation.AdmitsBinding:
-    case FrameworkRelationshipRelation.PerformsBindingEffect:
-    case FrameworkRelationshipRelation.LooksUpObserver:
-      return "handoff";
-    default:
-      return "modeled";
-  }
+  return renderingRelationshipPolicy(relation).closure;
 }
 
 function obligationForDiRelation(
@@ -467,43 +528,19 @@ function obligationForCompilerRelation(
 function layerForLifecycleRelation(
   relation: FrameworkRelationshipRelation,
 ): FrameworkEmulationLayer {
-  switch (relation) {
-    case FrameworkRelationshipRelation.LooksUpKey:
-    case FrameworkRelationshipRelation.ResolvesKey:
-      return "application-world";
-    case FrameworkRelationshipRelation.PerformsBindingEffect:
-      return "typechecker-reactivity";
-    default:
-      return "resolved-hydration";
-  }
+  return lifecycleRelationshipPolicy(relation).layer;
 }
 
 function modeForLifecycleRelation(
   relation: FrameworkRelationshipRelation,
 ): FrameworkEmulationMode {
-  switch (relation) {
-    case FrameworkRelationshipRelation.LooksUpKey:
-    case FrameworkRelationshipRelation.ResolvesKey:
-      return "ecmascript-evaluation";
-    case FrameworkRelationshipRelation.PerformsBindingEffect:
-      return "typescript-handoff";
-    default:
-      return "semantic-runtime-emulator";
-  }
+  return lifecycleRelationshipPolicy(relation).mode;
 }
 
 function obligationForLifecycleRelation(
   relation: FrameworkRelationshipRelation,
 ): FrameworkEmulationObligationKind {
-  switch (relation) {
-    case FrameworkRelationshipRelation.LooksUpKey:
-    case FrameworkRelationshipRelation.ResolvesKey:
-      return "resolve-dependency";
-    case FrameworkRelationshipRelation.PerformsBindingEffect:
-      return "model-binding";
-    default:
-      return "hydrate-runtime";
-  }
+  return lifecycleRelationshipPolicy(relation).obligationKind;
 }
 
 function closureForRelationship(

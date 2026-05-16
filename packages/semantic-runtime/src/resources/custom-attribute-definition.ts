@@ -7,6 +7,7 @@ import type { FieldProvenance } from '../kernel/provenance.js';
 import { auLink } from '../kernel/au-link.js';
 import type { BindableDefinition, BindableDefinitionContribution } from './bindable-definition.js';
 import { ResourceDefinitionKind } from './resource-kind.js';
+import type { ComponentResourceDefinitionContributionKind } from './resource-kind.js';
 import type {
   ResourceAliasDefinition,
   ResourceDependencyReference,
@@ -32,21 +33,11 @@ export type CustomAttributeDefinitionField =
   | 'containerStrategy'
   | 'defaultProperty';
 
-export const enum CustomAttributeDefinitionContributionKind {
-  Header = 'header',
-  DefinitionObject = 'definition-object',
-  TypeStaticProperty = 'type-static-property',
-  Annotation = 'annotation',
-  BindableMetadata = 'bindable-metadata',
-  WatchMetadata = 'watch-metadata',
-  Convention = 'convention',
-}
-
 // TODO(resource-convergence): This mirrors the custom-element contribution envelope until convergence pressure tells
 // us whether resource contributions want per-origin variants, per-field patches, or another tighter representation.
 export class CustomAttributeDefinitionContribution {
   constructor(
-    readonly contributionKind: CustomAttributeDefinitionContributionKind,
+    readonly contributionKind: ComponentResourceDefinitionContributionKind,
     readonly target: ResourceTargetReference | null = null,
     readonly name: string | null = null,
     readonly aliases: readonly ResourceAliasDefinition[] = [],

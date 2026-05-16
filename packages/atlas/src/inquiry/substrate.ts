@@ -39,6 +39,8 @@ export const enum SubstrateId {
   AtlasContracts = "atlas.contracts",
   /** Atlas filesystem-backed memory store joined to live source pressure. */
   AtlasMemory = "atlas.memory",
+  /** Typed work-routing ontology that joins Atlas memory, source architecture, and framework corpus pressure. */
+  AtlasWorkRouter = "atlas.work-router",
 }
 
 /** Broad substrate family. */
@@ -361,6 +363,30 @@ export const SubstrateCatalog: readonly SubstrateContract[] = [
       SubstrateId.SourceFiles,
       SubstrateId.TypeScriptProgram,
       SubstrateId.ProductArchitecture,
+    ],
+  },
+  {
+    id: SubstrateId.AtlasWorkRouter,
+    kind: SubstrateKind.Atlas,
+    trust: SubstrateTrust.ModeledStatic,
+    summary:
+      "Typed work-route ontology that turns domains, roles, source anchors, lens anchors, memory domains, auLink ids, and framework corpus concepts into structural next-work entrypoints without relying on fuzzy task search.",
+    basisKinds: [
+      BasisKind.AtlasContract,
+      BasisKind.HumanJudgement,
+      BasisKind.TypeScriptProgram,
+      BasisKind.SourceText,
+    ],
+    produces: [
+      EvidenceKind.MaintenanceSignal,
+      EvidenceKind.SourceSpan,
+      EvidenceKind.OpenSeam,
+    ],
+    dependsOn: [
+      SubstrateId.AtlasContracts,
+      SubstrateId.AtlasMemory,
+      SubstrateId.ProductArchitecture,
+      SubstrateId.FrameworkCorpus,
     ],
   },
 ];

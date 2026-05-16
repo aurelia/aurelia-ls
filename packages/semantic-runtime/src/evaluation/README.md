@@ -19,18 +19,25 @@ projects static type and member surfaces from the checker for template/expressio
 ## Responsibilities
 
 - Parse TypeScript source files as ECMAScript modules with imports, exports, and top-level bindings.
+- Evaluate local side-effect imports as module execution edges even though they produce no import binding. Decorated
+  resources, registry bodies, and other module-level facts in `import './x'` dependencies must enter the shared
+  project evaluation result before Aurelia recognizers run.
 - Build module environment records with declared, initialized, imported, function, class, and open bindings.
 - Evaluate modeled expression shapes such as literals, arrays, object literals, class construction, property access,
   simple operators, `typeof`, conditionals, regular-expression literals, module-namespace property/element reads, selected
   standard intrinsics, optional-chain nullish short-circuiting, simple function returns, evaluator-local function-body
   declarations, and evaluator-local own properties on object/function/class/instance values.
+- Keep common ECMAScript collection/string glue in the evaluator substrate, including `Object.keys/values/entries/fromEntries`,
+  `Array.from`, array map/filter/find/findIndex/some/every/reduce/flat/flatMap/forEach/includes/indexOf/join/slice/sort,
+  array push/pop/shift/unshift/splice/reverse/fill mutation, and string startsWith/endsWith/includes/indexOf/split/replace/replaceAll/slice/trim/case transforms.
 - Preserve host-environment and external-module carriers as explicit evaluator-local boundary object/value carriers, so
   boundary-dependent expressions propagate without being mislabeled as generic dynamic branches, missing identifiers, or
   object-property fallbacks.
 - Preserve string-shaped expressions with known static text and dynamic boundary holes as `EvaluationStringPatternValue`
   rather than flattening them to unknown or a generic boundary value. Consumers such as router instruction
   materialization can use the static prefix while still treating the holes as runtime supplied.
-- Traverse a deliberate statement set with explicit unsupported cases for statements that can affect evaluation.
+- Traverse a deliberate statement set with explicit unsupported cases for statements that can affect evaluation,
+  including exact `switch` fallthrough when the discriminant and case expressions close statically.
 - Materialize ECMAScript binding patterns into environment cells for variable declarations, function and constructor
   parameters, and supported loop declaration initializers. Array/object defaults, rest bindings, known object/array
   sources, and boundary-derived properties should stay evaluator substrate instead of becoming recognizer-local
@@ -88,19 +95,42 @@ APIs. The current `ModuleLoader` issue pass reads evaluated source expressions f
 `invalid_module_transform_input` / `AUR0021` diagnostics when the input is statically closed and invalid. The framework
 API issue pass is narrower: it recognizes direct TypeChecker/import-grounded calls whose framework guard is source-local,
 such as falsy EventAggregator channel/type arguments, `firstDefined()` with no defined argument, and
-`Metadata.define(...)` with no metadata key.
+`Metadata.define(...)` with no metadata key. Because these diagnostics scan boot-admitted project sources, their spans
+carry the admitted source-file address into `sourceSpanAddressForSite(...)`; do not re-resolve these issue locations
+from filenames.
+`EvaluationIssuePublisher` is the evaluation-layer issue product primitive over the shared kernel
+`publishIssueProduct(...)` helper. New evaluation diagnostics should publish through it so evidence, provenance,
+identity, and materialized-product records do not regrow inside each source scanner.
 Follow-up expression reads must reuse the `StaticModuleEvaluationResult` policy and runtime host. Otherwise a
 materializer can silently lose product-specific host intrinsics that were present during module evaluation, causing
 configuration values to degrade when a recognizer asks a second question about the same expression.
+`StaticEvaluationExpressionReader` keeps one evaluator per reader for those follow-up reads, matching the
+binding-source evaluation frame's per-source evaluator lifetime so guardrails and seam checkpoints do not reset for
+every property or target probe.
 `StaticEvaluationPolicy` also owns evaluator guardrails. Statement, depth, loop, and intrinsic-callback budgets are
 there to prevent runaway interpretation of arbitrary source, not to express user-facing query pagination. Intrinsics
 that speculate on a receiver or callback should use the evaluator checkpoint/restore lane so an abandoned attempt
 does not leak transient open seams or consumed statement budget into the rest of the module.
+`IntrinsicCallbackFrame` is the shared lifetime primitive for callback-bearing intrinsics: it owns the checkpoint,
+counts callback invocations against `maxIntrinsicCallbackEvaluations`, and lets the intrinsic decide whether exhausted
+precision becomes unknown membership/order, an unknown scalar result, or `undefined`.
+`intrinsics.ts` is the intentional dispatcher and public contract surface for `StaticEvaluator`; implementation lives under
+`intrinsics/` by ECMAScript family (`array`, `object`, `string`, `collection`, `promise`, `regexp`, and module-boundary
+calls). Keep new standard behavior in that family split so the dispatcher stays a routing table rather than a second
+evaluator body.
 
 `project-evaluation.ts` owns the shared project pass over boot admissions. It is still evaluator substrate: it admits
 boot sources whose role is `app-source` and whose language is TS/JS into module graph evaluation, then emits evaluator
 open seams. Tests, declarations, package manifests, templates, styles, and known tooling config files remain admitted
 source records but do not enter app-world static evaluation.
+
+`declaration-instantiation.ts` owns ECMAScript declaration-instantiation shape for a source file or interpreted block:
+import bindings, function hoists, and top-level class bindings. Keep this separate from statement execution so module
+linkage and hoisting do not drift between `StaticEvaluator` and `StaticModuleGraphEvaluator`.
+
+`commonjs.ts` owns evaluator-local CommonJS carrier semantics. `StaticEvaluator` materializes authored `exports` and
+`module` through it, and `StaticModuleGraphEvaluator` reads local CommonJS exports through the same helpers. Do not add
+separate `exports` / `module.exports` readers in graph or recognizer code.
 
 `literals.ts` owns array and object literal construction through a small host delegation boundary, similar to
 `intrinsics.ts`. Keep literal element/property traversal there, but keep recursion, property-name reading, seam policy,
@@ -109,10 +139,35 @@ spread accepts both boundary objects and boundary values as unresolved spread ca
 values as unresolved iterable carriers and should keep boundary objects on the dynamic-mutation seam path unless a real
 ECMAScript-modeling reason changes that policy.
 
+`class-values.ts` owns static class property materialization, instance property materialization, parameter properties, and
+guarded constructor execution over evaluator-local class values. Keep class lifecycle details there while preserving the
+owning evaluator's recursion, binding-pattern host, and open-seam stream.
+
+`function-values.ts` owns evaluator-local function invocation: argument binding, `this` binding, async fulfillment
+boundaries, block completion handling, and expression-bodied return values. Property accessors and intrinsics should
+call this lane through evaluator host methods instead of duplicating call-frame construction.
+
+`binding-patterns.ts` owns environment-cell materialization for variable declarations, function/constructor parameters,
+destructuring defaults, rest bindings, and supported loop declaration initializers. It uses a small host delegation
+boundary back into `StaticEvaluator` for expression defaults, computed property names, own-property reads, and seam
+publication; keep it as environment-construction substrate rather than a feature-local destructuring helper.
+
+`operators.ts` owns primitive ECMAScript value algebra that does not need evaluator state. Keep pure operator semantics
+there instead of adding bottom-of-evaluator helper islands.
+
+`property-access.ts` owns ECMAScript-shaped property and element access over evaluator values, including own-property
+read/write, getter invocation through the evaluator host, module namespace lookups, collection/string size and prototype
+boundary values, and RegExp instance fields. Keep recursion, policy, and unknown/open-seam construction on
+`StaticEvaluator`; keep property receiver/key semantics in this substrate instead of duplicating object access in
+recognizers.
+
 ## Watchpoints
 
 - Import bindings start as evaluator-local unknown values. They should become seams only when a materializer or
   expression actually depends on the imported value and module linking cannot close it.
+- Side-effect imports are execution edges, not value bindings. Local side-effect targets should be evaluated for their
+  module-level declarations and effects, while unresolved relative targets should remain module-resolution seams and
+  external side-effect package imports should stay boundaries rather than synthetic values.
 - Evaluator open seams are source-owned. A seam records the source file of the syntax node that produced it, and kernel
   emission resolves/admitts that node-owned source before writing source spans. Cross-module interpretation must not
   project imported function/class body seams onto the caller source file.
@@ -122,11 +177,15 @@ ECMAScript-modeling reason changes that policy.
   for object properties materialized out of the generated default export. HTML/CSS asset modules still only provide
   default string values; escaped-string source maps should become a real asset primitive before any consumer claims
   exact interior spans there.
-- Supported intrinsic calls are deliberately small and standard-shaped: current coverage includes `Object.freeze`,
-  `Object.assign`, `Object.values`, `String(...)`, `Array.of`, `Array.isArray`, `new Array(...)`, `RegExp(...)`,
-  `new RegExp(...)`, `array.concat`, `array.filter`, `array.fill`, `array.slice`, `array.sort`, `string.slice`,
-  `string.localeCompare`, `Map.get`, `Map.set`, `Map.has`, `Map.delete`, `Set.has`, `Set.add`, and `Set.delete`
-  over evaluator-known values.
+- Supported intrinsic calls are deliberately standard-shaped: current coverage includes `Object.freeze`,
+  `Object.assign`, `Object.keys`, `Object.values`, `Object.entries`, `Object.fromEntries`, `String(...)`, `Array.of`,
+  `Array.from`, `Array.isArray`, `new Array(...)`, `RegExp(...)`, `new RegExp(...)`, `array.concat`, `array.map`,
+  `array.flatMap`, `array.filter`, `array.find`, `array.findIndex`, `array.some`, `array.every`, `array.forEach`,
+  `array.reduce`, `array.reduceRight`, `array.fill`, `array.flat`, `array.includes`, `array.indexOf`, `array.join`,
+  `array.slice`, `array.sort`, `array.push`, `array.pop`, `array.shift`, `array.unshift`, `array.splice`,
+  `array.reverse`, string `slice`, `localeCompare`, `startsWith`, `endsWith`, `includes`, `indexOf`,
+  `split`, `replace`, `replaceAll`, `trim`, case transforms, `Map.get`, `Map.set`, `Map.has`, `Map.delete`,
+  `Set.has`, `Set.add`, and `Set.delete` over evaluator-known values.
 - Function and class values are callable/constructable carriers plus ordinary JavaScript property carriers. Static
   evaluator-local assignments such as `factory.someKey = value` should update the function/class value instead of
   opening a dynamic-mutation seam. Class construction and local getter reads are guarded static interpretation lanes;
@@ -135,6 +194,13 @@ ECMAScript-modeling reason changes that policy.
   statements execute. Class declarations encountered during interpreted function/block execution also publish their
   class value into the current evaluator environment. This is evaluator substrate for authored helper/factory shapes,
   not a reason for product recognizers to duplicate declaration-hoisting or class-materialization logic.
+- `switch` statements evaluate the first statically matching case, then execute fallthrough clauses until an unlabeled
+  `break` exits the switch. Unknown or boundary case selection remains a dynamic-branch seam rather than speculative
+  multi-branch execution.
+- `try` statements evaluate closed `try` / `catch` / `finally` completion flow. A caught throw enters the catch block,
+  `finally` completion overrides prior completion, and catch bindings are removed after the catch body. Catch bindings
+  that would shadow an existing evaluator binding remain an explicit unsupported-binding-pattern seam until nested
+  lexical environment records are modeled.
 - Binding patterns are part of environment construction. If a resource/configuration/DI recognizer needs values from
   `const { x } = ...`, `const [first] = ...`, or destructured function parameters, improve the evaluator binding path
   rather than reading those AST shapes locally. Unknown and boundary sources should propagate unknown/boundary values
@@ -181,10 +247,15 @@ ECMAScript-modeling reason changes that policy.
   pagination, ranking, or consumer policy. Large static data flowing through userland collection helpers should degrade
   into imprecise evaluator values, such as unknown array order or membership, before it poisons module evaluation as a
   hard statement-limit seam.
-- Collection callback guardrails follow that rule. `Array.filter` and comparator-backed `Array.sort` checkpoint callback
-  interpretation and restore abandoned seams/counters when the callback budget is exhausted, then return an array with
-  unknown membership/order rather than publishing a generic `dynamic-call` seam from the evaluator. If a later product
-  truly needs exact membership or order, that product should emit the domain-specific open seam at consumption time.
+- Collection callback guardrails follow that rule. Callback-bearing array intrinsics use `IntrinsicCallbackFrame` to
+  checkpoint interpretation and restore abandoned seams/counters when the callback budget is exhausted, then return an
+  imprecise evaluator result rather than publishing a generic `dynamic-call` seam from the evaluator. If a later product
+  truly needs exact membership, order, or scalar closure, that product should emit the domain-specific open seam at
+  consumption time.
+- Mutating array intrinsics update the evaluator-local receiver. `push`, `unshift`, `reverse`, exact `splice`, exact
+  `pop`, exact `shift`, `sort`, and `fill` should not return detached arrays that hide receiver effects. When a spread,
+  unknown range, or non-exact receiver prevents exact closure, mark receiver membership/order imprecise or return an
+  evaluator unknown instead of pretending subsequent reads see an exact array.
 - Evaluation and TypeChecker projection will meet at several future boundaries, especially DI, view-model scopes,
   SSR/SSG, and template expression tooling. Keep that handoff explicit through product handles, identities, claims,
   and provenance rather than letting either layer pretend it owns the whole story.

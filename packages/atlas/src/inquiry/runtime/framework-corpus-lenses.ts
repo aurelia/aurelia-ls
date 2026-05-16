@@ -47,9 +47,14 @@ import {
   inquiryStringFilter,
   matchesAnyFilterValue,
   queryMatches,
-  queryRelevanceScore,
+  querySignificantPartialMatches,
 } from "./lens-filter-utils.js";
 import { optionalNextPageContinuation } from "./lens-continuation-utils.js";
+import {
+  frameworkCorpusFixtureSeedHasClassificationKey,
+  frameworkCorpusFixtureSeedMatchesClassification,
+} from "./framework-corpus-classification.js";
+import { frameworkCorpusFixtureSeedQueryScore } from "./framework-corpus-row-relevance.js";
 
 export interface FrameworkCorpusValue {
   readonly version: FrameworkCorpusAnalysis["version"];
@@ -156,7 +161,7 @@ export function answerFrameworkCorpus(
         "framework.corpus:fixture-seeds",
         "framework fixture seed row(s)",
         [...filterFixtureSeedRows(analysis.fixtureSeeds, fixtureSeedFilters)]
-          .sort((left, right) => compareFixtureSeedRows(left, right, fixtureSeedFilters.query)),
+          .sort((left, right) => compareFixtureSeedRows(left, right, fixtureSeedFilters)),
         basis,
         (rows) => ({ ...frameworkSourceStateBaseValue(analysis), fixtureSeeds: rows }),
         evidenceForFixtureSeedRow,
@@ -255,7 +260,7 @@ function filterDocRows(
   return rows.filter((row) =>
     matchesPathAndGroup(row, filters) &&
     matchesAnyFilterValue(row.concepts, filters.concept) &&
-    queryMatches(filters.query, [
+    corpusQueryMatches(filters, [
       row.id,
       row.filePath,
       row.group,
@@ -278,7 +283,7 @@ function filterDocSnippetRows(
     matchesAnyFilterValue(row.concepts, filters.concept) &&
     (filters.language === undefined || row.language === filters.language) &&
     (filters.snippetKind === undefined || row.kind === filters.snippetKind) &&
-    queryMatches(filters.query, [
+    corpusQueryMatches(filters, [
       row.id,
       row.filePath,
       row.group,
@@ -300,7 +305,7 @@ function filterTestRows(
     matchesPathAndGroup(row, filters) &&
     matchesAnyFilterValue(row.concepts, filters.concept) &&
     (filters.generated === undefined || row.generated === filters.generated) &&
-    queryMatches(filters.query, [
+    corpusQueryMatches(filters, [
       row.id,
       row.filePath,
       row.group,
@@ -320,7 +325,7 @@ function filterTestSnippetRows(
     matchesAnyFilterValue(row.concepts, filters.concept) &&
     (filters.generated === undefined || row.generated === filters.generated) &&
     (filters.snippetKind === undefined || row.kind === filters.snippetKind) &&
-    queryMatches(filters.query, [
+    corpusQueryMatches(filters, [
       row.id,
       row.filePath,
       row.group,
@@ -340,7 +345,7 @@ function filterLegacyPackageRows(
   const filters = frameworkCorpusFilters(inquiry);
   return rows.filter((row) =>
     (filters.path === undefined || row.packagePath.includes(filters.path)) &&
-    queryMatches(filters.query, [
+    corpusQueryMatches(filters, [
       row.id,
       row.packagePath,
       row.name ?? "",
@@ -360,7 +365,7 @@ function filterExpectedEffectDescriptorRows(
     (filters.effectKind === undefined || row.effectKind === filters.effectKind) &&
     (filters.effectRole === undefined || row.effectRole === filters.effectRole) &&
     (filters.effectSeedPolicy === undefined || row.seedPolicy === filters.effectSeedPolicy) &&
-    queryMatches(filters.query, [
+    corpusQueryMatches(filters, [
       row.id,
       row.contractKind,
       row.key,
@@ -388,9 +393,10 @@ function filterFixtureSeedRows(
     (filters.effectKind === undefined || row.effectHints.some((effect) => effect === filters.effectKind)) &&
     matchesExpectedEffectFilter(row, filters) &&
     (filters.recipeKey === undefined || row.recipeHints.some((recipe) => recipe === filters.recipeKey)) &&
+    frameworkCorpusFixtureSeedMatchesClassification(row, filters) &&
     (filters.language === undefined || row.language === filters.language) &&
     (filters.snippetKind === undefined || row.snippetKind === filters.snippetKind) &&
-    queryMatches(filters.query, [
+    corpusQueryMatches(filters, [
       row.id,
       row.sourceId,
       row.filePath,
@@ -403,6 +409,12 @@ function filterFixtureSeedRows(
       row.preview,
       ...row.concepts,
       ...row.effectHints,
+      ...row.classificationReasons.flatMap((reason) => [
+        reason.kind,
+        reason.key,
+        `${reason.kind}:${reason.key}`,
+        reason.summary,
+      ]),
       ...row.expectedEffects.flatMap((effect) => [
         effect.effectKind,
         effect.contractSummary ?? "",
@@ -423,36 +435,98 @@ function filterFixtureSeedRows(
 function compareFixtureSeedRows(
   left: FrameworkCorpusFixtureSeedRow,
   right: FrameworkCorpusFixtureSeedRow,
-  query: string | undefined,
+  filters: FrameworkCorpusFilters,
 ): number {
-  return fixtureSeedQueryScore(right, query) - fixtureSeedQueryScore(left, query) ||
+  return frameworkCorpusFixtureSeedQueryScore(right, filters.query) - frameworkCorpusFixtureSeedQueryScore(left, filters.query) ||
+    fixtureSeedFilterFocusScore(right, filters) - fixtureSeedFilterFocusScore(left, filters) ||
     compareFixtureSeedPressure(left, right);
 }
 
-function fixtureSeedQueryScore(
+function fixtureSeedFilterFocusScore(
   row: FrameworkCorpusFixtureSeedRow,
-  query: string | undefined,
+  filters: FrameworkCorpusFilters,
 ): number {
-  return queryRelevanceScore(query, [
-    { weight: 90, values: [row.filePath, row.sourceId, row.id] },
-    { weight: 70, values: [row.preview, row.summary] },
-    { weight: 50, values: row.concepts },
-    {
-      weight: 35,
-      values: row.expectedEffects.flatMap((effect) => [
-        effect.effectKind,
-        effect.contractSummary ?? "",
-        effect.contractDeclared ? "declared expected-effect" : "undeclared expected-effect",
-        ...effect.filters.flatMap((filter) => [
-          filter.field,
-          String(filter.value ?? ""),
-          `${filter.field}=${String(filter.value ?? "")}`,
-        ]),
-      ]),
-    },
-    { weight: 25, values: row.effectHints },
-    { weight: 10, values: [row.group, row.sourceKind, row.seedUse, row.snippetKind, row.language ?? ""] },
-  ]);
+  let score = 0;
+  if (row.effectHints.length === 0) {
+    score -= 200;
+  } else {
+    score += Math.min(row.effectHints.length, 8) * 8;
+  }
+  if (filters.concept !== undefined) {
+    if (pathIncludesToken(row.filePath, filters.concept)) {
+      score += 120;
+    }
+    if (row.group === filters.concept) {
+      score += 60;
+    }
+    if (filters.concept === "forms") {
+      score += formFixtureSeedFocusScore(row);
+    }
+    score -= Math.max(0, row.concepts.length - 1) * 2;
+  }
+  if (
+    filters.expectedEffectFilterField !== undefined &&
+    row.expectedEffects.some((effect) =>
+      effect.filters.some((filter) =>
+        filter.field === filters.expectedEffectFilterField &&
+        (
+          filters.expectedEffectFilterValue === undefined ||
+          String(filter.value ?? "") === filters.expectedEffectFilterValue
+        )
+      )
+    )
+  ) {
+    score += 40;
+  }
+  if (filters.effectKind !== undefined && row.effectHints.includes(filters.effectKind as never)) {
+    score += 30;
+  }
+  if (filters.recipeKey !== undefined && row.recipeHints.includes(filters.recipeKey as never)) {
+    score += 30;
+  }
+  if (
+    filters.classificationKind !== undefined &&
+    row.classificationReasons.some((reason) => reason.kind === filters.classificationKind)
+  ) {
+    score += 30;
+  }
+  if (
+    filters.classificationKey !== undefined &&
+    row.classificationReasons.some((reason) => reason.key === filters.classificationKey)
+  ) {
+    score += 60;
+  }
+  return score;
+}
+
+function formFixtureSeedFocusScore(row: FrameworkCorpusFixtureSeedRow): number {
+  let score = 0;
+  if (frameworkCorpusFixtureSeedHasClassificationKey(row, "native-form-control")) {
+    score += 100;
+  }
+  if (frameworkCorpusFixtureSeedHasClassificationKey(row, "native-value-binding")) {
+    score += 90;
+  }
+  if (frameworkCorpusFixtureSeedHasClassificationKey(row, "native-checked-binding")) {
+    score += 90;
+  }
+  if (frameworkCorpusFixtureSeedHasClassificationKey(row, "option-model-binding")) {
+    score += 70;
+  }
+  if (frameworkCorpusFixtureSeedHasClassificationKey(row, "direct-service-form")) {
+    score -= 100;
+  }
+  return score;
+}
+
+function pathIncludesToken(
+  filePath: string,
+  token: string,
+): boolean {
+  return filePath
+    .toLowerCase()
+    .split(/[\\/._-]+/u)
+    .includes(token.toLowerCase());
 }
 
 function compareDocPressure(
@@ -530,6 +604,7 @@ function compareExpectedEffectDescriptorRows(
 
 interface FrameworkCorpusFilters {
   readonly query?: string;
+  readonly queryMode?: "all" | "partial";
   readonly concept?: string;
   readonly group?: string;
   readonly path?: string;
@@ -542,6 +617,8 @@ interface FrameworkCorpusFilters {
   readonly effectRole?: string;
   readonly effectSeedPolicy?: string;
   readonly recipeKey?: string;
+  readonly classificationKind?: string;
+  readonly classificationKey?: string;
   readonly expectedEffectFilterField?: string;
   readonly expectedEffectFilterValue?: string;
 }
@@ -549,7 +626,8 @@ interface FrameworkCorpusFilters {
 function frameworkCorpusFilters(inquiry: Inquiry): FrameworkCorpusFilters {
   return {
     query: inquiryStringFilter(inquiry, "query"),
-    concept: inquiryLowerStringFilter(inquiry, "concept"),
+    queryMode: frameworkCorpusQueryModeFilter(inquiryLowerStringFilter(inquiry, "queryMode")),
+    concept: frameworkCorpusConceptFilter(inquiryLowerStringFilter(inquiry, "concept")),
     group: inquiryStringFilter(inquiry, "group"),
     path: inquiryStringFilter(inquiry, "path"),
     language: inquiryStringFilter(inquiry, "language"),
@@ -561,9 +639,51 @@ function frameworkCorpusFilters(inquiry: Inquiry): FrameworkCorpusFilters {
     effectRole: inquiryStringFilter(inquiry, "effectRole"),
     effectSeedPolicy: inquiryStringFilter(inquiry, "effectSeedPolicy"),
     recipeKey: inquiryStringFilter(inquiry, "recipeKey"),
+    classificationKind: inquiryStringFilter(inquiry, "classificationKind"),
+    classificationKey: inquiryStringFilter(inquiry, "classificationKey"),
     expectedEffectFilterField: inquiryStringFilter(inquiry, "expectedEffectFilterField"),
     expectedEffectFilterValue: inquiryStringFilter(inquiry, "expectedEffectFilterValue"),
   };
+}
+
+function corpusQueryMatches(
+  filters: FrameworkCorpusFilters,
+  values: readonly string[],
+): boolean {
+  return filters.queryMode === "partial"
+    ? querySignificantPartialMatches(filters.query, values)
+    : queryMatches(filters.query, values);
+}
+
+function frameworkCorpusQueryModeFilter(
+  value: string | undefined,
+): "all" | "partial" | undefined {
+  switch (value) {
+    case "partial":
+    case "any":
+    case "explore":
+      return "partial";
+    case "all":
+    case "exact":
+    case undefined:
+      return undefined;
+    default:
+      return undefined;
+  }
+}
+
+function frameworkCorpusConceptFilter(
+  concept: string | undefined,
+): string | undefined {
+  switch (concept) {
+    case "template":
+      return "templates";
+    case "expressions":
+    case "expr":
+      return "expression";
+    default:
+      return concept;
+  }
 }
 
 function matchesExpectedEffectFilter(
@@ -652,9 +772,13 @@ function evidenceForExpectedEffectDescriptorRow(
 }
 
 function evidenceForFixtureSeedRow(row: FrameworkCorpusFixtureSeedRow): Evidence {
+  const reasonSummary = row.classificationReasons
+    .slice(0, 4)
+    .map((reason) => `${reason.kind}:${reason.key}`)
+    .join(", ");
   return sourceEvidence(
     row.id,
-    `${row.sourceKind} fixture seed at ${row.filePath}:${row.source.start.line + 1} hints expected effects ${row.effectHints.join(", ") || "<none>"} and recipes ${row.recipeHints.join(", ") || "<none>"}.`,
+    `${row.sourceKind} fixture seed at ${row.filePath}:${row.source.start.line + 1} hints expected effects ${row.effectHints.join(", ") || "<none>"} and recipes ${row.recipeHints.join(", ") || "<none>"}; reasons ${reasonSummary || "<none>"}.`,
     row.source,
   );
 }

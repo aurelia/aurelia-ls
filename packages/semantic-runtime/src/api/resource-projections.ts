@@ -283,8 +283,14 @@ function dependencyRows(
 ): readonly SemanticResourceDefinitionDependencyRow[] {
   return dependencies
     .map((dependency): SemanticResourceDefinitionDependencyRow => ({
+      dependencyKind: dependency.dependencyKind,
       keyName: dependency.keyName,
+      localName: dependency.localName,
+      registryKind: dependency.registryKind,
       hasIdentity: dependency.identityHandle != null,
     }))
-    .sort((left, right) => `${left.keyName ?? ''}:${left.hasIdentity}`.localeCompare(`${right.keyName ?? ''}:${right.hasIdentity}`));
+    .sort((left, right) =>
+      `${left.dependencyKind}:${left.registryKind ?? ''}:${left.keyName ?? ''}:${left.localName ?? ''}:${left.hasIdentity}`
+        .localeCompare(`${right.dependencyKind}:${right.registryKind ?? ''}:${right.keyName ?? ''}:${right.localName ?? ''}:${right.hasIdentity}`)
+    );
 }

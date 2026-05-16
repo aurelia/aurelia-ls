@@ -146,6 +146,17 @@ export function printEmptyRows(rows: readonly unknown[], message = "no rows at t
   }
 }
 
+/** Print a row-section header that makes compact display slices explicit. */
+export function printRowSectionHeader(
+  label: string,
+  rows: readonly unknown[],
+  limit: number,
+): void {
+  console.log("");
+  const shown = Math.min(rows.length, limit);
+  console.log(rows.length > shown ? `${label} (showing ${shown} of ${rows.length})` : label);
+}
+
 /** Compact singular/plural label helper for script output. */
 export function countLabel(count: number, singular: string, plural: string): string {
   return count === 1 ? singular : plural;
@@ -200,6 +211,67 @@ export function scriptNumberArgumentValue(
   }
   const parsed = Number(value);
   return Number.isFinite(parsed) && parsed > 0 ? Math.floor(parsed) : undefined;
+}
+
+/** Fail fast when a human-oriented script receives an unsupported `--flag`. */
+export function assertKnownScriptArguments(
+  label: string,
+  knownArguments: readonly string[],
+  args: readonly string[] = process.argv,
+): void {
+  const unknown = args
+    .slice(2)
+    .filter((entry) => entry.startsWith("--") && entry !== "--")
+    .filter((entry) => !knownArguments.some((known) => scriptArgumentMatchesKnown(entry, known)));
+  if (unknown.length > 0) {
+    console.error(`${label} received unknown argument(s): ${unknown.join(", ")}`);
+    process.exit(1);
+  }
+}
+
+function scriptArgumentMatchesKnown(argument: string, known: string): boolean {
+  if (known.endsWith("=")) {
+    const flag = known.slice(0, -1);
+    return argument === flag || argument.startsWith(known);
+  }
+  return argument === known;
+}
+
+/** Build an object-spreadable string filter from a prefix-style script argument. */
+export function scriptOptionalStringFilter(
+  name: string,
+  args: readonly string[] = process.argv,
+): Record<string, string> {
+  const value = scriptArgumentValue(`--${name}=`, args);
+  return value === undefined ? {} : { [name]: value };
+}
+
+/** Build an object-spreadable boolean filter from a `--name=true|false` script argument. */
+export function scriptOptionalBooleanFilter(
+  name: string,
+  args: readonly string[] = process.argv,
+): Record<string, boolean> {
+  const value = scriptArgumentValue(`--${name}=`, args);
+  if (value === "true") {
+    return { [name]: true };
+  }
+  if (value === "false") {
+    return { [name]: false };
+  }
+  return {};
+}
+
+/** Format script filters consistently across human-oriented Atlas CLI wrappers. */
+export function scriptFilterSummary(
+  filters: Readonly<Record<string, unknown>>,
+): string | undefined {
+  const parts = Object.entries(filters).map(([key, value]) => {
+    if (Array.isArray(value)) {
+      return `${key}=[${value.join(",")}]`;
+    }
+    return `${key}=${String(value)}`;
+  });
+  return parts.length === 0 ? undefined : parts.join("; ");
 }
 
 /** Require a prefix-style script argument. */

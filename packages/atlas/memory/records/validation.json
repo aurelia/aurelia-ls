@@ -18,6 +18,7 @@
         "Keep validation source-rule diagnostics separate from validation-html binding behavior; validation-html template semantics should stay in template/binding lanes unless the issue is genuinely rule-source owned.",
         "AuthoringOrientation may report validation ownership from positive validation-html `& validate` applications, validation package configuration admissions, validation service resolve sites, or validation source-rule issue rows; do not confuse that taste signal with the narrower ValidationIssue diagnostic product lane.",
         "The generated `validated-state-backed-form` authoring recipe is the positive ownership canary for validation-html: it should materialize `validate` through `BindingBehaviorApplications`, expose any static validation trigger through `staticArgumentValues`, satisfy `validation-controller-usage`, and avoid producing ValidationIssue diagnostics.",
+        "`dynamic-keyed-validation` is the contrastive validation-html pressure canary: repeat-local keyed writes such as `person[field] & validate` and nested keyed writes such as `person[addressField][line1Field] & validate` should remain analyzable as binding-behavior applications plus runtime-assignable two-way data flows without becoming a generated authoring recommendation.",
         "Current exact source-owned codes are AUR4101 rule_provider_no_rule_found, AUR4102 unable_to_parse_accessor_function, AUR4105 hydrate_rule_unsupported, AUR4106 hydrate_rule_invalid_name, and AUR4108 group_rule_invalid_execution_result.",
         "Do not claim AUR4100, AUR4103, or AUR4104 until semantic-runtime admits serialized validation payloads; do not claim AUR4107 or AUR4109 until it admits live validation rule execution or custom rule return values."
       ],
@@ -50,6 +51,11 @@
           "summary": "Pressure fixture for the exact validation source-rule diagnostics."
         },
         {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/dynamic-keyed-validation",
+          "summary": "Pressure fixture for validation-html binding behavior over dynamic keyed writable source expressions."
+        },
+        {
           "kind": "lens",
           "lensId": "framework.errors",
           "projection": "diagnostic-codes",
@@ -78,10 +84,14 @@
         {
           "kind": "source-file-exists",
           "filePath": "packages/semantic-runtime/fixtures/pressure/validation-rule-source-errors/src/validation-rule-source-errors-app.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/fixtures/pressure/dynamic-keyed-validation/src/dynamic-keyed-validation-app.html"
         }
       ],
       "createdAt": "2026-05-14",
-      "updatedAt": "2026-05-14"
+      "updatedAt": "2026-05-15"
     }
   ]
 }

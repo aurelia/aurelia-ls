@@ -18,19 +18,12 @@ import type {
   UnaryExpression,
 } from '../expression/ast.js';
 import {
-  StaticEvaluator,
-} from '../evaluation/evaluator.js';
-import {
   openSeamReasonKindForEvaluationBoundary,
 } from '../evaluation/boundary-open-reason.js';
 import {
-  isEvaluatedProjectSource,
   type EvaluatedProjectSource,
   type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
-import {
-  normalizeModuleKey,
-} from '../evaluation/module-graph.js';
 import {
   EvaluationBooleanValue,
   EvaluationBoundaryValue,
@@ -79,6 +72,7 @@ import {
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { TemplateScopeConstructionEmission } from '../template/template-controller-scope-materializer.js';
+import { RuntimeBindingSourceEvaluationFrame } from './binding-source-evaluation-frame.js';
 
 export const enum RuntimeBindingSourceValueEvaluationKind {
   Value = 'value',
@@ -322,7 +316,7 @@ export function runtimeBoundControllerValueTableForTemplateResources(
  * carries a static value, but source lookup, view-model member access, and getter execution stay with the binding flow.
  */
 export class RuntimeBindingSourceValueEvaluator {
-  private readonly evaluatedSourcesByFileName = new Map<string, EvaluatedProjectSource>();
+  private readonly evaluationFrame: RuntimeBindingSourceEvaluationFrame;
   private readonly activeBoundControllerReads = new Set<string>();
 
   constructor(
@@ -330,13 +324,7 @@ export class RuntimeBindingSourceValueEvaluator {
     readonly evaluation: StaticProjectEvaluationResult,
     readonly boundControllerValues: RuntimeBoundControllerValueTable = RuntimeBoundControllerValueTable.empty,
   ) {
-    for (const source of evaluation.sources) {
-      if (!isEvaluatedProjectSource(source)) {
-        continue;
-      }
-      this.evaluatedSourcesByFileName.set(normalizeModuleKey(source.sourceFile.fileName), source);
-      this.evaluatedSourcesByFileName.set(normalizeModuleKey(source.moduleKey), source);
-    }
+    this.evaluationFrame = new RuntimeBindingSourceEvaluationFrame(evaluation);
   }
 
   evaluate(
@@ -398,7 +386,7 @@ export class RuntimeBindingSourceValueEvaluator {
     ancestor: number,
     scope: BindingScope,
   ): RuntimeBindingSourceValueEvaluation {
-    const lookup = locatedScopeSlot(scope, name, ancestor);
+    const lookup = scope.locate(name, ancestor);
     if (lookup.lookupKind === BindingScopeLookupKind.MissingAncestor) {
       return openSlotNoStaticValue(`Could not resolve ancestor ${ancestor} for '${name}'.`);
     }
@@ -453,12 +441,15 @@ export class RuntimeBindingSourceValueEvaluator {
         owner.openReasonKinds,
       );
     }
-    const source = evaluatedSourceForValue(owner.value, this.evaluatedSourcesByFileName);
+    const localValue = localPropertyValue(owner.value, expression.name.name);
+    if (localValue != null) {
+      return RuntimeBindingSourceValueEvaluation.value(localValue);
+    }
+    const source = this.evaluationFrame.sourceForValue(owner.value);
     if (source == null) {
       return openMemberNoStaticValue(`Member '${expression.name.name}' owner did not retain an evaluated source module.`);
     }
-    const evaluator = new StaticEvaluator(source.evaluation.policy, source.evaluation.runtimeHost);
-    const read = evaluator.evaluatePropertyValue(owner.value, expression.name.name, source.moduleKey, source.sourceFile);
+    const read = this.evaluationFrame.readPropertyValue(source, owner.value, expression.name.name, source.sourceFile);
     return evaluationResult(read.value, read.openSeams.map((seam) => seam.summary));
   }
 
@@ -492,12 +483,11 @@ export class RuntimeBindingSourceValueEvaluator {
         owner.openReasonKinds,
       );
     }
-    const source = evaluatedSourceForValue(owner.value, this.evaluatedSourcesByFileName);
+    const source = this.evaluationFrame.sourceForValue(owner.value);
     if (source == null) {
       return openMemberNoStaticValue(`CallMember '${expression.name.name}' owner did not retain an evaluated source module.`);
     }
-    const evaluator = new StaticEvaluator(source.evaluation.policy, source.evaluation.runtimeHost);
-    const read = evaluator.evaluatePropertyValue(owner.value, expression.name.name, source.moduleKey, source.sourceFile);
+    const read = this.evaluationFrame.readPropertyValue(source, owner.value, expression.name.name, source.sourceFile);
     if (read.value.kind === EvaluationValueKind.Unknown || read.value.kind === EvaluationValueKind.BoundaryValue) {
       return evaluationResult(read.value, read.openSeams.map((seam) => seam.summary));
     }
@@ -537,17 +527,11 @@ export class RuntimeBindingSourceValueEvaluator {
       return argumentsRead.open
         ?? RuntimeBindingSourceValueEvaluation.open(`${label} arguments did not close.`);
     }
-    const source = evaluatedSourceForValue(callee, this.evaluatedSourcesByFileName);
+    const source = this.evaluationFrame.sourceForValue(callee);
     if (source == null) {
       return openMemberNoStaticValue(`${label} function source module was not part of static project evaluation.`);
     }
-    const evaluator = new StaticEvaluator(source.evaluation.policy, source.evaluation.runtimeHost);
-    const read = evaluator.evaluateFunctionValue(
-      callee,
-      callee.node ?? source.sourceFile,
-      source.moduleKey,
-      argumentsRead.values,
-    );
+    const read = this.evaluationFrame.callFunctionValue(source, callee, callee.node ?? source.sourceFile, argumentsRead.values);
     return evaluationResult(read.value, read.openSeams.map((seam) => seam.summary));
   }
 
@@ -582,6 +566,9 @@ export class RuntimeBindingSourceValueEvaluator {
     slot: BindingContextSlot,
     scope: BindingScope | null,
   ): RuntimeBindingSourceValueEvaluation {
+    if (slot.staticValue != null) {
+      return RuntimeBindingSourceValueEvaluation.value(slot.staticValue);
+    }
     if (slot.targetProductHandle == null) {
       if (slot.targetType != null) {
         return openSlotNoStaticValue(
@@ -607,7 +594,7 @@ export class RuntimeBindingSourceValueEvaluator {
       return openMemberNoStaticValue(`Member '${member.name}' does not have a named class declaration for static value evaluation.`);
     }
 
-    const source = this.evaluatedSourceForNode(classNode);
+    const source = this.evaluationFrame.sourceForNode(classNode);
     if (source == null) {
       return openMemberNoStaticValue(`Member '${member.name}' source module was not part of static project evaluation.`);
     }
@@ -626,13 +613,12 @@ export class RuntimeBindingSourceValueEvaluator {
     source: EvaluatedProjectSource,
     scope: BindingScope | null,
   ): RuntimeBindingSourceValueEvaluation {
-    const evaluator = new StaticEvaluator(source.evaluation.policy, source.evaluation.runtimeHost);
-    const instance = evaluator.evaluateClassValueInstantiation(classValue, source.moduleKey, classNode);
+    const instance = this.evaluationFrame.instantiateClassValue(source, classValue, classNode);
     if (instance.value.kind === EvaluationValueKind.Unknown) {
       return evaluationResult(instance.value, instance.openSeams.map((seam) => seam.summary));
     }
     this.applyBoundControllerValues(instance.value, scope);
-    const value = evaluator.evaluatePropertyValue(instance.value, memberName, source.moduleKey, classNode);
+    const value = this.evaluationFrame.readPropertyValue(source, instance.value, memberName, classNode);
     return evaluationResult(value.value, [
       ...instance.openSeams.map((seam) => seam.summary),
       ...value.openSeams.map((seam) => seam.summary),
@@ -822,80 +808,6 @@ export class RuntimeBindingSourceValueEvaluator {
     }
     return this.evaluateNode(truthy ? expression.yes : expression.no, scope);
   }
-
-  private evaluatedSourceForNode(node: ts.Node): EvaluatedProjectSource | null {
-    return this.evaluatedSourcesByFileName.get(normalizeModuleKey(node.getSourceFile().fileName)) ?? null;
-  }
-}
-
-interface LocatedScopeSlot {
-  readonly lookupKind: BindingScopeLookupKind;
-  readonly scope: BindingScope | null;
-  readonly slot: BindingContextSlot | null;
-}
-
-function locatedScopeSlot(
-  scope: BindingScope,
-  name: string,
-  ancestor: number,
-): LocatedScopeSlot {
-  let current: BindingScope | null = scope;
-
-  if (ancestor > 0) {
-    while (ancestor > 0 && current != null) {
-      ancestor--;
-      current = current.parent;
-    }
-    if (current == null) {
-      return {
-        lookupKind: BindingScopeLookupKind.MissingAncestor,
-        scope: null,
-        slot: null,
-      };
-    }
-    const overrideSlot = current.overrideContext.lookup(name);
-    return overrideSlot != null
-      ? {
-          lookupKind: BindingScopeLookupKind.OverrideContext,
-          scope: current,
-          slot: overrideSlot,
-        }
-      : {
-          lookupKind: BindingScopeLookupKind.BindingContext,
-          scope: current,
-          slot: current.bindingContext.lookup(name),
-        };
-  }
-
-  while (
-    current != null
-    && !current.isBoundary
-    && current.overrideContext.lookup(name) == null
-    && current.bindingContext.lookup(name) == null
-  ) {
-    current = current.parent;
-  }
-
-  if (current == null) {
-    return {
-      lookupKind: BindingScopeLookupKind.FallbackBindingContext,
-      scope,
-      slot: null,
-    };
-  }
-
-  const overrideSlot = current.overrideContext.lookup(name);
-  return overrideSlot != null
-    ? {
-        lookupKind: BindingScopeLookupKind.OverrideContext,
-        scope: current,
-        slot: overrideSlot,
-      }
-    : {
-        lookupKind: BindingScopeLookupKind.BindingContext,
-        scope: current,
-        slot: current.bindingContext.lookup(name),
-      };
 }
 
 function boundControllerValuesForRuntimeAnalysis(
@@ -932,6 +844,27 @@ function boundControllerValuesForRuntimeAnalysis(
     });
   }
   return values;
+}
+
+function localPropertyValue(
+  value: EvaluationValue,
+  propertyName: string,
+): EvaluationValue | null {
+  if (
+    value.kind === EvaluationValueKind.Object
+    || value.kind === EvaluationValueKind.BoundaryObject
+    || value.kind === EvaluationValueKind.Instance
+  ) {
+    return value.properties.get(propertyName)?.value ?? null;
+  }
+  if (value.kind === EvaluationValueKind.BoundaryValue) {
+    return new EvaluationBoundaryValue(
+      value.boundaryKind,
+      `${value.path}.${propertyName}`,
+      value.node,
+    );
+  }
+  return null;
 }
 
 function controllerDefinitionsForRuntimeAnalysis(
@@ -988,16 +921,6 @@ function bindingExpressionAstForProduct(
   }
   const parse = store.productDetails.read(TemplateProductDetails.ExpressionParse, expressionProductHandle);
   return parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
-}
-
-function evaluatedSourceForValue(
-  value: EvaluationValue,
-  evaluatedSourcesByFileName: ReadonlyMap<string, EvaluatedProjectSource>,
-): EvaluatedProjectSource | null {
-  const sourceFile = value.node?.getSourceFile() ?? null;
-  return sourceFile == null
-    ? null
-    : evaluatedSourcesByFileName.get(normalizeModuleKey(sourceFile.fileName)) ?? null;
 }
 
 function evaluationResult(

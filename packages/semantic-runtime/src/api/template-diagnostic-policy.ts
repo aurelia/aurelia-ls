@@ -46,6 +46,7 @@ import {
   RuntimeHtmlObservationFrameworkErrorCode,
   RuntimeObservationFrameworkErrorCode,
 } from '../observation/framework-error-code.js';
+import type { RouterIssueModel } from '../router/model.js';
 import type { CheckerExpressionTypeOpenSubject } from '../type-system/expression-type-evaluation.js';
 import type {
   SemanticTemplateCursorDiagnosticRow,
@@ -760,6 +761,36 @@ export function runtimeBindingScopeIssueDiagnostic(
   };
 }
 
+export function routerIssueDiagnostic(
+  issue: RouterIssueModel,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticTemplateCursorDiagnosticRow {
+  return {
+    diagnosticKind: 'router-framework-error',
+    diagnosticAuthority: issue.frameworkErrorCode == null ? 'framework-runtime-behavior' : 'framework-error-code',
+    frameworkErrorCode: issue.frameworkErrorCode,
+    severity: issue.severity,
+    summary: issue.message,
+    missingInput: `router:${issue.issueKind}`,
+    missingInputs: [`router:${issue.issueKind}`],
+    source,
+    selectedMemberName: null,
+    ownerTypeDisplay: null,
+    ownerTypeShapeKind: null,
+    ownerTypeOrigin: null,
+    suggestion: {
+      suggestionKind: 'fix-router-instruction',
+      actionKind: 'rewrite-expression',
+      actionTarget: suggestionActionTarget('expression', source, null, issue.expected),
+      summary: 'Rewrite the router instruction to a route string, routeable component, or viewport instruction that the router can materialize.',
+      targetMemberName: null,
+      ownerTypeDisplay: null,
+      valueTypeDisplay: issue.expected,
+      valueTypeSource: null,
+    },
+  };
+}
+
 function repeatNonIterableDiagnostic(
   issue: RuntimeBindingScopeIssue,
   source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
@@ -810,7 +841,7 @@ export function bindingTargetAccessFrameworkErrorDiagnostic(
     diagnosticAuthority: 'framework-error-code',
     frameworkErrorCode: targetAccess.frameworkErrorCode,
     severity: 'error',
-    summary: targetAccess.openReason
+    summary: targetAccess.diagnosticReason
       ?? `Aurelia runtime ${targetAccess.frameworkErrorCode} rejects this binding target observer lookup.`,
     missingInput: `binding-target-access:${targetAccess.frameworkErrorCode}`,
     missingInputs: [`binding-target-access:${targetAccess.frameworkErrorCode}`],
@@ -819,7 +850,32 @@ export function bindingTargetAccessFrameworkErrorDiagnostic(
     ownerTypeDisplay: targetAccess.targetType?.display ?? null,
     ownerTypeShapeKind: null,
     ownerTypeOrigin: targetAccess.targetType?.origin ?? null,
-    suggestion: null,
+    suggestion: bindingTargetAccessFrameworkErrorSuggestion(targetAccess, source),
+  };
+}
+
+function bindingTargetAccessFrameworkErrorSuggestion(
+  targetAccess: RuntimeBindingTargetAccess,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticTemplateCursorSuggestionRow | null {
+  if (targetAccess.frameworkErrorCode !== RuntimeHtmlObservationFrameworkErrorCode.NodeObserverStrategyNotFound) {
+    return null;
+  }
+  return {
+    suggestionKind: 'configure-node-observer',
+    actionKind: 'configure-observer',
+    actionTarget: suggestionActionTarget(
+      'observer-config',
+      source,
+      targetAccess.targetProperty,
+      targetAccess.targetType?.display ?? null,
+    ),
+    summary:
+      `Configure NodeObserverLocator.useConfig(...) for '${targetAccess.targetProperty}' or change the binding target to a framework-supported observable property/attribute.`,
+    targetMemberName: targetAccess.targetProperty,
+    ownerTypeDisplay: targetAccess.targetType?.display ?? null,
+    valueTypeDisplay: targetAccess.propertyType?.display ?? null,
+    valueTypeSource: 'binding-target',
   };
 }
 
@@ -921,6 +977,12 @@ function readOwnerType(
     : store.productDetails.read(TypeSystemProductDetails.TypeShape, productHandle);
 }
 
+function memberOwnerTypeActionSource(
+  memberOwnerType: SemanticTemplateCursorInfoResult['memberOwnerType'],
+): SemanticTemplateCursorDiagnosticRow['source'] {
+  return memberOwnerType?.declarationSource ?? memberOwnerType?.source ?? null;
+}
+
 function missingOwnerTypeDiagnostic(
   store: KernelStore,
   missingInputs: readonly string[],
@@ -941,7 +1003,7 @@ function missingOwnerTypeDiagnostic(
     ? subjectTarget
     : missingScopeSlot
       ? suggestionActionTarget('scope-slot', source, selectedMemberName, null)
-      : suggestionActionTarget('owner-type', memberOwnerType?.source ?? source, selectedMemberName, memberOwnerType?.display ?? null);
+      : suggestionActionTarget('owner-type', memberOwnerTypeActionSource(memberOwnerType) ?? source, selectedMemberName, memberOwnerType?.display ?? null);
   return [weakOwnerDiagnostic(
     missingInput,
     expressionMemberOwnerTypeMissingSummary(missingInput),
@@ -978,7 +1040,7 @@ function indexSignatureOwnerDiagnostic(
     {
       suggestionKind: 'declare-explicit-member',
       actionKind: 'declare-member',
-      actionTarget: suggestionActionTarget('owner-type', memberOwnerType?.source ?? null, selectedMemberName, memberOwnerType?.display ?? null),
+      actionTarget: suggestionActionTarget('owner-type', memberOwnerTypeActionSource(memberOwnerType), selectedMemberName, memberOwnerType?.display ?? null),
       summary: 'Declare a typed property on the owner type, or replace the broad index-signature record with an interface that includes this member.',
       targetMemberName: selectedMemberName,
       ownerTypeDisplay: memberOwnerType?.display ?? null,
@@ -1004,7 +1066,7 @@ function anyOwnerDiagnostic(
     {
       suggestionKind: 'replace-any-owner',
       actionKind: 'replace-owner-type',
-      actionTarget: suggestionActionTarget('owner-type', memberOwnerType?.source ?? null, selectedMemberName, memberOwnerType?.display ?? null),
+      actionTarget: suggestionActionTarget('owner-type', memberOwnerTypeActionSource(memberOwnerType), selectedMemberName, memberOwnerType?.display ?? null),
       summary: 'Replace the any-typed owner with a named interface or class so template tooling can project members.',
       targetMemberName: selectedMemberName,
       ownerTypeDisplay: memberOwnerType?.display ?? null,
@@ -1030,7 +1092,7 @@ function emptyOwnerDiagnostic(
     {
       suggestionKind: 'inspect-owner-type',
       actionKind: 'inspect-owner-type',
-      actionTarget: suggestionActionTarget('owner-type', memberOwnerType?.source ?? null, selectedMemberName, memberOwnerType?.display ?? null),
+      actionTarget: suggestionActionTarget('owner-type', memberOwnerTypeActionSource(memberOwnerType), selectedMemberName, memberOwnerType?.display ?? null),
       summary: 'Check whether the owner expression has the intended declared type and whether that type is visible to the TypeChecker.',
       targetMemberName: selectedMemberName,
       ownerTypeDisplay: memberOwnerType?.display ?? null,
@@ -1065,7 +1127,7 @@ function missingMemberDiagnostic(
     suggestion: {
       suggestionKind: declareMember ? 'declare-explicit-member' : 'inspect-owner-type',
       actionKind: declareMember ? 'declare-member' : 'inspect-owner-type',
-      actionTarget: suggestionActionTarget('owner-type', memberOwnerType?.source ?? null, selectedMemberName, memberOwnerType?.display ?? null),
+      actionTarget: suggestionActionTarget('owner-type', memberOwnerTypeActionSource(memberOwnerType), selectedMemberName, memberOwnerType?.display ?? null),
       summary: declareMember
         ? 'Declare this member on the owner type, or change the expression so it targets the type that actually owns the member.'
         : 'Inspect the owner expression type; the member may belong on a callback return type, model type, or different expression.',

@@ -15,6 +15,12 @@ import {
   sameCheckerTypeReference,
 } from './type-shape.js';
 
+export interface CheckerTupleElementRequest {
+  readonly name?: string | null;
+  readonly valueType: CheckerTypeReference;
+  readonly isRest?: boolean;
+}
+
 /** Synthesizes product-owned type shapes for Aurelia expression and template-runtime semantics. */
 export class CheckerExpressionTypeSynthesizer {
   constructor(
@@ -129,6 +135,29 @@ export class CheckerExpressionTypeSynthesizer {
     });
   }
 
+  templateStringsArrayType(
+    elementType: CheckerTypeReference,
+    lengthReference: CheckerTypeReference | null,
+    rawArrayType: CheckerTypeReference,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeShape {
+    return this.projector.ensureSyntheticProjection({
+      localKey: `${localKey}:template-strings-array`,
+      shapeKind: CheckerTypeShapeKind.Object,
+      display: 'TemplateStringsArray',
+      members: [
+        { name: 'length', valueType: lengthReference, memberKind: CheckerTypeMemberKind.Property },
+        { name: 'raw', valueType: rawArrayType, memberKind: CheckerTypeMemberKind.Property, isReadonly: true },
+      ],
+      indexedValueType: elementType,
+      indexedAccessKeyKind: CheckerIndexedAccessKeyKind.Number,
+      iteratedValueType: elementType,
+      origin: CheckerTypeProjectionOrigin.SyntheticExpressionType,
+      sourceAddressHandle,
+    });
+  }
+
   mapEntryType(
     keyReference: CheckerTypeReference,
     valueReference: CheckerTypeReference,
@@ -136,22 +165,48 @@ export class CheckerExpressionTypeSynthesizer {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerTypeShape {
-    const indexedValueType = sameCheckerTypeReference(keyReference, valueReference)
-      ? keyReference
-      : null;
+    return this.tupleType(
+      [
+        { valueType: keyReference },
+        { valueType: valueReference },
+      ],
+      lengthReference,
+      localKey,
+      sourceAddressHandle,
+      CheckerTypeProjectionOrigin.SyntheticTemplateType,
+    );
+  }
+
+  tupleType(
+    elements: readonly CheckerTupleElementRequest[],
+    lengthReference: CheckerTypeReference | null,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+    origin: CheckerTypeProjectionOrigin = CheckerTypeProjectionOrigin.SyntheticExpressionType,
+  ): CheckerTypeShape {
+    const fixedElements = elements.filter((element) => !element.isRest);
+    const indexedValueType = commonTypeReference(
+      fixedElements.map((element) => element.valueType),
+      fixedElements.length,
+    );
+    const members: CheckerSyntheticTypeMemberRequest[] = fixedElements.map((element, index) => ({
+      name: String(index),
+      valueType: element.valueType,
+      memberKind: CheckerTypeMemberKind.Property,
+    }));
+    if (lengthReference != null) {
+      members.push({ name: 'length', valueType: lengthReference, memberKind: CheckerTypeMemberKind.Property });
+    }
+
     return this.projector.ensureSyntheticProjection({
       localKey: `${localKey}:tuple`,
       shapeKind: CheckerTypeShapeKind.Object,
-      display: `[${keyReference.display ?? 'unknown'}, ${valueReference.display ?? 'unknown'}]`,
-      members: [
-        { name: '0', valueType: keyReference, memberKind: CheckerTypeMemberKind.Property },
-        { name: '1', valueType: valueReference, memberKind: CheckerTypeMemberKind.Property },
-        { name: 'length', valueType: lengthReference, memberKind: CheckerTypeMemberKind.Property },
-      ],
+      display: displayTupleType(elements),
+      members,
       indexedValueType,
       indexedAccessKeyKind: indexedValueType == null ? null : CheckerIndexedAccessKeyKind.Number,
       iteratedValueType: indexedValueType,
-      origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
+      origin,
       sourceAddressHandle,
     });
   }
@@ -253,6 +308,14 @@ function displayObjectLiteralType(members: readonly CheckerSyntheticTypeMemberRe
 function displayUnionType(shapes: readonly CheckerTypeShape[]): string {
   const displays = [...new Set(shapes.map((shape) => shape.display))];
   return displays.join(' | ');
+}
+
+function displayTupleType(elements: readonly CheckerTupleElementRequest[]): string {
+  return `[${elements.map((element) => {
+    const value = element.valueType.display ?? element.valueType.checkerKey ?? 'unknown';
+    const label = element.name == null ? '' : `${element.name}: `;
+    return element.isRest ? `...${label}${value}` : `${label}${value}`;
+  }).join(', ')}]`;
 }
 
 function displayArrowFunctionType(

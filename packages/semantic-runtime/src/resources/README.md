@@ -13,12 +13,20 @@ It recognizes source carriers that the Aurelia runtime turns into resources:
 
 The source-level pass expects an evaluated module environment. The project-level pass starts from boot admissions and
 uses the shared `evaluation` project pass before running the same recognizers over each admitted TS/JS
-module. Recognition should not grow its own import resolver. When static evaluation links additional local source
+module. Recognition should not grow its own import resolver. Local side-effect imports are still evaluator module
+execution edges, so resource files reached through `import './resource'` should be evaluated and recognized even when
+no value is imported. When static evaluation links additional local source
 modules or assets, the project-level pass threads those linked admissions back into resource recognition so imported
 HTML templates can keep precise template-file provenance instead of falling back to the component TypeScript span.
+`resource-source-address.ts` owns resource convergence source spans and inline-template decoded-to-authored offset
+mapping; keep that provenance substrate reusable instead of burying escaped-string coordinate logic inside a specific
+definition field reader.
 `ResourceRecognitionContextIndex` keeps source-local contexts for those graph-linked modules. Cross-module source nodes,
 especially inherited bindable metadata, must be interpreted through the context that owns the node's source file so
 imported decorator arguments and exact source spans use the right evaluator environment.
+Source-address materialization should use only contexts admitted by this index. If a TypeChecker node is not owned by a
+resource-recognition context, leave the source span absent or surface an open seam rather than re-resolving a file name
+from the store and risking a span attached to the wrong project/source admission.
 Generic expression and value reads belong in `evaluation`; resource field readers should only interpret Aurelia
 definition fields such as `type`, `name`, `aliases`, `pattern`, and `symbols`.
 
@@ -43,11 +51,12 @@ kernel handles, scalar fields, entry-level source handles, and field provenance 
 nodes. `BindableDefinition` and `WatchDefinition` mirror runtime metadata records. Definition contribution records
 capture typed field contributions from headers, definition objects, static properties, annotations, metadata, syntax
 factories, and conventions.
-Convergence preserves the carrier mechanism in those contributions: decorator carriers become annotation
-contributions, static `$au` carriers become type-static-property contributions, define/object carriers become
-definition-object contributions, `AttributePattern.create(...)` carriers become create-call contributions, and current
-convention carriers stay convention contributions. Do not collapse these back into generic headers; authoring
-orientation and resource queries need the distinction.
+Convergence preserves the carrier mechanism through the shared resource-kind ontology: decorator carriers become
+annotation contributions, static `$au` carriers become type-static-property contributions, define/object carriers
+become definition-object contributions, and current convention carriers stay convention contributions. Named resources
+share that mapping through `named-resource-kind.ts` / `resource-kind.ts`; attribute patterns keep their own syntax
+mapping because `AttributePattern.create(...)` is a parser-pattern factory and should remain a create-call contribution.
+Do not collapse these back into generic headers; authoring orientation and resource queries need the distinction.
 `CustomElementDefinition`, `CustomAttributeDefinition`, `ValueConverterDefinition`, `BindingBehaviorDefinition`,
 `BindingCommandDefinition`, and `AttributePatternDefinition` are fully formed metadata definitions before DI admission
 or template compilation. Template controllers currently converge through the custom-attribute shape with
@@ -100,12 +109,36 @@ subclass context currently being converged. Bindable definitions preserve the so
 member declaration that produced them, because template attribute completion, go-to-definition, and later rename support
 need that narrower origin instead of only the owning resource definition. Member `@bindable(...)` still contributes the
 property as bindable when its optional config object stays open; checker-visible `set` properties become open setter
-metadata, and the unresolved config fields remain visible as seams instead of erasing the bindable. Dependency
+metadata, and the unresolved config fields remain visible as seams instead of erasing the bindable. Known primitive,
+nullish, and string member-decorator arguments follow the framework's property-decorator default-config path rather
+than becoming open seams; only unknown or object-like values that may carry runtime properties stay open.
+Class-level `@bindable(...)` has a separate read epoch because runtime-html treats the overload as a named-property
+declaration path: a string or object with a static string `name` can close to a bindable, while bare, nullish, or
+name-less configurations produce the framework-backed class-decorator configuration issues instead of creating a
+silent open seam. Dependency
 convergence first trusts evaluator-closed class/function values, then uses the TypeChecker as a fallback for identifier
-dependencies that are checker-visible constructable/callable values. Watch convergence now closes class/method
-`@watch(...)` decorators, static `watches`, and definition-object `watches` when their expression, callback, and flush
-metadata reduce to static runtime metadata. Runtime watcher/controller execution is still observation/lifecycle work;
+dependencies that are checker-visible constructable/callable values. Registry dependencies stay separate from visible
+resources: `cssModules(...)`, `shadowCSS(...)`, `@children`, and `@slotted` are modeled as component child-container
+registry effects rather than resource-scope entries. Watch convergence now closes class/method
+`@watch(...)` decorators, static `watches`, and custom-element definition-object `watches` when their expression,
+callback, and flush metadata reduce to static runtime metadata. Custom attributes and template controllers intentionally
+ignore definition-object `watches`, matching the current runtime-html creation path that only merges decorator metadata
+and `Type.watches` for that resource family. Runtime watcher/controller execution is still observation/lifecycle work;
 definition convergence should only model the metadata Aurelia stores on resource definitions.
+Class-level resource metadata annotations have their own reader in `resource-metadata-annotations.ts`. It models the
+shared `@alias(...)` annotation lane for named resources plus custom-element annotations for `@containerless`,
+`@useShadowDOM(...)`, `@capture(...)`, and member-level registry dependencies from `@children` / `@slotted`. These
+annotations sit in the same priority position as the framework metadata helpers: annotation metadata comes before
+definition-object fields, and static class fields remain own-type
+fallbacks unless the framework source names an inheritance exception. If an annotation exists but cannot close to a
+static fact, convergence should surface an open seam rather than erasing the decorator or inventing a default.
+`resource-definition-converger.ts` owns convergence orchestration, product publication, aliases, open seams, and the
+custom-element definition assembly path. `CustomElementConvergenceFrame` is the per-definition read epoch for custom
+element metadata; it owns the shared local-key prefix, annotation priority, bindable/watch/template/dependency reads,
+and issue aggregation before the converger publishes the final definition product. Shared source-field/decorator/open-seam helpers live in
+`resource-convergence-support.ts`; bindable metadata policy lives in `bindable-convergence.ts`; watcher metadata policy
+lives in `watch-convergence.ts`; resource annotation policy lives in `resource-metadata-annotations.ts`. Keep these
+files aligned with runtime-html concepts rather than regrouping them by local call graph convenience.
 
 Known resource-metadata failures are products too. `ResourceIssue` rows are for cases where the framework source shows
 an exact error path and static convergence or registration spending can prove it. Resource convergence currently owns malformed bindable
@@ -125,7 +158,9 @@ resolver publication conflicts. Direct runtime-html resource API calls are a thi
 `CustomElementDefinition.create(...)` with only a string name maps to `element_only_name` (`AUR0761`), and
 project-local `getDefinition(...)` calls on classes with no matching recognized resource definition map to
 `element_def_not_found` (`AUR0760`), `attribute_def_not_found` (`AUR0759`), `value_converter_def_not_found`
-(`AUR0152`), or `binding_behavior_def_not_found` (`AUR0151`). By contrast, metadata that is visible but not safely
+(`AUR0152`), or `binding_behavior_def_not_found` (`AUR0151`). The direct API scanner carries each boot-admitted
+source-file address into the issue site and publishes exact call spans through `sourceSpanAddressForSite(...)`; do not
+fall back to filename lookup for scanner-owned source diagnostics. By contrast, metadata that is visible but not safely
 materialized yet remains an open seam, including dependencies, pre-lowered instructions, surrogates, and watcher values
 whose expression/callback/flush shape does not close statically.
 
@@ -133,6 +168,12 @@ whose expression/callback/flush shape does not close statically.
 configured catalog selections, and full definitions from product handles. This keeps resource inquiry and tooling
 expansion from treating headers, definitions, or framework catalogs as generic payloads while still letting materializers
 consume rich current-run metadata.
+`ResourceDefinitionIndex` indexes converged resource definitions by target/product identity, module/local name, primary
+resource name, alias names, and dependency references. String routeables, compiler-world resource lookup, and
+template/resource completions should ask this index rather than rebuilding name maps in each consumer; ambiguous name
+hits stay unresolved until the owning scope model can disambiguate them. For router string routeables, the index exposes
+custom-element-only lookup plus dependency-scoped custom-element lookup so a parent component's `dependencies` array can
+disambiguate same-named resources without making the router maintain its own resource map.
 
 Open seams are part of the product here. A carrier with an open kind, name, alias, pattern, or target should still
 produce kernel pressure rather than disappearing or pretending to be complete.

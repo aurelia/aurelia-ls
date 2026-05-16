@@ -5,6 +5,7 @@ import type {
 } from "../../source/index.js";
 import type {
   AtlasSelfAnalysis,
+  AtlasSelfAnalysisPhaseProfileRow,
   AtlasSelfAxisPressureRow,
   AtlasSelfClassSurfaceRow,
   AtlasSelfContractStringRow,
@@ -14,6 +15,7 @@ import type {
   AtlasSelfEnumRow,
   AtlasSelfEnumValueOccurrenceRow,
   AtlasSelfEnumValueSpaceRow,
+  AtlasSelfFunctionControlFlowShapeGroupRow,
   AtlasSelfFunctionShapeGroupRow,
   AtlasSelfFunctionSurfaceRow,
   AtlasSelfFunctionWrapperRow,
@@ -25,6 +27,7 @@ import type {
   AtlasSelfSourceFileSurfaceRow,
   AtlasSelfStringLiteralRow,
   AtlasSelfSubstrateSurfaceRow,
+  AtlasSelfVariableSurfaceRow,
 } from "./self-analysis.js";
 import type { SelfContractRow } from "./self-contracts.js";
 import type { AtlasSelfRecipeRow } from "./self-recipes.js";
@@ -76,8 +79,12 @@ export interface SelfValue {
   readonly classSurfaces?: readonly AtlasSelfClassSurfaceRow[];
   /** Function and method declaration surfaces discovered in Atlas source. */
   readonly functionSurfaces?: readonly AtlasSelfFunctionSurfaceRow[];
+  /** Top-level variable declaration surfaces discovered in Atlas source. */
+  readonly variableSurfaces?: readonly AtlasSelfVariableSurfaceRow[];
   /** Repeated AST/control-flow function body-shape groups. */
   readonly functionShapeGroups?: readonly AtlasSelfFunctionShapeGroupRow[];
+  /** Shared switch-dispatch topology function groups. */
+  readonly functionControlFlowShapeGroups?: readonly AtlasSelfFunctionControlFlowShapeGroupRow[];
   /** Shallow constructor/call wrapper rows. */
   readonly functionWrapperRows?: readonly AtlasSelfFunctionWrapperRow[];
   /** Source file module surfaces discovered in Atlas source. */
@@ -98,6 +105,8 @@ export interface SelfValue {
   readonly contractStrings?: readonly AtlasSelfContractStringRow[];
   /** Exact axis/mapping/stringly-surface pressure rows. */
   readonly axisPressure?: readonly AtlasSelfAxisPressureRow[];
+  /** Measured cold-build phase rows for the Atlas self-analysis substrate. */
+  readonly phaseProfileRows?: readonly AtlasSelfAnalysisPhaseProfileRow[];
 }
 
 /** Compact source project summary without per-package rows. */
@@ -135,6 +144,7 @@ export function buildSelfBaseValue(
   unimplemented: readonly { readonly id: LensId }[],
   analysis: AtlasSelfAnalysis,
   includeSourceProject: boolean,
+  includeTaxonomy: boolean = true,
 ): SelfValue {
   const sourceProjectSummary = sourceProject.snapshot().summary;
   return {
@@ -166,7 +176,7 @@ export function buildSelfBaseValue(
     sourceProject: includeSourceProject ? sourceProjectSummary : undefined,
     implementedLensIds: [...implementedLensIds],
     unimplementedLensIds: unimplemented.map((lens) => lens.id),
-    taxonomy: selfTaxonomyValue(analysis),
+    taxonomy: includeTaxonomy ? selfTaxonomyValue(analysis) : undefined,
   };
 }
 

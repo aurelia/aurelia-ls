@@ -78,6 +78,10 @@ type FrameworkErrorGapFilter =
   | "raw-error-factory-call"
   | "raw-error-usage"
   | "raw-error-authority-gap"
+  | "actionable-uncovered"
+  | "future-substrate"
+  | "runtime-product-boundary"
+  | "dormant-framework-authority"
   | "intentionally-unclaimed-raw-authority"
   | "unresolved-semantic-runtime-reference"
   | "unresolved-semantic-runtime-raw-reference";
@@ -138,14 +142,27 @@ export function answerFrameworkErrors(
     }
     case "diagnostic-frontiers": {
       const filtered = filterFrameworkErrorRows(analysis, inquiry);
-      const rollup = frameworkErrorRollupForRows(filtered.packages, filtered.codes, filtered.usages, filtered.semanticRuntimeReferences, filtered.semanticRuntimeRawReferences);
       const families = frameworkErrorFamiliesForRows(filtered.codes, filtered.usages);
-      const diagnosticFrontiers = frameworkErrorDiagnosticFrontiersForRows(
-        families,
-        filtered.codes,
-        filtered.usages,
-        filtered.semanticRuntimeReferences,
-        filtered.semanticRuntimeRawReferences,
+      const diagnosticFrontiers = filterFrameworkErrorDiagnosticFrontierRows(
+        frameworkErrorDiagnosticFrontiersForRows(
+          families,
+          filtered.codes,
+          filtered.usages,
+          filtered.semanticRuntimeReferences,
+          filtered.semanticRuntimeRawReferences,
+        ),
+        inquiry,
+      );
+      const diagnosticFiltered = filterFrameworkErrorRowsForDiagnosticFrontiers(
+        filtered,
+        diagnosticFrontiers,
+      );
+      const rollup = frameworkErrorRollupForRows(
+        diagnosticFiltered.packages,
+        diagnosticFiltered.codes,
+        diagnosticFiltered.usages,
+        diagnosticFiltered.semanticRuntimeReferences,
+        diagnosticFiltered.semanticRuntimeRawReferences,
       );
       return answerFrameworkErrorRows(
         inquiry,
@@ -401,10 +418,68 @@ function filterFrameworkErrorDiagnosticCodeRows(
   inquiry: Inquiry,
 ): readonly FrameworkErrorDiagnosticCodeRow[] {
   const disposition = frameworkErrorDiagnosticDispositionFilter(inquiry);
-  if (disposition === undefined) {
-    return rows;
+  const gap = frameworkErrorGapFilter(inquiry);
+  return rows.filter((row) =>
+    (disposition === undefined || row.diagnosticDisposition === disposition) &&
+    frameworkErrorDiagnosticCodeMatchesGap(row, gap)
+  );
+}
+
+function filterFrameworkErrorDiagnosticFrontierRows(
+  rows: readonly FrameworkErrorDiagnosticFrontierRow[],
+  inquiry: Inquiry,
+): readonly FrameworkErrorDiagnosticFrontierRow[] {
+  const gap = frameworkErrorGapFilter(inquiry);
+  return rows.filter((row) => frameworkErrorDiagnosticFrontierMatchesGap(row, gap));
+}
+
+function filterFrameworkErrorRowsForDiagnosticFrontiers(
+  rows: FilteredFrameworkErrorRows,
+  diagnosticFrontiers: readonly FrameworkErrorDiagnosticFrontierRow[],
+): FilteredFrameworkErrorRows {
+  if (diagnosticFrontiers.length === 0) {
+    return {
+      packages: [],
+      codes: [],
+      usages: [],
+      semanticRuntimeReferences: [],
+      semanticRuntimeRawReferences: [],
+    };
   }
-  return rows.filter((row) => row.diagnosticDisposition === disposition);
+  const packageIds = new Set(diagnosticFrontiers.map((row) => row.packageId));
+  const familyKeys = new Set(diagnosticFrontiers.map(frameworkErrorDiagnosticFamilyKey));
+  const codes = rows.codes.filter((row) =>
+    familyKeys.has(frameworkErrorDiagnosticFamilyKey(row))
+  );
+  const codeLabels = new Set(codes.map((row) => row.codeLabel));
+  const codeDefinitions = new Set(codes.map(frameworkErrorDefinitionIdentity));
+  const usages = rows.usages.filter((row) =>
+    packageIds.has(row.packageId) &&
+    (
+      (
+        row.enumName != null &&
+        row.codeNamePrefix != null &&
+        familyKeys.has(`${row.packageId}:${row.enumName}:${row.codeNamePrefix}`)
+      ) ||
+      (
+        row.inlineCodeLabel != null &&
+        codeLabels.has(row.inlineCodeLabel)
+      )
+    )
+  );
+  const semanticRuntimeReferences = rows.semanticRuntimeReferences.filter((row) =>
+    frameworkErrorSemanticRuntimeReferenceMatchesDefinitions(row, codeLabels, codeDefinitions)
+  );
+  const semanticRuntimeRawReferences = rows.semanticRuntimeRawReferences.filter((row) =>
+    packageIds.has(row.frameworkPackageId)
+  );
+  return {
+    packages: rows.packages.filter((row) => packageIds.has(row.id)),
+    codes,
+    usages,
+    semanticRuntimeReferences,
+    semanticRuntimeRawReferences,
+  };
 }
 
 function filterFrameworkErrorRowsForDiagnosticCodes(
@@ -462,6 +537,12 @@ function frameworkErrorDiagnosticCodeKey(
   row: Pick<FrameworkErrorCodeRow | FrameworkErrorDiagnosticCodeRow, "packageId" | "enumName" | "name">,
 ): string {
   return `${row.packageId}:${row.enumName}:${row.name}`;
+}
+
+function frameworkErrorDiagnosticFamilyKey(
+  row: Pick<FrameworkErrorCodeRow | FrameworkErrorDiagnosticFrontierRow, "packageId" | "enumName" | "namePrefix">,
+): string {
+  return `${row.packageId}:${row.enumName}:${row.namePrefix}`;
 }
 
 function frameworkErrorPackageMatches(row: FrameworkErrorPackageRow, query: string): boolean {
@@ -553,6 +634,10 @@ function frameworkErrorGapFilter(inquiry: Inquiry): FrameworkErrorGapFilter | un
     case "raw-error-factory-call":
     case "raw-error-usage":
     case "raw-error-authority-gap":
+    case "actionable-uncovered":
+    case "future-substrate":
+    case "runtime-product-boundary":
+    case "dormant-framework-authority":
     case "intentionally-unclaimed-raw-authority":
     case "unresolved-semantic-runtime-reference":
     case "unresolved-semantic-runtime-raw-reference":
@@ -580,12 +665,102 @@ function frameworkErrorDiagnosticDispositionFilter(
   }
 }
 
-function frameworkErrorCodeMatchesGap(
-  row: FrameworkErrorCodeRow,
+function frameworkErrorDiagnosticCodeMatchesGap(
+  row: FrameworkErrorDiagnosticCodeRow,
   gap: FrameworkErrorGapFilter | undefined,
 ): boolean {
   switch (gap) {
     case undefined:
+      return true;
+    case "actionable-uncovered":
+      return row.diagnosticDisposition === "declared-unspent" ||
+        row.diagnosticDisposition === "broken-exact-link" ||
+        row.diagnosticDisposition === "raw-authority-gap" ||
+        row.diagnosticDisposition === "unmodeled-used-framework-authority";
+    case "future-substrate":
+      return row.intentionalUnclaimedKind === "future-substrate";
+    case "runtime-product-boundary":
+      return row.intentionalUnclaimedKind === "runtime-product-boundary";
+    case "dormant-framework-authority":
+      return row.diagnosticDisposition === "dormant-framework-authority";
+    case "raw-error-authority-gap":
+      return row.rawAuthorityGapCount > 0;
+    case "unresolved-semantic-runtime-reference":
+      return row.semanticRuntimeUnresolvedExactReferenceCount > 0;
+    case "code-without-message":
+      return row.message == null;
+    case "unused-code":
+      return row.usageCount === 0;
+    case "unresolved-usage-code":
+    case "raw-new-error":
+    case "raw-error-factory-call":
+    case "raw-error-usage":
+    case "intentionally-unclaimed-raw-authority":
+    case "unresolved-semantic-runtime-raw-reference":
+      return true;
+  }
+}
+
+function frameworkErrorDiagnosticFrontierMatchesGap(
+  row: FrameworkErrorDiagnosticFrontierRow,
+  gap: FrameworkErrorGapFilter | undefined,
+): boolean {
+  switch (gap) {
+    case undefined:
+      return true;
+    case "actionable-uncovered":
+      return row.actionableUncoveredCodeCount > 0 ||
+        row.rawAuthorityGapCount > 0 ||
+        row.semanticRuntimeUnresolvedExactReferenceCount > 0;
+    case "future-substrate":
+      return row.intentionalUnclaimedFutureSubstrateCodeCount > 0;
+    case "runtime-product-boundary":
+      return row.intentionalUnclaimedRuntimeBoundaryCodeCount > 0;
+    case "dormant-framework-authority":
+      return row.dormantCodeCount > 0;
+    case "raw-error-authority-gap":
+      return row.rawAuthorityGapCount > 0;
+    case "unresolved-semantic-runtime-reference":
+      return row.semanticRuntimeUnresolvedExactReferenceCount > 0;
+    case "code-without-message":
+    case "unused-code":
+    case "unresolved-usage-code":
+    case "raw-new-error":
+    case "raw-error-factory-call":
+    case "raw-error-usage":
+    case "intentionally-unclaimed-raw-authority":
+    case "unresolved-semantic-runtime-raw-reference":
+      return true;
+  }
+}
+
+function frameworkErrorGapIsDiagnosticOnly(
+  gap: FrameworkErrorGapFilter | undefined,
+): boolean {
+  switch (gap) {
+    case "actionable-uncovered":
+    case "future-substrate":
+    case "runtime-product-boundary":
+    case "dormant-framework-authority":
+      return true;
+    default:
+      return false;
+  }
+}
+
+function frameworkErrorCodeMatchesGap(
+  row: FrameworkErrorCodeRow,
+  gap: FrameworkErrorGapFilter | undefined,
+): boolean {
+  if (frameworkErrorGapIsDiagnosticOnly(gap)) {
+    return true;
+  }
+  switch (gap) {
+    case undefined:
+    case "actionable-uncovered":
+    case "future-substrate":
+    case "runtime-product-boundary":
+    case "dormant-framework-authority":
       return true;
     case "code-without-message":
       return row.message == null;
@@ -608,8 +783,15 @@ function frameworkErrorUsageMatchesGap(
   gap: FrameworkErrorGapFilter | undefined,
   semanticRuntimeRawReferences: readonly FrameworkErrorSemanticRuntimeRawReferenceRow[],
 ): boolean {
+  if (frameworkErrorGapIsDiagnosticOnly(gap)) {
+    return true;
+  }
   switch (gap) {
     case undefined:
+    case "actionable-uncovered":
+    case "future-substrate":
+    case "runtime-product-boundary":
+    case "dormant-framework-authority":
       return true;
     case "raw-new-error":
       return row.mechanism === "raw-new-error";
@@ -635,8 +817,15 @@ function frameworkErrorSemanticRuntimeReferenceMatchesGap(
   row: FrameworkErrorSemanticRuntimeReferenceRow,
   gap: FrameworkErrorGapFilter | undefined,
 ): boolean {
+  if (frameworkErrorGapIsDiagnosticOnly(gap)) {
+    return true;
+  }
   switch (gap) {
     case undefined:
+    case "actionable-uncovered":
+    case "future-substrate":
+    case "runtime-product-boundary":
+    case "dormant-framework-authority":
       return true;
     case "unresolved-semantic-runtime-reference":
       return row.frameworkPackageId == null
@@ -659,8 +848,15 @@ function frameworkErrorSemanticRuntimeRawReferenceMatchesGap(
   row: FrameworkErrorSemanticRuntimeRawReferenceRow,
   gap: FrameworkErrorGapFilter | undefined,
 ): boolean {
+  if (frameworkErrorGapIsDiagnosticOnly(gap)) {
+    return true;
+  }
   switch (gap) {
     case undefined:
+    case "actionable-uncovered":
+    case "future-substrate":
+    case "runtime-product-boundary":
+    case "dormant-framework-authority":
       return true;
     case "unresolved-semantic-runtime-raw-reference":
       return row.resolvedUsageCount === 0;

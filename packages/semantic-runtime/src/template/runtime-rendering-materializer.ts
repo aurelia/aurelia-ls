@@ -293,41 +293,21 @@ export class RuntimeRenderingMaterializer {
   }
 
   private registerProductDetails(emission: RuntimeRenderingEmission): void {
-    for (const binding of emission.bindings) {
-      this.store.productDetails.add(TemplateProductDetails.RuntimeBinding, binding.productHandle, binding);
-    }
-    for (const operation of emission.targetOperations) {
-      this.store.productDetails.add(TemplateProductDetails.RuntimeBindingTargetOperation, operation.productHandle, operation);
-    }
-    for (const effect of emission.scopeEffects) {
-      this.store.productDetails.add(TemplateProductDetails.RuntimeBindingScopeEffect, effect.productHandle, effect);
-    }
-    for (const issue of emission.controllerIssues) {
-      this.store.productDetails.add(TemplateProductDetails.RuntimeControllerIssue, issue.productHandle, issue);
-    }
-    for (const issue of emission.rendererIssues) {
-      this.store.productDetails.add(TemplateProductDetails.RuntimeRendererIssue, issue.productHandle, issue);
-    }
-    for (const issue of emission.bindingIssues) {
-      this.store.productDetails.add(TemplateProductDetails.RuntimeBindingIssue, issue.productHandle, issue);
-    }
-    for (const viewFactory of emission.viewFactories) {
-      this.store.productDetails.add(ConfigurationProductDetails.ViewFactory, viewFactory.productHandle, viewFactory);
-    }
+    this.store.productDetails.addAll(TemplateProductDetails.RuntimeBinding, emission.bindings);
+    this.store.productDetails.addAll(TemplateProductDetails.RuntimeBindingTargetOperation, emission.targetOperations);
+    this.store.productDetails.addAll(TemplateProductDetails.RuntimeBindingScopeEffect, emission.scopeEffects);
+    this.store.productDetails.addAll(TemplateProductDetails.RuntimeControllerIssue, emission.controllerIssues);
+    this.store.productDetails.addAll(TemplateProductDetails.RuntimeRendererIssue, emission.rendererIssues);
+    this.store.productDetails.addAll(TemplateProductDetails.RuntimeBindingIssue, emission.bindingIssues);
+    this.store.productDetails.addAll(ConfigurationProductDetails.ViewFactory, emission.viewFactories);
     for (const definition of emission.embeddedDefinitions) {
       if (definition.productHandle != null) {
         this.store.productDetails.add(ResourceProductDetails.Definition, definition.productHandle, definition);
       }
     }
-    for (const instruction of emission.dynamicInstructions) {
-      this.store.productDetails.addIfAbsent(TemplateProductDetails.Instruction, instruction.productHandle, instruction);
-    }
-    for (const site of emission.dynamicValueSites) {
-      this.store.productDetails.add(TemplateProductDetails.ValueSite, site.productHandle, site);
-    }
-    for (const parse of emission.dynamicExpressionParses) {
-      this.store.productDetails.add(TemplateProductDetails.ExpressionParse, parse.productHandle, parse);
-    }
+    this.store.productDetails.addAllIfAbsent(TemplateProductDetails.Instruction, emission.dynamicInstructions);
+    this.store.productDetails.addAll(TemplateProductDetails.ValueSite, emission.dynamicValueSites);
+    this.store.productDetails.addAll(TemplateProductDetails.ExpressionParse, emission.dynamicExpressionParses);
   }
 
   private recordsForRendering(input: RuntimeRenderingMaterializationRequest): RuntimeRenderingEmission {

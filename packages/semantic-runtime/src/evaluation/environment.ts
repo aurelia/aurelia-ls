@@ -101,6 +101,11 @@ export class ModuleEnvironmentRecord {
     return true;
   }
 
+  /** Remove a binding cell introduced by a temporary lexical frame. */
+  deleteBinding(name: string): boolean {
+    return this.bindings.delete(name);
+  }
+
   /** Read a binding cell by lexical name. */
   readBinding(name: string): EvaluationBinding | null {
     return this.bindings.get(name) ?? null;

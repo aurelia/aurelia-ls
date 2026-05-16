@@ -13,10 +13,12 @@ import type {
 } from '../api/contracts.js';
 import { SemanticAppQueryKind, SemanticRuntimeAnswerOutcome } from '../api/contracts.js';
 import type { SemanticApplicationTopologyResult } from '../api/app-topology.js';
+import { semanticRouteEffectQueryKinds } from '../api/route-effect-facts.js';
 import type {
   ExpectedSemanticEffect,
 } from './expected-effect.js';
 import {
+  expectedSemanticRouteFactRowsFor,
   observeExpectedSemanticEffect,
   type ExpectedSemanticEffectObservationSnapshot,
 } from './effect-observation.js';
@@ -62,6 +64,7 @@ export class AuthoringVerificationSnapshot {
     readonly targetOperations: readonly SemanticTargetOperationRow[] | null = null,
     readonly bindingValueChannels: readonly SemanticBindingValueChannelRow[] | null = null,
     readonly bindingDataFlows: readonly SemanticBindingDataFlowRow[] | null = null,
+    readonly routeFactRows: readonly object[] = [],
   ) {}
 }
 
@@ -81,16 +84,20 @@ export function readAuthoringVerificationSnapshot(
   options: AuthoringVerificationSnapshotOptions = {},
 ): AuthoringVerificationSnapshot {
   const pageSize = normalizeVerificationSnapshotPageSize(options.pageSize);
+  const summary = app.summary().value;
+  const topology = readAnswerValue<SemanticApplicationTopologyResult>(app, SemanticAppQueryKind.AppTopology);
+  const authoringOrientation = readAnswerValue<SemanticAuthoringOrientationResult>(app, SemanticAppQueryKind.AuthoringOrientation);
   return new AuthoringVerificationSnapshot(
-    app.summary().value,
-    readAnswerValue<SemanticApplicationTopologyResult>(app, SemanticAppQueryKind.AppTopology),
-    readAnswerValue<SemanticAuthoringOrientationResult>(app, SemanticAppQueryKind.AuthoringOrientation),
+    summary,
+    topology,
+    authoringOrientation,
     readPagedRows<SemanticOpenSeamRow>(app, SemanticAppQueryKind.OpenSeams, pageSize),
     readPagedRows<SemanticBindingBehaviorApplicationRow>(app, SemanticAppQueryKind.BindingBehaviorApplications, pageSize),
     readPagedRows<SemanticBindingTargetAccessRow>(app, SemanticAppQueryKind.BindingTargetAccesses, pageSize),
     readPagedRows<SemanticTargetOperationRow>(app, SemanticAppQueryKind.TargetOperations, pageSize),
     readPagedRows<SemanticBindingValueChannelRow>(app, SemanticAppQueryKind.BindingValueChannels, pageSize),
     readPagedRows<SemanticBindingDataFlowRow>(app, SemanticAppQueryKind.BindingDataFlows, pageSize),
+    readRouteFactRows(app, topology, pageSize),
   );
 }
 
@@ -196,6 +203,22 @@ function readRowsValue<TRow>(
   return (value as { rows: readonly TRow[] }).rows;
 }
 
+function readRouteFactRows(
+  app: AuthoringVerificationAppSnapshotSource,
+  topology: SemanticApplicationTopologyResult,
+  pageSize: number,
+): readonly object[] {
+  return [
+    ...expectedSemanticRouteFactRowsFor('topology-route', topology.routes),
+    ...semanticRouteEffectQueryKinds.flatMap((query) =>
+      expectedSemanticRouteFactRowsFor(
+        query.routeProductKind,
+        readPagedRows<object>(app, query.queryKind, pageSize),
+      )
+    ),
+  ];
+}
+
 function assertVerificationSnapshotAnswerSupported(
   answer: SemanticRuntimeAnswer<unknown>,
   kind: SemanticAppQueryKind,
@@ -234,6 +257,7 @@ function verificationObservationSnapshot(
     bindingBehaviorApplications: snapshot.bindingBehaviorApplications,
     bindingDataFlows: snapshot.bindingDataFlows ?? snapshot.summary.runtimeBindingDataFlows,
     routeFacts: snapshot.summary.routeConfigs + snapshot.summary.routePatterns + snapshot.summary.routeEndpoints,
+    routeFactRows: snapshot.routeFactRows,
     routes: snapshot.topology.routes,
     dependencyInjectionFacts: snapshot.summary.containers + snapshot.summary.resolverSlots + snapshot.summary.registrationAdmissions,
     capabilities: snapshot.authoringOrientation.capabilities,

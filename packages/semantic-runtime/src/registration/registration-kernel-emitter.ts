@@ -467,6 +467,7 @@ class RegistrationAdmissionSupportMaterializer {
       handles.addressHandle,
       observation.localName,
       observation.frameworkKind,
+      observation.registryBody,
     );
   }
 
@@ -784,6 +785,7 @@ export class RegistrationKernelEmitter {
           value,
           sourceAddressHandle,
           fieldProvenance,
+          observation.resourceLookupNameOverride,
         ),
         KernelVocabulary.Registration.ResourceAdmission.key,
       );

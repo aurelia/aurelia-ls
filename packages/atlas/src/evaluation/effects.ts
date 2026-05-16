@@ -46,6 +46,8 @@ export const enum EvaluationTraceBindingOrigin {
   CapturedParameter = "captured-parameter",
   /** Local alias of another known binding. */
   Alias = "alias",
+  /** Identifier introduced by an object/array binding pattern from another binding or parameter slot. */
+  Destructured = "destructured",
   /** Local variable with a concrete initializer expression. */
   Variable = "variable",
   /** Loop variable bound to each element of an iterable binding. */
@@ -70,6 +72,8 @@ export interface EvaluationTraceBinding {
   readonly parameterIndex?: number;
   /** Previous binding name when this is a local alias. */
   readonly aliasOf?: string;
+  /** Object/array binding-pattern path from the aliased or parameter source, when destructured. */
+  readonly destructuredPath?: string;
   /** Iterable binding name when this is a loop variable. */
   readonly iterableOf?: string;
   /** Argument expression text that supplied a captured parameter, when available. */
@@ -202,6 +206,11 @@ interface TraceContext {
   readonly openSeams: EvaluationEffectOpenSeam[];
   readonly callStack: string[];
   nextSequence: number;
+}
+
+const enum EvaluationTraceCompletion {
+  Continue = "continue",
+  Exit = "exit",
 }
 
 class EvaluationTraceScope {
@@ -411,8 +420,7 @@ function rootsForReturnedExpression(
 
 function effectRootForCandidate(project: SourceProject, candidate: TraceRootCandidate): EvaluationEffectRoot {
   const parameters = candidate.node.parameters
-    .map((parameter, index) => parameterBinding(project, candidate.sourceFile, parameter, index))
-    .filter((binding): binding is EvaluationTraceBinding => binding !== null);
+    .flatMap((parameter, index) => parameterBindings(project, candidate.sourceFile, parameter, index));
   const file = requiredSourceFileIdentity(project, candidate.sourceFile);
   const span = sourceSpanForNode(candidate.sourceFile, candidate.node);
   return {
@@ -473,14 +481,18 @@ function traceBlock(
   certainty: EvaluationEffectCertainty,
   controlPath: readonly string[],
   depth: number,
-): void {
+): EvaluationTraceCompletion {
   if (depth > context.maxDepth) {
     open(context, EvaluationOpenKind.DepthLimit, "Static effect trace reached the syntax depth limit.", block, controlPath);
-    return;
+    return EvaluationTraceCompletion.Exit;
   }
   for (const statement of block.statements) {
-    traceStatement(statement, scope, context, certainty, controlPath, depth + 1);
+    const completion = traceStatement(statement, scope, context, certainty, controlPath, depth + 1);
+    if (completion === EvaluationTraceCompletion.Exit) {
+      return completion;
+    }
   }
+  return EvaluationTraceCompletion.Continue;
 }
 
 function traceStatement(
@@ -490,10 +502,10 @@ function traceStatement(
   certainty: EvaluationEffectCertainty,
   controlPath: readonly string[],
   depth: number,
-): void {
+): EvaluationTraceCompletion {
   if (depth > context.maxDepth) {
     open(context, EvaluationOpenKind.DepthLimit, "Static effect trace reached the syntax depth limit.", statement, controlPath);
-    return;
+    return EvaluationTraceCompletion.Exit;
   }
   if (ts.isVariableStatement(statement)) {
     for (const declaration of statement.declarationList.declarations) {
@@ -502,38 +514,48 @@ function traceStatement(
       }
       bindVariableDeclaration(declaration, scope, context);
     }
-    return;
+    return EvaluationTraceCompletion.Continue;
   }
   if (ts.isExpressionStatement(statement)) {
     traceExpression(statement.expression, scope, context, certainty, controlPath, depth + 1);
-    return;
+    return EvaluationTraceCompletion.Continue;
   }
   if (ts.isReturnStatement(statement)) {
     if (statement.expression !== undefined) {
       traceExpression(statement.expression, scope, context, certainty, controlPath, depth + 1);
     }
-    return;
+    return EvaluationTraceCompletion.Exit;
+  }
+  if (ts.isThrowStatement(statement)) {
+    if (statement.expression !== undefined) {
+      traceExpression(statement.expression, scope, context, certainty, controlPath, depth + 1);
+    }
+    return EvaluationTraceCompletion.Exit;
+  }
+  if (ts.isBreakStatement(statement) || ts.isContinueStatement(statement)) {
+    return EvaluationTraceCompletion.Exit;
   }
   if (ts.isBlock(statement)) {
-    traceBlock(statement, scope.fork(), context, certainty, controlPath, depth + 1);
-    return;
+    return traceBlock(statement, scope.fork(), context, certainty, controlPath, depth + 1);
   }
   if (ts.isIfStatement(statement)) {
     traceExpression(statement.expression, scope, context, certainty, controlPath, depth + 1);
     open(context, EvaluationOpenKind.DynamicBranch, "If statement effects are reported as potential on both branches.", statement.expression, controlPath);
-    traceStatementLike(statement.thenStatement, scope.fork(), context, EvaluationEffectCertainty.Potential, [...controlPath, "if:then"], depth + 1);
-    if (statement.elseStatement !== undefined) {
-      traceStatementLike(statement.elseStatement, scope.fork(), context, EvaluationEffectCertainty.Potential, [...controlPath, "if:else"], depth + 1);
+    const thenCompletion = traceStatementLike(statement.thenStatement, scope.fork(), context, EvaluationEffectCertainty.Potential, [...controlPath, "if:then"], depth + 1);
+    const elseCompletion = statement.elseStatement === undefined
+      ? EvaluationTraceCompletion.Continue
+      : traceStatementLike(statement.elseStatement, scope.fork(), context, EvaluationEffectCertainty.Potential, [...controlPath, "if:else"], depth + 1);
+    return thenCompletion === EvaluationTraceCompletion.Exit && elseCompletion === EvaluationTraceCompletion.Exit
+      ? EvaluationTraceCompletion.Exit
+      : EvaluationTraceCompletion.Continue;
     }
-    return;
-  }
   if (ts.isForOfStatement(statement)) {
     traceExpression(statement.expression, scope, context, certainty, controlPath, depth + 1);
     open(context, EvaluationOpenKind.DynamicLoop, "For-of body effects are reported as repeated potential effects.", statement, controlPath);
     const loopScope = scope.fork();
     bindForOfVariable(statement, scope, loopScope, context);
     traceStatementLike(statement.statement, loopScope, context, EvaluationEffectCertainty.Repeated, [...controlPath, "for-of"], depth + 1);
-    return;
+    return EvaluationTraceCompletion.Continue;
   }
   if (ts.isForStatement(statement)) {
     if (statement.initializer !== undefined && !ts.isVariableDeclarationList(statement.initializer)) {
@@ -547,14 +569,14 @@ function traceStatement(
     }
     open(context, EvaluationOpenKind.DynamicLoop, "For-loop body effects are reported as repeated potential effects.", statement, controlPath);
     traceStatementLike(statement.statement, scope.fork(), context, EvaluationEffectCertainty.Repeated, [...controlPath, "for"], depth + 1);
-    return;
+    return EvaluationTraceCompletion.Continue;
   }
   if (ts.isWhileStatement(statement) || ts.isDoStatement(statement)) {
     const expression = ts.isWhileStatement(statement) ? statement.expression : statement.expression;
     traceExpression(expression, scope, context, certainty, controlPath, depth + 1);
     open(context, EvaluationOpenKind.DynamicLoop, "Loop body effects are reported as repeated potential effects.", statement, controlPath);
     traceStatementLike(statement.statement, scope.fork(), context, EvaluationEffectCertainty.Repeated, [...controlPath, "loop"], depth + 1);
-    return;
+    return EvaluationTraceCompletion.Continue;
   }
   if (
     ts.isFunctionDeclaration(statement)
@@ -565,9 +587,10 @@ function traceStatement(
     || ts.isExportDeclaration(statement)
     || ts.isEmptyStatement(statement)
   ) {
-    return;
+    return EvaluationTraceCompletion.Continue;
   }
   open(context, EvaluationOpenKind.UnsupportedStatement, `Statement kind ${ts.SyntaxKind[statement.kind]} is not in the effect trace statement set.`, statement, controlPath);
+  return EvaluationTraceCompletion.Continue;
 }
 
 function traceStatementLike(
@@ -577,12 +600,11 @@ function traceStatementLike(
   certainty: EvaluationEffectCertainty,
   controlPath: readonly string[],
   depth: number,
-): void {
+): EvaluationTraceCompletion {
   if (ts.isBlock(statement)) {
-    traceBlock(statement, scope, context, certainty, controlPath, depth + 1);
-  } else {
-    traceStatement(statement, scope, context, certainty, controlPath, depth + 1);
+    return traceBlock(statement, scope, context, certainty, controlPath, depth + 1);
   }
+  return traceStatement(statement, scope, context, certainty, controlPath, depth + 1);
 }
 
 function traceExpression(
@@ -699,10 +721,6 @@ function traceLocalFunctionCall(
 
   const callScope = scope.fork();
   for (const [index, parameter] of declaration.parameters.entries()) {
-    if (!ts.isIdentifier(parameter.name)) {
-      open(context, EvaluationOpenKind.UnsupportedBindingPattern, "Local function parameter binding pattern is not represented in effect tracing.", parameter.name, controlPath);
-      continue;
-    }
     const argument = call.arguments[index];
     const argumentExpression = argument === undefined
       ? null
@@ -710,25 +728,28 @@ function traceLocalFunctionCall(
         ? argument.expression
         : argument;
     const argumentAlias = argumentExpression === null ? null : bindingForExpression(argumentExpression, scope);
-    const bindingOptions = {
+    const bindingOptions: TraceBindingExtra = {
       parameterIndex: argumentAlias?.parameterIndex ?? index,
     };
     if (argumentAlias !== null) {
-      Object.assign(bindingOptions, { aliasOf: argumentAlias.name });
+      bindingOptions.aliasOf = argumentAlias.name;
     }
     if (argumentExpression !== null) {
-      Object.assign(bindingOptions, {
-        expression: readTypeScriptExpressionFact(context.project, context.sourceFile, argumentExpression),
-        capturedFromArgument: argumentExpression.getText(context.sourceFile),
-      });
+      bindingOptions.expression = readTypeScriptExpressionFact(context.project, context.sourceFile, argumentExpression);
+      bindingOptions.capturedFromArgument = argumentExpression.getText(context.sourceFile);
     }
-    callScope.set(bindingFromName(
-      context.project,
-      context.sourceFile,
+    bindTraceBindingName(
       parameter.name,
-      argumentAlias === null ? EvaluationTraceBindingOrigin.CapturedParameter : EvaluationTraceBindingOrigin.Alias,
+      callScope,
+      context,
+      ts.isIdentifier(parameter.name)
+        ? argumentAlias === null
+          ? EvaluationTraceBindingOrigin.CapturedParameter
+          : EvaluationTraceBindingOrigin.Alias
+        : EvaluationTraceBindingOrigin.Destructured,
       bindingOptions,
-    ));
+      controlPath,
+    );
   }
 
   context.callStack.push(declarationKey);
@@ -763,17 +784,21 @@ function traceKnownSynchronousCallback(
   const callbackScope = scope.fork();
   const iterable = bindingForExpression(callee.expression, scope);
   const firstParameter = callbackFunction.parameters[0];
-  if (firstParameter !== undefined && ts.isIdentifier(firstParameter.name) && iterable !== null) {
-    callbackScope.set(bindingFromName(
-      context.project,
-      context.sourceFile,
+  if (firstParameter !== undefined && iterable !== null) {
+    bindTraceBindingName(
       firstParameter.name,
-      EvaluationTraceBindingOrigin.Iteration,
+      callbackScope,
+      context,
+      ts.isIdentifier(firstParameter.name)
+        ? EvaluationTraceBindingOrigin.Iteration
+        : EvaluationTraceBindingOrigin.Destructured,
       {
+        aliasOf: iterable.name,
         iterableOf: iterable.name,
         parameterIndex: iterable.parameterIndex,
       },
-    ));
+      controlPath,
+    );
   }
   traceFunctionBody(callbackFunction, callbackScope, context, certainty === EvaluationEffectCertainty.Repeated ? certainty : EvaluationEffectCertainty.Potential, [...controlPath, `callback:${callee.name.text}`], depth + 1);
 }
@@ -795,11 +820,16 @@ function traceDeferredCallbacks(
     }
     const callbackScope = scope.fork();
     for (const [parameterIndex, parameter] of current.parameters.entries()) {
-      if (!ts.isIdentifier(parameter.name)) {
-        open(context, EvaluationOpenKind.UnsupportedBindingPattern, "Deferred callback parameter binding pattern is not represented in effect tracing.", parameter.name, controlPath);
-        continue;
-      }
-      callbackScope.set(bindingFromName(context.project, context.sourceFile, parameter.name, EvaluationTraceBindingOrigin.Parameter, { parameterIndex }));
+      bindTraceBindingName(
+        parameter.name,
+        callbackScope,
+        context,
+        ts.isIdentifier(parameter.name)
+          ? EvaluationTraceBindingOrigin.Parameter
+          : EvaluationTraceBindingOrigin.Destructured,
+        { parameterIndex },
+        controlPath,
+      );
     }
     traceFunctionBody(current, callbackScope, context, EvaluationEffectCertainty.Deferred, [...controlPath, `callback:${callName(call)}:${index}`], depth + 1);
   }
@@ -865,25 +895,18 @@ function callName(call: ts.CallExpression): string {
 }
 
 function bindVariableDeclaration(declaration: ts.VariableDeclaration, scope: EvaluationTraceScope, context: TraceContext): void {
-  if (!ts.isIdentifier(declaration.name)) {
-    if (declaration.initializer !== undefined) {
-      open(context, EvaluationOpenKind.UnsupportedBindingPattern, "Variable binding pattern is not represented in effect tracing.", declaration.name, []);
-    }
-    return;
-  }
   const initializer = declaration.initializer === undefined ? null : bindingForExpression(declaration.initializer, scope);
-  scope.set(bindingFromName(
-    context.project,
-    context.sourceFile,
-    declaration.name,
-    initializer === null ? EvaluationTraceBindingOrigin.Variable : EvaluationTraceBindingOrigin.Alias,
-    initializer === null
-      ? {}
-      : {
-        aliasOf: initializer.name,
-        parameterIndex: initializer.parameterIndex,
-      },
-  ));
+  const origin = ts.isIdentifier(declaration.name)
+    ? initializer === null
+      ? EvaluationTraceBindingOrigin.Variable
+      : EvaluationTraceBindingOrigin.Alias
+    : EvaluationTraceBindingOrigin.Destructured;
+  const extra: TraceBindingExtra = {};
+  if (initializer !== null) {
+    extra.aliasOf = initializer.name;
+    extra.parameterIndex = initializer.parameterIndex;
+  }
+  bindTraceBindingName(declaration.name, scope, context, origin, extra, []);
 }
 
 function bindAssignment(expression: ts.BinaryExpression, scope: EvaluationTraceScope, context: TraceContext): void {
@@ -915,29 +938,30 @@ function bindForOfVariable(
     return;
   }
   const declaration = statement.initializer.declarations[0];
-  if (declaration === undefined || !ts.isIdentifier(declaration.name)) {
+  if (declaration === undefined) {
     return;
   }
   const iterable = bindingForExpression(statement.expression, outerScope);
-  loopScope.set(bindingFromName(
-    context.project,
-    context.sourceFile,
+  const extra: TraceBindingExtra = {};
+  if (iterable !== null) {
+    extra.aliasOf = iterable.name;
+    extra.iterableOf = iterable.name;
+    extra.parameterIndex = iterable.parameterIndex;
+  }
+  bindTraceBindingName(
     declaration.name,
-    EvaluationTraceBindingOrigin.Iteration,
-    iterable === null
-      ? {}
-      : {
-        iterableOf: iterable.name,
-        parameterIndex: iterable.parameterIndex,
-      },
-  ));
+    loopScope,
+    context,
+    ts.isIdentifier(declaration.name)
+      ? EvaluationTraceBindingOrigin.Iteration
+      : EvaluationTraceBindingOrigin.Destructured,
+    extra,
+    [],
+  );
 }
 
-function parameterBinding(project: SourceProject, sourceFile: ts.SourceFile, parameter: ts.ParameterDeclaration, index: number): EvaluationTraceBinding | null {
-  if (!ts.isIdentifier(parameter.name)) {
-    return null;
-  }
-  return bindingFromName(project, sourceFile, parameter.name, EvaluationTraceBindingOrigin.Parameter, { parameterIndex: index });
+function parameterBindings(project: SourceProject, sourceFile: ts.SourceFile, parameter: ts.ParameterDeclaration, index: number): readonly EvaluationTraceBinding[] {
+  return bindingsFromName(project, sourceFile, parameter.name, ts.isIdentifier(parameter.name) ? EvaluationTraceBindingOrigin.Parameter : EvaluationTraceBindingOrigin.Destructured, { parameterIndex: index });
 }
 
 function capturedParameterBindings(
@@ -947,16 +971,15 @@ function capturedParameterBindings(
   call: ts.CallExpression,
 ): readonly EvaluationTraceBinding[] {
   return declaration.parameters
-    .map((parameter, index) => {
-      if (!ts.isIdentifier(parameter.name)) {
-        return null;
-      }
+    .flatMap((parameter, index) => {
       const argument = call.arguments[index];
-      return bindingFromName(
+      return bindingsFromName(
         project,
         sourceFile,
         parameter.name,
-        EvaluationTraceBindingOrigin.CapturedParameter,
+        ts.isIdentifier(parameter.name)
+          ? EvaluationTraceBindingOrigin.CapturedParameter
+          : EvaluationTraceBindingOrigin.Destructured,
         {
           parameterIndex: index,
           expression: argument === undefined
@@ -965,8 +988,145 @@ function capturedParameterBindings(
           capturedFromArgument: argument?.getText(sourceFile),
         },
       );
-    })
-    .filter((binding): binding is EvaluationTraceBinding => binding !== null);
+    });
+}
+
+interface TraceBindingExtra {
+  parameterIndex?: number;
+  aliasOf?: string;
+  iterableOf?: string;
+  expression?: TypeScriptExpressionFact;
+  capturedFromArgument?: string;
+  destructuredPath?: string;
+}
+
+function bindTraceBindingName(
+  name: ts.BindingName,
+  scope: EvaluationTraceScope,
+  context: TraceContext,
+  origin: EvaluationTraceBindingOrigin,
+  extra: TraceBindingExtra,
+  controlPath: readonly string[],
+): void {
+  for (const binding of bindingsFromName(
+    context.project,
+    context.sourceFile,
+    name,
+    origin,
+    extra,
+    context,
+    controlPath,
+  )) {
+    scope.set(binding);
+  }
+}
+
+function bindingsFromName(
+  project: SourceProject,
+  sourceFile: ts.SourceFile,
+  name: ts.BindingName,
+  origin: EvaluationTraceBindingOrigin,
+  extra: TraceBindingExtra = {},
+  context: TraceContext | null = null,
+  controlPath: readonly string[] = [],
+  pathPrefix = "",
+): readonly EvaluationTraceBinding[] {
+  if (ts.isIdentifier(name)) {
+    return [bindingFromName(project, sourceFile, name, origin, extra)];
+  }
+  if (ts.isObjectBindingPattern(name)) {
+    const bindings: EvaluationTraceBinding[] = [];
+    for (const element of name.elements) {
+      const property = bindingElementPathSegment(element, sourceFile, context, controlPath);
+      if (property === null) {
+        continue;
+      }
+      const nextExtra = bindingExtraWithPath(extra, pathPrefix, property);
+      bindings.push(...bindingsFromName(
+        project,
+        sourceFile,
+        element.name,
+        EvaluationTraceBindingOrigin.Destructured,
+        nextExtra,
+        context,
+        controlPath,
+        nextExtra.destructuredPath ?? pathPrefix,
+      ));
+    }
+    return bindings;
+  }
+  const bindings: EvaluationTraceBinding[] = [];
+  for (const [index, element] of name.elements.entries()) {
+    if (ts.isOmittedExpression(element)) {
+      continue;
+    }
+    const segment = element.dotDotDotToken === undefined ? `[${index}]` : `[...${index}]`;
+    const nextExtra = bindingExtraWithPath(extra, pathPrefix, segment);
+    bindings.push(...bindingsFromName(
+      project,
+      sourceFile,
+      element.name,
+      EvaluationTraceBindingOrigin.Destructured,
+      nextExtra,
+      context,
+      controlPath,
+      nextExtra.destructuredPath ?? pathPrefix,
+    ));
+  }
+  return bindings;
+}
+
+function bindingElementPathSegment(
+  element: ts.BindingElement,
+  sourceFile: ts.SourceFile,
+  context: TraceContext | null,
+  controlPath: readonly string[],
+): string | null {
+  if (element.dotDotDotToken !== undefined) {
+    return "...";
+  }
+  const propertyName = propertyNameText(element.propertyName, sourceFile);
+  if (propertyName !== null) {
+    return propertyName;
+  }
+  if (element.propertyName === undefined && ts.isIdentifier(element.name)) {
+    return element.name.text;
+  }
+  if (context !== null) {
+    open(
+      context,
+      EvaluationOpenKind.UnsupportedBindingPattern,
+      "Computed binding pattern property is not represented in effect tracing.",
+      element,
+      controlPath,
+    );
+  }
+  return null;
+}
+
+function bindingExtraWithPath(
+  extra: TraceBindingExtra,
+  prefix: string,
+  segment: string,
+): TraceBindingExtra {
+  return {
+    parameterIndex: extra.parameterIndex,
+    aliasOf: extra.aliasOf,
+    iterableOf: extra.iterableOf,
+    expression: extra.expression,
+    capturedFromArgument: extra.capturedFromArgument,
+    destructuredPath: pathSegment(prefix, segment),
+  };
+}
+
+function pathSegment(prefix: string, segment: string): string {
+  if (prefix.length === 0) {
+    return segment;
+  }
+  if (segment.startsWith("[")) {
+    return `${prefix}${segment}`;
+  }
+  return `${prefix}.${segment}`;
 }
 
 function bindingFromName(
@@ -977,6 +1137,7 @@ function bindingFromName(
   extra: {
     readonly parameterIndex?: number;
     readonly aliasOf?: string;
+    readonly destructuredPath?: string;
     readonly iterableOf?: string;
     readonly expression?: TypeScriptExpressionFact;
     readonly capturedFromArgument?: string;

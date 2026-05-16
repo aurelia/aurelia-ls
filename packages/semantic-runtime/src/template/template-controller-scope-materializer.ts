@@ -8,6 +8,8 @@ import {
   BindingContextSlotDraft,
   BindingScope,
 } from '../configuration/scope.js';
+import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
+import { RuntimeBindingSourceValueEvaluator } from '../observation/binding-source-value-evaluator.js';
 import {
   BindingScopeConstructionEmission,
   BindingScopeMaterializer,
@@ -85,6 +87,7 @@ import {
   accessScopeTargetName,
 } from './template-controller-value.js';
 import { TemplateScopeTypeProjector } from './template-scope-type-projector.js';
+import { repeatStaticLocalValue } from './repeat-static-value.js';
 import { TemplateControllerFlowScopeMaterializer } from './template-controller-flow-scope-materializer.js';
 import {
   RuntimeBindingScopeIssue,
@@ -112,6 +115,8 @@ export interface TemplateScopeConstructionRequest {
   readonly runtimeBindings: RuntimeRenderingEmission;
   /** Project-level compiled-template index available for recursive child-view scope construction. */
   readonly projectContext: TemplateRuntimeAnalysisProjectContext;
+  /** Shared static evaluation available for runtime Scope value carriers. */
+  readonly evaluation: StaticProjectEvaluationResult | null;
   /** Current TypeChecker epoch, if resource recognition supplied one. */
   readonly typeSystem: TypeSystemProject | null;
   /** Compiler resource scope visible to expression semantics such as value converters. */
@@ -810,9 +815,13 @@ export class TemplateControllerScopeMaterializer {
     localSuffix: string,
   ): BindingScopeConstructionEmission {
     const input = frame.input;
+    const sourceValueEvaluator = input.evaluation == null
+      ? null
+      : new RuntimeBindingSourceValueEvaluator(this.store, input.evaluation);
     const elementType = this.typeSupport.iteratorElementType(input, parent, effect, localSuffix);
     const localProjection = this.typeSupport.iteratorLocalProjection(input, parent, effect, localSuffix);
     const localTypes = new Map(localProjection.locals.map((local) => [local.name, local]));
+    const iteratorParse = this.typeSupport.readParse(effect.iterableExpressionProductHandle);
     const repeatableIssue = this.typeSupport.iteratorRepeatableIssue(input, parent, effect, localSuffix);
     if (repeatableIssue != null) {
       frame.addScopeIssue(this.scopeIssuePublisher.publish(
@@ -859,6 +868,8 @@ export class TemplateControllerScopeMaterializer {
           ? localTypes.get(name)?.typeReference ?? null
           : elementTypeForFlattenedIteratorName(effect.localNames, elementType),
         effect.sourceAddressHandle,
+        [],
+        repeatStaticLocalValue(iteratorParse, parent, effect, name, sourceValueEvaluator),
       )),
       overrideSlots: this.typeSupport.repeatOverrideSlots(input, effect.sourceAddressHandle, elementType),
       sourceAddressHandle: effect.sourceAddressHandle,

@@ -89,6 +89,8 @@ export const enum LensId {
   AtlasSelf = "atlas.self",
   /** Queryable Atlas memory joining durable intent records to live source pressure. */
   AtlasMemory = "atlas.memory",
+  /** Typed work router joining route ontology to Atlas memory, source pressure, and framework corpus anchors. */
+  AtlasWorkRouter = "atlas.work-router",
 }
 
 /** Role for a lens parameter. */

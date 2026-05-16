@@ -55,12 +55,13 @@ import {
   type RouteConfigContextModel,
   type RouteContextModel,
 } from './model.js';
-import type { ExpressionAstNode, ObjectLiteralExpression } from '../expression/ast.js';
+import type { ArrayLiteralExpression, ExpressionAstNode, ObjectLiteralExpression } from '../expression/ast.js';
 import { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import { RouterFrameworkErrorCode } from './framework-error-code.js';
 import {
   EagerRouteComponentKind,
   RouteEagerPathGenerationIndex,
+  type EagerPathGenerationResult,
   type EagerPathGenerationInstruction,
   type EagerRouteParameterValue,
   type EagerRouteParameters,
@@ -140,6 +141,7 @@ interface RouteInstructionMaterializationState {
   readonly rootRouteContextsByParentContainerIdentity: ReadonlyMap<IdentityHandle, readonly RouteContextModel[]>;
   readonly routeContextsByIdentity: ReadonlyMap<IdentityHandle, RouteContextModel>;
   readonly routeConfigContextsByIdentity: ReadonlyMap<IdentityHandle, RouteConfigContextModel>;
+  readonly routeConfigContextsByRouteConfigIdentity: ReadonlyMap<IdentityHandle, RouteConfigContextModel>;
   readonly useEagerLoading: boolean;
   readonly emissions: RouteInstructionEmission[];
   readonly issues: RouterIssueModel[];
@@ -322,6 +324,12 @@ function createRouteInstructionMaterializationState(
     ),
     routeConfigContextsByIdentity: new Map(
       routeConfigContexts.readRouteConfigContexts().map((routeConfigContext) => [routeConfigContext.identityHandle, routeConfigContext] as const),
+    ),
+    routeConfigContextsByRouteConfigIdentity: new Map(
+      routeConfigContexts.readRouteConfigContexts().flatMap((routeConfigContext) => {
+        const identityHandle = routeConfigContext.config.identityHandle;
+        return identityHandle == null ? [] : [[identityHandle, routeConfigContext] as const];
+      }),
     ),
     useEagerLoading: routeConfigContexts.useEagerLoading,
     emissions: [],
@@ -599,14 +607,24 @@ function materializeEagerInstructionTree(
   );
   switch (result.kind) {
     case 'generated': {
-      const value = routePathWithQuery(result.path, result.query);
+      const generated = generatedEagerRouteExpression(
+        store,
+        closed,
+        state,
+        routeConfigContext,
+        result,
+      );
+      if (generated == null) {
+        return null;
+      }
+      const value = routePathWithQuery(generated.path, generated.query);
       return materializeInstructionTree(
         store,
         {
           kind: 'route-expression',
           site,
           value,
-          valueSourceAddressHandle: closed.sourceAddressHandle,
+          valueSourceAddressHandle: generated.sourceAddressHandle ?? closed.sourceAddressHandle,
         },
         state.routeContextsByIdentity,
         routerOptions,
@@ -658,6 +676,143 @@ function routePathWithQuery(
     params.set(key, value);
   }
   return `${path}?${params.toString()}`;
+}
+
+interface GeneratedEagerRouteExpression {
+  readonly path: string;
+  readonly query: ReadonlyMap<string, string>;
+  readonly sourceAddressHandle: AddressHandle | null;
+}
+
+function generatedEagerRouteExpression(
+  store: KernelStore,
+  closed: ClosedEagerRouterResourceInstruction,
+  state: RouteInstructionMaterializationState,
+  routeConfigContext: RouteConfigContextModel,
+  result: Extract<EagerPathGenerationResult, { readonly kind: 'generated' }>,
+): GeneratedEagerRouteExpression | null {
+  const childRouteContext = result.routeConfig.identityHandle == null
+    ? null
+    : state.routeConfigContextsByRouteConfigIdentity.get(result.routeConfig.identityHandle) ?? null;
+  const childPaths: string[] = [];
+  let query = result.query;
+  for (const child of closed.instruction.children) {
+    const childClosed = closedEagerChildInstruction(closed, child);
+    if (childRouteContext == null) {
+      recordOpenSeam(
+        store,
+        closed.site,
+        'Eager router instruction children need the generated component RouteConfigContext before recursive path generation can close.',
+        [OpenSeamReasonKind.RouterInstructionNeedsRouteContext],
+        state.openSeams,
+        state.openRecords,
+        closed.sourceAddressHandle,
+      );
+      return null;
+    }
+    const childResult = state.eagerPathGeneration.generate(
+      childRouteContext,
+      state.useEagerLoading,
+      child,
+      result.endpoint.path,
+    );
+    switch (childResult.kind) {
+      case 'generated': {
+        const generatedChild = generatedEagerRouteExpression(
+          store,
+          childClosed,
+          state,
+          childRouteContext,
+          childResult,
+        );
+        if (generatedChild == null) {
+          return null;
+        }
+        childPaths.push(generatedChild.path);
+        query = mergeRouteQuery(query, generatedChild.query);
+        break;
+      }
+      case 'failed':
+        recordEagerPathGenerationIssue(
+          store,
+          childClosed,
+          childRouteContext,
+          childResult,
+          state.issues,
+          state.issueRecords,
+        );
+        return null;
+      case 'open':
+        recordOpenSeam(
+          store,
+          closed.site,
+          childResult.reason,
+          [OpenSeamReasonKind.RouterInstructionNeedsStaticValue],
+          state.openSeams,
+          state.openRecords,
+          closed.sourceAddressHandle,
+        );
+        return null;
+      case 'not-eager':
+        recordOpenSeam(
+          store,
+          closed.site,
+          childResult.component == null
+            ? 'Eager child router instruction did not expose a component that RouteConfigContext can resolve.'
+            : `Eager child router instruction component '${childResult.component}' did not resolve to an eagerly generated route path.`,
+          [OpenSeamReasonKind.RouterInstructionNeedsStaticValue],
+          state.openSeams,
+          state.openRecords,
+          closed.sourceAddressHandle,
+        );
+        return null;
+    }
+  }
+  const ownPath = routePathWithViewport(result.path, closed.instruction.viewport);
+  const childPath = childPaths.join('+');
+  return {
+    path: childPath.length === 0
+      ? ownPath
+      : ownPath.length === 0 ? childPath : `${ownPath}/${childPath}`,
+    query,
+    sourceAddressHandle: closed.sourceAddressHandle,
+  };
+}
+
+function closedEagerChildInstruction(
+  parent: ClosedEagerRouterResourceInstruction,
+  instruction: EagerPathGenerationInstruction,
+): ClosedEagerRouterResourceInstruction {
+  return {
+    kind: 'eager-instruction',
+    site: parent.site,
+    instruction,
+    sourceAddressHandle: parent.sourceAddressHandle,
+  };
+}
+
+function mergeRouteQuery(
+  left: ReadonlyMap<string, string>,
+  right: ReadonlyMap<string, string>,
+): ReadonlyMap<string, string> {
+  if (right.size === 0) {
+    return left;
+  }
+  const merged = new Map(left);
+  for (const [key, value] of right) {
+    merged.set(key, value);
+  }
+  return merged;
+}
+
+function routePathWithViewport(
+  path: string,
+  viewport: string | null,
+): string {
+  const normalizedViewport = viewport?.trim() ?? '';
+  return normalizedViewport.length === 0 || normalizedViewport === 'default' || path.length === 0
+    ? path
+    : `${path}@${normalizedViewport}`;
 }
 
 function recordEagerPathGenerationIssue(
@@ -1046,7 +1201,7 @@ function viewportInstructionForParsedInstruction(
     instruction.open,
     instruction.close,
     null,
-    site.sourceAddressHandle,
+    typedInstruction.sourceAddressHandle ?? site.sourceAddressHandle,
   );
 }
 
@@ -1142,26 +1297,28 @@ function staticRouterResourceValue(
   for (const productHandle of hydrate.bindingInstructionProductHandles) {
     const instruction = store.productDetails.read(TemplateProductDetails.Instruction, productHandle);
     if (instruction instanceof SetPropertyInstruction && instruction.targetProperty === property) {
+      const valueSourceAddressHandle = instructionValueSourceAddressHandle(store, instruction);
       return {
         state: 'route-expression',
         value: instruction.value,
-        sourceAddressHandle: instruction.sourceAddressHandle,
+        sourceAddressHandle: valueSourceAddressHandle,
         dynamicPartCount: 0,
       };
     }
     if (instruction instanceof MultiAttrInstruction && instruction.target === property) {
+      const valueSourceAddressHandle = instructionValueSourceAddressHandle(store, instruction);
       if (instruction.command == null && instruction.expressionProductHandle == null) {
         return {
           state: 'route-expression',
           value: instruction.value,
-          sourceAddressHandle: instruction.sourceAddressHandle,
+          sourceAddressHandle: valueSourceAddressHandle,
           dynamicPartCount: 0,
         };
       }
       const multiAttrValue = expressionRouterResourceValue(
         store,
         instruction.expressionProductHandle,
-        instruction.sourceAddressHandle,
+        valueSourceAddressHandle,
         scope,
         sourceValueEvaluator,
         resourceIndex,
@@ -1170,17 +1327,18 @@ function staticRouterResourceValue(
         return multiAttrValue;
       }
       sawDynamic = true;
-      dynamicSourceAddressHandle ??= instruction.sourceAddressHandle;
+      dynamicSourceAddressHandle ??= valueSourceAddressHandle;
       const reason = dynamicBindingReason(store, instruction.expressionProductHandle, scope, sourceValueEvaluator);
       dynamicReason ??= reason?.summary ?? null;
       dynamicReasonKinds = compactOpenSeamReasonKinds([...dynamicReasonKinds, ...(reason?.reasonKinds ?? [])]);
       continue;
     }
     if (instruction instanceof PropertyBindingInstruction && instruction.targetProperty === property) {
+      const valueSourceAddressHandle = instructionValueSourceAddressHandle(store, instruction);
       const propertyBound = expressionRouterResourceValue(
         store,
         instruction.expressionProductHandle,
-        instruction.sourceAddressHandle,
+        valueSourceAddressHandle,
         scope,
         sourceValueEvaluator,
         resourceIndex,
@@ -1189,19 +1347,20 @@ function staticRouterResourceValue(
         return propertyBound;
       }
       sawDynamic = true;
-      dynamicSourceAddressHandle ??= instruction.sourceAddressHandle;
+      dynamicSourceAddressHandle ??= valueSourceAddressHandle;
       const reason = dynamicBindingReason(store, instruction.expressionProductHandle, scope, sourceValueEvaluator);
       dynamicReason ??= reason?.summary ?? null;
       dynamicReasonKinds = compactOpenSeamReasonKinds([...dynamicReasonKinds, ...(reason?.reasonKinds ?? [])]);
       continue;
     }
     if (instruction instanceof InterpolationInstruction && instruction.target === property) {
-      const interpolated = interpolatedStringValue(store, instruction.expressionProductHandles[0] ?? null, instruction.sourceAddressHandle, scope, sourceValueEvaluator);
+      const valueSourceAddressHandle = instructionValueSourceAddressHandle(store, instruction);
+      const interpolated = interpolatedStringValue(store, instruction.expressionProductHandles[0] ?? null, valueSourceAddressHandle, scope, sourceValueEvaluator);
       if (interpolated != null) {
         return interpolated;
       }
       sawDynamic = true;
-      dynamicSourceAddressHandle ??= instruction.sourceAddressHandle;
+      dynamicSourceAddressHandle ??= valueSourceAddressHandle;
       const reason = dynamicBindingReason(store, instruction.expressionProductHandles[0] ?? null, scope, sourceValueEvaluator);
       dynamicReason ??= reason?.summary ?? null;
       dynamicReasonKinds = compactOpenSeamReasonKinds([...dynamicReasonKinds, ...(reason?.reasonKinds ?? [])]);
@@ -1215,6 +1374,22 @@ function staticRouterResourceValue(
         sourceAddressHandle: dynamicSourceAddressHandle,
       }
     : { state: 'missing' };
+}
+
+function instructionValueSourceAddressHandle(
+  store: KernelStore,
+  instruction:
+    | SetPropertyInstruction
+    | MultiAttrInstruction
+    | PropertyBindingInstruction
+    | InterpolationInstruction,
+): AddressHandle | null {
+  const attribute = instruction.attribute?.productHandle == null
+    ? null
+    : store.productDetails.read(TemplateProductDetails.HtmlAttribute, instruction.attribute.productHandle);
+  return attribute instanceof HtmlAttribute
+    ? attribute.valueAddressHandle ?? instruction.sourceAddressHandle
+    : instruction.sourceAddressHandle;
 }
 
 function expressionRouterResourceValue(
@@ -1231,14 +1406,16 @@ function expressionRouterResourceValue(
   if (expression == null) {
     return null;
   }
+  const expressionSourceAddressHandle = expressionSourceAddressHandleForProduct(store, expressionProductHandle)
+    ?? sourceAddressHandle;
   if (expression.$kind === 'ObjectLiteral') {
-    return eagerInstructionValue(expression, sourceAddressHandle, scope, sourceValueEvaluator, resourceIndex);
+    return eagerInstructionValue(expression, expressionSourceAddressHandle, scope, sourceValueEvaluator, resourceIndex);
   }
   if (expression.$kind === 'Interpolation') {
-    return interpolatedStringValue(store, expressionProductHandle, sourceAddressHandle, scope, sourceValueEvaluator);
+    return interpolatedStringValue(store, expressionProductHandle, expressionSourceAddressHandle, scope, sourceValueEvaluator);
   }
-  return expressionStringValue(expression, sourceAddressHandle, scope, sourceValueEvaluator)
-    ?? invalidClosedRouterInstructionValue(expression, sourceAddressHandle, scope, sourceValueEvaluator);
+  return expressionStringValue(expression, expressionSourceAddressHandle, scope, sourceValueEvaluator)
+    ?? invalidClosedRouterInstructionValue(expression, expressionSourceAddressHandle, scope, sourceValueEvaluator);
 }
 
 function eagerInstructionValue(
@@ -1251,17 +1428,48 @@ function eagerInstructionValue(
   if (scope == null || sourceValueEvaluator == null) {
     return null;
   }
-  if (readObjectLiteralValue(expression, 'children') != null) {
+  const instruction = eagerInstructionFromObjectLiteral(expression, scope, sourceValueEvaluator, resourceIndex);
+  if (instruction.state === 'missing') {
+    return null;
+  }
+  if (instruction.state === 'dynamic') {
     return {
       state: 'dynamic',
-      reason: 'Eager router instruction children are not yet materialized by semantic-runtime route instruction generation.',
-      reasonKinds: [OpenSeamReasonKind.RouterInstructionNeedsStaticValue],
+      reason: instruction.reason,
+      reasonKinds: instruction.reasonKinds,
       sourceAddressHandle,
     };
   }
+  return {
+    state: 'eager-instruction',
+    instruction: instruction.instruction,
+    sourceAddressHandle,
+  };
+}
+
+type EagerRouteInstructionRead =
+  | {
+      readonly state: 'closed';
+      readonly instruction: EagerPathGenerationInstruction;
+    }
+  | {
+      readonly state: 'dynamic';
+      readonly reason: string;
+      readonly reasonKinds: readonly OpenSeamReasonKind[];
+    }
+  | {
+      readonly state: 'missing';
+    };
+
+function eagerInstructionFromObjectLiteral(
+  expression: ObjectLiteralExpression,
+  scope: BindingScope,
+  sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
+  resourceIndex: ResourceDefinitionIndex,
+): EagerRouteInstructionRead {
   const componentExpression = readObjectLiteralValue(expression, 'component');
   if (componentExpression == null) {
-    return null;
+    return { state: 'missing' };
   }
   const component = eagerRouteComponent(componentExpression, scope, sourceValueEvaluator, resourceIndex);
   if (component.state === 'dynamic') {
@@ -1269,7 +1477,6 @@ function eagerInstructionValue(
       state: 'dynamic',
       reason: component.reason,
       reasonKinds: component.reasonKinds,
-      sourceAddressHandle,
     };
   }
   const params = eagerRouteParameters(
@@ -1282,16 +1489,41 @@ function eagerInstructionValue(
       state: 'dynamic',
       reason: params.reason,
       reasonKinds: params.reasonKinds,
-      sourceAddressHandle,
+    };
+  }
+  const viewport = eagerRouteViewport(
+    readObjectLiteralValue(expression, 'viewport'),
+    scope,
+    sourceValueEvaluator,
+  );
+  if (viewport.state === 'dynamic') {
+    return {
+      state: 'dynamic',
+      reason: viewport.reason,
+      reasonKinds: viewport.reasonKinds,
+    };
+  }
+  const children = eagerRouteChildren(
+    readObjectLiteralValue(expression, 'children'),
+    scope,
+    sourceValueEvaluator,
+    resourceIndex,
+  );
+  if (children.state === 'dynamic') {
+    return {
+      state: 'dynamic',
+      reason: children.reason,
+      reasonKinds: children.reasonKinds,
     };
   }
   return {
-    state: 'eager-instruction',
+    state: 'closed',
     instruction: {
       component: component.component,
       params: params.params,
+      viewport: viewport.viewport,
+      children: children.children,
     },
-    sourceAddressHandle,
   };
 }
 
@@ -1415,6 +1647,129 @@ function eagerRouteParameters(
       values,
       mayHaveUnknownProperties: evaluated.value.mayHaveUnknownProperties,
     },
+  };
+}
+
+type EagerRouteViewportRead =
+  | {
+      readonly state: 'closed';
+      readonly viewport: string | null;
+    }
+  | {
+      readonly state: 'dynamic';
+      readonly reason: string;
+      readonly reasonKinds: readonly OpenSeamReasonKind[];
+    };
+
+function eagerRouteViewport(
+  expression: ExpressionAstNode | null,
+  scope: BindingScope,
+  sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
+): EagerRouteViewportRead {
+  if (expression == null) {
+    return { state: 'closed', viewport: null };
+  }
+  const evaluated = sourceValueEvaluator.evaluate(expression, scope);
+  if (evaluated.kind === RuntimeBindingSourceValueEvaluationKind.Open || evaluated.value == null) {
+    return {
+      state: 'dynamic',
+      reason: evaluated.openReason ?? 'Eager router instruction viewport did not close.',
+      reasonKinds: evaluated.openReasonKinds,
+    };
+  }
+  if (evaluated.value.kind === EvaluationValueKind.Null || evaluated.value.kind === EvaluationValueKind.Undefined) {
+    return { state: 'closed', viewport: null };
+  }
+  return evaluated.value.kind === EvaluationValueKind.String
+    ? { state: 'closed', viewport: evaluated.value.value }
+    : {
+        state: 'dynamic',
+        reason: `Eager router instruction viewport reduced to '${evaluated.value.kind}' instead of a string or null.`,
+        reasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
+      };
+}
+
+type EagerRouteChildrenRead =
+  | {
+      readonly state: 'closed';
+      readonly children: readonly EagerPathGenerationInstruction[];
+    }
+  | {
+      readonly state: 'dynamic';
+      readonly reason: string;
+      readonly reasonKinds: readonly OpenSeamReasonKind[];
+    };
+
+function eagerRouteChildren(
+  expression: ExpressionAstNode | null,
+  scope: BindingScope,
+  sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
+  resourceIndex: ResourceDefinitionIndex,
+): EagerRouteChildrenRead {
+  if (expression == null) {
+    return { state: 'closed', children: [] };
+  }
+  if (expression.$kind !== 'ArrayLiteral') {
+    return {
+      state: 'dynamic',
+      reason: `Eager router instruction children reduced from '${expression.$kind}' instead of a static array literal.`,
+      reasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
+    };
+  }
+  return eagerRouteChildrenFromArray(expression, scope, sourceValueEvaluator, resourceIndex);
+}
+
+function eagerRouteChildrenFromArray(
+  expression: ArrayLiteralExpression,
+  scope: BindingScope,
+  sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
+  resourceIndex: ResourceDefinitionIndex,
+): EagerRouteChildrenRead {
+  const children: EagerPathGenerationInstruction[] = [];
+  for (const element of expression.elements) {
+    const child = eagerRouteChildInstruction(element, scope, sourceValueEvaluator, resourceIndex);
+    if (child.state === 'dynamic') {
+      return child;
+    }
+    children.push(child.instruction);
+  }
+  return { state: 'closed', children };
+}
+
+function eagerRouteChildInstruction(
+  expression: ExpressionAstNode,
+  scope: BindingScope,
+  sourceValueEvaluator: RuntimeBindingSourceValueEvaluator,
+  resourceIndex: ResourceDefinitionIndex,
+): Exclude<EagerRouteInstructionRead, { readonly state: 'missing' }> {
+  if (expression.$kind === 'ObjectLiteral') {
+    const child = eagerInstructionFromObjectLiteral(expression, scope, sourceValueEvaluator, resourceIndex);
+    return child.state === 'missing'
+      ? {
+          state: 'dynamic',
+          reason: 'Eager child router instruction object did not expose a component property.',
+          reasonKinds: [OpenSeamReasonKind.RouterInstructionNeedsStaticValue],
+        }
+      : child;
+  }
+  const component = eagerRouteComponent(expression, scope, sourceValueEvaluator, resourceIndex);
+  return component.state === 'dynamic'
+    ? component
+    : {
+        state: 'closed',
+        instruction: {
+          component: component.component,
+          params: emptyEagerRouteParameters(),
+          viewport: null,
+          children: [],
+        },
+      };
+}
+
+function emptyEagerRouteParameters(): EagerRouteParameters {
+  return {
+    values: new Map(),
+    mayHaveUnknownProperties: false,
   };
 }
 
@@ -1632,6 +1987,16 @@ function bindingExpressionAstForProduct(
 ): AcceptedBindingExpressionAst | null {
   const parse = store.productDetails.read(TemplateProductDetails.ExpressionParse, expressionProductHandle);
   return parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+}
+
+function expressionSourceAddressHandleForProduct(
+  store: KernelStore,
+  expressionProductHandle: ProductHandle | null,
+): AddressHandle | null {
+  if (expressionProductHandle == null) {
+    return null;
+  }
+  return store.productDetails.read(TemplateProductDetails.ExpressionParse, expressionProductHandle)?.sourceAddressHandle ?? null;
 }
 
 function evaluatedBindingExpressionProduct(

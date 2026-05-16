@@ -241,6 +241,7 @@ function filterEnumValueSpaces(
   const enumName = inquiryStringFilter(inquiry, "enumName");
   const memberName = inquiryStringFilter(inquiry, "memberName");
   const value = inquiryStringFilter(inquiry, "value");
+  const valueKind = inquiryStringFilter(inquiry, "valueKind");
   const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
     if (enumName !== undefined && !row.enumNames.includes(enumName)) {
@@ -253,6 +254,9 @@ function filterEnumValueSpaces(
       return false;
     }
     if (value !== undefined && String(row.value) !== value) {
+      return false;
+    }
+    if (valueKind !== undefined && row.valueKind !== valueKind) {
       return false;
     }
     if (query === undefined) {
@@ -275,6 +279,7 @@ function filterEnumValueOccurrences(
   const memberName = inquiryStringFilter(inquiry, "memberName");
   const role = inquiryStringFilter(inquiry, "role");
   const value = inquiryStringFilter(inquiry, "value");
+  const valueKind = inquiryStringFilter(inquiry, "valueKind");
   const contextualOnly = inquiryBooleanFilter(inquiry, "contextualOnly");
   const query = inquiryLowerStringFilter(inquiry, "query");
   return rows.filter((row) => {
@@ -294,6 +299,9 @@ function filterEnumValueOccurrences(
       return false;
     }
     if (value !== undefined && String(row.value) !== value) {
+      return false;
+    }
+    if (valueKind !== undefined && row.valueKind !== valueKind) {
       return false;
     }
     if (

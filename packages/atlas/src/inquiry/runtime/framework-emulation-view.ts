@@ -403,31 +403,31 @@ function renderConsequenceObligations(
   return readFrameworkRenderConsequenceRows(
     sourceProject,
     filters as FrameworkRenderConsequenceFilters,
-  ).map((row): FrameworkEmulationObligationRow => ({
-    id: `framework-emulation:render-consequence:${row.id}`,
-    layer: layerForConsequence(row.consequenceKind),
-    mode: modeForConsequence(row.consequenceKind),
-    obligationKind: obligationForConsequence(row.consequenceKind),
-    ownerName: row.actorName,
-    targetName: row.targetName,
-    targetKind: targetKindForConsequence(row.consequenceKind),
-    packageId: row.packageId,
-    packageName: row.packageName,
-    closure:
-      modeForConsequence(row.consequenceKind) === "typescript-handoff"
-        ? "handoff"
-        : "exact",
-    sourceLens: LensId.FrameworkRendering,
-    sourceProjection: "render-consequences",
-    detailFilters: {
-      consequenceKind: row.consequenceKind,
-      ...row.detailFilters,
-    },
-    basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
-    source: row.source,
-    sourceRowId: row.id,
-    summary: `Rendering consequence ${row.consequenceKind}: ${row.summary}`,
-  }));
+  ).map((row): FrameworkEmulationObligationRow => {
+    const policy = policyForConsequence(row.consequenceKind);
+    return {
+      id: `framework-emulation:render-consequence:${row.id}`,
+      layer: policy.layer,
+      mode: policy.mode,
+      obligationKind: policy.obligationKind,
+      ownerName: row.actorName,
+      targetName: row.targetName,
+      targetKind: targetKindForConsequence(row.consequenceKind),
+      packageId: row.packageId,
+      packageName: row.packageName,
+      closure: policy.mode === "typescript-handoff" ? "handoff" : "exact",
+      sourceLens: LensId.FrameworkRendering,
+      sourceProjection: "render-consequences",
+      detailFilters: {
+        consequenceKind: row.consequenceKind,
+        ...row.detailFilters,
+      },
+      basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+      source: row.source,
+      sourceRowId: row.id,
+      summary: `Rendering consequence ${row.consequenceKind}: ${row.summary}`,
+    };
+  });
 }
 
 function targetKindForConsequence(
@@ -507,52 +507,55 @@ function obligationForHydrationTarget(
   return "hydrate-runtime";
 }
 
-function layerForConsequence(kind: string): FrameworkEmulationLayer {
-  switch (kind) {
-    case "template-controller-link":
-      return "template-controller-virtualization";
-    case "binding-admission":
-    case "binding-production":
-    case "binding-effect":
-    case "observer-lookup":
-    case "observation-setup":
-      return "typechecker-reactivity";
-    default:
-      return "resolved-hydration";
-  }
+interface FrameworkRenderConsequenceEmulationPolicy {
+  readonly layer: FrameworkEmulationLayer;
+  readonly mode: FrameworkEmulationMode;
+  readonly obligationKind: FrameworkEmulationObligationKind;
 }
 
-function modeForConsequence(kind: string): FrameworkEmulationMode {
-  switch (kind) {
-    case "template-controller-link":
-      return "virtualized-runtime";
-    case "binding-admission":
-    case "binding-production":
-    case "binding-effect":
-    case "observer-lookup":
-    case "observation-setup":
-      return "typescript-handoff";
-    default:
-      return "semantic-runtime-emulator";
-  }
-}
+const defaultConsequencePolicy: FrameworkRenderConsequenceEmulationPolicy = {
+  layer: "resolved-hydration",
+  mode: "semantic-runtime-emulator",
+  obligationKind: "hydrate-runtime",
+};
 
-function obligationForConsequence(
-  kind: string,
-): FrameworkEmulationObligationKind {
-  switch (kind) {
-    case "binding-admission":
-    case "binding-effect":
-    case "binding-production":
-      return "model-binding";
-    case "observer-lookup":
-    case "observation-setup":
-      return "model-observation";
-    case "template-controller-link":
-      return "virtualize-template-controller";
-    default:
-      return "hydrate-runtime";
-  }
+const consequencePolicies = new Map<FrameworkRenderConsequenceKind, FrameworkRenderConsequenceEmulationPolicy>([
+  ["binding-admission", {
+    layer: "typechecker-reactivity",
+    mode: "typescript-handoff",
+    obligationKind: "model-binding",
+  }],
+  ["binding-effect", {
+    layer: "typechecker-reactivity",
+    mode: "typescript-handoff",
+    obligationKind: "model-binding",
+  }],
+  ["binding-production", {
+    layer: "typechecker-reactivity",
+    mode: "typescript-handoff",
+    obligationKind: "model-binding",
+  }],
+  ["observation-setup", {
+    layer: "typechecker-reactivity",
+    mode: "typescript-handoff",
+    obligationKind: "model-observation",
+  }],
+  ["observer-lookup", {
+    layer: "typechecker-reactivity",
+    mode: "typescript-handoff",
+    obligationKind: "model-observation",
+  }],
+  ["template-controller-link", {
+    layer: "template-controller-virtualization",
+    mode: "virtualized-runtime",
+    obligationKind: "virtualize-template-controller",
+  }],
+]);
+
+function policyForConsequence(
+  kind: FrameworkRenderConsequenceKind,
+): FrameworkRenderConsequenceEmulationPolicy {
+  return consequencePolicies.get(kind) ?? defaultConsequencePolicy;
 }
 
 function emulationRowMatches(

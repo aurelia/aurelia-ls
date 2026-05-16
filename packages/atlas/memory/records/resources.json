@@ -15,17 +15,65 @@
       "guidance": [
         "Start here when a source-level resource header must become a FullResourceDefinition with exact provenance, alias claims, bindables, watches, and open seams.",
         "Keep header recognition, definition convergence, and catalog admission separate unless framework.resource grounding shows a sharper boundary.",
-        "Use framework.resources pressure before changing definition provenance or treating header-level evidence as full-definition evidence.",
+        "CustomElementConvergenceFrame is the per-custom-element read epoch inside resource-definition-converger.ts; it owns local-key prefixing, annotation priority, bindable/watch/template/dependency reads, and custom-element issue aggregation before ResourceDefinitionConverger publishes the final definition product.",
+        "ResourceDefinitionConverger now delegates source-field helpers to resource-convergence-support.ts, bindable metadata convergence to bindable-convergence.ts, and watcher metadata convergence to watch-convergence.ts. Custom elements include definition-object watches, decorators, and static Type.watches; custom attributes/template controllers intentionally ignore definition-object watches because runtime-html currently only merges decorator metadata and Type.watches for that resource family.",
+        "Use framework.resources pressure before changing definition provenance or treating header-level evidence as full-definition evidence; use `framework:resources -- --projection=convergence --detail` when the exact definition/backing/admission/materialization rows matter.",
+        "Use resource-source-address.ts for resource source spans and inline-template decoded-to-authored offset mapping; do not re-bury escaped-string coordinate logic inside ResourceDefinitionConverger.",
         "For bindables, mirror runtime-html Bindable.getAll(Type): decorator metadata walks the class prototype chain base-to-derived, while static Type.bindables uses the nearest constructor static property. Do not generalize this inheritance rule to other resource fields without framework grounding.",
-        "Inherited metadata nodes belong to their declaring source file. Use ResourceRecognitionContextIndex/readNodeContext so imported decorator configuration is evaluated in the declaring module environment instead of the subclass module environment."
+        "Member @bindable(...) invocation follows runtime-html's property-decorator default-config path for known primitive/nullish/string arguments; keep the bindable and only leave an open seam for unknown or object-like values that may carry runtime config properties.",
+        "Class-level @bindable(...) runs through ClassBindableDecoratorFrame: string or object-with-static-string-name closes to a bindable, while bare/nullish/name-less configurations publish the framework-backed class-decorator configuration issues instead of becoming silent open seams.",
+        "Resource metadata annotations live in resource-metadata-annotations.ts: shared @alias(...) annotation values feed all named resources, while custom-element @containerless, @useShadowDOM(...), @capture(...), and member @children/@slotted registry dependencies feed full-definition convergence before definition-object and static class fallbacks.",
+        "Inherited metadata nodes belong to their declaring source file. Use ResourceRecognitionContextIndex/readNodeContext so imported decorator configuration is evaluated in the declaring module environment instead of the subclass module environment.",
+        "Resource source spans should use sourceFileAddressHandleForNode/readAdmittedNodeContext over contexts admitted by the resource-recognition pass. Do not re-resolve node source file names through KernelStore from resource convergence helpers."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/resource-definition-converger.ts",
           "symbolName": "ResourceDefinitionConverger",
-          "line": 375,
+          "line": 326,
           "summary": "Resource definition convergence materializer."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-convergence-support.ts",
+          "summary": "Shared convergence source-field, target-reference, decorator, and open-seam helpers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-definition-converger.ts",
+          "symbolName": "CustomElementConvergenceFrame",
+          "summary": "Per custom-element convergence frame for metadata reads and issue aggregation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/bindable-convergence.ts",
+          "symbolName": "readBindables",
+          "summary": "Bindable metadata convergence from decorators, inherited metadata, static bindables, and definition objects."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/bindable-convergence.ts",
+          "symbolName": "ClassBindableDecoratorFrame",
+          "summary": "Class-level @bindable overload reader and framework-backed issue publication path."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/watch-convergence.ts",
+          "symbolName": "readWatches",
+          "summary": "Watch metadata convergence from decorators, static watches, definition objects, and callback lookup."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-source-address.ts",
+          "symbolName": "templateMarkupSourceAddress",
+          "summary": "Resource convergence source-address and inline-template source-map helper."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-metadata-annotations.ts",
+          "symbolName": "readCustomElementMetadataAnnotations",
+          "summary": "Resource metadata annotation reader for @alias, @containerless, @useShadowDOM, @capture, and @children/@slotted registry dependencies."
         },
         {
           "kind": "source",
@@ -46,10 +94,24 @@
           "filePath": "packages/semantic-runtime/src/resources/resource-definition-converger.ts",
           "minLineCount": 300,
           "minMethodCount": 10
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CustomElementConvergenceFrame",
+          "filePath": "packages/semantic-runtime/src/resources/resource-definition-converger.ts",
+          "minLineCount": 120,
+          "minMethodCount": 6
+        },
+        {
+          "kind": "product-large-class",
+          "className": "ClassBindableDecoratorFrame",
+          "filePath": "packages/semantic-runtime/src/resources/bindable-convergence.ts",
+          "minLineCount": 90,
+          "minMethodCount": 4
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "frontier:resource-metadata-diagnostics",
@@ -68,7 +130,7 @@
       "summary": "Resource metadata diagnostics are owned by resource convergence and surfaced as ResourceIssue products with exact runtime-html error-code authority.",
       "rationale": "Aurelia's bindable decorator, processContent decorator, @children decorator, @slotted decorator, @watch decorator, and static/definition-object watcher metadata fail before template diagnostics owns anything. Static convergence can model malformed metadata and controller watcher callback lookup without opening the rendering or LSP layers, so these failures belong beside resource definition convergence rather than in API wording policy.",
       "guidance": [
-        "Start here when @bindable decorators, @processContent decorators, @children decorators, @slotted decorators, @watch decorators, static watches, definition-object watches, or controller watcher metadata produce framework-grounded diagnostics.",
+        "Start here when @bindable decorators, @processContent decorators, @children decorators, @slotted decorators, @watch decorators, static watches, custom-element definition-object watches, or controller watcher metadata produce framework-grounded diagnostics.",
         "Use framework.errors usage rows before adding another ResourceFrameworkErrorCode member; AUR labels collide across packages and need exact package/enum/member authority.",
         "Keep runtime-html invalid* partial through ResourceIssue products: AUR0227, AUR0229, AUR0766, AUR9989, and AUR9990 are modeled here. Runtime computed_not_getter / AUR0228 is an ObservationIssue, not resource convergence. AUR9991 is dormant in current framework source. AUR0769 and AUR0771 belong to app-root platform host state and Aurelia instance lifecycle state, not resource convergence.",
         "Keep watch* complete through ResourceIssue products: AUR0772, AUR0773, and AUR0774 are modeled here.",
@@ -98,7 +160,19 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/resource-definition-converger.ts",
           "symbolName": "ResourceDefinitionConverger",
-          "summary": "Watch metadata convergence and issue production."
+          "summary": "Definition convergence orchestrator that consumes metadata convergence reads and publishes ResourceIssue products."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/bindable-convergence.ts",
+          "symbolName": "readBindables",
+          "summary": "Bindable metadata convergence and bindable decorator issue production."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/watch-convergence.ts",
+          "symbolName": "readWatches",
+          "summary": "Watcher metadata convergence and watcher/controller callback issue production."
         },
         {
           "kind": "lens",
@@ -127,6 +201,16 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/resources/resource-definition-converger.ts",
           "symbolName": "ResourceDefinitionConverger"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/resources/bindable-convergence.ts",
+          "symbolName": "readBindables"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/resources/watch-convergence.ts",
+          "symbolName": "readWatches"
         }
       ],
       "createdAt": "2026-05-13",
@@ -205,7 +289,7 @@
         "Start here when framework built-ins, configured resource catalogs, i18n/state/runtime-html/validation-html resource visibility, or built-in full definitions are involved.",
         "Keep catalog grouping and configured catalog selection distinct from per-resource publication and built-in full-definition construction.",
         "ValidationHtmlConfiguration admits a default validation-html catalog with ValidateBindingBehavior, ValidationErrorsCustomAttribute, and ValidationContainerCustomElement; option-sensitive subscriber toggles are still a future customization frontier.",
-        "Use framework.resources and framework.discovery bundle rows before assuming StandardConfiguration is the only source of built-in resource visibility."
+        "Use `framework:resources -- --projection=convergence` and framework.discovery bundle rows before assuming StandardConfiguration is the only source of built-in resource visibility."
       ],
       "anchors": [
         {
@@ -282,6 +366,7 @@
       "guidance": [
         "Start here when project-level resource recognition, linked source admission, unresolved module carry-through, recognition profiling, or TypeChecker handoff changes.",
         "Keep source-level recognizers and convergence materializers below this pass; this class should orchestrate them rather than learn carrier-specific resource logic.",
+        "Resource recognition depends on the shared project evaluator executing local side-effect imports. If a source file is admitted but its decorators are invisible, inspect `StaticModuleGraphEvaluator.evaluateSideEffectImport` before adding a resource-local import walk.",
         "If imported templates lose exact provenance, inspect this pass and the shared evaluation source admissions before adding template-layer fallbacks.",
         "When convergence follows AST nodes into linked modules, thread ResourceRecognitionContextIndex and ask readNodeContext for the owning source context before evaluating expressions or source spans."
       ],
@@ -307,7 +392,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "frontier:resource-definition-index",
@@ -323,6 +408,8 @@
       "rationale": "Later configuration, DI, compiler-world, and template materializers need to connect runtime/evaluator references to full resource definitions without rediscovering resource convergence. This index is the reuse point for those joins and should keep ambiguity explicit.",
       "guidance": [
         "Start here when a materializer needs to resolve a resource from product handle, target identity, module/local name, dependency reference, resource name, or evaluated class/function value.",
+        "Resource-name lookup includes primary resource names and converged alias names; use it for template/compiler-world lookup instead of rebuilding consumer-local alias maps.",
+        "Router string routeables should use ResourceDefinitionIndex custom-element-only lookup and dependency-scoped custom-element lookup so parent component dependencies can disambiguate same-named resources without router-local maps.",
         "Keep ambiguous local-name/resource-name lookups explicit; do not pick a definition by name when multiple definitions are visible.",
         "If a new lookup path appears, add it to the index rather than adding local resource-definition maps inside DI, configuration, or template code."
       ],
@@ -350,7 +437,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "frontier:resource-definition-api-issues",
@@ -368,6 +455,7 @@
         "Start here when source calls to runtime-html definition create/getDefinition APIs need diagnostics.",
         "Keep missing renderer resources in runtime controller/rendering issues and expression converter/behavior name misses in binding-utils/type-system lanes.",
         "Use ResourceIssuePublisher for product records and exact framework-error authority; do not attach resource API diagnostics directly in AppDiagnostics.",
+        "Direct resource API issue sites carry boot-admitted source-file handles and publish spans through sourceSpanAddressForSite; avoid filename lookup for scanner-owned source diagnostics.",
         "If a new direct resource API call shape appears, extend readResourceDefinitionApiCallSites or issueForResourceDefinitionApiCall before adding API-local checks."
       ],
       "anchors": [
@@ -375,7 +463,7 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/resources/resource-definition-api-issues.ts",
           "symbolName": "ResourceDefinitionApiIssueMaterializer",
-          "line": 89,
+          "line": 90,
           "summary": "Materializes direct runtime-html resource definition API issue products."
         },
         {
@@ -405,12 +493,65 @@
           "kind": "product-large-class",
           "className": "ResourceDefinitionApiIssueMaterializer",
           "filePath": "packages/semantic-runtime/src/resources/resource-definition-api-issues.ts",
-          "minLineCount": 90,
+          "minLineCount": 80,
           "minMethodCount": 3
         }
       ],
       "createdAt": "2026-05-14",
-      "updatedAt": "2026-05-14"
+      "updatedAt": "2026-05-15"
+    },
+    {
+      "id": "reuse:style-registry-dependencies",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "resources",
+        "style-resources",
+        "compiler-world",
+        "registration"
+      ],
+      "summary": "cssModules and shadowCSS entries in custom-element dependencies are framework registry dependencies, not visible resource definitions.",
+      "rationale": "Aurelia runtime-html exposes cssModules(...) and shadowCSS(...) as IRegistry values that component child containers register from CustomElementDefinition.dependencies. Resource lookup should not treat them as custom-element/custom-attribute resources, while app topology should still report their style assets.",
+      "guidance": [
+        "When a resource dependency entry is a cssModules(...) or shadowCSS(...) call, classify it as a registry dependency rather than opening a resource-definition field seam.",
+        "When @children or @slotted appears on custom-element members, treat the generated lifecycle hook as annotation-backed registry dependency metadata, not merely as decorator diagnostics.",
+        "Keep registry dependencies out of ResourceDefinitionIndex visibility lookups; they affect registration/container semantics instead of resource-name lookup.",
+        "Use style-topology products to expose css-module, shadow-DOM, component stylesheet, and global stylesheet assets; do not duplicate style import classification locally in resource convergence.",
+        "Before extending style dependency semantics, re-check runtime-html styles.ts and custom-element dependency registration instead of assuming a component-like resource shape."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/style-registry-call.ts",
+          "symbolName": "aureliaStyleRegistryCallKind",
+          "summary": "Shared classifier for framework style registry calls."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-definition-converger.ts",
+          "symbolName": "ResourceDefinitionConverger",
+          "summary": "Converges custom-element dependencies and now distinguishes registry dependencies from resource dependencies."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/resources/resource-reference.ts",
+          "symbolName": "ResourceDependencyReferenceKind",
+          "summary": "Dependency-kind discriminator used to keep visible resources separate from registry dependencies."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/application/style-topology.ts",
+          "symbolName": "readApplicationStyleAssetSites",
+          "summary": "Application topology style asset reader that reuses the shared style registry classifier."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.work-router",
+          "summary": "Route semantic-runtime.resource-style-dependencies before touching resource/style dependency behavior."
+        }
+      ],
+      "createdAt": "2026-05-15",
+      "updatedAt": "2026-05-15"
     }
   ]
 }

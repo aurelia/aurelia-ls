@@ -9,16 +9,15 @@ import {
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
 import {
-  SourceSpanAddress,
-  SourceSpanRole,
-} from '../kernel/address.js';
-import type { AddressHandle } from '../kernel/handles.js';
-import {
   KernelStore,
   KernelStoreBatch,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import {
+  sourceSpanAddressForSite,
+  type SourceSpanAddressPublication,
+} from '../kernel/source-address.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   DiContainerApiMethodKind,
@@ -79,13 +78,7 @@ export class DiDependencyCycleIssueMaterializer {
     if (records.length > 0) {
       this.store.commit(new KernelStoreBatch(records, 'di-dependency-cycle-issues'));
     }
-    for (const publication of publications) {
-      this.store.productDetails.add(
-        DiProductDetails.Issue,
-        publication.issue.productHandle,
-        publication.issue,
-      );
-    }
+    this.store.productDetails.addAll(DiProductDetails.Issue, publications.map((publication) => publication.issue));
 
     return new DiDependencyCycleIssueMaterialization(
       publications.map((publication) => publication.issue),
@@ -107,7 +100,7 @@ export class DiDependencyCycleIssueMaterializer {
       return [];
     }
     const local = dependencyCycleIssueLocalKey(project, site, index);
-    const source = this.sourceAddress(local, site.sourcePath, site.start, site.end);
+    const source = this.sourceAddress(local, site);
     const publication = this.publisher.publishCyclicDependency(
       local,
       site.keyExpressionText,
@@ -120,33 +113,9 @@ export class DiDependencyCycleIssueMaterializer {
 
   private sourceAddress(
     local: string,
-    sourcePath: string,
-    start: number,
-    end: number,
-  ): {
-    readonly handle: AddressHandle | null;
-    readonly records: readonly KernelStoreRecord[];
-  } {
-    const file = this.store.readBestSourceFileAddressForFileName(sourcePath);
-    if (file == null) {
-      return {
-        handle: null,
-        records: [],
-      };
-    }
-    const handle = this.store.handles.address(`${local}:source`);
-    return {
-      handle,
-      records: [
-        new SourceSpanAddress(
-          handle,
-          file.handle,
-          start,
-          end,
-          SourceSpanRole.Primary,
-        ),
-      ],
-    };
+    site: DiContainerApiCallSite,
+  ): SourceSpanAddressPublication {
+    return sourceSpanAddressForSite(this.store, local, site);
   }
 }
 

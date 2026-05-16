@@ -31,6 +31,18 @@ interface AtlasSelfPressureValue {
     readonly lineCount: number;
     readonly callCount: number;
     readonly uniqueCallTargetCount: number;
+    readonly switchTopologyFingerprint: string | null;
+    readonly switchTopologyCount: number;
+    readonly source?: SourceRef;
+  }[];
+  readonly variableSurfaces?: readonly {
+    readonly name: string;
+    readonly declarationKind: string;
+    readonly exported: boolean;
+    readonly filePath: string;
+    readonly lineCount: number;
+    readonly initializerKind: string;
+    readonly initializerEntryCount: number | null;
     readonly source?: SourceRef;
   }[];
   readonly functionShapeGroups?: readonly {
@@ -39,6 +51,17 @@ interface AtlasSelfPressureValue {
     readonly nameCount: number;
     readonly fileCount: number;
     readonly lineCount: number;
+    readonly nameSamples: readonly string[];
+    readonly fileSamples: readonly string[];
+    readonly source?: SourceRef;
+  }[];
+  readonly functionControlFlowShapeGroups?: readonly {
+    readonly switchTopologyFingerprint: string;
+    readonly functionCount: number;
+    readonly nameCount: number;
+    readonly fileCount: number;
+    readonly lineCount: number;
+    readonly switchTopologyCount: number;
     readonly nameSamples: readonly string[];
     readonly fileSamples: readonly string[];
     readonly source?: SourceRef;
@@ -149,8 +172,10 @@ const [
 const [
   classAnswer,
   functionAnswer,
+  variableAnswer,
   duplicateFunctionNameRows,
   functionShapeAnswer,
+  functionControlFlowShapeAnswer,
   functionWrapperAnswer,
   axisAnswer,
   optionalObjectSpreadAnswer,
@@ -172,13 +197,20 @@ const [
     filters: { minCallCount: 20, orderBy: "callCount" },
     budget: { rows: 10, evidencePerSubject: 2 },
   }),
+  api.ask({
+    lens: LensId.AtlasSelf,
+    locus: RepoRootLocus,
+    projection: "variables",
+    filters: { minInitializerEntryCount: 20, orderBy: "initializerEntryCount" },
+    budget: { rows: detail ? 12 : 6, evidencePerSubject: 2 },
+  }),
   readAllPagedRows<AtlasSelfPressureValue, NonNullable<AtlasSelfPressureValue["functionSurfaces"]>[number]>(
     api,
     {
       label: "atlas.self:functions duplicate names",
       lens: LensId.AtlasSelf,
       projection: "functions",
-      filters: { functionKind: "top-level" },
+      filters: { functionKind: "top-level", includeFunctionBodyAnalysis: true },
       rowsFromValue: (value) => value?.functionSurfaces ?? [],
     },
   ),
@@ -187,6 +219,13 @@ const [
     locus: RepoRootLocus,
     projection: "function-shapes",
     filters: functionShapeFilters,
+    budget: { rows: detail ? 12 : 6, evidencePerSubject: 2 },
+  }),
+  api.ask({
+    lens: LensId.AtlasSelf,
+    locus: RepoRootLocus,
+    projection: "function-control-flow-shapes",
+    filters: { minFunctionCount: 2, minNameCount: 2 },
     budget: { rows: detail ? 12 : 6, evidencePerSubject: 2 },
   }),
   api.ask({
@@ -245,7 +284,12 @@ for (const answer of [
 }
 assertHitAnswer<AtlasSelfPressureValue>("atlas.self:classes", classAnswer);
 assertHitAnswer<AtlasSelfPressureValue>("atlas.self:functions", functionAnswer);
+assertHitOrMissAnswer("atlas.self:variables", variableAnswer);
 assertHitOrMissAnswer("atlas.self:function-shapes", functionShapeAnswer);
+assertHitOrMissAnswer(
+  "atlas.self:function-control-flow-shapes",
+  functionControlFlowShapeAnswer,
+);
 assertHitOrMissAnswer("atlas.self:function-wrappers", functionWrapperAnswer);
 assertHitOrMissAnswer("atlas.self:axis-pressure", axisAnswer);
 assertHitOrMissAnswer("atlas.self:axis-pressure optional object spread", optionalObjectSpreadAnswer);
@@ -279,11 +323,15 @@ const functionRows = (functionAnswer.value.functionSurfaces ?? []).slice(
   0,
   classFunctionDisplayRows,
 );
+const variableRows =
+  answerValue<AtlasSelfPressureValue>(variableAnswer)?.variableSurfaces ?? [];
 const duplicateFunctionNameGroups = duplicateTopLevelFunctionNameGroups(
   duplicateFunctionNameRows,
 );
 const functionShapeRows =
   answerValue<AtlasSelfPressureValue>(functionShapeAnswer)?.functionShapeGroups ?? [];
+const functionControlFlowShapeRows =
+  answerValue<AtlasSelfPressureValue>(functionControlFlowShapeAnswer)?.functionControlFlowShapeGroups ?? [];
 const functionWrapperRows =
   answerValue<AtlasSelfPressureValue>(functionWrapperAnswer)?.functionWrapperRows ?? [];
 const axisRows =
@@ -350,6 +398,16 @@ for (const row of functionRows) {
 }
 
 console.log("");
+console.log("atlas.self large variable initializer pressure");
+console.log("filters: minInitializerEntryCount=20; top-level variables only; useful for route catalogs, fixture catalogs, and other table-shaped anchors");
+printEmptyRows(variableRows);
+for (const row of variableRows) {
+  console.log(
+    `- ${row.name}: ${row.declarationKind}, exported=${row.exported}, ${row.initializerKind}(${row.initializerEntryCount ?? 0}), ${row.lineCount} line(s) at ${sourceLabel(row)}`,
+  );
+}
+
+console.log("");
 console.log("atlas.self duplicate top-level helper-name pressure");
 console.log("filters: functionKind=top-level; same function name appears in more than one file; AST body-shape fingerprint groups equivalent control-flow shapes before exact body text");
 printEmptyRows(duplicateFunctionNameGroups);
@@ -372,6 +430,16 @@ printEmptyRows(functionShapeRows);
 for (const row of functionShapeRows.slice(0, duplicateDisplayRows)) {
   console.log(
     `- ${row.functionCount} function(s), ${row.nameCount} name(s), ${row.fileCount} file(s), ${row.lineCount} total line(s), names ${row.nameSamples.join(", ")}, samples ${row.fileSamples.join("; ")} at ${sourceLabel(row)}`,
+  );
+}
+
+console.log("");
+console.log("atlas.self shared switch-topology function pressure");
+console.log("filters: minFunctionCount=2/minNameCount=2; structural canary for parallel switch walkers and dispatch surfaces, not a duplicate verdict");
+printEmptyRows(functionControlFlowShapeRows);
+for (const row of functionControlFlowShapeRows.slice(0, duplicateDisplayRows)) {
+  console.log(
+    `- ${row.functionCount} function(s), ${row.nameCount} name(s), ${row.fileCount} file(s), ${row.lineCount} total line(s), ${row.switchTopologyCount} switch(es), names ${row.nameSamples.join(", ")}, samples ${row.fileSamples.join("; ")} at ${sourceLabel(row)}`,
   );
 }
 

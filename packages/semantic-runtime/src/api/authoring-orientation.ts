@@ -99,6 +99,7 @@ import type {
 import { readAppOpenSeams } from './open-seam-projections.js';
 import { readResourceDefinitionRows } from './resource-projections.js';
 import { readRuntimeControllerRows } from './controller-projections.js';
+import { readSemanticRouteEffectFactRows } from './route-effect-facts.js';
 import { RuntimeBindingValueChannelKind } from '../observation/runtime-binding-observation.js';
 import { RuntimeBindingTargetKind } from '../template/runtime-binding.js';
 import { describeAddress, type SemanticSourceReference } from './source-reference.js';
@@ -1415,6 +1416,7 @@ function expectedEffectObservationSnapshot(
     routeFacts: facts.emission.routes.readRouteConfigs().length +
       facts.emission.routeRecognizer.readConfigurableRoutes().length +
       facts.emission.routeRecognizer.readEndpoints().length,
+    routeFactRows: readSemanticRouteEffectFactRows(facts.emission, facts.store, facts.topology),
     routes: facts.topology.routes,
     dependencyInjectionFacts: facts.emission.appWorld.diWorld.containers.length +
       facts.emission.appWorld.diWorld.resolverSlots.length +

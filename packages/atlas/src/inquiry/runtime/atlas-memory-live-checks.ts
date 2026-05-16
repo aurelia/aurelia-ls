@@ -10,6 +10,7 @@ import type {
   AtlasMemoryAtlasSelfClassCheck,
   AtlasMemoryAtlasSelfFunctionCheck,
   AtlasMemoryAtlasSelfSourceFileCheck,
+  AtlasMemoryAtlasSelfVariableCheck,
   AtlasMemoryAuLinkExistsCheck,
   AtlasMemoryLiveCheck,
   AtlasMemoryLiveCheckResult,
@@ -32,7 +33,9 @@ export function readAtlasMemorySelfAnalysisIfNeeded(
   records: readonly AtlasMemoryRecord[],
 ): AtlasSelfAnalysis | undefined {
   return memoryNeedsAtlasSelfAnalysis(records)
-    ? readAtlasSelfAnalysis(sourceProject)
+    ? readAtlasSelfAnalysis(sourceProject, {
+      includeSemanticTaxonomyAnalysis: false,
+    })
     : undefined;
 }
 
@@ -56,6 +59,8 @@ export function evaluateAtlasMemoryLiveCheck(
       return evaluateAtlasSelfClassCheck(sourceProject, atlasSelfAnalysis, check);
     case "atlas-self-function":
       return evaluateAtlasSelfFunctionCheck(sourceProject, atlasSelfAnalysis, check);
+    case "atlas-self-variable":
+      return evaluateAtlasSelfVariableCheck(sourceProject, atlasSelfAnalysis, check);
     case "auLink-exists":
       return evaluateAuLinkExistsCheck(sourceProject, productClasses, check);
   }
@@ -68,7 +73,8 @@ function memoryNeedsAtlasSelfAnalysis(
     (record.liveChecks ?? []).some((check) =>
       check.kind === "atlas-self-source-file" ||
       check.kind === "atlas-self-class" ||
-      check.kind === "atlas-self-function",
+      check.kind === "atlas-self-function" ||
+      check.kind === "atlas-self-variable",
     ),
   );
 }
@@ -129,7 +135,7 @@ function evaluateSourceFileExistsCheck(
   const exists = atlasMemoryRepoPathExists(sourceProject, check.filePath);
   return {
     check,
-    status: exists ? "active" : "stale-source",
+    status: exists ? "present" : "stale-source",
     summary: exists
       ? `${check.filePath} exists in the current checkout.`
       : `${check.filePath} is missing in the current checkout.`,
@@ -154,7 +160,7 @@ function evaluateSourceDeclarationExistsCheck(
   );
   return {
     check,
-    status: exists ? "active" : "stale-check",
+    status: exists ? "present" : "stale-check",
     summary: exists
       ? `${check.symbolName} exists in ${check.filePath}.`
       : `${check.symbolName} was not found in ${check.filePath}.`,
@@ -272,6 +278,47 @@ function evaluateAtlasSelfFunctionCheck(
   };
 }
 
+function evaluateAtlasSelfVariableCheck(
+  sourceProject: SourceProject,
+  atlasSelfAnalysis: AtlasSelfAnalysis | undefined,
+  check: AtlasMemoryAtlasSelfVariableCheck,
+): AtlasMemoryLiveCheckResult {
+  if (atlasSelfAnalysis === undefined) {
+    return {
+      check,
+      status: "stale-check",
+      summary: "atlas.self analysis was not available for an atlas-self-variable live check.",
+    };
+  }
+  const row = atlasSelfAnalysis.variableSurfaces.find((entry) =>
+    entry.name === check.variableName &&
+    (check.filePath === undefined || entry.filePath === check.filePath),
+  );
+  if (row === undefined) {
+    return missingAtlasSelfCheck(
+      sourceProject,
+      check,
+      check.filePath,
+      `Atlas variable ${check.variableName}`,
+    );
+  }
+  const active =
+    row.lineCount >= (check.minLineCount ?? 0) &&
+    (row.initializerEntryCount ?? 0) >=
+      (check.minInitializerEntryCount ?? 0) &&
+    (check.initializerKind === undefined ||
+      row.initializerKind === check.initializerKind);
+  return {
+    check,
+    status: active ? "active" : "resolved",
+    summary: active
+      ? `${check.variableName} is still ${row.lineCount} line(s) with ${row.initializerKind} initializer and ${row.initializerEntryCount ?? 0} initializer entries.`
+      : `${check.variableName} is below atlas.self variable thresholds at ${row.lineCount} line(s), ${row.initializerKind} initializer, and ${row.initializerEntryCount ?? 0} initializer entries.`,
+    source: oneBasedSourceFromSourceRange(row.source),
+    atlasSelfVariable: row,
+  };
+}
+
 function evaluateAuLinkExistsCheck(
   sourceProject: SourceProject,
   productClasses: readonly ProductArchitectureClassSurfaceRow[],
@@ -285,7 +332,7 @@ function evaluateAuLinkExistsCheck(
   if (row !== undefined) {
     return {
       check,
-      status: "active",
+      status: "present",
       summary: `${check.linkId} is present on ${row.name} in ${row.filePath}.`,
       source: row.source,
       productClass: row,
@@ -313,7 +360,8 @@ function missingAtlasSelfCheck(
   check:
     | AtlasMemoryAtlasSelfSourceFileCheck
     | AtlasMemoryAtlasSelfClassCheck
-    | AtlasMemoryAtlasSelfFunctionCheck,
+    | AtlasMemoryAtlasSelfFunctionCheck
+    | AtlasMemoryAtlasSelfVariableCheck,
   filePath: string | undefined,
   label: string,
 ): AtlasMemoryLiveCheckResult {

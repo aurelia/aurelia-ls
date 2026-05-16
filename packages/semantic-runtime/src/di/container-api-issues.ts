@@ -1,16 +1,15 @@
 import ts from 'typescript';
 
 import {
-  SourceSpanAddress,
-  SourceSpanRole,
-} from '../kernel/address.js';
-import type { AddressHandle } from '../kernel/handles.js';
-import {
   KernelStore,
   KernelStoreBatch,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import {
+  sourceSpanAddressForSite,
+  type SourceSpanAddressPublication,
+} from '../kernel/source-address.js';
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
@@ -77,13 +76,7 @@ export class DiContainerApiIssueMaterializer {
     if (records.length > 0) {
       this.store.commit(new KernelStoreBatch(records, 'di-container-api-issues'));
     }
-    for (const publication of publications) {
-      this.store.productDetails.add(
-        DiProductDetails.Issue,
-        publication.issue.productHandle,
-        publication.issue,
-      );
-    }
+    this.store.productDetails.addAll(DiProductDetails.Issue, publications.map((publication) => publication.issue));
 
     return new DiContainerApiIssueMaterialization(
       publications.map((publication) => publication.issue),
@@ -100,42 +93,42 @@ export class DiContainerApiIssueMaterializer {
   ): readonly DiIssuePublication[] {
     if (containerApiCallValidatesNullishKey(site) && site.nullishKeyArguments.length > 0) {
       const local = containerApiIssueLocalKey(project, site, index, DiIssueKind.NullUndefinedKey);
-      const source = this.sourceAddress(local, site.sourcePath, site.start, site.end);
+      const source = this.sourceAddress(local, site);
       const publication = this.publisher.publishNullUndefinedKeyForContainerCall(local, site, source.handle);
       return [withDiIssueSourceAddressRecords(publication, source.records)];
     }
 
     if (containerApiCallHasExactNoneResolverFailure(site)) {
       const local = containerApiIssueLocalKey(project, site, index, DiIssueKind.NoneResolverFound);
-      const source = this.sourceAddress(local, site.sourcePath, site.start, site.end);
+      const source = this.sourceAddress(local, site);
       const publication = this.publisher.publishNoneResolverFoundForContainerCall(local, site, source.handle);
       return [withDiIssueSourceAddressRecords(publication, source.records)];
     }
 
     if (containerApiCallHasExactNullResolverFromRegisterFailure(site, nullReturningRegistryNames)) {
       const local = containerApiIssueLocalKey(project, site, index, DiIssueKind.NullResolverFromRegister);
-      const source = this.sourceAddress(local, site.sourcePath, site.start, site.end);
+      const source = this.sourceAddress(local, site);
       const publication = this.publisher.publishNullResolverFromRegisterForContainerCall(local, site, source.handle);
       return [withDiIssueSourceAddressRecords(publication, source.records)];
     }
 
     if (containerApiCallHasExactInvalidNewInstanceOnInterfaceFailure(site, noDefaultInterfaceNames)) {
       const local = containerApiIssueLocalKey(project, site, index, DiIssueKind.InvalidNewInstanceOnInterface);
-      const source = this.sourceAddress(local, site.sourcePath, site.start, site.end);
+      const source = this.sourceAddress(local, site);
       const publication = this.publisher.publishInvalidNewInstanceOnInterfaceForContainerCall(local, site, source.handle);
       return [withDiIssueSourceAddressRecords(publication, source.records)];
     }
 
     if (containerApiCallHasExactNativeConstructionFailure(site)) {
       const local = containerApiIssueLocalKey(project, site, index, DiIssueKind.NoConstructNativeFunction);
-      const source = this.sourceAddress(local, site.sourcePath, site.start, site.end);
+      const source = this.sourceAddress(local, site);
       const publication = this.publisher.publishNoConstructNativeFunctionForContainerCall(local, site, source.handle);
       return [withDiIssueSourceAddressRecords(publication, source.records)];
     }
 
     if (containerApiCallHasExactEphemeralNonConstructorFailure(site)) {
       const local = containerApiIssueLocalKey(project, site, index, DiIssueKind.UnableJitNonConstructor);
-      const source = this.sourceAddress(local, site.sourcePath, site.start, site.end);
+      const source = this.sourceAddress(local, site);
       const publication = this.publisher.publishUnableJitNonConstructorForContainerCall(local, site, source.handle);
       return [withDiIssueSourceAddressRecords(publication, source.records)];
     }
@@ -145,33 +138,9 @@ export class DiContainerApiIssueMaterializer {
 
   private sourceAddress(
     local: string,
-    sourcePath: string,
-    start: number,
-    end: number,
-  ): {
-    readonly handle: AddressHandle | null;
-    readonly records: readonly KernelStoreRecord[];
-  } {
-    const file = this.store.readBestSourceFileAddressForFileName(sourcePath);
-    if (file == null) {
-      return {
-        handle: null,
-        records: [],
-      };
-    }
-    const handle = this.store.handles.address(`${local}:source`);
-    return {
-      handle,
-      records: [
-        new SourceSpanAddress(
-          handle,
-          file.handle,
-          start,
-          end,
-          SourceSpanRole.Primary,
-        ),
-      ],
-    };
+    site: DiContainerApiCallSite,
+  ): SourceSpanAddressPublication {
+    return sourceSpanAddressForSite(this.store, local, site);
   }
 }
 

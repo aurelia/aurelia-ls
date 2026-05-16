@@ -1,3 +1,6 @@
+import { resolve } from '@aurelia/kernel';
+import { RequestService } from '../services/request-service';
+
 export type ContactPreference = 'email' | 'phone';
 export type RequestTopic = 'hardware' | 'billing' | 'support';
 
@@ -18,8 +21,11 @@ export interface ServiceRequest {
 }
 
 export class AppState {
-  readonly requestIds = ['request-1', 'request-2'];
-  selectedRequestId = 'request-1';
+  private readonly requestService = resolve(RequestService);
+  private readonly requests = new Map<string, ServiceRequest>();
+
+  selectedRequestId = '';
+  isLoadingRequests = false;
 
   readonly emailPreference: ContactPreference = 'email';
   readonly phonePreference: ContactPreference = 'phone';
@@ -28,10 +34,9 @@ export class AppState {
   readonly supportTopic: RequestTopic = 'support';
   readonly supportTopicSummary: RequestTopicSummary = { id: 'support', label: 'Support' };
 
-  private readonly requests = new Map<string, ServiceRequest>([
-    ['request-1', createRequest('request-1', 'Ada Lovelace')],
-    ['request-2', createRequest('request-2', 'Grace Hopper')],
-  ]);
+  get requestIds(): readonly string[] {
+    return [...this.requests.keys()];
+  }
 
   get submittedCount(): number {
     let count = 0;
@@ -45,23 +50,67 @@ export class AppState {
     return this.requests.get(requestId) ?? null;
   }
 
-  markSubmitted(requestId: string): void {
+  async loadRequests(): Promise<void> {
+    if (this.requests.size > 0 || this.isLoadingRequests) {
+      return;
+    }
+
+    this.isLoadingRequests = true;
+    try {
+      this.replaceRequests(await this.requestService.loadRequests());
+      this.selectedRequestId = this.requestIds[0] ?? '';
+    } finally {
+      this.isLoadingRequests = false;
+    }
+  }
+
+  updateCustomerName(requestId: string, value: string): void {
+    const request = this.readRequest(requestId);
+    if (request != null) {
+      request.customerName = value;
+    }
+  }
+
+  updateEmail(requestId: string, value: string): void {
+    const request = this.readRequest(requestId);
+    if (request != null) {
+      request.email = value;
+    }
+  }
+
+  updateUrgency(requestId: string, value: boolean): void {
+    const request = this.readRequest(requestId);
+    if (request != null) {
+      request.urgent = value;
+    }
+  }
+
+  updateContactPreference(requestId: string, value: ContactPreference): void {
+    const request = this.readRequest(requestId);
+    if (request != null) {
+      request.contactPreference = value;
+    }
+  }
+
+  updateNotes(requestId: string, value: string): void {
+    const request = this.readRequest(requestId);
+    if (request != null) {
+      request.notes = value;
+    }
+  }
+
+  async submitRequest(requestId: string): Promise<void> {
     const request = this.readRequest(requestId);
     if (request != null) {
       request.submitCount += 1;
+      await this.requestService.submitRequest(request);
     }
   }
-}
 
-function createRequest(id: string, customerName: string): ServiceRequest {
-  return {
-    id,
-    customerName,
-    email: `${customerName.toLowerCase().replace(' ', '.')}@example.test`,
-    urgent: false,
-    contactPreference: 'email',
-    topics: ['support'],
-    notes: '',
-    submitCount: 0,
-  };
+  private replaceRequests(requests: readonly ServiceRequest[]): void {
+    this.requests.clear();
+    for (const request of requests) {
+      this.requests.set(request.id, request);
+    }
+  }
 }

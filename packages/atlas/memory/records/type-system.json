@@ -11,25 +11,37 @@
         "world-construction"
       ],
       "summary": "TypeSystemProject is the shared TypeScript Program/checker epoch that bridges static evaluation, framework resource projection, template scope, and inquiry.",
-      "rationale": "The semantic runtime should not grow isolated TypeChecker setup paths when a feature needs app-local checker facts. TypeSystemProject is the reusable epoch boundary over evaluated source files, ambient app declarations, compiler host setup, module export lookup, and runtime target type reads.",
+      "rationale": "The semantic runtime should not grow isolated TypeChecker setup paths when a feature needs app-local checker facts. TypeSystemProject is the reusable epoch boundary over evaluated source files, ambient app declarations, compiler host setup, module export lookup, and runtime target type reads. App pressure can make TypeScript Program construction look like generic semantic-runtime bulk, so this frontier also owns phase item counts that distinguish authored source volume from checker/lib/declaration volume.",
       "guidance": [
         "Start here when a feature needs a checker epoch, source-file lookup, module export type lookup, or runtime target instance type for a resource.",
         "Keep evaluator source admission and TypeChecker Program construction threaded through this epoch instead of rebuilding local programs.",
-        "If external app loading is slow, inspect TypeSystemProject phase timings before guessing at semantic-runtime bulk cost."
+        "If app loading is slow, inspect TypeSystemProject phase timings and phase item counts before guessing at semantic-runtime bulk cost.",
+        "Treat a large `type-system:program` item count as a substrate/admission/inquiry-depth question, not as evidence that a downstream template, authoring, or diagnostics materializer is inherently expensive.",
+        "Keep TypeSystemProject profile item counts flowing through app pressure scripts so future performance work can compare evaluated source files, ambient sources, compiler-host files, and final Program files.",
+        "Use the TypeSystemProject compiler-host source-file cache for dependency/lib files under node_modules before adding a second checker host path. App pressure reports host source-cache hits, misses, writes, and bypasses; current-project and sibling workspace authored files should continue to bypass or come from evaluated sources so edits do not get hidden behind global cache state.",
+        "declaration-source.ts is the intentional filename-to-source-address bridge for TypeChecker declarations. Reuse admitted source-file addresses when present, and only materialize `type-system-program` source files for checker-only ambient/framework/dependency declarations; scanned app-source diagnostics should carry admitted handles instead.",
+        "Use admittedSourceFileAddressHandleForCheckerNode when a checker-carrier consumer scans declaration bodies for app diagnostics and should skip checker-only framework/ambient/dependency files instead of admitting them as diagnostic sources."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/project.ts",
           "symbolName": "TypeSystemProject",
-          "line": 35,
+          "line": 106,
           "summary": "Current app-local TypeScript Program/checker epoch."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemCompilerHostSourceFileCache",
+          "line": 43,
+          "summary": "Shared compiler-host source-file cache for node_modules dependency/lib files."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
           "symbolName": "TypeSystemProjectBuilder",
-          "line": 161,
+          "line": 274,
           "summary": "Builds the TypeSystemProject epoch from evaluated app sources."
         },
         {
@@ -43,6 +55,11 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/README.md",
           "summary": "Type-system substrate responsibilities and watchpoints."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/scripts/app-api-pressure.mjs",
+          "summary": "App pressure timing lane that aggregates TypeSystemProject phase timings and item counts."
         }
       ],
       "liveChecks": [
@@ -55,7 +72,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "reuse:checker-expression-type-world",
@@ -110,11 +127,13 @@
         "expression",
         "template"
       ],
-      "summary": "CheckerTypeShapeAccess is the shared resolver for member, finite-key, index-signature, and numeric-index value shapes over projected checker products.",
-      "rationale": "Expression evaluation, cursor owner projection, binding-pattern locals, and diagnostics all need to read values through type-shape products. Keeping this as a named substrate avoids regrowing small TypeChecker access paths in answer code or template-specific helpers.",
+      "summary": "CheckerTypeShapeAccess is the shared resolver for member-value, finite-key, index-signature, numeric-index, and member-write access over projected checker products.",
+      "rationale": "Expression evaluation, cursor owner projection, binding-pattern locals, observation data-flow, and diagnostics all need to read or classify values through type-shape products. Keeping this as a named substrate avoids regrowing small TypeChecker access paths in answer code, observation helpers, or template-specific code.",
       "guidance": [
         "Start here when a feature needs member value type, dynamic keyed access, finite literal-key access, or array/tuple numeric access from a type-shape product.",
         "Do not collapse index-signature, finite-key, numeric-key, and dot-member semantics into one fuzzy member lookup.",
+        "Use memberValueAccess when diagnostics, expression reads, or repairs need to distinguish missing members from checker-visible members whose value type could not be projected.",
+        "Use memberWriteAccess when observation or a future policy layer needs TypeChecker writability; downstream code should map the result into framework policy instead of reopening checker symbols locally.",
         "If a missing member looks like a weak-typing diagnostic, preserve the open reason rather than synthesizing a misleading member."
       ],
       "anchors": [
@@ -122,7 +141,7 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/checker-type-shape-access.ts",
           "symbolName": "CheckerTypeShapeAccess",
-          "line": 32,
+          "line": 71,
           "summary": "Shared TypeChecker-backed access service for projected type shapes."
         },
         {
@@ -141,7 +160,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "frontier:checker-expression-type-synthesizer",
@@ -158,6 +177,7 @@
       "guidance": [
         "Start here when a runtime-shaped expression result needs a durable synthetic type-shape product.",
         "Keep synthesis separate from expression execution; evaluators should decide what was produced, while this class publishes the reusable type-shape product.",
+        "Use tuple synthesis for TypeChecker-contextual rest bindings and template runtime tuple products instead of creating ad hoc array/object shapes in the caller.",
         "If branch-aware completion needs more than common union members, add an explicit continuation instead of weakening union synthesis."
       ],
       "anchors": [
@@ -184,7 +204,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "frontier:checker-expression-scope-narrower",
@@ -345,6 +365,8 @@
         "Start here when a feature touches call return types, construct return types, overload arity, argument assignability, or value-converter toView signatures.",
         "Keep ordinary single-signature calls lazy; do not evaluate arguments just to re-prove a fixed return type.",
         "Use this projector as the grounding point before adding cursor-aware call-argument contexts for callback bodies such as collection methods.",
+        "Arrow-function contextual parameter typing also belongs here: reuse the call projector's callable-parameter path so overload, arity, and rest-parameter policy do not drift into the expression evaluator.",
+        "Keep runtime argument context and callback rest-parameter context distinct. Target rest parameters unwrap for ordinary argument values and positional callback parameters, but arrow rest bindings should preserve the rest array or synthesize a tuple-shaped remaining-argument type.",
         "Keep fromView, generic inference from synthetic arguments, custom expression plugins, and richer collection prototype semantics explicit until their missing facts are modeled."
       ],
       "anchors": [
@@ -376,7 +398,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-05-15"
     }
   ]
 }

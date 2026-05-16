@@ -179,6 +179,7 @@ export function repairKindForDiagnosticSuggestion(
       return 'strengthen-owner-type';
     case 'register-resource':
     case 'resolve-runtime-boundary':
+    case 'configure-node-observer':
       return 'resolve-runtime-boundary';
     case 'remove-duplicate-binding-behavior':
     case 'use-assignable-expression':

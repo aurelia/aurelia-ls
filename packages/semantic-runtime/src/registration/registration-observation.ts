@@ -11,6 +11,7 @@ import type {
 } from './registration-admission.js';
 import type {
   FrameworkRegistrationKind,
+  RegistryBodyReference,
   RegistrationValueKind,
 } from './registration-reference.js';
 
@@ -84,6 +85,8 @@ export class RegistrationValueObservation {
     readonly sourceFileAddressHandle: AddressHandle | null = null,
     /** Module key that owns the value declaration when it differs from the recognizing module. */
     readonly moduleKey: string | null = null,
+    /** Known registry-body semantics, when an IRegistry value was produced by a framework registry factory. */
+    readonly registryBody: RegistryBodyReference | null = null,
   ) {}
 }
 
@@ -120,5 +123,7 @@ export class RegistrationAdmissionObservation {
     readonly registryParameters: readonly RegistrationValueObservation[] = [],
     /** Unresolved points that must stay visible to later consumers. */
     readonly openSeams: readonly RegistrationRecognitionOpen[] = [],
+    /** Resource lookup name override passed to `ResourceDefinition.register(container, alias)`. */
+    readonly resourceLookupNameOverride: string | null = null,
   ) {}
 }

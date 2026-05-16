@@ -73,22 +73,21 @@ import {
   TypeSystemProductDetails,
 } from '../type-system/product-details.js';
 import {
-  checkerDeclarationsAreReadonly,
-  checkerSymbolMemberKind,
-  declarationsForCheckerSymbol,
-} from '../type-system/checker-member-surface.js';
-import { checkerTypeShapeIsDefinitelyNullish } from '../type-system/checker-related-types.js';
+  checkerTypeShapeIsDefinitelyNullish,
+} from '../type-system/checker-related-types.js';
 import {
-  CheckerTypeMember,
-  CheckerTypeMemberKind,
-  CheckerTypeProjectionOrigin,
   type CheckerTypeReference,
   type CheckerTypeShape,
 } from '../type-system/type-shape.js';
 import {
   CheckerTypeProjector,
-  type CheckerTypeProjectionRequest,
 } from '../type-system/checker-projector.js';
+import {
+  CheckerTypeShapeAccess,
+  CheckerTypeShapeMemberWriteAccessKind,
+  checkerTypeMemberWriteAccess,
+  type CheckerTypeShapeMemberWriteAccess,
+} from '../type-system/checker-type-shape-access.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import {
   TemplateBindingMode,
@@ -1024,35 +1023,16 @@ class BindingDataFlowSourceWriteCapabilityProjector {
         RuntimeBindingDataFlowSourceAssignmentReasonKind.OwnerTypeOpen,
       );
     }
-    const ownerShape = this.typeAccess.readTypeShape(ownerEvaluation.typeReference);
-    if (strictBinding === true && ownerShape != null && checkerTypeShapeIsDefinitelyNullish(ownerShape)) {
+    const ownerShape = ownerEvaluation.typeShape;
+    if (strictBinding === true && checkerTypeShapeIsDefinitelyNullish(ownerShape)) {
       return sourceWriteCapabilityRuntimeUnassignable(
         `Aurelia strict astAssign rejects member assignment '${expression.name.name}' because the owner type is definitely nullish.`,
         RuntimeBindingDataFlowSourceAssignmentReasonKind.NullishAssignment,
       );
     }
-    const member = ownerShape?.members.find((candidate) => candidate.name === expression.name.name) ?? null;
-    if (member != null) {
-      return memberWriteCapability(member);
-    }
-    const checkerMember = checkerMemberForOwnerType(ownerShape, expression.name.name);
-    if (checkerMember != null) {
-      return checkerSymbolWriteCapability(checkerMember.symbol, checkerMember.declarations);
-    }
-    const stringIndexInfo = checkerStringIndexInfoForOwnerType(ownerShape);
-    if (stringIndexInfo != null) {
-      return stringIndexInfo.isReadonly
-        ? sourceWriteCapabilityTypeScriptStrictness(
-          `Owner type '${ownerShape?.display ?? ownerEvaluation.typeReference.display ?? 'unknown'}' exposes a readonly string index signature; Aurelia astAssign still writes to runtime objects.`,
-          false,
-          RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceMemberReadonly,
-        )
-        : sourceWriteCapabilityWritable();
-    }
-    return sourceWriteCapabilityTypeScriptStrictness(
-      `Owner type '${ownerShape?.display ?? ownerEvaluation.typeReference.display ?? 'unknown'}' did not project member '${expression.name.name}'; Aurelia astAssign can still write to runtime objects.`,
-      null,
-      RuntimeBindingDataFlowSourceAssignmentReasonKind.OwnerMemberNotProjected,
+    return sourceWriteCapabilityForMemberAccess(
+      this.typeAccess.memberWriteAccess(ownerShape, expression.name.name),
+      ownerShape.display ?? ownerEvaluation.typeReference.display,
       ownerEvaluation.typeReference,
     );
   }
@@ -1080,8 +1060,8 @@ class BindingDataFlowSourceWriteCapabilityProjector {
         RuntimeBindingDataFlowSourceAssignmentReasonKind.OwnerTypeOpen,
       );
     }
-    const ownerShape = this.typeAccess.readTypeShape(ownerEvaluation.typeReference);
-    return ownerShape != null && checkerTypeShapeIsDefinitelyNullish(ownerShape)
+    const ownerShape = ownerEvaluation.typeShape;
+    return checkerTypeShapeIsDefinitelyNullish(ownerShape)
       ? sourceWriteCapabilityRuntimeUnassignable(
         'Aurelia strict astAssign rejects keyed assignment because the owner type is definitely nullish.',
         RuntimeBindingDataFlowSourceAssignmentReasonKind.NullishAssignment,
@@ -1103,7 +1083,11 @@ class BindingDataFlowSourceWriteCapabilityProjector {
         'Scope slot member product was not available for runtime assignment policy.',
         RuntimeBindingDataFlowSourceAssignmentReasonKind.ScopeSlotTypeCheckerMemberUnavailable,
       )
-      : memberWriteCapability(member);
+      : sourceWriteCapabilityForMemberAccess(
+        checkerTypeMemberWriteAccess(member),
+        member.ownerType.display,
+        member.ownerType,
+      );
   }
 }
 
@@ -1278,10 +1262,14 @@ class BindingDataFlowAssignabilityEvaluator {
 }
 
 class BindingDataFlowTypeAccess {
+  private readonly shapeAccess: CheckerTypeShapeAccess;
+
   constructor(
     private readonly store: KernelStore,
-    private readonly typeProjector: CheckerTypeProjector,
-  ) {}
+    typeProjector: CheckerTypeProjector,
+  ) {
+    this.shapeAccess = new CheckerTypeShapeAccess(store, typeProjector);
+  }
 
   readTypeShape(reference: CheckerTypeReference | null): CheckerTypeShape | null {
     return reference?.productHandle == null
@@ -1301,46 +1289,21 @@ class BindingDataFlowTypeAccess {
     propertyName: string,
   ): CheckerTypeReference | null {
     const shape = this.readTypeShape(reference);
-    const member = shape?.members.find((candidate) => candidate.name === propertyName) ?? null;
-    if (member?.valueType != null) {
-      return member.valueType;
-    }
     if (shape == null || reference == null) {
       return null;
     }
-    return this.projectCheckerMemberType(reference, shape, propertyName);
+    return this.shapeAccess.memberValueType(
+      shape,
+      propertyName,
+      `${reference.productHandle ?? reference.checkerKey ?? 'open'}:member:${propertyName}`,
+    )?.toReference() ?? null;
   }
 
-  private projectCheckerMemberType(
-    reference: CheckerTypeReference,
-    shape: CheckerTypeShape,
-    propertyName: string,
-  ): CheckerTypeReference | null {
-    const carrier = shape.carrier;
-    if (carrier == null) {
-      return null;
-    }
-    const checker = carrier.checker;
-    const symbol = checker.getPropertyOfType(carrier.type, propertyName)
-      ?? checker.getPropertyOfType(checker.getApparentType(carrier.type), propertyName);
-    if (symbol == null) {
-      return null;
-    }
-    const location = carrier.declarations[0]
-      ?? symbol.valueDeclaration
-      ?? symbol.declarations?.[0]
-      ?? null;
-    if (location == null) {
-      return null;
-    }
-    const type = checker.getTypeOfSymbolAtLocation(symbol, location);
-    return this.typeProjector.ensureProjection({
-      localKey: `${reference.productHandle ?? reference.checkerKey ?? 'open'}:member:${propertyName}`,
-      checker,
-      type,
-      origin: CheckerTypeProjectionOrigin.TypeChecker,
-      sourceNode: location,
-    } satisfies CheckerTypeProjectionRequest).toReference();
+  memberWriteAccess(
+    ownerType: CheckerTypeShape,
+    memberName: string,
+  ): CheckerTypeShapeMemberWriteAccess {
+    return this.shapeAccess.memberWriteAccess(ownerType, memberName);
   }
 }
 
@@ -1764,94 +1727,50 @@ function sourceWriteCapabilityOpen(
   };
 }
 
-function memberWriteCapability(member: CheckerTypeMember): SourceWriteCapability {
-  return memberSurfaceWriteCapability(
-    member.name,
-    member.memberKind,
-    member.isReadonly,
-    member.carrier?.declarations ?? [],
-  );
-}
-
-function checkerSymbolWriteCapability(
-  symbol: ts.Symbol,
-  declarations: readonly ts.Declaration[],
+function sourceWriteCapabilityForMemberAccess(
+  access: CheckerTypeShapeMemberWriteAccess,
+  ownerDisplay: string | null,
+  assignmentTargetType: CheckerTypeReference | null,
 ): SourceWriteCapability {
-  return memberSurfaceWriteCapability(
-    symbol.getName(),
-    checkerSymbolMemberKind(symbol, declarations),
-    checkerDeclarationsAreReadonly(declarations),
-    declarations,
-  );
-}
-
-function memberSurfaceWriteCapability(
-  memberName: string,
-  memberKind: CheckerTypeMemberKind,
-  isReadonly: boolean,
-  declarations: readonly ts.Declaration[],
-): SourceWriteCapability {
-  if (memberKind === CheckerTypeMemberKind.Method
-    || memberKind === CheckerTypeMemberKind.Constructor
-    || memberKind === CheckerTypeMemberKind.CallSignature) {
-    return sourceWriteCapabilityRuntimeUnassignable(
-      `Source member '${memberName}' is a ${memberKind} and is not an Aurelia astAssign target.`,
-      RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceMemberRuntimeUnassignable,
-    );
+  switch (access.accessKind) {
+    case CheckerTypeShapeMemberWriteAccessKind.Writable:
+    case CheckerTypeShapeMemberWriteAccessKind.StringIndexWritable:
+      return sourceWriteCapabilityWritable();
+    case CheckerTypeShapeMemberWriteAccessKind.MethodLike:
+      return sourceWriteCapabilityRuntimeUnassignable(
+        `Source member '${access.memberName}' is a ${access.memberKind ?? 'member'} and is not an Aurelia astAssign target.`,
+        RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceMemberRuntimeUnassignable,
+      );
+    case CheckerTypeShapeMemberWriteAccessKind.GetterWithoutSetter:
+      return sourceWriteCapabilityRuntimeUnassignable(
+        `Source member '${access.memberName}' is a getter without a setter at runtime.`,
+        RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceMemberGetterWithoutSetter,
+      );
+    case CheckerTypeShapeMemberWriteAccessKind.Readonly:
+      return sourceWriteCapabilityTypeScriptStrictness(
+        `Source member '${access.memberName}' is readonly in the TypeChecker surface, but Aurelia astAssign performs a runtime property assignment.`,
+        access.checkerWritable,
+        RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceMemberReadonly,
+      );
+    case CheckerTypeShapeMemberWriteAccessKind.StringIndexReadonly:
+      return sourceWriteCapabilityTypeScriptStrictness(
+        `Owner type '${ownerDisplay ?? 'unknown'}' exposes a readonly string index signature; Aurelia astAssign still writes to runtime objects.`,
+        access.checkerWritable,
+        RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceMemberReadonly,
+      );
+    case CheckerTypeShapeMemberWriteAccessKind.DeclarationMissing:
+      return sourceWriteCapabilityOpen(
+        `Source member '${access.memberName}' did not expose declarations for assignment policy.`,
+        RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceMemberDeclarationMissing,
+      );
+    case CheckerTypeShapeMemberWriteAccessKind.Missing:
+      return sourceWriteCapabilityTypeScriptStrictness(
+        `Owner type '${ownerDisplay ?? 'unknown'}' did not project member '${access.memberName}'; Aurelia astAssign can still write to runtime objects.`,
+        access.checkerWritable,
+        RuntimeBindingDataFlowSourceAssignmentReasonKind.OwnerMemberNotProjected,
+        assignmentTargetType,
+      );
   }
-  if (declarations.some((declaration) => ts.isSetAccessorDeclaration(declaration))) {
-    return sourceWriteCapabilityWritable();
-  }
-  if (declarations.some((declaration) => ts.isGetAccessorDeclaration(declaration))) {
-    return sourceWriteCapabilityRuntimeUnassignable(
-      `Source member '${memberName}' is a getter without a setter at runtime.`,
-      RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceMemberGetterWithoutSetter,
-    );
-  }
-  if (isReadonly) {
-    return sourceWriteCapabilityTypeScriptStrictness(
-      `Source member '${memberName}' is readonly in the TypeChecker surface, but Aurelia astAssign performs a runtime property assignment.`,
-      false,
-      RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceMemberReadonly,
-    );
-  }
-  return declarations.length === 0
-    ? sourceWriteCapabilityOpen(
-      `Source member '${memberName}' did not expose declarations for assignment policy.`,
-      RuntimeBindingDataFlowSourceAssignmentReasonKind.SourceMemberDeclarationMissing,
-    )
-    : sourceWriteCapabilityWritable();
-}
-
-function checkerMemberForOwnerType(
-  ownerType: CheckerTypeShape | null,
-  memberName: string,
-): { readonly symbol: ts.Symbol; readonly declarations: readonly ts.Declaration[] } | null {
-  const carrier = ownerType?.carrier ?? null;
-  if (carrier == null) {
-    return null;
-  }
-  const symbol = carrier.checker.getPropertyOfType(carrier.type, memberName)
-    ?? carrier.checker.getPropertyOfType(carrier.checker.getApparentType(carrier.type), memberName);
-  if (symbol == null) {
-    return null;
-  }
-  return {
-    symbol,
-    declarations: declarationsForCheckerSymbol(symbol),
-  };
-}
-
-function checkerStringIndexInfoForOwnerType(
-  ownerType: CheckerTypeShape | null,
-): ts.IndexInfo | null {
-  const carrier = ownerType?.carrier ?? null;
-  if (carrier == null) {
-    return null;
-  }
-  return carrier.checker.getIndexInfoOfType(carrier.type, ts.IndexKind.String)
-    ?? carrier.checker.getIndexInfoOfType(carrier.checker.getApparentType(carrier.type), ts.IndexKind.String)
-    ?? null;
 }
 
 function compactStrings(values: readonly (string | null | undefined)[]): readonly string[] {

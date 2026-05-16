@@ -50,6 +50,8 @@ export interface EagerRouteParameters {
 export interface EagerPathGenerationInstruction {
   readonly component: EagerRouteComponent;
   readonly params: EagerRouteParameters;
+  readonly viewport: string | null;
+  readonly children: readonly EagerPathGenerationInstruction[];
 }
 
 export type EagerPathGenerationResult =

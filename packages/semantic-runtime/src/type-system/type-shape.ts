@@ -139,6 +139,7 @@ export type CheckerTypeShapeField =
   | 'callReturnType'
   | 'constructReturnType'
   | 'source'
+  | 'declarationSource'
   | 'carrier';
 
 export type CheckerTypeMemberField =
@@ -276,6 +277,8 @@ export class CheckerTypeShape {
     readonly constructReturnType: CheckerTypeReference | null,
     /** Source address that caused or owns this projection. */
     readonly sourceAddressHandle: AddressHandle | null,
+    /** Best TypeScript declaration source for the projected type, when checker declarations can name one. */
+    readonly declarationSourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for checker/source projections. */
     readonly fieldProvenance: readonly FieldProvenance<CheckerTypeShapeField>[] = [],
     /** Hot checker carrier for follow-up member/type reads. */

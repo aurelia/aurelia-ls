@@ -37,12 +37,30 @@ still be realistic app code rather than artificial parser torture cases.
 - `di-inject-decorator-contexts` captures valid class/field `@inject` metadata carriers next to invalid
   method/getter/setter targets. It preserves `invalid_inject_decorator_usage` / `AUR0022` pressure without teaching
   authoring recipes to put injection decorators on rejected TC39 decorator contexts.
+- `dynamic-keyed-validation` captures `& validate` bindings whose writable source expressions use repeat-local keyed
+  access and nested TypeChecker-visible keys, such as `person[field]` and `person[addressField][line1Field]`. It
+  preserves framework-test-shaped validation binding pressure without teaching generated authoring recipes to prefer
+  dynamic keyed form fields.
+- `contextual-call-argument-completion` captures cursor member-owner projection inside callback arguments whose
+  parameter type comes from a view-model method signature or a TypeChecker-visible collection method. It preserves
+  contextual call-argument typing for completions without teaching authoring recipes to prefer callback-heavy template
+  expressions.
+- `class-style-interpolation-boundaries` captures class and style attributes with multiple interpolation holes and
+  JavaScript template expressions inside those holes. It preserves interpolation boundary, class/style accessor, and
+  value-channel pressure without treating the fixture as a recommended styling pattern.
+- `implicit-binding-expression-inference` captures empty `.bind`, `.two-way`, and `.from-view` command values where
+  Aurelia infers the source expression from the authored target name while target-property mapping remains separate. It
+  preserves framework compiler behavior such as `minlength.bind` reading `minlength` even when the DOM target property
+  maps to `minLength`.
 - `observable-decorator-contexts` captures valid field `@observable` carriers next to invalid class, method, getter,
   and auto-accessor decorator forms. It preserves runtime `invalid_observable_decorator_usage` / `AUR0224` pressure in
   the observation source-issue lane without treating `@observable` as resource metadata.
 - `ast-track-decorator-contexts` captures a valid method `@astTrack` next to an invalid field decorator form. It
   preserves runtime `ast_track_decorator_not_a_method` / `AUR0117` pressure in the observation source-issue lane without
   teaching authoring recipes to decorate non-method members.
+- `checked-select-custom-matcher` captures `matcher.bind` on checked and select observers with object-valued
+  `model.bind` options. It preserves the observer comparison semantics as value-channel facts without teaching generated
+  authoring recipes to prefer matcher-heavy forms.
 - `router-dynamic-pattern` captures router-resource `href` values produced by view-model methods returning a static
   route prefix with a runtime repeat-local hole, an external-link-like field, and a bare external-module boundary. It
   pressures evaluator string-pattern propagation, router recognition, and runtime-boundary repair planning without
@@ -61,6 +79,14 @@ still be realistic app code rather than artificial parser torture cases.
   route-context or route-recognizer materialization: a non-string `path` value and a null decorator config. It preserves
   `rtInvalidConfigProperty` / `AUR3554` and `rtInvalidConfig` / `AUR3555` pressure without teaching authoring recipes
   to generate invalid route metadata.
+- `router-routeable-alias` captures a child route whose string routeable resolves through a side-effect-imported custom
+  element and class-level `@alias(...)` metadata. It preserves evaluator side-effect import execution, resource alias
+  convergence, and router string routeable lookup without teaching authoring recipes to prefer implicit side-effect
+  registration over explicit routeable class references.
+- `router-contextual-string-routeable` captures a parent route component whose `dependencies` array disambiguates a
+  string child routeable when multiple custom elements share the same resource name. It preserves Aurelia's
+  `resolveCustomElementDefinition(...)` dependency-scope lookup before root-container fallback without teaching
+  authoring recipes to create duplicate custom-element names.
 - `repeat-keyed-iterables` captures nested `repeat.for` locals whose iterable comes from nullable arrays and finite
   keyed records such as `Record<'one' | 'two', Item[]>`. It preserves the TypeChecker handoff needed for public plugin
   and app templates where a repeat local indexes a mapped record before a deeper child repeat reads item members.

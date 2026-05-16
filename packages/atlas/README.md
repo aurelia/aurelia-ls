@@ -43,14 +43,46 @@ The compact summary
 prints its first rows. The
 shortcut script is `pnpm --filter @aurelia-ls/atlas memory`; use
 `memory:json` when a tool needs the exact answer payload.
-Pass `--query`, `--path`, `--domain`, `--kind`, `--status`, `--recordId`, `--surfaceRole`, `--liveCheckKind`, `--nextActionPolicy`, `--anchorKind`, `--anchorLensId`, `--symbolName`, or `--rows` to narrow the memory script without paging the full store.
-Memory scripts accept both `--name=value` and `--name value`; `--limit` is an alias for `--rows`. Repeating `--domain`
+Pass `--query`, `--path`, `--domain`, `--kind`, `--status`, `--recordId`, `--name`, `--surfaceRole`, `--liveCheckKind`, `--nextActionPolicy`, `--anchorKind`, `--anchorLensId`, `--symbolName`, or `--rows` to narrow the memory script without paging the full store.
+Memory scripts accept both `--name=value` and `--name value` as exact record-id filters and default those reads to the `records` projection; `--limit` is an alias for `--rows`. Repeating `--domain`
 narrows to rows carrying every listed domain unless `--domainMode=any` is supplied.
 Query-filtered memory rows and next actions rank ids, exact domains, anchors, and summaries above incidental mentions in guidance prose. They try strict all-token matching first and fall back to partial-token relevance only when a broad checkpoint query would otherwise return no rows, so loose workstream phrases can still find the strongest local handle first.
 Use `memory:next` when a fresh session needs a ranked live canary instead of a
 new markdown archaeology pass. Once the workstream is known, narrow the next
 lane structurally, for example `memory:next -- --domain authoring --rows 8`,
 so global large-class pressure does not bury the most relevant local frontier.
+Use `work:router -- --projection=workset` when the current dirty worktree itself
+is the canary; it groups changed files by typed route source/doc/path anchors
+and memory shards before you decide what to inspect next. Workset route rows carry
+`workset-structural` match strength, not catalog-default, when dirty files match
+route-owned evidence. Use `--fileRows=...` to widen the per-route changed-file
+sample, and reserve `--includePlans` for checkpoints that need full route-plan
+authority and corpus detail in addition to the dirty-file grouping.
+Use `work:router -- --projection=memory-coverage --detail` when `memory:next`
+looks ahead of the route catalog. Durable memory ownership does not come from
+path anchors or unfiltered generic lens anchors: use source, exact
+memory-domain, auLink, script, doc, or structurally filtered lens anchors. Exact
+domain-set matches win; otherwise a route needs at least two non-generic domain
+overlaps so generic carriers such as `semantic-runtime`, `template`, `memory`,
+and `inquiry` do not route by themselves. Memory-domain anchors are for explicit
+domain filters and memory coverage joins; route queries should still match
+declared route terms, source symbols, query canaries, auLink ids, corpus lanes,
+or exact anchors rather than inheriting memory domains as fuzzy vocabulary.
+With no explicit filters, `work:router -- --projection=route-plan` ranks from
+both live memory-next actions and live product/source pressure. Product-pressure
+matches are structural source-anchor matches, so a large module, class, or
+function body can promote the route that owns it without relying on fuzzy prose.
+Symbol-qualified source anchors rank declaration/class/function/variable rows
+rather than inheriting whole-file/module pressure, and Atlas catalog/contract/barrel
+module shapes are damped so static catalog size stays visible without becoming
+implementation pressure. Source-anchor roles weight that live pressure: primary
+and pressure anchors can drive route selection, while supporting catalog/context
+anchors stay visible without drowning the owning substrate just because they are
+large.
+Work Router projection ids are exact (`route-plan`, `next-questions`,
+`route-health`, `workset`, `memory-coverage`, and `schema`); unsupported
+projection requests print the reroute answer, the supported projection list, and
+typed continuations instead of a stack trace.
 In detail mode, record-backed next rows print anchors before guidance and the
 answer payload includes the backing memory record rows, so the next jump target
 is visible without opening raw JSON. The printed backing-record section
@@ -84,30 +116,54 @@ For a compact current handoff, read [workbench/agent-handoff.md](workbench/agent
   exhaustive project plan. Use `memory:write` for durable updates instead of
   letting new direction live only in scratch notes.
 - Use `product.architecture` before opening semantic-runtime source for structure pressure. `functions`, `classes`,
-  `call-sites`, and `call-dependencies` are the usual fast product refactor lanes; `summary` and symbol projections
-  spend the heavier symbol-backed memo. The shortcut script is
+  `call-sites`, and `call-dependencies` are the usual fast product refactor lanes; `functions --detail` prints bounded
+  callee symbol/expression samples so a large method's coordination shape is visible before opening the full call-site
+  page. `summary` and symbol projections spend the heavier symbol-backed memo. The shortcut script is
   compact `pnpm --filter @aurelia-ls/atlas pressure:product-architecture`; it prints cheap structure pressure first,
   then the call-site-backed function pressure. Use
   `pnpm --filter @aurelia-ls/atlas pressure:product-architecture:detail` when lower-ranked rows matter.
+  The script wrapper accepts exact filter names only; use `--fromFilePath`, `--toFilePath`, `--filePath`, or
+  `--pathPrefix` for file-scoped dependency/source questions. Unsupported flags fail fast so a mistyped filter cannot
+  silently widen into a global architecture read.
 - Use `pnpm --filter @aurelia-ls/atlas profile:product-architecture` when a product architecture query feels slow.
-  The script prints structure, compact-call core/full, exact-call core/full, and symbol cold phase timings so cache or
-  split decisions start from measured cost instead of vibes.
+  The script prints structure, body+structure, compact-call core/full, exact-call core/full, and symbol cold phase
+  timings so cache or split decisions start from measured cost instead of vibes. Function body fingerprints and switch
+  topology are opt-in body-analysis facts; cheap structure reads intentionally skip them unless duplicate/control-flow
+  projections or `--includeFunctionBodyAnalysis=true` ask for that lane.
 - Use `pnpm --filter @aurelia-ls/atlas profile:workspace-architecture` when external-root workspace pressure feels
   slow. It prints package manifest/file-inventory, source scan, attribution, profile inference, sorting, and rollup
   phase timings.
 - Use `atlas.self:classes` and `atlas.self:functions` before opening Atlas source for Atlas refactors. Class rows
   support `minLineCount`, `minMethodCount`, `minPropertyCount`, and pressure-oriented ordering; function rows support
-  `minLineCount`, `minCallCount`, `minUniqueCallTargetCount`, and pressure-oriented ordering. The shortcut script is
+  `minLineCount`, `minCallCount`, `minUniqueCallTargetCount`, and pressure-oriented ordering. Use
+  `pnpm --filter @aurelia-ls/atlas self -- --projection=...` when a specific `atlas.self` row family needs exact
+  filters, paging, detail output, or JSON payloads. The pressure shortcut is
   compact `pnpm --filter @aurelia-ls/atlas pressure:self`; use
   `pnpm --filter @aurelia-ls/atlas pressure:self:detail` when a full metric row is needed. It also prints high
   `atlas.self:axis-pressure` rows. Use
-  `pnpm --filter @aurelia-ls/atlas profile:self` when the question is projection cost rather than source shape.
+  `pnpm --filter @aurelia-ls/atlas profile:self` when the question is projection cost rather than source shape; the
+  default output is compact and its enum hotspot summary splits string/number candidate rows; `profile:self:detail`,
+  `--phaseRows=...`, or `--enumRoleRows=...` widens the tail.
+  Use `self -- --projection=phase-profile` when a measured cost lane needs to be narrowed, paged, or joined through
+  ordinary inquiry continuations instead of re-running the profile script output by hand. Standard `atlas.self` skips
+  expensive call-argument enum contextual refinement unless a targeted call-argument occurrence inquiry or
+  `--enumContext=all` asks for the full lane; `--enumContext=none` keeps enum declaration/reference/raw-overlap rows
+  without checker-backed raw-value narrowing when the current question is baseline inventory cost. Comparison raw-value
+  narrowing has a syntax-skipped profiler row for counterparts that cannot carry enum value types, so inspect
+  `enum-usage.checker.getTypeAtLocation.comparison-counterpart` and its `.syntax-skipped` sibling together. It also
+  separates source-surface reads from semantic taxonomy reads:
+  ordinary `classes`, `functions`, `source-files`, variables, wrapper, and Work Router source-pressure reads skip
+  enum/string/contract-string taxonomy unless `--includeSemanticTaxonomyAnalysis=true` or a taxonomy projection asks for
+  it. Function body fingerprints and switch topology are a second explicit body-analysis lane: ordinary
+  `classes`/`functions`/summary reads skip it, while `function-shapes`, `function-control-flow-shapes`, fingerprint
+  filters, switch-topology filters, or `--includeFunctionBodyAnalysis=true` request it deliberately.
 - Use framework lenses for Aurelia grounding rather than pattern-matching from other frameworks. `framework.resources`
   preserves exact definition spans plus typed source-site lanes for backing declarations, bundle admissions, syntax
   products, and materialization sites. `framework.rendering` owns hydration/binding/controller rows,
   `framework.observation` owns observer-locator/reactivity rows, and `framework.composition:emulation` is the compact
   semantic-runtime obligation map. Use `pnpm --filter @aurelia-ls/atlas pressure:framework-resources` when resource
-  provenance is the question.
+  provenance is the question, and use `pnpm --filter @aurelia-ls/atlas framework:resources -- --projection=convergence`
+  when a resource route needs exact convergence rows.
 - Use `framework.corpus` when official Aurelia docs or framework tests should seed fixture/authoring pressure. The
   shortcut `pnpm --filter @aurelia-ls/atlas framework:corpus -- --projection=doc-snippets --concept=forms` returns
   classified, paged rows from docs/tests/legacy replacement inventory without turning those corpora into MCP or direct
@@ -117,13 +173,25 @@ For a compact current handoff, read [workbench/agent-handoff.md](workbench/agent
   `fixture-seeds` joins docs/test snippets to those
   expected-effect descriptors plus recipe hints so fixture expansion can start from a semantic pressure target instead
   of raw examples. Seed classifiers read the exact source range behind each snippet rather than the compact preview.
+  Fixture seed rows also carry typed classification reasons (`concept:*`, `effect:*`, `surface:*`, `recipe:*`,
+  `contrast:*`) so a row can explain why it was admitted or downgraded without reopening the source immediately. Use
+  `classificationKind` and `classificationKey` for exact reason filters such as `surface:native-value-binding`,
+  `surface:native-checked-binding`, `surface:option-model-binding`, or `surface:validation-binding-behavior`. Surface
+  reasons are local to doc code fences and test `createFixture(...)` call snippets; broader `describe`/`it` carrier
+  rows can still carry effect, recipe, or contrast pressure, but they should not satisfy exact surface filters.
+  Interpolation and bare `else` classification is context-aware: markup snippets can count Aurelia template syntax,
+  while ordinary TypeScript template strings and JavaScript branches should not.
   Use `effectKind`, `effectRole`, `effectSeedPolicy`, and `recipeKey` as structural filters and `query` for
   source/content concepts; recipe names are not allowed to make every row match a content query such as `forms`.
   Use `seedUse=authoring-taste` or `seedUse=behavior-grounding` when choosing whether the corpus snippets are being
-  used as taste pressure or framework behavior pressure; `authoring-taste` expected effects are orientation contracts,
-  so they are not expected to have direct fixture seed rows of their own.
+  used as taste pressure or framework behavior pressure; documentation under testing guides is behavior-grounding
+  rather than app-authoring taste. `authoring-taste` expected effects are orientation contracts, so they are not
+  expected to have direct fixture seed rows of their own.
   Fixture seed expected-effect filters can also be narrowed structurally with `expectedEffectFilterField` and
   `expectedEffectFilterValue`, for example `staticArgumentValues=blur` or `targetProperty=value`.
+  Router fixture seeds require concrete router authoring/runtime syntax such as `@aurelia/router`, `@route`, route
+  config objects, or `au-viewport`; broad route/router prose remains visible as corpus navigation pressure without
+  creating routed authoring recipe pressure by itself.
 - Use `framework.discovery:bundles` when composition roots are the question. It separates spendable framework
   `configuration`, `registration-catalog`, and `registry` rows, so `StandardConfiguration` is a canary rather than the
   only visible composition shape. Follow bundle rows into `framework.di:world` with `configurationPackageId` and
@@ -136,7 +204,13 @@ For a compact current handoff, read [workbench/agent-handoff.md](workbench/agent
   `flow-issues` and `recognizer-issues` projections self-audit curated descriptor maps against the live framework source,
   so stale or ambiguous route-flow landmarks are visible instead of silently disappearing. Router
   flow rows also expose semantic route continuations into resource materialization, rendering hydration, child-controller
-  creation, and controller lifecycle rows when their stage crosses those framework boundaries.
+  creation, and controller lifecycle rows when their stage crosses those framework boundaries. Use
+  `pnpm --filter @aurelia-ls/atlas framework:router -- --projection=relationships --query=ViewportAgent --detail`
+  when the compact `pressure:framework-router` summary needs row-level grounding.
+- Use `bridge.aulink` after framework router rows when the question is whether a framework-owned router concept has a
+  product mirror, role evidence, emulation obligation, or divergent usage. The targeted shortcut is
+  `pnpm --filter @aurelia-ls/atlas bridge:aulink -- --projection=mirror --packageId=router --detail`; use
+  `--sourceLens=framework.router` or `--linkId=router:ViewportAgent` when the route/viewport question is already known.
 - Use `workspace.architecture` when a pressure run admits authored apps or monorepos through the source substrate. It
   separates package admission role from inferred Aurelia shape, exposes source-role pressure for app/test/tooling
   separation, then reports Aurelia entrypoint signals, manifest/build signals, framework imports, resources,

@@ -124,15 +124,16 @@ function answerAtlasMemorySummary(
   analysis: AtlasMemoryAnalysis,
   basis: readonly Basis[],
 ): Answer<AtlasMemoryValue> {
+  const limit = rowLimit(inquiry);
   const summaryRecords = filterMemoryRows(analysis.records, inquiry)
-    .slice(0, Math.min(rowLimit(inquiry), 12));
+    .slice(0, limit);
   const untracked = filterUntrackedFrontiers(
     analysis.untrackedProductClassFrontiers,
     inquiry,
-  ).slice(0, Math.min(rowLimit(inquiry), 12));
-  const issues = analysis.issues.slice(0, Math.min(rowLimit(inquiry), 12));
+  ).slice(0, limit);
+  const issues = analysis.issues.slice(0, limit);
   const nextActions = filterNextActions(atlasMemoryNextActionRows(analysis), inquiry)
-    .slice(0, Math.min(rowLimit(inquiry), 12));
+    .slice(0, limit);
   const evidence = [
     ...summaryRecords.map(memoryRowEvidence),
     ...nextActions.map(nextActionEvidence),
@@ -339,9 +340,9 @@ function answerAtlasMemorySchema(
         "Use intentional-shape for large or unusual structures that are deliberately kept.",
         "Use reuse-guide for 'what should I inspect before solving this kind of problem?' records.",
         "Use doc-shard for stable large-document headings that should be queryable without rereading the whole workbench.",
-        "Prefer liveChecks when Atlas can verify status from source instead of trusting prose.",
-        "Use source-declaration-exists when a record depends on a specific admitted TypeScript declaration rather than a broad file.",
-        "Use atlas-self-source-file, atlas-self-class, or atlas-self-function when a record depends on Atlas-owned source pressure rather than semantic-runtime product pressure.",
+        "Prefer liveChecks when Atlas can verify status from source instead of trusting prose; source/file/auLink presence checks are anchors, not pressure by themselves.",
+        "Use source-declaration-exists when a record depends on a specific admitted TypeScript declaration rather than a broad file; pair it with a pressure-shaped check when it should keep a pressure-frontier active.",
+        "Use atlas-self-source-file, atlas-self-class, atlas-self-function, or atlas-self-variable when a record depends on Atlas-owned source pressure rather than semantic-runtime product pressure.",
         "Use untracked product-class frontiers and surfaceRole rollups as a canary for missing durable handles, not as a static task list.",
         "Use --surfaceRole when a broad frontier pass needs to focus product-owner, service-surface, epoch-context, semantic-model, or carrier-like rows.",
         "Use --liveCheckKind when you want records grouped by the mechanism that keeps them active, stale, or resolved.",

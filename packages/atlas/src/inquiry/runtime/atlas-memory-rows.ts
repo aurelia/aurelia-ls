@@ -8,14 +8,23 @@ import {
   querySignificantPartialMatches,
 } from "./lens-filter-utils.js";
 import type {
-  AtlasMemoryAnchor,
   AtlasMemoryAnalysis,
   AtlasMemoryComputedStatus,
   AtlasMemoryLiveCheckResult,
   AtlasMemoryRecordRow,
   AtlasMemoryUntrackedProductClassFrontier,
 } from "./atlas-memory-contracts.js";
+import { atlasMemoryAnchorSearchText } from "./atlas-memory-contracts.js";
 import type { AtlasMemoryNextActionRow } from "./atlas-memory-next-actions.js";
+import {
+  atlasMemoryRecordRowHasAnchorKind,
+  atlasMemoryRecordRowHasAuLink,
+  atlasMemoryRecordRowHasLens,
+  atlasMemoryRecordRowHasLiveCheckKind,
+  atlasMemoryRecordRowHasSymbol,
+  atlasMemoryRecordRowPathMatches,
+  atlasMemoryRepoPathMatches,
+} from "./atlas-memory-row-matching.js";
 
 export type AtlasMemoryProjection =
   | "summary"
@@ -81,12 +90,12 @@ export function filterMemoryRows(
     (status === undefined || row.status === status) &&
     memoryDomainsMatch(row.domains, domains, domainMode) &&
     (recordId === undefined || row.id === recordId) &&
-    (path === undefined || memoryRowPathMatches(row, path)) &&
-    (liveCheckKind === undefined || memoryRowLiveCheckKindMatches(row, liveCheckKind)) &&
-    (anchorKind === undefined || memoryRowAnchorKindMatches(row, anchorKind)) &&
-    (anchorLensId === undefined || memoryRowAnchorLensIdMatches(row, anchorLensId)) &&
-    (auLinkId === undefined || memoryRowAuLinkIdMatches(row, auLinkId)) &&
-    (symbolName === undefined || memoryRowSymbolNameMatches(row, symbolName)) &&
+    (path === undefined || atlasMemoryRecordRowPathMatches(row, path)) &&
+    (liveCheckKind === undefined || atlasMemoryRecordRowHasLiveCheckKind(row, liveCheckKind)) &&
+    (anchorKind === undefined || atlasMemoryRecordRowHasAnchorKind(row, anchorKind)) &&
+    (anchorLensId === undefined || atlasMemoryRecordRowHasLens(row, anchorLensId)) &&
+    (auLinkId === undefined || atlasMemoryRecordRowHasAuLink(row, auLinkId)) &&
+    (symbolName === undefined || atlasMemoryRecordRowHasSymbol(row, symbolName)) &&
     (nextActionPolicy === undefined || memoryRowNextActionPolicy(row) === nextActionPolicy),
   );
   const exactQueryFiltered = query === undefined
@@ -115,7 +124,7 @@ export function filterUntrackedFrontiers(
   const query = inquiryStringFilter(inquiry, "query");
   const structurallyFiltered = rows.filter((row) =>
     memoryDomainsMatch(row.domains, domains, domainMode) &&
-    (path === undefined || repoPathMatches(row.filePath, path)) &&
+    (path === undefined || atlasMemoryRepoPathMatches(row.filePath, path)) &&
     matchesFilterValue(row.surfaceRole, surfaceRole),
   );
   const exactQueryFiltered = query === undefined
@@ -318,7 +327,7 @@ function memorySearchText(row: AtlasMemoryRecordRow): readonly string[] {
     row.record.rationale ?? "",
     ...row.domains,
     ...(row.record.guidance ?? []),
-    ...(row.record.anchors ?? []).map(anchorSearchText),
+    ...(row.record.anchors ?? []).map(atlasMemoryAnchorSearchText),
     ...row.liveChecks.flatMap(liveCheckSearchText),
   ];
 }
@@ -528,89 +537,13 @@ function statusRank(status: AtlasMemoryComputedStatus | "untracked" | "storage-i
   }
 }
 
-function memoryRowPathMatches(
-  row: AtlasMemoryRecordRow,
-  pathFilter: string,
-): boolean {
-  return (row.record.anchors ?? []).some((anchor) =>
-    anchor.kind === "source"
-      ? repoPathMatches(anchor.filePath, pathFilter)
-      : anchor.kind === "doc" || anchor.kind === "fixture"
-        ? repoPathMatches(anchor.path, pathFilter)
-        : false,
-  ) || repoPathMatches(row.shardPath, pathFilter) ||
-  row.liveChecks.some((result) =>
-    "filePath" in result.check &&
-    result.check.filePath !== undefined &&
-    repoPathMatches(result.check.filePath, pathFilter),
-  );
-}
-
-function memoryRowLiveCheckKindMatches(
-  row: AtlasMemoryRecordRow,
-  liveCheckKind: string,
-): boolean {
-  return row.liveChecks.some((result) => result.check.kind === liveCheckKind);
-}
-
-function memoryRowAnchorKindMatches(
-  row: AtlasMemoryRecordRow,
-  anchorKind: string,
-): boolean {
-  return (row.record.anchors ?? []).some((anchor) => anchor.kind === anchorKind);
-}
-
-function memoryRowAnchorLensIdMatches(
-  row: AtlasMemoryRecordRow,
-  anchorLensId: string,
-): boolean {
-  return (row.record.anchors ?? []).some((anchor) =>
-    anchor.kind === "lens" && anchor.lensId === anchorLensId,
-  );
-}
-
-function memoryRowAuLinkIdMatches(
-  row: AtlasMemoryRecordRow,
-  auLinkId: string,
-): boolean {
-  return (row.record.anchors ?? []).some((anchor) =>
-    anchor.kind === "auLink" && anchor.linkId === auLinkId,
-  ) || row.liveChecks.some((result) =>
-    result.check.kind === "auLink-exists" && result.check.linkId === auLinkId,
-  );
-}
-
-function memoryRowSymbolNameMatches(
-  row: AtlasMemoryRecordRow,
-  symbolName: string,
-): boolean {
-  return (row.record.anchors ?? []).some((anchor) =>
-    (anchor.kind === "source" || anchor.kind === "auLink") && anchor.symbolName === symbolName,
-  ) || row.liveChecks.some((result) => {
-    switch (result.check.kind) {
-      case "product-large-class":
-      case "atlas-self-class":
-        return result.check.className === symbolName;
-      case "atlas-self-function":
-        return result.check.functionName === symbolName;
-      case "source-declaration-exists":
-        return result.check.symbolName === symbolName;
-      case "auLink-exists":
-        return result.check.symbolName === symbolName;
-      case "source-file-exists":
-      case "atlas-self-source-file":
-        return false;
-    }
-  });
-}
-
 function frontierPathMatches(
   row: AtlasMemoryFrontierRow,
   pathFilter: string,
 ): boolean {
   return row.kind === "memory-record"
-    ? memoryRowPathMatches(row.record, pathFilter)
-    : repoPathMatches(row.frontier.filePath, pathFilter);
+    ? atlasMemoryRecordRowPathMatches(row.record, pathFilter)
+    : atlasMemoryRepoPathMatches(row.frontier.filePath, pathFilter);
 }
 
 function frontierLiveCheckKindMatches(
@@ -618,7 +551,7 @@ function frontierLiveCheckKindMatches(
   liveCheckKind: string,
 ): boolean {
   return row.kind === "memory-record" &&
-    memoryRowLiveCheckKindMatches(row.record, liveCheckKind);
+    atlasMemoryRecordRowHasLiveCheckKind(row.record, liveCheckKind);
 }
 
 function frontierAnchorKindMatches(
@@ -626,7 +559,7 @@ function frontierAnchorKindMatches(
   anchorKind: string,
 ): boolean {
   return row.kind === "memory-record" &&
-    memoryRowAnchorKindMatches(row.record, anchorKind);
+    atlasMemoryRecordRowHasAnchorKind(row.record, anchorKind);
 }
 
 function frontierAnchorLensIdMatches(
@@ -634,7 +567,7 @@ function frontierAnchorLensIdMatches(
   anchorLensId: string,
 ): boolean {
   return row.kind === "memory-record" &&
-    memoryRowAnchorLensIdMatches(row.record, anchorLensId);
+    atlasMemoryRecordRowHasLens(row.record, anchorLensId);
 }
 
 function frontierAuLinkIdMatches(
@@ -642,7 +575,7 @@ function frontierAuLinkIdMatches(
   auLinkId: string,
 ): boolean {
   return row.kind === "memory-record" &&
-    memoryRowAuLinkIdMatches(row.record, auLinkId);
+    atlasMemoryRecordRowHasAuLink(row.record, auLinkId);
 }
 
 function frontierSymbolNameMatches(
@@ -650,7 +583,7 @@ function frontierSymbolNameMatches(
   symbolName: string,
 ): boolean {
   return row.kind === "memory-record"
-    ? memoryRowSymbolNameMatches(row.record, symbolName)
+    ? atlasMemoryRecordRowHasSymbol(row.record, symbolName)
     : row.frontier.className === symbolName;
 }
 
@@ -658,9 +591,10 @@ function nextActionPathMatches(
   row: AtlasMemoryNextActionRow,
   pathFilter: string,
 ): boolean {
-  return (row.record !== undefined && memoryRowPathMatches(row.record, pathFilter)) ||
-    (row.frontier !== undefined && repoPathMatches(row.frontier.filePath, pathFilter)) ||
-    (row.sampleFrontier !== undefined && repoPathMatches(row.sampleFrontier.filePath, pathFilter));
+  return (row.record !== undefined && atlasMemoryRecordRowPathMatches(row.record, pathFilter)) ||
+    (row.frontier !== undefined && atlasMemoryRepoPathMatches(row.frontier.filePath, pathFilter)) ||
+    (row.sampleFrontier !== undefined &&
+      atlasMemoryRepoPathMatches(row.sampleFrontier.filePath, pathFilter));
 }
 
 function nextActionLiveCheckKindMatches(
@@ -668,7 +602,7 @@ function nextActionLiveCheckKindMatches(
   liveCheckKind: string,
 ): boolean {
   return row.record !== undefined &&
-    memoryRowLiveCheckKindMatches(row.record, liveCheckKind);
+    atlasMemoryRecordRowHasLiveCheckKind(row.record, liveCheckKind);
 }
 
 function nextActionAnchorKindMatches(
@@ -676,7 +610,7 @@ function nextActionAnchorKindMatches(
   anchorKind: string,
 ): boolean {
   return row.record !== undefined &&
-    memoryRowAnchorKindMatches(row.record, anchorKind);
+    atlasMemoryRecordRowHasAnchorKind(row.record, anchorKind);
 }
 
 function nextActionAnchorLensIdMatches(
@@ -684,7 +618,7 @@ function nextActionAnchorLensIdMatches(
   anchorLensId: string,
 ): boolean {
   return row.record !== undefined &&
-    memoryRowAnchorLensIdMatches(row.record, anchorLensId);
+    atlasMemoryRecordRowHasLens(row.record, anchorLensId);
 }
 
 function nextActionAuLinkIdMatches(
@@ -692,33 +626,16 @@ function nextActionAuLinkIdMatches(
   auLinkId: string,
 ): boolean {
   return row.record !== undefined &&
-    memoryRowAuLinkIdMatches(row.record, auLinkId);
+    atlasMemoryRecordRowHasAuLink(row.record, auLinkId);
 }
 
 function nextActionSymbolNameMatches(
   row: AtlasMemoryNextActionRow,
   symbolName: string,
 ): boolean {
-  return (row.record !== undefined && memoryRowSymbolNameMatches(row.record, symbolName)) ||
+  return (row.record !== undefined && atlasMemoryRecordRowHasSymbol(row.record, symbolName)) ||
     row.frontier?.className === symbolName ||
     row.sampleFrontier?.className === symbolName;
-}
-
-function repoPathMatches(
-  repoPath: string,
-  pathFilter: string,
-): boolean {
-  const normalizedPath = normalizePathForFilter(repoPath);
-  const normalizedFilter = normalizePathForFilter(pathFilter);
-  if (normalizedFilter.length === 0) {
-    return true;
-  }
-  return normalizedPath === normalizedFilter ||
-    normalizedPath.startsWith(`${normalizedFilter}/`);
-}
-
-function normalizePathForFilter(value: string): string {
-  return value.replaceAll("\\", "/").replace(/^\.?\//, "").replace(/\/+$/, "");
 }
 
 function liveCheckSearchText(
@@ -760,6 +677,14 @@ function liveCheckSearchText(
         result.check.kind,
         result.check.functionName,
         result.check.filePath ?? "",
+        result.summary,
+      ];
+    case "atlas-self-variable":
+      return [
+        result.check.kind,
+        result.check.variableName,
+        result.check.filePath ?? "",
+        result.check.initializerKind ?? "",
         result.summary,
       ];
     case "auLink-exists":
@@ -869,21 +794,4 @@ function nextActionAdjacentSearchText(row: AtlasMemoryNextActionRow): readonly s
 
 function trackedKind(row: AtlasMemoryFrontierRow): string {
   return row.kind === "memory-record" ? row.record.kind : row.kind;
-}
-
-function anchorSearchText(anchor: AtlasMemoryAnchor): string {
-  switch (anchor.kind) {
-    case "source":
-      return `${anchor.filePath} ${anchor.symbolName ?? ""} ${anchor.summary ?? ""}`;
-    case "lens":
-      return `${anchor.lensId} ${anchor.projection ?? ""} ${anchor.summary ?? ""}`;
-    case "script":
-      return `${anchor.command} ${anchor.summary ?? ""}`;
-    case "doc":
-      return `${anchor.path} ${anchor.heading ?? ""} ${anchor.summary ?? ""}`;
-    case "fixture":
-      return `${anchor.path} ${anchor.scenario ?? ""} ${anchor.summary ?? ""}`;
-    case "auLink":
-      return `${anchor.linkId} ${anchor.symbolName ?? ""} ${anchor.summary ?? ""}`;
-  }
 }

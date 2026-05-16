@@ -63,6 +63,7 @@ interface RecognizedRouteDraft {
   readonly parameters: ReadonlyMap<string, string | undefined>;
   readonly parameterCount: number;
   readonly redirectDepth: number;
+  readonly redirectSourceRouteConfig: RouteConfigModel | null;
 }
 
 interface RedirectExpansionResult {
@@ -809,6 +810,7 @@ class EndpointRequirement {
       parameters: params,
       parameterCount: [...params].filter(([key, value]) => key !== RESIDUE && value != null).length,
       redirectDepth: 0,
+      redirectSourceRouteConfig: null,
     };
   }
 }
@@ -864,6 +866,7 @@ function redirectTargetsFor(
   const targets = recognized.map((target) => ({
     ...target,
     redirectDepth: depth,
+    redirectSourceRouteConfig: routeConfig,
   }));
   const expanded: RecognizedRouteDraft[] = [];
   const issues: RedirectExpansionIssueDraft[] = [];
@@ -1028,6 +1031,7 @@ function recognizedRouteModel(
     route.residue,
     route.parameterCount,
     route.redirectDepth,
+    route.redirectSourceRouteConfig?.toReference() ?? null,
     viewportInstruction.sourceAddressHandle,
   );
 }

@@ -24,7 +24,7 @@ export type AuthoringRecipeKey =
   | 'state-backed-form'
   /** State-backed form plus validation-html configuration, validate bindings, and validation service ownership. */
   | 'validated-state-backed-form'
-  /** DI-owned state plus an injected service layer mediating native form mutation/submission. */
+  /** DI-owned state plus an injected service boundary for loading/submission side effects. */
   | 'service-backed-form'
   /** State-backed form with route admission and routeable component ownership; waits on router substrate. */
   | 'routed-state-backed-form';
@@ -82,7 +82,7 @@ export const AuthoringRecipeDescriptors = {
     ['state-backed-form'],
     'editable',
     ['package-tooling-policy-open'],
-    'Service-backed form has a concrete plan builder, source edit plan, recipe-baseline package/typecheck tooling, and expected effects for DI-owned state plus an injected service layer; build-tool emission remains open.',
+    'Service-backed form has a concrete plan builder, source edit plan, recipe-baseline package/typecheck tooling, and expected effects for DI-owned state that owns an injected service boundary; build-tool emission remains open.',
   ),
   RoutedStateBackedForm: new AuthoringRecipeDescriptor(
     'routed-state-backed-form',

@@ -7,8 +7,10 @@ import {
   semanticAppAnalysisDepthSatisfies,
 } from '../configuration/app-analysis.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
 import {
   type CheckerExpressionTypeEvaluationCacheStats,
+  type CheckerExpressionTypeEvaluationCacheMarker,
 } from '../type-system/expression-type-evaluation.js';
 import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import {
@@ -73,10 +75,14 @@ export class TemplateRuntimeAnalysisRequest {
     readonly compilerWorld: TemplateCompilerWorldEmission,
     /** Project-level compiled-template index available before runtime rendering runs. */
     readonly projectContext: TemplateRuntimeAnalysisProjectContext,
+    /** Shared static evaluation available for repeat-local value carriers and other runtime Scope value handoff. */
+    readonly evaluation: StaticProjectEvaluationResult | null,
     /** Current TypeChecker epoch, if resource recognition supplied one. */
     readonly typeSystem: TypeSystemProject | null,
     /** Analysis depth requested by the app-world inquiry. */
     readonly analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` = DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
+    /** Shared expression TypeChecker world for the surrounding template-analysis pass. */
+    readonly expressionWorld: CheckerExpressionTypeWorld | null = null,
   ) {}
 }
 
@@ -188,6 +194,7 @@ class TemplateRuntimeAnalysisFrame {
   private readonly analysisDepth: SemanticAppAnalysisDepth;
   private readonly phases: TemplateRuntimeAnalysisPhaseTiming[] = [];
   private readonly expressionWorld: CheckerExpressionTypeWorld;
+  private readonly expressionCacheMarker: CheckerExpressionTypeEvaluationCacheMarker;
 
   constructor(
     private readonly request: TemplateRuntimeAnalysisRequest,
@@ -195,7 +202,8 @@ class TemplateRuntimeAnalysisFrame {
     private readonly services: TemplateRuntimeAnalysisServices,
   ) {
     this.analysisDepth = normalizeSemanticAppAnalysisDepth(request.analysisDepth);
-    this.expressionWorld = new CheckerExpressionTypeWorld(store);
+    this.expressionWorld = request.expressionWorld ?? new CheckerExpressionTypeWorld(store);
+    this.expressionCacheMarker = this.expressionWorld.cacheMarker();
   }
 
   materialize(): TemplateRuntimeAnalysisEmission {
@@ -219,7 +227,7 @@ class TemplateRuntimeAnalysisFrame {
     const profile: TemplateRuntimeAnalysisProfile = {
       totalMilliseconds: performance.now() - this.started,
       phases: this.phases,
-      expressionTypeCache: this.expressionWorld.cacheSnapshot(),
+      expressionTypeCache: this.expressionWorld.cacheSnapshotSince(this.expressionCacheMarker),
     };
 
     return new TemplateRuntimeAnalysisEmission(
@@ -325,6 +333,7 @@ class TemplateRuntimeAnalysisFrame {
       compiledTemplate: this.request.compiledTemplate,
       runtimeBindings: runtimeRendering,
       projectContext: this.request.projectContext,
+      evaluation: this.request.evaluation,
       typeSystem: this.request.typeSystem,
       resourceScope: this.request.compilerWorld.resourceScope,
       expressionWorld: this.expressionWorld,

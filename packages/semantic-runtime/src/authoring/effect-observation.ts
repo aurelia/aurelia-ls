@@ -24,6 +24,7 @@ export interface ExpectedSemanticEffectObservationSnapshot {
   readonly bindingBehaviorApplications: readonly object[];
   readonly bindingDataFlows: ExpectedSemanticEffectObservableRows;
   readonly routeFacts: number;
+  readonly routeFactRows: readonly object[];
   readonly routes: readonly object[];
   readonly dependencyInjectionFacts: number;
   readonly capabilities: readonly ExpectedSemanticEffectCapabilityRow[];
@@ -35,6 +36,62 @@ export interface ExpectedSemanticEffectObservationSnapshot {
 export type ExpectedSemanticEffectObservableRows =
   | number
   | readonly object[];
+
+export type ExpectedSemanticEffectRouteProductKind =
+  /** App-topology route summary row kept for compatibility with broad route-config effects. */
+  | 'topology-route'
+  /** RouterOptions product created from RouterConfiguration admissions and option folds. */
+  | 'router-options'
+  /** Normalized RouteConfig product, including origin/value-shape metadata. */
+  | 'route-config'
+  /** Runtime RouteContext topology product. */
+  | 'route-context'
+  /** Modeled au-viewport custom-element product. */
+  | 'router-viewport'
+  /** ViewportAgent product that hosts routed component activation. */
+  | 'viewport-agent'
+  /** ComponentAgent handoff product for a routed custom element. */
+  | 'component-agent'
+  /** TypedNavigationInstruction product produced from router resource values. */
+  | 'typed-navigation-instruction'
+  /** ViewportInstruction product before route-tree realization. */
+  | 'viewport-instruction'
+  /** ViewportInstructionTree product grouped by route context. */
+  | 'viewport-instruction-tree'
+  /** RouteTree product for initial or transition route tree state. */
+  | 'route-tree'
+  /** RouteNode product inside a route tree. */
+  | 'route-node'
+  /** Route-recognizer ConfigurableRoute pattern product. */
+  | 'route-pattern'
+  /** Route-recognizer Endpoint product. */
+  | 'route-endpoint'
+  /** Route-recognizer State graph product. */
+  | 'route-recognizer-state'
+  /** Route-recognizer known framework-failure issue product. */
+  | 'route-recognizer-issue'
+  /** Router issue product with framework error-code or semantic-runtime authority. */
+  | 'router-issue'
+  /** RecognizedRoute product from walking a static instruction through a recognizer. */
+  | 'recognized-route';
+
+export function expectedSemanticRouteFactRowsFor(
+  routeProductKind: ExpectedSemanticEffectRouteProductKind,
+  rows: readonly object[],
+): readonly object[] {
+  return rows.map((row) => expectedSemanticRouteFactRow(routeProductKind, row));
+}
+
+export function expectedSemanticRouteFactRow(
+  routeProductKind: ExpectedSemanticEffectRouteProductKind,
+  row: object,
+): object {
+  const output: Record<string, unknown> = { routeProductKind };
+  for (const [key, value] of Object.entries(row)) {
+    output[key] = value;
+  }
+  return output;
+}
 
 export interface ExpectedSemanticEffectCapabilityRow {
   readonly key: string;
@@ -142,7 +199,7 @@ export function observedCountForExpectedSemanticEffect(
     case 'route':
       return expectedEffect.filters.length === 0
         ? snapshot.routeFacts
-        : snapshot.routes.filter((route) => matchesFilters(route, expectedEffect.filters)).length;
+        : routeFactRows(snapshot).filter((route) => matchesFilters(route, expectedEffect.filters)).length;
     case 'dependency-injection':
       return snapshot.dependencyInjectionFacts;
     case 'authoring-capability':
@@ -156,6 +213,14 @@ export function observedCountForExpectedSemanticEffect(
     case 'open-seam-closure':
       return snapshot.openSeams;
   }
+}
+
+function routeFactRows(
+  snapshot: ExpectedSemanticEffectObservationSnapshot,
+): readonly object[] {
+  return snapshot.routeFactRows.length === 0
+    ? snapshot.routes
+    : snapshot.routeFactRows;
 }
 
 function filteredRowCount(

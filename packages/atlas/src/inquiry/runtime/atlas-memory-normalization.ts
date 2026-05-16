@@ -5,6 +5,7 @@ import {
   atlasMemoryNextActionPolicyValue,
   type AtlasMemoryAnchor,
   type AtlasMemoryAtlasSelfSourceFileCheck,
+  type AtlasMemoryAtlasSelfVariableCheck,
   type AtlasMemoryLiveCheck,
   type AtlasMemoryManifest,
   type AtlasMemoryRecord,
@@ -338,6 +339,12 @@ function normalizeLiveCheck(value: unknown): AtlasMemoryLiveCheck | null {
           minCallCount: numberFieldValue(value, "minCallCount"),
         };
     }
+    case "atlas-self-variable": {
+      const variableName = stringFieldValue(value, "variableName");
+      return variableName === undefined
+        ? null
+        : atlasSelfVariableCheck(value, variableName);
+    }
     case "auLink-exists": {
       const linkId = stringFieldValue(value, "linkId");
       return linkId === undefined
@@ -352,6 +359,23 @@ function normalizeLiveCheck(value: unknown): AtlasMemoryLiveCheck | null {
     default:
       return null;
   }
+}
+
+function atlasSelfVariableCheck(
+  value: Record<string, unknown>,
+  variableName: string,
+): AtlasMemoryAtlasSelfVariableCheck {
+  return {
+    kind: "atlas-self-variable",
+    variableName,
+    filePath: normalizeOptionalRepoPath(stringFieldValue(value, "filePath")),
+    minLineCount: numberFieldValue(value, "minLineCount"),
+    minInitializerEntryCount: numberFieldValue(
+      value,
+      "minInitializerEntryCount",
+    ),
+    initializerKind: atlasSelfVariableInitializerKindValue(value.initializerKind),
+  };
 }
 
 function atlasSelfSourceFileCheck(
@@ -385,6 +409,26 @@ function recordKindValue(value: unknown): AtlasMemoryRecordKind | undefined {
     case "reuse-guide":
     case "decision":
     case "doc-shard":
+      return value;
+    default:
+      return undefined;
+  }
+}
+
+function atlasSelfVariableInitializerKindValue(
+  value: unknown,
+): AtlasMemoryAtlasSelfVariableCheck["initializerKind"] | undefined {
+  switch (value) {
+    case "array-literal":
+    case "object-literal":
+    case "function-like":
+    case "call":
+    case "new":
+    case "literal":
+    case "identifier":
+    case "property-access":
+    case "none":
+    case "other":
       return value;
     default:
       return undefined;

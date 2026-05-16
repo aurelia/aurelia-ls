@@ -3,6 +3,10 @@
 `scripts` contains package-local maintenance entrypoints.
 
 These scripts should check static coherence rather than trying to prove runtime usefulness. The package is intentionally contract-first, so the early checks should verify things like lens-to-substrate references, required vocabulary shape, active terrain, and answer algebra invariants.
+Shared CLI output and argument helpers live in [script-output.ts](script-output.ts). Reuse `scriptArgumentValue`,
+`scriptArgumentValues`, `scriptNumberArgumentValue`, `scriptOptionalStringFilter`, `scriptOptionalBooleanFilter`,
+`scriptFilterSummary`, and source/row formatting helpers before adding local script parsing or object-spread filter
+helpers.
 
 ## Current Scripts
 
@@ -11,29 +15,103 @@ These scripts should check static coherence rather than trying to prove runtime 
 - [atlas-memory.ts](atlas-memory.ts) prints the `atlas.memory` lens: durable JSON memory records joined to live
   source/product-architecture/atlas.self checks, computed status, reuse guidance, and untracked live pressure. Use
   `--projection=guidance`, `--projection=frontiers`, `--projection=next`, `--projection=stale`, `--query=...`,
-  `--path=...`, `--domain=...`, `--kind=...`, `--status=...`, `--recordId=...`, `--surfaceRole=...`,
+  `--path=...`, `--domain=...`, `--kind=...`, `--status=...`, `--recordId=...`, `--name=...`, `--surfaceRole=...`,
   `--liveCheckKind=...`, `--anchorKind=...`, `--anchorLensId=...`, `--symbolName=...`, `--rows=...`, `--detail`, and
   `--json` when a compact memory summary is not enough or another tool needs the exact answer payload. Detail output
   caps anchors, live checks, and guidance for readability; use `--anchorRows=...`, `--liveCheckRows=...`,
   `--guidanceRows=...`, `--all-anchors`, `--all-live-checks`, or `--all-guidance` only when the current question needs
-  the complete human-readable expansion. The script accepts both `--name=value` and `--name value`; `--limit` is a
-  `--rows` alias, and repeated `--domain` filters narrow by all listed domains unless `--domainMode=any` is supplied.
-  `surfaceRole`
+  the complete human-readable expansion. The script accepts both `--name=value` and `--name value` as exact record-id
+  filters and defaults those reads to `--projection=records`; `--limit` is a `--rows` alias, repeated `--domain` filters
+  narrow by all listed domains unless `--domainMode=any` is supplied, and unsupported flags fail fast.
+  If a multi-domain query returns no rows, the script prints that widening hint explicitly; keep the default strict mode
+  for exact intersections and use `--domainMode=any` for nearby-route-family exploration. `surfaceRole`
   narrows untracked product-class pressure by the product-architecture role classifier. `memory:next` prints the
   checkpoint-friendly ranked next-action lane computed from live memory state rather than stored as a static task list,
-  including shard path/line for record-backed next actions.
+  including shard path/line for record-backed next actions. Source/file/auLink existence checks report `present`; they
+  keep records grounded without making a pressure frontier live unless paired with a pressure-shaped live check.
 - [atlas-memory-write.ts](atlas-memory-write.ts) is the structured write-side helper for durable memory storage. Use
   `memory:write -- --mode=list-shards` to inspect shard targets, `memory:write -- --template ...` to print a record
   draft, `memory:write -- --record=.temp/record.json --shard=atlas --dry-run` to review an upsert, and
   `memory:write -- --mode=remove --id=... --dry-run` to remove stale records intentionally. It preserves `createdAt`,
   refreshes `updatedAt`, and removes duplicate ids from other shards during upsert.
+- [atlas-self.ts](atlas-self.ts) is the direct human CLI for `atlas.self` projections. Use
+  `self -- --projection=classes`, `self -- --projection=functions`, `self -- --projection=enum-value-occurrences`,
+  `self -- --projection=phase-profile`, or another declared self projection when `pressure:self` or `profile:self`
+  points at a lane that needs exact row filters. It accepts `--query=...`, exact projection filters such as
+  `--className=...`, `--functionName=...`, `--enumName=...`, `--role=...`, `--valueKind=...`, `--contextualOnly=true`,
+  `--enumContext=all`, `--enumContext=none`, `--includeSemanticTaxonomyAnalysis=true`, `--includeFunctionBodyAnalysis=true`,
+  `--minExclusiveMilliseconds=...`, `--orderBy=...`, `--rows=...` / `--limit=...`, `--detail`, and `--json`. Prefer this
+  wrapper over throwaway inquiry scripts when the needed substrate is already exposed by `atlas.self`. Source-surface
+  projections skip enum/string taxonomy unless a taxonomy projection or the semantic-taxonomy flag asks for it. Function
+  body fingerprints and switch topology are a separate explicit body-analysis lane; use the boolean flag or the
+  shape/control-flow projections when those facts are the question.
+- [atlas-work-router.ts](atlas-work-router.ts) prints the `atlas.work-router` lens: typed work routes joined to live
+  source anchors, Atlas memory, framework corpus fixture seeds, expected-effect descriptors, scripts, docs, and
+  cautions. Prefer exact `--routeId=...` / `--route=...`, `--domain=...`, `--role=...`, `--lensId=...`, `--path=...`, `--symbolName=...`,
+  `--auLinkId=...`, `--concept=...`, `--effectKind=...`, `--recipeKey=...`, or `--seedUse=...` before `--query=...`;
+  weak text matches are intentionally visible route-substrate pressure. Domain filters are structural over route
+  domains and route-owned memory anchor domains. Query matching stays structural: distinctive multi-token route terms,
+  source symbols, anchors, and canary phrases may be contained inside larger checkpoint prose, while single-token
+  fragments are not enough by themselves. Add exact route terms when a composite canary matters instead of relying on
+  broad prose.
+  Generic lens anchors are navigation hints, not memory ownership evidence. A route lens anchor only joins memory through
+  lens evidence when it carries structural filters that match the memory lens anchor; otherwise source/path/domain/auLink
+  anchors should own the route.
+  Route-owned corpus anchors may carry their own `query` when concept/effect filters are structurally correct but too
+  broad, so the route plan starts from the examples that express the route's actual pressure. They may also carry
+  `classificationKind`, `classificationKey`, `expectedEffectFilterField`, and `expectedEffectFilterValue` filters; the
+  route-plan seed selection diversifies across the more specific anchors first so one broad concept lane does not hide
+  exact fixture canaries such as checked bindings or select option models.
+  Use `--projection=route-plan --detail` after route selection to print authority lanes, memory-next summaries,
+  query-canary counts, cautions, and several next questions. With no explicit filters, route-plan ranks routes from
+  live `memory:next` pressure and live product/source pressure through exact route memory/source/path/auLink overlap
+  before falling back to catalog orientation. Product pressure is source-anchor structural evidence, not prose search:
+  large modules, large class surfaces, and large function bodies can promote the route that owns their source anchors.
+  Source-anchor roles weight that evidence, so a large supporting catalog stays route context while a primary or
+  pressure anchor can drive the route plan.
+  `--rows` controls the answer row budget; compact CLI output may display a smaller section slice, and section headers
+  say when they are showing only part of the returned rows.
+  Use `--projection=next-questions` when the immediate need
+  is autonomous continuation prompts from the selected route plan. Use `--projection=workset` when a checkpoint needs the
+  current git worktree grouped by route-owned source/doc/path anchors, route-owned memory source/doc/fixture/live-check
+  anchors, and memory shards. Workset rows are reported as `workset-structural` route matches so a checkpoint can tell
+  actual dirty-file evidence apart from catalog orientation. Workset detail output prints changed-file samples without
+  route-plan expansion by default; pass `--fileRows=...` to widen each route's sample or `--includePlans` when the
+  route authority/corpus/memory plan is worth the extra context.
+  Route path anchors are for workset grouping and explicit path filters; they do not by themselves route durable memory
+  records or memory-next actions.
+  Use `--projection=memory-coverage --detail` when `memory:next` seems ahead of the route catalog; it joins live
+  memory next actions back to structural routes and exposes unrouted frontiers as route ontology pressure. Shared
+  generic lens anchors are deliberately not enough to route memory pressure; add source, exact memory-domain, auLink,
+  script, doc, or route vocabulary when a route should own the action. Route memory-domain anchors need either an exact
+  domain-set match or at least two route-specific domain overlaps; generic carriers such as `semantic-runtime`,
+  `template`, `memory`, and `inquiry` are not enough by themselves.
+  Structural query matching can cover a query across several declared route vocabulary values for the same route; weak
+  prose still has to match as prose and cannot borrow this set-coverage path.
 - [self-check.ts](self-check.ts) validates the current inquiry surface map through the auto-starting session API and
   checks a few compact answer invariants, including workspace/router/plugin mechanism compactness, router flow
   self-audit health, spendable framework bundle/catalog visibility, and the presence of
   router-to-rendering/lifecycle/materialization semantic routes.
-- [product-architecture-profile.ts](product-architecture-profile.ts) profiles the structure, core, symbol, and full
-  `product.architecture` analysis phase costs through the same session API after explicit daemon warmup, so
-  startup/status cost is visible separately from warm inquiry cost.
+- [product-architecture-profile.ts](product-architecture-profile.ts) profiles the structure, body+structure, core,
+  symbol, and full `product.architecture` analysis phase costs through the same session API after explicit daemon warmup, so
+  startup/status cost is visible separately from warm inquiry cost. The default output is compact: use
+  `--laneRows=...` to narrow lanes, `--phaseRows=...` or `--rows=...` to widen or narrow phase rows, and
+  `profile:product-architecture:detail` when the long tail is the question. Cheap structure/function reads skip
+  function-body fingerprints and switch topology unless duplicate/control-flow projections or
+  `--includeFunctionBodyAnalysis=true` ask for that body-analysis lane.
+- [product-architecture.ts](product-architecture.ts) is the targeted human CLI for `product.architecture` rows when a
+  route plan names a lens anchor. Use `product:architecture -- --projection=functions --className=... --orderBy=lineCount
+  --detail` for method-level breakdowns; function detail rows include bounded callee symbol/expression samples so large
+  coordinator methods can be understood before paging raw call sites. Use `--minDistinctCalleeCount=...` when the
+  immediate question is dependency fan-out. Use `--projection=classes` / `--projection=modules` with `--pathPrefix`,
+  `--surfaceRole`, `--area`, `--minLineCount`, `--functionName`, and related structural filters when the pressure script
+  is too broad. The `summary` projection prints the main row families together and honors `--rows` for each budgeted
+  family; row-producing projections print their own row family rather than falling back to classes. `call-sites`
+  supports exact `--calleeName`, `--callKind`, `--fromFilePath`, `--toFilePath`, `--targetPackageId`, `--local`,
+  `--crossesArea`, and `--includeCallDetails=true` filters when a route needs concrete call edges. The
+  `function-duplicates` projection also supports `--pathPrefix` and prints its duplicate groups directly, including
+  grouped files and samples in `--detail` mode. Use `--query=...` as an additional row-text filter, not as a replacement
+  for exact class, path, role, call-site, or area filters.
 - [product-architecture-pressure.ts](product-architecture-pressure.ts) prints compact current semantic-runtime
   large-module, cross-area import, large-class, zero-method `*Input` envelope, behavioral `*Input` suffix, and
   function-call pressure rows with request timing and source line anchors from `product.architecture`. It also prints
@@ -66,8 +144,18 @@ These scripts should check static coherence rather than trying to prove runtime 
   `--projection=diagnostic-frontiers`, `--projection=diagnostic-codes`, `--projection=semantic-references`, or
   `--projection=semantic-raw-references` with `--packageId=template-compiler`,
   `--codeNamePrefix=compiler`, `--disposition=unmodeled-used-framework-authority`,
-  `--gap=raw-error-authority-gap`, `--gap=intentionally-unclaimed-raw-authority`, `--query=binding`, `--rows=...`, `--detail`, and
-  `--json` when the pressure summary is too broad.
+  `--gap=actionable-uncovered`, `--gap=future-substrate`, `--gap=runtime-product-boundary`,
+  `--gap=dormant-framework-authority`, `--gap=raw-error-authority-gap`,
+  `--gap=intentionally-unclaimed-raw-authority`, `--query=binding`, `--rows=...`, `--detail`, and
+  `--json` when the pressure summary is too broad. The diagnostic gap filters are row-level filters on the
+  `diagnostic-frontiers` and `diagnostic-codes` projections; the raw/code/message gap filters apply to the source rows.
+- [framework-resources.ts](framework-resources.ts) prints the queryable `framework.resources` lens for targeted
+  resource convergence grounding. Use `--projection=convergence` or `--projection=definitions` with
+  `--resourceKind=custom-element`, `--resourceKind=custom-attribute`, `--lane=runtime-materialization`,
+  `--bundleExportName=StandardConfiguration`, `--targetName=...`, `--resourceName=...`, `--producerKind=...`,
+  `--productKind=...`, `--instantiationKind=...`, `--materializationSiteKind=...`, `--query=...`, `--rows=...`,
+  `--detail`, and `--json` when resource convergence needs exact definition, backing declaration, bundle admission,
+  syntax product, or materialization-site source rows instead of the broad pressure rollup.
 - [framework-corpus-pressure.ts](framework-corpus-pressure.ts) prints compact public Aurelia docs/test corpus counts and
   old-package replacement inventory. Use it as Atlas-local pressure before treating docs as authoring pattern seeds,
   choosing test clusters for behavior grounding, or mapping legacy package surfaces onto semantic-runtime APIs. It also
@@ -76,16 +164,31 @@ These scripts should check static coherence rather than trying to prove runtime 
 - [framework-corpus.ts](framework-corpus.ts) prints the queryable `framework.corpus` lens for targeted fixture and
   authoring navigation. Use `--projection=docs`, `--projection=doc-snippets`, `--projection=tests`,
   `--projection=test-snippets`, `--projection=expected-effects`, `--projection=fixture-seeds`, or
-  `--projection=legacy` with `--query=...`, `--concept=forms`, `--group=router`, `--path=...`, `--language=html`,
+  `--projection=legacy` with `--query=...`, `--queryMode=partial`, `--concept=forms`, `--group=router`, `--path=...`, `--language=html`,
   `--snippetKind=it-call`, `--generated=false`, `--seedUse=authoring-taste`,
   `--effectKind=binding-data-flow`,
   `--expectedEffectFilterField=targetProperty`, `--expectedEffectFilterValue=value`,
+  `--classificationKind=surface`, `--classificationKey=native-value-binding`,
   `--recipeKey=service-backed-form`, `--rows=...`, `--detail`, and `--json` when the pressure summary is too broad.
   For `fixture-seeds`, prefer `effectKind` and `recipeKey` for structural narrowing and `query` for source/content
-  concepts. Use `seedUse=authoring-taste` or `seedUse=behavior-grounding` when choosing whether docs/tests are being
-  used for taste pressure or framework behavior pressure; `authoring-taste` expected effects themselves are orientation
-  contracts and should not be expected to have direct corpus seeds. Use expected-effect field/value filters when the
-  seed must prove a concrete fact such as a validate trigger argument or a specific binding target property.
+  concepts. Use the default all-token `query` mode for exact-ish narrowing; use `--queryMode=partial` only for
+  exploratory multi-term sweeps where adjacent corpus examples are more useful than a zero-row answer. Use
+  `seedUse=authoring-taste` or `seedUse=behavior-grounding` when choosing whether docs/tests are being
+  used for taste pressure or framework behavior pressure; framework testing docs are behavior-grounding even though
+  they are documentation snippets. `authoring-taste` expected effects themselves are orientation contracts and should
+  not be expected to have direct corpus seeds. Use expected-effect field/value filters when the seed must prove a
+  concrete fact such as a validate trigger argument or a specific binding target property. Router fixture seeds require
+  concrete router authoring/runtime syntax such as `@aurelia/router`, `@route`, route config objects, or `au-viewport`;
+  broad route/router prose remains corpus navigation pressure only. Use classification filters for exact reason lanes
+  such as `surface:native-value-binding`, `surface:native-checked-binding`, `surface:option-model-binding`, and
+  `surface:validation-binding-behavior`; surface reasons are local to docs fences and test `createFixture(...)` calls,
+  while parent `describe`/`it` ranges remain carrier pressure. In
+  `--detail` mode, fixture seeds print typed classification reasons so a row explains which concept, surface, effect,
+  recipe, or contrastive pressure admitted it. Interpolation and bare `else` classification is context-aware, so
+  TypeScript template strings and JavaScript control flow do not masquerade as Aurelia template pressure.
+  `--concept=expression` is the TypeChecker-expression lane for interpolation, expression-bearing binding commands,
+  parser/evaluator terms, value converters, binding behaviors, and AST expression examples; `--concept=template`
+  normalizes to the stored `templates` concept for convenience.
 - [framework-observation-pressure.ts](framework-observation-pressure.ts) prints framework observation topology from
   `framework.observation`: observer entities, binding observer lookup and setup rows, observation flow sites,
   flow-to-entity links, and relationship axis distributions. Use it before changing semantic-runtime observer,
@@ -93,6 +196,23 @@ These scripts should check static coherence rather than trying to prove runtime 
   from Aurelia's actual observation subsystem rather than local product guesses.
 - [framework-router-pressure.ts](framework-router-pressure.ts) prints the framework router rollup, curated route-flow
   spine health, relationship axis distributions, and flow self-audit rows from `framework.router`.
+- [framework-router.ts](framework-router.ts) prints the queryable `framework.router` lens for targeted router,
+  route-recognizer, viewport-agent, and relationship grounding. Use `--projection=surfaces`, `--projection=flow`,
+  `--projection=recognizer`, `--projection=relationships`, `--query=ViewportAgent`, `--stage=route-tree-compilation`,
+  `--product=endpoint`, `--rows=...`, `--detail`, and `--json` when the pressure summary is too broad.
+- [framework-evaluator.ts](framework-evaluator.ts) prints the queryable `framework.evaluator` lens for targeted static
+  evaluator effects, open seams, and module-value summaries. Use `--projection=effects`,
+  `--projection=open-seams`, `--projection=value`, `--path=...`, `--packageId=...`, `--query=...`,
+  `--memberName=register`, `--calleeName=...`, `--receiverName=...`, `--rows=...`, `--detail`, and `--json`
+  before expanding semantic-runtime evaluator/world-construction support. `effects` prints a pointer when open seams are
+  present; `open-seams` prints full seam-kind rollups and paged seam rows without also dumping effect rows. Prefer
+  `--memberName=...` when checking one method's closure, because `--calleeName=...` filters returned effects but leaves
+  root-level open seams scoped to the selected source roots.
+- [bridge-aulink.ts](bridge-aulink.ts) prints the queryable `bridge.aulink` lens for targeted product-to-framework
+  bridge grounding. Use `--projection=mirror`, `--projection=role-evidence`, `--projection=obligations`,
+  `--projection=usage-comparison`, `--projection=member-surface`, `--projection=usage-sites`, `--packageId=router`,
+  `--sourceLens=framework.router`, `--linkId=router:ViewportAgent`, `--query=ViewportAgent`, `--rows=...`, `--detail`,
+  and `--json` when the broad bridge pressure summary is too expensive or too general.
 - [bridge-aulink-pressure.ts](bridge-aulink-pressure.ts) prints auLink catalog/placement coverage, mirror role-evidence
   gaps, mirror rows with role evidence but no emulation obligations, and usage divergence rollups. Use it after
   product or LSP pressure flattens out to decide whether the next work is missing product links, missing framework
@@ -114,13 +234,15 @@ These scripts should check static coherence rather than trying to prove runtime 
   measuring, separates measured analysis time from warm request overhead, calls out hot daemon reads that reuse a
   cached analysis profile, and reports the source-scan phase in scanned-file units rather than cumulative surface rows.
 - [atlas-self-pressure.ts](atlas-self-pressure.ts) prints compact source-file shape/size/coupling, class density,
-  function density, duplicate top-level helper-name pressure, repeated function body-shape pressure, shallow
+  function density, large top-level variable initializer pressure, duplicate top-level helper-name pressure, repeated function body-shape pressure, shallow
   constructor/call wrapper pressure, optional object-spread construction pressure, magic/contract string pressure,
   const-object contract vocabulary pressure, and high multi-axis pressure rows plus request timing and source line anchors
   from `atlas.self` so Atlas refactors can start from source-backed pressure rather than raw file browsing. Its helper
   lanes use the same AST body-shape fingerprint as product pressure, including a projection that catches helpers with
   different names but equivalent canonical control flow; the compact script filters out very small grouped declarations
-  so coincidental key-builder shapes do not crowd out mergeable helpers. The wrapper lane shows helpers that directly
+  so coincidental key-builder shapes do not crowd out mergeable helpers. Duplicate helper-name pressure explicitly
+  opts into `atlas.self` function body analysis so exact body/body-shape counts stay available without taxing ordinary
+  function rows. The wrapper lane shows helpers that directly
   return a constructor or simple call and includes local direct-call, value-reference, and total-usage counts; use it to inspect whether a
   wrapper has real lifetime/ownership, not as a cleanup score to game. The object-spread lane catches `...(cond ? {} : { prop })` style
   construction, including isolated low-pressure envelopes, so those rows can be simplified intentionally instead of found by grep. The string lanes surface
@@ -129,7 +251,13 @@ These scripts should check static coherence rather than trying to prove runtime 
 - [atlas-self-profile.ts](atlas-self-profile.ts) times the major `atlas.self` projections through the daemon with
   representative filters and prints the cold self-analysis phase profile from the summary read. Use
   `pnpm --filter @aurelia-ls/atlas profile:self` before splitting Atlas core analysis files so the decision starts
-  from measured build phases and hot request cost, not only line count.
+  from measured build phases and hot request cost, not only line count. The default profile output prints the highest
+  exclusive-cost phase rows plus compact enum hotspot summaries; use
+  `pnpm --filter @aurelia-ls/atlas profile:self:detail`, `--phaseRows=...`, `--enumRoleRows=...`,
+  `--enumHotspotRows=...`, `--laneRows=...`, `--enumContext=none`, or `--skipEnumHotspots` when the current question
+  needs a wider tail, a checker-context-free enum baseline, or a narrower terminal read.
+  Parent phases print `excl / total` when they contain nested profiler measurements, so broad walkers do not hide the
+  concrete child phase that actually costs.
 - [framework-emulation-symbols-report.ts](framework-emulation-symbols-report.ts) writes the deterministic framework
   emulation Markdown golden by calling the named session report endpoint. The report currently uses
   `StandardConfiguration` as a broad canary, not as the only configuration shape Atlas can reason about.

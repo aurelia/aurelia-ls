@@ -93,13 +93,13 @@ function runtimeAcceptedInterpolationAst(
     },
   ].sort((left, right) => left.index - right.index);
 
-  if (expressions.length + 1 !== result.rawParts.length) {
+  if (expressions.length + 1 !== result.parts.length) {
     return null;
   }
 
   return new Interpolation(
     result.primarySpan ?? activeExpression.span,
-    [...result.rawParts],
+    [...result.parts],
     expressions.map((entry) => entry.expression),
   );
 }

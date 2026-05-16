@@ -66,7 +66,18 @@ export class ResourceRecognitionContext {
     );
   }
 
-  /** Use the owner module environment for a syntax node, falling back to this context when not indexed. */
+  /** Read the owner module environment for a syntax node when the source file is admitted by this pass. */
+  readAdmittedNodeContext(node: ts.Node | null | undefined): ResourceRecognitionContext | null {
+    if (node == null) {
+      return this;
+    }
+    if (node.getSourceFile() === this.sourceFile) {
+      return this;
+    }
+    return this.contextIndex?.readNodeContext(node) ?? null;
+  }
+
+  /** Use the owner module environment for a syntax node, falling back to this context for value reads only. */
   readNodeContext(node: ts.Node | null | undefined): ResourceRecognitionContext {
     return this.contextIndex?.readNodeContext(node) ?? this;
   }

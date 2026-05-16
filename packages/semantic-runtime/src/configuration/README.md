@@ -50,6 +50,10 @@ The tooling model should keep that split:
 - `scope-materializer.ts` materializes runtime-shaped `Scope`, binding-context, and override-context products together,
   then attaches typed product details. Inquiry should read those details for expression name visibility instead of
   peeking into controller construction or compiler-world internals.
+- `scope.ts` owns the runtime lookup rule once. `BindingScope.lookup(...)` returns reference-shaped products for normal
+  expression/type-system consumers, while `BindingScope.locate(...)` returns the same result with concrete modeled
+  scope/context objects for materializers that must keep evaluating across the resolved runtime context. Observation,
+  diagnostics, and authoring should use these APIs rather than reimplementing parent/override/boundary traversal.
 - `binding-scope-slot-projector.ts` owns the TypeChecker-backed handoff from projected context type members into
   binding-context slot drafts. Keep that projection out of scope product publication so `Scope` remains the runtime
   lookup surface and the type-system layer remains the source of static member surfaces.
@@ -57,13 +61,18 @@ The tooling model should keep that split:
   facts prove a null/undefined first argument. It claims runtime `null_scope` (`AUR0203`) for
   `Scope.fromParent(...)`/`Scope.getContext(...)` null scopes and runtime `create_scope_with_null_context` (`AUR0204`)
   for `Scope.create(...)` null binding contexts. Normal rendered binding-scope lookup should not grow null fallbacks:
-  semantic-runtime constructs those scopes as non-null products.
+  semantic-runtime constructs those scopes as non-null products. The source/API scanner carries the boot-admitted
+  source-file address through `sourceSiteForNode(...)` into `sourceSpanAddressForSite(...)`; do not re-resolve those
+  issue spans from filenames or publish addressless source diagnostics from this path.
 - Configuration sequence records describe source/evaluation order for app setup, plugin setup, registry bodies, and
   builder-style configuration objects.
 - Configuration product publication should flow through one configuration-owned primitive for `ConfigurationIdentity`,
   `MaterializedProduct`, and `MaterializationRecord`. Do not hand-spell that envelope for sequences, steps, app roots,
   Aurelia facades, app-root configs, app tasks, or option contributions unless the product has genuinely different
   ownership semantics.
+- Configuration issue products flow through `ConfigurationIssuePublisher`, which wraps the shared kernel
+  `publishIssueProduct(...)` primitive. Source scanners may still own their exact source spans, but issue evidence,
+  provenance, identity, materialized-product, and materialization records should not be rebuilt in each scanner.
 - `configuration-publication.ts` owns that primitive, plus source/evidence/provenance triples, open seams, and
   configuration-owned claim sets. `configuration-kernel-emitter.ts` should ask this collaborator for records rather
   than rebuilding kernel envelopes locally.
@@ -83,6 +92,10 @@ The tooling model should keep that split:
 - Direct object-literal options passed to `.customize(...)` and direct assignments inside simple customization
   callbacks, such as `options.translationAttributeAliases = [...]`, may produce typed option contributions. Callback
   bodies only remain open when they contain control flow or side effects beyond those direct assignments.
+- `configuration-option-shape-issues.ts` owns source-backed diagnostics for recognized framework configuration paths
+  whose option keys are statically impossible. For example, `I18nConfiguration` translation resources belong under
+  `initOptions.resources`, so a top-level `resources` contribution should stay visible as a configuration issue rather
+  than being accepted by the i18n catalog.
 - AppTask factory calls are value creation. They become configuration AppTask records only when a registration path
   admits that registry value; a standalone `AppTask.*(...)` expression should not produce app-world effects. Their
   callback bodies may be inspected later, but they are not spent into container state merely because the task was

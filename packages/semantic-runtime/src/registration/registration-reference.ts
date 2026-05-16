@@ -70,6 +70,27 @@ export const enum FrameworkRegistrationKind {
   RuntimeHtmlDefaultRenderers = 'runtime-html.default-renderers',
 }
 
+export const enum RegistryBodyKind {
+  /** Kernel `aliasedResourcesRegistry(mod, mainAlias, aliases)` registry body. */
+  AliasedResourcesRegistry = 'aliased-resources-registry',
+}
+
+export const enum RegistryBodyInterpretationState {
+  /** The registry body exists but still depends on open source/evaluation facts. */
+  Open = 'open',
+  /** The registry body has been interpreted enough for DI spending to avoid a generic body-open seam. */
+  Interpreted = 'interpreted',
+}
+
+export class RegistryBodyReference {
+  constructor(
+    /** Framework/runtime body shape represented by this IRegistry value. */
+    readonly bodyKind: RegistryBodyKind,
+    /** Whether this body has been interpreted in the current static product lane. */
+    readonly state: RegistryBodyInterpretationState,
+  ) {}
+}
+
 /** Source-level reference to the DI key offered by a registration admission. */
 export class RegistrationKeyReference {
   constructor(
@@ -97,5 +118,7 @@ export class RegistrationValueReference {
     readonly localName: string | null,
     /** Known framework registration effect package, when recognized from source. */
     readonly frameworkKind: FrameworkRegistrationKind | null = null,
+    /** Known registry-body semantics, when an IRegistry value was produced by a framework registry factory. */
+    readonly registryBody: RegistryBodyReference | null = null,
   ) {}
 }

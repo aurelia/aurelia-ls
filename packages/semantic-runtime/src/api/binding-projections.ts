@@ -39,6 +39,7 @@ export function readBindingTargetAccessRows(
         authority: access.authority,
         openReason: access.openReason,
         frameworkErrorCode: access.frameworkErrorCode,
+        diagnosticReason: access.diagnosticReason,
         source: describeAddress(store, access.sourceAddressHandle),
         ...(handles ? {
           handles: {
@@ -191,6 +192,7 @@ export function readBindingValueChannelRows(
         runtimeValueType: valueChannel.runtimeValueType?.display ?? null,
         valueDomain: valueChannel.valueDomain,
         isCollection: valueChannel.isCollection,
+        usesCustomMatcher: valueChannel.usesCustomMatcher,
         openReason: valueChannel.openReason,
         openReasonKinds: valueChannel.openReasonKinds,
         source: describeAddress(store, valueChannel.sourceAddressHandle),

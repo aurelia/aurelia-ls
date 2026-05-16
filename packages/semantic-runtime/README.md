@@ -33,8 +33,9 @@ pnpm --filter @aurelia-ls/semantic-runtime fixtures:authoring
 Set `SEMANTIC_RUNTIME_PRESSURE_ROOTS` to a path-delimited list of external roots when using external clean-room apps as a
 transient pressure surface. Treat the output as local inspection material: do not promote exact paths, project keys,
 row names, source text, or app-specific open-reason details from external clean-room roots into tracked files. The pressure
-script defaults to `SEMANTIC_RUNTIME_PRESSURE_DETAIL=summary`, which buckets source-assignment and open-seam detail
-into durable pressure categories; use `SEMANTIC_RUNTIME_PRESSURE_DETAIL=raw` only for local, non-committed debugging.
+script defaults to `SEMANTIC_RUNTIME_PRESSURE_DETAIL=compact`, which keeps route-friendly aggregate buckets first; use
+`SEMANTIC_RUNTIME_PRESSURE_DETAIL=summary` for wider bucket detail and `SEMANTIC_RUNTIME_PRESSURE_DETAIL=raw` only for
+local, non-committed debugging.
 It also defaults to `SEMANTIC_RUNTIME_PRESSURE_OUTPUT=aggregate` because the built-in fixture list is broad and
 future-you usually needs the combined cross-root pressure shape before opening per-input detail. Use
 `SEMANTIC_RUNTIME_PRESSURE_OUTPUT=inputs` for a single isolated root, and `SEMANTIC_RUNTIME_PRESSURE_OUTPUT=both` only

@@ -48,8 +48,8 @@ pnpm --filter @aurelia-ls/atlas self-check
   `nextActionPolicy=when-touched`: those are reusable grounding rows for matching
   tasks, not default autonomous work just because their source handles still
   exist. The script
-  forwards `--query`, `--path`, `--domain`, `--kind`, `--status`, and
-  `--recordId` filters, plus `--surfaceRole` for untracked product-class pressure,
+  forwards `--query`, `--path`, `--domain`, `--kind`, `--status`,
+  `--recordId`, and `--name` filters, plus `--surfaceRole` for untracked product-class pressure,
   `--liveCheckKind` for the mechanism that keeps a durable record honest,
   `--nextActionPolicy` for proactive versus when-touched pressure-frontiers,
   `--anchorKind`, `--anchorLensId`, and `--symbolName` for structural memory
@@ -73,6 +73,29 @@ pnpm --filter @aurelia-ls/atlas self-check
   `--dry-run` first. JSON memory is the queryable handle; README files own stable
   boundaries, workbenches own rolling context, and `.temp` is scratch unless its
   durable essence has been promoted.
+- `atlas.work-router` is the structural route layer over memory, source anchors,
+  framework corpus, docs, scripts, and cautions. Use
+  `pnpm --filter @aurelia-ls/atlas work:router -- --projection=memory-coverage --detail`
+  when `memory:next` seems ahead of the route catalog. Durable memory ownership
+  does not come from path anchors or unfiltered generic lens anchors; use source,
+  exact memory-domain, auLink, script, doc, or structurally filtered lens anchors.
+  Exact domain-set matches win; otherwise at least two non-generic domain
+  overlaps are required so generic carriers such as `semantic-runtime`,
+  `template`, `memory`, and `inquiry` do not route by themselves. Memory-domain
+  anchors support explicit domain filters and memory-coverage joins, not free
+  query vocabulary. Unfiltered `route-plan --detail` ranks from both memory-next and live product/source
+  pressure; `product-structural` matches mean a large module, class, function,
+  or named declaration matched a route-owned source anchor. Symbol-qualified
+  anchors do not inherit whole-file/module pressure, and Atlas catalog/contract/barrel
+  module shapes are damped so static catalog size stays visible without becoming
+  implementation pressure. Source-anchor roles weight those live pressure scores,
+  so primary/pressure anchors can drive route selection while supporting
+  catalog/context anchors stay visible without dominating merely because they
+  are large. Projection ids are exact, and the
+  CLI now prints supported projection ids plus typed continuations for reroute
+  answers instead of throwing a stack trace on unsupported projections. Current route health is green and
+  memory coverage is fully routed after adding explicit template HTML parsing,
+  binding-scope, and i18n translation-binding routes.
 - The session daemon is compatibility-profiled. Normal repo sessions and
   clean-room external-root sessions write separate manifests under
   `.temp/atlas/session/profiles/<compatibility-key>/`, and the client caches the
@@ -189,6 +212,12 @@ pnpm --filter @aurelia-ls/atlas self-check
   recipe needs a seed for one exact binding behavior argument or value channel.
   Listener commands such as `click.trigger` and `submit.trigger` do not count
   as value-channel `targetProperty` filters.
+  Use `classificationKind` plus `classificationKey` for exact typed reason
+  filters such as `surface:native-value-binding`,
+  `surface:native-checked-binding`, `surface:option-model-binding`, or
+  `surface:validation-binding-behavior`. Surface reason filters intentionally
+  match local doc code fences and test `createFixture(...)` call snippets, not
+  parent `describe`/`it` carrier ranges that merely contain nested markup.
   Style/class fixture seeds split stylesheet assets, observer-backed
   class/style value channels, and direct renderer target operations; target
   operations are classified only from HTML-like tag spans so TypeScript
@@ -232,6 +261,14 @@ pnpm --filter @aurelia-ls/atlas self-check
   groups, not gap rows; same-facet duplicates still indicate split-brain.
   `atlas.self:function-shapes` is now available for finding split-brain helpers
   that share canonical AST/control-flow bodies even when their names differ.
+  `atlas.self` now separates source-surface analysis from semantic taxonomy
+  analysis. Work Router and memory live checks use source surfaces without
+  dragging enum/string/contract-string taxonomy through every route plan, while
+  summary/taxonomy/enum/string/contract projections still request taxonomy.
+  `atlas.self` also no longer computes function body fingerprints and switch
+  topology in ordinary summary/function lanes; body facts are an explicit
+  `includeFunctionBodyAnalysis` lane requested by shape/control-flow
+  projections, fingerprint filters, or pressure scripts that truly need them.
   `atlas.self:function-wrappers` is available for finding shallow helpers that
   directly return a constructor call or simple call. It now separates local
   direct calls from value/callback references and reports total usage; those
@@ -377,8 +414,11 @@ pnpm --filter @aurelia-ls/atlas self-check
   new rows should be treated as fresh ownership pressure rather than known
   background noise.
 - `profile:product-architecture` is for cost decisions. It prints structure,
-  compact-call core/full, exact-call core/full, and symbol lanes so
-  cache/warmup/split work starts from measured cost.
+  body+structure, compact-call core/full, exact-call core/full, and symbol lanes
+  so cache/warmup/split work starts from measured cost. Product architecture now
+  treats function body fingerprints and switch topology as explicit
+  body-analysis facts: duplicate/control-flow projections ask for them, while
+  cheap module/class/function structure reads do not.
 - `profile:workspace-architecture` and `profile:product-architecture` warm the
   daemon before measuring profile requests. Treat the startup/status line as
   session envelope cost and the request line as warm inquiry cost; otherwise
@@ -642,14 +682,29 @@ Inferred maintenance heuristics:
 - `profile:self` times the major `atlas.self` projections through the daemon.
   Use it when line count or context cost suggests a split, cache, or phase-boundary
   decision; it is a cost lane, while `pressure:self` is a source-navigation lane.
+  The default terminal output shows the highest exclusive-cost phase rows and a
+  compact enum hotspot summary split by string/number value kind; use `profile:self:detail`, `--phaseRows=...`,
+  `--enumRoleRows=...`, or `--skipEnumHotspots` when the tail or a narrower
+  read matters.
+  Parent phases now print exclusive and inclusive timings when they contain nested
+  profiler rows, so treat `excl` as the root-cost signal and `total` as the
+  containing-scope signal.
   The profile output now includes cold self-analysis phase timings; at the
   current checkpoint the expensive phase is the Atlas enum usage index, while
   hot filtered projections remain cheap after the summary read warms the analysis.
   The enum usage index also emits nested phase/checker-call timings through the
   shared `PhaseProfiler`; the first cleanup cut cold self-analysis by avoiding
   contextual type lookups for non-raw-value literal roles and caching root
-  enum-name extraction for contextual types. Remaining measured pressure is
-  mostly the enum usage pass plus contextual type lookups.
+  enum-name extraction for contextual types. The standard self-analysis path now
+  treats call-argument raw enum contextual refinement as an opt-in lane: use
+  `self -- --projection=enum-value-occurrences --role=call-argument ...` or
+  `--enumContext=all` when that exact lane matters. Remaining standard pressure
+  is mostly the enum usage pass plus comparison/object contextual type lookups.
+  Use `pnpm --filter @aurelia-ls/atlas self -- --projection=...` when a specific
+  `atlas.self` row family needs exact filters, paging, detail output, or JSON.
+  Use `self -- --projection=phase-profile` when measured phase rows need to be
+  queried by exact phase id, `minMilliseconds`, `minExclusiveMilliseconds`, or
+  text query instead of read from terminal profile output.
 - Relationship row factories with setup plus a final object/array/call return
   are recognized as direct factories, so `pressure:self` should highlight true
   branching axis mappers rather than coherent row materializers.

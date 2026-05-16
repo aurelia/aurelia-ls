@@ -19,16 +19,87 @@ export type TypeSystemProjectPhaseName =
 export interface TypeSystemProjectPhaseTiming {
   readonly name: TypeSystemProjectPhaseName;
   readonly milliseconds: number;
+  readonly itemCount?: number;
+}
+
+export interface TypeSystemCompilerHostSourceFileCacheStats {
+  readonly hits: number;
+  readonly misses: number;
+  readonly writes: number;
+  readonly bypasses: number;
 }
 
 export interface TypeSystemProjectProfile {
   readonly totalMilliseconds: number;
   readonly phases: readonly TypeSystemProjectPhaseTiming[];
+  readonly hostSourceFileCache: TypeSystemCompilerHostSourceFileCacheStats;
 }
 
 interface TypeSystemSourceFileIndexes {
   readonly byPath: Map<string, ts.SourceFile>;
   readonly byModuleKey: Map<string, ts.SourceFile>;
+}
+
+class TypeSystemCompilerHostSourceFileCache {
+  private readonly sourceFiles = new Map<string, ts.SourceFile>();
+  private hits = 0;
+  private misses = 0;
+  private writes = 0;
+  private bypasses = 0;
+
+  readOrCreate(
+    fileName: string,
+    languageVersionOrOptions: ts.ScriptTarget | ts.CreateSourceFileOptions,
+    projectRootDir: string,
+    shouldCreateNewSourceFile: boolean | undefined,
+    create: () => ts.SourceFile | undefined,
+  ): ts.SourceFile | undefined {
+    if (
+      shouldCreateNewSourceFile === true ||
+      !typeSystemHostSourceFileIsCacheable(fileName, projectRootDir)
+    ) {
+      this.bypasses += 1;
+      return create();
+    }
+
+    const key = typeSystemHostSourceFileCacheKey(fileName, languageVersionOrOptions);
+    const existing = this.sourceFiles.get(key);
+    if (existing !== undefined) {
+      this.hits += 1;
+      return existing;
+    }
+
+    this.misses += 1;
+    const sourceFile = create();
+    if (sourceFile !== undefined) {
+      this.sourceFiles.set(key, sourceFile);
+      this.writes += 1;
+    }
+    return sourceFile;
+  }
+
+  snapshot(): TypeSystemCompilerHostSourceFileCacheStats {
+    return {
+      hits: this.hits,
+      misses: this.misses,
+      writes: this.writes,
+      bypasses: this.bypasses,
+    };
+  }
+}
+
+const sharedCompilerHostSourceFileCache = new TypeSystemCompilerHostSourceFileCache();
+
+function diffCompilerHostSourceFileCacheStats(
+  after: TypeSystemCompilerHostSourceFileCacheStats,
+  before: TypeSystemCompilerHostSourceFileCacheStats,
+): TypeSystemCompilerHostSourceFileCacheStats {
+  return {
+    hits: after.hits - before.hits,
+    misses: after.misses - before.misses,
+    writes: after.writes - before.writes,
+    bypasses: after.bypasses - before.bypasses,
+  };
 }
 
 /** Current TypeScript Program/checker epoch for one booted project frame. */
@@ -206,27 +277,40 @@ export class TypeSystemProjectBuilder {
     evaluation: StaticProjectEvaluationResult,
   ): TypeSystemProject {
     const started = performance.now();
+    const hostSourceFileCacheBefore = sharedCompilerHostSourceFileCache.snapshot();
     const phases: TypeSystemProjectPhaseTiming[] = [];
-    const evaluatedSources = measureTypeSystemProjectPhase(phases, 'evaluated-source-index', () =>
-      evaluation.readEvaluatedSources()
+    const evaluatedSources = measureTypeSystemProjectPhase(
+      phases,
+      'evaluated-source-index',
+      () => evaluation.readEvaluatedSources(),
+      (sources) => sources.length,
     );
     const sourceFiles = typeSystemSourceFileIndexes(evaluatedSources);
 
     const projectOptions = measureTypeSystemProjectPhase(phases, 'project-options', () =>
       buildTypeSystemProjectOptions(project.rootDir)
     );
-    measureTypeSystemProjectPhase(phases, 'ambient-source-index', () =>
-      addAmbientSourceFiles(sourceFiles.byPath, projectOptions.ambientSourceFiles)
+    measureTypeSystemProjectPhase(
+      phases,
+      'ambient-source-index',
+      () => addAmbientSourceFiles(sourceFiles.byPath, projectOptions.ambientSourceFiles),
+      () => projectOptions.ambientSourceFiles.length,
     );
 
     const options = projectOptions.compilerOptions;
-    const host = measureTypeSystemProjectPhase(phases, 'compiler-host', () =>
-      createTypeSystemCompilerHost(options, sourceFiles.byPath)
+    const host = measureTypeSystemProjectPhase(
+      phases,
+      'compiler-host',
+      () => createTypeSystemCompilerHost(options, sourceFiles.byPath, project.rootDir),
+      () => sourceFiles.byPath.size,
     );
 
     const rootNames = [...sourceFiles.byPath.keys()];
-    const program = measureTypeSystemProjectPhase(phases, 'program', () =>
-      ts.createProgram(rootNames, options, host)
+    const program = measureTypeSystemProjectPhase(
+      phases,
+      'program',
+      () => ts.createProgram(rootNames, options, host),
+      (created) => created.getSourceFiles().length,
     );
     const checker = measureTypeSystemProjectPhase(phases, 'checker', () =>
       program.getTypeChecker()
@@ -239,6 +323,10 @@ export class TypeSystemProjectBuilder {
       {
         totalMilliseconds: performance.now() - started,
         phases,
+        hostSourceFileCache: diffCompilerHostSourceFileCacheStats(
+          sharedCompilerHostSourceFileCache.snapshot(),
+          hostSourceFileCacheBefore,
+        ),
       },
       sourceFiles.byModuleKey,
       sourceFiles.byPath,
@@ -270,6 +358,7 @@ function addAmbientSourceFiles(
 function createTypeSystemCompilerHost(
   options: ts.CompilerOptions,
   byPath: ReadonlyMap<string, ts.SourceFile>,
+  projectRootDir: string,
 ): ts.CompilerHost {
   const compilerHost = ts.createCompilerHost(options, true);
   const defaultGetSourceFile = compilerHost.getSourceFile.bind(compilerHost);
@@ -280,7 +369,13 @@ function createTypeSystemCompilerHost(
     shouldCreateNewSourceFile,
   ) => {
     const existing = byPath.get(normalizeTypeSystemPath(fileName));
-    return existing ?? defaultGetSourceFile(fileName, languageVersionOrOptions, onError, shouldCreateNewSourceFile);
+    return existing ?? sharedCompilerHostSourceFileCache.readOrCreate(
+      fileName,
+      languageVersionOrOptions,
+      projectRootDir,
+      shouldCreateNewSourceFile,
+      () => defaultGetSourceFile(fileName, languageVersionOrOptions, onError, shouldCreateNewSourceFile),
+    );
   };
   return compilerHost;
 }
@@ -352,16 +447,36 @@ function normalizeTypeSystemPath(fileName: string): string {
   return path.normalize(fileName).replace(/\\/g, '/');
 }
 
+function typeSystemHostSourceFileCacheKey(
+  fileName: string,
+  languageVersionOrOptions: ts.ScriptTarget | ts.CreateSourceFileOptions,
+): string {
+  const scriptTarget = typeof languageVersionOrOptions === 'number'
+    ? languageVersionOrOptions
+    : languageVersionOrOptions.languageVersion;
+  return `${normalizeTypeSystemPath(fileName)}::${scriptTarget}`;
+}
+
+function typeSystemHostSourceFileIsCacheable(
+  fileName: string,
+  _projectRootDir: string,
+): boolean {
+  const normalizedFileName = normalizeTypeSystemPath(path.resolve(fileName)).toLowerCase();
+  return normalizedFileName.includes('/node_modules/');
+}
+
 function measureTypeSystemProjectPhase<TValue>(
   phases: TypeSystemProjectPhaseTiming[],
   name: TypeSystemProjectPhaseName,
   read: () => TValue,
+  itemCount?: (value: TValue) => number | undefined,
 ): TValue {
   const started = performance.now();
   const value = read();
   phases.push({
     name,
     milliseconds: performance.now() - started,
+    itemCount: itemCount?.(value),
   });
   return value;
 }

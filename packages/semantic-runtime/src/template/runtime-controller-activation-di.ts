@@ -10,6 +10,7 @@ import type {
 } from '../kernel/store.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
+import { admittedSourceFileAddressHandleForCheckerNode } from '../type-system/declaration-source.js';
 import type { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import type { CustomElementDefinition } from '../resources/custom-element-definition.js';
 
@@ -24,7 +25,7 @@ const VIEW_FACTORY_MODULES = new Set([
 ]);
 
 export interface RuntimeControllerActivationDiSite {
-  readonly sourceAddressHandle: AddressHandle | null;
+  readonly sourceAddressHandle: AddressHandle;
   readonly records: readonly KernelStoreRecord[];
 }
 
@@ -73,6 +74,10 @@ function readClassActivationViewFactoryResolveSites(
   declaration: ts.ClassDeclaration,
 ): readonly RuntimeControllerActivationDiSite[] {
   const sourceFile = declaration.getSourceFile();
+  const sourceFileAddressHandle = admittedSourceFileAddressHandleForCheckerNode(store, declaration);
+  if (sourceFileAddressHandle == null) {
+    return [];
+  }
   const bindings = readImportBindings(sourceFile);
   const sites: RuntimeControllerActivationDiSite[] = [];
   for (const member of declaration.members) {
@@ -80,11 +85,11 @@ function readClassActivationViewFactoryResolveSites(
       continue;
     }
     if (ts.isPropertyDeclaration(member) && member.initializer != null) {
-      visitActivationNode(store, sourceFile, bindings, definitionName, member.initializer, sites);
+      visitActivationNode(store, sourceFileAddressHandle, sourceFile, bindings, definitionName, member.initializer, sites);
       continue;
     }
     if (ts.isConstructorDeclaration(member) && member.body != null) {
-      visitActivationNode(store, sourceFile, bindings, definitionName, member.body, sites);
+      visitActivationNode(store, sourceFileAddressHandle, sourceFile, bindings, definitionName, member.body, sites);
     }
   }
   return sites;
@@ -92,6 +97,7 @@ function readClassActivationViewFactoryResolveSites(
 
 function visitActivationNode(
   store: KernelStore,
+  sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
   bindings: ImportBindings,
   definitionName: string,
@@ -102,9 +108,11 @@ function visitActivationNode(
     return;
   }
   if (ts.isCallExpression(node) && isResolveIViewFactoryCall(node, bindings)) {
-    sites.push(sourceSiteForNode(store, sourceFile, definitionName, node));
+    sites.push(sourceSiteForNode(store, sourceFileAddressHandle, sourceFile, definitionName, node));
   }
-  ts.forEachChild(node, (child) => visitActivationNode(store, sourceFile, bindings, definitionName, child, sites));
+  ts.forEachChild(node, (child) =>
+    visitActivationNode(store, sourceFileAddressHandle, sourceFile, bindings, definitionName, child, sites)
+  );
 }
 
 function readImportBindings(sourceFile: ts.SourceFile): ImportBindings {
@@ -178,17 +186,11 @@ function isIViewFactoryExpression(
 
 function sourceSiteForNode(
   store: KernelStore,
+  sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
   definitionName: string,
   node: ts.Node,
 ): RuntimeControllerActivationDiSite {
-  const sourceFileAddress = store.readBestSourceFileAddressForFileName(sourceFile.fileName);
-  if (sourceFileAddress == null) {
-    return {
-      sourceAddressHandle: null,
-      records: [],
-    };
-  }
   const start = node.getStart(sourceFile);
   const end = node.end;
   const handle = store.handles.address([
@@ -203,7 +205,7 @@ function sourceSiteForNode(
     records: [
       new SourceSpanAddress(
         handle,
-        sourceFileAddress.handle,
+        sourceFileAddressHandle,
         start,
         end,
         SourceSpanRole.Primary,

@@ -67,6 +67,8 @@ export interface FrameworkEvaluatorValue {
   readonly modules?: readonly FrameworkEvaluatorModuleSummary[];
   /** Open seams returned as first-class rows. */
   readonly openSeams?: readonly EvaluationEffectOpenSeam[];
+  /** Total open-seam counts by evaluator-local kind before row paging. */
+  readonly openSeamKindCounts?: Readonly<Record<string, number>>;
 }
 
 /** Serializable module-evaluation summary. */
@@ -120,37 +122,63 @@ export function answerFrameworkEvaluator(
       selector,
       pageOptions,
     );
-    const value: FrameworkEvaluatorValue = {
-      selector,
-      targetCount: resolution.targets.length,
-      candidateCount: resolution.candidateCount,
-      effectTrace,
-      openSeams: effectTrace.openSeams,
-    };
     if (projection === "open-seams") {
+      const openSeamOffset = pageOptions.offset ?? 0;
+      const openSeamRows = effectTrace.openSeams.slice(
+        openSeamOffset,
+        openSeamOffset + pageOptions.limit,
+      );
       return createAnswer(
         inquiry,
         effectTrace.openSeams.length === 0
           ? OutcomeKind.Miss
           : OutcomeKind.Partial,
-        `Returned ${effectTrace.openSeams.length} static evaluator open seam(s).`,
+        `Returned ${openSeamRows.length} of ${effectTrace.openSeams.length} static evaluator open seam row(s).`,
         {
-          value,
+          value: {
+            selector,
+            targetCount: resolution.targets.length,
+            candidateCount: resolution.candidateCount,
+            openSeams: openSeamRows,
+            openSeamKindCounts: openSeamKindCounts(effectTrace.openSeams),
+          },
           basis: [
             frameworkEvaluatorStaticBasis(sourceProject),
             evaluatorCheckerBasis(sourceProject),
             frameworkEvaluatorSourceTextBasis(sourceProject),
           ],
-          evidence: effectTrace.openSeams
+          evidence: openSeamRows
             .slice(0, evidenceLimit(inquiry))
             .map(evidenceForOpenSeam),
-          openSeams: effectTrace.openSeams
+          openSeams: openSeamRows
             .slice(0, evidenceLimit(inquiry))
             .map(answerOpenSeam),
-          continuations: openSeamContinuations(inquiry, effectTrace.openSeams),
+          page: {
+            size: pageOptions.limit,
+            cursor: inquiry.page?.cursor,
+            returned: openSeamRows.length,
+            total: effectTrace.openSeams.length,
+            nextCursor: openSeamOffset + openSeamRows.length >= effectTrace.openSeams.length
+              ? undefined
+              : String(openSeamOffset + openSeamRows.length),
+          },
+          continuations: openSeamContinuations(
+            inquiry,
+            openSeamRows,
+            effectTrace.openSeams.length,
+            openSeamOffset,
+            pageOptions.limit,
+          ),
         },
       );
     }
+    const value: FrameworkEvaluatorValue = {
+      selector,
+      targetCount: resolution.targets.length,
+      candidateCount: resolution.candidateCount,
+      effectTrace,
+      openSeams: effectTrace.openSeams.slice(0, pageOptions.limit),
+    };
     return createAnswer(
       inquiry,
       effectTrace.totalEffects === 0 ? OutcomeKind.Miss : OutcomeKind.Hit,
@@ -207,6 +235,16 @@ export function answerFrameworkEvaluator(
         .map(answerOpenSeam),
     },
   );
+}
+
+function openSeamKindCounts(
+  seams: readonly EvaluationEffectOpenSeam[],
+): Readonly<Record<string, number>> {
+  const counts: Record<string, number> = {};
+  for (const seam of seams) {
+    counts[seam.openKind] = (counts[seam.openKind] ?? 0) + 1;
+  }
+  return counts;
 }
 
 function moduleSummaries(
@@ -325,22 +363,39 @@ function effectContinuations(
 function openSeamContinuations(
   inquiry: Inquiry,
   seams: readonly EvaluationEffectOpenSeam[],
+  total: number,
+  offset: number,
+  limit: number,
 ): readonly Continuation[] {
-  return seams.slice(0, 3).map((seam, index) => {
+  const continuations: Continuation[] = [];
+  if (offset + seams.length < total) {
+    continuations.push(
+      nextPageContinuation(
+        inquiry,
+        "framework.evaluator:open-seams:next-page",
+        "Continue evaluator open seam rows.",
+        offset + seams.length,
+        limit,
+      ),
+    );
+  }
+  for (const [index, seam] of seams.slice(0, 3).entries()) {
     const builder = new FrameworkRowContinuationBuilder(
       inquiry,
       "framework.evaluator:open-seams",
       index,
       evidenceForOpenSeam(seam),
     );
-    return builder.source(
+    const continuation = builder.source(
       "source",
       sourceRangeForEvaluationOpenSeam(seam),
       "Inspect source behind this evaluator open seam.",
       "Source behind an evaluator open seam.",
       { basis: [BasisKind.SourceText, BasisKind.StaticEvaluator] },
     );
-  });
+    continuations.push(continuation);
+  }
+  return continuations;
 }
 
 function evidenceForEffect(effect: EvaluationInvocationEffect): Evidence {

@@ -28,4 +28,8 @@ export class App {
   get submittedCount(): number {
     return this.state.submittedCount;
   }
+
+  binding(): void {
+    void this.state.loadRequests();
+  }
 }

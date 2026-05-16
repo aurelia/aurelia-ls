@@ -11,11 +11,11 @@ import {
   readEvaluatedExpressionTarget,
 } from './resource-field-readers.js';
 import {
-  ResourceCarrierKind,
   ResourceRecognitionObservation,
   ResourceRecognitionOpen,
   ResourceTargetObservation,
 } from './resource-observation.js';
+import { ResourceCarrierKind } from './resource-kind.js';
 
 /** Combined recognizer for resources that alter syntax recognition rather than ordinary resource lookup alone. */
 export class SyntaxResourceRecognizer {

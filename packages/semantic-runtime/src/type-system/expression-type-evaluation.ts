@@ -103,11 +103,26 @@ export interface CheckerExpressionTypeEvaluationCacheStats {
   readonly writesByBucket: Readonly<Record<string, number>>;
 }
 
+export class CheckerExpressionTypeEvaluationCacheMarker {
+  constructor(
+    readonly entries: number,
+    readonly hits: number,
+    readonly misses: number,
+    readonly writes: number,
+    readonly entriesByBucket: Readonly<Record<string, number>>,
+    readonly hitsByBucket: Readonly<Record<string, number>>,
+    readonly missesByBucket: Readonly<Record<string, number>>,
+    readonly writesByBucket: Readonly<Record<string, number>>,
+  ) {}
+}
+
 /**
  * Hot cache for Aurelia-expression TypeChecker evaluations within one runtime-analysis pass.
  *
- * The cache key is the caller-owned local key. Call sites must include the modeled binding scope, expression product,
- * and semantic role in that key before sharing a cache across materializers.
+ * The evaluator supplies a key that combines the caller-owned semantic local key with the modeled BindingScope,
+ * TemplateResourceScope, expression span/kind, runtime evaluation mode, and contextual type. Call sites should still
+ * choose a meaningful local key for projection handles and cache bucketing, but correctness must not depend on every
+ * caller remembering all scope dimensions.
  */
 export class CheckerExpressionTypeEvaluationCache {
   private readonly evaluations = new Map<string, CheckerExpressionTypeEvaluation>();
@@ -159,6 +174,34 @@ export class CheckerExpressionTypeEvaluationCache {
       writesByBucket: cacheBucketSnapshot(this.writesByBucket),
     };
   }
+
+  mark(): CheckerExpressionTypeEvaluationCacheMarker {
+    const snapshot = this.snapshot();
+    return new CheckerExpressionTypeEvaluationCacheMarker(
+      snapshot.entries,
+      snapshot.hits,
+      snapshot.misses,
+      snapshot.writes,
+      snapshot.entriesByBucket,
+      snapshot.hitsByBucket,
+      snapshot.missesByBucket,
+      snapshot.writesByBucket,
+    );
+  }
+
+  snapshotSince(marker: CheckerExpressionTypeEvaluationCacheMarker): CheckerExpressionTypeEvaluationCacheStats {
+    const snapshot = this.snapshot();
+    return {
+      entries: Math.max(0, snapshot.entries - marker.entries),
+      hits: Math.max(0, snapshot.hits - marker.hits),
+      misses: Math.max(0, snapshot.misses - marker.misses),
+      writes: Math.max(0, snapshot.writes - marker.writes),
+      entriesByBucket: subtractCacheBucketSnapshot(snapshot.entriesByBucket, marker.entriesByBucket),
+      hitsByBucket: subtractCacheBucketSnapshot(snapshot.hitsByBucket, marker.hitsByBucket),
+      missesByBucket: subtractCacheBucketSnapshot(snapshot.missesByBucket, marker.missesByBucket),
+      writesByBucket: subtractCacheBucketSnapshot(snapshot.writesByBucket, marker.writesByBucket),
+    };
+  }
 }
 
 function cacheKeyBucket(localKey: string): string {
@@ -197,4 +240,18 @@ function cacheBucketSnapshot(buckets: ReadonlyMap<string, number>): Readonly<Rec
   return Object.fromEntries([...buckets.entries()].sort((left, right) =>
     right[1] - left[1] || left[0].localeCompare(right[0])
   ));
+}
+
+function subtractCacheBucketSnapshot(
+  snapshot: Readonly<Record<string, number>>,
+  marker: Readonly<Record<string, number>>,
+): Readonly<Record<string, number>> {
+  const buckets = new Map<string, number>();
+  for (const key of new Set([...Object.keys(snapshot), ...Object.keys(marker)])) {
+    const value = (snapshot[key] ?? 0) - (marker[key] ?? 0);
+    if (value > 0) {
+      buckets.set(key, value);
+    }
+  }
+  return cacheBucketSnapshot(buckets);
 }

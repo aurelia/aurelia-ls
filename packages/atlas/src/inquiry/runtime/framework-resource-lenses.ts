@@ -163,6 +163,7 @@ interface FrameworkResourceFilters extends FrameworkDiscoveryFilters {
 /** Value returned by framework.resources. */
 export interface FrameworkResourcesValue {
   readonly resourceConvergenceCount: number;
+  readonly totalResourceConvergenceCount: number;
   readonly resourceKinds: Readonly<Record<string, number>>;
   readonly carrierKinds: Readonly<Record<string, number>>;
   readonly carrierSourceRoles: Readonly<Record<string, number>>;
@@ -195,8 +196,9 @@ export function answerFrameworkResources(
 ): Answer<FrameworkResourcesValue> {
   const projection = inquiry.projection ?? "summary";
   const filters = resourceFiltersFromInquiry(inquiry);
-  const rows = readFrameworkResourceConvergenceRows(sourceProject, filters);
-  const baseValue = resourceValue(rows);
+  const allRows = readFrameworkResourceConvergenceRowUniverse(sourceProject);
+  const rows = allRows.filter((row) => convergenceRowMatches(row, filters));
+  const baseValue = resourceValue(rows, allRows.length);
   const limit = rowLimit(inquiry);
   const offset = pageOffset(inquiry);
 
@@ -207,6 +209,7 @@ export function answerFrameworkResources(
       limit,
       offset,
       basis: [resourceConvergenceBasis(sourceProject)],
+      summary: (page) => resourceConvergencePageSummary(page.rows.length, rows.length, allRows.length),
       value: (page) => ({
         ...baseValue,
         convergenceRows: page.rows,
@@ -218,7 +221,7 @@ export function answerFrameworkResources(
   return createAnswer(
     inquiry,
     OutcomeKind.Hit,
-    `Framework resources have ${rows.length} converged resource row(s) across carriers, public exports, bundle admissions, syntax products, and materialization sites.`,
+    resourceConvergenceSummary(rows.length, allRows.length),
     {
       value: baseValue,
       basis: [resourceConvergenceBasis(sourceProject)],
@@ -242,9 +245,15 @@ export function readFrameworkResourceConvergenceRows(
   sourceProject: SourceProject,
   filters: FrameworkResourceFilters,
 ): readonly FrameworkResourceConvergenceRow[] {
-  return frameworkResourceConvergenceMemo
-    .read(sourceProject, () => readAllFrameworkResourceConvergenceRows(sourceProject))
+  return readFrameworkResourceConvergenceRowUniverse(sourceProject)
     .filter((row) => convergenceRowMatches(row, filters));
+}
+
+function readFrameworkResourceConvergenceRowUniverse(
+  sourceProject: SourceProject,
+): readonly FrameworkResourceConvergenceRow[] {
+  return frameworkResourceConvergenceMemo
+    .read(sourceProject, () => readAllFrameworkResourceConvergenceRows(sourceProject));
 }
 
 function readAllFrameworkResourceConvergenceRows(
@@ -614,9 +623,11 @@ function resourceFilterExtras(value: unknown): FrameworkResourceFilters {
 
 function resourceValue(
   rows: readonly FrameworkResourceConvergenceRow[],
+  totalRows: number,
 ): FrameworkResourcesValue {
   return {
     resourceConvergenceCount: rows.length,
+    totalResourceConvergenceCount: totalRows,
     resourceKinds: countBy(rows, (row) => row.resourceKind),
     carrierKinds: countBy(rows, (row) => row.carrierKind),
     carrierSourceRoles: countBy(rows, (row) => row.carrierSourceRole),
@@ -645,6 +656,26 @@ function resourceValue(
       (row) => !sameSourceRange(row.definitionSource, row.declarationSource),
     ).length,
   };
+}
+
+function resourceConvergenceSummary(
+  matchingRows: number,
+  totalRows: number,
+): string {
+  const scope = "across carriers, public exports, bundle admissions, syntax products, and materialization sites";
+  return matchingRows === totalRows
+    ? `Framework resources have ${matchingRows} converged resource row(s) ${scope}.`
+    : `Framework resources matched ${matchingRows} of ${totalRows} converged resource row(s) ${scope}.`;
+}
+
+function resourceConvergencePageSummary(
+  pageRows: number,
+  matchingRows: number,
+  totalRows: number,
+): string {
+  return matchingRows === totalRows
+    ? `Returned ${pageRows} of ${matchingRows} framework resource convergence row(s).`
+    : `Returned ${pageRows} of ${matchingRows} matching framework resource convergence row(s) (${totalRows} total before filters).`;
 }
 
 function evidenceForRow(row: FrameworkResourceConvergenceRow): Evidence {

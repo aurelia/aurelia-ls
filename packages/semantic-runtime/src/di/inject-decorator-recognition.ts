@@ -3,15 +3,16 @@ import ts from 'typescript';
 import type { ProjectBootFrame } from '../boot/frames.js';
 import {
   hasAccessorModifier,
-  readPropertyName,
   unwrapExpression,
 } from '../evaluation/ts-syntax.js';
+import type { AddressHandle } from '../kernel/handles.js';
 import {
   readImportedExportName,
   readSourceImportBindings,
   type SourceImportBindings,
 } from '../evaluation/import-bindings.js';
 import type { TypeSystemProject } from '../type-system/project.js';
+import { decoratedTargetName } from '../type-system/decorator-target.js';
 
 const AURELIA_INJECTION_DECORATOR_MODULES = new Set([
   'aurelia',
@@ -50,6 +51,7 @@ export class DiInjectDecoratorSite {
 
   constructor(
     readonly sourcePath: string,
+    readonly sourceFileAddressHandle: AddressHandle,
     readonly start: number,
     readonly end: number,
     readonly decoratorName: string,
@@ -67,12 +69,13 @@ export function readInvalidDiInjectDecoratorSites(
     const sourceFile = typeSystem.readSourceFileByPath(source.path);
     return sourceFile == null
       ? []
-      : readSourceFileInvalidDiInjectDecoratorSites(source.path, sourceFile);
+      : readSourceFileInvalidDiInjectDecoratorSites(source.path, source.addressHandle, sourceFile);
   });
 }
 
 function readSourceFileInvalidDiInjectDecoratorSites(
   sourcePath: string,
+  sourceFileAddressHandle: AddressHandle,
   sourceFile: ts.SourceFile,
 ): readonly DiInjectDecoratorSite[] {
   const bindings = readInjectionDecoratorBindings(sourceFile);
@@ -91,6 +94,7 @@ function readSourceFileInvalidDiInjectDecoratorSites(
         }
         sites.push(new DiInjectDecoratorSite(
           sourcePath,
+          sourceFileAddressHandle,
           decorator.getStart(sourceFile),
           decorator.end,
           decoratorName,
@@ -143,11 +147,4 @@ function invalidInjectDecoratorTargetKind(
   return ts.canHaveDecorators(node) && !ts.isClassDeclaration(node) && !ts.isClassExpression(node) && !ts.isPropertyDeclaration(node)
     ? 'unknown'
     : null;
-}
-
-function decoratedTargetName(node: ts.Node): string | null {
-  if (ts.isMethodDeclaration(node) || ts.isGetAccessorDeclaration(node) || ts.isSetAccessorDeclaration(node) || ts.isPropertyDeclaration(node)) {
-    return readPropertyName(node.name);
-  }
-  return null;
 }

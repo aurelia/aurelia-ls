@@ -51,7 +51,10 @@ import {
   isKnownConfigurationKind,
   traceNameForFrameworkRegistrationKind,
 } from '../registration/framework-registration-manifest.js';
-import { aureliaFrameworkRegistrationKindForEvaluationValue } from './aurelia-evaluation-runtime.js';
+import {
+  aureliaFrameworkRegistrationKindForEvaluationValue,
+  aureliaRegistryBodyForEvaluationValue,
+} from './aurelia-evaluation-runtime.js';
 import {
   AppTaskCallbackKind,
   AppTaskSlot,
@@ -930,6 +933,7 @@ function evaluatedRegistryValueObservation(
   valueSource: RegistryValueSource,
   frameworkKind: FrameworkRegistrationKind | null,
 ): RegistrationValueObservation {
+  const registryBody = aureliaRegistryBodyForEvaluationValue(value);
   return new RegistrationValueObservation(
     RegistrationValueKind.Registry,
     readReferenceName(argument) ?? evaluatedValueLocalName(value) ?? 'IRegistry',
@@ -939,6 +943,7 @@ function evaluatedRegistryValueObservation(
     frameworkKind,
     valueSource.sourceFileAddressHandle,
     valueSource.moduleKey,
+    registryBody,
   );
 }
 

@@ -8,7 +8,10 @@ import {
   uniqueSortedStrings,
 } from "../../collections.js";
 import { normalizedSourceFingerprint } from "../../text-fingerprint.js";
-import { functionBodyShapeFingerprint } from "../../ast-fingerprint.js";
+import {
+  functionBodyShapeFingerprint,
+  functionSwitchTopologyFingerprint,
+} from "../../ast-fingerprint.js";
 import {
   calleeNameForExpression,
   canonicalSourceSymbolKey,
@@ -430,10 +433,14 @@ export interface ProductArchitectureFunctionSurfaceRow {
   readonly area: string;
   /** Function-like body span line count. */
   readonly lineCount: number;
-  /** Stable body-text fingerprint, normalized for whitespace-only formatting differences. */
-  readonly bodyFingerprint: string;
-  /** Stable AST/control-flow body fingerprint, normalized for simple equivalent body shapes. */
-  readonly bodyShapeFingerprint: string;
+  /** Stable body-text fingerprint, normalized for whitespace-only formatting differences, when body analysis was requested. */
+  readonly bodyFingerprint: string | null;
+  /** Stable AST/control-flow body fingerprint, normalized for simple equivalent body shapes, when body analysis was requested. */
+  readonly bodyShapeFingerprint: string | null;
+  /** Stable switch-dispatch topology fingerprint, when this body contains switch statements. */
+  readonly switchTopologyFingerprint: string | null;
+  /** Number of switch statements contributing to the switch topology fingerprint. */
+  readonly switchTopologyCount: number;
   /** Checker-backed call-site rows observed in this function body. */
   readonly callSiteCount: number;
   /** Checker-backed call-site rows whose target resolves inside semantic-runtime. */
@@ -442,6 +449,10 @@ export interface ProductArchitectureFunctionSurfaceRow {
   readonly crossAreaCallSiteCount: number;
   /** Distinct resolved callee symbols or callee names observed in this function body. */
   readonly distinctCalleeCount: number;
+  /** Budgeted stable sample of resolved callee symbols or syntax names observed in this function body. */
+  readonly sampleCalleeNames: readonly string[];
+  /** Budgeted stable sample of callee expressions observed in this function body. */
+  readonly sampleCalleeTexts: readonly string[];
   /** Exact declaration source range. */
   readonly source: ProductArchitectureSourceReference;
   /** Compact row summary. */
@@ -674,6 +685,8 @@ export interface ProductArchitecturePhaseProfile {
 export interface ProductArchitectureProfile {
   /** Analysis produced by the profiled build. */
   readonly analysis: ProductArchitectureAnalysis;
+  /** True when function body fingerprints and switch topology rows were included. */
+  readonly includeFunctionBodyAnalysis: boolean;
   /** True when checker-backed call-site and call dependency rows were included. */
   readonly includeCallSites: boolean;
   /** True when call-site rows include expensive checker type/signature displays. */
@@ -690,6 +703,8 @@ export interface ProductArchitectureProfile {
 
 /** Construction lanes for product-architecture analysis. */
 export interface ProductArchitectureAnalysisOptions {
+  /** Include function body fingerprints and switch topology facts used by duplicate/control-flow inquiries. */
+  readonly includeFunctionBodyAnalysis?: boolean;
   /** Include checker-backed call-site rows, call dependency rows, and function call enrichment. */
   readonly includeCallSites?: boolean;
   /** Include expensive call-site checker type/signature displays. */
@@ -726,12 +741,15 @@ const productArchitectureMemo =
   new SourceProjectKeyedMemo<string, ProductArchitectureAnalysis>();
 
 function productArchitectureMemoKey(
+  includeFunctionBodyAnalysis: boolean,
   includeCallSites: boolean,
   includeCallDetails: boolean,
   includeSymbols: boolean,
   includeKernelRecords: boolean,
 ): string {
-  return `${includeCallSites ? "calls" : "no-calls"}:${
+  return `${includeFunctionBodyAnalysis ? "body-analysis" : "no-body-analysis"}:${
+    includeCallSites ? "calls" : "no-calls"
+  }:${
     includeCallDetails ? "call-details" : "compact-calls"
   }:${
     includeSymbols ? "symbols" : "no-symbols"
@@ -745,11 +763,13 @@ export function readProductArchitectureAnalysis(
   sourceProject: SourceProject,
   options: ProductArchitectureAnalysisOptions = {},
 ): ProductArchitectureAnalysis {
+  const includeFunctionBodyAnalysis = options.includeFunctionBodyAnalysis ?? false;
   const includeCallSites = options.includeCallSites ?? true;
   const includeCallDetails = includeCallSites && (options.includeCallDetails ?? false);
   const includeSymbols = options.includeSymbols ?? true;
   const includeKernelRecords = options.includeKernelRecords ?? true;
   const memoKey = productArchitectureMemoKey(
+    includeFunctionBodyAnalysis,
     includeCallSites,
     includeCallDetails,
     includeSymbols,
@@ -759,6 +779,7 @@ export function readProductArchitectureAnalysis(
     buildProductArchitectureAnalysis(
       sourceProject,
       runProductArchitecturePhase,
+      includeFunctionBodyAnalysis,
       includeCallSites,
       includeCallDetails,
       includeSymbols,
@@ -772,6 +793,7 @@ export function profileProductArchitectureAnalysis(
   sourceProject: SourceProject,
   options: ProductArchitectureAnalysisOptions = {},
 ): ProductArchitectureProfile {
+  const includeFunctionBodyAnalysis = options.includeFunctionBodyAnalysis ?? false;
   const includeCallSites = options.includeCallSites ?? true;
   const includeCallDetails = includeCallSites && (options.includeCallDetails ?? false);
   const includeSymbols = options.includeSymbols ?? true;
@@ -787,9 +809,10 @@ export function profileProductArchitectureAnalysis(
       count: countValue(value, count),
     });
     return value;
-  }, includeCallSites, includeCallDetails, includeSymbols, includeKernelRecords);
+  }, includeFunctionBodyAnalysis, includeCallSites, includeCallDetails, includeSymbols, includeKernelRecords);
   return {
     analysis,
+    includeFunctionBodyAnalysis,
     includeCallSites,
     includeCallDetails,
     includeSymbols,
@@ -802,6 +825,7 @@ export function profileProductArchitectureAnalysis(
 function buildProductArchitectureAnalysis(
   sourceProject: SourceProject,
   phase: ProductArchitecturePhaseRunner = runProductArchitecturePhase,
+  includeFunctionBodyAnalysis: boolean = false,
   includeCallSites: boolean = true,
   includeCallDetails: boolean = false,
   includeSymbols: boolean = true,
@@ -871,7 +895,9 @@ function buildProductArchitectureAnalysis(
   const fieldProvenanceConstructions = kernelRecordRows.fieldProvenanceConstructions;
   const rawFunctionSurfaces = phase(
     "function surface rows",
-    () => sourceFiles.flatMap(functionSurfaceRows),
+    () => sourceFiles.flatMap((entry) =>
+      functionSurfaceRows(entry, includeFunctionBodyAnalysis)
+    ),
     rowCount,
   );
   const callSites = includeCallSites
@@ -1546,22 +1572,47 @@ function classSurfaceRows(
 
 function functionSurfaceRows(
   entry: SemanticRuntimeSourceFile,
+  includeBodyAnalysis: boolean,
 ): readonly ProductArchitectureFunctionSurfaceRow[] {
   const rows: ProductArchitectureFunctionSurfaceRow[] = [];
   for (const statement of entry.sourceFile.statements) {
     if (ts.isFunctionDeclaration(statement) && statement.name !== undefined) {
-      rows.push(productFunctionSurfaceForFunctionDeclaration(entry, statement));
       rows.push(
-        ...localFunctionSurfaceRows(entry, statement, statement.name.text, null),
+        productFunctionSurfaceForFunctionDeclaration(
+          entry,
+          statement,
+          includeBodyAnalysis,
+        ),
+      );
+      rows.push(
+        ...localFunctionSurfaceRows(
+          entry,
+          statement,
+          statement.name.text,
+          null,
+          includeBodyAnalysis,
+        ),
       );
       continue;
     }
     if (ts.isVariableStatement(statement)) {
-      rows.push(...functionSurfaceRowsForVariableStatement(entry, statement));
+      rows.push(
+        ...functionSurfaceRowsForVariableStatement(
+          entry,
+          statement,
+          includeBodyAnalysis,
+        ),
+      );
       continue;
     }
     if (ts.isClassDeclaration(statement) && statement.name !== undefined) {
-      rows.push(...functionSurfaceRowsForClassDeclaration(entry, statement));
+      rows.push(
+        ...functionSurfaceRowsForClassDeclaration(
+          entry,
+          statement,
+          includeBodyAnalysis,
+        ),
+      );
     }
   }
   return rows.sort((left, right) =>
@@ -1627,16 +1678,22 @@ function classSurfaceRole(
       reason: "phase-owning materializer, constructor, pass, or builder suffix",
     };
   }
+  if (name.endsWith("Drafts") || (name.endsWith("Draft") && surface.methodCount > 2)) {
+    return {
+      role: ProductArchitectureClassSurfaceRole.ProductOwner,
+      reason: "behavioral draft owner suffix",
+    };
+  }
   if (endsWithAny(name, ["Publisher", "Publication", "Recorder", "Emitter"])) {
     return {
       role: ProductArchitectureClassSurfaceRole.Publisher,
       reason: "publisher, publication, recorder, or emitter suffix",
     };
   }
-  if (endsWithAny(name, ["Parser", "Projector", "Evaluator", "Service", "Catalog", "Factory", "Creator", "Host", "Locator", "Analyzer", "Recognizer", "Index"])) {
+  if (endsWithAny(name, ["Parser", "Projector", "Evaluator", "Service", "Catalog", "Factory", "Creator", "Host", "Locator", "Analyzer", "Recognizer", "Index", "Support", "Table"])) {
     return {
       role: ProductArchitectureClassSurfaceRole.ServiceSurface,
-      reason: "reusable parser, projector, evaluator, catalog, factory, creator, host, locator, analyzer, recognizer, or index suffix",
+      reason: "reusable parser, projector, evaluator, catalog, factory, creator, host, locator, analyzer, recognizer, index, support, or table suffix",
     };
   }
   if (endsWithAny(name, ["Access", "Narrower", "Synthesizer"])) {
@@ -1645,16 +1702,22 @@ function classSurfaceRole(
       reason: "reusable access, narrowing, or synthesis service suffix",
     };
   }
-  if (endsWithAny(name, ["Project", "Store"])) {
+  if (endsWithAny(name, ["Project", "Store", "World", "Cache"])) {
     return {
       role: ProductArchitectureClassSurfaceRole.EpochContext,
-      reason: "project or store suffix for a reusable program/checker/world epoch",
+      reason: "project, store, world, or cache suffix for a reusable program/checker/world epoch",
     };
   }
   if (endsWithAny(name, ["Record"]) && surface.methodCount > 0) {
     return {
       role: ProductArchitectureClassSurfaceRole.SemanticModel,
       reason: "domain record suffix with behavior rather than a property-only carrier",
+    };
+  }
+  if (endsWithAny(name, ["Effect", "Evaluation", "ValueChannel", "Ontology", "Shape"]) && surface.methodCount > 0) {
+    return {
+      role: ProductArchitectureClassSurfaceRole.SemanticModel,
+      reason: "behavioral effect, evaluation, value-channel, ontology, or shape domain model",
     };
   }
   if (
@@ -1688,6 +1751,7 @@ function endsWithAny(value: string, suffixes: readonly string[]): boolean {
 function productFunctionSurfaceForFunctionDeclaration(
   entry: SemanticRuntimeSourceFile,
   node: ts.FunctionDeclaration,
+  includeBodyAnalysis: boolean,
 ): ProductArchitectureFunctionSurfaceRow {
   return functionSurfaceRow(entry, node, {
     name: node.name!.text,
@@ -1696,12 +1760,13 @@ function productFunctionSurfaceForFunctionDeclaration(
     parentFunctionName: null,
     exported: hasModifier(node, ts.SyntaxKind.ExportKeyword),
     static: false,
-  });
+  }, includeBodyAnalysis);
 }
 
 function functionSurfaceRowsForVariableStatement(
   entry: SemanticRuntimeSourceFile,
   statement: ts.VariableStatement,
+  includeBodyAnalysis: boolean,
 ): readonly ProductArchitectureFunctionSurfaceRow[] {
   const rows: ProductArchitectureFunctionSurfaceRow[] = [];
   for (const declaration of statement.declarationList.declarations) {
@@ -1721,7 +1786,7 @@ function functionSurfaceRowsForVariableStatement(
         parentFunctionName: null,
         exported: hasModifier(statement, ts.SyntaxKind.ExportKeyword),
         static: false,
-      }),
+      }, includeBodyAnalysis),
     );
     rows.push(
       ...localFunctionSurfaceRows(
@@ -1729,6 +1794,7 @@ function functionSurfaceRowsForVariableStatement(
         declaration.initializer,
         declaration.name.text,
         null,
+        includeBodyAnalysis,
       ),
     );
   }
@@ -1738,6 +1804,7 @@ function functionSurfaceRowsForVariableStatement(
 function functionSurfaceRowsForClassDeclaration(
   entry: SemanticRuntimeSourceFile,
   node: ts.ClassDeclaration,
+  includeBodyAnalysis: boolean,
 ): readonly ProductArchitectureFunctionSurfaceRow[] {
   const className = node.name!.text;
   const classExported = hasModifier(node, ts.SyntaxKind.ExportKeyword);
@@ -1752,7 +1819,7 @@ function functionSurfaceRowsForClassDeclaration(
           parentFunctionName: null,
           exported: classExported,
           static: false,
-        }),
+        }, includeBodyAnalysis),
       );
       rows.push(
         ...localFunctionSurfaceRows(
@@ -1760,6 +1827,7 @@ function functionSurfaceRowsForClassDeclaration(
           member,
           `${className}.constructor`,
           className,
+          includeBodyAnalysis,
         ),
       );
       continue;
@@ -1778,10 +1846,16 @@ function functionSurfaceRowsForClassDeclaration(
           parentFunctionName: null,
           exported: classExported,
           static: hasModifier(member, ts.SyntaxKind.StaticKeyword),
-        }),
+        }, includeBodyAnalysis),
       );
       rows.push(
-        ...localFunctionSurfaceRows(entry, member, functionName, className),
+        ...localFunctionSurfaceRows(
+          entry,
+          member,
+          functionName,
+          className,
+          includeBodyAnalysis,
+        ),
       );
       continue;
     }
@@ -1799,10 +1873,16 @@ function functionSurfaceRowsForClassDeclaration(
           parentFunctionName: null,
           exported: classExported,
           static: hasModifier(member, ts.SyntaxKind.StaticKeyword),
-        }),
+        }, includeBodyAnalysis),
       );
       rows.push(
-        ...localFunctionSurfaceRows(entry, member, functionName, className),
+        ...localFunctionSurfaceRows(
+          entry,
+          member,
+          functionName,
+          className,
+          includeBodyAnalysis,
+        ),
       );
       continue;
     }
@@ -1825,7 +1905,7 @@ function functionSurfaceRowsForClassDeclaration(
           parentFunctionName: null,
           exported: classExported,
           static: hasModifier(member, ts.SyntaxKind.StaticKeyword),
-        }),
+        }, includeBodyAnalysis),
       );
       rows.push(
         ...localFunctionSurfaceRows(
@@ -1833,6 +1913,7 @@ function functionSurfaceRowsForClassDeclaration(
           member.initializer,
           functionName,
           className,
+          includeBodyAnalysis,
         ),
       );
     }
@@ -1845,6 +1926,7 @@ function localFunctionSurfaceRows(
   root: ts.Node,
   parentFunctionName: string,
   className: string | null,
+  includeBodyAnalysis: boolean,
 ): readonly ProductArchitectureFunctionSurfaceRow[] {
   const rows: ProductArchitectureFunctionSurfaceRow[] = [];
   const visit = (node: ts.Node): void => {
@@ -1858,9 +1940,17 @@ function localFunctionSurfaceRows(
           parentFunctionName,
           exported: false,
           static: false,
-        }),
+        }, includeBodyAnalysis),
       );
-      rows.push(...localFunctionSurfaceRows(entry, node, functionName, className));
+      rows.push(
+        ...localFunctionSurfaceRows(
+          entry,
+          node,
+          functionName,
+          className,
+          includeBodyAnalysis,
+        ),
+      );
       return;
     }
     if (
@@ -1879,7 +1969,7 @@ function localFunctionSurfaceRows(
           parentFunctionName,
           exported: false,
           static: false,
-        }),
+        }, includeBodyAnalysis),
       );
       rows.push(
         ...localFunctionSurfaceRows(
@@ -1887,6 +1977,7 @@ function localFunctionSurfaceRows(
           node.initializer,
           functionName,
           className,
+          includeBodyAnalysis,
         ),
       );
       return;
@@ -1916,10 +2007,16 @@ function functionSurfaceRow(
     | "exported"
     | "static"
   >,
+  includeBodyAnalysis: boolean,
 ): ProductArchitectureFunctionSurfaceRow {
   const source = sourceReferenceForEntryNode(entry, node);
   const lineCount = lineCountForSource(source);
-  const body = "body" in node && node.body !== undefined ? node.body : node;
+  const body = includeBodyAnalysis && "body" in node && node.body !== undefined
+    ? node.body
+    : node;
+  const switchTopology = includeBodyAnalysis
+    ? functionSwitchTopologyFingerprint(node, entry.sourceFile)
+    : null;
   return {
     id: `product.arch:function:${entry.filePath}:${fields.name}:${node.getStart(entry.sourceFile)}`,
     ...fields,
@@ -1928,12 +2025,20 @@ function functionSurfaceRow(
     filePath: entry.filePath,
     area: entry.area,
     lineCount,
-    bodyFingerprint: normalizedSourceFingerprint(body.getText(entry.sourceFile)),
-    bodyShapeFingerprint: functionBodyShapeFingerprint(node, entry.sourceFile),
+    bodyFingerprint: includeBodyAnalysis
+      ? normalizedSourceFingerprint(body.getText(entry.sourceFile))
+      : null,
+    bodyShapeFingerprint: includeBodyAnalysis
+      ? functionBodyShapeFingerprint(node, entry.sourceFile)
+      : null,
+    switchTopologyFingerprint: switchTopology?.fingerprint ?? null,
+    switchTopologyCount: switchTopology?.switchCount ?? 0,
     callSiteCount: 0,
     localCallSiteCount: 0,
     crossAreaCallSiteCount: 0,
     distinctCalleeCount: 0,
+    sampleCalleeNames: [],
+    sampleCalleeTexts: [],
     source,
     summary: `${fields.name} is a ${fields.functionKind} surface spanning ${lineCount} line(s) in ${entry.filePath}.`,
   };
@@ -1953,6 +2058,14 @@ function enrichFunctionSurfaces(
     const distinctCalleeCount = new Set(rowCallSites.map((callSite) =>
       callSite.calleeSymbolKey ?? callSite.calleeName,
     )).size;
+    const sampleCalleeNames = uniqueSortedStrings(
+      rowCallSites.map((callSite) =>
+        callSite.calleeSymbolName ?? callSite.calleeName
+      ),
+    ).slice(0, 12);
+    const sampleCalleeTexts = uniqueSortedStrings(
+      rowCallSites.map((callSite) => callSite.calleeText),
+    ).slice(0, 12);
     return {
       ...row,
       callSiteCount: rowCallSites.length,
@@ -1962,6 +2075,8 @@ function enrichFunctionSurfaces(
         callSite.crossesArea
       ).length,
       distinctCalleeCount,
+      sampleCalleeNames,
+      sampleCalleeTexts,
       summary: `${row.name} is a ${row.functionKind} surface spanning ${row.lineCount} line(s) in ${row.filePath} with ${rowCallSites.length} checker-backed call-site row(s) across ${distinctCalleeCount} distinct callee(s).`,
     };
   });

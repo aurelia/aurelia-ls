@@ -192,16 +192,17 @@ Do not add an app generator here until the semantic edit loop is real enough to 
   when the key is external.
 - Application service topology now owns the next usage layer over those DI facts. `readApplicationServiceTopology(...)`
   projects class-bearing service/state/model declarations, `resolve(...)` injection sites, and TypeChecker-backed calls
-  into those classes before `api.AppTopology` serializes rows. The service-backed form recipe verifies both
-  component-to-service and service-to-state calls plus projection-property reads as `service-interaction` expected
-  effects, filtered by consumer role and self-interaction state, so service layering is pressure-tested as behavior
-  topology rather than only folder/class ownership.
+  into those classes before `api.AppTopology` serializes rows. The service-backed form recipe now verifies
+  component-to-state calls/reads plus state-to-service calls as `service-interaction` expected effects, filtered by
+  consumer role and self-interaction state, so service-backed state is pressure-tested as behavior topology rather than
+  only folder/class ownership. Direct component-to-service or service-to-state facades remain observable app shapes, but
+  are no longer the recommendable generated recipe default.
 - `api.AppTopology.serviceInteractionBindings` joins binding data-flow rows to the component member whose body performs
-  the service/state/model read, write, or call. The service-backed form recipe verifies both two-way setter handoff into
-  the service layer and template reads of service projection properties through this row, so the authoring flywheel can
-  assert a cross-layer form chain without snapshotting source text. Binding data-flow now carries a `sourceRootName`
-  beside the display source, letting single-root interpolations such as projection-object member reads join back to the
-  getter that owns the service interaction.
+  the service/state/model read, write, or call. The service-backed form recipe verifies two-way setter handoff into DI
+  state and template reads of state projection properties through this row, while separate state-to-service interaction
+  facts prove the side-effect boundary. Binding data-flow now carries a `sourceRootName` beside the display source,
+  letting single-root interpolations such as projection-object member reads join back to the getter that owns the
+  interaction.
 - `api.AppTopology` also projects `stateCompositions` for public state-class properties whose TypeChecker value is a
   project-local class instance. Storefront currently exposes `StorefrontState -> CatalogState/CartState/CheckoutState`
   as source-backed composition rows, keeping idiomatic composed state visible without teaching topology to guess from
@@ -228,8 +229,9 @@ Do not add an app generator here until the semantic edit loop is real enough to 
   taste without making validation an implicit part of every form recipe.
 - `pnpm --filter @aurelia-ls/semantic-runtime smoke:service-backed-form` writes the service-backed source plan into a
   temporary app, reopens it, and verifies state/service topology rows, DI-owned service-layer taste, recursive
-  child-component compilation, native form value channels, component/service interaction rows, binding-to-service
-  interaction joins including a single-root interpolation over a typed projection object, and no open seams.
+  child-component compilation, native form value channels, component/state interaction rows, state/service interaction
+  rows, binding-to-state interaction joins including a single-root interpolation over a typed projection object, and no
+  open seams.
 - `pnpm --filter @aurelia-ls/semantic-runtime smoke:minimal-app` reopens the external-template fixture and verifies the
   minimal app recipe's expected effects. `fixtures:authoring` also materializes `generated-minimal-app` from the same
   source plan so the durable generated fixture set covers every concrete recipe source plan.

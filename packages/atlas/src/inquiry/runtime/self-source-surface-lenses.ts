@@ -11,6 +11,7 @@ import type {
   AtlasSelfAxisPressureRow,
   AtlasSelfClassSurfaceRow,
   AtlasSelfContractStringRow,
+  AtlasSelfFunctionControlFlowShapeGroupRow,
   AtlasSelfFunctionShapeGroupRow,
   AtlasSelfFunctionSurfaceRow,
   AtlasSelfFunctionWrapperRow,
@@ -18,6 +19,7 @@ import type {
   AtlasSelfRowSurfaceRow,
   AtlasSelfSourceFileSurfaceRow,
   AtlasSelfStringLiteralRow,
+  AtlasSelfVariableSurfaceRow,
 } from "./self-analysis.js";
 import {
   inquiryBooleanFilter,
@@ -31,6 +33,7 @@ import {
   selfSourceBasis,
 } from "./self-row-projection.js";
 import type { SelfValue } from "./self-value.js";
+import { orderClassSurfaceRows } from "./class-surface-order.js";
 
 
 
@@ -218,6 +221,30 @@ export function answerSelfFunctionsProjection(
   });
 }
 
+export function answerSelfVariablesProjection(
+  inquiry: Inquiry,
+  value: SelfValue,
+  analysis: AtlasSelfAnalysis,
+): Answer<SelfValue> {
+  const rows = filterAtlasSelfVariableSurfaces(analysis.variableSurfaces, inquiry);
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:variables",
+    rows,
+    valueWithRows: (pageRows) => ({ ...value, variableSurfaces: pageRows }),
+    rowNoun: "Atlas top-level variable surface row(s)",
+    basisSummary:
+      "Read top-level variable declarations through the hot TypeScript Program.",
+    evidenceForRow: evidenceForAtlasSelfVariableSurface,
+    nextPageId: "atlas.self:variables:next-page",
+    nextPageRationale: "Continue Atlas top-level variable surface rows.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect variable surface ${row.name}.`,
+    }),
+  });
+}
+
 
 
 
@@ -242,6 +269,36 @@ export function answerSelfFunctionShapesProjection(
       id: row.id,
       source: row.source,
       summary: `Inspect first function in repeated body-shape group ${row.bodyShapeFingerprint}.`,
+    }),
+  });
+}
+
+export function answerSelfFunctionControlFlowShapesProjection(
+  inquiry: Inquiry,
+  value: SelfValue,
+  analysis: AtlasSelfAnalysis,
+): Answer<SelfValue> {
+  const rows = filterAtlasSelfFunctionControlFlowShapeGroups(
+    analysis.functionControlFlowShapeGroups,
+    inquiry,
+  );
+  return answerSelfRowProjection(inquiry, {
+    familyId: "atlas.self:function-control-flow-shapes",
+    rows,
+    valueWithRows: (pageRows) => ({
+      ...value,
+      functionControlFlowShapeGroups: pageRows,
+    }),
+    rowNoun: "Atlas shared switch-topology function group(s)",
+    basisSummary:
+      "Read shared function switch-dispatch topology through canonical structural fingerprints.",
+    evidenceForRow: evidenceForAtlasSelfFunctionControlFlowShapeGroup,
+    nextPageId: "atlas.self:function-control-flow-shapes:next-page",
+    nextPageRationale: "Continue Atlas shared switch-topology function groups.",
+    inspectionForRow: (row) => ({
+      id: row.id,
+      source: row.source,
+      summary: `Inspect first function in switch-topology group ${row.switchTopologyFingerprint}.`,
     }),
   });
 }
@@ -544,44 +601,7 @@ function filterAtlasSelfClassSurfaces(
       row.properties.some((property) => property.toLowerCase().includes(query))
     );
   });
-  return orderAtlasSelfClassSurfaces(filtered, inquiryStringFilter(inquiry, "orderBy"));
-}
-
-
-
-
-
-function orderAtlasSelfClassSurfaces(
-  rows: readonly AtlasSelfClassSurfaceRow[],
-  orderBy: string | undefined,
-): readonly AtlasSelfClassSurfaceRow[] {
-  switch (orderBy) {
-    case "size":
-    case "lineCount":
-      return [...rows].sort((left, right) =>
-        right.lineCount - left.lineCount ||
-        left.filePath.localeCompare(right.filePath) ||
-        left.name.localeCompare(right.name),
-      );
-    case "methodCount":
-      return [...rows].sort((left, right) =>
-        right.methodCount - left.methodCount ||
-        right.lineCount - left.lineCount ||
-        left.filePath.localeCompare(right.filePath) ||
-        left.name.localeCompare(right.name),
-      );
-    case "propertyCount":
-      return [...rows].sort((left, right) =>
-        right.propertyCount - left.propertyCount ||
-        right.lineCount - left.lineCount ||
-        left.filePath.localeCompare(right.filePath) ||
-        left.name.localeCompare(right.name),
-      );
-    case undefined:
-    case "source":
-    default:
-      return rows;
-  }
+  return orderClassSurfaceRows(filtered, inquiryStringFilter(inquiry, "orderBy"));
 }
 
 
@@ -720,7 +740,9 @@ function filterAtlasSelfFunctionSurfaces(
   const functionName = inquiryStringFilter(inquiry, "functionName");
   const bodyFingerprint = inquiryStringFilter(inquiry, "bodyFingerprint");
   const bodyShapeFingerprint = inquiryStringFilter(inquiry, "bodyShapeFingerprint");
+  const switchTopologyFingerprint = inquiryStringFilter(inquiry, "switchTopologyFingerprint");
   const minLineCount = inquiryNumberFilter(inquiry, "minLineCount");
+  const minSwitchTopologyCount = inquiryNumberFilter(inquiry, "minSwitchTopologyCount");
   const minCallCount = inquiryNumberFilter(inquiry, "minCallCount");
   const minUniqueCallTargetCount = inquiryNumberFilter(
     inquiry,
@@ -746,7 +768,19 @@ function filterAtlasSelfFunctionSurfaces(
     if (bodyShapeFingerprint !== undefined && row.bodyShapeFingerprint !== bodyShapeFingerprint) {
       return false;
     }
+    if (
+      switchTopologyFingerprint !== undefined &&
+      row.switchTopologyFingerprint !== switchTopologyFingerprint
+    ) {
+      return false;
+    }
     if (minLineCount !== undefined && row.lineCount < minLineCount) {
+      return false;
+    }
+    if (
+      minSwitchTopologyCount !== undefined &&
+      row.switchTopologyCount < minSwitchTopologyCount
+    ) {
       return false;
     }
     if (minCallCount !== undefined && row.callCount < minCallCount) {
@@ -763,8 +797,9 @@ function filterAtlasSelfFunctionSurfaces(
     }
     return (
       row.name.toLowerCase().includes(query) ||
-      row.bodyFingerprint.toLowerCase().includes(query) ||
-      row.bodyShapeFingerprint.toLowerCase().includes(query) ||
+      (row.bodyFingerprint?.toLowerCase().includes(query) ?? false) ||
+      (row.bodyShapeFingerprint?.toLowerCase().includes(query) ?? false) ||
+      (row.switchTopologyFingerprint?.toLowerCase().includes(query) ?? false) ||
       (row.className?.toLowerCase().includes(query) ?? false) ||
       row.filePath.toLowerCase().includes(query) ||
       row.functionKind.toLowerCase().includes(query)
@@ -809,6 +844,141 @@ function orderAtlasSelfFunctionSurfaces(
         left.functionKind.localeCompare(right.functionKind) ||
         left.name.localeCompare(right.name),
       );
+    case "switchTopologyCount":
+      return [...rows].sort((left, right) =>
+        right.switchTopologyCount - left.switchTopologyCount ||
+        right.lineCount - left.lineCount ||
+        left.filePath.localeCompare(right.filePath) ||
+        left.functionKind.localeCompare(right.functionKind) ||
+        left.name.localeCompare(right.name),
+      );
+    case "bodyFingerprint":
+      return [...rows].sort((left, right) =>
+        compareNullableStrings(left.bodyFingerprint, right.bodyFingerprint) ||
+        right.lineCount - left.lineCount ||
+        left.filePath.localeCompare(right.filePath) ||
+        left.functionKind.localeCompare(right.functionKind) ||
+        left.name.localeCompare(right.name),
+      );
+    case "bodyShapeFingerprint":
+      return [...rows].sort((left, right) =>
+        compareNullableStrings(left.bodyShapeFingerprint, right.bodyShapeFingerprint) ||
+        right.lineCount - left.lineCount ||
+        left.filePath.localeCompare(right.filePath) ||
+        left.functionKind.localeCompare(right.functionKind) ||
+        left.name.localeCompare(right.name),
+      );
+    case "switchTopologyFingerprint":
+      return [...rows].sort((left, right) =>
+        compareNullableStrings(left.switchTopologyFingerprint, right.switchTopologyFingerprint) ||
+        right.switchTopologyCount - left.switchTopologyCount ||
+        right.lineCount - left.lineCount ||
+        left.filePath.localeCompare(right.filePath) ||
+        left.functionKind.localeCompare(right.functionKind) ||
+        left.name.localeCompare(right.name),
+      );
+    case undefined:
+    case "source":
+    default:
+      return rows;
+  }
+}
+
+function compareNullableStrings(
+  left: string | null,
+  right: string | null,
+): number {
+  if (left === null && right === null) {
+    return 0;
+  }
+  if (left === null) {
+    return 1;
+  }
+  if (right === null) {
+    return -1;
+  }
+  return left.localeCompare(right);
+}
+
+function filterAtlasSelfVariableSurfaces(
+  rows: readonly AtlasSelfVariableSurfaceRow[],
+  inquiry: Inquiry,
+): readonly AtlasSelfVariableSurfaceRow[] {
+  const packageId = inquiryStringFilter(inquiry, "packageId");
+  const variableName = inquiryStringFilter(inquiry, "variableName");
+  const declarationKind = inquiryStringFilter(inquiry, "declarationKind");
+  const initializerKind = inquiryStringFilter(inquiry, "initializerKind");
+  const exported = inquiryBooleanFilter(inquiry, "exported");
+  const minLineCount = inquiryNumberFilter(inquiry, "minLineCount");
+  const minInitializerEntryCount = inquiryNumberFilter(
+    inquiry,
+    "minInitializerEntryCount",
+  );
+  const query = inquiryLowerStringFilter(inquiry, "query");
+  const filtered = rows.filter((row) => {
+    if (packageId !== undefined && row.packageId !== packageId) {
+      return false;
+    }
+    if (variableName !== undefined && row.name !== variableName) {
+      return false;
+    }
+    if (
+      declarationKind !== undefined &&
+      row.declarationKind !== declarationKind
+    ) {
+      return false;
+    }
+    if (
+      initializerKind !== undefined &&
+      row.initializerKind !== initializerKind
+    ) {
+      return false;
+    }
+    if (exported !== undefined && row.exported !== exported) {
+      return false;
+    }
+    if (minLineCount !== undefined && row.lineCount < minLineCount) {
+      return false;
+    }
+    if (
+      minInitializerEntryCount !== undefined &&
+      (row.initializerEntryCount ?? 0) < minInitializerEntryCount
+    ) {
+      return false;
+    }
+    if (query === undefined) {
+      return true;
+    }
+    return (
+      row.name.toLowerCase().includes(query) ||
+      row.filePath.toLowerCase().includes(query) ||
+      row.declarationKind.toLowerCase().includes(query) ||
+      row.initializerKind.toLowerCase().includes(query)
+    );
+  });
+  return orderAtlasSelfVariableSurfaces(filtered, inquiryStringFilter(inquiry, "orderBy"));
+}
+
+function orderAtlasSelfVariableSurfaces(
+  rows: readonly AtlasSelfVariableSurfaceRow[],
+  orderBy: string | undefined,
+): readonly AtlasSelfVariableSurfaceRow[] {
+  switch (orderBy) {
+    case "size":
+    case "lineCount":
+      return [...rows].sort((left, right) =>
+        right.lineCount - left.lineCount ||
+        left.filePath.localeCompare(right.filePath) ||
+        left.name.localeCompare(right.name),
+      );
+    case "initializerEntryCount":
+      return [...rows].sort((left, right) =>
+        (right.initializerEntryCount ?? 0) -
+          (left.initializerEntryCount ?? 0) ||
+        right.lineCount - left.lineCount ||
+        left.filePath.localeCompare(right.filePath) ||
+        left.name.localeCompare(right.name),
+      );
     case undefined:
     case "source":
     default:
@@ -851,6 +1021,51 @@ function filterAtlasSelfFunctionShapeGroups(
     }
     return (
       row.bodyShapeFingerprint.toLowerCase().includes(query) ||
+      row.nameSamples.some((name) => name.toLowerCase().includes(query)) ||
+      row.fileSamples.some((filePath) => filePath.toLowerCase().includes(query)) ||
+      row.functionKinds.some((kind) => kind.toLowerCase().includes(query))
+    );
+  });
+}
+
+function filterAtlasSelfFunctionControlFlowShapeGroups(
+  rows: readonly AtlasSelfFunctionControlFlowShapeGroupRow[],
+  inquiry: Inquiry,
+): readonly AtlasSelfFunctionControlFlowShapeGroupRow[] {
+  const switchTopologyFingerprint = inquiryStringFilter(inquiry, "switchTopologyFingerprint");
+  const minFunctionCount = inquiryNumberFilter(inquiry, "minFunctionCount");
+  const minNameCount = inquiryNumberFilter(inquiry, "minNameCount");
+  const minFileCount = inquiryNumberFilter(inquiry, "minFileCount");
+  const minLineCount = inquiryNumberFilter(inquiry, "minLineCount");
+  const minSwitchTopologyCount = inquiryNumberFilter(inquiry, "minSwitchTopologyCount");
+  const query = inquiryLowerStringFilter(inquiry, "query");
+  return rows.filter((row) => {
+    if (switchTopologyFingerprint !== undefined && row.switchTopologyFingerprint !== switchTopologyFingerprint) {
+      return false;
+    }
+    if (minFunctionCount !== undefined && row.functionCount < minFunctionCount) {
+      return false;
+    }
+    if (minNameCount !== undefined && row.nameCount < minNameCount) {
+      return false;
+    }
+    if (minFileCount !== undefined && row.fileCount < minFileCount) {
+      return false;
+    }
+    if (minLineCount !== undefined && row.lineCount < minLineCount) {
+      return false;
+    }
+    if (
+      minSwitchTopologyCount !== undefined &&
+      row.switchTopologyCount < minSwitchTopologyCount
+    ) {
+      return false;
+    }
+    if (query === undefined) {
+      return true;
+    }
+    return (
+      row.switchTopologyFingerprint.toLowerCase().includes(query) ||
       row.nameSamples.some((name) => name.toLowerCase().includes(query)) ||
       row.fileSamples.some((filePath) => filePath.toLowerCase().includes(query)) ||
       row.functionKinds.some((kind) => kind.toLowerCase().includes(query))
@@ -1203,6 +1418,21 @@ function evidenceForAtlasSelfFunctionSurface(
   };
 }
 
+function evidenceForAtlasSelfVariableSurface(
+  row: AtlasSelfVariableSurfaceRow,
+): Evidence {
+  return {
+    id: `${row.id}:evidence`,
+    kind: EvidenceKind.MaintenanceSignal,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Exact,
+    summary: row.summary,
+    basis: selfSourceBasis("Top-level variable surface discovery is AST-derived."),
+    source: row.source,
+    data: row,
+  };
+}
+
 
 
 
@@ -1217,6 +1447,21 @@ function evidenceForAtlasSelfFunctionShapeGroup(
     confidence: EvidenceConfidence.Exact,
     summary: row.summary,
     basis: selfSourceBasis("Function body-shape grouping is derived from canonical AST/control-flow fingerprints."),
+    source: row.source,
+    data: row,
+  };
+}
+
+function evidenceForAtlasSelfFunctionControlFlowShapeGroup(
+  row: AtlasSelfFunctionControlFlowShapeGroupRow,
+): Evidence {
+  return {
+    id: `${row.id}:evidence`,
+    kind: EvidenceKind.MaintenanceSignal,
+    role: EvidenceRole.Subject,
+    confidence: EvidenceConfidence.Exact,
+    summary: row.summary,
+    basis: selfSourceBasis("Function control-flow grouping is derived from canonical switch-dispatch topology fingerprints."),
     source: row.source,
     data: row,
   };

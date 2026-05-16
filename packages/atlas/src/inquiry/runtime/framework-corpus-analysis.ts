@@ -11,7 +11,7 @@ import {
 import { SourceProjectMemo, type SourceProject } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 
-export const FRAMEWORK_CORPUS_ANALYSIS_VERSION = "framework-corpus-analysis.v9";
+export const FRAMEWORK_CORPUS_ANALYSIS_VERSION = "framework-corpus-analysis.v15";
 
 const frameworkCorpusAnalysisMemo =
   new SourceProjectMemo<FrameworkCorpusAnalysis>();
@@ -20,6 +20,7 @@ export type FrameworkCorpusConcept =
   | "binding"
   | "bindables"
   | "di"
+  | "expression"
   | "forms"
   | "i18n"
   | "lifecycle"
@@ -86,6 +87,24 @@ export type FrameworkCorpusFixtureRecipeHint =
   | "service-backed-form"
   | "routed-state-backed-form"
   | "pressure-fixture";
+
+export type FrameworkCorpusFixtureSeedClassificationKind =
+  /** Source corpus concept assigned by docs/test snippet classification. */
+  | "concept"
+  /** Expected-effect hint assigned from concept, concept-combination, or source-surface evidence. */
+  | "effect"
+  /** Recipe hint that can seed generated or hand-authored fixture work. */
+  | "recipe"
+  /** Concrete syntax/surface evidence that affects effect or recipe selection. */
+  | "surface"
+  /** Useful corpus pressure that is intentionally not the recommendable generated recipe shape. */
+  | "contrast";
+
+export interface FrameworkCorpusFixtureSeedClassificationReason {
+  readonly kind: FrameworkCorpusFixtureSeedClassificationKind;
+  readonly key: string;
+  readonly summary: string;
+}
 
 export interface FrameworkCorpusSourceState {
   readonly docsRoot: string;
@@ -234,6 +253,7 @@ export interface FrameworkCorpusFixtureSeedRow {
   readonly effectHints: readonly FrameworkCorpusExpectedEffectHint[];
   readonly expectedEffects: readonly FrameworkCorpusFixtureSeedExpectedEffectRow[];
   readonly recipeHints: readonly FrameworkCorpusFixtureRecipeHint[];
+  readonly classificationReasons: readonly FrameworkCorpusFixtureSeedClassificationReason[];
   readonly source: SourceRange;
   readonly preview: string;
   readonly summary: string;
@@ -255,6 +275,10 @@ export interface FrameworkCorpusAnalysis {
 interface ConceptDescriptor {
   readonly id: FrameworkCorpusConcept;
   readonly pattern: RegExp;
+}
+
+interface ConceptExtractionContext {
+  readonly aureliaInterpolation: "markup" | "mixed-template-host" | "none";
 }
 
 interface MarkdownFence {
@@ -282,11 +306,13 @@ const legacyPackages = [
 
 const CONCEPT_DESCRIPTORS: readonly ConceptDescriptor[] = [
   // Binding syntax and binding commands such as value.bind, model.bind, class.bind, and interpolation.
-  { id: "binding", pattern: /\b(?:bind|two-way|from-view|to-view|trigger|delegate|capture|call|value\.bind|model\.bind|checked\.bind|class\.bind|style\.bind)\b|\$\{/giu },
+  { id: "binding", pattern: /\b(?:bind|two-way|from-view|to-view|trigger|delegate|capture|call|value\.bind|model\.bind|checked\.bind|class\.bind|style\.bind)\b/giu },
   // Explicit bindable declaration and component input API pressure.
   { id: "bindables", pattern: /@bindable\b|\bbindable\b|\bBindable\b/giu },
   // Dependency injection, container APIs, registrations, and resolver-style helpers.
   { id: "di", pattern: /\b(?:DI|IContainer|Registration|resolve|inject|singleton|transient|newInstanceForScope|factory)\b/giu },
+  // Aurelia expression parser/evaluator semantics and expression-bearing template surfaces.
+  { id: "expression", pattern: /\b(?:expression|expressions|interpolation|astEvaluate|IAstEvaluator|ExpressionParser|parseExpression|AccessScope|AccessMember|AccessKeyed|CallScope|CallMember|CallFunction|ForOfStatement|BindingBehavior|ValueConverter|value converter|value-converter|binding behavior|binding-behavior|template expression|arrow function|optional chaining|nullish|\$event)\b|\$\{/giu },
   // Native and Aurelia form controls, select/radio/checkbox semantics, validation, and submit flow.
   { id: "forms", pattern: /\b(?:forms?|checkbox|radio|validation|submit|model\.bind|checked\.bind)\b|<\s*(?:form|input|select|option|textarea|button)\b|\b(?:input|select|option|textarea)\.(?:value|checked)\b/giu },
   // Localization and translation plugin pressure.
@@ -304,8 +330,12 @@ const CONCEPT_DESCRIPTORS: readonly ConceptDescriptor[] = [
   // Stylesheet resources plus dynamic class/style binding channels.
   { id: "styles", pattern: /\b(?:stylesheet|stylesheets|cssModules|shadowCSS|style\.bind|class\.bind)\b|(?:\b(?:class|style|css)\s*=\s*['"][^'"]*\$\{)|\b[\w-]+\.(?:class|style)\s*=/giu },
   // Template controllers, repeat/if/switch syntax, interpolation, and template compiler pressure.
-  { id: "templates", pattern: /\b(?:template|repeat\.for|if\.bind|else|switch\.bind|with\.bind|promise\.bind)\b|\$\{/giu },
+  { id: "templates", pattern: /\b(?:template|repeat\.for|if\.bind|switch\.bind|with\.bind|promise\.bind)\b/giu },
 ];
+
+const TEXT_CONCEPT_CONTEXT: ConceptExtractionContext = {
+  aureliaInterpolation: "none",
+};
 
 export function readFrameworkCorpusAnalysis(
   sourceProject: SourceProject,
@@ -368,7 +398,7 @@ function frameworkDocRows(repoRoot: string): readonly FrameworkCorpusDocRow[] {
     .map((filePath) => {
       const text = read(repoRoot, filePath);
       const fences = markdownFences(text);
-      const conceptCounts = conceptCountsFor(text);
+      const conceptCounts = conceptCountsFor(text, TEXT_CONCEPT_CONTEXT);
       const concepts = conceptsFromCounts(conceptCounts);
       const fenceLanguages = uniqueSortedStrings(fences.map((fence) => fence.language));
       const imports = aureliaPackageImports(text);
@@ -393,7 +423,7 @@ function frameworkDocSnippetRows(repoRoot: string): readonly FrameworkCorpusDocS
     .flatMap((filePath) => {
       const text = read(repoRoot, filePath);
       return markdownFences(text).map((fence, index) => {
-        const concepts = conceptsFromCounts(conceptCountsFor(fence.text));
+        const concepts = conceptsFromCounts(conceptCountsFor(fence.text, conceptContextForDocFence(fence.language)));
         const source = sourceRangeForOffsets(filePath, text, fence.start, fence.end);
         return {
           id: `framework-doc-snippet:${filePath}:${index}`,
@@ -415,7 +445,9 @@ function frameworkTestRows(repoRoot: string): readonly FrameworkCorpusTestRow[] 
   return walk(repoRoot, FRAMEWORK_TESTS_ROOT, (file) => file.endsWith(".ts"))
     .map((filePath) => {
       const text = read(repoRoot, filePath);
-      const conceptCounts = conceptCountsFor(text);
+      const conceptCounts = conceptCountsFor(text, {
+        aureliaInterpolation: "mixed-template-host",
+      });
       const concepts = conceptsFromCounts(conceptCounts);
       return {
         id: `framework-test:${filePath}`,
@@ -451,7 +483,9 @@ function frameworkTestSnippetRows(repoRoot: string): readonly FrameworkCorpusTes
           return;
         }
         const snippetText = text.slice(node.getStart(sourceFile), node.getEnd());
-        const concepts = conceptsFromCounts(conceptCountsFor(snippetText));
+        const concepts = conceptsFromCounts(conceptCountsFor(snippetText, {
+          aureliaInterpolation: "mixed-template-host",
+        }));
         const source = sourceRangeForOffsets(
           filePath,
           text,
@@ -601,16 +635,18 @@ function fixtureSeedForDocSnippet(
 ): readonly FrameworkCorpusFixtureSeedRow[] {
   const effectHints = expectedEffectHintsForSnippet(row.concepts, snippetText);
   const recipeHints = recipeHintsForConcepts(row.concepts, snippetText);
+  const classificationReasons = fixtureSeedClassificationReasons(row.concepts, snippetText, effectHints, recipeHints, true);
   if (effectHints.length === 0 && recipeHints.length === 0) {
     return [];
   }
+  const seedUse = docSnippetSeedUse(row.filePath);
   return [{
     id: `framework-fixture-seed:${row.id}`,
     sourceKind: "doc-snippet",
     sourceId: row.id,
     filePath: row.filePath,
     group: row.group,
-    seedUse: "authoring-taste",
+    seedUse,
     generated: false,
     language: row.language,
     snippetKind: row.kind,
@@ -618,10 +654,17 @@ function fixtureSeedForDocSnippet(
     effectHints,
     expectedEffects: fixtureSeedExpectedEffects(effectHints, descriptors, snippetText),
     recipeHints,
+    classificationReasons,
     source: row.source,
     preview: row.preview,
-    summary: `Documentation fixture seed for ${effectHints.join(", ") || "recipe exploration"} from ${row.filePath}.`,
+    summary: `Documentation ${seedUse} fixture seed for ${effectHints.join(", ") || "recipe exploration"} from ${row.filePath}.`,
   }];
+}
+
+function docSnippetSeedUse(filePath: string): FrameworkCorpusFixtureSeedUse {
+  return filePath.includes("/testing/")
+    ? "behavior-grounding"
+    : "authoring-taste";
 }
 
 function fixtureSeedForTestSnippet(
@@ -631,6 +674,13 @@ function fixtureSeedForTestSnippet(
 ): readonly FrameworkCorpusFixtureSeedRow[] {
   const effectHints = expectedEffectHintsForSnippet(row.concepts, snippetText);
   const recipeHints = recipeHintsForConcepts(row.concepts, snippetText);
+  const classificationReasons = fixtureSeedClassificationReasons(
+    row.concepts,
+    snippetText,
+    effectHints,
+    recipeHints,
+    row.kind === "create-fixture-call",
+  );
   if (effectHints.length === 0 && recipeHints.length === 0) {
     return [];
   }
@@ -648,6 +698,7 @@ function fixtureSeedForTestSnippet(
     effectHints,
     expectedEffects: fixtureSeedExpectedEffects(effectHints, descriptors, snippetText),
     recipeHints,
+    classificationReasons,
     source: row.source,
     preview: row.preview,
     summary: `Framework-test fixture seed for ${effectHints.join(", ") || "recipe exploration"} from ${row.filePath}.`,
@@ -803,8 +854,10 @@ function expectedEffectsForConcept(
       return ["component-role"];
     case "di":
       return ["dependency-injection", "service-class", "service-interaction"];
+    case "expression":
+      return ["binding-data-flow", "template-compilation"];
     case "forms":
-      return ["binding-target-access", "binding-value-channel", "binding-data-flow", "component-role"];
+      return [];
     case "i18n":
       return ["dependency-injection"];
     case "lifecycle":
@@ -814,7 +867,7 @@ function expectedEffectsForConcept(
     case "resources":
       return ["resource-definition", "component"];
     case "router":
-      return ["route"];
+      return [];
     case "state":
       return ["service-class", "service-interaction"];
     case "styles":
@@ -830,10 +883,8 @@ function expectedEffectsForConceptCombination(
 ): readonly FrameworkCorpusExpectedEffectHint[] {
   const hasBinding = concepts.includes("binding");
   const hasDi = concepts.includes("di");
-  const hasAppState = concepts.includes("forms") || concepts.includes("state");
-  const hasServiceOrStateSurface =
-    /\b(?:[A-Z][A-Za-z0-9]*Service|I[A-Z][A-Za-z0-9]*Service|service|services\/|State|store|resolve\([^)]*(?:Service|State|Store))/iu.test(snippetText);
-  return hasBinding && hasDi && hasAppState && hasServiceOrStateSurface
+  const hasAppState = concepts.includes("state") || hasFormDataOrValidationSurface(snippetText);
+  return hasBinding && hasDi && hasAppState && hasServiceOrStateSurface(snippetText)
     ? ["service-interaction-binding"]
     : [];
 }
@@ -858,6 +909,9 @@ function expectedEffectsForSourceText(
   if (hasTargetOperationSurface(snippetText)) {
     effects.add("target-operation");
   }
+  if (hasRouterAuthoringSurface(snippetText)) {
+    effects.add("route");
+  }
   return [...effects].sort();
 }
 
@@ -865,6 +919,33 @@ function hasValueChannelBindingSurface(snippetText: string): boolean {
   return /\b(?:value|checked|model|class|style)\.(?:bind|two-way|from-view|to-view)\b/u.test(snippetText)
     || /\b[\w-]+\.(?:class|style)\s*=/u.test(snippetText)
     || /(?:\b(?:class|style|css)\s*=\s*['"][^'"]*\$\{)/u.test(snippetText);
+}
+
+function hasNativeFormControlSurface(snippetText: string): boolean {
+  return htmlLikeTagTexts(snippetText).some((tagText) =>
+    /^<\s*(?:form|input|select|option|textarea|button)\b/iu.test(tagText)
+  );
+}
+
+function hasNativeValueBindingSurface(snippetText: string): boolean {
+  return htmlLikeTagTexts(snippetText).some((tagText) =>
+    /^<\s*(?:input|select|textarea)\b/iu.test(tagText) &&
+    /\bvalue\.(?:bind|two-way|from-view|to-view)\b/u.test(tagText)
+  );
+}
+
+function hasNativeCheckedBindingSurface(snippetText: string): boolean {
+  return htmlLikeTagTexts(snippetText).some((tagText) =>
+    /^<\s*input\b/iu.test(tagText) &&
+    /\bchecked\.(?:bind|two-way|from-view|to-view)\b/u.test(tagText)
+  );
+}
+
+function hasOptionModelBindingSurface(snippetText: string): boolean {
+  return htmlLikeTagTexts(snippetText).some((tagText) =>
+    /^<\s*option\b/iu.test(tagText) &&
+    /\bmodel\.(?:bind|two-way|from-view|to-view)\b/u.test(tagText)
+  );
 }
 
 function hasBindingBehaviorApplicationSurface(snippetText: string): boolean {
@@ -992,11 +1073,18 @@ function recipeHintsForConcepts(
 ): readonly FrameworkCorpusFixtureRecipeHint[] {
   const set = new Set<FrameworkCorpusFixtureRecipeHint>();
   const hasValidationSurface = hasValidationBindingBehaviorSurface(snippetText);
+  const hasRouterSurface = hasRouterAuthoringSurface(snippetText);
+  const hasFormServiceSurface =
+    concepts.includes("forms") &&
+    concepts.includes("di") &&
+    hasFormDataOrValidationSurface(snippetText) &&
+    hasServiceSurface(snippetText);
+  const hasStateOwnedServiceSurface = hasFormServiceSurface && hasStateSurface(snippetText);
   const hasSpecificAppPressure =
     concepts.includes("forms") ||
     concepts.includes("state") ||
     concepts.includes("di") ||
-    concepts.includes("router") ||
+    hasRouterSurface ||
     hasValidationSurface;
   if (!hasSpecificAppPressure && (concepts.includes("templates") || concepts.includes("resources") || concepts.includes("styles"))) {
     set.add("minimal-app");
@@ -1007,16 +1095,186 @@ function recipeHintsForConcepts(
   if (hasValidationSurface) {
     set.add("validated-state-backed-form");
   }
-  if (concepts.includes("forms") && concepts.includes("di")) {
+  if (hasStateOwnedServiceSurface) {
     set.add("service-backed-form");
   }
-  if (concepts.includes("router")) {
+  if (hasFormServiceSurface && !hasStateOwnedServiceSurface) {
+    set.add("pressure-fixture");
+  }
+  if (hasRouterSurface) {
     set.add("routed-state-backed-form");
   }
   if (concepts.includes("observation") || concepts.includes("bindables") || concepts.includes("styles")) {
     set.add("pressure-fixture");
   }
   return [...set].sort();
+}
+
+function fixtureSeedClassificationReasons(
+  concepts: readonly FrameworkCorpusConcept[],
+  snippetText: string,
+  effectHints: readonly FrameworkCorpusExpectedEffectHint[],
+  recipeHints: readonly FrameworkCorpusFixtureRecipeHint[],
+  localSurfaceSource: boolean,
+): readonly FrameworkCorpusFixtureSeedClassificationReason[] {
+  const reasons = new Map<string, FrameworkCorpusFixtureSeedClassificationReason>();
+  const add = (
+    kind: FrameworkCorpusFixtureSeedClassificationKind,
+    key: string,
+    summary: string,
+  ) => reasons.set(`${kind}:${key}`, { kind, key, summary });
+
+  for (const concept of concepts) {
+    add("concept", concept, `Snippet was classified with the ${concept} corpus concept.`);
+  }
+  if (localSurfaceSource) {
+    if (hasValueChannelBindingSurface(snippetText)) {
+      add("surface", "value-channel-binding", "Snippet contains an observer-backed binding value channel such as value/model/checked/class/style.");
+    }
+    if (hasNativeFormControlSurface(snippetText)) {
+      add("surface", "native-form-control", "Snippet contains native form-control markup such as input, select, option, textarea, or form.");
+    }
+    if (hasNativeValueBindingSurface(snippetText)) {
+      add("surface", "native-value-binding", "Snippet binds the native value property on an input, select, or textarea control.");
+    }
+    if (hasNativeCheckedBindingSurface(snippetText)) {
+      add("surface", "native-checked-binding", "Snippet binds the native checked property on an input control.");
+    }
+    if (hasOptionModelBindingSurface(snippetText)) {
+      add("surface", "option-model-binding", "Snippet binds option.model for select option value identity.");
+    }
+    if (hasBindingBehaviorApplicationSurface(snippetText)) {
+      add("surface", "binding-behavior-application", "Snippet applies a binding behavior in an Aurelia binding expression.");
+    }
+    if (hasTargetOperationSurface(snippetText)) {
+      add("surface", "direct-target-operation", "Snippet contains direct class/style/css target-operation syntax inside an HTML-like tag.");
+    }
+    if (hasValidationBindingBehaviorSurface(snippetText)) {
+      add("surface", "validation-binding-behavior", "Snippet contains validation binding-behavior syntax or validation-behavior prose.");
+    }
+    if (hasRouterAuthoringSurface(snippetText)) {
+      add("surface", "router-authoring", "Snippet contains concrete Aurelia router API, route config, route decorator, viewport, or router package syntax.");
+    }
+    if (hasServiceSurface(snippetText)) {
+      add("surface", "service", "Snippet contains a service-shaped type, import/path, or DI resolution surface.");
+    }
+    if (hasStateSurface(snippetText)) {
+      add("surface", "state-store", "Snippet contains a concrete state/store type, path, API, or DI resolution surface.");
+    }
+  }
+
+  for (const effect of effectHints) {
+    add("effect", effect, effectHintReason(effect, concepts, snippetText));
+  }
+  for (const recipe of recipeHints) {
+    add("recipe", recipe, recipeHintReason(recipe, concepts, snippetText));
+  }
+  if (
+    recipeHints.includes("pressure-fixture") &&
+    concepts.includes("forms") &&
+    concepts.includes("di") &&
+    hasFormDataOrValidationSurface(snippetText) &&
+    hasServiceSurface(snippetText) &&
+    !hasStateSurface(snippetText)
+  ) {
+    add("contrast", "direct-service-form", "Form + DI + service pressure lacks a concrete state/store surface, so it is contrastive rather than a service-backed state recipe seed.");
+  }
+
+  return [...reasons.values()].sort((left, right) =>
+    left.kind.localeCompare(right.kind) ||
+    left.key.localeCompare(right.key)
+  );
+}
+
+function effectHintReason(
+  effect: FrameworkCorpusExpectedEffectHint,
+  concepts: readonly FrameworkCorpusConcept[],
+  snippetText: string,
+): string {
+  if (expectedEffectsForSourceText(snippetText).includes(effect)) {
+    return `Expected-effect hint ${effect} was assigned from concrete snippet syntax.`;
+  }
+  if (expectedEffectsForConceptCombination(concepts, snippetText).includes(effect)) {
+    return `Expected-effect hint ${effect} was assigned from a concept combination plus service/state surface evidence.`;
+  }
+  const conceptOwners = concepts.filter((concept) => expectedEffectsForConcept(concept).includes(effect));
+  return conceptOwners.length === 0
+    ? `Expected-effect hint ${effect} was assigned by corpus classification.`
+    : `Expected-effect hint ${effect} was assigned from concept(s): ${conceptOwners.join(", ")}.`;
+}
+
+function recipeHintReason(
+  recipe: FrameworkCorpusFixtureRecipeHint,
+  concepts: readonly FrameworkCorpusConcept[],
+  snippetText: string,
+): string {
+  switch (recipe) {
+    case "minimal-app":
+      return "Snippet has template/resource/style pressure without a more specific app, form, DI, state, validation, or router pressure.";
+    case "state-backed-form":
+      return "Snippet has form or state pressure that can seed state-backed form fixture work.";
+    case "validated-state-backed-form":
+      return "Snippet has validation binding-behavior pressure that can seed validated form fixture work.";
+    case "service-backed-form":
+      return "Snippet has form + DI + service surface plus concrete state/store surface, matching the service-backed state recipe.";
+    case "routed-state-backed-form":
+      return "Snippet has concrete router authoring/runtime syntax that can seed routed state-backed fixture work.";
+    case "pressure-fixture":
+      return pressureFixtureReason(concepts, snippetText);
+  }
+}
+
+function pressureFixtureReason(
+  concepts: readonly FrameworkCorpusConcept[],
+  snippetText: string,
+): string {
+  if (
+    concepts.includes("forms") &&
+    concepts.includes("di") &&
+    hasFormDataOrValidationSurface(snippetText) &&
+    hasServiceSurface(snippetText) &&
+    !hasStateSurface(snippetText)
+  ) {
+    return "Snippet has form + DI + service pressure without a concrete state/store surface, so it is useful contrastive fixture pressure.";
+  }
+  return "Snippet has observation, bindable, or style pressure that should be analyzed without assuming it is a generated authoring ideal.";
+}
+
+function hasServiceOrStateSurface(snippetText: string): boolean {
+  return hasServiceSurface(snippetText) || hasStateSurface(snippetText);
+}
+
+function hasFormDataOrValidationSurface(snippetText: string): boolean {
+  return hasNativeDataFormControlSurface(snippetText) ||
+    hasNativeValueBindingSurface(snippetText) ||
+    hasNativeCheckedBindingSurface(snippetText) ||
+    hasOptionModelBindingSurface(snippetText) ||
+    hasValidationBindingBehaviorSurface(snippetText);
+}
+
+function hasNativeDataFormControlSurface(snippetText: string): boolean {
+  return htmlLikeTagTexts(snippetText).some((tagText) =>
+    /^<\s*(?:form|input|select|option|textarea)\b/iu.test(tagText)
+  );
+}
+
+function hasServiceSurface(snippetText: string): boolean {
+  return /\b(?:[A-Z][A-Za-z0-9]*Service|I[A-Z][A-Za-z0-9]*Service|service|services\/|resolve\([^)]*(?:Service))/iu.test(snippetText);
+}
+
+function hasStateSurface(snippetText: string): boolean {
+  return /\b(?:[A-Z][A-Za-z0-9]*State|IStore|Store<|getState\(|\.getState|stores\/|state\/|resolve\([^)]*(?:State|Store))/u.test(snippetText);
+}
+
+function hasRouterAuthoringSurface(snippetText: string): boolean {
+  return /from\s+['"]@aurelia\/router['"]/u.test(snippetText)
+    || /@route\s*\(|\broute\s*\(\s*\{/u.test(snippetText)
+    || /\bRouterConfiguration(?:\b|\.|,|\s*\))/u.test(snippetText)
+    || /\bI(?:Router|RouteContext|CurrentRoute)\b/u.test(snippetText)
+    || /\b(?:Router|RouteContext|RouteConfig|RouteableComponent|ViewportAgent|ViewportInstruction|ViewportInstructionTree|TypedNavigationInstruction|RecognizedRoute|ComponentAgent)\b/u.test(snippetText)
+    || /<\s*au-viewport\b|\bau-viewport\b/u.test(snippetText)
+    || /\broutes\s*:\s*\[/u.test(snippetText)
+    || /\bpath\s*:\s*['"][^'"]+['"][\s\S]{0,160}\bcomponent\s*:/u.test(snippetText);
 }
 
 function countConceptRows(
@@ -1078,13 +1336,96 @@ function aureliaPackageImports(text: string): readonly string[] {
   );
 }
 
-function conceptCountsFor(text: string): Readonly<Record<FrameworkCorpusConcept, number>> {
+function conceptCountsFor(
+  text: string,
+  context: ConceptExtractionContext,
+): Readonly<Record<FrameworkCorpusConcept, number>> {
   const counts = {} as Record<FrameworkCorpusConcept, number>;
   for (const descriptor of CONCEPT_DESCRIPTORS) {
     descriptor.pattern.lastIndex = 0;
     counts[descriptor.id] = countMatches(text, descriptor.pattern);
   }
+  const interpolationCount = aureliaInterpolationCount(text, context);
+  counts.binding += interpolationCount;
+  counts.expression += aureliaExpressionSurfaceCount(text, context);
+  counts.templates += interpolationCount;
+  counts.templates += aureliaBareElseTemplateControllerCount(text, context);
   return counts;
+}
+
+function conceptContextForDocFence(language: string): ConceptExtractionContext {
+  return {
+    aureliaInterpolation: isMarkupFenceLanguage(language)
+      ? "markup"
+      : "mixed-template-host",
+  };
+}
+
+function isMarkupFenceLanguage(language: string): boolean {
+  return /^(?:html|HTML|markup)$/u.test(language);
+}
+
+function aureliaInterpolationCount(
+  text: string,
+  context: ConceptExtractionContext,
+): number {
+  if (!text.includes("${")) {
+    return 0;
+  }
+  return countAureliaMarkupContexts(text, context, (markup) => countMatches(markup, /\$\{/gu));
+}
+
+function aureliaExpressionSurfaceCount(
+  text: string,
+  context: ConceptExtractionContext,
+): number {
+  return countAureliaMarkupContexts(text, context, expressionSurfaceCountForMarkup);
+}
+
+function expressionSurfaceCountForMarkup(markup: string): number {
+  return countMatches(
+    markup,
+    /\b[\w-]+\.(?:bind|two-way|from-view|to-view|trigger|delegate|capture|call)\s*=/gu,
+  )
+    + countMatches(markup, /\$\{/gu)
+    + countMatches(markup, /\b(?:repeat\.for|if\.bind|switch\.bind|case|with\.bind|promise\.bind|then|catch)\s*=/gu);
+}
+
+function stringLiteralsWithMarkup(text: string): readonly string[] {
+  return [...text.matchAll(/`[^`]*`|'[^']*'|"[^"]*"/gsu)]
+    .map((match) => match[0] ?? "")
+    .filter((literal) => /<[A-Za-z]/u.test(literal));
+}
+
+function aureliaBareElseTemplateControllerCount(
+  text: string,
+  context: ConceptExtractionContext,
+): number {
+  return countAureliaMarkupContexts(text, context, bareElseTemplateControllerCountForMarkup);
+}
+
+function countAureliaMarkupContexts(
+  text: string,
+  context: ConceptExtractionContext,
+  countMarkup: (markup: string) => number,
+): number {
+  switch (context.aureliaInterpolation) {
+    case "markup":
+      return countMarkup(text);
+    case "mixed-template-host":
+      return stringLiteralsWithMarkup(text)
+        .reduce((count, literal) => count + countMarkup(literal), 0);
+    case "none":
+      return 0;
+  }
+}
+
+function bareElseTemplateControllerCountForMarkup(markup: string): number {
+  return htmlLikeTagTexts(markup).filter(hasBareElseAttribute).length;
+}
+
+function hasBareElseAttribute(tagText: string): boolean {
+  return /\selse(?:\s|=|>|$)/u.test(tagText);
 }
 
 function conceptsFromCounts(

@@ -1,7 +1,6 @@
 import { bindable, customElement } from '@aurelia/runtime-html';
 import { resolve } from '@aurelia/kernel';
-import { RequestService } from '../services/request-service';
-import { type ContactPreference, type RequestTopic, type RequestTopicSummary } from '../state/app-state';
+import { AppState, type ContactPreference, type RequestTopic, type RequestTopicSummary } from '../state/app-state';
 import template from './service-backed-form.html';
 
 @customElement({
@@ -9,7 +8,7 @@ import template from './service-backed-form.html';
   template,
 })
 export class ServiceBackedForm {
-  private readonly requests = resolve(RequestService);
+  private readonly state = resolve(AppState);
 
   @bindable requestId = '';
 
@@ -18,7 +17,7 @@ export class ServiceBackedForm {
   }
 
   set customerName(value: string) {
-    this.requests.updateCustomerName(this.requestId, value);
+    this.state.updateCustomerName(this.requestId, value);
   }
 
   get email(): string {
@@ -26,7 +25,7 @@ export class ServiceBackedForm {
   }
 
   set email(value: string) {
-    this.requests.updateEmail(this.requestId, value);
+    this.state.updateEmail(this.requestId, value);
   }
 
   get urgent(): boolean {
@@ -34,7 +33,7 @@ export class ServiceBackedForm {
   }
 
   set urgent(value: boolean) {
-    this.requests.updateUrgency(this.requestId, value);
+    this.state.updateUrgency(this.requestId, value);
   }
 
   get contactPreference(): ContactPreference {
@@ -42,7 +41,7 @@ export class ServiceBackedForm {
   }
 
   set contactPreference(value: ContactPreference) {
-    this.requests.updateContactPreference(this.requestId, value);
+    this.state.updateContactPreference(this.requestId, value);
   }
 
   get topics(): RequestTopic[] {
@@ -54,31 +53,31 @@ export class ServiceBackedForm {
   }
 
   set notes(value: string) {
-    this.requests.updateNotes(this.requestId, value);
+    this.state.updateNotes(this.requestId, value);
   }
 
   get emailPreference(): ContactPreference {
-    return this.requests.emailPreference;
+    return this.state.emailPreference;
   }
 
   get phonePreference(): ContactPreference {
-    return this.requests.phonePreference;
+    return this.state.phonePreference;
   }
 
   get hardwareTopic(): RequestTopic {
-    return this.requests.hardwareTopic;
+    return this.state.hardwareTopic;
   }
 
   get billingTopic(): RequestTopic {
-    return this.requests.billingTopic;
+    return this.state.billingTopic;
   }
 
   get supportTopic(): RequestTopic {
-    return this.requests.supportTopic;
+    return this.state.supportTopic;
   }
 
   get supportTopicSummary(): RequestTopicSummary {
-    return this.requests.supportTopicSummary;
+    return this.state.supportTopicSummary;
   }
 
   get canSubmit(): boolean {
@@ -86,10 +85,10 @@ export class ServiceBackedForm {
   }
 
   submit(): void {
-    this.requests.submitRequest(this.requestId);
+    void this.state.submitRequest(this.requestId);
   }
 
   private get request() {
-    return this.requests.readRequest(this.requestId);
+    return this.state.readRequest(this.requestId);
   }
 }

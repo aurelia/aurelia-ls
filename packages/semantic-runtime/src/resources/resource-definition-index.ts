@@ -11,8 +11,12 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { ResourceTargetReference } from './resource-reference.js';
-import type { ResourceDependencyReference } from './resource-reference.js';
+import {
+  ResourceDependencyReferenceKind,
+  type ResourceDependencyReference,
+} from './resource-reference.js';
 import type { FullResourceDefinition } from './resource-definition.js';
+import { ResourceDefinitionKind } from './resource-kind.js';
 import type { ResourceRecognitionProjectResult } from './resource-recognition-project-pass.js';
 
 export class ResourceDefinitionIndexEntry {
@@ -72,8 +76,7 @@ export class ResourceDefinitionIndex {
         ...(this.byLocalName.get(entry.localName) ?? []),
         entry.definition,
       ]);
-      const resourceName = readResourceDefinitionName(entry.definition);
-      if (resourceName != null) {
+      for (const resourceName of readResourceDefinitionNames(entry.definition)) {
         const nameKey = resourceName.toLowerCase();
         this.byResourceName.set(nameKey, [
           ...(this.byResourceName.get(nameKey) ?? []),
@@ -115,6 +118,37 @@ export class ResourceDefinitionIndex {
     return matching.length === 1 ? matching[0]! : null;
   }
 
+  lookupCustomElementByResourceName(resourceName: string | null): FullResourceDefinition | null {
+    if (resourceName == null) {
+      return null;
+    }
+    const matching = (this.byResourceName.get(resourceName.toLowerCase()) ?? [])
+      .filter(isCustomElementDefinition);
+    return matching.length === 1 ? matching[0]! : null;
+  }
+
+  lookupCustomElementByResourceNameInDependencies(
+    resourceName: string | null,
+    dependencies: readonly ResourceDependencyReference[],
+  ): FullResourceDefinition | null {
+    if (resourceName == null || dependencies.length === 0) {
+      return null;
+    }
+    const key = resourceName.toLowerCase();
+    const matching: FullResourceDefinition[] = [];
+    const seen = new Set<FullResourceDefinition>();
+    for (const dependency of dependencies) {
+      for (const definition of this.lookupAllByDependencyReference(dependency)) {
+        if (!isCustomElementDefinition(definition) || !resourceDefinitionHasName(definition, key) || seen.has(definition)) {
+          continue;
+        }
+        matching.push(definition);
+        seen.add(definition);
+      }
+    }
+    return matching.length === 1 ? matching[0]! : null;
+  }
+
   lookupByModule(moduleKey: string | null): readonly FullResourceDefinition[] {
     return moduleKey == null
       ? []
@@ -142,6 +176,9 @@ export class ResourceDefinitionIndex {
 
   lookupAllByDependencyReference(reference: ResourceDependencyReference | null): readonly FullResourceDefinition[] {
     if (reference == null) {
+      return [];
+    }
+    if (reference.dependencyKind !== ResourceDependencyReferenceKind.Resource) {
       return [];
     }
     const byIdentity = this.lookupByTargetIdentity(reference.identityHandle);
@@ -195,6 +232,23 @@ function resourceDefinitionIndexKey(moduleKey: string, localName: string): strin
   return `${normalizeModuleKey(moduleKey)}\0${localName}`;
 }
 
-function readResourceDefinitionName(definition: FullResourceDefinition): string | null {
-  return 'name' in definition ? definition.name : null;
+function readResourceDefinitionNames(definition: FullResourceDefinition): readonly string[] {
+  if (!('name' in definition)) {
+    return [];
+  }
+  const names = new Set<string>();
+  names.add(definition.name);
+  for (const alias of definition.aliases) {
+    names.add(alias.name);
+  }
+  return [...names];
+}
+
+function isCustomElementDefinition(definition: FullResourceDefinition): boolean {
+  return definition.type === ResourceDefinitionKind.CustomElement;
+}
+
+function resourceDefinitionHasName(definition: FullResourceDefinition, resourceNameKey: string): boolean {
+  return readResourceDefinitionNames(definition)
+    .some((name) => name.toLowerCase() === resourceNameKey);
 }

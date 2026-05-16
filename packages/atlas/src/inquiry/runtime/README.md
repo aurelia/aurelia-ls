@@ -12,12 +12,14 @@ This is not a compatibility layer for old readers and not the default caller sur
 - [lenses.ts](lenses.ts) contains implemented in-memory lenses over static contracts.
 - [self-analysis-contracts.ts](self-analysis-contracts.ts) owns the row contract vocabulary behind `atlas.self`.
   [self-analysis.ts](self-analysis.ts) builds the source-backed substrate behind those rows. It indexes grouped
-  string literals, structural row surfaces, relationship-axis surfaces, class/function declaration surfaces,
+  string literals, structural row surfaces, relationship-axis surfaces, class/function/top-level-variable declaration surfaces,
   mapper/parallel-axis pressure rows, lens implementation paths, projection branches, continuation objects,
   continuation helper calls, declared framework semantic routes, module dependencies, and substrate surface rows
   through the hot TypeScript Program. [self-enums.ts](self-enums.ts) owns the Atlas-facing enum, value-space, and
   mapping rows projected from the package-scoped TypeScript enum usage index. [self-strings.ts](self-strings.ts) owns
-  literal occurrence roles and contract-bearing string classification. Keep enum and string ontology work in those
+  literal occurrence roles and contract-bearing string classification. [self-phase-profile-lenses.ts](self-phase-profile-lenses.ts)
+  exposes the measured phase rows from the same source-analysis build as a queryable `atlas.self:phase-profile`
+  projection, so cache/split decisions can be made through Atlas itself instead of profile-script prose. Keep enum and string ontology work in those
   modules unless it needs to join across broader Atlas surfaces.
   Lens reachability follows same-file calls and exact named imports, which keeps fact ownership inspectable without
   fuzzy global name matching.
@@ -31,9 +33,10 @@ This is not a compatibility layer for old readers and not the default caller sur
   continuations, and small composition aids; strategic decisions still come from reading the surrounding code and
   deciding which primitive should exist.
   Prefer named classes for substantial analyzers, builders, graphs, classifiers, registries, and memos. `atlas.self`
-  can now inspect class and function surfaces directly, including line-count, method-count, and property-count pressure
-  filters for class rows plus line-count, direct-call-count, and unique-call-target-count pressure filters for function
-  rows, so future refactors should leave stable TypeScript shapes that the API can navigate without source-reading
+  can now inspect class, function, and top-level variable surfaces directly, including line-count, method-count, and
+  property-count pressure filters for class rows, line-count, direct-call-count, and unique-call-target-count pressure
+  filters for function rows, plus initializer-kind and initializer-entry-count filters for catalog/table-shaped variable
+  rows. Future refactors should leave stable TypeScript shapes that the API can navigate without source-reading
   fallback.
 - [ts-lenses.ts](ts-lenses.ts) adapts the hot TypeScript source substrate and LanguageService into `ts.source`,
   `ts.structure`, and `ts.type` answers, including IDE primitives and read-only TypeScript edit plans.
@@ -71,6 +74,40 @@ This is not a compatibility layer for old readers and not the default caller sur
   `bridge.aulink` rows also continue into `atlas.memory` by `auLinkId`. This keeps the framework-shape mirror and the
   durable work/decision index from becoming competing mechanisms: start from either side, then jump to the other when a
   semantic-runtime mirror row has already accumulated guidance or still-live pressure.
+- [atlas-memory-*.ts](atlas-memory-contracts.ts) owns the durable memory lens and filesystem-backed record store.
+  Memory records are not a second workbench note system; they are queryable, live-checked guidance. Use Atlas-owned
+  `atlas-self-*` live checks for Atlas source pressure, including `atlas-self-variable` for route catalogs and other
+  top-level table-shaped declarations.
+- [atlas-work-router-contracts.ts](atlas-work-router-contracts.ts),
+  [atlas-work-router-route-catalog.ts](atlas-work-router-route-catalog.ts), and
+  [atlas-work-router-lenses.ts](atlas-work-router-lenses.ts) expose `atlas.work-router`. The contracts file owns the
+  schema, the route-catalog file owns the static route ontology, and the lens joins that ontology to live source,
+  memory, and corpus pressure. The router maps broad work
+  intent to typed route plans over source anchors, Atlas memory, framework corpus seeds, expected effects, scripts,
+  docs, and cautions. Prefer exact route/domain/lens/source/symbol/auLink/corpus filters, including `effectKind`,
+  `recipeKey`, and `seedUse`, before prose `query`; weak text matches are route-substrate pressure, not a success
+  condition. Framework corpus seed rows carry typed classification reasons, so broad or surprising route fixture seeds
+  should be inspected through those reasons before being treated as authoring taste. Route-owned corpus `query` anchors
+  are the preferred way to keep a route's seed lane precise when a broad concept/effect pair admits adjacent examples.
+  `route-plan` returns the full selected plan; when no explicit filter is supplied, it ranks route plans from live
+  `atlas.memory:next` pressure and live product/source pressure using exact memory, source, path, and auLink anchor
+  overlap before falling back to catalog order. Symbol-qualified source anchors rank named declaration/class/function/
+  variable rows rather than broad module/file rows, and Atlas catalog/contract/barrel module shapes are damped so
+  static catalog size remains visible without acting like implementation pressure. `next-questions` is the same route-plan family foregrounded for autonomous continuation prompts so
+  agents do not have to rediscover route-specific steering after compaction.
+  Prose `query` matching still uses route-owned structural vocabulary: a distinctive multi-token route term, symbol,
+  source anchor, or canary phrase may be contained inside a larger natural-language query, while single-token fragments
+  are not enough by themselves. This keeps checkpoint phrases like `CheckerExpressionTypeEvaluator method breakdown`
+  routeable without turning the router into fuzzy search.
+  Route-plan memory previews use route memory anchors as the admission gate, then let the active query reorder the
+  admitted records and next actions; if an exact pressure phrase routes correctly but previews the wrong frontier,
+  improve the durable memory wording instead of widening fuzzy route matching.
+  The `workset` projection joins the current git worktree to route source/doc/path anchors and memory shards
+  so autonomous checkpoints can see which typed routes the dirty set actually touches. Workset-matched route rows use
+  `workset-structural` authority so their route plans do not look like orientation-only catalog defaults.
+  `memory-coverage` reverses that join from live memory-next actions to route candidates. Exact source/path/auLink
+  overlap is structural; shared generic lens anchors are not sufficient by themselves because they can connect unrelated
+  routes through broad inspection tools such as `product.architecture`.
 - [product-vocabulary-analysis.ts](product-vocabulary-analysis.ts) and
   [product-vocabulary-lenses.ts](product-vocabulary-lenses.ts) expose `product.vocabulary`. They walk the
   semantic-runtime vocabulary package through the hot TypeScript Program, then return the declared catalog, exact
@@ -90,11 +127,14 @@ This is not a compatibility layer for old readers and not the default caller sur
   and `symbol-dependencies` spend the full symbol-backed memo, while row projections such as `functions`,
   `call-sites`, and `call-dependencies` use the lighter core memo and omit rollup counts that would pretend symbol
   rows had been built. `areas`, `modules`, `dependencies`, `area-dependencies`, `declarations`, `cycles`, `classes`,
-  and `function-duplicates` use the no-call-site structure lane; `function-duplicates` groups top-level helper names
-  across files with both normalized body fingerprints and AST/control-flow body-shape fingerprints, so the duplicate
-  pressure script does not need to page every function row and regroup outside the lens. `atlas.self:function-shapes`
-  groups repeated canonical function body shapes across different names, which catches split-brain helpers that would
-  be invisible to duplicate-name scans. `atlas.self:function-wrappers` surfaces direct constructor-return and
+  `function-duplicates`, and `function-control-flow-shapes` use the no-call-site structure lane;
+  `function-duplicates` groups top-level helper names across files with both normalized body fingerprints and
+  AST/control-flow body-shape fingerprints, so the duplicate pressure script does not need to page every function row
+  and regroup outside the lens. `function-control-flow-shapes` groups functions that share switch-dispatch topology
+  across different names/files; treat it as a structural canary for parallel walkers and dispatch surfaces, not as a
+  duplicate verdict. `atlas.self:function-shapes` groups repeated canonical function body shapes across different names,
+  and `atlas.self:function-control-flow-shapes` applies the same switch-topology canary to Atlas source itself, catching
+  split-brain helpers that would be invisible to duplicate-name scans. `atlas.self:function-wrappers` surfaces direct constructor-return and
   simple-call-return helpers with local direct-call, value-reference, and total-usage counts; it is a source-navigation lane for spotting
   possible one-off wrapper soup, not a verdict that a wrapper should be inlined or extracted. `functions`,
   `call-sites`, and `call-dependencies` use compact call-site topology by default; `call-sites` accepts
@@ -215,7 +255,9 @@ This is not a compatibility layer for old readers and not the default caller sur
   `define` call, decorator, attribute-pattern create call, or renderer helper call. Rows also carry a separate
   declaration-source continuation when the backing class/export header is a different span, plus typed `sourceSites`
   for backing declarations, bundle admissions, syntax products, and materialization sites. Use
-  `pressure:framework-resources` when provenance breadth is the pressure rather than a specific resource row.
+  `pressure:framework-resources` when provenance breadth is the pressure rather than a specific resource row. Filtered
+  summaries distinguish matching rows from total convergence rows, so a query miss should read as "no matching
+  resource row" instead of "the framework resource substrate is empty".
 - [framework-router-lenses.ts](framework-router-lenses.ts) exposes `framework.router`. It is the first router grounding
   map: rows stay source-backed and split router package pressure into an ordered route-config/navigation `flow`
   projection, including route-recognizer state population and recognition rows, plus route-context, route-tree,

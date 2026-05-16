@@ -54,6 +54,12 @@ import { routerOpenSeamRecords, routerProductRecords } from './router-product-re
 const DEFAULT_VIEWPORT_NAME = 'default';
 const RESIDUE = '$$residue';
 
+const enum OpenViewportResolutionKind {
+  MissingComponentName = 'missing-component-name',
+  NoAvailableViewportAgent = 'no-available-viewport-agent',
+  MissingRouteContextPair = 'missing-route-context-pair',
+}
+
 interface RouteTreeEmission {
   readonly records: readonly KernelStoreRecord[];
   readonly routeTree: RouteTreeModel;
@@ -87,6 +93,7 @@ interface TransitionRouteNodeSite {
 }
 
 interface OpenViewportResolution {
+  readonly kind: OpenViewportResolutionKind;
   readonly parentRouteContext: RouteContextModel;
   readonly seed: TransitionRouteNodeSeed;
   readonly request: ViewportRequestModel | null;
@@ -251,6 +258,7 @@ class RouteTreeTransitionMaterializationFrame {
   private readonly configurableRoutesByIdentity: ReadonlyMap<ConfigurableRouteModel['identityHandle'], ConfigurableRouteModel>;
   private readonly viewportInstructionsByIdentity: ReadonlyMap<ViewportInstructionModel['identityHandle'], ViewportInstructionModel>;
   private readonly viewportInstructionTreesByIdentity: ReadonlyMap<ViewportInstructionTreeModel['identityHandle'], ViewportInstructionTreeModel>;
+  private readonly redirectIssueRouteConfigIdentities: ReadonlySet<RouteConfigModel['identityHandle']>;
 
   constructor(
     private readonly store: KernelStore,
@@ -287,6 +295,14 @@ class RouteTreeTransitionMaterializationFrame {
     this.viewportInstructionTreesByIdentity = new Map(
       routeInstructions.readViewportInstructionTrees().map((tree) => [tree.identityHandle, tree] as const),
     );
+    this.redirectIssueRouteConfigIdentities = new Set(
+      routeRecognition.readIssues().flatMap((issue) => {
+        const identityHandle = issue.routeConfig?.identityHandle ?? null;
+        return issue.issueKind === RouterIssueKind.InstructionUnknownRedirect && identityHandle != null
+          ? [identityHandle]
+          : [];
+      }),
+    );
   }
 
   materialize(): readonly RouteTreeEmission[] {
@@ -303,12 +319,12 @@ class RouteTreeTransitionMaterializationFrame {
     const updateRouteContext = this.updateRouteContextForInstructionTree(instructionTree);
     const updateRouteConfig = this.updateRouteConfigForRouteContext(updateRouteContext);
     const seeds = routes.flatMap((recognizedRoute) => {
-      const seed = this.transitionRouteNodeSeed(recognizedRoute);
+      const seed = this.transitionRouteNodeSeed(recognizedRoute, routes);
       return seed == null ? [] : [seed];
     });
     const resolvedSeeds = resolveTransitionRouteNodeSeeds(this.routeRuntime, updateRouteContext, seeds);
     if (resolvedSeeds.open != null) {
-      recordViewportResolutionOpenSeam(this.store, resolvedSeeds.open, this.issues, this.openRecords);
+      recordViewportResolutionFailure(this.store, resolvedSeeds.open, this.issues, this.openRecords);
     }
     if (resolvedSeeds.seeds.length === 0) {
       return [];
@@ -401,6 +417,7 @@ class RouteTreeTransitionMaterializationFrame {
 
   private transitionRouteNodeSeed(
     recognizedRoute: RecognizedRouteModel,
+    routeGroup: readonly RecognizedRouteModel[],
   ): TransitionRouteNodeSeed | null {
     const endpoint = requiredByIdentity(
       this.endpointsByIdentity,
@@ -420,7 +437,7 @@ class RouteTreeTransitionMaterializationFrame {
     const routeConfigContext = this.routeConfigContextsByConfigIdentity.get(routeConfig.identityHandle) ?? null;
     if (routeConfigContext == null) {
       if (routeConfig.routeKind === RouteConfigKind.Redirect) {
-        recordRedirectMigrationIssue(
+        const hasMigrationIssue = recordRedirectMigrationIssue(
           this.store,
           recognizedRoute,
           configurableRoute,
@@ -428,7 +445,13 @@ class RouteTreeTransitionMaterializationFrame {
           this.issues,
           this.issueRecords,
         );
-        recordRedirectTargetOpenSeam(this.store, recognizedRoute, routeConfig, this.openRecords);
+        if (
+          !hasMigrationIssue
+          && !this.redirectIssueRouteConfigIdentities.has(routeConfig.identityHandle)
+          && !hasRecognizedRedirectTarget(routeConfig, routeGroup)
+        ) {
+          recordRedirectTargetOpenSeam(this.store, recognizedRoute, routeConfig, this.openRecords);
+        }
         return null;
       }
       throw new Error(`RouteConfig '${routeConfig.identityHandle}' has no materialized RouteConfigContext.`);
@@ -836,6 +859,7 @@ function resolveTransitionRouteNodeSeeds(
       return {
         seeds: [],
         open: {
+          kind: OpenViewportResolutionKind.MissingComponentName,
           parentRouteContext,
           seed,
           request: null,
@@ -852,6 +876,7 @@ function resolveTransitionRouteNodeSeeds(
       return {
         seeds: [],
         open: {
+          kind: OpenViewportResolutionKind.NoAvailableViewportAgent,
           parentRouteContext,
           seed,
           request: viewportRequest,
@@ -867,6 +892,7 @@ function resolveTransitionRouteNodeSeeds(
       return {
         seeds: [],
         open: {
+          kind: OpenViewportResolutionKind.MissingRouteContextPair,
           parentRouteContext,
           seed,
           request: viewportRequest,
@@ -888,15 +914,26 @@ function resolveTransitionRouteNodeSeeds(
   };
 }
 
-function recordViewportResolutionOpenSeam(
+function recordViewportResolutionFailure(
   store: KernelStore,
   open: OpenViewportResolution,
   issues: RouterIssueModel[],
   records: KernelStoreRecord[],
 ): void {
-  const requestLabel = open.request == null
-    ? 'unavailable ViewportRequest'
-    : `ViewportRequest(viewport:'${open.request.viewportName}',component:'${open.request.componentName}')`;
+  const requestLabel = viewportResolutionRequestLabel(open);
+  if (open.kind === OpenViewportResolutionKind.NoAvailableViewportAgent && open.request != null) {
+    recordNoAvailableViewportAgentIssue(store, open, requestLabel, issues, records);
+    return;
+  }
+  recordViewportResolutionOpenSeam(store, open, requestLabel, records);
+}
+
+function recordViewportResolutionOpenSeam(
+  store: KernelStore,
+  open: OpenViewportResolution,
+  requestLabel: string,
+  records: KernelStoreRecord[],
+): void {
   const summary = `RouteTree.createConfiguredNode could not resolve ${requestLabel}: ${open.reason}.`;
   const local = `router-route-tree-open:viewport-request:${open.seed.recognizedRoute.identityHandle}:${localKeyPart(open.reason)}`;
   const emission = routerOpenSeamRecords(store, {
@@ -910,9 +947,12 @@ function recordViewportResolutionOpenSeam(
     evidenceRoles: [EvidenceRole.TransformInput],
   });
   records.push(...emission.records);
-  if (open.request != null && open.reason === 'parent RouteContext has no matching available ViewportAgent') {
-    recordNoAvailableViewportAgentIssue(store, open, requestLabel, issues, records);
-  }
+}
+
+function viewportResolutionRequestLabel(open: OpenViewportResolution): string {
+  return open.request == null
+    ? 'unavailable ViewportRequest'
+    : `ViewportRequest(viewport:'${open.request.viewportName}',component:'${open.request.componentName}')`;
 }
 
 function recordNoAvailableViewportAgentIssue(
@@ -965,19 +1005,19 @@ function recordRedirectMigrationIssue(
   routeConfig: RouteConfigModel,
   issues: RouterIssueModel[],
   records: KernelStoreRecord[],
-): void {
+): boolean {
   if (routeConfig.redirectTo == null) {
-    return;
+    return false;
   }
 
   let unsupported: ReturnType<typeof redirectMigrationUnsupported> | null = null;
   try {
     unsupported = redirectMigrationUnsupported(configurableRoute.path, routeConfig.redirectTo);
   } catch {
-    return;
+    return false;
   }
   if (unsupported == null) {
-    return;
+    return false;
   }
 
   const sourceAddressHandle = unsupported.source === 'redirectTo'
@@ -1020,6 +1060,16 @@ function recordRedirectMigrationIssue(
     localName: routeConfig.id ?? configurableRoute.path,
     evidenceSummary: message,
   }));
+  return true;
+}
+
+function hasRecognizedRedirectTarget(
+  routeConfig: RouteConfigModel,
+  routeGroup: readonly RecognizedRouteModel[],
+): boolean {
+  return routeGroup.some((route) =>
+    route.redirectSourceRouteConfig?.identityHandle === routeConfig.identityHandle
+  );
 }
 
 function recordRedirectTargetOpenSeam(

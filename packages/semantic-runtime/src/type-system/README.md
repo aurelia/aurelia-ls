@@ -30,6 +30,9 @@ source, value, expression, or template-local slot.
   the same call-return path as TypeChecker-backed function and constructor types.
 - Project call and construct signatures through a named call projector so overload arity, argument assignability, and
   value-converter `toView(value, ...args)` semantics are not buried in the evaluator switch.
+- Keep call-argument and callback-parameter context related but distinct. A positional callback parameter receives the
+  value at one runtime argument position, while a callback rest parameter receives the array or tuple of remaining
+  values; both policies belong in `CheckerExpressionCallProjector`.
 - Represent expression-level control-flow results as synthetic union shapes with only common safe member surfaces rather
   than turning every different-branch expression into an answer-layer policy decision.
 - Project repeat-local types through runtime repeat semantics, including synthetic tuple-shaped entries for
@@ -44,9 +47,12 @@ source, value, expression, or template-local slot.
 - Let repeat binding-pattern projection report framework-runtime compatibility pressure while it projects locals.
   `CheckerBindingPatternLocalProjection` carries both local slot types and destructuring-source issues so scope
   construction can publish exact `AUR0112` diagnostics without duplicating TypeChecker member/index access in the API.
-- Keep projected type-shape access reusable. Ordinary expression member reads, cursor member-owner projection, and
-  repeat binding-pattern destructuring should share the same member/index/reference resolver instead of each growing a
-  local TypeChecker access path.
+- Keep repeat/iterator expression semantics in `CheckerExpressionIterableProjector`. The evaluator should dispatch
+  `ForOfStatement` and public repeat-local queries into that projector instead of owning RepeatableHandlerResolver
+  compatibility, map-entry tuple synthesis, and binding-pattern local projection inline.
+- Keep projected type-shape access reusable. Ordinary expression member reads, cursor member-owner projection, repeat
+  binding-pattern destructuring, and observation source-write classification should share the same member/index/reference
+  resolver instead of each growing a local TypeChecker access path.
 - Preserve the key kind for projected indexed access. A type can be indexable by number without supporting arbitrary
   dot-member fallback; string-index signature semantics, numeric keyed access, and finite literal-key access must stay
   separate so diagnostics do not invent synthetic members for primitive or array-like owners.
@@ -84,6 +90,28 @@ therefore use bundler-style module resolution, a small `*.html` module declarati
 checkout type-path map when this repository's `aurelia/packages/*/dist/types` tree is present. Real app `tsconfig.json`
 files remain authoritative and can override those defaults.
 
+Type-system profiles should keep both time and item volume visible. App-level pressure can make TypeScript Program
+construction look like undifferentiated semantic-runtime cost, but the useful question is often whether the epoch is
+spending on admitted app files, ambient declarations, framework/plugin declaration files, or a downstream inquiry depth
+that did not need checker facts at all. Keep phase item counts on the `TypeSystemProject` boundary and propagate them
+through pressure scripts before adding caches or narrowing source admission.
+
+`TypeSystemProjectBuilder` also owns a process-local compiler-host source-file cache for dependency/lib files reached
+through `node_modules`, such as framework package declarations, dependency declarations, and TypeScript libs. Evaluated
+app source files and sibling workspace source remain current-epoch reads, so the cache does not become a stale
+app-source store in monorepos. `pressure:app-api` reports host source-cache hits, misses, writes, and bypasses next to
+`type-system:program` timing; inspect those numbers before changing source admission or adding a second checker host
+path.
+
+Checker declaration source is the one intentional source-address bridge that may start from a filename. Materializers
+that scan boot-admitted app sources should carry the admitted source-file address handle through their site records
+instead. `declaration-source.ts` first reuses an admitted source-file address for checker declarations and only then
+materializes a `type-system-program` source-file address for ambient/framework/dependency declarations that the
+TypeScript Program can see but the boot frame did not admit as app source.
+When a checker-carrier consumer scans declaration bodies for app diagnostics, use
+`admittedSourceFileAddressHandleForCheckerNode(...)`; it returns only already-admitted source files and leaves
+checker-only files out of app-authored diagnostic publication.
+
 For template work, the split begins after compiled-template/render-row assembly. The compiler side can still be modeled
 as evaluation-shaped construction because it consumes closed resource metadata, DI/compiler-world products, HTML IR, and
 lowered instruction rows. Controller activation, nested template-controller view creation, repeated view instances, and
@@ -106,14 +134,36 @@ mode. `++`, `--`, and compound assignment become an explicit open kind when a bi
 dependencies because Aurelia throws `ast_increment_infinite_loop`; listener/event-style evaluations that pass no
 connectable can still project a numeric result.
 Its companion files are part of the same substrate: `expression-type-evaluation.ts` owns result/open/cache vocabulary,
-`expression-type-world.ts` owns cache/evaluator lifetime, `expression-type-synthesis.ts` owns synthetic
-expression/template type-shape construction, `expression-call-projector.ts` owns TypeChecker call/construct signature
-selection and return projection, and
-`checker-type-shape-access.ts` owns reusable member, keyed, finite-keyed, and index-signature access over projected
-type-shape products. `expression-member-owner-projector.ts` owns cursor-offset member-owner projection and delegates
+`expression-type-world.ts` owns cache/evaluator lifetime, `expression-type-support.ts` owns shared checker-carrier,
+global, primitive, project/open/resolve/union primitives for evaluator-side projectors, `expression-type-synthesis.ts`
+owns synthetic expression/template type-shape construction, `expression-call-projector.ts` owns TypeChecker
+call/construct signature selection and return projection, `expression-argument-context-projector.ts` owns the bridge
+from Aurelia callable AST forms to contextual argument types, and
+`checker-type-shape-access.ts` owns reusable member, apparent-member, keyed, finite-keyed, index-signature, and
+member-write access over projected type-shape products. Observation maps those lower-level access results into Aurelia
+`astAssign` policy instead of reopening checker member lookup beside expression evaluation.
+`expression-access-projector.ts` sits one layer above that lower type-shape access substrate: it owns Aurelia
+AccessMember/AccessKeyed/CallMember callee semantics, including owner/key evaluation, optional and non-strict nullish
+reads, finite keyed access, and index-signature fallback. Keep runtime expression access policy there instead of
+re-growing member/keyed access inside the evaluator, completion, or diagnostics.
+`expression-scope-projector.ts` owns runtime `Scope` lookup projection for `$this`, `$parent`/ancestor access,
+`AccessBoundary`, `AccessScope`, `$host`, slot lookup, and globals. Keep lookup-kind/open-subject policy there instead
+of splitting binding-scope name resolution across evaluator, completion, or diagnostics.
+`expression-iterable-projector.ts` owns repeat/iterator expression semantics above the same type-shape access substrate:
+it evaluates the repeat source, applies Aurelia's built-in repeat source categories, synthesizes `Map`/`ReadonlyMap`
+entry tuples, and hands item types to binding-pattern local projection. Keep repeat-local scope work and diagnostics
+hooked through this projector instead of adding template-controller-specific repeat type paths.
+`expression-resource-projector.ts` owns expression-level resource semantics for value converters and binding behaviors:
+compiler resource-scope lookup, converter target hydration, `toView` call projection, and duplicate behavior checks.
+Keep those resource-expression policies there instead of threading resource lookups through the evaluator switch or
+completion-specific helpers.
+`expression-member-owner-projector.ts` owns cursor-offset member-owner projection and delegates
 value evaluation plus arrow-function scope creation back to the evaluator, so completion and diagnostic code do not
 grow separate offset walkers. `expression-branch-scope.ts` owns expression-local truthy/falsy branch Scope projection,
 while `speculative-binding-scope.ts` owns the uncommitted same-level Scope overlay used by that projection.
+`expression-contextual-type-projector.ts` owns contextual target descent into arrow scopes, array literal elements, and
+object literal properties. Both ordinary expression evaluation and cursor/member-owner descent spend that projector, so
+callback parameter typing, object-option typing, and nested literal context do not drift into answer-local helpers.
 
 ## Watchpoints
 
@@ -121,6 +171,10 @@ while `speculative-binding-scope.ts` owns the uncommitted same-level Scope overl
   introduced only when an inquiry or materializer needs it.
 - Type-shape identities are session-stable because checker objects are epoch-bound even when their source
   declarations are source-stable.
+- A projected type shape keeps two source lanes separate: `sourceAddressHandle` is the expression/template/product site
+  that caused the projection, while `declarationSourceAddressHandle` is the best TypeScript declaration span for
+  navigation and owner-type repair planning. Do not overwrite projection source with declaration source just to make a
+  cursor answer look navigable.
 - Checker declaration source is allowed to admit a Program-only source-file address on demand. This is not a source
   discovery fallback for app semantics; it is a navigation/provenance handoff for TypeScript declaration files reached
   through the active Program, including lib and external package declaration members.
@@ -149,14 +203,36 @@ while `speculative-binding-scope.ts` owns the uncommitted same-level Scope overl
   calls over a definitely nullish owner/callee project `undefined`; non-strict `astEvaluate` mode does the same for
   non-optional nullish member/keyed/call reads. Strict mode keeps the corresponding open kind so data-flow diagnostics
   can spend `AUR0114`, `AUR0115`, or the strict nullish call-target lane without over-reporting non-strict bindings.
+  Keyed access checks the nullish owner before literal-key projection, so `foo?.['bar']` and strict
+  `foo['bar']` do not degrade into a missing-member result just because the key closed statically.
 - Expression evaluation can accept a contextual target type. Arrow-function parameters first spend listener `$event`
-  semantics when present, then fall back to parameter types from the contextual callable target, and only synthesize
-  `unknown` when neither runtime nor target-side facts can type the parameter. This keeps binding data-flow and
-  member-completion inference on the TypeChecker substrate instead of in answer-specific callback heuristics.
+  semantics when present, then fall back through `CheckerExpressionCallProjector` to parameter types from the contextual
+  callable target, and only synthesize `unknown` when neither runtime nor target-side facts can type the parameter.
+  Keeping this in the call projector makes arrow-parameter context share the same arity, overload, and rest-parameter
+  policy as call and construct argument context. Contextual target types also descend
+  through array literal elements, object literal property values, and conditional branches before reaching nested
+  arrows. This keeps binding data-flow and member-completion inference on the TypeChecker substrate instead of in
+  answer-specific callback heuristics.
+- Cursor member-owner projection also spends contextual call-argument types before entering an argument expression. The
+  argument-context projector owns the AST-call-form handoff, the call projector owns the signature/construct parameter
+  query, and the offset walker owns only the lexical descent into the argument. That lexical descent carries array
+  element, object property, and conditional branch context just like ordinary expression evaluation, so cursor completion
+  and value-flow diagnostics agree about nested callback parameters. This lets callbacks inside `CallScope`,
+  `CallMember`, `CallFunction`, `CallGlobal`, `New`, and tagged-template substitution sites inherit TypeChecker-visible
+  parameter surfaces without completion-specific callback heuristics. Tagged templates must preserve Aurelia's runtime
+  call shape, `func(ast.cooked, ...results)`, when choosing overloads; the evaluator materializes a synthetic
+  `TemplateStringsArray`-like first argument before handing the call to the shared signature projector.
 - When a runtime-analysis phase needs expression types, enter through `CheckerExpressionTypeWorld` so scope
   construction, value-channel projection, data-flow, and future speculative lifecycle contexts share the same cache and
   evaluator lifetime. Creating a bare `CheckerExpressionTypeEvaluator` should be a deliberate inquiry-local choice, not
   the default way to get expression facts.
+- Template project runtime analysis shares one `CheckerExpressionTypeWorld` across the resources in that compilation
+  pass, including selected authoring templates. Resource-level timing profiles mark the cache before each resource and
+  report deltas, so aggregate pressure can stay honest while the expression world itself has project-pass lifetime.
+- The shared expression cache is scope-sensitive. The evaluator salts each cache key with the modeled `BindingScope`,
+  visible `TemplateResourceScope`, expression kind/span or source address, runtime evaluation mode, and contextual type
+  before reading the world cache. Caller local keys still name the semantic role and projection handles, but callers do
+  not need to manually encode every scope dimension to avoid cross-template or cross-resource cache reuse.
 - Unsupported expression-call results should preserve their `CheckerExpressionTypeOpenKind` when crossing into
   observation/data-flow. Diagnostics can map the modeled callable subset to runtime `astEvaluate` framework codes, but
   the evaluator should not collapse every open call/construct expression into a generic weak-owner or assignment
@@ -165,6 +241,20 @@ while `speculative-binding-scope.ts` owns the uncommitted same-level Scope overl
   the expression span. For example, a missing TypeChecker type on a repeat-local scope slot should carry a `scope-slot`
   subject so diagnostics can target the slot while keeping selected member names as evidence. Do not recover that
   target later by parsing diagnostic summaries or selected member strings.
+- `CheckerExpressionTypeSupport` is the shared substrate for turning checker types and synthetic type shapes into
+  expression evaluations. Add new expression-side projectors to that support object when they need project/open/resolve
+  or union semantics; do not create another local result factory just because the runtime AST control flow lives
+  outside `CheckerExpressionTypeEvaluator`.
+- `CheckerExpressionAccessProjector` owns expression-level member/keyed access policy. If a feature needs to classify
+  missing members, index signatures, finite literal-key unions, or nullish member/keyed reads, route it through this
+  projector and `CheckerTypeShapeAccess` instead of adding another local checker/member walk.
+- `CheckerExpressionScopeProjector` owns expression-level `Scope` lookup and context/slot/global projection. If a
+  feature needs `$this`, ancestor lookup, `$host`, boundary lookup, scope-slot open subjects, or global reads, route it
+  through this projector instead of duplicating runtime name lookup beside the evaluator.
+- `CheckerExpressionCallProjector` owns the distinction between runtime argument context and callback parameter binding
+  context. Target rest parameters unwrap to their element type for ordinary arguments and positional callback
+  parameters, but arrow rest bindings preserve the target rest array or synthesize a tuple-shaped remaining-argument
+  product when the target signature is fixed-arity.
 - Template completion and file/app diagnostic scans also enter through `CheckerExpressionTypeWorld`. The query object
   stays product-handle-shaped, but cursor-context construction may receive a hot world so repeated diagnostic probes
   share the same projector/evaluator cache instead of rebuilding a local TypeChecker expression stack per member span.
@@ -196,7 +286,12 @@ while `speculative-binding-scope.ts` owns the uncommitted same-level Scope overl
   pressure.
 - Keep projected type-shape access in `checker-type-shape-access.ts`. Cursor owner projection, ordinary member reads,
   indexed access, finite keyed access, and binding-pattern destructuring should not regrow separate checker/member
-  resolvers inside answer code or expression semantics.
+  resolvers inside answer code or expression semantics. Use `memberValueAccess` when the caller needs to distinguish a
+  missing member from a checker-visible member whose value type could not be projected; use `memberValueType` only when
+  every non-closed access can honestly be treated as absent.
+- Related checker references on projected shapes are allowed to be handleless until a consumer needs detail. Access
+  helpers must not treat a handleless `indexedValueType` or member reference as a terminal result; they should fall
+  through to the retained checker carrier and materialize the reached value shape at the current semantic site.
 - Do not collapse indexed-value projection into dot-member semantics. `indexedValueType` carries the value reachable by
   a dynamic key together with `indexedAccessKeyKind`; only string-capable index kinds may synthesize an index-signature
   selected member for cursor-info. Number-only indexability is still useful for keyed access and iteration, but a

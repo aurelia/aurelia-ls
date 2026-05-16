@@ -16,6 +16,23 @@ fixtures are the app-pressure canary for project-tooling expected effects and th
 `pnpm --filter @aurelia-ls/semantic-runtime fixtures:authoring` after changing recipe source plans. The refresh command
 replaces each `generated-*` folder before writing the current source plan, so removed recipe files cannot linger as
 false app-pressure evidence.
+Use `pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api` for the checkpoint-friendly compact fixture flywheel
+view before opening summary/raw pressure detail.
+Supplying `SEMANTIC_RUNTIME_PRESSURE_ROOTS=packages/semantic-runtime/fixtures/authoring` expands to the same durable
+fixture children as the default broad sweep (`generated-*` plus `storefront`), so fixture-lane rows stay comparable
+between targeted and full pressure runs. Combining a collection root with an explicit child root is de-duplicated.
+When the broad sweep reports `project-tooling` failures, read the
+`authoring.applicable-project-tooling-fixture-lane-outcomes` line before changing recipes: generated fixtures should
+satisfy package/typecheck rows, while stress fixtures may intentionally omit local project tooling.
+Compact `authoring.applicable-*` rows describe the recipe lane that is actually in play for the fixture. Compact
+`authoring.all-candidate-*` rows are contrastive: they include recipes that are not applicable to the current fixture
+and should not be read as active pressure by themselves.
+When the next question is which fixture owns a semantic gap, read the fixture-owner cross-tabs such as
+`bindings.data-flow-assignment-reason-fixtures`, `templates.missing-input-fixtures`, and
+`open-seams.reason-fixtures`; they use public fixture folder keys and collapse external/custom roots. For exact
+framework diagnostic work, prefer the error-code fixture rows such as `templates.diagnostic-error-code-fixtures`,
+`app.diagnostic-error-code-fixtures`, `bindings.data-flow-error-code-fixtures`, and
+`router.error-code-fixtures`.
 
 Add fixtures only when the semantic runtime can analyze the idiomatic shape without falling back to inline `static $au`
 templates for convenience.
@@ -28,25 +45,26 @@ templates for convenience.
   the original hand-authored minimal app shape.
 - `generated-state-backed-form` is the first generated-intent fixture shape for the authoring API. It mirrors the
   `buildStateBackedFormPlan(...)` recipe: a root component composes a DI-owned state class and a form component that
-  receives only a scalar ID, then exposes state through getters/setters, native form bindings, a component-owned
-  stylesheet, and one state-driven class-token binding. Keep it small and boring; it is meant to prove the recipe/effect loop, not to absorb every analyzer edge case. The state-backed form
+  receives only a scalar ID, then exposes state through getters/setters, native value bindings, checked/radio bindings,
+  select bindings, a component-owned stylesheet, and one state-driven class-token binding. Keep it small and boring; it is meant to prove the recipe/effect loop, not to absorb every analyzer edge case. The state-backed form
   smoke now also writes the recipe's own `AuthoringSourceEditPlan` into a temporary app and reopens that generated
   source, so this fixture is a durable example rather than the only materialization proof.
 - `generated-validated-state-backed-form` keeps the same DI state/component shape as the state-backed form and adds
   `ValidationHtmlConfiguration`, validation service resolution, source-authored rules, and `& validate` bindings. It
   mirrors `buildValidatedStateBackedFormPlan(...)`: validation is a distinct recipe signature, not something every
   generated form silently absorbs.
-- `generated-service-backed-form` extends the generated form lane with an injected service class between the form
-  component and DI-owned state. It mirrors `buildServiceBackedFormPlan(...)` and keeps the component dependency explicit
-  on the root custom element so recursive template compilation is proved through ordinary Aurelia resource visibility.
-  It carries the same component-owned root stylesheet and class-token style binding expectations as the simpler
-  generated form.
+- `generated-service-backed-form` extends the generated form lane with DI-owned state that uses an injected service for
+  loading/submission side effects. Components still resolve state and expose it through getters/setters; the service
+  boundary belongs to the state class instead of becoming the template-facing view-model API. It mirrors
+  `buildServiceBackedFormPlan(...)` and keeps the component dependency explicit on the root custom element so recursive
+  template compilation is proved through ordinary Aurelia resource visibility. It carries the same component-owned root
+  stylesheet, class-token style binding, checked/radio, and select binding expectations as the simpler generated form.
   Its smoke writes the recipe's own source plan into a temporary app before reopen verification.
 - `generated-routed-state-backed-form` extends that generated-intent lane through router configuration, a static route
   decorator with nested child `routes`, `au-viewport`, and a route-owned form component. It mirrors `buildRoutedStateBackedFormPlan(...)` while
   keeping router support honest: the recipe can verify current semantic effects, but router authoring remains partial
   until deeper viewport activation, guard, and route lifecycle semantics are modeled. The root stylesheet keeps
-  style-resource verification and class-token style binding inside the generated authoring loop. Its smoke now writes the routed
+  style-resource verification, class-token style binding, checked/radio, and select binding inside the generated authoring loop. Its smoke now writes the routed
   source plan into a temporary app, so the committed fixture remains a durable example rather than the only proof of the
   materialized source shape.
 - `external-template` is the first narrow authoring slice: a root custom element uses a default `.html` template import,
@@ -56,7 +74,8 @@ templates for convenience.
 - `storefront` is the first app-building pressure fixture: a small storefront shell with a product catalog service,
   DI-resolved composed state, model, nested custom elements, ID-based component boundaries, component dependencies,
   `repeat.for`, `if.bind`/`with.bind` type handoff, promise pending/then/catch flow, checkout form controls, and
-  external templates. It also pressures renderer-created runtime child containers through nested custom elements and
+  external templates. It carries a local package manifest, TypeScript config, and asset declarations so the hand-authored
+  recommendable fixture lane has the same package/typecheck baseline as generated recipe fixtures. It also pressures renderer-created runtime child containers through nested custom elements and
   template controllers, binding bind-time target accessor/observer materialization for native form controls, and
   source/target binding data-flow rows for two-way form state. The checkout form also pressures observer value channels
   with a static

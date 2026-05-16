@@ -302,6 +302,7 @@ export type RouteRecognizerField =
   | 'residue'
   | 'parameterCount'
   | 'redirectDepth'
+  | 'redirectSourceRouteConfig'
   | 'viewportInstruction'
   | 'viewportInstructionTree'
   | 'issueKind'
@@ -961,6 +962,7 @@ export class RecognizedRouteModel {
     readonly residue: string | null,
     readonly parameterCount: number,
     readonly redirectDepth: number,
+    readonly redirectSourceRouteConfig: RouteConfigReference | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RouteRecognizerField>[] = [],
   ) {}

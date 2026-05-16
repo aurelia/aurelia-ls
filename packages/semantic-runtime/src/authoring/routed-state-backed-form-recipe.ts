@@ -6,17 +6,9 @@ import {
 } from '../application/index.js';
 import {
   AddRouteOperation,
-  AddTemplateBindingOperation,
   ConfigurePluginOperation,
   CreateComponentOperation,
-  CreateEntrypointOperation,
-  CreateExternalTemplateOperation,
-  CreateFormComponentOperation,
-  CreateProjectFilesOperation,
-  CreateRootComponentOperation,
-  CreateStyleAssetOperation,
   CreateStateModelOperation,
-  VerifyAppOperation,
 } from './operation.js';
 import {
   AuthoringIntent,
@@ -28,19 +20,26 @@ import {
   ExpectedSemanticEffect,
   ExpectedSemanticEffectFilter,
 } from './expected-effect.js';
+import {
+  routeProductDiscriminatorEffect,
+  routeProductSignatureEffect,
+} from './route-expected-effects.js';
 import { AuthoringPreference } from './ontology.js';
 import {
-  classTokenStyleTasteEffect,
-  componentStylesheetCapabilityEffect,
-  componentStylesheetEffect,
-  componentStylesheetTasteEffect,
-  nativeFormValueTasteEffects,
-  nativeValueChannelEffect,
-  nativeValueDataFlowEffect,
-  nativeValueTargetAccessEffect,
-} from './form-expected-effects.js';
+  standardFormAppExpectedEffects,
+  standardFormTemplateBindingExpectedEffects,
+} from './form-recipe-expected-effects.js';
+import {
+  componentStyleAssetPlanStep,
+  entrypointPlanStep,
+  externalTemplatePlanStep,
+  formComponentPlanStep,
+  projectFilesPlanStep,
+  rootComponentPlanStep,
+  templateBindingPlanStep,
+  verifyAppPlanStep,
+} from './form-recipe-plan-steps.js';
 import { routedStateBackedFormSourcePlan } from './routed-state-backed-form-source-plan.js';
-import { projectToolingExpectedEffects } from './project-tooling-expected-effects.js';
 
 export interface RoutedStateBackedFormRecipeRequest {
   /** Project root that the authored app should occupy. */
@@ -110,6 +109,8 @@ export function buildRoutedStateBackedFormPlan(request: RoutedStateBackedFormRec
         new AuthoringPreference('style-resource-ownership', 'component-stylesheet'),
         new AuthoringPreference('style-binding-model', 'class-token-binding'),
         new AuthoringPreference('form-value-channel', 'native-control-value-binding'),
+        new AuthoringPreference('form-value-channel', 'checked-model-binding'),
+        new AuthoringPreference('form-value-channel', 'select-model-binding'),
         new AuthoringPreference('build-tool-profile', 'host-selected-build-tool'),
       ],
     ),
@@ -157,26 +158,22 @@ function routedStateBackedFormPlanSteps(
   topology: ApplicationTopology,
 ): readonly AuthoringPlanStep[] {
   return [
-    new AuthoringPlanStep(
-      new CreateProjectFilesOperation([
-        model.entrypointPath,
-        model.rootComponentPath,
-        model.rootTemplatePath,
-        model.rootStylePath,
-        model.statePath,
-        model.routeComponentPath,
-        model.routeTemplatePath,
-        model.formComponentPath,
-        model.formTemplatePath,
-      ]),
-      [
-        ExpectedSemanticEffect.fact('Project should reopen as an Aurelia app.', 'project-shape'),
-      ],
-    ),
+    projectFilesPlanStep([
+      model.entrypointPath,
+      model.rootComponentPath,
+      model.rootTemplatePath,
+      model.rootStylePath,
+      model.statePath,
+      model.routeComponentPath,
+      model.routeTemplatePath,
+      model.formComponentPath,
+      model.formTemplatePath,
+    ]),
     new AuthoringPlanStep(
       new ConfigurePluginOperation('RouterConfiguration', '@aurelia/router'),
       [
         ExpectedSemanticEffect.discriminatorFact('Router should expose route facts after reopen.', 'route', 'route', 'router'),
+        routeProductSignatureEffect('Router options should be visible after RouterConfiguration is registered.', 'router-options'),
       ],
     ),
     new AuthoringPlanStep(
@@ -186,36 +183,15 @@ function routedStateBackedFormPlanSteps(
         ExpectedSemanticEffect.signatureTaste('Authoring orientation should recognize DI-owned state.', 'state-ownership', 'di-owned-state-class', 'state-model'),
       ],
     ),
-    new AuthoringPlanStep(
-      new CreateEntrypointOperation(model.entrypointPath, model.rootComponentClassName),
-      [
-        ExpectedSemanticEffect.fact('App root should be visible after reopen.', 'app-root', 'app', 'entrypoint'),
-      ],
-    ),
-    new AuthoringPlanStep(
-      new CreateRootComponentOperation(model.rootComponentPath, model.rootComponentClassName, model.rootElementName),
-      [
-        ExpectedSemanticEffect.fact('Root component should be a custom element.', 'component', 'resource', 'app-root'),
-      ],
-    ),
-    new AuthoringPlanStep(
-      new CreateStyleAssetOperation(model.rootStylePath, 'component'),
-      [
-        componentStylesheetEffect('Root component stylesheet should be visible as a style resource.'),
-        componentStylesheetCapabilityEffect('Authoring orientation should expose style asset authoring.'),
-        componentStylesheetTasteEffect('Authoring orientation should recognize component stylesheet ownership.'),
-      ],
-    ),
-    new AuthoringPlanStep(
-      new CreateExternalTemplateOperation(model.rootTemplatePath, model.rootComponentClassName),
-      [
-        ExpectedSemanticEffect.fact('Root component should use an external template.', 'external-template', 'template', 'template'),
-      ],
-    ),
+    entrypointPlanStep(model.entrypointPath, model.rootComponentClassName),
+    rootComponentPlanStep(model.rootComponentPath, model.rootComponentClassName, model.rootElementName),
+    componentStyleAssetPlanStep(model.rootStylePath),
+    externalTemplatePlanStep(model.rootTemplatePath, model.rootComponentClassName, 'Root component'),
     new AuthoringPlanStep(
       new AddRouteOperation(model.routePath, model.routeComponentClassName),
       [
         ExpectedSemanticEffect.discriminatorFact('Route config should be visible.', 'route', 'route', 'route'),
+        routeProductDiscriminatorEffect('Route config should be visible as a source-backed router product.', 'route-config'),
         ExpectedSemanticEffect.signatureFact('Route config should close as an authored decorator object.', 'route', 'route', 'route', 'present', null, [
           new ExpectedSemanticEffectFilter('originKind', 'route-decorator'),
           new ExpectedSemanticEffectFilter('valueKind', 'object-literal'),
@@ -236,40 +212,15 @@ function routedStateBackedFormPlanSteps(
         ExpectedSemanticEffect.fact('Route component should be a custom element.', 'component', 'resource', 'route'),
       ],
     ),
-    new AuthoringPlanStep(
-      new CreateExternalTemplateOperation(model.routeTemplatePath, model.routeComponentClassName),
-      [
-        ExpectedSemanticEffect.fact('Route component should use an external template.', 'external-template', 'template', 'template'),
-      ],
+    externalTemplatePlanStep(model.routeTemplatePath, model.routeComponentClassName, 'Route component'),
+    formComponentPlanStep(model.formComponentPath, model.formComponentClassName, model.formElementName),
+    externalTemplatePlanStep(model.formTemplatePath, model.formComponentClassName, 'Form component'),
+    templateBindingPlanStep(
+      model.formTemplatePath,
+      'route-owned form composition, native value binding, checked/model binding, select model binding, and submit trigger',
+      standardFormTemplateBindingExpectedEffects(),
     ),
-    new AuthoringPlanStep(
-      new CreateFormComponentOperation(model.formComponentPath, model.formComponentClassName, model.formElementName),
-      [
-        ExpectedSemanticEffect.fact('Form component should be a custom element.', 'component', 'resource', 'component'),
-      ],
-    ),
-    new AuthoringPlanStep(
-      new CreateExternalTemplateOperation(model.formTemplatePath, model.formComponentClassName),
-      [
-        ExpectedSemanticEffect.fact('Form component should use an external template.', 'external-template', 'template', 'template'),
-      ],
-    ),
-    new AuthoringPlanStep(
-      new AddTemplateBindingOperation(
-        model.formTemplatePath,
-        'route-owned form composition, native value binding, checked/model binding, and submit trigger',
-      ),
-      [
-        nativeValueTargetAccessEffect('Form should expose target access for native value bindings.'),
-        nativeValueChannelEffect('Form should expose observer-backed value channels for native value bindings.'),
-        nativeValueDataFlowEffect('Form should expose TypeChecker-backed data flow for native value bindings.'),
-        classTokenStyleTasteEffect('Authoring orientation should recognize class-token style binding.'),
-      ],
-    ),
-    new AuthoringPlanStep(
-      new VerifyAppOperation(topology),
-      routedStateBackedFormExpectedEffects(),
-    ),
+    verifyAppPlanStep(topology, routedStateBackedFormExpectedEffects()),
   ];
 }
 
@@ -374,28 +325,31 @@ function addRoutedFormEntrypoint(
 
 function routedStateBackedFormExpectedEffects(): readonly ExpectedSemanticEffect[] {
   return [
-    ExpectedSemanticEffect.fact('Routed form app reopens as an Aurelia project.', 'project-shape'),
-    ...projectToolingExpectedEffects('Routed form app'),
-    ExpectedSemanticEffect.fact('Routed form app has an app root.', 'app-root'),
-    ExpectedSemanticEffect.atLeast('Routed form app has root, route, and form custom elements.', 'component', 'resource', 3, 'component'),
-    ExpectedSemanticEffect.fact('Routed form app has an app-root component role.', 'component-role', 'resource', 'app-root', 'present', null, [
-      new ExpectedSemanticEffectFilter('roleKind', 'app-root'),
-    ]),
+    ...standardFormAppExpectedEffects({
+      summaryPrefix: 'Routed form app',
+      componentCount: 3,
+      componentCountSummary: 'root, route, and form custom elements',
+      externalTemplateCount: 3,
+      compiledTemplateCount: 3,
+    }),
     ExpectedSemanticEffect.discriminatorFact('Routed form app has a routed-component role.', 'component-role', 'route', 'route', 'present', null, [
       new ExpectedSemanticEffectFilter('roleKind', 'routed-component'),
     ]),
-    ExpectedSemanticEffect.fact('Routed form app has a component-composition host role.', 'component-role', 'resource', 'component', 'present', null, [
-      new ExpectedSemanticEffectFilter('roleKind', 'component-composition-host'),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Routed form app has a data-entry component role.', 'component-role', 'template', 'template-binding', 'present', null, [
-      new ExpectedSemanticEffectFilter('roleKind', 'data-entry-surface'),
-    ]),
-    ExpectedSemanticEffect.atLeast('Routed form app has external templates.', 'external-template', 'template', 3, 'template'),
-    componentStylesheetEffect('Routed form app has a component stylesheet.'),
-    componentStylesheetCapabilityEffect('Routed form app exposes verifiable style asset authoring.'),
-    ExpectedSemanticEffect.atLeast('Routed form app has compiled template facts.', 'template-compilation', 'template', 3, 'template'),
-    ExpectedSemanticEffect.fact('Routed form app has runtime controller facts.', 'runtime-controller', 'template', 'component'),
     ExpectedSemanticEffect.discriminatorFact('Routed form app has route/router topology facts.', 'route', 'route', 'route'),
+    routeProductDiscriminatorEffect('Routed form app has source-backed RouteConfig products.', 'route-config'),
+    routeProductSignatureEffect('Routed form app has RouteContext topology products.', 'route-context'),
+    routeProductSignatureEffect('Routed form app has au-viewport products.', 'router-viewport'),
+    routeProductSignatureEffect('Routed form app has ViewportAgent products.', 'viewport-agent'),
+    routeProductSignatureEffect('Routed form app has route-recognizer pattern products.', 'route-pattern'),
+    routeProductSignatureEffect('Routed form app has route-recognizer endpoint products.', 'route-endpoint'),
+    routeProductSignatureEffect('Routed form app has route-recognizer state products.', 'route-recognizer-state'),
+    routeProductSignatureEffect('Routed form app has TypedNavigationInstruction products.', 'typed-navigation-instruction'),
+    routeProductSignatureEffect('Routed form app has ViewportInstruction products.', 'viewport-instruction'),
+    routeProductSignatureEffect('Routed form app has ViewportInstructionTree products.', 'viewport-instruction-tree'),
+    routeProductSignatureEffect('Routed form app has RecognizedRoute products.', 'recognized-route'),
+    routeProductSignatureEffect('Routed form app has RouteTree products.', 'route-tree'),
+    routeProductSignatureEffect('Routed form app has RouteNode products.', 'route-node'),
+    routeProductSignatureEffect('Routed form app has ComponentAgent handoff products.', 'component-agent'),
     ExpectedSemanticEffect.signatureFact('Routed form app has a decorator object route config.', 'route', 'route', 'route', 'present', null, [
       new ExpectedSemanticEffectFilter('originKind', 'route-decorator'),
       new ExpectedSemanticEffectFilter('valueKind', 'object-literal'),
@@ -404,22 +358,10 @@ function routedStateBackedFormExpectedEffects(): readonly ExpectedSemanticEffect
       new ExpectedSemanticEffectFilter('originKind', 'child-routes-property'),
       new ExpectedSemanticEffectFilter('valueKind', 'object-literal'),
     ]),
-    nativeValueTargetAccessEffect('Routed form app has native value binding target access.'),
-    nativeValueChannelEffect('Routed form app has native value binding channels.'),
-    nativeValueDataFlowEffect('Routed form app has native value binding data flows.'),
-    ExpectedSemanticEffect.absent('Routed form app has no open semantic seams.', 'open-seam-closure'),
     ExpectedSemanticEffect.discriminatorCapability('Routed form app exposes at least partial router authoring.', 'router', 'partial'),
-    ExpectedSemanticEffect.capability('Routed form app exposes verifiable template composition.', 'template-composition', 'verifiable'),
     ExpectedSemanticEffect.discriminatorTaste('Routed form app reports static route config.', 'navigation-ownership', 'static-route-config', 'route'),
     ExpectedSemanticEffect.signatureTaste('Routed form app reports decorator route config.', 'navigation-ownership', 'decorator-route-config', 'route'),
     ExpectedSemanticEffect.signatureTaste('Routed form app reports child routes property config.', 'navigation-ownership', 'child-routes-property-route-config', 'route'),
     ExpectedSemanticEffect.signatureTaste('Routed form app reports viewport layout navigation.', 'navigation-ownership', 'viewport-layout-navigation', 'route'),
-    ExpectedSemanticEffect.signatureTaste('Routed form app reports DI-owned state taste.', 'state-ownership', 'di-owned-state-class', 'state-model'),
-    componentStylesheetTasteEffect('Routed form app reports component stylesheet taste.'),
-    classTokenStyleTasteEffect('Routed form app reports class-token style binding taste.'),
-    ...nativeFormValueTasteEffects(
-      'Routed form app reports native form value binding taste.',
-      'Routed form app reports select model binding taste.',
-    ),
   ];
 }

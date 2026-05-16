@@ -6,7 +6,10 @@ import type {
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import { auLink } from '../kernel/au-link.js';
-import { ResourceDefinitionKind } from './resource-kind.js';
+import {
+  AttributePatternDefinitionContributionKind,
+  ResourceDefinitionKind,
+} from './resource-kind.js';
 import type { ResourceTargetReference } from './resource-reference.js';
 
 export type AttributePatternDefinitionField =
@@ -21,12 +24,6 @@ export class AttributePatternDefinitionEntry {
     readonly addressHandle: AddressHandle | null = null,
     readonly provenanceHandle: ProvenanceHandle | null = null,
   ) {}
-}
-
-export const enum AttributePatternDefinitionContributionKind {
-  Header = 'header',
-  CreateCall = 'create-call',
-  Convention = 'convention',
 }
 
 // TODO(resource-convergence): AttributePattern is a registry factory in the framework, not a runtime definition class.

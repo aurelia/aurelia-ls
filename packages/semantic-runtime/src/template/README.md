@@ -38,6 +38,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   compiler worlds and compiler-visible custom element definitions, then runs compilation-unit materialization, HTML
   parsing, attribute syntax parsing, attribute classification, compiler-owned value-site selection, binding-command
   lowering, compiled-template handoff materialization, and the runtime-analysis phase.
+  The pass owns the shared `CheckerExpressionTypeWorld` for all resource runtime-analysis frames in that project
+  compilation, while each resource profile reports expression-cache deltas from a local marker. Keep future
+  runtime/checker lifetime work at this project-pass boundary instead of rebuilding an expression world per resource.
   App component compiler-world materialization and standalone authoring compiler-world materialization are separate
   profile phases (`component-compiler-world` and `authoring-compiler-world`) so broad app-root cost and LSP/resource
   library fallback cost remain distinguishable.
@@ -45,6 +48,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   TypeChecker epoch as app-root compiler worlds when it materializes built-in resources. Built-in template-controller
   and custom-attribute definitions then project framework target classes such as `If` and `Repeat` through the app's
   program instead of degrading to controller view-model targets with no type.
+  Runtime controller diagnostics that scan view-model class bodies should ask the type-system declaration-source bridge
+  for the checker declaration's already-admitted source-file address. They should not borrow the resource target span,
+  because imported/factory-backed targets can point at a different authored site than the class body being scanned.
 - `html-ir.ts` models authored HTML before Aurelia syntax interpretation. It preserves source addresses and recovery
   observations without performing resource lookup.
 - `html-parse-materializer.ts` is the HTML materialization boundary. It spends a template compilation unit into authored
@@ -88,7 +94,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   custom command bodies, unresolved commands, and invalid segment targets become explicit open seams rather than
   parser-owned special cases. Inline multi-binding is one secondary grammar for both custom attributes and template
   controllers; the value site is `MultiBindingValue`, while its `AttributeClassification` carries which resource owns
-  the bindables.
+  the bindables. Empty `.bind`, `.two-way`, and `.from-view` command values infer the source expression from the
+  authored target name before DOM target-property mapping; for example `minlength.bind` reads `minlength` while the
+  target access can still map to `minLength`.
 - `binding-command-lowering-publication.ts` owns the product envelopes for that lowering phase: source/provenance/open
   seams, ordinary command build/lowering products, multi-binding segment/syntax/lowering products, instruction identity
   publication, and the claims that connect command lowerings to produced instructions and expression parses. Keep

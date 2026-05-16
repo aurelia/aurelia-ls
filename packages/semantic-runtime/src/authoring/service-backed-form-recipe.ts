@@ -5,16 +5,8 @@ import {
   ApplicationTopologyBuilder,
 } from '../application/index.js';
 import {
-  AddTemplateBindingOperation,
-  CreateEntrypointOperation,
-  CreateExternalTemplateOperation,
-  CreateFormComponentOperation,
-  CreateProjectFilesOperation,
-  CreateRootComponentOperation,
   CreateServiceOperation,
-  CreateStyleAssetOperation,
   CreateStateModelOperation,
-  VerifyAppOperation,
 } from './operation.js';
 import {
   AuthoringIntent,
@@ -28,17 +20,20 @@ import {
 } from './expected-effect.js';
 import { AuthoringPreference } from './ontology.js';
 import {
-  classTokenStyleTasteEffect,
-  componentStylesheetCapabilityEffect,
-  componentStylesheetEffect,
-  componentStylesheetTasteEffect,
-  nativeFormValueTasteEffects,
-  nativeValueChannelEffect,
-  nativeValueDataFlowEffect,
-  nativeValueTargetAccessEffect,
-} from './form-expected-effects.js';
+  standardFormAppExpectedEffects,
+  standardFormTemplateBindingExpectedEffects,
+} from './form-recipe-expected-effects.js';
+import {
+  componentStyleAssetPlanStep,
+  entrypointPlanStep,
+  externalTemplatePlanStep,
+  formComponentPlanStep,
+  projectFilesPlanStep,
+  rootComponentPlanStep,
+  templateBindingPlanStep,
+  verifyAppPlanStep,
+} from './form-recipe-plan-steps.js';
 import { serviceBackedFormSourcePlan } from './service-backed-form-source-plan.js';
-import { projectToolingExpectedEffects } from './project-tooling-expected-effects.js';
 
 export interface ServiceBackedFormRecipeRequest {
   /** Project root that the authored app should occupy. */
@@ -86,7 +81,7 @@ export function buildServiceBackedFormPlan(request: ServiceBackedFormRecipeReque
 
   return new AuthoringPlan(
     new AuthoringIntent(
-      `Create ${model.appName} as a DI service-backed Aurelia form app.`,
+      `Create ${model.appName} as a DI state-owned Aurelia form app with a service-backed data boundary.`,
       topology,
       null,
       [
@@ -97,6 +92,8 @@ export function buildServiceBackedFormPlan(request: ServiceBackedFormRecipeReque
         new AuthoringPreference('style-resource-ownership', 'component-stylesheet'),
         new AuthoringPreference('style-binding-model', 'class-token-binding'),
         new AuthoringPreference('form-value-channel', 'native-control-value-binding'),
+        new AuthoringPreference('form-value-channel', 'checked-model-binding'),
+        new AuthoringPreference('form-value-channel', 'select-model-binding'),
         new AuthoringPreference('build-tool-profile', 'host-selected-build-tool'),
       ],
     ),
@@ -140,19 +137,16 @@ function serviceBackedFormPlanSteps(
   topology: ApplicationTopology,
 ): readonly AuthoringPlanStep[] {
   return [
-    new AuthoringPlanStep(
-      new CreateProjectFilesOperation([
-        model.entrypointPath,
-        model.rootComponentPath,
-        model.rootTemplatePath,
-        model.rootStylePath,
-        model.statePath,
-        model.servicePath,
-        model.formComponentPath,
-        model.formTemplatePath,
-      ]),
-      [ExpectedSemanticEffect.fact('Project should reopen as an Aurelia app.', 'project-shape')],
-    ),
+    projectFilesPlanStep([
+      model.entrypointPath,
+      model.rootComponentPath,
+      model.rootTemplatePath,
+      model.rootStylePath,
+      model.statePath,
+      model.servicePath,
+      model.formComponentPath,
+      model.formTemplatePath,
+    ]),
     new AuthoringPlanStep(
       new CreateStateModelOperation(model.statePath, model.stateClassName),
       [
@@ -171,50 +165,18 @@ function serviceBackedFormPlanSteps(
         ExpectedSemanticEffect.discriminatorTaste('Authoring orientation should recognize a DI-owned service layer.', 'state-ownership', 'di-owned-service-layer', 'service'),
       ],
     ),
-    new AuthoringPlanStep(
-      new CreateEntrypointOperation(model.entrypointPath, model.rootComponentClassName),
-      [ExpectedSemanticEffect.fact('App root should be visible after reopen.', 'app-root', 'app', 'entrypoint')],
+    entrypointPlanStep(model.entrypointPath, model.rootComponentClassName),
+    rootComponentPlanStep(model.rootComponentPath, model.rootComponentClassName, model.rootElementName),
+    componentStyleAssetPlanStep(model.rootStylePath),
+    externalTemplatePlanStep(model.rootTemplatePath, model.rootComponentClassName, 'Root component'),
+    formComponentPlanStep(model.formComponentPath, model.formComponentClassName, model.formElementName),
+    externalTemplatePlanStep(model.formTemplatePath, model.formComponentClassName, 'Form component'),
+    templateBindingPlanStep(
+      model.formTemplatePath,
+      'native value binding, checked/model binding, select model binding, and DI state/service handoff',
+      standardFormTemplateBindingExpectedEffects(),
     ),
-    new AuthoringPlanStep(
-      new CreateRootComponentOperation(model.rootComponentPath, model.rootComponentClassName, model.rootElementName),
-      [ExpectedSemanticEffect.fact('Root component should be a custom element.', 'component', 'resource', 'app-root')],
-    ),
-    new AuthoringPlanStep(
-      new CreateStyleAssetOperation(model.rootStylePath, 'component'),
-      [
-        componentStylesheetEffect('Root component stylesheet should be visible as a style resource.'),
-        componentStylesheetCapabilityEffect('Authoring orientation should expose style asset authoring.'),
-        componentStylesheetTasteEffect('Authoring orientation should recognize component stylesheet ownership.'),
-      ],
-    ),
-    new AuthoringPlanStep(
-      new CreateExternalTemplateOperation(model.rootTemplatePath, model.rootComponentClassName),
-      [ExpectedSemanticEffect.fact('Root component should use an external template.', 'external-template', 'template', 'template')],
-    ),
-    new AuthoringPlanStep(
-      new CreateFormComponentOperation(model.formComponentPath, model.formComponentClassName, model.formElementName),
-      [ExpectedSemanticEffect.fact('Form component should be a custom element.', 'component', 'resource', 'component')],
-    ),
-    new AuthoringPlanStep(
-      new CreateExternalTemplateOperation(model.formTemplatePath, model.formComponentClassName),
-      [ExpectedSemanticEffect.fact('Form component should use an external template.', 'external-template', 'template', 'template')],
-    ),
-    new AuthoringPlanStep(
-      new AddTemplateBindingOperation(
-        model.formTemplatePath,
-        'native value binding routed through an injected service layer',
-      ),
-      [
-        nativeValueTargetAccessEffect('Form should expose target access for native value bindings.'),
-        nativeValueChannelEffect('Form should expose observer-backed value channels for native value bindings.'),
-        nativeValueDataFlowEffect('Form should expose TypeChecker-backed data flow for native value bindings.'),
-        classTokenStyleTasteEffect('Authoring orientation should recognize class-token style binding.'),
-      ],
-    ),
-    new AuthoringPlanStep(
-      new VerifyAppOperation(topology),
-      serviceBackedFormExpectedEffects(),
-    ),
+    verifyAppPlanStep(topology, serviceBackedFormExpectedEffects()),
   ];
 }
 
@@ -301,84 +263,55 @@ function addServiceBackedFormEntrypoint(
 
 function serviceBackedFormExpectedEffects(): readonly ExpectedSemanticEffect[] {
   return [
-    ExpectedSemanticEffect.fact('Service-backed form app reopens as an Aurelia project.', 'project-shape'),
-    ...projectToolingExpectedEffects('Service-backed form app'),
-    ExpectedSemanticEffect.fact('Service-backed form app has an app root.', 'app-root'),
-    ExpectedSemanticEffect.atLeast('Service-backed form app has root and form custom elements.', 'component', 'resource', 2, 'component'),
+    ...standardFormAppExpectedEffects({
+      summaryPrefix: 'Service-backed form app',
+      componentCount: 2,
+      componentCountSummary: 'root and form custom elements',
+      externalTemplateCount: 2,
+      compiledTemplateCount: 2,
+    }),
     ExpectedSemanticEffect.signatureFact('Service-backed form app has a state service-class row.', 'service-class', 'di', 'state-model', 'present', null, [
       new ExpectedSemanticEffectFilter('role', 'state-source'),
     ]),
     ExpectedSemanticEffect.discriminatorFact('Service-backed form app has a service-layer service-class row.', 'service-class', 'di', 'service', 'present', null, [
       new ExpectedSemanticEffectFilter('role', 'service-source'),
     ]),
-    ExpectedSemanticEffect.signatureFact('Service-backed form component calls the injected service layer.', 'service-interaction', 'di', 'service', 'present', null, [
+    ExpectedSemanticEffect.signatureFact('Service-backed form component calls the DI-owned state layer.', 'service-interaction', 'di', 'state-model', 'present', null, [
       new ExpectedSemanticEffectFilter('consumerRole', 'component-source'),
-      new ExpectedSemanticEffectFilter('targetRole', 'service-source'),
-      new ExpectedSemanticEffectFilter('operationKind', 'call'),
-      new ExpectedSemanticEffectFilter('isSelfInteraction', false),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Service-backed service calls the DI-owned state layer.', 'service-interaction', 'di', 'state-model', 'present', null, [
-      new ExpectedSemanticEffectFilter('consumerRole', 'service-source'),
       new ExpectedSemanticEffectFilter('targetRole', 'state-source'),
       new ExpectedSemanticEffectFilter('operationKind', 'call'),
       new ExpectedSemanticEffectFilter('isSelfInteraction', false),
     ]),
-    ExpectedSemanticEffect.signatureFact('Service-backed form component reads service-layer projection properties.', 'service-interaction', 'di', 'service', 'present', null, [
-      new ExpectedSemanticEffectFilter('consumerRole', 'component-source'),
+    ExpectedSemanticEffect.discriminatorFact('DI-owned state calls the injected service boundary.', 'service-interaction', 'di', 'service', 'present', null, [
+      new ExpectedSemanticEffectFilter('consumerRole', 'state-source'),
       new ExpectedSemanticEffectFilter('targetRole', 'service-source'),
-      new ExpectedSemanticEffectFilter('operationKind', 'read'),
+      new ExpectedSemanticEffectFilter('operationKind', 'call'),
       new ExpectedSemanticEffectFilter('isSelfInteraction', false),
     ]),
-    ExpectedSemanticEffect.signatureFact('Service-backed service reads DI-owned state projection properties.', 'service-interaction', 'di', 'state-model', 'present', null, [
-      new ExpectedSemanticEffectFilter('consumerRole', 'service-source'),
+    ExpectedSemanticEffect.signatureFact('Service-backed form component reads state projection properties.', 'service-interaction', 'di', 'state-model', 'present', null, [
+      new ExpectedSemanticEffectFilter('consumerRole', 'component-source'),
       new ExpectedSemanticEffectFilter('targetRole', 'state-source'),
       new ExpectedSemanticEffectFilter('operationKind', 'read'),
       new ExpectedSemanticEffectFilter('isSelfInteraction', false),
     ]),
-    ExpectedSemanticEffect.signatureFact('Service-backed form input bindings hand off setter writes to the service layer.', 'service-interaction-binding', 'template', 'template-binding', 'present', null, [
+    ExpectedSemanticEffect.signatureFact('Service-backed form input bindings hand off setter writes to DI state.', 'service-interaction-binding', 'template', 'template-binding', 'present', null, [
       new ExpectedSemanticEffectFilter('bindingDirection', 'two-way'),
-      new ExpectedSemanticEffectFilter('interactionTargetRole', 'service-source'),
+      new ExpectedSemanticEffectFilter('interactionTargetRole', 'state-source'),
       new ExpectedSemanticEffectFilter('interactionOperationKind', 'call'),
       new ExpectedSemanticEffectFilter('interactionIsSelfInteraction', false),
     ]),
-    ExpectedSemanticEffect.signatureFact('Service-backed form template bindings read service projection properties.', 'service-interaction-binding', 'template', 'template-binding', 'present', null, [
-      new ExpectedSemanticEffectFilter('interactionTargetRole', 'service-source'),
+    ExpectedSemanticEffect.signatureFact('Service-backed form template bindings read DI state projection properties.', 'service-interaction-binding', 'template', 'template-binding', 'present', null, [
+      new ExpectedSemanticEffectFilter('interactionTargetRole', 'state-source'),
       new ExpectedSemanticEffectFilter('interactionOperationKind', 'read'),
       new ExpectedSemanticEffectFilter('interactionIsSelfInteraction', false),
     ]),
-    ExpectedSemanticEffect.signatureFact('Service-backed form interpolated member bindings hand off through the projection getter root.', 'service-interaction-binding', 'template', 'template-binding', 'present', null, [
+    ExpectedSemanticEffect.signatureFact('Service-backed form interpolated member bindings hand off through the state getter root.', 'service-interaction-binding', 'template', 'template-binding', 'present', null, [
       new ExpectedSemanticEffectFilter('bindingSourceKind', 'other'),
       new ExpectedSemanticEffectFilter('bindingTargetProperty', 'textContent'),
-      new ExpectedSemanticEffectFilter('interactionTargetRole', 'service-source'),
+      new ExpectedSemanticEffectFilter('interactionTargetRole', 'state-source'),
       new ExpectedSemanticEffectFilter('interactionOperationKind', 'read'),
       new ExpectedSemanticEffectFilter('interactionIsSelfInteraction', false),
     ]),
-    ExpectedSemanticEffect.fact('Service-backed form app has an app-root component role.', 'component-role', 'resource', 'app-root', 'present', null, [
-      new ExpectedSemanticEffectFilter('roleKind', 'app-root'),
-    ]),
-    ExpectedSemanticEffect.fact('Service-backed form app has a component-composition host role.', 'component-role', 'resource', 'component', 'present', null, [
-      new ExpectedSemanticEffectFilter('roleKind', 'component-composition-host'),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Service-backed form app has a data-entry component role.', 'component-role', 'template', 'template-binding', 'present', null, [
-      new ExpectedSemanticEffectFilter('roleKind', 'data-entry-surface'),
-    ]),
-    ExpectedSemanticEffect.atLeast('Service-backed form app has external templates.', 'external-template', 'template', 2, 'template'),
-    componentStylesheetEffect('Service-backed form app has a component stylesheet.'),
-    componentStylesheetCapabilityEffect('Service-backed form app exposes verifiable style asset authoring.'),
-    ExpectedSemanticEffect.atLeast('Service-backed form app has compiled template facts.', 'template-compilation', 'template', 2, 'template'),
-    ExpectedSemanticEffect.fact('Service-backed form app has runtime controller facts.', 'runtime-controller', 'template', 'component'),
-    nativeValueTargetAccessEffect('Service-backed form app has native value binding target access.'),
-    nativeValueChannelEffect('Service-backed form app has native value binding channels.'),
-    nativeValueDataFlowEffect('Service-backed form app has native value binding data flows.'),
-    ExpectedSemanticEffect.absent('Service-backed form app has no open semantic seams.', 'open-seam-closure'),
-    ExpectedSemanticEffect.capability('Service-backed form app exposes verifiable template composition.', 'template-composition', 'verifiable'),
-    ExpectedSemanticEffect.signatureTaste('Service-backed form app reports DI-owned state taste.', 'state-ownership', 'di-owned-state-class', 'state-model'),
     ExpectedSemanticEffect.discriminatorTaste('Service-backed form app reports a DI-owned service layer.', 'state-ownership', 'di-owned-service-layer', 'service'),
-    componentStylesheetTasteEffect('Service-backed form app reports component stylesheet taste.'),
-    classTokenStyleTasteEffect('Service-backed form app reports class-token style binding taste.'),
-    ...nativeFormValueTasteEffects(
-      'Service-backed form app reports native form value binding taste.',
-      'Service-backed form app reports select model binding taste.',
-    ),
   ];
 }

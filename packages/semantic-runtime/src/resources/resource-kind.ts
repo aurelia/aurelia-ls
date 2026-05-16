@@ -1,4 +1,15 @@
-import { AureliaResourceIdentityKind } from '../kernel/identity.js';
+export const enum ResourceCarrierKind {
+  /** Class decorator such as @customElement(...) or @valueConverter(...). */
+  Decorator = 'decorator',
+  /** Static class-side `$au` definition metadata. */
+  StaticAu = 'static-$au',
+  /** Imperative definition call such as CustomElement.define(...). */
+  DefineCall = 'define-call',
+  /** Syntax-resource factory call such as AttributePattern.create(...). */
+  AttributePatternCreate = 'attribute-pattern-create',
+  /** Name derived from a conventions layer known to be active. */
+  Convention = 'convention',
+}
 
 export const enum ResourceDefinitionKind {
   CustomElement = 'custom-element',
@@ -22,22 +33,58 @@ export type SyntaxResourceDefinitionKind =
   | ResourceDefinitionKind.BindingCommand
   | ResourceDefinitionKind.AttributePattern;
 
-export function toAureliaResourceIdentityKind(
-  kind: NamedResourceDefinitionKind,
-): AureliaResourceIdentityKind {
-  switch (kind) {
-    case ResourceDefinitionKind.CustomElement:
-      return AureliaResourceIdentityKind.CustomElement;
-    case ResourceDefinitionKind.CustomAttribute:
-      return AureliaResourceIdentityKind.CustomAttribute;
-    case ResourceDefinitionKind.TemplateController:
-      return AureliaResourceIdentityKind.TemplateController;
-    case ResourceDefinitionKind.ValueConverter:
-      return AureliaResourceIdentityKind.ValueConverter;
-    case ResourceDefinitionKind.BindingBehavior:
-      return AureliaResourceIdentityKind.BindingBehavior;
-    case ResourceDefinitionKind.BindingCommand:
-      return AureliaResourceIdentityKind.BindingCommand;
+export const enum NamedResourceDefinitionContributionKind {
+  Header = 'header',
+  DefinitionObject = 'definition-object',
+  TypeStaticProperty = 'type-static-property',
+  Annotation = 'annotation',
+  Convention = 'convention',
+}
+
+export const enum ResourceMetadataContributionKind {
+  BindableMetadata = 'bindable-metadata',
+  WatchMetadata = 'watch-metadata',
+}
+
+export type ComponentResourceDefinitionContributionKind =
+  | NamedResourceDefinitionContributionKind
+  | ResourceMetadataContributionKind;
+
+export const enum AttributePatternDefinitionContributionKind {
+  Header = 'header',
+  CreateCall = 'create-call',
+  Convention = 'convention',
+}
+
+export function namedResourceContributionKindForCarrier(
+  carrierKind: ResourceCarrierKind,
+): NamedResourceDefinitionContributionKind {
+  switch (carrierKind) {
+    case ResourceCarrierKind.Decorator:
+      return NamedResourceDefinitionContributionKind.Annotation;
+    case ResourceCarrierKind.StaticAu:
+      return NamedResourceDefinitionContributionKind.TypeStaticProperty;
+    case ResourceCarrierKind.DefineCall:
+      return NamedResourceDefinitionContributionKind.DefinitionObject;
+    case ResourceCarrierKind.AttributePatternCreate:
+      return NamedResourceDefinitionContributionKind.Header;
+    case ResourceCarrierKind.Convention:
+      return NamedResourceDefinitionContributionKind.Convention;
+  }
+}
+
+export function attributePatternContributionKindForCarrier(
+  carrierKind: ResourceCarrierKind,
+): AttributePatternDefinitionContributionKind {
+  switch (carrierKind) {
+    case ResourceCarrierKind.AttributePatternCreate:
+      return AttributePatternDefinitionContributionKind.CreateCall;
+    case ResourceCarrierKind.Convention:
+      return AttributePatternDefinitionContributionKind.Convention;
+    case ResourceCarrierKind.Decorator:
+    case ResourceCarrierKind.StaticAu:
+    case ResourceCarrierKind.DefineCall:
+      return AttributePatternDefinitionContributionKind.Header;
   }
 }
 

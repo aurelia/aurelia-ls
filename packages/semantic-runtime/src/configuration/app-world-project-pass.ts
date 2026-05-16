@@ -52,6 +52,9 @@ import {
   type ConfigurationRecognitionProjectResult,
 } from './configuration-recognition-project-pass.js';
 import {
+  ConfigurationOptionShapeIssueMaterializer,
+} from './configuration-option-shape-issues.js';
+import {
   RouteConfigRecognitionProjectPass,
   type RouteConfigRecognitionProjectResult,
 } from '../router/route-config-recognition.js';
@@ -157,6 +160,7 @@ export type AureliaAppWorldProjectPhaseName =
   | 'scope-api-issues'
   | 'route-config-recognition'
   | 'configuration-recognition'
+  | 'configuration-option-shape-issues'
   | 'router-options-materialization'
   | 'route-context-materialization'
   | 'route-recognizer-materialization'
@@ -299,6 +303,7 @@ class AureliaAppWorldProjectConstructionFrame {
     this.materializeScopeApiIssues(typeSystem);
     const routes = this.recognizeRouteConfigs(evaluation, resourceIndex);
     const configuration = this.recognizeConfiguration(evaluation, typeSystem, resourceIndex);
+    this.materializeConfigurationOptionShapeIssues(configuration);
     const routerOptions = this.materializeRouterOptions(configuration);
     const routeContexts = this.materializeRouteContexts(routes, routerOptions, configuration);
     const routeRecognizer = this.materializeRouteRecognizer(routeContexts);
@@ -308,7 +313,7 @@ class AureliaAppWorldProjectConstructionFrame {
     const fetchClient = this.materializeFetchClientSourceIssues(typeSystem);
     const dialog = this.materializeDialogSourceIssues(typeSystem);
     const appWorld = this.composeAppWorld(configuration, resourceIndex, typeSystem);
-    const templates = this.compileTemplates(appWorld, typeSystem, resourceIndex, routeContexts);
+    const templates = this.compileTemplates(evaluation, appWorld, typeSystem, resourceIndex, routeContexts);
     const state = this.materializeStateStoreLookupIssues(stateBase, templates, typeSystem);
     const routeRuntimeTopology = this.materializeRouteRuntimeTopology(routeContexts, templates);
     const routeInstructions = this.materializeRouteInstructions(
@@ -519,6 +524,14 @@ class AureliaAppWorldProjectConstructionFrame {
     );
   }
 
+  private materializeConfigurationOptionShapeIssues(
+    configuration: ConfigurationRecognitionProjectResult,
+  ): void {
+    this.measure('configuration-option-shape-issues', () =>
+      new ConfigurationOptionShapeIssueMaterializer(this.store).materializeAndEmit(configuration)
+    );
+  }
+
   private materializeI18nTranslationCatalog(
     configuration: ConfigurationRecognitionProjectResult,
   ): I18nTranslationCatalogProjectResult {
@@ -631,6 +644,7 @@ class AureliaAppWorldProjectConstructionFrame {
   }
 
   private compileTemplates(
+    evaluation: StaticProjectEvaluationResult,
     appWorld: AureliaAppWorldEmission,
     typeSystem: TypeSystemProject,
     resourceIndex: ResourceDefinitionIndex,
@@ -644,6 +658,7 @@ class AureliaAppWorldProjectConstructionFrame {
         routeContexts,
         {
           runtimeAnalysisDepth: this.analysisDepth,
+          evaluation,
           includeAuthoringTemplates: this.includeAuthoringTemplates,
           authoringTemplateSourceFiles: this.authoringTemplateSourceFiles,
           authoringTemplateLimit: this.authoringTemplateLimit,

@@ -14,20 +14,48 @@
       "rationale": "This class carries the static TypeScript side of expression evaluation. Its size is not automatically bad, but future work should inspect whether new expression, binding, or control-flow behavior belongs here, in synthesis helpers, or in a narrower speculative evaluation context.",
       "guidance": [
         "Inspect expression-type-evaluator before adding a second local TypeChecker expression evaluator.",
+        "Use CheckerExpressionTypeSupport for shared checker-carrier lookup, global lookup, primitive projection, and project/open/resolve/union primitives when adding evaluator-adjacent projectors; do not create local result factories or checker lookup loops beside the evaluator.",
         "Use CheckerExpressionMemberOwnerProjector for cursor offset/member-owner projection; do not regrow offset walks inside completion or diagnostic answer code.",
+        "Use CheckerExpressionArgumentContextProjector for the AST-call-form handoff from cursor argument position to TypeChecker contextual argument type; keep signature policy in CheckerExpressionCallProjector and runtime-shaped callee evaluation in CheckerExpressionTypeEvaluator.",
+        "Use CheckerExpressionContextualTypeProjector for contextual target descent into arrow scopes, array literal elements, and object literal properties; evaluator execution and member-owner cursor descent should share it instead of keeping local contextual helpers.",
+        "Use CheckerExpressionAccessProjector for expression-level AccessMember, AccessKeyed, and CallMember callee policy; keep nullish member/keyed reads, finite keyed access, index-signature fallback, and member-on-type result projection out of completion or diagnostic-local helpers.",
+        "Use CheckerExpressionScopeProjector for runtime Scope lookup projection: $this, ancestor lookup, AccessBoundary, AccessScope, $host, slot lookup, open-subject selection, and global reads should not be reimplemented inside completion, diagnostics, or another evaluator.",
+        "Use CheckerExpressionIterableProjector for repeat/iterator source evaluation, RepeatableHandlerResolver compatibility, map-entry tuple synthesis, and binding-pattern local projection; do not duplicate repeat-local TypeChecker projection in template-controller scope or diagnostics.",
+        "Use CheckerExpressionResourceProjector for value-converter and binding-behavior expression semantics; keep compiler resource-scope lookup, converter target hydration, toView call projection, and duplicate behavior checks out of the evaluator switch and completion-local helpers.",
         "If a feature needs lifecycle or template-control-flow context, enter through CheckerExpressionTypeWorld and look for a layered speculative context rather than duplicating global evaluator setup.",
+        "Before inventing a new speculative context object, inspect CheckerExpressionBranchScopeProjector and speculativeBindingScopeOverlay; truthy/falsy/nullish/short-circuit narrowing already has an uncommitted BindingScope overlay path.",
         "Use the evaluator runtime context for framework evaluation modes such as connectable source-to-target dependency collection and proven IAstEvaluator.strict state; do not fork a second evaluator just to distinguish binding observation from listener/event evaluation.",
+        "CheckerExpressionTypeEvaluationCache is now salted by BindingScope, TemplateResourceScope, expression kind/span or source address, runtime mode, and contextual type inside CheckerExpressionTypeEvaluator. Caller local keys should describe semantic role and projection ownership, not carry hidden correctness obligations for cache isolation.",
+        "TemplateCompilationProjectPass shares one CheckerExpressionTypeWorld across resource runtime-analysis frames in a project compilation; per-resource profiles use cache-marker deltas so pressure output does not double-count the shared cache.",
         "Optional and non-strict nullish member/keyed/call reads should project undefined through the evaluator. Unknown strictness should remain open so diagnostics do not claim framework runtime codes prematurely.",
+        "Keyed access must check definitely-nullish owners before literal-key member projection; otherwise `foo?.['bar']` and strict nullish keyed reads degrade into missing-member pressure instead of runtime-shaped nullish semantics.",
+        "`fixtures/pressure/dynamic-keyed-validation` keeps finite repeat-local keyed writes and nested keyed writes covered through validation-html bindings; treat future failures there as expression/binding-flow pressure before weakening validation semantics.",
+        "`fixtures/pressure/contextual-call-argument-completion` keeps cursor owner typing covered inside callback arguments for view-model method calls, TypeChecker-visible collection methods, object literal options, array literal elements, and conditional callback branches. If that fixture regresses, inspect CheckerExpressionCallProjector's contextual argument query plus CheckerExpressionTypeEvaluator/CheckerExpressionMemberOwnerProjector contextual descent before adding completion-local callback logic.",
+        "Contextual target types should descend through array literal elements, object literal property values, and conditional branches in both ordinary expression evaluation and cursor member-owner projection.",
+        "Handleless related checker references are not terminal. If indexed or member access reaches a reference without a product handle, fall through to the retained TypeChecker carrier and materialize the value shape through checker-type-shape-access.",
+        "Tagged templates spend the same call projector as ordinary calls, but their runtime arity includes the synthesized cooked-string argument. Materialize that TemplateStringsArray-like argument in CheckerExpressionTypeEvaluator so CheckerExpressionCallProjector can stay an ordinary call/construct signature projector.",
         "Template completion and file/app diagnostic probes should receive or create a CheckerExpressionTypeWorld; keep TemplateCompletionQuery product-handle-shaped and pass hot evaluator lifetime through cursor-context construction.",
-        "Use this pressure as a prompt to check whether Atlas can reveal the flow clearly before splitting."
+        "Use SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS with absolute or workspace-relative roots when cursor pressure should target one fixture, a fixture collection root, or a clean-room checkout. Treat a non-Aurelia result from a known fixture as root-resolution pressure before inferring semantic-runtime shape policy drift.",
+        "Use SEMANTIC_RUNTIME_CURSOR_PRESSURE_OUTPUT=aggregate when sampling fixture collections. Diagnostic-probe loci must remain scoped to the compiled resource's own source spans before direct/public API comparison; otherwise same-file multi-template diagnostics can masquerade as template-resource selection failures.",
+        "Cursor-info should surface template compiler diagnostics even when the cursor site is not a completion site. Unknown completion sites inside recovery/error spans are acceptable only when the LSP envelope still carries exact framework-code diagnostics and syntax-rewrite suggestions.",
+        "Cursor pressure completion classes may be diagnostic-backed while the answer still carries missing inputs. Inspect the separate missing-input counters before treating a diagnostic-backed partial as resolved substrate work or as an unexplained autocomplete gap.",
+        "Use `framework:corpus -- --projection=fixture-seeds --concept=expression --seedUse=behavior-grounding --detail` when TypeChecker expression work needs grounded fixture pressure from docs/tests instead of generic binding examples.",
+        "Use this pressure as a prompt to check whether Atlas can reveal the flow clearly before splitting.",
+        "Cursor-info currently proves contextual callback owner identity but may surface the template expression as the compact owner-type source; before changing answer formatting, inspect whether the product should carry both expression locus and TypeChecker declaration locus explicitly."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/expression-type-evaluator.ts",
           "symbolName": "CheckerExpressionTypeEvaluator",
-          "line": 98,
+          "line": 94,
           "summary": "Current large TypeChecker-backed expression evaluator."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-type-support.ts",
+          "symbolName": "CheckerExpressionTypeSupport",
+          "summary": "Shared checker-carrier, global, primitive, result, and projection support for expression evaluator-adjacent projectors."
         },
         {
           "kind": "source",
@@ -38,9 +66,69 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-argument-context-projector.ts",
+          "symbolName": "CheckerExpressionArgumentContextProjector",
+          "summary": "AST-call-form handoff from cursor argument positions to contextual argument types."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-contextual-type-projector.ts",
+          "symbolName": "CheckerExpressionContextualTypeProjector",
+          "summary": "Contextual target descent for arrow scopes, array literal elements, and object literal properties."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/expression-type-world.ts",
           "symbolName": "CheckerExpressionTypeWorld",
           "summary": "Pass-local owner for evaluator/cache lifetime."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-type-evaluation.ts",
+          "symbolName": "CheckerExpressionTypeEvaluationCache",
+          "summary": "World-shared cache that receives evaluator-owned scope/resource/context salts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-branch-scope.ts",
+          "symbolName": "CheckerExpressionBranchScopeProjector",
+          "summary": "Branch-local truthy/falsy/nullish and short-circuit speculative scope projection."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/speculative-binding-scope.ts",
+          "symbolName": "speculativeBindingScopeOverlay",
+          "summary": "Uncommitted same-level BindingScope overlay primitive for TypeChecker speculation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-call-projector.ts",
+          "symbolName": "CheckerExpressionCallProjector",
+          "summary": "TypeChecker call/construct signature projection and contextual argument typing."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-access-projector.ts",
+          "symbolName": "CheckerExpressionAccessProjector",
+          "summary": "Expression-level member/keyed access policy above CheckerTypeShapeAccess."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-scope-projector.ts",
+          "symbolName": "CheckerExpressionScopeProjector",
+          "summary": "Expression-level runtime Scope lookup and context/slot/global projection."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-iterable-projector.ts",
+          "symbolName": "CheckerExpressionIterableProjector",
+          "summary": "Expression-level repeat/iterator projection above CheckerTypeShapeAccess and binding-pattern locals."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-resource-projector.ts",
+          "symbolName": "CheckerExpressionResourceProjector",
+          "summary": "Expression-level value-converter and binding-behavior resource projection."
         },
         {
           "kind": "source",
@@ -56,6 +144,11 @@
             "className": "CheckerExpressionTypeEvaluator"
           },
           "summary": "Live product-architecture class row."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/fixtures/pressure/contextual-call-argument-completion/src/contextual-call-argument-completion-app.html",
+          "summary": "Pressure fixture for cursor owner projection inside contextual callback arguments."
         }
       ],
       "liveChecks": [
@@ -72,10 +165,73 @@
           "filePath": "packages/semantic-runtime/src/type-system/expression-member-owner-projector.ts",
           "minLineCount": 80,
           "minMethodCount": 3
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CheckerExpressionTypeSupport",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-type-support.ts",
+          "minLineCount": 80,
+          "minMethodCount": 3
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CheckerExpressionArgumentContextProjector",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-argument-context-projector.ts",
+          "minLineCount": 80,
+          "minMethodCount": 4
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CheckerExpressionContextualTypeProjector",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-contextual-type-projector.ts",
+          "minLineCount": 80,
+          "minMethodCount": 4
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CheckerExpressionAccessProjector",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-access-projector.ts",
+          "minLineCount": 80,
+          "minMethodCount": 4
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CheckerExpressionScopeProjector",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-scope-projector.ts",
+          "minLineCount": 80,
+          "minMethodCount": 4
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CheckerExpressionIterableProjector",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-iterable-projector.ts",
+          "minLineCount": 80,
+          "minMethodCount": 4
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CheckerExpressionResourceProjector",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-resource-projector.ts",
+          "minLineCount": 80,
+          "minMethodCount": 4
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-branch-scope.ts",
+          "symbolName": "CheckerExpressionBranchScopeProjector"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/speculative-binding-scope.ts",
+          "symbolName": "speculativeBindingScopeOverlay"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/fixtures/pressure/contextual-call-argument-completion/src/contextual-call-argument-completion-app.html"
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-14"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "frontier:completed-input-companion-builder",
@@ -139,7 +295,9 @@
         "Start with CompletedInputParser, parser state, scanner, primary/binding-pattern/template corridors, and failure tracking before changing autocomplete behavior.",
         "Treat equivalent-looking parser helpers as possible split-brain; use product.architecture function-shape rows before adding another corridor helper.",
         "For template expressions inside interpolation holes, prefer robust parser state/lookahead over permissive EOF shortcuts.",
-        "Use expression-boundary-scanner for interpolation opener and close-boundary logic so template value-site classification and interpolation publication do not drift."
+        "Use expression-boundary-scanner for interpolation opener and close-boundary logic so template value-site classification and interpolation publication do not drift.",
+        "Interpolation opener detection follows Aurelia's odd-backslash escape law, and text/template chunks should spend expression-scanner cooking helpers before becoming Interpolation.parts or TemplateExpression.cooked.",
+        "parse-result-inspection owns reusable AST traversal primitives for member-owner, member-name, visitor, and subtree kind checks; extend that traversal when a new expression kind appears instead of adding another local recursive switch."
       ],
       "anchors": [
         {
@@ -238,6 +396,12 @@
           "symbolName": "ParseCompanionState",
           "line": 39,
           "summary": "Companion parse-state envelope."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/parse-result-inspection.ts",
+          "symbolName": "ExpressionParseResultInspector",
+          "summary": "Shared parse-result and member-inspection helper surface."
         },
         {
           "kind": "source",
@@ -340,6 +504,11 @@
           "minMethodCount": 3
         },
         {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/expression/parse-result-inspection.ts",
+          "symbolName": "ExpressionParseResultInspector"
+        },
+        {
           "kind": "product-large-class",
           "className": "CompletedInputTailCorridor",
           "filePath": "packages/semantic-runtime/src/expression/completed-input-tail-corridor.ts",
@@ -363,6 +532,7 @@
       "rationale": "Downstream template, binding, scope, and inquiry code should not rebuild sibling switches over parser result kinds. This class is intentionally a focused static inspector over durable family/outcome questions, not a convenience alias layer.",
       "guidance": [
         "Start here when a consumer needs parser result family, completion, hard-error, member-owner, or canonical-AST questions.",
+        "Use `expressionAstNodeContainsKind` or `visitExpressionAstNodes` for expression subtree predicates and collection before adding consumer-local recursive switches.",
         "Add inspection helpers only for durable parser-owned questions that multiple consumers would otherwise duplicate.",
         "Do not put product ownership, template lowering, or value-site publication policy in parser result inspection."
       ],
@@ -373,6 +543,12 @@
           "symbolName": "ExpressionParseResultInspector",
           "line": 41,
           "summary": "Parser result family/outcome inspector."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/parse-result-inspection.ts",
+          "symbolName": "expressionAstNodeContainsKind",
+          "summary": "Parser-owned expression subtree kind predicate used by inquiry code instead of local AST switches."
         },
         {
           "kind": "doc",

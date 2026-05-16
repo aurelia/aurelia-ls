@@ -7,16 +7,13 @@ import { ProductsRoute } from './routes/products-route';
   routes: [
     {
       id: 'products',
-      path: ['', 'products'],
+      path: 'products',
       component: ProductsRoute,
       title: 'Products',
     },
-    {
-      id: 'product-detail',
-      path: 'products/:productId',
-      component: ProductDetailsRoute,
-      title: 'Product Details',
-    },
   ],
 })
-export class RouterPatternApp {}
+export class RouterPatternApp {
+  readonly productsRoute = ProductsRoute;
+  readonly productDetailsRoute = ProductDetailsRoute;
+}

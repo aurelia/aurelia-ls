@@ -15,6 +15,7 @@ const detail = process.argv.includes("--detail");
 const json = process.argv.includes("--json");
 const projection = scriptArgumentValue("--projection=") ?? "summary";
 const query = scriptArgumentValue("--query=");
+const queryMode = scriptArgumentValue("--queryMode=");
 const concept = scriptArgumentValue("--concept=");
 const group = scriptArgumentValue("--group=");
 const path = scriptArgumentValue("--path=");
@@ -27,6 +28,8 @@ const effectKind = scriptArgumentValue("--effectKind=");
 const effectRole = scriptArgumentValue("--effectRole=");
 const effectSeedPolicy = scriptArgumentValue("--effectSeedPolicy=");
 const recipeKey = scriptArgumentValue("--recipeKey=");
+const classificationKind = scriptArgumentValue("--classificationKind=");
+const classificationKey = scriptArgumentValue("--classificationKey=");
 const expectedEffectFilterField = scriptArgumentValue("--expectedEffectFilterField=");
 const expectedEffectFilterValue = scriptArgumentValue("--expectedEffectFilterValue=");
 const rows = scriptNumberArgumentValue("--rows=");
@@ -35,6 +38,7 @@ const answerRowBudget = rows ?? (detail ? 80 : 24);
 
 const filters = {
   ...(query === undefined ? {} : { query }),
+  ...(queryMode === undefined ? {} : { queryMode }),
   ...(concept === undefined ? {} : { concept }),
   ...(group === undefined ? {} : { group }),
   ...(path === undefined ? {} : { path }),
@@ -47,6 +51,8 @@ const filters = {
   ...(effectRole === undefined ? {} : { effectRole }),
   ...(effectSeedPolicy === undefined ? {} : { effectSeedPolicy }),
   ...(recipeKey === undefined ? {} : { recipeKey }),
+  ...(classificationKind === undefined ? {} : { classificationKind }),
+  ...(classificationKey === undefined ? {} : { classificationKey }),
   ...(expectedEffectFilterField === undefined ? {} : { expectedEffectFilterField }),
   ...(expectedEffectFilterValue === undefined ? {} : { expectedEffectFilterValue }),
 };
@@ -249,6 +255,7 @@ function printFixtureSeeds(
     );
     if (detail) {
       console.log(`  ${row.preview}`);
+      console.log(`  reasons: ${fixtureSeedReasonSummary(row)}`);
     }
   }
 }
@@ -260,4 +267,14 @@ function fixtureSeedFilterSummary(
     effect.filters.map((filter) => `${effect.effectKind}.${filter.field}=${String(filter.value ?? "")}`)
   );
   return filters.length === 0 ? "<none>" : filters.join(", ");
+}
+
+function fixtureSeedReasonSummary(
+  row: NonNullable<FrameworkCorpusValue["fixtureSeeds"]>[number],
+): string {
+  return row.classificationReasons.length === 0
+    ? "<none>"
+    : row.classificationReasons
+      .map((reason) => `${reason.kind}:${reason.key}`)
+      .join(", ");
 }

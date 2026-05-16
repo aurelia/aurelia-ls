@@ -28,6 +28,11 @@ interface LoadedShard {
   readonly shard: AtlasMemoryShard;
 }
 
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  printUsage();
+  process.exit(0);
+}
+
 const mode = memoryWriteMode();
 const repoRoot = findRepoRoot();
 const dryRun = process.argv.includes("--dry-run");
@@ -45,6 +50,32 @@ switch (mode) {
   case "remove":
     removeRecord();
     break;
+}
+
+function printUsage(): void {
+  console.log(`atlas-memory-write
+
+Usage:
+  pnpm --filter @aurelia-ls/atlas memory:write -- --mode=list-shards
+  pnpm --filter @aurelia-ls/atlas memory:write -- --template --id=frontier:example --kind=pressure-frontier --domains=atlas,memory --summary="Example"
+  pnpm --filter @aurelia-ls/atlas memory:write -- --record=.temp/example.json --shard=atlas --dry-run
+  pnpm --filter @aurelia-ls/atlas memory:write -- --record=.temp/example.json --shard=atlas
+  pnpm --filter @aurelia-ls/atlas memory:write -- --mode=remove --id=frontier:example --dry-run
+
+Modes:
+  --template          Print one draft memory record.
+  --mode=list-shards List writable memory shards.
+  --mode=upsert      Upsert --record into the inferred or explicit --shard. This is the default mode.
+  --mode=remove      Remove --id from all shards.
+
+Common options:
+  --record=<path>    Repository-relative JSON file containing one Atlas memory record.
+  --shard=<name>     Shard name, such as template, or repository-relative shard path.
+  --dry-run          Print the action and resulting record without writing.
+  --domains=<list>   Comma or space separated domains for template mode.
+  --auLinkId=<id>    Add an auLink anchor in template mode.
+  --symbolName=<n>   Pair the template auLink anchor with a symbol name.
+`);
 }
 
 function printTemplate(): void {

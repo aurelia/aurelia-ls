@@ -115,7 +115,13 @@ with `SemanticApp.ask({ kind: TemplateCursorInfo })`, and prints aggregate site 
 classes, value-site kinds, candidate lanes, public-API mismatches, cursor-info source coverage, hover/navigation
 targets, diagnostic signals, LSP envelopes, value-domain gaps, and bucketed missing-input reasons without paths, source
 text, or candidate names. Use it for LSP-shaped pressure before assuming a gap belongs to parsing, scope construction,
-resource lookup, API wrapping, or domain-specific value completion. `SEMANTIC_RUNTIME_CURSOR_PRESSURE_PROJECT_SHAPES`
+resource lookup, API wrapping, or domain-specific value completion. `SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS` accepts a
+path-delimited list of absolute or workspace-relative roots, so a single fixture or transient external checkout can be
+sampled without changing the script. The known `fixtures/authoring` and `fixtures/pressure` collection roots expand to
+their child fixture projects; use `SEMANTIC_RUNTIME_CURSOR_PRESSURE_OUTPUT=aggregate` for broad collection pressure and
+`SEMANTIC_RUNTIME_CURSOR_PRESSURE_INPUT_LIMIT` for a cheap first canary. Diagnostic probes are scoped back to the
+compiled resource's own source spans before comparing direct substrate answers with the public API, so same-file
+multi-template diagnostics do not create false template-resource mismatches. `SEMANTIC_RUNTIME_CURSOR_PRESSURE_PROJECT_SHAPES`
 can scope that sampling to app-shaped, resource-library, Aurelia-package, or non-Aurelia project frames; if omitted,
 the cursor script uses `SEMANTIC_RUNTIME_PROJECT_SHAPES` when present and otherwise samples all booted projects. Both
 env vars accept exact runtime shape tokens: `aurelia-app`, `aurelia-resource-library`, `aurelia-package`, and
@@ -150,6 +156,9 @@ selection to be exact, but file/app loci now aggregate the same cursor-info diag
 `SemanticAppQueryKind.TemplateDiagnostics`. Use that batch answer when the product question is editor diagnostics, CI,
 or agent review over a whole template file; use cursor pressure when the question is whether a specific source offset
 selects the right semantic site.
+Cursor-info also carries template compiler diagnostics at the active cursor offset. Some malformed or recovery-heavy
+source positions are not completion sites and may still classify as `unknown`, but they should surface the exact
+framework-code diagnostic and syntax-rewrite suggestion instead of becoming a silent completion miss.
 For app/file diagnostics, source text should be loaded from the admitted source-file address using workspace-root
 semantics. The selected app project may be nested below the workspace, while compiled template resources can also come
 from source-shipped package dependencies; resolving every address relative to the app project silently hides those

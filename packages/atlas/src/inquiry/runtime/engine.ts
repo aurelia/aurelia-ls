@@ -48,6 +48,7 @@ import { answerPluginArchitecture } from "./plugin-architecture-lenses.js";
 import { answerFrameworkRouter } from "./framework-router-lenses.js";
 import { answerFrameworkCorpus } from "./framework-corpus-lenses.js";
 import { answerAtlasMemory } from "./atlas-memory-lenses.js";
+import { answerAtlasWorkRouter } from "./atlas-work-router-lenses.js";
 import type { InquiryWorld } from "./world.js";
 
 /** Hot substrate context shared by runtime lens implementations. */
@@ -82,6 +83,7 @@ export class InquiryEngine {
     LensId.RepoTerrain,
     LensId.AtlasSelf,
     LensId.AtlasMemory,
+    LensId.AtlasWorkRouter,
     LensId.TsSource,
     LensId.TsStructure,
     LensId.TsType,
@@ -260,6 +262,11 @@ export class InquiryEngine {
         );
       case LensId.FrameworkCorpus:
         return answerFrameworkCorpus(
+          normalized.inquiry,
+          this.substrates.sourceProject,
+        );
+      case LensId.AtlasWorkRouter:
+        return answerAtlasWorkRouter(
           normalized.inquiry,
           this.substrates.sourceProject,
         );

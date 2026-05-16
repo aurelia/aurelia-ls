@@ -11,9 +11,15 @@ import {
 } from '../evaluation/module-graph.js';
 import type { StaticModuleExternalValueResolver } from '../evaluation/module-evaluator.js';
 import {
+  ModuleLoader,
+  ModuleLoaderTransformStatus,
+} from '../evaluation/module-loader.js';
+import { EvaluationOpenSeamKind } from '../evaluation/seams.js';
+import {
   EvaluationBoundaryKind,
   EvaluationBoundaryObjectValue,
   EvaluationFunctionValue,
+  EvaluationUndefined,
   EvaluationValueKind,
   EvaluationNumberValue,
   EvaluationObjectProperty,
@@ -21,7 +27,12 @@ import {
   type EvaluationValue,
 } from '../evaluation/values.js';
 import { unwrapExpression } from '../evaluation/ts-syntax.js';
-import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
+import {
+  FrameworkRegistrationKind,
+  RegistryBodyInterpretationState,
+  RegistryBodyKind,
+  RegistryBodyReference,
+} from '../registration/registration-reference.js';
 
 const APP_TASK_MODULES = new Set([
   'aurelia',
@@ -83,6 +94,7 @@ const syntheticSource = ts.createSourceFile(
 const syntheticEnvironment = new ModuleEnvironmentRecord('semantic-runtime:aurelia-evaluation-runtime');
 const syntheticFunctions = new Map<string, EvaluationFunctionValue>();
 const frameworkRegistrationKindsByObject = new WeakMap<EvaluationObjectValue, FrameworkRegistrationKind>();
+const registryBodiesByObject = new WeakMap<EvaluationObjectValue, RegistryBodyReference>();
 
 for (const statement of syntheticSource.statements) {
   if (!ts.isFunctionDeclaration(statement) || statement.name == null) {
@@ -162,7 +174,10 @@ export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
     }
 
     if (isAliasedResourcesRegistryCall(expression)) {
-      return registryObject(call);
+      return registryObject(
+        call,
+        aliasedResourcesRegistryBody(call, environment, moduleKey, depth + 1, host),
+      );
     }
 
     if (
@@ -186,6 +201,14 @@ export function aureliaFrameworkRegistrationKindForEvaluationValue(
   }
   return frameworkRegistrationKindsByObject.get(value)
     ?? (isSyntheticDialogConfigurationObject(value) ? FrameworkRegistrationKind.DialogConfiguration : null);
+}
+
+export function aureliaRegistryBodyForEvaluationValue(
+  value: EvaluationValue | null,
+): RegistryBodyReference | null {
+  return value?.kind === EvaluationValueKind.Object
+    ? registryBodiesByObject.get(value) ?? null
+    : null;
 }
 
 export const aureliaExternalEvaluationValueResolver: StaticModuleExternalValueResolver = {
@@ -221,10 +244,97 @@ function dialogConfigurationObject(node: ts.Node): EvaluationObjectValue {
   return value;
 }
 
-function registryObject(node: ts.Node): EvaluationObjectValue {
-  return new EvaluationObjectValue(new Map([
+function registryObject(node: ts.Node, registryBody: RegistryBodyReference | null = null): EvaluationObjectValue {
+  const value = new EvaluationObjectValue(new Map([
     objectProperty('register'),
   ]), false, node);
+  if (registryBody != null) {
+    registryBodiesByObject.set(value, registryBody);
+  }
+  return value;
+}
+
+function aliasedResourcesRegistryBody(
+  call: ts.CallExpression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): RegistryBodyReference {
+  const input = call.arguments[0] == null
+    ? EvaluationUndefined
+    : evaluateAliasedResourcesRegistryArgument(call.arguments[0]!, environment, moduleKey, depth + 1, host);
+  const result = new ModuleLoader().load(input);
+  if (result.status === ModuleLoaderTransformStatus.InvalidInput) {
+    return new RegistryBodyReference(
+      RegistryBodyKind.AliasedResourcesRegistry,
+      RegistryBodyInterpretationState.Interpreted,
+    );
+  }
+  if (result.status === ModuleLoaderTransformStatus.Open) {
+    return new RegistryBodyReference(
+      RegistryBodyKind.AliasedResourcesRegistry,
+      RegistryBodyInterpretationState.Open,
+    );
+  }
+  return new RegistryBodyReference(
+    RegistryBodyKind.AliasedResourcesRegistry,
+    aliasedResourcesRegistryAliasArgumentsClosed(call, environment, moduleKey, depth + 1, host)
+      ? RegistryBodyInterpretationState.Interpreted
+      : RegistryBodyInterpretationState.Open,
+  );
+}
+
+function evaluateAliasedResourcesRegistryArgument(
+  argument: ts.Expression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationValue {
+  if (ts.isSpreadElement(argument)) {
+    return host.unknown(
+      'aliasedResourcesRegistry(...) spread argument stayed open.',
+      argument,
+      moduleKey,
+      EvaluationOpenSeamKind.DynamicCall,
+    );
+  }
+  return host.evaluateExpression(argument, environment, moduleKey, depth + 1);
+}
+
+function aliasedResourcesRegistryAliasArgumentsClosed(
+  call: ts.CallExpression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): boolean {
+  const mainAlias = call.arguments[1] == null
+    ? EvaluationUndefined
+    : evaluateAliasedResourcesRegistryArgument(call.arguments[1]!, environment, moduleKey, depth + 1, host);
+  if (
+    mainAlias.kind !== EvaluationValueKind.Undefined
+    && mainAlias.kind !== EvaluationValueKind.Null
+    && mainAlias.kind !== EvaluationValueKind.String
+  ) {
+    return false;
+  }
+  const aliases = call.arguments[2] == null
+    ? EvaluationUndefined
+    : evaluateAliasedResourcesRegistryArgument(call.arguments[2]!, environment, moduleKey, depth + 1, host);
+  if (aliases.kind === EvaluationValueKind.Undefined || aliases.kind === EvaluationValueKind.Null) {
+    return true;
+  }
+  if (aliases.kind !== EvaluationValueKind.Object || aliases.mayHaveUnknownProperties) {
+    return false;
+  }
+  for (const property of aliases.properties.values()) {
+    if (property.value.kind !== EvaluationValueKind.String) {
+      return false;
+    }
+  }
+  return true;
 }
 
 function objectProperty(name: 'register' | 'customize' | 'withChild'): [string, EvaluationObjectProperty] {

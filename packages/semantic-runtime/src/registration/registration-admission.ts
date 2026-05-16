@@ -80,6 +80,7 @@ export type RegistrationAdmissionField =
   | 'strategy'
   | 'keyRole'
   | 'registryParameters'
+  | 'resourceLookupNameOverride'
   | 'targetKey'
   | 'registeredValue'
   | 'source';
@@ -239,6 +240,8 @@ export class ResourceRegistrationAdmission {
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<RegistrationAdmissionField>[] = [],
+    /** Resource lookup name override passed to `ResourceDefinition.register(container, alias)`. */
+    readonly resourceLookupNameOverride: string | null = null,
   ) {}
 }
 

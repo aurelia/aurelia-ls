@@ -118,6 +118,16 @@ export function stringLiteralArgument(
     : null;
 }
 
+export function numericLiteralArgument(
+  call: ts.CallExpression | ts.NewExpression,
+  index: number,
+): number | null {
+  const argument = call.arguments?.[index];
+  return argument !== undefined && ts.isNumericLiteral(argument)
+    ? Number(argument.text)
+    : null;
+}
+
 export function declarationInitializer(node: ts.Node): ts.Expression | undefined {
   return ts.isVariableDeclaration(node) ||
     ts.isParameter(node) ||

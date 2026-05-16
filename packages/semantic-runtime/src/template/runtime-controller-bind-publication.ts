@@ -273,6 +273,7 @@ export class RuntimeControllerBindPublisher {
       lookup.authority,
       lookup.openReason,
       lookup.frameworkErrorCode,
+      lookup.diagnosticReason,
       request.binding.sourceAddressHandle,
     );
   }

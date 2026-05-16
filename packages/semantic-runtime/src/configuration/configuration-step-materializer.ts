@@ -1,5 +1,17 @@
 import ts from 'typescript';
+import {
+  readStaticStringValue,
+} from '../evaluation/expression-reader.js';
+import {
+  ModuleLoader,
+  ModuleLoaderTransformStatus,
+  type ModuleItem,
+} from '../evaluation/module-loader.js';
 import { readReferenceSeed } from '../evaluation/ts-syntax.js';
+import {
+  EvaluationValueKind,
+  type EvaluationObjectValue,
+} from '../evaluation/values.js';
 import {
   SourceSpanRole,
 } from '../kernel/address.js';
@@ -44,9 +56,12 @@ import {
 } from '../registration/registration-kernel-emitter.js';
 import {
   RegistrationAdmissionObservation,
+  RegistrationCarrierKind,
+  RegistrationRecognitionOpen,
   RegistrationValueObservation,
 } from '../registration/registration-observation.js';
 import {
+  RegistrationAdmissionKind,
   RegistrationKeyRole,
   RegistrationStrategy,
   type RegistrationAdmissionProduct,
@@ -54,6 +69,8 @@ import {
 import {
   FrameworkRegistrationKind,
   RegistrationKeyReference,
+  RegistryBodyInterpretationState,
+  RegistryBodyKind,
   RegistrationValueKind,
 } from '../registration/registration-reference.js';
 import {
@@ -664,7 +681,10 @@ export class ConfigurationStepMaterializer {
     const enriched = observation.registrationAdmissions.map((admission) => {
       const appTaskEnriched = enrichAppTaskRegistration(admission, appTaskEmissions);
       return enrichResourceRegistration(appTaskEnriched, context, resources);
-    });
+    }).flatMap((admission) => [
+      admission,
+      ...aliasedResourcesRegistryBodyRegistrations(admission, context, resources),
+    ]);
     return new RegistrationKernelEmitter(this.store).materialize(
       new RegistrationEmissionContext(
         context.sourceFile,
@@ -820,6 +840,195 @@ function readDiKeyIdentitySeed(
       return { kind: 'property-access-name', candidateName: seed.candidateName };
     case 'open-expression':
       return { kind: 'open-expression', candidateName: null };
+  }
+}
+
+function aliasedResourcesRegistryBodyRegistrations(
+  observation: RegistrationAdmissionObservation,
+  context: ConfigurationRecognitionContext,
+  resources: ResourceDefinitionIndex | null,
+): readonly RegistrationAdmissionObservation[] {
+  const body = observation.registeredValue?.registryBody ?? null;
+  if (
+    resources == null
+    || body?.bodyKind !== RegistryBodyKind.AliasedResourcesRegistry
+    || body.state !== RegistryBodyInterpretationState.Interpreted
+    || observation.registeredValue == null
+    || !ts.isCallExpression(observation.registeredValue.node)
+  ) {
+    return [];
+  }
+
+  const call = observation.registeredValue.node;
+  const input = call.arguments[0] == null
+    ? null
+    : context.expressionReader.evaluateExpression(call.arguments[0]).value;
+  if (input == null) {
+    return [];
+  }
+  const moduleResult = new ModuleLoader().load(input);
+  if (moduleResult.status !== ModuleLoaderTransformStatus.Analyzed || moduleResult.analyzedModule == null) {
+    return [];
+  }
+
+  const mainAlias = readAliasedResourcesRegistryMainAlias(call, context);
+  const aliases = readAliasedResourcesRegistryAliases(call, context);
+  const registrations: RegistrationAdmissionObservation[] = [];
+  let mainAliasRegistered = false;
+  moduleResult.analyzedModule.items.forEach((item, itemIndex) => {
+    const definition = resources.lookupValue(item.value);
+    if (definition == null || definition.productHandle == null) {
+      registrations.push(openAliasedResourcesRegistryModuleItem(observation, item, itemIndex));
+      return;
+    }
+    const override = !mainAliasRegistered && mainAlias != null
+      ? mainAlias
+      : aliases.get(resourceDefinitionName(definition) ?? '') ?? null;
+    if (!mainAliasRegistered && mainAlias != null) {
+      mainAliasRegistered = true;
+    }
+    registrations.push(resourceAliasedResourcesRegistryModuleItem(
+      observation,
+      context,
+      item,
+      definition,
+      override,
+    ));
+  });
+  return registrations;
+}
+
+function resourceDefinitionName(definition: FullResourceDefinition): string | null {
+  return 'name' in definition ? definition.name : null;
+}
+
+function readAliasedResourcesRegistryMainAlias(
+  call: ts.CallExpression,
+  context: ConfigurationRecognitionContext,
+): string | null {
+  const argument = call.arguments[1] ?? null;
+  if (argument == null) {
+    return null;
+  }
+  const read = context.expressionReader.evaluateExpression(argument).value;
+  return read == null ? null : readStaticStringValue(read);
+}
+
+function readAliasedResourcesRegistryAliases(
+  call: ts.CallExpression,
+  context: ConfigurationRecognitionContext,
+): ReadonlyMap<string, string> {
+  const argument = call.arguments[2] ?? null;
+  if (argument == null) {
+    return new Map();
+  }
+  const read = context.expressionReader.evaluateExpression(argument).value;
+  return read?.kind === EvaluationValueKind.Object
+    ? readStaticStringRecord(read)
+    : new Map();
+}
+
+function readStaticStringRecord(
+  value: EvaluationObjectValue,
+): ReadonlyMap<string, string> {
+  if (value.mayHaveUnknownProperties) {
+    return new Map();
+  }
+  const result = new Map<string, string>();
+  for (const [name, property] of value.properties) {
+    const stringValue = readStaticStringValue(property.value);
+    if (stringValue != null) {
+      result.set(name, stringValue);
+    }
+  }
+  return result;
+}
+
+function resourceAliasedResourcesRegistryModuleItem(
+  observation: RegistrationAdmissionObservation,
+  context: ConfigurationRecognitionContext,
+  item: ModuleItem,
+  definition: FullResourceDefinition,
+  lookupNameOverride: string | null,
+): RegistrationAdmissionObservation {
+  const valueSource = moduleItemValueSource(context, item);
+  return new RegistrationAdmissionObservation(
+    RegistrationCarrierKind.RegistryRegisterMethod,
+    RegistrationAdmissionKind.RegistryMethod,
+    RegistrationStrategy.Resource,
+    RegistrationKeyRole.Unknown,
+    observation.sourceNode,
+    null,
+    new RegistrationValueObservation(
+      RegistrationValueKind.ResourceDefinition,
+      definition.target.localName ?? item.key,
+      valueSource.node,
+      valueSource.isDeclaration,
+      definition.productHandle,
+      null,
+      valueSource.sourceFileAddressHandle,
+      valueSource.moduleKey,
+    ),
+    [],
+    [],
+    lookupNameOverride,
+  );
+}
+
+function openAliasedResourcesRegistryModuleItem(
+  observation: RegistrationAdmissionObservation,
+  item: ModuleItem,
+  index: number,
+): RegistrationAdmissionObservation {
+  return new RegistrationAdmissionObservation(
+    RegistrationCarrierKind.RegistryRegisterMethod,
+    RegistrationAdmissionKind.RegistryMethod,
+    RegistrationStrategy.Unknown,
+    RegistrationKeyRole.Unknown,
+    observation.sourceNode,
+    null,
+    new RegistrationValueObservation(
+      RegistrationValueKind.Unknown,
+      item.key,
+      item.sourceProperty?.node ?? observation.sourceNode,
+      false,
+    ),
+    [],
+    [new RegistrationRecognitionOpen(
+      KernelVocabulary.Registration.OpenStrategy.key,
+      `aliasedResourcesRegistry(...) module item ${index} did not converge to a resource definition or modeled registration strategy yet.`,
+      observation.sourceNode,
+    )],
+  );
+}
+
+function moduleItemValueSource(
+  context: ConfigurationRecognitionContext,
+  item: ModuleItem,
+): {
+  readonly node: ts.Node;
+  readonly isDeclaration: boolean;
+  readonly sourceFileAddressHandle: AddressHandle | null;
+  readonly moduleKey: string | null;
+} {
+  switch (item.value.kind) {
+    case EvaluationValueKind.Class:
+    case EvaluationValueKind.Function:
+      return {
+        node: item.value.declaration,
+        isDeclaration: true,
+        sourceFileAddressHandle: context.sourceFileAddressHandleForNode(item.value.declaration),
+        moduleKey: item.value.environment.moduleKey,
+      };
+    default:
+      return {
+        node: item.sourceProperty?.node ?? context.sourceFile,
+        isDeclaration: false,
+        sourceFileAddressHandle: item.sourceProperty == null
+          ? context.sourceFileAddressHandle
+          : context.sourceFileAddressHandleForNode(item.sourceProperty.node),
+        moduleKey: null,
+      };
   }
 }
 

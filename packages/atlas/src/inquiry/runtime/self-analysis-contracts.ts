@@ -140,14 +140,54 @@ export interface AtlasSelfFunctionSurfaceRow {
   readonly filePath: string;
   /** Declaration span line count. */
   readonly lineCount: number;
-  /** Stable body-text fingerprint, normalized for whitespace-only formatting differences. */
-  readonly bodyFingerprint: string;
-  /** Stable AST/control-flow body fingerprint, normalized for simple equivalent body shapes. */
-  readonly bodyShapeFingerprint: string;
+  /** Stable body-text fingerprint, normalized for whitespace-only formatting differences when body analysis is requested. */
+  readonly bodyFingerprint: string | null;
+  /** Stable AST/control-flow body fingerprint, normalized for simple equivalent body shapes when body analysis is requested. */
+  readonly bodyShapeFingerprint: string | null;
+  /** Stable switch-dispatch topology fingerprint, when this body contains switch statements. */
+  readonly switchTopologyFingerprint: string | null;
+  /** Number of switch statements contributing to the switch topology fingerprint. */
+  readonly switchTopologyCount: number;
   /** Direct call-expression count inside this declaration, excluding nested executable declarations. */
   readonly callCount: number;
   /** Unique locally resolved call targets observed inside this declaration. */
   readonly uniqueCallTargetCount: number;
+  /** Exact declaration source. */
+  readonly source: SourceRange;
+  /** Compact row summary. */
+  readonly summary: string;
+}
+
+/** Top-level variable declaration surface for catalog, route, and large-literal anchors. */
+export interface AtlasSelfVariableSurfaceRow {
+  /** Stable row id. */
+  readonly id: string;
+  /** Package that owns the variable declaration. */
+  readonly packageId: string;
+  /** Variable declaration name. */
+  readonly name: string;
+  /** Variable declaration kind from the owning declaration list. */
+  readonly declarationKind: "const" | "let" | "var";
+  /** True when exported from the source module. */
+  readonly exported: boolean;
+  /** Source file that owns the declaration. */
+  readonly filePath: string;
+  /** Declaration span line count. */
+  readonly lineCount: number;
+  /** Broad initializer shape without embedding source text. */
+  readonly initializerKind:
+    | "array-literal"
+    | "object-literal"
+    | "function-like"
+    | "call"
+    | "new"
+    | "literal"
+    | "identifier"
+    | "property-access"
+    | "none"
+    | "other";
+  /** Number of elements/properties when the initializer is an array or object literal. */
+  readonly initializerEntryCount: number | null;
   /** Exact declaration source. */
   readonly source: SourceRange;
   /** Compact row summary. */
@@ -168,6 +208,34 @@ export interface AtlasSelfFunctionShapeGroupRow {
   readonly fileCount: number;
   /** Total declaration line count across grouped surfaces. */
   readonly lineCount: number;
+  /** Function-kind families represented in the group. */
+  readonly functionKinds: readonly ("top-level" | "class-method")[];
+  /** Bounded declaration-name samples for compact review. */
+  readonly nameSamples: readonly string[];
+  /** Bounded file samples for compact review. */
+  readonly fileSamples: readonly string[];
+  /** Exact source of the first grouped declaration. */
+  readonly source: SourceRange;
+  /** Compact row summary. */
+  readonly summary: string;
+}
+
+/** Group of function/method declarations that share switch-dispatch topology. */
+export interface AtlasSelfFunctionControlFlowShapeGroupRow {
+  /** Stable row id. */
+  readonly id: string;
+  /** Stable switch-dispatch topology fingerprint shared by all grouped declarations. */
+  readonly switchTopologyFingerprint: string;
+  /** Number of function or method surfaces in the group. */
+  readonly functionCount: number;
+  /** Number of distinct declaration names in the group. */
+  readonly nameCount: number;
+  /** Number of distinct source files in the group. */
+  readonly fileCount: number;
+  /** Total declaration line count across grouped surfaces. */
+  readonly lineCount: number;
+  /** Maximum number of switch statements contributing to one grouped surface. */
+  readonly switchTopologyCount: number;
   /** Function-kind families represented in the group. */
   readonly functionKinds: readonly ("top-level" | "class-method")[];
   /** Bounded declaration-name samples for compact review. */
@@ -483,8 +551,12 @@ export interface AtlasSelfAnalysis {
   readonly classSurfaces: readonly AtlasSelfClassSurfaceRow[];
   /** Function and method declaration surfaces. */
   readonly functionSurfaces: readonly AtlasSelfFunctionSurfaceRow[];
+  /** Top-level variable declaration surfaces. */
+  readonly variableSurfaces: readonly AtlasSelfVariableSurfaceRow[];
   /** Repeated AST/control-flow body shape groups for finding split-brain helpers. */
   readonly functionShapeGroups: readonly AtlasSelfFunctionShapeGroupRow[];
+  /** Shared switch-dispatch topology groups for finding parallel walkers and dispatch surfaces. */
+  readonly functionControlFlowShapeGroups: readonly AtlasSelfFunctionControlFlowShapeGroupRow[];
   /** Shallow constructor/call wrapper rows for spotting extraction-as-obfuscation pressure. */
   readonly functionWrapperRows: readonly AtlasSelfFunctionWrapperRow[];
   /** Source file module surfaces. */
@@ -529,7 +601,11 @@ export interface AtlasSelfAnalysis {
     readonly functionSurfaceCount: number;
     readonly topLevelFunctionCount: number;
     readonly classMethodFunctionCount: number;
+    readonly variableSurfaceCount: number;
+    readonly exportedVariableSurfaceCount: number;
+    readonly largeLiteralVariableSurfaceCount: number;
     readonly functionShapeGroupCount: number;
+    readonly functionControlFlowShapeGroupCount: number;
     readonly functionWrapperCount: number;
     readonly singleUseFunctionWrapperCount: number;
     readonly sourceFileSurfaceCount: number;

@@ -9,6 +9,7 @@ import {
   printEmptyRows,
   scriptArgumentValue,
   scriptNumberArgumentValue,
+  scriptOptionalStringFilter,
   sourceLabel,
 } from "./script-output.js";
 
@@ -20,16 +21,16 @@ const displayRowLimit = rows ?? (detail ? 60 : 20);
 const answerRowBudget = rows ?? (detail ? 120 : 40);
 
 const filters = {
-  ...optionalFilter("packageId"),
-  ...optionalFilter("enumName"),
-  ...optionalFilter("codeNamePrefix"),
-  ...optionalFilter("mechanism"),
-  ...optionalFilter("effect"),
-  ...optionalFilter("rawErrorKind"),
-  ...optionalFilter("inlineCodeLabel"),
-  ...optionalFilter("disposition"),
-  ...optionalFilter("gap"),
-  ...optionalFilter("query"),
+  ...scriptOptionalStringFilter("packageId"),
+  ...scriptOptionalStringFilter("enumName"),
+  ...scriptOptionalStringFilter("codeNamePrefix"),
+  ...scriptOptionalStringFilter("mechanism"),
+  ...scriptOptionalStringFilter("effect"),
+  ...scriptOptionalStringFilter("rawErrorKind"),
+  ...scriptOptionalStringFilter("inlineCodeLabel"),
+  ...scriptOptionalStringFilter("disposition"),
+  ...scriptOptionalStringFilter("gap"),
+  ...scriptOptionalStringFilter("query"),
 };
 
 const api = createApi({ idleTtlMs: 120_000, requestTimeoutMs: 180_000 });
@@ -72,11 +73,6 @@ printCodeRows(value, displayRowLimit, detail);
 printUsageRows(value, displayRowLimit, detail);
 printSemanticReferenceRows(value, displayRowLimit, detail);
 printSemanticRawReferenceRows(value, displayRowLimit, detail);
-
-function optionalFilter(name: string): Record<string, string> {
-  const value = scriptArgumentValue(`--${name}=`);
-  return value === undefined ? {} : { [name]: value };
-}
 
 function printRollup(
   value: FrameworkErrorsValue,
@@ -218,7 +214,7 @@ function printDiagnosticCodeRows(
         console.log(`  ${row.message}`);
       }
       if (row.intentionalUnclaimedReason != null) {
-        console.log(`  intentional=${row.intentionalUnclaimedReason}`);
+        console.log(`  intentional=${row.intentionalUnclaimedKind ?? "unclassified"}: ${row.intentionalUnclaimedReason}`);
       }
     }
   }

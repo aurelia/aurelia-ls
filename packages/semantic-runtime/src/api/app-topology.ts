@@ -22,6 +22,7 @@ import {
 } from '../application/index.js';
 import { BindableBindingMode } from '../resources/bindable-definition.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
+import type { ResourceDependencyReferenceKind } from '../resources/resource-reference.js';
 import {
   RuntimeBindingDataFlowDirection,
   RuntimeBindingDataFlowSourceKind,
@@ -79,7 +80,10 @@ export interface SemanticApplicationBindableRow {
 }
 
 export interface SemanticApplicationDependencyRow {
+  readonly dependencyKind: ResourceDependencyReferenceKind | `${ResourceDependencyReferenceKind}`;
   readonly keyName: string | null;
+  readonly localName: string | null;
+  readonly registryKind: string | null;
   readonly componentName: string | null;
   readonly componentClassName: string | null;
   readonly source: SemanticSourceReference | null;
@@ -1004,7 +1008,10 @@ function applicationComponentReference(
         .filter((candidate): candidate is CustomElementDefinition => candidate instanceof CustomElementDefinition);
       const components = dependencyDefinitions.length === 0 ? [null] : dependencyDefinitions;
       return components.map((component) => ({
+        dependencyKind: dependency.dependencyKind,
         keyName: dependency.keyName,
+        localName: dependency.localName,
+        registryKind: dependency.registryKind,
         componentName: component?.name ?? null,
         componentClassName: component?.target.localName ?? null,
         source: describeAddress(store, component?.sourceAddressHandle ?? null),

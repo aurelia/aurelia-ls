@@ -8,7 +8,10 @@ import {
 import ts from 'typescript';
 import { ExpressionParser } from '../expression/expression-parser.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
-import { ExpressionParseResultInspector } from '../expression/parse-result-inspection.js';
+import {
+  ExpressionParseResultInspector,
+  expressionAstNodeContainsKind,
+} from '../expression/parse-result-inspection.js';
 import { expressionSpanContainsOffset } from '../expression/source-span.js';
 import type {
   AddressHandle,
@@ -1333,7 +1336,7 @@ function shouldReadResourceScopeForMemberOwner(
     return false;
   }
   const owner = ExpressionParseResultInspector.memberOwner(expressionResult);
-  return owner != null && expressionContainsValueConverter(owner);
+  return owner != null && expressionAstNodeContainsKind(owner, 'ValueConverter');
 }
 
 function deriveMemberOwnerTypeProductHandle(
@@ -1533,84 +1536,6 @@ function missingDerivedMemberOwnerType(): DerivedMemberOwnerType {
     productHandle: null,
     openSubject: null,
   };
-}
-
-function expressionContainsValueConverter(expression: ExpressionAstNode): boolean {
-  switch (expression.$kind) {
-    case 'ValueConverter':
-      return true;
-    case 'BindingBehavior':
-      return expressionContainsValueConverter(expression.expression)
-        || expression.args.some(expressionContainsValueConverter);
-    case 'Paren':
-    case 'Unary':
-      return expressionContainsValueConverter(expression.expression);
-    case 'AccessMember':
-      return expressionContainsValueConverter(expression.object);
-    case 'AccessKeyed':
-      return expressionContainsValueConverter(expression.object)
-        || expressionContainsValueConverter(expression.key);
-    case 'CallMember':
-      return expressionContainsValueConverter(expression.object)
-        || expression.args.some(expressionContainsValueConverter);
-    case 'CallFunction':
-      return expressionContainsValueConverter(expression.func)
-        || expression.args.some(expressionContainsValueConverter);
-    case 'CallScope':
-    case 'CallGlobal':
-      return expression.args.some(expressionContainsValueConverter);
-    case 'New':
-      return expressionContainsValueConverter(expression.func)
-        || expression.args.some(expressionContainsValueConverter);
-    case 'TaggedTemplate':
-      return expressionContainsValueConverter(expression.func)
-        || expression.expressions.some(expressionContainsValueConverter);
-    case 'Binary':
-      return expressionContainsValueConverter(expression.left)
-        || expressionContainsValueConverter(expression.right);
-    case 'Conditional':
-      return expressionContainsValueConverter(expression.condition)
-        || expressionContainsValueConverter(expression.yes)
-        || expressionContainsValueConverter(expression.no);
-    case 'Assign':
-      return expressionContainsValueConverter(expression.target)
-        || expressionContainsValueConverter(expression.value);
-    case 'ArrowFunction':
-      return expressionContainsValueConverter(expression.body);
-    case 'ArrayLiteral':
-      return expression.elements.some(expressionContainsValueConverter);
-    case 'ObjectLiteral':
-      return expression.values.some(expressionContainsValueConverter);
-    case 'Template':
-    case 'Interpolation':
-      return expression.expressions.some(expressionContainsValueConverter);
-    case 'ForOfStatement':
-      return expressionContainsValueConverter(expression.iterable);
-    case 'AccessThis':
-    case 'AccessBoundary':
-    case 'AccessScope':
-    case 'AccessGlobal':
-    case 'PrimitiveLiteral':
-    case 'Identifier':
-    case 'BindingIdentifier':
-      return false;
-    case 'BindingPatternDefault':
-      return expressionContainsValueConverter(expression.target)
-        || expressionContainsValueConverter(expression.default);
-    case 'BindingPatternHole':
-      return false;
-    case 'ArrayBindingPattern':
-      return expression.elements.some(expressionContainsValueConverter)
-        || (expression.rest != null && expressionContainsValueConverter(expression.rest));
-    case 'ObjectBindingPattern':
-      return expression.properties.some((property) => expressionContainsValueConverter(property.value))
-        || (expression.rest != null && expressionContainsValueConverter(expression.rest));
-    case 'DestructuringAssignment':
-      return expressionContainsValueConverter(expression.pattern)
-        || expressionContainsValueConverter(expression.source);
-    case 'Custom':
-      return false;
-  }
 }
 
 function expressionCompletionFrontier(

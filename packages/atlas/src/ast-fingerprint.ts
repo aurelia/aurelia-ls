@@ -13,6 +13,14 @@ type FunctionBodyNode =
   | ts.GetAccessorDeclaration
   | ts.SetAccessorDeclaration;
 
+/** Structural switch-dispatch shape found inside a function body. */
+export interface FunctionSwitchTopologyFingerprint {
+  /** Stable fingerprint for the ordered switch discriminants and case labels. */
+  readonly fingerprint: string;
+  /** Number of switch statements contributing to the fingerprint. */
+  readonly switchCount: number;
+}
+
 /** Fingerprint a function body by canonical AST/control-flow shape rather than raw text. */
 export function functionBodyShapeFingerprint(
   node: FunctionBodyNode,
@@ -22,8 +30,33 @@ export function functionBodyShapeFingerprint(
   return stableTextFingerprint(canonical);
 }
 
+/**
+ * Fingerprint the switch-dispatch topology of a function body.
+ *
+ * This is intentionally narrower than a body-shape fingerprint: it groups
+ * parallel dispatch walkers that switch over the same conceptual discriminant
+ * and case-label set even when their per-case actions differ.
+ */
+export function functionSwitchTopologyFingerprint(
+  node: FunctionBodyNode,
+  sourceFile: ts.SourceFile,
+): FunctionSwitchTopologyFingerprint | null {
+  const scope = new CanonicalScope();
+  declareFunctionParameters(node, sourceFile, scope);
+  const topologies: string[] = [];
+  collectSwitchTopologies(functionBodyTraversalRoot(node), sourceFile, scope, topologies);
+  if (topologies.length === 0) {
+    return null;
+  }
+  return {
+    fingerprint: stableTextFingerprint(`switch-topology(${topologies.join(";")})`),
+    switchCount: topologies.length,
+  };
+}
+
 class CanonicalScope {
   readonly #bindings = new Map<string, string>();
+  readonly #aliases = new Map<string, string>();
   readonly #counters: Map<CanonicalBindingKind, number>;
 
   public constructor(
@@ -50,9 +83,213 @@ class CanonicalScope {
     return canonical;
   }
 
+  public declareAlias(
+    name: string,
+    kind: CanonicalBindingKind,
+    canonicalAlias: string,
+  ): string {
+    const canonical = this.declare(name, kind);
+    this.#aliases.set(name, canonicalAlias);
+    return canonical;
+  }
+
   public resolve(name: string): string | null {
+    const alias = this.#aliases.get(name);
+    if (alias !== undefined) {
+      return alias;
+    }
     return this.#bindings.get(name) ?? this.parent?.resolve(name) ?? null;
   }
+}
+
+function declareFunctionParameters(
+  node: FunctionBodyNode,
+  sourceFile: ts.SourceFile,
+  scope: CanonicalScope,
+): void {
+  if (!("parameters" in node)) {
+    return;
+  }
+  for (const parameter of node.parameters) {
+    canonicalParameter(parameter, sourceFile, scope);
+  }
+}
+
+function functionBodyTraversalRoot(node: FunctionBodyNode): ts.Node | null {
+  if (!("body" in node) || node.body == null) {
+    return null;
+  }
+  return node.body;
+}
+
+function collectSwitchTopologies(
+  node: ts.Node | null,
+  sourceFile: ts.SourceFile,
+  scope: CanonicalScope,
+  topologies: string[],
+): void {
+  if (node == null) {
+    return;
+  }
+  if (ts.isFunctionLike(node)) {
+    return;
+  }
+  if (ts.isBlock(node)) {
+    collectSwitchTopologiesInStatements(node.statements, sourceFile, scope.child(), topologies);
+    return;
+  }
+  if (ts.isVariableStatement(node)) {
+    declareVariableStatementAliases(node, sourceFile, scope);
+    return;
+  }
+  if (ts.isSwitchStatement(node)) {
+    topologies.push(canonicalSwitchTopology(node, sourceFile, scope));
+    collectSwitchTopologiesInCaseBlock(node.caseBlock, sourceFile, scope.child(), topologies);
+    return;
+  }
+  if (ts.isForStatement(node)) {
+    const child = scope.child();
+    if (node.initializer != null && ts.isVariableDeclarationList(node.initializer)) {
+      declareVariableDeclarationAliases(node.initializer, sourceFile, child);
+    }
+    collectSwitchTopologies(node.statement, sourceFile, child, topologies);
+    return;
+  }
+  if (ts.isForInStatement(node) || ts.isForOfStatement(node)) {
+    const child = scope.child();
+    if (ts.isVariableDeclarationList(node.initializer)) {
+      declareVariableDeclarationAliases(node.initializer, sourceFile, child);
+    }
+    collectSwitchTopologies(node.statement, sourceFile, child, topologies);
+    return;
+  }
+  if (ts.isCatchClause(node)) {
+    const child = scope.child();
+    if (node.variableDeclaration != null) {
+      canonicalBindingName(node.variableDeclaration.name, sourceFile, child, "local");
+    }
+    collectSwitchTopologies(node.block, sourceFile, child, topologies);
+    return;
+  }
+  ts.forEachChild(node, (child) => {
+    collectSwitchTopologies(child, sourceFile, scope, topologies);
+  });
+}
+
+function collectSwitchTopologiesInStatements(
+  statements: readonly ts.Statement[],
+  sourceFile: ts.SourceFile,
+  scope: CanonicalScope,
+  topologies: string[],
+): void {
+  for (const statement of statements) {
+    collectSwitchTopologies(statement, sourceFile, scope, topologies);
+  }
+}
+
+function collectSwitchTopologiesInCaseBlock(
+  caseBlock: ts.CaseBlock,
+  sourceFile: ts.SourceFile,
+  scope: CanonicalScope,
+  topologies: string[],
+): void {
+  for (const clause of caseBlock.clauses) {
+    collectSwitchTopologiesInStatements(clause.statements, sourceFile, scope.child(), topologies);
+  }
+}
+
+function canonicalSwitchTopology(
+  statement: ts.SwitchStatement,
+  sourceFile: ts.SourceFile,
+  scope: CanonicalScope,
+): string {
+  const discriminant = canonicalExpression(statement.expression, sourceFile, scope);
+  const clauses = statement.caseBlock.clauses.map((clause) => {
+    const label = ts.isDefaultClause(clause)
+      ? "default"
+      : canonicalExpression(clause.expression, sourceFile, scope);
+    const statementKinds = clause.statements.map((caseStatement) =>
+      canonicalSwitchClauseStatementKind(caseStatement)
+    ).join(",");
+    return `${label}{${statementKinds}}`;
+  }).join("|");
+  return `switch(${discriminant})[${clauses}]`;
+}
+
+function canonicalSwitchClauseStatementKind(statement: ts.Statement): string {
+  const current = unwrapSingleStatementBlock(statement);
+  if (ts.isReturnStatement(current)) {
+    return "return";
+  }
+  if (ts.isThrowStatement(current)) {
+    return "throw";
+  }
+  if (ts.isBreakStatement(current)) {
+    return "break";
+  }
+  if (ts.isIfStatement(current)) {
+    return "if";
+  }
+  if (ts.isSwitchStatement(current)) {
+    return "switch";
+  }
+  if (ts.isVariableStatement(current)) {
+    return "var";
+  }
+  if (ts.isExpressionStatement(current)) {
+    return "expr";
+  }
+  return ts.SyntaxKind[current.kind];
+}
+
+function declareVariableStatementAliases(
+  statement: ts.VariableStatement,
+  sourceFile: ts.SourceFile,
+  scope: CanonicalScope,
+): void {
+  declareVariableDeclarationAliases(statement.declarationList, sourceFile, scope);
+}
+
+function declareVariableDeclarationAliases(
+  list: ts.VariableDeclarationList,
+  sourceFile: ts.SourceFile,
+  scope: CanonicalScope,
+): void {
+  for (const declaration of list.declarations) {
+    if (
+      ts.isIdentifier(declaration.name) &&
+      declaration.initializer != null &&
+      isStableSwitchAliasExpression(declaration.initializer)
+    ) {
+      scope.declareAlias(
+        declaration.name.text,
+        "local",
+        canonicalExpression(declaration.initializer, sourceFile, scope),
+      );
+      continue;
+    }
+    canonicalBindingName(declaration.name, sourceFile, scope, "local");
+  }
+}
+
+function isStableSwitchAliasExpression(expression: ts.Expression): boolean {
+  const current = unwrapExpression(expression);
+  return (
+    ts.isIdentifier(current) ||
+    current.kind === ts.SyntaxKind.ThisKeyword ||
+    current.kind === ts.SyntaxKind.SuperKeyword ||
+    (ts.isPropertyAccessExpression(current) && isStableSwitchAliasExpression(current.expression)) ||
+    (ts.isElementAccessExpression(current) &&
+      isStableSwitchAliasExpression(current.expression) &&
+      (current.argumentExpression == null || isStableSwitchAliasKey(current.argumentExpression)))
+  );
+}
+
+function isStableSwitchAliasKey(expression: ts.Expression): boolean {
+  const current = unwrapExpression(expression);
+  return ts.isStringLiteralLike(current) ||
+    ts.isNumericLiteral(current) ||
+    ts.isIdentifier(current);
 }
 
 function canonicalFunctionLike(

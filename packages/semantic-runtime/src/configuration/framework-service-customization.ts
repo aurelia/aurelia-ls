@@ -214,7 +214,7 @@ class FrameworkServiceCustomizationDraft {
       index: this.issueOrdinal++,
     })}`;
     const message = `Mapping for property ${propertyName} of <${tagName} /> already exists.`;
-    const publication = this.issuePublisher.publish(
+    const publication = this.issuePublisher.publishForNode(
       context,
       call,
       local,
@@ -267,7 +267,7 @@ class FrameworkServiceCustomizationDraft {
       index: this.issueOrdinal++,
     })}`;
     const message = `Attribute mapper already has a mapping for ${attributeName} on ${tagName}.`;
-    const publication = this.issuePublisher.publish(
+    const publication = this.issuePublisher.publishForNode(
       context,
       call,
       local,

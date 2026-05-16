@@ -58,22 +58,29 @@
       "guidance": [
         "Start here when a materializer or inquiry needs to attach, read, or enumerate rich details for a materialized product.",
         "Define a ProductDetailSlot for a product-owned contract instead of using generic payload escape hatches.",
-        "Keep duplicate-detail and product-kind checks strict so hot details remain tied to committed durable products."
+        "Keep duplicate-detail and product-kind checks strict so hot details remain tied to committed durable products.",
+        "Use ProductDetailCatalog.addAll(...) and addAllIfAbsent(...) for homogeneous materializer emission row families whose details already carry product handles; keep nullable or conditional detail attachment explicit at the call site."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/kernel/product-details.ts",
           "symbolName": "ProductDetailCatalog",
-          "line": 47,
+          "line": 48,
           "summary": "Hot typed product-detail catalog."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/kernel/product-details.ts",
           "symbolName": "ProductDetailSlot",
-          "line": 12,
+          "line": 13,
           "summary": "Typed product-detail slot contract."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/product-details.ts",
+          "line": 83,
+          "summary": "Bulk detail attachment for homogeneous emitted product-detail row families."
         }
       ],
       "liveChecks": [
@@ -86,7 +93,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "reuse:source-backed-issue-publication",

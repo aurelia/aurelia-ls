@@ -5,6 +5,7 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
+import type { EvaluationValue } from '../evaluation/values.js';
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
 
 export const enum BindingContextKind {
@@ -100,6 +101,8 @@ export class BindingContextSlot {
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for mixed-source scope entries. */
     readonly fieldProvenance: readonly FieldProvenance<BindingContextSlotField>[] = [],
+    /** Evaluator-local value carried by runtime-created slots such as repeat locals, when statically knowable. */
+    readonly staticValue: EvaluationValue | null = null,
   ) {}
 }
 
@@ -123,6 +126,8 @@ export class BindingContextSlotDraft {
     readonly sourceAddressHandle: AddressHandle | null = null,
     /** Field-level provenance for mixed-source scope entries. */
     readonly fieldProvenance: readonly FieldProvenance<BindingContextSlotField>[] = [],
+    /** Evaluator-local value carried by runtime-created slots such as repeat locals, when statically knowable. */
+    readonly staticValue: EvaluationValue | null = null,
   ) {}
 
   static fromSlot(slot: BindingContextSlot): BindingContextSlotDraft {
@@ -133,6 +138,7 @@ export class BindingContextSlotDraft {
       slot.targetType,
       slot.sourceAddressHandle,
       slot.fieldProvenance,
+      slot.staticValue,
     );
   }
 
@@ -144,6 +150,7 @@ export class BindingContextSlotDraft {
       this.targetType,
       this.sourceAddressHandle,
       this.fieldProvenance,
+      this.staticValue,
     );
   }
 }
@@ -274,6 +281,29 @@ export class BindingScopeLookup {
     /** Slot that matched the requested name. Null means fallback context or missing ancestor. */
     readonly slot: BindingContextSlot | null,
   ) {}
+}
+
+/** Concrete runtime Scope lookup result for materializers that need the resolved modeled context, not only references. */
+export class BindingScopeLocatedLookup {
+  constructor(
+    /** Lookup lane selected by the runtime Scope rule. */
+    readonly lookupKind: BindingScopeLookupKind,
+    /** Scope where lookup stopped, if one was reachable. */
+    readonly scope: BindingScope | null,
+    /** Context selected by lookup, if known. */
+    readonly context: BindingScopeContext | null,
+    /** Slot that matched the requested name. Null means fallback context, `$this`, or missing ancestor. */
+    readonly slot: BindingContextSlot | null,
+  ) {}
+
+  toLookup(): BindingScopeLookup {
+    return new BindingScopeLookup(
+      this.lookupKind,
+      this.scope?.toReference() ?? null,
+      this.context?.toReference() ?? null,
+      this.slot,
+    );
+  }
 }
 
 /** Runtime Scope model used by controllers and binding expression resolution. */
@@ -424,6 +454,10 @@ export class BindingScope {
   }
 
   lookup(name: string, ancestor: number = 0): BindingScopeLookup {
+    return this.locate(name, ancestor).toLookup();
+  }
+
+  locate(name: string, ancestor: number = 0): BindingScopeLocatedLookup {
     let current: BindingScope | null = this;
 
     if (ancestor > 0) {
@@ -433,23 +467,23 @@ export class BindingScope {
       }
 
       if (current == null) {
-        return new BindingScopeLookup(BindingScopeLookupKind.MissingAncestor, null, null, null);
+        return new BindingScopeLocatedLookup(BindingScopeLookupKind.MissingAncestor, null, null, null);
       }
 
       const overrideSlot = current.overrideContext.lookup(name);
       if (overrideSlot != null) {
-        return new BindingScopeLookup(
+        return new BindingScopeLocatedLookup(
           BindingScopeLookupKind.OverrideContext,
-          current.toReference(),
-          current.overrideContext.toReference(),
+          current,
+          current.overrideContext,
           overrideSlot,
         );
       }
 
-      return new BindingScopeLookup(
+      return new BindingScopeLocatedLookup(
         BindingScopeLookupKind.BindingContext,
-        current.toReference(),
-        current.bindingContext.toReference(),
+        current,
+        current.bindingContext,
         current.bindingContext.lookup(name),
       );
     }
@@ -464,33 +498,37 @@ export class BindingScope {
     }
 
     if (current == null) {
-      return new BindingScopeLookup(
+      return new BindingScopeLocatedLookup(
         BindingScopeLookupKind.FallbackBindingContext,
-        this.toReference(),
-        this.bindingContext.toReference(),
+        this,
+        this.bindingContext,
         null,
       );
     }
 
     const overrideSlot = current.overrideContext.lookup(name);
     if (overrideSlot != null) {
-      return new BindingScopeLookup(
+      return new BindingScopeLocatedLookup(
         BindingScopeLookupKind.OverrideContext,
-        current.toReference(),
-        current.overrideContext.toReference(),
+        current,
+        current.overrideContext,
         overrideSlot,
       );
     }
 
-    return new BindingScopeLookup(
+    return new BindingScopeLocatedLookup(
       BindingScopeLookupKind.BindingContext,
-      current.toReference(),
-      current.bindingContext.toReference(),
+      current,
+      current.bindingContext,
       current.bindingContext.lookup(name),
     );
   }
 
   lookupThis(ancestor: number = 0): BindingScopeLookup {
+    return this.locateThis(ancestor).toLookup();
+  }
+
+  locateThis(ancestor: number = 0): BindingScopeLocatedLookup {
     let current: BindingScope | null = this;
 
     while (ancestor > 0 && current != null) {
@@ -499,13 +537,13 @@ export class BindingScope {
     }
 
     if (current == null) {
-      return new BindingScopeLookup(BindingScopeLookupKind.MissingAncestor, null, null, null);
+      return new BindingScopeLocatedLookup(BindingScopeLookupKind.MissingAncestor, null, null, null);
     }
 
-    return new BindingScopeLookup(
+    return new BindingScopeLocatedLookup(
       BindingScopeLookupKind.BindingContext,
-      current.toReference(),
-      current.bindingContext.toReference(),
+      current,
+      current.bindingContext,
       null,
     );
   }

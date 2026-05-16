@@ -8,11 +8,13 @@ import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ConfigurationFrameworkErrorCode } from './framework-error-code.js';
 
 export const enum ConfigurationIssuePhase {
+  ConfigurationOptions = 'configuration-options',
   ScopeApi = 'scope-api',
   FrameworkServiceCustomization = 'framework-service-customization',
 }
 
 export const enum ConfigurationIssueKind {
+  UnknownConfigurationOption = 'unknown-configuration-option',
   NullScope = 'null-scope',
   CreateScopeWithNullContext = 'create-scope-with-null-context',
   NodeObserverMappingExisted = 'node-observer-mapping-existed',

@@ -1,31 +1,13 @@
 import type { KernelStore } from '../kernel/store.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import {
-  readComponentAgentRows,
-  readRecognizedRouteRows,
-  readRouteConfigRows,
-  readRouteContextRows,
-  readRouteEndpointRows,
-  readRouteNodeRows,
-  readRoutePatternRows,
-  readRouteRecognizerIssueRows,
-  readRouteRecognizerStateRows,
-  readRouterIssueRows,
-  readRouterOptionsRows,
-  readRouterViewportRows,
-  readRouteTreeRows,
-  readTypedNavigationInstructionRows,
-  readViewportAgentRows,
-  readViewportInstructionRows,
-  readViewportInstructionTreeRows,
-} from './route-projections.js';
-import {
   answer,
   includeHandles,
   outcomeForPagedRows,
   pageRows,
 } from './answer-helpers.js';
 import {
+  SemanticAppQueryKind,
   SemanticRuntimeDetail,
   type SemanticComponentAgentsResult,
   type SemanticRecognizedRoutesResult,
@@ -47,6 +29,28 @@ import {
   type SemanticViewportInstructionsResult,
   type SemanticViewportInstructionTreesResult,
 } from './contracts.js';
+import {
+  componentAgentsRouteQuery,
+  recognizedRoutesRouteQuery,
+  routeConfigsRouteQuery,
+  routeContextsRouteQuery,
+  routeEndpointsRouteQuery,
+  routeNodesRouteQuery,
+  routePatternsRouteQuery,
+  routeRecognizerIssuesRouteQuery,
+  routeRecognizerStatesRouteQuery,
+  routerIssuesRouteQuery,
+  routerOptionsRouteQuery,
+  routerViewportsRouteQuery,
+  routeTreesRouteQuery,
+  semanticRouteQueryDescriptorFor,
+  typedNavigationInstructionsRouteQuery,
+  viewportAgentsRouteQuery,
+  viewportInstructionsRouteQuery,
+  viewportInstructionTreesRouteQuery,
+  type SemanticRouteQueryDescriptor,
+  type SemanticRouteQueryRowsResult,
+} from './route-query-registry.js';
 
 export class SemanticAppRouteQueries {
   constructor(
@@ -54,252 +58,159 @@ export class SemanticAppRouteQueries {
     private readonly store: KernelStore,
   ) {}
 
+  answer(
+    queryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`,
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticRouteQueryRowsResult> | null {
+    const descriptor = semanticRouteQueryDescriptorFor(queryKind);
+    return descriptor == null
+      ? null
+      : this.answerRouteQuery(descriptor, page, detail);
+  }
+
   routerOptions(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticRouterOptionsResult> {
-    const rows = readRouterOptionsRows(this.emission, this.store, includeHandles(detail));
-    const paged = pageRows(rows, page);
-    return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} router options row(s).`,
-      { rows: paged.rows },
-      paged.page,
-    );
+    return this.answerRouteQuery(routerOptionsRouteQuery, page, detail);
   }
 
   routes(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticRouteConfigsResult> {
-    const rows = readRouteConfigRows(this.emission, this.store, includeHandles(detail));
-    const paged = pageRows(rows, page);
-    return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} source-backed router route config row(s).`,
-      { rows: paged.rows },
-      paged.page,
-    );
+    return this.answerRouteQuery(routeConfigsRouteQuery, page, detail);
   }
 
   routeContexts(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticRouteContextsResult> {
-    const rows = readRouteContextRows(this.emission, this.store, includeHandles(detail));
-    const paged = pageRows(rows, page);
-    return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} runtime RouteContext row(s).`,
-      { rows: paged.rows },
-      paged.page,
-    );
+    return this.answerRouteQuery(routeContextsRouteQuery, page, detail);
   }
 
   routePatterns(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticRoutePatternsResult> {
-    const rows = readRoutePatternRows(this.emission, this.store, includeHandles(detail));
-    const paged = pageRows(rows, page);
-    return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} route-recognizer configurable route pattern row(s).`,
-      { rows: paged.rows },
-      paged.page,
-    );
+    return this.answerRouteQuery(routePatternsRouteQuery, page, detail);
   }
 
   routeEndpoints(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticRouteEndpointsResult> {
-    const rows = readRouteEndpointRows(this.emission, this.store, includeHandles(detail));
-    const paged = pageRows(rows, page);
-    return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} route-recognizer endpoint row(s).`,
-      { rows: paged.rows },
-      paged.page,
-    );
+    return this.answerRouteQuery(routeEndpointsRouteQuery, page, detail);
   }
 
   routeRecognizerStates(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticRouteRecognizerStatesResult> {
-    const rows = readRouteRecognizerStateRows(this.emission, this.store, includeHandles(detail));
-    const paged = pageRows(rows, page);
-    return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} route-recognizer State row(s).`,
-      { rows: paged.rows },
-      paged.page,
-    );
+    return this.answerRouteQuery(routeRecognizerStatesRouteQuery, page, detail);
   }
 
   routeRecognizerIssues(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticRouteRecognizerIssuesResult> {
-    const rows = this.routeRecognizerIssueRows(detail);
-    const paged = pageRows(rows, page);
-    return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} route-recognizer issue row(s).`,
-      { rows: paged.rows },
-      paged.page,
-    );
+    return this.answerRouteQuery(routeRecognizerIssuesRouteQuery, page, detail);
   }
 
   routerIssues(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticRouterIssuesResult> {
-    const rows = this.routerIssueRows(detail);
-    const paged = pageRows(rows, page);
-    return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} router issue row(s).`,
-      { rows: paged.rows },
-      paged.page,
-    );
+    return this.answerRouteQuery(routerIssuesRouteQuery, page, detail);
   }
 
   routerIssueRows(
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRouterIssuesResult['rows'] {
-    return readRouterIssueRows(this.emission, this.store, includeHandles(detail));
+    return routerIssuesRouteQuery.readRows(this.emission, this.store, includeHandles(detail));
   }
 
   routeRecognizerIssueRows(
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRouteRecognizerIssuesResult['rows'] {
-    return readRouteRecognizerIssueRows(this.emission, this.store, includeHandles(detail));
+    return routeRecognizerIssuesRouteQuery.readRows(this.emission, this.store, includeHandles(detail));
   }
 
   recognizedRoutes(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticRecognizedRoutesResult> {
-    const rows = readRecognizedRouteRows(this.emission, this.store, includeHandles(detail));
-    const paged = pageRows(rows, page);
-    return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} route-recognizer RecognizedRoute row(s).`,
-      { rows: paged.rows },
-      paged.page,
-    );
+    return this.answerRouteQuery(recognizedRoutesRouteQuery, page, detail);
   }
 
   typedNavigationInstructions(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticTypedNavigationInstructionsResult> {
-    const rows = readTypedNavigationInstructionRows(this.emission, this.store, includeHandles(detail));
-    const paged = pageRows(rows, page);
-    return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} TypedNavigationInstruction row(s).`,
-      { rows: paged.rows },
-      paged.page,
-    );
+    return this.answerRouteQuery(typedNavigationInstructionsRouteQuery, page, detail);
   }
 
   viewportInstructions(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticViewportInstructionsResult> {
-    const rows = readViewportInstructionRows(this.emission, this.store, includeHandles(detail));
-    const paged = pageRows(rows, page);
-    return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} ViewportInstruction row(s).`,
-      { rows: paged.rows },
-      paged.page,
-    );
+    return this.answerRouteQuery(viewportInstructionsRouteQuery, page, detail);
   }
 
   viewportInstructionTrees(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticViewportInstructionTreesResult> {
-    const rows = readViewportInstructionTreeRows(this.emission, this.store, includeHandles(detail));
-    const paged = pageRows(rows, page);
-    return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} ViewportInstructionTree row(s).`,
-      { rows: paged.rows },
-      paged.page,
-    );
+    return this.answerRouteQuery(viewportInstructionTreesRouteQuery, page, detail);
   }
 
   routeTrees(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticRouteTreesResult> {
-    const rows = readRouteTreeRows(this.emission, this.store, includeHandles(detail));
-    const paged = pageRows(rows, page);
-    return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} RouteTree row(s).`,
-      { rows: paged.rows },
-      paged.page,
-    );
+    return this.answerRouteQuery(routeTreesRouteQuery, page, detail);
   }
 
   routeNodes(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticRouteNodesResult> {
-    const rows = readRouteNodeRows(this.emission, this.store, includeHandles(detail));
-    const paged = pageRows(rows, page);
-    return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} RouteNode row(s).`,
-      { rows: paged.rows },
-      paged.page,
-    );
+    return this.answerRouteQuery(routeNodesRouteQuery, page, detail);
   }
 
   routerViewports(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticRouterViewportsResult> {
-    const rows = readRouterViewportRows(this.emission, this.store, includeHandles(detail));
-    const paged = pageRows(rows, page);
-    return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} router viewport row(s).`,
-      { rows: paged.rows },
-      paged.page,
-    );
+    return this.answerRouteQuery(routerViewportsRouteQuery, page, detail);
   }
 
   viewportAgents(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticViewportAgentsResult> {
-    const rows = readViewportAgentRows(this.emission, this.store, includeHandles(detail));
-    const paged = pageRows(rows, page);
-    return answer(
-      outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} ViewportAgent row(s).`,
-      { rows: paged.rows },
-      paged.page,
-    );
+    return this.answerRouteQuery(viewportAgentsRouteQuery, page, detail);
   }
 
   componentAgents(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
   ): SemanticRuntimeAnswer<SemanticComponentAgentsResult> {
-    const rows = readComponentAgentRows(this.emission, this.store, includeHandles(detail));
+    return this.answerRouteQuery(componentAgentsRouteQuery, page, detail);
+  }
+
+  private answerRouteQuery<TResult extends SemanticRouteQueryRowsResult>(
+    descriptor: SemanticRouteQueryDescriptor<TResult>,
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<TResult> {
+    const rows = descriptor.readRows(this.emission, this.store, includeHandles(detail));
     const paged = pageRows(rows, page);
     return answer(
       outcomeForPagedRows(paged),
-      `Returned ${paged.rows.length} of ${rows.length} ComponentAgent handoff row(s).`,
-      { rows: paged.rows },
+      `Returned ${paged.rows.length} of ${rows.length} ${descriptor.answerRowLabel}.`,
+      { rows: paged.rows } as TResult,
       paged.page,
     );
   }

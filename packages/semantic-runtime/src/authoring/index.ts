@@ -1,5 +1,6 @@
 export * from './capability.js';
 export * from './form-expected-effects.js';
+export * from './form-recipe-expected-effects.js';
 export * from './ontology.js';
 export * from './operation.js';
 export * from './package-tooling.js';
@@ -9,5 +10,6 @@ export * from './project-tooling-expected-effects.js';
 export * from './repair.js';
 export * from './repair-plan.js';
 export * from './recipe.js';
+export * from './route-expected-effects.js';
 export * from './source-plan.js';
 export * from './verification.js';

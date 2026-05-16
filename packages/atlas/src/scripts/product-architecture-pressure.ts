@@ -64,6 +64,16 @@ interface ProductArchitecturePressureValue {
     readonly repeatedBodyShapeFingerprintCount: number;
     readonly samples: readonly string[];
   }[];
+  readonly functionControlFlowShapeGroups?: readonly {
+    readonly switchTopologyFingerprint: string;
+    readonly functionCount: number;
+    readonly nameCount: number;
+    readonly fileCount: number;
+    readonly lineCount: number;
+    readonly switchTopologyCount: number;
+    readonly nameSamples: readonly string[];
+    readonly fileSamples: readonly string[];
+  }[];
   readonly kernelRecordConstructions?: readonly {
     readonly constructionKind: "new-expression" | "object-literal";
     readonly className: string | null;
@@ -116,90 +126,114 @@ const functionDisplayRows = detail ? 30 : 10;
 const api = createApi({ idleTtlMs: 120_000, requestTimeoutMs: 120_000 });
 
 const structureStarted = performance.now();
-const moduleAnswer = await api.ask({
-  lens: LensId.ProductArchitecture,
-  locus: RepoRootLocus,
-  projection: "modules",
-  filters: {
-    minLargeFunctionCount: 1,
-    orderBy: "bodyPressure",
-  },
-  budget: { rows: 12, evidencePerSubject: 2 },
-});
-const areaDependencyAnswer = await api.ask({
-  lens: LensId.ProductArchitecture,
-  locus: RepoRootLocus,
-  projection: "area-dependencies",
-  filters: { crossesArea: true },
-  budget: { rows: 12, evidencePerSubject: 2 },
-});
-const classAnswer = await api.ask({
-  lens: LensId.ProductArchitecture,
-  locus: RepoRootLocus,
-  projection: "classes",
-  filters: {
-    minLineCount: 80,
-    orderBy: "methodCount",
-  },
-  budget: { rows: 12, evidencePerSubject: 2 },
-});
-const inputClassAnswer = await api.ask({
-  lens: LensId.ProductArchitecture,
-  locus: RepoRootLocus,
-  projection: "classes",
-  filters: {
-    classNameSuffix: "Input",
-    orderBy: "lineCount",
-  },
-  budget: { rows: 80, evidencePerSubject: 1 },
-});
-const auLinkNameMatchAnswer = await api.ask({
-  lens: LensId.ProductArchitecture,
-  locus: RepoRootLocus,
-  projection: "classes",
-  filters: {
-    hasAuLinkCatalogNameMatch: true,
-    hasAuLink: false,
-  },
-  budget: { rows: 80, evidencePerSubject: 1 },
-});
-const duplicateFunctionAnswer = await api.ask({
-  lens: LensId.ProductArchitecture,
-  locus: RepoRootLocus,
-  projection: "function-duplicates",
-  filters: {
-    minFileCount: 2,
-    orderBy: "bodyShapeFingerprint",
-  },
-  budget: { rows: 80, evidencePerSubject: 1 },
-});
-const kernelBatchRows = await readAllPagedRows<
-  ProductArchitecturePressureValue,
-  NonNullable<ProductArchitecturePressureValue["kernelRecordBatches"]>[number]
->(api, {
-  label: "product.architecture:kernel-batches",
-  lens: LensId.ProductArchitecture,
-  projection: "kernel-batches",
-  rowsFromValue: (value) => value?.kernelRecordBatches ?? [],
-});
-const kernelRecordRows = await readAllPagedRows<
-  ProductArchitecturePressureValue,
-  NonNullable<ProductArchitecturePressureValue["kernelRecordConstructions"]>[number]
->(api, {
-  label: "product.architecture:kernel-records",
-  lens: LensId.ProductArchitecture,
-  projection: "kernel-records",
-  rowsFromValue: (value) => value?.kernelRecordConstructions ?? [],
-});
-const fieldProvenanceRows = await readAllPagedRows<
-  ProductArchitecturePressureValue,
-  NonNullable<ProductArchitecturePressureValue["fieldProvenanceConstructions"]>[number]
->(api, {
-  label: "product.architecture:field-provenance",
-  lens: LensId.ProductArchitecture,
-  projection: "field-provenance",
-  rowsFromValue: (value) => value?.fieldProvenanceConstructions ?? [],
-});
+const [
+  moduleAnswer,
+  areaDependencyAnswer,
+  classAnswer,
+  inputClassAnswer,
+  auLinkNameMatchAnswer,
+  duplicateFunctionAnswer,
+  functionControlFlowShapeAnswer,
+  kernelBatchRows,
+  kernelRecordRows,
+  fieldProvenanceRows,
+] = await Promise.all([
+  api.ask({
+    lens: LensId.ProductArchitecture,
+    locus: RepoRootLocus,
+    projection: "modules",
+    filters: {
+      minLargeFunctionCount: 1,
+      orderBy: "bodyPressure",
+    },
+    budget: { rows: 12, evidencePerSubject: 2 },
+  }),
+  api.ask({
+    lens: LensId.ProductArchitecture,
+    locus: RepoRootLocus,
+    projection: "area-dependencies",
+    filters: { crossesArea: true },
+    budget: { rows: 12, evidencePerSubject: 2 },
+  }),
+  api.ask({
+    lens: LensId.ProductArchitecture,
+    locus: RepoRootLocus,
+    projection: "classes",
+    filters: {
+      minLineCount: 80,
+      orderBy: "methodCount",
+    },
+    budget: { rows: 12, evidencePerSubject: 2 },
+  }),
+  api.ask({
+    lens: LensId.ProductArchitecture,
+    locus: RepoRootLocus,
+    projection: "classes",
+    filters: {
+      classNameSuffix: "Input",
+      orderBy: "lineCount",
+    },
+    budget: { rows: 80, evidencePerSubject: 1 },
+  }),
+  api.ask({
+    lens: LensId.ProductArchitecture,
+    locus: RepoRootLocus,
+    projection: "classes",
+    filters: {
+      hasAuLinkCatalogNameMatch: true,
+      hasAuLink: false,
+    },
+    budget: { rows: 80, evidencePerSubject: 1 },
+  }),
+  api.ask({
+    lens: LensId.ProductArchitecture,
+    locus: RepoRootLocus,
+    projection: "function-duplicates",
+    filters: {
+      minFileCount: 2,
+      orderBy: "bodyShapeFingerprint",
+    },
+    budget: { rows: 80, evidencePerSubject: 1 },
+  }),
+  api.ask({
+    lens: LensId.ProductArchitecture,
+    locus: RepoRootLocus,
+    projection: "function-control-flow-shapes",
+    filters: {
+      minFunctionCount: 2,
+      minNameCount: 2,
+      orderBy: "functionCount",
+    },
+    budget: { rows: 80, evidencePerSubject: 1 },
+  }),
+  readAllPagedRows<
+    ProductArchitecturePressureValue,
+    NonNullable<ProductArchitecturePressureValue["kernelRecordBatches"]>[number]
+  >(api, {
+    label: "product.architecture:kernel-batches",
+    lens: LensId.ProductArchitecture,
+    projection: "kernel-batches",
+    rowsFromValue: (value) => value?.kernelRecordBatches ?? [],
+  }),
+  readAllPagedRows<
+    ProductArchitecturePressureValue,
+    NonNullable<ProductArchitecturePressureValue["kernelRecordConstructions"]>[number]
+  >(api, {
+    label: "product.architecture:kernel-records",
+    lens: LensId.ProductArchitecture,
+    projection: "kernel-records",
+    rowsFromValue: (value) => value?.kernelRecordConstructions ?? [],
+  }),
+  readAllPagedRows<
+    ProductArchitecturePressureValue,
+    NonNullable<ProductArchitecturePressureValue["fieldProvenanceConstructions"]>[number]
+  >(api, {
+    label: "product.architecture:field-provenance",
+    lens: LensId.ProductArchitecture,
+    projection: "field-provenance",
+    rowsFromValue: (value) => value?.fieldProvenanceConstructions ?? [],
+  }),
+]);
 
 assertHitOrMissAnswer("product.architecture:modules", moduleAnswer);
 assertHitOrMissAnswer(
@@ -215,6 +249,10 @@ assertHitOrMissAnswer(
 assertHitOrMissAnswer(
   "product.architecture:function-duplicates",
   duplicateFunctionAnswer,
+);
+assertHitOrMissAnswer(
+  "product.architecture:function-control-flow-shapes",
+  functionControlFlowShapeAnswer,
 );
 
 const structureMilliseconds = performance.now() - structureStarted;
@@ -238,6 +276,8 @@ const duplicateFunctionPressureGroups = duplicateFunctionNameGroups.filter((grou
   (group.repeatedBodyShapeFingerprintCount ?? 0) > 0 ||
   (group.repeatedBodyFingerprintCount ?? 0) > 0
 );
+const functionControlFlowShapeGroups =
+  answerValue<ProductArchitecturePressureValue>(functionControlFlowShapeAnswer)?.functionControlFlowShapeGroups ?? [];
 const kernelRecordKindGroups = countEntriesBy(kernelRecordRows, (row) => row.recordKind);
 const kernelProductKindGroups = countEntriesBy(
   kernelRecordRows.filter((row) => row.productKindExpression !== null),
@@ -358,6 +398,16 @@ for (const group of duplicateFunctionPressureGroups.slice(0, duplicateDisplayRow
     : `${group.distinctBodyFingerprintCount} distinct body fingerprint(s), ${group.repeatedBodyFingerprintCount} repeated across files`;
   console.log(
     `- ${group.name}: ${group.functionCount} function(s), ${group.fileCount} file(s), ${group.lineCount} total line(s), ${shapeSignal}, ${bodySignal}, samples ${group.samples.join("; ")}`,
+  );
+}
+
+console.log("");
+console.log("shared switch-topology function pressure");
+console.log("filters: minFunctionCount=2/minNameCount=2; structural canary for parallel switch walkers and dispatch surfaces, not a duplicate verdict");
+printEmptyRows(functionControlFlowShapeGroups);
+for (const group of functionControlFlowShapeGroups.slice(0, duplicateDisplayRows)) {
+  console.log(
+    `- ${group.functionCount} function(s), ${group.nameCount} name(s), ${group.fileCount} file(s), ${group.lineCount} total line(s), ${group.switchTopologyCount} switch(es), names ${group.nameSamples.join(", ")}, files ${group.fileSamples.join("; ")}`,
   );
 }
 

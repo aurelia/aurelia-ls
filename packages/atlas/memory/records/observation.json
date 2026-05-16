@@ -12,11 +12,13 @@
       ],
       "summary": "RuntimeBindingSourceValueEvaluator is the observation-side value evaluation pressure point.",
       "rationale": "Binding value channels own data flow between templates and state. When app pressure asks for smarter diagnostics or completions, this evaluator should be checked before inventing feature-local source-value logic.",
-      "guidance": [
-        "Check framework.observation before extending binding source value evaluation.",
-        "Keep source-to-target and target-to-source policy direction-gated.",
-        "If TypeChecker writeability or value-channel cost rises, inspect whether the inquiry can ask for less rather than computing everything."
-      ],
+        "guidance": [
+          "Check framework.observation before extending binding source value evaluation.",
+          "Keep source-to-target and target-to-source policy direction-gated.",
+          "Scope-name value reads should use BindingScope.locate so bound-controller value handoff and static binding value reduction share the runtime Scope traversal with TypeChecker expression lookup.",
+          "Follow-up binding-source reads should go through RuntimeBindingSourceEvaluationFrame so source lookup, StaticEvaluator reuse, module policy, runtime host, and evaluator guardrails stay aligned for the read epoch.",
+          "If TypeChecker writeability or value-channel cost rises, inspect whether the inquiry can ask for less rather than computing everything."
+        ],
       "anchors": [
         {
           "kind": "source",
@@ -24,6 +26,12 @@
           "symbolName": "RuntimeBindingSourceValueEvaluator",
           "line": 97,
           "summary": "Binding source value evaluator."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/binding-source-evaluation-frame.ts",
+          "symbolName": "RuntimeBindingSourceEvaluationFrame",
+          "summary": "Per binding-source read frame for source lookup and StaticEvaluator reuse."
         },
         {
           "kind": "lens",
@@ -42,8 +50,8 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-13"
-    },
+        "updatedAt": "2026-05-15"
+      },
     {
       "id": "frontier:runtime-effect-lifecycle",
       "kind": "pressure-frontier",
@@ -108,6 +116,8 @@
         "If observer modeling needs TS-specific policy, keep the framework concept name and make the static strategy visible underneath it.",
         "Target-access rows preserve targetTypeSource; dom-global-fallback means the exact tag was absent from TypeScript DOM tag maps and should be treated as host-node/web-component typing pressure, not as a custom-element guess.",
         "AUR0652 is an exact framework error only for the NodeObserverLocator.getObserver path where dirty checking is disabled, the native node property exists, and no configured observer/data/namespace/class/style branch applies. Do not spend it for unknown TypeChecker input.",
+        "AUR0652 diagnostics should carry configure-node-observer guidance toward NodeObserverLocator.useConfig(...) or a framework-supported observable target, so repair planning sees runtime-policy pressure instead of a generic inspection task.",
+        "Exact target-access framework errors are closed diagnostics, not open observer seams. Keep RuntimeBindingTargetAccess.openReason for unresolved ObserverLocator semantics, use diagnosticReason/frameworkErrorCode for the framework throw, and let value-channel publish rejected-target-access without opening data flow.",
         "External app pressure that shows node element-property access with missing property types should be split by targetTypeSource before changing observer selection or diagnostics."
       ],
       "anchors": [
@@ -136,6 +146,12 @@
           "filePath": "packages/semantic-runtime/src/template/runtime-binding.ts",
           "symbolName": "RuntimeBindingTargetTypeSource",
           "summary": "Target type source vocabulary for ObserverLocator target-access rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-observation.ts",
+          "symbolName": "RuntimeBindingValueChannelKind",
+          "summary": "Value-channel kind vocabulary, including rejected target-access diagnostics."
         },
         {
           "kind": "lens",
@@ -171,7 +187,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "frontier:bound-controller-value-flow",
@@ -242,26 +258,26 @@
       "summary": "Select and checked binding value-channel drafts are live pressure for the most-misunderstood form observer semantics.",
       "rationale": "The user explicitly asked to slow down on select and checked observers because they are complex and user-facing. Keep this as a durable handle before future form, diagnostic, autocomplete, or repair work adds local shortcuts.",
       "guidance": [
-        "Start from binding-value-channel-drafts before changing select, radio, checkbox, model.bind, matcher, or multi-select behavior.",
+        "Start from select-value-observer-channel-drafts or checked-observer-channel-drafts before changing select, radio, checkbox, model.bind, matcher, or multi-select behavior; the public binding-value-channel-drafts module is now only the dispatcher.",
         "Distinguish raw DOM property type, observer runtime value type, source assignment capability, and collection mutation channels.",
         "Bound select `multiple` semantics are attribute-order independent: find the `multiple` PropertyBinding among sibling lowered bindings, then classify literal true, literal false, or dynamic mode.",
         "When a dynamic select's option values are a static string domain, use checker string-literal types from the source carrier before declaring the source open; synthetic domain projections may not carry their own checker.",
         "Use weak typing as diagnostic/repair pressure rather than inventing value domains the TypeChecker cannot support.",
-        "AUR0654 belongs at binding data-flow, not value-channel drafting: SelectValueObserverChannelDrafts proves the single-select channel, while RuntimeBindingDataFlowMaterializer compares that channel with the TypeChecker source array shape."
+        "AUR0654 belongs at binding data-flow, not value-channel drafting: SelectValueObserverChannelDrafts proves the single-select channel, while RuntimeBindingDataFlowMaterializer compares that channel with the TypeChecker source array shape.",
+        "Custom matcher presence is now a value-channel fact (`usesCustomMatcher`) for checked/select observers. Do not execute matcher bodies in the static analyzer; use the fact to keep default equality and app-supplied comparison visibly distinct.",
+        "`fixtures/pressure/checked-select-custom-matcher` covers checked array/set collection membership, checked map keyed-boolean membership, checked radio values, single select option values, and multi-select option values with object-valued `model.bind` plus `matcher.bind`, and also covers static `value` radio/checkbox branches for the CheckedObserver value-channel path."
       ],
       "anchors": [
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/observation/binding-value-channel-drafts.ts",
+          "filePath": "packages/semantic-runtime/src/observation/select-value-observer-channel-drafts.ts",
           "symbolName": "SelectValueObserverChannelDrafts",
-          "line": 905,
           "summary": "Select value-channel draft semantics."
         },
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/observation/binding-value-channel-drafts.ts",
+          "filePath": "packages/semantic-runtime/src/observation/checked-observer-channel-drafts.ts",
           "symbolName": "CheckedObserverChannelDrafts",
-          "line": 1281,
           "summary": "Checked/radio/checkbox value-channel draft semantics."
         },
         {
@@ -275,26 +291,35 @@
           "filePath": "packages/semantic-runtime/src/observation/framework-error-code.ts",
           "symbolName": "RuntimeHtmlObservationFrameworkErrorCode",
           "summary": "Exact observation framework error-code bridge; includes runtime-html select_observer_array_on_non_multi_select / AUR0654."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/checked-select-custom-matcher",
+          "summary": "Pressure fixture for checked/select `matcher.bind` value-channel facts."
         }
       ],
       "liveChecks": [
         {
           "kind": "product-large-class",
           "className": "SelectValueObserverChannelDrafts",
-          "filePath": "packages/semantic-runtime/src/observation/binding-value-channel-drafts.ts",
+          "filePath": "packages/semantic-runtime/src/observation/select-value-observer-channel-drafts.ts",
           "minLineCount": 80,
           "minMethodCount": 10
         },
         {
           "kind": "product-large-class",
           "className": "CheckedObserverChannelDrafts",
-          "filePath": "packages/semantic-runtime/src/observation/binding-value-channel-drafts.ts",
+          "filePath": "packages/semantic-runtime/src/observation/checked-observer-channel-drafts.ts",
           "minLineCount": 80,
           "minMethodCount": 4
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/fixtures/pressure/checked-select-custom-matcher/src/checked-select-custom-matcher-app.html"
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "frontier:binding-value-channel-materializer",
@@ -311,6 +336,7 @@
       "guidance": [
         "Start here when a binding needs runtime intake type, observer-specific value domain, source-type reads, model/value sibling lookup, or value-channel open reasons.",
         "Keep draft/type-domain helpers separate from product publication; publication should not rediscover template/node/value-site facts.",
+        "RuntimeBindingValueChannelDraftFrame is the per-binding read epoch: it caches the lazy source-type reader and owns source-operation, direct target-operation, target-access, rejected-target-access, and observer-specific handoff decisions before select/checked/direct collaborators take over.",
         "Use the select/checked frontier for form-specific branch semantics, but keep the generic value-channel materializer as the publication boundary."
       ],
       "anchors": [
@@ -325,15 +351,25 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/observation/binding-value-channel-drafts.ts",
           "symbolName": "RuntimeBindingValueChannelDraftMaterializer",
-          "line": 126,
           "summary": "Draft dispatch layer for binding value channels."
         },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/observation/binding-value-channel-drafts.ts",
+          "symbolName": "RuntimeBindingValueChannelDraftFrame",
+          "summary": "Per-binding value-channel draft read epoch with lazy source-type reader."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/binding-value-channel-draft-support.ts",
           "symbolName": "RuntimeBindingValueChannelDraftSupport",
-          "line": 408,
           "summary": "Shared value-channel lookup and source-type support."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/direct-binding-value-channel-drafts.ts",
+          "symbolName": "DirectBindingValueChannelDrafts",
+          "summary": "Direct target/source operation value-channel drafts."
         },
         {
           "kind": "doc",
@@ -350,36 +386,41 @@
           "minMethodCount": 8
         },
         {
-          "kind": "product-large-class",
-          "className": "RuntimeBindingValueChannelDraftMaterializer",
+          "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/observation/binding-value-channel-drafts.ts",
-          "minLineCount": 80,
-          "minMethodCount": 1
+          "symbolName": "RuntimeBindingValueChannelDraftMaterializer"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "RuntimeBindingValueChannelDraftFrame",
+          "filePath": "packages/semantic-runtime/src/observation/binding-value-channel-drafts.ts",
+          "minLineCount": 120,
+          "minMethodCount": 6
         },
         {
           "kind": "product-large-class",
           "className": "RuntimeBindingValueChannelDraftSupport",
-          "filePath": "packages/semantic-runtime/src/observation/binding-value-channel-drafts.ts",
+          "filePath": "packages/semantic-runtime/src/observation/binding-value-channel-draft-support.ts",
           "minLineCount": 180,
           "minMethodCount": 10
         },
         {
           "kind": "product-large-class",
           "className": "RuntimeBindingValueChannelTypeSupport",
-          "filePath": "packages/semantic-runtime/src/observation/binding-value-channel-drafts.ts",
+          "filePath": "packages/semantic-runtime/src/observation/binding-value-channel-draft-support.ts",
           "minLineCount": 120,
           "minMethodCount": 8
         },
         {
           "kind": "product-large-class",
           "className": "DirectBindingValueChannelDrafts",
-          "filePath": "packages/semantic-runtime/src/observation/binding-value-channel-drafts.ts",
+          "filePath": "packages/semantic-runtime/src/observation/direct-binding-value-channel-drafts.ts",
           "minLineCount": 180,
           "minMethodCount": 5
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "frontier:binding-data-flow-materializer",
@@ -397,6 +438,9 @@
         "Start here when source/target assignability, source write capability, source expression projection, contextual target typing, or weak-typing diagnostics are involved.",
         "Keep expression parsing as authored syntax and observation data-flow as runtime binding semantics over target products and Scope slots.",
         "Target-side observer write failures belong here: spend runtime assign_readonly_size / AUR0220 for source-to-target writes through CollectionSizeObserver and assign_readonly_readonly_property_from_computed / AUR0221 for source-to-target writes through getter-only ComputedObserver targets.",
+        "Runtime AST source-assignment diagnostics such as runtime-expression-unassignable, host-access-scope-assignment, and nullish-assignment are binding data-flow/source write capability pressure, not API-policy wording.",
+        "For member-expression writes, consume CheckerTypeShapeAccess.memberWriteAccess and map that lower-level result into Aurelia astAssign policy; do not duplicate checker/apparent-property or string-index lookup in observation.",
+        "Framework astAssign default-handles unsupported expression kinds as no-ops, so runtime-expression-unassignable should stay framework-runtime-behavior without an AUR code; reserved $host and strict nullish assignment spend exact runtime AUR0106/AUR0116 codes.",
         "Carry source expression open kinds forward on data-flow rows; runtime AST callable diagnostics should consume that product field instead of reparsing expressions in API policy.",
         "Preserve source-type open reasons on rows when TypeChecker facts are weak; do not manufacture members to make autocomplete look better."
       ],
@@ -466,7 +510,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-14"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "reuse:forms-observation-value-channels",
@@ -510,8 +554,8 @@
       "updatedAt": "2026-05-12"
     },
     {
-      "id": "frontier:observation-source-issues",
-      "kind": "pressure-frontier",
+      "id": "reuse:observation-source-issues",
+      "kind": "reuse-guide",
       "domains": [
         "semantic-runtime",
         "observation",
@@ -520,7 +564,7 @@
         "type-system"
       ],
       "summary": "Observation source issues own framework observation errors that arise from authored TypeScript shapes before template binding or resource convergence.",
-      "rationale": "The runtime @astTrack and @observable decorators throw from observation code, even on ordinary classes. Semantic-runtime should model those as observation-owned source issues rather than squeezing them into resource metadata, template diagnostics, or API-level wording.",
+      "rationale": "The runtime @astTrack, @computed, and @observable decorators throw from observation code, even on ordinary classes. Semantic-runtime models those as observation-owned source issues rather than squeezing them into resource metadata, template diagnostics, or API-level wording.",
       "guidance": [
         "Start here when a framework error row comes from observation-authored TypeScript such as @astTrack or @observable decorator context rather than from a template binding target.",
         "As of 2026-05-14, non-method @astTrack targets spend runtime ast_track_decorator_not_a_method / AUR0117; invalid @observable forms spend runtime invalid_observable_decorator_usage / AUR0224; invalid @computed(...) non-getter/non-method targets spend runtime-html computed_not_getter / AUR0228.",
@@ -548,6 +592,12 @@
           "symbolName": "ObservableDecoratorIssueMaterializer",
           "line": 46,
           "summary": "Observation-owned materializer for source-level @observable decorator issues."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/computed-decorator-issues.ts",
+          "symbolName": "ComputedDecoratorIssueMaterializer",
+          "summary": "Observation-owned materializer for source-level @computed decorator issues."
         },
         {
           "kind": "source",
@@ -581,11 +631,9 @@
       ],
       "liveChecks": [
         {
-          "kind": "product-large-class",
-          "className": "AstTrackDecoratorIssueMaterializer",
+          "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/observation/ast-track-decorator-issues.ts",
-          "minLineCount": 60,
-          "minMethodCount": 2
+          "symbolName": "AstTrackDecoratorIssueMaterializer"
         },
         {
           "kind": "source-declaration-exists",
@@ -593,11 +641,14 @@
           "symbolName": "readInvalidAstTrackDecoratorSites"
         },
         {
-          "kind": "product-large-class",
-          "className": "ObservableDecoratorIssueMaterializer",
+          "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/observation/observable-decorator-issues.ts",
-          "minLineCount": 60,
-          "minMethodCount": 2
+          "symbolName": "ObservableDecoratorIssueMaterializer"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/computed-decorator-issues.ts",
+          "symbolName": "ComputedDecoratorIssueMaterializer"
         },
         {
           "kind": "source-declaration-exists",
@@ -611,7 +662,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-14"
+      "updatedAt": "2026-05-15"
     }
   ]
 }

@@ -118,12 +118,8 @@ export class TemplateValueSiteMaterializer {
     if (emission.records.length > 0) {
       this.store.commit(new KernelStoreBatch(emission.records, `template-value-site:${input.localKey}`));
     }
-    for (const site of emission.sites) {
-      this.store.productDetails.add(TemplateProductDetails.ValueSite, site.productHandle, site);
-    }
-    for (const parse of emission.parses) {
-      this.store.productDetails.add(TemplateProductDetails.ExpressionParse, parse.productHandle, parse);
-    }
+    this.store.productDetails.addAll(TemplateProductDetails.ValueSite, emission.sites);
+    this.store.productDetails.addAll(TemplateProductDetails.ExpressionParse, emission.parses);
     return emission;
   }
 

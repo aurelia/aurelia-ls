@@ -66,6 +66,7 @@ import {
 } from '../registration/registration-admission.js';
 import {
   FrameworkRegistrationKind,
+  RegistryBodyKind,
   RegistrationKeyReference,
   RegistrationValueReference,
 } from '../registration/registration-reference.js';
@@ -583,6 +584,12 @@ function summaryForParameterizedRegistryResult(state: RegistryRegistrationState)
 }
 
 function summaryForRegistryAdmissionOpen(admission: RegistryRegistrationAdmission): string | null {
+  switch (admission.registryValue?.registryBody?.bodyKind) {
+    case RegistryBodyKind.AliasedResourcesRegistry:
+      return 'aliasedResourcesRegistry(...) module input or alias arguments are not statically closed enough for registry body interpretation.';
+    case undefined:
+      break;
+  }
   switch (admission.registryValue?.frameworkKind) {
     case FrameworkRegistrationKind.StandardConfiguration:
       return null;

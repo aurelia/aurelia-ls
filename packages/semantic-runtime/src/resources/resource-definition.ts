@@ -122,25 +122,3 @@ export type FullResourceDefinition =
 export type TemplateCompilableResourceDefinition =
   | CustomElementDefinition
   | CustomAttributeDefinition;
-
-export function createNamedResourceDefinitionHeader(
-  resourceKind: NamedResourceDefinitionHeader['type'],
-  target: ResourceTargetObservation | null,
-  name: string | null,
-  aliases: readonly string[],
-): NamedResourceDefinitionHeader {
-  switch (resourceKind) {
-    case ResourceDefinitionKind.CustomElement:
-      return new CustomElementDefinitionHeader(target, name, aliases);
-    case ResourceDefinitionKind.CustomAttribute:
-      return new CustomAttributeDefinitionHeader(target, name, aliases);
-    case ResourceDefinitionKind.TemplateController:
-      return new TemplateControllerDefinitionHeader(target, name, aliases);
-    case ResourceDefinitionKind.ValueConverter:
-      return new ValueConverterDefinitionHeader(target, name, aliases);
-    case ResourceDefinitionKind.BindingBehavior:
-      return new BindingBehaviorDefinitionHeader(target, name, aliases);
-    case ResourceDefinitionKind.BindingCommand:
-      return new BindingCommandDefinitionHeader(target, name, aliases);
-  }
-}

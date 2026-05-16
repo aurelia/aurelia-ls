@@ -62,6 +62,7 @@ import {
 } from '../registration/registration-admission.js';
 import {
   FrameworkRegistrationKind,
+  RegistryBodyInterpretationState,
 } from '../registration/registration-reference.js';
 import {
   frameworkRegistrationEffectsForKind,
@@ -1228,7 +1229,7 @@ export class DiWorldConstructor {
       return new DiResourceSlotEmission(seam.records, [], [], [seam.seam]);
     }
 
-    const names = resourceLookupNames(definition);
+    const names = resourceLookupNames(definition, admission.resourceLookupNameOverride);
     names.forEach((name, index) => {
       const slot = this.resourceSlotPublication.recordsForResourceDefinitionSlot(
         container,
@@ -1391,11 +1392,14 @@ export class DiWorldConstructor {
 
 }
 
-function resourceLookupNames(definition: FullResourceDefinition): readonly string[] {
+function resourceLookupNames(
+  definition: FullResourceDefinition,
+  lookupNameOverride: string | null = null,
+): readonly string[] {
   if (definition.type === ResourceDefinitionKind.AttributePattern) {
     return [];
   }
-  return [definition.name, ...definition.aliases.map((alias) => alias.name)];
+  return [lookupNameOverride ?? definition.name, ...definition.aliases.map((alias) => alias.name)];
 }
 
 function summaryForOpenRegistrationAdmission(admission: OpenRegistrationAdmission): string {
@@ -1428,6 +1432,12 @@ function summaryForOpenRegistrationAdmission(admission: OpenRegistrationAdmissio
 }
 
 function frameworkRegistrationEffectsCloseRegistryBody(admission: RegistrationAdmissionProduct): boolean {
+  if (
+    admission instanceof RegistryRegistrationAdmission
+    && admission.registryValue?.registryBody?.state === RegistryBodyInterpretationState.Interpreted
+  ) {
+    return true;
+  }
   switch (frameworkRegistrationKindForAdmission(admission)) {
     case FrameworkRegistrationKind.ValidationConfiguration:
     case FrameworkRegistrationKind.ValidationHtmlConfiguration:

@@ -61,9 +61,7 @@ import {
 import type { FullResourceDefinition } from './resource-definition.js';
 import { materializeBuiltInResourceDefinition } from './built-in-resource-definition-materializer.js';
 import { BuiltInResourceTargetTypeProjector } from './built-in-resource-target-type.js';
-import {
-  toAureliaResourceIdentityKind,
-} from './resource-kind.js';
+import { toAureliaResourceIdentityKind } from './named-resource-kind.js';
 import { ResourceProductDetails } from './product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 

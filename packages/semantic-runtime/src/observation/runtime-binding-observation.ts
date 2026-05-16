@@ -33,6 +33,7 @@ export const enum RuntimeBindingValueChannelKind {
   CheckedCollectionMembership = 'checked-collection-membership',
   CheckedMapKeyedBoolean = 'checked-map-keyed-boolean',
   CheckedModel = 'checked-model',
+  RejectedTargetAccess = 'rejected-target-access',
   Open = 'open',
 }
 
@@ -130,6 +131,7 @@ export type RuntimeBindingValueChannelField =
   | 'runtimeValueType'
   | 'valueDomain'
   | 'isCollection'
+  | 'usesCustomMatcher'
   | 'openReason'
   | 'openReasonKinds'
   | 'source';
@@ -169,6 +171,7 @@ export class RuntimeBindingValueChannel {
     readonly runtimeValueType: CheckerTypeReference | null,
     readonly valueDomain: readonly string[],
     readonly isCollection: boolean | null,
+    readonly usesCustomMatcher: boolean,
     readonly openReason: string | null,
     readonly openReasonKinds: readonly OpenSeamReasonKind[],
     readonly sourceAddressHandle: AddressHandle | null,

@@ -6,6 +6,11 @@ import {
   type StaticModuleEvaluationResult,
 } from './evaluator.js';
 import {
+  readStaticCommonJsExportMap,
+  readStaticCommonJsExportValue,
+  readStaticCommonJsRequireValue,
+} from './commonjs.js';
+import {
   DefaultStaticEvaluationPolicy,
   type StaticEvaluationPolicy,
 } from './policy.js';
@@ -16,13 +21,11 @@ import {
   type EvaluationModuleGraph,
   type EvaluationModuleRecord,
 } from './module-graph.js';
-import type { ModuleEnvironmentRecord } from './environment.js';
 import {
   EvaluationBoundaryKind,
   EvaluationBoundaryObjectValue,
   EvaluationBoundaryValue,
   EvaluationModuleNamespaceValue,
-  EvaluationObjectValue,
   EvaluationPromiseValue,
   EvaluationUnknownValue,
   EvaluationValueKind,
@@ -169,7 +172,7 @@ export class StaticModuleGraphEvaluator {
       return this.openValue(`Export '${exportName}' is ambiguous across export-star entries in ${moduleKey}.`, record.sourceFile);
     }
 
-    const commonJsExport = readCommonJsExportValue(result.environment, exportName);
+    const commonJsExport = readStaticCommonJsExportValue(result.environment, exportName);
     if (commonJsExport != null) {
       return commonJsExport;
     }
@@ -182,13 +185,32 @@ export class StaticModuleGraphEvaluator {
   private resolveImportValues(record: EvaluationModuleRecord): StaticEvaluationImportValues {
     const imports = new Map<string, EvaluationValue>();
     for (const entry of record.imports) {
-      if (entry.localName == null || entry.importKind === EvaluationImportKind.SideEffect) {
+      if (entry.importKind === EvaluationImportKind.SideEffect) {
+        this.evaluateSideEffectImport(record.moduleKey, entry);
+        continue;
+      }
+      if (entry.localName == null) {
         continue;
       }
       const value = this.resolveImportValue(record.moduleKey, entry);
       imports.set(entry.localName, value);
     }
     return imports;
+  }
+
+  private evaluateSideEffectImport(fromModuleKey: string, entry: EvaluationImportEntry): void {
+    const targetModuleKey = this.graph.readLinkedModule(fromModuleKey, entry.moduleSpecifier);
+    if (targetModuleKey == null) {
+      if (isRelativeModuleSpecifier(entry.moduleSpecifier)) {
+        this.openValue(`Side-effect import '${entry.moduleSpecifier}' from ${fromModuleKey} did not resolve to a local module.`, entry.node);
+      }
+      return;
+    }
+    const result = this.evaluateModule(targetModuleKey);
+    if (result == null) {
+      const record = this.graph.readModule(targetModuleKey);
+      this.openValue(`Side-effect import '${entry.moduleSpecifier}' target could not be evaluated.`, record?.sourceFile ?? entry.node);
+    }
   }
 
   private resolveImportValue(fromModuleKey: string, entry: EvaluationImportEntry): EvaluationValue {
@@ -231,7 +253,7 @@ export class StaticModuleGraphEvaluator {
       const record = this.graph.readModule(targetModuleKey);
       return this.openValue(`CommonJS require '${moduleSpecifier}' target could not be evaluated.`, record?.sourceFile ?? node);
     }
-    const commonJsExport = readCommonJsRequireValue(result.environment);
+    const commonJsExport = readStaticCommonJsRequireValue(result.environment);
     if (commonJsExport != null) {
       return commonJsExport;
     }
@@ -317,7 +339,7 @@ export class StaticModuleGraphEvaluator {
     }
     const result = this.evaluateModule(moduleKey);
     if (result != null) {
-      for (const [name, value] of readCommonJsExportMap(result.environment)) {
+      for (const [name, value] of readStaticCommonJsExportMap(result.environment)) {
         if (!exports.has(name)) {
           exports.set(name, value);
         }
@@ -348,59 +370,4 @@ function externalImportBoundaryValue(entry: EvaluationImportEntry): EvaluationVa
     `import '${importedName}' from '${entry.moduleSpecifier}'`,
     entry.node,
   );
-}
-
-function readCommonJsExportValue(
-  environment: ModuleEnvironmentRecord,
-  exportName: string,
-): EvaluationValue | null {
-  const moduleExports = readCommonJsModuleExportsValue(environment);
-  if (exportName === 'default' && moduleExports != null) {
-    return moduleExports;
-  }
-  if (moduleExports?.kind === EvaluationValueKind.Object) {
-    return moduleExports.properties.get(exportName)?.value ?? null;
-  }
-  const exportsValue = readCommonJsExportsBindingObject(environment);
-  if (exportName === 'default') {
-    return exportsValue;
-  }
-  return exportsValue?.properties.get(exportName)?.value ?? null;
-}
-
-function readCommonJsExportMap(
-  environment: ModuleEnvironmentRecord,
-): ReadonlyMap<string, EvaluationValue> {
-  const moduleExports = readCommonJsModuleExportsValue(environment);
-  const exports = moduleExports?.kind === EvaluationValueKind.Object
-    ? moduleExports
-    : readCommonJsExportsBindingObject(environment);
-  if (exports == null) {
-    return new Map();
-  }
-  return new Map([...exports.properties].map(([name, property]) => [name, property.value]));
-}
-
-function readCommonJsRequireValue(
-  environment: ModuleEnvironmentRecord,
-): EvaluationValue | null {
-  return readCommonJsModuleExportsValue(environment)
-    ?? readCommonJsExportsBindingObject(environment);
-}
-
-function readCommonJsModuleExportsValue(
-  environment: ModuleEnvironmentRecord,
-): EvaluationValue | null {
-  const moduleValue = environment.readValue('module');
-  if (moduleValue?.kind === EvaluationValueKind.Object) {
-    return moduleValue.properties.get('exports')?.value ?? null;
-  }
-  return null;
-}
-
-function readCommonJsExportsBindingObject(
-  environment: ModuleEnvironmentRecord,
-): EvaluationObjectValue | null {
-  const exportsValue = environment.readValue('exports');
-  return exportsValue?.kind === EvaluationValueKind.Object ? exportsValue : null;
 }

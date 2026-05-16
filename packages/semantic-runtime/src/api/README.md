@@ -16,7 +16,10 @@ focused modules such as `binding-projections.ts`, so expanding the authoring API
 materializer.
 Answer envelope/page mechanics live in `answer-helpers.ts`. Route-family answerers live in `app-route-queries.ts`:
 that module owns the public query-method shape for router options, route configs, route contexts, recognizer rows,
-viewport instructions/agents, route trees/nodes, and component agents, while `runtime.ts` only delegates to it.
+viewport instructions/agents, route trees/nodes, and component agents, while `runtime.ts` only delegates the route
+family. `route-query-registry.ts` owns the shared route query descriptors: `SemanticAppQueryKind`, stable
+`routeProductKind`, row reader, and answer label. `route-effect-facts.ts` is the authoring-facing bridge over those
+descriptors so API dispatch, verification, and orientation share one registry of router product rows.
 Template-family answerers live in `app-template-queries.ts`: that module owns template-compilation rows plus
 template completion, cursor-info, and diagnostic query handoff, while the runtime facade keeps only app opening,
 app-level dispatch, and direct cursor-locus convenience methods.
@@ -210,7 +213,9 @@ source-bearing when the resource definition has authored bindable metadata, so g
 bindable declaration instead of stopping at the owning custom element or custom attribute. Expression-member selection
 keeps the owner type available for completion and diagnostics, but also resolves the exact authored member token when
 the cursor is on a closed member name; hover/definition can then target the member declaration rather than only the
-owner type.
+owner type. The owner type row deliberately exposes both the template/expression projection source and the TypeScript
+declaration source. Hover/explanation can point at the projection source when answering "why this type here?", while
+definition and owner-type repair planning should prefer the declaration source when the checker can name one.
 Those member declarations may come from app source, source-shipped packages, or Program-only declaration files. The API
 should surface the source reference when the TypeChecker can name the declaration. If the cursor is on a member of an
 index-signature-only owner, cursor-info may report that selected member as an index-signature access with the indexed
@@ -248,6 +253,9 @@ The cursor pressure script derives hover targets, navigation targets, diagnostic
 from this same result so feature pressure stays on the shared cursor-info substrate instead of becoming separate source
 scans. It labels index-signature selected members as synthetic so those rows do not look like lost TypeChecker
 declaration provenance.
+Completion pressure classes prefer cursor-diagnostic-backed labels when the LSP envelope already explains a miss or
+partial answer, but the script still prints the underlying `missingInputs` counters separately. That keeps actionable
+repair surfaces such as missing scope-slot types visible without making them look like unexplained autocomplete gaps.
 It also seeds a bounded `diagnostic-probe` lane from file/app diagnostic source ranges before generic expression
 sampling. The reader may inspect more diagnostic rows than it samples and then chooses loci by diagnostic pressure class,
 so rare diagnostics such as binding assignment strictness are not hidden behind a dominant weak-owner class. That keeps
@@ -706,12 +714,21 @@ RouteConfigContext eager path generation publishes `eager-path-generation-failed
 whose endpoint path cannot be generated from the provided params. Rows preserve route-config and recognized-route
 references when available, the component/path/redirect fields relevant to the owning router algorithm, source, and
 optional handles.
+Template diagnostics also project router issue rows whose authored source belongs to the selected template. Those rows
+use `router-framework-error` so file-level and cursor-locus APIs can surface `load`/`href` expression parser,
+instruction creation, recognition, viewport-resolution, and eager path-generation failures without moving issue
+ownership out of the router domain. `AppDiagnostics` still reads the owning router issue lane and filters those
+template-projected copies to avoid double-counting. Cursor-info uses the same projection path and should prefer the
+exact expression/value span from parser or HTML value provenance over the broader attribute carrier when a router issue
+originates in a template value.
 `RecognizedRoutes` exposes the next layer for closed static router-resource instruction paths. Rows carry the recognized
 path, residue presence, fulfilled parameter count, recognizer reference, causing `ViewportInstruction` /
-`ViewportInstructionTree`, route-context closure, redirect depth, endpoint path/residual closure, source, and optional handles. The
+`ViewportInstructionTree`, route-context closure, redirect depth, redirect source route config, endpoint
+path/residual closure, source, and optional handles. The
 recognizer walk mirrors Aurelia's `RouteRecognizer.recognize(...)` candidate chain, including the handler-based endpoint
 grouping that keeps multi-path and residual endpoints attached to the same route config. Closed static redirects publish
-additional recognized-route rows for their re-recognized target paths with `redirectDepth > 0`. These rows are still
+additional recognized-route rows for their re-recognized target paths with `redirectDepth > 0` and
+`redirectSourceRouteConfig` pointing at the redirect route config that produced the target. These rows are still
 pre-transition facts: the original `ViewportInstruction` rows remain the instruction-tree creation products, while
 recognized-route rows are the handoff into route-tree compilation.
 
@@ -735,8 +752,9 @@ viewport/residue shape, path/final-path, child counts, source references, and op
 pre-activation route-tree compilation facts; the runtime still does not claim to have run guards, scheduled viewport
 updates, activated component agents, or exhausted every redirect edge case. Redirect routes that reach transition
 compilation without a modeled redirect target still surface an explicit router open-seam reason instead of silently
-disappearing from the transition tree; when the framework would reject the redirect expression shape first,
-`RouterIssues` adds the diagnostic row and `AppDiagnostics` reports it under the `router` domain.
+disappearing from the transition tree. Closed static redirect targets are consumed through their
+`redirectSourceRouteConfig` edge, and framework-rejected redirect targets or expression shapes surface as
+`RouterIssues` / `AppDiagnostics` instead of generic open seams.
 `TypedNavigationInstructions`, `ViewportInstructions`, and `ViewportInstructionTrees` expose the handoff products that
 router resources create before route-recognizer matching and route-node transition compilation. Rows keep the
 RouteExpression-backed typed instruction kind/value lane, viewport wrapper shape, child cardinality, parameter count,
@@ -773,6 +791,10 @@ unassignable expression shapes without parsing prose. The compact summary uses
 strictness are separate axes: a two-way binding can be honest Aurelia runtime flow while still carrying policy pressure
 for diagnostics or authoring guidance. Pressure output prints assignment-kind/reason-kind cross-products so runtime
 unassignable rows stay distinct from runtime-assignable-with-strictness rows.
+Framework `astAssign` only throws exact runtime codes for reserved `$host` assignment (`AUR0106`), strict nullish
+member/keyed assignment (`AUR0116`), and destructuring source failures (`AUR0112`); non-assignable expression kinds
+such as calls or tagged templates are framework-runtime no-ops and should stay code-less diagnostics unless a future
+framework usage path changes that authority.
 It also prints generalized reason-by-source-type, reason-by-assignment-target-type, reason-by-target-type, and
 reason-by-writeability cross-tabs. Use those before opening raw app rows: they reveal whether a pressure class is a
 real unsupported assignment, a readonly TypeChecker surface, an `unknown`/`any` target value channel, or a
@@ -810,7 +832,10 @@ broad `HTMLElement`/`SVGElement` fallback, so unknown custom-host or web-compone
 tag-name heuristics. Target access rows can also carry exact framework error-code authority when the observer lookup
 itself would throw. The current modeled case is runtime-html `node_observer_strategy_not_found` (`AUR0652`) when
 `NodeObserverLocator.allowDirtyCheck` is disabled and an existing native node property has no configured observer
-strategy; `TemplateDiagnostics` and `AppDiagnostics` surface that as `binding-target-access-framework-error`.
+strategy; the row uses `diagnosticReason` for that closed framework rejection while `openReason` remains reserved for
+unresolved observer-locator semantics. `TemplateDiagnostics` and `AppDiagnostics` surface the closed rejection as
+`binding-target-access-framework-error` with a `configure-node-observer` suggestion that points at the observer-config
+boundary, and the value-channel row reports `rejected-target-access` rather than opening data-flow again.
 
 `TargetOperations` exposes direct target updates that do not ask `ObserverLocator`. Rows include an owner lane:
 renderer-owned operations from `SetPropertyRenderer`, `SetAttributeRenderer`, `SetClassAttributeRenderer`, and
@@ -836,15 +861,17 @@ verification uses this lane for fact-level effects such as "the generated valida
 applications" before deriving higher-level validation ownership taste.
 
 `BindingValueChannels` exposes the observer/accessor or direct-operation value shape that runtime data flow should use
-instead of blindly treating the raw DOM property as the transported value. Static single-select options now surface a
+instead of blindly treating the raw DOM property as the transported value. Rows also carry `usesCustomMatcher` so
+checked/select channels can report that Aurelia runtime comparison is delegated to an app-provided matcher even though
+the matcher function body remains outside static execution. Static single-select options now surface a
 literal value domain such as `'ship' | 'pickup'`, and expression-backed `model.bind`/`value.bind` can supply option,
 radio, and checkbox element values through the lowered sibling binding products. `checked.bind` surfaces boolean,
 radio-value, checkbox array/set-membership, and checkbox map keyed-boolean branches. Static multi-selects expose
 selected option element domains for array sources. Dynamic `multiple.bind` surfaces as `select-dynamic-option-value`
 when the source type can accept both
 single-select scalar updates and multi-select array updates; otherwise it remains channel pressure. Non-literal dynamic
-element values and custom matcher semantics should also stay visible as channel pressure until their observer semantics
-are closed. Select-channel open rows carry typed reason kinds such as
+element values should stay visible as channel pressure until their observer semantics are closed. Select-channel open
+rows carry typed reason kinds such as
 `binding-value-channel-dynamic-select-multiple`,
 `binding-value-channel-select-option-value-open`, `binding-value-channel-select-option-domain-open`, and
 `binding-value-channel-select-multiple-source-open` on both the value-channel row and any dependent open data-flow seam,

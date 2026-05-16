@@ -13,6 +13,12 @@ resource definitions, registrations, and world-construction paths have to be int
 - Represent calm ECMAScript host primitives that framework source uses as declaration machinery, currently
   `Symbol.for(...)`, `Object.freeze(...)`/package-local freeze aliases, and object-binding exports.
 - Preserve unsupported syntax, unresolved identifiers, dynamic calls, mutation pressure, and branch uncertainty as open seams.
+- In static invocation/effect tracing, treat `return`, `throw`, `break`, and `continue` as block-exit completions so
+  framework effect rows do not pretend later statements in the same block still execute. Branch conditions can still
+  remain dynamic and report both branch bodies as potential effects.
+- In static invocation/effect tracing, bind destructured variable, parameter, callback, and for-of names as lexical flow
+  facts with destructured paths instead of emitting unsupported binding-pattern seams for ordinary object/array
+  destructuring.
 - Offer an intrinsic hook for known pure helper calls without importing the target package.
 - Stay framework-neutral at the core: Aurelia resource, registration, DI, and materialization readers sit above this layer.
 

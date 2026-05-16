@@ -42,6 +42,7 @@ export class ProductDetailEntry<
 }
 
 type ReadProduct = (handle: ProductHandle) => MaterializedProduct | null;
+type ProductDetailWithHandle = { readonly productHandle: ProductHandle };
 
 /** Hot in-memory catalog for typed product details keyed by durable product handles. */
 export class ProductDetailCatalog {
@@ -78,6 +79,18 @@ export class ProductDetailCatalog {
     return entry;
   }
 
+  /** Attach a typed detail collection whose members carry their own product handles. */
+  addAll<TDetail extends ProductDetailWithHandle, TProductKind extends ProductKindKey>(
+    slot: ProductDetailSlot<TDetail, TProductKind>,
+    details: Iterable<TDetail>,
+  ): readonly ProductDetailEntry<TDetail, TProductKind>[] {
+    const entries: ProductDetailEntry<TDetail, TProductKind>[] = [];
+    for (const detail of details) {
+      entries.push(this.add(slot, detail.productHandle, detail));
+    }
+    return entries;
+  }
+
   /** Attach a detail unless the same slot has already hydrated this product. */
   addIfAbsent<TDetail, TProductKind extends ProductKindKey>(
     slot: ProductDetailSlot<TDetail, TProductKind>,
@@ -94,6 +107,18 @@ export class ProductDetailCatalog {
       );
     }
     return existing as ProductDetailEntry<TDetail, TProductKind>;
+  }
+
+  /** Attach a detail collection unless each product already has the same slot. */
+  addAllIfAbsent<TDetail extends ProductDetailWithHandle, TProductKind extends ProductKindKey>(
+    slot: ProductDetailSlot<TDetail, TProductKind>,
+    details: Iterable<TDetail>,
+  ): readonly ProductDetailEntry<TDetail, TProductKind>[] {
+    const entries: ProductDetailEntry<TDetail, TProductKind>[] = [];
+    for (const detail of details) {
+      entries.push(this.addIfAbsent(slot, detail.productHandle, detail));
+    }
+    return entries;
   }
 
   /** Read a detail through the slot that owns its type contract. */

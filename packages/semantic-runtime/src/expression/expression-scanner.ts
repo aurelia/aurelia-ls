@@ -419,54 +419,8 @@ export class Scanner {
           break;
         }
 
-        switch (next) {
-          case CharCode.SingleQuote:
-            result += "'";
-            this.index += 2;
-            break;
-          case CharCode.DoubleQuote:
-            result += "\"";
-            this.index += 2;
-            break;
-          case CharCode.Backslash:
-            result += "\\";
-            this.index += 2;
-            break;
-          case CharCode.LowercaseN:
-            result += "\n";
-            this.index += 2;
-            break;
-          case CharCode.LowercaseR:
-            result += "\r";
-            this.index += 2;
-            break;
-          case CharCode.LowercaseT:
-            result += "\t";
-            this.index += 2;
-            break;
-          case CharCode.LowercaseB:
-            result += "\b";
-            this.index += 2;
-            break;
-          case CharCode.LowercaseF:
-            result += "\f";
-            this.index += 2;
-            break;
-          case CharCode.LowercaseV:
-            result += "\v";
-            this.index += 2;
-            break;
-          case CharCode.Zero:
-            result += "\0";
-            this.index += 2;
-            break;
-          default: {
-            // Simple escape: just take the escaped char as-is.
-            result += String.fromCharCode(next);
-            this.index += 2;
-            break;
-          }
-        }
+        result += String.fromCharCode(unescapeExpressionCode(next));
+        this.index += 2;
         continue;
       }
 
@@ -650,6 +604,60 @@ function charCodeAt(source: string, index: number): number {
   return index < 0 || index >= source.length ? -1 : source.charCodeAt(index);
 }
 
+export function unescapeExpressionCode(code: number): number {
+  switch (code) {
+    case CharCode.LowercaseB:
+      return CharCode.Backspace;
+    case CharCode.LowercaseT:
+      return CharCode.Tab;
+    case CharCode.LowercaseN:
+      return CharCode.LineFeed;
+    case CharCode.LowercaseV:
+      return CharCode.VerticalTab;
+    case CharCode.LowercaseF:
+      return CharCode.FormFeed;
+    case CharCode.LowercaseR:
+      return CharCode.CarriageReturn;
+    case CharCode.DoubleQuote:
+      return CharCode.DoubleQuote;
+    case CharCode.SingleQuote:
+      return CharCode.SingleQuote;
+    case CharCode.Backslash:
+      return CharCode.Backslash;
+    default:
+      return code;
+  }
+}
+
+export function cookExpressionStringSegment(
+  source: string,
+  start = 0,
+  end = source.length,
+): string {
+  let result = "";
+  let index = start;
+  while (index < end) {
+    const ch = source.charCodeAt(index);
+    if (ch === CharCode.Backslash && index + 1 < end) {
+      result += String.fromCharCode(unescapeExpressionCode(source.charCodeAt(index + 1)));
+      index += 2;
+      continue;
+    }
+
+    result += String.fromCharCode(ch);
+    index++;
+  }
+  return result;
+}
+
+export function isEscapedByOddBackslashRun(source: string, index: number): boolean {
+  let count = 0;
+  for (let cursor = index - 1; cursor >= 0 && source.charCodeAt(cursor) === CharCode.Backslash; cursor--) {
+    count++;
+  }
+  return count % 2 === 1;
+}
+
 function isEcmascriptWhitespaceCode(ch: number): boolean {
   return (
     ch === CharCode.Space ||
@@ -696,6 +704,7 @@ export const enum CharCode {
   CarriageReturn = 0x000d,
   Space = 0x0020,
   NonBreakingSpace = 0x00a0,
+  Backspace = 0x0008,
 
   // Digits
   Zero = 0x0030,

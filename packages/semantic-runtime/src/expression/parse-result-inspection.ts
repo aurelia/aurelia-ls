@@ -216,263 +216,136 @@ function collectMemberNameSpans(
   expression: ExpressionAstNode,
   spans: SourceSpan[],
 ): void {
-  switch (expression.$kind) {
-    case 'AccessMember':
-      spans.push(expression.name.span);
-      collectMemberNameSpans(expression.object, spans);
-      return;
-    case 'CallMember':
-      spans.push(expression.name.span);
-      collectMemberNameSpans(expression.object, spans);
-      collectMemberNameSpansInList(expression.args, spans);
-      return;
-    case 'Paren':
-    case 'Unary':
-      collectMemberNameSpans(expression.expression, spans);
-      return;
-    case 'AccessKeyed':
-      collectMemberNameSpans(expression.object, spans);
-      collectMemberNameSpans(expression.key, spans);
-      return;
-    case 'CallFunction':
-      collectMemberNameSpans(expression.func, spans);
-      collectMemberNameSpansInList(expression.args, spans);
-      return;
-    case 'CallScope':
-    case 'CallGlobal':
-      collectMemberNameSpansInList(expression.args, spans);
-      return;
-    case 'New':
-      collectMemberNameSpans(expression.func, spans);
-      collectMemberNameSpansInList(expression.args, spans);
-      return;
-    case 'TaggedTemplate':
-      collectMemberNameSpans(expression.func, spans);
-      collectMemberNameSpansInList(expression.expressions, spans);
-      return;
-    case 'Binary':
-      collectMemberNameSpans(expression.left, spans);
-      collectMemberNameSpans(expression.right, spans);
-      return;
-    case 'Conditional':
-      collectMemberNameSpans(expression.condition, spans);
-      collectMemberNameSpans(expression.yes, spans);
-      collectMemberNameSpans(expression.no, spans);
-      return;
-    case 'Assign':
-      collectMemberNameSpans(expression.target, spans);
-      collectMemberNameSpans(expression.value, spans);
-      return;
-    case 'ArrowFunction':
-      collectMemberNameSpans(expression.body, spans);
-      return;
-    case 'ArrayLiteral':
-      collectMemberNameSpansInList(expression.elements, spans);
-      return;
-    case 'ObjectLiteral':
-      collectMemberNameSpansInList(expression.values, spans);
-      return;
-    case 'Template':
-    case 'Interpolation':
-      collectMemberNameSpansInList(expression.expressions, spans);
-      return;
-    case 'ForOfStatement':
-      collectMemberNameSpans(expression.iterable, spans);
-      return;
-    case 'BindingPatternDefault':
-      collectMemberNameSpans(expression.target, spans);
-      collectMemberNameSpans(expression.default, spans);
-      return;
-    case 'ArrayBindingPattern':
-      collectMemberNameSpansInList(expression.elements, spans);
-      if (expression.rest != null) {
-        collectMemberNameSpans(expression.rest, spans);
-      }
-      return;
-    case 'ObjectBindingPattern':
-      collectMemberNameSpansInList(expression.properties.map((property) => property.value), spans);
-      if (expression.rest != null) {
-        collectMemberNameSpans(expression.rest, spans);
-      }
-      return;
-    case 'DestructuringAssignment':
-      collectMemberNameSpans(expression.pattern, spans);
-      collectMemberNameSpans(expression.source, spans);
-      return;
-    case 'AccessThis':
-    case 'AccessBoundary':
-    case 'AccessScope':
-    case 'AccessGlobal':
-    case 'PrimitiveLiteral':
-    case 'Identifier':
-    case 'BindingIdentifier':
-    case 'BindingPatternHole':
-    case 'Custom':
-      return;
-  }
-}
-
-function collectMemberNameSpansInList(
-  expressions: readonly ExpressionAstNode[],
-  spans: SourceSpan[],
-): void {
-  for (const expression of expressions) {
-    collectMemberNameSpans(expression, spans);
-  }
-}
-
-function firstMemberOwnerExpression(expression: ExpressionAstNode): ExpressionAstNode | null {
-  switch (expression.$kind) {
-    case 'AccessMember':
-    case 'CallMember':
-      return expression.object;
-    case 'Paren':
-    case 'Unary':
-      return firstMemberOwnerExpression(expression.expression);
-    case 'AccessKeyed':
-      return firstMemberOwnerExpression(expression.object)
-        ?? firstMemberOwnerExpression(expression.key);
-    case 'CallFunction':
-      return firstMemberOwnerExpression(expression.func)
-        ?? firstMemberOwnerExpressionInList(expression.args);
-    case 'CallScope':
-    case 'CallGlobal':
-      return firstMemberOwnerExpressionInList(expression.args);
-    case 'New':
-      return firstMemberOwnerExpression(expression.func)
-        ?? firstMemberOwnerExpressionInList(expression.args);
-    case 'TaggedTemplate':
-      return firstMemberOwnerExpression(expression.func)
-        ?? firstMemberOwnerExpressionInList(expression.expressions);
-    case 'Binary':
-      return firstMemberOwnerExpression(expression.left)
-        ?? firstMemberOwnerExpression(expression.right);
-    case 'Conditional':
-      return firstMemberOwnerExpression(expression.condition)
-        ?? firstMemberOwnerExpression(expression.yes)
-        ?? firstMemberOwnerExpression(expression.no);
-    case 'Assign':
-      return firstMemberOwnerExpression(expression.target)
-        ?? firstMemberOwnerExpression(expression.value);
-    case 'ArrowFunction':
-      return firstMemberOwnerExpression(expression.body);
-    case 'ArrayLiteral':
-      return firstMemberOwnerExpressionInList(expression.elements);
-    case 'ObjectLiteral':
-      return firstMemberOwnerExpressionInList(expression.values);
-    case 'Template':
-    case 'Interpolation':
-      return firstMemberOwnerExpressionInList(expression.expressions);
-    case 'ForOfStatement':
-      return firstMemberOwnerExpression(expression.iterable);
-    case 'BindingPatternDefault':
-      return firstMemberOwnerExpression(expression.target)
-        ?? firstMemberOwnerExpression(expression.default);
-    case 'ArrayBindingPattern':
-      return firstMemberOwnerExpressionInList(expression.elements)
-        ?? (expression.rest == null ? null : firstMemberOwnerExpression(expression.rest));
-    case 'ObjectBindingPattern':
-      return firstMemberOwnerExpressionInList(expression.properties.map((property) => property.value))
-        ?? (expression.rest == null ? null : firstMemberOwnerExpression(expression.rest));
-    case 'DestructuringAssignment':
-      return firstMemberOwnerExpression(expression.pattern)
-        ?? firstMemberOwnerExpression(expression.source);
-    case 'AccessThis':
-    case 'AccessBoundary':
-    case 'AccessScope':
-    case 'AccessGlobal':
-    case 'PrimitiveLiteral':
-    case 'Identifier':
-    case 'BindingIdentifier':
-    case 'BindingPatternHole':
-    case 'Custom':
-      return null;
-  }
-  return null;
-}
-
-function firstMemberOwnerExpressionInList(
-  expressions: readonly ExpressionAstNode[],
-): ExpressionAstNode | null {
-  for (const expression of expressions) {
-    const owner = firstMemberOwnerExpression(expression);
-    if (owner != null) {
-      return owner;
+  findInExpression(expression, (candidate) => {
+    if (isMemberAccessExpression(candidate)) {
+      spans.push(candidate.name.span);
     }
-  }
-  return null;
+    return null;
+  });
 }
 
 type MemberAccessExpression =
   | AccessMemberExpression
   | CallMemberExpression;
 
+function firstMemberOwnerExpression(expression: ExpressionAstNode): ExpressionAstNode | null {
+  return findInExpression(expression, (candidate) =>
+    isMemberAccessExpression(candidate)
+      ? candidate.object
+      : null
+  );
+}
+
 function memberAccessExpressionForNodeOffset(
   expression: ExpressionAstNode,
   offset: number,
   matchesMember: (expression: MemberAccessExpression, offset: number) => boolean,
 ): MemberAccessExpression | null {
+  return findInExpressionAtOffset(expression, offset, (candidate) =>
+    isMemberAccessExpression(candidate) && matchesMember(candidate, offset)
+      ? candidate
+      : null
+  );
+}
+
+function findInExpression<T>(
+  expression: ExpressionAstNode,
+  select: (expression: ExpressionAstNode) => T | null,
+): T | null {
+  return select(expression)
+    ?? findInExpressionChildren(expression, (child) => findInExpression(child, select));
+}
+
+export function visitExpressionAstNodes(
+  expression: ExpressionAstNode,
+  visit: (expression: ExpressionAstNode) => void,
+): void {
+  findInExpression(expression, (candidate) => {
+    visit(candidate);
+    return null;
+  });
+}
+
+export function expressionAstNodeContainsKind(
+  expression: ExpressionAstNode,
+  kind: ExpressionAstNode['$kind'],
+): boolean {
+  return findInExpression(expression, (candidate) => candidate.$kind === kind ? true : null) === true;
+}
+
+function findInExpressionAtOffset<T>(
+  expression: ExpressionAstNode,
+  offset: number,
+  select: (expression: ExpressionAstNode) => T | null,
+): T | null {
+  if (!expressionSpanContainsOffset(expression.span, offset)) {
+    return null;
+  }
+  return select(expression)
+    ?? findInExpressionChildren(expression, (child) => findInExpressionAtOffset(child, offset, select));
+}
+
+function findInExpressionChildren<T>(
+  expression: ExpressionAstNode,
+  findChild: (expression: ExpressionAstNode) => T | null,
+): T | null {
   switch (expression.$kind) {
     case 'AccessMember':
-      return matchesMember(expression, offset)
-        ? expression
-        : memberAccessExpressionForNodeOffset(expression.object, offset, matchesMember);
+      return findChild(expression.object);
     case 'CallMember':
-      return matchesMember(expression, offset)
-        ? expression
-        : memberAccessExpressionForNodeOffset(expression.object, offset, matchesMember)
-          ?? memberAccessExpressionForNodeOffsetInList(expression.args, offset, matchesMember);
+      return findChild(expression.object)
+        ?? findInExpressionList(expression.args, findChild);
     case 'Paren':
     case 'Unary':
-      return memberAccessExpressionForNodeOffset(expression.expression, offset, matchesMember);
+      return findChild(expression.expression);
     case 'AccessKeyed':
-      return memberAccessExpressionForNodeOffset(expression.object, offset, matchesMember)
-        ?? memberAccessExpressionForNodeOffset(expression.key, offset, matchesMember);
+      return findChild(expression.object)
+        ?? findChild(expression.key);
     case 'CallFunction':
-      return memberAccessExpressionForNodeOffset(expression.func, offset, matchesMember)
-        ?? memberAccessExpressionForNodeOffsetInList(expression.args, offset, matchesMember);
+      return findChild(expression.func)
+        ?? findInExpressionList(expression.args, findChild);
     case 'CallScope':
     case 'CallGlobal':
-      return memberAccessExpressionForNodeOffsetInList(expression.args, offset, matchesMember);
+      return findInExpressionList(expression.args, findChild);
     case 'New':
-      return memberAccessExpressionForNodeOffset(expression.func, offset, matchesMember)
-        ?? memberAccessExpressionForNodeOffsetInList(expression.args, offset, matchesMember);
+      return findChild(expression.func)
+        ?? findInExpressionList(expression.args, findChild);
     case 'TaggedTemplate':
-      return memberAccessExpressionForNodeOffset(expression.func, offset, matchesMember)
-        ?? memberAccessExpressionForNodeOffsetInList(expression.expressions, offset, matchesMember);
+      return findChild(expression.func)
+        ?? findInExpressionList(expression.expressions, findChild);
     case 'Binary':
-      return memberAccessExpressionForNodeOffset(expression.left, offset, matchesMember)
-        ?? memberAccessExpressionForNodeOffset(expression.right, offset, matchesMember);
+      return findChild(expression.left)
+        ?? findChild(expression.right);
     case 'Conditional':
-      return memberAccessExpressionForNodeOffset(expression.condition, offset, matchesMember)
-        ?? memberAccessExpressionForNodeOffset(expression.yes, offset, matchesMember)
-        ?? memberAccessExpressionForNodeOffset(expression.no, offset, matchesMember);
+      return findChild(expression.condition)
+        ?? findChild(expression.yes)
+        ?? findChild(expression.no);
     case 'Assign':
-      return memberAccessExpressionForNodeOffset(expression.target, offset, matchesMember)
-        ?? memberAccessExpressionForNodeOffset(expression.value, offset, matchesMember);
+      return findChild(expression.target)
+        ?? findChild(expression.value);
     case 'ArrowFunction':
-      return memberAccessExpressionForNodeOffset(expression.body, offset, matchesMember);
+      return findChild(expression.body);
     case 'ArrayLiteral':
-      return memberAccessExpressionForNodeOffsetInList(expression.elements, offset, matchesMember);
+      return findInExpressionList(expression.elements, findChild);
     case 'ObjectLiteral':
-      return memberAccessExpressionForNodeOffsetInList(expression.values, offset, matchesMember);
+      return findInExpressionList(expression.values, findChild);
     case 'Template':
     case 'Interpolation':
-      return memberAccessExpressionForNodeOffsetInList(expression.expressions, offset, matchesMember);
+      return findInExpressionList(expression.expressions, findChild);
     case 'ForOfStatement':
-      return memberAccessExpressionForNodeOffset(expression.iterable, offset, matchesMember);
+      return findChild(expression.iterable);
     case 'BindingPatternDefault':
-      return memberAccessExpressionForNodeOffset(expression.target, offset, matchesMember)
-        ?? memberAccessExpressionForNodeOffset(expression.default, offset, matchesMember);
+      return findChild(expression.target)
+        ?? findChild(expression.default);
     case 'ArrayBindingPattern':
-      return memberAccessExpressionForNodeOffsetInList(expression.elements, offset, matchesMember)
-        ?? (expression.rest == null ? null : memberAccessExpressionForNodeOffset(expression.rest, offset, matchesMember));
+      return findInExpressionList(expression.elements, findChild)
+        ?? findOptionalExpression(expression.rest, findChild);
     case 'ObjectBindingPattern':
-      return memberAccessExpressionForNodeOffsetInList(expression.properties.map((property) => property.value), offset, matchesMember)
-        ?? (expression.rest == null ? null : memberAccessExpressionForNodeOffset(expression.rest, offset, matchesMember));
+      return findInExpressionList(expression.properties.map((property) => property.value), findChild)
+        ?? findOptionalExpression(expression.rest, findChild);
     case 'DestructuringAssignment':
-      return memberAccessExpressionForNodeOffset(expression.pattern, offset, matchesMember)
-        ?? memberAccessExpressionForNodeOffset(expression.source, offset, matchesMember);
+      return findChild(expression.pattern)
+        ?? findChild(expression.source);
     case 'AccessThis':
     case 'AccessBoundary':
     case 'AccessScope':
@@ -487,21 +360,30 @@ function memberAccessExpressionForNodeOffset(
   return null;
 }
 
-function memberAccessExpressionForNodeOffsetInList(
+function findInExpressionList<T>(
   expressions: readonly ExpressionAstNode[],
-  offset: number,
-  matchesMember: (expression: MemberAccessExpression, offset: number) => boolean,
-): MemberAccessExpression | null {
+  findChild: (expression: ExpressionAstNode) => T | null,
+): T | null {
   for (const expression of expressions) {
-    if (!expressionSpanContainsOffset(expression.span, offset)) {
-      continue;
-    }
-    const member = memberAccessExpressionForNodeOffset(expression, offset, matchesMember);
-    if (member != null) {
-      return member;
+    const found = findChild(expression);
+    if (found != null) {
+      return found;
     }
   }
   return null;
+}
+
+function findOptionalExpression<T>(
+  expression: ExpressionAstNode | null,
+  findChild: (expression: ExpressionAstNode) => T | null,
+): T | null {
+  return expression == null ? null : findChild(expression);
+}
+
+function isMemberAccessExpression(
+  expression: ExpressionAstNode,
+): expression is MemberAccessExpression {
+  return expression.$kind === 'AccessMember' || expression.$kind === 'CallMember';
 }
 
 function isMemberOwnerOffset(

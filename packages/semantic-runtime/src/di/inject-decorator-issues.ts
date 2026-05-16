@@ -1,14 +1,13 @@
 import {
-  SourceSpanAddress,
-  SourceSpanRole,
-} from '../kernel/address.js';
-import type { AddressHandle } from '../kernel/handles.js';
-import {
   KernelStore,
   KernelStoreBatch,
   type KernelStoreRecord,
 } from '../kernel/store.js';
 import { localKeyPart } from '../kernel/local-key.js';
+import {
+  sourceSpanAddressForSite,
+  type SourceSpanAddressPublication,
+} from '../kernel/source-address.js';
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
@@ -53,13 +52,7 @@ export class DiInjectDecoratorIssueMaterializer {
     if (records.length > 0) {
       this.store.commit(new KernelStoreBatch(records, 'di-inject-decorator-issues'));
     }
-    for (const publication of publications) {
-      this.store.productDetails.add(
-        DiProductDetails.Issue,
-        publication.issue.productHandle,
-        publication.issue,
-      );
-    }
+    this.store.productDetails.addAll(DiProductDetails.Issue, publications.map((publication) => publication.issue));
 
     return new DiInjectDecoratorIssueMaterialization(
       publications.map((publication) => publication.issue),
@@ -84,30 +77,8 @@ export class DiInjectDecoratorIssueMaterializer {
   private sourceAddress(
     local: string,
     site: DiInjectDecoratorSite,
-  ): {
-    readonly handle: AddressHandle | null;
-    readonly records: readonly KernelStoreRecord[];
-  } {
-    const file = this.store.readBestSourceFileAddressForFileName(site.sourcePath);
-    if (file == null) {
-      return {
-        handle: null,
-        records: [],
-      };
-    }
-    const handle = this.store.handles.address(`${local}:source`);
-    return {
-      handle,
-      records: [
-        new SourceSpanAddress(
-          handle,
-          file.handle,
-          site.start,
-          site.end,
-          SourceSpanRole.Primary,
-        ),
-      ],
-    };
+  ): SourceSpanAddressPublication {
+    return sourceSpanAddressForSite(this.store, local, site);
   }
 }
 

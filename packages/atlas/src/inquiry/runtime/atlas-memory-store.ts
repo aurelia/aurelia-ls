@@ -287,6 +287,20 @@ function computedRecordStatus(
         return "reference";
     }
   }
+  if (checks.some((check) => check.status === "present")) {
+    switch (kind) {
+      case "intentional-shape":
+        return "intentional-live";
+      case "decision":
+      case "doc-shard":
+      case "reuse-guide":
+        return "reference";
+      case "pressure-frontier":
+        return checks.some((check) => check.status === "resolved")
+          ? "resolved"
+          : "reference";
+    }
+  }
   return "resolved";
 }
 

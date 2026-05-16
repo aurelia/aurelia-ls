@@ -4,7 +4,7 @@ import {
   countBy,
   uniqueSortedStrings,
 } from "../../collections.js";
-import type { TypeScriptEnumUsageIndex } from "../../source/index.js";
+import type { TypeScriptEnumDeclarationRow } from "../../source/index.js";
 import { stableTextFingerprint } from "../../text-fingerprint.js";
 import type { SourceRange } from "../locus.js";
 
@@ -98,10 +98,10 @@ interface SubstrateSurfaceStringSource {
 
 export function buildAtlasSelfStringRows(
   occurrences: readonly AtlasSelfStringOccurrence[],
-  enumUsage: TypeScriptEnumUsageIndex,
+  enumDeclarations: readonly TypeScriptEnumDeclarationRow[],
 ): readonly AtlasSelfStringLiteralRow[] {
   const enumMembersByValue = new Map<string, string[]>();
-  for (const enumRow of enumUsage.enumDeclarations) {
+  for (const enumRow of enumDeclarations) {
     for (const member of enumRow.members) {
       if (typeof member.value !== "string") {
         continue;

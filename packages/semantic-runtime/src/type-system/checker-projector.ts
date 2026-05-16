@@ -166,6 +166,7 @@ class TypeShapePublicationFrame {
   constructor(
     readonly localKey: string,
     readonly source: TypeProjectionSourceSet,
+    readonly declarationSource: DeclarationSourcePublication | null,
     readonly records: KernelStoreRecord[],
     readonly handles: TypeShapeHandles,
     readonly checkerKey: string,
@@ -274,6 +275,8 @@ export class CheckerTypeProjector {
     records: KernelStoreRecord[],
   ): TypeShapePublicationFrame {
     const descriptor = checkerTypeDescriptor(input);
+    const declarationSource = typeShapeDeclarationSource(this.store, descriptor);
+    appendDeclarationSourceRecords(this.store, records, declarationSource);
     const handles = this.typeShapeHandles(input.localKey);
     const shapeReference = typeShapeReferenceFor(
       handles,
@@ -287,6 +290,7 @@ export class CheckerTypeProjector {
     return new TypeShapePublicationFrame(
       input.localKey,
       source,
+      declarationSource,
       records,
       handles,
       descriptor.checkerKey,
@@ -351,6 +355,7 @@ export class CheckerTypeProjector {
     return this.recordsForShapePublication(new TypeShapePublicationFrame(
       input.localKey,
       source,
+      null,
       records,
       handles,
       checkerKey,
@@ -393,6 +398,7 @@ export class CheckerTypeProjector {
       input.callReturnType,
       input.constructReturnType,
       input.source.sourceAddressHandle,
+      input.declarationSource?.address.handle ?? null,
       [],
       input.carrier,
     );
@@ -598,6 +604,15 @@ function checkerTypeDescriptor(input: CheckerTypeProjectionRequest): CheckerType
     checkerKey: checkerKeyForType(input.type, symbol, display),
     shapeKind: classifyCheckerTypeShape(input.type, symbol),
   };
+}
+
+function typeShapeDeclarationSource(
+  store: KernelStore,
+  descriptor: CheckerTypeDescriptor,
+): DeclarationSourcePublication | null {
+  return descriptor.symbol == null
+    ? null
+    : sourceSpanForCheckerDeclaration(store, descriptor.symbol, descriptor.declarations, SourceSpanRole.Name);
 }
 
 function checkerTypeRelatedTypes(input: CheckerTypeProjectionRequest): TypeShapeRelatedTypes {

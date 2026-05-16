@@ -6,10 +6,12 @@ new Aurelia()
   .register(
     StandardConfiguration,
     I18nConfiguration.customize((options) => {
-      options.resources = {
-        en: {
-          translation: {
-            greeting: 'Hello {{name}}',
+      options.initOptions = {
+        resources: {
+          en: {
+            translation: {
+              greeting: 'Hello {{name}}',
+            },
           },
         },
       };

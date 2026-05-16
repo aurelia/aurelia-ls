@@ -4,10 +4,13 @@ import { createApi } from "../session/index.js";
 import {
   answerValue,
   assertHitOrMissAnswer,
+  assertKnownScriptArguments,
   printCounts,
   printEmptyRows,
+  printRowSectionHeader,
   scriptArgumentValue,
   scriptArgumentValues,
+  scriptFilterSummary,
   scriptNumberArgumentValue,
   sourceLabel,
   type ScriptSourceRef,
@@ -161,6 +164,35 @@ type AtlasMemoryScriptAnchor =
       readonly summary?: string;
     };
 
+assertKnownScriptArguments("atlas.memory", [
+  "--detail",
+  "--json",
+  "--query=",
+  "--path=",
+  "--domain=",
+  "--domainMode=",
+  "--kind=",
+  "--status=",
+  "--recordId=",
+  "--name=",
+  "--surfaceRole=",
+  "--liveCheckKind=",
+  "--anchorKind=",
+  "--anchorLensId=",
+  "--auLinkId=",
+  "--symbolName=",
+  "--nextActionPolicy=",
+  "--rows=",
+  "--limit=",
+  "--all-guidance",
+  "--guidanceRows=",
+  "--all-anchors",
+  "--anchorRows=",
+  "--all-live-checks",
+  "--liveCheckRows=",
+  "--projection=",
+]);
+
 const detail = process.argv.includes("--detail");
 const json = process.argv.includes("--json");
 const query = scriptArgumentValue("--query=");
@@ -171,7 +203,7 @@ const domains = scriptArgumentValues("--domain=").flatMap((value) =>
 const domainMode = scriptArgumentValue("--domainMode=");
 const kind = scriptArgumentValue("--kind=");
 const status = scriptArgumentValue("--status=");
-const recordId = scriptArgumentValue("--recordId=");
+const recordId = scriptArgumentValue("--recordId=") ?? scriptArgumentValue("--name=");
 const surfaceRole = scriptArgumentValue("--surfaceRole=");
 const liveCheckKind = scriptArgumentValue("--liveCheckKind=");
 const anchorKind = scriptArgumentValue("--anchorKind=");
@@ -192,7 +224,7 @@ const liveCheckRows = process.argv.includes("--all-live-checks")
 const rowLimit = rows ?? scriptNumberArgumentValue("--limit=");
 const displayRowLimit = rowLimit ?? (detail ? 40 : 10);
 const answerRowBudget = rowLimit ?? (detail ? 80 : 20);
-const projection = scriptArgumentValue("--projection=") ?? "summary";
+const projection = scriptArgumentValue("--projection=") ?? (recordId === undefined ? "summary" : "records");
 const filters = {
   ...(query === undefined ? {} : { query }),
   ...(path === undefined ? {} : { path }),
@@ -241,6 +273,7 @@ if (filterSummary !== undefined) {
   console.log(`filters: ${filterSummary}`);
 }
 console.log(answer.summary);
+printDomainFilterHint(value);
 
 if (value?.rollup !== undefined) {
   printCounts("records by kind", value.rollup.byKind);
@@ -279,8 +312,7 @@ const nextActionRecordIds = new Set(
   nextActions.flatMap((row) => row.record === undefined ? [] : [row.record.id]),
 );
 if (nextActions.length > 0) {
-  console.log("");
-  console.log("next actions");
+  printRowSectionHeader("next actions", nextActions, displayRowLimit);
   for (const row of nextActions.slice(0, displayRowLimit)) {
     const domains = row.domains.length === 0 ? "" : `; domains ${row.domains.join(", ")}`;
     const shard = row.record === undefined
@@ -309,8 +341,7 @@ if (nextActions.length > 0) {
   }
 }
 
-console.log("");
-console.log("memory records");
+printRowSectionHeader("memory records", records, displayRowLimit);
 printEmptyRows(records, "no memory records returned");
 for (const row of records.slice(0, displayRowLimit)) {
   const policy = row.nextActionPolicy === undefined
@@ -335,8 +366,7 @@ const genericFrontiers = frontiers.filter((row) =>
   (row.kind !== "untracked-product-class" || row.frontier === undefined),
 );
 if (genericFrontiers.length > 0) {
-  console.log("");
-  console.log("frontiers");
+  printRowSectionHeader("frontiers", genericFrontiers, displayRowLimit);
   for (const row of genericFrontiers.slice(0, displayRowLimit)) {
     console.log(`- ${row.id}: ${row.kind}/${row.status}; ${row.summary}`);
   }
@@ -346,8 +376,7 @@ const untracked = projection === "frontiers"
   ? frontierUntracked
   : value?.untrackedProductClassFrontiers ?? [];
 if (untracked.length > 0) {
-  console.log("");
-  console.log("untracked product class frontiers");
+  printRowSectionHeader("untracked product class frontiers", untracked, displayRowLimit);
   for (const row of untracked.slice(0, displayRowLimit)) {
     const area = row.area === undefined ? "" : ` [${row.area}]`;
     const role = row.surfaceRole === undefined ? "" : ` {${row.surfaceRole}}`;
@@ -369,6 +398,29 @@ if (issues.length > 0) {
   }
 }
 
+function printDomainFilterHint(value: AtlasMemoryScriptValue | undefined): void {
+  if (
+    domains.length <= 1 ||
+    domainMode === "any" ||
+    atlasMemoryScriptValueHasRows(value)
+  ) {
+    return;
+  }
+  console.log(
+    "hint: repeated --domain filters match records that carry every listed domain; add --domainMode=any to inspect records that carry any listed domain.",
+  );
+}
+
+function atlasMemoryScriptValueHasRows(value: AtlasMemoryScriptValue | undefined): boolean {
+  return (
+    (value?.records?.length ?? 0) > 0 ||
+    (value?.frontiers?.length ?? 0) > 0 ||
+    (value?.nextActions?.length ?? 0) > 0 ||
+    (value?.untrackedProductClassFrontiers?.length ?? 0) > 0 ||
+    (value?.issues?.length ?? 0) > 0
+  );
+}
+
 function printRecordLiveChecks(
   row: AtlasMemoryScriptRecordRow,
   indent: string,
@@ -383,16 +435,6 @@ function printRecordLiveChecks(
   if (checks.length > liveCheckRows) {
     console.log(`${indent}live-check: ... ${checks.length - liveCheckRows} more; pass --liveCheckRows=${checks.length} or --all-live-checks for all`);
   }
-}
-
-function scriptFilterSummary(filters: Readonly<Record<string, unknown>>): string | undefined {
-  const parts = Object.entries(filters).map(([key, value]) => {
-    if (Array.isArray(value)) {
-      return `${key}=[${value.join(",")}]`;
-    }
-    return `${key}=${String(value)}`;
-  });
-  return parts.length === 0 ? undefined : parts.join("; ");
 }
 
 function printRecordAnchors(

@@ -35,6 +35,7 @@ import type { RuntimeBindingBehaviorIssue } from '../template/runtime-binding-be
 import type { RuntimeValueConverterIssue } from '../template/runtime-value-converter.js';
 import type { RuntimeControllerIssue } from '../template/runtime-controller-issue.js';
 import type { RuntimeRendererIssue } from '../template/runtime-renderer-issue.js';
+import type { RouterIssueModel } from '../router/model.js';
 import type { TemplateExpressionParse } from '../template/value-site.js';
 import { TemplateValueSiteKind } from '../template/value-site.js';
 import { runtimeAcceptedBindingExpressionAstForParse } from '../template/expression-parse-projection.js';
@@ -107,6 +108,7 @@ import {
   runtimeRendererIssueDiagnostic,
   runtimeValueConverterIssueDiagnostic,
   runtimeControllerIssueDiagnostic,
+  routerIssueDiagnostic,
   templateCompilerErrorDiagnostic,
 } from './template-diagnostic-policy.js';
 
@@ -212,11 +214,16 @@ function readTemplateCursorInfoValue(
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
   });
   const missingInputs = [...new Set(cursorContext.missingInputs)];
+  const cursorOffset = readContext.locus.cursor.offset;
   return {
     missingInputs,
-    value: withCursorAssignmentDiagnostics(
+    value: withCursorDiagnostics(
       templateCursorInfoResult(store, readContext.selection, cursorContext, includeHandles, missingInputs),
-      bindingSourceAssignmentCursorDiagnostics(store, readContext.selection, readContext.locus.cursor.offset),
+      [
+        ...bindingSourceAssignmentCursorDiagnostics(store, readContext.selection, cursorOffset),
+        ...templateCompilerIssueCursorDiagnostics(store, readContext.selection, cursorOffset),
+        ...routerIssueCursorDiagnostics(store, emission, cursorOffset),
+      ],
     ),
   };
 }
@@ -261,6 +268,56 @@ function bindingSourceAssignmentCursorDiagnostics(
   });
 }
 
+function templateCompilerIssueCursorDiagnostics(
+  store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
+  cursorOffset: number | null,
+): readonly SemanticTemplateCursorDiagnosticRow[] {
+  if (cursorOffset == null) {
+    return [];
+  }
+  return templateCompilerIssues(selection.resource).flatMap((issue) => {
+    const source = describeAddress(store, issue.sourceAddressHandle);
+    if (source == null || !sourceReferenceContainsOffset(source, cursorOffset)) {
+      return [];
+    }
+    return [templateCompilerErrorDiagnostic(
+      issue.message,
+      issue.frameworkErrorCode,
+      source,
+      issue.severity,
+    )];
+  });
+}
+
+function routerIssueCursorDiagnostics(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  cursorOffset: number | null,
+): readonly SemanticTemplateCursorDiagnosticRow[] {
+  if (cursorOffset == null) {
+    return [];
+  }
+  return routerIssues(emission).flatMap((issue) => {
+    const source = sourceReferenceForRouterIssue(store, issue);
+    if (source == null || !sourceReferenceContainsOffset(source, cursorOffset)) {
+      return [];
+    }
+    return [routerIssueDiagnostic(issue, source)];
+  });
+}
+
+function routerIssues(
+  emission: AureliaAppWorldProjectEmission,
+): readonly RouterIssueModel[] {
+  return [
+    ...emission.routes.readIssues(),
+    ...emission.routeInstructions.readIssues(),
+    ...emission.routeRecognition.readIssues(),
+    ...emission.routeTree.readIssues(),
+  ];
+}
+
 function templateDiagnosticExpectedValueTypeForCursor(
   store: KernelStore,
   selection: TemplateCompletionResourceSelection,
@@ -299,7 +356,7 @@ function valueSiteSupportsBindingTargetExpectedType(
   }
 }
 
-function withCursorAssignmentDiagnostics(
+function withCursorDiagnostics(
   value: SemanticTemplateCursorInfoResult,
   diagnostics: readonly SemanticTemplateCursorDiagnosticRow[],
 ): SemanticTemplateCursorInfoResult {
@@ -329,6 +386,20 @@ function cursorDiagnosticKey(
     diagnosticRowMissingInputKey(diagnostic),
     diagnostic.selectedMemberName ?? 'none',
   ].join(':');
+}
+
+function sourceReferenceContainsOffset(
+  source: NonNullable<SemanticTemplateCursorDiagnosticRow['source']>,
+  offset: number,
+): boolean {
+  const start = source.start;
+  const end = source.end;
+  return typeof start === 'number'
+    && typeof end === 'number'
+    && Number.isInteger(start)
+    && Number.isInteger(end)
+    && start <= offset
+    && offset <= end;
 }
 
 export function readSemanticTemplateDiagnostics(
@@ -438,6 +509,7 @@ export function readTemplateDiagnosticRows(
     ...selections.flatMap((selection) => runtimeBindingBehaviorIssueDiagnosticRowsForSelection(store, selection, sourceFile, context)),
     ...selections.flatMap((selection) => runtimeValueConverterIssueDiagnosticRowsForSelection(store, selection, sourceFile, context)),
     ...selections.flatMap((selection) => runtimeBindingScopeIssueDiagnosticRowsForSelection(store, selection, sourceFile, context)),
+    ...selections.flatMap((selection) => routerIssueDiagnosticRowsForSelection(store, emission, selection, sourceFile, context)),
     ...selections.flatMap((selection) => targetAccessDiagnosticRowsForSelection(store, selection, sourceFile, context)),
     ...selections.flatMap((selection) => templateDiagnosticRowsForSelection(store, workspaceRootDir, selection, context)),
     ...selections.flatMap((selection) => bindingDataFlowDiagnosticRowsForSelection(store, selection, sourceFile, context)),
@@ -898,6 +970,44 @@ function runtimeBindingScopeIssueDiagnosticRowsForSelection(
   });
 }
 
+function routerIssueDiagnosticRowsForSelection(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  selection: TemplateCompletionResourceSelection,
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+  context: TemplateDiagnosticsScanContext,
+): readonly SemanticTemplateDiagnosticRow[] {
+  const templateSpan = templateSourceSpan(store, selection.resource);
+  if (templateSpan == null) {
+    return [];
+  }
+  return routerIssues(emission).flatMap((issue) => {
+    const source = sourceReferenceForRouterIssue(store, issue);
+    if (
+      source == null
+      || !sourceReferenceMatchesFile(source, sourceFile)
+      || !sourceReferenceWithinTemplateSpan(store, source, templateSpan)
+    ) {
+      return [];
+    }
+    const diagnostic = routerIssueDiagnostic(issue, source);
+    const key = templateDiagnosticRowKey(diagnostic, source);
+    if (context.seenRows.has(key)) {
+      return [];
+    }
+    context.seenRows.add(key);
+    return [{
+      ...diagnostic,
+      siteKind: TemplateCompletionSiteKind.AttributeValue,
+      valueSiteKind: null,
+      template: {
+        compilationLane: selection.lane,
+        source: describeAddress(store, selection.sourceAddressHandle),
+      },
+    }];
+  });
+}
+
 function templateCompilerIssues(
   resource: TemplateResourceRuntimeAnalysisEmission,
 ): readonly TemplateCompilerIssue[] {
@@ -950,6 +1060,13 @@ function sourceReferenceForRuntimeBindingScopeIssue(
   if (issue.sourceSpan?.file?.path != null) {
     return sourceReferenceForParserSpan(issue.sourceSpan.file.path, issue.sourceSpan, 'range');
   }
+  return describeAddress(store, issue.sourceAddressHandle);
+}
+
+function sourceReferenceForRouterIssue(
+  store: KernelStore,
+  issue: RouterIssueModel,
+): NonNullable<SemanticTemplateDiagnosticRow['source']> | null {
   return describeAddress(store, issue.sourceAddressHandle);
 }
 
@@ -1010,6 +1127,22 @@ function sourceReferenceMatchesFile(
 ): boolean {
   return sourceFile?.filePath == null
     || (source?.path != null && sourcePathMatchesFileName(source.path, sourceFile.filePath));
+}
+
+function sourceReferenceWithinTemplateSpan(
+  store: KernelStore,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+  templateSpan: SourceSpanAddress,
+): boolean {
+  const file = store.readAddress(templateSpan.fileHandle);
+  return file != null
+    && isSourceFileAddress(file)
+    && source.path != null
+    && sourcePathMatchesFileName(file.path, source.path)
+    && typeof source.start === 'number'
+    && typeof source.end === 'number'
+    && templateSpan.start <= source.start
+    && source.end <= templateSpan.end;
 }
 
 function valueSiteKindForDataFlow(
@@ -1162,26 +1295,41 @@ function firstRuntimeAstExpressionKind(
   expression: ExpressionAstNode,
   kind: 'BindingBehavior' | 'ValueConverter',
 ): ExpressionAstNode | null {
-  if (expression.$kind === kind) {
-    return expression;
-  }
-  switch (expression.$kind) {
-    case 'BindingBehavior':
-    case 'ValueConverter':
-      return firstRuntimeAstExpressionKind(expression.expression, kind);
-    default:
+  let current: ExpressionAstNode = expression;
+  for (;;) {
+    const wrapper = runtimeAstResourceWrapper(current);
+    if (wrapper == null) {
       return null;
+    }
+    if (wrapper.$kind === kind) {
+      return wrapper;
+    }
+    current = wrapper.expression;
   }
 }
 
 function unwrapRuntimeAstDiagnosticExpression(expression: ExpressionAstNode): ExpressionAstNode {
-  switch (expression.$kind) {
-    case 'BindingBehavior':
-    case 'ValueConverter':
-      return unwrapRuntimeAstDiagnosticExpression(expression.expression);
-    default:
-      return expression;
+  let current: ExpressionAstNode = expression;
+  for (;;) {
+    const wrapper = runtimeAstResourceWrapper(current);
+    if (wrapper == null) {
+      return current;
+    }
+    current = wrapper.expression;
   }
+}
+
+type RuntimeAstResourceWrapper = Extract<
+  ExpressionAstNode,
+  { readonly $kind: 'BindingBehavior' | 'ValueConverter' }
+>;
+
+function runtimeAstResourceWrapper(
+  expression: ExpressionAstNode,
+): RuntimeAstResourceWrapper | null {
+  return expression.$kind === 'BindingBehavior' || expression.$kind === 'ValueConverter'
+    ? expression
+    : null;
 }
 
 function expressionParseForProductHandle(
@@ -1678,11 +1826,13 @@ function cursorMemberOwnerTypeRow(
     shapeKind: typeShape.shapeKind,
     origin: typeShape.origin,
     source: describeAddress(store, typeShape.sourceAddressHandle),
+    declarationSource: describeAddress(store, typeShape.declarationSourceAddressHandle),
     ...(includeHandles ? {
       handles: {
         productHandle: typeShape.productHandle,
         identityHandle: typeShape.identityHandle,
         sourceAddressHandle: typeShape.sourceAddressHandle,
+        declarationSourceAddressHandle: typeShape.declarationSourceAddressHandle,
       },
     } : {}),
   };

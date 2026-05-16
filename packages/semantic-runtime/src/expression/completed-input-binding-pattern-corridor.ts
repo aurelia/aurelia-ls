@@ -72,21 +72,10 @@ export class CompletedInputBindingPatternCorridor {
   }
 
   parseLhsBinding(): ParsedBindingPattern {
-    const t = this.state.peekToken();
-
-    switch (t.type) {
-      case TokenType.Identifier:
-        return this.parseBindingIdentifier();
-      case TokenType.OpenBracket:
-        return this.parseArrayBindingPattern();
-      case TokenType.OpenBrace:
-        return this.parseObjectBindingPattern();
-      default:
-        return this.state.failures.error(
-          'Invalid repeat.for left-hand side; expected identifier, array pattern, or object pattern',
-          t,
-        );
-    }
+    return this.parseBindingPatternBase(
+      null,
+      'Invalid repeat.for left-hand side; expected identifier, array pattern, or object pattern',
+    );
   }
 
   private parseBindingIdentifier(): ParsedBindingIdentifier {
@@ -131,6 +120,7 @@ export class CompletedInputBindingPatternCorridor {
 
   private parseBindingPatternBase(
     frameworkErrorCode: string | null = null,
+    invalidPatternMessage = 'Invalid binding pattern; expected identifier, array pattern, or object pattern',
   ): ParsedBindingPattern {
     const t = this.state.peekToken();
     switch (t.type) {
@@ -142,7 +132,7 @@ export class CompletedInputBindingPatternCorridor {
         return this.parseObjectBindingPattern();
       default:
         return this.state.failures.error(
-          'Invalid binding pattern; expected identifier, array pattern, or object pattern',
+          invalidPatternMessage,
           t,
           frameworkErrorCode,
         );

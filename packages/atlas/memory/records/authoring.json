@@ -77,7 +77,7 @@
         "For authoring-taste expected effects, rows carry the target value layer and ontology summary so recipe-fit pressure can separate primitive policy targets from observed-shape signatures without reopening ontology.ts.",
         "Expected effects carry a role: baseline effects are general app-health checks, signature effects identify candidate recipe shape, and discriminator effects are required recipe-identifying facts. A recipe with no satisfied signature-like effects, or an unsatisfied discriminator, is not-applicable rather than a failed verification.",
         "ExpectedSemanticEffectFilter predicates match scalar row fields by equality and array row fields by inclusion. Use that for compact fact checks such as `BindingBehaviorApplications.staticArgumentValues`, direct `target-operation` renderer writes, or binding `targetProperty=value` without adding source-text assertions.",
-        "Keep repeated form/style expected-effect concepts in `form-expected-effects.ts`; generated recipes should reuse those constructors for component stylesheet ownership, class-token style binding, native value channels, and select model taste instead of restating the same ontology rows locally.",
+        "Keep primitive form/style expected-effect concepts in `form-expected-effects.ts`; generated recipes should reuse `form-recipe-expected-effects.ts` for standard form-app verification composition, then add only their state, service, validation, or router discriminator effects locally.",
         "Use `readAuthoringVerificationSnapshot(app)` for closed-loop verification from an opened app; it paginates and carries summary, topology, orientation, open seams, binding-behavior applications, target accesses, target operations, value channels, and data-flow rows so filtered expected effects do not silently fall back to count-only snapshots. Unsupported row-backed projections should fail snapshot construction rather than masquerade as zero observed facts.",
         "`project-tooling` expected effects are backed by project source-role rows. Use them to verify package manifests, TypeScript config files, and module declarations after source plans are applied without comparing file text.",
         "`style-resource` is the fact-level expected effect for stylesheet/style asset ownership rows; keep it separate from `style-resource-ownership`, which is the orientation taste reading derived from those rows.",
@@ -115,6 +115,12 @@
           "filePath": "packages/semantic-runtime/src/authoring/recipe.ts",
           "symbolName": "expectedSemanticEffectsForPlan",
           "summary": "Plan-local expected-effect compression used by recipe catalog rows and fixture verification."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/form-recipe-expected-effects.ts",
+          "symbolName": "standardFormAppExpectedEffects",
+          "summary": "Recipe-level standard form app verification composition."
         }
       ],
       "liveChecks": [
@@ -128,7 +134,7 @@
       ],
       "nextActionPolicy": "when-touched",
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-14"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "reuse:authoring-fixture-flywheel",
@@ -149,13 +155,20 @@
         "Keep generated/recommendable fixtures and stress pressure fixtures in separate folders.",
         "Use AuthoringOrientation before fixture expansion so recipes, capability gaps, taste/policy choices, and expected semantic effects are visible.",
         "Use `SemanticRuntime.authoringCatalog()` or the equivalent AuthoringCatalog app query when the question is static vocabulary or recipe contracts; use AuthoringOrientation when the question is how a currently opened app satisfies those contracts.",
-        "For broad fixture sweeps, run semantic-runtime `pressure:app-api`; it discovers generated authoring fixtures and pressure fixture folders, then defaults to aggregate output so expected-effect target outcome buckets explain recipe-fit failures without per-root transcript noise. The all-recipe outcome lane intentionally keeps cross-recipe failed effects, while the applicable-recipe lane filters out `not-applicable` recipes and is the cleaner generated-fixture health signal. Use `SEMANTIC_RUNTIME_PRESSURE_OUTPUT=inputs` only for isolated-root inspection.",
+        "For broad fixture sweeps, run semantic-runtime `pressure:app-api`; it discovers generated authoring fixtures and pressure fixture folders, then defaults to aggregate compact output so expected-effect target outcome buckets explain recipe-fit failures without per-root transcript noise. Compact output starts with `inputs.fixture-lanes` so generated authoring fixtures, hand-authored authoring fixtures, and stress pressure fixtures are not conflated. Use `SEMANTIC_RUNTIME_PRESSURE_DETAIL=summary` or `raw` only after the compact pressure buckets identify a thread that needs wider detail. The all-recipe outcome lane intentionally keeps cross-recipe failed effects, while the applicable-recipe lane filters out `not-applicable` recipes and is the cleaner generated-fixture health signal. Use `SEMANTIC_RUNTIME_PRESSURE_OUTPUT=inputs` only for isolated-root inspection.",
+        "In compact `pressure:app-api` output, treat `authoring.applicable-*` rows as active recipe pressure and `authoring.all-candidate-*` rows as contrastive recipe-selection context. Do not widen recipes or fixtures solely because an all-candidate row includes failed effects from recipes that are not applicable to the current fixture.",
+        "When `SEMANTIC_RUNTIME_PRESSURE_ROOTS` is set to the authoring fixture root or pressure fixture root, app pressure expands the collection root into child fixture inputs and de-duplicates explicit child roots. Use explicit child roots only when one fixture should be inspected as a single input.",
+        "When `project-tooling` expected effects look failed in a broad sweep, read `authoring.applicable-project-tooling-fixture-lane-outcomes` before changing recipes or fixture materialization. Generated fixtures should satisfy those rows; stress fixtures may legitimately lack local package/typecheck files and should be interpreted as analysis contrast pressure.",
+        "When broad app pressure shows source-assignment, template missing-input, framework error-code, or open-seam rows, read the fixture-owner cross-tabs (`bindings.data-flow-assignment-reason-fixtures`, `templates.missing-input-fixtures`, `templates.diagnostic-error-code-fixtures`, `app.diagnostic-error-code-fixtures`, `bindings.data-flow-error-code-fixtures`, `router.error-code-fixtures`, `open-seams.reason-fixtures`) before doing per-fixture runs. Internal fixtures use public `authoring:<folder>` and `pressure:<folder>` keys; custom/external roots collapse to `custom-root`.",
         "Read the axis-keyed authoring taste pressure rows before opening raw orientation payloads; they show which narrow axes are unobserved, which values appeared under which axis, and where a recipe-fit failure is only a missing signature value. `pressure:app-api` reports `policyState` under primitive-policy headings because observed-shape and derived-reading values can verify recipe signatures without becoming edit policy. It also prints focused taste sections for style binding, style ownership, form value channels, state ownership, validation ownership, and build-tool profile so low-count but important values do not disappear under the compact top-N rollup.",
-        "Generated state/validated-state/service/routed form recipes intentionally include a root component stylesheet via `create-style-asset`, a `canSubmit` class-token binding, and native `value` form bindings, with `style-resource`, `component-stylesheet`, `class-token-binding`, and filtered binding target-access/value-channel/data-flow verification. Native value filters use `targetKind=node` plus `targetProperty=value` so custom element `value` bindables do not satisfy native-control expectations; treat failures there as topology/style-recognition or binding value-channel pressure, not as expendable decoration.",
+        "Generated state/validated-state/service/routed form recipes intentionally include a root component stylesheet via `create-style-asset`, a `canSubmit` class-token binding, native `value` form bindings, checked/radio bindings, and select bindings, with `style-resource`, `component-stylesheet`, `class-token-binding`, and filtered binding target-access/value-channel/data-flow verification. Native value filters use `targetKind=node` plus `targetProperty=value`; checked filters use `targetKind=node` plus `targetProperty=checked`; custom element `value` bindables do not satisfy native-control expectations. Treat failures there as topology/style-recognition or binding value-channel pressure, not as expendable decoration.",
+        "Shared recommendable form plan steps live in `form-recipe-plan-steps.ts`; use those helpers for standard project files, entrypoint, root component, stylesheet, external template, form component, template binding, and verification steps, then keep state/service/validation/router discriminator steps local to the concrete recipe.",
+        "`service-backed-form` is now service-backed state rather than a direct component-facing service facade: generated components resolve DI state, state resolves a service/repository boundary for loading and submission side effects, expected effects prove component-to-state binding handoff plus state-to-service calls, and direct component-to-service facades should be treated as observed app shape or contrastive pressure rather than the recommendable default.",
         "Durable generated authoring fixtures should materialize the full recipe source plan, including package manifest, TypeScript config, and local asset declarations, so app-pressure sees project-tooling expected effects and the observed `build-tool-profile:typecheck-only-tooling` taste instead of only the `src/` tree. The fixture materializer derives from `AuthoringRecipeDescriptors`, resets each generated fixture folder before writing, and should be run with `pnpm --filter @aurelia-ls/semantic-runtime fixtures:authoring` after recipe source-plan changes.",
         "`validated-state-backed-form` is the recommendable validation recipe: it adds ValidationHtmlConfiguration, validation service resolution, source-authored rules, `& validate` bindings, fact-level `binding-behavior-application` verification for `validate`, and a `validation-controller-usage` discriminator taste while keeping the plain form recipe unopinionated. When the recipe emits a static validation trigger such as `& validate:'blur'`, verify it through `BindingBehaviorApplications.staticArgumentValues` rather than source text.",
         "When a generated fixture exposes a substrate gap, deepen the substrate before papering over the recipe.",
         "Use official Aurelia docs and framework tests as pressure inputs through Atlas corpus lenses; docs frequency is not idiom policy and tests are not fixture source to copy wholesale.",
+        "When selecting form fixture seeds from docs/tests, prefer exact Atlas corpus classification filters such as `classificationKind=surface` plus `classificationKey=native-value-binding`, `native-checked-binding`, `option-model-binding`, or `validation-binding-behavior` before broad prose queries. These surface keys point at local doc fences or test `createFixture(...)` calls; broader carrier rows are still useful pressure but not exact authoring examples.",
         "When an external app or stress fixture exposes weak typing or plugin/router/i18n pressure, generalize the pattern into Atlas or semantic-runtime without committing external app paths or templates."
       ],
       "anchors": [
@@ -175,6 +188,11 @@
           "filePath": "packages/semantic-runtime/src/authoring/expected-effect.ts",
           "symbolName": "ExpectedSemanticEffect",
           "summary": "Expected semantic effects used to compare generated intent with reopened app facts."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/form-recipe-plan-steps.ts",
+          "summary": "Shared standard form recipe plan-step constructors."
         },
         {
           "kind": "script",
@@ -198,7 +216,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-14"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "decision:authoring-source-plan-is-edit-boundary",
@@ -214,6 +232,7 @@
       "guidance": [
         "Use source-plan.ts for recipe-owned source text authority, conflict policy, formatting policy, and package-tooling policy.",
         "Use package-tooling.ts for recipe-baseline package manifests, TypeScript config, declaration files, dependencies, and scripts; build-tool profile and package-manager execution policy remain host-owned until modeled.",
+        "Keep recipe source plans split around named file-artifact producers once they grow beyond a minimal app shell. Functions such as `stateBackedFormComponentFile(...)` or `serviceBackedFormStateFile(...)` give Atlas and repair planning stable handles for one generated artifact without inventing a generic source-plan builder.",
         "Do not hide edit application policy inside operation names or recipe prose.",
         "When edit application becomes real, first model the host boundary and verification effects rather than bolting writes onto recipes."
       ],
@@ -251,7 +270,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-14"
+      "updatedAt": "2026-05-15"
     },
     {
       "id": "frontier:semantic-authoring-orientation",
