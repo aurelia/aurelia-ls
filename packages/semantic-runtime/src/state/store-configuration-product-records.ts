@@ -1,4 +1,5 @@
 import type { ConfigurationOptionValueKind } from '../configuration/configuration-option.js';
+import type { CheckerTypeReference } from '../type-system/type-shape.js';
 import {
   EvidenceKind,
   EvidenceRecord,
@@ -39,6 +40,7 @@ export interface StateStoreConfigurationProductSeed {
   readonly sourceAddressHandle: AddressHandle | null;
   readonly nameSourceAddressHandle: AddressHandle | null;
   readonly initialStateSourceAddressHandle: AddressHandle | null;
+  readonly initialStateType: CheckerTypeReference | null;
   readonly optionsOrHandlerSourceAddressHandle: AddressHandle | null;
   readonly actionHandlerSourceAddressHandles: readonly AddressHandle[];
 }
@@ -104,6 +106,7 @@ function stateStoreConfigurationModel(
     seed.sourceAddressHandle,
     seed.nameSourceAddressHandle,
     seed.initialStateSourceAddressHandle,
+    seed.initialStateType,
     seed.optionsOrHandlerSourceAddressHandle,
     seed.actionHandlerSourceAddressHandles,
   );

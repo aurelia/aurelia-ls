@@ -44,6 +44,201 @@
       ],
       "createdAt": "2026-05-12",
       "updatedAt": "2026-05-12"
+    },
+    {
+      "id": "frontier:query-claim-graph",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "inquiry",
+        "api",
+        "performance",
+        "telemetry"
+      ],
+      "summary": "QueryClaimGraph is the answer-boundary storage layer for query outcomes, lazy resolution, nested effects, retention policy, and disposal.",
+      "rationale": "Semantic-runtime serves many consumers with different latency and memory budgets. Public API answers should not turn every query-local projection into durable kernel products; QueryClaimGraph records answer shape, materialization policy, nested query composition, inclusive kernel side effects, and retention/disposal policy immediately before serialization.",
+      "guidance": [
+        "Start here when a public query grows kernel records, retains TypeChecker products, caches answer-local data, or needs inquiry-profile-specific disposal.",
+        "Keep durable semantic facts in kernel products and claims; keep answer payload shape, nested query composition, query-local type projection, and transport-facing retention in query claims.",
+        "Use app-query catalog materializationPolicy and profile-aware telemetry before adding another cache or eager projection.",
+        "Use `SEMANTIC_RUNTIME_TELEMETRY_DEPTHS=query-default` when measuring routed query cost from the public API's natural inquiry-depth policy. Use explicit depth rows only when the consumer intentionally forces a broader app-world analysis posture.",
+        "Keep app-world epochs shared across consumer lanes. A SemanticApp can own multiple QueryClaimGraph instances, one per inquiry profile, while the underlying cached app remains keyed by semantic shape rather than profile.",
+        "Retained outcomes are indexed by materialization policy, query kind, query key, locus key, and epoch key. Add reuse or invalidation through that graph-owned storage rather than scanning answer history or adding a second cache.",
+        "Treat QueryClaimGraph as the lazy storage layer immediately before public answer serialization. New API answerers should enter the graph with an answer closure and explicit materialization/disposal policy instead of producing a value first and later recording telemetry.",
+        "Opened-app convenience methods should re-enter SemanticApp.ask(...) when called outside active materialization. Do not add new direct SemanticApp answer methods that bypass answerPublicQueryIfNeeded.",
+        "Keep exact answer loci separate from invalidation epoch keys. Cursor/file answers should carry source/project epoch keys so source-change disposal can stay graph-owned instead of adapter-local.",
+        "Canonicalize source-file query loci before computing query keys, locus keys, and epoch keys. Runtime routed queries should converge absolute host paths and project-relative paths to the same project-relative source epoch.",
+        "Use SemanticRuntime.disposeQueryClaims for long-lived public sessions that need to prune answer-outcome storage by project/source/query policy without clearing the app-world kernel. Use clearAnalysisCache when retained app products themselves are stale.",
+        "Route public query-claim disposal through the semantic-runtime disposal strategy layer before touching QueryClaimGraph. The strategy should resolve scope, manual/project/source invalidation kind, canonical epoch keys, query-kind filters, materialization-policy filters, and profile selection; the graph should own indexed matching and disposal.",
+        "Source-file invalidation should include the containing project epoch as well as the canonical source epoch. Project-wide and sibling-file answers can depend on a changed resource, route, registration, or type surface, so do not treat the source key as an isolated cache key.",
+        "Use QueryClaimGraph.disposeWithSummary when invalidating by source, query family, or session policy. The summary should show candidate, matched, disposed, evaluation-state, materialization-policy, and profile/retention details so disposal stays graph-owned rather than adapter-local guesswork.",
+        "Use QueryClaimGraph snapshot index cardinalities before adding adapter-local retention scans. Root/child counts, max depth, and distinct query-kind/locus/epoch/materialization/outcome buckets show whether retained answer storage has the shape an invalidation or reuse policy expects.",
+        "Use retained query/locus/epoch/outcome key character mass before compacting query identity strings. Query keys are answer-boundary identity, not durable semantic truth, so excessive retained key text should be fixed in the claim graph/query-key policy rather than in transport caches.",
+        "Use retained answer values only for small answers whose materialization policy is explicitly admitted by the active inquiry-profile budget; do not retain broad semantic DTOs in the claim graph just to avoid recomputation.",
+        "Retained answer values should have both per-answer and graph-total byte budgets. If the total budget is exceeded, drop old DTO values while keeping claim records and payload/effect telemetry for invalidation and diagnostics.",
+        "Keep QueryAnswerClaim as a lazy handle, not a second cache. Rereads should succeed only when the graph retained the answer value; otherwise the handle is read-once and invalidation/disposal must prevent stale DTO reuse.",
+        "Retained-answer byte checks should use bounded DTO shape estimation, not row count alone, because summary answers can carry broad nested objects without exposing a top-level rows array.",
+        "Keep runtime-level summary/static answers and opened-app answers in separate query-claim graphs so workspace/project-selection or static catalog reuse does not force app-world construction or pollute app-epoch retention.",
+        "Public transport catalog answers should call claim-backed SemanticRuntime methods, not raw readSemantic* helpers, so tools and resources share one query-outcome ledger.",
+        "Record routed app answers in the runtime-level query-claim graph through optional app-epoch disposal. That graph should retain lightweight outcome/cost claims for one-off MCP-style calls without owning or retaining the opened app kernel records.",
+        "Use SemanticRuntime.answerAppQueries for multi-answer public orientation moves. The batch should be one runtime-level claim, while app-world child queries still enter the app-owned graph with their own materialization policy.",
+        "For routed batch profiling, inspect both runtime query claims and app query claims. Runtime claims explain public transport retention and app-epoch cleanup; app claims explain nested child-query composition and retained answer reuse before optional app disposal.",
+        "Let app-world-free app queries remain app-world-free through the routed boundary, driven by app-query catalog runtimeBoundary rather than private switches. Runtime-static, project-frame, and static-evaluation batches should retain a runtime root claim plus nested runtime child claims, and zero app-owned child claims, instead of opening an app world just to preserve a uniform batch shape.",
+        "Batch routed app answers should copy compact app construction profile evidence into the public result before disposal. Use that top-phase evidence for retention-safe telemetry; reopen with an opened-app profile only when deeper subphase detail is actually needed.",
+        "Keep expensive owner summaries on the compact routed app profile when they are needed to explain disposed answers. Template expression type-cache counters belong there so one-off MCP-style answers can attribute CheckerExpressionTypeWorld work without retaining the app epoch.",
+        "Use disposeAnswerSideEffects for policy-owned one-off cleanup such as routed app epoch disposal. The claim should record both materialized kernel deltas and reclaimed nested app query claims so retained-memory telemetry stays honest.",
+        "Kernel disposal summaries should carry disposed handle-character mass beside record/detail counts. Use root handle deltas, disposed handle characters, and net handle characters when investigating handle-string memory pressure from one-off answers.",
+        "Route process-local TypeScript dependency SourceFile cache clears through the same answer-side disposal summary when they are part of a one-off public answer. The graph should count cleared dependency files/text beside app-world disposal rather than leaving that cleanup hidden in adapter-local finally blocks.",
+        "Keep dependency SourceFile cache clearing inquiry-shaped. Recompute-friendly routed answers that dispose the app epoch default to clearing all dependency/lib SourceFiles, while warm sessions can pass `preserve` to keep TypeChecker Program construction cheap.",
+        "Retained answer hits must still run answer-side disposal policy. Reusing a small answer value should not bypass an explicit dispose-app request or any future transport-owned cleanup hook.",
+        "Let answer boundaries veto retained-answer reuse when materialization is the requested side effect, such as retain-app routed queries that need to warm a compatible app epoch.",
+        "Session profiles should carry explicit retained-record budgets. Budget disposal belongs in QueryClaimGraph, should be visible in telemetry, and should prune only answered/failed nodes so pending lazy claims remain materializable.",
+        "Discard-after-answer profiles should still retain pending lazy nodes until materialization resolves or fails; the graph is the storage owner before serialization even when the profile keeps no records afterward.",
+        "Keep answer-local kernel retention as one explicit policy. KernelStore markers dispose records, product details, and hot details as a coherent slice; do not add separate hot-detail retention flags without a new kernel lifetime primitive.",
+        "Keep retained node/index mechanics in QueryClaimGraphStorage. QueryClaimGraph should own lazy materialization, profile policy, and disposal accounting; storage should own retained outcome history, index buckets, reuse lookup, invalidation candidates, and retention-budget candidate selection.",
+        "Keep retained-answer byte totals and cheap retained-shape snapshot accounting in QueryClaimGraphStorage. Cache overview should not allocate full public query-claim row DTOs just to report pending/root/retained-answer counts.",
+        "When cache overview asks for row detail, use the graph's recent-record projection rather than materializing all retained claim rows and slicing in API code. The graph storage is the answer-history owner.",
+        "Put profile-to-retention and disposal vocabulary changes in query-claim-policy.ts; keep query-claim-graph.ts focused on graph materialization, storage, indexes, lazy policy, and counters until a real second source-file lifetime warrants a split.",
+        "Treat diagnosticProjection as the first concrete query policy lever: overview-style callers should use available-products, while explicit diagnostics can request type-projection. The lsp-diagnostics profile keeps session claims but disposes answer-local TypeChecker products; fixture and authoring profiles may retain them for app-epoch inspection.",
+        "Expose diagnosticProjection at public transport boundaries instead of baking in a hidden default. MCP/LSP orientation flows can choose available-products, while repair/deep diagnostic flows can choose type-projection and make the CPU/memory trade-off visible in query claims.",
+        "Prefer lazy answer closures at the query-claim boundary; do not compute an answer first and record it afterward.",
+        "Use kernel mark/dispose boundaries for non-retaining inquiry profiles: query claims should record answer-local kernel deltas and disposed counts without forcing those products to survive the public answer.",
+        "When memory pressure returns, inspect whether hot details or query-produced products should be retained for session, retained for app epoch, discarded after answer, or moved into query-local claim storage instead of durable kernel products.",
+        "Treat QueryClaimNode as an internal lifetime object for one answer attempt. It may be large because it owns resolved/disposed state, parent/depth, payload shape, and inclusive kernel-effect deltas; do not split it just to hide source pressure unless a real second lifetime emerges.",
+        "Treat QueryClaimGraphCounters as graph-local measurement state owned by the claim graph. Keep it visible as part of the claim-graph frontier, but do not promote it to an independent product model unless another consumer starts needing its lifetime separately."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraph",
+          "summary": "Lazy answer-claim graph with profile-shaped retention and disposal policy."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimNode",
+          "summary": "Internal per-answer node carrying lifecycle state, nesting, and inclusive kernel effects."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraphStorage",
+          "summary": "Retained query outcome storage and invalidation indexes under the claim graph."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraphCounters",
+          "summary": "Graph-local counter accumulator for answer retention, row, kernel-effect, and disposal telemetry."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-policy.ts",
+          "symbolName": "queryClaimRetentionPolicyForProfile",
+          "summary": "Inquiry-profile policy mapping for query claim retention and answer-local kernel disposal."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp",
+          "summary": "Opened app facade routes public app queries through QueryClaimGraph."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp.answerPublicQueryIfNeeded",
+          "summary": "Direct opened-app answer methods re-enter the app query claim graph before running projection bodies."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/store.ts",
+          "symbolName": "KernelStore.mark",
+          "summary": "Kernel/session marker used by query claims to dispose answer-local records and sidecars."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-query-catalog.ts",
+          "symbolName": "semanticAppQueryCatalogRow",
+          "summary": "Public app-query catalog carrying answer materialization policy."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-query-identity.ts",
+          "symbolName": "semanticAppQueryKey",
+          "summary": "Shared app-query identity, locus, and invalidation epoch key helpers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-query-policy.ts",
+          "symbolName": "semanticRuntimeQueryClaimDisposalStrategy",
+          "summary": "Public query-claim disposal strategy builder for scope, invalidation kind, epoch keys, and policy filters."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime.answerAppQueries",
+          "summary": "Batch routed app-query answer boundary with one runtime claim and child app query claims."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/scripts/app-telemetry.mjs",
+          "summary": "Inquiry-profile app telemetry script printing query-claim retention and query-side kernel growth."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/inquiry/README.md",
+          "heading": "Query Claims",
+          "summary": "Inquiry boundary note for query claims, laziness, and disposal."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "className": "QueryClaimGraph",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "minLineCount": 120,
+          "minMethodCount": 6
+        },
+        {
+          "kind": "product-large-class",
+          "className": "QueryClaimNode",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        },
+        {
+          "kind": "product-large-class",
+          "className": "QueryClaimGraphStorage",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "minLineCount": 80,
+          "minMethodCount": 5
+        },
+        {
+          "kind": "product-large-class",
+          "className": "QueryClaimGraphCounters",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "minLineCount": 60,
+          "minMethodCount": 4
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-query-catalog.ts",
+          "symbolName": "semanticAppQueryCatalogRow"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticApp.answerPublicQueryIfNeeded"
+        }
+      ],
+      "createdAt": "2026-05-17",
+      "updatedAt": "2026-05-17"
     }
   ]
 }

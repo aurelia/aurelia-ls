@@ -97,6 +97,7 @@ const WORKSPACE_FILE_INVENTORY_EXCLUDED_DIRECTORIES = new Set([
 export type WorkspaceAdmissionRole =
   | "atlas"
   | "semantic-runtime"
+  | "mcp"
   | "aurelia-framework"
   | "public-plugin"
   | "external"
@@ -1553,6 +1554,9 @@ function admissionRoleForPackage(
   }
   if (sourcePackage.id === SourcePackageId.SemanticRuntime) {
     return "semantic-runtime";
+  }
+  if (sourcePackage.id === SourcePackageId.Mcp) {
+    return "mcp";
   }
   if ((AURELIA_FRAMEWORK_PACKAGE_IDS as readonly string[]).includes(sourcePackage.id)) {
     return "aurelia-framework";

@@ -7,7 +7,6 @@ import type {
 } from '../boot/frames.js';
 import {
   isEvaluatedProjectSource,
-  StaticProjectEvaluationPass,
   type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
 import type { EvaluationModuleResolutionOpen } from '../evaluation/module-host.js';
@@ -24,6 +23,9 @@ import {
   ConfigurationRecognitionPass,
   type ConfigurationRecognitionResult,
 } from './configuration-recognition-pass.js';
+import {
+  evaluateAndEmitAureliaProject,
+} from './aurelia-project-evaluation.js';
 import type { ConfigurationSequenceObservation } from './configuration-observation.js';
 import { normalizeConfigurationSourceFileName } from './source-file-names.js';
 
@@ -78,7 +80,7 @@ export class ConfigurationRecognitionProjectPass {
     evaluation: StaticProjectEvaluationResult | null = null,
     typeSystem: TypeSystemProject | null = null,
   ): ConfigurationRecognitionProjectResult {
-    const projectEvaluation = evaluation ?? new StaticProjectEvaluationPass().evaluateAndEmit(store, project);
+    const projectEvaluation = evaluation ?? evaluateAndEmitAureliaProject(store, project);
     const recognition = new ConfigurationRecognitionPass();
     const sourceFileAddressHandlesByFileName = readSourceFileAddressHandlesByFileName(projectEvaluation);
     return new ConfigurationRecognitionProjectResult(

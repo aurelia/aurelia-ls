@@ -544,6 +544,7 @@ function validateTargetIsNodeOrControllerViewModel(targetAccess: RuntimeBindingT
     case RuntimeBindingTargetKind.ControllerViewModel:
       return true;
     case RuntimeBindingTargetKind.Controller:
+    case RuntimeBindingTargetKind.StateStore:
       return false;
     case RuntimeBindingTargetKind.Unknown:
       return null;

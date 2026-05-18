@@ -15,6 +15,9 @@ import {
 } from './checker-related-types.js';
 import type { CheckerTypeShapeAccess } from './checker-type-shape-access.js';
 import {
+  CheckerTypeMemberProjectionPolicy,
+} from './checker-projector.js';
+import {
   type CheckerExpressionTypeEvaluation,
   CheckerExpressionTypeEvaluationResultKind,
   CheckerExpressionTypeOpenKind,
@@ -33,6 +36,17 @@ export interface CheckerExpressionIterableProjectorHost {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerExpressionTypeEvaluation;
+}
+
+export class CheckerExpressionIteratorProjection {
+  constructor(
+    /** Type evaluation for the authored repeat source expression. */
+    readonly iterable: CheckerExpressionTypeEvaluation,
+    /** Runtime RepeatableHandlerResolver element projection, or the open result that blocked it. */
+    readonly element: CheckerExpressionTypeEvaluation,
+    /** Binding-pattern locals projected from `element`, or the open result that blocked them. */
+    readonly locals: CheckerBindingPatternLocalProjection | CheckerExpressionTypeEvaluation,
+  ) {}
 }
 
 /**
@@ -69,16 +83,7 @@ export class CheckerExpressionIterableProjector {
     localKey: string,
     sourceAddressHandle: AddressHandle | null = null,
   ): CheckerExpressionTypeEvaluation {
-    const iterable = this.host.evaluateNode(
-      expression.iterable,
-      scope,
-      `${localKey}:iterator-source`,
-      sourceAddressHandle,
-    );
-    if (iterable.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
-      return iterable;
-    }
-    return this.evaluateIterableElementType(expression, iterable.typeShape, `${localKey}:iterator-element`, sourceAddressHandle);
+    return this.evaluateIteratorProjection(expression, scope, localKey, sourceAddressHandle).element;
   }
 
   evaluateIteratorLocals(
@@ -87,16 +92,35 @@ export class CheckerExpressionIterableProjector {
     localKey: string,
     sourceAddressHandle: AddressHandle | null = null,
   ): CheckerExpressionTypeEvaluation | CheckerBindingPatternLocalProjection {
-    const element = this.evaluateIteratorElement(expression, scope, localKey, sourceAddressHandle);
-    if (element.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
-      return element;
+    return this.evaluateIteratorProjection(expression, scope, localKey, sourceAddressHandle).locals;
+  }
+
+  evaluateIteratorProjection(
+    expression: ForOfStatement,
+    scope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null = null,
+  ): CheckerExpressionIteratorProjection {
+    const iterable = this.host.evaluateNode(
+      expression.iterable,
+      scope,
+      `${localKey}:iterator-source`,
+      sourceAddressHandle,
+    );
+    if (iterable.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
+      return new CheckerExpressionIteratorProjection(iterable, iterable, iterable);
     }
-    return this.bindingPatternLocals.projectBindingPattern(
+    const element = this.evaluateIterableElementType(expression, iterable.typeShape, `${localKey}:iterator-element`, sourceAddressHandle);
+    if (element.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
+      return new CheckerExpressionIteratorProjection(iterable, element, element);
+    }
+    const locals = this.bindingPatternLocals.projectBindingPattern(
       expression.declaration,
       element.typeShape,
       `${localKey}:iterator-local`,
       sourceAddressHandle,
     );
+    return new CheckerExpressionIteratorProjection(iterable, element, locals);
   }
 
   private evaluateIterableElementType(
@@ -148,7 +172,15 @@ export class CheckerExpressionIterableProjector {
       );
     }
 
-    return this.support.projectType(expression, checker, repeatable.elementType, `${localKey}:value`, sourceAddressHandle);
+    return this.support.projectType(
+      expression,
+      checker,
+      repeatable.elementType,
+      `${localKey}:value`,
+      sourceAddressHandle,
+      `Projected ${expression.$kind} repeat element type through the TypeChecker.`,
+      { memberProjection: CheckerTypeMemberProjectionPolicy.Lazy },
+    );
   }
 
   private evaluateMapEntryElementType(
@@ -168,9 +200,33 @@ export class CheckerExpressionIterableProjector {
       return null;
     }
 
-    const keyReference = this.support.projectType(expression, checker, keyType, `${localKey}:key`, sourceAddressHandle).typeReference;
-    const valueReference = this.support.projectType(expression, checker, valueType, `${localKey}:value`, sourceAddressHandle).typeReference;
-    const lengthReference = this.support.projectType(expression, checker, checker.getNumberType(), `${localKey}:length`, sourceAddressHandle).typeReference;
+    const keyReference = this.support.projectType(
+      expression,
+      checker,
+      keyType,
+      `${localKey}:key`,
+      sourceAddressHandle,
+      `Projected ${expression.$kind} map key type through the TypeChecker.`,
+      { memberProjection: CheckerTypeMemberProjectionPolicy.Lazy },
+    ).typeReference;
+    const valueReference = this.support.projectType(
+      expression,
+      checker,
+      valueType,
+      `${localKey}:value`,
+      sourceAddressHandle,
+      `Projected ${expression.$kind} map value type through the TypeChecker.`,
+      { memberProjection: CheckerTypeMemberProjectionPolicy.Lazy },
+    ).typeReference;
+    const lengthReference = this.support.projectType(
+      expression,
+      checker,
+      checker.getNumberType(),
+      `${localKey}:length`,
+      sourceAddressHandle,
+      `Projected ${expression.$kind} map entry length type through the TypeChecker.`,
+      { memberProjection: CheckerTypeMemberProjectionPolicy.Lazy },
+    ).typeReference;
     const tupleType = this.synthesis.mapEntryType(keyReference, valueReference, lengthReference, localKey, sourceAddressHandle);
     return this.support.type(tupleType, `Synthesized ${symbolName} repeat entry type for destructuring.`);
   }

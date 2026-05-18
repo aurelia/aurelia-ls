@@ -1,11 +1,11 @@
 <main>
   <h1>Service request</h1>
   <label for="request-selector">Request</label>
-  <select id="request-selector" value.bind="selectedRequestId">
-    <option repeat.for="requestId of requestIds" model.bind="requestId">${requestId}</option>
+  <select id="request-selector" value.bind="state.selectedRequestId">
+    <option repeat.for="requestId of state.requestIds" model.bind="requestId">${requestId}</option>
   </select>
 
-  <service-backed-form request-id.bind="selectedRequestId"></service-backed-form>
+  <service-backed-form request-id.bind="state.selectedRequestId"></service-backed-form>
 
-  <p>${submittedCount} submitted request(s)</p>
+  <p>${state.submittedCount} submitted request(s)</p>
 </main>

@@ -226,6 +226,11 @@ function builtInElementBindables(
         { name: 'default' },
         { name: 'fallback' },
       ]);
+    case 'ValidationContainerCustomElement':
+      return bindables(source, [
+        { name: 'controller' },
+        { name: 'errors' },
+      ]);
     default:
       return [];
   }
@@ -288,6 +293,11 @@ function builtInAttributeBindables(
       ]);
     case 'HrefCustomAttribute':
       return bindables(source, [{ name: 'value' }]);
+    case 'ValidationErrorsCustomAttribute':
+      return bindables(source, [
+        { name: 'controller' },
+        { name: 'errors', mode: BindableBindingMode.TwoWay },
+      ]);
     case 'Else':
     default:
       return [];
@@ -302,6 +312,8 @@ function builtInDefaultProperty(targetName: string): string {
       return 'target';
     case 'LoadCustomAttribute':
       return 'route';
+    case 'ValidationErrorsCustomAttribute':
+      return 'errors';
     default:
       return 'value';
   }

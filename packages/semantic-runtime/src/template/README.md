@@ -76,7 +76,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   values into expression parser publications. They preserve value-site provenance above the parser and deliberately
   transfer ownership away from the parser for binding-command values and secondary grammars that need command/compiler
   preprocessing first. Direct spread values are parser-owned here as `SpreadValue` sites so `...$bindables="source"`
-  and shorthand `...source` lower through expression products instead of becoming static attributes.
+  and shorthand `...source` lower through expression products instead of becoming static attributes. Static text and
+  plain platform attributes do not publish durable value-site products; cursor inquiries can still classify those
+  source ranges from HTML/syntax products, and should create query-local claims if they ever need a value-site-shaped
+  answer envelope.
 - `expression-parse-projection.ts` owns the template/runtime projection from parser publications to expression ASTs.
   Keep this distinct from the parser's publication algebra: authoring-strict companion/frontier results can remain
   visible on parse products while runtime-shaped consumers ask whether Aurelia itself would accept a binding expression
@@ -84,6 +87,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   companion/frontier, while binding data-flow can still spend the runtime-accepted interpolation expression.
 - `binding-command-execution.ts` models runtime binding-command executables, resolver state, command build inputs, and
   lowering results. Custom command bodies can stay opaque while still preserving the exact command/input boundary.
+  `BindingCommandBuildInput` mirrors the framework's `ICommandBuildInfo` shape and should stay limited to the command's
+  node/attribute plus optional bindable/definition context; surrounding value-site or expression relations should remain
+  claim-backed topology unless the framework command boundary itself would own them.
 - `compiler-issue.ts` and `compiler-issue-publication.ts` own template-compiler failure products. Compiler-world
   service registration, attribute classification, binding-command lowering, compiled-template assembly, and spread
   compilation attach exact framework `ErrorNames` authority there when a modeled Aurelia throw or warning is known;
@@ -135,9 +141,45 @@ classification, expression parsing, and instruction lowering converge on the sam
   matching Aurelia's `definition.surrogates` pass. Runtime rendering now uses the project compiled-template context to
   expand child custom-element controllers into aggregate child-view render passes; this keeps recursive controller
   hydration tied to actual `Controller.addChild` products rather than cloning a definition-level render in isolation.
+  Controller containers now also spend local resource dependencies during root and child controller creation, mirroring
+  `AppRoot` child-container creation and `Controller.$el` / `$attr` dependency registration before nested renderers
+  perform resource lookup.
   `SpreadBinding` is the deliberate exception to direct controller admission: it can own dynamically compiled inner
   bindings created by `TemplateCompiler.compileSpread(...)`, and those ownership edges are recorded as
   binding-to-binding claims so the later `Controller.bind` emulation still walks them.
+- `runtime-composition.ts`, `runtime-composition-materializer.ts`, and `runtime-composition-activation.ts` own the first runtime-shaped `AuCompose`
+  composition lane after controller bind and binding data-flow facts exist. Static invalid `AuCompose` inputs remain
+  controller-issue pressure because lowered `SetPropertyInstruction`s can prove those failures during controller
+  creation. Dynamic composition is different: the materializer evaluates `component` and `model` bindings against the
+  current scope when possible, then falls back to TypeChecker-visible constructable candidates so unions such as
+  `typeof ChartWidget | typeof InventoryWidget` become explicit `CompositionContext` / `CompositionController`
+  products rather than a closed-looking but invisible runtime branch. The API exposes those rows through
+  `RuntimeCompositions`, and `app-api-pressure` reports candidate counts, compiled-template counts, candidate
+  resource-analysis coverage, candidate resource-controller count buckets, activation handoff kinds, context input
+  presence and fulfillment buckets, and open composition rows so dynamic composition cannot disappear behind ordinary
+  controller totals. Component/template/model fulfillment distinguishes absent inputs from direct static fulfillment,
+  promise-unwrapped fulfillment, and genuinely open inputs.
+  The same context now reads static `SetPropertyInstruction` inputs for `model`, `scopeBehavior`, `tag`, and `flushMode`
+  alongside dynamic property bindings. This is deliberate: literal AuCompose bindables are part of the hydrate
+  instruction, while `component.bind`, `model.bind`, `composition.bind`, and `composing.bind` enter through
+  controller-bind target accesses. Keep those two input lanes joined here rather than pretending every AuCompose input
+  is a runtime binding.
+  Closed static/value custom-element composition branches also materialize an aggregate child `Controller` handoff under
+  the `AuCompose` host controller. TypeChecker-only candidate unions remain candidate rows rather than fake child
+  controllers. This gives recursive composition a real controller/container boundary to extend later while keeping
+  candidate resource-analysis coverage distinct from actual composed-child hydration.
+  A statically evaluated object, instance, boundary object, or non-resource constructable component is classified as
+  `object-view-model` instead of remaining open: Aurelia accepts those as ordinary dynamic component instances even
+  when no custom-element definition is involved. For constructable object view-models, activation lookup checks the
+  instance type because the framework invokes the constructor before calling `comp.activate?.(model)`.
+  Each resolved component branch and object-view-model branch now records the `comp.activate?.(model)` /
+  `update(model)` handoff shape. The activation module owns this TypeChecker-backed lifecycle check separately from
+  component resolution: absent or parameterless activation is closed as such, and `activate(model)` branches compare the
+  model binding source type with the first activation parameter type through the shared checker assignability helper.
+  Candidate resource-analysis coverage means the resolved component resources have their own
+  project-level template/runtime analyses available; it is not the same as recursive composed-child rendering. Full
+  recursive child composition rendering, template-only runtime template compilation, and lifecycle run/deactivate state
+  errors remain deeper controller/lifecycle frontiers.
 - `runtime-spread-binding-creator.ts` contains the semantic counterpart to `SpreadBinding.create(...)`: it walks the
   modeled hydration-context controller chain, resolves captured `AttrSyntax` products, and hands them to
   `TemplateCompiler.compileSpread(...)`. `runtime-spread-compile-host.ts` contains the runtime-shaped compiler host
@@ -188,8 +230,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   `MultiAttrInstruction`s: unsupported `key` commands (`AUR0775`), extraneous repeat option targets (`AUR0776`), and
   unsupported `contextual` commands (`AUR0821`). Static `AuCompose` inputs live here too: invalid literal
   `scope-behavior` (`AUR0805`) and `flush-mode` (`AUR0809`) are detected from lowered `SetPropertyInstruction`s, while
-  static string `component` / `view-model` names probe the parent hydration-context container and map missing custom
-  elements to `AUR0806`. Runtime composition re-entry/deactivation errors remain unclaimed until lifecycle phases are
+  static string `component` / `view-model` names probe the parent hydration-context controller container, including
+  controller-local dependency resource slots, and map missing custom elements to `AUR0806`. Runtime composition
+  re-entry/deactivation errors remain unclaimed until lifecycle phases are
   modeled. `else` link-hook failures are also controller-owned: when the previous child controller sibling is not `if`,
   the issue maps to `AUR0810`. `case` and `default-case` link-hook failures use the same lane: missing parent `switch` maps to
   `AUR0815`, and a second `default-case` linked to the same switch maps to `AUR0816`. Promise-result controller
@@ -240,8 +283,16 @@ classification, expression parsing, and instruction lowering converge on the sam
   intentionally aggregate/cardinality-aware rather than per-runtime-instance: the controller row records `many`,
   `optional`, or `single` through template-controller semantics. The synthetic render pass groups embedded instructions
   by authored target node before dispatch so nested renderer and spread-compile logic can still see the target node.
-  Recursive rendering work should extend this phase instead of pulling runtime instance concerns back into the
-  compiler-front-door pass.
+  Recursive child custom-element rendering is guarded by controller ancestry over custom-element definition handles,
+  not by fresh controller product handles, so self-recursive or mutually recursive component templates stay finite while
+  still exposing the first aggregate child-view surface. When the guard is reached, the child controller records a
+  `recursive-hydration-boundary` lifecycle step and API rows report `childViewRenderingState=recursive-boundary` rather
+  than publishing an open seam; this is an intentional finite aggregate boundary, not a hidden proof of per-instance
+  recursive activation. Recursive rendering work should extend this phase instead of pulling runtime instance concerns
+  back into the compiler-front-door pass. Compiled instruction products are definition-level identities, while runtime
+  controller frames are instance-level identities: recursive rendering can create several controllers from the same
+  instruction product under different parents, so scope construction and branch-link publication must use the active
+  parent controller context instead of a global instruction-to-controller lookup.
 - `template-controller-scope-materializer.ts` owns the TypeChecker-backed control-flow handoff for built-in template
   controllers. `template-controller-flow-scope-materializer.ts` applies the built-in controller-flow dispatcher and
   publishes link-hook claims for branch controllers whose framework `link(...)` method attaches them to another
@@ -281,7 +332,8 @@ classification, expression parsing, and instruction lowering converge on the sam
   checked, select value, textarea value, class/style accessors, and ordinary element properties. The access strategy is
   selected by `observation/observer-locator.ts`, which combines framework node observer configuration with TypeChecker
   target/property facts. Native node target-access rows preserve whether the checker type came from an exact
-  `HTMLElementTagNameMap`/`SVGElementTagNameMap` hit or from the broad `HTMLElement`/`SVGElement` fallback, because
+  `HTMLElementTagNameMap`/`SVGElementTagNameMap`/`MathMLElementTagNameMap` hit or from the broad
+  `HTMLElement`/`SVGElement`/`MathMLElement` fallback, because
   fallback rows are honest host-node or web-component pressure rather than custom-element guesses. Controller view-model
   targeting comes from renderer dispatch and child-controller creation, not from tag-name heuristics. Property,
   interpolation, and spread-value bindings all use the same renderer-owned target
@@ -315,6 +367,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   It preserves the CE boundary-scope rule, repeat local binding-context rule, repeat override contextual names,
   `with.bind` object binding-context rule, branch-local `if.bind`/`else` narrowing, promise result locals, and
   let-binding target-context rule so expression inquiry can use the same scope substrate as runtime-shaped compilation.
+  Listener and state-dispatch event scopes keep `$event` as the DOM event type, then attach member-type refinements for
+  `$event.currentTarget` and native form-control `$event.target` through the authored host element. This preserves normal
+  event members while letting form payload expressions such as `$event.target.value` close through the same DOM
+  tag-name-map substrate as observer lookup.
   It also models target-to-source bindable assignments that create runtime-only binding-context names for later
   template expressions. A two-way/from-view bindable can write a previously undeclared scope name; later
   sibling/descendant expressions should see that name after the instruction that wrote it. The slot stays runtime-only
@@ -326,10 +382,13 @@ classification, expression parsing, and instruction lowering converge on the sam
   attribute; nested `...$attrs` transfer moves to that context controller's parent. This lets wrapper components forward
   expressions such as `value.bind="email"` into an inner input while typechecking `email` against the parent view model.
   If no parent hydration context is modeled, the transfer is an explicit open runtime boundary instead of a
-  definition-level capture fallback. Recursive child custom-element views are now scope-walked from the controller that
-  rendered them, so parent-captured expressions keep their usage scope through wrapper templates and built-in
-  template-controller child views. Repeated runtime instances still use aggregate compiled-template products rather than
-  per-instance template products. Listener binding instructions receive a derived expression scope with the runtime
+  definition-level capture fallback. Child custom-element instructions create a child view-model scope for bindable
+  and target-flow analysis, and scope construction also walks the child resource's compiled-template instructions under
+  that child scope when runtime rendering created an aggregate child controller view. Recursive component definitions
+  are guarded by controller definition ancestry so static analysis stays finite while still preserving usage-local
+  wrapper/capture semantics. Repeated runtime instances still use aggregate compiled-template products rather than
+  per-instance template products.
+  Listener binding instructions receive a derived expression scope with the runtime
   `$event` override-context slot typed from DOM event maps for the event name. This models `ListenerBinding.callSource`
   rather than a completion special case, and it gives listener-returned functions the same first-argument event type
   when arrow callbacks such as `(e) => e.stopPropagation()` are evaluated by the TypeChecker substrate.

@@ -23,6 +23,8 @@ export type ExpectedSemanticEffectKind =
   | 'style-resource'
   /** The reopened app should expose source-backed state/service/model classes in app topology. */
   | 'service-class'
+  /** The reopened app should expose public composed state/domain objects owned by a state class. */
+  | 'state-composition'
   /** The reopened app should expose source-backed calls into topology service/state/model classes. */
   | 'service-interaction'
   /** The reopened app should join template binding source members to service/state/model class interactions. */
@@ -33,6 +35,8 @@ export type ExpectedSemanticEffectKind =
   | 'template-compilation'
   /** The reopened app should expose runtime controller/hydration facts. */
   | 'runtime-controller'
+  /** The reopened app should expose dynamic AuCompose runtime composition facts. */
+  | 'runtime-composition'
   /** The reopened app should expose observer/accessor target facts for template bindings. */
   | 'binding-target-access'
   /** The reopened app should expose direct runtime target-operation facts for renderer or binding writes. */
@@ -41,6 +45,12 @@ export type ExpectedSemanticEffectKind =
   | 'binding-value-channel'
   /** The reopened app should expose runtime binding-behavior application facts. */
   | 'binding-behavior-application'
+  /** The reopened app should expose static i18n translation-key products. */
+  | 'i18n-translation-key'
+  /** The reopened app should expose rendered i18n TranslationBinding target groups. */
+  | 'i18n-translation-binding'
+  /** The reopened app should expose @aurelia/state store configuration products. */
+  | 'state-store'
   /** The reopened app should expose source-to-target TypeChecker data-flow facts. */
   | 'binding-data-flow'
   /** The reopened app should expose route configuration or router topology facts. */

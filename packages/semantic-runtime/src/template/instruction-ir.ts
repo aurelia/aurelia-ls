@@ -537,6 +537,7 @@ export class StateBindingInstruction {
     readonly rawExpression: string,
     readonly target: string,
     readonly storeName: string | null,
+    readonly expressionProductHandle: ProductHandle | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
   ) {}
@@ -555,6 +556,7 @@ export class DispatchBindingInstruction {
     readonly eventName: string,
     readonly rawExpression: string,
     readonly storeName: string | null,
+    readonly expressionProductHandle: ProductHandle | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<TemplateInstructionField>[] = [],
   ) {}
@@ -602,6 +604,8 @@ export function expressionProductHandlesForInstruction(
     case TemplateInstructionKind.SpreadValueBinding:
     case TemplateInstructionKind.TranslationBindBinding:
     case TemplateInstructionKind.TranslationParametersBinding:
+    case TemplateInstructionKind.StateBinding:
+    case TemplateInstructionKind.DispatchBinding:
       return productHandleArray(instruction.expressionProductHandle);
     case TemplateInstructionKind.IteratorBinding:
       return productHandleArray(instruction.iterableExpressionProductHandle);
@@ -619,8 +623,6 @@ export function expressionProductHandlesForInstruction(
     case TemplateInstructionKind.SpreadTransferedBinding:
     case TemplateInstructionKind.SpreadElementPropBinding:
     case TemplateInstructionKind.TranslationBinding:
-    case TemplateInstructionKind.StateBinding:
-    case TemplateInstructionKind.DispatchBinding:
       return [];
   }
 }

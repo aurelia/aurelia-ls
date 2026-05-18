@@ -5,6 +5,7 @@ import type {
   AddressHandle,
   ProductHandle,
 } from '../kernel/handles.js';
+import { uniqueStrings } from '../kernel/collections.js';
 import { checkerExpressionTypeLocalKey } from '../kernel/local-key.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
@@ -37,7 +38,9 @@ import {
   type CheckerTypeProjectionRequest,
   type CheckerSyntheticTypeProjectionRequest,
 } from '../type-system/checker-projector.js';
-import { TypeSystemProductDetails } from '../type-system/product-details.js';
+import {
+  readCheckerTypeShape,
+} from '../type-system/checker-type-shape-access.js';
 import {
   CheckerTypeProjectionOrigin,
   CheckerTypeShapeKind,
@@ -63,6 +66,10 @@ import type {
   CheckedSourceShape,
   RuntimeValueChannelBinding,
 } from './binding-value-channel-draft-types.js';
+import {
+  RuntimeBindingPrimitiveValueKind,
+  type RuntimeBindingPrimitiveValue,
+} from './runtime-binding-observation.js';
 
 export class RuntimeBindingValueChannelTypeSupport {
   constructor(
@@ -80,7 +87,7 @@ export class RuntimeBindingValueChannelTypeSupport {
       localKey: local,
       checker,
       type,
-      origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
+      origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceAddressHandle,
     } satisfies CheckerTypeProjectionRequest).toReference();
   }
@@ -97,7 +104,7 @@ export class RuntimeBindingValueChannelTypeSupport {
         localKey: local,
         checker: carrier.checker,
         type: carrier.checker.getBooleanType(),
-        origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
+        origin: CheckerTypeProjectionOrigin.TypeChecker,
         sourceAddressHandle: binding.sourceAddressHandle,
         display: 'boolean',
       } satisfies CheckerTypeProjectionRequest).toReference();
@@ -226,9 +233,7 @@ export class RuntimeBindingValueChannelTypeSupport {
   }
 
   readTypeShape(reference: CheckerTypeReference | null): CheckerTypeShape | null {
-    return reference?.productHandle == null
-      ? null
-      : this.store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle);
+    return readCheckerTypeShape(this.store, reference);
   }
 }
 
@@ -286,23 +291,33 @@ export class RuntimeBindingValueChannelDraftSupport {
       return {
         valueType: null,
         valueDomain: [],
+        primitiveValueDomain: [],
       };
     }
-    const literalDomain = stringDomainForExpression(ast);
-    if (literalDomain.length > 0) {
-      return this.literalDomainBindingValueExpression(local, binding, literalDomain);
+    const primitiveDomain = primitiveValueDomainForExpression(ast);
+    const stringDomain = stringDomainForPrimitiveValues(primitiveDomain);
+    if (stringDomain.length > 0 && stringDomain.length === primitiveDomain.length) {
+      return this.literalDomainBindingValueExpression(local, binding, stringDomain, primitiveDomain);
     }
-    return this.evaluatedBindingValueExpression(binding, scope, ast, context);
+    const evaluated = this.evaluatedBindingValueExpression(binding, scope, ast, context);
+    return primitiveDomain.length === 0
+      ? evaluated
+      : {
+        ...evaluated,
+        primitiveValueDomain: primitiveDomain,
+      };
   }
 
   private literalDomainBindingValueExpression(
     local: string,
     binding: PropertyBinding,
     literalDomain: readonly string[],
+    primitiveDomain: readonly RuntimeBindingPrimitiveValue[],
   ): BindingValueExpression {
     return {
       valueType: this.types.stringLiteralDomainType(`${local}:literal-domain`, literalDomain, binding.sourceAddressHandle),
       valueDomain: literalDomain,
+      primitiveValueDomain: primitiveDomain,
     };
   }
 
@@ -322,11 +337,13 @@ export class RuntimeBindingValueChannelDraftSupport {
       return {
         valueType: null,
         valueDomain: [],
+        primitiveValueDomain: [],
       };
     }
     return {
       valueType: evaluation.typeReference,
-      valueDomain: this.types.stringLiteralDomainForType(evaluation.typeReference),
+      valueDomain: [],
+      primitiveValueDomain: [],
     };
   }
 
@@ -470,17 +487,38 @@ export class RuntimeBindingValueChannelDraftSupport {
   }
 }
 
-function stringDomainForExpression(expression: ExpressionAstNode): readonly string[] {
+function primitiveValueDomainForExpression(expression: ExpressionAstNode): readonly RuntimeBindingPrimitiveValue[] {
   switch (expression.$kind) {
     case 'PrimitiveLiteral':
-      return typeof expression.value === 'string' ? [expression.value] : [];
-    case 'ArrayLiteral':
-      return uniqueStrings(expression.elements.flatMap((element) => stringDomainForExpression(element)));
+      return [primitiveValueForExpressionValue(expression.value)];
     case 'Paren':
-      return stringDomainForExpression(expression.expression);
+      return primitiveValueDomainForExpression(expression.expression);
     default:
       return [];
   }
+}
+
+function primitiveValueForExpressionValue(
+  value: null | undefined | number | boolean | string,
+): RuntimeBindingPrimitiveValue {
+  switch (typeof value) {
+    case 'string':
+      return { kind: RuntimeBindingPrimitiveValueKind.String, value };
+    case 'number':
+      return { kind: RuntimeBindingPrimitiveValueKind.Number, value };
+    case 'boolean':
+      return { kind: RuntimeBindingPrimitiveValueKind.Boolean, value };
+    case 'undefined':
+      return { kind: RuntimeBindingPrimitiveValueKind.Undefined };
+    default:
+      return { kind: RuntimeBindingPrimitiveValueKind.Null };
+  }
+}
+
+function stringDomainForPrimitiveValues(values: readonly RuntimeBindingPrimitiveValue[]): readonly string[] {
+  return values.flatMap((value) =>
+    value.kind === RuntimeBindingPrimitiveValueKind.String ? [value.value] : []
+  );
 }
 
 export function booleanLiteralForExpression(expression: ExpressionAstNode): boolean | null {
@@ -498,11 +536,8 @@ function staticStringValue(value: string): BindingValueExpression {
   return {
     valueType: null,
     valueDomain: [value],
+    primitiveValueDomain: [{ kind: RuntimeBindingPrimitiveValueKind.String, value }],
   };
-}
-
-export function uniqueStrings(values: readonly string[]): readonly string[] {
-  return [...new Set(values)];
 }
 
 export function isBroadTypeShape(

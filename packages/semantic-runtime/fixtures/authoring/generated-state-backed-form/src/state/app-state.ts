@@ -7,6 +7,7 @@ export interface ServiceRequest {
   email: string;
   urgent: boolean;
   contactPreference: ContactPreference;
+  primaryTopic: RequestTopic | null;
   topics: RequestTopic[];
   notes: string;
   submitCount: number;
@@ -58,6 +59,7 @@ function createRequest(id: string, customerName: string): ServiceRequest {
     email: `${customerName.toLowerCase().replace(' ', '.')}@example.test`,
     urgent: false,
     contactPreference: 'email',
+    primaryTopic: null,
     topics: ['support'],
     notes: '',
     submitCount: 0,

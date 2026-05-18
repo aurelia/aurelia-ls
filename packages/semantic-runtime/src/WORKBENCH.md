@@ -201,6 +201,28 @@ being present under the workspace root. Boot now also discovers package/tsconfig
 host does not supply projects, excludes nested project roots from parent source discovery, and opens the default app
 from the first project with import/receiver-grounded Aurelia app bootstrap signals. Keep the classifier conservative; explicit host project
 selection is still the strongest answer when a monorepo has multiple app packages.
+MCP hand-testing on a larger monorepo showed that workspace/project discovery can stay cheap enough to select an app,
+but app-world opening may exceed Node's default heap even when the caller only asks for a summary. The immediate MCP
+launch workaround is an explicit heap budget; the semantic-runtime frontier is to profile app-world construction by
+phase and inquiry depth, then make callers pay only for the minimum honest substrate needed by the question instead of
+materializing full downstream products by habit.
+Follow-up MCP pressure confirmed the analysis-depth ladder: the same selected app shape can fail at full
+`binding-observation` depth while `runtime-topology` succeeds and still exposes route/resource/diagnostic/open-seam
+pressure. At topology depth, the dominant cost is still template compilation/runtime analysis, especially runtime
+rendering and scope construction; TypeChecker program construction is visible but not the top bucket. Treat future MCP
+first-read defaults and app-world performance work accordingly.
+Default `openApp()` now chooses `runtime-topology`; template cursor/diagnostic convenience methods still default to
+`binding-observation` because those LSP-style answers intentionally need observer/data-flow and weak-member pressure.
+Opening a deeper or otherwise non-compatible app epoch for the same project clears cached app epochs before rebuilding,
+because app-world handles are currently request-unsalted and duplicate if a shallow epoch remains in the same
+workspace kernel. This is an honest invalidation policy, not the final cache architecture: a future app-epoch store or
+handle-salt design could retain multiple depths at once.
+`pressure:app-api` now has project-key and project-root filters so a broad workspace discovery pass can be followed by
+one selected app-world profile without opening unrelated monorepo packages deeply. A clean-room app pressure sample
+showed the useful timing split at this layer: template runtime analysis can dominate selected-app app-world opening,
+with value-channel/data-flow/rendering/scope-construction buckets visible below the template pass, while TypeChecker
+program construction remains separately visible. Treat that as a routing signal for future performance/inquiry-depth
+work, not as a proof that MCP should hide the cost with larger heaps.
 Project shape and project analysis policy are now deliberately separate. `shapeKind` records the discovered source/package
 shape, while `analysisKind` says whether this project should be opened as an app world, opened as a standalone resource
 library authoring world, inspected as an Aurelia package, or skipped as outside Aurelia. Pressure scripts default to the
@@ -211,6 +233,28 @@ evaluation, resource recognition, configuration admission, DI world construction
 compilation, rendering dispatch, and TypeChecker-backed scope products. Keep initial answers compact; expose opaque
 kernel handles only through explicit detail projections so the API can serve app developers and AI callers without
 forcing every query into full graph expansion.
+Query outcomes now pass through `QueryClaimGraph` before public answer serialization. Treat that graph as the lazy
+answer/outcome layer, not as a kernel substitute: durable facts still belong in kernel products and claims, while
+answer-local work, nested query composition, payload shape, query type projections, and disposal policy belong in
+the query-claim layer. When a public query grows kernel products, first check the query catalog materialization policy
+and telemetry output before adding another cache or eager projection.
+Telemetry pressure has already shown a few useful compression rules:
+type-member details can be hot children of a durable type-shape rather than durable products themselves; declaration-backed
+TypeChecker/evaluated-value type shapes can converge by checker key and declaration source while expression/binding rows
+own the user-facing source locus; checker-owned union/intersection keys can converge structurally when their
+constituents are source-independent; template-requested checker-returned types should keep `TypeChecker` origin instead
+of being mislabeled as synthetic; and kernel handle strings are session transport links that may compact long recursive
+local keys. Do not recover semantics by parsing handles. True synthetic template/expression products still keep their
+runtime expression/site identity unless a later structural synthetic-type policy proves it can preserve lost provenance.
+Query-time type projections that are retained only for an answer should stay behind query-claim retention/disposal
+whenever the inquiry profile does not need durable app-world facts.
+Template weak-member diagnostics are now explicitly depth- and projection-gated. `runtime-topology` and
+`binding-targets` overview and diagnostic-summary queries should not publish retained TypeChecker products, and
+`AppOverview` asks its nested diagnostic summary with `diagnosticProjection: available-products` even at
+`binding-observation` depth. Explicit diagnostic surfaces still default to `type-projection` because those queries are
+the current file/app-locus weak-member substrate. The next frontier is a query-local projection store behind
+`QueryClaimGraph`, so retained diagnostic TypeChecker facts can be disposed with query/session/app epochs instead of
+graduating to durable kernel records by default.
 Authoring/LSP template analysis is now a separate opt-in lane on app opening. Hydrated app templates remain on
 `templates.resources`; standalone resource-library templates can be compiled into `templates.authoringResources`.
 `openApp({ includeAuthoringTemplates: true, authoringTemplateSourceFiles: [...] })` is the preferred editor/LSP shape:
@@ -446,15 +490,31 @@ shared linked sources can be analyzed under multiple project frames in one runti
 Zero-method `*Input` classes are not automatically product models. Template pass handoffs that only bundle arguments for
 one call should be request/plan interfaces plus named object literals, not positional constructor envelopes. Keep classes
 for things with product identity, framework grounding, behavior, or lifetime. `BindingCommandBuildInput` is currently in
-that latter bucket because it mirrors framework `ICommandBuildInfo` through auLink and carries product/identity handles;
+that latter bucket because it mirrors framework `ICommandBuildInfo` through auLink and carries command-execution topology;
 ordinary parse/lower/materialize pass inputs should stay as request interfaces.
+Do not let that product become a dumping ground for surrounding compiler topology. It should model the framework command
+input boundary (`node`, `attr`, optional bindable/definition), while selected value-site or expression topology should
+stay claim-backed or be looked up by the materializer that actually needs it.
 The first cleanup pass left no ordinary zero-method `*Input` class pressure at the default Atlas threshold. If the smell
 returns, check whether the class is a product/facility with lifecycle or merely a method payload; projector and runtime
 handoff payloads should default inside the receiving service instead of encoding positional constructor order.
 
 Large external-root pressure narrowed template runtime cost to binding observation rather than the compiler front door.
-`pressure:app-api` now prints nested template/runtime-analysis timings so future runs can distinguish parsing/lowering
-cost from runtime rendering, scope construction, controller bind, value-channel, and data-flow work. Binding expression
+`pressure:app-api` and `profile:app-telemetry` now print nested template compilation and runtime-analysis timings,
+including memory/kernel deltas when full telemetry is enabled. `profile:app-telemetry` also has an opt-in fine phase lane
+(`SEMANTIC_RUNTIME_TELEMETRY_FINE_PHASES=true`) that breaks runtime rendering and scope construction into internal
+subphases. Use full phase memory/kernel snapshots for density questions; use fine phases with
+`SEMANTIC_RUNTIME_TELEMETRY_PHASE_MEMORY=false` and `SEMANTIC_RUNTIME_TELEMETRY_PHASE_KERNEL=false` for cleaner CPU
+attribution because each measured subphase otherwise pays snapshot overhead. Current canaries show render-target sequence walking and nested
+template-controller child sequences as the hot scope-construction path, while runtime rendering's product growth is
+mostly admitted at commit time. Parent templates hydrate child custom-element controllers and child view-model scopes
+for bindable flow, while child view internals stay owned by the child resource's own runtime-analysis emission; only
+built-in template-controller synthetic views recurse through embedded instruction sequences. The large-root canary that
+exposed the issue dropped from roughly 388k records / 71k products / 404MiB construction heap to roughly 120k records /
+23k products / 249MiB after this aggregate boundary was restored, and the top product growth shifted back to ordinary
+template compiler/value-site rows. After that cut, observer setup diagnostics were the next runtime-rendering CPU
+canary: they now invoke ObserverLocator only when a bindable actually has coercion or change-callback semantics to
+validate, with target-type property checks cached per controller definition. Binding expression
 type projections should be keyed by the expression product and modeled `Scope`, not by the downstream materializer that
 asks first; otherwise value-channel and data-flow duplicate the same TypeChecker projection under different local keys.
 Value-channel source-type reads should stay lazy because many channels can be described from target access, source
@@ -468,7 +528,18 @@ agents; `binding-targets` adds Controller.bind target/source setup; `binding-obs
 data-flow products. Binding-specific API queries should report `unsupported` when an app was opened at a shallower
 depth rather than returning silently empty rows. The next inquiry-algebra pressure is below this app-world split:
 large roots still pay TypeChecker construction, resource recognition, and static evaluation when a product question may
-only need a narrower resource/router slice.
+only need a narrower resource/router slice. Generic adapters should choose app depth from the query catalog's
+`minimumAnalysisDepth` instead of defaulting to deepest analysis.
+Query-claim retention is the first per-consumer memory/CPU policy layer below app-world depth. `lsp-diagnostics` now
+keeps lightweight session claim records but disposes answer-local TypeChecker products; fixture and authoring lanes may
+retain those products for app-epoch inspection. Keep this split intentional when adding query-local projections: cursor
+queries need fast follow-up, diagnostics can spend more CPU, and fixture/authoring pressure often needs to inspect the
+generated kernel shape. Session profiles have retained-record budgets so repeated cursor/diagnostic/MCP queries do not
+make the claim graph another unbounded cache; budget disposal is graph-owned and prunes answered/failed nodes only.
+`profile:app-telemetry` aggregate output now preserves root/depth/profile groups before global totals. Use that view for
+depth-policy comparisons; if a global aggregate points at memory pressure, first check the grouped row to see whether
+the cost arrived at `runtime-topology`, `binding-targets`, or `binding-observation` before adding a cache or trimming a
+detail shape.
 
 When `product.architecture` reports duplicate helpers, treat the row as a question, not a quota. The pressure includes
 both exact body fingerprints and AST/control-flow body-shape fingerprints, so rows can mean exact duplication, equivalent
@@ -503,6 +574,18 @@ project because it is intentionally pressure-oriented; product APIs should make 
 topology rather than all-package stress. The accepted tokens are the runtime enum values: `aurelia-app`,
 `aurelia-resource-library`, `aurelia-package`, and `non-aurelia`.
 
+Static-evaluation module graph cost is now source-host-profiled instead of opaque. A large external runtime-topology
+canary showed evaluator execution itself was small; the hot work was building one graph through TypeScript module
+resolution and file-system probing. `FileSystemEvaluationModuleSourceHost` now owns a per-pass TypeScript
+module-resolution cache, cached file-system adapter, declaration-to-source policy cache, framework/package external
+boundary policy, and source-host profile rows. On that canary, static-evaluation fell from roughly 1.07s before
+profiling to roughly 0.33s after host caching, framework/package boundary skipping, and admission-policy cleanup. Treat
+future module-graph pressure as a source-host/admission/inquiry-depth question before adding evaluator semantics or
+broad app-world caches. Direct evaluator path probes are for JSON/HTML/CSS asset imports and query-bearing specifiers;
+ordinary TS/JS relative imports should let TypeScript choose source/declaration semantics. A measured post-TypeScript
+fallback path-probe retry resolved no modules in the large canary and should not be reintroduced without profile
+evidence.
+
 `pressure:app-api` defaults to checkpoint-friendly compact aggregate output: request shape, fixture lanes, timing
 buckets, expression-type cache buckets, and one-line pressure buckets for authoring, router, binding, observation,
 diagnostics, and open seams. Use compact first during fixture flywheel work, then open
@@ -521,8 +604,8 @@ signals, compact LSP envelopes, value-domain gaps, and bucketed missing-input re
 `SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS` for external roots when a question is about hovers/completion/navigation
 pressure rather than whole app topology. Current sampled behavior is: generic expression scopes, binding-command names,
 resource names, bindable names, expression member owners, and parent repeat scopes are reachable; plain static platform
-attribute values publish `plain-attribute-value` and can remain empty misses, while real platform interpolation values
-publish `plain-attribute-interpolation` and spend expression holes through normal expression completion; finite checker-backed static bindable domains offer literal
+attribute values are classified directly from HTML/syntax products and do not publish durable value-site products, while
+real platform interpolation values publish `plain-attribute-interpolation` and spend expression holes through normal expression completion; finite checker-backed static bindable domains offer literal
 `attribute-value` candidates; open-ended checker-backed scalar bindables are expected-empty completion sites; inline
 multi-binding custom-attribute values can offer bindable segment names from the resource definition; and router
 `load` primary values now offer `router-route` candidates from typed `RouteConfig` product details threaded through
@@ -779,8 +862,25 @@ owner: observer-locator collection branches expose hook capability, and runtime 
 unsupported coercer/callback hooks. The runtime-html `au*` frontier is also intentionally partial: static
 `AuCompose` input failures are controller-owned because lowered `SetPropertyInstruction`s can prove them during
 controller creation. Setter failures (`scopeBehavior` / `AUR0805` and `flushMode` / `AUR0809`) stay on bindable set,
-while static string `component` / `view-model` misses (`AUR0806`) probe the parent hydration-context container.
-Composition controller run/deactivate errors still need runtime composition/lifecycle state before they can be claimed.
+while static string `component` / `view-model` misses (`AUR0806`) probe the parent hydration-context controller
+container after controller-local dependency resources have been registered. Static string component pressure exposed
+that root render analysis also needs the framework's AppRoot child-container shape rather than using the app/compiler
+container as the root controller's own container.
+Dynamic `AuCompose` composition now has a separate runtime-analysis lane: `RuntimeCompositionMaterializer` creates
+`CompositionContext` / `CompositionController` products after bind/data-flow facts exist, resolves static values or
+TypeChecker-visible component candidates, and exposes those rows through `RuntimeCompositions` plus app-pressure
+aggregate buckets. Candidate rows now include the first composition lifecycle handoff: absent/parameterless
+`activate` is closed, and `activate(model)` compares the model binding source type with the activation parameter type.
+Composition contexts now join both AuCompose input lanes: dynamic property bindings from controller bind and static
+literal bindables from `HydrateElementInstruction.bindableInstructionProductHandles`. That lets rows report
+`scopeBehavior`, `tag`, `flushMode`, template-only composition, and `composition`/`composing` from-view bindings
+without pretending literal inputs are runtime bindings.
+A statically evaluated plain object, instance, boundary object, or non-resource constructable component now closes as
+`object-view-model`, matching AuCompose's `_createComponentInstance(...)` branch where no custom-element definition is
+required. Object view-model rows reuse the same TypeChecker-backed activation handoff as custom-element candidates, but
+without compiled-template/candidate-runtime-analysis coverage because no custom-element definition exists.
+Composition controller run/deactivate errors and recursive child composition hydration still need deeper composition
+lifecycle state before they can be claimed.
 The same controller issue lane now owns switch/case link-hook errors: `case` / `default-case` without a parent switch
 map to `AUR0815`, and duplicate `default-case` under one switch maps to `AUR0816`.
 Lifecycle-state controller errors should remain unclaimed until controller state emulation owns them.
@@ -1055,6 +1155,35 @@ publish `runtime-boundary:source` action targets, so repair clusters can point a
 requiring runtime intent.
 `fixtures/pressure/router-dynamic-pattern` now covers that same repair handoff without external app dependency by
 including an internal string-pattern href, an external-link-like field href, and an unresolved bare-module href.
+
+Telemetry now has an opt-in detail-density lane for memory/performance substrate work. Use
+`SEMANTIC_RUNTIME_TELEMETRY_DETAIL_DENSITY=true` with kernel breakdowns, or
+`SemanticRuntime.analysisCacheOverview({ includeKernelBreakdowns: true, includeDetailDensity: true })`, when retained
+heap pressure needs a shallow x-ray of product-detail and hot-detail sidecars. The lane reports detail kinds,
+constructors, direct field totals, direct array items, direct string characters, and the heaviest direct string/array
+fields. The first large-app canary showed the heaviest detail-side strings are mostly handle fields such as identity,
+source, product, declaration, and parser handles. Treat that as representation or inquiry-depth pressure, not as proof
+that navigable handles can be dropped.
+
+Store-local sidecar indexes are now named and disposable through `KernelStore.registerSidecarIndex(...)`; telemetry
+prints their entry counts under kernel breakdowns. The immediate pressure came from the TypeChecker type-shape projector
+index: query-local `disposeSince(...)` removed product and hot details, but the private WeakMap index could otherwise
+retain stale type shapes, members, and checker carriers until a later lazy miss. The projector index now prunes on
+kernel disposal, and a canary projection returned its sidecar entry count from 1 to 0 after reclaiming the query-local
+type shape and its hot members.
+
+`scripts/app-telemetry.mjs` now respects app-query catalog paging modes. Offset/continuation row tables use
+`SEMANTIC_RUNTIME_TELEMETRY_QUERY_PAGE_SIZE`; router-overview row samples use
+`SEMANTIC_RUNTIME_TELEMETRY_ROW_SAMPLE_SIZE` and default to 0. This matters for MCP-orientation pressure: a large app's
+summary-first router overview stayed around 2.6 KiB, while treating row samples as ordinary pages pushed that single
+answer to roughly 255 KiB.
+
+Repeat scope construction now spends one combined iterator projection for each repeat effect. The old local path asked
+for element type, binding-pattern locals, and repeatability diagnostics separately, which re-entered the
+TypeChecker-backed evaluator around the same repeat source. `CheckerExpressionIterableProjector` now publishes
+`CheckerExpressionIteratorProjection`, and `TemplateScopeTypeProjector.iteratorProjection(...)` converts that into the
+scope-construction view. Large-app timing moved only modestly in a noisy run, but the substrate is cleaner: repeat
+source, element, locals, and repeatability all share one semantic projection boundary.
 
 ## Template Compiler Emulation Notes
 

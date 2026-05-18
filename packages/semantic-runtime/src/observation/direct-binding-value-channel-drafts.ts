@@ -1,6 +1,7 @@
 import { splitWhitespace } from '../strings.js';
 import {
   AttributeBinding,
+  RuntimeBindingSourceOperationKind,
   RuntimeBindingTargetOperationKind,
   type RuntimeBindingSourceOperation,
   type RuntimeBindingTargetAccess,
@@ -102,6 +103,7 @@ export class DirectBindingValueChannelDrafts {
 
   valueChannelDraftForSourceOperation(
     sourceOperation: RuntimeBindingSourceOperation | null,
+    readSourceType?: BindingSourceTypeReader,
   ): RuntimeBindingValueChannelDraft {
     if (sourceOperation == null) {
       return {
@@ -123,14 +125,39 @@ export class DirectBindingValueChannelDrafts {
         openReason: sourceOperation.openReason,
       };
     }
-    return {
-      channelKind: RuntimeBindingValueChannelKind.RefTarget,
-      authority: RuntimeBindingValueChannelAuthority.SourceOperation,
-      runtimeValueType: sourceOperation.targetType,
-      valueDomain: [],
-      isCollection: false,
-      openReason: null,
-    };
+    switch (sourceOperation.operationKind) {
+      case RuntimeBindingSourceOperationKind.RefAssignTarget:
+        return {
+          channelKind: RuntimeBindingValueChannelKind.RefTarget,
+          authority: RuntimeBindingValueChannelAuthority.SourceOperation,
+          runtimeValueType: sourceOperation.targetType,
+          valueDomain: [],
+          isCollection: false,
+          openReason: null,
+        };
+      case RuntimeBindingSourceOperationKind.StateDispatchAction: {
+        const sourceType = readSourceType?.() ?? null;
+        return {
+          channelKind: RuntimeBindingValueChannelKind.StateDispatchAction,
+          authority: sourceType == null
+            ? RuntimeBindingValueChannelAuthority.SourceOperation
+            : RuntimeBindingValueChannelAuthority.BindingExpressionAndTypeChecker,
+          runtimeValueType: sourceType,
+          valueDomain: [sourceOperation.targetName],
+          isCollection: false,
+          openReason: null,
+        };
+      }
+      case RuntimeBindingSourceOperationKind.Open:
+        return {
+          channelKind: RuntimeBindingValueChannelKind.Open,
+          authority: RuntimeBindingValueChannelAuthority.Open,
+          runtimeValueType: sourceOperation.targetType,
+          valueDomain: [],
+          isCollection: null,
+          openReason: sourceOperation.openReason ?? 'Runtime source operation stayed open.',
+        };
+    }
   }
 
   classValueChannelDraft(

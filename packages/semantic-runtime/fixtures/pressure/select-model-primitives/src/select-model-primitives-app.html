@@ -1,0 +1,44 @@
+<section>
+  <label>
+    Product by id
+    <select value.bind="selectedProductId">
+      <option model.bind="null">Choose...</option>
+      <option repeat.for="product of products" model.bind="product.id">
+        ${product.id} - ${product.name}
+      </option>
+    </select>
+  </label>
+
+  <label>
+    Product by object
+    <select value.bind="selectedProduct">
+      <option model.bind="null">Choose...</option>
+      <option repeat.for="product of products" model.bind="product">${product.name}</option>
+    </select>
+  </label>
+
+  <label>
+    Boolean choice
+    <select value.bind="likesTacos">
+      <option model.bind="null">Choose...</option>
+      <option model.bind="true">Yes</option>
+      <option model.bind="false">No</option>
+    </select>
+  </label>
+
+  <fieldset>
+    <legend>Nullable radio choice</legend>
+    <label>
+      <input type="radio" name="nullable-choice" model.bind="null" checked.bind="nullableChoice">
+      Choose later
+    </label>
+    <label>
+      <input type="radio" name="nullable-choice" model.bind="true" checked.bind="nullableChoice">
+      Yes
+    </label>
+    <label>
+      <input type="radio" name="nullable-choice" model.bind="false" checked.bind="nullableChoice">
+      No
+    </label>
+  </fieldset>
+</section>

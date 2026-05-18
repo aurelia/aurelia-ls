@@ -1,9 +1,16 @@
 main {
   display: grid;
   gap: 1rem;
-  max-width: 46rem;
+  max-width: 62rem;
   margin: 0 auto;
   padding: 2rem;
+}
+
+.routed-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16rem;
+  gap: 1rem;
+  align-items: start;
 }
 
 .form-ready {

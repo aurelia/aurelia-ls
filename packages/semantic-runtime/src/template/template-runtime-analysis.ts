@@ -6,6 +6,20 @@ import {
   normalizeSemanticAppAnalysisDepth,
   semanticAppAnalysisDepthSatisfies,
 } from '../configuration/app-analysis.js';
+import {
+  DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
+  type SemanticRuntimeInquiryProfile,
+} from '../telemetry/inquiry-profile.js';
+import {
+  normalizeSemanticRuntimeTelemetryOptions,
+  type NormalizedSemanticRuntimeTelemetryOptions,
+  type SemanticRuntimeTelemetryOptions,
+} from '../telemetry/options.js';
+import {
+  measureSemanticRuntimePhase,
+  type SemanticRuntimePhaseSink,
+  type SemanticRuntimePhaseTiming,
+} from '../telemetry/phase.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
 import {
@@ -18,6 +32,10 @@ import {
   RuntimeBindingDataFlowMaterializationRequest,
   RuntimeBindingDataFlowMaterializer,
 } from '../observation/binding-data-flow-materializer.js';
+import {
+  RuntimeBindingSourceValueEvaluator,
+} from '../observation/binding-source-value-evaluator.js';
+import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import {
   RuntimeBindingValueChannelEmission,
   RuntimeBindingValueChannelMaterializationRequest,
@@ -49,10 +67,16 @@ import {
   type RuntimeControllerBindMaterializationRequest,
 } from './runtime-controller-bind-materializer.js';
 import {
+  RuntimeCompositionEmission,
+  RuntimeCompositionMaterializationRequest,
+  RuntimeCompositionMaterializer,
+} from './runtime-composition-materializer.js';
+import {
   RuntimeRenderingMaterializer,
   type RuntimeRenderingEmission,
   type RuntimeRenderingMaterializationRequest,
 } from './runtime-rendering-materializer.js';
+import { ContainerContextResolverRecordPolicy } from '../di/container-materializer.js';
 import type { TemplateRuntimeAnalysisProjectContext } from './template-runtime-analysis-context.js';
 import {
   TemplateControllerScopeMaterializer,
@@ -65,6 +89,8 @@ export class TemplateRuntimeAnalysisRequest {
   constructor(
     /** Store-local key shared with the template compilation pass. */
     readonly localKey: string,
+    /** Project key that owns this runtime analysis, when known. */
+    readonly projectKey: string | null,
     /** Custom element definition whose compiled template is being analyzed. */
     readonly definition: CustomElementDefinition,
     /** Compiled template handoff produced by the compiler-front-door phase. */
@@ -79,10 +105,14 @@ export class TemplateRuntimeAnalysisRequest {
     readonly evaluation: StaticProjectEvaluationResult | null,
     /** Current TypeChecker epoch, if resource recognition supplied one. */
     readonly typeSystem: TypeSystemProject | null,
+    /** Project resource index for runtime resource lookup and component-valued binding resolution. */
+    readonly resourceDefinitions: ResourceDefinitionIndex | null = null,
     /** Analysis depth requested by the app-world inquiry. */
     readonly analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` = DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
     /** Shared expression TypeChecker world for the surrounding template-analysis pass. */
     readonly expressionWorld: CheckerExpressionTypeWorld | null = null,
+    /** Telemetry policy inherited from the app-world inquiry boundary. */
+    readonly telemetry: SemanticRuntimeTelemetryOptions | null = null,
   ) {}
 }
 
@@ -94,13 +124,12 @@ export type TemplateRuntimeAnalysisPhaseName =
   | 'binding-behavior'
   | 'value-converter'
   | 'binding-value-channel'
-  | 'binding-data-flow';
+  | 'binding-data-flow'
+  | 'runtime-composition';
 
-export interface TemplateRuntimeAnalysisPhaseTiming {
-  readonly name: TemplateRuntimeAnalysisPhaseName;
-  readonly milliseconds: number;
+export type TemplateRuntimeAnalysisPhaseTiming = SemanticRuntimePhaseTiming<TemplateRuntimeAnalysisPhaseName> & {
   readonly skipped?: boolean;
-}
+};
 
 export interface TemplateRuntimeAnalysisProfile {
   readonly totalMilliseconds: number;
@@ -129,6 +158,8 @@ export class TemplateRuntimeAnalysisEmission {
     readonly bindingValueChannel: RuntimeBindingValueChannelEmission,
     /** Source/target data-flow edges derived from runtime binding scopes and target-side products. */
     readonly bindingDataFlow: RuntimeBindingDataFlowEmission,
+    /** Runtime-html AuCompose composition contexts/controllers derived after source values and data-flow are visible. */
+    readonly runtimeComposition: RuntimeCompositionEmission,
     /** Nested timing profile for the runtime/checker half of template analysis. */
     readonly profile: TemplateRuntimeAnalysisProfile,
   ) {}
@@ -149,6 +180,7 @@ export class TemplateRuntimeAnalysisMaterializer {
   private readonly valueConverter: RuntimeValueConverterMaterializer;
   private readonly bindingValueChannel: RuntimeBindingValueChannelMaterializer;
   private readonly bindingDataFlow: RuntimeBindingDataFlowMaterializer;
+  private readonly runtimeComposition: RuntimeCompositionMaterializer;
 
   constructor(
     /** Hot analysis store shared by child materializers. */
@@ -162,6 +194,7 @@ export class TemplateRuntimeAnalysisMaterializer {
     this.valueConverter = new RuntimeValueConverterMaterializer(store);
     this.bindingValueChannel = new RuntimeBindingValueChannelMaterializer(store);
     this.bindingDataFlow = new RuntimeBindingDataFlowMaterializer(store);
+    this.runtimeComposition = new RuntimeCompositionMaterializer(store);
   }
 
   materialize(request: TemplateRuntimeAnalysisRequest): TemplateRuntimeAnalysisEmission {
@@ -174,6 +207,7 @@ export class TemplateRuntimeAnalysisMaterializer {
       valueConverter: this.valueConverter,
       bindingValueChannel: this.bindingValueChannel,
       bindingDataFlow: this.bindingDataFlow,
+      runtimeComposition: this.runtimeComposition,
     }).materialize();
   }
 }
@@ -187,6 +221,7 @@ interface TemplateRuntimeAnalysisServices {
   readonly valueConverter: RuntimeValueConverterMaterializer;
   readonly bindingValueChannel: RuntimeBindingValueChannelMaterializer;
   readonly bindingDataFlow: RuntimeBindingDataFlowMaterializer;
+  readonly runtimeComposition: RuntimeCompositionMaterializer;
 }
 
 class TemplateRuntimeAnalysisFrame {
@@ -195,15 +230,20 @@ class TemplateRuntimeAnalysisFrame {
   private readonly phases: TemplateRuntimeAnalysisPhaseTiming[] = [];
   private readonly expressionWorld: CheckerExpressionTypeWorld;
   private readonly expressionCacheMarker: CheckerExpressionTypeEvaluationCacheMarker;
+  private readonly telemetry: NormalizedSemanticRuntimeTelemetryOptions;
 
   constructor(
     private readonly request: TemplateRuntimeAnalysisRequest,
-    store: KernelStore,
+    private readonly store: KernelStore,
     private readonly services: TemplateRuntimeAnalysisServices,
   ) {
     this.analysisDepth = normalizeSemanticAppAnalysisDepth(request.analysisDepth);
     this.expressionWorld = request.expressionWorld ?? new CheckerExpressionTypeWorld(store);
     this.expressionCacheMarker = this.expressionWorld.cacheMarker();
+    this.telemetry = normalizeSemanticRuntimeTelemetryOptions(
+      request.telemetry,
+      DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
+    );
   }
 
   materialize(): TemplateRuntimeAnalysisEmission {
@@ -224,6 +264,12 @@ class TemplateRuntimeAnalysisFrame {
       bindingValueChannel,
       scopes,
     );
+    const runtimeComposition = this.materializeRuntimeCompositionForDepth(
+      runtimeRendering,
+      controllerBind,
+      bindingDataFlow,
+      scopes,
+    );
     const profile: TemplateRuntimeAnalysisProfile = {
       totalMilliseconds: performance.now() - this.started,
       phases: this.phases,
@@ -240,6 +286,7 @@ class TemplateRuntimeAnalysisFrame {
       valueConverter,
       bindingValueChannel,
       bindingDataFlow,
+      runtimeComposition,
       profile,
     );
   }
@@ -312,15 +359,32 @@ class TemplateRuntimeAnalysisFrame {
       : skippedBindingDataFlow(this.phases);
   }
 
+  private materializeRuntimeCompositionForDepth(
+    runtimeRendering: RuntimeRenderingEmission,
+    controllerBind: RuntimeControllerBindEmission,
+    bindingDataFlow: RuntimeBindingDataFlowEmission,
+    scopes: TemplateScopeConstructionEmission,
+  ): RuntimeCompositionEmission {
+    return semanticAppAnalysisDepthSatisfies(this.analysisDepth, SemanticAppAnalysisDepth.BindingObservation)
+      ? this.measure('runtime-composition', () =>
+        this.materializeRuntimeComposition(runtimeRendering, controllerBind, bindingDataFlow, scopes)
+      )
+      : skippedRuntimeComposition(this.phases);
+  }
+
   private materializeRuntimeRendering(): RuntimeRenderingEmission {
     return this.services.runtimeRendering.materialize({
       localKey: this.request.localKey,
+      projectKey: this.request.projectKey,
       definition: this.request.definition,
       compiledTemplate: this.request.compiledTemplate,
       attributeSyntax: this.request.attributeSyntax,
       compilerWorld: this.request.compilerWorld,
       projectContext: this.request.projectContext,
+      resourceDefinitions: this.request.resourceDefinitions,
       typeSystem: this.request.typeSystem,
+      contextResolverRecordPolicy: contextResolverRecordPolicyForProfile(this.telemetry.inquiryProfile),
+      profiling: this.profilingSink(),
     } satisfies RuntimeRenderingMaterializationRequest);
   }
 
@@ -337,6 +401,7 @@ class TemplateRuntimeAnalysisFrame {
       typeSystem: this.request.typeSystem,
       resourceScope: this.request.compilerWorld.resourceScope,
       expressionWorld: this.expressionWorld,
+      profiling: this.profilingSink(),
     } satisfies TemplateScopeConstructionRequest);
   }
 
@@ -421,11 +486,38 @@ class TemplateRuntimeAnalysisFrame {
     ));
   }
 
+  private materializeRuntimeComposition(
+    runtimeRendering: RuntimeRenderingEmission,
+    controllerBind: RuntimeControllerBindEmission,
+    bindingDataFlow: RuntimeBindingDataFlowEmission,
+    scopes: TemplateScopeConstructionEmission,
+  ): RuntimeCompositionEmission {
+    return this.services.runtimeComposition.materialize(new RuntimeCompositionMaterializationRequest(
+      this.request.localKey,
+      runtimeRendering,
+      controllerBind,
+      bindingDataFlow,
+      scopes,
+      this.request.projectContext,
+      this.request.resourceDefinitions,
+      this.request.evaluation == null ? null : new RuntimeBindingSourceValueEvaluator(this.store, this.request.evaluation),
+    ));
+  }
+
   private measure<TValue>(
     name: TemplateRuntimeAnalysisPhaseName,
     read: () => TValue,
   ): TValue {
-    return measureTemplateRuntimeAnalysisPhase(this.phases, name, read);
+    return measureSemanticRuntimePhase(this.phases, name, this.store, this.telemetry, read);
+  }
+
+  private profilingSink(): SemanticRuntimePhaseSink | null {
+    return this.telemetry.captureFineGrainedPhases
+      ? {
+        phases: this.phases as SemanticRuntimePhaseTiming<string>[],
+        telemetry: this.telemetry,
+      }
+      : null;
   }
 }
 
@@ -459,6 +551,28 @@ function skippedBindingDataFlow(phases: TemplateRuntimeAnalysisPhaseTiming[]): R
   return new RuntimeBindingDataFlowEmission([], [], []);
 }
 
+function skippedRuntimeComposition(phases: TemplateRuntimeAnalysisPhaseTiming[]): RuntimeCompositionEmission {
+  recordSkippedTemplateRuntimeAnalysisPhase(phases, 'runtime-composition');
+  return new RuntimeCompositionEmission([], [], [], [], [], []);
+}
+
+function contextResolverRecordPolicyForProfile(
+  profile: SemanticRuntimeInquiryProfile,
+): ContainerContextResolverRecordPolicy {
+  switch (profile) {
+    case 'fixture':
+    case 'mcp-authoring':
+    case 'exploration':
+      return ContainerContextResolverRecordPolicy.PublishAll;
+    case 'lsp-cursor':
+    case 'lsp-diagnostics':
+    case 'mcp-orientation':
+    case 'aot':
+    case 'ssr':
+      return ContainerContextResolverRecordPolicy.ModelOnly;
+  }
+}
+
 function recordSkippedTemplateRuntimeAnalysisPhase(
   phases: TemplateRuntimeAnalysisPhaseTiming[],
   name: TemplateRuntimeAnalysisPhaseName,
@@ -468,18 +582,4 @@ function recordSkippedTemplateRuntimeAnalysisPhase(
     milliseconds: 0,
     skipped: true,
   });
-}
-
-function measureTemplateRuntimeAnalysisPhase<TValue>(
-  phases: TemplateRuntimeAnalysisPhaseTiming[],
-  name: TemplateRuntimeAnalysisPhaseName,
-  read: () => TValue,
-): TValue {
-  const started = performance.now();
-  const value = read();
-  phases.push({
-    name,
-    milliseconds: performance.now() - started,
-  });
-  return value;
 }

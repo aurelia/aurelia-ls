@@ -46,6 +46,7 @@ import {
 import type { KernelStore } from '../kernel/store.js';
 import type { ProductHandle } from '../kernel/handles.js';
 import {
+  TypeSystemHotDetails,
   TypeSystemProductDetails,
 } from '../type-system/product-details.js';
 import {
@@ -577,7 +578,7 @@ export class RuntimeBindingSourceValueEvaluator {
       }
       return openSlotNoStaticValue(`Scope slot '${slot.name}' did not carry a TypeChecker member product.`);
     }
-    const member = this.store.productDetails.read(TypeSystemProductDetails.TypeMember, slot.targetProductHandle);
+    const member = this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
     if (!(member instanceof CheckerTypeMember)) {
       return openSlotNoStaticValue(`Scope slot '${slot.name}' target product is not a TypeChecker member.`);
     }
@@ -912,7 +913,7 @@ function propertyBindingCarriesSourceToTarget(binding: PropertyBinding): boolean
   }
 }
 
-function bindingExpressionAstForProduct(
+export function bindingExpressionAstForProduct(
   store: KernelStore,
   expressionProductHandle: ProductHandle | null,
 ): ExpressionAstNode | null {

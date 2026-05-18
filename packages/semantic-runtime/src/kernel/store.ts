@@ -5,6 +5,7 @@ import type {
 import type { SemanticClaim } from './claim.js';
 import type { SemanticIdentity } from './identity.js';
 import type { MaterializationRecord, MaterializedProduct } from './materialization.js';
+import { HotDetailCatalog } from './hot-details.js';
 import { ProductDetailCatalog } from './product-details.js';
 import type { ClaimPredicateKey, ProductKindKey } from './vocabulary.js';
 import {
@@ -28,12 +29,69 @@ import { KernelHandleFactory } from './handles.js';
 import type { EvidenceRecord } from './evidence.js';
 import type { ProvenanceRecord } from './provenance.js';
 import type { OpenSeam } from './open-seam.js';
+import {
+  countSemanticRuntimeRows,
+  countSemanticRuntimeRowsBy,
+  sortedCountRows,
+  type SemanticRuntimeCountRow,
+  type SemanticRuntimeDetailDensityRow,
+  type SemanticRuntimeKernelCountSnapshot,
+  type SemanticRuntimeKernelDensitySnapshot,
+  type SemanticRuntimeKernelTelemetryOptions,
+} from '../telemetry/kernel-density.js';
+import {
+  readSemanticRuntimeDetailDensityRows,
+} from '../telemetry/detail-density.js';
 
 interface KernelStoreCommitIndex {
   readonly addresses: ReadonlyMap<AddressHandle, SemanticAddress>;
   readonly identities: ReadonlyMap<IdentityHandle, SemanticIdentity>;
   readonly products: ReadonlyMap<ProductHandle, MaterializedProduct>;
   readonly claims: ReadonlyMap<ClaimHandle, SemanticClaim>;
+}
+
+export interface KernelStoreMarker {
+  readonly records: number;
+  readonly productDetails: number;
+  readonly hotDetails: number;
+}
+
+export interface KernelStoreDisposalSummary {
+  readonly records: number;
+  readonly productDetails: number;
+  readonly hotDetails: number;
+  readonly handleCharacters: number;
+}
+
+export interface KernelStoreDetailDensityDelta {
+  readonly productDetailDensity: readonly SemanticRuntimeDetailDensityRow[];
+  readonly hotDetailDensity: readonly SemanticRuntimeDetailDensityRow[];
+}
+
+export interface KernelStoreDensityDelta {
+  readonly recordKinds: readonly SemanticRuntimeCountRow[];
+  readonly sourceSpanRoles: readonly SemanticRuntimeCountRow[];
+  readonly productKinds: readonly SemanticRuntimeCountRow[];
+  readonly productDetailKinds: readonly SemanticRuntimeCountRow[];
+  readonly hotDetailKinds: readonly SemanticRuntimeCountRow[];
+}
+
+export interface KernelStoreDisposalContext {
+  readonly marker: KernelStoreMarker;
+  readonly summary: KernelStoreDisposalSummary;
+}
+
+export interface KernelStoreSidecarIndex {
+  readonly key: string;
+  readonly summary: string;
+  readEntryCount(): number;
+  dispose(context: KernelStoreDisposalContext): void;
+}
+
+export interface KernelStoreSidecarIndexRow {
+  readonly key: string;
+  readonly entries: number;
+  readonly summary: string;
 }
 
 /** Any handle-bearing record admitted into the hot kernel store; not a semantic taxonomy. */
@@ -77,6 +135,70 @@ function readSet<TKey, TValue>(
   return [...(map.get(key) ?? [])];
 }
 
+function removeFromSet<TKey, TValue>(
+  map: Map<TKey, Set<TValue>>,
+  key: TKey,
+  value: TValue,
+): void {
+  const values = map.get(key);
+  if (values === undefined) {
+    return;
+  }
+  values.delete(value);
+  if (values.size === 0) {
+    map.delete(key);
+  }
+}
+
+function handleCharactersByRecordKind(records: Iterable<KernelStoreRecord>) {
+  const counts = new Map<string, number>();
+  for (const record of records) {
+    counts.set(record.kind, (counts.get(record.kind) ?? 0) + record.handle.length);
+  }
+  return sortedCountRows(counts);
+}
+
+function handleCharactersByProductKind(records: Iterable<MaterializedProduct>) {
+  const counts = new Map<string, number>();
+  for (const record of records) {
+    counts.set(record.productKindKey, (counts.get(record.productKindKey) ?? 0) + record.handle.length);
+  }
+  return sortedCountRows(counts);
+}
+
+function sourceSpanRoleRows(records: Iterable<SemanticAddress>) {
+  return countSemanticRuntimeRowsBy(
+    records,
+    (record) => record.kind === 'source-span-address' ? record.role : null,
+  );
+}
+
+function sourceFileRoleRows(records: Iterable<SemanticAddress>) {
+  return countSemanticRuntimeRowsBy(
+    records,
+    (record) => record.kind === 'source-file-address' ? record.role : null,
+  );
+}
+
+function handleCharactersBySourceSpanRole(records: Iterable<SemanticAddress>) {
+  const counts = new Map<string, number>();
+  for (const record of records) {
+    if (record.kind !== 'source-span-address') {
+      continue;
+    }
+    counts.set(record.role, (counts.get(record.role) ?? 0) + record.handle.length);
+  }
+  return sortedCountRows(counts);
+}
+
+function countDetailKindRows(entries: Iterable<{ readonly slot: { readonly detailKind: string } }>): readonly SemanticRuntimeCountRow[] {
+  const counts = new Map<string, number>();
+  for (const entry of entries) {
+    counts.set(entry.slot.detailKind, (counts.get(entry.slot.detailKind) ?? 0) + 1);
+  }
+  return sortedCountRows(counts);
+}
+
 /**
  * Hot in-memory analysis store for normalized kernel records and handle expansion.
  *
@@ -88,6 +210,7 @@ function readSet<TKey, TValue>(
 export class KernelStore {
   readonly handles: KernelHandleFactory;
   private readonly records = new Map<KernelRecordHandle, KernelStoreRecord>();
+  private readonly recordOrder: KernelRecordHandle[] = [];
   private readonly addresses = new Map<AddressHandle, SemanticAddress>();
   private readonly identities = new Map<IdentityHandle, SemanticIdentity>();
   private readonly evidence = new Map<EvidenceHandle, EvidenceRecord>();
@@ -104,6 +227,9 @@ export class KernelStore {
   private readonly claimsBySubject = new Map<AddressHandle | IdentityHandle | ProductHandle, Set<ClaimHandle>>();
   private readonly claimsByObject = new Map<AddressHandle | IdentityHandle | ProductHandle, Set<ClaimHandle>>();
   private readonly claimsByPredicate = new Map<ClaimPredicateKey, Set<ClaimHandle>>();
+  private readonly sidecarIndexes = new Map<string, KernelStoreSidecarIndex>();
+  private handleCharacterCount = 0;
+  readonly hotDetails = new HotDetailCatalog();
   readonly productDetails: ProductDetailCatalog;
 
   constructor(
@@ -120,6 +246,8 @@ export class KernelStore {
       throw new Error(`Duplicate kernel record handle in store: ${record.handle}`);
     }
     this.records.set(record.handle as KernelRecordHandle, record);
+    this.recordOrder.push(record.handle as KernelRecordHandle);
+    this.handleCharacterCount += record.handle.length;
     this.indexRecord(record);
     return record;
   }
@@ -144,6 +272,63 @@ export class KernelStore {
     for (const record of batch.records) {
       this.add(record);
     }
+  }
+
+  mark(): KernelStoreMarker {
+    return {
+      records: this.recordOrder.length,
+      productDetails: this.productDetails.mark(),
+      hotDetails: this.hotDetails.mark(),
+    };
+  }
+
+  disposeSince(marker: KernelStoreMarker): KernelStoreDisposalSummary {
+    const productDetails = this.productDetails.removeSince(marker.productDetails);
+    const hotDetails = this.hotDetails.removeSince(marker.hotDetails);
+    let records = 0;
+    let handleCharacters = 0;
+    while (this.recordOrder.length > marker.records) {
+      const handle = this.recordOrder.pop();
+      if (handle == null) {
+        continue;
+      }
+      const record = this.records.get(handle) ?? null;
+      if (record == null) {
+        continue;
+      }
+      this.records.delete(handle);
+      this.handleCharacterCount -= record.handle.length;
+      handleCharacters += record.handle.length;
+      this.removeRecordFromIndexes(record);
+      records += 1;
+    }
+    const summary = { records, productDetails, hotDetails, handleCharacters };
+    this.notifySidecarIndexes({ marker, summary });
+    return summary;
+  }
+
+  /** Register a store-local sidecar index whose entries mirror kernel/product-detail lifetimes. */
+  registerSidecarIndex(index: KernelStoreSidecarIndex): () => void {
+    const existing = this.sidecarIndexes.get(index.key);
+    if (existing != null && existing !== index) {
+      throw new Error(`Kernel sidecar index already registered for ${index.key}.`);
+    }
+    this.sidecarIndexes.set(index.key, index);
+    return () => {
+      if (this.sidecarIndexes.get(index.key) === index) {
+        this.sidecarIndexes.delete(index.key);
+      }
+    };
+  }
+
+  readSidecarIndexRows(): readonly KernelStoreSidecarIndexRow[] {
+    return [...this.sidecarIndexes.values()]
+      .map((index) => ({
+        key: index.key,
+        entries: index.readEntryCount(),
+        summary: index.summary,
+      }))
+      .sort((left, right) => right.entries - left.entries || left.key.localeCompare(right.key));
   }
 
   /** Expand any handle-bearing record by store-local handle. */
@@ -242,6 +427,105 @@ export class KernelStore {
 
   readMaterializations(): readonly MaterializationRecord[] {
     return [...this.materializations.values()];
+  }
+
+  /** Snapshot kernel size for telemetry; this does not expand product details or source text. */
+  readTelemetrySnapshot(
+    options: SemanticRuntimeKernelTelemetryOptions = {},
+  ): SemanticRuntimeKernelCountSnapshot | SemanticRuntimeKernelDensitySnapshot {
+    const counts: SemanticRuntimeKernelCountSnapshot = {
+      totalRecords: this.records.size,
+      addresses: this.addresses.size,
+      identities: this.identities.size,
+      evidence: this.evidence.size,
+      provenance: this.provenance.size,
+      claims: this.claims.size,
+      openSeams: this.openSeams.size,
+      products: this.products.size,
+      materializations: this.materializations.size,
+      productDetails: this.productDetails.size,
+      hotDetails: this.hotDetails.size,
+      handleCharacters: this.handleCharacterCount,
+    };
+    if (options.includeBreakdowns !== true) {
+      return counts;
+    }
+    return {
+      ...counts,
+      recordKinds: countSemanticRuntimeRowsBy(this.records.values(), (record) => record.kind),
+      addressKinds: countSemanticRuntimeRowsBy(this.addresses.values(), (record) => record.kind),
+      sourceSpanRoles: sourceSpanRoleRows(this.addresses.values()),
+      sourceFileRoles: sourceFileRoleRows(this.addresses.values()),
+      identityKinds: countSemanticRuntimeRowsBy(this.identities.values(), (record) => record.kind),
+      productKinds: sortedCountRows(new Map([...this.productsByKind].map(([key, handles]) => [key, handles.size]))),
+      productDetailKinds: sortedCountRows(this.productDetails.readDetailKindCounts()),
+      hotDetailKinds: sortedCountRows(this.hotDetails.readDetailKindCounts()),
+      claimPredicates: countSemanticRuntimeRowsBy(this.claims.values(), (claim) => claim.predicateKey),
+      openSeamKinds: countSemanticRuntimeRowsBy(this.openSeams.values(), (seam) => seam.seamKindKey),
+      recordKindHandleCharacters: handleCharactersByRecordKind(this.records.values()),
+      productKindHandleCharacters: handleCharactersByProductKind(this.products.values()),
+      sourceSpanRoleHandleCharacters: handleCharactersBySourceSpanRole(this.addresses.values()),
+      sidecarIndexes: this.readSidecarIndexRows(),
+      ...(options.includeDetailDensity === true
+        ? this.readDetailDensitySince({ records: 0, productDetails: 0, hotDetails: 0 })
+        : {}),
+    };
+  }
+
+  readDetailDensitySince(marker: KernelStoreMarker): KernelStoreDetailDensityDelta {
+    return {
+      productDetailDensity: readSemanticRuntimeDetailDensityRows(
+        this.productDetails.readEntriesSince(marker.productDetails).map((entry) => {
+          return {
+            detailKind: entry.slot.detailKind,
+            detail: entry.detail,
+            envelopeHandles: [
+              entry.product.handle,
+              entry.product.identityHandle,
+              entry.product.addressHandle,
+              entry.product.provenanceHandle,
+            ].filter((handle) => handle != null).map((handle) => String(handle)),
+          };
+        }),
+      ),
+      hotDetailDensity: readSemanticRuntimeDetailDensityRows(
+        this.hotDetails.readEntriesSince(marker.hotDetails).map((entry) => ({
+          detailKind: entry.slot.detailKind,
+          detail: entry.detail,
+          envelopeHandles: [entry.handle],
+        })),
+      ),
+    };
+  }
+
+  readDensitySince(marker: KernelStoreMarker): KernelStoreDensityDelta {
+    const recordKinds = new Map<string, number>();
+    const sourceSpanRoles = new Map<string, number>();
+    const productKinds = new Map<string, number>();
+    for (let index = marker.records; index < this.recordOrder.length; index += 1) {
+      const handle = this.recordOrder[index];
+      if (handle == null) {
+        continue;
+      }
+      const record = this.records.get(handle) ?? null;
+      if (record == null) {
+        continue;
+      }
+      recordKinds.set(record.kind, (recordKinds.get(record.kind) ?? 0) + 1);
+      if (record.kind === 'source-span-address') {
+        sourceSpanRoles.set(record.role, (sourceSpanRoles.get(record.role) ?? 0) + 1);
+      }
+      if (record.kind === 'materialized-product') {
+        productKinds.set(record.productKindKey, (productKinds.get(record.productKindKey) ?? 0) + 1);
+      }
+    }
+    return {
+      recordKinds: sortedCountRows(recordKinds),
+      sourceSpanRoles: sortedCountRows(sourceSpanRoles),
+      productKinds: sortedCountRows(productKinds),
+      productDetailKinds: countDetailKindRows(this.productDetails.readEntriesSince(marker.productDetails)),
+      hotDetailKinds: countDetailKindRows(this.hotDetails.readEntriesSince(marker.hotDetails)),
+    };
   }
 
   readEvidenceForAddress(handle: AddressHandle): readonly EvidenceHandle[] {
@@ -489,6 +773,90 @@ export class KernelStore {
       case 'materialization-record':
         this.materializations.set(record.handle, record);
         return;
+    }
+  }
+
+  private removeRecordFromIndexes(record: KernelStoreRecord): void {
+    switch (record.kind) {
+      case 'source-file-address':
+        this.addresses.delete(record.handle);
+        for (const suffix of sourcePathSuffixes(record.path)) {
+          removeFromSet(this.sourceFileAddressesByPath, suffix, record.handle);
+        }
+        return;
+      case 'source-span-address':
+      case 'template-address':
+      case 'template-node-address':
+      case 'generated-address':
+      case 'external-address':
+        this.addresses.delete(record.handle);
+        return;
+      case 'typescript-declaration-identity':
+      case 'aurelia-resource-identity':
+      case 'aurelia-attribute-pattern-identity':
+      case 'di-key-identity':
+      case 'container-identity':
+      case 'di-product-identity':
+      case 'registration-identity':
+      case 'resource-product-identity':
+      case 'evaluation-identity':
+      case 'configuration-identity':
+      case 'router-identity':
+      case 'route-recognizer-identity':
+      case 'i18n-identity':
+      case 'state-identity':
+      case 'validation-identity':
+      case 'fetch-client-identity':
+      case 'dialog-identity':
+      case 'compiler-identity':
+      case 'template-identity':
+      case 'template-node-identity':
+      case 'binding-identity':
+      case 'instruction-identity':
+      case 'type-system-identity':
+        this.identities.delete(record.handle);
+        return;
+      case 'evidence-record':
+        this.evidence.delete(record.handle);
+        if (record.addressHandle != null) {
+          removeFromSet(this.evidenceByAddress, record.addressHandle, record.handle);
+        }
+        if (record.identityHandle != null) {
+          removeFromSet(this.evidenceByIdentity, record.identityHandle, record.handle);
+        }
+        return;
+      case 'provenance-record':
+        this.provenance.delete(record.handle);
+        for (const evidenceHandle of record.evidenceHandles) {
+          removeFromSet(this.provenanceByEvidence, evidenceHandle, record.handle);
+        }
+        return;
+      case 'semantic-claim':
+        this.claims.delete(record.handle);
+        removeFromSet(this.claimsBySubject, record.subjectHandle, record.handle);
+        removeFromSet(this.claimsByObject, record.objectHandle, record.handle);
+        removeFromSet(this.claimsByPredicate, record.predicateKey, record.handle);
+        return;
+      case 'open-seam':
+        this.openSeams.delete(record.handle);
+        return;
+      case 'materialized-product':
+        this.products.delete(record.handle);
+        removeFromSet(this.productsByKind, record.productKindKey, record.handle);
+        this.productDetails.remove(record.handle);
+        return;
+      case 'materialization-record':
+        this.materializations.delete(record.handle);
+        return;
+    }
+  }
+
+  private notifySidecarIndexes(context: KernelStoreDisposalContext): void {
+    if (this.sidecarIndexes.size === 0) {
+      return;
+    }
+    for (const index of this.sidecarIndexes.values()) {
+      index.dispose(context);
     }
   }
 }

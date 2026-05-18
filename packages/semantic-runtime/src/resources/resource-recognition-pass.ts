@@ -10,6 +10,7 @@ import {
 import {
   ResourceRecognitionKernelEmitter,
   type ResourceRecognitionKernelEmission,
+  type ResourceRecognitionEmissionPhaseTiming,
 } from './resource-recognition-kernel-emitter.js';
 import type { ResourceRecognitionObservation } from './resource-observation.js';
 import { SyntaxResourceRecognizer } from './syntax-resource-recognizer.js';
@@ -18,7 +19,8 @@ export type ResourceRecognitionPhaseName =
   | 'named-recognition'
   | 'syntax-recognition'
   | 'kernel-emission'
-  | 'definition-convergence';
+  | 'definition-convergence'
+  | ResourceRecognitionEmissionPhaseTiming['name'];
 
 export interface ResourceRecognitionPhaseTiming {
   readonly name: ResourceRecognitionPhaseName;
@@ -75,6 +77,7 @@ export class ResourceRecognitionPass {
     const emission = measureResourceRecognitionPhase(phases, 'kernel-emission', () =>
       new ResourceRecognitionKernelEmitter(store).emit(context, observations)
     );
+    phases.push(...emission.profile.phases);
     const convergence = measureResourceRecognitionPhase(phases, 'definition-convergence', () =>
       new ResourceDefinitionConverger(store).converge(context, observations, emission)
     );

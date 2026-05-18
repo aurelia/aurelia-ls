@@ -11,23 +11,7 @@ import './app.css';
   dependencies: [ServiceBackedForm],
 })
 export class App {
-  private readonly state = resolve(AppState);
-
-  get requestIds(): readonly string[] {
-    return this.state.requestIds;
-  }
-
-  get selectedRequestId(): string {
-    return this.state.selectedRequestId;
-  }
-
-  set selectedRequestId(value: string) {
-    this.state.selectedRequestId = value;
-  }
-
-  get submittedCount(): number {
-    return this.state.submittedCount;
-  }
+  readonly state = resolve(AppState);
 
   binding(): void {
     void this.state.loadRequests();

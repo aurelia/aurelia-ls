@@ -1143,6 +1143,7 @@ export class StateBindingCommand {
         expression,
         targetForPropertyBinding(info, context),
         info.syntax.parts[0] ?? null,
+        context.parseFunctionExpression(expression, info),
         instructionSource(info),
       ),
     ]);
@@ -1180,6 +1181,7 @@ export class DispatchBindingCommand {
         info.syntax.target,
         info.syntax.rawValue,
         info.syntax.parts[0] ?? null,
+        context.parsePropertyExpression(info.syntax.rawValue, info),
         instructionSource(info),
       ),
     ]);

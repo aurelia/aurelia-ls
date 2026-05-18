@@ -12,10 +12,10 @@ that every item belongs in one API surface. Update it when capability boundaries
 - [ ] Profile negotiation: expose decorator, convention, explicit-registration, and hybrid choices with ambiguity
   points.
 - [ ] Recipe model: compose operations into named flows without turning large requests into magic primitives. The
-  minimal, state-backed form, validated state-backed form, service-backed form, and routed state-backed form recipes
-  produce typed operations and expected effects; the state-backed, validated state-backed, service-backed, and routed
-  state-backed form recipes also produce concrete source edits that are reopened from temporary apps during smoke
-  verification. Minimal app now uses the same source-plan lane; richer repair recipes remain open.
+  minimal, state-backed form, localized state-backed form, validated state-backed form, service-backed form, routed
+  state-backed form, catalog storefront, and composed dashboard recipes produce typed operations and expected effects;
+  they also produce concrete source edits that are reopened from temporary apps during smoke verification. Richer repair
+  recipes remain open.
 - [ ] Plan builder: produce semantic operations, preconditions, expected effects, and topology expectations before file
   edits.
 - [ ] Source edit boundary: define how plans become concrete file edits without hiding formatting, package-manager, or
@@ -79,7 +79,12 @@ that every item belongs in one API surface. Update it when capability boundaries
   read expressions.
 - [ ] Control flow and structural resources such as repeat/if/promise/switch-like patterns and template-controller
   scopes. Repeat locals, local `if`/`else` narrowing, `with.bind` object scopes, and promise `then`/`catch` locals are
-  now closed enough for the storefront fixture; switch/case and richer flow composition remain open.
+  now closed enough for the storefront fixture. Runtime-controller expected effects can now filter row fields for
+  built-in template-controller and synthetic-view hydration (`templateControllerFlowKind`, `childViewCardinality`,
+  `childViewRenderingState`, and `hydrationHandoffKind`), so generated catalog/dashboard recipes verify their
+  control-flow substrate directly. The generated catalog recipe now also verifies promise owner and linked
+  `pending`/`then`/`catch` branch controller rows plus switch owner and linked `case`/`default-case` rows. Richer flow
+  composition remains open.
 - [ ] Forms, inputs, two-way binding, validation, submit flows, loading, empty, and error states. The storefront fixture
   now exercises basic form controls, presentation state, and submit flow; target accessor/observer lookup is
   materialized for native controls, controller/view-model targets, class/style attribute bindings, and class/style
@@ -88,10 +93,15 @@ that every item belongs in one API surface. Update it when capability boundaries
   dynamic repeated select option value types, separate select model/value orientation, `CheckedObserver` boolean/radio/array-membership flow, class token/toggle
   channels, and style rule/property channels are closed. Validation-html positive ownership is now visible through
   `BindingBehaviorApplications` and the validated state-backed recipe, while source-authored validation rule failures
-  are a diagnostics lane; live validation execution, dynamic multi-select mode, richer `CheckedObserver` modes, value
-  conversion/coercion policy, custom matcher semantics, richer class/style value-shape checking, and setter-body flow
-  into composed state remain open.
-- [ ] Component composition, content projection or slot-like patterns, and nested resource visibility.
+  are a diagnostics lane; custom matcher presence is visible through value-channel rows and authoring taste, while live
+  validation execution, dynamic multi-select mode, richer `CheckedObserver` modes, value conversion/coercion policy,
+  matcher behavior analysis, richer class/style value-shape checking, and setter-body flow into composed state remain
+  open.
+- [ ] Component composition, content projection or slot-like patterns, and nested resource visibility. Dynamic
+  `<au-compose>` candidate/template resolution is visible through `api.RuntimeCompositions` and the generated composed
+  dashboard recipe; `activate(model)` handoff assignability is visible, and closed static/value custom-element branches
+  now materialize aggregate composed child-controller handoff. Lifecycle activation/deactivation, template-only runtime
+  template compilation, and recursive composed child rendering remain open.
 - [ ] Template-to-TypeChecker handoff for member lookup, autocomplete, diagnostics, and speculative synthetic views.
 - [ ] ID-based component boundaries where app components receive primitive identity/configuration inputs and resolve
   domain state themselves. The storefront fixture avoids object/function bindables across app-component boundaries.
@@ -121,7 +131,15 @@ that every item belongs in one API surface. Update it when capability boundaries
 ## Routing, Auth, And Access Control
 
 - [ ] Router admission and route tree authoring.
-- [ ] Routeable components, layouts, navigation links, route params, and viewport structure.
+- [ ] Routeable components, layouts, navigation links, route params, and viewport structure. Generated routed forms now
+  verify a static `form/:requestId` parameter through route-pattern, route-endpoint, and recognized-route rows while the
+  routed view-model reads `IRouteContext.getRouteParameters({ includeQueryParams: true })`-shaped facts through the
+  framework API. The same generated fixture verifies sibling `main`/`sidebar` viewport instructions, static query
+  params, repeated query-key arrays, and fragment propagation through route-config, router-viewport,
+  viewport-instruction-tree, route-node, and component-agent rows. A stress fixture now proves recursive residual
+  child-route recognition plus child-first, parent-first, append, and by-route route-node parameter aggregation for
+  nested route contexts. Dynamic query merging, live active route state, viewport activation, and broader route
+  lifecycle semantics remain open.
 - [ ] Route hooks and lifecycle/validation behavior independent of auth.
 - [ ] Authentication services, provider integration, session/user state, login/logout UI, and persistence policy.
 - [ ] Access-control policy, protected route admission, guard hooks, permission checks, denied-state UI, and repair
@@ -157,7 +175,10 @@ that every item belongs in one API surface. Update it when capability boundaries
   in app topology; conventions, query variants, and virtual assets remain open.
 - [ ] Convention recognition for components, templates, styles, and resources.
 - [ ] Package/plugin admission recognition for router, i18n, validation, state, fetch-client, and other common Aurelia
-  packages.
+  packages. The localized state-backed form recipe now exercises `@aurelia/i18n` plugin admission, static
+  `I18nConfiguration` translation resources, `i18n-translation-key` expected effects, and rendered
+  `i18n-translation-binding` groups for `t`/`t-params.bind` lifecycles. Dynamic i18n loaders, runtime language
+  switching, and broader plugin package-policy authoring remain open.
 - [ ] DI, compiler-world, resource visibility, template compilation, rendering, and TypeChecker handoff answers are
   compact enough for AI callers.
 - [ ] Runtime binding target access can be queried without internal emissions. The binding bind-time materializer emits

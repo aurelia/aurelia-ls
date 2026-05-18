@@ -1,0 +1,24 @@
+<main class="catalog-shell ${state.cart.itemCount > 0 ? 'has-selection' : 'empty-selection'}">
+  <header>
+    <h1>Catalog</h1>
+    <p>${state.cart.itemCount} item(s) selected</p>
+    <div class="cart-progress" aria-hidden="true">
+      <span style="width: ${cartProgressPercent}%"></span>
+    </div>
+    <section promise.bind="catalogStatus" aria-label="Catalog status">
+      <p pending>Checking catalog status...</p>
+      <p then="notice">${notice}</p>
+      <p catch="reason">${reason}</p>
+    </section>
+  </header>
+
+  <product-list></product-list>
+
+  <aside if.bind="state.cart.itemCount > 0" aria-label="Selected products">
+    <h2>Selected products</h2>
+    <ul>
+      <li repeat.for="name of cartProductNames">${name}</li>
+    </ul>
+  </aside>
+  <p else>Select a featured product to start an order.</p>
+</main>

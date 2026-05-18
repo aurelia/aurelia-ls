@@ -53,6 +53,7 @@ import { optionalNextPageContinuation } from "./lens-continuation-utils.js";
 import {
   frameworkCorpusFixtureSeedHasClassificationKey,
   frameworkCorpusFixtureSeedMatchesClassification,
+  normalizeFrameworkCorpusClassificationFilter,
 } from "./framework-corpus-classification.js";
 import { frameworkCorpusFixtureSeedQueryScore } from "./framework-corpus-row-relevance.js";
 
@@ -462,6 +463,9 @@ function fixtureSeedFilterFocusScore(
     if (filters.concept === "forms") {
       score += formFixtureSeedFocusScore(row);
     }
+    if (filters.concept === "validation") {
+      score += validationFixtureSeedFocusScore(row);
+    }
     score -= Math.max(0, row.concepts.length - 1) * 2;
   }
   if (
@@ -480,6 +484,9 @@ function fixtureSeedFilterFocusScore(
   }
   if (filters.effectKind !== undefined && row.effectHints.includes(filters.effectKind as never)) {
     score += 30;
+    if (filters.effectKind === "runtime-composition") {
+      score += runtimeCompositionFixtureSeedFocusScore(row);
+    }
   }
   if (filters.recipeKey !== undefined && row.recipeHints.includes(filters.recipeKey as never)) {
     score += 30;
@@ -515,6 +522,44 @@ function formFixtureSeedFocusScore(row: FrameworkCorpusFixtureSeedRow): number {
   }
   if (frameworkCorpusFixtureSeedHasClassificationKey(row, "direct-service-form")) {
     score -= 100;
+  }
+  return score;
+}
+
+function validationFixtureSeedFocusScore(row: FrameworkCorpusFixtureSeedRow): number {
+  let score = 0;
+  if (frameworkCorpusFixtureSeedHasClassificationKey(row, "validation-binding-behavior")) {
+    score += 120;
+  }
+  if (frameworkCorpusFixtureSeedHasClassificationKey(row, "binding-behavior-application")) {
+    score += 70;
+  }
+  if (frameworkCorpusFixtureSeedHasClassificationKey(row, "native-value-binding")) {
+    score += 40;
+  }
+  return score;
+}
+
+function runtimeCompositionFixtureSeedFocusScore(row: FrameworkCorpusFixtureSeedRow): number {
+  let score = 0;
+  const path = row.filePath.toLowerCase();
+  if (frameworkCorpusFixtureSeedHasClassificationKey(row, "au-compose")) {
+    score += 80;
+  }
+  if (row.recipeHints.includes("composed-dashboard")) {
+    score += 80;
+  }
+  if (path.includes("dynamic-composition")) {
+    score += 160;
+  }
+  if (path.includes("au-compose")) {
+    score += 140;
+  }
+  if (path.includes("advanced-ui-modeling-with-composite-mvvm")) {
+    score += 90;
+  }
+  if ((row.concepts.includes("forms") || row.concepts.includes("validation")) && !path.includes("dynamic-composition")) {
+    score -= 60;
   }
   return score;
 }
@@ -624,7 +669,7 @@ interface FrameworkCorpusFilters {
 }
 
 function frameworkCorpusFilters(inquiry: Inquiry): FrameworkCorpusFilters {
-  return {
+  const filters = {
     query: inquiryStringFilter(inquiry, "query"),
     queryMode: frameworkCorpusQueryModeFilter(inquiryLowerStringFilter(inquiry, "queryMode")),
     concept: frameworkCorpusConceptFilter(inquiryLowerStringFilter(inquiry, "concept")),
@@ -643,6 +688,10 @@ function frameworkCorpusFilters(inquiry: Inquiry): FrameworkCorpusFilters {
     classificationKey: inquiryStringFilter(inquiry, "classificationKey"),
     expectedEffectFilterField: inquiryStringFilter(inquiry, "expectedEffectFilterField"),
     expectedEffectFilterValue: inquiryStringFilter(inquiry, "expectedEffectFilterValue"),
+  };
+  return {
+    ...filters,
+    ...normalizeFrameworkCorpusClassificationFilter(filters),
   };
 }
 

@@ -5,6 +5,7 @@ import {
   PropertyBinding,
   RefBinding,
   SpreadValueBinding,
+  StateDispatchBinding,
   RuntimeBindingTargetAccessStrategy,
   type RuntimeBindingSourceOperation,
   type RuntimeBindingTargetAccess,
@@ -61,8 +62,8 @@ class RuntimeBindingValueChannelDraftFrame {
   }
 
   read(): RuntimeBindingValueChannelDraft {
-    if (this.binding instanceof RefBinding) {
-      return this.directBinding.valueChannelDraftForSourceOperation(this.sourceOperation);
+    if (this.binding instanceof RefBinding || this.binding instanceof StateDispatchBinding) {
+      return this.directBinding.valueChannelDraftForSourceOperation(this.sourceOperation, this.readSourceType);
     }
     if (this.binding instanceof SpreadValueBinding && this.targetAccess == null) {
       return this.openSpreadBindingWithoutClosedBindable();

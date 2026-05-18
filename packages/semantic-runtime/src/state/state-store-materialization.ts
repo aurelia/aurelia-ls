@@ -1,3 +1,7 @@
+import ts from 'typescript';
+import {
+  SourceSpanAddress,
+} from '../kernel/address.js';
 import {
   ConfigurationOptionContributionKind,
   ConfigurationOptionValueKind,
@@ -11,6 +15,14 @@ import {
   type KernelStore,
 } from '../kernel/store.js';
 import { FrameworkRegistrationKind } from '../registration/registration-reference.js';
+import {
+  CheckerTypeProjector,
+} from '../type-system/checker-projector.js';
+import type { TypeSystemProject } from '../type-system/project.js';
+import {
+  CheckerTypeProjectionOrigin,
+  type CheckerTypeReference,
+} from '../type-system/type-shape.js';
 import { StateProductDetails } from './product-details.js';
 import { StateRawErrorAuthority } from './framework-raw-error-authority.js';
 import {
@@ -50,8 +62,9 @@ export class StateStoreConfigurationMaterializationProjectPass {
   materializeAndEmit(
     store: KernelStore,
     configuration: ConfigurationRecognitionProjectResult,
+    typeSystem: TypeSystemProject | null = null,
   ): StateProjectResult {
-    const seeds = readStateStoreConfigurationSeeds(configuration);
+    const seeds = readStateStoreConfigurationSeeds(store, configuration, typeSystem);
     const issuePublications = stateIssuePublications(store, seeds);
     const validSeeds = seeds.filter((seed) => !stateStoreSeedIsReservedDefaultWithStore(seed));
     const emissions = validSeeds.map((seed, index) =>
@@ -147,7 +160,9 @@ function stateStoreSeedIsReservedDefaultWithStore(
 }
 
 function readStateStoreConfigurationSeeds(
+  store: KernelStore,
   configuration: ConfigurationRecognitionProjectResult,
+  typeSystem: TypeSystemProject | null,
 ): readonly StateStoreConfigurationProductSeed[] {
   const emission = configuration.readConfiguration();
   const contributionsByProductHandle = new Map(
@@ -165,7 +180,14 @@ function readStateStoreConfigurationSeeds(
         && contribution.contributionKind === ConfigurationOptionContributionKind.BuilderArgument
         && contribution.configurationKind === FrameworkRegistrationKind.StateDefaultConfiguration
       );
-    const seed = stateStoreConfigurationSeedForBuilderStep(configuration.project.projectKey, step, contributions);
+    const seed = stateStoreConfigurationSeedForBuilderStep(
+      store,
+      configuration.project.projectKey,
+      step,
+      contributions,
+      seeds.length,
+      typeSystem,
+    );
     if (seed != null) {
       seeds.push(seed);
     }
@@ -174,16 +196,19 @@ function readStateStoreConfigurationSeeds(
 }
 
 function stateStoreConfigurationSeedForBuilderStep(
+  store: KernelStore,
   projectKey: string,
   step: { readonly identityHandle: StateStoreConfigurationProductSeed['ownerIdentityHandle']; readonly sourceAddressHandle: AddressHandle | null },
   contributions: readonly ConfigurationOptionContribution[],
+  storeIndex: number,
+  typeSystem: TypeSystemProject | null,
 ): StateStoreConfigurationProductSeed | null {
   const methodName = stateStoreBuilderMethodName(contributions);
   if (methodName === 'init') {
-    return stateStoreConfigurationSeedForInit(projectKey, step, contributions);
+    return stateStoreConfigurationSeedForInit(store, projectKey, step, contributions, storeIndex, typeSystem);
   }
   if (methodName === 'withStore') {
-    return stateStoreConfigurationSeedForWithStore(projectKey, step, contributions);
+    return stateStoreConfigurationSeedForWithStore(store, projectKey, step, contributions, storeIndex, typeSystem);
   }
   return null;
 }
@@ -199,9 +224,12 @@ function stateStoreBuilderMethodName(
 }
 
 function stateStoreConfigurationSeedForInit(
+  store: KernelStore,
   projectKey: string,
   step: { readonly identityHandle: StateStoreConfigurationProductSeed['ownerIdentityHandle']; readonly sourceAddressHandle: AddressHandle | null },
   contributions: readonly ConfigurationOptionContribution[],
+  storeIndex: number,
+  typeSystem: TypeSystemProject | null,
 ): StateStoreConfigurationProductSeed {
   const argument = argumentsByIndex(contributions);
   const initialState = argument.get(0) ?? null;
@@ -217,15 +245,24 @@ function stateStoreConfigurationSeedForInit(
     sourceAddressHandle: step.sourceAddressHandle,
     nameSourceAddressHandle: null,
     initialStateSourceAddressHandle: initialState?.value.addressHandle ?? null,
+    initialStateType: stateStoreInitialStateType(
+      store,
+      typeSystem,
+      initialState,
+      `state-store-configuration:${projectKey}:${storeIndex}:default`,
+    ),
     optionsOrHandlerSourceAddressHandle: optionsOrHandler.sourceAddressHandle,
     actionHandlerSourceAddressHandles: actionHandlerSourceAddressHandles(argument, optionsOrHandler),
   };
 }
 
 function stateStoreConfigurationSeedForWithStore(
+  store: KernelStore,
   projectKey: string,
   step: { readonly identityHandle: StateStoreConfigurationProductSeed['ownerIdentityHandle']; readonly sourceAddressHandle: AddressHandle | null },
   contributions: readonly ConfigurationOptionContribution[],
+  storeIndex: number,
+  typeSystem: TypeSystemProject | null,
 ): StateStoreConfigurationProductSeed {
   const argument = argumentsByIndex(contributions);
   const name = argument.get(0) ?? null;
@@ -242,9 +279,81 @@ function stateStoreConfigurationSeedForWithStore(
     sourceAddressHandle: step.sourceAddressHandle,
     nameSourceAddressHandle: name?.value.addressHandle ?? null,
     initialStateSourceAddressHandle: initialState?.value.addressHandle ?? null,
+    initialStateType: stateStoreInitialStateType(
+      store,
+      typeSystem,
+      initialState,
+      `state-store-configuration:${projectKey}:${storeIndex}:${
+        name?.value.valueKind === ConfigurationOptionValueKind.String ? name.value.value : 'named'
+      }`,
+    ),
     optionsOrHandlerSourceAddressHandle: optionsOrHandler.sourceAddressHandle,
     actionHandlerSourceAddressHandles: actionHandlerSourceAddressHandles(argument, optionsOrHandler),
   };
+}
+
+function stateStoreInitialStateType(
+  store: KernelStore,
+  typeSystem: TypeSystemProject | null,
+  contribution: ConfigurationOptionContribution | null,
+  localKey: string,
+): CheckerTypeReference | null {
+  if (typeSystem == null || contribution?.value.addressHandle == null) {
+    return null;
+  }
+  const node = programExpressionForSourceAddress(store, typeSystem, contribution.value.addressHandle);
+  if (node == null) {
+    return null;
+  }
+  const checker = typeSystem.checker;
+  const type = checker.getTypeAtLocation(node);
+  return new CheckerTypeProjector(store).ensureProjection({
+    localKey: `${localKey}:initial-state-type`,
+    checker,
+    type,
+    origin: CheckerTypeProjectionOrigin.TypeChecker,
+    sourceNode: node,
+    sourceAddressHandle: contribution.value.addressHandle,
+    display: checker.typeToString(type, node),
+  }).toReference();
+}
+
+function programExpressionForSourceAddress(
+  store: KernelStore,
+  typeSystem: TypeSystemProject,
+  sourceAddressHandle: AddressHandle,
+): ts.Expression | null {
+  const address = store.readAddress(sourceAddressHandle);
+  if (!(address instanceof SourceSpanAddress)) {
+    return null;
+  }
+  const fileAddress = store.readAddress(address.fileHandle);
+  if (fileAddress?.kind !== 'source-file-address') {
+    return null;
+  }
+  const sourceFile = typeSystem.readProgramSourceFileByPath(fileAddress.path);
+  return sourceFile == null ? null : smallestExpressionForSpan(sourceFile, address.start, address.end);
+}
+
+function smallestExpressionForSpan(
+  sourceFile: ts.SourceFile,
+  start: number,
+  end: number,
+): ts.Expression | null {
+  let best: ts.Expression | null = null;
+  const visit = (node: ts.Node): void => {
+    if (node.end < start || node.getStart(sourceFile) > end) {
+      return;
+    }
+    if (ts.isExpression(node) && node.getStart(sourceFile) === start && node.end === end) {
+      best = node;
+    }
+    if (node.getStart(sourceFile) <= start && end <= node.end) {
+      ts.forEachChild(node, visit);
+    }
+  };
+  visit(sourceFile);
+  return best;
 }
 
 function argumentsByIndex(

@@ -7,6 +7,7 @@ import {
 import {
   CreateStateModelOperation,
   ConfigurePluginOperation,
+  CreateComponentOperation,
 } from './operation.js';
 import {
   AuthoringIntent,
@@ -27,6 +28,11 @@ import {
   standardFormAppExpectedEffects,
   standardFormTemplateBindingExpectedEffects,
 } from './form-recipe-expected-effects.js';
+import {
+  validationErrorsDataFlowEffect,
+  validationErrorsTargetAccessEffect,
+  validationErrorsValueChannelEffect,
+} from './form-expected-effects.js';
 import {
   componentStyleAssetPlanStep,
   entrypointPlanStep,
@@ -67,10 +73,20 @@ export interface StateBackedFormRecipeRequest {
   readonly formComponentClassName?: string;
   /** Form custom element name. */
   readonly formElementName?: string;
+  /** Capture-based field shell source path. */
+  readonly fieldShellComponentPath?: string;
+  /** Capture-based field shell template path. */
+  readonly fieldShellTemplatePath?: string;
+  /** Capture-based field shell class name. */
+  readonly fieldShellClassName?: string;
+  /** Capture-based field shell custom element name. */
+  readonly fieldShellElementName?: string;
   /** Include validation-html configuration, rules, controller usage, and validate binding behavior. */
   readonly validationEnabled?: boolean;
   /** Optional static trigger argument for generated validation binding behavior applications. */
   readonly validationTrigger?: StateBackedFormValidationTriggerName | null;
+  /** Include i18n configuration, static translation resources, and translated template text. */
+  readonly i18nEnabled?: boolean;
 }
 
 interface StateBackedFormRecipeModel {
@@ -88,8 +104,13 @@ interface StateBackedFormRecipeModel {
   readonly formTemplatePath: string;
   readonly formComponentClassName: string;
   readonly formElementName: string;
+  readonly fieldShellComponentPath: string;
+  readonly fieldShellTemplatePath: string;
+  readonly fieldShellClassName: string;
+  readonly fieldShellElementName: string;
   readonly validationEnabled: boolean;
   readonly validationTrigger: StateBackedFormValidationTriggerName | null;
+  readonly i18nEnabled: boolean;
 }
 
 export function buildStateBackedFormPlan(request: StateBackedFormRecipeRequest): AuthoringPlan {
@@ -101,6 +122,15 @@ export function buildValidatedStateBackedFormPlan(request: Omit<StateBackedFormR
   const model = normalizeStateBackedFormRecipe({
     ...request,
     validationEnabled: true,
+    validationTrigger: request.validationTrigger === undefined ? 'blur' : request.validationTrigger,
+  });
+  return buildStateBackedFormPlanFromModel(model);
+}
+
+export function buildLocalizedStateBackedFormPlan(request: Omit<StateBackedFormRecipeRequest, 'i18nEnabled'>): AuthoringPlan {
+  const model = normalizeStateBackedFormRecipe({
+    ...request,
+    i18nEnabled: true,
   });
   return buildStateBackedFormPlanFromModel(model);
 }
@@ -138,12 +168,20 @@ function normalizeStateBackedFormRecipe(request: StateBackedFormRecipeRequest): 
     formTemplatePath: request.formTemplatePath ?? 'src/components/state-backed-form.html',
     formComponentClassName: request.formComponentClassName ?? 'StateBackedForm',
     formElementName: request.formElementName ?? 'state-backed-form',
+    fieldShellComponentPath: request.fieldShellComponentPath ?? 'src/components/field-shell.ts',
+    fieldShellTemplatePath: request.fieldShellTemplatePath ?? 'src/components/field-shell.html',
+    fieldShellClassName: request.fieldShellClassName ?? 'FieldShell',
+    fieldShellElementName: request.fieldShellElementName ?? 'field-shell',
     validationEnabled: request.validationEnabled === true,
     validationTrigger: request.validationTrigger ?? null,
+    i18nEnabled: request.i18nEnabled === true,
   };
 }
 
 function stateBackedFormIntentSummary(model: StateBackedFormRecipeModel): string {
+  if (model.i18nEnabled) {
+    return `Create ${model.appName} as a DI state-backed Aurelia form app with static i18n resources.`;
+  }
   return model.validationEnabled
     ? `Create ${model.appName} as a DI state-backed Aurelia form app with validation-html validation.`
     : `Create ${model.appName} as a DI state-backed Aurelia form app.`;
@@ -162,6 +200,9 @@ function stateBackedFormPreferences(model: StateBackedFormRecipeModel): readonly
     new AuthoringPreference('build-tool-profile', 'host-selected-build-tool'),
     ...(model.validationEnabled
       ? [new AuthoringPreference('validation-ownership', 'validation-controller-usage')]
+      : []),
+    ...(model.i18nEnabled
+      ? [new AuthoringPreference('resource-admission-mode', 'plugin-registration-admission')]
       : []),
   ];
 }
@@ -186,7 +227,23 @@ function stateBackedFormPlanSteps(
       model.statePath,
       model.formComponentPath,
       model.formTemplatePath,
+      model.fieldShellComponentPath,
+      model.fieldShellTemplatePath,
     ]),
+    ...(model.i18nEnabled
+      ? [new AuthoringPlanStep(
+        new ConfigurePluginOperation('I18nConfiguration', '@aurelia/i18n'),
+        [
+          ExpectedSemanticEffect.discriminatorFact('I18n plugin configuration should admit static translation resources.', 'dependency-injection', 'di', 'plugin'),
+          ExpectedSemanticEffect.discriminatorFact('Static i18n resources should expose the app title translation key.', 'i18n-translation-key', 'template', 'plugin', 'present', null, [
+            new ExpectedSemanticEffectFilter('key', 'app.title'),
+            new ExpectedSemanticEffectFilter('locale', 'en'),
+            new ExpectedSemanticEffectFilter('namespace', 'translation'),
+          ]),
+          ExpectedSemanticEffect.signatureTaste('Authoring orientation should recognize plugin registration admission.', 'resource-admission-mode', 'plugin-registration-admission', 'plugin'),
+        ],
+      )]
+      : []),
     ...(model.validationEnabled
       ? [new AuthoringPlanStep(
         new ConfigurePluginOperation('ValidationHtmlConfiguration', '@aurelia/validation-html'),
@@ -207,6 +264,13 @@ function stateBackedFormPlanSteps(
     rootComponentPlanStep(model.rootComponentPath, model.rootComponentClassName, model.rootElementName),
     componentStyleAssetPlanStep(model.rootStylePath),
     externalTemplatePlanStep(model.rootTemplatePath, model.rootComponentClassName, 'Root component'),
+    new AuthoringPlanStep(
+      new CreateComponentOperation(model.fieldShellComponentPath, model.fieldShellClassName, model.fieldShellElementName),
+      [
+        ExpectedSemanticEffect.fact('Field shell should be a custom element.', 'component', 'resource', 'component'),
+      ],
+    ),
+    externalTemplatePlanStep(model.fieldShellTemplatePath, model.fieldShellClassName, 'Field shell component'),
     formComponentPlanStep(model.formComponentPath, model.formComponentClassName, model.formElementName),
     externalTemplatePlanStep(model.formTemplatePath, model.formComponentClassName, 'Form component'),
     templateBindingPlanStep(
@@ -230,7 +294,8 @@ function stateBackedFormPlanSteps(
 
 function stateBackedFormTopology(model: StateBackedFormRecipeModel): ApplicationTopology {
   const builder = new ApplicationTopologyBuilder(model.rootDir);
-  const form = addStateBackedFormComponent(builder, model);
+  const fieldShell = addStateBackedFieldShellComponent(builder, model);
+  const form = addStateBackedFormComponent(builder, model, fieldShell);
   const root = addStateBackedFormRoot(builder, model, form);
   addStateBackedFormState(builder, model);
   addStateBackedFormEntrypoint(builder, model, root);
@@ -240,6 +305,7 @@ function stateBackedFormTopology(model: StateBackedFormRecipeModel): Application
 function addStateBackedFormComponent(
   builder: ApplicationTopologyBuilder,
   model: StateBackedFormRecipeModel,
+  fieldShell: ApplicationComponentTopologyResult,
 ): ApplicationComponentTopologyResult {
   return builder.component({
     className: model.formComponentClassName,
@@ -247,6 +313,20 @@ function addStateBackedFormComponent(
     sourcePath: model.formComponentPath,
     elementName: model.formElementName,
     templatePath: model.formTemplatePath,
+    dependencies: [fieldShell.reference],
+  });
+}
+
+function addStateBackedFieldShellComponent(
+  builder: ApplicationTopologyBuilder,
+  model: StateBackedFormRecipeModel,
+): ApplicationComponentTopologyResult {
+  return builder.component({
+    className: model.fieldShellClassName,
+    referenceFromPath: model.formComponentPath,
+    sourcePath: model.fieldShellComponentPath,
+    elementName: model.fieldShellElementName,
+    templatePath: model.fieldShellTemplatePath,
   });
 }
 
@@ -295,6 +375,9 @@ function addStateBackedFormEntrypoint(
       ...(model.validationEnabled
         ? [new ApplicationImport('@aurelia/validation-html', ['ValidationHtmlConfiguration'])]
         : []),
+      ...(model.i18nEnabled
+        ? [new ApplicationImport('@aurelia/i18n', ['I18nConfiguration'])]
+        : []),
       new ApplicationImport(root.reference.moduleSpecifier, [model.rootComponentClassName]),
     ],
   });
@@ -304,17 +387,48 @@ function stateBackedFormExpectedEffects(model: StateBackedFormRecipeModel): read
   return [
     ...standardFormAppExpectedEffects({
       summaryPrefix: 'Generated form app',
-      componentCount: 2,
-      componentCountSummary: 'root and form custom elements',
-      externalTemplateCount: 2,
-      compiledTemplateCount: 2,
+      componentCount: 3,
+      componentCountSummary: 'root, form, and field shell custom elements',
+      externalTemplateCount: 3,
+      compiledTemplateCount: 3,
     }),
     ...(model.validationEnabled
       ? [
         ExpectedSemanticEffect.discriminatorFact('Validated form app materializes validate binding behavior applications.', 'binding-behavior-application', 'template', 'binding-behavior', 'present', null, [
           ...validateBindingBehaviorExpectedFilters(model),
         ]),
+        validationErrorsTargetAccessEffect('Validated form app materializes validation-errors errors target access.'),
+        validationErrorsValueChannelEffect('Validated form app materializes validation-errors errors value channels.'),
+        validationErrorsDataFlowEffect('Validated form app materializes validation-errors errors from-view data flow.'),
         ExpectedSemanticEffect.discriminatorTaste('Validated form app reports validation controller/plugin usage.', 'validation-ownership', 'validation-controller-usage', 'template-binding'),
+      ]
+      : []),
+    ...(model.i18nEnabled
+      ? [
+        ExpectedSemanticEffect.discriminatorAtLeast('Localized form app exposes static i18n translation keys.', 'i18n-translation-key', 'template', 6, 'plugin'),
+        ExpectedSemanticEffect.discriminatorAtLeast('Localized form app renders i18n translation binding groups.', 'i18n-translation-binding', 'template', 6, 'template-binding', [
+          new ExpectedSemanticEffectFilter('issueCount', 0),
+        ]),
+        ExpectedSemanticEffect.signatureFact('Localized form app exposes the translated submit label key.', 'i18n-translation-key', 'template', 'plugin', 'present', null, [
+          new ExpectedSemanticEffectFilter('key', 'form.submit'),
+          new ExpectedSemanticEffectFilter('locale', 'en'),
+          new ExpectedSemanticEffectFilter('namespace', 'translation'),
+        ]),
+        ExpectedSemanticEffect.signatureFact('Localized form app renders parameterized translation bindings.', 'i18n-translation-binding', 'template', 'template-binding', 'present', null, [
+          new ExpectedSemanticEffectFilter('hasParameterBinding', true),
+          new ExpectedSemanticEffectFilter('issueCount', 0),
+        ]),
+        ExpectedSemanticEffect.signatureFact('Localized form app renders the translated submit label binding.', 'i18n-translation-binding', 'template', 'template-binding', 'present', null, [
+          new ExpectedSemanticEffectFilter('staticKey', 'form.submit'),
+          new ExpectedSemanticEffectFilter('issueCount', 0),
+        ]),
+        ExpectedSemanticEffect.signatureFact('Localized form app renders a translated submit title target.', 'i18n-translation-binding', 'template', 'template-binding', 'present', null, [
+          new ExpectedSemanticEffectFilter('staticKeys', 'form.submit'),
+          new ExpectedSemanticEffectFilter('targetProperties', 'title'),
+          new ExpectedSemanticEffectFilter('targetKinds', 'attribute-or-property'),
+          new ExpectedSemanticEffectFilter('issueCount', 0),
+        ]),
+        ExpectedSemanticEffect.signatureTaste('Localized form app reports plugin registration admission.', 'resource-admission-mode', 'plugin-registration-admission', 'plugin'),
       ]
       : []),
   ];

@@ -17,6 +17,7 @@
         "Keep header recognition, definition convergence, and catalog admission separate unless framework.resource grounding shows a sharper boundary.",
         "CustomElementConvergenceFrame is the per-custom-element read epoch inside resource-definition-converger.ts; it owns local-key prefixing, annotation priority, bindable/watch/template/dependency reads, and custom-element issue aggregation before ResourceDefinitionConverger publishes the final definition product.",
         "ResourceDefinitionConverger now delegates source-field helpers to resource-convergence-support.ts, bindable metadata convergence to bindable-convergence.ts, and watcher metadata convergence to watch-convergence.ts. Custom elements include definition-object watches, decorators, and static Type.watches; custom attributes/template controllers intentionally ignore definition-object watches because runtime-html currently only merges decorator metadata and Type.watches for that resource family.",
+        "Watcher callback validation crosses from evaluator/static metadata into TypeChecker instance-member checks. Route those checks through TypeSystemProject's Program-node/runtime-target helpers; do not call checker APIs directly on convergence nodes that may not be Program-owned.",
         "Use framework.resources pressure before changing definition provenance or treating header-level evidence as full-definition evidence; use `framework:resources -- --projection=convergence --detail` when the exact definition/backing/admission/materialization rows matter.",
         "Use resource-source-address.ts for resource source spans and inline-template decoded-to-authored offset mapping; do not re-bury escaped-string coordinate logic inside ResourceDefinitionConverger.",
         "For bindables, mirror runtime-html Bindable.getAll(Type): decorator metadata walks the class prototype chain base-to-derived, while static Type.bindables uses the nearest constructor static property. Do not generalize this inheritance rule to other resource fields without framework grounding.",
@@ -231,6 +232,7 @@
       "guidance": [
         "Start here when resource recognition needs target identities, TypeChecker-backed target types, resource identities, aliases, attribute-pattern identities, or recognition open seams.",
         "Keep carrier recognizers and field readers out of kernel publication; use the emitter and publication support as the boundary.",
+        "Resource target type projection should stay lazy over members. Recognition publishes the target type reference and checker carrier; member enumeration belongs to expression access, diagnostics, completions, or authoring answers that explicitly need it.",
         "Do not treat a recognized definition header as compiler-visible full metadata; converge it through ResourceDefinitionConverger when metadata matters."
       ],
       "anchors": [

@@ -228,6 +228,7 @@ function valueSiteSubject(
 function textValueSites(html: HtmlParseEmission): readonly PendingValueSite[] {
   return html.nodes
     .filter((node): node is HtmlText => node instanceof HtmlText)
+    .filter((node) => hasInterpolationOpener(node.text))
     .map((node) => new PendingValueSite(
       TemplateValueSiteKind.TextInterpolation,
       node.text,
@@ -339,7 +340,7 @@ function plainAttributeValueSite(
   classification: AttributeClassification,
   syntax: AttributeSyntax,
   attribute: HtmlAttribute,
-): PendingValueSite {
+): PendingValueSite | null {
   return hasInterpolationOpener(syntax.rawValue)
     ? interpolationAttributeSite(
       TemplateValueSiteKind.PlainAttributeInterpolation,
@@ -347,18 +348,7 @@ function plainAttributeValueSite(
       syntax,
       attribute,
     )
-    : new PendingValueSite(
-      TemplateValueSiteKind.PlainAttributeValue,
-      syntax.rawValue,
-      null,
-      classification.ownerNode,
-      attribute.toReference(),
-      syntax,
-      classification,
-      null,
-      null,
-      attribute.valueAddressHandle ?? attribute.sourceAddressHandle,
-    );
+    : null;
 }
 
 function hasInterpolationOpener(value: string): boolean {

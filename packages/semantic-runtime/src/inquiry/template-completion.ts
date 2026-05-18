@@ -51,7 +51,10 @@ import type {
 import {
   CheckerTypeShapeKind,
   checkerIndexedAccessSupportsString,
+  checkerTypeMemberReachableIdentityHandle,
 } from '../type-system/type-shape.js';
+import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
+import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
 import {
   RouteConfigKind,
   type RouteConfigModel,
@@ -662,7 +665,7 @@ function collectExpressionMemberCandidates(
   );
   const members = readTypeMembers(frame.store, frame.memberOwnerTypeProductHandle, frame.missingInputs);
   if (members != null) {
-    frame.candidates.push(...typeMemberCandidates(members));
+    frame.candidates.push(...typeMemberCandidates(frame.store, members));
   }
 }
 
@@ -916,14 +919,15 @@ function readTypeMembers(
     missingInputs.push('type-shape-detail');
     return null;
   }
-  if (detail.members.length === 0) {
+  const members = readOrProjectCheckerTypeMembers(store, detail, productHandle);
+  if (members.length === 0) {
     missingInputs.push(expressionMemberSurfaceMissingInput(
       detail.shapeKind,
       detail.indexedValueType,
       detail.indexedAccessKeyKind,
     ));
   }
-  return detail.members;
+  return members;
 }
 
 function readValueSite(
@@ -1184,8 +1188,8 @@ function bindableAttributeValueCandidates(
     value,
     TemplateCompletionCandidateSourceKind.TypeSystem,
     member.productHandle,
-    member.identityHandle,
-    member.sourceAddressHandle,
+    checkerTypeMemberReachableIdentityHandle(member),
+    checkerTypeMemberSourceAddressHandle(store, member),
     'Finite static value accepted by the checker-projected bindable type.',
     member.valueType,
   ));
@@ -1216,7 +1220,10 @@ function bindableTypeMember(
     return null;
   }
   const targetType = store.productDetails.read(TypeSystemProductDetails.TypeShape, targetTypeProductHandle);
-  return targetType?.members.find((member) => member.name === bindableName) ?? null;
+  const members = targetType == null
+    ? []
+    : readOrProjectCheckerTypeMembers(store, targetType, targetTypeProductHandle);
+  return members.find((member) => member.name === bindableName) ?? null;
 }
 
 function contextualExpressionTypeForQuery(
@@ -1700,6 +1707,7 @@ function bindableCandidates(
 }
 
 function typeMemberCandidates(
+  store: KernelStore,
   members: readonly CheckerTypeMember[],
 ): readonly TemplateCompletionCandidate[] {
   return members.map((member) => new TemplateCompletionCandidate(
@@ -1707,8 +1715,8 @@ function typeMemberCandidates(
     member.name,
     TemplateCompletionCandidateSourceKind.TypeSystem,
     member.productHandle,
-    member.identityHandle,
-    member.sourceAddressHandle,
+    checkerTypeMemberReachableIdentityHandle(member),
+    checkerTypeMemberSourceAddressHandle(store, member),
     `Member visible on checker-projected type.`,
     member.valueType,
   ));

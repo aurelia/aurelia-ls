@@ -188,6 +188,8 @@ export const KernelClaimPredicates = {
           KernelProductKinds.Configuration.AppRootConfig,
           KernelProductKinds.Configuration.AppRoot,
           KernelProductKinds.Configuration.Controller,
+          KernelProductKinds.Configuration.CompositionContext,
+          KernelProductKinds.Configuration.CompositionController,
           KernelProductKinds.Configuration.BindingScope,
           KernelProductKinds.Configuration.BindingContext,
           KernelProductKinds.Configuration.OverrideContext,
@@ -250,6 +252,39 @@ export const KernelClaimPredicates = {
       claimSignature(
         productEndpoint(KernelProductKinds.Configuration.Controller),
         productEndpoint(KernelProductKinds.Configuration.BindingScope),
+      ),
+    ),
+
+    /** A modeled au-compose controller created or updated a CompositionController. */
+    ControllerOwnsComposition: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'controller-owns-composition',
+      'A modeled au-compose controller created, updated, or exposes an AuCompose CompositionController.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.Controller),
+        productEndpoint(KernelProductKinds.Configuration.CompositionController),
+      ),
+    ),
+
+    /** A CompositionController was produced from one CompositionContext. */
+    CompositionControllerUsesContext: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'composition-controller-uses-context',
+      'An AuCompose CompositionController was produced from one CompositionContext.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.CompositionController),
+        productEndpoint(KernelProductKinds.Configuration.CompositionContext),
+      ),
+    ),
+
+    /** A CompositionController resolved one custom element definition candidate. */
+    CompositionControllerUsesDefinition: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'composition-controller-uses-definition',
+      'An AuCompose CompositionController resolved one custom-element definition candidate from its component input.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.CompositionController),
+        productEndpoint(KernelProductKinds.Resource.Definition),
       ),
     ),
 

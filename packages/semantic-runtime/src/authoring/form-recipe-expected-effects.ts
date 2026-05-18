@@ -10,10 +10,16 @@ import {
   componentStylesheetCapabilityEffect,
   componentStylesheetEffect,
   componentStylesheetTasteEffect,
+  capturedFieldShellInputTypeEffect,
+  capturedFieldShellValueDataFlowEffect,
   formValueChannelTasteEffects,
   nativeValueChannelEffect,
   nativeValueDataFlowEffect,
   nativeValueTargetAccessEffect,
+  primitiveValueChannelEffect,
+  validationErrorsDataFlowEffect,
+  validationErrorsTargetAccessEffect,
+  validationErrorsValueChannelEffect,
 } from './form-expected-effects.js';
 import { projectToolingExpectedEffects } from './project-tooling-expected-effects.js';
 
@@ -52,6 +58,9 @@ export function standardFormTemplateBindingExpectedEffects(
     checkedTargetAccessEffect('Form should expose target access for checked bindings.'),
     checkedValueChannelEffect('Form should expose checked observer value channels.'),
     checkedDataFlowEffect('Form should expose TypeChecker-backed data flow for checked bindings.'),
+    primitiveValueChannelEffect('Form should expose primitive model value domains for nullable select options.', 'null'),
+    capturedFieldShellInputTypeEffect('Form should materialize captured field-shell input type attributes.'),
+    capturedFieldShellValueDataFlowEffect('Form should data-flow field-shell captured value bindings.'),
     ...formValueChannelTasteEffects(
       'Authoring orientation should recognize native form value binding.',
       'Authoring orientation should recognize checked/model binding.',
@@ -76,6 +85,9 @@ export function standardFormTemplateBindingExpectedEffects(
           'validation-controller-usage',
           'template-binding',
         ),
+        validationErrorsTargetAccessEffect('Validation error presentation should expose target access for validation-errors errors.'),
+        validationErrorsValueChannelEffect('Validation error presentation should expose a raw-property channel for validation-errors errors.'),
+        validationErrorsDataFlowEffect('Validation error presentation should expose from-view data flow for validation-errors errors.'),
       ]),
   ];
 }
@@ -124,6 +136,9 @@ export function standardFormAppExpectedEffects(
     checkedTargetAccessEffect(`${prefix} has checked binding target access.`),
     checkedValueChannelEffect(`${prefix} has checked observer value channels.`),
     checkedDataFlowEffect(`${prefix} has checked binding data flows.`),
+    primitiveValueChannelEffect(`${prefix} has nullable select primitive value domains.`, 'null'),
+    capturedFieldShellInputTypeEffect(`${prefix} materializes captured field-shell input attributes.`),
+    capturedFieldShellValueDataFlowEffect(`${prefix} data-flows captured field-shell value bindings.`),
     ExpectedSemanticEffect.absent(`${prefix} has no open semantic seams.`, 'open-seam-closure'),
     ExpectedSemanticEffect.capability(`${prefix} exposes verifiable template composition.`, 'template-composition', 'verifiable'),
     ExpectedSemanticEffect.signatureTaste(`${prefix} reports DI-owned state taste.`, 'state-ownership', 'di-owned-state-class', 'state-model'),

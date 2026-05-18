@@ -5,9 +5,13 @@ import type { AddressHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
   type CheckerTypeProjectionRequest,
+  CheckerTypeMemberProjectionPolicy,
   type CheckerTypeProjector,
 } from './checker-projector.js';
-import { CheckerTypeShapeAccess } from './checker-type-shape-access.js';
+import {
+  CheckerTypeShapeAccess,
+  readCheckerTypeShape,
+} from './checker-type-shape-access.js';
 import {
   CheckerExpressionType,
   type CheckerExpressionTypeEvaluation,
@@ -21,9 +25,11 @@ import {
   CheckerExpressionTypeSynthesizer,
   commonTypeReference,
 } from './expression-type-synthesis.js';
-import { TypeSystemProductDetails } from './product-details.js';
+import { TypeSystemHotDetails, TypeSystemProductDetails } from './product-details.js';
+import { checkerTypeMemberSourceAddressHandle } from './checker-type-member-source.js';
 import {
   CheckerTypeProjectionOrigin,
+  checkerTypeMemberReachableIdentityHandle,
   type CheckerTypeReference,
   type CheckerTypeShape,
 } from './type-shape.js';
@@ -34,6 +40,17 @@ export type CheckerLookupCarrier = {
 };
 
 export type CheckerPrimitiveName = 'string' | 'number' | 'boolean' | 'undefined';
+
+export interface CheckerExpressionTypeProjectionOptions {
+  /**
+   * Controls how much member surface is materialized for this expression result.
+   *
+   * Scope construction often needs a carrier/reference for later type access, while cursor completions need eager
+   * enumerable members. Keeping this explicit prevents a low-level evaluator query from silently choosing the wrong
+   * memory/CPU trade-off for every consumer.
+   */
+  readonly memberProjection?: CheckerTypeMemberProjectionPolicy;
+}
 
 /**
  * Shared low-level result/projection vocabulary for Aurelia expression TypeChecker emulation.
@@ -51,9 +68,7 @@ export class CheckerExpressionTypeSupport {
   ) {}
 
   typeShapeForReference(reference: CheckerTypeReference | null): CheckerTypeShape | null {
-    return reference?.productHandle == null
-      ? null
-      : this.store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle);
+    return readCheckerTypeShape(this.store, reference);
   }
 
   findChecker(scope: BindingScope): ts.TypeChecker | null {
@@ -107,7 +122,7 @@ export class CheckerExpressionTypeSupport {
 
     const member = slot.targetProductHandle == null
       ? null
-      : this.store.productDetails.read(TypeSystemProductDetails.TypeMember, slot.targetProductHandle);
+      : this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
     if (member?.carrier?.valueType == null) {
       return reference;
     }
@@ -119,9 +134,10 @@ export class CheckerExpressionTypeSupport {
       type: member.carrier.valueType,
       origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceNode,
-      sourceAddressHandle: slot.sourceAddressHandle ?? member.sourceAddressHandle,
-      ownerIdentityHandle: member.identityHandle,
+      sourceAddressHandle: slot.sourceAddressHandle ?? checkerTypeMemberSourceAddressHandle(this.store, member),
+      ownerIdentityHandle: checkerTypeMemberReachableIdentityHandle(member),
       display: reference.display ?? member.valueType?.display ?? null,
+      memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
     } satisfies CheckerTypeProjectionRequest).toReference();
   }
 
@@ -263,6 +279,7 @@ export class CheckerExpressionTypeSupport {
     localKey: string,
     sourceAddressHandle: AddressHandle | null = null,
     summary: string = `Projected ${expression.$kind} through the TypeChecker.`,
+    options: CheckerExpressionTypeProjectionOptions = {},
   ): CheckerExpressionType {
     const typeShape = this.projector.ensureProjection({
       localKey,
@@ -271,6 +288,7 @@ export class CheckerExpressionTypeSupport {
       origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceAddressHandle,
       display: checker.typeToString(type),
+      memberProjection: options.memberProjection ?? CheckerTypeMemberProjectionPolicy.Eager,
     } satisfies CheckerTypeProjectionRequest);
     return this.type(typeShape, summary);
   }

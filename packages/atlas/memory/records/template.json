@@ -11,11 +11,18 @@
         "template",
         "expression"
       ],
-      "summary": "CheckerTypeProjector is the TypeChecker projection frontier for durable type shapes, members, related types, and synthetic type-system products.",
-      "rationale": "Expression, observation, template, and LSP-like inquiries should reuse one checker projection substrate instead of each producing local type summaries. This record complements the expression evaluator record by pointing at the lower-level shape publication layer.",
+      "summary": "CheckerTypeProjector is the TypeChecker projection frontier for durable and canonicalized type shapes, hot members, related types, and synthetic type-system products.",
+      "rationale": "Expression, observation, template, and LSP-like inquiries should reuse one checker projection substrate instead of each producing local type summaries. This record complements the expression evaluator record by pointing at the lower-level shape publication layer. Telemetry showed that declaration-backed TypeChecker/evaluated-value surfaces should converge by checker key and declaration lane while caller-owned expression, binding, diagnostic, and cursor products preserve user-facing source loci. Checker-owned unions/intersections can also converge structurally when their constituents are source-independent. Synthetic expression/template shapes remain a separate convergence policy frontier because their identity is often produced by the runtime-shaped expression site.",
       "guidance": [
-        "Start here when a feature needs durable type shapes, type members, related indexed/iterated/call/construct types, or synthetic type projections.",
+        "Start here when repeated type checker keys, hot type-member volume, durable type shapes, related indexed/iterated/call/construct types, synthetic type projections, or query-local TypeChecker projection retention appear in telemetry.",
         "Use CheckerExpressionTypeEvaluator for expression semantics, but keep reusable checker shape publication in CheckerTypeProjector.",
+        "Checker keys for declared or library-backed generic surfaces must include the projected display/instantiation; declaration site alone is not enough for TypeChecker shape identity.",
+        "Do not use expression source as part of declaration-backed TypeChecker type identity just to preserve cursor loci; the caller-owned expression, binding, diagnostic, or cursor product should carry that source.",
+        "Keep declarationSourceAddressHandle as the navigation and owner-type repair lane for checker-backed shapes.",
+        "Template-requested checker-returned types should keep TypeChecker origin. Use SyntheticTemplateType only when the template/runtime substrate creates the shape rather than asking the TypeChecker for it.",
+        "Let checker-owned union/intersection keys converge structurally only when their constituents are source-independent; anonymous authored object/function shapes should remain source-owned.",
+        "Keep synthetic expression/template shapes source-owned until a structural synthetic-type identity policy proves it can preserve the lost runtime expression provenance.",
+        "If QueryClaimGraph disposal removes a query-local shape, evict stale projector index rows before returning a reused handle.",
         "If type projection cost rises, treat it as inquiry-algebra or caching pressure before duplicating narrow type summaries."
       ],
       "anchors": [
@@ -28,8 +35,19 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-projector.ts",
+          "symbolName": "typeProjectionSourceAddress",
+          "summary": "Chooses whether projection source participates in type-shape identity."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/README.md",
-          "summary": "Type-system substrate notes."
+          "summary": "Type-shape convergence and source-lane watchpoints."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/scripts/app-telemetry.mjs",
+          "summary": "Reports repeated type checker keys, hot details, and phase/kernel growth."
         }
       ],
       "liveChecks": [
@@ -42,7 +60,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-05-17"
     },
     {
       "id": "frontier:compiled-template-materializer",
@@ -60,7 +78,8 @@
         "Treat CompiledTemplateInstructionFactory and CompiledTemplateInstructionTraversal as companions of the compiled-template materializer unless framework grounding suggests a cleaner Aurelia-shaped split.",
         "If recursive rendering or controller semantics are involved, keep the controller and view-factory materializers in the loop.",
         "Root `<template>` surrogate failures, projection ownership failures, `<slot>` shadow-DOM failures, and local-template shape failures that match Aurelia template-compiler throws publish compiler issues in this phase; do not reintroduce generic open seams for those framework-rejected cases.",
-        "Avoid ad hoc template feature flags when the framework has a renderer, binding, or controller shape for the behavior."
+        "Avoid ad hoc template feature flags when the framework has a renderer, binding, or controller shape for the behavior.",
+        "Use routed app-profile phase kernel summaries before optimizing template bulk. Disposed-app answers can now report which template/runtime phases created answer-local records and product details before QueryClaimGraph reclaims them."
       ],
       "anchors": [
         {
@@ -260,10 +279,17 @@
       "guidance": [
         "Start here when work touches full template compilation, authoring template compilation, runtime-analysis depth, or phase profiling.",
         "Use child materializer records for local behavior, but keep project-pass orchestration in this front-door pass.",
-        "TemplateRuntimeAnalysisProjectContext carries compiled-template emissions so runtime rendering and scope construction can expand child custom-element views without re-running the compiler front door.",
+        "TemplateRuntimeAnalysisProjectContext carries compiled-template emissions so runtime rendering and scope construction can relate parent usage sites to child custom-element definitions without re-running the compiler front door.",
         "The project pass owns one CheckerExpressionTypeWorld for app and authoring resource runtime analysis, while each TemplateRuntimeAnalysisFrame records expression-cache deltas from a marker. Keep runtime/checker lifetime work here instead of recreating the world per resource.",
         "Captured `...$attrs` work should keep the parent usage scope through dynamic instruction origin claims; do not fall back to definition-wide captured attribute buckets.",
-        "This frontier is nextActionPolicy=when-touched after the aggregate child custom-element render/scope bridge closed; use it as front-door grounding, while instance-precise recursive hydration belongs to runtime rendering/controller records.",
+        "Use opt-in fine-grained runtime-analysis phase telemetry when optimizing this frontier. Pair SEMANTIC_RUNTIME_TELEMETRY_FINE_PHASES=true with phase memory/kernel snapshots for density questions, or disable snapshots for cleaner CPU attribution.",
+        "This frontier is nextActionPolicy=when-touched after the aggregate child custom-element usage bridge closed; use it as front-door grounding, while runtime rendering/controller records own usage-local child view expansion.",
+        "Parent templates should hydrate child custom-element controllers, child view-model scopes, and aggregate child compiled-template views when renderer emulation created a child controller. This is required for wrapper/capture semantics such as field-shell `...$attrs`, because the child template's SpreadBinding must see the parent HydrateElementInstruction that captured the attributes.",
+        "Keep recursive component hydration finite with controller definition ancestry guards, not with definition-wide capture buckets or fresh-controller product handles. Built-in template-controller synthetic views remain recursive because their child instruction sequences are embedded in the same compiled template.",
+        "Recursive custom-element re-entry is now an intentional controller boundary, not an open seam: the child controller records `recursive-hydration-boundary` and API rows expose `childViewRenderingState=recursive-boundary`. Treat that as a finite aggregate analysis state; per-runtime-instance expansion and runtime-state termination policy are still future controller semantics.",
+        "Conditional template-controller branches need an explicit pass-through child scope even when TypeChecker narrowing produces no slots; otherwise nested branch work can clear the parent `if` marker before `else` link-hook claims are published.",
+        "The aggregate boundary is a memory/performance invariant, not just a recursion guard: a large-root canary dropped from roughly 388k records / 71k products / 404MiB construction heap to roughly 120k records / 23k products / 249MiB after child component internals stopped being duplicated under every parent usage site. If usage-local child views are needed, keep them aggregate and guarded rather than per-runtime-instance.",
+        "Controller observer setup diagnostics should stay demand-driven: only invoke ObserverLocator/TypeChecker support when a bindable has coercion or change-callback semantics to validate, and cache target-type property checks per definition.",
         "If a future inquiry only needs part of this pass, model that as inquiry depth/scope pressure instead of cloning a partial compiler pipeline."
       ],
       "nextActionPolicy": "when-touched",
@@ -321,7 +347,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-14"
+      "updatedAt": "2026-05-17"
     },
     {
       "id": "frontier:template-compilation-unit-materializer",
@@ -469,6 +495,7 @@
           "Start here when a feature needs runtime binding context, override context, scope products, or checker-facing slot projection.",
           "Keep runtime binding scope distinct from compiler resource scope and template-controller flow scope.",
           "Use BindingScope.lookup for reference-shaped expression consumers and BindingScope.locate when a materializer needs the concrete resolved Scope/context; do not reimplement parent/override/boundary traversal locally.",
+          "If view-model fields disappear from Aurelia expression lookup, inspect BindingScopeSlotProjector and lazy CheckerType member projection before patching downstream router, observation, completion, or diagnostic materializers.",
           "If a new inquiry needs partial scope data, expose scope depth or projection controls instead of re-materializing local scope objects."
         ],
         "anchors": [
@@ -893,6 +920,8 @@
       "guidance": [
         "Start with runtime-controller, runtime-rendering, runtime-view-factory, and template-controller flow materializers.",
         "Use framework.rendering, framework.lifecycle, and framework.observation as shape checks before modeling new runtime consequences.",
+        "Generated authoring recipes can now verify built-in template-controller and synthetic-view hydration through row-backed runtime-controller expected effects; promise helpers assert branch-to-owner links for `pending`/`then`/`catch`, and switch helpers assert case-to-switch links for `case`/`default-case`. Use those as pressure canaries before adding source-level fixture shortcuts.",
+        "Compiled instruction products are definition-level, while runtime controller frames are instance-level; recursive rendering can produce several controllers for one instruction, so scope construction and branch-link publication must use the active parent controller context.",
         "If recursive hydration is blocked by runtime-dependent viewmodel state, model controller semantics rather than pretending the branch is closed."
       ],
       "anchors": [
@@ -1012,6 +1041,8 @@
       "guidance": [
         "Check runtime-view-factory and runtime-controller materializers before adding another rendering handoff.",
         "Use framework.rendering relationships to decide whether a behavior belongs in renderer dispatch, hydration, binding setup, or controller creation.",
+        "Root render analysis should mirror AppRoot's child-container boundary, and controller creation should register CustomElement/CustomAttribute local resource dependencies into the controller container before nested renderer lookup.",
+        "When custom-element rendering reaches a repeated definition through controller ancestry, record a controller `recursive-hydration-boundary` lifecycle step and surface `childViewRenderingState=recursive-boundary`; do not publish an open seam merely because the aggregate model refuses unbounded runtime expansion.",
         "Controller-activation diagnostics that scan view-model class bodies should anchor spans through the checker declaration's already-admitted source-file address via the type-system declaration-source bridge. Do not borrow the resource target span; imported/factory-backed targets can point at a different authored site than the class body.",
         "If the class grows, split along Aurelia phase/interface boundaries rather than invented product categories."
       ],
@@ -1108,7 +1139,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-18"
     },
     {
       "id": "frontier:runtime-controller-frame",
@@ -1445,7 +1476,8 @@
       "guidance": [
         "Start here when work touches text interpolation, attribute value ownership, binding-command values, expression parses, or value-site provenance.",
         "Keep value-site selection in the materializer and product/kernel publication in the publisher unless framework compiler grounding suggests a sharper split.",
-        "Use the interpolation parser and binding-command lowering records together when value-site pressure involves expression parsing."
+        "Use the interpolation parser and binding-command lowering records together when value-site pressure involves expression parsing.",
+        "Publish durable value-site products only for values that enter parser, command, compiler, or runtime ownership. Static text and plain platform attributes should stay on HTML/syntax products unless a query-local value-site claim is explicitly needed."
       ],
       "anchors": [
         {
@@ -1486,7 +1518,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-17"
     },
     {
       "id": "frontier:attribute-syntax-and-classification-materializers",
@@ -1752,6 +1784,97 @@
       ],
       "createdAt": "2026-05-14",
       "updatedAt": "2026-05-14"
+    },
+    {
+      "id": "frontier:runtime-composition-materializer",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "template",
+        "composition",
+        "controller",
+        "binding",
+        "type-system"
+      ],
+      "summary": "RuntimeCompositionMaterializer owns dynamic AuCompose CompositionContext and CompositionController products after bind/data-flow facts exist.",
+      "rationale": "Static AuCompose setter/name failures are controller-input diagnostics, but dynamic composition is a runtime composition branch. It needs binding source evaluation, hydration-context container lookup, TypeChecker constructable candidate projection, and API pressure rows so dynamic component candidates do not look closed merely because no open seam was emitted.",
+      "guidance": [
+        "Start here when work touches `<au-compose>`, CompositionContext, CompositionController, component/model binding evaluation, or dynamic composition candidate reporting.",
+        "Keep static invalid `scopeBehavior`, `flushMode`, and missing static string component diagnostics in the controller issue lane; dynamic component/model resolution belongs to runtime composition after controller bind and binding data-flow.",
+        "Use TypeChecker constructable candidates as a semantic fallback when value evaluation stays open but the component binding source type names custom-element classes.",
+        "Resource-definition lookup can enter through module-local identity when evaluator values carry a module key, or through unique local declaration identity when a TypeChecker declaration is the carrier.",
+        "Runtime composition rows now include the first lifecycle handoff: absent/parameterless `activate` closes as such, and `activate(model)` compares the model binding source type with the activation parameter type through shared checker assignability. The checker-backed activation handoff lives in `runtime-composition-activation.ts`; keep it reusable for future routeable-component activation comparisons rather than burying it in the composition scanner.",
+        "Runtime composition rows now report candidate resource-analysis coverage and candidate resource-controller counts by joining resolved component definitions back to their project-level template/runtime analyses.",
+        "Runtime composition contexts distinguish absent, direct, promise-fulfilled, and open component/template/model inputs so generated fixtures can verify promise-valued `AuCompose` support without inferring it from component resolution alone.",
+        "Closed static/value custom-element composition branches now materialize an aggregate composed child controller; TypeChecker-only candidate unions remain candidates rather than fake child controllers.",
+        "Do not treat current candidate resolution, candidate resource-analysis coverage, or aggregate composed child-controller handoff as full recursive composition rendering. Child scope handoff, lifecycle run/deactivate errors, template-only runtime template compilation, and per-branch recursive rendering remain controller/composition lifecycle frontiers.",
+        "Keep `RuntimeCompositions` and `pressure:app-api` buckets in sync so composition candidates, compiled-template coverage, candidate resource-analysis coverage, input fulfillment, composed child-controller counts, activation handoff kinds, and open composition rows stay visible in aggregate app pressure."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition-materializer.ts",
+          "symbolName": "RuntimeCompositionMaterializer",
+          "summary": "Materializes runtime AuCompose composition contexts and controllers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition.ts",
+          "symbolName": "CompositionController",
+          "summary": "Runtime composition controller product model with auLink grounding."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition-activation.ts",
+          "symbolName": "activationModelHandoffForType",
+          "summary": "Checker-backed AuCompose activate(model) lifecycle handoff analysis."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/composition-projections.ts",
+          "summary": "API projection for runtime composition rows."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/au-compose-dynamic-composition",
+          "scenario": "TypeChecker-visible AuCompose dynamic component candidates",
+          "summary": "Pressure fixture where a repeat-local model carries a custom-element class union into `component.bind`."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.composition",
+          "projection": "summary",
+          "summary": "Framework composition grounding lane."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.rendering",
+          "projection": "hydration-flow",
+          "summary": "Framework hydration/rendering handoff for dynamic composition and controller ownership."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "product-large-class",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition-materializer.ts",
+          "className": "RuntimeCompositionMaterializer",
+          "minLineCount": 180,
+          "minMethodCount": 8
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition.ts",
+          "symbolName": "CompositionController"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-composition-activation.ts",
+          "symbolName": "activationModelHandoffForType"
+        }
+      ],
+      "nextActionPolicy": "when-touched",
+      "createdAt": "2026-05-17",
+      "updatedAt": "2026-05-17"
     },
     {
       "id": "reuse:repeat-scope-value-carriers",

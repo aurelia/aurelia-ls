@@ -58,12 +58,35 @@ export interface RoutedStateBackedFormRecipeRequest {
   readonly routeTemplatePath?: string;
   readonly routeComponentClassName?: string;
   readonly routeElementName?: string;
+  readonly routeId?: string;
   readonly routePath?: string;
+  readonly routeNavigationPath?: string;
+  readonly routeParameterName?: string;
+  readonly routeParameterValue?: string;
+  readonly routeQueryModeName?: string;
+  readonly routeQueryModeValue?: string;
+  readonly routeQueryTagName?: string;
+  readonly routeQueryTagValues?: readonly string[];
+  readonly routeFragment?: string;
+  readonly routeViewportName?: string;
   readonly routeTitle?: string;
+  readonly routeRedirectPath?: string;
+  readonly summaryRouteId?: string;
+  readonly summaryRoutePath?: string;
+  readonly summaryRouteComponentPath?: string;
+  readonly summaryRouteTemplatePath?: string;
+  readonly summaryRouteComponentClassName?: string;
+  readonly summaryRouteElementName?: string;
+  readonly summaryRouteViewportName?: string;
+  readonly summaryRouteTitle?: string;
   readonly formComponentPath?: string;
   readonly formTemplatePath?: string;
   readonly formComponentClassName?: string;
   readonly formElementName?: string;
+  readonly fieldShellComponentPath?: string;
+  readonly fieldShellTemplatePath?: string;
+  readonly fieldShellClassName?: string;
+  readonly fieldShellElementName?: string;
 }
 
 interface RoutedStateBackedFormRecipeModel {
@@ -81,12 +104,35 @@ interface RoutedStateBackedFormRecipeModel {
   readonly routeTemplatePath: string;
   readonly routeComponentClassName: string;
   readonly routeElementName: string;
+  readonly routeId: string;
   readonly routePath: string;
+  readonly routeNavigationPath: string;
+  readonly routeParameterName: string;
+  readonly routeParameterValue: string;
+  readonly routeQueryModeName: string;
+  readonly routeQueryModeValue: string;
+  readonly routeQueryTagName: string;
+  readonly routeQueryTagValues: readonly string[];
+  readonly routeFragment: string;
+  readonly routeViewportName: string;
   readonly routeTitle: string;
+  readonly routeRedirectPath: string;
+  readonly summaryRouteId: string;
+  readonly summaryRoutePath: string;
+  readonly summaryRouteComponentPath: string;
+  readonly summaryRouteTemplatePath: string;
+  readonly summaryRouteComponentClassName: string;
+  readonly summaryRouteElementName: string;
+  readonly summaryRouteViewportName: string;
+  readonly summaryRouteTitle: string;
   readonly formComponentPath: string;
   readonly formTemplatePath: string;
   readonly formComponentClassName: string;
   readonly formElementName: string;
+  readonly fieldShellComponentPath: string;
+  readonly fieldShellTemplatePath: string;
+  readonly fieldShellClassName: string;
+  readonly fieldShellElementName: string;
 }
 
 export function buildRoutedStateBackedFormPlan(request: RoutedStateBackedFormRecipeRequest): AuthoringPlan {
@@ -105,6 +151,7 @@ export function buildRoutedStateBackedFormPlan(request: RoutedStateBackedFormRec
         new AuthoringPreference('navigation-ownership', 'decorator-route-config'),
         new AuthoringPreference('navigation-ownership', 'child-routes-property-route-config'),
         new AuthoringPreference('navigation-ownership', 'viewport-layout-navigation'),
+        new AuthoringPreference('state-ownership', 'route-parameter-selected-state'),
         new AuthoringPreference('template-source-ownership', 'external-template-file'),
         new AuthoringPreference('style-resource-ownership', 'component-stylesheet'),
         new AuthoringPreference('style-binding-model', 'class-token-binding'),
@@ -122,6 +169,16 @@ export function buildRoutedStateBackedFormPlan(request: RoutedStateBackedFormRec
 }
 
 function normalizeRoutedStateBackedFormRecipe(request: RoutedStateBackedFormRecipeRequest): RoutedStateBackedFormRecipeModel {
+  const routeParameterValue = request.routeParameterValue ?? 'request-1';
+  const routeQueryModeName = request.routeQueryModeName ?? 'mode';
+  const routeQueryModeValue = request.routeQueryModeValue ?? 'edit';
+  const routeQueryTagName = request.routeQueryTagName ?? 'tag';
+  const routeQueryTagValues = request.routeQueryTagValues ?? ['primary', 'priority'];
+  const routeFragment = request.routeFragment ?? 'details';
+  const routeQuery = [
+    `${routeQueryModeName}=${routeQueryModeValue}`,
+    ...routeQueryTagValues.map((value) => `${routeQueryTagName}=${value}`),
+  ].join('&');
   return {
     rootDir: request.rootDir,
     appName: request.appName,
@@ -137,12 +194,35 @@ function normalizeRoutedStateBackedFormRecipe(request: RoutedStateBackedFormReci
     routeTemplatePath: request.routeTemplatePath ?? 'src/routes/form-route.html',
     routeComponentClassName: request.routeComponentClassName ?? 'FormRoute',
     routeElementName: request.routeElementName ?? 'form-route',
-    routePath: request.routePath ?? 'form',
+    routeId: request.routeId ?? 'form',
+    routePath: request.routePath ?? 'form/:requestId',
+    routeNavigationPath: request.routeNavigationPath ?? `form/${routeParameterValue}+summary?${routeQuery}#${routeFragment}`,
+    routeParameterName: request.routeParameterName ?? 'requestId',
+    routeParameterValue,
+    routeQueryModeName,
+    routeQueryModeValue,
+    routeQueryTagName,
+    routeQueryTagValues,
+    routeFragment,
+    routeViewportName: request.routeViewportName ?? 'main',
     routeTitle: request.routeTitle ?? 'Service Request',
+    routeRedirectPath: request.routeRedirectPath ?? `form/${routeParameterValue}`,
+    summaryRouteId: request.summaryRouteId ?? 'summary',
+    summaryRoutePath: request.summaryRoutePath ?? 'summary',
+    summaryRouteComponentPath: request.summaryRouteComponentPath ?? 'src/routes/summary-route.ts',
+    summaryRouteTemplatePath: request.summaryRouteTemplatePath ?? 'src/routes/summary-route.html',
+    summaryRouteComponentClassName: request.summaryRouteComponentClassName ?? 'SummaryRoute',
+    summaryRouteElementName: request.summaryRouteElementName ?? 'summary-route',
+    summaryRouteViewportName: request.summaryRouteViewportName ?? 'sidebar',
+    summaryRouteTitle: request.summaryRouteTitle ?? 'Activity',
     formComponentPath: request.formComponentPath ?? 'src/components/state-backed-form.ts',
     formTemplatePath: request.formTemplatePath ?? 'src/components/state-backed-form.html',
     formComponentClassName: request.formComponentClassName ?? 'StateBackedForm',
     formElementName: request.formElementName ?? 'state-backed-form',
+    fieldShellComponentPath: request.fieldShellComponentPath ?? 'src/components/field-shell.ts',
+    fieldShellTemplatePath: request.fieldShellTemplatePath ?? 'src/components/field-shell.html',
+    fieldShellClassName: request.fieldShellClassName ?? 'FieldShell',
+    fieldShellElementName: request.fieldShellElementName ?? 'field-shell',
   };
 }
 
@@ -166,8 +246,12 @@ function routedStateBackedFormPlanSteps(
       model.statePath,
       model.routeComponentPath,
       model.routeTemplatePath,
+      model.summaryRouteComponentPath,
+      model.summaryRouteTemplatePath,
       model.formComponentPath,
       model.formTemplatePath,
+      model.fieldShellComponentPath,
+      model.fieldShellTemplatePath,
     ]),
     new AuthoringPlanStep(
       new ConfigurePluginOperation('RouterConfiguration', '@aurelia/router'),
@@ -200,6 +284,42 @@ function routedStateBackedFormPlanSteps(
           new ExpectedSemanticEffectFilter('originKind', 'child-routes-property'),
           new ExpectedSemanticEffectFilter('valueKind', 'object-literal'),
         ]),
+        ExpectedSemanticEffect.signatureFact('Route pattern should expose the authored request route parameter.', 'route', 'route', 'route', 'present', null, [
+          new ExpectedSemanticEffectFilter('routeProductKind', 'route-pattern'),
+          new ExpectedSemanticEffectFilter('parameterNames', model.routeParameterName),
+        ]),
+        ExpectedSemanticEffect.signatureFact('Route endpoint should carry the authored request route parameter.', 'route', 'route', 'route', 'present', null, [
+          new ExpectedSemanticEffectFilter('routeProductKind', 'route-endpoint'),
+          new ExpectedSemanticEffectFilter('parameterNames', model.routeParameterName),
+        ]),
+        ExpectedSemanticEffect.signatureFact('Recognized route should carry the concrete authored request route parameter value.', 'route', 'route', 'route', 'present', null, [
+          new ExpectedSemanticEffectFilter('routeProductKind', 'recognized-route'),
+          new ExpectedSemanticEffectFilter('parameterValuePairs', `${model.routeParameterName}=${model.routeParameterValue}`),
+        ]),
+        ExpectedSemanticEffect.signatureFact('Viewport instruction tree should carry the authored route query mode.', 'route', 'route', 'route', 'present', null, [
+          new ExpectedSemanticEffectFilter('routeProductKind', 'viewport-instruction-tree'),
+          new ExpectedSemanticEffectFilter('queryParamPairs', `${model.routeQueryModeName}=${model.routeQueryModeValue}`),
+        ]),
+        ExpectedSemanticEffect.signatureFact('Viewport instruction tree should carry repeated route query tags.', 'route', 'route', 'route', 'present', null, [
+          new ExpectedSemanticEffectFilter('routeProductKind', 'viewport-instruction-tree'),
+          new ExpectedSemanticEffectFilter('queryParamPairs', `${model.routeQueryTagName}=${model.routeQueryTagValues[0] ?? ''}`),
+        ]),
+        ExpectedSemanticEffect.signatureFact('Viewport instruction tree should carry the route fragment.', 'route', 'route', 'route', 'present', null, [
+          new ExpectedSemanticEffectFilter('routeProductKind', 'viewport-instruction-tree'),
+          new ExpectedSemanticEffectFilter('fragment', model.routeFragment),
+        ]),
+        ExpectedSemanticEffect.signatureFact('Route config should target the authored named viewport.', 'route', 'route', 'route', 'present', null, [
+          new ExpectedSemanticEffectFilter('routeProductKind', 'route-config'),
+          new ExpectedSemanticEffectFilter('viewport', model.routeViewportName),
+        ]),
+        ExpectedSemanticEffect.signatureFact('Root template should expose the authored named viewport.', 'route', 'route', 'route', 'present', null, [
+          new ExpectedSemanticEffectFilter('routeProductKind', 'router-viewport'),
+          new ExpectedSemanticEffectFilter('name', model.routeViewportName),
+        ]),
+        ExpectedSemanticEffect.signatureFact('Root template should expose the authored sidebar viewport.', 'route', 'route', 'route', 'present', null, [
+          new ExpectedSemanticEffectFilter('routeProductKind', 'router-viewport'),
+          new ExpectedSemanticEffectFilter('name', model.summaryRouteViewportName),
+        ]),
         ExpectedSemanticEffect.discriminatorTaste('Authoring orientation should recognize static route config.', 'navigation-ownership', 'static-route-config', 'route'),
         ExpectedSemanticEffect.signatureTaste('Authoring orientation should recognize decorator route config.', 'navigation-ownership', 'decorator-route-config', 'route'),
         ExpectedSemanticEffect.signatureTaste('Authoring orientation should recognize child routes property config.', 'navigation-ownership', 'child-routes-property-route-config', 'route'),
@@ -213,6 +333,29 @@ function routedStateBackedFormPlanSteps(
       ],
     ),
     externalTemplatePlanStep(model.routeTemplatePath, model.routeComponentClassName, 'Route component'),
+    new AuthoringPlanStep(
+      new AddRouteOperation(model.summaryRoutePath, model.summaryRouteComponentClassName),
+      [
+        ExpectedSemanticEffect.signatureFact('Summary route config should target the authored sidebar viewport.', 'route', 'route', 'route', 'present', null, [
+          new ExpectedSemanticEffectFilter('routeProductKind', 'route-config'),
+          new ExpectedSemanticEffectFilter('viewport', model.summaryRouteViewportName),
+        ]),
+      ],
+    ),
+    new AuthoringPlanStep(
+      new CreateComponentOperation(model.summaryRouteComponentPath, model.summaryRouteComponentClassName, model.summaryRouteElementName),
+      [
+        ExpectedSemanticEffect.fact('Summary route component should be a custom element.', 'component', 'resource', 'route'),
+      ],
+    ),
+    externalTemplatePlanStep(model.summaryRouteTemplatePath, model.summaryRouteComponentClassName, 'Summary route component'),
+    new AuthoringPlanStep(
+      new CreateComponentOperation(model.fieldShellComponentPath, model.fieldShellClassName, model.fieldShellElementName),
+      [
+        ExpectedSemanticEffect.fact('Field shell should be a custom element.', 'component', 'resource', 'component'),
+      ],
+    ),
+    externalTemplatePlanStep(model.fieldShellTemplatePath, model.fieldShellClassName, 'Field shell component'),
     formComponentPlanStep(model.formComponentPath, model.formComponentClassName, model.formElementName),
     externalTemplatePlanStep(model.formTemplatePath, model.formComponentClassName, 'Form component'),
     templateBindingPlanStep(
@@ -220,17 +363,20 @@ function routedStateBackedFormPlanSteps(
       'route-owned form composition, native value binding, checked/model binding, select model binding, and submit trigger',
       standardFormTemplateBindingExpectedEffects(),
     ),
-    verifyAppPlanStep(topology, routedStateBackedFormExpectedEffects()),
+    verifyAppPlanStep(topology, routedStateBackedFormExpectedEffects(model)),
   ];
 }
 
 function routedStateBackedFormTopology(model: RoutedStateBackedFormRecipeModel): ApplicationTopology {
   const builder = new ApplicationTopologyBuilder(model.rootDir);
-  const form = addRoutedFormComponent(builder, model);
+  const fieldShell = addRoutedFieldShellComponent(builder, model);
+  const form = addRoutedFormComponent(builder, model, fieldShell);
   const route = addRoutedFormRouteComponent(builder, model, form);
-  const root = addRoutedFormRoot(builder, model, route);
+  const summaryRoute = addRoutedSummaryRouteComponent(builder, model);
+  const root = addRoutedFormRoot(builder, model, route, summaryRoute);
   addRoutedFormState(builder, model);
   addRoutedFormRoute(builder, model, route);
+  addRoutedSummaryRoute(builder, model, summaryRoute);
   addRoutedFormEntrypoint(builder, model, root);
   return builder.toTopology();
 }
@@ -239,6 +385,7 @@ function addRoutedFormRoot(
   builder: ApplicationTopologyBuilder,
   model: RoutedStateBackedFormRecipeModel,
   route: ApplicationComponentTopologyResult,
+  summaryRoute: ApplicationComponentTopologyResult,
 ): ApplicationComponentTopologyResult {
   return builder.component({
     className: model.rootComponentClassName,
@@ -251,7 +398,7 @@ function addRoutedFormRoot(
       assetKind: 'component-stylesheet',
       sourceKind: 'css-import',
     }],
-    dependencies: [route.reference],
+    dependencies: [route.reference, summaryRoute.reference],
   });
 }
 
@@ -273,6 +420,7 @@ function addRoutedFormRouteComponent(
 function addRoutedFormComponent(
   builder: ApplicationTopologyBuilder,
   model: RoutedStateBackedFormRecipeModel,
+  fieldShell: ApplicationComponentTopologyResult,
 ): ApplicationComponentTopologyResult {
   return builder.component({
     className: model.formComponentClassName,
@@ -280,6 +428,33 @@ function addRoutedFormComponent(
     sourcePath: model.formComponentPath,
     elementName: model.formElementName,
     templatePath: model.formTemplatePath,
+    dependencies: [fieldShell.reference],
+  });
+}
+
+function addRoutedSummaryRouteComponent(
+  builder: ApplicationTopologyBuilder,
+  model: RoutedStateBackedFormRecipeModel,
+): ApplicationComponentTopologyResult {
+  return builder.component({
+    className: model.summaryRouteComponentClassName,
+    referenceFromPath: model.rootComponentPath,
+    sourcePath: model.summaryRouteComponentPath,
+    elementName: model.summaryRouteElementName,
+    templatePath: model.summaryRouteTemplatePath,
+  });
+}
+
+function addRoutedFieldShellComponent(
+  builder: ApplicationTopologyBuilder,
+  model: RoutedStateBackedFormRecipeModel,
+): ApplicationComponentTopologyResult {
+  return builder.component({
+    className: model.fieldShellClassName,
+    referenceFromPath: model.formComponentPath,
+    sourcePath: model.fieldShellComponentPath,
+    elementName: model.fieldShellElementName,
+    templatePath: model.fieldShellTemplatePath,
   });
 }
 
@@ -306,6 +481,18 @@ function addRoutedFormRoute(
   });
 }
 
+function addRoutedSummaryRoute(
+  builder: ApplicationTopologyBuilder,
+  model: RoutedStateBackedFormRecipeModel,
+  route: ApplicationComponentTopologyResult,
+): void {
+  builder.route({
+    path: model.summaryRoutePath,
+    component: route.reference,
+    title: model.summaryRouteTitle,
+  });
+}
+
 function addRoutedFormEntrypoint(
   builder: ApplicationTopologyBuilder,
   model: RoutedStateBackedFormRecipeModel,
@@ -323,32 +510,98 @@ function addRoutedFormEntrypoint(
   });
 }
 
-function routedStateBackedFormExpectedEffects(): readonly ExpectedSemanticEffect[] {
+function routedStateBackedFormExpectedEffects(
+  model: RoutedStateBackedFormRecipeModel,
+): readonly ExpectedSemanticEffect[] {
   return [
     ...standardFormAppExpectedEffects({
       summaryPrefix: 'Routed form app',
-      componentCount: 3,
-      componentCountSummary: 'root, route, and form custom elements',
-      externalTemplateCount: 3,
-      compiledTemplateCount: 3,
+      componentCount: 5,
+      componentCountSummary: 'root, form route, summary route, form, and field shell custom elements',
+      externalTemplateCount: 5,
+      compiledTemplateCount: 5,
     }),
     ExpectedSemanticEffect.discriminatorFact('Routed form app has a routed-component role.', 'component-role', 'route', 'route', 'present', null, [
       new ExpectedSemanticEffectFilter('roleKind', 'routed-component'),
     ]),
     ExpectedSemanticEffect.discriminatorFact('Routed form app has route/router topology facts.', 'route', 'route', 'route'),
     routeProductDiscriminatorEffect('Routed form app has source-backed RouteConfig products.', 'route-config'),
+    ExpectedSemanticEffect.signatureFact('Routed form app route config targets the named viewport.', 'route', 'route', 'route', 'present', null, [
+      new ExpectedSemanticEffectFilter('routeProductKind', 'route-config'),
+      new ExpectedSemanticEffectFilter('viewport', model.routeViewportName),
+    ]),
+    ExpectedSemanticEffect.signatureFact('Routed form app summary route config targets the sidebar viewport.', 'route', 'route', 'route', 'present', null, [
+      new ExpectedSemanticEffectFilter('routeProductKind', 'route-config'),
+      new ExpectedSemanticEffectFilter('viewport', model.summaryRouteViewportName),
+    ]),
     routeProductSignatureEffect('Routed form app has RouteContext topology products.', 'route-context'),
     routeProductSignatureEffect('Routed form app has au-viewport products.', 'router-viewport'),
+    ExpectedSemanticEffect.signatureFact('Routed form app has the named router viewport.', 'route', 'route', 'route', 'present', null, [
+      new ExpectedSemanticEffectFilter('routeProductKind', 'router-viewport'),
+      new ExpectedSemanticEffectFilter('name', model.routeViewportName),
+    ]),
+    ExpectedSemanticEffect.signatureFact('Routed form app has the sidebar router viewport.', 'route', 'route', 'route', 'present', null, [
+      new ExpectedSemanticEffectFilter('routeProductKind', 'router-viewport'),
+      new ExpectedSemanticEffectFilter('name', model.summaryRouteViewportName),
+    ]),
     routeProductSignatureEffect('Routed form app has ViewportAgent products.', 'viewport-agent'),
     routeProductSignatureEffect('Routed form app has route-recognizer pattern products.', 'route-pattern'),
+    ExpectedSemanticEffect.signatureFact('Routed form app has a route pattern with the request route parameter.', 'route', 'route', 'route', 'present', null, [
+      new ExpectedSemanticEffectFilter('routeProductKind', 'route-pattern'),
+      new ExpectedSemanticEffectFilter('parameterNames', model.routeParameterName),
+    ]),
     routeProductSignatureEffect('Routed form app has route-recognizer endpoint products.', 'route-endpoint'),
+    ExpectedSemanticEffect.signatureFact('Routed form app has a route endpoint with the request route parameter.', 'route', 'route', 'route', 'present', null, [
+      new ExpectedSemanticEffectFilter('routeProductKind', 'route-endpoint'),
+      new ExpectedSemanticEffectFilter('parameterNames', model.routeParameterName),
+    ]),
     routeProductSignatureEffect('Routed form app has route-recognizer state products.', 'route-recognizer-state'),
     routeProductSignatureEffect('Routed form app has TypedNavigationInstruction products.', 'typed-navigation-instruction'),
     routeProductSignatureEffect('Routed form app has ViewportInstruction products.', 'viewport-instruction'),
     routeProductSignatureEffect('Routed form app has ViewportInstructionTree products.', 'viewport-instruction-tree'),
     routeProductSignatureEffect('Routed form app has RecognizedRoute products.', 'recognized-route'),
+    ExpectedSemanticEffect.signatureFact('Routed form app recognizes the request route parameter from static navigation.', 'route', 'route', 'route', 'present', null, [
+      new ExpectedSemanticEffectFilter('routeProductKind', 'recognized-route'),
+      new ExpectedSemanticEffectFilter('parameterNames', model.routeParameterName),
+    ]),
+    ExpectedSemanticEffect.signatureFact('Routed form app recognizes the concrete request route parameter value.', 'route', 'route', 'route', 'present', null, [
+      new ExpectedSemanticEffectFilter('routeProductKind', 'recognized-route'),
+      new ExpectedSemanticEffectFilter('parameterValuePairs', `${model.routeParameterName}=${model.routeParameterValue}`),
+    ]),
+    ExpectedSemanticEffect.signatureFact('Routed form app viewport instruction tree carries the route query mode.', 'route', 'route', 'route', 'present', null, [
+      new ExpectedSemanticEffectFilter('routeProductKind', 'viewport-instruction-tree'),
+      new ExpectedSemanticEffectFilter('queryParamPairs', `${model.routeQueryModeName}=${model.routeQueryModeValue}`),
+    ]),
+    ExpectedSemanticEffect.signatureFact('Routed form app viewport instruction tree carries the route fragment.', 'route', 'route', 'route', 'present', null, [
+      new ExpectedSemanticEffectFilter('routeProductKind', 'viewport-instruction-tree'),
+      new ExpectedSemanticEffectFilter('fragment', model.routeFragment),
+    ]),
     routeProductSignatureEffect('Routed form app has RouteTree products.', 'route-tree'),
     routeProductSignatureEffect('Routed form app has RouteNode products.', 'route-node'),
+    ExpectedSemanticEffect.signatureFact('Routed form app route node carries the concrete request route parameter value.', 'route', 'route', 'route', 'present', null, [
+      new ExpectedSemanticEffectFilter('routeProductKind', 'route-node'),
+      new ExpectedSemanticEffectFilter('parameterValuePairs', `${model.routeParameterName}=${model.routeParameterValue}`),
+    ]),
+    ExpectedSemanticEffect.signatureFact('Routed form app route node exposes child-first getRouteParameters values.', 'route', 'route', 'route', 'present', null, [
+      new ExpectedSemanticEffectFilter('routeProductKind', 'route-node'),
+      new ExpectedSemanticEffectFilter('childFirstParameterValuePairs', `${model.routeParameterName}=${model.routeParameterValue}`),
+    ]),
+    ExpectedSemanticEffect.signatureFact('Routed form app route node exposes include-query route parameter mode.', 'route', 'route', 'route', 'present', null, [
+      new ExpectedSemanticEffectFilter('routeProductKind', 'route-node'),
+      new ExpectedSemanticEffectFilter('childFirstParameterAndQueryValuePairs', `${model.routeQueryModeName}=${model.routeQueryModeValue}`),
+    ]),
+    ExpectedSemanticEffect.signatureFact('Routed form app route node preserves repeated query values in include-query route parameters.', 'route', 'route', 'route', 'present', null, [
+      new ExpectedSemanticEffectFilter('routeProductKind', 'route-node'),
+      new ExpectedSemanticEffectFilter('childFirstParameterAndQueryValuePairs', `${model.routeQueryTagName}=[${model.routeQueryTagValues.join(',')}]`),
+    ]),
+    ExpectedSemanticEffect.signatureFact('Routed form app route node carries the named viewport.', 'route', 'route', 'route', 'present', null, [
+      new ExpectedSemanticEffectFilter('routeProductKind', 'route-node'),
+      new ExpectedSemanticEffectFilter('viewport', model.routeViewportName),
+    ]),
+    ExpectedSemanticEffect.signatureFact('Routed form app route node carries the sidebar viewport.', 'route', 'route', 'route', 'present', null, [
+      new ExpectedSemanticEffectFilter('routeProductKind', 'route-node'),
+      new ExpectedSemanticEffectFilter('viewport', model.summaryRouteViewportName),
+    ]),
     routeProductSignatureEffect('Routed form app has ComponentAgent handoff products.', 'component-agent'),
     ExpectedSemanticEffect.signatureFact('Routed form app has a decorator object route config.', 'route', 'route', 'route', 'present', null, [
       new ExpectedSemanticEffectFilter('originKind', 'route-decorator'),
@@ -358,7 +611,7 @@ function routedStateBackedFormExpectedEffects(): readonly ExpectedSemanticEffect
       new ExpectedSemanticEffectFilter('originKind', 'child-routes-property'),
       new ExpectedSemanticEffectFilter('valueKind', 'object-literal'),
     ]),
-    ExpectedSemanticEffect.discriminatorCapability('Routed form app exposes at least partial router authoring.', 'router', 'partial'),
+    ExpectedSemanticEffect.discriminatorCapability('Routed form app exposes verifiable router authoring for the modeled route topology.', 'router', 'verifiable'),
     ExpectedSemanticEffect.discriminatorTaste('Routed form app reports static route config.', 'navigation-ownership', 'static-route-config', 'route'),
     ExpectedSemanticEffect.signatureTaste('Routed form app reports decorator route config.', 'navigation-ownership', 'decorator-route-config', 'route'),
     ExpectedSemanticEffect.signatureTaste('Routed form app reports child routes property config.', 'navigation-ownership', 'child-routes-property-route-config', 'route'),

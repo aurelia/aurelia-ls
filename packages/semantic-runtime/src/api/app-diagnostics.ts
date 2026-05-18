@@ -3,6 +3,7 @@ import {
 } from '../kernel/source-address.js';
 import type {
   SemanticAppDiagnosticRow,
+  SemanticAppDiagnosticSummaryRow,
   SemanticAppQuery,
   SemanticAppQueryKind,
   SemanticConfigurationIssueRow,
@@ -78,6 +79,82 @@ export function appDiagnosticRows(
     `${left.source?.path ?? ''}:${left.source?.start ?? 0}:${left.diagnosticDomain}:${left.diagnosticKind}`
       .localeCompare(`${right.source?.path ?? ''}:${right.source?.start ?? 0}:${right.diagnosticDomain}:${right.diagnosticKind}`)
       );
+}
+
+export function appDiagnosticSummaryRows(
+  rows: readonly SemanticAppDiagnosticRow[],
+): readonly SemanticAppDiagnosticSummaryRow[] {
+  const clusters = new Map<string, DiagnosticSummaryCluster>();
+  for (const row of rows) {
+    const key = diagnosticSummaryKey(row);
+    let cluster = clusters.get(key);
+    if (cluster == null) {
+      cluster = {
+        diagnosticDomain: row.diagnosticDomain,
+        diagnosticKind: row.diagnosticKind,
+        diagnosticAuthority: row.diagnosticAuthority,
+        frameworkErrorCode: row.frameworkErrorCode,
+        severity: row.severity,
+        relatedQueryKind: row.relatedQueryKind,
+        count: 0,
+        sourceFiles: new Set<string>(),
+        sampleSummary: row.summary,
+        sampleSources: [],
+      };
+      clusters.set(key, cluster);
+    }
+    cluster.count += 1;
+    if (row.source?.path != null) {
+      cluster.sourceFiles.add(row.source.path);
+    }
+    if (row.source != null && cluster.sampleSources.length < 3 && !cluster.sampleSources.some((source) => source.label === row.source?.label)) {
+      cluster.sampleSources.push(row.source);
+    }
+  }
+  return [...clusters.values()]
+    .map((cluster): SemanticAppDiagnosticSummaryRow => ({
+      diagnosticDomain: cluster.diagnosticDomain,
+      diagnosticKind: cluster.diagnosticKind,
+      diagnosticAuthority: cluster.diagnosticAuthority,
+      frameworkErrorCode: cluster.frameworkErrorCode,
+      severity: cluster.severity,
+      relatedQueryKind: cluster.relatedQueryKind,
+      count: cluster.count,
+      sourceFileCount: cluster.sourceFiles.size,
+      sampleSummary: cluster.sampleSummary,
+      sampleSources: cluster.sampleSources,
+    }))
+    .sort((left, right) =>
+      right.count - left.count
+      || left.diagnosticDomain.localeCompare(right.diagnosticDomain)
+      || left.diagnosticKind.localeCompare(right.diagnosticKind)
+      || left.severity.localeCompare(right.severity)
+      || (left.frameworkErrorCode ?? '').localeCompare(right.frameworkErrorCode ?? '')
+    );
+}
+
+interface DiagnosticSummaryCluster {
+  readonly diagnosticDomain: SemanticAppDiagnosticRow['diagnosticDomain'];
+  readonly diagnosticKind: string;
+  readonly diagnosticAuthority: SemanticAppDiagnosticRow['diagnosticAuthority'];
+  readonly frameworkErrorCode: string | null;
+  readonly severity: SemanticAppDiagnosticRow['severity'];
+  readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;
+  count: number;
+  readonly sourceFiles: Set<string>;
+  readonly sampleSummary: string;
+  readonly sampleSources: SemanticSourceReference[];
+}
+
+function diagnosticSummaryKey(row: SemanticAppDiagnosticRow): string {
+  return [
+    row.diagnosticDomain,
+    row.diagnosticKind,
+    row.diagnosticAuthority,
+    row.frameworkErrorCode ?? 'none',
+    row.severity,
+    row.relatedQueryKind,
+  ].join('\0');
 }
 
 function templateDiagnosticContributesToAppDiagnostics(

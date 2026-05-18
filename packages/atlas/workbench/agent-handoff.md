@@ -18,6 +18,8 @@ pnpm --filter @aurelia-ls/atlas pressure:framework-corpus
 pnpm --filter @aurelia-ls/atlas framework:corpus -- --projection=doc-snippets --concept=forms
 pnpm --filter @aurelia-ls/atlas pressure:framework-resources
 pnpm --filter @aurelia-ls/atlas pressure:framework-observation
+pnpm --filter @aurelia-ls/atlas framework:observation -- --projection=surface-methods --surfaceKind=proxy-observable --detail
+pnpm --filter @aurelia-ls/atlas framework:observation -- --projection=flow-sites --surfaceKind=ast-evaluator --detail
 pnpm --filter @aurelia-ls/atlas pressure:framework-router
 pnpm --filter @aurelia-ls/atlas pressure:plugin-architecture
 pnpm --filter @aurelia-ls/atlas pressure:workspace-architecture
@@ -212,16 +214,28 @@ pnpm --filter @aurelia-ls/atlas self-check
   recipe needs a seed for one exact binding behavior argument or value channel.
   Listener commands such as `click.trigger` and `submit.trigger` do not count
   as value-channel `targetProperty` filters.
-  Use `classificationKind` plus `classificationKey` for exact typed reason
-  filters such as `surface:native-value-binding`,
-  `surface:native-checked-binding`, `surface:option-model-binding`, or
-  `surface:validation-binding-behavior`. Surface reason filters intentionally
-  match local doc code fences and test `createFixture(...)` call snippets, not
-  parent `describe`/`it` carrier ranges that merely contain nested markup.
+  Use `classificationKind=surface` plus `classificationKey` for exact typed
+  reason filters such as `native-value-binding`, `native-checked-binding`,
+  `option-model-binding`, or `validation-binding-behavior`. The CLI also accepts
+  the printed reason spelling in `classificationKey`, such as
+  `surface:option-model-binding`, and normalizes it into the same kind/key
+  filter. Surface reason filters intentionally match local doc code fences and
+  test `createFixture(...)` call snippets, not parent `describe`/`it` carrier
+  ranges that merely contain nested markup.
   Style/class fixture seeds split stylesheet assets, observer-backed
   class/style value channels, and direct renderer target operations; target
   operations are classified only from HTML-like tag spans so TypeScript
   variables such as `const css = ...` do not masquerade as template writes.
+  Whole class/style bindings and per-token/per-property bindings carry
+  different value-channel filters: `.class` rows use the class token as the
+  value-side `targetProperty`, while `.style` rows use the concrete CSS
+  property as the value-side `targetProperty` and `style` as the target-access
+  property.
+  AuCompose snippets now seed `runtime-composition`, `surface:au-compose`, and
+  `recipeKey=composed-dashboard`; use those structured filters before broad
+  `query=au-compose` searches. Narrow AuCompose surface keys also exist for
+  component/model/template inputs, scope/flush/tag literals,
+  composition/composing outputs, and object-shaped component values.
   Fixture seed rows join their effect hints to the expected-effect contract descriptor when semantic-runtime declares one.
   Effect hints are classified from the exact snippet source range, not the
   compact display preview; keep it that way when adding source-shaped rules. The
@@ -238,7 +252,12 @@ pnpm --filter @aurelia-ls/atlas self-check
   prints observer entities, binding observer lookups and setup overrides,
   observation flow sites, flow-to-entity links, and relationship axes for
   ObserverLocator, NodeObserverLocator, collection observers, dirty checking,
-  connectables, watchers, effects, and slot watchers.
+  connectables, AST expression evaluation, watchers, effects, slot watchers, and ProxyObservable. Use the
+  targeted `framework:observation` CLI when a subsystem needs source-backed rows,
+  for example `--projection=surface-methods --surfaceKind=proxy-observable` or
+  `--projection=flow-sites --surfaceKind=proxy-observable`. Use
+  `--projection=flow-sites --surfaceKind=ast-evaluator` before adding fixture
+  boilerplate or product semantics around direct `state.member` template reads.
 - `framework.router` is the router grounding lane. Use it before adding more
   semantic-runtime router/route-recognizer behavior; it maps router and
   route-recognizer source into an ordered route-config/navigation `flow`
@@ -835,7 +854,8 @@ Inferred maintenance heuristics:
 - The follow-up no-role mirror cleanup added exact framework-role rows for many mirrored DI/compiler/router definition
   concepts. DI now grounds `ContainerConfiguration`, `ParameterizedRegistry`, and `IRegistry.register`; compiler
   contracts ground binding-command definitions/instances, command build info, attribute patterns, compiled patterns, and
-  bindables-info interfaces; rendering grounds `BindableDefinition`. A fresh `bridge.aulink` mirror read with
+  bindables-info interfaces; rendering grounds `BindableDefinition` plus the private AuCompose composition actors
+  `CompositionContext`, `CompositionController`, and `ICompositionController`. A fresh `bridge.aulink` mirror read with
   `hasRoleEvidence: false` should currently be interpreted through the four known module-loader/validation rows above
   before assuming a semantic-runtime `auLink` target is merely floating.
 - Product-architecture `call-sites includeCallDetails=true` is page-scoped when there is no detail `query`: Atlas builds

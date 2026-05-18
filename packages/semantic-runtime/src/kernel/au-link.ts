@@ -94,6 +94,9 @@ export function auLink(id: 'runtime-html:PendingTemplateController'): ClassDecor
 export function auLink(id: 'runtime-html:FulfilledTemplateController'): ClassDecorator;
 export function auLink(id: 'runtime-html:RejectedTemplateController'): ClassDecorator;
 export function auLink(id: 'runtime-html:AuCompose'): ClassDecorator;
+export function auLink(id: 'runtime-html:CompositionContext'): ClassDecorator;
+export function auLink(id: 'runtime-html:CompositionController'): ClassDecorator;
+export function auLink(id: 'runtime-html:ICompositionController'): ClassDecorator;
 export function auLink(id: 'runtime-html:Portal'): ClassDecorator;
 export function auLink(id: 'runtime-html:Focus'): ClassDecorator;
 export function auLink(id: 'runtime-html:Show'): ClassDecorator;
@@ -226,6 +229,7 @@ export function auLink(id: 'template-compiler:SpreadValueBindingInstruction'): C
 export function auLink(id: 'i18n:TranslationBindingInstruction'): ClassDecorator;
 export function auLink(id: 'i18n:TranslationBindBindingInstruction'): ClassDecorator;
 export function auLink(id: 'i18n:TranslationParametersBindingInstruction'): ClassDecorator;
+export function auLink(id: 'i18n:I18nKeyEvaluationResult'): ClassDecorator;
 export function auLink(id: 'i18n:TranslationBindingRenderer'): ClassDecorator;
 export function auLink(id: 'i18n:TranslationBindBindingRenderer'): ClassDecorator;
 export function auLink(id: 'i18n:TranslationParametersBindingRenderer'): ClassDecorator;

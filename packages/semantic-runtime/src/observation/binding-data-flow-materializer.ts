@@ -1,5 +1,6 @@
 import ts from 'typescript';
 import {
+  booleanLiteralValuesForType,
   collectionElementTypeFor,
   isRuntimeArrayInstanceType,
   mapKeyTypeFor,
@@ -70,11 +71,14 @@ import {
   type CheckerExpressionTypeWorld,
 } from '../type-system/expression-type-world.js';
 import {
-  TypeSystemProductDetails,
+  TypeSystemHotDetails,
 } from '../type-system/product-details.js';
 import {
   checkerTypeShapeIsDefinitelyNullish,
 } from '../type-system/checker-related-types.js';
+import {
+  checkerTypeReferenceAssignable,
+} from '../type-system/checker-type-assignability.js';
 import {
   type CheckerTypeReference,
   type CheckerTypeShape,
@@ -86,6 +90,7 @@ import {
   CheckerTypeShapeAccess,
   CheckerTypeShapeMemberWriteAccessKind,
   checkerTypeMemberWriteAccess,
+  readCheckerTypeShape,
   type CheckerTypeShapeMemberWriteAccess,
 } from '../type-system/checker-type-shape-access.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
@@ -115,6 +120,8 @@ import {
   RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceAssignmentReasonKind,
   RuntimeBindingDataFlowSourceKind,
+  RuntimeBindingPrimitiveValueKind,
+  type RuntimeBindingPrimitiveValue,
   type RuntimeBindingValueChannel,
   RuntimeBindingValueChannelKind,
 } from './runtime-binding-observation.js';
@@ -994,6 +1001,17 @@ class BindingDataFlowSourceWriteCapabilityProjector {
     if (lookup.slot == null && isSyntheticWritebackLocal(expression)) {
       return sourceWriteCapabilityWritable(targetValueType);
     }
+    if (lookup.slot == null) {
+      const contextType = lookup.context?.contextType ?? null;
+      const contextShape = this.typeAccess.readTypeShape(contextType);
+      if (contextShape != null) {
+        return sourceWriteCapabilityForMemberAccess(
+          this.typeAccess.memberWriteAccess(contextShape, expression.name.name),
+          contextShape.display ?? contextType?.display ?? null,
+          contextType,
+        );
+      }
+    }
     return lookup.slot == null
       ? sourceWriteCapabilityTypeScriptStrictness(
         'Scope lookup did not expose a TypeChecker slot; Aurelia astAssign can still write to the runtime context.',
@@ -1077,7 +1095,7 @@ class BindingDataFlowSourceWriteCapabilityProjector {
         RuntimeBindingDataFlowSourceAssignmentReasonKind.ScopeSlotRuntimeOnly,
       );
     }
-    const member = this.store.productDetails.read(TypeSystemProductDetails.TypeMember, slot.targetProductHandle);
+    const member = this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
     return member == null
       ? sourceWriteCapabilityOpen(
         'Scope slot member product was not available for runtime assignment policy.',
@@ -1114,17 +1132,7 @@ class BindingDataFlowAssignabilityEvaluator {
     from: CheckerTypeReference | null,
     to: CheckerTypeReference | null,
   ): boolean | null {
-    const fromShape = this.typeAccess.readTypeShape(from);
-    const toShape = this.typeAccess.readTypeShape(to);
-    const fromCarrier = fromShape?.carrier ?? null;
-    const toCarrier = toShape?.carrier ?? null;
-    if (fromCarrier == null || toCarrier == null || fromCarrier.checker !== toCarrier.checker) {
-      if (from?.display != null && to?.display != null && from.display === to.display) {
-        return true;
-      }
-      return null;
-    }
-    return fromCarrier.checker.isTypeAssignableTo(fromCarrier.type, toCarrier.type);
+    return checkerTypeReferenceAssignable(this.typeAccess.store, from, to);
   }
 
   private isSourceAssignableToTarget(
@@ -1133,12 +1141,13 @@ class BindingDataFlowAssignabilityEvaluator {
     valueChannel: RuntimeBindingValueChannel | null,
   ): boolean | null {
     const valueDomain = valueChannel?.valueDomain ?? [];
-    if (valueDomain.length > 0 && valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedRadioValue) {
-      return this.isStringDomainAssignableToType(valueDomain, sourceType);
+    const primitiveValueDomain = this.primitiveValueDomain(valueChannel);
+    if (primitiveValueDomain.length > 0 && valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedRadioValue) {
+      return this.isPrimitiveDomainAssignableToType(primitiveValueDomain, sourceType);
     }
     if (valueChannelMutatesCollection(valueChannel)) {
-      return valueDomain.length > 0
-        ? this.isStringDomainAssignableToSourceMutation(valueDomain, sourceType, valueChannel)
+      return primitiveValueDomain.length > 0
+        ? this.isPrimitiveDomainAssignableToSourceMutation(primitiveValueDomain, sourceType, valueChannel)
         : this.isTypeAssignableToSourceMutationValue(targetType, sourceType, valueChannel);
     }
     const checkerAssignable = this.isTypeAssignable(sourceType, targetType);
@@ -1157,9 +1166,10 @@ class BindingDataFlowAssignabilityEvaluator {
     valueChannel: RuntimeBindingValueChannel | null,
   ): boolean | null {
     const valueDomain = valueChannel?.valueDomain ?? [];
+    const primitiveValueDomain = this.primitiveValueDomain(valueChannel);
     if (valueChannelMutatesCollection(valueChannel)) {
-      return valueDomain.length > 0
-        ? this.isStringDomainAssignableToSourceMutation(valueDomain, sourceType, valueChannel)
+      return primitiveValueDomain.length > 0
+        ? this.isPrimitiveDomainAssignableToSourceMutation(primitiveValueDomain, sourceType, valueChannel)
         : this.isTypeAssignableToSourceMutationValue(targetType, sourceType, valueChannel);
     }
     const checkerAssignable = this.isTypeAssignable(targetType, sourceType);
@@ -1170,6 +1180,32 @@ class BindingDataFlowAssignabilityEvaluator {
       return null;
     }
     return this.isStringDomainAssignableToType(valueDomain, sourceType);
+  }
+
+  private primitiveValueDomain(
+    valueChannel: RuntimeBindingValueChannel | null,
+  ): readonly RuntimeBindingPrimitiveValue[] {
+    const direct = valueChannel?.primitiveValueDomain ?? [];
+    return direct.length > 0
+      ? direct
+      : (valueChannel?.valueDomain ?? []).map((value) => ({
+        kind: RuntimeBindingPrimitiveValueKind.String,
+        value,
+      }));
+  }
+
+  private isPrimitiveDomainAssignableToType(
+    values: readonly RuntimeBindingPrimitiveValue[],
+    to: CheckerTypeReference | null,
+  ): boolean | null {
+    const toShape = this.typeAccess.readTypeShape(to);
+    const toCarrier = toShape?.carrier ?? null;
+    if (toCarrier == null) {
+      return null;
+    }
+    return values.every((value) =>
+      this.isPrimitiveValueAssignableToType(value, toCarrier.checker, toCarrier.type)
+    );
   }
 
   private isStringDomainAssignableToType(
@@ -1226,6 +1262,30 @@ class BindingDataFlowAssignabilityEvaluator {
       : keyAssignable;
   }
 
+  private isPrimitiveDomainAssignableToSourceMutation(
+    values: readonly RuntimeBindingPrimitiveValue[],
+    sourceType: CheckerTypeReference | null,
+    valueChannel: RuntimeBindingValueChannel | null,
+  ): boolean | null {
+    const sourceShape = this.typeAccess.readTypeShape(sourceType);
+    const sourceCarrier = sourceShape?.carrier ?? null;
+    if (sourceCarrier == null) {
+      return null;
+    }
+    const elementType = valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean
+      ? mapKeyTypeFor(sourceCarrier.checker, sourceCarrier.type)
+      : collectionElementTypeFor(sourceCarrier.checker, sourceCarrier.type);
+    if (elementType == null) {
+      return null;
+    }
+    const keyAssignable = values.every((value) =>
+      this.isPrimitiveValueAssignableToType(value, sourceCarrier.checker, elementType)
+    );
+    return valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean
+      ? keyAssignable && this.isBooleanAssignableToMapValue(sourceCarrier.checker, sourceCarrier.type)
+      : keyAssignable;
+  }
+
   private isTypeAssignableToSourceMutationValue(
     valueType: CheckerTypeReference | null,
     sourceType: CheckerTypeReference | null,
@@ -1250,6 +1310,25 @@ class BindingDataFlowAssignabilityEvaluator {
     return keyAssignable && this.isBooleanAssignableToMapValue(sourceCarrier.checker, sourceCarrier.type);
   }
 
+  private isPrimitiveValueAssignableToType(
+    value: RuntimeBindingPrimitiveValue,
+    checker: ts.TypeChecker,
+    to: ts.Type,
+  ): boolean {
+    switch (value.kind) {
+      case RuntimeBindingPrimitiveValueKind.String:
+        return checker.isTypeAssignableTo(checker.getStringLiteralType(value.value), to);
+      case RuntimeBindingPrimitiveValueKind.Number:
+        return checker.isTypeAssignableTo(numberLiteralType(checker, value.value), to);
+      case RuntimeBindingPrimitiveValueKind.Boolean:
+        return booleanLiteralAssignableToType(value.value, checker, to);
+      case RuntimeBindingPrimitiveValueKind.Null:
+        return checker.isTypeAssignableTo(checker.getNullType(), to);
+      case RuntimeBindingPrimitiveValueKind.Undefined:
+        return checker.isTypeAssignableTo(checker.getUndefinedType(), to);
+    }
+  }
+
   private isBooleanAssignableToMapValue(
     checker: ts.TypeChecker,
     sourceType: ts.Type,
@@ -1261,20 +1340,37 @@ class BindingDataFlowAssignabilityEvaluator {
   }
 }
 
+function numberLiteralType(checker: ts.TypeChecker, value: number): ts.Type {
+  const typedChecker = checker as ts.TypeChecker & {
+    readonly getNumberLiteralType?: (value: number) => ts.Type;
+  };
+  return typedChecker.getNumberLiteralType?.(value) ?? checker.getNumberType();
+}
+
+function booleanLiteralAssignableToType(
+  value: boolean,
+  checker: ts.TypeChecker,
+  to: ts.Type,
+): boolean {
+  const literalValues = booleanLiteralValuesForType(to);
+  if (literalValues != null) {
+    return literalValues.includes(value);
+  }
+  return checker.isTypeAssignableTo(checker.getBooleanType(), to);
+}
+
 class BindingDataFlowTypeAccess {
   private readonly shapeAccess: CheckerTypeShapeAccess;
 
   constructor(
-    private readonly store: KernelStore,
+    readonly store: KernelStore,
     typeProjector: CheckerTypeProjector,
   ) {
     this.shapeAccess = new CheckerTypeShapeAccess(store, typeProjector);
   }
 
   readTypeShape(reference: CheckerTypeReference | null): CheckerTypeShape | null {
-    return reference?.productHandle == null
-      ? null
-      : this.store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle);
+    return readCheckerTypeShape(this.store, reference);
   }
 
   isRuntimeArrayInstanceType(reference: CheckerTypeReference | null): boolean {

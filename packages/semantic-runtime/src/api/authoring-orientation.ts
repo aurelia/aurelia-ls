@@ -67,6 +67,11 @@ import {
   readTargetOperationRows,
   readBindingValueChannelRows,
 } from './binding-projections.js';
+import {
+  readI18nTranslationBindingRows,
+  readI18nTranslationKeyRows,
+} from './i18n-projections.js';
+import { readStateStoreRows } from './state-projections.js';
 import type {
   SemanticAuthoringAvailableSurfaceRow,
   SemanticAuthoringCapabilityRow,
@@ -89,9 +94,13 @@ import type {
   SemanticBindingDataFlowRow,
   SemanticBindingTargetAccessRow,
   SemanticBindingValueChannelRow,
+  SemanticI18nTranslationBindingRow,
+  SemanticI18nTranslationKeyRow,
+  SemanticStateStoreRow,
   SemanticTargetOperationRow,
   SemanticResourceDeclarationMode,
   SemanticRuntimeControllerRow,
+  SemanticRuntimeCompositionRow,
   SemanticTemplateDiagnosticRow,
   SemanticTemplateCursorSuggestionRow,
   SemanticTemplateCursorSuggestionValueTypeSource,
@@ -99,6 +108,7 @@ import type {
 import { readAppOpenSeams } from './open-seam-projections.js';
 import { readResourceDefinitionRows } from './resource-projections.js';
 import { readRuntimeControllerRows } from './controller-projections.js';
+import { readRuntimeCompositionRows } from './composition-projections.js';
 import { readSemanticRouteEffectFactRows } from './route-effect-facts.js';
 import { RuntimeBindingValueChannelKind } from '../observation/runtime-binding-observation.js';
 import { RuntimeBindingTargetKind } from '../template/runtime-binding.js';
@@ -112,10 +122,14 @@ interface OrientationFacts {
   readonly topology: ReturnType<typeof readSemanticApplicationTopology>;
   readonly resourceDefinitions: ReturnType<typeof readResourceDefinitionRows>;
   readonly runtimeControllers: readonly SemanticRuntimeControllerRow[];
+  readonly runtimeCompositions: readonly SemanticRuntimeCompositionRow[];
   readonly bindingTargetAccesses: readonly SemanticBindingTargetAccessRow[];
   readonly targetOperations: readonly SemanticTargetOperationRow[];
   readonly bindingValueChannels: readonly SemanticBindingValueChannelRow[];
   readonly bindingBehaviorApplications: readonly SemanticBindingBehaviorApplicationRow[];
+  readonly i18nTranslationKeys: readonly SemanticI18nTranslationKeyRow[];
+  readonly i18nTranslationBindings: readonly SemanticI18nTranslationBindingRow[];
+  readonly stateStores: readonly SemanticStateStoreRow[];
   readonly bindingDataFlows: readonly SemanticBindingDataFlowRow[];
   readonly templateDiagnostics: readonly SemanticTemplateDiagnosticRow[];
   readonly diResolveCallSites: readonly DiResolveCallSite[];
@@ -178,10 +192,14 @@ function orientationFacts(
     topology: readSemanticApplicationTopology(store, emission, false),
     resourceDefinitions: readResourceDefinitionRows(emission, store, false),
     runtimeControllers: readRuntimeControllerRows(emission, store, false),
+    runtimeCompositions: readRuntimeCompositionRows(emission, store, false),
     bindingTargetAccesses: readBindingTargetAccessRows(emission, store, false),
     targetOperations: readTargetOperationRows(emission, store, false),
     bindingValueChannels: readBindingValueChannelRows(emission, store, false),
     bindingBehaviorApplications: readBindingBehaviorApplicationRows(emission, store, false),
+    i18nTranslationKeys: readI18nTranslationKeyRows(emission, store, false),
+    i18nTranslationBindings: readI18nTranslationBindingRows(emission, store, false),
+    stateStores: readStateStoreRows(emission, store, false),
     bindingDataFlows: readBindingDataFlowRows(emission, store, false),
     templateDiagnostics: readSemanticTemplateDiagnostics(
       store,
@@ -256,6 +274,7 @@ function coverageRows(facts: OrientationFacts): readonly SemanticAuthoringCovera
     coverage('resource-visibility', 'Resource Visibility', 'resource-visibility', 'template', countState(facts.emission.templates.compilerWorlds.length), 'framework-emulated', facts.emission.templates.compilerWorlds.length, 'Compiler worlds expose visible resources and syntax resources.'),
     coverage('routes', 'Routes', 'route', 'route', routes === 0 ? 'open' : 'observable', 'framework-emulated', routes, routes === 0 ? 'No route configs are present in the opened app.' : 'Route configs are queryable from the app world.', routes === 0 ? ['semantic-fact-partial'] : []),
     coverage('runtime-controllers', 'Runtime Controllers', 'runtime-controller', 'component', countState(facts.runtimeControllers.length), 'framework-emulated', facts.runtimeControllers.length, 'Runtime controller hydration rows are queryable.'),
+    coverage('runtime-compositions', 'Runtime Compositions', 'runtime-composition', 'template', countState(facts.runtimeCompositions.length), 'framework-emulated', facts.runtimeCompositions.length, 'Dynamic AuCompose composition rows are queryable after binding data-flow.'),
     coverage('component-roles', 'Component Roles', 'component-role', 'component', countState(componentRoles), 'generated-projection', componentRoles, 'Derived component-role rows are available from app topology joins.'),
     coverage('binding-target-accesses', 'Binding Target Accesses', 'binding-target-access', 'template', countState(facts.bindingTargetAccesses.length), 'type-checker', facts.bindingTargetAccesses.length, 'Observer/accessor target facts are queryable for runtime bindings.'),
     coverage('target-operations', 'Target Operations', 'target-operation', 'template', countState(facts.targetOperations.length), 'framework-emulated', facts.targetOperations.length, 'Direct renderer and binding target-operation writes are queryable.'),
@@ -786,6 +805,9 @@ function templateRenderingBoundaryValues(facts: OrientationFacts): readonly Sema
       role.roleKind === SemanticApplicationComponentRoleKind.TemplateCompositionHost
     ).length,
   0);
+  const dynamicCompositions = facts.runtimeCompositions.filter((composition) =>
+    composition.componentResolutionKind !== 'template-only'
+  ).length;
   const values: SemanticAuthoringTasteValueRow[] = [];
   if (shadowTemplates > 0) {
     values.push(tasteValue('shadow-dom-template', 'likely', 'framework-emulated', 'template', 'Custom element template definitions carry shadow DOM options.', shadowTemplates));
@@ -795,6 +817,9 @@ function templateRenderingBoundaryValues(facts: OrientationFacts): readonly Sema
   }
   if (templateCompositionHosts > 0) {
     values.push(tasteValue('template-controller-composition', 'likely', 'framework-emulated', 'template', 'Component role rows show template-controller composition hosts.', templateCompositionHosts));
+  }
+  if (dynamicCompositions > 0) {
+    values.push(tasteValue('dynamic-component-composition', 'likely', 'framework-emulated', 'template', 'Runtime composition rows show dynamic component composition hosts.', dynamicCompositions));
   }
   return values;
 }
@@ -815,6 +840,9 @@ function formValueChannelValues(facts: OrientationFacts): readonly SemanticAutho
     || channel.channelKind === RuntimeBindingValueChannelKind.SelectMultipleOptionValues
     || channel.channelKind === RuntimeBindingValueChannelKind.SelectDynamicOptionValue
   ).length;
+  const customMatcherChannels = facts.bindingValueChannels.filter((channel) =>
+    channel.usesCustomMatcher
+  ).length;
   const values: SemanticAuthoringTasteValueRow[] = [];
   if (valueChannels > 0) {
     values.push(tasteValue('native-control-value-binding', 'likely', 'framework-emulated', 'template', 'Value observer channels are present.', valueChannels));
@@ -824,6 +852,9 @@ function formValueChannelValues(facts: OrientationFacts): readonly SemanticAutho
   }
   if (selectChannels > 0) {
     values.push(tasteValue('select-model-binding', 'likely', 'framework-emulated', 'template', 'Select observer model/value binding rows are present.', selectChannels));
+  }
+  if (customMatcherChannels > 0) {
+    values.push(tasteValue('custom-matcher-comparison', 'likely', 'framework-emulated', 'template', 'Checked/select value-channel rows use custom matcher bindings.', customMatcherChannels));
   }
   if (customControlChannels > 0) {
     values.push(tasteValue('custom-control-binding', 'likely', 'framework-emulated', 'template', 'Custom element/component value-channel rows are present.', customControlChannels));
@@ -1113,7 +1144,7 @@ function capabilitySupportState(
     case 'dependency-injection':
       return dependencyInjectionEvidenceCount(facts) > 0 ? 'observable' : 'partial';
     case 'router':
-      return facts.topology.routes.length > 0 ? 'partial' : 'open';
+      return routerCapabilitySupportState(facts);
     case 'auth':
     case 'access-control':
     case 'evolution':
@@ -1130,6 +1161,30 @@ function capabilitySupportState(
       }
       return facts.templateDiagnostics.length > 0 ? 'repairable' : 'verifiable';
   }
+}
+
+function routerCapabilitySupportState(
+  facts: OrientationFacts,
+): AuthoringSupportState {
+  const routeFactRows = readSemanticRouteEffectFactRows(facts.emission, facts.store, facts.topology);
+  if (routeFactRows.some(routeFactKind('route-config'))
+    && routeFactRows.some(routeFactKind('router-viewport'))
+    && routeFactRows.some(routeFactKind('viewport-agent'))
+    && routeFactRows.some(routeFactKind('route-tree'))
+    && routeFactRows.some(routeFactKind('component-agent'))) {
+    return 'verifiable';
+  }
+  if (routeFactRows.length > 0 || facts.topology.routes.length > 0) {
+    return 'partial';
+  }
+  return 'open';
+}
+
+function routeFactKind(
+  routeProductKind: string,
+): (row: object) => boolean {
+  return (row) =>
+    (row as { readonly routeProductKind?: unknown }).routeProductKind === routeProductKind;
 }
 
 function capabilityOpenReasons(
@@ -1157,8 +1212,11 @@ function capabilityOpenReasons(
   if (key === 'dependency-injection' && state === 'partial') {
     reasons.push('semantic-fact-partial');
   }
-  if (key === 'router' && facts.topology.routes.length === 0) {
-    reasons.push('semantic-fact-partial', 'framework-grounding-missing');
+  if (key === 'router' && state === 'partial') {
+    reasons.push('semantic-fact-partial');
+    if (facts.topology.routes.length === 0) {
+      reasons.push('framework-grounding-missing');
+    }
   }
   if (key === 'closed-loop-verification' && facts.openSeams.length > 0) {
     reasons.push('semantic-fact-partial');
@@ -1404,14 +1462,19 @@ function expectedEffectObservationSnapshot(
     components: facts.topology.components,
     styles: facts.topology.styles,
     services: facts.topology.services,
+    stateCompositions: facts.topology.stateCompositions,
     serviceInteractions: facts.topology.serviceInteractions,
     serviceInteractionBindings: facts.topology.serviceInteractionBindings,
     compiledResources: facts.emission.templates.resources.length,
-    runtimeControllers: facts.runtimeControllers.length,
+    runtimeControllers: facts.runtimeControllers,
+    runtimeCompositions: facts.runtimeCompositions,
     bindingTargetAccesses: facts.bindingTargetAccesses,
     targetOperations: facts.targetOperations,
     bindingValueChannels: facts.bindingValueChannels,
     bindingBehaviorApplications: facts.bindingBehaviorApplications,
+    i18nTranslationKeys: facts.i18nTranslationKeys,
+    i18nTranslationBindings: facts.i18nTranslationBindings,
+    stateStores: facts.stateStores,
     bindingDataFlows: facts.bindingDataFlows,
     routeFacts: facts.emission.routes.readRouteConfigs().length +
       facts.emission.routeRecognizer.readConfigurableRoutes().length +
@@ -1482,15 +1545,17 @@ function expectedEffectRow(
 function recipeCurrentFit(
   expectedEffects: readonly SemanticAuthoringExpectedEffectRow[],
 ): SemanticAuthoringRecipeSeedRow['currentFitState'] {
-  if (expectedEffects.some((effect) => effect.currentOutcome === 'unsupported')) {
-    return 'unsupported';
+  if (expectedEffects.every((effect) => effect.currentOutcome === 'satisfied')) {
+    return 'satisfied';
   }
-  return expectedEffects.every((effect) => effect.currentOutcome === 'satisfied')
-    ? 'satisfied'
-    : recipeDiscriminatorsSatisfied(expectedEffects) === false
-      ? 'not-applicable'
-    : recipeSignatureSatisfied(expectedEffects) === false
-      ? 'not-applicable'
+  if (recipeDiscriminatorsSatisfied(expectedEffects) === false) {
+    return 'not-applicable';
+  }
+  if (recipeSignatureSatisfied(expectedEffects) === false) {
+    return 'not-applicable';
+  }
+  return expectedEffects.some((effect) => effect.currentOutcome === 'unsupported')
+    ? 'unsupported'
     : 'partial';
 }
 

@@ -4,3 +4,4 @@ export const SEMANTIC_RUNTIME_PACKAGE_NAME = "@aurelia-ls/semantic-runtime" as c
 export * from './application/index.js';
 export * from './authoring/index.js';
 export * from './api/index.js';
+export * from './telemetry/index.js';

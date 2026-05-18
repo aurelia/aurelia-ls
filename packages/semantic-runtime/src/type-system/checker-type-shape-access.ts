@@ -1,10 +1,13 @@
 import ts from 'typescript';
-import type { AddressHandle } from '../kernel/handles.js';
+import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import type { KernelStore } from '../kernel/store.js';
 import type {
   CheckerTypeProjectionRequest,
   CheckerTypeProjector,
+} from './checker-projector.js';
+import {
+  CheckerTypeMemberProjectionPolicy,
 } from './checker-projector.js';
 import { TypeSystemProductDetails } from './product-details.js';
 import {
@@ -16,6 +19,7 @@ import {
   CheckerTypeShapeKind,
   checkerIndexedAccessSupportsNumber,
   checkerIndexedAccessSupportsString,
+  checkerTypeMemberReachableIdentityHandle,
   checkerTypeShapeIsPrimitiveDisplay,
 } from './type-shape.js';
 import {
@@ -27,6 +31,7 @@ import {
   checkerSymbolMemberKind,
   declarationsForCheckerSymbol,
 } from './checker-member-surface.js';
+import { checkerTypeMemberSourceAddressHandle } from './checker-type-member-source.js';
 
 export const enum CheckerTypeShapeMemberWriteAccessKind {
   Writable = 'writable',
@@ -62,6 +67,22 @@ export interface CheckerTypeShapeMemberValueAccess {
   readonly declarations: readonly ts.Declaration[];
 }
 
+export function readCheckerTypeShape(
+  store: KernelStore,
+  reference: CheckerTypeReference | null | undefined,
+): CheckerTypeShape | null {
+  return readCheckerTypeShapeByProductHandle(store, reference?.productHandle);
+}
+
+export function readCheckerTypeShapeByProductHandle(
+  store: KernelStore,
+  productHandle: ProductHandle | null | undefined,
+): CheckerTypeShape | null {
+  return productHandle == null
+    ? null
+    : store.productDetails.read(TypeSystemProductDetails.TypeShape, productHandle);
+}
+
 /**
  * Shared TypeChecker-backed value-shape access for expression evaluation and pattern-local projection.
  *
@@ -75,9 +96,7 @@ export class CheckerTypeShapeAccess {
   ) {}
 
   resolveReference(reference: CheckerTypeReference): CheckerTypeShape | null {
-    return reference.productHandle == null
-      ? null
-      : this.store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle);
+    return readCheckerTypeShape(this.store, reference);
   }
 
   memberValueType(
@@ -255,6 +274,7 @@ export class CheckerTypeShapeAccess {
       origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceAddressHandle,
       display: checker.typeToString(indexType),
+      memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
     } satisfies CheckerTypeProjectionRequest);
   }
 
@@ -304,6 +324,7 @@ export class CheckerTypeShapeAccess {
       origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceAddressHandle,
       display: checker.typeToString(indexInfo.type),
+      memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
     } satisfies CheckerTypeProjectionRequest);
   }
 
@@ -355,6 +376,7 @@ export class CheckerTypeShapeAccess {
       origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceAddressHandle: ownerType.sourceAddressHandle,
       display: checker.typeToString(indexInfo.type),
+      memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
     } satisfies CheckerTypeProjectionRequest);
   }
 
@@ -363,7 +385,7 @@ export class CheckerTypeShapeAccess {
     localKey: string,
   ): CheckerTypeShape | null {
     if (member.valueType?.productHandle != null) {
-      const existing = this.store.productDetails.read(TypeSystemProductDetails.TypeShape, member.valueType.productHandle);
+      const existing = readCheckerTypeShape(this.store, member.valueType);
       if (existing != null) {
         return existing;
       }
@@ -379,9 +401,10 @@ export class CheckerTypeShapeAccess {
       type: member.carrier.valueType,
       origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceNode: member.carrier.declarations[0] ?? null,
-      sourceAddressHandle: member.sourceAddressHandle,
-      ownerIdentityHandle: member.identityHandle,
+      sourceAddressHandle: checkerTypeMemberSourceAddressHandle(this.store, member),
+      ownerIdentityHandle: checkerTypeMemberReachableIdentityHandle(member),
       display: member.valueType?.display ?? null,
+      memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
     } satisfies CheckerTypeProjectionRequest);
   }
 
@@ -412,6 +435,7 @@ export class CheckerTypeShapeAccess {
       sourceAddressHandle: ownerType.sourceAddressHandle,
       ownerIdentityHandle: ownerType.identityHandle,
       display: carrier.checker.typeToString(valueType),
+      memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
     } satisfies CheckerTypeProjectionRequest);
   }
 }

@@ -11,7 +11,7 @@ import {
 import { SourceProjectMemo, type SourceProject } from "../../source/index.js";
 import type { SourceRange } from "../locus.js";
 
-export const FRAMEWORK_CORPUS_ANALYSIS_VERSION = "framework-corpus-analysis.v15";
+export const FRAMEWORK_CORPUS_ANALYSIS_VERSION = "framework-corpus-analysis.v18";
 
 const frameworkCorpusAnalysisMemo =
   new SourceProjectMemo<FrameworkCorpusAnalysis>();
@@ -29,7 +29,8 @@ export type FrameworkCorpusConcept =
   | "router"
   | "state"
   | "styles"
-  | "templates";
+  | "templates"
+  | "validation";
 
 export type FrameworkCorpusDocSnippetKind = "code-fence";
 
@@ -63,6 +64,7 @@ export type FrameworkCorpusExpectedEffectHint =
   | "resource-definition"
   | "route"
   | "runtime-controller"
+  | "runtime-composition"
   | "service-class"
   | "service-interaction"
   | "service-interaction-binding"
@@ -86,6 +88,7 @@ export type FrameworkCorpusFixtureRecipeHint =
   | "validated-state-backed-form"
   | "service-backed-form"
   | "routed-state-backed-form"
+  | "composed-dashboard"
   | "pressure-fixture";
 
 export type FrameworkCorpusFixtureSeedClassificationKind =
@@ -288,6 +291,17 @@ interface MarkdownFence {
   readonly end: number;
 }
 
+interface BindingSurfaceHint {
+  readonly targetProperty: string;
+  readonly targetAccessProperty?: string;
+  readonly valueTargetProperty?: string;
+  readonly targetKind?: "node";
+  readonly targetAccessStrategy?: string;
+  readonly channelKind?: string;
+  readonly valueChannelKind?: string;
+  readonly valueSiteKind?: string;
+}
+
 const FRAMEWORK_DOCS_ROOT = "aurelia/docs/user-docs";
 const FRAMEWORK_TESTS_ROOT = "aurelia/packages/__tests__";
 const SEMANTIC_RUNTIME_EXPECTED_EFFECT_PATH =
@@ -313,8 +327,8 @@ const CONCEPT_DESCRIPTORS: readonly ConceptDescriptor[] = [
   { id: "di", pattern: /\b(?:DI|IContainer|Registration|resolve|inject|singleton|transient|newInstanceForScope|factory)\b/giu },
   // Aurelia expression parser/evaluator semantics and expression-bearing template surfaces.
   { id: "expression", pattern: /\b(?:expression|expressions|interpolation|astEvaluate|IAstEvaluator|ExpressionParser|parseExpression|AccessScope|AccessMember|AccessKeyed|CallScope|CallMember|CallFunction|ForOfStatement|BindingBehavior|ValueConverter|value converter|value-converter|binding behavior|binding-behavior|template expression|arrow function|optional chaining|nullish|\$event)\b|\$\{/giu },
-  // Native and Aurelia form controls, select/radio/checkbox semantics, validation, and submit flow.
-  { id: "forms", pattern: /\b(?:forms?|checkbox|radio|validation|submit|model\.bind|checked\.bind)\b|<\s*(?:form|input|select|option|textarea|button)\b|\b(?:input|select|option|textarea)\.(?:value|checked)\b/giu },
+  // Native and Aurelia form controls, select/radio/checkbox semantics, and submit flow.
+  { id: "forms", pattern: /\b(?:forms?|checkbox|radio|submit|model\.bind|checked\.bind)\b|<\s*(?:form|input|select|option|textarea|button)\b|\b(?:input|select|option|textarea)\.(?:value|checked)\b/giu },
   // Localization and translation plugin pressure.
   { id: "i18n", pattern: /\b(?:i18n|I18N|translation|translations|t\.bind|t-params)\b/giu },
   // Controller, resource, component, and binding lifecycle phases.
@@ -331,6 +345,8 @@ const CONCEPT_DESCRIPTORS: readonly ConceptDescriptor[] = [
   { id: "styles", pattern: /\b(?:stylesheet|stylesheets|cssModules|shadowCSS|style\.bind|class\.bind)\b|(?:\b(?:class|style|css)\s*=\s*['"][^'"]*\$\{)|\b[\w-]+\.(?:class|style)\s*=/giu },
   // Template controllers, repeat/if/switch syntax, interpolation, and template compiler pressure.
   { id: "templates", pattern: /\b(?:template|repeat\.for|if\.bind|switch\.bind|with\.bind|promise\.bind)\b/giu },
+  // Validation plugin, validation binding behavior, validation rules, and validation result presentation.
+  { id: "validation", pattern: /@aurelia\/validation(?:-html|-i18n)?\b|\b(?:validation|ValidationHtml|ValidationConfiguration|IValidationController|IValidationRules|IValidationRule|validationRules|validation-errors|validation-container|validate binding behavior)\b|&\s*validate(?:\b|:)/giu },
 ];
 
 const TEXT_CONCEPT_CONTEXT: ConceptExtractionContext = {
@@ -874,6 +890,8 @@ function expectedEffectsForConcept(
       return ["style-resource", "template-compilation", "runtime-controller"];
     case "templates":
       return ["template-compilation", "runtime-controller"];
+    case "validation":
+      return [];
   }
 }
 
@@ -911,6 +929,9 @@ function expectedEffectsForSourceText(
   }
   if (hasRouterAuthoringSurface(snippetText)) {
     effects.add("route");
+  }
+  if (hasAuComposeSurface(snippetText)) {
+    effects.add("runtime-composition");
   }
   return [...effects].sort();
 }
@@ -965,6 +986,14 @@ function hasValidationBindingBehaviorSurface(snippetText: string): boolean {
     || /\bvalidate binding behavior\b/iu.test(snippetText);
 }
 
+function hasBindingSurfaceChannel(
+  snippetText: string,
+  channelKind: string,
+): boolean {
+  return bindingValueChannelSurfaceHints(snippetText)
+    .some((hint) => hint.channelKind === channelKind);
+}
+
 function expectedEffectFiltersForSourceText(
   effectKind: FrameworkCorpusExpectedEffectHint,
   snippetText: string,
@@ -973,7 +1002,7 @@ function expectedEffectFiltersForSourceText(
     return bindingBehaviorApplicationFilters(snippetText);
   }
   if (effectKind === "binding-target-access" || effectKind === "binding-value-channel" || effectKind === "binding-data-flow") {
-    return bindingTargetPropertyFilters(snippetText);
+    return bindingSurfaceFilters(effectKind, snippetText);
   }
   if (effectKind === "target-operation") {
     return targetOperationFilters(snippetText);
@@ -1008,19 +1037,257 @@ function bindingBehaviorApplicationFilters(
   ];
 }
 
-function bindingTargetPropertyFilters(
+function bindingSurfaceFilters(
+  effectKind: "binding-target-access" | "binding-value-channel" | "binding-data-flow",
   snippetText: string,
 ): readonly FrameworkCorpusFixtureSeedExpectedEffectFilterRow[] {
-  const targetProperties = uniqueSortedStrings([...snippetText.matchAll(/\b([\w-]+)\.(?:bind|two-way|from-view|to-view)\b/gu)]
-    .map((match) => match[1] ?? "")
-    .filter((target) => target.length > 0));
-  return targetProperties.length === 1
-    ? [{
+  const valueChannelHints = bindingValueChannelSurfaceHints(snippetText);
+  const sourceHints = effectKind === "binding-value-channel"
+    ? valueChannelHints
+    : bindingExpressionSurfaceHints(snippetText, valueChannelHints);
+  const singleTargetProperty = singleHintValue(sourceHints, (hint) =>
+    bindingEffectTargetProperty(effectKind, hint)
+  );
+  const singleTargetKind = singleHintValue(sourceHints, (hint) => hint.targetKind);
+  const filters: FrameworkCorpusFixtureSeedExpectedEffectFilterRow[] = [];
+  if (singleTargetKind !== null) {
+    filters.push({
+      field: "targetKind",
+      value: singleTargetKind,
+      summary: `Snippet has one locally-inferred binding target kind: ${singleTargetKind}.`,
+    });
+  }
+  if (singleTargetProperty !== null) {
+    filters.push({
       field: "targetProperty",
-      value: targetProperties[0]!,
-      summary: `Snippet has one binding command target property: ${targetProperties[0]}.`,
-    }]
-    : [];
+      value: singleTargetProperty,
+      summary: `Snippet has one locally-inferred binding target property: ${singleTargetProperty}.`,
+    });
+  }
+  if (effectKind === "binding-target-access") {
+    const strategy = singleHintValue(sourceHints, (hint) => hint.targetAccessStrategy);
+    if (strategy !== null) {
+      filters.push({
+        field: "strategy",
+        value: strategy,
+        summary: `Snippet maps to one binding target-access strategy: ${strategy}.`,
+      });
+    }
+  }
+  if (effectKind === "binding-value-channel") {
+    const channelKind = singleHintValue(sourceHints, (hint) => hint.channelKind);
+    if (channelKind !== null) {
+      filters.push({
+        field: "channelKind",
+        value: channelKind,
+        summary: `Snippet maps to one binding value-channel kind: ${channelKind}.`,
+      });
+    }
+  }
+  if (effectKind === "binding-data-flow") {
+    const valueChannelKind = singleHintValue(sourceHints, (hint) => hint.valueChannelKind);
+    if (valueChannelKind !== null) {
+      filters.push({
+        field: "valueChannelKind",
+        value: valueChannelKind,
+        summary: `Snippet maps to one binding data-flow value-channel kind: ${valueChannelKind}.`,
+      });
+    }
+    const valueSiteKind = singleHintValue(sourceHints, (hint) => hint.valueSiteKind);
+    if (valueSiteKind !== null) {
+      filters.push({
+        field: "valueSiteKind",
+        value: valueSiteKind,
+        summary: `Snippet maps to one binding data-flow value-site kind: ${valueSiteKind}.`,
+      });
+    }
+  }
+  return filters;
+}
+
+function bindingEffectTargetProperty(
+  effectKind: "binding-target-access" | "binding-value-channel" | "binding-data-flow",
+  hint: BindingSurfaceHint,
+): string {
+  return effectKind === "binding-target-access"
+    ? hint.targetAccessProperty ?? hint.targetProperty
+    : hint.valueTargetProperty ?? hint.targetProperty;
+}
+
+function bindingExpressionSurfaceHints(
+  snippetText: string,
+  valueChannelHints: readonly BindingSurfaceHint[],
+): readonly BindingSurfaceHint[] {
+  return uniqueBindingSurfaceHints([
+    ...bindingCommandSurfaceHints(snippetText),
+    ...valueChannelHints,
+  ]);
+}
+
+function bindingValueChannelSurfaceHints(
+  snippetText: string,
+): readonly BindingSurfaceHint[] {
+  return uniqueBindingSurfaceHints([
+    ...bindingCommandSurfaceHints(snippetText).filter((hint) =>
+      isValueChannelTargetProperty(hint.targetProperty)
+    ),
+    ...htmlLikeTagTexts(snippetText).flatMap(classStyleAttributeSurfaceHints),
+  ]);
+}
+
+function bindingCommandSurfaceHints(snippetText: string): readonly BindingSurfaceHint[] {
+  return uniqueBindingSurfaceHints([...snippetText.matchAll(/\b([\w-]+)\.(?:bind|two-way|from-view|to-view)\b/gu)]
+    .map((match) => bindingCommandSurfaceHint(match[1] ?? ""))
+    .filter((hint): hint is BindingSurfaceHint => hint !== null));
+}
+
+function bindingCommandSurfaceHint(targetProperty: string): BindingSurfaceHint | null {
+  if (targetProperty.length === 0) {
+    return null;
+  }
+  if (targetProperty === "class") {
+    return classTokenBindingSurfaceHint();
+  }
+  if (targetProperty === "style" || targetProperty === "css") {
+    return styleRuleBindingSurfaceHint(targetProperty);
+  }
+  return { targetProperty };
+}
+
+function classStyleAttributeSurfaceHints(tagText: string): readonly BindingSurfaceHint[] {
+  const hints: BindingSurfaceHint[] = [];
+  for (const match of tagText.matchAll(/\b(class|style|css)\s*=\s*(["'])([\s\S]*?)\2/gu)) {
+    const targetProperty = match[1] ?? "";
+    const value = match[3] ?? "";
+    if (!value.includes("${")) {
+      continue;
+    }
+    if (targetProperty === "class") {
+      hints.push({
+        ...classTokenBindingSurfaceHint(),
+        valueSiteKind: "plain-attribute-interpolation",
+      });
+      continue;
+    }
+    if (targetProperty === "style" || targetProperty === "css") {
+      hints.push({
+        ...styleRuleBindingSurfaceHint(targetProperty),
+        valueSiteKind: "plain-attribute-interpolation",
+      });
+    }
+  }
+  for (const match of tagText.matchAll(/(?:^|\s)([-\w:]+)\.class\s*=/gu)) {
+    const classToken = match[1] ?? "";
+    if (classToken.length > 0) {
+      hints.push({
+        targetKind: "node",
+        targetProperty: "class",
+        targetAccessProperty: "class",
+        valueTargetProperty: classToken,
+        targetAccessStrategy: "class-attribute-accessor",
+        channelKind: "class-toggle",
+        valueChannelKind: "class-toggle",
+      });
+    }
+  }
+  for (const match of tagText.matchAll(/(?:^|\s)([-\w]+)\.style\s*=/gu)) {
+    const styleProperty = match[1] ?? "";
+    if (styleProperty.length > 0) {
+      hints.push({
+        targetKind: "node",
+        targetProperty: "style",
+        targetAccessProperty: "style",
+        valueTargetProperty: styleProperty,
+        targetAccessStrategy: "style-attribute-accessor",
+        channelKind: "style-property-value",
+        valueChannelKind: "style-property-value",
+      });
+    }
+  }
+  for (const match of tagText.matchAll(/\bstyle\.([-\w]+)\s*=/gu)) {
+    const styleProperty = match[1] ?? "";
+    if (styleProperty.length > 0) {
+      hints.push({
+        targetKind: "node",
+        targetProperty: "style",
+        targetAccessProperty: "style",
+        valueTargetProperty: styleProperty,
+        targetAccessStrategy: "style-attribute-accessor",
+        channelKind: "style-property-value",
+        valueChannelKind: "style-property-value",
+      });
+    }
+  }
+  return uniqueBindingSurfaceHints(hints);
+}
+
+function classTokenBindingSurfaceHint(): BindingSurfaceHint {
+  return {
+    targetKind: "node",
+    targetProperty: "class",
+    targetAccessStrategy: "class-attribute-accessor",
+    channelKind: "class-attribute-tokens",
+    valueChannelKind: "class-attribute-tokens",
+  };
+}
+
+function styleRuleBindingSurfaceHint(targetProperty: "style" | "css"): BindingSurfaceHint {
+  return {
+    targetKind: "node",
+    targetProperty,
+    targetAccessStrategy: "style-attribute-accessor",
+    channelKind: "style-attribute-rules",
+    valueChannelKind: "style-attribute-rules",
+  };
+}
+
+function isValueChannelTargetProperty(targetProperty: string): boolean {
+  switch (targetProperty) {
+    case "value":
+    case "checked":
+    case "model":
+    case "class":
+    case "style":
+    case "css":
+      return true;
+    default:
+      return false;
+  }
+}
+
+function singleHintValue<TValue extends string>(
+  hints: readonly BindingSurfaceHint[],
+  read: (hint: BindingSurfaceHint) => TValue | undefined,
+): TValue | null {
+  const values = uniqueSortedStrings(hints
+    .map(read)
+    .filter((value): value is TValue => value !== undefined && value.length > 0));
+  return values.length === 1 ? values[0] as TValue : null;
+}
+
+function uniqueBindingSurfaceHints(
+  hints: readonly BindingSurfaceHint[],
+): readonly BindingSurfaceHint[] {
+  const seen = new Set<string>();
+  const unique: BindingSurfaceHint[] = [];
+  for (const hint of hints) {
+    const key = [
+      hint.targetProperty,
+      hint.targetAccessProperty ?? "",
+      hint.valueTargetProperty ?? "",
+      hint.targetKind ?? "",
+      hint.targetAccessStrategy ?? "",
+      hint.channelKind ?? "",
+      hint.valueChannelKind ?? "",
+      hint.valueSiteKind ?? "",
+    ].join("\u0000");
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    unique.push(hint);
+  }
+  return unique;
 }
 
 function targetOperationFilters(
@@ -1084,6 +1351,7 @@ function recipeHintsForConcepts(
     concepts.includes("forms") ||
     concepts.includes("state") ||
     concepts.includes("di") ||
+    concepts.includes("validation") ||
     hasRouterSurface ||
     hasValidationSurface;
   if (!hasSpecificAppPressure && (concepts.includes("templates") || concepts.includes("resources") || concepts.includes("styles"))) {
@@ -1103,6 +1371,9 @@ function recipeHintsForConcepts(
   }
   if (hasRouterSurface) {
     set.add("routed-state-backed-form");
+  }
+  if (hasAuComposeSurface(snippetText)) {
+    set.add("composed-dashboard");
   }
   if (concepts.includes("observation") || concepts.includes("bindables") || concepts.includes("styles")) {
     set.add("pressure-fixture");
@@ -1131,6 +1402,18 @@ function fixtureSeedClassificationReasons(
     if (hasValueChannelBindingSurface(snippetText)) {
       add("surface", "value-channel-binding", "Snippet contains an observer-backed binding value channel such as value/model/checked/class/style.");
     }
+    if (hasBindingSurfaceChannel(snippetText, "class-attribute-tokens")) {
+      add("surface", "class-token-binding", "Snippet contains a whole-class binding channel such as class.bind or class interpolation.");
+    }
+    if (hasBindingSurfaceChannel(snippetText, "class-toggle")) {
+      add("surface", "class-toggle-binding", "Snippet contains a per-token class binding surface such as name.class.");
+    }
+    if (hasBindingSurfaceChannel(snippetText, "style-attribute-rules")) {
+      add("surface", "style-rule-binding", "Snippet contains a whole-style binding channel such as style.bind or style interpolation.");
+    }
+    if (hasBindingSurfaceChannel(snippetText, "style-property-value")) {
+      add("surface", "style-property-binding", "Snippet contains a per-property style binding surface such as width.style.");
+    }
     if (hasNativeFormControlSurface(snippetText)) {
       add("surface", "native-form-control", "Snippet contains native form-control markup such as input, select, option, textarea, or form.");
     }
@@ -1154,6 +1437,36 @@ function fixtureSeedClassificationReasons(
     }
     if (hasRouterAuthoringSurface(snippetText)) {
       add("surface", "router-authoring", "Snippet contains concrete Aurelia router API, route config, route decorator, viewport, or router package syntax.");
+    }
+    if (hasAuComposeSurface(snippetText)) {
+      add("surface", "au-compose", "Snippet contains concrete Aurelia dynamic composition syntax or AuCompose API usage.");
+    }
+    if (hasAuComposeAttributeSurface(snippetText, "component.bind") || hasAuComposeAttributeSurface(snippetText, "component")) {
+      add("surface", "au-compose-component-input", "Snippet supplies an AuCompose component input.");
+    }
+    if (hasAuComposeAttributeSurface(snippetText, "model.bind") || hasAuComposeAttributeSurface(snippetText, "model")) {
+      add("surface", "au-compose-model-input", "Snippet supplies an AuCompose model input.");
+    }
+    if (hasAuComposeAttributeSurface(snippetText, "template.bind") || hasAuComposeAttributeSurface(snippetText, "template")) {
+      add("surface", "au-compose-template-input", "Snippet supplies an AuCompose template input.");
+    }
+    if (hasAuComposeAttributeSurface(snippetText, "scope-behavior")) {
+      add("surface", "au-compose-scope-behavior", "Snippet supplies AuCompose scope-behavior input.");
+    }
+    if (hasAuComposeAttributeSurface(snippetText, "flush-mode")) {
+      add("surface", "au-compose-flush-mode", "Snippet supplies AuCompose flush-mode input.");
+    }
+    if (hasAuComposeAttributeSurface(snippetText, "tag")) {
+      add("surface", "au-compose-tag", "Snippet supplies AuCompose host tag input.");
+    }
+    if (hasAuComposeAttributeSurface(snippetText, "composition.bind")) {
+      add("surface", "au-compose-composition-binding", "Snippet binds AuCompose composition from-view output.");
+    }
+    if (hasAuComposeAttributeSurface(snippetText, "composing.bind")) {
+      add("surface", "au-compose-composing-binding", "Snippet binds AuCompose composing from-view output.");
+    }
+    if (hasAuComposeObjectComponentSurface(snippetText)) {
+      add("surface", "au-compose-object-component", "Snippet supplies an object-shaped or non-resource component value to AuCompose.");
     }
     if (hasServiceSurface(snippetText)) {
       add("surface", "service", "Snippet contains a service-shaped type, import/path, or DI resolution surface.");
@@ -1219,6 +1532,8 @@ function recipeHintReason(
       return "Snippet has form + DI + service surface plus concrete state/store surface, matching the service-backed state recipe.";
     case "routed-state-backed-form":
       return "Snippet has concrete router authoring/runtime syntax that can seed routed state-backed fixture work.";
+    case "composed-dashboard":
+      return "Snippet has concrete AuCompose dynamic composition syntax that can seed composed dashboard fixture work.";
     case "pressure-fixture":
       return pressureFixtureReason(concepts, snippetText);
   }
@@ -1275,6 +1590,29 @@ function hasRouterAuthoringSurface(snippetText: string): boolean {
     || /<\s*au-viewport\b|\bau-viewport\b/u.test(snippetText)
     || /\broutes\s*:\s*\[/u.test(snippetText)
     || /\bpath\s*:\s*['"][^'"]+['"][\s\S]{0,160}\bcomponent\s*:/u.test(snippetText);
+}
+
+function hasAuComposeSurface(snippetText: string): boolean {
+  return /<\s*au-compose\b/iu.test(snippetText)
+    || /\bAuCompose\b/u.test(snippetText);
+}
+
+function hasAuComposeAttributeSurface(snippetText: string, attributeName: string): boolean {
+  return htmlLikeTagTexts(snippetText).some((tagText) =>
+    /^<\s*au-compose\b/iu.test(tagText)
+    && new RegExp(`\\b${escapeRegExp(attributeName)}\\s*=`, "iu").test(tagText)
+  );
+}
+
+function hasAuComposeObjectComponentSurface(snippetText: string): boolean {
+  return htmlLikeTagTexts(snippetText).some((tagText) =>
+    /^<\s*au-compose\b/iu.test(tagText)
+    && /\bcomponent\.bind\s*=\s*["']\s*(?:\{|new\s+|[A-Za-z_$][\w$]*Class\b)/u.test(tagText)
+  );
+}
+
+function escapeRegExp(value: string): string {
+  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function countConceptRows(

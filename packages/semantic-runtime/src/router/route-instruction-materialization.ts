@@ -49,6 +49,7 @@ import {
   RouterIssueKind,
   RouterIssueModel,
   RouterIssuePhase,
+  RouteQueryParameterValueModel,
   TypedNavigationInstructionModel,
   ViewportInstructionModel,
   ViewportInstructionTreeModel,
@@ -926,9 +927,16 @@ function viewportInstructionTreeModel(
     effectiveOptions?.toReference() ?? null,
     parsed.expression.isAbsolute,
     parsed.expression.queryParamCount,
+    routeQueryParameterValues(parsed.expression.queryParams),
     parsed.expression.fragment,
     site.sourceAddressHandle,
   );
+}
+
+function routeQueryParameterValues(
+  queryParams: ParsedRouteExpression['queryParams'],
+): readonly RouteQueryParameterValueModel[] {
+  return queryParams.map((queryParam) => new RouteQueryParameterValueModel(queryParam.name, queryParam.value));
 }
 
 function viewportInstructionTreeRecords(

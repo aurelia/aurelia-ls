@@ -168,8 +168,11 @@ helpers.
   `--snippetKind=it-call`, `--generated=false`, `--seedUse=authoring-taste`,
   `--effectKind=binding-data-flow`,
   `--expectedEffectFilterField=targetProperty`, `--expectedEffectFilterValue=value`,
+  `--expectedEffectFilterField=channelKind`, `--expectedEffectFilterValue=style-property-value`,
   `--classificationKind=surface`, `--classificationKey=native-value-binding`,
-  `--recipeKey=service-backed-form`, `--rows=...`, `--detail`, and `--json` when the pressure summary is too broad.
+  `--classificationKey=surface:au-compose`, `--classificationKey=surface:au-compose-flush-mode`,
+  `--classificationKey=surface:au-compose-object-component`, `--recipeKey=service-backed-form`, `--recipeKey=composed-dashboard`,
+  `--rows=...`, `--detail`, and `--json` when the pressure summary is too broad.
   For `fixture-seeds`, prefer `effectKind` and `recipeKey` for structural narrowing and `query` for source/content
   concepts. Use the default all-token `query` mode for exact-ish narrowing; use `--queryMode=partial` only for
   exploratory multi-term sweeps where adjacent corpus examples are more useful than a zero-row answer. Use
@@ -177,7 +180,11 @@ helpers.
   used for taste pressure or framework behavior pressure; framework testing docs are behavior-grounding even though
   they are documentation snippets. `authoring-taste` expected effects themselves are orientation contracts and should
   not be expected to have direct corpus seeds. Use expected-effect field/value filters when the seed must prove a
-  concrete fact such as a validate trigger argument or a specific binding target property. Router fixture seeds require
+  concrete fact such as a validate trigger argument, a specific binding target property, or a class/style value-channel
+  kind. AuCompose fixture seeds carry `runtime-composition` effect hints, `composed-dashboard` recipe hints, and
+  narrow surface keys for component/model/template inputs, scope/flush/tag literals, composition/composing outputs, and
+  object-shaped component values.
+  Router fixture seeds require
   concrete router authoring/runtime syntax such as `@aurelia/router`, `@route`, route config objects, or `au-viewport`;
   broad route/router prose remains corpus navigation pressure only. Use classification filters for exact reason lanes
   such as `surface:native-value-binding`, `surface:native-checked-binding`, `surface:option-model-binding`, and
@@ -194,6 +201,11 @@ helpers.
   flow-to-entity links, and relationship axis distributions. Use it before changing semantic-runtime observer,
   accessor, binding value-channel, dirty-check, watcher, effect, or collection-observer semantics so the work starts
   from Aurelia's actual observation subsystem rather than local product guesses.
+- [framework-observation.ts](framework-observation.ts) is the targeted human CLI for `framework.observation` rows. Use
+  `framework:observation -- --projection=surface-methods --surfaceKind=proxy-observable --detail` before changing
+  ProxyObservable-adjacent behavior, `--projection=flow-sites --surfaceKind=ast-evaluator --detail` before changing
+  direct expression-read dependency semantics, or `--projection=flow-sites` with `--siteKind=...` when observation flow
+  needs a narrower source-backed read than the pressure rollup.
 - [framework-router-pressure.ts](framework-router-pressure.ts) prints the framework router rollup, curated route-flow
   spine health, relationship axis distributions, and flow self-audit rows from `framework.router`.
 - [framework-router.ts](framework-router.ts) prints the queryable `framework.router` lens for targeted router,

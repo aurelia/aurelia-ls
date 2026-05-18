@@ -101,6 +101,7 @@ export class SemanticAppTemplateQueries {
       query.sourceFile,
       toPageRequest(query.page),
       query.detail ?? SemanticRuntimeDetail.Compact,
+      query.diagnosticProjection,
     );
   }
 
@@ -114,6 +115,7 @@ export class SemanticAppTemplateQueries {
       this.emission,
       query.sourceFile,
       (query.detail ?? SemanticRuntimeDetail.Compact) === SemanticRuntimeDetail.Handles,
+      query.diagnosticProjection,
     );
   }
 }

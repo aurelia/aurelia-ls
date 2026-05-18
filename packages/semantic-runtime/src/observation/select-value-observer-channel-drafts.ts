@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { uniqueStrings } from '../kernel/collections.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { HtmlElement, normalizeHtmlTagName } from '../template/html-ir.js';
 import { runtimeAcceptedBindingExpressionAstForParse } from '../template/expression-parse-projection.js';
@@ -26,11 +27,12 @@ import {
   isBroadTypeShape,
   sourceTypeHasAssignableArrayPart,
   stringLiteralTypesForDomain,
-  uniqueStrings,
 } from './binding-value-channel-draft-support.js';
 import {
+  RuntimeBindingPrimitiveValueKind,
   RuntimeBindingValueChannelAuthority,
   RuntimeBindingValueChannelKind,
+  type RuntimeBindingPrimitiveValue,
 } from './runtime-binding-observation.js';
 
 export class SelectValueObserverChannelDrafts {
@@ -93,7 +95,9 @@ export class SelectValueObserverChannelDrafts {
     const optionValues = options.map((option, index) =>
       this.owner.optionRuntimeValue(`${local}:option:${index}`, option, context)
     );
-    const openOption = optionValues.find((option) => option.valueType == null && option.valueDomain.length === 0);
+    const openOption = optionValues.find((option) =>
+      option.valueType == null && option.valueDomain.length === 0 && option.primitiveValueDomain.length === 0
+    );
     if (openOption != null) {
       return {
         channelKind: RuntimeBindingValueChannelKind.SelectMultipleOptionValues,
@@ -107,6 +111,7 @@ export class SelectValueObserverChannelDrafts {
       };
     }
     const valueDomain = uniqueStrings(optionValues.flatMap((option) => option.valueDomain));
+    const primitiveValueDomain = uniquePrimitiveValueDomain(optionValues);
     const sourceShape = this.selectMultipleSourceShape(`${local}:source`, readSourceType());
     const runtimeValueType = this.selectOptionRuntimeValueType(
       `${local}:select-multiple-option-domain`,
@@ -122,6 +127,7 @@ export class SelectValueObserverChannelDrafts {
         authority: RuntimeBindingValueChannelAuthority.Open,
         runtimeValueType: targetAccess.propertyType,
         valueDomain: [],
+        primitiveValueDomain,
         isCollection: true,
         usesCustomMatcher,
         openReason: 'SelectValueObserver did not expose any static or TypeChecker-backed option value type for the multi-select value channel.',
@@ -134,6 +140,7 @@ export class SelectValueObserverChannelDrafts {
         authority: RuntimeBindingValueChannelAuthority.Open,
         runtimeValueType,
         valueDomain,
+        primitiveValueDomain,
         isCollection: true,
         usesCustomMatcher,
         openReason: 'SelectValueObserver multiple mode requires a TypeChecker-visible array source before collection element mutation can close.',
@@ -146,6 +153,7 @@ export class SelectValueObserverChannelDrafts {
         authority: RuntimeBindingValueChannelAuthority.Open,
         runtimeValueType,
         valueDomain,
+        primitiveValueDomain,
         isCollection: true,
         usesCustomMatcher,
         openReason: 'SelectValueObserver multiple mode mutates an array source; the binding source did not close as an array.',
@@ -160,6 +168,7 @@ export class SelectValueObserverChannelDrafts {
         : RuntimeBindingValueChannelAuthority.StaticTemplateAndTypeChecker,
       runtimeValueType,
       valueDomain,
+      primitiveValueDomain,
       isCollection: true,
       usesCustomMatcher,
       openReason: null,
@@ -199,7 +208,9 @@ export class SelectValueObserverChannelDrafts {
     const optionValues = options.map((option, index) =>
       this.owner.optionRuntimeValue(`${local}:option:${index}`, option, context)
     );
-    const openOption = optionValues.find((option) => option.valueType == null && option.valueDomain.length === 0);
+    const openOption = optionValues.find((option) =>
+      option.valueType == null && option.valueDomain.length === 0 && option.primitiveValueDomain.length === 0
+    );
     if (openOption != null) {
       return {
         channelKind: RuntimeBindingValueChannelKind.SelectDynamicOptionValue,
@@ -213,6 +224,7 @@ export class SelectValueObserverChannelDrafts {
       };
     }
     const valueDomain = uniqueStrings(optionValues.flatMap((option) => option.valueDomain));
+    const primitiveValueDomain = uniquePrimitiveValueDomain(optionValues);
     const optionValueType = this.selectDynamicOptionValueType(
       `${local}:select-dynamic-option-domain`,
       binding,
@@ -227,6 +239,7 @@ export class SelectValueObserverChannelDrafts {
         authority: RuntimeBindingValueChannelAuthority.Open,
         runtimeValueType: optionValueType ?? targetAccess.propertyType,
         valueDomain,
+        primitiveValueDomain,
         isCollection: null,
         usesCustomMatcher,
         openReason: 'SelectValueObserver dynamic multiple mode needs a source type that can accept both single option values and array-valued selection updates.',
@@ -242,6 +255,7 @@ export class SelectValueObserverChannelDrafts {
           : RuntimeBindingValueChannelAuthority.ObserverSemantics,
       runtimeValueType,
       valueDomain,
+      primitiveValueDomain,
       isCollection: null,
       usesCustomMatcher,
       openReason: null,
@@ -357,7 +371,9 @@ export class SelectValueObserverChannelDrafts {
     const optionValues = options.map((option, index) =>
       this.owner.optionRuntimeValue(`${local}:option:${index}`, option, context)
     );
-    const openOption = optionValues.find((option) => option.valueType == null && option.valueDomain.length === 0);
+    const openOption = optionValues.find((option) =>
+      option.valueType == null && option.valueDomain.length === 0 && option.primitiveValueDomain.length === 0
+    );
     if (openOption != null) {
       return {
         channelKind: RuntimeBindingValueChannelKind.SelectSingleOptionValue,
@@ -371,6 +387,7 @@ export class SelectValueObserverChannelDrafts {
       };
     }
     const valueDomain = uniqueStrings(optionValues.flatMap((option) => option.valueDomain));
+    const primitiveValueDomain = uniquePrimitiveValueDomain(optionValues);
     const runtimeValueType = this.selectOptionRuntimeValueType(
       `${local}:select-option-domain`,
       binding,
@@ -401,6 +418,7 @@ export class SelectValueObserverChannelDrafts {
           : RuntimeBindingValueChannelAuthority.StaticTemplateAndTypeChecker,
       runtimeValueType,
       valueDomain,
+      primitiveValueDomain,
       isCollection: false,
       usesCustomMatcher,
       openReason: null,
@@ -434,5 +452,33 @@ export class SelectValueObserverChannelDrafts {
     return typed.every((valueType) => sameCheckerTypeReference(first, valueType))
       ? first
       : null;
+  }
+}
+
+function uniquePrimitiveValueDomain(
+  optionValues: readonly BindingValueExpression[],
+): readonly RuntimeBindingPrimitiveValue[] {
+  const seen = new Set<string>();
+  const result: RuntimeBindingPrimitiveValue[] = [];
+  for (const value of optionValues.flatMap((option) => option.primitiveValueDomain)) {
+    const key = primitiveValueKey(value);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(value);
+  }
+  return result;
+}
+
+function primitiveValueKey(value: RuntimeBindingPrimitiveValue): string {
+  switch (value.kind) {
+    case RuntimeBindingPrimitiveValueKind.String:
+    case RuntimeBindingPrimitiveValueKind.Number:
+    case RuntimeBindingPrimitiveValueKind.Boolean:
+      return `${value.kind}:${String(value.value)}`;
+    case RuntimeBindingPrimitiveValueKind.Null:
+    case RuntimeBindingPrimitiveValueKind.Undefined:
+      return value.kind;
   }
 }

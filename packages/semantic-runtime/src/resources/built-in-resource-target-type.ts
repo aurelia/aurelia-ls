@@ -5,6 +5,7 @@ import type {
 import { localKeyPart } from '../kernel/local-key.js';
 import type { KernelStore } from '../kernel/store.js';
 import {
+  CheckerTypeMemberProjectionPolicy,
   CheckerTypeProjector,
   type CheckerTypeProjectionRequest,
 } from '../type-system/checker-projector.js';
@@ -48,6 +49,7 @@ export class BuiltInResourceTargetTypeProjector {
       sourceAddressHandle,
       ownerIdentityHandle,
       display: this.typeSystem.checker.typeToString(type),
+      memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
     } satisfies CheckerTypeProjectionRequest).toReference();
   }
 

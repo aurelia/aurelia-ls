@@ -3,6 +3,10 @@ import type { AddressHandle, OpenSeamHandle } from '../kernel/handles.js';
 import type { OpenSeam } from '../kernel/open-seam.js';
 import { addressBelongsToSourceFiles } from '../kernel/source-address.js';
 import type { KernelStore } from '../kernel/store.js';
+import type {
+  SemanticOpenSeamRow,
+  SemanticOpenSeamSummaryRow,
+} from './contracts.js';
 
 type RuntimeTemplateResource = AureliaAppWorldProjectEmission['templates']['resources'][number];
 
@@ -27,6 +31,64 @@ export function readAppOpenSeams(
   }
 
   return [...rows.values()];
+}
+
+export function openSeamSummaryRows(
+  rows: readonly SemanticOpenSeamRow[],
+): readonly SemanticOpenSeamSummaryRow[] {
+  const clusters = new Map<string, OpenSeamSummaryCluster>();
+  for (const row of rows) {
+    const key = openSeamSummaryKey(row);
+    let cluster = clusters.get(key);
+    if (cluster == null) {
+      cluster = {
+        seamKindKey: row.seamKindKey,
+        reasonKinds: [...row.reasonKinds],
+        count: 0,
+        sourceFiles: new Set<string>(),
+        sampleSummary: row.summary,
+        sampleSources: [],
+      };
+      clusters.set(key, cluster);
+    }
+    cluster.count += 1;
+    if (row.source?.path != null) {
+      cluster.sourceFiles.add(row.source.path);
+    }
+    if (row.source != null && cluster.sampleSources.length < 3 && !cluster.sampleSources.some((source) => source.label === row.source?.label)) {
+      cluster.sampleSources.push(row.source);
+    }
+  }
+  return [...clusters.values()]
+    .map((cluster): SemanticOpenSeamSummaryRow => ({
+      seamKindKey: cluster.seamKindKey,
+      reasonKinds: cluster.reasonKinds,
+      count: cluster.count,
+      sourceFileCount: cluster.sourceFiles.size,
+      sampleSummary: cluster.sampleSummary,
+      sampleSources: cluster.sampleSources,
+    }))
+    .sort((left, right) =>
+      right.count - left.count
+      || left.seamKindKey.localeCompare(right.seamKindKey)
+      || left.reasonKinds.join('|').localeCompare(right.reasonKinds.join('|'))
+    );
+}
+
+interface OpenSeamSummaryCluster {
+  readonly seamKindKey: SemanticOpenSeamRow['seamKindKey'];
+  readonly reasonKinds: SemanticOpenSeamSummaryRow['reasonKinds'];
+  count: number;
+  readonly sourceFiles: Set<string>;
+  readonly sampleSummary: string;
+  readonly sampleSources: NonNullable<SemanticOpenSeamRow['source']>[];
+}
+
+function openSeamSummaryKey(row: SemanticOpenSeamRow): string {
+  return [
+    row.seamKindKey,
+    [...row.reasonKinds].sort().join('|'),
+  ].join('\0');
 }
 
 function recordSourceFileOpenSeams(
@@ -57,6 +119,7 @@ function templateResourceOpenSeams(resource: RuntimeTemplateResource): readonly 
     ...resource.runtimeAnalysis.controllerBind.openSeams,
     ...resource.runtimeAnalysis.bindingValueChannel.openSeams,
     ...resource.runtimeAnalysis.bindingDataFlow.openSeams,
+    ...resource.runtimeAnalysis.runtimeComposition.openSeams,
   ];
 }
 

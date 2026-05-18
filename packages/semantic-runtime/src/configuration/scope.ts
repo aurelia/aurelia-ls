@@ -21,6 +21,7 @@ export const enum BindingScopeOwnerKind {
   SyntheticView = 'synthetic-view',
   LetElement = 'let-element',
   RepeatedItem = 'repeated-item',
+  StateBinding = 'state-binding',
 }
 
 export const enum BindingScopeLookupKind {
@@ -49,6 +50,18 @@ export type BindingContextSlotField =
   | 'target'
   | 'targetType'
   | 'source';
+
+/** Type refinement for a member of a runtime-created scope slot. */
+export class BindingContextSlotMemberType {
+  constructor(
+    /** Member name reached from the slot value. */
+    readonly name: string,
+    /** Static type that framework/template semantics project for this member. */
+    readonly targetType: CheckerTypeReference,
+    /** Source address for the binding site that introduced the refinement. */
+    readonly sourceAddressHandle: AddressHandle | null,
+  ) {}
+}
 
 /** Reference to a runtime binding context or override context without expanding all known names. */
 export class BindingContextReference {
@@ -103,6 +116,8 @@ export class BindingContextSlot {
     readonly fieldProvenance: readonly FieldProvenance<BindingContextSlotField>[] = [],
     /** Evaluator-local value carried by runtime-created slots such as repeat locals, when statically knowable. */
     readonly staticValue: EvaluationValue | null = null,
+    /** Member-level type refinements supplied by framework/template semantics. */
+    readonly memberTypes: readonly BindingContextSlotMemberType[] = [],
   ) {}
 }
 
@@ -128,6 +143,8 @@ export class BindingContextSlotDraft {
     readonly fieldProvenance: readonly FieldProvenance<BindingContextSlotField>[] = [],
     /** Evaluator-local value carried by runtime-created slots such as repeat locals, when statically knowable. */
     readonly staticValue: EvaluationValue | null = null,
+    /** Member-level type refinements supplied by framework/template semantics. */
+    readonly memberTypes: readonly BindingContextSlotMemberType[] = [],
   ) {}
 
   static fromSlot(slot: BindingContextSlot): BindingContextSlotDraft {
@@ -139,6 +156,7 @@ export class BindingContextSlotDraft {
       slot.sourceAddressHandle,
       slot.fieldProvenance,
       slot.staticValue,
+      slot.memberTypes,
     );
   }
 
@@ -151,6 +169,7 @@ export class BindingContextSlotDraft {
       this.sourceAddressHandle,
       this.fieldProvenance,
       this.staticValue,
+      this.memberTypes,
     );
   }
 }
@@ -380,6 +399,33 @@ export class BindingScope {
       null,
       [],
       false,
+      input.sourceAddressHandle,
+      input.scopeEffectOwnerProductHandles ?? [],
+    );
+  }
+
+  /** Runtime `createStateBindingScope(state, scope)` shape used by @aurelia/state binding behavior. */
+  static fromStateBindingScope(input: {
+    readonly localKey: string;
+    readonly ownerProductHandle: ProductHandle | null;
+    readonly ownerIdentityHandle: IdentityHandle | null;
+    readonly parent: BindingScope;
+    readonly stateType: CheckerTypeReference | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly scopeEffectOwnerProductHandles?: readonly ProductHandle[];
+  }): BindingScopeConstructionRequest {
+    return new BindingScopeConstructionRequest(
+      input.localKey,
+      BindingScopeOwnerKind.StateBinding,
+      input.ownerProductHandle,
+      input.ownerIdentityHandle,
+      input.parent,
+      BindingContextKind.Object,
+      input.stateType,
+      [],
+      null,
+      [],
+      true,
       input.sourceAddressHandle,
       input.scopeEffectOwnerProductHandles ?? [],
     );

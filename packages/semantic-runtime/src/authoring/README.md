@@ -21,17 +21,52 @@ operation classes should point into the ontology instead of creating parallel na
 composition and should not grow a second verification model.
 Named recipes currently live in `recipe.ts`; concrete builders are split by recipe so they can carry their own topology
 model, preferences, ordered operations, and expected effects without turning the recipe catalog into a generator.
-Current concrete recipe builders cover minimal app, state-backed form, validated state-backed form, service-backed form,
-and routed state-backed form loops. All current recipe builders expose source-plan contracts plus a project-tooling
-subcontract for package manifest, TypeScript config, and local asset module declarations. Build-tool/browser runner
-selection is still not modeled and remains visible as package-tooling product-open policy.
+Current concrete recipe builders cover minimal app, state-backed form, localized state-backed form, validated
+state-backed form, service-backed form, routed state-backed form, state-store todo, catalog storefront, and composed
+dashboard loops. All current recipe builders expose
+source-plan contracts plus a project-tooling subcontract for package manifest, TypeScript config, and local asset module
+declarations.
+Build-tool/browser runner selection is still not modeled and remains visible as package-tooling product-open policy.
 Recipes also declare direct base recipes and a transitive specificity rank. This keeps superset recipes honest: a
 validated, service-backed, or routed form can satisfy the state-backed form shape without losing the fact that the
 more-specific recipe is the better candidate when its discriminator effects are present.
 The service-backed form recipe now means service-backed state rather than a template-facing service facade: components
-resolve DI state and expose it through getters/setters, while the state class owns service/repository calls for loading
-and submission side effects. Its discriminator effects therefore prove state-to-service calls plus template-to-state
-binding handoff, not component bindability through a service object.
+resolve DI state, templates may bind directly into ordinary state classes, and view-model getters/setters are reserved
+for real adaptation rather than one-hop member forwarding. The state class owns service/repository calls for loading and
+submission side effects. Its discriminator effects therefore prove state-to-service calls plus template-to-state binding
+handoff, not component bindability through a service object.
+The localized state-backed form recipe keeps the recommendable DI-owned state/form shape and adds `@aurelia/i18n`
+plugin registration with static `I18nConfiguration` resources, `t` attributes, and `t-params.bind` values. Its
+discriminator effects prove plugin admission plus `i18n-translation-key` and `i18n-translation-binding` rows, so
+localization can be verified through semantic facts instead of source-text snapshots. The generated submit button uses
+Aurelia's multi-target i18n key-expression syntax (`[title]form.submit;form.submit`) so the recipe also proves
+normalized translation target properties and target kinds.
+The catalog storefront recipe is the first generated app-building recipe beyond forms. It uses DI-owned composed state,
+a catalog service for background loading, scalar ID handoff between non-leaf components, and getter projections over
+state lookups so recommendable templates do not depend on nullable object reads while still exercising list/detail
+composition, service interaction bindings, state composition verification, promise pending/then/catch branch
+controllers, switch/case/default-case availability states, and class/style interpolation plus per-token `.class` and
+per-property `.style` bindings backed by row-level target access, value-channel, data-flow, and style-binding taste
+verification.
+The composed dashboard recipe is the first generated app-building recipe that verifies dynamic component composition.
+It uses DI-owned widget state, repeated dashboard cards, a TypeChecker-visible union of widget component classes, and
+`<au-compose component.bind model.bind>` handoff. Its discriminator effect is `runtime-composition`, backed by
+`RuntimeCompositions` rows that report component resolution kind, model resolution kind, resolved component count,
+compiled template count, candidate resource-analysis coverage, and aggregate composed child-controller handoff for
+closed static/value branches. The same row now records `activate(model)` handoff kinds, parameter/model assignability,
+static/defaulted `scopeBehavior` and `flushMode`, template-only composition presence, host `tag`, and
+`composition`/`composing` from-view handoff presence. The recipe therefore proves both a repeated dynamic widget
+composition and a scoped template-only summary composition without inferring either from markup alone. Recursive child
+composition rendering, template-only runtime template compilation, and lifecycle run/deactivate state remain
+controller/composition frontiers instead of source-plan shortcuts.
+The state-store todo recipe is the first generated `@aurelia/state` recipe. It uses
+`StateDefaultConfiguration.init(...).withStore(...)`, a default todo store, a named filters store, `.state` /
+`.dispatch` command syntax, and default plus named `& state` binding behaviors. Its expected effects prove plugin
+admission, default/named `state-store` rows, `aurelia-state-store` ownership taste, and state binding-behavior
+applications. The semantic-runtime state substrate also projects initial-state argument types so `& state` and `.state`
+expressions evaluate against store-backed binding scopes, while `.dispatch` emits state-store action source operations
+and payload value channels. The generated input dispatch expression also verifies that `$event.target.value` refines
+through the authored native input element.
 `recipe.ts` also exposes `expectedSemanticEffectsForPlan(...)` and recipe expected-effect coverage by building the plan
 from stable seed inputs and compressing duplicate semantic targets across step-local and final verification effects.
 Use that API and
@@ -61,6 +96,33 @@ passing cardinality through the broad `fact(...)` argument list when a count is 
 Project tooling has its own expected-effect family (`project-tooling`). Generated recipes now verify package manifest,
 TypeScript config, and local asset module declaration source roles after reopen instead of treating those files as
 invisible write-side artifacts.
+Composed state has its own expected-effect family (`state-composition`) backed by `api.AppTopology.stateCompositions`.
+Use it when a recipe needs to prove that a DI state class owns typed child state instances, rather than inferring app
+shape only from folder names or arbitrary object literals.
+Runtime component composition has its own expected-effect family (`runtime-composition`) backed by
+`api.RuntimeCompositions`. Use it when a recipe needs to prove that an `AuCompose` host resolved dynamic component
+candidates, compiled their templates, exposed candidate resource-analysis coverage, materialized aggregate composed
+child-controller handoff for closed branches, closed activation model handoff where a component or object view-model
+exposes `activate(model)`, or when it needs to prove template-only composition context inputs such as `scopeBehavior`,
+`tag`, `flushMode`, `composition`, and `composing`. Rows also expose direct/promise/absent/open input fulfillment for
+component, template, and model inputs, so recipes can prove framework-supported promise-valued composition inputs
+without inferring composition from markup alone.
+Runtime controller facts are row-backed when a recipe supplies filters. Shared helpers in
+`template-controller-expected-effects.ts` verify built-in template-controller handoff rows such as
+`creationKind=template-controller`, `templateControllerFlowKind=iteration`, `childViewCardinality=many`, and matching
+synthetic-view hydration. Promise helpers also verify `pending`/`then`/`catch` branch rows with
+`templateControllerLinkKind=promise-branch-to-promise`, so generated markup can assert the controller relationship and
+not just the presence of promise-shaped rows. Switch helpers similarly assert `case`/`default-case` linkage through
+`templateControllerLinkKind=switch-case-to-switch`. Use these helpers when generated markup depends on built-in
+template-controller semantics rather than treating `runtime-controller` as an aggregate count.
+I18n translation catalogs have their own expected-effect family (`i18n-translation-key`) backed by
+`api.I18nTranslationKeys`. Use it when a recipe needs to prove that static plugin resources materialized as translation
+keys. Rendered i18n translation usages have a separate expected-effect family (`i18n-translation-binding`) backed by
+`api.I18nTranslationBindings`. Use it when a recipe needs to prove that `t`/`t.bind` and `t-params.bind` materialized as
+target-element binding groups with closed lifecycle issue counts and framework-shaped target semantics such as
+`targetProperties=title` or `targetKinds=text-content`. Keep both distinct from i18n template diagnostics: translation-key
+rows describe catalog availability, translation-binding rows describe successful rendered lifecycles, and
+`AUR4000`/`AUR4001`/`AUR4002` diagnostics describe `TranslationBinding` lifecycle failures after rendering.
 `AuthoringOrientation` reports package tooling as `partial` when no project-tooling source roles are visible and
 `observable` when package manifest, tooling config, or declaration rows are admitted; build-tool and package-manager
 execution still remain product-open policy.
@@ -73,6 +135,10 @@ current app reading implies a particular style ownership taste. The operation/ca
 `style-asset-authoring` separate from the broader `design-system` capability: recipes can create component stylesheets
 without pretending that product-wide tokens, layout policy, accessibility policy, or component-library integration are
 solved.
+Class and style presentation bindings now have reusable expected-effect helpers in `form-expected-effects.ts`.
+Generated recipes can verify class attribute accessors, whole-class token value channels, per-class toggle channels,
+whole-style-rule channels, per-property style channels, and plain-attribute interpolation data flow without falling
+back to source-text assertions.
 Route expected effects keep the broad route topology count for unfiltered `route` facts, and can also filter reopened
 route rows by fields such as `originKind`, `valueKind`, and `routeProductKind`. `routeProductKind` comes from the
 shared route query registry used by API dispatch and route-effect facts. It distinguishes route configs, RouteContexts,
@@ -80,19 +146,36 @@ au-viewport products, ViewportAgents, router instruction trees, recognizer produ
 ComponentAgent handoffs. Use those filters when a recipe needs to prove an intended router/viewport authoring lane
 instead of accepting any route topology as equivalent. Shared router expected-effect constructors live in
 `route-expected-effects.ts`.
+The routed state-backed form recipe now uses a parameterized route (`form/:requestId`), a sibling static navigation
+target (`form/request-1+summary?mode=edit&tag=primary&tag=priority#details`), named route viewports (`main` and
+`sidebar`), and `IRouteContext.getRouteParameters({ includeQueryParams: true })` inside the routed view-model so the
+generated form receives its scalar ID and query metadata from the route rather than from a local selection widget. Its
+router effects assert the request parameter on route-pattern, route-endpoint, and recognized-route rows, assert static
+query/fragment propagation on viewport-instruction-tree rows, and assert sibling viewport routing plus include-query
+route-node aggregates on route-config, router-viewport, route-node, and component-agent rows. This proves static
+parameter-name/value, query-value, and viewport-target propagation through the modeled recognizer/route-tree lane.
+Append/by-route static aggregation is API-visible as analysis evidence; dynamic query merging and live navigation state
+remain router substrate work.
 Build-tool selection is represented as taste/policy through `build-tool-profile`. Generated recipes currently prefer
 `host-selected-build-tool` and expose typecheck-only project tooling; orientation may observe existing bundler config
 files, but build-tool choice remains host/product policy until it has a real authoring contract.
 The state-backed, service-backed, and routed state-backed form recipes now generate a root component stylesheet through
-`create-style-asset` and a form-level class-token binding driven by `canSubmit`; their final verification expects
-`style-resource` facts, `component-stylesheet` taste, `class-token-binding` taste, native `value` target-access,
-value-channel, and data-flow facts through structured `targetKind=node` plus `targetProperty=value` expected-effect
-filters, and checked/radio target-access, value-channel, and data-flow facts through `targetProperty=checked`.
+`create-style-asset`, a form-level class-token binding driven by `canSubmit`, and a capture-based `field-shell` custom
+element that forwards authored `value` / validation attributes through `...$attrs` into a native input; their final
+verification expects `style-resource` facts, `component-stylesheet` taste, `class-token-binding` taste, native `value`
+target-access, value-channel, and data-flow facts through structured `targetKind=node` plus `targetProperty=value`
+expected-effect filters, a `target-operation` fact for captured `type="email"` spread into the inner native input,
+captured `valueSiteKind=captured-value` two-way value data-flow, and checked/radio target-access, value-channel, and
+data-flow facts through `targetProperty=checked`.
 Primitive form/style expected-effect constructors live in `form-expected-effects.ts`, while
 `form-recipe-expected-effects.ts` composes those primitives with project-tooling, component-role, external-template, and
 runtime-controller expectations for recommendable generated form apps. Recipe builders should reuse the recipe-level
 composition when they mean the same standard form semantics, then add only their state, service, validation, or router
 discriminator effects locally.
+The standard form recipes now include a nullable single-select beside the multi-select array control, mirroring the
+Aurelia docs pattern of `option model.bind="null"` for "choose later" placeholders. Verification asserts that the
+binding value-channel API exposes the primitive `null` model domain, which keeps generated forms honest about
+non-string runtime model values without recommending custom matcher-heavy object selection as the default.
 `form-recipe-plan-steps.ts` carries the shared recommendable form-app plan steps for project files, entrypoint, root
 component, component stylesheet, external templates, form component creation, template binding, and verification. Use
 those helpers for the repeated standard form scaffolding shape, then keep recipe-specific state, service, validation,
@@ -100,7 +183,9 @@ or router steps visible in the concrete builder.
 Authoring orientation reads binding value-channel `targetKind` to separate native element `value` observers from custom
 element/component `value`/`model`/`checked` APIs. Null target channels remain open/unknown rather than being promoted to
 native DOM observer taste; custom-control form taste should stay grounded in runtime binding target semantics rather
-than target-name heuristics.
+than target-name heuristics. Checked/select `matcher.bind` is also visible as `custom-matcher-comparison` form taste
+and can be verified by filtering `binding-value-channel` expected effects with `usesCustomMatcher=true`; this records
+the framework handoff to app-supplied equality without executing matcher bodies.
 `AuthoringOrientation` coverage and available-surface rows expose binding target accesses, direct target operations,
 binding value channels, binding behavior applications, and binding data flows as separate surfaces. Keep those lanes
 distinct when widening authoring verification: observer/accessor lookup, direct renderer/binding writes, transported
@@ -108,24 +193,33 @@ value shape, behavior application, and TypeChecker source/target flow answer dif
 Coverage and surfaces also both advertise resource visibility and runtime controllers, so callers do not have to know
 whether compiler-world visibility or hydration facts are filed under coverage-only rows.
 The validated state-backed form recipe deliberately stays separate from the plain form recipe. It adds
-`ValidationHtmlConfiguration`, `IValidationRules`/`IValidationController` usage, and `& validate` bindings, then expects
-fact-level `binding-behavior-application` rows for `validate` plus `validation-controller-usage` as a discriminator
-taste so validation ownership remains an explicit authoring choice. The recipe can also emit a static validation
-trigger such as `& validate:'blur'`; verification matches that through the `BindingBehaviorApplications`
-`staticArgumentValues` row field rather than inspecting source text.
+`ValidationHtmlConfiguration`, `IValidationRules`/`IValidationController` usage, `& validate` bindings, and
+`validation-errors.from-view` presentation regions, then expects fact-level `binding-behavior-application` rows for
+`validate`, controller-view-model `errors` target access/value-channel/data-flow rows for `validation-errors`, and
+`validation-controller-usage` as a discriminator taste so validation ownership remains an explicit authoring choice.
+The default validated recipe emits `& validate:'blur'` so generated fixtures prove static binding-behavior arguments;
+hosts can still pass `validationTrigger: null` when they want plain `& validate`. Verification matches the trigger
+through the `BindingBehaviorApplications` `staticArgumentValues` row field rather than inspecting source text.
 The current observation uses the same shared expected-effect primitive as closed-loop verification, so a recipe can
 report whether its ambition is already satisfied, partially missing, unsupported, or not applicable before a generator
-or repair planner picks the next move. Filtered binding target/value/data-flow expectations require row-level facts;
-count-only verification snapshots remain valid only for unfiltered effects. Use `expectedSemanticEffectsForPlan(plan)`
-rather than only the final verification step when checking a concrete plan: step-local effects often carry the signature
-or discriminator facts that make a recipe meaningful.
+or repair planner picks the next move. Fit-state evaluation checks failed discriminators/signatures before classifying
+unsupported row-backed effects, so a recipe that plainly does not apply does not become a false-positive unsupported
+candidate. Filtered runtime-controller, binding target/value/data-flow, and similar expectations require row-level
+facts; count-only verification snapshots remain valid only for unfiltered effects. Use
+`expectedSemanticEffectsForPlan(plan)` rather than only the final verification step when checking a concrete plan:
+step-local effects often carry the signature or discriminator facts that make a recipe meaningful.
 Use `readAuthoringVerificationSnapshot(app)` when verifying a reopened app from the public API. It collects the summary,
-topology, orientation, open seams, route-effect fact rows, binding-behavior applications, target accesses, direct target
-operations, value channels, and data-flow rows with pagination, so recipe and repair smokes do not each decide which row
-families matter for filtered expected effects. Use `target-operation` effects for renderer or binding writes that
-deliberately bypass the observer locator, such as captured static attributes, class/style renderers, or direct
-attribute/property updates. If one of those row-backed projections is unsupported for the opened app's analysis depth,
-the helper fails early instead of turning missing analysis into zero observed facts.
+topology, orientation, open seams, runtime controller rows, runtime compositions, i18n translation keys,
+i18n translation bindings, route-effect fact rows,
+binding-behavior applications, target accesses, direct target operations, value channels, and data-flow rows with
+pagination, so recipe and repair smokes do not each decide which row families matter for filtered expected effects. Use
+`target-operation` effects for renderer or
+binding writes that deliberately bypass the observer locator, such as captured static attributes, class/style renderers,
+or direct attribute/property updates. If one of those row-backed projections is unsupported for the opened app's
+analysis depth, the helper fails early instead of turning missing analysis into zero observed facts.
+Closed-loop authoring smokes therefore open generated apps with `analysisDepth: 'binding-observation'`: the verification
+snapshot intentionally spans binding-behavior, target-operation, value-channel, and data-flow rows, even when one recipe
+only asserts a subset of those facts.
 `source-plan.ts` is the first explicit edit boundary: recipes may attach file-level source edits with text authority,
 conflict policy, formatting policy, and package-tooling policy instead of hiding those choices in operation prose.
 Recipe source templates fail closed when a placeholder has no value or a supplied value is unused; template/source-plan
@@ -134,8 +228,9 @@ Recipe source-plan builders should expose named file-artifact producer functions
 shell. Those functions are intentionally concrete handles for one generated artifact, not a generic generator DSL.
 `package-tooling.ts` is the first structured project-tooling boundary: generated recipes can carry recipe-owned
 `package.json`, `tsconfig.json`, and declaration-file text without claiming that build-tool profile selection is solved.
-The minimal, state-backed, validated state-backed, service-backed, and routed state-backed form recipes now use those
-lanes to generate temporary apps from their own source and tooling plans before reopen verification.
+The minimal, state-backed, localized state-backed, validated state-backed, service-backed, routed state-backed form,
+catalog storefront, and composed dashboard recipes now use those lanes to generate temporary apps from their own source
+and tooling plans before reopen verification.
 The durable fixture materializer derives from `AuthoringRecipeDescriptors` and writes every recipe source plan under
 `fixtures/authoring/generated-*`, replacing each generated folder first so stale files do not survive recipe changes.
 Adding a concrete recipe no longer requires a second hand-maintained fixture list.

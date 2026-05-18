@@ -24,6 +24,10 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
+  bindProductDetailEnvelope,
+  requireProductDetailEnvelope,
+} from '../kernel/product-details.js';
+import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -254,14 +258,17 @@ export class HtmlParseMaterializer {
     rootNodes: readonly HtmlNodeReference[],
     recoveries: readonly HtmlRecovery[],
   ): HtmlDocument {
-    return new HtmlDocument(
-      handles.productHandle,
-      handles.identityHandle,
+    return bindProductDetailEnvelope(new HtmlDocument(
       rootNodes,
       recoveries,
-      source.sourceAddressHandle,
       [],
-    );
+    ), new MaterializedProduct(
+      handles.productHandle,
+      KernelVocabulary.Template.HtmlDocument.key,
+      handles.identityHandle,
+      source.sourceAddressHandle,
+      source.provenanceHandle,
+    ));
   }
 
   private sourceClaimForDocument(
@@ -292,13 +299,7 @@ export class HtmlParseMaterializer {
         state.source.sourceAddressHandle,
         input.compilationUnit.unitKind,
       ),
-      new MaterializedProduct(
-        document.productHandle,
-        KernelVocabulary.Template.HtmlDocument.key,
-        document.identityHandle,
-        state.source.sourceAddressHandle,
-        state.source.provenanceHandle,
-      ),
+      requireProductDetailEnvelope(document, 'template.html-document'),
       sourceClaim,
       ...state.claims.filter((claim) => claim !== sourceClaim),
       new MaterializationRecord(
@@ -400,22 +401,16 @@ class HtmlParseTreeMaterializer {
       case HtmlIrNodeKind.Comment:
         return this.htmlCommentForDraft(state, draft, frame);
       case HtmlIrNodeKind.Doctype:
-        return new HtmlDoctype(
-          frame.productHandle,
-          frame.identityHandle,
+        return this.bindHtmlNodeProduct(new HtmlDoctype(
           draft.text,
-          frame.sourceAddressHandle,
           frame.recoveries,
-        );
+        ), state, frame);
       case HtmlIrNodeKind.Text:
       default:
-        return new HtmlText(
-          frame.productHandle,
-          frame.identityHandle,
+        return this.bindHtmlNodeProduct(new HtmlText(
           draft.text ?? '',
-          frame.sourceAddressHandle,
           [],
-        );
+        ), state, frame);
     }
   }
 
@@ -429,18 +424,15 @@ class HtmlParseTreeMaterializer {
       this.materializeAttribute(input, state, attribute, frame.productHandle, frame.identityHandle, `${frame.pathKey}:attr:${index}`)
     );
     const children = draft.children.map((child) => this.materializeNode(input, state, child, frame.productHandle));
-    return new HtmlElement(
-      frame.productHandle,
-      frame.identityHandle,
+    return this.bindHtmlNodeProduct(new HtmlElement(
       draft.tagName ?? '',
       draft.namespace,
       attributes,
       children,
       draft.selfClosing,
-      frame.sourceAddressHandle,
       frame.recoveries,
       [],
-    );
+    ), state, frame);
   }
 
   private htmlCommentForDraft(
@@ -448,15 +440,26 @@ class HtmlParseTreeMaterializer {
     draft: ParsedHtmlNodeDraft,
     frame: HtmlNodeMaterializationFrame,
   ): HtmlComment {
-    return new HtmlComment(
-      frame.productHandle,
-      frame.identityHandle,
+    return this.bindHtmlNodeProduct(new HtmlComment(
       draft.text ?? '',
       HtmlCommentSemanticKind.Plain,
-      frame.sourceAddressHandle,
       frame.recoveries,
       [],
-    );
+    ), state, frame);
+  }
+
+  private bindHtmlNodeProduct<TNode extends HtmlElement | HtmlText | HtmlComment | HtmlDoctype>(
+    node: TNode,
+    state: HtmlMaterializationState,
+    frame: HtmlNodeMaterializationFrame,
+  ): TNode {
+    return bindProductDetailEnvelope(node, new MaterializedProduct(
+      frame.productHandle,
+      KernelVocabulary.Template.HtmlNode.key,
+      frame.identityHandle,
+      frame.sourceAddressHandle,
+      state.source.provenanceHandle,
+    ));
   }
 
   private recordMaterializedNode(
@@ -482,13 +485,7 @@ class HtmlParseTreeMaterializer {
         nodeKey(draft, frame.sourceAddressHandle),
         frame.nodeAddressHandle,
       ),
-      new MaterializedProduct(
-        frame.productHandle,
-        KernelVocabulary.Template.HtmlNode.key,
-        frame.identityHandle,
-        frame.sourceAddressHandle,
-        state.source.provenanceHandle,
-      ),
+      requireProductDetailEnvelope(node, 'template.html-node'),
     );
   }
 
@@ -535,17 +532,20 @@ class HtmlParseTreeMaterializer {
     draft: ParsedHtmlAttributeDraft,
     frame: HtmlAttributeMaterializationFrame,
   ): HtmlAttribute {
-    return new HtmlAttribute(
-      frame.productHandle,
-      frame.identityHandle,
+    return bindProductDetailEnvelope(new HtmlAttribute(
       draft.rawName,
       draft.rawValue,
       frame.nameAddressHandle,
       frame.valueAddressHandle,
-      frame.sourceAddressHandle,
       frame.recoveries,
       [],
-    );
+    ), new MaterializedProduct(
+      frame.productHandle,
+      KernelVocabulary.Template.HtmlAttribute.key,
+      frame.identityHandle,
+      frame.sourceAddressHandle,
+      state.source.provenanceHandle,
+    ));
   }
 
   private recordMaterializedAttribute(
@@ -567,13 +567,7 @@ class HtmlParseTreeMaterializer {
         frame.sourceAddressHandle,
         draft.rawName,
       ),
-      new MaterializedProduct(
-        frame.productHandle,
-        KernelVocabulary.Template.HtmlAttribute.key,
-        frame.identityHandle,
-        frame.sourceAddressHandle,
-        state.source.provenanceHandle,
-      ),
+      requireProductDetailEnvelope(attribute, 'template.html-attribute'),
     );
   }
 

@@ -94,6 +94,18 @@ static type surfaces rather than hydrated runtime values.
   writeability, while observation only maps that result into Aurelia `astAssign` policy. Only after those fail should
   the row report `owner-member-not-projected`; otherwise app pressure will confuse ordinary indexed/dynamic TypeScript
   surfaces with missing Aurelia runtime semantics.
+  Ordinary template reads such as `state.member` do not need view-model forwarding getters to become observable:
+  Aurelia's expression evaluation connects `AccessScope`, `AccessMember`, and `AccessKeyed` reads through the active
+  connectable. Atlas exposes this framework grounding through
+  `framework:observation -- --projection=flow-sites --surfaceKind=ast-evaluator --detail`, including the exact
+  `astEvaluate` source rows that call `IConnectable.observe`. Authoring recipes should therefore expose DI state
+  directly when the getter would only shorten one member hop. Keep getters for real adaptation points such as nullability,
+  id lookup, route parameter projection,
+  presentation state, or form field read/write policy.
+  Access-scope writes follow the same context-type fallback as expression reads: if no explicit Scope slot exists but
+  the selected binding context has a TypeChecker-backed view-model type, writeability is resolved through that context
+  type. This keeps ordinary getter/setter view-model properties runtime-assignable without eagerly materializing every
+  member as a Scope slot.
   Data-flow rows pass rendering-controller `strictBinding` into the TypeChecker evaluator because Aurelia only throws
   nullish member/keyed/call access errors in strict expression-evaluation mode. The evaluator projects `undefined` for
   optional and non-strict nullish reads, preserves open nullish results when strictness is unknown, and lets template
@@ -140,10 +152,12 @@ static type surfaces rather than hydrated runtime values.
   `select-value-observer-channel-drafts.ts` owns `SelectValueObserver` branches,
   `checked-observer-channel-drafts.ts` owns `CheckedObserver` branches, and
   `binding-value-channel-draft-support.ts` owns shared TypeChecker, template-node, value-site, and lazy source-type
-  lookup support. Closed observer-specific slices include static
-  single-select option domains, such as `select.value` carrying `'ship' | 'pickup'` instead of raw DOM `string`, plain
-  checkbox boolean channels, radio element values, checkbox element values bound to array/set membership sources, and
-  checkbox element keys bound to `Map<K, boolean>` sources.
+  lookup support. Closed observer-specific slices include static single-select option domains, such as `select.value`
+  carrying `'ship' | 'pickup'` instead of raw DOM `string`, plain checkbox boolean channels, radio element values,
+  checkbox element values bound to array/set membership sources, and checkbox element keys bound to `Map<K, boolean>`
+  sources. String `valueDomain` is intentionally not the whole story: `model.bind="null"`, boolean radio/select
+  options, and numeric option models carry a `primitiveValueDomain` alongside the existing string display domain so
+  API consumers and data-flow assignability can see Aurelia's actual runtime comparison values.
   Element values can come from static `value`/`model` attributes or from lowered sibling `model.bind`/`value.bind`
   property bindings. Dynamic element-property and setter accessors may have no declared TypeScript property type, for
   example `model` on options or inputs, while still being valid Aurelia runtime writes; those channels use `unknown` as
@@ -192,13 +206,16 @@ channel they imply, and `binding-value-channel-materializer.ts` publishes the re
 matters because the observers select the accessor branch, but the actual value domain depends on authored option/input
 nodes plus TypeChecker-visible source facts. The current value-channel model
 closes the single-select option domain from static `option.value`, static `option.model`, or expression-backed
-`option.model/value` bindings. Static multi-selects close the selected option element domain for TypeChecker-visible
-array sources. Dynamic `multiple.bind` is a distinct `select-dynamic-option-value` channel when the source type is
+`option.model/value` bindings. Primitive option/input models such as `null`, `true`, `false`, and numeric literals are
+stored as primitive value-domain entries rather than coerced into the string domain; the string `valueDomain` remains
+for actual static string values and presentation token domains. Static multi-selects close the selected option element
+domain for TypeChecker-visible array sources. Dynamic `multiple.bind` is a distinct `select-dynamic-option-value`
+channel when the source type is
 broad enough to carry both framework branches: single-select scalar updates and multi-select array mutation. This is
 common in wrapper components whose public value is intentionally weak or scalar-or-array; it should stay visible as a
 dynamic select channel rather than an open seam. It still remains an explicit
-`binding-value-channel-dynamic-select-multiple` seam when the bound source type cannot plausibly accept both branches,
-because Aurelia's `SelectValueObserver` branches on the live element `multiple` flag at runtime.
+  `binding-value-channel-dynamic-select-multiple` seam when the bound source type cannot plausibly accept both branches,
+  because Aurelia's `SelectValueObserver` branches on the live element `multiple` flag at runtime.
 The exact `AUR0654` single-select/array-source error is deliberately not published by the value-channel draft: the draft
 can prove the single-select channel, but only the later data-flow edge has the TypeChecker source type needed to mirror
 `SelectValueObserver.setValue(...)` and `_observeArray(...)`.
@@ -207,7 +224,9 @@ authored select targets, and multi-select source-shape pressure.
 `CheckedObserver` closes plain checkbox boolean flow, radio values, checkbox values for array/set membership sources,
 and checkbox keyed-boolean writes for `Map<K, boolean>` sources using static attributes or expression-backed
 `model/value` bindings. The map channel carries the element model/value as the map key and validates the checked state
-against the map value type during data-flow assignability. `matcher.bind` is preserved on checked/select value-channel
+against the map value type during data-flow assignability. Radio source-to-target assignability uses primitive domains
+when present, so a source typed `boolean | null` can correctly drive individual `model.bind="true"`, `false`, and
+`null` radios. `matcher.bind` is preserved on checked/select value-channel
 rows as `usesCustomMatcher` so diagnostics and authoring can distinguish default runtime equality from an app-supplied
 comparison function; the analyzer still does not execute the matcher body or derive equality semantics from it.
 Non-literal dynamic element values remain explicit pressure.
@@ -222,3 +241,21 @@ for order-sensitive inputs, and this substrate consumes the resulting lowered si
 than rediscovering those expressions from raw attributes. Class/style command syntax is also consumed after lowering:
 `.class` and `.style` sites are runtime `AttributeBinding` products with direct target operations, while plain
 `class="${...}"` and `style="${...}"` sites are runtime `InterpolationBinding` products with target access.
+
+Proxy observation is part of the same observation circuit as the ordinary binding lane above. Framework
+`ProxyObservable` wraps plain objects, arrays, maps, and sets so watcher/computed/trackable-method evaluation and nested
+collection reads can keep feeding dependency reads into the active connectable. Its object, array, and collection proxy
+handlers collect through that connectable and unwrap before returning values to the caller, while `astEvaluate` supplies
+the ordinary `AccessScope`/`AccessMember`/`AccessKeyed` read handoffs. Atlas exposes both sides of the circuit through
+`framework:observation`: use `--surfaceKind=ast-evaluator` for expression-evaluation handoffs and
+`--surfaceKind=proxy-observable` for proxy wrapping/cache/collection handoffs. The product model still mainly spends
+the normal template connectable and observer-locator paths. Richer ProxyObservable-style dependency products remain a
+substrate frontier for vanilla class domain modeling, especially when fixture recipes start relying more heavily on
+composed state classes instead of view-model forwarding.
+
+The current frontier is deliberately not closed by a placeholder product. Atlas now identifies the framework flow sites,
+but semantic-runtime still needs a product that is useful at the binding/watcher/computed boundary: ordinary binding
+data-flow can identify the primary source expression, while a future dependency lane should explain the concrete
+`AccessScope`/`AccessMember`/`AccessKeyed`, collection, and proxy/trackable reads that a connectable subscribed to.
+Add that lane only when it feeds diagnostics, authoring verification, repair planning, or fixture pressure; otherwise it
+will become a parallel observation model instead of a sharper version of the existing one.

@@ -1,6 +1,6 @@
 import ts from 'typescript';
 import type { KernelStore } from '../kernel/store.js';
-import { TypeSystemProductDetails } from './product-details.js';
+import { readCheckerTypeShape } from './checker-type-shape-access.js';
 import {
   CheckerTypeShapeKind,
   classifyCheckerTypeShape,
@@ -25,9 +25,7 @@ export function readCheckerReferenceSurface(
   if (reference == null) {
     return emptyTypeSurface();
   }
-  const shape = reference.productHandle == null
-    ? null
-    : store.productDetails.read(TypeSystemProductDetails.TypeShape, reference.productHandle);
+  const shape = readCheckerTypeShape(store, reference);
   return checkerSurfaceFromReference(reference, shape);
 }
 

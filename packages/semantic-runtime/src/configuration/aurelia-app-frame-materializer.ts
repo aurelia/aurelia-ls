@@ -24,7 +24,7 @@ import {
 } from '../kernel/materialization.js';
 import {
   compactFieldProvenance,
-  FieldProvenance,
+  fieldProvenanceWhenDistinct,
 } from '../kernel/provenance.js';
 import type {
   KernelStore,
@@ -475,11 +475,8 @@ export class AureliaAppFrameMaterializer {
       null,
       source.addressHandle,
       compactFieldProvenance<AppRootConfigField>([
-        host == null ? null : new FieldProvenance('host', host.provenanceHandle),
-        component == null ? null : new FieldProvenance('component', component.provenanceHandle),
-        observation.allowActionlessForm == null ? null : new FieldProvenance('allowActionlessForm', source.provenanceHandle),
-        observation.strictBinding == null ? null : new FieldProvenance('strictBinding', source.provenanceHandle),
-        new FieldProvenance('source', source.provenanceHandle),
+        fieldProvenanceWhenDistinct('host', host?.provenanceHandle, source.provenanceHandle),
+        fieldProvenanceWhenDistinct('component', component?.provenanceHandle, source.provenanceHandle),
       ]),
     );
   }

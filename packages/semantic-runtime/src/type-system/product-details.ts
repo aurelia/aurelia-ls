@@ -1,4 +1,5 @@
 import { defineProductDetailSlot } from '../kernel/product-details.js';
+import { defineHotDetailSlot } from '../kernel/hot-details.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type {
   CheckerTypeMember,
@@ -12,9 +13,12 @@ export const TypeSystemProductDetails = {
     'type-system.type-shape',
     'Type-system type projection with optional hot checker carrier and member details.',
   ),
-  TypeMember: defineProductDetailSlot<CheckerTypeMember>(
-    KernelVocabulary.TypeSystem.TypeMember.key,
+} as const;
+
+/** Hot TypeChecker details whose lifetime is owned by a projected type shape or query claim. */
+export const TypeSystemHotDetails = {
+  TypeMember: defineHotDetailSlot<CheckerTypeMember>(
     'type-system.type-member',
-    'Type-system member projection visible on a type shape.',
+    'Hot type-system member projection visible on a type shape; usually not a durable kernel product.',
   ),
 } as const;

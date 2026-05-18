@@ -10,7 +10,7 @@
   </product-card>
 
   <product-card
-    repeat.for="productId of productIds"
+    repeat.for="productId of state.catalog.productIds"
     product-id.bind="productId">
   </product-card>
 </section>

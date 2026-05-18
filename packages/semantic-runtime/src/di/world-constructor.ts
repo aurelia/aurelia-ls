@@ -79,6 +79,7 @@ import type { DiIssue } from './di-issue.js';
 import {
   DiIssuePublisher,
 } from './di-issue-publication.js';
+import { DiKeyIdentityEmitter } from './di-key-identity-emitter.js';
 import { DiProductDetails } from './product-details.js';
 import { Resolver } from './resolver.js';
 import {
@@ -91,7 +92,6 @@ import {
   DiContainerSelfResolverPublicationMaterializer,
   DiFrameworkAppTaskPublicationMaterializer,
   DiFrameworkRegistrationEffectEmission,
-  DiKeyIdentityEmitter,
   DiProductEmission,
   DiRegistrationOperationEmission,
   DiRegistrationOperationHandles,

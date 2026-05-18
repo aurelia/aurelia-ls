@@ -24,6 +24,7 @@ import type {
   FrameworkSyntaxProductRow,
 } from "./framework-entities.js";
 import type { FrameworkDiscoveryFilters } from "./framework-filters.js";
+import { auComposeCompositionDeclarations } from "./framework-au-compose.js";
 import {
   readFrameworkBindingAdmissions,
   readFrameworkBindingEffects,
@@ -144,6 +145,7 @@ export function readFrameworkRenderingRelationships(
       bindingSetupRelationship,
     ),
     ...bindablesDefinitionRelationships(sourceProject),
+    ...auComposeCompositionRelationships(sourceProject),
   ]);
   return rows
     .filter((row) => renderingRelationshipMatches(row, filters))
@@ -214,6 +216,53 @@ function bindablesDefinitionRelationships(
         "BindableDefinition is the runtime-html definition record produced for @bindable metadata and ResourceResolver bindable tables.",
     },
   ];
+}
+
+function auComposeCompositionRelationships(
+  sourceProject: SourceProject,
+): readonly FrameworkRenderingRelationshipRow[] {
+  const declarations = auComposeCompositionDeclarations(sourceProject);
+  return declarations.flatMap((declaration) => {
+    const declarationName = declaration.name;
+    if (declarationName === undefined) {
+      return [];
+    }
+    const source = requiredSourceRangeForNode(sourceProject, declarationName);
+    const name = declarationName.text;
+    return [{
+      id: [
+        "framework-rendering-contract",
+        "au-compose-composition",
+        name,
+        source.filePath,
+        source.start.line,
+        source.start.character,
+      ].join(":"),
+      family: FrameworkRelationshipFamily.Rendering,
+      relation: FrameworkRelationshipRelation.DefinesRenderingStructure,
+      mechanism: FrameworkRelationshipMechanism.SyntaxProduct,
+      phase: FrameworkRelationshipPhase.Definition,
+      packageId: "runtime-html",
+      packageName: "@aurelia/runtime-html",
+      from: {
+        kind: FrameworkRelationshipEndpointKind.Package,
+        name: "@aurelia/runtime-html",
+        packageId: "runtime-html",
+        packageName: "@aurelia/runtime-html",
+        source,
+      },
+      to: {
+        kind: FrameworkRelationshipEndpointKind.Symbol,
+        name,
+        packageId: "runtime-html",
+        packageName: "@aurelia/runtime-html",
+        source,
+      },
+      source,
+      sourceRowId: `framework-rendering-contract:au-compose-composition:${name}`,
+      summary: `${name} is a runtime-html dynamic composition structure declared inside AuCompose.`,
+    }];
+  });
 }
 
 function uniqueRenderingRelationships(

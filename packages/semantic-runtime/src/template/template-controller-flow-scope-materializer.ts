@@ -146,6 +146,13 @@ export class TemplateControllerFlowScopeMaterializer {
       if (emission != null) {
         return frame.addDerivedScope(emission);
       }
+      return frame.addDerivedScope(this.constructBranchScope(
+        frame.input,
+        parent,
+        instruction,
+        controller,
+        `${localSuffix}:else-branch`,
+      ));
     }
     return parent;
   }
@@ -252,7 +259,13 @@ export class TemplateControllerFlowScopeMaterializer {
     if (emission != null) {
       return frame.addDerivedScope(emission);
     }
-    return parent;
+    return frame.addDerivedScope(this.constructBranchScope(
+      frame.input,
+      parent,
+      instruction,
+      controller,
+      `${localSuffix}:if-branch`,
+    ));
   }
 
   private constructPassThroughScope(
@@ -270,7 +283,7 @@ export class TemplateControllerFlowScopeMaterializer {
     targetInstruction: HydrateTemplateControllerInstruction,
   ): void {
     const source = sourceController ?? frame.input.runtimeBindings.readControllerForInstruction(sourceInstruction.productHandle);
-    const target = frame.input.runtimeBindings.readControllerForInstruction(targetInstruction.productHandle);
+    const target = templateControllerLinkTarget(frame, source, targetInstruction);
     if (source == null || target == null) {
       return;
     }
@@ -300,7 +313,7 @@ export class TemplateControllerFlowScopeMaterializer {
     if (narrowing == null) {
       return null;
     }
-    return this.scopeMaterializer.construct(BindingScope.fromNarrowedBindingScope({
+    return this.scopeMaterializer.prepare(BindingScope.fromNarrowedBindingScope({
       localKey: `${input.localKey}:scope:template-controller:${localSuffix}`,
       ownerProductHandle: controller?.productHandle ?? ownerInstruction.productHandle,
       ownerIdentityHandle: controller?.identityHandle ?? ownerInstruction.identityHandle,
@@ -308,6 +321,24 @@ export class TemplateControllerFlowScopeMaterializer {
       bindingContextSlots: narrowing.bindingContextSlots,
       overrideContextSlots: narrowing.overrideContextSlots,
       sourceAddressHandle: ownerInstruction.sourceAddressHandle,
+    }));
+  }
+
+  private constructBranchScope(
+    input: TemplateScopeConstructionRequest,
+    parent: BindingScope,
+    instruction: HydrateTemplateControllerInstruction,
+    controller: RuntimeControllerFrame | null,
+    localSuffix: string,
+  ): BindingScopeConstructionEmission {
+    return this.scopeMaterializer.prepare(BindingScope.fromNarrowedBindingScope({
+      localKey: `${input.localKey}:scope:template-controller:${localSuffix}`,
+      ownerProductHandle: controller?.productHandle ?? instruction.productHandle,
+      ownerIdentityHandle: controller?.identityHandle ?? instruction.identityHandle,
+      base: parent,
+      bindingContextSlots: [],
+      overrideContextSlots: [],
+      sourceAddressHandle: instruction.sourceAddressHandle,
     }));
   }
 
@@ -325,7 +356,7 @@ export class TemplateControllerFlowScopeMaterializer {
       return null;
     }
 
-    return this.scopeMaterializer.construct(BindingScope.fromNarrowedBindingScope({
+    return this.scopeMaterializer.prepare(BindingScope.fromNarrowedBindingScope({
       localKey: `${input.localKey}:scope:template-controller:${localSuffix}:promise-${resultKind}:${target.name}`,
       ownerProductHandle: controller?.productHandle ?? instruction.productHandle,
       ownerIdentityHandle: controller?.identityHandle ?? instruction.identityHandle,
@@ -361,7 +392,7 @@ export class TemplateControllerFlowScopeMaterializer {
     localSuffix: string,
     contextType: Parameters<typeof BindingScope.fromParentObject>[0]['contextType'],
   ): BindingScopeConstructionEmission {
-    return this.scopeMaterializer.construct(BindingScope.fromParentObject({
+    return this.scopeMaterializer.prepare(BindingScope.fromParentObject({
       localKey: `${input.localKey}:scope:template-controller:${localSuffix}:object`,
       ownerProductHandle: controller?.productHandle ?? instruction.productHandle,
       ownerIdentityHandle: controller?.identityHandle ?? instruction.identityHandle,
@@ -370,4 +401,19 @@ export class TemplateControllerFlowScopeMaterializer {
       sourceAddressHandle: instruction.sourceAddressHandle,
     }));
   }
+}
+
+function templateControllerLinkTarget(
+  frame: TemplateScopeConstructionFrame,
+  source: RuntimeControllerFrame | null,
+  targetInstruction: HydrateTemplateControllerInstruction,
+): RuntimeControllerFrame | null {
+  const ownerController = source?.parent?.parent ?? null;
+  if (ownerController?.instructionProductHandle === targetInstruction.productHandle) {
+    return ownerController;
+  }
+  return frame.input.runtimeBindings.readControllerForInstructionUnderParent(
+    targetInstruction.productHandle,
+    source?.parent ?? null,
+  );
 }

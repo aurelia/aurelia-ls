@@ -1,0 +1,32 @@
+{
+  "name": "@aurelia-ls/mcp",
+  "version": "0.1.0",
+  "private": true,
+  "type": "module",
+  "main": "./out/index.js",
+  "types": "./out/index.d.ts",
+  "exports": {
+    ".": {
+      "import": "./out/index.js",
+      "types": "./out/index.d.ts"
+    }
+  },
+  "bin": {
+    "au-mcp": "./out/server.js"
+  },
+  "scripts": {
+    "build": "tsc -p tsconfig.json",
+    "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true }); require('node:fs').rmSync('tsconfig.tsbuildinfo', { force: true })\"",
+    "dev:invoke": "node ./out/dev/invoke.js",
+    "probe:stdio": "pnpm build && node scripts/probe-stdio.mjs"
+  },
+  "dependencies": {
+    "@aurelia-ls/semantic-runtime": "workspace:*",
+    "@modelcontextprotocol/sdk": "^1.29.0",
+    "zod": "^4.4.3"
+  },
+  "devDependencies": {
+    "@types/node": "^22.5.4",
+    "typescript": "^6.0.3"
+  }
+}

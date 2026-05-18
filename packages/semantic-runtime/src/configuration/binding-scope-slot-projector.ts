@@ -4,10 +4,13 @@ import type {
   CheckerTypeMember,
   CheckerTypeShape,
 } from '../type-system/type-shape.js';
+import { checkerTypeMemberReachableIdentityHandle } from '../type-system/type-shape.js';
+import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
 import {
   BindingContextSlotDraft,
   type BindingScopeConstructionRequest,
 } from './scope.js';
+import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
 
 /** Projects TypeChecker-backed context type surfaces into runtime binding-context slot drafts. */
 export class BindingScopeSlotProjector {
@@ -22,7 +25,7 @@ export class BindingScopeSlotProjector {
     const slotsByName = explicitContextSlotsByName(explicitSlots);
     const typeShape = this.typeShapeForContext(contextType);
     if (typeShape != null) {
-      addTypeShapeSlots(slotsByName, typeShape);
+      addTypeShapeSlots(this.store, slotsByName, typeShape);
     }
     return [...slotsByName.values()];
   }
@@ -47,26 +50,29 @@ function explicitContextSlotsByName(
 }
 
 function addTypeShapeSlots(
+  store: KernelStore,
   slotsByName: Map<string, BindingContextSlotDraft>,
   typeShape: CheckerTypeShape,
 ): void {
-  for (const member of typeShape.members) {
+  const members = readOrProjectCheckerTypeMembers(store, typeShape, typeShape.productHandle);
+  for (const member of members) {
     if (slotsByName.has(member.name)) {
       continue;
     }
-    slotsByName.set(member.name, slotDraftForTypeMember(member));
+    slotsByName.set(member.name, slotDraftForTypeMember(store, member));
   }
 }
 
 function slotDraftForTypeMember(
+  store: KernelStore,
   member: CheckerTypeMember,
 ): BindingContextSlotDraft {
   return new BindingContextSlotDraft(
     member.name,
-    member.identityHandle,
+    checkerTypeMemberReachableIdentityHandle(member),
     member.productHandle,
     member.valueType,
-    member.sourceAddressHandle,
+    checkerTypeMemberSourceAddressHandle(store, member),
     [],
   );
 }

@@ -1,14 +1,16 @@
 import { bindable, customElement } from '@aurelia/runtime-html';
 import { resolve } from '@aurelia/kernel';
-import { AppState, type ContactPreference, type RequestTopic, type RequestTopicSummary } from '../state/app-state';
+import { AppState, type ContactPreference, type RequestTopic } from '../state/app-state';
+import { FieldShell } from './field-shell';
 import template from './service-backed-form.html';
 
 @customElement({
   name: 'service-backed-form',
   template,
+  dependencies: [FieldShell],
 })
 export class ServiceBackedForm {
-  private readonly state = resolve(AppState);
+  readonly state = resolve(AppState);
 
   @bindable requestId = '';
 
@@ -37,11 +39,19 @@ export class ServiceBackedForm {
   }
 
   get contactPreference(): ContactPreference {
-    return this.request?.contactPreference ?? this.emailPreference;
+    return this.request?.contactPreference ?? this.state.emailPreference;
   }
 
   set contactPreference(value: ContactPreference) {
     this.state.updateContactPreference(this.requestId, value);
+  }
+
+  get primaryTopic(): RequestTopic | null {
+    return this.request?.primaryTopic ?? null;
+  }
+
+  set primaryTopic(value: RequestTopic | null) {
+    this.state.updatePrimaryTopic(this.requestId, value);
   }
 
   get topics(): RequestTopic[] {
@@ -54,30 +64,6 @@ export class ServiceBackedForm {
 
   set notes(value: string) {
     this.state.updateNotes(this.requestId, value);
-  }
-
-  get emailPreference(): ContactPreference {
-    return this.state.emailPreference;
-  }
-
-  get phonePreference(): ContactPreference {
-    return this.state.phonePreference;
-  }
-
-  get hardwareTopic(): RequestTopic {
-    return this.state.hardwareTopic;
-  }
-
-  get billingTopic(): RequestTopic {
-    return this.state.billingTopic;
-  }
-
-  get supportTopic(): RequestTopic {
-    return this.state.supportTopic;
-  }
-
-  get supportTopicSummary(): RequestTopicSummary {
-    return this.state.supportTopicSummary;
   }
 
   get canSubmit(): boolean {

@@ -33,6 +33,7 @@ export const enum RuntimeBindingValueChannelKind {
   CheckedCollectionMembership = 'checked-collection-membership',
   CheckedMapKeyedBoolean = 'checked-map-keyed-boolean',
   CheckedModel = 'checked-model',
+  StateDispatchAction = 'state-dispatch-action',
   RejectedTargetAccess = 'rejected-target-access',
   Open = 'open',
 }
@@ -48,6 +49,34 @@ export const enum RuntimeBindingValueChannelAuthority {
   ObserverSemantics = 'observer-semantics',
   Open = 'open',
 }
+
+export const enum RuntimeBindingPrimitiveValueKind {
+  String = 'string',
+  Number = 'number',
+  Boolean = 'boolean',
+  Null = 'null',
+  Undefined = 'undefined',
+}
+
+export type RuntimeBindingPrimitiveValue =
+  | {
+    readonly kind: RuntimeBindingPrimitiveValueKind.String;
+    readonly value: string;
+  }
+  | {
+    readonly kind: RuntimeBindingPrimitiveValueKind.Number;
+    readonly value: number;
+  }
+  | {
+    readonly kind: RuntimeBindingPrimitiveValueKind.Boolean;
+    readonly value: boolean;
+  }
+  | {
+    readonly kind: RuntimeBindingPrimitiveValueKind.Null;
+  }
+  | {
+    readonly kind: RuntimeBindingPrimitiveValueKind.Undefined;
+  };
 
 export const enum RuntimeBindingDataFlowDirection {
   SourceToTarget = 'source-to-target',
@@ -130,6 +159,7 @@ export type RuntimeBindingValueChannelField =
   | 'rawTargetPropertyType'
   | 'runtimeValueType'
   | 'valueDomain'
+  | 'primitiveValueDomain'
   | 'isCollection'
   | 'usesCustomMatcher'
   | 'openReason'
@@ -170,6 +200,7 @@ export class RuntimeBindingValueChannel {
     readonly rawTargetPropertyType: CheckerTypeReference | null,
     readonly runtimeValueType: CheckerTypeReference | null,
     readonly valueDomain: readonly string[],
+    readonly primitiveValueDomain: readonly RuntimeBindingPrimitiveValue[],
     readonly isCollection: boolean | null,
     readonly usesCustomMatcher: boolean,
     readonly openReason: string | null,

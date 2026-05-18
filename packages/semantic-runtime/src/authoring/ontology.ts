@@ -313,12 +313,16 @@ export type AuthoringTasteValueKey =
   | 'light-dom-template'
   /** Template composition uses built-in or custom template controllers that create child scopes/views. */
   | 'template-controller-composition'
+  /** Template composition uses runtime dynamic component composition such as AuCompose. */
+  | 'dynamic-component-composition'
   /** Form/control values flow through native value observers. */
   | 'native-control-value-binding'
   /** Checkbox/radio-like model state flows through checked/model binding semantics. */
   | 'checked-model-binding'
   /** Select controls use model/value matching semantics. */
   | 'select-model-binding'
+  /** Checked/select controls delegate value comparison to an app-authored matcher binding. */
+  | 'custom-matcher-comparison'
   /** Form values flow through custom control/component APIs instead of native element observers. */
   | 'custom-control-binding'
   /** Validation is mediated by a validation controller/plugin surface. */
@@ -503,14 +507,20 @@ export const AuthoringTasteAxes = {
     'Template Rendering Boundary',
     'observed-shape',
     'Which rendering boundary or template-composition mechanism is visible.',
-    ['shadow-dom-template', 'light-dom-template', 'template-controller-composition'],
+    ['shadow-dom-template', 'light-dom-template', 'template-controller-composition', 'dynamic-component-composition'],
   ),
   FormValueChannel: new AuthoringTasteAxisDescriptor(
     'form-value-channel',
     'Form Value Channel',
     'observed-shape',
     'How controls and form-like components represent bound values.',
-    ['native-control-value-binding', 'checked-model-binding', 'select-model-binding', 'custom-control-binding'],
+    [
+      'native-control-value-binding',
+      'checked-model-binding',
+      'select-model-binding',
+      'custom-matcher-comparison',
+      'custom-control-binding',
+    ],
   ),
   ValidationOwnership: new AuthoringTasteAxisDescriptor(
     'validation-ownership',
@@ -812,6 +822,12 @@ export const AuthoringTasteValueDescriptors = {
     'observed-shape',
     'Template composition uses template controllers that create child scopes or synthetic views.',
   ),
+  DynamicComponentComposition: new AuthoringTasteValueDescriptor(
+    'dynamic-component-composition',
+    'template-rendering-boundary',
+    'observed-shape',
+    'Template composition uses runtime dynamic component composition through AuCompose or equivalent composition products.',
+  ),
   NativeControlValueBinding: new AuthoringTasteValueDescriptor(
     'native-control-value-binding',
     'form-value-channel',
@@ -829,6 +845,12 @@ export const AuthoringTasteValueDescriptors = {
     'form-value-channel',
     'observed-shape',
     'Select controls use model/value matching semantics.',
+  ),
+  CustomMatcherComparison: new AuthoringTasteValueDescriptor(
+    'custom-matcher-comparison',
+    'form-value-channel',
+    'observed-shape',
+    'Checked/select controls use app-authored matcher bindings for equality instead of default identity comparison.',
   ),
   CustomControlBinding: new AuthoringTasteValueDescriptor(
     'custom-control-binding',
@@ -1461,6 +1483,14 @@ export const AuthoringOperationDescriptors = {
     'state-model',
     'Create vanilla state/domain classes before deciding whether a framework state package is required.',
     ['dependency-injection'],
+  ),
+  ConfigureStateStore: new AuthoringOperationDescriptor(
+    'configure-state-store',
+    'domain-model',
+    'configure',
+    'state-model',
+    'Configure @aurelia/state stores, initial state, action handlers, and template store-binding expectations.',
+    ['template-composition', 'closed-loop-verification'],
   ),
   CreateServerIntegration: new AuthoringOperationDescriptor(
     'create-server-integration',

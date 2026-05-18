@@ -33,6 +33,7 @@
     "bridge:aulink": "pnpm build && node dist/scripts/bridge-aulink.js",
     "framework:errors": "pnpm build && node dist/scripts/framework-errors.js",
     "framework:evaluator": "pnpm build && node dist/scripts/framework-evaluator.js",
+    "framework:observation": "pnpm build && node dist/scripts/framework-observation.js",
     "framework:resources": "pnpm build && node dist/scripts/framework-resources.js",
     "framework:corpus": "pnpm build && node dist/scripts/framework-corpus.js",
     "framework:router": "pnpm build && node dist/scripts/framework-router.js",

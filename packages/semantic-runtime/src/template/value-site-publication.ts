@@ -11,6 +11,10 @@ import type {
 } from '../kernel/handles.js';
 import { CompilerIdentity } from '../kernel/identity.js';
 import { MaterializedProduct } from '../kernel/materialization.js';
+import {
+  bindProductDetailEnvelope,
+  requireProductDetailEnvelope,
+} from '../kernel/product-details.js';
 import type {
   KernelStore,
   KernelStoreRecord,
@@ -147,9 +151,14 @@ export class TemplateValueSitePublisher {
     request: TemplateValueSitePublicationRequest,
     handles: TemplateValueSiteHandles,
   ): TemplateValueSite {
-    return new TemplateValueSite(
+    const product = new MaterializedProduct(
       handles.productHandle,
+      KernelVocabulary.Template.ValueSite.key,
       handles.identityHandle,
+      request.sourceAddressHandle,
+      request.provenanceHandle,
+    );
+    return bindProductDetailEnvelope(new TemplateValueSite(
       request.siteKind,
       request.rawValue,
       request.entryFamily,
@@ -159,9 +168,8 @@ export class TemplateValueSitePublisher {
       request.classification,
       request.bindingCommand,
       request.bindable,
-      request.sourceAddressHandle,
       [],
-    );
+    ), product);
   }
 
   private valueSiteRouteClaim(
@@ -184,6 +192,7 @@ export class TemplateValueSitePublisher {
     site: TemplateValueSite,
     routeClaim: SemanticClaim | null,
   ): readonly KernelStoreRecord[] {
+    const product = requireProductDetailEnvelope(site, 'template.value-site');
     return [
       new CompilerIdentity(
         site.identityHandle,
@@ -192,13 +201,7 @@ export class TemplateValueSitePublisher {
         request.sourceAddressHandle,
         request.siteIdentityDiscriminator,
       ),
-      new MaterializedProduct(
-        site.productHandle,
-        KernelVocabulary.Template.ValueSite.key,
-        site.identityHandle,
-        request.sourceAddressHandle,
-        request.provenanceHandle,
-      ),
+      product,
       ...nullableClaim(routeClaim),
     ];
   }
@@ -243,17 +246,21 @@ export class TemplateValueSitePublisher {
     site: TemplateValueSite,
     resolved: ResolvedTemplateExpressionParseRequest,
   ): TemplateExpressionParse {
-    return new TemplateExpressionParse(
+    const product = new MaterializedProduct(
       this.store.handles.product(resolved.parseLocal),
+      KernelVocabulary.Template.ExpressionParse.key,
       this.store.handles.identity(resolved.parseLocal),
+      request.sourceAddressHandle,
+      request.provenanceHandle,
+    );
+    return bindProductDetailEnvelope(new TemplateExpressionParse(
       site.toReference(),
       request.parser.productHandle,
       expressionParseStateForResult(resolved.result),
       resolved.result.kind,
       resolved.result,
-      request.sourceAddressHandle,
       [],
-    );
+    ), product);
   }
 
   private expressionParseClaim(
@@ -278,6 +285,7 @@ export class TemplateValueSitePublisher {
     resolved: ResolvedTemplateExpressionParseRequest,
     parseClaim: SemanticClaim,
   ): readonly KernelStoreRecord[] {
+    const product = requireProductDetailEnvelope(parse, 'template.expression-parse');
     return [
       new CompilerIdentity(
         parse.identityHandle,
@@ -286,13 +294,7 @@ export class TemplateValueSitePublisher {
         request.sourceAddressHandle,
         resolved.parseIdentityDiscriminator(resolved.result),
       ),
-      new MaterializedProduct(
-        parse.productHandle,
-        KernelVocabulary.Template.ExpressionParse.key,
-        parse.identityHandle,
-        request.sourceAddressHandle,
-        request.provenanceHandle,
-      ),
+      product,
       parseClaim,
     ];
   }

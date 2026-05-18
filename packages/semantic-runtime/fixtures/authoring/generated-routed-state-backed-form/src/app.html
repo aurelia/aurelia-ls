@@ -1,6 +1,9 @@
 <main>
   <nav>
-    <a load="form">Service Request</a>
+    <a load="form/request-1+summary?mode=edit&tag=primary&tag=priority#details">Service Request</a>
   </nav>
-  <au-viewport></au-viewport>
+  <section class="routed-layout">
+    <au-viewport name="main"></au-viewport>
+    <au-viewport name="sidebar" fallback=""></au-viewport>
+  </section>
 </main>

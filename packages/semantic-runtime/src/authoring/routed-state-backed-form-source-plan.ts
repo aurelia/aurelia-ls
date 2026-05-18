@@ -10,6 +10,10 @@ import {
   fillSourceTemplate,
   sourceText,
 } from './source-template.js';
+import {
+  formFieldShellComponentFile,
+  formFieldShellTemplateFile,
+} from './form-field-shell-source-plan.js';
 
 export interface RoutedStateBackedFormSourcePlanModel {
   readonly rootDir: string;
@@ -26,12 +30,31 @@ export interface RoutedStateBackedFormSourcePlanModel {
   readonly routeTemplatePath: string;
   readonly routeComponentClassName: string;
   readonly routeElementName: string;
+  readonly routeId: string;
   readonly routePath: string;
+  readonly routeNavigationPath: string;
+  readonly routeParameterName: string;
+  readonly routeQueryModeName: string;
+  readonly routeQueryTagName: string;
+  readonly routeViewportName: string;
   readonly routeTitle: string;
+  readonly routeRedirectPath: string;
+  readonly summaryRouteId: string;
+  readonly summaryRoutePath: string;
+  readonly summaryRouteComponentPath: string;
+  readonly summaryRouteTemplatePath: string;
+  readonly summaryRouteComponentClassName: string;
+  readonly summaryRouteElementName: string;
+  readonly summaryRouteViewportName: string;
+  readonly summaryRouteTitle: string;
   readonly formComponentPath: string;
   readonly formTemplatePath: string;
   readonly formComponentClassName: string;
   readonly formElementName: string;
+  readonly fieldShellComponentPath: string;
+  readonly fieldShellTemplatePath: string;
+  readonly fieldShellClassName: string;
+  readonly fieldShellElementName: string;
 }
 
 export function routedStateBackedFormSourcePlan(
@@ -59,6 +82,10 @@ function routedStateBackedFormSourceFiles(
     routedFormStateFile(model),
     routedFormRouteComponentFile(model),
     routedFormRouteTemplateFile(model),
+    routedFormSummaryRouteComponentFile(model),
+    routedFormSummaryRouteTemplateFile(model),
+    formFieldShellComponentFile(model),
+    formFieldShellTemplateFile(model),
     routedFormComponentFile(model),
     routedFormTemplateFile(model),
   ];
@@ -91,8 +118,17 @@ function routedFormRootComponentFile(model: RoutedStateBackedFormSourcePlanModel
       ROOT_TEMPLATE_MODULE: moduleSpecifier(model.rootComponentPath, model.rootTemplatePath, true),
       ROUTE_COMPONENT_CLASS: model.routeComponentClassName,
       ROUTE_COMPONENT_MODULE: moduleSpecifier(model.rootComponentPath, model.routeComponentPath, false),
+      ROUTE_ID: model.routeId,
       ROUTE_PATH: model.routePath,
+      ROUTE_REDIRECT_PATH: model.routeRedirectPath,
       ROUTE_TITLE: model.routeTitle,
+      ROUTE_VIEWPORT_NAME: model.routeViewportName,
+      SUMMARY_ROUTE_COMPONENT_CLASS: model.summaryRouteComponentClassName,
+      SUMMARY_ROUTE_COMPONENT_MODULE: moduleSpecifier(model.rootComponentPath, model.summaryRouteComponentPath, false),
+      SUMMARY_ROUTE_ID: model.summaryRouteId,
+      SUMMARY_ROUTE_PATH: model.summaryRoutePath,
+      SUMMARY_ROUTE_TITLE: model.summaryRouteTitle,
+      SUMMARY_ROUTE_VIEWPORT_NAME: model.summaryRouteViewportName,
     }),
   );
 }
@@ -104,8 +140,10 @@ function routedFormRootTemplateFile(model: RoutedStateBackedFormSourcePlanModel)
     'html',
     'create-external-template',
     fillSourceTemplate(ROOT_TEMPLATE_SOURCE, {
-      ROUTE_PATH: model.routePath,
+      ROUTE_NAVIGATION_PATH: model.routeNavigationPath,
       ROUTE_TITLE: model.routeTitle,
+      ROUTE_VIEWPORT_NAME: model.routeViewportName,
+      SUMMARY_ROUTE_VIEWPORT_NAME: model.summaryRouteViewportName,
     }),
   );
 }
@@ -143,6 +181,9 @@ function routedFormRouteComponentFile(model: RoutedStateBackedFormSourcePlanMode
       FORM_COMPONENT_MODULE: moduleSpecifier(model.routeComponentPath, model.formComponentPath, false),
       ROUTE_COMPONENT_CLASS: model.routeComponentClassName,
       ROUTE_ELEMENT_NAME: model.routeElementName,
+      ROUTE_PARAMETER_NAME: model.routeParameterName,
+      ROUTE_QUERY_MODE_NAME: model.routeQueryModeName,
+      ROUTE_QUERY_TAG_NAME: model.routeQueryTagName,
       ROUTE_TEMPLATE_MODULE: moduleSpecifier(model.routeComponentPath, model.routeTemplatePath, true),
       STATE_CLASS: model.stateClassName,
       STATE_MODULE: moduleSpecifier(model.routeComponentPath, model.statePath, false),
@@ -162,6 +203,32 @@ function routedFormRouteTemplateFile(model: RoutedStateBackedFormSourcePlanModel
   );
 }
 
+function routedFormSummaryRouteComponentFile(model: RoutedStateBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.summaryRouteComponentPath,
+    'component',
+    'typescript',
+    'create-component',
+    fillSourceTemplate(SUMMARY_ROUTE_COMPONENT_SOURCE, {
+      STATE_CLASS: model.stateClassName,
+      STATE_MODULE: moduleSpecifier(model.summaryRouteComponentPath, model.statePath, false),
+      SUMMARY_ROUTE_COMPONENT_CLASS: model.summaryRouteComponentClassName,
+      SUMMARY_ROUTE_ELEMENT_NAME: model.summaryRouteElementName,
+      SUMMARY_ROUTE_TEMPLATE_MODULE: moduleSpecifier(model.summaryRouteComponentPath, model.summaryRouteTemplatePath, true),
+    }),
+  );
+}
+
+function routedFormSummaryRouteTemplateFile(model: RoutedStateBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+  return recipeSourceFile(
+    model.summaryRouteTemplatePath,
+    'template',
+    'html',
+    'create-external-template',
+    SUMMARY_ROUTE_TEMPLATE_SOURCE,
+  );
+}
+
 function routedFormComponentFile(model: RoutedStateBackedFormSourcePlanModel): AuthoringSourceFileEdit {
   return recipeSourceFile(
     model.formComponentPath,
@@ -171,6 +238,8 @@ function routedFormComponentFile(model: RoutedStateBackedFormSourcePlanModel): A
     fillSourceTemplate(FORM_COMPONENT_SOURCE, {
       FORM_COMPONENT_CLASS: model.formComponentClassName,
       FORM_ELEMENT_NAME: model.formElementName,
+      FIELD_SHELL_CLASS: model.fieldShellClassName,
+      FIELD_SHELL_MODULE: moduleSpecifier(model.formComponentPath, model.fieldShellComponentPath, false),
       FORM_TEMPLATE_MODULE: moduleSpecifier(model.formComponentPath, model.formTemplatePath, true),
       STATE_CLASS: model.stateClassName,
       STATE_MODULE: moduleSpecifier(model.formComponentPath, model.statePath, false),
@@ -184,7 +253,9 @@ function routedFormTemplateFile(model: RoutedStateBackedFormSourcePlanModel): Au
     'template',
     'html',
     'create-external-template',
-    FORM_TEMPLATE_SOURCE,
+    fillSourceTemplate(FORM_TEMPLATE_SOURCE, {
+      FIELD_SHELL_ELEMENT_NAME: model.fieldShellElementName,
+    }),
   );
 }
 
@@ -210,6 +281,7 @@ new Aurelia()
 const ROOT_COMPONENT_SOURCE = sourceText(`import { customElement } from '@aurelia/runtime-html';
 import { route } from '@aurelia/router';
 import { __ROUTE_COMPONENT_CLASS__ } from '__ROUTE_COMPONENT_MODULE__';
+import { __SUMMARY_ROUTE_COMPONENT_CLASS__ } from '__SUMMARY_ROUTE_COMPONENT_MODULE__';
 import template from '__ROOT_TEMPLATE_MODULE__';
 import '__ROOT_STYLE_MODULE__';
 
@@ -217,35 +289,57 @@ import '__ROOT_STYLE_MODULE__';
   title: '__APP_NAME__',
   routes: [
     {
-      id: '__ROUTE_PATH__',
-      path: ['', '__ROUTE_PATH__'],
+      path: '',
+      redirectTo: '__ROUTE_REDIRECT_PATH__',
+    },
+    {
+      id: '__ROUTE_ID__',
+      path: '__ROUTE_PATH__',
       component: __ROUTE_COMPONENT_CLASS__,
       title: '__ROUTE_TITLE__',
+      viewport: '__ROUTE_VIEWPORT_NAME__',
+    },
+    {
+      id: '__SUMMARY_ROUTE_ID__',
+      path: '__SUMMARY_ROUTE_PATH__',
+      component: __SUMMARY_ROUTE_COMPONENT_CLASS__,
+      title: '__SUMMARY_ROUTE_TITLE__',
+      viewport: '__SUMMARY_ROUTE_VIEWPORT_NAME__',
     },
   ],
 })
 @customElement({
   name: '__ROOT_ELEMENT_NAME__',
   template,
-  dependencies: [__ROUTE_COMPONENT_CLASS__],
+  dependencies: [__ROUTE_COMPONENT_CLASS__, __SUMMARY_ROUTE_COMPONENT_CLASS__],
 })
 export class __ROOT_COMPONENT_CLASS__ {}
 `);
 
 const ROOT_TEMPLATE_SOURCE = sourceText(`<main>
   <nav>
-    <a load="__ROUTE_PATH__">__ROUTE_TITLE__</a>
+    <a load="__ROUTE_NAVIGATION_PATH__">__ROUTE_TITLE__</a>
   </nav>
-  <au-viewport></au-viewport>
+  <section class="routed-layout">
+    <au-viewport name="__ROUTE_VIEWPORT_NAME__"></au-viewport>
+    <au-viewport name="__SUMMARY_ROUTE_VIEWPORT_NAME__" fallback=""></au-viewport>
+  </section>
 </main>
 `);
 
 const ROOT_STYLE_SOURCE = sourceText(`main {
   display: grid;
   gap: 1rem;
-  max-width: 46rem;
+  max-width: 62rem;
   margin: 0 auto;
   padding: 2rem;
+}
+
+.routed-layout {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 16rem;
+  gap: 1rem;
+  align-items: start;
 }
 
 .form-ready {
@@ -266,6 +360,7 @@ export interface ServiceRequest {
   email: string;
   urgent: boolean;
   contactPreference: ContactPreference;
+  primaryTopic: RequestTopic | null;
   topics: RequestTopic[];
   notes: string;
   submitCount: number;
@@ -317,6 +412,7 @@ function createRequest(id: string, customerName: string): ServiceRequest {
     email: \`\${customerName.toLowerCase().replace(' ', '.')}@example.test\`,
     urgent: false,
     contactPreference: 'email',
+    primaryTopic: null,
     topics: ['support'],
     notes: '',
     submitCount: 0,
@@ -326,6 +422,7 @@ function createRequest(id: string, customerName: string): ServiceRequest {
 
 const ROUTE_COMPONENT_SOURCE = sourceText(`import { customElement } from '@aurelia/runtime-html';
 import { resolve } from '@aurelia/kernel';
+import { IRouteContext } from '@aurelia/router';
 import { __FORM_COMPONENT_CLASS__ } from '__FORM_COMPONENT_MODULE__';
 import { __STATE_CLASS__ } from '__STATE_MODULE__';
 import template from '__ROUTE_TEMPLATE_MODULE__';
@@ -336,50 +433,75 @@ import template from '__ROUTE_TEMPLATE_MODULE__';
   dependencies: [__FORM_COMPONENT_CLASS__],
 })
 export class __ROUTE_COMPONENT_CLASS__ {
-  private readonly state = resolve(__STATE_CLASS__);
+  readonly state = resolve(__STATE_CLASS__);
+  private readonly routeParams = resolve(IRouteContext).getRouteParameters<{
+    __ROUTE_PARAMETER_NAME__: string;
+    __ROUTE_QUERY_MODE_NAME__?: string;
+    __ROUTE_QUERY_TAG_NAME__?: string | readonly string[];
+  }>({ includeQueryParams: true });
 
-  get selectedRequestId(): string {
-    return this.state.selectedRequestId;
+  get requestId(): string {
+    return this.routeParams.__ROUTE_PARAMETER_NAME__;
   }
 
-  set selectedRequestId(value: string) {
-    this.state.selectedRequestId = value;
+  get routeMode(): string {
+    return this.routeParams.__ROUTE_QUERY_MODE_NAME__ ?? 'edit';
   }
 
-  get requestIds(): readonly string[] {
-    return this.state.requestIds;
+  get routeTagCount(): number {
+    const tags = this.routeParams.__ROUTE_QUERY_TAG_NAME__;
+    if (Array.isArray(tags)) {
+      return tags.length;
+    }
+    return tags == null ? 0 : 1;
   }
 
-  get submittedCount(): number {
-    return this.state.submittedCount;
-  }
 }
 `);
 
 const ROUTE_TEMPLATE_SOURCE = sourceText(`<section>
-  <h1>Service request</h1>
-  <label for="request-selector">Request</label>
-  <select id="request-selector" value.bind="selectedRequestId">
-    <option repeat.for="requestId of requestIds" model.bind="requestId">\${requestId}</option>
-  </select>
+  <h1>Service request \${requestId}</h1>
+  <p>Mode: \${routeMode} (\${routeTagCount} tag(s))</p>
 
-  <__FORM_ELEMENT_NAME__ request-id.bind="selectedRequestId"></__FORM_ELEMENT_NAME__>
+  <__FORM_ELEMENT_NAME__ request-id.bind="requestId"></__FORM_ELEMENT_NAME__>
 
-  <p>\${submittedCount} submitted request(s)</p>
+  <p>\${state.submittedCount} submitted request(s)</p>
 </section>
+`);
+
+const SUMMARY_ROUTE_COMPONENT_SOURCE = sourceText(`import { customElement } from '@aurelia/runtime-html';
+import { resolve } from '@aurelia/kernel';
+import { __STATE_CLASS__ } from '__STATE_MODULE__';
+import template from '__SUMMARY_ROUTE_TEMPLATE_MODULE__';
+
+@customElement({
+  name: '__SUMMARY_ROUTE_ELEMENT_NAME__',
+  template,
+})
+export class __SUMMARY_ROUTE_COMPONENT_CLASS__ {
+  readonly state = resolve(__STATE_CLASS__);
+}
+`);
+
+const SUMMARY_ROUTE_TEMPLATE_SOURCE = sourceText(`<aside>
+  <h2>Activity</h2>
+  <p>\${state.submittedCount} submitted request(s)</p>
+</aside>
 `);
 
 const FORM_COMPONENT_SOURCE = sourceText(`import { bindable, customElement } from '@aurelia/runtime-html';
 import { resolve } from '@aurelia/kernel';
 import { __STATE_CLASS__, type ContactPreference, type RequestTopic } from '__STATE_MODULE__';
+import { __FIELD_SHELL_CLASS__ } from '__FIELD_SHELL_MODULE__';
 import template from '__FORM_TEMPLATE_MODULE__';
 
 @customElement({
   name: '__FORM_ELEMENT_NAME__',
   template,
+  dependencies: [__FIELD_SHELL_CLASS__],
 })
 export class __FORM_COMPONENT_CLASS__ {
-  private readonly state = resolve(__STATE_CLASS__);
+  readonly state = resolve(__STATE_CLASS__);
 
   @bindable requestId = '';
 
@@ -417,13 +539,24 @@ export class __FORM_COMPONENT_CLASS__ {
   }
 
   get contactPreference(): ContactPreference {
-    return this.request?.contactPreference ?? this.emailPreference;
+    return this.request?.contactPreference ?? this.state.emailPreference;
   }
 
   set contactPreference(value: ContactPreference) {
     const request = this.request;
     if (request != null) {
       request.contactPreference = value;
+    }
+  }
+
+  get primaryTopic(): RequestTopic | null {
+    return this.request?.primaryTopic ?? null;
+  }
+
+  set primaryTopic(value: RequestTopic | null) {
+    const request = this.request;
+    if (request != null) {
+      request.primaryTopic = value;
     }
   }
 
@@ -442,26 +575,6 @@ export class __FORM_COMPONENT_CLASS__ {
     }
   }
 
-  get emailPreference(): ContactPreference {
-    return this.state.emailPreference;
-  }
-
-  get phonePreference(): ContactPreference {
-    return this.state.phonePreference;
-  }
-
-  get hardwareTopic(): RequestTopic {
-    return this.state.hardwareTopic;
-  }
-
-  get billingTopic(): RequestTopic {
-    return this.state.billingTopic;
-  }
-
-  get supportTopic(): RequestTopic {
-    return this.state.supportTopic;
-  }
-
   get canSubmit(): boolean {
     return this.customerName !== '' && this.email !== '';
   }
@@ -477,11 +590,19 @@ export class __FORM_COMPONENT_CLASS__ {
 `);
 
 const FORM_TEMPLATE_SOURCE = sourceText(`<form class.bind="canSubmit ? 'form-ready' : 'form-pending'" submit.trigger="submit()">
-  <label for="customer-name">Name</label>
-  <input id="customer-name" value.bind="customerName">
+  <__FIELD_SHELL_ELEMENT_NAME__
+    input-id="customer-name"
+    label="Name"
+    type="text"
+    value.bind="customerName">
+  </__FIELD_SHELL_ELEMENT_NAME__>
 
-  <label for="email">Email</label>
-  <input id="email" type="email" value.bind="email">
+  <__FIELD_SHELL_ELEMENT_NAME__
+    input-id="email"
+    label="Email"
+    type="email"
+    value.bind="email">
+  </__FIELD_SHELL_ELEMENT_NAME__>
 
   <label>
     <input type="checkbox" checked.bind="urgent">
@@ -491,20 +612,28 @@ const FORM_TEMPLATE_SOURCE = sourceText(`<form class.bind="canSubmit ? 'form-rea
   <fieldset>
     <legend>Contact preference</legend>
     <label>
-      <input type="radio" model.bind="emailPreference" checked.bind="contactPreference">
+      <input type="radio" model.bind="state.emailPreference" checked.bind="contactPreference">
       Email
     </label>
     <label>
-      <input type="radio" model.bind="phonePreference" checked.bind="contactPreference">
+      <input type="radio" model.bind="state.phonePreference" checked.bind="contactPreference">
       Phone
     </label>
   </fieldset>
 
-  <label for="topics">Topics</label>
+  <label for="primary-topic">Primary topic</label>
+  <select id="primary-topic" value.bind="primaryTopic">
+    <option model.bind="null">Choose...</option>
+    <option model.bind="state.hardwareTopic">Hardware</option>
+    <option model.bind="state.billingTopic">Billing</option>
+    <option model.bind="state.supportTopic">Support</option>
+  </select>
+
+  <label for="topics">Additional topics</label>
   <select id="topics" multiple value.bind="topics">
-    <option model.bind="hardwareTopic">Hardware</option>
-    <option model.bind="billingTopic">Billing</option>
-    <option model.bind="supportTopic">Support</option>
+    <option model.bind="state.hardwareTopic">Hardware</option>
+    <option model.bind="state.billingTopic">Billing</option>
+    <option model.bind="state.supportTopic">Support</option>
   </select>
 
   <label for="notes">Notes</label>

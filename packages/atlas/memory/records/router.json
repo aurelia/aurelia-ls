@@ -113,6 +113,7 @@
         "Check `framework.errors` with `gap=raw-error-usage` and `projection=semantic-raw-references` when route-recognizer semantics become diagnostic or policy work; route-recognizer currently exposes message-expression raw Error usage rather than framework ErrorNames.",
         "Known framework-throwing recognizer registration conditions should become RouteRecognizerIssue products and API rows, not open seams or silently accepted graphs. Since @aurelia/route-recognizer throws raw Error instances rather than mapped AUR codes, expose modeled issues as framework-runtime-behavior, keep framework-error-code null, and cite exact `frameworkRawErrorAuthority(...)` constants when the framework throw site is part of `framework.errors`.",
         "Reserved `$$residue` parameter usage and invalid route-parameter regex constraints are registration issues; do not materialize endpoint/state graph products for paths the framework would reject during `RouteRecognizer.$add(...)`.",
+        "Route pattern, endpoint, and recognized-route API rows now preserve parameter-name groups. Recognized-route and route-node rows preserve decoded parameter values, recursive residual child recognition publishes nested child recognized routes from routed child RouteConfigContexts, and route-node rows expose child-first / parent-first / append / by-route aggregates over the materialized route-node parent chain. Closed static query params flow through ViewportInstructionTree, RouteTree, and RouteNode rows; repeated query keys stay visible as row entries and as multi-value aggregate arrays in include-query strategies. Include-query append/by-route rows intentionally repeat shared query values per active route node because Aurelia writes ViewportInstructionTree query params onto every node before route-context aggregation. Route-config, router-viewport, viewport-instruction-tree, route-node, and component-agent rows carry enough named viewport/query/fragment shape for generated recipes to verify sibling viewport-instruction targets and static include-query route parameter reads. Start from those rows when an authoring recipe needs static parameter or viewport contract verification; dynamic query merging, live active-navigation state, and viewport activation belong to the route-context/runtime frontier.",
         "Treat endpoint registration, path grammar, state graph, candidate selection, and cache behavior as separate semantic axes.",
         "Do not collapse recognizer work into generic route-config traversal."
       ],
@@ -175,6 +176,7 @@
         "RouteTree redirect-parameter migration accepts only Segment / slash-scoped Segment RouteExpression chains. Sibling composites and grouped expressions belong in RouterIssue rows with exact router exprUnexpectedKind / AUR3502 authority, not route-recognizer rows or generic open seams.",
         "Closed static redirect targets must carry redirectSourceRouteConfig from RouteRecognizer expansion into RouteTree compilation. Use that exact edge to suppress generic redirect-target open seams only when the redirect target was actually re-recognized.",
         "Unknown static redirect targets belong to instrUnknownRedirect / AUR3402 RouterIssue rows from redirect expansion, not to generic redirect-target open seams.",
+        "Residual parent-route matches should not stop at the parent residual parameter. RouteRecognitionMaterializationProjectPass follows the residual child ViewportInstruction through the resolved child RouteConfigContext so RouteTreeTransitionMaterializationFrame can materialize nested child RouteNode and ComponentAgent products under the parent route context.",
         "A closed ViewportRequest with no matching available ViewportAgent is an exact router issue with rcNoAvailableVpa / AUR3174 authority, not a route-tree open seam. Do not publish a partial transition tree for that chain, and keep genuinely missing request/context handoffs as open seams."
       ],
       "anchors": [
@@ -388,6 +390,7 @@
         "Cross-check framework.router recognizer mechanics before changing Candidate or EndpointRequirement behavior.",
         "Redirect expansion must use the shared route redirect migration substrate rather than splitting redirect strings on `/`; RouteTree is the diagnostic owner for unsupported RouteExpression node kinds.",
         "A closed static viewport-instruction path with a materialized recognizer, no matching configured route, and no owning route-config fallback is a recognition issue with instrNoFallback / AUR3401 authority.",
+        "For nested route expressions such as a parent route with residual child segments, recognition recurses into the routed child's RouteConfigContext after the parent residual match. This keeps child RecognizedRoute, RouteNode, and ComponentAgent products visible instead of relying on a single parent residual row.",
         "A recognized redirect route whose migrated target path cannot be recognized is a redirect-resolution issue with instrUnknownRedirect / AUR3402 authority; semantic-runtime records it during redirect expansion even though the framework throws while creating the RouteTree node.",
         "Keep recognition separate from route-recognizer graph construction and route-tree transition materialization."
       ],
@@ -462,7 +465,7 @@
         "Keep row construction in route-projections and answer-envelope mechanics in answer-helpers; this class should stay a public query-method facade.",
         "If router query pressure expands, split along route-config, recognizer, viewport, route-tree, or agent concepts rather than moving methods back into runtime.ts.",
         "Keep route-effect facts sourced from route-query-registry; authoring verification may derive query-only rows from that registry, but should not restate the route product vocabulary by hand.",
-        "Route expected-effect helpers currently assert product-family presence. If recipes need route parameter shape, route-tree shape, viewport selection, or issue-specific expectations, extend the route expected-effect helper layer before adding ad hoc recipe filters."
+        "Route expected-effect helpers can now filter route product rows by fields such as `parameterNames`. If recipes need richer route-tree shape, viewport selection, runtime parameter aggregation, or issue-specific expectations, extend the route expected-effect helper layer before adding ad hoc recipe filters."
       ],
       "anchors": [
         {

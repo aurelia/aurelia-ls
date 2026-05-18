@@ -34,6 +34,7 @@ export const enum CheckerExpressionTypeOpenKind {
   UnsupportedExpression = 'unsupported-expression',
   MissingValueConverterResource = 'missing-value-converter-resource',
   MissingBindingBehaviorResource = 'missing-binding-behavior-resource',
+  MissingStateStore = 'missing-state-store',
   DuplicateBindingBehavior = 'duplicate-binding-behavior',
   OpenValueConverter = 'open-value-converter',
 }

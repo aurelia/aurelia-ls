@@ -1,8 +1,7 @@
 import ts from 'typescript';
-import type { ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
-import { TypeSystemProductDetails } from '../type-system/product-details.js';
+import { readCheckerTypeShapeByProductHandle } from '../type-system/checker-type-shape-access.js';
 import type { CheckerTypeMember, CheckerTypeShape } from '../type-system/type-shape.js';
 import type {
   TemplateResourceScope,
@@ -59,7 +58,7 @@ export class RuntimeBindingBehaviorBindEffectReader {
     if (definition?.type !== ResourceDefinitionKind.BindingBehavior) {
       return noBindingBehaviorBindEffects;
     }
-    const targetType = readTypeShape(this.store, definition.target.targetType?.productHandle ?? null);
+    const targetType = readCheckerTypeShapeByProductHandle(this.store, definition.target.targetType?.productHandle);
     if (targetType == null) {
       return noBindingBehaviorBindEffects;
     }
@@ -77,15 +76,6 @@ function resourceEffectCacheKey(resource: TemplateVisibleResource): string {
   return resource.definitionProductHandle
     ?? resource.resourceProductHandle
     ?? `${resource.resourceKind}:${resource.name}`;
-}
-
-function readTypeShape(
-  store: KernelStore,
-  productHandle: ProductHandle | null,
-): CheckerTypeShape | null {
-  return productHandle == null
-    ? null
-    : store.productDetails.read(TypeSystemProductDetails.TypeShape, productHandle);
 }
 
 function directTargetSubscriberCallsForBindMember(member: CheckerTypeMember): number {

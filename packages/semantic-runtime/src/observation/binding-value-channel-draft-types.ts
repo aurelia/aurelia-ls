@@ -8,6 +8,7 @@ import type { RuntimeExpressionBinding } from './runtime-binding-expression.js';
 import type {
   RuntimeBindingValueChannelAuthority,
   RuntimeBindingValueChannelKind,
+  RuntimeBindingPrimitiveValue,
 } from './runtime-binding-observation.js';
 
 export type RuntimeValueChannelBinding = RuntimeExpressionBinding;
@@ -17,6 +18,7 @@ export type RuntimeBindingValueChannelDraft = {
   readonly authority: RuntimeBindingValueChannelAuthority;
   readonly runtimeValueType: CheckerTypeReference | null;
   readonly valueDomain: readonly string[];
+  readonly primitiveValueDomain?: readonly RuntimeBindingPrimitiveValue[];
   readonly isCollection: boolean | null;
   readonly usesCustomMatcher?: boolean;
   readonly openReason: string | null;
@@ -55,4 +57,5 @@ export type SelectMultipleMode =
 export type BindingValueExpression = {
   readonly valueType: CheckerTypeReference | null;
   readonly valueDomain: readonly string[];
+  readonly primitiveValueDomain: readonly RuntimeBindingPrimitiveValue[];
 };

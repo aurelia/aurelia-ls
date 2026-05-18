@@ -13,11 +13,11 @@
   <aside
     class.bind="fulfillmentClassTokens"
     style.bind="fulfillmentStyles"
-    data-fulfillment.attr="fulfillmentMethod"
+    data-fulfillment.attr="state.checkout.fulfillmentMethod"
     --fulfillment-accent.style="statusAccentColor"
     border-inline-start-width.style="progressStrokeWidth">
     <span
-      checkout-ready,checkout-waiting.class="!canSubmit"
+      checkout-ready,checkout-waiting.class="!state.checkout.canSubmit"
       color.style="statusTextColor"
       text-decoration.style="statusDecoration"
       data-submit-count.attr="submitCountText">
@@ -43,7 +43,7 @@
       input-id="checkout-email"
       label="Email"
       type="email"
-      value.bind="email"
+      value.bind="state.checkout.email"
       autocomplete="email"
       aria-describedby="checkout-heading"
       data-field-kind="email"
@@ -51,7 +51,7 @@
     </field-shell>
 
     <label for="fulfillment-method">Fulfillment</label>
-    <select id="fulfillment-method" value.bind="fulfillmentMethod">
+    <select id="fulfillment-method" value.bind="state.checkout.fulfillmentMethod">
       <option model.bind="shipFulfillmentMethod">Ship the order</option>
       <option model.bind="pickupFulfillmentMethod">Pick up in store</option>
     </select>
@@ -63,7 +63,7 @@
           type="radio"
           name="contact-preference"
           model.bind="emailContactPreference"
-          checked.bind="contactPreference">
+          checked.bind="state.checkout.contactPreference">
         Email
       </label>
       <label>
@@ -71,7 +71,7 @@
           type="radio"
           name="contact-preference"
           model.bind="phoneContactPreference"
-          checked.bind="contactPreference">
+          checked.bind="state.checkout.contactPreference">
         Phone
       </label>
     </fieldset>
@@ -82,14 +82,14 @@
         <input
           type="checkbox"
           model.bind="installationAddOn"
-          checked.bind="selectedAddOns">
+          checked.bind="state.checkout.selectedAddOns">
         Installation help
       </label>
       <label>
         <input
           type="checkbox"
           model.bind="supportAddOn"
-          checked.bind="selectedAddOns">
+          checked.bind="state.checkout.selectedAddOns">
         Priority support
       </label>
     </fieldset>
@@ -98,23 +98,23 @@
     <select
       id="checkout-addon-select"
       multiple
-      value.bind="selectedAddOns">
+      value.bind="state.checkout.selectedAddOns">
       <option model.bind="installationAddOn">Installation help</option>
       <option model.bind="supportAddOn">Priority support</option>
     </select>
 
     <field-shell
-      if.bind="requiresPostalCode"
+      if.bind="state.checkout.requiresPostalCode"
       input-id="postal-code"
       label="Postal code"
-      value.bind="postalCode"
+      value.bind="state.checkout.postalCode"
       autocomplete="postal-code">
     </field-shell>
 
     <label>
       <input
         type="checkbox"
-        checked.bind="giftWrap"
+        checked.bind="state.checkout.giftWrap"
         accent-color.style="statusAccentColor">
       Add gift wrapping
     </label>
@@ -122,19 +122,19 @@
     <label for="delivery-notes">Delivery notes</label>
     <textarea
       id="delivery-notes"
-      value.bind="instructions"
+      value.bind="state.checkout.instructions"
       rows="3">
     </textarea>
 
     <button
       type="submit"
-      disabled.bind="!canSubmit"
-      needs-details.class="!canSubmit"
+      disabled.bind="!state.checkout.canSubmit"
+      needs-details.class="!state.checkout.canSubmit"
       padding.style="submitButtonPadding"
       outline.style="submitButtonOutline"
       data-state.attr="checkoutStateName">
       Request quote
     </button>
-    <p if.bind="statusMessage != ''">${statusMessage}</p>
+    <p if.bind="state.checkout.statusMessage != ''">${state.checkout.statusMessage}</p>
   </form>
 </section>

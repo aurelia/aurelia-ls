@@ -82,6 +82,10 @@
       "summary": "template memory records."
     },
     {
+      "path": "packages/atlas/memory/records/telemetry.json",
+      "summary": "telemetry memory records."
+    },
+    {
       "path": "packages/atlas/memory/records/validation.json",
       "summary": "validation memory records."
     },

@@ -92,7 +92,9 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
 - Parse closed route config paths into `ConfigurableRoute`, `Parameter`, `StaticSegment`, `DynamicSegment`, and
   `StarSegment` facts, preserving local `path` and optional `parentPath`, then materialize the `Endpoint` products that
   `RouteRecognizer.add(..., true)` creates. Every non-star route gets a primary endpoint plus the framework's residual
-  catch-all endpoint.
+  catch-all endpoint. Public route pattern, endpoint, and recognized-route rows preserve the parameter-name groups from
+  those facts so authoring and API callers can distinguish required, optional, and star parameters without reparsing
+  authored paths.
 - Materialize the first `State` graph nodes produced by appending endpoint paths: separator states, static-character
   states, dynamic parameter states, star states, and residual states. State products carry previous and next-state
   references plus segment name/pattern pressure so route-recognizer candidate matching can walk the same forward graph
@@ -175,7 +177,11 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   identity rather than the configurable-route row so multi-path and residual endpoints stay attached to one route
   handler. Closed static redirects are re-recognized as additional `RecognizedRoute` facts with `redirectDepth` and
   `redirectSourceRouteConfig` so route-tree compilation can consume the exact redirect target instead of pretending the
-  redirect route has a `RouteNode`.
+  redirect route has a `RouteNode`. When a residual endpoint consumes only a parent route prefix, recognition follows
+  the residual child `ViewportInstruction` through the resolved child `RouteConfigContext` before route-tree
+  materialization. This mirrors `RouteTree.createAndAppendNodes(...)`: the parent `RouteNode` still sees residual child
+  instructions, but nested route configs also publish their own `RecognizedRoute`, `RouteNode`, and `ComponentAgent`
+  products instead of disappearing behind the parent residual parameter.
   A closed static instruction path that reaches the recognizer, matches no configured route, and has no fallback on the
   owning route config publishes `instrNoFallback` / `AUR3401` as a route-recognition issue. Dynamic/open instructions
   and contexts without a materialized recognizer remain open seams instead of spending this framework code.
@@ -190,13 +196,25 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   has closed and recognizer matching has produced non-redirect `RecognizedRoute` facts. Route nodes now carry the
   framework-shaped handoff fields from `RouteNode.create(...)`: instruction/original-instruction references,
   recognized route, params/query/fragment counts, viewport name, residue count, parent/child node references, component,
-  title, path, and final path. A transition chain emits a route tree only when every `ViewportRequest` can resolve
-  through the parent route context's available `ViewportAgent`s and the resulting context pair is materialized. A closed
-  request with no matching viewport agent publishes `rcNoAvailableVpa` / `AUR3174` as an exact router issue without also
-  recording a router open seam; missing request pieces and missing route-context pairs stay as open seams instead of
-  publishing partial route trees as if they had closed. Initial root, transition root, and transition child nodes all
-  publish through the same route-node
+  title, path, and final path. Transition materialization preserves the lowered `ViewportInstructionTree` shape:
+  recognized routes from the same viewport instruction stay chained for scoped route contexts, while sibling viewport
+  instructions remain sibling route nodes under the update root or the nearest seeded parent instruction. A transition
+  tree emits only when every `ViewportRequest` can resolve through its parent route context's available
+  `ViewportAgent`s and the resulting context pair is materialized. A closed request with no matching viewport agent
+  publishes `rcNoAvailableVpa` / `AUR3174` as an exact router issue without also recording a router open seam; missing
+  request pieces and missing route-context pairs stay as open seams instead of publishing partial route trees as if they
+  had closed. Initial root, transition root, and transition child nodes all publish through the same route-node
   materialization primitive so route-node handles and config references stay aligned as the router tree substrate grows.
+- Carry closed static query parameters from `RouteExpression` parsing through `ViewportInstructionTree`, `RouteTree`,
+  and every transition `RouteNode`, matching the framework's shared `URLSearchParams` handoff. API rows preserve
+  duplicate query keys as repeated query-param rows, while child-first / parent-first route-node aggregates expose the
+  `IRouteContext.getRouteParameters({ includeQueryParams: true })` flat strategy shape with multi-value query entries
+  represented as arrays.
+- Expose the static `IRouteContext.getRouteParameters(...)` strategy family on `RouteNode` rows. Child-first and
+  parent-first rows project flat nearest/parent overwrite semantics; append rows preserve parent-to-child arrays; and
+  by-route rows group values by the framework route identifier. Include-query variants intentionally repeat shared
+  query values per active route node because the framework writes the same `ViewportInstructionTree.queryParams` onto
+  every node before `RouteContext.getRouteParameters(...)` walks the context chain.
 - Preserve the framework RouteExpression tree shape, not only flattened viewport instructions. Redirect parameter
   migration in `RouteTree.createConfiguredNode(...)` accepts only `Segment` / slash-scoped `Segment` chains; sibling
   composites and grouped expressions are known framework failures and should publish router issue products with
@@ -220,6 +238,10 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
 - Resolving `NavigationStrategy` components outside a concrete viewport instruction. `RouteConfig.component` /
   `AUR3558` stays unclaimed because navigation-strategy routeables remain referential/open until navigation supplies
   the instruction context.
+- Emulating dynamic `IRouteContext.getRouteParameters(...)` inputs. Static route rows expose parameter names and decoded
+  values from closed recognizer endpoints, and `RouteNode` rows expose child-first, parent-first, append, and by-route
+  aggregates over the materialized transition node chain, including closed static query parameters. Runtime query-merge
+  mutations and live active-navigation state remain route-context/runtime frontier work.
 - Resolving string or lazy-import routeables through a full `RouteConfigContext` dependency/resource scope. The current
   model handles dependency-array custom-element names for child route contexts and can claim the closed string miss
   where no component is known (`rtNoComponent` / `AUR3552`), but root-container registration visibility, imported view

@@ -2,6 +2,7 @@ import ts from 'typescript';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import {
+  BindingContextSlotMemberType,
   BindingContextSlotDraft,
   BindingScope,
 } from '../configuration/scope.js';
@@ -10,11 +11,13 @@ import type { KernelStore } from '../kernel/store.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   CheckerTypeProjector,
+  CheckerTypeMemberProjectionPolicy,
   type CheckerTypeProjectionRequest,
 } from '../type-system/checker-projector.js';
 import { CheckerAsyncTypeProjector } from '../type-system/checker-async-type-projector.js';
 import {
   CheckerExpressionTypeEvaluationResultKind,
+  type CheckerExpressionTypeEvaluation,
 } from '../type-system/expression-type-evaluation.js';
 import {
   checkerRepeatableElementTypeInfo,
@@ -29,7 +32,6 @@ import {
 } from '../type-system/type-shape.js';
 import {
   HydrateTemplateControllerInstruction,
-  ListenerBindingInstruction,
 } from './instruction-ir.js';
 import {
   IteratorBindingScopeEffect,
@@ -47,6 +49,22 @@ import {
   templateControllerValueExpressionProductHandle,
 } from './template-controller-value.js';
 import type { TemplateScopeConstructionRequest } from './template-controller-scope-materializer.js';
+import {
+  HtmlElement,
+  normalizeHtmlTagName,
+  type HtmlNodeReference,
+} from './html-ir.js';
+import {
+  checkerLookupLocation,
+  globalDeclaredType,
+  resolveCheckerDomNodeType,
+} from '../type-system/dom-node-type.js';
+
+interface TemplateEventScopeInstruction {
+  readonly node: HtmlNodeReference;
+  readonly eventName: string;
+  readonly sourceAddressHandle: AddressHandle | null;
+}
 
 export class IteratorRepeatableRuntimeIssueProjection {
   constructor(
@@ -54,6 +72,19 @@ export class IteratorRepeatableRuntimeIssueProjection {
     readonly summary: string,
     readonly sourceType: CheckerTypeReference | null,
     readonly sourceSpan: SourceSpan | null,
+  ) {}
+}
+
+export class TemplateIteratorScopeProjection {
+  constructor(
+    /** Parsed `repeat.for` expression that produced this projection, when parsing succeeded. */
+    readonly parse: TemplateExpressionParse | null,
+    /** Runtime RepeatableHandlerResolver element type visible to `$index`, `$previous`, and locals. */
+    readonly elementType: CheckerTypeReference | null,
+    /** Binding-pattern locals projected from the repeat element type. */
+    readonly localProjection: CheckerBindingPatternLocalProjection,
+    /** Static repeatability issue, when the source type cannot satisfy Aurelia repeat source categories. */
+    readonly repeatableIssue: IteratorRepeatableRuntimeIssueProjection | null,
   ) {}
 }
 
@@ -75,7 +106,7 @@ export class TemplateScopeTypeProjector {
 
   listenerEventSlot(
     input: TemplateScopeConstructionRequest,
-    instruction: ListenerBindingInstruction,
+    instruction: TemplateEventScopeInstruction,
     localSuffix: string,
   ): BindingContextSlotDraft {
     return new BindingContextSlotDraft(
@@ -84,6 +115,9 @@ export class TemplateScopeTypeProjector {
       null,
       this.listenerEventTypeReference(input, instruction, localSuffix),
       instruction.sourceAddressHandle,
+      [],
+      null,
+      this.listenerEventMemberTypes(input, instruction, localSuffix),
     );
   }
 
@@ -141,19 +175,37 @@ export class TemplateScopeTypeProjector {
     effect: IteratorBindingScopeEffect,
     localSuffix: string,
   ): CheckerBindingPatternLocalProjection {
+    return this.iteratorProjection(input, parent, effect, localSuffix).localProjection;
+  }
+
+  iteratorProjection(
+    input: TemplateScopeConstructionRequest,
+    parent: BindingScope,
+    effect: IteratorBindingScopeEffect,
+    localSuffix: string,
+  ): TemplateIteratorScopeProjection {
     const parse = this.readParse(effect.iterableExpressionProductHandle);
     if (parse?.result.kind !== ExpressionParseResultKind.IteratorSuccess) {
-      return new CheckerBindingPatternLocalProjection([], []);
+      return new TemplateIteratorScopeProjection(parse, null, new CheckerBindingPatternLocalProjection([], []), null);
     }
-    const evaluation = this.typeEvaluator(input).evaluateIteratorLocals(
+    const projection = this.typeEvaluator(input).evaluateIteratorProjection(
       parse.result.ast,
       parent,
       `${input.localKey}:scope:${localSuffix}`,
       effect.sourceAddressHandle,
     );
-    return evaluation instanceof CheckerBindingPatternLocalProjection
-      ? evaluation
+    const elementType = projection.element.kind === CheckerExpressionTypeEvaluationResultKind.Type
+      ? projection.element.typeReference
+      : null;
+    const localProjection = projection.locals instanceof CheckerBindingPatternLocalProjection
+      ? projection.locals
       : new CheckerBindingPatternLocalProjection([], []);
+    return new TemplateIteratorScopeProjection(
+      parse,
+      elementType,
+      localProjection,
+      this.iteratorRepeatableIssueFromEvaluation(projection.iterable, parse.result.ast.iterable.span),
+    );
   }
 
   iteratorRepeatableIssue(
@@ -172,6 +224,13 @@ export class TemplateScopeTypeProjector {
       `${input.localKey}:scope:${localSuffix}:iterator-source-repeatable`,
       effect.sourceAddressHandle,
     );
+    return this.iteratorRepeatableIssueFromEvaluation(source, parse.result.ast.iterable.span);
+  }
+
+  private iteratorRepeatableIssueFromEvaluation(
+    source: CheckerExpressionTypeEvaluation,
+    sourceSpan: SourceSpan,
+  ): IteratorRepeatableRuntimeIssueProjection | null {
     if (source.kind !== CheckerExpressionTypeEvaluationResultKind.Type) {
       return null;
     }
@@ -193,7 +252,7 @@ export class TemplateScopeTypeProjector {
       certainty,
       `Type '${source.typeShape.display}' does not match the built-in repeat source categories: array, set, map, number, or nullish.`,
       source.typeReference,
-      parse.result.ast.iterable.span,
+      sourceSpan,
     );
   }
 
@@ -300,7 +359,7 @@ export class TemplateScopeTypeProjector {
 
   private listenerEventTypeReference(
     input: TemplateScopeConstructionRequest,
-    instruction: ListenerBindingInstruction,
+    instruction: TemplateEventScopeInstruction,
     localSuffix: string,
   ): CheckerTypeReference | null {
     if (input.typeSystem == null) {
@@ -309,7 +368,7 @@ export class TemplateScopeTypeProjector {
 
     const checker = input.typeSystem.checker;
     const location = checkerLookupLocation(input.typeSystem);
-    const eventType = listenerEventType(checker, location, instruction.eventName);
+    const eventType = listenerEventType(input.typeSystem, location, instruction.eventName);
     if (eventType == null) {
       return null;
     }
@@ -318,10 +377,62 @@ export class TemplateScopeTypeProjector {
       localKey: `${input.localKey}:scope:${localSuffix}:listener-event:$event`,
       checker,
       type: eventType,
-      origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
+      origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceAddressHandle: instruction.sourceAddressHandle,
       display: checker.typeToString(eventType),
+      memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
     } satisfies CheckerTypeProjectionRequest).toReference();
+  }
+
+  private listenerEventMemberTypes(
+    input: TemplateScopeConstructionRequest,
+    instruction: TemplateEventScopeInstruction,
+    localSuffix: string,
+  ): readonly BindingContextSlotMemberType[] {
+    const targetType = this.listenerEventTargetTypeReference(input, instruction, localSuffix);
+    if (targetType == null) {
+      return [];
+    }
+
+    const refinements = [
+      new BindingContextSlotMemberType('currentTarget', targetType, instruction.sourceAddressHandle),
+    ];
+    const node = this.htmlElementFor(instruction.node);
+    if (node != null && listenerTargetCanUseAttachedElement(node)) {
+      refinements.push(new BindingContextSlotMemberType('target', targetType, instruction.sourceAddressHandle));
+    }
+    return refinements;
+  }
+
+  private listenerEventTargetTypeReference(
+    input: TemplateScopeConstructionRequest,
+    instruction: TemplateEventScopeInstruction,
+    localSuffix: string,
+  ): CheckerTypeReference | null {
+    if (input.typeSystem == null) {
+      return null;
+    }
+    const node = this.htmlElementFor(instruction.node);
+    if (node == null) {
+      return null;
+    }
+    const resolution = resolveCheckerDomNodeType(
+      input.typeSystem,
+      node.tagName,
+      node.namespace,
+      this.typeProjector,
+      `${input.localKey}:scope:${localSuffix}:listener-event-target`,
+      node.sourceAddressHandle ?? instruction.sourceAddressHandle,
+    );
+    return resolution?.reference ?? null;
+  }
+
+  private htmlElementFor(reference: HtmlNodeReference): HtmlElement | null {
+    if (reference.productHandle == null) {
+      return null;
+    }
+    const node = this.store.productDetails.read(TemplateProductDetails.HtmlNode, reference.productHandle);
+    return node instanceof HtmlElement ? node : null;
   }
 
   private primitiveReference(
@@ -339,7 +450,7 @@ export class TemplateScopeTypeProjector {
       localKey: `${input.localKey}:scope:repeat-context:${name}`,
       checker,
       type,
-      origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
+      origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceAddressHandle,
       display: primitive,
     } satisfies CheckerTypeProjectionRequest).toReference();
@@ -347,23 +458,24 @@ export class TemplateScopeTypeProjector {
 }
 
 function listenerEventType(
-  checker: ts.TypeChecker,
-  location: ts.Node | undefined,
+  typeSystem: TypeSystemProject,
+  location: ts.Node | null,
   eventName: string,
 ): ts.Type | null {
-  return eventMapPropertyType(checker, location, 'GlobalEventHandlersEventMap', eventName)
-    ?? eventMapPropertyType(checker, location, 'HTMLElementEventMap', eventName)
-    ?? globalType(checker, location, 'CustomEvent')
-    ?? globalType(checker, location, 'Event');
+  return eventMapPropertyType(typeSystem, location, 'GlobalEventHandlersEventMap', eventName)
+    ?? eventMapPropertyType(typeSystem, location, 'HTMLElementEventMap', eventName)
+    ?? globalDeclaredType(typeSystem, 'CustomEvent', location)
+    ?? globalDeclaredType(typeSystem, 'Event', location);
 }
 
 function eventMapPropertyType(
-  checker: ts.TypeChecker,
-  location: ts.Node | undefined,
+  typeSystem: TypeSystemProject,
+  location: ts.Node | null,
   mapName: string,
   eventName: string,
 ): ts.Type | null {
-  const mapType = globalType(checker, location, mapName);
+  const checker = typeSystem.checker;
+  const mapType = globalDeclaredType(typeSystem, mapName, location);
   const property = mapType == null ? null : checker.getPropertyOfType(mapType, eventName);
   const declaration = property?.valueDeclaration ?? property?.declarations?.[0] ?? location ?? null;
   return property == null || declaration == null
@@ -371,18 +483,13 @@ function eventMapPropertyType(
     : checker.getTypeOfSymbolAtLocation(property, declaration);
 }
 
-function globalType(
-  checker: ts.TypeChecker,
-  location: ts.Node | undefined,
-  name: string,
-): ts.Type | null {
-  const symbol = checker.resolveName(name, location, ts.SymbolFlags.Type, false);
-  return symbol == null ? null : checker.getDeclaredTypeOfSymbol(symbol);
-}
-
-function checkerLookupLocation(
-  typeSystem: TypeSystemProject,
-): ts.Node | undefined {
-  return typeSystem.program.getSourceFiles().find((sourceFile) => !sourceFile.isDeclarationFile)
-    ?? typeSystem.program.getSourceFiles()[0];
+function listenerTargetCanUseAttachedElement(node: HtmlElement): boolean {
+  switch (normalizeHtmlTagName(node.tagName)) {
+    case 'INPUT':
+    case 'SELECT':
+    case 'TEXTAREA':
+      return true;
+    default:
+      return false;
+  }
 }

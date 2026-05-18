@@ -78,7 +78,7 @@ export class CheckerAsyncTypeProjector {
       localKey,
       checker: carrier.checker,
       type,
-      origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
+      origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceNode,
       sourceAddressHandle,
       display: carrier.checker.typeToString(type, sourceNode ?? undefined),

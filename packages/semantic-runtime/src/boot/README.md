@@ -19,6 +19,10 @@ later materializers that consume admitted sources and emit their own evidence, c
   `tooling-config`, `declaration`, `template`, `style`, and `package-manifest`.
 - Read project compiler options as host footing for later evaluation and TypeChecker epochs. This is still boot-level
   because it describes how source modules are wired, not what Aurelia semantics they contain.
+- Synthesize TypeScript path mappings for the checked-out Aurelia framework packages by reading package manifests under
+  `aurelia/packages/*` and pointing each package name at `dist/types/index.d.ts` when present. Keep this dynamic rather
+  than a hand-maintained package list: validation, i18n, state, dialog, and future framework packages all need the same
+  checker footing when generated fixtures import their public APIs.
 - Expose conservative project-shape triage before app-world construction. The current policy counts local manifest
   dependencies on `aurelia` / `@aurelia/*`, inherits Aurelia dependency context from ancestor workspace manifests that
   explicitly include the project frame, and parses app-source imports for Aurelia facade/default/namespace imports,
@@ -28,6 +32,10 @@ later materializers that consume admitted sources and emit their own evidence, c
 - Share package-manifest, directory, and path-normalization host helpers through `host-files.ts` so project discovery,
   compiler-option construction, evaluation module resolution, and future boot inputs do not grow parallel filesystem
   micro-policies. Package manifests are cached at this host boundary for the current process.
+- Cache project compiler-option shapes by project root for the current process and clone them on read. Static
+  evaluation and TypeSystem construction both need the same filesystem-derived tsconfig/path-mapping shape during one
+  app open; caching this at boot avoids repeating package/source-root discovery without sharing a mutable
+  `ts.CompilerOptions` object between TypeScript consumers.
 - Admit package-source roots from local workspace manifests and, during clean-room pressure runs, from
   `SEMANTIC_RUNTIME_EXTERNAL_SOURCE_ROOTS` / `ATLAS_EXTERNAL_SOURCE_ROOTS`. These roots supply TypeScript path
   mappings for sibling/plugin package source; they are input wiring, not checked-in app facts.
@@ -67,3 +75,9 @@ External source roots are deliberately ephemeral. They let pressure runs resolve
 source without copying those paths into fixtures or durable docs. Materializers may then recognize resources,
 configuration, and registration bodies in the linked package source if project evaluation reaches those modules through
 ordinary import edges.
+
+Project compiler-option caching is a CPU/read-amplification trade-off, not a semantic claim about the app. It caches
+small configuration objects and path-mapping strings, while app-world products, TypeScript dependency SourceFiles, and
+query outcomes retain their own lifetimes. If a long-lived host changes tsconfig or workspace/package wiring, it should
+restart the semantic-runtime session or clear that boot cache through the owning control path once a config-epoch
+invalidation policy exists.

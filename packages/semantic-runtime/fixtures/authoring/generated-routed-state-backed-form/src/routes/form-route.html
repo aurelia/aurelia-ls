@@ -1,11 +1,8 @@
 <section>
-  <h1>Service request</h1>
-  <label for="request-selector">Request</label>
-  <select id="request-selector" value.bind="selectedRequestId">
-    <option repeat.for="requestId of requestIds" model.bind="requestId">${requestId}</option>
-  </select>
+  <h1>Service request ${requestId}</h1>
+  <p>Mode: ${routeMode} (${routeTagCount} tag(s))</p>
 
-  <state-backed-form request-id.bind="selectedRequestId"></state-backed-form>
+  <state-backed-form request-id.bind="requestId"></state-backed-form>
 
-  <p>${submittedCount} submitted request(s)</p>
+  <p>${state.submittedCount} submitted request(s)</p>
 </section>

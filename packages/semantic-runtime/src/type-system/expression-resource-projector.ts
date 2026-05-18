@@ -11,6 +11,10 @@ import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { ValueConverterDefinition } from '../resources/value-converter-definition.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import type { TemplateVisibleResource } from '../template/compiler-world-reference.js';
+import {
+  STATE_BINDING_BEHAVIOR_NAME,
+  type StateBindingScopeProjector,
+} from '../state/state-binding-scope.js';
 import { CheckerExpressionAccessProjector } from './expression-access-projector.js';
 import {
   checkerExpressionCallArguments,
@@ -44,6 +48,7 @@ export class CheckerExpressionResourceProjector {
     private readonly access: CheckerExpressionAccessProjector,
     private readonly calls: CheckerExpressionCallProjector,
     private readonly resourceScope: TemplateResourceScope | null,
+    private readonly stateScopes: StateBindingScopeProjector,
     private readonly host: CheckerExpressionResourceProjectorHost,
   ) {}
 
@@ -126,6 +131,10 @@ export class CheckerExpressionResourceProjector {
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
   ): CheckerExpressionTypeEvaluation {
+    if (expression.name.name === STATE_BINDING_BEHAVIOR_NAME) {
+      return this.evaluateStateBindingBehavior(expression, scope, localKey, sourceAddressHandle);
+    }
+
     const inner = this.evaluateValueConverterRoot(expression.expression, scope, `${localKey}:behavior:${expression.name.name}`, sourceAddressHandle);
     if (inner.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return inner;
@@ -148,6 +157,49 @@ export class CheckerExpressionResourceProjector {
       );
     }
     return inner;
+  }
+
+  private evaluateStateBindingBehavior(
+    expression: BindingBehaviorExpression,
+    scope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerExpressionTypeEvaluation {
+    const definition = this.findBindingBehaviorDefinition(expression.name.name);
+    if (definition == null) {
+      return this.support.open(
+        CheckerExpressionTypeOpenKind.MissingBindingBehaviorResource,
+        expression,
+        `Binding behavior '${expression.name.name}' was not resolved through the current compiler resource scope.`,
+      );
+    }
+    if (bindingBehaviorAlreadyApplied(expression.expression, expression.name.name)) {
+      return this.support.open(
+        CheckerExpressionTypeOpenKind.DuplicateBindingBehavior,
+        expression,
+        `Binding behavior '${expression.name.name}' is applied more than once in this expression.`,
+      );
+    }
+    const stateScope = this.stateScopes.scopeForBindingBehavior(
+      expression,
+      scope,
+      `${localKey}:behavior:${expression.name.name}`,
+      sourceAddressHandle,
+    );
+    if (stateScope.scope == null) {
+      return this.support.open(
+        CheckerExpressionTypeOpenKind.MissingStateStore,
+        expression,
+        stateScope.openReason ?? 'The state binding behavior could not produce a store-backed binding scope.',
+        stateScope.store?.initialStateType ?? null,
+      );
+    }
+    return this.evaluateValueConverterRoot(
+      expression.expression,
+      stateScope.scope,
+      `${localKey}:behavior:${expression.name.name}:state-scope`,
+      sourceAddressHandle,
+    );
   }
 
   private evaluateValueConverterRoot(

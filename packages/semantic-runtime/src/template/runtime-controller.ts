@@ -55,12 +55,14 @@ export const enum RuntimeControllerLifecycleStage {
 export const enum RuntimeControllerLifecycleStepKind {
   CreateController = 'create-controller',
   CreateChildContainer = 'create-child-container',
+  RegisterDependencies = 'register-dependencies',
   AddChild = 'add-child',
   AdmittedToParent = 'admitted-to-parent',
   AddBinding = 'add-binding',
   CreateViewFactory = 'create-view-factory',
   CreateSyntheticView = 'create-synthetic-view',
   RenderInstructions = 'render-instructions',
+  RecursiveHydrationBoundary = 'recursive-hydration-boundary',
   AttachScope = 'attach-scope',
   Bind = 'bind',
 }
@@ -269,6 +271,16 @@ export class RuntimeControllerFrame {
     ));
   }
 
+  recordRecursiveHydrationBoundary(summary: string): void {
+    this.recordLifecycleStep(
+      RuntimeControllerLifecycleStage.Rendering,
+      RuntimeControllerLifecycleStepKind.RecursiveHydrationBoundary,
+      this.definitionProductHandle,
+      this.sourceAddressHandle,
+      summary,
+    );
+  }
+
   readBindings(): readonly RuntimeBinding[] {
     return [...this.bindings];
   }
@@ -295,6 +307,12 @@ export class RuntimeControllerFrame {
     return [...this.lifecycleSteps];
   }
 
+  hasRecursiveHydrationBoundary(): boolean {
+    return this.lifecycleSteps.some((step) =>
+      step.stepKind === RuntimeControllerLifecycleStepKind.RecursiveHydrationBoundary
+    );
+  }
+
   readReadinessKind(): RuntimeControllerReadinessKind {
     if (this.lifecycleSteps.some((step) => step.stepKind === RuntimeControllerLifecycleStepKind.Bind)) {
       return RuntimeControllerReadinessKind.Bound;
@@ -303,6 +321,7 @@ export class RuntimeControllerFrame {
       return RuntimeControllerReadinessKind.ScopeReady;
     }
     if (this.lifecycleSteps.some((step) => step.stepKind === RuntimeControllerLifecycleStepKind.RenderInstructions)
+      || this.hasRecursiveHydrationBoundary()
       || this.bindings.length > 0
       || this.children.length > 0) {
       return RuntimeControllerReadinessKind.Rendered;

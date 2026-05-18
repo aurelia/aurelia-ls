@@ -15,7 +15,6 @@ import {
   ContainerIdentity,
   ContainerIdentityKind,
   DiProductIdentity,
-  InterfaceDiKeyIdentity,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
@@ -46,6 +45,7 @@ import {
 import {
   ResolverStrategy,
 } from './resolver.js';
+import { DiKeyIdentityEmitter } from './di-key-identity-emitter.js';
 
 export class ContainerContextResolverSlotRequest {
   constructor(
@@ -70,7 +70,21 @@ export class ContainerChildMaterializationRequest {
     readonly contextResolvers: readonly ContainerContextResolverSlotRequest[] = [],
     /** Optional createChild configuration. Omit for runtime's default child-container path. */
     readonly configuration: ContainerConfiguration | ContainerConfigurationRequest | null = null,
+    /**
+     * Record detail policy for framework contextual resolver slots.
+     *
+     * Some inquiry profiles need these slots modeled for DI lookup but do not need every renderer-created contextual
+     * provider published as kernel products up front. Detailed topology lanes can still request full publication.
+     */
+    readonly contextResolverRecordPolicy: ContainerContextResolverRecordPolicy = ContainerContextResolverRecordPolicy.PublishAll,
   ) {}
+}
+
+export const enum ContainerContextResolverRecordPolicy {
+  /** Publish each contextual resolver slot as DI key identity, resolver-slot product, claims, and materialization. */
+  PublishAll = 'publish-all',
+  /** Keep contextual resolver slots in the live container model, but defer resolver-slot product rows. */
+  ModelOnly = 'model-only',
 }
 
 export class ContainerChildMaterializationEmission {
@@ -85,6 +99,18 @@ export class ContainerChildMaterializationEmission {
     readonly records: readonly KernelStoreRecord[],
   ) {}
 }
+
+export type ContainerChildMaterializationPhaseName =
+  | 'source'
+  | 'container'
+  | 'self-resolver'
+  | 'context-resolvers'
+  | 'records';
+
+export type ContainerChildMaterializationMeasure = <TValue>(
+  name: ContainerChildMaterializationPhaseName,
+  read: () => TValue,
+) => TValue;
 
 class ContainerMaterializationSourceSet {
   constructor(
@@ -124,34 +150,45 @@ class ContainerSlotProductHandles {
   }
 }
 
+const unmeasuredContainerChildMaterialization: ContainerChildMaterializationMeasure = (_name, read) => read();
+
 /** Shared materializer for runtime-created child containers and their constructor/context slots. */
 export class ContainerChildMaterializer {
-  private readonly emittedIdentityHandles = new Set<IdentityHandle>();
+  private readonly keyIdentityEmitter: DiKeyIdentityEmitter;
 
   constructor(
     /** Hot analysis store used for handle allocation and duplicate identity checks. */
     readonly store: KernelStore,
-  ) {}
+  ) {
+    this.keyIdentityEmitter = new DiKeyIdentityEmitter(store);
+  }
 
-  materializeChild(input: ContainerChildMaterializationRequest): ContainerChildMaterializationEmission {
+  materializeChild(
+    input: ContainerChildMaterializationRequest,
+    measure: ContainerChildMaterializationMeasure = unmeasuredContainerChildMaterialization,
+  ): ContainerChildMaterializationEmission {
     const local = `di-child-container:${input.localKey}`;
-    const source = this.recordsForSource(
+    const source = measure('source', () => this.recordsForSource(
       local,
       'Runtime child container created from a parent controller/container boundary.',
       input.sourceAddressHandle,
+    ));
+    const child = measure('container', () => this.createChildContainer(input, local));
+    const selfResolver = measure('self-resolver', () =>
+      this.recordsForContainerSelfResolver(child, source.provenanceHandle)
     );
-    const child = this.createChildContainer(input, local);
-    const selfResolver = this.recordsForContainerSelfResolver(child, source.provenanceHandle);
     child.registerSelfResolver(selfResolver.slot);
-    const contextResolvers = this.recordsForContextResolverSlots(child, input, local, source.provenanceHandle);
+    const contextResolvers = measure('context-resolvers', () =>
+      this.recordsForContextResolverSlots(child, input, local, source.provenanceHandle)
+    );
     contextResolvers.slots.forEach((slot) => child.registerResolver(slot));
 
-    const records: KernelStoreRecord[] = [
+    const records: KernelStoreRecord[] = measure('records', () => [
       ...source.records,
       ...this.recordsForChildContainer(input, local, source, child),
       ...selfResolver.records,
       ...contextResolvers.records,
-    ];
+    ]);
 
     return new ContainerChildMaterializationEmission(
       child,
@@ -224,12 +261,14 @@ export class ContainerChildMaterializer {
   ): ContainerSlotEmissionSet<ContainerResolverSlot> {
     const records: KernelStoreRecord[] = [];
     const contextResolverSlots: ContainerResolverSlot[] = [];
+    const publishRecords = input.contextResolverRecordPolicy === ContainerContextResolverRecordPolicy.PublishAll;
     input.contextResolvers.forEach((contextResolver, index) => {
       const slot = this.recordsForContextResolverSlot(
         child,
         contextResolver,
         `${local}:context:${index}`,
         provenanceHandle,
+        publishRecords,
       );
       records.push(...slot.records);
       contextResolverSlots.push(slot.slot);
@@ -243,8 +282,8 @@ export class ContainerChildMaterializer {
   ): ContainerSlotEmission<ContainerSelfResolverSlot> {
     const local = `di-self-resolver:${container.productHandle}`;
     const records: KernelStoreRecord[] = [];
-    const keyIdentityHandle = this.store.handles.identity('di-key:interface:IContainer');
-    this.emitInterfaceKeyIdentity(records, keyIdentityHandle, 'IContainer', container.sourceAddressHandle);
+    const keyIdentityHandle = this.keyIdentityEmitter.interfaceKeyIdentityHandle('IContainer');
+    this.keyIdentityEmitter.emitInterfaceKeyIdentity(records, keyIdentityHandle, 'IContainer', container.sourceAddressHandle);
 
     const handles = this.containerSlotProductHandles(local, keyIdentityHandle);
     const slot = this.containerSelfResolverSlot(container, handles);
@@ -279,13 +318,25 @@ export class ContainerChildMaterializer {
     input: ContainerContextResolverSlotRequest,
     local: string,
     provenanceHandle: ProvenanceHandle,
+    publishRecords: boolean,
   ): ContainerSlotEmission<ContainerResolverSlot> {
     const records: KernelStoreRecord[] = [];
-    const keyIdentityHandle = this.store.handles.identity(`di-key:interface:${input.interfaceName}`);
-    this.emitInterfaceKeyIdentity(records, keyIdentityHandle, input.interfaceName, input.sourceAddressHandle);
+    const keyIdentityHandle = this.keyIdentityEmitter.interfaceKeyIdentityHandle(input.interfaceName);
+    if (!publishRecords) {
+      return new ContainerSlotEmission(
+        records,
+        this.contextResolverSlot(
+          container,
+          input,
+          this.store.handles.product(local),
+          keyIdentityHandle,
+        ),
+      );
+    }
+    this.keyIdentityEmitter.emitInterfaceKeyIdentity(records, keyIdentityHandle, input.interfaceName, input.sourceAddressHandle);
 
     const handles = this.containerSlotProductHandles(local, keyIdentityHandle);
-    const slot = this.contextResolverSlot(container, input, handles);
+    const slot = this.contextResolverSlot(container, input, handles.productHandle, handles.keyIdentityHandle);
     records.push(
       ...this.recordsForContainerSlotProduct(
         local,
@@ -302,12 +353,13 @@ export class ContainerChildMaterializer {
   private contextResolverSlot(
     container: Container,
     input: ContainerContextResolverSlotRequest,
-    handles: ContainerSlotProductHandles,
+    productHandle: ProductHandle,
+    keyIdentityHandle: IdentityHandle,
   ): ContainerResolverSlot {
     return new ContainerResolverSlot(
-      handles.productHandle,
+      productHandle,
       container.toReference(),
-      handles.keyIdentityHandle,
+      keyIdentityHandle,
       null,
       null,
       ResolverStrategy.instance,
@@ -436,21 +488,4 @@ export class ContainerChildMaterializer {
     );
   }
 
-  private emitInterfaceKeyIdentity(
-    records: KernelStoreRecord[],
-    handle: IdentityHandle,
-    interfaceName: string,
-    addressHandle: AddressHandle | null,
-  ): void {
-    if (this.emittedIdentityHandles.has(handle) || this.store.readIdentity(handle) != null) {
-      return;
-    }
-    this.emittedIdentityHandles.add(handle);
-    records.push(new InterfaceDiKeyIdentity(
-      handle,
-      interfaceName,
-      null,
-      addressHandle,
-    ));
-  }
 }

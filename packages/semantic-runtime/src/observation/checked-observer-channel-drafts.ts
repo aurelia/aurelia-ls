@@ -83,16 +83,17 @@ export class CheckedObserverChannelDrafts {
       authority: elementValue.valueType == null
         ? RuntimeBindingValueChannelAuthority.StaticTemplate
         : RuntimeBindingValueChannelAuthority.BindingExpressionAndTypeChecker,
-      runtimeValueType: elementValue.valueType
-        ?? this.owner.types.stringLiteralDomainType(
-          `${binding.productHandle}:checked-radio-domain`,
-          elementValue.valueDomain,
-          binding.sourceAddressHandle,
-        ),
-      valueDomain: elementValue.valueDomain,
-      isCollection: false,
-      usesCustomMatcher,
-      openReason: null,
+        runtimeValueType: elementValue.valueType
+          ?? this.owner.types.stringLiteralDomainType(
+            `${binding.productHandle}:checked-radio-domain`,
+            elementValue.valueDomain,
+            binding.sourceAddressHandle,
+          ),
+        valueDomain: elementValue.valueDomain,
+        primitiveValueDomain: elementValue.primitiveValueDomain,
+        isCollection: false,
+        usesCustomMatcher,
+        openReason: null,
     };
   }
 
@@ -143,7 +144,7 @@ export class CheckedObserverChannelDrafts {
   ): RuntimeBindingValueChannelDraft {
     const elementValue = this.owner.inputRuntimeValue(local, input, context);
     const valueDomain = elementValue.valueDomain;
-    if (elementValue.valueType == null && valueDomain.length === 0) {
+    if (elementValue.valueType == null && valueDomain.length === 0 && elementValue.primitiveValueDomain.length === 0) {
       return {
         channelKind: RuntimeBindingValueChannelKind.CheckedModel,
         authority: RuntimeBindingValueChannelAuthority.Open,
@@ -165,8 +166,9 @@ export class CheckedObserverChannelDrafts {
             `${local}:checked-collection-domain`,
             valueDomain,
             binding.sourceAddressHandle,
-          ),
+        ),
         valueDomain,
+        primitiveValueDomain: elementValue.primitiveValueDomain,
         isCollection: true,
         usesCustomMatcher,
         openReason: null,
@@ -184,6 +186,7 @@ export class CheckedObserverChannelDrafts {
           binding.sourceAddressHandle,
         ),
       valueDomain,
+      primitiveValueDomain: elementValue.primitiveValueDomain,
       isCollection: true,
       usesCustomMatcher,
       openReason: null,

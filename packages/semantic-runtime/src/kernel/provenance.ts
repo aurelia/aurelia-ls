@@ -40,6 +40,25 @@ export function compactFieldProvenance<TField extends string>(
   return provenance.filter((entry): entry is FieldProvenance<TField> => entry != null);
 }
 
+/**
+ * Create field provenance only when the field has a more specific witness than the owning product.
+ *
+ * Field provenance is useful when a property comes from a different authored span or symbol. When it repeats the owner
+ * provenance handle, it is usually representation noise; the product/source provenance already explains that field.
+ */
+export function fieldProvenanceWhenDistinct<TField extends string>(
+  /** Field name on the owning semantic object. */
+  field: TField,
+  /** Field-specific provenance handle, if one was observed. */
+  provenanceHandle: ProvenanceHandle | null | undefined,
+  /** Provenance handle already carried by the owning product or source record. */
+  ownerProvenanceHandle: ProvenanceHandle | null | undefined,
+): FieldProvenance<TField> | null {
+  return provenanceHandle == null || provenanceHandle === ownerProvenanceHandle
+    ? null
+    : new FieldProvenance(field, provenanceHandle);
+}
+
 /** Create same-provenance field entries while preserving optional field slots at the call site. */
 export function fieldProvenanceEntries<TField extends string>(
   /** Field names materialized from the same provenance handle. */

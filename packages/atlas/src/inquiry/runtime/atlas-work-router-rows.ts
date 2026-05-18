@@ -26,6 +26,7 @@ import type {
   ProductArchitectureFunctionSurfaceRow,
   ProductArchitectureModuleRow,
 } from "./product-architecture-analysis.js";
+import type { SourceRange } from "../locus.js";
 
 /** Value returned by atlas.work-router. */
 export interface AtlasWorkRouterValue {
@@ -251,6 +252,10 @@ export interface AtlasWorkRouteSourcePlanRow {
   readonly anchor: AtlasWorkRouteSourceAnchor;
   /** True when a module or class matched the anchor path/symbol. */
   readonly found: boolean;
+  /** True when the source file itself is admitted into Atlas's hot TypeScript world. */
+  readonly admittedSourceFileFound: boolean;
+  /** Generic declaration matches from any admitted package, used before package-specific architecture lenses interpret the file. */
+  readonly admittedSourceDeclarations: readonly AtlasWorkRouteAdmittedSourceDeclarationRow[];
   /** Matching class surfaces. */
   readonly classSurfaces: readonly ProductArchitectureClassSurfaceRow[];
   /** Matching declaration surfaces, including function and type declarations. */
@@ -268,6 +273,24 @@ export interface AtlasWorkRouteSourcePlanRow {
   /** Matching Atlas source-file surfaces when the anchor points inside packages/atlas. */
   readonly atlasSourceFiles: readonly AtlasSelfSourceFileSurfaceRow[];
   /** Compact source-plan summary. */
+  readonly summary: string;
+}
+
+/** Package-neutral declaration match for a work-route source anchor. */
+export interface AtlasWorkRouteAdmittedSourceDeclarationRow {
+  /** Declaration kind from the source substrate. */
+  readonly kind: string;
+  /** Declaration name, when available. */
+  readonly name: string | null;
+  /** Admitted package that owns the declaration file. */
+  readonly packageId: string | null;
+  /** Repository-relative declaration file path. */
+  readonly filePath: string;
+  /** True when the declaration is exported from its local source file. */
+  readonly exported: boolean;
+  /** Exact declaration span. */
+  readonly source: SourceRange;
+  /** Compact display summary. */
   readonly summary: string;
 }
 

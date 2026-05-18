@@ -175,10 +175,11 @@ For a compact current handoff, read [workbench/agent-handoff.md](workbench/agent
   of raw examples. Seed classifiers read the exact source range behind each snippet rather than the compact preview.
   Fixture seed rows also carry typed classification reasons (`concept:*`, `effect:*`, `surface:*`, `recipe:*`,
   `contrast:*`) so a row can explain why it was admitted or downgraded without reopening the source immediately. Use
-  `classificationKind` and `classificationKey` for exact reason filters such as `surface:native-value-binding`,
-  `surface:native-checked-binding`, `surface:option-model-binding`, or `surface:validation-binding-behavior`. Surface
-  reasons are local to doc code fences and test `createFixture(...)` call snippets; broader `describe`/`it` carrier
-  rows can still carry effect, recipe, or contrast pressure, but they should not satisfy exact surface filters.
+  `classificationKind=surface` and `classificationKey` for exact reason filters such as `native-value-binding`,
+  `native-checked-binding`, `option-model-binding`, or `validation-binding-behavior`; the CLI also accepts the printed
+  reason spelling in `classificationKey`, such as `surface:option-model-binding`. Surface reasons are local to doc code
+  fences and test `createFixture(...)` call snippets; broader `describe`/`it` carrier rows can still carry effect,
+  recipe, or contrast pressure, but they should not satisfy exact surface filters.
   Interpolation and bare `else` classification is context-aware: markup snippets can count Aurelia template syntax,
   while ordinary TypeScript template strings and JavaScript branches should not.
   Use `effectKind`, `effectRole`, `effectSeedPolicy`, and `recipeKey` as structural filters and `query` for

@@ -20,6 +20,7 @@ function createRequest(id: string, customerName: string): ServiceRequest {
     email: `${customerName.toLowerCase().replace(' ', '.')}@example.test`,
     urgent: false,
     contactPreference: 'email',
+    primaryTopic: null,
     topics: ['support'],
     notes: '',
     submitCount: 0,

@@ -18,6 +18,8 @@ export interface CheckerRepeatableElementTypeInfo {
   readonly nullishConstituents: number;
 }
 
+const repeatableElementInfoByChecker = new WeakMap<ts.TypeChecker, WeakMap<ts.Type, CheckerRepeatableElementTypeInfo>>();
+
 export function checkerStringIndexValueType(
   checker: ts.TypeChecker,
   type: ts.Type,
@@ -104,6 +106,20 @@ export function checkerRepeatableElementTypeInfo(
   checker: ts.TypeChecker,
   type: ts.Type,
 ): CheckerRepeatableElementTypeInfo {
+  const cache = repeatableElementTypeInfoCache(checker);
+  const cached = cache.get(type);
+  if (cached != null) {
+    return cached;
+  }
+  const info = computeCheckerRepeatableElementTypeInfo(checker, type);
+  cache.set(type, info);
+  return info;
+}
+
+function computeCheckerRepeatableElementTypeInfo(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): CheckerRepeatableElementTypeInfo {
   if (type.isUnion()) {
     return unionRepeatableElementTypeInfo(checker, type.types);
   }
@@ -120,6 +136,20 @@ export function checkerRepeatableElementTypeInfo(
   return elementType == null
     ? repeatableElementInfo(null, 0, 1, 0, 0)
     : repeatableElementInfo(elementType, 1, 0, 0, 0);
+}
+
+function repeatableElementTypeInfoCache(
+  checker: ts.TypeChecker,
+): WeakMap<ts.Type, CheckerRepeatableElementTypeInfo> {
+  let cache = repeatableElementInfoByChecker.get(checker);
+  if (cache === undefined) {
+    // Repeat-source classification can hit the same TypeChecker type from scope construction, diagnostics, and
+    // completion. Cache only this small relation, not whole projected shapes; this spends a little checker-epoch memory
+    // to avoid repeated TypeChecker relation work without growing the kernel or public query answers.
+    cache = new WeakMap();
+    repeatableElementInfoByChecker.set(checker, cache);
+  }
+  return cache;
 }
 
 export function checkerRepeatableElementType(

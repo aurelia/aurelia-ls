@@ -215,7 +215,10 @@ function resourceRecognitionSourceFiles(
 }
 
 function emptyResourceEmission(): ResourceRecognitionKernelEmission {
-  return new ResourceRecognitionKernelEmission([], []);
+  return new ResourceRecognitionKernelEmission([], [], {
+    totalMilliseconds: 0,
+    phases: [],
+  });
 }
 
 function emptyDefinitionConvergence(): ResourceDefinitionConvergenceEmission {

@@ -10,19 +10,38 @@
         "template",
         "diagnostics"
       ],
-      "summary": "I18n TranslationBinding lifecycle errors are modeled after runtime rendering joins key and parameter bindings on the same target element.",
-      "rationale": "Aurelia i18n does not treat each t/t.bind/t-params.bind attribute as an isolated binding lifetime. The renderer retrieves or creates one TranslationBinding per target and t-params.bind calls useParameter(...), so semantic-runtime diagnostics for AUR4000/AUR4001/AUR4002 must group rendered TranslationBinding products by target before publishing RuntimeBindingIssue products.",
+      "summary": "I18n TranslationBinding lifecycle rows and target semantics are modeled after runtime rendering joins key and parameter bindings on the same target element.",
+      "rationale": "Aurelia i18n does not treat each t/t.bind/t-params.bind attribute as an isolated binding lifetime. The renderer retrieves or creates one TranslationBinding per target and t-params.bind calls useParameter(...), while I18nKeyEvaluationResult parses semicolon-delimited key expressions such as [title]key;key into runtime target attributes. Semantic-runtime must group rendered TranslationBinding products by target and parse static key-expression targets before projecting positive api.I18nTranslationBindings rows or publishing RuntimeBindingIssue products for AUR4000/AUR4001/AUR4002.",
       "guidance": [
         "Inspect framework i18n TranslationBinding and translation renderers before changing this lane; the join point is TranslationBinding.useParameter(...).",
         "Keep translation-key catalog products separate from translation-binding lifecycle diagnostics: catalog completion comes from configuration resources, while lifecycle errors come from rendered binding products.",
-        "Surface i18n lifecycle diagnostics through shared template/app diagnostic projection instead of adding i18n-specific API rows prematurely."
+        "Use api.I18nTranslationBindings and i18n-translation-binding expected effects when a recipe needs to prove successful rendered t/t.bind/t-params.bind lifecycles; rows expose normalized targetProperties/targetKinds because the compiler target for t itself is not the same as TranslationBinding's runtime write target.",
+        "Surface i18n lifecycle diagnostics through shared template/app diagnostic projection instead of adding i18n-specific diagnostic rows; the translation-key catalog has its own query/effect lane."
       ],
       "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/i18n/key-evaluation-result.ts",
+          "symbolName": "I18nKeyEvaluationResult",
+          "summary": "Static mirror of framework i18n key-expression attribute parsing and target defaulting."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/i18n/translation-binding-groups.ts",
+          "symbolName": "i18nTranslationBindingGroups",
+          "summary": "Shared positive/negative target-element grouping primitive for rendered i18n TranslationBinding products."
+        },
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/i18n/translation-binding-issues.ts",
           "symbolName": "I18nTranslationBindingIssueMaterializer",
           "summary": "Semantic-runtime materializer for TranslationBinding.create/bind diagnostics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/i18n-projections.ts",
+          "symbolName": "readI18nTranslationBindingRows",
+          "summary": "Public row projection for rendered TranslationBinding target groups."
         },
         {
           "kind": "source",
@@ -36,6 +55,11 @@
           "summary": "Synthetic pressure fixture for i18n translation binding diagnostics."
         },
         {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime smoke:localized-state-backed-form",
+          "summary": "Closed-loop smoke for positive localized catalog and rendered translation-binding verification."
+        },
+        {
           "kind": "lens",
           "lensId": "framework.errors",
           "projection": "diagnostic-codes",
@@ -44,15 +68,88 @@
       ],
       "liveChecks": [
         {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/i18n/key-evaluation-result.ts",
+          "symbolName": "I18nKeyEvaluationResult"
+        },
+        {
           "kind": "product-large-class",
           "className": "I18nTranslationBindingIssueMaterializer",
           "filePath": "packages/semantic-runtime/src/i18n/translation-binding-issues.ts",
           "minLineCount": 180,
           "minMethodCount": 8
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/i18n/translation-binding-groups.ts",
+          "symbolName": "i18nTranslationBindingGroups"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/i18n-projections.ts",
+          "symbolName": "readI18nTranslationBindingRows"
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-05-17"
+    },
+    {
+      "id": "frontier:i18n-translation-key-query-effect",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "i18n",
+        "api",
+        "authoring",
+        "fixtures"
+      ],
+      "summary": "Static i18n translation resources now have a public query and authoring expected-effect surface.",
+      "rationale": "Generated localized fixtures need to prove that plugin registration admitted translation resources without comparing generated source text. The static i18n catalog materializer already owns I18nTranslationKey products, so api.I18nTranslationKeys and i18n-translation-key expected effects are the correct verification boundary.",
+      "guidance": [
+        "Use api.I18nTranslationKeys when a caller needs static translation catalog rows for completion, fixture verification, or future hover/coverage work.",
+        "Use i18n-translation-key expected effects when a recipe needs to prove static I18nConfiguration init resources reopened as semantic facts.",
+        "Keep dynamic backend loaders, runtime language switching, missing-key lifecycle diagnostics, and translation catalog authoring as separate frontiers; this lane only proves static catalog availability.",
+        "Pressure summaries report i18n key counts without printing translation keys, so external app scans do not promote app-specific catalog names into tracked output."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/i18n-projections.ts",
+          "symbolName": "readI18nTranslationKeyRows",
+          "summary": "Public row projection for static translation key products."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/effect-observation.ts",
+          "symbolName": "observeExpectedSemanticEffect",
+          "summary": "Expected-effect observation now handles i18n-translation-key rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/state-backed-form-recipe.ts",
+          "symbolName": "buildLocalizedStateBackedFormPlan",
+          "summary": "Generated localized form recipe that uses static I18nConfiguration resources."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime smoke:localized-state-backed-form",
+          "summary": "Closed-loop smoke for localized generated fixture verification."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/i18n-projections.ts",
+          "symbolName": "readI18nTranslationKeyRows"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/authoring/state-backed-form-recipe.ts",
+          "symbolName": "buildLocalizedStateBackedFormPlan"
+        }
+      ],
+      "createdAt": "2026-05-17",
+      "updatedAt": "2026-05-17"
     }
   ]
 }

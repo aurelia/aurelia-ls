@@ -194,8 +194,15 @@ const numberFilterArguments: readonly (readonly [string, string])[] = [
   ["--minCrossAreaCallSiteCount=", "minCrossAreaCallSiteCount"],
 ];
 
+if (process.argv.includes("--help") || process.argv.includes("-h")) {
+  printUsage();
+  process.exit(0);
+}
+
 assertKnownScriptArguments("product.architecture", [
   "--detail",
+  "--help",
+  "-h",
   "--projection=",
   "--rows=",
   ...stringFilterArguments.map(([argument]) => argument),
@@ -437,6 +444,36 @@ function printDetailList(label: string, values: readonly string[]): void {
   if (values.length > 0) {
     console.log(`  ${label}: ${values.slice(0, 24).join(", ")}${values.length > 24 ? ", ..." : ""}`);
   }
+}
+
+function printUsage(): void {
+  console.log(`product.architecture
+
+Usage:
+  pnpm --filter @aurelia-ls/atlas product:architecture -- --projection=classes --rows=20
+  pnpm --filter @aurelia-ls/atlas product:architecture -- --projection=functions --className=Container --orderBy=lineCount --detail
+  pnpm --filter @aurelia-ls/atlas product:architecture -- --projection=call-sites --calleeName=register --includeCallDetails=true
+
+Projections:
+  summary, areas, dependencies, area-dependencies, declarations, cycles,
+  modules, classes, functions, function-duplicates, function-control-flow-shapes,
+  call-sites, call-dependencies, symbol-references, symbol-dependencies,
+  kernel-records, kernel-batches, field-provenance
+
+Common options:
+  --rows=<n>        Limit row families. Defaults to 20.
+  --detail          Include bounded supporting fields and source/call detail.
+  --query=<text>    Additional row-text filter; prefer exact filters when known.
+
+String filters:
+  ${stringFilterArguments.map(([argument]) => argument).join(" ")}
+
+Boolean filters:
+  ${booleanFilterArguments.map(([argument]) => argument).join(" ")}
+
+Number filters:
+  ${numberFilterArguments.map(([argument]) => argument).join(" ")}
+`);
 }
 
 function copyStringFilter(argumentName: string, filterName: string): void {

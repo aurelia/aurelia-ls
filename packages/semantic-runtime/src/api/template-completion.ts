@@ -27,6 +27,10 @@ import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js
 import { ExpressionParseResultInspector } from '../expression/parse-result-inspection.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
+import {
+  SemanticAppAnalysisDepth,
+  semanticAppAnalysisDepthSatisfies,
+} from '../configuration/app-analysis.js';
 import type { TemplateResourceRuntimeAnalysisEmission } from '../template/template-compilation-project-pass.js';
 import type { TemplateCompilerIssue } from '../template/compiler-issue.js';
 import type { RuntimeBindingScopeIssue } from '../template/runtime-binding-scope-issue.js';
@@ -58,7 +62,10 @@ import {
 import {
   CheckerTypeMemberKind,
   checkerIndexedAccessSupportsString,
+  checkerTypeMemberReachableIdentityHandle,
 } from '../type-system/type-shape.js';
+import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
+import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
 import {
   RuntimeBindingDataFlowDirection,
   type RuntimeBindingDataFlow,
@@ -85,6 +92,7 @@ import type {
 } from './contracts.js';
 import {
   SEMANTIC_RUNTIME_API_VERSION,
+  SemanticDiagnosticProjectionPolicy,
   SemanticRuntimeAnswerOutcome,
   SemanticRuntimeDetail,
   type SemanticRuntimeAnswer,
@@ -410,6 +418,7 @@ export function readSemanticTemplateDiagnostics(
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
   page: InquiryPageRequest,
   detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`,
+  diagnosticProjection: SemanticDiagnosticProjectionPolicy | `${SemanticDiagnosticProjectionPolicy}` | null | undefined = SemanticDiagnosticProjectionPolicy.TypeProjection,
 ): SemanticRuntimeAnswer<SemanticTemplateDiagnosticsResult> {
   const rows = readTemplateDiagnosticRows(
     store,
@@ -418,6 +427,7 @@ export function readSemanticTemplateDiagnostics(
     emission,
     sourceFile,
     detail === SemanticRuntimeDetail.Handles,
+    diagnosticProjection,
   );
   const paged = pageTemplateDiagnosticRows(rows, page);
   return {
@@ -496,7 +506,9 @@ export function readTemplateDiagnosticRows(
   emission: AureliaAppWorldProjectEmission,
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
   includeHandles: boolean,
+  diagnosticProjection: SemanticDiagnosticProjectionPolicy | `${SemanticDiagnosticProjectionPolicy}` | null | undefined = SemanticDiagnosticProjectionPolicy.TypeProjection,
 ): readonly SemanticTemplateDiagnosticRow[] {
+  const projectionPolicy = normalizeSemanticDiagnosticProjectionPolicy(diagnosticProjection);
   const context = templateDiagnosticsScanContext(store, emission, includeHandles);
   const selections = templateResourceSelections(store, emission)
     .filter((selection) => templateDiagnosticSelectionMatchesFile(store, selection, sourceFile));
@@ -511,7 +523,7 @@ export function readTemplateDiagnosticRows(
     ...selections.flatMap((selection) => runtimeBindingScopeIssueDiagnosticRowsForSelection(store, selection, sourceFile, context)),
     ...selections.flatMap((selection) => routerIssueDiagnosticRowsForSelection(store, emission, selection, sourceFile, context)),
     ...selections.flatMap((selection) => targetAccessDiagnosticRowsForSelection(store, selection, sourceFile, context)),
-    ...selections.flatMap((selection) => templateDiagnosticRowsForSelection(store, workspaceRootDir, selection, context)),
+    ...typeProjectionTemplateDiagnosticRows(store, workspaceRootDir, emission, selections, context, projectionPolicy),
     ...selections.flatMap((selection) => bindingDataFlowDiagnosticRowsForSelection(store, selection, sourceFile, context)),
   ];
   return [...rows].sort((left, right) =>
@@ -524,6 +536,31 @@ export function readTemplateDiagnosticRows(
   );
 }
 
+function typeProjectionTemplateDiagnosticRows(
+  store: KernelStore,
+  workspaceRootDir: string,
+  emission: AureliaAppWorldProjectEmission,
+  selections: readonly TemplateCompletionResourceSelection[],
+  context: TemplateDiagnosticsScanContext,
+  diagnosticProjection: SemanticDiagnosticProjectionPolicy,
+): readonly SemanticTemplateDiagnosticRow[] {
+  if (
+    diagnosticProjection !== SemanticDiagnosticProjectionPolicy.TypeProjection
+    || !semanticAppAnalysisDepthSatisfies(emission.analysisDepth, SemanticAppAnalysisDepth.BindingObservation)
+  ) {
+    return [];
+  }
+  return selections.flatMap((selection) => templateDiagnosticRowsForSelection(store, workspaceRootDir, selection, context));
+}
+
+function normalizeSemanticDiagnosticProjectionPolicy(
+  policy: SemanticDiagnosticProjectionPolicy | `${SemanticDiagnosticProjectionPolicy}` | null | undefined,
+): SemanticDiagnosticProjectionPolicy {
+  return policy === SemanticDiagnosticProjectionPolicy.AvailableProducts
+    ? SemanticDiagnosticProjectionPolicy.AvailableProducts
+    : SemanticDiagnosticProjectionPolicy.TypeProjection;
+}
+
 function templateDiagnosticsScanContext(
   store: KernelStore,
   emission: AureliaAppWorldProjectEmission,
@@ -533,6 +570,10 @@ function templateDiagnosticsScanContext(
     includeHandles,
     routeConfigProductHandles: emission.routes.readRouteConfigs().map((routeConfig) => routeConfig.productHandle),
     i18nTranslationKeyProductHandles: emission.i18n.readTranslationKeys().map((translationKey) => translationKey.productHandle),
+    // Weak-member diagnostics at binding-observation depth reuse the cursor-completion type path, which can publish
+    // TypeChecker type products in the kernel. The active inquiry profile decides the CPU/memory trade-off through the
+    // query catalog materialization policy; lower analysis depths keep parse/compiler/runtime diagnostics without
+    // paying this query type-projection lane.
     expressionWorld: new CheckerExpressionTypeWorld(store),
     sourceTextCache: new Map(),
     seenRows: new Set(),
@@ -1848,7 +1889,10 @@ function cursorSelectedMemberRow(
     return null;
   }
   const ownerType = store.productDetails.read(TypeSystemProductDetails.TypeShape, cursorContext.query.memberOwnerTypeProductHandle);
-  const member = ownerType?.members.find((candidate) => candidate.name === memberName) ?? null;
+  const members = ownerType == null
+    ? []
+    : readOrProjectCheckerTypeMembers(store, ownerType, cursorContext.query.memberOwnerTypeProductHandle);
+  const member = members.find((candidate) => candidate.name === memberName) ?? null;
   if (
     member == null
     && ownerType?.indexedValueType != null
@@ -1872,12 +1916,14 @@ function cursorSelectedMemberRow(
     typeDisplay: member.valueType?.display ?? null,
     isOptional: member.isOptional,
     isReadonly: member.isReadonly,
-    source: describeAddress(store, member.sourceAddressHandle),
+    source: describeAddress(store, checkerTypeMemberSourceAddressHandle(store, member)),
     ...(includeHandles ? {
       handles: {
         productHandle: member.productHandle,
-        identityHandle: member.identityHandle,
-        sourceAddressHandle: member.sourceAddressHandle,
+        declarationIdentityHandle: member.declarationIdentityHandle,
+        ownerTypeIdentityHandle: member.ownerType.identityHandle,
+        reachableIdentityHandle: checkerTypeMemberReachableIdentityHandle(member),
+        sourceAddressHandle: checkerTypeMemberSourceAddressHandle(store, member),
       },
     } : {}),
   };

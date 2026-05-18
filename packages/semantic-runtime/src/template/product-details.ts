@@ -74,6 +74,10 @@ import type {
 } from './runtime-binding-scope-issue.js';
 import type { RuntimeControllerIssue } from './runtime-controller-issue.js';
 import type {
+  CompositionContext,
+  CompositionController,
+} from './runtime-composition.js';
+import type {
   BuiltInRuntimeRendererCatalog,
   ConfiguredBuiltInRuntimeRendererCatalogSelection,
   RuntimeRenderer,
@@ -330,6 +334,16 @@ export const TemplateProductDetails = {
     KernelVocabulary.Configuration.ControllerIssue.key,
     'configuration.controller-issue',
     'Framework-runtime issue discovered while constructing or hydrating a controller.',
+  ),
+  CompositionContext: defineProductDetailSlot<CompositionContext>(
+    KernelVocabulary.Configuration.CompositionContext.key,
+    'configuration.composition-context',
+    'Runtime-html AuCompose CompositionContext detail produced from component/template/model inputs.',
+  ),
+  CompositionController: defineProductDetailSlot<CompositionController>(
+    KernelVocabulary.Configuration.CompositionController.key,
+    'configuration.composition-controller',
+    'Runtime-html AuCompose CompositionController detail with resolved component candidates and model handoff state.',
   ),
   RuntimeBindingTargetAccess: defineProductDetailSlot<RuntimeBindingTargetAccess>(
     KernelVocabulary.Binding.TargetAccess.key,

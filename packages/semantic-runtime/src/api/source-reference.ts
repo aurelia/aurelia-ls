@@ -1,3 +1,4 @@
+import type ts from 'typescript';
 import type { AddressHandle } from '../kernel/handles.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import type {
@@ -63,6 +64,19 @@ export function sourceReferenceForParserSpan(
     start: span.start,
     end: span.end,
     role,
+  };
+}
+
+export function sourceReferenceForTsNode(node: ts.Node): SemanticSourceReference {
+  const sourceFile = node.getSourceFile();
+  const start = node.getStart(sourceFile);
+  const end = node.getEnd();
+  return {
+    kind: 'typescript-node',
+    label: `${sourceFile.fileName}@${start}..${end}`,
+    path: sourceFile.fileName,
+    start,
+    end,
   };
 }
 

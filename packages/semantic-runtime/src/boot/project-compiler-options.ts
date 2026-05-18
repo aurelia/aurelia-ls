@@ -13,8 +13,77 @@ import {
   safeReadDirectory,
 } from './host-files.js';
 
+export interface ProjectCompilerOptionsCacheOverview {
+  readonly entries: number;
+  readonly hits: number;
+  readonly misses: number;
+  readonly writes: number;
+  readonly clearOperations: number;
+  readonly clearedEntries: number;
+  readonly pathMappingCount: number;
+  readonly pathMappingTargetCount: number;
+}
+
+interface ProjectCompilerOptionsCacheEntry {
+  readonly options: ts.CompilerOptions;
+  readonly pathMappingCount: number;
+  readonly pathMappingTargetCount: number;
+}
+
+const projectCompilerOptionsCache = new Map<string, ProjectCompilerOptionsCacheEntry>();
+let projectCompilerOptionsCacheHits = 0;
+let projectCompilerOptionsCacheMisses = 0;
+let projectCompilerOptionsCacheWrites = 0;
+let projectCompilerOptionsCacheClearOperations = 0;
+let projectCompilerOptionsCacheClearedEntries = 0;
+
 /** Read compiler options for one boot project, with semantic-runtime defaults and local tsconfig overrides. */
 export function buildProjectCompilerOptions(rootDir: string): ts.CompilerOptions {
+  const cacheKey = projectCompilerOptionsCacheKey(rootDir);
+  const cached = projectCompilerOptionsCache.get(cacheKey);
+  if (cached != null) {
+    projectCompilerOptionsCacheHits += 1;
+    return cloneCompilerOptions(cached.options);
+  }
+  projectCompilerOptionsCacheMisses += 1;
+  const options = buildProjectCompilerOptionsUncached(rootDir);
+  projectCompilerOptionsCache.set(cacheKey, {
+    options: cloneCompilerOptions(options),
+    pathMappingCount: Object.keys(options.paths ?? {}).length,
+    pathMappingTargetCount: pathMappingTargetCount(options.paths),
+  });
+  projectCompilerOptionsCacheWrites += 1;
+  return options;
+}
+
+export function readProjectCompilerOptionsCacheOverview(): ProjectCompilerOptionsCacheOverview {
+  let pathMappingCount = 0;
+  let pathMappingTargetCount = 0;
+  for (const entry of projectCompilerOptionsCache.values()) {
+    pathMappingCount += entry.pathMappingCount;
+    pathMappingTargetCount += entry.pathMappingTargetCount;
+  }
+  return {
+    entries: projectCompilerOptionsCache.size,
+    hits: projectCompilerOptionsCacheHits,
+    misses: projectCompilerOptionsCacheMisses,
+    writes: projectCompilerOptionsCacheWrites,
+    clearOperations: projectCompilerOptionsCacheClearOperations,
+    clearedEntries: projectCompilerOptionsCacheClearedEntries,
+    pathMappingCount,
+    pathMappingTargetCount,
+  };
+}
+
+export function clearProjectCompilerOptionsCache(): ProjectCompilerOptionsCacheOverview {
+  const clearedEntries = projectCompilerOptionsCache.size;
+  projectCompilerOptionsCache.clear();
+  projectCompilerOptionsCacheClearOperations += 1;
+  projectCompilerOptionsCacheClearedEntries += clearedEntries;
+  return readProjectCompilerOptionsCacheOverview();
+}
+
+function buildProjectCompilerOptionsUncached(rootDir: string): ts.CompilerOptions {
   const defaults = defaultProjectCompilerOptions(rootDir);
   const configFile = path.join(rootDir, 'tsconfig.json');
   if (!ts.sys.fileExists(configFile)) {
@@ -36,12 +105,58 @@ export function buildProjectCompilerOptions(rootDir: string): ts.CompilerOptions
     ? defaults.paths
     : rebasePathMappings(defaults.paths, defaults.baseUrl, parsed.options.baseUrl);
   const paths = mergePathMappings(defaultPaths, parsed.options.paths);
-  return {
+  const merged = {
     ...defaults,
     ...parsed.options,
     baseUrl: effectiveBaseUrl,
     ...(paths == null ? {} : { paths }),
   };
+  if (parsed.options.lib == null) {
+    delete merged.lib;
+  }
+  return merged;
+}
+
+function projectCompilerOptionsCacheKey(rootDir: string): string {
+  const resolved = normalizePosixPath(path.resolve(rootDir));
+  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+}
+
+function cloneCompilerOptions(options: ts.CompilerOptions): ts.CompilerOptions {
+  const clone: ts.CompilerOptions = { ...options };
+  clone.paths = clonePathMappings(options.paths);
+  clone.lib = cloneArrayOption(options.lib);
+  clone.types = cloneArrayOption(options.types);
+  clone.typeRoots = cloneArrayOption(options.typeRoots);
+  clone.rootDirs = cloneArrayOption(options.rootDirs);
+  clone.moduleSuffixes = cloneArrayOption(options.moduleSuffixes);
+  clone.customConditions = cloneArrayOption(options.customConditions);
+  return clone;
+}
+
+function cloneArrayOption<TValue>(
+  value: readonly TValue[] | undefined,
+): TValue[] | undefined {
+  return value == null ? undefined : [...value];
+}
+
+function clonePathMappings(
+  paths: ts.CompilerOptions['paths'],
+): ts.CompilerOptions['paths'] {
+  if (paths == null) {
+    return undefined;
+  }
+  const cloned: Record<string, string[]> = {};
+  for (const [specifier, targets] of Object.entries(paths)) {
+    cloned[specifier] = [...targets];
+  }
+  return cloned;
+}
+
+function pathMappingTargetCount(
+  paths: ts.CompilerOptions['paths'],
+): number {
+  return Object.values(paths ?? {}).reduce((total, targets) => total + targets.length, 0);
 }
 
 function defaultProjectCompilerOptions(rootDir: string): ts.CompilerOptions {
@@ -57,6 +172,11 @@ function defaultProjectCompilerOptions(rootDir: string): ts.CompilerOptions {
     experimentalDecorators: false,
     ignoreDeprecations: '6.0',
     jsx: ts.JsxEmit.Preserve,
+    lib: [
+      'lib.es2024.d.ts',
+      'lib.dom.d.ts',
+      'lib.dom.iterable.d.ts',
+    ],
     module: ts.ModuleKind.ESNext,
     moduleResolution: ts.ModuleResolutionKind.Bundler,
     noEmit: true,
@@ -78,19 +198,18 @@ function discoverAureliaTypePaths(rootDir: string): Record<string, string[]> {
   }
 
   const paths: Record<string, string[]> = {};
-  for (const pkg of aureliaPackageTypeMappings()) {
-    const absolute = path.join(
-      workspaceRoot,
-      'aurelia',
-      'packages',
-      pkg.packageDir,
-      'dist',
-      'types',
-      'index.d.ts',
-    );
-    if (ts.sys.fileExists(absolute)) {
-      paths[pkg.specifier] = [normalizePosixPath(path.relative(rootDir, absolute))];
+  const packagesRoot = path.join(workspaceRoot, 'aurelia', 'packages');
+  for (const packageDir of safeReadDirectory(packagesRoot)) {
+    const packageRoot = path.join(packagesRoot, packageDir);
+    const specifier = readPackageName(packageRoot);
+    if (specifier == null) {
+      continue;
     }
+    const absolute = path.join(packageRoot, 'dist', 'types', 'index.d.ts');
+    if (!ts.sys.fileExists(absolute)) {
+      continue;
+    }
+    paths[specifier] = [normalizePosixPath(path.relative(rootDir, absolute))];
   }
 
   return paths;
@@ -109,24 +228,6 @@ function discoverAureliaCheckoutRoot(rootDir: string): string | null {
     }
     current = parent;
   }
-}
-
-function aureliaPackageTypeMappings(): readonly { readonly specifier: string; readonly packageDir: string }[] {
-  return [
-    { specifier: 'aurelia', packageDir: 'aurelia' },
-    { specifier: '@aurelia/expression-parser', packageDir: 'expression-parser' },
-    { specifier: '@aurelia/fetch-client', packageDir: 'fetch-client' },
-    { specifier: '@aurelia/kernel', packageDir: 'kernel' },
-    { specifier: '@aurelia/metadata', packageDir: 'metadata' },
-    { specifier: '@aurelia/platform', packageDir: 'platform' },
-    { specifier: '@aurelia/platform-browser', packageDir: 'platform-browser' },
-    { specifier: '@aurelia/route-recognizer', packageDir: 'route-recognizer' },
-    { specifier: '@aurelia/router', packageDir: 'router' },
-    { specifier: '@aurelia/runtime', packageDir: 'runtime' },
-    { specifier: '@aurelia/runtime-html', packageDir: 'runtime-html' },
-    { specifier: '@aurelia/template-compiler', packageDir: 'template-compiler' },
-    { specifier: '@aurelia/testing', packageDir: 'testing' },
-  ];
 }
 
 function discoverWorkspacePackageSourcePaths(rootDir: string): Record<string, string[]> {

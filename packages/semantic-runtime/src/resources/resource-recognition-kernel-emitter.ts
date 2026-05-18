@@ -19,6 +19,10 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
+  bindProductDetailEnvelope,
+} from '../kernel/product-details.js';
+import { performance } from 'node:perf_hooks';
+import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -46,6 +50,26 @@ import {
   ResourceTargetPublication,
 } from './resource-recognition-publication.js';
 
+export type ResourceRecognitionEmissionPhaseName =
+  | 'kernel-emission:observation-records'
+  | 'kernel-emission:source-records'
+  | 'kernel-emission:target-type-projection'
+  | 'kernel-emission:resource-identity-records'
+  | 'kernel-emission:open-seam-records'
+  | 'kernel-emission:definition-product-records'
+  | 'kernel-emission:batch-commit'
+  | 'kernel-emission:definition-header-details';
+
+export interface ResourceRecognitionEmissionPhaseTiming {
+  readonly name: ResourceRecognitionEmissionPhaseName;
+  readonly milliseconds: number;
+}
+
+export interface ResourceRecognitionEmissionProfile {
+  readonly totalMilliseconds: number;
+  readonly phases: readonly ResourceRecognitionEmissionPhaseTiming[];
+}
+
 /** Result of emitting resource recognition observations into kernel-backed definition headers. */
 export class ResourceRecognitionKernelEmission {
   constructor(
@@ -53,6 +77,8 @@ export class ResourceRecognitionKernelEmission {
     readonly definitions: readonly ResourceDefinitionHeaderEmission[],
     /** Kernel records committed by this emission. */
     readonly records: readonly KernelStoreRecord[],
+    /** Internal publication timings for resource-recognition profiling. */
+    readonly profile: ResourceRecognitionEmissionProfile,
   ) {}
 }
 
@@ -85,36 +111,55 @@ export class ResourceRecognitionKernelEmitter {
   constructor(
     /** Hot analysis store that receives resource-recognition records. */
     readonly store: KernelStore,
-    readonly publication = new ResourceRecognitionPublicationSupport(store),
   ) {}
 
   emit(
     context: ResourceRecognitionContext,
     observations: readonly ResourceRecognitionObservation[],
   ): ResourceRecognitionKernelEmission {
+    const started = performance.now();
+    const phases: ResourceRecognitionEmissionPhaseTiming[] = [];
+    const publication = new ResourceRecognitionPublicationSupport(
+      this.store,
+      (name, read) => measureResourceRecognitionEmissionPhase(phases, name, read),
+    );
     const records: KernelStoreRecord[] = [];
     const definitions: ResourceDefinitionHeaderEmission[] = [];
-    observations.forEach((observation, index) => {
-      const emission = this.recordsForObservation(context, observation, index);
-      records.push(...emission.records);
-      if (emission.definition != null) {
-        definitions.push(emission.definition);
-      }
+    measureResourceRecognitionEmissionPhase(phases, 'kernel-emission:observation-records', () => {
+      observations.forEach((observation, index) => {
+        const emission = this.recordsForObservation(context, publication, observation, index, phases);
+        records.push(...emission.records);
+        if (emission.definition != null) {
+          definitions.push(emission.definition);
+        }
+      });
     });
     if (records.length === 0) {
-      return new ResourceRecognitionKernelEmission(definitions, records);
+      return new ResourceRecognitionKernelEmission(definitions, records, {
+        totalMilliseconds: performance.now() - started,
+        phases,
+      });
     }
-    this.store.commit(new KernelStoreBatch(records, `resource-recognition:${context.moduleKey}`));
-    for (const definition of definitions) {
-      this.store.productDetails.add(ResourceProductDetails.DefinitionHeader, definition.productHandle, definition);
-    }
-    return new ResourceRecognitionKernelEmission(definitions, records);
+    measureResourceRecognitionEmissionPhase(phases, 'kernel-emission:batch-commit', () => {
+      this.store.commit(new KernelStoreBatch(records, `resource-recognition:${context.moduleKey}`));
+    });
+    measureResourceRecognitionEmissionPhase(phases, 'kernel-emission:definition-header-details', () => {
+      for (const definition of definitions) {
+        this.store.productDetails.add(ResourceProductDetails.DefinitionHeader, definition.productHandle, definition);
+      }
+    });
+    return new ResourceRecognitionKernelEmission(definitions, records, {
+      totalMilliseconds: performance.now() - started,
+      phases,
+    });
   }
 
   private recordsForObservation(
     context: ResourceRecognitionContext,
+    publication: ResourceRecognitionPublicationSupport,
     observation: ResourceRecognitionObservation,
     index: number,
+    phases: ResourceRecognitionEmissionPhaseTiming[],
   ): ResourceObservationEmission {
     const local = projectModuleSourceNodeOrdinalLocalKey({
       projectKey: context.projectKey,
@@ -123,21 +168,25 @@ export class ResourceRecognitionKernelEmitter {
       node: observation.sourceNode,
       index,
     });
-    const parts = this.resourceObservationParts(context, observation, local);
+    const parts = this.resourceObservationParts(context, publication, observation, local, phases);
 
     return new ResourceObservationEmission(
-      this.recordsForObservationParts(local, parts),
+      this.recordsForObservationParts(local, parts, phases),
       this.definitionEmissionForObservation(local, index, observation, parts.source, parts.target.targetReference, parts.productHandle, parts.resourceIdentities),
     );
   }
 
   private resourceObservationParts(
     context: ResourceRecognitionContext,
+    publication: ResourceRecognitionPublicationSupport,
     observation: ResourceRecognitionObservation,
     local: string,
+    phases: ResourceRecognitionEmissionPhaseTiming[],
   ): ResourceObservationParts {
-    const source = this.recordsForObservationSource(context, observation, local);
-    const target = this.publication.recordsForTarget(context, observation, local);
+    const source = measureResourceRecognitionEmissionPhase(phases, 'kernel-emission:source-records', () =>
+      this.recordsForObservationSource(context, observation, local)
+    );
+    const target = publication.recordsForTarget(context, observation, local);
     const productHandle = observation.definition == null
       ? null
       : this.store.handles.product(`resource-definition:${local}`);
@@ -145,35 +194,39 @@ export class ResourceRecognitionKernelEmitter {
       source,
       target,
       productHandle,
-      resourceIdentities: this.publication.recordsForResourceIdentities(
-        context,
-        observation,
-        local,
-        productHandle,
-        target.identityHandle,
-        source.sourceAddressHandle,
-        source.provenanceHandle,
+      resourceIdentities: measureResourceRecognitionEmissionPhase(
+        phases,
+        'kernel-emission:resource-identity-records',
+        () => publication.recordsForResourceIdentities(
+          context,
+          observation,
+          local,
+          productHandle,
+          target.identityHandle,
+          source.sourceAddressHandle,
+          source.provenanceHandle,
+        ),
       ),
-      openSeams: this.publication.recordsForOpenSeams(context, observation.openSeams, local),
+      openSeams: measureResourceRecognitionEmissionPhase(phases, 'kernel-emission:open-seam-records', () =>
+        publication.recordsForOpenSeams(context, observation.openSeams, local)
+      ),
     };
   }
 
   private recordsForObservationParts(
     local: string,
     parts: ResourceObservationParts,
+    phases: ResourceRecognitionEmissionPhaseTiming[],
   ): readonly KernelStoreRecord[] {
     return [
       ...parts.source.records,
       ...parts.target.records,
       ...parts.resourceIdentities.records,
       ...parts.openSeams.records,
-      ...this.recordsForDefinitionProduct(
-        local,
-        parts.source,
-        parts.target.identityHandle,
-        parts.productHandle,
-        parts.resourceIdentities,
-        parts.openSeams,
+      ...measureResourceRecognitionEmissionPhase(
+        phases,
+        'kernel-emission:definition-product-records',
+        () => this.recordsForDefinitionProduct(local, parts),
       ),
     ];
   }
@@ -215,30 +268,26 @@ export class ResourceRecognitionKernelEmitter {
 
   private recordsForDefinitionProduct(
     local: string,
-    source: ResourceObservationSourceSet,
-    targetIdentityHandle: IdentityHandle | null,
-    productHandle: ProductHandle | null,
-    resourceIdentities: ResourceIdentityPublicationSet,
-    openSeams: ResourceOpenSeamPublicationSet,
+    parts: ResourceObservationParts,
   ): readonly KernelStoreRecord[] {
     return [
-      ...(productHandle == null
+      ...(parts.productHandle == null
         ? []
         : [
           new MaterializedProduct(
-            productHandle,
+            parts.productHandle,
             KernelVocabulary.Resource.DefinitionHeader.key,
-            resourceIdentities.primaryIdentityHandle,
-            source.sourceAddressHandle,
-            source.provenanceHandle,
+            parts.resourceIdentities.primaryIdentityHandle,
+            parts.source.sourceAddressHandle,
+            parts.source.provenanceHandle,
           ),
         ]),
       new MaterializationRecord(
         this.store.handles.materialization(`resource-recognition:${local}`),
-        targetIdentityHandle ?? source.sourceAddressHandle,
-        productHandle == null ? [] : [productHandle],
-        resourceIdentities.claimHandles,
-        openSeams.handles,
+        parts.target.identityHandle ?? parts.source.sourceAddressHandle,
+        parts.productHandle == null ? [] : [parts.productHandle],
+        parts.resourceIdentities.claimHandles,
+        parts.openSeams.handles,
       ),
     ];
   }
@@ -254,20 +303,36 @@ export class ResourceRecognitionKernelEmitter {
   ): ResourceDefinitionHeaderEmission | null {
     return productHandle == null || observation.definition == null
       ? null
-      : new ResourceDefinitionHeaderEmission(
+      : bindProductDetailEnvelope(new ResourceDefinitionHeaderEmission(
         local,
         index,
-        productHandle,
-        resourceIdentities.primaryIdentityHandle,
         targetReference,
         observation.definition.type,
         lookupNamesForDefinition(observation.definition),
+        resourceIdentities.claimHandles,
+      ), new MaterializedProduct(
+        productHandle,
+        KernelVocabulary.Resource.DefinitionHeader.key,
+        resourceIdentities.primaryIdentityHandle,
         source.sourceAddressHandle,
         source.provenanceHandle,
-        resourceIdentities.claimHandles,
-      );
+      ));
   }
 
+}
+
+function measureResourceRecognitionEmissionPhase<TValue>(
+  phases: ResourceRecognitionEmissionPhaseTiming[],
+  name: ResourceRecognitionEmissionPhaseName,
+  read: () => TValue,
+): TValue {
+  const started = performance.now();
+  const value = read();
+  phases.push({
+    name,
+    milliseconds: performance.now() - started,
+  });
+  return value;
 }
 
 function lookupNamesForDefinition(

@@ -5,6 +5,7 @@ import {
   ApplicationTopologyBuilder,
 } from '../application/index.js';
 import {
+  CreateComponentOperation,
   CreateServiceOperation,
   CreateStateModelOperation,
 } from './operation.js';
@@ -54,6 +55,10 @@ export interface ServiceBackedFormRecipeRequest {
   readonly formTemplatePath?: string;
   readonly formComponentClassName?: string;
   readonly formElementName?: string;
+  readonly fieldShellComponentPath?: string;
+  readonly fieldShellTemplatePath?: string;
+  readonly fieldShellClassName?: string;
+  readonly fieldShellElementName?: string;
 }
 
 interface ServiceBackedFormRecipeModel {
@@ -73,6 +78,10 @@ interface ServiceBackedFormRecipeModel {
   readonly formTemplatePath: string;
   readonly formComponentClassName: string;
   readonly formElementName: string;
+  readonly fieldShellComponentPath: string;
+  readonly fieldShellTemplatePath: string;
+  readonly fieldShellClassName: string;
+  readonly fieldShellElementName: string;
 }
 
 export function buildServiceBackedFormPlan(request: ServiceBackedFormRecipeRequest): AuthoringPlan {
@@ -122,6 +131,10 @@ function normalizeServiceBackedFormRecipe(request: ServiceBackedFormRecipeReques
     formTemplatePath: request.formTemplatePath ?? 'src/components/service-backed-form.html',
     formComponentClassName: request.formComponentClassName ?? 'ServiceBackedForm',
     formElementName: request.formElementName ?? 'service-backed-form',
+    fieldShellComponentPath: request.fieldShellComponentPath ?? 'src/components/field-shell.ts',
+    fieldShellTemplatePath: request.fieldShellTemplatePath ?? 'src/components/field-shell.html',
+    fieldShellClassName: request.fieldShellClassName ?? 'FieldShell',
+    fieldShellElementName: request.fieldShellElementName ?? 'field-shell',
   };
 }
 
@@ -146,6 +159,8 @@ function serviceBackedFormPlanSteps(
       model.servicePath,
       model.formComponentPath,
       model.formTemplatePath,
+      model.fieldShellComponentPath,
+      model.fieldShellTemplatePath,
     ]),
     new AuthoringPlanStep(
       new CreateStateModelOperation(model.statePath, model.stateClassName),
@@ -169,6 +184,13 @@ function serviceBackedFormPlanSteps(
     rootComponentPlanStep(model.rootComponentPath, model.rootComponentClassName, model.rootElementName),
     componentStyleAssetPlanStep(model.rootStylePath),
     externalTemplatePlanStep(model.rootTemplatePath, model.rootComponentClassName, 'Root component'),
+    new AuthoringPlanStep(
+      new CreateComponentOperation(model.fieldShellComponentPath, model.fieldShellClassName, model.fieldShellElementName),
+      [
+        ExpectedSemanticEffect.fact('Field shell should be a custom element.', 'component', 'resource', 'component'),
+      ],
+    ),
+    externalTemplatePlanStep(model.fieldShellTemplatePath, model.fieldShellClassName, 'Field shell component'),
     formComponentPlanStep(model.formComponentPath, model.formComponentClassName, model.formElementName),
     externalTemplatePlanStep(model.formTemplatePath, model.formComponentClassName, 'Form component'),
     templateBindingPlanStep(
@@ -182,7 +204,8 @@ function serviceBackedFormPlanSteps(
 
 function serviceBackedFormTopology(model: ServiceBackedFormRecipeModel): ApplicationTopology {
   const builder = new ApplicationTopologyBuilder(model.rootDir);
-  const form = addServiceBackedFormComponent(builder, model);
+  const fieldShell = addServiceBackedFieldShellComponent(builder, model);
+  const form = addServiceBackedFormComponent(builder, model, fieldShell);
   const root = addServiceBackedFormRoot(builder, model, form);
   addServiceBackedFormState(builder, model);
   addServiceBackedFormService(builder, model);
@@ -193,6 +216,7 @@ function serviceBackedFormTopology(model: ServiceBackedFormRecipeModel): Applica
 function addServiceBackedFormComponent(
   builder: ApplicationTopologyBuilder,
   model: ServiceBackedFormRecipeModel,
+  fieldShell: ApplicationComponentTopologyResult,
 ): ApplicationComponentTopologyResult {
   return builder.component({
     className: model.formComponentClassName,
@@ -200,6 +224,20 @@ function addServiceBackedFormComponent(
     sourcePath: model.formComponentPath,
     elementName: model.formElementName,
     templatePath: model.formTemplatePath,
+    dependencies: [fieldShell.reference],
+  });
+}
+
+function addServiceBackedFieldShellComponent(
+  builder: ApplicationTopologyBuilder,
+  model: ServiceBackedFormRecipeModel,
+): ApplicationComponentTopologyResult {
+  return builder.component({
+    className: model.fieldShellClassName,
+    referenceFromPath: model.formComponentPath,
+    sourcePath: model.fieldShellComponentPath,
+    elementName: model.fieldShellElementName,
+    templatePath: model.fieldShellTemplatePath,
   });
 }
 
@@ -265,10 +303,10 @@ function serviceBackedFormExpectedEffects(): readonly ExpectedSemanticEffect[] {
   return [
     ...standardFormAppExpectedEffects({
       summaryPrefix: 'Service-backed form app',
-      componentCount: 2,
-      componentCountSummary: 'root and form custom elements',
-      externalTemplateCount: 2,
-      compiledTemplateCount: 2,
+      componentCount: 3,
+      componentCountSummary: 'root, form, and field shell custom elements',
+      externalTemplateCount: 3,
+      compiledTemplateCount: 3,
     }),
     ExpectedSemanticEffect.signatureFact('Service-backed form app has a state service-class row.', 'service-class', 'di', 'state-model', 'present', null, [
       new ExpectedSemanticEffectFilter('role', 'state-source'),

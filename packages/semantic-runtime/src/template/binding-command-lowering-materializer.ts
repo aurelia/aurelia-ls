@@ -153,7 +153,6 @@ interface BindingCommandLoweringIndexes {
   readonly syntaxByProduct: ReadonlyMap<ProductHandle, AttributeSyntax>;
   readonly attributesByProduct: ReadonlyMap<ProductHandle, HtmlAttribute>;
   readonly ownersByAttributeProduct: ReadonlyMap<ProductHandle, HtmlElementAttributeOwner>;
-  readonly valueSiteByClassificationProduct: ReadonlyMap<ProductHandle, TemplateValueSite>;
 }
 
 class BindingCommandLoweringFrame {
@@ -655,7 +654,6 @@ export class BindingCommandLoweringMaterializer {
         ? null
         : indexes.ownersByAttributeProduct.get(syntax.attribute.productHandle) ?? null;
       const local = `binding-command-lowering:${input.localKey}:${index}`;
-      const expressionSite = indexes.valueSiteByClassificationProduct.get(classification.productHandle) ?? null;
       frame.recordCommandClassification(this.lowerBindingCommandClassification(
         local,
         source,
@@ -664,7 +662,6 @@ export class BindingCommandLoweringMaterializer {
         syntax,
         attribute,
         owner,
-        expressionSite,
       ));
     });
   }
@@ -698,7 +695,6 @@ export class BindingCommandLoweringMaterializer {
     syntax: AttributeSyntax | null,
     attribute: HtmlAttribute | null,
     owner: HtmlElementAttributeOwner | null,
-    expressionSite: TemplateValueSite | null,
   ): BindingCommandClassificationLoweringResult {
     const records: KernelStoreRecord[] = [];
     const claims: SemanticClaim[] = [];
@@ -712,7 +708,6 @@ export class BindingCommandLoweringMaterializer {
       classification,
       syntax,
       attribute,
-      expressionSite,
     );
     records.push(...buildInput.records);
     claims.push(...buildInput.claims);
@@ -1135,6 +1130,7 @@ export class BindingCommandLoweringMaterializer {
     const syntax = this.publisher.publishMultiBindingAttributeSyntax(
       local,
       site,
+      source,
       attribute,
       parseAttributeSyntaxInWorld(compilerWorld, parsed.rawName, parsed.rawValue),
       segmentAddress.handle,
@@ -1298,20 +1294,7 @@ function loweringIndexes(input: BindingCommandLoweringRequest): BindingCommandLo
     syntaxByProduct: new Map(input.attributeSyntax.syntaxes.map((syntax) => [syntax.productHandle, syntax])),
     attributesByProduct: new Map(input.html.attributes.map((attribute) => [attribute.productHandle, attribute])),
     ownersByAttributeProduct: htmlElementAttributeOwnersByAttributeProduct(input.html.nodes, input.html.attributes),
-    valueSiteByClassificationProduct: commandValueSitesByClassificationProduct(input.valueSites),
   };
-}
-
-function commandValueSitesByClassificationProduct(
-  valueSites: TemplateValueSiteEmission,
-): ReadonlyMap<ProductHandle, TemplateValueSite> {
-  const sites = new Map<ProductHandle, TemplateValueSite>();
-  for (const site of valueSites.sites) {
-    if (site.classification?.productHandle != null && site.bindingCommand != null) {
-      sites.set(site.classification.productHandle, site);
-    }
-  }
-  return sites;
 }
 
 function findCommand(

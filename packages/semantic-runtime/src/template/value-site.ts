@@ -6,6 +6,11 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
+import {
+  productDetailAddressHandle,
+  productDetailHandle,
+  productDetailIdentityHandle,
+} from '../kernel/product-details.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type { TemplateBindableReference } from './compiler-world-reference.js';
 import type { AttributeClassification, AttributeSyntax } from './attribute-syntax.js';
@@ -18,7 +23,7 @@ import type {
 export const enum TemplateValueSiteKind {
   /** Text node value owned by interpolation parsing. */
   TextInterpolation = 'text-interpolation',
-  /** Plain platform attribute value that has no interpolation opener and is not parser-owned. */
+  /** Plain platform attribute value that has no interpolation opener; currently reserved for query-local ownership. */
   PlainAttributeValue = 'plain-attribute-value',
   /** Plain platform attribute value owned by interpolation parsing. */
   PlainAttributeInterpolation = 'plain-attribute-interpolation',
@@ -66,6 +71,9 @@ export type TemplateExpressionParseField =
   | 'resultKind'
   | 'source';
 
+const TemplateValueSiteDetailKind = 'template.value-site';
+const TemplateExpressionParseDetailKind = 'template.expression-parse';
+
 export class TemplateValueSiteReference {
   constructor(
     /** Product handle for this template value site. */
@@ -84,10 +92,6 @@ export class TemplateValueSiteReference {
 /** Compiler-owned ownership decision for one authored template value. */
 export class TemplateValueSite {
   constructor(
-    /** Product handle for the materialized-product envelope that represents this value site. */
-    readonly productHandle: ProductHandle,
-    /** Identity for this value site. */
-    readonly identityHandle: IdentityHandle,
     /** Value-site family. */
     readonly siteKind: TemplateValueSiteKind,
     /** Raw authored value submitted to the expression parser or reserved for a secondary grammar. */
@@ -106,11 +110,24 @@ export class TemplateValueSite {
     readonly bindingCommand: BindingCommandExecutableReference | null,
     /** Bindable selected before parsing, when present. */
     readonly bindable: TemplateBindableReference | null,
-    /** Source address for the authored value. */
-    readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<TemplateValueSiteField>[] = [],
   ) {}
+
+  /** Product handle for the materialized-product envelope that represents this value site. */
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, TemplateValueSiteDetailKind);
+  }
+
+  /** Identity for this value site. */
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, TemplateValueSiteDetailKind);
+  }
+
+  /** Source address for the authored value. */
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, TemplateValueSiteDetailKind);
+  }
 
   toReference(): TemplateValueSiteReference {
     return new TemplateValueSiteReference(
@@ -126,10 +143,6 @@ export class TemplateValueSite {
 /** Expression parser publication for one parser-owned template value site. */
 export class TemplateExpressionParse {
   constructor(
-    /** Product handle for the materialized-product envelope that represents this parse result. */
-    readonly productHandle: ProductHandle,
-    /** Identity for this parse result. */
-    readonly identityHandle: IdentityHandle,
     /** Parser-owned value site that produced this parse. */
     readonly site: TemplateValueSiteReference,
     /** Parser service visible through the compiler world. */
@@ -140,11 +153,24 @@ export class TemplateExpressionParse {
     readonly resultKind: ExpressionParseResultKind,
     /** Parser-owned publication result. */
     readonly result: ExpressionParseResult,
-    /** Source address for the authored value. */
-    readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<TemplateExpressionParseField>[] = [],
   ) {}
+
+  /** Product handle for the materialized-product envelope that represents this parse result. */
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, TemplateExpressionParseDetailKind);
+  }
+
+  /** Identity for this parse result. */
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, TemplateExpressionParseDetailKind);
+  }
+
+  /** Source address for the authored value. */
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, TemplateExpressionParseDetailKind);
+  }
 }
 
 export function expressionParseStateForResult(

@@ -31,8 +31,11 @@ import {
 } from "../navigation.js";
 import { PagedRowFamily } from "../paged-row-family.js";
 import { evidenceLimit, pageOffset, rowLimit } from "../paging.js";
-import type { SourceProject } from "../../source/index.js";
-import { sourceRangeFromOneBasedReference } from "../../source/index.js";
+import type { SourceDeclarationRow, SourceProject } from "../../source/index.js";
+import {
+  sourceRangeFromFileSpan,
+  sourceRangeFromOneBasedReference,
+} from "../../source/index.js";
 import {
   atlasMemoryAnchorQueryValues,
   isDefinedMemorySearchValue,
@@ -134,6 +137,7 @@ interface RouterState {
   readonly memoryNextActions: readonly AtlasMemoryNextActionRow[];
   readonly fixtureSeeds: readonly FrameworkCorpusFixtureSeedRow[];
   readonly expectedEffects: readonly FrameworkCorpusExpectedEffectDescriptorRow[];
+  readonly sourceProject: SourceProject;
 }
 
 interface WorktreeFile {
@@ -503,6 +507,14 @@ function compareMemoryCoverageRows(
   right: AtlasWorkRouteMemoryCoverageRow,
   filters: AtlasWorkRouterFilters,
 ): number {
+  if (hasQueryText(filters.query)) {
+    const queryScoreDifference =
+      memoryCoverageQueryScore(right, filters.query) -
+      memoryCoverageQueryScore(left, filters.query);
+    if (queryScoreDifference !== 0) {
+      return queryScoreDifference;
+    }
+  }
   return routeScopedMemoryCoverage(filters)
     ? topRouteCoverageScore(right) - topRouteCoverageScore(left) ||
       right.rank - left.rank ||
@@ -514,6 +526,26 @@ function compareMemoryCoverageRows(
 
 function topRouteCoverageScore(row: AtlasWorkRouteMemoryCoverageRow): number {
   return Math.max(0, ...row.routeMatches.map((match) => match.score));
+}
+
+function memoryCoverageQueryScore(
+  row: AtlasWorkRouteMemoryCoverageRow,
+  query: string | undefined,
+): number {
+  return queryRelevanceScore(query, [
+    {
+      weight: 6,
+      values: [
+        row.id,
+        row.recordId ?? "",
+        row.actionSummary,
+      ],
+    },
+    {
+      weight: 3,
+      values: row.domains,
+    },
+  ]);
 }
 
 function answerAtlasWorkRouterSchema(
@@ -560,6 +592,7 @@ function readRouterState(sourceProject: SourceProject): RouterState {
     memoryNextActions: atlasMemoryNextActionRows(memory),
     fixtureSeeds: corpus.fixtureSeeds,
     expectedEffects: corpus.expectedEffectDescriptors,
+    sourceProject,
   };
 }
 
@@ -589,7 +622,7 @@ function routePlan(
   const route = scored.route;
   const sourceAnchors = route.anchors
     .filter((anchor): anchor is AtlasWorkRouteSourceAnchor => anchor.kind === "source")
-    .map((anchor) => sourcePlan(anchor, state.product, state.atlasSelf));
+    .map((anchor) => sourcePlan(anchor, state));
   const lensAnchors = route.anchors
     .filter((anchor): anchor is AtlasWorkRouteLensAnchor => anchor.kind === "lens");
   const scriptAnchors = route.anchors
@@ -1099,9 +1132,14 @@ function routeById(routeId: string): AtlasWorkRoute {
 
 function sourcePlan(
   anchor: AtlasWorkRouteSourceAnchor,
-  product: ProductArchitectureAnalysis,
-  atlasSelf: AtlasSelfAnalysis,
+  state: RouterState,
 ): AtlasWorkRouteSourcePlanRow {
+  const { product, atlasSelf, sourceProject } = state;
+  const admittedSourceFileFound = sourceProject.readSourceFile(anchor.filePath) !== null;
+  const admittedSourceDeclarations = admittedSourceDeclarationMatches(
+    anchor,
+    sourceProject.declarationRows(),
+  ).slice(0, 8);
   const modules = product.modules.filter((module) =>
     sourcePathMatches(module.filePath, anchor.filePath),
   );
@@ -1133,6 +1171,8 @@ function sourcePlan(
     (anchor.symbolName === undefined || row.name === anchor.symbolName),
   );
   const found =
+    admittedSourceDeclarations.length > 0 ||
+    (anchor.symbolName === undefined && admittedSourceFileFound) ||
     classSurfaces.length > 0 ||
     functionSurfaces.length > 0 ||
     declarations.length > 0 ||
@@ -1144,6 +1184,8 @@ function sourcePlan(
   return {
     anchor,
     found,
+    admittedSourceFileFound,
+    admittedSourceDeclarations,
     classSurfaces: classSurfaces.slice(0, 8),
     declarations: declarations.slice(0, 8),
     functionSurfaces: functionSurfaces.slice(0, 8),
@@ -1153,9 +1195,30 @@ function sourcePlan(
     atlasVariableSurfaces: atlasVariableSurfaces.slice(0, 8),
     atlasSourceFiles: atlasSourceFiles.slice(0, 4),
     summary: found
-      ? `Found ${classSurfaces.length} semantic-runtime class surface(s), ${functionSurfaces.length} semantic-runtime function surface(s), ${declarations.length} semantic-runtime declaration row(s), ${modules.length} semantic-runtime module row(s), ${atlasClassSurfaces.length} Atlas class surface(s), ${atlasFunctionSurfaces.length} Atlas function surface(s), ${atlasVariableSurfaces.length} Atlas variable surface(s), and ${atlasSourceFiles.length} Atlas source-file row(s) for ${anchor.filePath}.`
-      : `No current semantic-runtime source match for ${anchor.filePath}${anchor.symbolName === undefined ? "" : `#${anchor.symbolName}`}.`,
+      ? `Found ${admittedSourceFileFound ? 1 : 0} admitted source file, ${admittedSourceDeclarations.length} admitted declaration row(s), ${classSurfaces.length} semantic-runtime class surface(s), ${functionSurfaces.length} semantic-runtime function surface(s), ${declarations.length} semantic-runtime declaration row(s), ${modules.length} semantic-runtime module row(s), ${atlasClassSurfaces.length} Atlas class surface(s), ${atlasFunctionSurfaces.length} Atlas function surface(s), ${atlasVariableSurfaces.length} Atlas variable surface(s), and ${atlasSourceFiles.length} Atlas source-file row(s) for ${anchor.filePath}.`
+      : `No current admitted source match for ${anchor.filePath}${anchor.symbolName === undefined ? "" : `#${anchor.symbolName}`}.`,
   };
+}
+
+function admittedSourceDeclarationMatches(
+  anchor: AtlasWorkRouteSourceAnchor,
+  declarations: readonly SourceDeclarationRow[],
+): AtlasWorkRouteSourcePlanRow["admittedSourceDeclarations"] {
+  return declarations
+    .filter((row) =>
+      sourcePathMatches(row.file.repoPath, anchor.filePath) &&
+      (anchor.symbolName === undefined || row.name === anchor.symbolName)
+    )
+    .map((row) => ({
+      kind: row.kind,
+      name: row.name,
+      packageId: row.file.packageId,
+      filePath: row.file.repoPath,
+      exported: row.exported,
+      source: sourceRangeFromFileSpan(row.file.repoPath, row.span),
+      summary:
+        `${row.name ?? "<anonymous>"} ${row.kind} declaration in ${row.file.repoPath}.`,
+    }));
 }
 
 function routeWorksetRow(
@@ -1634,6 +1697,12 @@ function memoryNextActionMatchesFilters(
   row: AtlasMemoryNextActionRow,
   filters: AtlasWorkRouterFilters,
 ): boolean {
+  if (
+    hasQueryText(filters.query) &&
+    memoryNextActionQueryScore(row, filters.query) === 0
+  ) {
+    return false;
+  }
   if (filters.domains.length === 0) {
     return true;
   }
@@ -2577,6 +2646,13 @@ function routePlanContinuations(row: AtlasWorkRoutePlanRow): readonly Continuati
     ...frameworkErrorCodeContinuations(row),
     ...row.sourceAnchors.flatMap((entry) =>
       [
+        ...entry.admittedSourceDeclarations.map((declaration) =>
+          sourceRangeContinuation(
+            `atlas.work-router:admitted-source-declaration:${entry.anchor.filePath}:${declaration.name ?? "anonymous"}`,
+            declaration.source,
+            `Inspect admitted ${declaration.kind} declaration ${declaration.name ?? "<anonymous>"} for route ${row.routeId}.`,
+          ),
+        ),
         ...entry.classSurfaces.map((classRow) =>
           sourceRangeContinuation(
             `atlas.work-router:source-class:${classRow.id}`,
@@ -2689,6 +2765,10 @@ function firstRoutePlanSource(
   row: AtlasWorkRoutePlanRow,
 ): SourceRange | undefined {
   for (const sourceAnchor of row.sourceAnchors) {
+    const admittedDeclaration = sourceAnchor.admittedSourceDeclarations[0];
+    if (admittedDeclaration !== undefined) {
+      return admittedDeclaration.source;
+    }
     const classSurface = sourceAnchor.classSurfaces[0];
     if (classSurface !== undefined) {
       return sourceRangeFromOneBasedReference(classSurface.source);

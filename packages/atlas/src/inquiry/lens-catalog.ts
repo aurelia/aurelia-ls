@@ -1023,7 +1023,7 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "admissionRole",
         role: ParameterRole.Filter,
         summary:
-          "Filter package rows by source-admission role such as atlas, semantic-runtime, aurelia-framework, public-plugin, external, or workspace.",
+          "Filter package rows by source-admission role such as atlas, semantic-runtime, mcp, aurelia-framework, public-plugin, external, or workspace.",
       },
       {
         id: "aureliaShape",

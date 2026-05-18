@@ -1,4 +1,5 @@
 import type { KernelStore } from '../kernel/store.js';
+import type { StateStoreConfiguration } from '../state/model.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
 import { CheckerTypeProjector } from './checker-projector.js';
 import { CheckerExpressionTypeEvaluator } from './expression-type-evaluator.js';
@@ -23,8 +24,9 @@ export class CheckerExpressionTypeWorld {
     readonly store: KernelStore,
     readonly projector: CheckerTypeProjector = new CheckerTypeProjector(store),
     readonly cache: CheckerExpressionTypeEvaluationCache = new CheckerExpressionTypeEvaluationCache(),
+    readonly stateStores: readonly StateStoreConfiguration[] = [],
   ) {
-    this.defaultEvaluator = new CheckerExpressionTypeEvaluator(store, projector, null, cache);
+    this.defaultEvaluator = new CheckerExpressionTypeEvaluator(store, projector, null, cache, stateStores);
   }
 
   evaluator(resourceScope: TemplateResourceScope | null = null): CheckerExpressionTypeEvaluator {
@@ -34,7 +36,7 @@ export class CheckerExpressionTypeWorld {
 
     let evaluator = this.scopedEvaluators.get(resourceScope);
     if (evaluator === undefined) {
-      evaluator = new CheckerExpressionTypeEvaluator(this.store, this.projector, resourceScope, this.cache);
+      evaluator = new CheckerExpressionTypeEvaluator(this.store, this.projector, resourceScope, this.cache, this.stateStores);
       this.scopedEvaluators.set(resourceScope, evaluator);
     }
     return evaluator;

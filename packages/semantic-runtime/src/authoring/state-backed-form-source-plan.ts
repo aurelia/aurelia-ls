@@ -10,6 +10,10 @@ import {
   fillSourceTemplate,
   sourceText,
 } from './source-template.js';
+import {
+  formFieldShellComponentFile,
+  formFieldShellTemplateFile,
+} from './form-field-shell-source-plan.js';
 
 export interface StateBackedFormSourcePlanModel {
   readonly rootDir: string;
@@ -26,10 +30,16 @@ export interface StateBackedFormSourcePlanModel {
   readonly formTemplatePath: string;
   readonly formComponentClassName: string;
   readonly formElementName: string;
+  readonly fieldShellComponentPath: string;
+  readonly fieldShellTemplatePath: string;
+  readonly fieldShellClassName: string;
+  readonly fieldShellElementName: string;
   /** Include validation-html configuration, validation services, and validate binding behavior usage. */
   readonly validationEnabled?: boolean;
   /** Optional static validation trigger argument for generated `& validate` applications. */
   readonly validationTrigger?: StateBackedFormValidationTriggerName | null;
+  /** Include i18n configuration, static translation resources, and translated template text. */
+  readonly i18nEnabled?: boolean;
 }
 
 export type StateBackedFormValidationTriggerName =
@@ -45,15 +55,14 @@ export function stateBackedFormSourcePlan(model: StateBackedFormSourcePlanModel)
     model.validationEnabled === true,
     model.validationTrigger ?? null,
   );
+  const i18n = stateBackedFormI18nTokens(model.i18nEnabled === true);
   return new AuthoringSourceEditPlan(
     model.rootDir,
     recipeSourceEditPolicy('recipe-baseline'),
-    stateBackedFormSourceFiles(model, validation),
+    stateBackedFormSourceFiles(model, validation, i18n),
     aureliaRecipeProjectToolingPlan({
       appName: model.appName,
-      dependencySpecifiers: model.validationEnabled === true
-        ? ['@aurelia/kernel', '@aurelia/validation-html']
-        : ['@aurelia/kernel'],
+      dependencySpecifiers: stateBackedFormDependencySpecifiers(model),
     }),
   );
 }
@@ -61,21 +70,25 @@ export function stateBackedFormSourcePlan(model: StateBackedFormSourcePlanModel)
 function stateBackedFormSourceFiles(
   model: StateBackedFormSourcePlanModel,
   validation: StateBackedFormValidationTokens,
+  i18n: StateBackedFormI18nTokens,
 ): readonly AuthoringSourceFileEdit[] {
   return [
-    stateBackedFormEntrypointFile(model, validation),
+    stateBackedFormEntrypointFile(model, validation, i18n),
     stateBackedFormRootComponentFile(model),
-    stateBackedFormRootTemplateFile(model),
+    stateBackedFormRootTemplateFile(model, i18n),
     stateBackedFormRootStyleFile(model),
     stateBackedFormStateFile(model),
+    formFieldShellComponentFile(model),
+    formFieldShellTemplateFile(model),
     stateBackedFormComponentFile(model, validation),
-    stateBackedFormTemplateFile(model, validation),
+    stateBackedFormTemplateFile(model, validation, i18n),
   ];
 }
 
 function stateBackedFormEntrypointFile(
   model: StateBackedFormSourcePlanModel,
   validation: StateBackedFormValidationTokens,
+  i18n: StateBackedFormI18nTokens,
 ): AuthoringSourceFileEdit {
   return recipeSourceFile(
     model.entrypointPath,
@@ -85,8 +98,8 @@ function stateBackedFormEntrypointFile(
     fillSourceTemplate(ENTRYPOINT_SOURCE, {
       ROOT_COMPONENT_CLASS: model.rootComponentClassName,
       ROOT_COMPONENT_MODULE: moduleSpecifier(model.entrypointPath, model.rootComponentPath, false),
-      VALIDATION_CONFIGURATION_IMPORT: validation.entrypointImport,
-      VALIDATION_REGISTRATION: validation.registrationArgument,
+      CONFIGURATION_IMPORTS: `${validation.entrypointImport}${i18n.entrypointImport}`,
+      CONFIGURATION_REGISTRATIONS: `${validation.registrationArgument}${i18n.registrationArgument}`,
     }),
   );
 }
@@ -110,7 +123,10 @@ function stateBackedFormRootComponentFile(model: StateBackedFormSourcePlanModel)
   );
 }
 
-function stateBackedFormRootTemplateFile(model: StateBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+function stateBackedFormRootTemplateFile(
+  model: StateBackedFormSourcePlanModel,
+  i18n: StateBackedFormI18nTokens,
+): AuthoringSourceFileEdit {
   return recipeSourceFile(
     model.rootTemplatePath,
     'template',
@@ -118,6 +134,9 @@ function stateBackedFormRootTemplateFile(model: StateBackedFormSourcePlanModel):
     'create-external-template',
     fillSourceTemplate(ROOT_TEMPLATE_SOURCE, {
       FORM_ELEMENT_NAME: model.formElementName,
+      ROOT_TITLE: i18n.rootTitle,
+      REQUEST_LABEL: i18n.requestLabel,
+      SUBMITTED_COUNT: i18n.submittedCount,
     }),
   );
 }
@@ -156,6 +175,8 @@ function stateBackedFormComponentFile(
     fillSourceTemplate(FORM_COMPONENT_SOURCE, {
       FORM_COMPONENT_CLASS: model.formComponentClassName,
       FORM_ELEMENT_NAME: model.formElementName,
+      FIELD_SHELL_CLASS: model.fieldShellClassName,
+      FIELD_SHELL_MODULE: moduleSpecifier(model.formComponentPath, model.fieldShellComponentPath, false),
       FORM_TEMPLATE_MODULE: moduleSpecifier(model.formComponentPath, model.formTemplatePath, true),
       STATE_CLASS: model.stateClassName,
       STATE_MODULE: moduleSpecifier(model.formComponentPath, model.statePath, false),
@@ -171,6 +192,7 @@ function stateBackedFormComponentFile(
 function stateBackedFormTemplateFile(
   model: StateBackedFormSourcePlanModel,
   validation: StateBackedFormValidationTokens,
+  i18n: StateBackedFormI18nTokens,
 ): AuthoringSourceFileEdit {
   return recipeSourceFile(
     model.formTemplatePath,
@@ -178,10 +200,38 @@ function stateBackedFormTemplateFile(
     'html',
     'create-external-template',
     fillSourceTemplate(FORM_TEMPLATE_SOURCE, {
-      CUSTOMER_NAME_BINDING: validation.customerNameBinding,
-      EMAIL_BINDING: validation.emailBinding,
+      CUSTOMER_NAME_FIELD: stateBackedFormFieldTemplate({
+        fieldShellElementName: model.fieldShellElementName,
+        inputId: 'customer-name',
+        label: 'Name',
+        type: 'text',
+        valueBinding: validation.customerNameBinding,
+        errorCollectionName: validation.customerNameErrorCollectionName,
+      }),
+      EMAIL_FIELD: stateBackedFormFieldTemplate({
+        fieldShellElementName: model.fieldShellElementName,
+        inputId: 'email',
+        label: 'Email',
+        type: 'email',
+        valueBinding: validation.emailBinding,
+        errorCollectionName: validation.emailErrorCollectionName,
+      }),
+      FORM_SUMMARY: i18n.formSummary,
+      CONTACT_PREFERENCE_LEGEND: i18n.contactPreferenceLegend,
+      SUBMIT_LABEL: i18n.submitLabel,
     }),
   );
+}
+
+function stateBackedFormDependencySpecifiers(model: StateBackedFormSourcePlanModel): readonly string[] {
+  const specifiers = new Set<string>(['@aurelia/kernel']);
+  if (model.validationEnabled === true) {
+    specifiers.add('@aurelia/validation-html');
+  }
+  if (model.i18nEnabled === true) {
+    specifiers.add('@aurelia/i18n');
+  }
+  return [...specifiers];
 }
 
 interface StateBackedFormValidationTokens {
@@ -194,6 +244,19 @@ interface StateBackedFormValidationTokens {
   readonly submitBody: string;
   readonly customerNameBinding: string;
   readonly emailBinding: string;
+  readonly customerNameErrorCollectionName: string | null;
+  readonly emailErrorCollectionName: string | null;
+}
+
+interface StateBackedFormI18nTokens {
+  readonly entrypointImport: string;
+  readonly registrationArgument: string;
+  readonly rootTitle: string;
+  readonly requestLabel: string;
+  readonly submittedCount: string;
+  readonly formSummary: string;
+  readonly contactPreferenceLegend: string;
+  readonly submitLabel: string;
 }
 
 function stateBackedFormValidationTokens(
@@ -204,9 +267,12 @@ function stateBackedFormValidationTokens(
     ? {
       entrypointImport: "import { ValidationHtmlConfiguration } from '@aurelia/validation-html';\n",
       registrationArgument: ', ValidationHtmlConfiguration',
-      formImport: "import { IValidationController, IValidationRules } from '@aurelia/validation-html';\n",
+      formImport: "import { IValidationController, IValidationRules, type ValidationResultTarget } from '@aurelia/validation-html';\n",
       formFields: `  private readonly validationRules = resolve(IValidationRules);
   private readonly validationController = resolve(IValidationController);
+
+  customerNameErrors: ValidationResultTarget[] = [];
+  emailErrors: ValidationResultTarget[] = [];
 `,
       constructorBody: `
   constructor() {
@@ -226,6 +292,8 @@ function stateBackedFormValidationTokens(
     }`,
       customerNameBinding: validateValueBinding('customerName', validationTrigger),
       emailBinding: validateValueBinding('email', validationTrigger),
+      customerNameErrorCollectionName: 'customerNameErrors',
+      emailErrorCollectionName: 'emailErrors',
     }
     : {
       entrypointImport: '',
@@ -237,7 +305,38 @@ function stateBackedFormValidationTokens(
       submitBody: '    this.state.submitRequest(this.requestId);',
       customerNameBinding: 'value.bind="customerName"',
       emailBinding: 'value.bind="email"',
+      customerNameErrorCollectionName: null,
+      emailErrorCollectionName: null,
     };
+}
+
+interface StateBackedFormFieldTemplateInput {
+  readonly fieldShellElementName: string;
+  readonly inputId: string;
+  readonly label: string;
+  readonly type: string;
+  readonly valueBinding: string;
+  readonly errorCollectionName: string | null;
+}
+
+function stateBackedFormFieldTemplate(input: StateBackedFormFieldTemplateInput): string {
+  const fieldShell = `  <${input.fieldShellElementName}
+    input-id="${input.inputId}"
+    label="${input.label}"
+    type="${input.type}"
+    ${input.valueBinding}>
+  </${input.fieldShellElementName}>`;
+  if (input.errorCollectionName == null) {
+    return fieldShell;
+  }
+  return `  <div class="field-stack" validation-errors.from-view="${input.errorCollectionName}">
+${indentLines(fieldShell, '  ')}
+    <p class="error" repeat.for="error of ${input.errorCollectionName}">\${error.result.message}</p>
+  </div>`;
+}
+
+function indentLines(text: string, indent: string): string {
+  return text.split('\n').map((line) => `${indent}${line}`).join('\n');
 }
 
 function validateValueBinding(
@@ -248,12 +347,56 @@ function validateValueBinding(
   return `value.two-way="${propertyName} & validate${triggerArgument}"`;
 }
 
+function stateBackedFormI18nTokens(i18nEnabled: boolean): StateBackedFormI18nTokens {
+  return i18nEnabled
+    ? {
+      entrypointImport: "import { I18nConfiguration } from '@aurelia/i18n';\n",
+      registrationArgument: `,
+    I18nConfiguration.customize((options) => {
+      options.initOptions = {
+        resources: {
+          en: {
+            translation: {
+              app: {
+                title: 'Service request',
+                request: 'Request',
+                submitted: '{{count}} submitted request(s)',
+              },
+              form: {
+                summary: 'Editing request {{requestId}}',
+                contactPreference: 'Contact preference',
+                submit: 'Submit request',
+              },
+            },
+          },
+        },
+      };
+    })`,
+      rootTitle: '<h1 t="app.title"></h1>',
+      requestLabel: '<label for="request-selector" t="app.request"></label>',
+      submittedCount: '<p t="app.submitted" t-params.bind="{ count: submittedCount }"></p>',
+      formSummary: '\n  <p t="form.summary" t-params.bind="{ requestId }"></p>\n',
+      contactPreferenceLegend: '<legend t="form.contactPreference"></legend>',
+      submitLabel: '<button type="submit" disabled.bind="!canSubmit" t="[title]form.submit;form.submit"></button>',
+    }
+    : {
+      entrypointImport: '',
+      registrationArgument: '',
+      rootTitle: '<h1>Service request</h1>',
+      requestLabel: '<label for="request-selector">Request</label>',
+      submittedCount: '<p>${state.submittedCount} submitted request(s)</p>',
+      formSummary: '',
+      contactPreferenceLegend: '<legend>Contact preference</legend>',
+      submitLabel: '<button type="submit" disabled.bind="!canSubmit">Submit request</button>',
+    };
+}
+
 const ENTRYPOINT_SOURCE = sourceText(`import { Aurelia, StandardConfiguration } from '@aurelia/runtime-html';
-__VALIDATION_CONFIGURATION_IMPORT__\
+__CONFIGURATION_IMPORTS__\
 import { __ROOT_COMPONENT_CLASS__ } from '__ROOT_COMPONENT_MODULE__';
 
 new Aurelia()
-  .register(StandardConfiguration__VALIDATION_REGISTRATION__)
+  .register(StandardConfiguration__CONFIGURATION_REGISTRATIONS__)
   .app({
     host: document.body,
     component: __ROOT_COMPONENT_CLASS__,
@@ -274,36 +417,20 @@ import '__ROOT_STYLE_MODULE__';
   dependencies: [__FORM_COMPONENT_CLASS__],
 })
 export class __ROOT_COMPONENT_CLASS__ {
-  private readonly state = resolve(__STATE_CLASS__);
-
-  get selectedRequestId(): string {
-    return this.state.selectedRequestId;
-  }
-
-  set selectedRequestId(value: string) {
-    this.state.selectedRequestId = value;
-  }
-
-  get requestIds(): readonly string[] {
-    return this.state.requestIds;
-  }
-
-  get submittedCount(): number {
-    return this.state.submittedCount;
-  }
+  readonly state = resolve(__STATE_CLASS__);
 }
 `);
 
 const ROOT_TEMPLATE_SOURCE = sourceText(`<main>
-  <h1>Service request</h1>
-  <label for="request-selector">Request</label>
-  <select id="request-selector" value.bind="selectedRequestId">
-    <option repeat.for="requestId of requestIds" model.bind="requestId">\${requestId}</option>
+  __ROOT_TITLE__
+  __REQUEST_LABEL__
+  <select id="request-selector" value.bind="state.selectedRequestId">
+    <option repeat.for="requestId of state.requestIds" model.bind="requestId">\${requestId}</option>
   </select>
 
-  <__FORM_ELEMENT_NAME__ request-id.bind="selectedRequestId"></__FORM_ELEMENT_NAME__>
+  <__FORM_ELEMENT_NAME__ request-id.bind="state.selectedRequestId"></__FORM_ELEMENT_NAME__>
 
-  <p>\${submittedCount} submitted request(s)</p>
+  __SUBMITTED_COUNT__
 </main>
 `);
 
@@ -322,6 +449,16 @@ const ROOT_STYLE_SOURCE = sourceText(`main {
 .form-pending {
   border-color: #9e3a2d;
 }
+
+.field-stack {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.error {
+  color: #9e3a2d;
+  margin: 0;
+}
 `);
 
 const STATE_SOURCE = sourceText(`export type ContactPreference = 'email' | 'phone';
@@ -333,6 +470,7 @@ export interface ServiceRequest {
   email: string;
   urgent: boolean;
   contactPreference: ContactPreference;
+  primaryTopic: RequestTopic | null;
   topics: RequestTopic[];
   notes: string;
   submitCount: number;
@@ -384,6 +522,7 @@ function createRequest(id: string, customerName: string): ServiceRequest {
     email: \`\${customerName.toLowerCase().replace(' ', '.')}@example.test\`,
     urgent: false,
     contactPreference: 'email',
+    primaryTopic: null,
     topics: ['support'],
     notes: '',
     submitCount: 0,
@@ -395,14 +534,16 @@ const FORM_COMPONENT_SOURCE = sourceText(`import { bindable, customElement } fro
 import { resolve } from '@aurelia/kernel';
 __VALIDATION_FORM_IMPORT__\
 import { __STATE_CLASS__, type ContactPreference, type RequestTopic } from '__STATE_MODULE__';
+import { __FIELD_SHELL_CLASS__ } from '__FIELD_SHELL_MODULE__';
 import template from '__FORM_TEMPLATE_MODULE__';
 
 @customElement({
   name: '__FORM_ELEMENT_NAME__',
   template,
+  dependencies: [__FIELD_SHELL_CLASS__],
 })
 export class __FORM_COMPONENT_CLASS__ {
-  private readonly state = resolve(__STATE_CLASS__);
+  readonly state = resolve(__STATE_CLASS__);
 __VALIDATION_FIELDS__
 
   @bindable requestId = '';
@@ -442,13 +583,24 @@ __VALIDATION_CONSTRUCTOR__
   }
 
   get contactPreference(): ContactPreference {
-    return this.request?.contactPreference ?? this.emailPreference;
+    return this.request?.contactPreference ?? this.state.emailPreference;
   }
 
   set contactPreference(value: ContactPreference) {
     const request = this.request;
     if (request != null) {
       request.contactPreference = value;
+    }
+  }
+
+  get primaryTopic(): RequestTopic | null {
+    return this.request?.primaryTopic ?? null;
+  }
+
+  set primaryTopic(value: RequestTopic | null) {
+    const request = this.request;
+    if (request != null) {
+      request.primaryTopic = value;
     }
   }
 
@@ -467,26 +619,6 @@ __VALIDATION_CONSTRUCTOR__
     }
   }
 
-  get emailPreference(): ContactPreference {
-    return this.state.emailPreference;
-  }
-
-  get phonePreference(): ContactPreference {
-    return this.state.phonePreference;
-  }
-
-  get hardwareTopic(): RequestTopic {
-    return this.state.hardwareTopic;
-  }
-
-  get billingTopic(): RequestTopic {
-    return this.state.billingTopic;
-  }
-
-  get supportTopic(): RequestTopic {
-    return this.state.supportTopic;
-  }
-
   get canSubmit(): boolean {
     return this.customerName !== '' && this.email !== '';
   }
@@ -501,12 +633,10 @@ __SUBMIT_BODY__
 }
 `);
 
-const FORM_TEMPLATE_SOURCE = sourceText(`<form class.bind="canSubmit ? 'form-ready' : 'form-pending'" submit.trigger="submit()">
-  <label for="customer-name">Name</label>
-  <input id="customer-name" __CUSTOMER_NAME_BINDING__>
+const FORM_TEMPLATE_SOURCE = sourceText(`<form class.bind="canSubmit ? 'form-ready' : 'form-pending'" submit.trigger="submit()">__FORM_SUMMARY__
+__CUSTOMER_NAME_FIELD__
 
-  <label for="email">Email</label>
-  <input id="email" type="email" __EMAIL_BINDING__>
+__EMAIL_FIELD__
 
   <label>
     <input type="checkbox" checked.bind="urgent">
@@ -514,27 +644,35 @@ const FORM_TEMPLATE_SOURCE = sourceText(`<form class.bind="canSubmit ? 'form-rea
   </label>
 
   <fieldset>
-    <legend>Contact preference</legend>
+    __CONTACT_PREFERENCE_LEGEND__
     <label>
-      <input type="radio" model.bind="emailPreference" checked.bind="contactPreference">
+      <input type="radio" model.bind="state.emailPreference" checked.bind="contactPreference">
       Email
     </label>
     <label>
-      <input type="radio" model.bind="phonePreference" checked.bind="contactPreference">
+      <input type="radio" model.bind="state.phonePreference" checked.bind="contactPreference">
       Phone
     </label>
   </fieldset>
 
-  <label for="topics">Topics</label>
+  <label for="primary-topic">Primary topic</label>
+  <select id="primary-topic" value.bind="primaryTopic">
+    <option model.bind="null">Choose...</option>
+    <option model.bind="state.hardwareTopic">Hardware</option>
+    <option model.bind="state.billingTopic">Billing</option>
+    <option model.bind="state.supportTopic">Support</option>
+  </select>
+
+  <label for="topics">Additional topics</label>
   <select id="topics" multiple value.bind="topics">
-    <option model.bind="hardwareTopic">Hardware</option>
-    <option model.bind="billingTopic">Billing</option>
-    <option model.bind="supportTopic">Support</option>
+    <option model.bind="state.hardwareTopic">Hardware</option>
+    <option model.bind="state.billingTopic">Billing</option>
+    <option model.bind="state.supportTopic">Support</option>
   </select>
 
   <label for="notes">Notes</label>
   <textarea id="notes" value.bind="notes"></textarea>
 
-  <button type="submit" disabled.bind="!canSubmit">Submit request</button>
+  __SUBMIT_LABEL__
 </form>
 `);

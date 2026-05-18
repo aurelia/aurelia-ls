@@ -119,10 +119,36 @@ precision becomes unknown membership/order, an unknown scalar result, or `undefi
 calls). Keep new standard behavior in that family split so the dispatcher stays a routing table rather than a second
 evaluator body.
 
-`project-evaluation.ts` owns the shared project pass over boot admissions. It is still evaluator substrate: it admits
-boot sources whose role is `app-source` and whose language is TS/JS into module graph evaluation, then emits evaluator
-open seams. Tests, declarations, package manifests, templates, styles, and known tooling config files remain admitted
-source records but do not enter app-world static evaluation.
+`project-evaluation.ts` owns the shared project pass over boot admissions. `StaticProjectEvaluationPass` is the small
+public facade; `StaticProjectEvaluationFrame` is the per-run lifetime object that owns the admission index, module source
+host, graph evaluation, result publication, linked-source admission, and profile assembly. It is still evaluator
+substrate: it admits boot sources whose role is `app-source` and whose language is TS/JS into module graph evaluation,
+then emits evaluator open seams. Tests, declarations, package manifests, templates, styles, and known tooling config
+files remain admitted source records but do not enter app-world static evaluation. Its profile intentionally splits the
+module-graph envelope from source-host work: source-file reads/parses, TypeScript module resolution, evaluator path
+probes, declaration-source mapping, and cached file-system probes are visible so performance work can choose between
+CPU, memory, and precision instead of adding broad caches blindly.
+The module-source host reports specifier-shape counters as well as resolution outcomes. Use `querySuffixCalls`,
+`assetSpecifierCalls`, `extensionlessRelativeCalls`, and `emittedJavaScriptRelativeCalls` to understand the authored
+module graph before changing caches or source-admission policy. Asset/query-shaped relative imports path-probe before
+TypeScript resolution because TypeScript may not understand the loader shape; ordinary relative imports ask TypeScript
+first, then use the measured post-TypeScript path-probe fallback only to close local authored source or asset modules
+that TypeScript did not resolve. Path-probe timing is split before/after TypeScript so the completeness fallback can be
+profile-gated if it proves expensive and rarely closes modules. `EvaluationModuleResolutionPolicy` owns that gate so
+the CPU/completeness trade-off is code-visible instead of hidden in a helper fallback. `unresolvedRelative` and
+`unresolvedBare` split local openings from intentional framework/package external boundaries that also return `null`
+from module resolution.
+Path probes should avoid filesystem work for impossible candidates. Explicit supported asset/source extensions resolve
+as exact candidates and do not expand into `specifier.ext/index.*`; emitted JavaScript extensions can map back to
+TypeScript source siblings; extensionless specifiers expand through the supported evaluation-module extensions plus
+index files. When TypeScript has already resolved a non-declaration file, do not re-probe file existence before
+admitting that evaluation-module path; use resolver/path-probe existence checks only when the host is choosing among
+candidate paths. `readSourceFile(...)` reads through the cached filesystem adapter directly and treats an undefined read
+as the miss, instead of probing existence and then reading the same path.
+The profile also reports evaluated-source composition: evaluated/open counts, project/node_modules/external source
+counts, TS/JS versus asset source counts, and source-text characters per bucket. Use that before changing package-source
+mapping or root admission policy; a large evaluated-source count only becomes actionable once the source mass is
+attributed to app-authored code, source-shipped package code, workspace-external source, or asset modules.
 
 `declaration-instantiation.ts` owns ECMAScript declaration-instantiation shape for a source file or interpreted block:
 import bindings, function hoists, and top-level class bindings. Keep this separate from statement execution so module
@@ -185,7 +211,7 @@ recognizers.
   `array.slice`, `array.sort`, `array.push`, `array.pop`, `array.shift`, `array.unshift`, `array.splice`,
   `array.reverse`, string `slice`, `localeCompare`, `startsWith`, `endsWith`, `includes`, `indexOf`,
   `split`, `replace`, `replaceAll`, `trim`, case transforms, `Map.get`, `Map.set`, `Map.has`, `Map.delete`,
-  `Set.has`, `Set.add`, and `Set.delete` over evaluator-known values.
+  `Set.has`, `Set.add`, `Set.delete`, and `Promise.resolve` over evaluator-known values.
 - Function and class values are callable/constructable carriers plus ordinary JavaScript property carriers. Static
   evaluator-local assignments such as `factory.someKey = value` should update the function/class value instead of
   opening a dynamic-mutation seam. Class construction and local getter reads are guarded static interpretation lanes;
@@ -208,7 +234,9 @@ recognizers.
 - Optional property access, element access, and optional calls over concrete `null`/`undefined` receivers reduce to
   `undefined`. Optional chains over unknown or boundary receivers still preserve the underlying unknown/boundary lane.
 - Async function calls return `EvaluationPromiseValue` with an `async-execution` boundary as the fulfillment value.
-  Promise `then`/`catch`/`finally` intrinsics preserve the fulfillment lane without running callbacks; deeper async
+  `Promise.resolve(value)` wraps a statically known value into the same promise lane so downstream consumers can unwrap
+  framework-supported promise inputs without treating the ambient `Promise` object as a host boundary. Promise
+  `then`/`catch`/`finally` intrinsics preserve the fulfillment lane without running callbacks; deeper async
   scheduling, rejection state, and callback execution remain future evaluator substrate rather than product-level
   guesswork.
 - Boundary objects are not ordinary evaluator objects with a missing-property fallback. Known boundary object properties
@@ -235,7 +263,11 @@ recognizers.
   back to `src/*` so public plugins can expose real registry bodies, resources, and bindables. Framework packages such
   as `aurelia` and `@aurelia/*` stay on the framework-emulation path instead of being pulled from `node_modules` into
   app evaluation. Package-manifest reads for this mapping use the shared boot host-file cache; do not add another
-  manifest reader inside the module host.
+  manifest reader inside the module host. The module source host owns a per-pass TypeScript module-resolution cache and
+  cached file-system adapter because one large graph can otherwise spend most static-evaluation time re-probing the
+  same directories and package files. Direct evaluator path probes are for JSON/HTML/CSS asset imports and
+  query-bearing specifiers; ordinary TS/JS relative imports should let TypeScript choose source/declaration semantics,
+  and the old post-TypeScript path-probe retry should stay out unless a profile shows it resolves real modules.
 - `ModuleLoader` mirrors the framework's direct-input and promise-fulfillment distinction: direct values must be
   promises or non-null object-like values; promise fulfillments reject only nullish modules and otherwise produce an
   analyzed module, with non-object fulfillments yielding an empty item list. `ModuleItem.definition` is deliberately

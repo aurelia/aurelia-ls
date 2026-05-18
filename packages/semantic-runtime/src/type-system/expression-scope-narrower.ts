@@ -24,10 +24,12 @@ import {
   CheckerTypeProjectionOrigin,
   CheckerTypeReference,
   CheckerTypeShapeKind,
+  checkerTypeMemberReachableIdentityHandle,
   sameCheckerTypeReference,
 } from './type-shape.js';
-import { TypeSystemProductDetails } from './product-details.js';
+import { TypeSystemHotDetails, TypeSystemProductDetails } from './product-details.js';
 import { checkerNullishType } from './checker-related-types.js';
+import { checkerTypeMemberSourceAddressHandle } from './checker-type-member-source.js';
 
 export const enum CheckerExpressionScopeNarrowingPolarity {
   Truthy = 'truthy',
@@ -176,7 +178,7 @@ export class CheckerExpressionScopeNarrower {
 
     const member = slot.targetProductHandle == null
       ? null
-      : this.store.productDetails.read(TypeSystemProductDetails.TypeMember, slot.targetProductHandle);
+      : this.store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
     if (member?.carrier?.valueType == null) {
       return reference;
     }
@@ -188,8 +190,8 @@ export class CheckerExpressionScopeNarrower {
       type: member.carrier.valueType,
       origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceNode,
-      sourceAddressHandle: slot.sourceAddressHandle ?? member.sourceAddressHandle,
-      ownerIdentityHandle: member.identityHandle,
+      sourceAddressHandle: slot.sourceAddressHandle ?? checkerTypeMemberSourceAddressHandle(this.store, member),
+      ownerIdentityHandle: checkerTypeMemberReachableIdentityHandle(member),
       display: reference.display ?? member.valueType?.display ?? null,
     } satisfies CheckerTypeProjectionRequest).toReference();
   }
@@ -320,7 +322,7 @@ export class CheckerExpressionScopeNarrower {
       localKey,
       checker: carrier.checker,
       type,
-      origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
+      origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceNode,
       sourceAddressHandle,
       display: carrier.checker.typeToString(type, sourceNode ?? undefined),

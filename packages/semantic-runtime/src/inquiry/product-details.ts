@@ -39,18 +39,18 @@ export class ProductDetailResult {
   ) {}
 }
 
-/** Expand a materialized-product handle through the typed hot detail catalog. */
+/** Expand a materialized-product handle through the typed product-detail catalog. */
 export function answerProductDetail(
   store: KernelStore,
   query: ProductDetailQuery,
 ): InquiryAnswer<ProductDetailResult | null, ProductDetailQuery> {
   const locus = new KernelRecordInquiryLocus(query.productHandle);
-  const product = store.readProduct(query.productHandle);
+  const detailEntry = store.productDetails.readEntry(query.productHandle);
+  const product = detailEntry?.product ?? store.readProduct(query.productHandle);
   if (product == null) {
     return missingProductDetailAnswer(query, locus);
   }
 
-  const detailEntry = store.productDetails.readEntry(query.productHandle);
   const result = new ProductDetailResult(product, detailEntry);
   const claimHandles = productDetailClaimHandles(store, product);
 

@@ -798,6 +798,24 @@ export class ParameterModel {
   ) {}
 }
 
+/** Decoded parameter value produced by route recognition and consumed by RouteNode creation. */
+export class RouteParameterValueModel {
+  constructor(
+    readonly name: string,
+    readonly value: string | null,
+    readonly isFulfilled: boolean,
+    readonly isResidue: boolean,
+  ) {}
+}
+
+/** Decoded static query parameter produced by ViewportInstructionTree creation and carried by RouteTree state. */
+export class RouteQueryParameterValueModel {
+  constructor(
+    readonly name: string,
+    readonly value: string,
+  ) {}
+}
+
 /** Parsed static path segment before StaticSegment.appendTo(...) materializes state transitions. */
 @auLink('route-recognizer:StaticSegment')
 export class StaticSegmentModel {
@@ -961,6 +979,7 @@ export class RecognizedRouteModel {
     readonly path: string,
     readonly residue: string | null,
     readonly parameterCount: number,
+    readonly parameters: readonly RouteParameterValueModel[],
     readonly redirectDepth: number,
     readonly redirectSourceRouteConfig: RouteConfigReference | null,
     readonly sourceAddressHandle: AddressHandle | null,
@@ -1160,7 +1179,9 @@ export interface RouteNodeModelFields {
   readonly originalInstruction: RouterReference | null;
   readonly recognizedRoute: RouteRecognizerReference | null;
   readonly parameterCount: number;
+  readonly params: readonly RouteParameterValueModel[];
   readonly queryParamCount: number;
+  readonly queryParams: readonly RouteQueryParameterValueModel[];
   readonly fragment: string | null;
   readonly hasData: boolean | null;
   readonly viewport: string | null;
@@ -1187,7 +1208,9 @@ export class RouteNodeModel {
   readonly originalInstruction: RouterReference | null;
   readonly recognizedRoute: RouteRecognizerReference | null;
   readonly parameterCount: number;
+  readonly params: readonly RouteParameterValueModel[];
   readonly queryParamCount: number;
+  readonly queryParams: readonly RouteQueryParameterValueModel[];
   readonly fragment: string | null;
   readonly hasData: boolean | null;
   readonly viewport: string | null;
@@ -1210,7 +1233,9 @@ export class RouteNodeModel {
     this.originalInstruction = fields.originalInstruction;
     this.recognizedRoute = fields.recognizedRoute;
     this.parameterCount = fields.parameterCount;
+    this.params = fields.params;
     this.queryParamCount = fields.queryParamCount;
+    this.queryParams = fields.queryParams;
     this.fragment = fields.fragment;
     this.hasData = fields.hasData;
     this.viewport = fields.viewport;
@@ -1241,6 +1266,7 @@ export class RouteTreeModel {
     readonly options: RouterOptionsReference | null,
     readonly nodeCount: number,
     readonly queryParamCount: number,
+    readonly queryParams: readonly RouteQueryParameterValueModel[],
     readonly fragment: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RouteTreeField>[] = [],
@@ -1289,6 +1315,7 @@ export class ViewportInstructionTreeModel {
     readonly options: RouterOptionsReference | null,
     readonly isAbsolute: boolean,
     readonly queryParamCount: number,
+    readonly queryParams: readonly RouteQueryParameterValueModel[],
     readonly fragment: string | null,
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RouterInstructionField>[] = [],

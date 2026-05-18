@@ -58,6 +58,37 @@
         "Use SemanticRuntime for workspace boot, app opening, project selection, cursor-locus convenience methods, and app-world cache policy.",
         "Use SemanticApp for public query dispatch and compact app-level query methods; move substrate-family answerers into focused modules when the facade starts owning projection logic.",
         "Keep `SemanticRuntime.authoringCatalog()` / `AuthoringCatalog` as the static ontology/recipe-contract projection and `AuthoringOrientation` as the opened-app evidence projection; callers should not need to spelunk ontology.ts or infer catalog contracts from an arbitrary app.",
+        "Use `readSemanticAppQueryCatalog()` / `SemanticRuntime.appQueryCatalog()` when a public adapter needs generic app-query discovery or validation; do not rebuild a local app-query enum list in MCP or another shell.",
+        "Public adapters should call claim-backed runtime catalog methods (`authoringCatalogView`, `authoringRecipePlan`, and `appQueryCatalog`) instead of raw readSemantic* helpers when the result crosses a transport boundary.",
+        "Keep `SemanticRuntime.summary()` summary-first for monorepos: whole-workspace rollups and app candidates should remain complete, detailed project rows are opt-in through `projectPage`, and the public summary answer itself should remain query-claim-backed under the caller's inquiry profile.",
+        "Keep `AppOverview` summary-first for real apps: diagnostics and open seams are default pressure signals, compact topology counts should not expand the full AppTopology DTO, and compact authoring orientation is opt-in through `includeAuthoringOrientation`. When authoring orientation is included, repair-cluster summaries should preserve planning readiness, action-target source coverage, and runtime boundary/intent kind buckets so public adapters do not flatten runtime-policy seams into ordinary source edits.",
+        "Use app-query catalog `minimumAnalysisDepth` when a generic public adapter opens an app; topology-owned queries should not accidentally pay for binding-observation.",
+        "Use app-query catalog `pagingKind` before exposing a paged-looking adapter control; offset row cursors, router row-sample sizing, and cursor-locus continuations are intentionally different public affordances.",
+        "Use app-query catalog `runtimeBoundary` before routing a public query: runtime-static, project-frame, and static-evaluation answers should stay below app-world construction, while app-world queries should make their construction cost visible.",
+        "Prefer `SemanticRuntime.answerAppQuery(...)` for thin public adapters that need a single app answer: it centralizes catalog depth, locus-derived inquiry profile, query-claim recording, runtime-level static catalog reuse, and profile-default app-epoch disposal instead of making MCP/LSP shells rediscover those policies.",
+        "Keep app-query identity, locus, epoch, and routed-policy helpers in focused API modules. Runtime facade code should call those helpers rather than rebuilding private query keys, default profiles, authoring-template switches, or app-retention decisions inline.",
+        "Routed app answers should leave a runtime-level lightweight query claim through optional app-epoch disposal; that claim records answer shape, observed cost, and reclaimed app/query-claim records without retaining app-world products.",
+        "Use `SemanticRuntime.answerAppQueries(...)` for public multi-answer app orientation. The result carries compact `appProfile` phase evidence captured before optional app disposal, so profilers and transport shells do not need to retain an app epoch merely to explain construction cost.",
+        "Keep routed-batch `appProfile` rich enough for retention-safe memory attribution: include nested construction phase summaries, static-evaluation source-host/source-composition counters, TypeSystem compiler-option shape, Program root/source-file composition, and compiler-host cache counters so one-off public calls can explain evaluator/checker/dependency cost after app-epoch disposal.",
+        "App-world-free routed answers should stay at the runtime boundary. AuthoringCatalog can use static catalog data, SourceFiles can use the booted project frame, and UnresolvedModules can use read-only Aurelia project evaluation. Single calls and all-app-world-free batches should not open an app epoch; their batch result uses appWorldOpened=false and appProfile=null intentionally.",
+        "Runtime-static app-query batches should stay workspace-level: do not select a project or app analysis depth when every child query is runtime-static. Project-frame and static-evaluation batches still need project selection because they depend on admitted source files or static project evaluation.",
+        "Public transport shells such as MCP should use the routed answer path with an explicit consumer profile and retention posture instead of leaving app-world epochs cached by manual `openApp(...).ask(...)` calls.",
+        "Inside an already-entered public claim boundary, use a focused raw answer builder rather than calling another public facade method. Public adapters should call claim-backed facades, but facade internals should not create unrelated default-profile query claims as an implementation detail.",
+        "Expose appRetention as an explicit adapter policy when hand-testing MCP-scale apps. Default dispose-app keeps retained app-kernel memory flat; retain-app is useful when several tools should share one app epoch and the cache overview will be inspected or cleared deliberately.",
+        "Expose diagnosticProjection through public adapters for diagnostic query families. Do not force every MCP/LSP diagnostic read through answer-time TypeChecker projection when available-products is enough for orientation.",
+        "Keep router overview summary-first by default; row samples from many router families are an opt-in orientation cost, not the default MCP answer.",
+        "Use `SemanticRuntime.analysisCacheOverview()` for long-lived adapter retention questions: it is the public x-ray for cached app epochs, query-claim retention, process memory, dependency cache density, and workspace kernel density; do not infer those facts from MCP-local session maps.",
+        "Read the project compiler-options cache row in analysis-cache overview before assuming repeated static-evaluation/type-system setup is unavoidable. That cache is boot/input wiring by project root and returns cloned options, separate from TypeScript Program or app-world retention.",
+        "Use `SemanticRuntime.disposeQueryClaims(...)` profileDisposals rows to verify which runtime-level and cached-app query-claim graphs were pruned by source, query, profile, or materialization-policy invalidation.",
+        "Use `includeQueryClaimRows` with a small `rowLimit` when aggregate query-claim counters are not enough; do not add a transport-local query ledger before checking the graph-owned retained rows.",
+        "Use the TypeSystem dependency-cache density fields in analysis-cache overview before treating TypeScript SourceFile retention as generic semantic-runtime memory pressure.",
+        "Use `includeTypeSystemDependencyEntries` only for a deliberate cache frontier read; ordinary adapter status should prefer dependency bucket density and clear-policy advice over path-level SourceFile rows.",
+        "Use `SemanticRuntime.clearAnalysisCache()` as the app-world reclaim boundary: it disposes cached app epochs and kernel records/details back to the first app-construction marker while keeping boot/source discovery available.",
+        "Use `typeSystemDependencyCacheClearPolicy` when clearing analysis cache so dependency SourceFile cache reclamation is an explicit CPU-vs-memory choice: preserve by default, clear all under pressure, or target node_modules, default libraries, or external declarations after reading cache density.",
+        "For one-off public routed calls, pass `typeSystemDependencyCacheClearPolicy` to `answerAppQuery(...)` or `answerAppQueries(...)` so dependency SourceFile cache disposal is recorded on the runtime-level query claim instead of happening as adapter-local cleanup.",
+        "Default `openApp()` should stay at `runtime-topology`; cursor/diagnostic convenience methods may explicitly default to `binding-observation` because those LSP-style surfaces need observer/data-flow pressure.",
+        "Until app-world handles are salted by request shape, opening a non-compatible app epoch for a project with cached app records clears cached app epochs before rebuilding; do not reintroduce duplicate app epochs in one workspace kernel by accident.",
+        "Keep app-world cache identity semantic-shape based rather than inquiry-profile based: project, analysis depth, and authoring-template scope define the cached app epoch, while `SemanticApp.ask(...)` records profile-specific answer retention in separate query-claim graphs at the API boundary.",
         "When an answer feels awkward, improve underlying product records or add a narrow query projection before adding compatibility glue to runtime.ts."
       ],
       "anchors": [
@@ -86,6 +117,54 @@
           "filePath": "packages/semantic-runtime/src/api/app-template-queries.ts",
           "symbolName": "SemanticAppTemplateQueries",
           "summary": "Template-family query boundary for template rows, completions, cursor info, and template diagnostics."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-query-catalog.ts",
+          "symbolName": "readSemanticAppQueryCatalog",
+          "summary": "Semantic-runtime-owned generic app query vocabulary for public adapters."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-query-identity.ts",
+          "symbolName": "semanticAppQueryKey",
+          "summary": "Shared app-query key, locus, and invalidation epoch identity helpers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-query-policy.ts",
+          "symbolName": "shouldDisposeAppAfterRoutedQuery",
+          "summary": "Routed app-query default profile, analysis-depth, materialization, and app-retention policy helpers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/router-overview.ts",
+          "symbolName": "readSemanticRouterOverview",
+          "summary": "Summary-first router overview with opt-in row samples."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime.analysisCacheOverview",
+          "summary": "Session-retention overview for cached app epochs, query claims, and kernel density."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime.answerAppQuery",
+          "summary": "Single-query app router that applies catalog depth, query-claim, and profile retention policy."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime.answerAppQueries",
+          "summary": "Batch routed app-query answer boundary that returns child answers plus compact app construction profile before optional disposal."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime.clearAnalysisCache",
+          "summary": "App-world reclaim boundary that disposes cached app epochs and answer/session sidecars while retaining the booted runtime."
         },
         {
           "kind": "doc",
@@ -118,7 +197,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-17"
     },
     {
       "id": "frontier:app-diagnostics-substrate",
@@ -290,7 +369,94 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-05-17"
+    },
+    {
+      "id": "frontier:mcp-app-world-heap-budget",
+      "kind": "pressure-frontier",
+      "domains": [
+        "mcp",
+        "semantic-runtime",
+        "api",
+        "performance",
+        "world-construction"
+      ],
+      "summary": "MCP app overview needs explicit heap and inquiry-depth pressure while app-world construction remains heavy.",
+      "rationale": "Workspace/project discovery can cheaply identify app-shaped projects in larger monorepos, but opening a selected app-world can exceed Node's default heap before MCP can return a shaped error. The MCP launch can use a larger heap for local preview, but the durable product answer is app-world profiling and inquiry-depth control so app-developer tools pay only for the substrate needed by the question. The app pressure lane can now narrow deep opening by project key or project root while preserving broad workspace discovery.",
+      "guidance": [
+        "Use this frontier when MCP app overview, semantic-runtime app opening, or large-app hand-testing shows heap, latency, or app-world construction pressure.",
+        "Prefer project-scoped opening after workspace overview has selected a project; do not make broad package-tsconfig discovery the default path for every app-world query in a monorepo.",
+        "Use an analysis-depth ladder for MCP first reads: runtime-topology can surface useful route/resource pressure when full binding-observation is too expensive.",
+        "Rely on semantic-runtime's default `openApp()` runtime-topology tier and query-catalog minimum-depth rows before asking for binding-observation.",
+        "When topology-depth selected app opening is still slow, inspect template compilation/runtime-analysis timings first; runtime rendering and scope construction can dominate before binding-observation products are even requested.",
+        "Use semantic-runtime `pressure:app-api` project-key or project-root filters for selected-app profiling before adding a one-off probe.",
+        "Use `aurelia_analysis_cache_overview` while hand-testing long-lived MCP sessions; request kernel breakdowns when the question is what the session is retaining, and clear the session when reclaiming memory because app records currently live in the workspace kernel.",
+        "For one-off routed MCP-style calls, use `answerAppQuery(...)` / `answerAppQueries(...)` with `appRetention='dispose-app'` and `typeSystemDependencyCacheClearPolicy` so app-world products, nested app query claims, and dependency SourceFile cache disposal are recorded on the runtime query claim.",
+        "Interpret RSS and rssOther together with heap-total, heap-used, dependency-cache counters, V8 heap statistics, and query-claim net kernel deltas. V8 can retain process heap capacity after semantic products and dependency SourceFiles have been reclaimed.",
+        "Profile app-world construction by phase before refactoring; likely owners include SemanticRuntime.openApp, AureliaAppWorldProjectConstructionFrame, TypeSystemProject, template runtime analysis, and query-depth policy.",
+        "Keep the MCP workaround operational and visible, but do not treat a larger heap as the product fix."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime",
+          "summary": "Workspace boot, project selection, and app-opening facade."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
+          "symbolName": "AureliaAppWorldProjectConstructionFrame",
+          "summary": "Phase owner for app-world construction and timings."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/runtime-adapter.ts",
+          "symbolName": "AureliaMcpSemanticRuntimeAdapter",
+          "summary": "MCP adapter surface that forwards app overview and app query requests."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/mcp/src/session-registry.ts",
+          "symbolName": "SemanticRuntimeSessionRegistry",
+          "summary": "Long-lived MCP session registry that now forwards semantic-runtime cache overview."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/mcp/README.md",
+          "summary": "Local MCP launch and heap-budget note."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/WORKBENCH.md",
+          "summary": "Generalized large-app app-world heap pressure note."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/README.md",
+          "summary": "Documented app pressure project filters."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/runtime.ts",
+          "symbolName": "SemanticRuntime"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
+          "symbolName": "AureliaAppWorldProjectConstructionFrame"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/mcp/src/runtime-adapter.ts",
+          "symbolName": "AureliaMcpSemanticRuntimeAdapter"
+        }
+      ],
+      "createdAt": "2026-05-16",
+      "updatedAt": "2026-05-17"
     }
   ]
 }

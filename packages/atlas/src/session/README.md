@@ -80,7 +80,7 @@ configuration and bundle exports are queryable through ordinary lenses such as `
 
 `ensureInquirySession()` computes the current session compatibility hash, probes that hash profile's manifest, reuses a
 compatible daemon, asks an incompatible daemon in the same profile to shut down, or starts a new detached process from
-`dist/session/daemon.js`. The hash intentionally changes when admitted TypeScript roots in Atlas, semantic-runtime, the
+`dist/session/daemon.js`. The hash intentionally changes when admitted TypeScript roots in Atlas, semantic-runtime, MCP, the
 Aurelia framework checkout, the public `aurelia2-plugins` checkout, or `ATLAS_EXTERNAL_SOURCE_ROOTS` clean-room source
 roots change, because the daemon owns a fixed source epoch for its lifetime. The compatibility hash is cached
 process-locally for the source-admission environment, so a script that issues several `createApi()` calls does not

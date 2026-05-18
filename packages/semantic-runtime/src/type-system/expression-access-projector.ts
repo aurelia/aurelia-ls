@@ -1,4 +1,4 @@
-import type { BindingScope } from '../configuration/scope.js';
+import type { BindingContextSlot, BindingScope } from '../configuration/scope.js';
 import type {
   AccessKeyedExpression,
   AccessMemberExpression,
@@ -60,6 +60,15 @@ export class CheckerExpressionAccessProjector {
     sourceAddressHandle: AddressHandle | null,
     runtimeContext: CheckerExpressionAccessRuntimeContext,
   ): CheckerExpressionTypeEvaluation {
+    const slotMember = this.evaluateSlotMemberRefinement(
+      expression,
+      scope,
+      `${localKey}:member:${expression.name.name}:slot-refinement`,
+    );
+    if (slotMember != null) {
+      return slotMember;
+    }
+
     const owner = this.host.evaluateNode(
       expression.object,
       scope,
@@ -249,6 +258,35 @@ export class CheckerExpressionAccessProjector {
     );
   }
 
+  private evaluateSlotMemberRefinement(
+    expression: AccessMemberExpression,
+    scope: BindingScope,
+    localKey: string,
+  ): CheckerExpressionTypeEvaluation | null {
+    const slot = accessScopeOwnerSlot(expression, scope);
+    if (slot == null) {
+      return null;
+    }
+    const memberType = slot.memberTypes.find((candidate) => candidate.name === expression.name.name) ?? null;
+    if (memberType == null) {
+      return null;
+    }
+
+    return this.support.resolveReference(
+      expression,
+      memberType.targetType,
+      localKey,
+      CheckerExpressionTypeOpenKind.MissingSlotType,
+      `Slot '${slot.name}' member '${expression.name.name}' had a type refinement but no projected type detail.`,
+      this.support.openSubject(
+        'scope-slot',
+        `${slot.name}.${expression.name.name}`,
+        memberType.sourceAddressHandle,
+        memberType.targetType,
+      ),
+    );
+  }
+
   private evaluateIndexSignatureAccess(
     expression: AccessKeyedExpression,
     ownerType: CheckerTypeShape,
@@ -299,6 +337,16 @@ export class CheckerExpressionAccessProjector {
     }
     return this.support.open(openKind, expression, openSummary, partialTypeReference);
   }
+}
+
+function accessScopeOwnerSlot(
+  expression: AccessMemberExpression,
+  scope: BindingScope,
+): BindingContextSlot | null {
+  if (expression.object.$kind !== 'AccessScope') {
+    return null;
+  }
+  return scope.lookup(expression.object.name.name, expression.object.ancestor).slot;
 }
 
 function literalPropertyKey(expression: IsAssign): string | null {

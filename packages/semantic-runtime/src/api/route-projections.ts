@@ -7,6 +7,8 @@ import type {
   RouteRecognizerIssueModel,
   RouterIssueModel,
   RecognizedRouteModel,
+  RouteParameterValueModel,
+  RouteQueryParameterValueModel,
   RouteRecognizerReference,
   RouteContextModel,
   RouteNodeModel,
@@ -36,7 +38,14 @@ import type {
   SemanticRouteEndpointRow,
   SemanticRecognizedRouteRow,
   SemanticRouteNodeRow,
+  SemanticRouteParameterAggregateValueRow,
+  SemanticRouteParameterAppendValueRow,
+  SemanticRouteParameterByRouteValueRow,
+  SemanticRouteParameterRouteValueRow,
+  SemanticRouteParameterValueRow,
+  SemanticRouteQueryParameterValueRow,
   SemanticRoutePatternRow,
+  SemanticRoutePatternParameterRow,
   SemanticRouteRecognizerIssueRow,
   SemanticRouteRecognizerStateRow,
   SemanticRouteRecognizerIssuesResult,
@@ -150,8 +159,12 @@ export function readRouteNodeRows(
   store: KernelStore,
   handles: boolean,
 ): readonly SemanticRouteNodeRow[] {
-  return emission.routeTree.readRouteNodes()
-    .map((routeNode) => routeNodeRow(emission, store, routeNode, handles))
+  const routeNodes = emission.routeTree.readRouteNodes();
+  const routeNodesByIdentity = new Map(
+    routeNodes.map((routeNode) => [routeNode.identityHandle, routeNode] as const),
+  );
+  return routeNodes
+    .map((routeNode) => routeNodeRow(emission, store, routeNode, routeNodesByIdentity, handles))
     .sort((left, right) =>
       `${left.routeContext.label ?? ''}:${left.path}:${left.source?.label ?? ''}`
         .localeCompare(`${right.routeContext.label ?? ''}:${right.path}:${right.source?.label ?? ''}`)
@@ -440,6 +453,8 @@ function viewportInstructionTreeRow(
     hasOptions: instructionTree.options != null,
     isAbsolute: instructionTree.isAbsolute,
     queryParamCount: instructionTree.queryParamCount,
+    ...routeQueryParameterValueGroups(routeQueryParameterValueRows(instructionTree.queryParams)),
+    queryParams: routeQueryParameterValueRows(instructionTree.queryParams),
     fragment: instructionTree.fragment,
     source: describeAddress(store, instructionTree.sourceAddressHandle),
     ...(handles ? {
@@ -473,6 +488,8 @@ function routeTreeRow(
     hasOptions: routeTree.options != null,
     nodeCount: routeTree.nodeCount,
     queryParamCount: routeTree.queryParamCount,
+    ...routeQueryParameterValueGroups(routeQueryParameterValueRows(routeTree.queryParams)),
+    queryParams: routeQueryParameterValueRows(routeTree.queryParams),
     fragment: routeTree.fragment,
     source: describeAddress(store, routeTree.sourceAddressHandle),
     ...(handles ? {
@@ -495,8 +512,12 @@ function routeNodeRow(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
   routeNode: RouteNodeModel,
+  routeNodesByIdentity: ReadonlyMap<RouteNodeModel['identityHandle'], RouteNodeModel>,
   handles: boolean,
 ): SemanticRouteNodeRow {
+  const parameterValues = routeParameterValueRows(routeNode.params);
+  const queryParams = routeQueryParameterValueRows(routeNode.queryParams);
+  const aggregation = routeNodeParameterAggregation(routeNode, routeNodesByIdentity);
   return {
     projectKey: emission.project.projectKey,
     path: routeNode.path,
@@ -506,7 +527,12 @@ function routeNodeRow(
     originalInstruction: routerProductReferenceRow(store, routeNode.originalInstruction),
     recognizedRoute: routeRecognizerReferenceRow(store, routeNode.recognizedRoute),
     parameterCount: routeNode.parameterCount,
+    ...routeParameterValueGroups(parameterValues),
+    parameterValues,
+    ...aggregation,
     queryParamCount: routeNode.queryParamCount,
+    ...routeQueryParameterValueGroups(queryParams),
+    queryParams,
     fragment: routeNode.fragment,
     hasData: routeNode.hasData,
     viewport: routeNode.viewport,
@@ -695,6 +721,7 @@ function routePatternRow(
   routePattern: ConfigurableRouteModel,
   handles: boolean,
 ): SemanticRoutePatternRow {
+  const parameterNameGroups = routeParameterNameGroups(routePattern.parameters);
   return {
     projectKey: emission.project.projectKey,
     parentPath: routePattern.parentPath,
@@ -703,6 +730,7 @@ function routePatternRow(
     caseSensitive: routePattern.caseSensitive,
     segmentCount: routePattern.segments.length,
     parameterCount: routePattern.parameters.length,
+    ...parameterNameGroups,
     segments: routePattern.segments.map((segment) => ({
       segmentKind: segment.segmentKind,
       raw: segment.raw,
@@ -751,11 +779,13 @@ function routeEndpointRow(
   routePattern: ConfigurableRouteModel,
   handles: boolean,
 ): SemanticRouteEndpointRow {
+  const parameterNameGroups = routeParameterNameGroups(endpoint.parameters);
   return {
     projectKey: emission.project.projectKey,
     path: endpoint.path,
     isResidual: endpoint.isResidual,
     parameterCount: endpoint.parameters.length,
+    ...parameterNameGroups,
     parameters: endpoint.parameters.map((parameter) => ({
       name: parameter.name,
       isOptional: parameter.isOptional,
@@ -927,12 +957,17 @@ function recognizedRouteRow(
   const endpoint = endpointIdentityHandle == null
     ? null
     : endpointsByIdentity.get(endpointIdentityHandle) ?? null;
+  const parameterNameGroups = routeParameterNameGroups(endpoint?.parameters ?? []);
+  const parameterValues = routeParameterValueRows(recognizedRoute.parameters);
   return {
     projectKey: emission.project.projectKey,
     path: recognizedRoute.path,
     residue: recognizedRoute.residue,
     hasResidue: recognizedRoute.residue != null,
     parameterCount: recognizedRoute.parameterCount,
+    ...parameterNameGroups,
+    ...routeParameterValueGroups(parameterValues),
+    parameterValues,
     redirectDepth: recognizedRoute.redirectDepth,
     redirectSourceRouteConfig: routeConfigReferenceRow(store, recognizedRoute.redirectSourceRouteConfig),
     recognizer: routeRecognizerReferenceRow(store, recognizedRoute.recognizer)!,
@@ -969,6 +1004,287 @@ function recognizedRouteRow(
         sourceAddressHandle: recognizedRoute.sourceAddressHandle,
       },
     } : {}),
+  };
+}
+
+function routeParameterValueRows(
+  parameters: readonly RouteParameterValueModel[],
+): readonly SemanticRouteParameterValueRow[] {
+  return parameters.map((parameter) => ({
+    name: parameter.name,
+    value: parameter.value,
+    isFulfilled: parameter.isFulfilled,
+    isResidue: parameter.isResidue,
+  }));
+}
+
+function routeQueryParameterValueRows(
+  parameters: readonly RouteQueryParameterValueModel[],
+): readonly SemanticRouteQueryParameterValueRow[] {
+  return parameters.map((parameter) => ({
+    name: parameter.name,
+    value: parameter.value,
+  }));
+}
+
+function routeQueryParameterValueGroups(
+  parameters: readonly SemanticRouteQueryParameterValueRow[],
+): Pick<
+  SemanticViewportInstructionTreeRow | SemanticRouteTreeRow | SemanticRouteNodeRow,
+  'queryParamNames' | 'queryParamPairs'
+> {
+  return {
+    queryParamNames: parameters.map((parameter) => parameter.name),
+    queryParamPairs: parameters.map((parameter) => `${parameter.name}=${parameter.value}`),
+  };
+}
+
+function routeParameterValueGroups(
+  parameters: readonly SemanticRouteParameterValueRow[],
+): Pick<SemanticRecognizedRouteRow, 'parameterValueNames' | 'fulfilledParameterNames' | 'parameterValuePairs'> {
+  return {
+    parameterValueNames: parameters.map((parameter) => parameter.name),
+    fulfilledParameterNames: parameters
+      .filter((parameter) => parameter.isFulfilled && !parameter.isResidue)
+      .map((parameter) => parameter.name),
+    parameterValuePairs: parameters
+      .filter((parameter) => parameter.isFulfilled)
+      .map((parameter) => `${parameter.name}=${parameter.value ?? ''}`),
+  };
+}
+
+function routeNodeParameterAggregation(
+  routeNode: RouteNodeModel,
+  routeNodesByIdentity: ReadonlyMap<RouteNodeModel['identityHandle'], RouteNodeModel>,
+): Pick<
+  SemanticRouteNodeRow,
+  | 'childFirstParameterNames'
+  | 'childFirstParameterValuePairs'
+  | 'parentFirstParameterNames'
+  | 'parentFirstParameterValuePairs'
+  | 'appendParameterValuePairs'
+  | 'appendParameterValues'
+  | 'byRouteParameterValuePairs'
+  | 'byRouteParameterValues'
+  | 'childFirstParameterAndQueryNames'
+  | 'childFirstParameterAndQueryValuePairs'
+  | 'childFirstParameterAndQueryValues'
+  | 'parentFirstParameterAndQueryNames'
+  | 'parentFirstParameterAndQueryValuePairs'
+  | 'parentFirstParameterAndQueryValues'
+  | 'appendParameterAndQueryValuePairs'
+  | 'appendParameterAndQueryValues'
+  | 'byRouteParameterAndQueryValuePairs'
+  | 'byRouteParameterAndQueryValues'
+> {
+  const chain = routeNodeAncestorChain(routeNode, routeNodesByIdentity);
+  const childFirst = new Map<string, SemanticRouteParameterAggregateValueRow>();
+  const parentFirst = new Map<string, SemanticRouteParameterAggregateValueRow>();
+  const childFirstWithQuery = new Map<string, SemanticRouteParameterAggregateValueRow>();
+  const parentFirstWithQuery = new Map<string, SemanticRouteParameterAggregateValueRow>();
+  const append = new Map<string, SemanticRouteParameterAggregateValueRow[]>();
+  const appendWithQuery = new Map<string, SemanticRouteParameterAggregateValueRow[]>();
+  const byRoute = new Map<string, Map<string, SemanticRouteParameterRouteValueRow>>();
+  const byRouteWithQuery = new Map<string, Map<string, SemanticRouteParameterRouteValueRow>>();
+  for (const node of chain) {
+    for (const parameter of routeNodeParameterAggregates(node, false)) {
+      appendChildFirstAggregateValue(childFirst, parameter);
+      parentFirst.set(parameter.name, parameter);
+      prependAppendParameterValue(append, parameter);
+      setByRouteParameterValue(byRoute, node, parameter);
+    }
+    for (const parameter of routeNodeParameterAggregates(node, true)) {
+      appendChildFirstAggregateValue(childFirstWithQuery, parameter);
+      parentFirstWithQuery.set(parameter.name, parameter);
+      prependAppendParameterValue(appendWithQuery, parameter);
+      setByRouteParameterValue(byRouteWithQuery, node, parameter);
+    }
+  }
+  const childFirstParameterAndQueryValues = [...childFirstWithQuery.values()];
+  const parentFirstParameterAndQueryValues = [...parentFirstWithQuery.values()];
+  const appendParameterValues = routeParameterAppendValueRows(append);
+  const byRouteParameterValues = routeParameterByRouteValueRows(byRoute);
+  const appendParameterAndQueryValues = routeParameterAppendValueRows(appendWithQuery);
+  const byRouteParameterAndQueryValues = routeParameterByRouteValueRows(byRouteWithQuery);
+  return {
+    childFirstParameterNames: [...childFirst.values()].map((value) => value.name),
+    childFirstParameterValuePairs: routeParameterAggregatePairs([...childFirst.values()]),
+    parentFirstParameterNames: [...parentFirst.values()].map((value) => value.name),
+    parentFirstParameterValuePairs: routeParameterAggregatePairs([...parentFirst.values()]),
+    appendParameterValuePairs: routeParameterAppendPairs(appendParameterValues),
+    appendParameterValues,
+    byRouteParameterValuePairs: routeParameterByRoutePairs(byRouteParameterValues),
+    byRouteParameterValues,
+    childFirstParameterAndQueryNames: childFirstParameterAndQueryValues.map((value) => value.name),
+    childFirstParameterAndQueryValuePairs: routeParameterAggregatePairs(childFirstParameterAndQueryValues),
+    childFirstParameterAndQueryValues,
+    parentFirstParameterAndQueryNames: parentFirstParameterAndQueryValues.map((value) => value.name),
+    parentFirstParameterAndQueryValuePairs: routeParameterAggregatePairs(parentFirstParameterAndQueryValues),
+    parentFirstParameterAndQueryValues,
+    appendParameterAndQueryValuePairs: routeParameterAppendPairs(appendParameterAndQueryValues),
+    appendParameterAndQueryValues,
+    byRouteParameterAndQueryValuePairs: routeParameterByRoutePairs(byRouteParameterAndQueryValues),
+    byRouteParameterAndQueryValues,
+  };
+}
+
+function routeNodeParameterAggregates(
+  routeNode: RouteNodeModel,
+  includeQueryParams: boolean,
+): readonly SemanticRouteParameterAggregateValueRow[] {
+  return [
+    ...(includeQueryParams ? routeNodeQueryParameterAggregates(routeNode.queryParams) : []),
+    ...routeNode.params.flatMap((parameter) => {
+      if (!parameter.isFulfilled || parameter.isResidue || parameter.value == null) {
+        return [];
+      }
+      return [routeParameterAggregateValue(parameter.name, [parameter.value], 'path')];
+    }),
+  ];
+}
+
+function routeNodeQueryParameterAggregates(
+  parameters: readonly RouteQueryParameterValueModel[],
+): readonly SemanticRouteParameterAggregateValueRow[] {
+  const grouped = new Map<string, string[]>();
+  for (const parameter of parameters) {
+    const bucket = grouped.get(parameter.name);
+    if (bucket == null) {
+      grouped.set(parameter.name, [parameter.value]);
+    } else {
+      bucket.push(parameter.value);
+    }
+  }
+  return [...grouped].map(([name, values]) => routeParameterAggregateValue(name, values, 'query'));
+}
+
+function routeParameterAggregateValue(
+  name: string,
+  values: readonly string[],
+  sourceKind: SemanticRouteParameterAggregateValueRow['sourceKind'],
+): SemanticRouteParameterAggregateValueRow {
+  return {
+    name,
+    value: values.length === 1 ? values[0]! : null,
+    values,
+    isMultiValue: values.length > 1,
+    sourceKind,
+  };
+}
+
+function appendChildFirstAggregateValue(
+  values: Map<string, SemanticRouteParameterAggregateValueRow>,
+  parameter: SemanticRouteParameterAggregateValueRow,
+): void {
+  if (!values.has(parameter.name)) {
+    values.set(parameter.name, parameter);
+  }
+}
+
+function prependAppendParameterValue(
+  values: Map<string, SemanticRouteParameterAggregateValueRow[]>,
+  parameter: SemanticRouteParameterAggregateValueRow,
+): void {
+  const bucket = values.get(parameter.name) ?? [];
+  values.set(parameter.name, [parameter, ...bucket]);
+}
+
+function setByRouteParameterValue(
+  values: Map<string, Map<string, SemanticRouteParameterRouteValueRow>>,
+  routeNode: RouteNodeModel,
+  parameter: SemanticRouteParameterAggregateValueRow,
+): void {
+  const routeId = routeNodeIdentifier(routeNode);
+  const bucket = values.get(parameter.name) ?? new Map<string, SemanticRouteParameterRouteValueRow>();
+  bucket.set(routeId, {
+    routeId,
+    routeContextLabel: routeNode.routeContext.localName,
+    value: parameter,
+  });
+  values.set(parameter.name, bucket);
+}
+
+function routeNodeIdentifier(routeNode: RouteNodeModel): string {
+  return routeNode.config?.localName
+    ?? routeNode.routeContext.localName
+    ?? routeNode.path
+    ?? routeNode.identityHandle;
+}
+
+function routeNodeAncestorChain(
+  routeNode: RouteNodeModel,
+  routeNodesByIdentity: ReadonlyMap<RouteNodeModel['identityHandle'], RouteNodeModel>,
+): readonly RouteNodeModel[] {
+  const chain: RouteNodeModel[] = [];
+  const seen = new Set<RouteNodeModel['identityHandle']>();
+  let current: RouteNodeModel | null = routeNode;
+  while (current != null && !seen.has(current.identityHandle)) {
+    seen.add(current.identityHandle);
+    chain.push(current);
+    const parentIdentity: RouteNodeModel['identityHandle'] | null = current.parent?.identityHandle ?? null;
+    current = parentIdentity == null ? null : routeNodesByIdentity.get(parentIdentity) ?? null;
+  }
+  return chain;
+}
+
+function routeParameterAggregatePairs(parameters: readonly SemanticRouteParameterAggregateValueRow[]): readonly string[] {
+  return parameters.map((parameter) =>
+    `${parameter.name}=${routeParameterAggregateValueDisplay(parameter)}`
+  );
+}
+
+function routeParameterAppendValueRows(
+  parameters: ReadonlyMap<string, readonly SemanticRouteParameterAggregateValueRow[]>,
+): readonly SemanticRouteParameterAppendValueRow[] {
+  return [...parameters].map(([name, values]) => ({
+    name,
+    valueDisplays: values.map(routeParameterAggregateValueDisplay),
+    values,
+  }));
+}
+
+function routeParameterAppendPairs(parameters: readonly SemanticRouteParameterAppendValueRow[]): readonly string[] {
+  return parameters.map((parameter) => `${parameter.name}=[${parameter.valueDisplays.join(',')}]`);
+}
+
+function routeParameterByRouteValueRows(
+  parameters: ReadonlyMap<string, ReadonlyMap<string, SemanticRouteParameterRouteValueRow>>,
+): readonly SemanticRouteParameterByRouteValueRow[] {
+  return [...parameters].map(([name, values]) => ({
+    name,
+    routeValues: [...values.values()],
+  }));
+}
+
+function routeParameterByRoutePairs(parameters: readonly SemanticRouteParameterByRouteValueRow[]): readonly string[] {
+  return parameters.flatMap((parameter) =>
+    parameter.routeValues.map((routeValue) =>
+      `${parameter.name}@${routeValue.routeId}=${routeParameterAggregateValueDisplay(routeValue.value)}`
+    )
+  );
+}
+
+function routeParameterAggregateValueDisplay(parameter: SemanticRouteParameterAggregateValueRow): string {
+  return parameter.isMultiValue
+    ? `[${parameter.values.join(',')}]`
+    : parameter.value ?? '';
+}
+
+function routeParameterNameGroups(parameters: readonly SemanticRoutePatternParameterRow[]): Pick<
+  SemanticRoutePatternRow,
+  'parameterNames' | 'requiredParameterNames' | 'optionalParameterNames' | 'starParameterNames'
+> {
+  return {
+    parameterNames: parameters.map((parameter) => parameter.name),
+    requiredParameterNames: parameters
+      .filter((parameter) => !parameter.isOptional && !parameter.isStar)
+      .map((parameter) => parameter.name),
+    optionalParameterNames: parameters
+      .filter((parameter) => parameter.isOptional)
+      .map((parameter) => parameter.name),
+    starParameterNames: parameters
+      .filter((parameter) => parameter.isStar)
+      .map((parameter) => parameter.name),
   };
 }
 

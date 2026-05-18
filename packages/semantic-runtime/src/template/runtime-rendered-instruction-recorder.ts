@@ -1,6 +1,7 @@
 import { SemanticClaim, nullableClaim } from '../kernel/claim.js';
 import type {
   ClaimHandle,
+  IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
 import {
@@ -171,6 +172,7 @@ export class RuntimeRenderedInstructionRecorder {
     this.recordBinding(
       rendered.local,
       binding,
+      rendered.instruction.identityHandle,
       rendered.renderer,
       source,
       records,
@@ -187,6 +189,7 @@ export class RuntimeRenderedInstructionRecorder {
   private recordBinding(
     local: string,
     binding: RuntimeBinding,
+    instructionIdentityHandle: IdentityHandle,
     renderer: RuntimeRenderer,
     source: RuntimeRenderingSourceSet,
     records: KernelStoreRecord[],
@@ -210,7 +213,7 @@ export class RuntimeRenderedInstructionRecorder {
       controllerBindingClaimHandles,
     );
     bindings.push(binding);
-    records.push(...this.recordsForRuntimeBinding(binding, semanticBindingKindKey, publication, source));
+    records.push(...this.recordsForRuntimeBinding(binding, instructionIdentityHandle, semanticBindingKindKey, publication, source));
   }
 
   private publishRuntimeBinding(
@@ -237,6 +240,7 @@ export class RuntimeRenderedInstructionRecorder {
 
   private recordsForRuntimeBinding(
     binding: RuntimeBinding,
+    instructionIdentityHandle: IdentityHandle,
     semanticBindingKindKey: BindingKindKey,
     publication: RuntimeBindingPublication,
     source: RuntimeRenderingSourceSet,
@@ -244,7 +248,7 @@ export class RuntimeRenderedInstructionRecorder {
     return [
       new BindingIdentity(
         binding.identityHandle,
-        binding.instructionIdentityHandle,
+        instructionIdentityHandle,
         semanticBindingKindKey,
       ),
       new MaterializedProduct(

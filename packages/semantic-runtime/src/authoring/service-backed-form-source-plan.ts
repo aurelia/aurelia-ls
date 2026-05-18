@@ -10,6 +10,10 @@ import {
   fillSourceTemplate,
   sourceText,
 } from './source-template.js';
+import {
+  formFieldShellComponentFile,
+  formFieldShellTemplateFile,
+} from './form-field-shell-source-plan.js';
 
 export interface ServiceBackedFormSourcePlanModel {
   readonly rootDir: string;
@@ -28,6 +32,10 @@ export interface ServiceBackedFormSourcePlanModel {
   readonly formTemplatePath: string;
   readonly formComponentClassName: string;
   readonly formElementName: string;
+  readonly fieldShellComponentPath: string;
+  readonly fieldShellTemplatePath: string;
+  readonly fieldShellClassName: string;
+  readonly fieldShellElementName: string;
 }
 
 export function serviceBackedFormSourcePlan(model: ServiceBackedFormSourcePlanModel): AuthoringSourceEditPlan {
@@ -52,6 +60,8 @@ function serviceBackedFormSourceFiles(
     serviceBackedFormRootStyleFile(model),
     serviceBackedFormStateFile(model),
     serviceBackedFormServiceFile(model),
+    formFieldShellComponentFile(model),
+    formFieldShellTemplateFile(model),
     serviceBackedFormComponentFile(model),
     serviceBackedFormTemplateFile(model),
   ];
@@ -147,6 +157,8 @@ function serviceBackedFormComponentFile(model: ServiceBackedFormSourcePlanModel)
     fillSourceTemplate(FORM_COMPONENT_SOURCE, {
       FORM_COMPONENT_CLASS: model.formComponentClassName,
       FORM_ELEMENT_NAME: model.formElementName,
+      FIELD_SHELL_CLASS: model.fieldShellClassName,
+      FIELD_SHELL_MODULE: moduleSpecifier(model.formComponentPath, model.fieldShellComponentPath, false),
       FORM_TEMPLATE_MODULE: moduleSpecifier(model.formComponentPath, model.formTemplatePath, true),
       STATE_CLASS: model.stateClassName,
       STATE_MODULE: moduleSpecifier(model.formComponentPath, model.statePath, false),
@@ -160,7 +172,9 @@ function serviceBackedFormTemplateFile(model: ServiceBackedFormSourcePlanModel):
     'template',
     'html',
     'create-external-template',
-    FORM_TEMPLATE_SOURCE,
+    fillSourceTemplate(FORM_TEMPLATE_SOURCE, {
+      FIELD_SHELL_ELEMENT_NAME: model.fieldShellElementName,
+    }),
   );
 }
 
@@ -189,23 +203,7 @@ import '__ROOT_STYLE_MODULE__';
   dependencies: [__FORM_COMPONENT_CLASS__],
 })
 export class __ROOT_COMPONENT_CLASS__ {
-  private readonly state = resolve(__STATE_CLASS__);
-
-  get requestIds(): readonly string[] {
-    return this.state.requestIds;
-  }
-
-  get selectedRequestId(): string {
-    return this.state.selectedRequestId;
-  }
-
-  set selectedRequestId(value: string) {
-    this.state.selectedRequestId = value;
-  }
-
-  get submittedCount(): number {
-    return this.state.submittedCount;
-  }
+  readonly state = resolve(__STATE_CLASS__);
 
   binding(): void {
     void this.state.loadRequests();
@@ -216,13 +214,13 @@ export class __ROOT_COMPONENT_CLASS__ {
 const ROOT_TEMPLATE_SOURCE = sourceText(`<main>
   <h1>Service request</h1>
   <label for="request-selector">Request</label>
-  <select id="request-selector" value.bind="selectedRequestId">
-    <option repeat.for="requestId of requestIds" model.bind="requestId">\${requestId}</option>
+  <select id="request-selector" value.bind="state.selectedRequestId">
+    <option repeat.for="requestId of state.requestIds" model.bind="requestId">\${requestId}</option>
   </select>
 
-  <__FORM_ELEMENT_NAME__ request-id.bind="selectedRequestId"></__FORM_ELEMENT_NAME__>
+  <__FORM_ELEMENT_NAME__ request-id.bind="state.selectedRequestId"></__FORM_ELEMENT_NAME__>
 
-  <p>\${submittedCount} submitted request(s)</p>
+  <p>\${state.submittedCount} submitted request(s)</p>
 </main>
 `);
 
@@ -260,6 +258,7 @@ export interface ServiceRequest {
   email: string;
   urgent: boolean;
   contactPreference: ContactPreference;
+  primaryTopic: RequestTopic | null;
   topics: RequestTopic[];
   notes: string;
   submitCount: number;
@@ -337,6 +336,13 @@ export class __STATE_CLASS__ {
     }
   }
 
+  updatePrimaryTopic(requestId: string, value: RequestTopic | null): void {
+    const request = this.readRequest(requestId);
+    if (request != null) {
+      request.primaryTopic = value;
+    }
+  }
+
   updateNotes(requestId: string, value: string): void {
     const request = this.readRequest(requestId);
     if (request != null) {
@@ -383,6 +389,7 @@ function createRequest(id: string, customerName: string): ServiceRequest {
     email: \`\${customerName.toLowerCase().replace(' ', '.')}@example.test\`,
     urgent: false,
     contactPreference: 'email',
+    primaryTopic: null,
     topics: ['support'],
     notes: '',
     submitCount: 0,
@@ -392,15 +399,17 @@ function createRequest(id: string, customerName: string): ServiceRequest {
 
 const FORM_COMPONENT_SOURCE = sourceText(`import { bindable, customElement } from '@aurelia/runtime-html';
 import { resolve } from '@aurelia/kernel';
-import { __STATE_CLASS__, type ContactPreference, type RequestTopic, type RequestTopicSummary } from '__STATE_MODULE__';
+import { __STATE_CLASS__, type ContactPreference, type RequestTopic } from '__STATE_MODULE__';
+import { __FIELD_SHELL_CLASS__ } from '__FIELD_SHELL_MODULE__';
 import template from '__FORM_TEMPLATE_MODULE__';
 
 @customElement({
   name: '__FORM_ELEMENT_NAME__',
   template,
+  dependencies: [__FIELD_SHELL_CLASS__],
 })
 export class __FORM_COMPONENT_CLASS__ {
-  private readonly state = resolve(__STATE_CLASS__);
+  readonly state = resolve(__STATE_CLASS__);
 
   @bindable requestId = '';
 
@@ -429,11 +438,19 @@ export class __FORM_COMPONENT_CLASS__ {
   }
 
   get contactPreference(): ContactPreference {
-    return this.request?.contactPreference ?? this.emailPreference;
+    return this.request?.contactPreference ?? this.state.emailPreference;
   }
 
   set contactPreference(value: ContactPreference) {
     this.state.updateContactPreference(this.requestId, value);
+  }
+
+  get primaryTopic(): RequestTopic | null {
+    return this.request?.primaryTopic ?? null;
+  }
+
+  set primaryTopic(value: RequestTopic | null) {
+    this.state.updatePrimaryTopic(this.requestId, value);
   }
 
   get topics(): RequestTopic[] {
@@ -446,30 +463,6 @@ export class __FORM_COMPONENT_CLASS__ {
 
   set notes(value: string) {
     this.state.updateNotes(this.requestId, value);
-  }
-
-  get emailPreference(): ContactPreference {
-    return this.state.emailPreference;
-  }
-
-  get phonePreference(): ContactPreference {
-    return this.state.phonePreference;
-  }
-
-  get hardwareTopic(): RequestTopic {
-    return this.state.hardwareTopic;
-  }
-
-  get billingTopic(): RequestTopic {
-    return this.state.billingTopic;
-  }
-
-  get supportTopic(): RequestTopic {
-    return this.state.supportTopic;
-  }
-
-  get supportTopicSummary(): RequestTopicSummary {
-    return this.state.supportTopicSummary;
   }
 
   get canSubmit(): boolean {
@@ -487,11 +480,19 @@ export class __FORM_COMPONENT_CLASS__ {
 `);
 
 const FORM_TEMPLATE_SOURCE = sourceText(`<form class.bind="canSubmit ? 'form-ready' : 'form-pending'" submit.trigger="submit()">
-  <label for="customer-name">Name</label>
-  <input id="customer-name" value.bind="customerName">
+  <__FIELD_SHELL_ELEMENT_NAME__
+    input-id="customer-name"
+    label="Name"
+    type="text"
+    value.bind="customerName">
+  </__FIELD_SHELL_ELEMENT_NAME__>
 
-  <label for="email">Email</label>
-  <input id="email" type="email" value.bind="email">
+  <__FIELD_SHELL_ELEMENT_NAME__
+    input-id="email"
+    label="Email"
+    type="email"
+    value.bind="email">
+  </__FIELD_SHELL_ELEMENT_NAME__>
 
   <label>
     <input type="checkbox" checked.bind="urgent">
@@ -501,21 +502,29 @@ const FORM_TEMPLATE_SOURCE = sourceText(`<form class.bind="canSubmit ? 'form-rea
   <fieldset>
     <legend>Contact preference</legend>
     <label>
-      <input type="radio" model.bind="emailPreference" checked.bind="contactPreference">
+      <input type="radio" model.bind="state.emailPreference" checked.bind="contactPreference">
       Email
     </label>
     <label>
-      <input type="radio" model.bind="phonePreference" checked.bind="contactPreference">
+      <input type="radio" model.bind="state.phonePreference" checked.bind="contactPreference">
       Phone
     </label>
   </fieldset>
 
-  <label for="topics">Topics</label>
-  <p>Default topic: \${supportTopicSummary.label}</p>
+  <label for="primary-topic">Primary topic</label>
+  <p>Default topic: \${state.supportTopicSummary.label}</p>
+  <select id="primary-topic" value.bind="primaryTopic">
+    <option model.bind="null">Choose...</option>
+    <option model.bind="state.hardwareTopic">Hardware</option>
+    <option model.bind="state.billingTopic">Billing</option>
+    <option model.bind="state.supportTopic">Support</option>
+  </select>
+
+  <label for="topics">Additional topics</label>
   <select id="topics" multiple value.bind="topics">
-    <option model.bind="hardwareTopic">Hardware</option>
-    <option model.bind="billingTopic">Billing</option>
-    <option model.bind="supportTopic">Support</option>
+    <option model.bind="state.hardwareTopic">Hardware</option>
+    <option model.bind="state.billingTopic">Billing</option>
+    <option model.bind="state.supportTopic">Support</option>
   </select>
 
   <label for="notes">Notes</label>

@@ -321,8 +321,6 @@ export class BindingCommandBuildInput {
     readonly attribute: HtmlAttributeReference,
     /** Parsed attribute syntax product, when available. */
     readonly syntaxProductHandle: ProductHandle | null,
-    /** Compiler-owned value site that transferred ownership to this command, when available. */
-    readonly expressionSiteProductHandle: ProductHandle | null,
     /** Owning definition product for the selected bindable, when the bindable is source-backed. */
     readonly bindableOwnerProductHandle: ProductHandle | null,
     /** Resource or element definition product relevant to the command input, when known. */

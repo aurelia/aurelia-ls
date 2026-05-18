@@ -48,6 +48,11 @@ still be realistic app code rather than artificial parser torture cases.
 - `class-style-interpolation-boundaries` captures class and style attributes with multiple interpolation holes and
   JavaScript template expressions inside those holes. It preserves interpolation boundary, class/style accessor, and
   value-channel pressure without treating the fixture as a recommended styling pattern.
+- `i18n-translation-binding-errors` captures invalid rendered i18n translation binding lifecycles: missing translation
+  keys, duplicate parameter bindings on one target element, and non-string dynamic key expressions. It preserves
+  `AUR4000`, `AUR4001`, and `AUR4002` diagnostic pressure without teaching generated authoring recipes to emit invalid
+  translation bindings. Static translation catalogs and positive rendered binding groups are now covered separately by
+  the generated localized authoring fixture through `api.I18nTranslationKeys` and `api.I18nTranslationBindings`.
 - `implicit-binding-expression-inference` captures empty `.bind`, `.two-way`, and `.from-view` command values where
   Aurelia infers the source expression from the authored target name while target-property mapping remains separate. It
   preserves framework compiler behavior such as `minlength.bind` reading `minlength` even when the DOM target property
@@ -59,8 +64,8 @@ still be realistic app code rather than artificial parser torture cases.
   preserves runtime `ast_track_decorator_not_a_method` / `AUR0117` pressure in the observation source-issue lane without
   teaching authoring recipes to decorate non-method members.
 - `checked-select-custom-matcher` captures `matcher.bind` on checked and select observers with object-valued
-  `model.bind` options. It preserves the observer comparison semantics as value-channel facts without teaching generated
-  authoring recipes to prefer matcher-heavy forms.
+  `model.bind` options. It preserves the observer comparison handoff as value-channel facts and authoring
+  `custom-matcher-comparison` taste without teaching generated authoring recipes to prefer matcher-heavy forms.
 - `router-dynamic-pattern` captures router-resource `href` values produced by view-model methods returning a static
   route prefix with a runtime repeat-local hole, an external-link-like field, and a bare external-module boundary. It
   pressures evaluator string-pattern propagation, router recognition, and runtime-boundary repair planning without
@@ -87,6 +92,12 @@ still be realistic app code rather than artificial parser torture cases.
   string child routeable when multiple custom elements share the same resource name. It preserves Aurelia's
   `resolveCustomElementDefinition(...)` dependency-scope lookup before root-container fallback without teaching
   authoring recipes to create duplicate custom-element names.
+- `router-route-parameter-aggregation` captures nested routed components where parent and child route configs both use
+  the same `:id` parameter name. It preserves `IRouteContext.getRouteParameters()` child-first/parent-first aggregation
+  pressure, append/by-route strategy projection, recursive residual-route recognition, nested `RouteNode` /
+  `ComponentAgent` projection, closed static query parameter inclusion with duplicate query keys, fragment propagation,
+  and active route-node parameter value projection without teaching generated authoring recipes to prefer ambiguous
+  repeated parameter names.
 - `repeat-keyed-iterables` captures nested `repeat.for` locals whose iterable comes from nullable arrays and finite
   keyed records such as `Record<'one' | 'two', Item[]>`. It preserves the TypeChecker handoff needed for public plugin
   and app templates where a repeat local indexes a mapped record before a deeper child repeat reads item members.
@@ -107,10 +118,22 @@ still be realistic app code rather than artificial parser torture cases.
   appear before, between, or after other bound attributes. It pressure-tests the value-channel handoff from bound
   `multiple` evidence into single, multiple, and dynamic `SelectValueObserver` modes, including a dynamic source that
   must accept both scalar option values and array-valued selection updates.
+- `select-model-primitives` mirrors Aurelia forms docs/tests where `option model.bind="null"`, boolean option models,
+  object-valued option models, and nullable radio `model.bind` values are framework-valid. It preserves primitive
+  `model.bind` value-domain pressure so semantic-runtime does not flatten null/boolean/number model values into the
+  string-only `valueDomain` lane.
 - `runtime-html-au-compose-errors` captures static `AuCompose` bindable setter failures for invalid `scope-behavior`
   and `flush-mode` literals. It preserves the controller-owned handoff from compiler-lowered `SetPropertyInstruction`
   rows to exact runtime-html `AUR0805` / `AUR0809` diagnostics while leaving runtime composition/lifecycle errors out
   of this fixture.
+- `au-compose-dynamic-composition` captures docs-shaped dynamic composition: a repeat-local model carries a custom
+  element constructor into `<au-compose component.bind>` and the same local into `model.bind`, a static component name
+  resolves through the parent container, promise-valued component/template inputs preserve the evaluator promise
+  fulfillment lane, while sibling template-only compositions use a plain object view-model component and a non-resource
+  class component. It pressures Aurelia's runtime-html composition controller semantics, candidate template analysis
+  coverage, child-container handoff, object/class view-model composition, static component name resolution, and
+  `activate(model)` boundary without claiming live recursive
+  composed-child hydration.
 - `runtime-html-spread-renderer-errors` captures a valid custom-element bindable spread beside `$element.spread` on the
   same custom element. It preserves the `SpreadValueRenderer` dispatch failure for `spreading_invalid_target` /
   `AUR0820` without making invalid spread targets part of generated authoring recipes.

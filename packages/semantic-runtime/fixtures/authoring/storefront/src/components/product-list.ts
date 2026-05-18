@@ -11,16 +11,12 @@ import template from './product-list.html';
   dependencies: [AvailabilityBadge, ProductCard],
 })
 export class ProductList {
-  private readonly state = resolve(StorefrontState);
+  readonly state = resolve(StorefrontState);
   availabilityBadge: AvailabilityBadge | null = null;
   featuredCard: ProductCard | null = null;
 
-  get productIds(): readonly string[] {
-    return this.state.catalog.productIds;
-  }
-
   get featuredProductId(): string {
-    return this.productIds[0] ?? '';
+    return this.state.catalog.productIds[0] ?? '';
   }
 
   get featuredCardBindings(): { productId: string } {

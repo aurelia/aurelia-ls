@@ -18,8 +18,6 @@ import type {
 import {
   ConfigurationIdentity,
   DiProductIdentity,
-  InterfaceDiKeyIdentity,
-  ResourceDiKeyIdentity,
 } from '../kernel/identity.js';
 import {
   MaterializationRecord,
@@ -90,6 +88,7 @@ import {
   ContainerSelfResolverSlot,
 } from './container-slot.js';
 import type { DiIssue } from './di-issue.js';
+import { DiKeyIdentityEmitter } from './di-key-identity-emitter.js';
 import { DiIssuePublisher } from './di-issue-publication.js';
 import {
   Resolver,
@@ -222,53 +221,6 @@ function recordsForPublishedDiProduct(
       [spec.providesKeyClaimHandle],
     ),
   ];
-}
-
-export class DiKeyIdentityEmitter {
-  private readonly emittedIdentityHandles = new Set<IdentityHandle>();
-
-  constructor(private readonly store: KernelStore) {}
-
-  reset(): void {
-    this.emittedIdentityHandles.clear();
-  }
-
-  emitInterfaceKeyIdentity(
-    records: KernelStoreRecord[],
-    handle: IdentityHandle,
-    interfaceName: string,
-    addressHandle: AddressHandle | null,
-  ): void {
-    if (this.emittedIdentityHandles.has(handle) || this.store.readIdentity(handle) != null) {
-      return;
-    }
-    this.emittedIdentityHandles.add(handle);
-    records.push(new InterfaceDiKeyIdentity(
-      handle,
-      interfaceName,
-      null,
-      addressHandle,
-    ));
-  }
-
-  emitResourceKeyIdentity(
-    records: KernelStoreRecord[],
-    handle: IdentityHandle,
-    resourceIdentityHandle: IdentityHandle,
-    resourceKey: string,
-    addressHandle: AddressHandle | null,
-  ): void {
-    if (this.emittedIdentityHandles.has(handle) || this.store.readIdentity(handle) != null) {
-      return;
-    }
-    this.emittedIdentityHandles.add(handle);
-    records.push(new ResourceDiKeyIdentity(
-      handle,
-      resourceIdentityHandle,
-      resourceKey,
-      addressHandle,
-    ));
-  }
 }
 
 export function recordsForDiSource(

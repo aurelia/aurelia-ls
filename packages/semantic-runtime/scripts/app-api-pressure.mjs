@@ -23,6 +23,9 @@ const defaultAppApiPressureAnalysisKinds = new Set([
 const roots = pressureRoots();
 const analysisDepth = pressureAnalysisDepth();
 const projectShapeFilter = pressureProjectShapeFilter();
+const projectKeyFilter = pressureProjectKeyFilter();
+const projectRootDirFilter = pressureProjectRootDirFilter();
+const projectDiscovery = pressureProjectDiscovery();
 const detailMode = pressureDetailMode();
 const outputMode = pressureOutputMode();
 const authoringSourceFileLimitPerProject = integerEnv('SEMANTIC_RUNTIME_APP_AUTHORING_SOURCE_FILE_LIMIT_PER_PROJECT', 12);
@@ -33,6 +36,9 @@ console.log('note: compact/summary detail buckets source-assignment and open-sea
 console.log('note: raw detail may include source-level names; do not promote it from external clean-room roots without manual abstraction');
 console.log(`analysis-depth: ${analysisDepth}`);
 console.log(`project-shapes: ${projectShapeFilter == null ? 'all' : [...projectShapeFilter].join(',')}`);
+console.log(`project-keys: ${projectKeyFilter == null ? 'all' : `${projectKeyFilter.size} selected`}`);
+console.log(`project-root-dirs: ${projectRootDirFilter == null ? 'all' : `${projectRootDirFilter.length} selected`}`);
+console.log(`project-discovery: ${projectDiscovery ?? 'default'}`);
 console.log(`default-analysis-policy: ${projectShapeFilter == null ? 'app-world,resource-library-authoring' : 'shape-filter-explicit'}`);
 console.log(`detail-mode: ${detailMode}`);
 console.log(`output-mode: ${outputMode}`);
@@ -110,6 +116,8 @@ function printInputSummary(aggregate, requestMilliseconds) {
     metricPart('stateStores', aggregate.stateStores),
     metricPart('diResolve', aggregate.diResolveCallSites),
     metricPart('diIssues', aggregate.diIssues),
+    metricPart('i18nKeys', aggregate.i18nTranslationKeys),
+    metricPart('i18nBindings', aggregate.i18nTranslationBindings),
     metricPart('bindables', aggregate.bindables),
     metricPart('watches', aggregate.watches),
     metricPart('topologyServices', aggregate.appTopologyServices),
@@ -119,6 +127,12 @@ function printInputSummary(aggregate, requestMilliseconds) {
     metricPart('stateCompositions', aggregate.appTopologyStateCompositions),
     metricPart('topologyStyles', aggregate.appTopologyStyles),
     metricPart('componentRoles', aggregate.appTopologyComponentRoles),
+    metricPart('runtimeCompositions', aggregate.runtimeCompositions),
+    metricPart('runtimeCompositionCandidates', aggregate.runtimeCompositionResolvedComponents),
+    metricPart('runtimeCompositionTemplates', aggregate.runtimeCompositionCompiledTemplates),
+    metricPart('runtimeCompositionCandidateResourceAnalyses', aggregate.runtimeCompositionCandidateResourceAnalyses),
+    metricPart('runtimeCompositionComposedControllers', aggregate.runtimeCompositionComposedChildControllers),
+    metricPart('runtimeCompositionModelHandoffs', aggregate.runtimeCompositionModelAssignableHandoffs),
     metricPart('authoringSources', aggregate.authoringSourceFilesRequested),
     metricPart('authoringTemplates', aggregate.authoringTemplatesSeen),
   ].filter(Boolean);
@@ -160,6 +174,7 @@ function printInputSummary(aggregate, requestMilliseconds) {
     metricPart('appDiagnostics', aggregate.appDiagnostics),
     metricPart('resourceIssues', aggregate.resourceIssues),
     metricPart('openFlows', aggregate.openBindingDataFlows),
+    metricPart('openRuntimeCompositions', aggregate.openRuntimeCompositions),
     metricPart('assignmentPressure', aggregate.bindingDataFlowSourceAssignmentPressures),
     metricPart('unresolvedEdges', aggregate.unresolvedModuleEdges),
     metricPart('openSeams', aggregate.openSeams),
@@ -282,6 +297,7 @@ function printAggregateCounts(aggregate) {
   }
   printCounts('project shape kinds', aggregate.projectShapeKinds);
   printCounts('fixture lanes', aggregate.fixtureLaneKinds);
+  printCounts('skipped project filters', aggregate.skippedProjectFilters);
   printCounts('project analysis kinds', aggregate.projectAnalysisKinds);
   printCounts('skipped project analysis kinds', aggregate.skippedProjectAnalysisKinds);
   printCounts('project source roles', aggregate.projectSourceRoles);
@@ -325,6 +341,34 @@ function printAggregateCounts(aggregate) {
   printCounts('app topology state composition roles', aggregate.appTopologyStateCompositionRoles);
   printCounts('app topology state composition value type shapes', aggregate.appTopologyStateCompositionValueTypeShapes);
   printCounts('app topology state composition source coverage', aggregate.appTopologyStateCompositionSourceCoverage);
+  printCounts('runtime composition component resolution', aggregate.runtimeCompositionComponentResolutionKinds);
+  printCounts('runtime composition model resolution', aggregate.runtimeCompositionModelResolutionKinds);
+  printCounts('runtime composition scope behavior', aggregate.runtimeCompositionScopeBehavior);
+  printCounts('runtime composition flush mode', aggregate.runtimeCompositionFlushMode);
+  printCounts('runtime composition tag', aggregate.runtimeCompositionTag);
+  printCounts('runtime composition component input', aggregate.runtimeCompositionComponentInput);
+  printCounts('runtime composition template input', aggregate.runtimeCompositionTemplateInput);
+  printCounts('runtime composition component input fulfillment', aggregate.runtimeCompositionComponentInputFulfillmentKinds);
+  printCounts('runtime composition template input fulfillment', aggregate.runtimeCompositionTemplateInputFulfillmentKinds);
+  printCounts('runtime composition model input fulfillment', aggregate.runtimeCompositionModelInputFulfillmentKinds);
+  printCounts('runtime composition static component name', aggregate.runtimeCompositionStaticComponentName);
+  printCounts('runtime composition template binding', aggregate.runtimeCompositionTemplateBinding);
+  printCounts('runtime composition composition binding', aggregate.runtimeCompositionCompositionBinding);
+  printCounts('runtime composition composing binding', aggregate.runtimeCompositionComposingBinding);
+  printCounts('runtime composition candidate counts', aggregate.runtimeCompositionCandidateCounts);
+  printCounts('runtime composition compiled-template counts', aggregate.runtimeCompositionCompiledTemplateCounts);
+  printCounts('runtime composition candidate resource-analysis states', aggregate.runtimeCompositionCandidateResourceAnalysisStates);
+  printCounts('runtime composition candidate resource-analysis counts', aggregate.runtimeCompositionCandidateResourceAnalysisCounts);
+  printCounts('runtime composition candidate resource-controller counts', aggregate.runtimeCompositionCandidateResourceControllerCounts);
+  printCounts('runtime composition candidate resource-controller creation kinds', aggregate.runtimeCompositionCandidateResourceControllerCreationKinds);
+  printCounts('runtime composition composed child-controller counts', aggregate.runtimeCompositionComposedChildControllerCounts);
+  printCounts('runtime composition composed child-controller creation kinds', aggregate.runtimeCompositionComposedChildControllerCreationKinds);
+  printCounts('runtime composition activation handoff kinds', aggregate.runtimeCompositionActivationHandoffKinds);
+  printCounts('runtime composition activation parameter types', aggregate.runtimeCompositionActivationParameterTypes, 12);
+  printCounts('runtime composition activation assignability', aggregate.runtimeCompositionActivationAssignability);
+  printCounts('runtime composition source coverage', aggregate.runtimeCompositionSourceCoverage);
+  printCounts('runtime composition open reasons', aggregate.runtimeCompositionOpenReasons, 12);
+  printCounts('runtime composition open reason kinds', aggregate.runtimeCompositionOpenReasonKinds, 12);
   printCounts('app topology style asset kinds', aggregate.appTopologyStyleAssetKinds);
   printCounts('app topology style source kinds', aggregate.appTopologyStyleSourceKinds);
   printCounts('app topology style owner kinds', aggregate.appTopologyStyleOwnerKinds);
@@ -334,6 +378,17 @@ function printAggregateCounts(aggregate) {
   printCounts('state store initial-state kinds', aggregate.stateStoreInitialStateKinds);
   printCounts('state store options-or-handler kinds', aggregate.stateStoreOptionsOrHandlerKinds);
   printCounts('state store action-handler counts', aggregate.stateStoreActionHandlerCounts);
+  printCounts('i18n translation key locale states', aggregate.i18nTranslationKeyLocaleStates);
+  printCounts('i18n translation key namespace states', aggregate.i18nTranslationKeyNamespaceStates);
+  printCounts('i18n translation key source coverage', aggregate.i18nTranslationKeySourceCoverage);
+  printCounts('i18n translation key source kinds', aggregate.i18nTranslationKeySourceKinds);
+  printCounts('i18n translation key segment counts', aggregate.i18nTranslationKeySegmentCounts);
+  printCounts('i18n translation binding key expression kinds', aggregate.i18nTranslationBindingKeyExpressionKinds);
+  printCounts('i18n translation binding target properties', aggregate.i18nTranslationBindingTargetProperties);
+  printCounts('i18n translation binding target kinds', aggregate.i18nTranslationBindingTargetKinds);
+  printCounts('i18n translation binding parameter presence', aggregate.i18nTranslationBindingParameterPresence);
+  printCounts('i18n translation binding issue counts', aggregate.i18nTranslationBindingIssueCounts);
+  printCounts('i18n translation binding framework code presence', aggregate.i18nTranslationBindingFrameworkErrorCodePresence);
   printCounts('authoring catalog taste axis layers', aggregate.authoringCatalogTasteAxisLayers);
   printCounts('authoring catalog taste axis value layers', aggregate.authoringCatalogTasteAxisValueLayers, 36);
   printCounts('authoring catalog taste axis primitive-policy value counts', aggregate.authoringCatalogTasteAxisPrimitivePolicyValueCounts);
@@ -485,6 +540,35 @@ function printAggregateCounts(aggregate) {
   printRouterPressureCounts(aggregate);
   printCounts('runtime controllers: creation kinds', aggregate.runtimeControllerCreationKinds);
   printCounts('runtime controllers: hydration handoff', aggregate.runtimeControllerHydrationHandoff);
+  printCounts('runtime controllers: child-view rendering state', aggregate.runtimeControllerChildViewRenderingState);
+  printCounts('runtime composition component resolution', aggregate.runtimeCompositionComponentResolutionKinds);
+  printCounts('runtime composition model resolution', aggregate.runtimeCompositionModelResolutionKinds);
+  printCounts('runtime composition scope behavior', aggregate.runtimeCompositionScopeBehavior);
+  printCounts('runtime composition flush mode', aggregate.runtimeCompositionFlushMode);
+  printCounts('runtime composition tag', aggregate.runtimeCompositionTag);
+  printCounts('runtime composition component input', aggregate.runtimeCompositionComponentInput);
+  printCounts('runtime composition template input', aggregate.runtimeCompositionTemplateInput);
+  printCounts('runtime composition component input fulfillment', aggregate.runtimeCompositionComponentInputFulfillmentKinds);
+  printCounts('runtime composition template input fulfillment', aggregate.runtimeCompositionTemplateInputFulfillmentKinds);
+  printCounts('runtime composition model input fulfillment', aggregate.runtimeCompositionModelInputFulfillmentKinds);
+  printCounts('runtime composition static component name', aggregate.runtimeCompositionStaticComponentName);
+  printCounts('runtime composition template binding', aggregate.runtimeCompositionTemplateBinding);
+  printCounts('runtime composition composition binding', aggregate.runtimeCompositionCompositionBinding);
+  printCounts('runtime composition composing binding', aggregate.runtimeCompositionComposingBinding);
+  printCounts('runtime composition candidate counts', aggregate.runtimeCompositionCandidateCounts);
+  printCounts('runtime composition compiled-template counts', aggregate.runtimeCompositionCompiledTemplateCounts);
+  printCounts('runtime composition candidate resource-analysis states', aggregate.runtimeCompositionCandidateResourceAnalysisStates);
+  printCounts('runtime composition candidate resource-analysis counts', aggregate.runtimeCompositionCandidateResourceAnalysisCounts);
+  printCounts('runtime composition candidate resource-controller counts', aggregate.runtimeCompositionCandidateResourceControllerCounts);
+  printCounts('runtime composition candidate resource-controller creation kinds', aggregate.runtimeCompositionCandidateResourceControllerCreationKinds);
+  printCounts('runtime composition composed child-controller counts', aggregate.runtimeCompositionComposedChildControllerCounts);
+  printCounts('runtime composition composed child-controller creation kinds', aggregate.runtimeCompositionComposedChildControllerCreationKinds);
+  printCounts('runtime composition activation handoff kinds', aggregate.runtimeCompositionActivationHandoffKinds);
+  printCounts('runtime composition activation parameter types', aggregate.runtimeCompositionActivationParameterTypes, 12);
+  printCounts('runtime composition activation assignability', aggregate.runtimeCompositionActivationAssignability);
+  printCounts('runtime composition source coverage', aggregate.runtimeCompositionSourceCoverage);
+  printCounts('runtime composition open reasons', aggregate.runtimeCompositionOpenReasons, 12);
+  printCounts('runtime composition open reason kinds', aggregate.runtimeCompositionOpenReasonKinds, 12);
   printCounts('bindable modes', aggregate.bindableModes);
   printCounts('bindable effective value type shapes', aggregate.bindableEffectiveValueTypeShapes);
   printCounts('bindable value type weak', aggregate.bindableValueTypeWeak);
@@ -572,6 +656,7 @@ function printCompactAggregateCounts(aggregate) {
   printCompactCounts('projects.shape', aggregate.projectShapeKinds);
   printCompactCounts('inputs.fixture-lanes', aggregate.fixtureLaneKinds);
   printCompactCounts('inputs.fixture-keys', aggregate.fixtureKeys, 8);
+  printCompactCounts('projects.skipped-filter', aggregate.skippedProjectFilters);
   printCompactCounts('projects.analysis', aggregate.projectAnalysisKinds);
   printCompactCounts('projects.skipped-analysis', aggregate.skippedProjectAnalysisKinds);
   printCompactCounts('projects.shape-reasons', aggregate.projectShapeReasons);
@@ -605,6 +690,29 @@ function printCompactAggregateCounts(aggregate) {
   printCompactCounts('resources.kinds', aggregate.resourceKinds);
   printCompactCounts('resources.issues', aggregate.resourceIssueKinds);
   printCompactCounts('resources.error-codes', aggregate.resourceIssueFrameworkErrorCodes);
+  printCompactCounts('controllers.child-view-rendering', aggregate.runtimeControllerChildViewRenderingState);
+  printCompactCounts('runtime-compositions.component-resolution', aggregate.runtimeCompositionComponentResolutionKinds);
+  printCompactCounts('runtime-compositions.model-resolution', aggregate.runtimeCompositionModelResolutionKinds);
+  printCompactCounts('runtime-compositions.scope-behavior', aggregate.runtimeCompositionScopeBehavior);
+  printCompactCounts('runtime-compositions.flush-mode', aggregate.runtimeCompositionFlushMode);
+  printCompactCounts('runtime-compositions.tag', aggregate.runtimeCompositionTag);
+  printCompactCounts('runtime-compositions.component-input', aggregate.runtimeCompositionComponentInput);
+  printCompactCounts('runtime-compositions.template-input', aggregate.runtimeCompositionTemplateInput);
+  printCompactCounts('runtime-compositions.component-input-fulfillment', aggregate.runtimeCompositionComponentInputFulfillmentKinds);
+  printCompactCounts('runtime-compositions.template-input-fulfillment', aggregate.runtimeCompositionTemplateInputFulfillmentKinds);
+  printCompactCounts('runtime-compositions.model-input-fulfillment', aggregate.runtimeCompositionModelInputFulfillmentKinds);
+  printCompactCounts('runtime-compositions.static-component-name', aggregate.runtimeCompositionStaticComponentName);
+  printCompactCounts('runtime-compositions.template-binding', aggregate.runtimeCompositionTemplateBinding);
+  printCompactCounts('runtime-compositions.composition-binding', aggregate.runtimeCompositionCompositionBinding);
+  printCompactCounts('runtime-compositions.composing-binding', aggregate.runtimeCompositionComposingBinding);
+  printCompactCounts('runtime-compositions.candidate-counts', aggregate.runtimeCompositionCandidateCounts);
+  printCompactCounts('runtime-compositions.compiled-template-counts', aggregate.runtimeCompositionCompiledTemplateCounts);
+  printCompactCounts('runtime-compositions.candidate-resource-analysis', aggregate.runtimeCompositionCandidateResourceAnalysisStates);
+  printCompactCounts('runtime-compositions.candidate-resource-controller-counts', aggregate.runtimeCompositionCandidateResourceControllerCounts);
+  printCompactCounts('runtime-compositions.composed-child-controller-counts', aggregate.runtimeCompositionComposedChildControllerCounts);
+  printCompactCounts('runtime-compositions.activation-handoffs', aggregate.runtimeCompositionActivationHandoffKinds);
+  printCompactCounts('runtime-compositions.activation-assignability', aggregate.runtimeCompositionActivationAssignability);
+  printCompactCounts('runtime-compositions.open-reasons', aggregate.runtimeCompositionOpenReasons);
   printCompactCounts('di.key-kinds', aggregate.diKeyIdentityKinds);
   printCompactCounts('state.stores', aggregate.stateStoreDefaultness);
 
@@ -668,6 +776,7 @@ function printRawAggregateCounts(aggregate) {
   printCounts('project shape kinds', aggregate.projectShapeKinds);
   printCounts('fixture lanes', aggregate.fixtureLaneKinds);
   printCounts('fixture keys', aggregate.fixtureKeys, 36);
+  printCounts('skipped project filters', aggregate.skippedProjectFilters);
   printCounts('skipped project shape kinds', aggregate.skippedProjectShapeKinds);
   printCounts('project analysis kinds', aggregate.projectAnalysisKinds);
   printCounts('skipped project analysis kinds', aggregate.skippedProjectAnalysisKinds);
@@ -698,6 +807,30 @@ function printRawAggregateCounts(aggregate) {
   printCounts('app topology state composition roles', aggregate.appTopologyStateCompositionRoles);
   printCounts('app topology state composition value type shapes', aggregate.appTopologyStateCompositionValueTypeShapes);
   printCounts('app topology state composition source coverage', aggregate.appTopologyStateCompositionSourceCoverage);
+  printCounts('runtime composition component resolution', aggregate.runtimeCompositionComponentResolutionKinds);
+  printCounts('runtime composition model resolution', aggregate.runtimeCompositionModelResolutionKinds);
+  printCounts('runtime composition scope behavior', aggregate.runtimeCompositionScopeBehavior);
+  printCounts('runtime composition flush mode', aggregate.runtimeCompositionFlushMode);
+  printCounts('runtime composition tag', aggregate.runtimeCompositionTag);
+  printCounts('runtime composition component input', aggregate.runtimeCompositionComponentInput);
+  printCounts('runtime composition template input', aggregate.runtimeCompositionTemplateInput);
+  printCounts('runtime composition component input fulfillment', aggregate.runtimeCompositionComponentInputFulfillmentKinds);
+  printCounts('runtime composition template input fulfillment', aggregate.runtimeCompositionTemplateInputFulfillmentKinds);
+  printCounts('runtime composition model input fulfillment', aggregate.runtimeCompositionModelInputFulfillmentKinds);
+  printCounts('runtime composition static component name', aggregate.runtimeCompositionStaticComponentName);
+  printCounts('runtime composition template binding', aggregate.runtimeCompositionTemplateBinding);
+  printCounts('runtime composition composition binding', aggregate.runtimeCompositionCompositionBinding);
+  printCounts('runtime composition composing binding', aggregate.runtimeCompositionComposingBinding);
+  printCounts('runtime composition candidate counts', aggregate.runtimeCompositionCandidateCounts);
+  printCounts('runtime composition compiled-template counts', aggregate.runtimeCompositionCompiledTemplateCounts);
+  printCounts('runtime composition composed child-controller counts', aggregate.runtimeCompositionComposedChildControllerCounts);
+  printCounts('runtime composition composed child-controller creation kinds', aggregate.runtimeCompositionComposedChildControllerCreationKinds);
+  printCounts('runtime composition activation handoff kinds', aggregate.runtimeCompositionActivationHandoffKinds);
+  printCounts('runtime composition activation parameter types', aggregate.runtimeCompositionActivationParameterTypes, 12);
+  printCounts('runtime composition activation assignability', aggregate.runtimeCompositionActivationAssignability);
+  printCounts('runtime composition source coverage', aggregate.runtimeCompositionSourceCoverage);
+  printCounts('runtime composition open reasons', aggregate.runtimeCompositionOpenReasons, 12);
+  printCounts('runtime composition open reason kinds', aggregate.runtimeCompositionOpenReasonKinds, 12);
   printCounts('app topology style asset kinds', aggregate.appTopologyStyleAssetKinds);
   printCounts('app topology style source kinds', aggregate.appTopologyStyleSourceKinds);
   printCounts('app topology style owner kinds', aggregate.appTopologyStyleOwnerKinds);
@@ -865,6 +998,7 @@ function printRawAggregateCounts(aggregate) {
   printCounts('runtime controllers: creation kinds', aggregate.runtimeControllerCreationKinds);
   printCounts('runtime controllers: readiness', aggregate.runtimeControllerReadiness);
   printCounts('runtime controllers: hydration handoff', aggregate.runtimeControllerHydrationHandoff);
+  printCounts('runtime controllers: child-view rendering state', aggregate.runtimeControllerChildViewRenderingState);
   printCounts('route trees: options', aggregate.routeTreeOptions);
   printCounts('route trees: instruction tree', aggregate.routeTreeInstructionTree);
   printCounts('route trees: node count', aggregate.routeTreeNodeCount);
@@ -946,6 +1080,8 @@ function printRawAggregateCounts(aggregate) {
   printCounts('binding value-channel raw target type surfaces', aggregate.bindingValueChannelRawTypeSurfaces, 18);
   printCounts('binding value-channel runtime type surfaces', aggregate.bindingValueChannelRuntimeTypeSurfaces, 18);
   printCounts('binding value-channel domain counts', aggregate.bindingValueChannelDomainCounts, 18);
+  printCounts('binding value-channel primitive domain counts', aggregate.bindingValueChannelPrimitiveDomainCounts, 18);
+  printCounts('binding value-channel primitive domain kinds', aggregate.bindingValueChannelPrimitiveDomainKinds, 18);
   printCounts('binding value-channel open reasons', aggregate.bindingValueChannelOpenReasons, 12);
   printCounts('watch expression kinds', aggregate.watchExpressionKinds);
   printCounts('watch expression property-key kinds', aggregate.watchExpressionPropertyKeyKinds);
@@ -1018,10 +1154,11 @@ async function readPressureForRoot(root) {
   const runtime = await measure(timings, 'create-runtime', () =>
     createSemanticRuntime({
       workspaceRoot: root,
+      projectDiscovery,
     }),
   );
   const summary = await measure(timings, 'workspace-summary', () =>
-    runtime.summary().value,
+    runtime.summary({ projectPage: { size: Number.MAX_SAFE_INTEGER } }).value,
   );
   const aggregate = {
     projects: summary.projects.length,
@@ -1080,9 +1217,21 @@ async function readPressureForRoot(root) {
     viewportAgents: 0,
     componentAgents: 0,
     appTasks: 0,
+    i18nTranslationKeys: 0,
+    i18nTranslationBindings: 0,
     diKeyIdentities: 0,
     diResolveCallSites: 0,
     runtimeControllers: 0,
+    runtimeCompositions: 0,
+    runtimeCompositionResolvedComponents: 0,
+    runtimeCompositionCompiledTemplates: 0,
+    runtimeCompositionCandidateResourceAnalyses: 0,
+    runtimeCompositionCandidateResourceControllers: 0,
+    runtimeCompositionComposedChildControllers: 0,
+    runtimeCompositionModelAssignableHandoffs: 0,
+    runtimeCompositionModelUnassignableHandoffs: 0,
+    runtimeCompositionOpenHandoffs: 0,
+    openRuntimeCompositions: 0,
     bindables: 0,
     watches: 0,
     templateDiagnostics: 0,
@@ -1108,6 +1257,7 @@ async function readPressureForRoot(root) {
     fixtureLaneKinds: {},
     fixtureKeys: {},
     resourceKinds: {},
+    skippedProjectFilters: {},
     resourceDeclarationModes: {},
     diKeyIdentityKinds: {},
     diKeyIdentityDeclarationCoverage: {},
@@ -1164,6 +1314,35 @@ async function readPressureForRoot(root) {
     runtimeControllerCreationKinds: {},
     runtimeControllerReadiness: {},
     runtimeControllerHydrationHandoff: {},
+    runtimeControllerChildViewRenderingState: {},
+    runtimeCompositionComponentResolutionKinds: {},
+    runtimeCompositionModelResolutionKinds: {},
+    runtimeCompositionScopeBehavior: {},
+    runtimeCompositionFlushMode: {},
+    runtimeCompositionTag: {},
+    runtimeCompositionComponentInput: {},
+    runtimeCompositionTemplateInput: {},
+    runtimeCompositionComponentInputFulfillmentKinds: {},
+    runtimeCompositionTemplateInputFulfillmentKinds: {},
+    runtimeCompositionModelInputFulfillmentKinds: {},
+    runtimeCompositionStaticComponentName: {},
+    runtimeCompositionTemplateBinding: {},
+    runtimeCompositionCompositionBinding: {},
+    runtimeCompositionComposingBinding: {},
+    runtimeCompositionCandidateCounts: {},
+    runtimeCompositionCompiledTemplateCounts: {},
+    runtimeCompositionCandidateResourceAnalysisStates: {},
+    runtimeCompositionCandidateResourceAnalysisCounts: {},
+    runtimeCompositionCandidateResourceControllerCounts: {},
+    runtimeCompositionCandidateResourceControllerCreationKinds: {},
+    runtimeCompositionComposedChildControllerCounts: {},
+    runtimeCompositionComposedChildControllerCreationKinds: {},
+    runtimeCompositionActivationHandoffKinds: {},
+    runtimeCompositionActivationParameterTypes: {},
+    runtimeCompositionActivationAssignability: {},
+    runtimeCompositionSourceCoverage: {},
+    runtimeCompositionOpenReasons: {},
+    runtimeCompositionOpenReasonKinds: {},
     routeTreeOptions: {},
     routeTreeInstructionTree: {},
     routeTreeNodeCount: {},
@@ -1191,6 +1370,17 @@ async function readPressureForRoot(root) {
     routerIssueKinds: {},
     routerIssueFrameworkErrorCodes: {},
     routerIssueFrameworkErrorCodeFixtureKeys: {},
+    i18nTranslationKeyLocaleStates: {},
+    i18nTranslationKeyNamespaceStates: {},
+    i18nTranslationKeySourceCoverage: {},
+    i18nTranslationKeySourceKinds: {},
+    i18nTranslationKeySegmentCounts: {},
+    i18nTranslationBindingKeyExpressionKinds: {},
+    i18nTranslationBindingTargetProperties: {},
+    i18nTranslationBindingTargetKinds: {},
+    i18nTranslationBindingParameterPresence: {},
+    i18nTranslationBindingIssueCounts: {},
+    i18nTranslationBindingFrameworkErrorCodePresence: {},
     recognizedRouteResidue: {},
     recognizedRouteParameters: {},
     recognizedRouteRedirectDepth: {},
@@ -1245,6 +1435,8 @@ async function readPressureForRoot(root) {
     bindingValueChannelRawTypeSurfaces: {},
     bindingValueChannelRuntimeTypeSurfaces: {},
     bindingValueChannelDomainCounts: {},
+    bindingValueChannelPrimitiveDomainCounts: {},
+    bindingValueChannelPrimitiveDomainKinds: {},
     bindingValueChannelOpenReasons: {},
     watchExpressionKinds: {},
     watchExpressionPropertyKeyKinds: {},
@@ -1519,6 +1711,11 @@ async function readPressureForRoot(root) {
       increment(aggregate.skippedProjectShapeKinds, project.shapeKind);
       continue;
     }
+    const projectFilterMiss = skippedProjectFilterReason(project, root);
+    if (projectFilterMiss != null) {
+      increment(aggregate.skippedProjectFilters, projectFilterMiss);
+      continue;
+    }
     if (projectShapeFilter == null && !defaultAppApiPressureAnalysisKinds.has(project.analysisKind)) {
       increment(aggregate.skippedProjectAnalysisKinds, project.analysisKind);
       continue;
@@ -1581,6 +1778,8 @@ async function readPressureForRoot(root) {
       aggregate.viewportAgents += appSummary.viewportAgents;
       aggregate.componentAgents += appSummary.componentAgents;
       aggregate.appTasks += appSummary.appTasks;
+      aggregate.i18nTranslationKeys += appSummary.i18nTranslationKeys;
+      aggregate.i18nTranslationBindings += appSummary.i18nTranslationBindings;
       recordDiKeyIdentities(aggregate, runtime.workspace.store);
       aggregate.stateStores += appSummary.stateStores;
       aggregate.diResolveCallSites += appSummary.diResolveCallSites;
@@ -1618,6 +1817,37 @@ async function readPressureForRoot(root) {
         increment(aggregate.stateStoreInitialStateKinds, row.initialStateKind ?? 'none');
         increment(aggregate.stateStoreOptionsOrHandlerKinds, row.optionsOrHandlerKind);
         increment(aggregate.stateStoreActionHandlerCounts, cardinalityBucket(row.actionHandlerCount));
+      }
+
+      const i18nTranslationKeyRows = await measure(timings, 'query-i18n-translation-keys', () =>
+        pagedRows(app, SemanticAppQueryKind.I18nTranslationKeys),
+      );
+      increment(aggregate.outcomes, `i18n-translation-keys:${i18nTranslationKeyRows.outcome}`);
+      increment(aggregate.pageCounts, 'i18n-translation-keys', i18nTranslationKeyRows.pages);
+      for (const row of i18nTranslationKeyRows.rows) {
+        increment(aggregate.i18nTranslationKeyLocaleStates, row.locale == null ? 'none' : 'present');
+        increment(aggregate.i18nTranslationKeyNamespaceStates, row.namespace == null ? 'none' : 'present');
+        increment(aggregate.i18nTranslationKeySourceCoverage, row.source == null ? 'none' : 'source');
+        increment(aggregate.i18nTranslationKeySourceKinds, row.source?.kind ?? 'unknown');
+        increment(aggregate.i18nTranslationKeySegmentCounts, cardinalityBucket(String(row.key ?? '').split('.').filter(Boolean).length));
+      }
+
+      const i18nTranslationBindingRows = await measure(timings, 'query-i18n-translation-bindings', () =>
+        pagedRows(app, SemanticAppQueryKind.I18nTranslationBindings),
+      );
+      increment(aggregate.outcomes, `i18n-translation-bindings:${i18nTranslationBindingRows.outcome}`);
+      increment(aggregate.pageCounts, 'i18n-translation-bindings', i18nTranslationBindingRows.pages);
+      for (const row of i18nTranslationBindingRows.rows) {
+        increment(aggregate.i18nTranslationBindingKeyExpressionKinds, row.keyExpressionKind ?? 'unknown');
+        for (const targetProperty of row.targetProperties ?? []) {
+          increment(aggregate.i18nTranslationBindingTargetProperties, targetProperty);
+        }
+        for (const targetKind of row.targetKinds ?? []) {
+          increment(aggregate.i18nTranslationBindingTargetKinds, targetKind);
+        }
+        increment(aggregate.i18nTranslationBindingParameterPresence, String(row.hasParameterBinding));
+        increment(aggregate.i18nTranslationBindingIssueCounts, cardinalityBucket(row.issueCount ?? 0));
+        increment(aggregate.i18nTranslationBindingFrameworkErrorCodePresence, row.frameworkErrorCodes?.length > 0 ? 'present' : 'none');
       }
 
       const resourceRows = await measure(timings, 'query-resources', () =>
@@ -1873,6 +2103,76 @@ async function readPressureForRoot(root) {
         increment(aggregate.runtimeControllerCreationKinds, row.creationKind);
         increment(aggregate.runtimeControllerReadiness, row.controllerReadiness);
         increment(aggregate.runtimeControllerHydrationHandoff, row.hydrationHandoffKind);
+        increment(aggregate.runtimeControllerChildViewRenderingState, row.childViewRenderingState);
+      }
+
+      const runtimeCompositionRows = await measure(timings, 'query-runtime-compositions', () =>
+        pagedRows(app, SemanticAppQueryKind.RuntimeCompositions),
+      );
+      increment(aggregate.outcomes, `runtime-compositions:${runtimeCompositionRows.outcome}`);
+      increment(aggregate.pageCounts, 'runtime-compositions', runtimeCompositionRows.pages);
+      aggregate.runtimeCompositions += runtimeCompositionRows.rows.length;
+      for (const row of runtimeCompositionRows.rows) {
+        aggregate.runtimeCompositionResolvedComponents += row.resolvedComponentCount ?? 0;
+        aggregate.runtimeCompositionCompiledTemplates += row.compiledTemplateCount ?? 0;
+        aggregate.runtimeCompositionCandidateResourceAnalyses += row.candidateResourceAnalysisCount ?? 0;
+        aggregate.runtimeCompositionCandidateResourceControllers += row.candidateResourceControllerCount ?? 0;
+        aggregate.runtimeCompositionComposedChildControllers += row.composedChildControllerCount ?? 0;
+        increment(aggregate.runtimeCompositionComponentResolutionKinds, row.componentResolutionKind);
+        increment(aggregate.runtimeCompositionModelResolutionKinds, row.modelResolutionKind);
+        increment(aggregate.runtimeCompositionScopeBehavior, row.scopeBehavior ?? 'dynamic-or-open');
+        increment(aggregate.runtimeCompositionFlushMode, row.flushMode ?? 'dynamic-or-open');
+        increment(aggregate.runtimeCompositionTag, row.tag ?? 'none');
+        increment(aggregate.runtimeCompositionComponentInput, row.hasComponentInput ? 'present' : 'absent');
+        increment(aggregate.runtimeCompositionTemplateInput, row.hasTemplateInput ? 'present' : 'absent');
+        increment(aggregate.runtimeCompositionComponentInputFulfillmentKinds, row.componentInputFulfillmentKind ?? 'unknown');
+        increment(aggregate.runtimeCompositionTemplateInputFulfillmentKinds, row.templateInputFulfillmentKind ?? 'unknown');
+        increment(aggregate.runtimeCompositionModelInputFulfillmentKinds, row.modelInputFulfillmentKind ?? 'unknown');
+        increment(aggregate.runtimeCompositionStaticComponentName, row.staticComponentName == null ? 'absent' : 'present');
+        increment(aggregate.runtimeCompositionTemplateBinding, row.hasTemplateBinding ? 'present' : 'absent');
+        increment(aggregate.runtimeCompositionCompositionBinding, row.hasCompositionBinding ? 'present' : 'absent');
+        increment(aggregate.runtimeCompositionComposingBinding, row.hasComposingBinding ? 'present' : 'absent');
+        increment(aggregate.runtimeCompositionCandidateCounts, cardinalityBucket(row.resolvedComponentCount ?? 0));
+        increment(aggregate.runtimeCompositionCompiledTemplateCounts, cardinalityBucket(row.compiledTemplateCount ?? 0));
+        increment(aggregate.runtimeCompositionCandidateResourceAnalysisStates, row.candidateResourceAnalysisState ?? 'unknown');
+        increment(aggregate.runtimeCompositionCandidateResourceAnalysisCounts, cardinalityBucket(row.candidateResourceAnalysisCount ?? 0));
+        increment(aggregate.runtimeCompositionCandidateResourceControllerCounts, cardinalityBucket(row.candidateResourceControllerCount ?? 0));
+        for (const creationKind of row.candidateResourceControllerCreationKinds ?? []) {
+          increment(aggregate.runtimeCompositionCandidateResourceControllerCreationKinds, creationKind);
+        }
+        increment(aggregate.runtimeCompositionComposedChildControllerCounts, cardinalityBucket(row.composedChildControllerCount ?? 0));
+        for (const creationKind of row.composedChildControllerCreationKinds ?? []) {
+          increment(aggregate.runtimeCompositionComposedChildControllerCreationKinds, creationKind);
+        }
+        for (const handoffKind of row.activationHandoffKinds ?? []) {
+          increment(aggregate.runtimeCompositionActivationHandoffKinds, handoffKind);
+        }
+        for (const parameterType of row.activationParameterTypes ?? []) {
+          increment(aggregate.runtimeCompositionActivationParameterTypes, parameterType);
+        }
+        aggregate.runtimeCompositionModelAssignableHandoffs += row.modelAssignableToActivationParameterCount ?? 0;
+        aggregate.runtimeCompositionModelUnassignableHandoffs += row.modelUnassignableToActivationParameterCount ?? 0;
+        aggregate.runtimeCompositionOpenHandoffs += row.activationOpenReasonCount ?? 0;
+        increment(
+          aggregate.runtimeCompositionActivationAssignability,
+          `assignable:${row.modelAssignableToActivationParameterCount ?? 0}`,
+        );
+        increment(
+          aggregate.runtimeCompositionActivationAssignability,
+          `unassignable:${row.modelUnassignableToActivationParameterCount ?? 0}`,
+        );
+        increment(
+          aggregate.runtimeCompositionActivationAssignability,
+          `open:${row.activationOpenReasonCount ?? 0}`,
+        );
+        increment(aggregate.runtimeCompositionSourceCoverage, sourceReferenceState(row.source));
+        if (row.openReason != null) {
+          aggregate.openRuntimeCompositions += 1;
+          increment(aggregate.runtimeCompositionOpenReasons, row.openReason);
+        }
+        for (const reasonKind of row.reasonKinds ?? []) {
+          increment(aggregate.runtimeCompositionOpenReasonKinds, reasonKind);
+        }
       }
 
       const routeTreeRows = await measure(timings, 'query-route-trees', () =>
@@ -2077,6 +2377,10 @@ async function readPressureForRoot(root) {
           increment(aggregate.bindingValueChannelRawTypeSurfaces, typeSurfaceKey(row.rawTargetPropertyType));
           increment(aggregate.bindingValueChannelRuntimeTypeSurfaces, typeSurfaceKey(row.runtimeValueType));
           increment(aggregate.bindingValueChannelDomainCounts, cardinalityBucket(row.valueDomain?.length ?? 0));
+          increment(aggregate.bindingValueChannelPrimitiveDomainCounts, cardinalityBucket(row.primitiveValueDomain?.length ?? 0));
+          for (const kind of row.primitiveValueDomainKinds ?? []) {
+            increment(aggregate.bindingValueChannelPrimitiveDomainKinds, kind);
+          }
           if (row.openReason != null) {
             increment(aggregate.bindingValueChannelOpenReasons, row.openReason);
           }
@@ -2806,6 +3110,26 @@ function pressureProjectShapeFilter() {
   return new Set(values);
 }
 
+function pressureProjectKeyFilter() {
+  return stringSetEnv('SEMANTIC_RUNTIME_PRESSURE_PROJECT_KEYS');
+}
+
+function pressureProjectRootDirFilter() {
+  return stringListEnv('SEMANTIC_RUNTIME_PRESSURE_PROJECT_ROOT_DIRS');
+}
+
+function pressureProjectDiscovery() {
+  const raw = process.env.SEMANTIC_RUNTIME_PRESSURE_PROJECT_DISCOVERY;
+  if (raw == null || raw.trim().length === 0) {
+    return undefined;
+  }
+  const value = raw.trim();
+  if (value === 'single-root' || value === 'package-tsconfig') {
+    return value;
+  }
+  throw new Error(`Unsupported SEMANTIC_RUNTIME_PRESSURE_PROJECT_DISCOVERY '${raw}'.`);
+}
+
 function pressureDetailMode() {
   const raw = process.env.SEMANTIC_RUNTIME_PRESSURE_DETAIL;
   if (raw == null || raw.trim().length === 0) {
@@ -2828,6 +3152,41 @@ function pressureOutputMode() {
     return value;
   }
   throw new Error(`Unsupported SEMANTIC_RUNTIME_PRESSURE_OUTPUT '${raw}'.`);
+}
+
+function skippedProjectFilterReason(project, root) {
+  if (projectKeyFilter != null && !projectKeyFilter.has(project.projectKey)) {
+    return 'project-key';
+  }
+  if (projectRootDirFilter != null && !projectRootDirMatchesFilter(project.rootDir, root, projectRootDirFilter)) {
+    return 'project-root-dir';
+  }
+  return null;
+}
+
+function projectRootDirMatchesFilter(projectRootDir, root, filters) {
+  return filters.some((filter) => {
+    const expectedRoot = path.isAbsolute(filter)
+      ? path.resolve(filter)
+      : path.resolve(root, filter);
+    return samePath(projectRootDir, expectedRoot);
+  });
+}
+
+function stringSetEnv(name) {
+  const values = stringListEnv(name);
+  return values == null ? null : new Set(values);
+}
+
+function stringListEnv(name) {
+  const raw = process.env[name];
+  if (raw == null || raw.trim().length === 0) {
+    return null;
+  }
+  return raw
+    .split(/[;,]/)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
 }
 
 function authoringTemplateSourceFilesForProject(project, projectFrame) {
@@ -2880,7 +3239,22 @@ function openSeamSummaryKey(row) {
   if (row.reasonKinds?.length > 0) {
     return `${row.seamKindKey} :: ${row.reasonKinds.join('+')}`;
   }
-  return `${row.seamKindKey} :: ${row.summary}`;
+  return `${row.seamKindKey} :: ${generalizedOpenSeamSummary(row)}`;
+}
+
+function generalizedOpenSeamSummary(row) {
+  switch (row.seamKindKey) {
+    case 'evaluation.unresolved-identifier':
+      return 'unresolved identifier';
+    case 'evaluation.unsupported-statement':
+      return 'unsupported evaluator statement';
+    case 'evaluation.unsupported-expression':
+      return 'unsupported evaluator expression';
+    case 'evaluation.dynamic-mutation':
+      return 'dynamic mutation needs runtime value';
+    default:
+      return 'no reason-kind summary';
+  }
 }
 
 function typeSurfaceKey(type) {

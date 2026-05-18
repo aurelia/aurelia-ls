@@ -1,4 +1,5 @@
 import path from 'node:path';
+import { performance } from 'node:perf_hooks';
 import type ts from 'typescript';
 import type {
   ProjectBootFrame,
@@ -19,11 +20,14 @@ import type {
 import {
   buildEvaluationModuleGraph,
   FileSystemEvaluationModuleSourceHost,
+  type EvaluationModuleGraphBuildResult,
+  type EvaluationModuleSourceHostProfile,
+  type EvaluationModuleResolutionPolicy,
   type EvaluationModuleResolutionOpen,
 } from './module-host.js';
-import { StaticModuleGraphEvaluator } from './module-evaluator.js';
+import { StaticModuleGraphEvaluator, type StaticModuleGraphEvaluationResult } from './module-evaluator.js';
 import type { StaticModuleExternalValueResolver } from './module-evaluator.js';
-import { normalizeModuleKey } from './module-graph.js';
+import { normalizeModuleKey, type EvaluationModuleRecord } from './module-graph.js';
 import type { EvaluationOpenSeam } from './seams.js';
 import {
   DefaultStaticEvaluationPolicy,
@@ -34,6 +38,40 @@ export type EvaluatedProjectSource = StaticProjectEvaluationSourceResult & {
   readonly sourceFile: ts.SourceFile;
   readonly evaluation: StaticModuleEvaluationResult;
 };
+
+export type StaticProjectEvaluationPhaseName =
+  | 'admission-index'
+  | 'module-graph'
+  | 'module-evaluation'
+  | 'result-publication';
+
+export interface StaticProjectEvaluationPhaseTiming {
+  readonly name: StaticProjectEvaluationPhaseName;
+  readonly milliseconds: number;
+  readonly itemCount?: number;
+}
+
+export interface StaticProjectEvaluationProfile {
+  readonly totalMilliseconds: number;
+  readonly phases: readonly StaticProjectEvaluationPhaseTiming[];
+  readonly sourceHost: EvaluationModuleSourceHostProfile;
+  readonly sourceFiles: StaticProjectEvaluationSourceFileStats;
+}
+
+export interface StaticProjectEvaluationSourceFileStats {
+  readonly total: number;
+  readonly evaluated: number;
+  readonly open: number;
+  readonly projectSources: number;
+  readonly nodeModuleSources: number;
+  readonly externalSources: number;
+  readonly typeScriptJavaScriptSources: number;
+  readonly assetSources: number;
+  readonly sourceTextCharacters: number;
+  readonly projectSourceTextCharacters: number;
+  readonly nodeModuleSourceTextCharacters: number;
+  readonly externalSourceTextCharacters: number;
+}
 
 /** Static-evaluation result for one boot-admitted source file. */
 export class StaticProjectEvaluationSourceResult {
@@ -58,6 +96,8 @@ export class StaticProjectEvaluationResult {
     readonly project: ProjectBootFrame,
     /** Per-source static-evaluation results. */
     readonly sources: readonly StaticProjectEvaluationSourceResult[],
+    /** Timing profile for graph construction, evaluator execution, and result publication. */
+    readonly profile: StaticProjectEvaluationProfile,
   ) {}
 
   readEvaluatedSources(): readonly EvaluatedProjectSource[] {
@@ -77,6 +117,8 @@ export class StaticProjectEvaluationOptions {
     readonly runtimeHost: StaticEvaluationRuntimeHost = {},
     /** Product-specific values for declaration/external imports that remain outside the local graph. */
     readonly externalValueResolver: StaticModuleExternalValueResolver | null = null,
+    /** Module-source resolution completeness/performance policy for project-level graph construction. */
+    readonly moduleResolutionPolicy?: EvaluationModuleResolutionPolicy,
   ) {}
 }
 
@@ -102,91 +144,205 @@ export class StaticProjectEvaluationPass {
     kernelEmitter: EvaluationKernelEmitter | null,
     options: StaticProjectEvaluationOptions,
   ): StaticProjectEvaluationResult {
-    const host = new FileSystemEvaluationModuleSourceHost(project.rootDir);
-    const sources: StaticProjectEvaluationSourceResult[] = [];
-    const sourceResultsByModuleKey = new Map<string, StaticProjectEvaluationSourceResult>();
-    const admissionsByModuleKey = new Map<string, SourceFileAdmission>();
-    for (const admission of project.sourceFiles) {
-      indexSourceAdmission(admissionsByModuleKey, project, admission);
-    }
-
-    for (const admission of project.sourceFiles) {
-      if (!isStaticEvaluationAdmission(admission)) {
-        continue;
-      }
-
-      const moduleKey = normalizeModuleKey(admission.path);
-      if (sourceResultsByModuleKey.has(moduleKey)) {
-        continue;
-      }
-      const build = buildEvaluationModuleGraph(moduleKey, host);
-      const record = build.graph.readModule(moduleKey);
-      if (record == null) {
-        const source = new StaticProjectEvaluationSourceResult(admission, moduleKey, null, null, build.unresolvedModules);
-        sources.push(source);
-        sourceResultsByModuleKey.set(moduleKey, source);
-        continue;
-      }
-
-      const graphEvaluation = new StaticModuleGraphEvaluator(
-        build.graph,
-        options.policy,
-        options.runtimeHost,
-        options.externalValueResolver,
-      ).evaluate(moduleKey);
-      for (const graphRecord of build.graph.readModules()) {
-        const graphModuleKey = normalizeModuleKey(graphRecord.moduleKey);
-        if (sourceResultsByModuleKey.has(graphModuleKey)) {
-          continue;
-        }
-        const graphAdmission = admissionsByModuleKey.get(graphModuleKey)
-          ?? (kernelEmitter == null
-            ? null
-            : linkedSourceAdmission(kernelEmitter.store, project, graphRecord.sourceFile));
-        if (graphAdmission == null) {
-          continue;
-        }
-        indexSourceAdmission(admissionsByModuleKey, project, graphAdmission);
-        admissionsByModuleKey.set(graphModuleKey, graphAdmission);
-        admissionsByModuleKey.set(normalizeModuleKey(graphRecord.sourceFile.fileName), graphAdmission);
-        const evaluation = graphEvaluation.modules.get(graphModuleKey) ?? null;
-        if (evaluation == null) {
-          const source = new StaticProjectEvaluationSourceResult(
-            graphAdmission,
-            graphModuleKey,
-            graphRecord.sourceFile,
-            null,
-            graphModuleKey === moduleKey ? build.unresolvedModules : [],
-          );
-          sources.push(source);
-          sourceResultsByModuleKey.set(graphModuleKey, source);
-          continue;
-        }
-
-        kernelEmitter?.emitOpenSeams(evaluation, (seam) =>
-          resolveOpenSeamSource(kernelEmitter.store, project, admissionsByModuleKey, seam)
-        );
-        const source = new StaticProjectEvaluationSourceResult(
-          graphAdmission,
-          graphModuleKey,
-          graphRecord.sourceFile,
-          evaluation,
-          graphModuleKey === moduleKey ? build.unresolvedModules : [],
-        );
-        sources.push(source);
-        sourceResultsByModuleKey.set(graphModuleKey, source);
-      }
-
-      if (!sourceResultsByModuleKey.has(moduleKey)) {
-        const source = new StaticProjectEvaluationSourceResult(admission, moduleKey, record.sourceFile, null, build.unresolvedModules);
-        sources.push(source);
-        sourceResultsByModuleKey.set(moduleKey, source);
-        continue;
-      }
-    }
-
-    return new StaticProjectEvaluationResult(project, sources);
+    return new StaticProjectEvaluationFrame(project, kernelEmitter, options).evaluate();
   }
+}
+
+class StaticProjectEvaluationFrame {
+  private readonly started = performance.now();
+  private readonly phases: StaticProjectEvaluationPhaseTiming[] = [];
+  private readonly host: FileSystemEvaluationModuleSourceHost;
+  private readonly sources: StaticProjectEvaluationSourceResult[] = [];
+  private readonly sourceResultsByModuleKey = new Map<string, StaticProjectEvaluationSourceResult>();
+  private readonly admissionsByModuleKey = new Map<string, SourceFileAdmission>();
+
+  constructor(
+    private readonly project: ProjectBootFrame,
+    private readonly kernelEmitter: EvaluationKernelEmitter | null,
+    private readonly options: StaticProjectEvaluationOptions,
+  ) {
+    this.host = new FileSystemEvaluationModuleSourceHost(
+      this.project.rootDir,
+      undefined,
+      this.options.moduleResolutionPolicy,
+    );
+  }
+
+  evaluate(): StaticProjectEvaluationResult {
+    this.indexProjectAdmissions();
+    for (const admission of this.project.sourceFiles) {
+      this.evaluateAdmission(admission);
+    }
+    return new StaticProjectEvaluationResult(this.project, this.sources, {
+      totalMilliseconds: performance.now() - this.started,
+      phases: this.phases,
+      sourceHost: this.host.snapshotProfile(),
+      sourceFiles: staticProjectEvaluationSourceFileStats(this.project.rootDir, this.sources),
+    });
+  }
+
+  private indexProjectAdmissions(): void {
+    measureStaticProjectEvaluationPhase(
+      this.phases,
+      'admission-index',
+      () => {
+        for (const admission of this.project.sourceFiles) {
+          indexSourceAdmission(this.admissionsByModuleKey, this.project, admission);
+        }
+      },
+      () => this.project.sourceFiles.length,
+    );
+  }
+
+  private evaluateAdmission(admission: SourceFileAdmission): void {
+    if (!isStaticEvaluationAdmission(admission)) {
+      return;
+    }
+
+    const moduleKey = normalizeModuleKey(admission.path);
+    if (this.sourceResultsByModuleKey.has(moduleKey)) {
+      return;
+    }
+    const build = measureStaticProjectEvaluationPhase(
+      this.phases,
+      'module-graph',
+      () => buildEvaluationModuleGraph(moduleKey, this.host),
+      (result) => result.graph.readModules().length,
+    );
+    const graphModules = build.graph.readModules();
+    const record = build.graph.readModule(moduleKey);
+    if (record == null) {
+      this.publishSourceResult(new StaticProjectEvaluationSourceResult(
+        admission,
+        moduleKey,
+        null,
+        null,
+        build.unresolvedModules,
+      ));
+      return;
+    }
+
+    const graphEvaluation = measureStaticProjectEvaluationPhase(
+      this.phases,
+      'module-evaluation',
+      () => new StaticModuleGraphEvaluator(
+        build.graph,
+        this.options.policy,
+        this.options.runtimeHost,
+        this.options.externalValueResolver,
+      ).evaluate(moduleKey),
+      (result) => result.modules.size,
+    );
+    this.publishGraphResults(moduleKey, build, graphEvaluation, graphModules);
+
+    if (!this.sourceResultsByModuleKey.has(moduleKey)) {
+      this.publishSourceResult(new StaticProjectEvaluationSourceResult(
+        admission,
+        moduleKey,
+        record.sourceFile,
+        null,
+        build.unresolvedModules,
+      ));
+    }
+  }
+
+  private publishGraphResults(
+    entryModuleKey: string,
+    build: EvaluationModuleGraphBuildResult,
+    graphEvaluation: StaticModuleGraphEvaluationResult,
+    graphModules: readonly EvaluationModuleRecord[],
+  ): void {
+    measureStaticProjectEvaluationPhase(
+      this.phases,
+      'result-publication',
+      () => {
+        for (const graphRecord of graphModules) {
+          this.publishGraphRecord(entryModuleKey, build, graphEvaluation, graphRecord);
+        }
+      },
+      () => graphModules.length,
+    );
+  }
+
+  private publishGraphRecord(
+    entryModuleKey: string,
+    build: EvaluationModuleGraphBuildResult,
+    graphEvaluation: StaticModuleGraphEvaluationResult,
+    graphRecord: EvaluationModuleRecord,
+  ): void {
+    const graphModuleKey = normalizeModuleKey(graphRecord.moduleKey);
+    if (this.sourceResultsByModuleKey.has(graphModuleKey)) {
+      return;
+    }
+    const graphAdmission = this.graphRecordAdmission(graphModuleKey, graphRecord.sourceFile);
+    if (graphAdmission == null) {
+      return;
+    }
+    const evaluation = graphEvaluation.modules.get(graphModuleKey) ?? null;
+    if (evaluation == null) {
+      this.publishSourceResult(new StaticProjectEvaluationSourceResult(
+        graphAdmission,
+        graphModuleKey,
+        graphRecord.sourceFile,
+        null,
+        graphModuleKey === entryModuleKey ? build.unresolvedModules : [],
+      ));
+      return;
+    }
+
+    const kernelEmitter = this.kernelEmitter;
+    if (kernelEmitter != null) {
+      kernelEmitter.emitOpenSeams(evaluation, (seam) =>
+        resolveOpenSeamSource(kernelEmitter.store, this.project, this.admissionsByModuleKey, seam)
+      );
+    }
+    this.publishSourceResult(new StaticProjectEvaluationSourceResult(
+      graphAdmission,
+      graphModuleKey,
+      graphRecord.sourceFile,
+      evaluation,
+      graphModuleKey === entryModuleKey ? build.unresolvedModules : [],
+    ));
+  }
+
+  private graphRecordAdmission(
+    graphModuleKey: string,
+    sourceFile: ts.SourceFile,
+  ): SourceFileAdmission | null {
+    const existing = this.admissionsByModuleKey.get(graphModuleKey);
+    if (existing != null) {
+      return existing;
+    }
+    if (this.kernelEmitter == null) {
+      return null;
+    }
+    const admitted = linkedSourceAdmission(this.kernelEmitter.store, this.project, sourceFile);
+    indexSourceAdmission(this.admissionsByModuleKey, this.project, admitted);
+    this.admissionsByModuleKey.set(graphModuleKey, admitted);
+    this.admissionsByModuleKey.set(normalizeModuleKey(sourceFile.fileName), admitted);
+    return admitted;
+  }
+
+  private publishSourceResult(source: StaticProjectEvaluationSourceResult): void {
+    this.sources.push(source);
+    this.sourceResultsByModuleKey.set(source.moduleKey, source);
+  }
+}
+
+function measureStaticProjectEvaluationPhase<TValue>(
+  phases: StaticProjectEvaluationPhaseTiming[],
+  name: StaticProjectEvaluationPhaseName,
+  read: () => TValue,
+  itemCount?: (value: TValue) => number | undefined,
+): TValue {
+  const started = performance.now();
+  const value = read();
+  phases.push({
+    name,
+    milliseconds: performance.now() - started,
+    itemCount: itemCount?.(value),
+  });
+  return value;
 }
 
 function resolveOpenSeamSource(
@@ -231,6 +387,72 @@ function linkedSourceAdmission(
     path: sourceFile.fileName,
     note: 'Source file admitted as a static evaluation dependency.',
   });
+}
+
+function staticProjectEvaluationSourceFileStats(
+  projectRootDir: string,
+  sources: readonly StaticProjectEvaluationSourceResult[],
+): StaticProjectEvaluationSourceFileStats {
+  const projectRootPath = normalizeModuleKey(path.resolve(projectRootDir)).toLowerCase();
+  let evaluated = 0;
+  let projectSources = 0;
+  let nodeModuleSources = 0;
+  let externalSources = 0;
+  let typeScriptJavaScriptSources = 0;
+  let assetSources = 0;
+  let sourceTextCharacters = 0;
+  let projectSourceTextCharacters = 0;
+  let nodeModuleSourceTextCharacters = 0;
+  let externalSourceTextCharacters = 0;
+
+  for (const source of sources) {
+    if (isEvaluatedProjectSource(source)) {
+      evaluated += 1;
+    }
+    const fileName = source.sourceFile?.fileName ?? path.resolve(projectRootDir, source.admission.path);
+    const normalized = normalizeModuleKey(path.resolve(fileName)).toLowerCase();
+    const sourceTextLength = source.sourceFile?.text.length ?? 0;
+    const isProjectSource = isNormalizedPathAtOrUnder(normalized, projectRootPath);
+    const isNodeModuleSource = normalized.includes('/node_modules/');
+    if (isProjectSource) {
+      projectSources += 1;
+      projectSourceTextCharacters += sourceTextLength;
+    } else if (isNodeModuleSource) {
+      nodeModuleSources += 1;
+      nodeModuleSourceTextCharacters += sourceTextLength;
+    } else {
+      externalSources += 1;
+      externalSourceTextCharacters += sourceTextLength;
+    }
+    if (isStaticEvaluationSource(source.admission.language)) {
+      typeScriptJavaScriptSources += 1;
+    } else {
+      assetSources += 1;
+    }
+    sourceTextCharacters += sourceTextLength;
+  }
+
+  return {
+    total: sources.length,
+    evaluated,
+    open: sources.length - evaluated,
+    projectSources,
+    nodeModuleSources,
+    externalSources,
+    typeScriptJavaScriptSources,
+    assetSources,
+    sourceTextCharacters,
+    projectSourceTextCharacters,
+    nodeModuleSourceTextCharacters,
+    externalSourceTextCharacters,
+  };
+}
+
+function isNormalizedPathAtOrUnder(
+  normalizedPath: string,
+  normalizedRoot: string,
+): boolean {
+  return normalizedPath === normalizedRoot || normalizedPath.startsWith(`${normalizedRoot}/`);
 }
 
 export function isStaticEvaluationSource(language: SourceLanguage): boolean {

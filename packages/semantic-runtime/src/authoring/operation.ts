@@ -126,6 +126,16 @@ export class CreateStateModelOperation extends AuthoringOperation<'create-state-
   }
 }
 
+/** Configure plugin-backed @aurelia/state stores and their source-owned action handlers. */
+export class ConfigureStateStoreOperation extends AuthoringOperation<'configure-state-store'> {
+  constructor(
+    readonly sourcePath: string,
+    readonly storeNames: readonly string[],
+  ) {
+    super('configure-state-store', `Configure @aurelia/state store(s): ${storeNames.join(', ')}.`);
+  }
+}
+
 /** Create an injectable app service or model class. */
 export class CreateServiceOperation extends AuthoringOperation<'create-service'> {
   constructor(
@@ -200,8 +210,30 @@ export class RepairAppOperation extends AuthoringOperation<'repair-app'> {
     readonly runtimeBoundaryKinds: readonly (AuthoringRepairRuntimeBoundaryKind | `${AuthoringRepairRuntimeBoundaryKind}`)[] = [],
     readonly runtimeIntentKinds: readonly (AuthoringRepairRuntimeIntentKind | `${AuthoringRepairRuntimeIntentKind}`)[] = [],
   ) {
-    super('repair-app', `Repair ${repairCount} ${repairKind} row(s) through ${planKind}.`);
+    super('repair-app', repairAppOperationSummary(
+      repairCount,
+      repairKind,
+      planKind,
+      runtimeBoundaryKinds,
+      runtimeIntentKinds,
+    ));
   }
 }
 
 export type AnyAuthoringOperation = AuthoringOperation<AuthoringOperationKind>;
+
+function repairAppOperationSummary(
+  repairCount: number,
+  repairKind: AuthoringRepairKind | `${AuthoringRepairKind}`,
+  planKind: AuthoringRepairPlanKind | `${AuthoringRepairPlanKind}`,
+  runtimeBoundaryKinds: readonly (AuthoringRepairRuntimeBoundaryKind | `${AuthoringRepairRuntimeBoundaryKind}`)[],
+  runtimeIntentKinds: readonly (AuthoringRepairRuntimeIntentKind | `${AuthoringRepairRuntimeIntentKind}`)[],
+): string {
+  const boundary = runtimeBoundaryKinds.length === 0
+    ? ''
+    : `; runtime boundaries: ${runtimeBoundaryKinds.join(', ')}`;
+  const intent = runtimeIntentKinds.length === 0
+    ? ''
+    : `; runtime intents: ${runtimeIntentKinds.join(', ')}`;
+  return `Repair ${repairCount} ${repairKind} row(s) through ${planKind}${boundary}${intent}.`;
+}

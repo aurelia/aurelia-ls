@@ -22,6 +22,7 @@ import {
   RouteConfigKind,
   RouteContextModel,
   RouteTreeModel,
+  RouteParameterValueModel,
   RouterIssueKind,
   RouterIssueModel,
   RouterIssuePhase,
@@ -84,12 +85,24 @@ interface ResolvedTransitionRouteNodeSeed extends TransitionRouteNodeSeed {
 interface TransitionRouteNodeEmission {
   readonly local: string;
   readonly node: RouteNodeModel;
+  readonly children: readonly TransitionRouteNodeEmission[];
 }
 
 interface TransitionRouteNodeSite {
   readonly seed: ResolvedTransitionRouteNodeSeed;
   readonly local: string;
   readonly reference: RouterReference;
+  readonly children: readonly TransitionRouteNodeSite[];
+}
+
+interface TransitionRouteNodeSeedTree {
+  readonly seed: TransitionRouteNodeSeed;
+  readonly children: readonly TransitionRouteNodeSeedTree[];
+}
+
+interface ResolvedTransitionRouteNodeTree {
+  readonly seed: ResolvedTransitionRouteNodeSeed;
+  readonly children: readonly ResolvedTransitionRouteNodeTree[];
 }
 
 interface OpenViewportResolution {
@@ -101,7 +114,7 @@ interface OpenViewportResolution {
 }
 
 interface ResolvedTransitionRouteNodeSeedSet {
-  readonly seeds: readonly ResolvedTransitionRouteNodeSeed[];
+  readonly roots: readonly ResolvedTransitionRouteNodeTree[];
   readonly open: OpenViewportResolution | null;
 }
 
@@ -322,11 +335,17 @@ class RouteTreeTransitionMaterializationFrame {
       const seed = this.transitionRouteNodeSeed(recognizedRoute, routes);
       return seed == null ? [] : [seed];
     });
-    const resolvedSeeds = resolveTransitionRouteNodeSeeds(this.routeRuntime, updateRouteContext, seeds);
+    const resolvedSeeds = resolveTransitionRouteNodeSeeds(
+      this.routeRuntime,
+      updateRouteContext,
+      instructionTree,
+      seeds,
+      this.viewportInstructionsByIdentity,
+    );
     if (resolvedSeeds.open != null) {
       recordViewportResolutionFailure(this.store, resolvedSeeds.open, this.issues, this.openRecords);
     }
-    if (resolvedSeeds.seeds.length === 0) {
+    if (resolvedSeeds.roots.length === 0) {
       return [];
     }
     return [
@@ -334,7 +353,7 @@ class RouteTreeTransitionMaterializationFrame {
         instructionTree,
         updateRouteContext,
         updateRouteConfig,
-        resolvedSeeds.seeds,
+        resolvedSeeds.roots,
         index,
       ),
     ];
@@ -383,13 +402,13 @@ class RouteTreeTransitionMaterializationFrame {
     instructionTree: ViewportInstructionTreeModel,
     updateRouteContext: RouteContextModel,
     updateRouteConfig: RouteConfigModel,
-    seeds: readonly ResolvedTransitionRouteNodeSeed[],
+    seedTrees: readonly ResolvedTransitionRouteNodeTree[],
     index: number,
   ): RouteTreeEmission {
     const treeLocal = `router-route-tree-transition:${instructionTree.identityHandle}:${index}`;
     const rootLocal = `${treeLocal}:update-root`;
     const rootReference = transitionRootRouteNodeReference(this.store, rootLocal, instructionTree, updateRouteContext);
-    const childSites = transitionRouteNodeSites(this.store, treeLocal, seeds);
+    const childSites = transitionRouteNodeSites(this.store, treeLocal, seedTrees);
     const childNodes = transitionRouteNodeEmissions(this.store, instructionTree, rootReference, childSites);
     const rootNode = transitionRootRouteNode(
       this.store,
@@ -411,7 +430,7 @@ class RouteTreeTransitionMaterializationFrame {
     return {
       records: transitionRouteTreeRecords(this.store, treeLocal, rootLocal, updateRouteContext, instructionTree, rootNode, childNodes),
       routeTree,
-      routeNodes: [rootNode, ...childNodes.map((emission) => emission.node)],
+      routeNodes: [rootNode, ...flattenTransitionRouteNodeEmissions(childNodes).map((emission) => emission.node)],
     };
   }
 
@@ -486,7 +505,9 @@ function initialRootRouteNode(
     originalInstruction: null,
     recognizedRoute: null,
     parameterCount: 0,
+    params: [],
     queryParamCount: 0,
+    queryParams: [],
     fragment: null,
     hasData: routeConfig.hasData,
     viewport: null,
@@ -515,6 +536,7 @@ function initialRouteTree(
     effectiveRouterOptions?.toReference() ?? null,
     1,
     0,
+    [],
     null,
     routeContext.sourceAddressHandle,
   );
@@ -595,7 +617,9 @@ function materializedRouteNode(
     originalInstruction: fields.originalInstruction,
     recognizedRoute: fields.recognizedRoute,
     parameterCount: fields.parameterCount,
+    params: fields.params,
     queryParamCount: fields.queryParamCount,
+    queryParams: fields.queryParams,
     fragment: fields.fragment,
     hasData: fields.hasData,
     viewport: fields.viewport,
@@ -626,20 +650,23 @@ function transitionRootRouteNodeReference(
 function transitionRouteNodeSites(
   store: KernelStore,
   treeLocal: string,
-  seeds: readonly ResolvedTransitionRouteNodeSeed[],
+  trees: readonly ResolvedTransitionRouteNodeTree[],
+  parentIndexPath = '',
 ): readonly TransitionRouteNodeSite[] {
-  return seeds.map((seed, seedIndex) => {
-    const local = `${treeLocal}:node:${seedIndex}:${seed.recognizedRoute.identityHandle}`;
+  return trees.map((tree, seedIndex) => {
+    const indexPath = parentIndexPath.length === 0 ? `${seedIndex}` : `${parentIndexPath}.${seedIndex}`;
+    const local = `${treeLocal}:node:${indexPath}:${tree.seed.recognizedRoute.identityHandle}`;
     return {
-      seed,
+      seed: tree.seed,
       local,
       reference: new RouterReference(
         store.handles.product(local),
         store.handles.identity(local),
         RouterModelKind.RouteNode,
-        seed.recognizedRoute.sourceAddressHandle,
-        seed.routeContext.localName,
+        tree.seed.recognizedRoute.sourceAddressHandle,
+        tree.seed.routeContext.localName,
       ),
+      children: transitionRouteNodeSites(store, treeLocal, tree.children, indexPath),
     };
   });
 }
@@ -650,16 +677,17 @@ function transitionRouteNodeEmissions(
   rootReference: RouterReference,
   sites: readonly TransitionRouteNodeSite[],
 ): readonly TransitionRouteNodeEmission[] {
-  return sites.map((site, seedIndex) => {
+  return sites.map((site) => {
+    const children = transitionRouteNodeEmissions(store, instructionTree, site.reference, site.children);
     const node = transitionRouteNode(
       store,
       site.local,
       instructionTree,
       site.seed,
-      seedIndex === 0 ? rootReference : sites[seedIndex - 1]!.reference,
-      seedIndex === sites.length - 1 ? null : sites[seedIndex + 1]!.reference,
+      rootReference,
+      children.map((child) => child.node.toReference()),
     );
-    return { local: site.local, node };
+    return { local: site.local, node, children };
   });
 }
 
@@ -671,19 +699,18 @@ function transitionRootRouteNode(
   routeConfig: RouteConfigModel,
   childNodes: readonly TransitionRouteNodeEmission[],
 ): RouteNodeModel {
-  const childReferences = childNodes.length === 0
-    ? []
-    : [childNodes[0]!.node.toReference()];
   return materializedRouteNode(store, rootLocal, {
     routeContext: routeContext.toReference(),
     routeConfig,
     parent: null,
-    children: childReferences,
+    children: childNodes.map((child) => child.node.toReference()),
     instruction: null,
     originalInstruction: null,
     recognizedRoute: null,
     parameterCount: 0,
+    params: [],
     queryParamCount: instructionTree.queryParamCount,
+    queryParams: instructionTree.queryParams,
     fragment: instructionTree.fragment,
     hasData: routeConfig.hasData,
     viewport: null,
@@ -710,8 +737,9 @@ function transitionRouteTree(
     rootNode.toReference(),
     instructionTree.toReference(),
     routerOptions?.readEffectiveRouterOptions()?.toReference() ?? null,
-    childNodes.length + 1,
+    flattenTransitionRouteNodeEmissions(childNodes).length + 1,
     instructionTree.queryParamCount,
+    instructionTree.queryParams,
     instructionTree.fragment,
     instructionTree.sourceAddressHandle,
   );
@@ -759,9 +787,18 @@ function transitionChildRouteNodeRecords(
   store: KernelStore,
   childNodes: readonly TransitionRouteNodeEmission[],
 ): readonly KernelStoreRecord[] {
-  return childNodes.flatMap((emission) =>
+  return flattenTransitionRouteNodeEmissions(childNodes).flatMap((emission) =>
     transitionRouteNodeRecords(store, emission.local, emission.node)
   );
+}
+
+function flattenTransitionRouteNodeEmissions(
+  childNodes: readonly TransitionRouteNodeEmission[],
+): readonly TransitionRouteNodeEmission[] {
+  return childNodes.flatMap((emission) => [
+    emission,
+    ...flattenTransitionRouteNodeEmissions(emission.children),
+  ]);
 }
 
 function transitionRouteTreeProductRecords(
@@ -792,7 +829,7 @@ function transitionRouteNode(
   instructionTree: ViewportInstructionTreeModel,
   seed: ResolvedTransitionRouteNodeSeed,
   parent: RouterReference | null,
-  child: RouterReference | null,
+  children: readonly RouterReference[],
 ): RouteNodeModel {
   const path = configuredPathForEndpoint(seed.endpoint, seed.configurableRoute);
   const viewport = seed.instruction?.viewport ?? seed.routeConfig.viewport ?? DEFAULT_VIEWPORT_NAME;
@@ -801,12 +838,14 @@ function transitionRouteNode(
     routeContext: seed.routeContext.toReference(),
     routeConfig: seed.routeConfig,
     parent,
-    children: child == null ? [] : [child],
+    children,
     instruction: seed.recognizedRoute.viewportInstruction,
     originalInstruction: seed.recognizedRoute.viewportInstruction,
     recognizedRoute: seed.recognizedRoute.toReference(),
     parameterCount: seed.recognizedRoute.parameterCount,
+    params: routeNodeParams(seed.recognizedRoute.parameters),
     queryParamCount: instructionTree.queryParamCount,
+    queryParams: instructionTree.queryParams,
     fragment: instructionTree.fragment,
     hasData: seed.routeConfig.hasData,
     viewport,
@@ -817,6 +856,12 @@ function transitionRouteNode(
     title: seed.routeConfig.title,
     sourceAddressHandle: seed.recognizedRoute.sourceAddressHandle,
   });
+}
+
+function routeNodeParams(
+  parameters: readonly RouteParameterValueModel[],
+): readonly RouteParameterValueModel[] {
+  return parameters.filter((parameter) => !parameter.isResidue);
 }
 
 function transitionRouteNodeRecords(
@@ -846,70 +891,274 @@ function transitionRouteNodeRecords(
   });
 }
 
+interface TransitionRouteNodeSeedGroupDraft {
+  readonly instructionIdentity: IdentityHandle;
+  readonly seeds: TransitionRouteNodeSeed[];
+  readonly children: TransitionRouteNodeSeedGroupDraft[];
+  readonly firstSeedIndex: number;
+  readonly order: number;
+}
+
+interface TransitionRouteNodeSeedRootDraft {
+  readonly firstSeedIndex: number;
+  readonly order: number;
+  readonly tree: TransitionRouteNodeSeedTree;
+}
+
+function transitionRouteNodeSeedTrees(
+  instructionTree: ViewportInstructionTreeModel,
+  seeds: readonly TransitionRouteNodeSeed[],
+  viewportInstructionsByIdentity: ReadonlyMap<ViewportInstructionModel['identityHandle'], ViewportInstructionModel>,
+): readonly TransitionRouteNodeSeedTree[] {
+  const instructionIndex = viewportInstructionTreeIndex(instructionTree, viewportInstructionsByIdentity);
+  const groups = new Map<IdentityHandle, TransitionRouteNodeSeedGroupDraft>();
+  const orphanRoots: TransitionRouteNodeSeedRootDraft[] = [];
+
+  seeds.forEach((seed, seedIndex) => {
+    const instructionIdentity = seed.instruction?.identityHandle ?? seed.recognizedRoute.viewportInstruction.identityHandle;
+    if (instructionIdentity == null) {
+      orphanRoots.push({
+        firstSeedIndex: seedIndex,
+        order: Number.MAX_SAFE_INTEGER,
+        tree: transitionRouteNodeSeedChain([seed], []),
+      });
+      return;
+    }
+    const existing = groups.get(instructionIdentity);
+    if (existing == null) {
+      groups.set(instructionIdentity, {
+        instructionIdentity,
+        seeds: [seed],
+        children: [],
+        firstSeedIndex: seedIndex,
+        order: instructionIndex.order.get(instructionIdentity) ?? Number.MAX_SAFE_INTEGER,
+      });
+    } else {
+      existing.seeds.push(seed);
+    }
+  });
+
+  const groupRoots: TransitionRouteNodeSeedGroupDraft[] = [];
+  for (const group of groups.values()) {
+    const parentIdentity = nearestSeededInstructionAncestor(group.instructionIdentity, instructionIndex.parent, groups);
+    if (parentIdentity == null) {
+      groupRoots.push(group);
+      continue;
+    }
+    groups.get(parentIdentity)?.children.push(group);
+  }
+
+  const roots = [
+    ...groupRoots.map((group) => ({
+      firstSeedIndex: group.firstSeedIndex,
+      order: group.order,
+      tree: transitionRouteNodeSeedGroupTree(group),
+    })),
+    ...orphanRoots,
+  ];
+  roots.sort(compareTransitionRouteNodeSeedRootDrafts);
+  return roots.map((root) => root.tree);
+}
+
+function transitionRouteNodeSeedGroupTree(
+  group: TransitionRouteNodeSeedGroupDraft,
+): TransitionRouteNodeSeedTree {
+  group.children.sort(compareTransitionRouteNodeSeedGroupDrafts);
+  return transitionRouteNodeSeedChain(
+    group.seeds,
+    group.children.map((child) => transitionRouteNodeSeedGroupTree(child)),
+  );
+}
+
+function transitionRouteNodeSeedChain(
+  seeds: readonly TransitionRouteNodeSeed[],
+  children: readonly TransitionRouteNodeSeedTree[],
+): TransitionRouteNodeSeedTree {
+  const [seed, ...rest] = seeds;
+  if (seed == null) {
+    throw new Error('Cannot materialize a transition RouteNode seed tree without a seed.');
+  }
+  return {
+    seed,
+    children: rest.length === 0
+      ? children
+      : [transitionRouteNodeSeedChain(rest, children)],
+  };
+}
+
+function compareTransitionRouteNodeSeedGroupDrafts(
+  left: TransitionRouteNodeSeedGroupDraft,
+  right: TransitionRouteNodeSeedGroupDraft,
+): number {
+  return left.order - right.order || left.firstSeedIndex - right.firstSeedIndex;
+}
+
+function compareTransitionRouteNodeSeedRootDrafts(
+  left: TransitionRouteNodeSeedRootDraft,
+  right: TransitionRouteNodeSeedRootDraft,
+): number {
+  return left.order - right.order || left.firstSeedIndex - right.firstSeedIndex;
+}
+
+function nearestSeededInstructionAncestor(
+  instructionIdentity: IdentityHandle,
+  parents: ReadonlyMap<IdentityHandle, IdentityHandle | null>,
+  groups: ReadonlyMap<IdentityHandle, TransitionRouteNodeSeedGroupDraft>,
+): IdentityHandle | null {
+  let current = parents.get(instructionIdentity) ?? null;
+  while (current != null) {
+    if (groups.has(current)) {
+      return current;
+    }
+    current = parents.get(current) ?? null;
+  }
+  return null;
+}
+
+function viewportInstructionTreeIndex(
+  instructionTree: ViewportInstructionTreeModel,
+  viewportInstructionsByIdentity: ReadonlyMap<ViewportInstructionModel['identityHandle'], ViewportInstructionModel>,
+): {
+  readonly parent: ReadonlyMap<IdentityHandle, IdentityHandle | null>;
+  readonly order: ReadonlyMap<IdentityHandle, number>;
+} {
+  const parent = new Map<IdentityHandle, IdentityHandle | null>();
+  const order = new Map<IdentityHandle, number>();
+  let nextOrder = 0;
+
+  const visit = (reference: RouterReference, parentIdentity: IdentityHandle | null): void => {
+    const identity = reference.identityHandle;
+    if (identity == null || order.has(identity)) {
+      return;
+    }
+    parent.set(identity, parentIdentity);
+    order.set(identity, nextOrder++);
+    const instruction = viewportInstructionsByIdentity.get(identity);
+    if (instruction == null) {
+      return;
+    }
+    for (const child of instruction.children) {
+      visit(child, identity);
+    }
+  };
+
+  for (const reference of instructionTree.instructions) {
+    visit(reference, null);
+  }
+
+  return { parent, order };
+}
+
 function resolveTransitionRouteNodeSeeds(
   routeRuntime: RouteRuntimeTopologyProjectResult,
   updateRouteContext: RouteContextModel,
+  instructionTree: ViewportInstructionTreeModel,
   seeds: readonly TransitionRouteNodeSeed[],
+  viewportInstructionsByIdentity: ReadonlyMap<ViewportInstructionModel['identityHandle'], ViewportInstructionModel>,
 ): ResolvedTransitionRouteNodeSeedSet {
-  const resolved: ResolvedTransitionRouteNodeSeed[] = [];
-  let parentRouteContext: RouteContextModel = updateRouteContext;
-  for (const seed of seeds) {
-    const componentName = seed.routeConfig.component?.localName ?? null;
-    if (componentName == null) {
-      return {
-        seeds: [],
-        open: {
-          kind: OpenViewportResolutionKind.MissingComponentName,
-          parentRouteContext,
-          seed,
-          request: null,
-          reason: 'resolved route config does not expose a component name for ViewportRequest construction',
-        },
-      };
+  const seedTrees = transitionRouteNodeSeedTrees(instructionTree, seeds, viewportInstructionsByIdentity);
+  const resolved = resolveTransitionRouteNodeSeedTrees(routeRuntime, updateRouteContext, seedTrees);
+  if (resolved.open != null) {
+    return {
+      roots: [],
+      open: resolved.open,
+    };
+  }
+  return {
+    roots: resolved.trees,
+    open: null,
+  };
+}
+
+interface ResolvedTransitionRouteNodeSeedTrees {
+  readonly trees: readonly ResolvedTransitionRouteNodeTree[];
+  readonly open: OpenViewportResolution | null;
+}
+
+function resolveTransitionRouteNodeSeedTrees(
+  routeRuntime: RouteRuntimeTopologyProjectResult,
+  parentRouteContext: RouteContextModel,
+  trees: readonly TransitionRouteNodeSeedTree[],
+): ResolvedTransitionRouteNodeSeedTrees {
+  const resolved: ResolvedTransitionRouteNodeTree[] = [];
+  for (const tree of trees) {
+    const seed = resolveTransitionRouteNodeSeed(routeRuntime, parentRouteContext, tree.seed);
+    if (seed.open != null || seed.seed == null) {
+      return { trees: [], open: seed.open };
     }
-    const viewportRequest = new ViewportRequestModel(
-      seed.instruction?.viewport ?? seed.routeConfig.viewport ?? DEFAULT_VIEWPORT_NAME,
-      componentName,
-    );
-    const viewportAgent = routeRuntime.resolveViewportAgent(parentRouteContext.identityHandle, viewportRequest);
-    if (viewportAgent == null) {
-      return {
-        seeds: [],
-        open: {
-          kind: OpenViewportResolutionKind.NoAvailableViewportAgent,
-          parentRouteContext,
-          seed,
-          request: viewportRequest,
-          reason: 'parent RouteContext has no matching available ViewportAgent',
-        },
-      };
-    }
-    const routeContext = routeRuntime.routeContextForRouteConfigContextAndViewportAgent(
-      seed.routeConfigContext.identityHandle,
-      viewportAgent.identityHandle,
-    );
-    if (routeContext == null) {
-      return {
-        seeds: [],
-        open: {
-          kind: OpenViewportResolutionKind.MissingRouteContextPair,
-          parentRouteContext,
-          seed,
-          request: viewportRequest,
-          reason: 'Router._getRouteContext pair is not materialized for the resolved ViewportAgent and RouteConfigContext',
-        },
-      };
+    const children = resolveTransitionRouteNodeSeedTrees(routeRuntime, seed.seed.routeContext, tree.children);
+    if (children.open != null) {
+      return { trees: [], open: children.open };
     }
     resolved.push({
+      seed: seed.seed,
+      children: children.trees,
+    });
+  }
+  return { trees: resolved, open: null };
+}
+
+function resolveTransitionRouteNodeSeed(
+  routeRuntime: RouteRuntimeTopologyProjectResult,
+  parentRouteContext: RouteContextModel,
+  seed: TransitionRouteNodeSeed,
+): {
+  readonly seed: ResolvedTransitionRouteNodeSeed | null;
+  readonly open: OpenViewportResolution | null;
+} {
+  const componentName = seed.routeConfig.component?.localName ?? null;
+  if (componentName == null) {
+    return {
+      seed: null,
+      open: {
+        kind: OpenViewportResolutionKind.MissingComponentName,
+        parentRouteContext,
+        seed,
+        request: null,
+        reason: 'resolved route config does not expose a component name for ViewportRequest construction',
+      },
+    };
+  }
+  const viewportRequest = new ViewportRequestModel(
+    seed.instruction?.viewport ?? seed.routeConfig.viewport ?? DEFAULT_VIEWPORT_NAME,
+    componentName,
+  );
+  const viewportAgent = routeRuntime.resolveViewportAgent(parentRouteContext.identityHandle, viewportRequest);
+  if (viewportAgent == null) {
+    return {
+      seed: null,
+      open: {
+        kind: OpenViewportResolutionKind.NoAvailableViewportAgent,
+        parentRouteContext,
+        seed,
+        request: viewportRequest,
+        reason: 'parent RouteContext has no matching available ViewportAgent',
+      },
+    };
+  }
+  const routeContext = routeRuntime.routeContextForRouteConfigContextAndViewportAgent(
+    seed.routeConfigContext.identityHandle,
+    viewportAgent.identityHandle,
+  );
+  if (routeContext == null) {
+    return {
+      seed: null,
+      open: {
+        kind: OpenViewportResolutionKind.MissingRouteContextPair,
+        parentRouteContext,
+        seed,
+        request: viewportRequest,
+        reason: 'Router._getRouteContext pair is not materialized for the resolved ViewportAgent and RouteConfigContext',
+      },
+    };
+  }
+  return {
+    seed: {
       ...seed,
       routeContext,
       viewportAgent,
       viewportRequest,
-    });
-    parentRouteContext = routeContext;
-  }
-  return {
-    seeds: resolved,
+    },
     open: null,
   };
 }

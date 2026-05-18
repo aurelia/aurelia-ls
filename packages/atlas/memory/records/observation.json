@@ -246,6 +246,83 @@
       "updatedAt": "2026-05-13"
     },
     {
+      "id": "frontier:proxy-observable-domain-modeling",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "observation",
+        "authoring",
+        "state",
+        "framework-grounding"
+      ],
+      "summary": "AstEvaluator and ProxyObservable are integrated entry points into Aurelia's connectable observation circuit for ordinary template reads and watcher/computed/trackable dependency reads over composed domain objects.",
+      "rationale": "Authoring recipes should be able to lean on vanilla DI-owned state classes without view-model forwarding getters. Ordinary template `state.member` reads are covered by ast-evaluator connectable observation, and framework ProxyObservable feeds wrapped object/array/map/set dependency collection into that same active-connectable circuit for watcher, computed, trackable-method, and nested collection cases. Keep their handoff points visible without modeling them as separate observation systems before adding richer state recipes or diagnostics.",
+      "guidance": [
+        "Do not use ProxyObservable as a reason to require view-model forwarding getters for ordinary template bindings; framework `astEvaluate` connects AccessScope, AccessMember, and AccessKeyed reads through the active connectable.",
+        "Start here when composed state classes, @computed, @watch/static watches, @astTrack/trackable methods, or nested array/map/set reads need dependency products beyond ordinary binding data-flow rows.",
+        "Ground direct template reads and ProxyObservable work in the same Atlas framework.observation graph: ast-evaluator rows show where expression evaluation calls the active connectable, while proxy-observable rows show how wrapped nested reads and collection reads feed the same dependency collection model.",
+        "For fixture pressure, start from framework corpus computed/watch/computed-method proxy-observation seeds before inventing an @astTrack-specific recipe; the current corpus surfaces computed/watch pressure more clearly than astTrack.",
+        "Keep source-level decorator misuse diagnostics in the observation-source-issues lane; this frontier is about valid dependency semantics and domain-model observability, not decorator error ownership.",
+        "As of the 2026-05-18 pause, Atlas can see framework astEvaluate/proxy-observable handoffs but semantic-runtime does not yet publish a first-class per-expression observed-dependency product. Add that only where it is wired to binding data-flow, watcher/computed execution, or repair diagnostics; do not add an inert companion row just to mirror the framework flow-site list.",
+        "If fixture recipes start depending on nested composed state or collection reads, add an explicit semantic product for ProxyObservable-style dependency reads rather than hiding the behavior in authoring verification or topology joins."
+      ],
+      "anchors": [
+        {
+          "kind": "lens",
+          "lensId": "framework.observation",
+          "projection": "flow-sites",
+          "surfaceKind": "ast-evaluator",
+          "summary": "Atlas rows for framework astEvaluate AccessScope, AccessMember, AccessKeyed, collection, and @astTrack dependency-collection flow sites."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.observation",
+          "projection": "flow-sites",
+          "surfaceKind": "proxy-observable",
+          "summary": "Atlas rows for framework ProxyObservable wrapping, raw/proxy cache, and dependency-collection flow sites."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-observation-internals.ts",
+          "symbolName": "FrameworkObservationSurfaceKind",
+          "summary": "Atlas classifier that admits ast-evaluator and proxy-observable surfaces."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/observation/README.md",
+          "summary": "Observation note explaining ordinary template connectable reads and ProxyObservable dependency products as one integrated observation circuit."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/authoring/README.md",
+          "summary": "Authoring guidance for direct DI state exposure and sparse view-model adaptation getters."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "atlas-self-source-file",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-observation-internals.ts",
+          "minLineCount": 500
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/atlas/src/inquiry/runtime/framework-observation-internals.ts",
+          "symbolName": "FrameworkObservationSurfaceKind"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/atlas/src/scripts/framework-observation.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/src/observation/README.md"
+        }
+      ],
+      "nextActionPolicy": "when-touched",
+      "createdAt": "2026-05-18",
+      "updatedAt": "2026-05-18"
+    },
+    {
       "id": "frontier:select-and-checked-value-channel-drafts",
       "kind": "pressure-frontier",
       "domains": [
@@ -262,6 +339,7 @@
         "Distinguish raw DOM property type, observer runtime value type, source assignment capability, and collection mutation channels.",
         "Bound select `multiple` semantics are attribute-order independent: find the `multiple` PropertyBinding among sibling lowered bindings, then classify literal true, literal false, or dynamic mode.",
         "When a dynamic select's option values are a static string domain, use checker string-literal types from the source carrier before declaring the source open; synthetic domain projections may not carry their own checker.",
+        "Do not collapse `model.bind` primitive values into string-only `valueDomain`: null, boolean, number, and undefined model values belong in `primitiveValueDomain` so select/radio comparison and data-flow assignability mirror Aurelia's direct model comparison.",
         "Use weak typing as diagnostic/repair pressure rather than inventing value domains the TypeChecker cannot support.",
         "AUR0654 belongs at binding data-flow, not value-channel drafting: SelectValueObserverChannelDrafts proves the single-select channel, while RuntimeBindingDataFlowMaterializer compares that channel with the TypeChecker source array shape.",
         "Custom matcher presence is now a value-channel fact (`usesCustomMatcher`) for checked/select observers. Do not execute matcher bodies in the static analyzer; use the fact to keep default equality and app-supplied comparison visibly distinct.",
@@ -296,6 +374,11 @@
           "kind": "fixture",
           "path": "packages/semantic-runtime/fixtures/pressure/checked-select-custom-matcher",
           "summary": "Pressure fixture for checked/select `matcher.bind` value-channel facts."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/select-model-primitives",
+          "summary": "Pressure fixture for nullable/boolean/object select and radio primitive model domains."
         }
       ],
       "liveChecks": [
@@ -319,7 +402,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-05-17"
     },
     {
       "id": "frontier:binding-value-channel-materializer",
@@ -440,6 +523,7 @@
         "Target-side observer write failures belong here: spend runtime assign_readonly_size / AUR0220 for source-to-target writes through CollectionSizeObserver and assign_readonly_readonly_property_from_computed / AUR0221 for source-to-target writes through getter-only ComputedObserver targets.",
         "Runtime AST source-assignment diagnostics such as runtime-expression-unassignable, host-access-scope-assignment, and nullish-assignment are binding data-flow/source write capability pressure, not API-policy wording.",
         "For member-expression writes, consume CheckerTypeShapeAccess.memberWriteAccess and map that lower-level result into Aurelia astAssign policy; do not duplicate checker/apparent-property or string-index lookup in observation.",
+        "Access-scope writes should use the same binding-context TypeChecker fallback as expression reads when no explicit Scope slot exists; ordinary getter/setter view-model properties should not require eager slot materialization just to prove target-to-source assignment.",
         "Framework astAssign default-handles unsupported expression kinds as no-ops, so runtime-expression-unassignable should stay framework-runtime-behavior without an AUR code; reserved $host and strict nullish assignment spend exact runtime AUR0106/AUR0116 codes.",
         "Carry source expression open kinds forward on data-flow rows; runtime AST callable diagnostics should consume that product field instead of reparsing expressions in API policy.",
         "Preserve source-type open reasons on rows when TypeChecker facts are weak; do not manufacture members to make autocomplete look better."
@@ -510,7 +594,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-05-17"
     },
     {
       "id": "reuse:forms-observation-value-channels",

@@ -4,6 +4,11 @@ import type {
   ProductHandle,
   ProvenanceHandle,
 } from '../kernel/handles.js';
+import {
+  productDetailAddressHandle,
+  productDetailHandle,
+  productDetailIdentityHandle,
+} from '../kernel/product-details.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 
 export const enum HtmlIrNodeKind {
@@ -96,6 +101,10 @@ export type HtmlCommentField =
   | 'source'
   | 'recovery';
 
+const HtmlDocumentDetailKind = 'template.html-document';
+const HtmlNodeDetailKind = 'template.html-node';
+const HtmlAttributeDetailKind = 'template.html-attribute';
+
 /** Reference to one authored HTML IR node. */
 export class HtmlNodeReference {
   constructor(
@@ -141,19 +150,28 @@ export class HtmlDocument {
   readonly nodeKind = HtmlIrNodeKind.Document;
 
   constructor(
-    /** Product handle for the materialized-product envelope that represents this document. */
-    readonly productHandle: ProductHandle,
-    /** Identity for this authored HTML document. */
-    readonly identityHandle: IdentityHandle,
     /** Root nodes in authored order. */
     readonly rootNodes: readonly HtmlNodeReference[],
     /** Parser recoveries that apply to the document as a whole. */
     readonly recoveries: readonly HtmlRecovery[],
-    /** Source address for the full template/document. */
-    readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<HtmlDocumentField>[] = [],
   ) {}
+
+  /** Product handle for the materialized-product envelope that represents this document. */
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, HtmlDocumentDetailKind);
+  }
+
+  /** Identity for this authored HTML document. */
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, HtmlDocumentDetailKind);
+  }
+
+  /** Source address for the full template/document. */
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, HtmlDocumentDetailKind);
+  }
 }
 
 /** Authored HTML fragment inside a template-controller, projection, or synthetic view. */
@@ -161,12 +179,21 @@ export class HtmlFragment {
   readonly nodeKind = HtmlIrNodeKind.Fragment;
 
   constructor(
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
     readonly children: readonly HtmlNodeReference[],
-    readonly sourceAddressHandle: AddressHandle | null,
     readonly recoveries: readonly HtmlRecovery[] = [],
   ) {}
+
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, HtmlNodeDetailKind);
+  }
+
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, HtmlNodeDetailKind);
+  }
+
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, HtmlNodeDetailKind);
+  }
 
   toReference(): HtmlNodeReference {
     return new HtmlNodeReference(
@@ -183,17 +210,26 @@ export class HtmlElement {
   readonly nodeKind = HtmlIrNodeKind.Element;
 
   constructor(
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
     readonly tagName: string,
     readonly namespace: HtmlNamespaceKind,
     readonly attributes: readonly HtmlAttributeReference[],
     readonly children: readonly HtmlNodeReference[],
     readonly selfClosing: boolean,
-    readonly sourceAddressHandle: AddressHandle | null,
     readonly recoveries: readonly HtmlRecovery[] = [],
     readonly fieldProvenance: readonly FieldProvenance<HtmlElementField>[] = [],
   ) {}
+
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, HtmlNodeDetailKind);
+  }
+
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, HtmlNodeDetailKind);
+  }
+
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, HtmlNodeDetailKind);
+  }
 
   toReference(): HtmlNodeReference {
     return new HtmlNodeReference(
@@ -208,16 +244,25 @@ export class HtmlElement {
 /** Authored attribute before Aurelia attribute-pattern parsing. */
 export class HtmlAttribute {
   constructor(
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
     readonly rawName: string,
     readonly rawValue: string,
     readonly nameAddressHandle: AddressHandle | null,
     readonly valueAddressHandle: AddressHandle | null,
-    readonly sourceAddressHandle: AddressHandle | null,
     readonly recoveries: readonly HtmlRecovery[] = [],
     readonly fieldProvenance: readonly FieldProvenance<HtmlAttributeField>[] = [],
   ) {}
+
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, HtmlAttributeDetailKind);
+  }
+
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, HtmlAttributeDetailKind);
+  }
+
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, HtmlAttributeDetailKind);
+  }
 
   toReference(): HtmlAttributeReference {
     return new HtmlAttributeReference(
@@ -233,12 +278,21 @@ export class HtmlText {
   readonly nodeKind = HtmlIrNodeKind.Text;
 
   constructor(
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
     readonly text: string,
-    readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<HtmlTextField>[] = [],
   ) {}
+
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, HtmlNodeDetailKind);
+  }
+
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, HtmlNodeDetailKind);
+  }
+
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, HtmlNodeDetailKind);
+  }
 
   toReference(): HtmlNodeReference {
     return new HtmlNodeReference(
@@ -255,14 +309,23 @@ export class HtmlComment {
   readonly nodeKind = HtmlIrNodeKind.Comment;
 
   constructor(
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
     readonly text: string,
     readonly semanticKind: HtmlCommentSemanticKind,
-    readonly sourceAddressHandle: AddressHandle | null,
     readonly recoveries: readonly HtmlRecovery[] = [],
     readonly fieldProvenance: readonly FieldProvenance<HtmlCommentField>[] = [],
   ) {}
+
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, HtmlNodeDetailKind);
+  }
+
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, HtmlNodeDetailKind);
+  }
+
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, HtmlNodeDetailKind);
+  }
 
   toReference(): HtmlNodeReference {
     return new HtmlNodeReference(
@@ -279,12 +342,21 @@ export class HtmlDoctype {
   readonly nodeKind = HtmlIrNodeKind.Doctype;
 
   constructor(
-    readonly productHandle: ProductHandle,
-    readonly identityHandle: IdentityHandle,
     readonly name: string | null,
-    readonly sourceAddressHandle: AddressHandle | null,
     readonly recoveries: readonly HtmlRecovery[] = [],
   ) {}
+
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, HtmlNodeDetailKind);
+  }
+
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, HtmlNodeDetailKind);
+  }
+
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, HtmlNodeDetailKind);
+  }
 
   toReference(): HtmlNodeReference {
     return new HtmlNodeReference(

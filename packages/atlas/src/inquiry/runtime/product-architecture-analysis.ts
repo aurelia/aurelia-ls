@@ -338,7 +338,7 @@ export const ProductArchitectureClassSurfaceRole = {
   ProductOwner: "product-owner",
   /** Class publishes or records products for a phase owned elsewhere. */
   Publisher: "publisher",
-  /** Class carries mutable per-pass or per-invocation state with a bounded lifetime. */
+  /** Class carries mutable per-pass, per-invocation, graph-local, or measurement state with a bounded lifetime. */
   WorkFrame: "work-frame",
   /** Class is primarily an input/output/result/config envelope or immutable product carrier. */
   DataCarrier: "data-carrier",
@@ -1722,11 +1722,11 @@ function classSurfaceRole(
   }
   if (
     name === "Candidate" ||
-    endsWithAny(name, ["Frame", "Run", "Context", "State", "Traversal", "Invocation", "Requirement"])
+    endsWithAny(name, ["Frame", "Run", "Context", "State", "Traversal", "Invocation", "Requirement", "Counter", "Counters", "Accumulator", "Metrics"])
   ) {
     return {
       role: ProductArchitectureClassSurfaceRole.WorkFrame,
-      reason: "bounded pass, invocation, context, requirement, candidate, or traversal state shape",
+      reason: "bounded pass, invocation, context, requirement, candidate, traversal, counter, or accumulator state shape",
     };
   }
   if (

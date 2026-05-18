@@ -221,6 +221,11 @@ export interface TemplateRenderingRunHost {
 
   compileSpread(input: RuntimeRendererSpreadCompileRequest): RuntimeRendererSpreadCompileResult;
 
+  measureRenderingPhase<TValue>(
+    name: string,
+    read: () => TValue,
+  ): TValue;
+
   recordRendererIssue(
     local: string,
     renderer: RuntimeRendererReference,
@@ -707,16 +712,24 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
     private readonly input: TemplateRenderingRunRequest,
   ) {
     this.provenanceHandle = input.provenanceHandle;
-    this.instructionsByProduct = new Map(input.instructions
-      .map((instruction) => [instruction.productHandle, instruction]));
-    this.nestedInstructionProductHandles = new Set(input.instructions.flatMap((instruction) =>
-      instruction instanceof IteratorBindingInstruction
-        ? instruction.tailInstructionProductHandles
-        : []
-    ));
+    const index = this.measure('render-dispatch:instruction-index', () =>
+      renderingInstructionIndex(input.instructions)
+    );
+    this.instructionsByProduct = index.instructionsByProduct;
+    this.nestedInstructionProductHandles = index.nestedInstructionProductHandles;
   }
 
   render(): TemplateRenderingRunResult {
+    this.measure('render-dispatch:surrogate', () => this.renderSurrogateInstructions());
+    this.measure('render-dispatch:targets', () => this.renderTargetInstructions());
+    return this.measure('render-dispatch:result', () => new TemplateRenderingRunResult(
+      this.input.rootController,
+      this.renderedInstructions,
+      this.openInstructions,
+    ));
+  }
+
+  private renderSurrogateInstructions(): void {
     const surrogateSequence = this.input.compiledTemplate.surrogateSequence;
     if (this.input.renderSurrogate && surrogateSequence != null) {
       const surrogateTarget = new TemplateRenderTarget(
@@ -761,7 +774,9 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
         );
       });
     }
+  }
 
+  private renderTargetInstructions(): void {
     this.input.targets.forEach((target, targetIndex) => {
       target.instructions.forEach((instruction, instructionIndex) => {
         if (this.consumed.has(instruction.productHandle)) {
@@ -784,12 +799,6 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
         );
       });
     });
-
-    return new TemplateRenderingRunResult(
-      this.input.rootController,
-      this.renderedInstructions,
-      this.openInstructions,
-    );
   }
 
   allocate(local: string): RuntimeRendererAllocation {
@@ -797,11 +806,15 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
   }
 
   createChildController(input: RuntimeControllerCreationRequest): RuntimeControllerFrame | null {
-    return this.input.host.createChildController(input);
+    return this.measure('render-dispatch:create-child-controller', () =>
+      this.input.host.createChildController(input)
+    );
   }
 
   compileSpread(input: RuntimeRendererSpreadCompileRequest): RuntimeRendererSpreadCompileResult {
-    const result = this.input.host.compileSpread(input);
+    const result = this.measure('render-dispatch:compile-spread', () =>
+      this.input.host.compileSpread(input)
+    );
     if (result.state === RuntimeRendererSpreadCompileState.Compiled) {
       for (const instruction of result.createdInstructions) {
         this.instructionsByProduct.set(instruction.productHandle, instruction);
@@ -895,18 +908,20 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
       return;
     }
 
-    const result = renderer.render(new RuntimeRendererInvocation(
-      local,
-      instruction,
-      renderer,
-      owner,
-      renderingController,
-      targetController,
-      target,
-      this,
-      hydrationContextController,
-      targetInstructions,
-    ));
+    const result = this.measure('render-dispatch:renderer-render', () =>
+      renderer.render(new RuntimeRendererInvocation(
+        local,
+        instruction,
+        renderer,
+        owner,
+        renderingController,
+        targetController,
+        target,
+        this,
+        hydrationContextController,
+        targetInstructions,
+      ))
+    );
     for (const binding of result.bindings) {
       if (bindingOwner instanceof SpreadBinding) {
         bindingOwner.addInnerBinding(binding);
@@ -927,6 +942,13 @@ class TemplateRenderingRun implements RuntimeRenderingRun {
       result.createdControllers,
       result.targetOperations,
     ));
+  }
+
+  private measure<TValue>(
+    name: string,
+    read: () => TValue,
+  ): TValue {
+    return this.input.host.measureRenderingPhase(name, read);
   }
 
   private defaultTarget(): TemplateRenderTarget {
@@ -1051,6 +1073,29 @@ export class TemplateCompilerWorld {
       this.sourceAddressHandle,
     );
   }
+}
+
+class TemplateRenderingInstructionIndex {
+  constructor(
+    readonly instructionsByProduct: Map<ProductHandle, TemplateInstruction>,
+    readonly nestedInstructionProductHandles: ReadonlySet<ProductHandle>,
+  ) {}
+}
+
+function renderingInstructionIndex(
+  instructions: readonly TemplateInstruction[],
+): TemplateRenderingInstructionIndex {
+  const instructionsByProduct = new Map<ProductHandle, TemplateInstruction>();
+  const nestedInstructionProductHandles = new Set<ProductHandle>();
+  for (const instruction of instructions) {
+    instructionsByProduct.set(instruction.productHandle, instruction);
+    if (instruction instanceof IteratorBindingInstruction) {
+      for (const handle of instruction.tailInstructionProductHandles) {
+        nestedInstructionProductHandles.add(handle);
+      }
+    }
+  }
+  return new TemplateRenderingInstructionIndex(instructionsByProduct, nestedInstructionProductHandles);
 }
 
 function matchesVisibleResourceName(

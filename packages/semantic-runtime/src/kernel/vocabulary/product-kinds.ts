@@ -255,6 +255,22 @@ export const KernelProductKinds = {
       'A modeled runtime Scope connecting parent scope, binding context, override context, and boundary behavior.',
     ),
 
+    /** Product kind for an AuCompose CompositionContext produced from component/template/model inputs. */
+    CompositionContext: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'composition-context',
+      KernelVocabularySlot.ProductKind,
+      'An AuCompose CompositionContext produced from component, template, model, scopeBehavior, tag, and flushMode inputs.',
+    ),
+
+    /** Product kind for an AuCompose CompositionController over one resolved composition context. */
+    CompositionController: defineVocabulary(
+      KernelVocabularyNamespace.Configuration,
+      'composition-controller',
+      KernelVocabularySlot.ProductKind,
+      'An AuCompose CompositionController that resolves a component or template and owns the composed child lifecycle boundary.',
+    ),
+
     /** Product kind for runtime binding contexts used by Scope lookup. */
     BindingContext: defineVocabulary(
       KernelVocabularyNamespace.Configuration,

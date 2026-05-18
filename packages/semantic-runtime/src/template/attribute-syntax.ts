@@ -4,6 +4,11 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
+import {
+  productDetailAddressHandle,
+  productDetailHandle,
+  productDetailIdentityHandle,
+} from '../kernel/product-details.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 import type {
   AttributePatternDefinitionEntry,
@@ -103,6 +108,9 @@ export type AttributeClassificationField =
   | 'bindable'
   | 'instructions'
   | 'source';
+
+const AttributeSyntaxDetailKind = 'template.attribute-syntax';
+const AttributeClassificationDetailKind = 'template.attribute-classification';
 
 /** Runtime compiled pattern score used to choose the best matching attribute pattern. */
 export class AttributePatternScore {
@@ -474,10 +482,6 @@ export class AttributeParserMachine {
 @auLink('template-compiler:AttrSyntax')
 export class AttributeSyntax {
   constructor(
-    /** Product handle for the materialized-product envelope that represents this syntax record. */
-    readonly productHandle: ProductHandle,
-    /** Identity for this authored attribute syntax. */
-    readonly identityHandle: IdentityHandle,
     /** Whether the parser produced plain syntax, pattern syntax, or an open recovery syntax. */
     readonly syntaxKind: AttributeSyntaxKind,
     /** Raw authored attribute name. */
@@ -494,11 +498,24 @@ export class AttributeSyntax {
     readonly pattern: AttributePatternDefinitionEntry | null,
     /** Source attribute reference that produced this syntax. */
     readonly attribute: HtmlAttributeReference,
-    /** Source address for the full attribute syntax. */
-    readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<AttributeSyntaxField>[] = [],
   ) {}
+
+  /** Product handle for the materialized-product envelope that represents this syntax record. */
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, AttributeSyntaxDetailKind);
+  }
+
+  /** Identity for this authored attribute syntax. */
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, AttributeSyntaxDetailKind);
+  }
+
+  /** Source address for the full attribute syntax. */
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, AttributeSyntaxDetailKind);
+  }
 }
 
 /** Executable attribute-pattern handler visible to IAttributeParser. */
@@ -672,10 +689,6 @@ export class AttributeParserService {
  */
 export class AttributeClassification {
   constructor(
-    /** Product handle for the materialized-product envelope that represents this classification. */
-    readonly productHandle: ProductHandle,
-    /** Identity for this classification product. */
-    readonly identityHandle: IdentityHandle,
     /** Parsed attribute syntax being classified. */
     readonly syntaxProductHandle: ProductHandle,
     /** HTML element or template node that owns the attribute. */
@@ -692,9 +705,22 @@ export class AttributeClassification {
     readonly bindable: TemplateBindableReference | null,
     /** Instruction products produced downstream from this classification. */
     readonly instructionProductHandles: readonly ProductHandle[],
-    /** Source address for the classification site. */
-    readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for source facts that matter to explanation or ambiguity. */
     readonly fieldProvenance: readonly FieldProvenance<AttributeClassificationField>[] = [],
   ) {}
+
+  /** Product handle for the materialized-product envelope that represents this classification. */
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, AttributeClassificationDetailKind);
+  }
+
+  /** Identity for this classification product. */
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, AttributeClassificationDetailKind);
+  }
+
+  /** Source address for the classification site. */
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, AttributeClassificationDetailKind);
+  }
 }

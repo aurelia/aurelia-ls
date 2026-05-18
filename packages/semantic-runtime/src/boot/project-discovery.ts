@@ -32,6 +32,9 @@ export function discoverBootProjects(
   if (mode === BootProjectDiscoveryMode.SingleRoot) {
     return [{ rootDir: absoluteRoot }];
   }
+  if (mode !== BootProjectDiscoveryMode.PackageTsconfig) {
+    throw new Error(`Unknown boot project discovery mode '${mode}'.`);
+  }
 
   const packageRoots = discoverPackageRoots(absoluteRoot);
   const projectRoots = packageRoots.filter(hasProjectManifest);

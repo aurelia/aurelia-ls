@@ -8,7 +8,13 @@ export const enum SemanticAppAnalysisDepth {
   BindingObservation = 'binding-observation',
 }
 
-export const DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH = SemanticAppAnalysisDepth.BindingObservation;
+export const SEMANTIC_APP_ANALYSIS_DEPTHS = [
+  'runtime-topology',
+  'binding-targets',
+  'binding-observation',
+] as const;
+
+export const DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH = SemanticAppAnalysisDepth.RuntimeTopology;
 
 export function normalizeSemanticAppAnalysisDepth(
   depth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null | undefined,
@@ -34,6 +40,19 @@ export function semanticAppAnalysisDepthSatisfies(
 ): boolean {
   return semanticAppAnalysisDepthRank(normalizeSemanticAppAnalysisDepth(actual))
     >= semanticAppAnalysisDepthRank(normalizeSemanticAppAnalysisDepth(required));
+}
+
+export function semanticAppAnalysisDepthMax(
+  depths: readonly (SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null | undefined)[],
+): SemanticAppAnalysisDepth {
+  let selected = DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH;
+  for (const depth of depths) {
+    const normalized = normalizeSemanticAppAnalysisDepth(depth);
+    if (semanticAppAnalysisDepthRank(normalized) > semanticAppAnalysisDepthRank(selected)) {
+      selected = normalized;
+    }
+  }
+  return selected;
 }
 
 function semanticAppAnalysisDepthRank(depth: SemanticAppAnalysisDepth): number {

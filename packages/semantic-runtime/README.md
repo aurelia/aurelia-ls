@@ -20,6 +20,22 @@ Run the aggregate app API pressure lane with:
 pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api
 ```
 
+Run the inquiry-aware construction/query telemetry lane with:
+
+```powershell
+pnpm --filter @aurelia-ls/semantic-runtime profile:app-telemetry
+```
+
+That profiler compares analysis depth and inquiry profile, reports phase memory/kernel deltas, shows product/detail,
+handle-character, and source-span-role density when kernel breakdowns are enabled, prints TypeSystemProject subphases,
+Program source-file composition, and compiler-host cache counts, and separates app-world construction cost from public
+query projection cost and query-claim retention. Use it before changing cache policy, materialization depth, hot details,
+source-address storage, or app-opening defaults.
+Aggregate output intentionally keeps per-root, analysis-depth, and inquiry-profile groups before printing global totals.
+Use those grouped rows for depth-policy decisions: a global aggregate can show the total memory/time load, but the grouped
+rows show which depth or profile actually introduced the extra products, TypeScript Program bulk, or retained query
+claims.
+
 Its default input set is discovered from `fixtures/authoring/generated-*`, `fixtures/authoring/storefront`, and every
 subfolder under `fixtures/pressure`, so adding a durable fixture makes it part of the broad aggregate lane without
 updating the script.
@@ -36,6 +52,19 @@ row names, source text, or app-specific open-reason details from external clean-
 script defaults to `SEMANTIC_RUNTIME_PRESSURE_DETAIL=compact`, which keeps route-friendly aggregate buckets first; use
 `SEMANTIC_RUNTIME_PRESSURE_DETAIL=summary` for wider bucket detail and `SEMANTIC_RUNTIME_PRESSURE_DETAIL=raw` only for
 local, non-committed debugging.
+For deep monorepos, keep the first pass broad and then narrow app-world opening with
+`SEMANTIC_RUNTIME_PRESSURE_PROJECT_KEYS`, `SEMANTIC_RUNTIME_PRESSURE_PROJECT_ROOT_DIRS`, or
+`SEMANTIC_RUNTIME_PRESSURE_PROJECT_DISCOVERY=single-root|package-tsconfig`. Project-root filters may be absolute or
+relative to each pressure root; use them to profile a selected app without turning unrelated packages into deep
+semantic-runtime work.
+Large selected apps can still need an explicit Node heap while app-world memory work is in progress:
+
+```powershell
+$env:NODE_OPTIONS='--max-old-space-size=8192'
+```
+
+Use `SEMANTIC_RUNTIME_APP_ANALYSIS_DEPTH=runtime-topology` as the first large-app depth, then deepen to
+`binding-targets` or `binding-observation` only when the question needs binding/type products.
 It also defaults to `SEMANTIC_RUNTIME_PRESSURE_OUTPUT=aggregate` because the built-in fixture list is broad and
 future-you usually needs the combined cross-root pressure shape before opening per-input detail. Use
 `SEMANTIC_RUNTIME_PRESSURE_OUTPUT=inputs` for a single isolated root, and `SEMANTIC_RUNTIME_PRESSURE_OUTPUT=both` only

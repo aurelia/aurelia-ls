@@ -15,6 +15,10 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
+  bindProductDetailEnvelope,
+  requireProductDetailEnvelope,
+} from '../kernel/product-details.js';
+import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -126,7 +130,7 @@ export class AttributeSyntaxMaterializer {
     attribute: HtmlAttribute,
   ): AttributeSyntaxPublication {
     const parse = input.compilerWorld.attributeParser.parse(attribute.rawName, attribute.rawValue, executionHost);
-    const syntax = this.createAttributeSyntax(local, attribute, parse);
+    const syntax = this.createAttributeSyntax(local, source, attribute, parse);
     const claims = this.claimsForAttributeSyntax(local, source, attribute, syntax, parse.executableProductHandle);
     return new AttributeSyntaxPublication(
       syntax,
@@ -137,12 +141,13 @@ export class AttributeSyntaxMaterializer {
 
   private createAttributeSyntax(
     local: string,
+    source: AttributeSyntaxSourceSet,
     attribute: HtmlAttribute,
     parse: AttributeParserParseResult,
   ): AttributeSyntax {
-    return new AttributeSyntax(
-      this.store.handles.product(local),
-      this.store.handles.identity(local),
+    const productHandle = this.store.handles.product(local);
+    const identityHandle = this.store.handles.identity(local);
+    return bindProductDetailEnvelope(new AttributeSyntax(
       parse.execution.syntaxKind,
       parse.execution.rawName,
       parse.execution.rawValue,
@@ -151,9 +156,14 @@ export class AttributeSyntaxMaterializer {
       parse.execution.parts,
       parse.pattern,
       attribute.toReference(),
-      attribute.sourceAddressHandle,
       [],
-    );
+    ), new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.AttributeSyntax.key,
+      identityHandle,
+      attribute.sourceAddressHandle,
+      source.provenanceHandle,
+    ));
   }
 
   private claimsForAttributeSyntax(
@@ -198,13 +208,7 @@ export class AttributeSyntaxMaterializer {
         attribute.sourceAddressHandle,
         attribute.rawName,
       ),
-      new MaterializedProduct(
-        syntax.productHandle,
-        KernelVocabulary.Template.AttributeSyntax.key,
-        syntax.identityHandle,
-        attribute.sourceAddressHandle,
-        source.provenanceHandle,
-      ),
+      requireProductDetailEnvelope(syntax, 'template.attribute-syntax'),
     ];
   }
 

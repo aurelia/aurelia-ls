@@ -3,6 +3,7 @@ import type { AppRoot } from '../configuration/app-root.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import type { ConfigurationKernelEmission } from '../configuration/configuration-kernel-emitter.js';
 import type { ConfigurationStep } from '../configuration/configuration-sequence.js';
+import { ConfigurationProductDetails } from '../configuration/product-details.js';
 import type { SourceFileAdmission } from '../boot/frames.js';
 import type { AddressHandle, IdentityHandle, ProductHandle } from '../kernel/handles.js';
 import type { KernelStore } from '../kernel/store.js';
@@ -25,6 +26,7 @@ import { CustomElementDefinition } from '../resources/custom-element-definition.
 import type { ResourceDependencyReferenceKind } from '../resources/resource-reference.js';
 import {
   RuntimeBindingDataFlowDirection,
+  RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceKind,
   RuntimeBindingValueChannelKind,
 } from '../observation/runtime-binding-observation.js';
@@ -337,10 +339,21 @@ export interface SemanticApplicationTopologyResult {
   readonly routes: readonly SemanticApplicationRouteRow[];
 }
 
+export interface SemanticApplicationTopologySummaryResult {
+  readonly counts: Record<string, number>;
+  readonly scalars: Record<string, unknown>;
+}
+
+export interface SemanticApplicationTopologyOptions {
+  /** Include query-local TypeChecker projection of bindable value surfaces. Defaults to false for overview reads. */
+  readonly includeTypeSurfaces?: boolean;
+}
+
 export function readSemanticApplicationTopology(
   store: KernelStore,
   emission: AureliaAppWorldProjectEmission,
   handles: boolean,
+  options: SemanticApplicationTopologyOptions = {},
 ): SemanticApplicationTopologyResult {
   const configuration = emission.configuration.readConfiguration();
   const appRootCounts = appRootCountByDefinitionProduct(emission);
@@ -348,15 +361,31 @@ export function readSemanticApplicationTopology(
   const componentDefinitions = uniqueCustomElementDefinitions(emission);
   const styles = applicationStyleRows(store, emission, componentDefinitions, handles);
   const stylesByDefinition = applicationStyleRowsByDefinition(styles);
+  const includeTypeSurfaces = options.includeTypeSurfaces === true;
   const appRoots = configuration.appRoots.map((appRoot) =>
-    applicationRootRow(store, emission, configuration, appRoot, componentRoles, stylesByDefinition, handles)
+    applicationRootRow(store, emission, configuration, appRoot, componentRoles, stylesByDefinition, handles, includeTypeSurfaces)
   );
-  const components = applicationComponentRows(store, emission, componentDefinitions, appRootCounts, componentRoles, stylesByDefinition, handles);
+  const components = applicationComponentRows(
+    store,
+    emission,
+    componentDefinitions,
+    appRootCounts,
+    componentRoles,
+    stylesByDefinition,
+    handles,
+    includeTypeSurfaces,
+  );
   const serviceTopology = readApplicationServiceTopology(emission.project, emission.typeSystem);
   const services = applicationServiceRows(store, emission, serviceTopology.services);
   const injections = applicationInjectionRows(store, emission, serviceTopology.injections);
   const serviceInteractions = applicationServiceInteractionRows(store, emission, components, serviceTopology.interactions);
-  const serviceInteractionBindings = applicationServiceInteractionBindingRows(store, emission, components, serviceInteractions);
+  const serviceInteractionBindings = applicationServiceInteractionBindingRows(
+    store,
+    emission,
+    components,
+    injections,
+    serviceInteractions,
+  );
   const stateCompositions = applicationStateCompositionRows(store, emission);
   const routes = applicationRouteRows(store, emission);
   const files = applicationFileRows(store, emission, appRoots, components, styles, routes);
@@ -376,6 +405,49 @@ export function readSemanticApplicationTopology(
   };
 }
 
+export function readSemanticApplicationTopologySummary(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+): SemanticApplicationTopologySummaryResult {
+  const configuration = emission.configuration.readConfiguration();
+  const componentDefinitions = uniqueCustomElementDefinitions(emission);
+  const styleSites = applicationStyleSites(store, emission, componentDefinitions);
+  const serviceTopology = readApplicationServiceTopology(emission.project, emission.typeSystem);
+  const routeConfigs = emission.routes.readRouteConfigs();
+  const files = applicationTopologySummaryFilePaths(
+    store,
+    emission,
+    configuration.appRoots,
+    componentDefinitions,
+    styleSites,
+    routeConfigs,
+  );
+  return {
+    counts: {
+      files: files.size,
+      appRoots: configuration.appRoots.length,
+      components: componentDefinitions.length,
+      services: serviceTopology.services.length,
+      injections: serviceTopology.injections.length,
+      serviceInteractions: serviceTopology.interactions.length,
+      serviceInteractionBindings: applicationServiceInteractionBindingCount(
+        store,
+        emission,
+        componentDefinitions,
+        serviceTopology.injections,
+        serviceTopology.interactions,
+      ),
+      stateCompositions: applicationStateCompositionRows(store, emission).length,
+      styles: styleSites.length,
+      routes: routeConfigs.length,
+    },
+    scalars: {
+      projectKey: emission.project.projectKey,
+      rootDir: emission.project.rootDir,
+    },
+  };
+}
+
 function applicationRootRow(
   store: KernelStore,
   emission: AureliaAppWorldProjectEmission,
@@ -384,6 +456,7 @@ function applicationRootRow(
   componentRoles: ComponentRoleRowsByDefinition,
   stylesByDefinition: ReadonlyMap<string, readonly SemanticApplicationStyleAsset[]>,
   handles: boolean,
+  includeTypeSurfaces: boolean,
 ): SemanticApplicationRootRow {
   const candidateDefinition = emission.resourceIndex.lookupByTargetReference(appRoot.component);
   const definition = candidateDefinition instanceof CustomElementDefinition ? candidateDefinition : null;
@@ -398,7 +471,7 @@ function applicationRootRow(
     host: describeAddress(store, appRoot.hostAddressHandle),
     component: definition == null
       ? null
-      : applicationComponentReference(store, emission, definition, componentRoles, stylesByDefinition, handles),
+      : applicationComponentReference(store, emission, definition, componentRoles, stylesByDefinition, handles, includeTypeSurfaces),
     compilerWorld: compilerWorld == null ? null : compilerWorldLabel(store, compilerWorld),
     configurationSequences: configuration.sequences.filter((sequence) =>
       sequence.appRoot?.productHandle === appRoot.productHandle
@@ -426,9 +499,10 @@ function applicationComponentRows(
   componentRoles: ComponentRoleRowsByDefinition,
   stylesByDefinition: ReadonlyMap<string, readonly SemanticApplicationStyleAsset[]>,
   handles: boolean,
+  includeTypeSurfaces: boolean,
 ): readonly SemanticApplicationComponentRow[] {
   const rows = definitions.map((definition) => {
-    const reference = applicationComponentReference(store, emission, definition, componentRoles, stylesByDefinition, handles);
+    const reference = applicationComponentReference(store, emission, definition, componentRoles, stylesByDefinition, handles, includeTypeSurfaces);
     return {
       ...reference,
       appRootCount: definition.productHandle == null ? 0 : appRootCounts.get(definition.productHandle) ?? 0,
@@ -881,7 +955,18 @@ function applicationStyleRows(
   handles: boolean,
 ): readonly SemanticApplicationStyleAsset[] {
   const sourceByPath = sourceAdmissionsByPath(emission.project.sourceFiles);
-  const sites = readApplicationStyleAssetSites(
+  const sites = applicationStyleSites(store, emission, definitions);
+  return sites.map((site) =>
+    applicationStyleRow(store, sourceByPath, site, handles)
+  );
+}
+
+function applicationStyleSites(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  definitions: readonly CustomElementDefinition[],
+): readonly ApplicationStyleAssetSite[] {
+  return readApplicationStyleAssetSites(
     emission.project,
     emission.typeSystem,
     definitions.map((definition) => ({
@@ -889,9 +974,6 @@ function applicationStyleRows(
       className: definition.target.localName,
       elementName: definition.name,
     })),
-  );
-  return sites.map((site) =>
-    applicationStyleRow(store, sourceByPath, site, handles)
   );
 }
 
@@ -978,6 +1060,7 @@ function applicationComponentReference(
   componentRoles: ComponentRoleRowsByDefinition,
   stylesByDefinition: ReadonlyMap<string, readonly SemanticApplicationStyleAsset[]>,
   handles: boolean,
+  includeTypeSurfaces: boolean,
 ): SemanticApplicationComponentReference {
   const template = applicationTemplateAsset(store, emission, definition, handles);
   return {
@@ -989,7 +1072,9 @@ function applicationComponentReference(
     styles: stylesByDefinition.get(componentStyleKeyForDefinition(definition)) ?? [],
     roles: componentRoleRowsForDefinition(componentRoles, definition),
     bindables: definition.bindables.map((bindable) => {
-      const typeSurface = projectBindableTypeSurface(store, definition.target, bindable);
+      const typeSurface = includeTypeSurfaces
+        ? projectBindableTypeSurface(store, definition.target, bindable)
+        : nullBindableTypeSurface();
       return {
         name: bindable.name,
         attribute: bindable.attribute,
@@ -1036,6 +1121,17 @@ function applicationComponentReference(
   };
 }
 
+function nullBindableTypeSurface() {
+  return {
+    valueType: null,
+    valueTypeShapeKind: null,
+    effectiveValueTypeShapeKind: null,
+    valueTypeHasCallSignature: null,
+    valueTypeHasMembers: null,
+    valueTypeIsWeak: null,
+  };
+}
+
 function applicationTemplateAsset(
   store: KernelStore,
   emission: AureliaAppWorldProjectEmission,
@@ -1053,7 +1149,8 @@ function applicationTemplateAsset(
       + compilation.runtimeAnalysis.runtimeRendering.openSeams.length
       + compilation.runtimeAnalysis.controllerBind.openSeams.length
       + compilation.runtimeAnalysis.bindingValueChannel.openSeams.length
-      + compilation.runtimeAnalysis.bindingDataFlow.openSeams.length;
+      + compilation.runtimeAnalysis.bindingDataFlow.openSeams.length
+      + compilation.runtimeAnalysis.runtimeComposition.openSeams.length;
   return {
     sourceKind: compilation?.compilation.unit.templateSource.sourceKind ?? definition.template?.kind ?? 'unknown',
     source: describeAddress(store, compilation?.compilation.definition.template?.addressHandle ?? sourceAddressHandle),
@@ -1140,6 +1237,44 @@ function applicationFileRows(
       source: file.source,
     }))
     .sort((left, right) => left.path.localeCompare(right.path));
+}
+
+function applicationTopologySummaryFilePaths(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  appRoots: readonly AppRoot[],
+  definitions: readonly CustomElementDefinition[],
+  styles: readonly ApplicationStyleAssetSite[],
+  routes: readonly RouteConfigModel[],
+): ReadonlySet<string> {
+  const files = new Set<string>();
+  const addPath = (path: string | null | undefined): void => {
+    if (path != null && path.length > 0) {
+      files.add(path);
+    }
+  };
+  const addAddress = (handle: AddressHandle | null): void => {
+    addPath(projectSourcePathForAddress(store, emission, handle));
+  };
+  for (const appRoot of appRoots) {
+    addAddress(appRoot.sourceAddressHandle);
+  }
+  for (const definition of definitions) {
+    addAddress(definition.sourceAddressHandle);
+    addAddress(definition.template?.addressHandle ?? null);
+  }
+  for (const style of styles) {
+    addPath(style.stylePath);
+  }
+  for (const route of routes) {
+    addAddress(route.sourceAddressHandle);
+  }
+  for (const source of emission.project.sourceFiles) {
+    if (supportSourceRoleForPath(source.path) != null) {
+      addPath(source.path);
+    }
+  }
+  return files;
 }
 
 function styleFileRole(style: SemanticApplicationStyleAsset): Extract<ApplicationFileRole, 'component-style' | 'global-style'> {
@@ -1292,17 +1427,26 @@ function applicationServiceInteractionBindingRows(
   store: KernelStore,
   emission: AureliaAppWorldProjectEmission,
   components: readonly SemanticApplicationComponentRow[],
+  injections: readonly SemanticApplicationInjectionRow[],
   interactions: readonly SemanticApplicationServiceInteractionRow[],
 ): readonly SemanticApplicationServiceInteractionBindingRow[] {
   const componentClassByElementName = componentClassNameByElementName(components);
+  const injectionsByComponentMember = serviceInjectionsByComponentMember(injections);
   const interactionsByComponentMember = serviceInteractionsByComponentMember(interactions);
-  return readBindingDataFlowRows(emission, store, true).flatMap((dataFlow) =>
-    applicationServiceInteractionBindingRowsForDataFlow(
+  return readBindingDataFlowRows(emission, store, true).flatMap((dataFlow) => [
+    ...directInjectionServiceInteractionBindingRowsForDataFlow(
+      store,
+      emission,
+      dataFlow,
+      componentClassByElementName,
+      injectionsByComponentMember,
+    ),
+    ...applicationServiceInteractionBindingRowsForDataFlow(
       dataFlow,
       componentClassByElementName,
       interactionsByComponentMember,
-    )
-  ).sort((left, right) =>
+    ),
+  ]).sort((left, right) =>
     left.definitionName.localeCompare(right.definitionName)
     || left.bindingSourceRootName.localeCompare(right.bindingSourceRootName)
     || left.bindingSourceName.localeCompare(right.bindingSourceName)
@@ -1310,6 +1454,177 @@ function applicationServiceInteractionBindingRows(
     || left.interactionOperationKind.localeCompare(right.interactionOperationKind)
     || left.interactionMemberName.localeCompare(right.interactionMemberName)
   );
+}
+
+function applicationServiceInteractionBindingCount(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  definitions: readonly CustomElementDefinition[],
+  injections: readonly ApplicationServiceInjectionSite[],
+  interactions: readonly ApplicationServiceInteractionSite[],
+): number {
+  const componentClassByElementName = componentClassNameByDefinitionElementName(definitions);
+  const componentSourcePaths = new Set(
+    definitions
+      .map((definition) => projectSourcePathForAddress(store, emission, definition.sourceAddressHandle))
+      .filter((sourcePath): sourcePath is string => sourcePath != null),
+  );
+  const injectionSitesByComponentMember = serviceInjectionSitesByComponentMember(injections, componentSourcePaths);
+  const interactionsByComponentMember = serviceInteractionSitesByComponentMember(interactions, componentSourcePaths);
+  let count = 0;
+  for (const dataFlow of readBindingDataFlowRows(emission, store, true)) {
+    const componentClassName = componentClassByElementName.get(dataFlow.definitionName) ?? null;
+    const componentMemberName = bindingComponentMemberNameForDataFlow(dataFlow);
+    if (componentClassName == null || dataFlow.sourceName == null || componentMemberName == null) {
+      continue;
+    }
+    count += interactionsByComponentMember.get(componentMemberKey(componentClassName, componentMemberName))?.length ?? 0;
+    const directRootName = singleSourceRootName(dataFlow.sourceRootName);
+    if (
+      directRootName != null
+      && (injectionSitesByComponentMember.get(componentMemberKey(componentClassName, directRootName)) ?? [])
+        .some((injection) => dataFlowRootSlotMatchesSourcePath(store, emission, dataFlow, directRootName, injection.sourcePath))
+    ) {
+      count += serviceInteractionOperationKindsForDataFlow(dataFlow).length;
+    }
+  }
+  return count;
+}
+
+function componentClassNameByDefinitionElementName(
+  definitions: readonly CustomElementDefinition[],
+): ReadonlyMap<string, string> {
+  const classNameByElementName = new Map<string, string>();
+  for (const definition of definitions) {
+    if (definition.target.localName != null) {
+      classNameByElementName.set(definition.name, definition.target.localName);
+    }
+  }
+  return classNameByElementName;
+}
+
+function serviceInteractionSitesByComponentMember(
+  interactions: readonly ApplicationServiceInteractionSite[],
+  componentSourcePaths: ReadonlySet<string>,
+): ReadonlyMap<string, readonly ApplicationServiceInteractionSite[]> {
+  const interactionsByMember = new Map<string, ApplicationServiceInteractionSite[]>();
+  for (const interaction of interactions) {
+    if (
+      !componentSourcePaths.has(interaction.sourcePath)
+      || interaction.consumerClassName == null
+      || interaction.consumerMemberName == null
+    ) {
+      continue;
+    }
+    const key = componentMemberKey(interaction.consumerClassName, interaction.consumerMemberName);
+    const rows = interactionsByMember.get(key) ?? [];
+    rows.push(interaction);
+    interactionsByMember.set(key, rows);
+  }
+  return interactionsByMember;
+}
+
+function serviceInjectionSitesByComponentMember(
+  injections: readonly ApplicationServiceInjectionSite[],
+  componentSourcePaths: ReadonlySet<string>,
+): ReadonlyMap<string, readonly ApplicationServiceInjectionSite[]> {
+  const injectionsByMember = new Map<string, ApplicationServiceInjectionSite[]>();
+  for (const injection of injections) {
+    if (
+      !componentSourcePaths.has(injection.sourcePath)
+      || injection.enclosingClassName == null
+      || injection.enclosingMemberName == null
+      || supportRoleFromFileRole(injection.keyDeclarationRole) == null
+      || injection.keyDeclarationName == null
+    ) {
+      continue;
+    }
+    const key = componentMemberKey(injection.enclosingClassName, injection.enclosingMemberName);
+    const rows = injectionsByMember.get(key) ?? [];
+    rows.push(injection);
+    injectionsByMember.set(key, rows);
+  }
+  return injectionsByMember;
+}
+
+function serviceInjectionsByComponentMember(
+  injections: readonly SemanticApplicationInjectionRow[],
+): ReadonlyMap<string, readonly SemanticApplicationInjectionRow[]> {
+  const injectionsByMember = new Map<string, SemanticApplicationInjectionRow[]>();
+  for (const injection of injections) {
+    if (
+      injection.consumerClassName == null
+      || injection.consumerMemberName == null
+      || supportRoleFromFileRole(injection.keyDeclarationRole) == null
+      || injection.keyDeclarationName == null
+    ) {
+      continue;
+    }
+    const key = componentMemberKey(injection.consumerClassName, injection.consumerMemberName);
+    const rows = injectionsByMember.get(key) ?? [];
+    rows.push(injection);
+    injectionsByMember.set(key, rows);
+  }
+  return injectionsByMember;
+}
+
+function directInjectionServiceInteractionBindingRowsForDataFlow(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  dataFlow: SemanticBindingDataFlowRow,
+  componentClassByElementName: ReadonlyMap<string, string>,
+  injectionsByComponentMember: ReadonlyMap<string, readonly SemanticApplicationInjectionRow[]>,
+): readonly SemanticApplicationServiceInteractionBindingRow[] {
+  const componentClassName = componentClassByElementName.get(dataFlow.definitionName) ?? null;
+  const sourceName = dataFlow.sourceName;
+  const sourceRootName = singleSourceRootName(dataFlow.sourceRootName);
+  if (componentClassName == null || sourceName == null || sourceRootName == null) {
+    return [];
+  }
+  const injections = (injectionsByComponentMember.get(componentMemberKey(componentClassName, sourceRootName)) ?? [])
+    .filter((injection) =>
+      dataFlowRootSlotMatchesSourcePath(store, emission, dataFlow, sourceRootName, injection.consumerPath)
+    );
+  return injections.flatMap((injection) => {
+    const targetRole = supportRoleFromFileRole(injection.keyDeclarationRole);
+    const targetClassName = injection.keyDeclarationName;
+    if (targetRole == null || targetClassName == null) {
+      return [];
+    }
+    return serviceInteractionOperationKindsForDataFlow(dataFlow).map((operationKind) => ({
+      definitionName: dataFlow.definitionName,
+      componentClassName,
+      bindingSourceKind: dataFlow.sourceKind,
+      bindingSourceName: sourceName,
+      bindingSourceRootName: sourceRootName,
+      bindingDirection: dataFlow.direction,
+      bindingTargetProperty: dataFlow.targetProperty,
+      interactionOperationKind: operationKind,
+      interactionTargetRole: targetRole,
+      interactionTargetClassName: targetClassName,
+      interactionMemberName: serviceInteractionBindingMemberName(sourceName, sourceRootName),
+      interactionIsSelfInteraction: false,
+      bindingSource: dataFlow.source,
+      interactionSource: injection.source,
+    }));
+  });
+}
+
+function dataFlowRootSlotMatchesSourcePath(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  dataFlow: SemanticBindingDataFlowRow,
+  sourceRootName: string,
+  sourcePath: string,
+): boolean {
+  const scopeProductHandle = dataFlow.handles?.bindingScopeProductHandle ?? null;
+  if (scopeProductHandle == null) {
+    return false;
+  }
+  const scope = store.productDetails.read(ConfigurationProductDetails.BindingScope, scopeProductHandle);
+  const slot = scope?.locate(sourceRootName).slot ?? null;
+  const slotSourcePath = projectSourcePathForAddress(store, emission, slot?.sourceAddressHandle ?? null);
+  return slotSourcePath != null && applicationPathsReferToSameSource(slotSourcePath, sourcePath);
 }
 
 function applicationServiceInteractionBindingRowsForDataFlow(
@@ -1349,6 +1664,43 @@ function bindingComponentMemberNameForDataFlow(dataFlow: SemanticBindingDataFlow
     case RuntimeBindingDataFlowSourceKind.Keyed:
     case RuntimeBindingDataFlowSourceKind.Other:
       return singleSourceRootName(dataFlow.sourceRootName);
+    default:
+      return null;
+  }
+}
+
+function serviceInteractionOperationKindsForDataFlow(
+  dataFlow: SemanticBindingDataFlowRow,
+): readonly ApplicationServiceInteractionOperationKind[] {
+  switch (dataFlow.direction) {
+    case RuntimeBindingDataFlowDirection.SourceToTarget:
+      return ['read'];
+    case RuntimeBindingDataFlowDirection.TargetToSource:
+      return dataFlowIsWritable(dataFlow) ? ['write'] : [];
+    case RuntimeBindingDataFlowDirection.TwoWay:
+      return dataFlowIsWritable(dataFlow) ? ['read', 'write'] : ['read'];
+    default:
+      return [];
+  }
+}
+
+function dataFlowIsWritable(dataFlow: SemanticBindingDataFlowRow): boolean {
+  return dataFlow.sourceAssignmentKind === RuntimeBindingDataFlowSourceAssignmentKind.RuntimeAssignable
+    || dataFlow.sourceAssignmentKind === RuntimeBindingDataFlowSourceAssignmentKind.RuntimeAssignableWithTypeScriptStrictness;
+}
+
+function serviceInteractionBindingMemberName(sourceName: string, sourceRootName: string): string {
+  return sourceName === sourceRootName || !sourceName.startsWith(`${sourceRootName}.`)
+    ? sourceName
+    : sourceName.slice(sourceRootName.length + 1);
+}
+
+function supportRoleFromFileRole(role: ApplicationFileRole | `${ApplicationFileRole}` | null): ApplicationSupportSourceRole | null {
+  switch (role) {
+    case 'service-source':
+    case 'state-source':
+    case 'model-source':
+      return role;
     default:
       return null;
   }
@@ -1440,6 +1792,12 @@ function applicationSourceLookupPaths(
 
 function normalizeApplicationPath(path: string): string {
   return path.replaceAll('\\', '/').replace(/^\.\//u, '');
+}
+
+function applicationPathsReferToSameSource(leftPath: string, rightPath: string): boolean {
+  const left = normalizeApplicationPath(leftPath);
+  const right = normalizeApplicationPath(rightPath);
+  return left === right || left.endsWith(`/${right}`) || right.endsWith(`/${left}`);
 }
 
 function applicationStateCompositionRows(

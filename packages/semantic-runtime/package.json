@@ -20,6 +20,10 @@
     "fixtures:authoring": "pnpm build && node scripts/materialize-authoring-fixtures.mjs",
     "pressure:app-api": "pnpm build && node scripts/app-api-pressure.mjs",
     "pressure:cursor-loci": "pnpm build && node scripts/cursor-locus-pressure.mjs",
+    "profile:app-telemetry": "pnpm build && node --expose-gc scripts/app-telemetry.mjs",
+    "smoke:catalog-storefront": "pnpm build && node scripts/smoke-authoring-catalog-storefront.mjs",
+    "smoke:composed-dashboard": "pnpm build && node scripts/smoke-authoring-composed-dashboard.mjs",
+    "smoke:localized-state-backed-form": "pnpm build && node scripts/smoke-authoring-localized-state-backed-form.mjs",
     "smoke:minimal-app": "pnpm build && node scripts/smoke-authoring-minimal-app.mjs",
     "smoke:repair-plan": "pnpm build && node scripts/smoke-authoring-repair-plan.mjs",
     "smoke:service-backed-form": "pnpm build && node scripts/smoke-authoring-service-backed-form.mjs",
@@ -27,6 +31,7 @@
     "smoke:validated-state-backed-form": "pnpm build && node scripts/smoke-authoring-validated-state-backed-form.mjs",
     "smoke:routed-state-backed-form": "pnpm build && node scripts/smoke-authoring-routed-state-backed-form.mjs",
     "smoke:state-backed-form": "pnpm build && node scripts/smoke-authoring-state-backed-form.mjs",
+    "smoke:state-store-todo": "pnpm build && node scripts/smoke-authoring-state-store-todo.mjs",
     "test": "pnpm build"
   },
   "dependencies": {

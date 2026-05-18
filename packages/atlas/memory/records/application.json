@@ -60,6 +60,70 @@
       "nextActionPolicy": "when-touched",
       "createdAt": "2026-05-12",
       "updatedAt": "2026-05-15"
+    },
+    {
+      "id": "reuse:direct-di-state-template-binding",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "application",
+        "authoring",
+        "observation",
+        "fixtures",
+        "topology"
+      ],
+      "summary": "Direct template bindings to DI-injected state should remain visible as topology binding handoffs without requiring view-model forwarding getters.",
+      "rationale": "Idiomatic Aurelia can bind templates to ordinary DI-owned state objects. A getter that only shortens `state.member` adds boilerplate and should not be required for AppTopology or authoring verification to see service/state flow.",
+      "guidance": [
+        "Prefer `state.member` template bindings over view-model getters when the getter only forwards to DI-owned state.",
+        "Keep getters/setters for real adaptation points: nullable object lookup, id-to-object projection, route/query projection, presentation state, validation policy, or service calls.",
+        "When a binding source root is an injected state/service/model member, AppTopology.serviceInteractionBindings should publish direct read/write handoff rows from the binding data-flow instead of requiring a component-member TypeScript body.",
+        "Keep the direct handoff scope-backed: use the binding row's materialized BindingScope to prove that the root slot resolves to the injected component member source, so template locals named `state` do not become false service/state interactions.",
+        "Ground ordinary `state.member` observability in Aurelia expression connectable reads. ProxyObservable feeds watcher/trackable/nested-collection reads into the same observation circuit, but it is not a reason to reintroduce forwarding getters."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
+          "symbolName": "directInjectionServiceInteractionBindingRowsForDataFlow",
+          "summary": "Direct binding-data-flow to injected support-member topology rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
+          "symbolName": "serviceInteractionOperationKindsForDataFlow",
+          "summary": "Read/write operation projection from binding direction and assignment policy."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/application/README.md",
+          "summary": "Application topology boundary and direct injected-state binding guidance."
+        },
+        {
+          "kind": "doc",
+          "path": "packages/semantic-runtime/src/observation/README.md",
+          "summary": "Observation notes for ordinary template connectable reads and ProxyObservable as one integrated observation circuit."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/authoring/storefront",
+          "summary": "Hand-authored authoring fixture using direct nested checkout state bindings."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
+          "symbolName": "directInjectionServiceInteractionBindingRowsForDataFlow"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
+          "symbolName": "serviceInteractionOperationKindsForDataFlow"
+        }
+      ],
+      "createdAt": "2026-05-18",
+      "updatedAt": "2026-05-18"
     }
   ]
 }

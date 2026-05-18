@@ -1,0 +1,6 @@
+<ul class="inventory-widget">
+  <li repeat.for="item of items" class="${item.count <= 2 ? 'low-stock' : 'in-stock'}">
+    <span>${item.label}</span>
+    <strong>${item.count}</strong>
+  </li>
+</ul>

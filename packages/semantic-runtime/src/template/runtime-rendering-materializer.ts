@@ -1,6 +1,7 @@
 import { SemanticClaim } from '../kernel/claim.js';
 import type { Container } from '../di/container.js';
 import {
+  ContainerContextResolverRecordPolicy,
   type ContainerChildMaterializationEmission,
 } from '../di/container-materializer.js';
 import type {
@@ -86,6 +87,7 @@ import {
   RuntimeRenderedInstructionRecorder,
 } from './runtime-rendered-instruction-recorder.js';
 import type { TemplateRuntimeAnalysisProjectContext } from './template-runtime-analysis-context.js';
+import type { ResourceDefinitionIndex } from '../resources/resource-definition-index.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
   syntheticViewTargetInputs,
@@ -103,10 +105,39 @@ import {
   RuntimeRendererIssuePublisher,
   type RuntimeRendererIssue,
 } from './runtime-renderer-issue.js';
+import {
+  measureSemanticRuntimePhase,
+  type SemanticRuntimePhaseSink,
+} from '../telemetry/phase.js';
+
+type RuntimeRenderingFinePhaseName =
+  | 'source-records'
+  | 'root-controller'
+  | 'controller-observer-setup'
+  | 'render-root-template'
+  | 'root-render-target-inputs'
+  | 'root-render-dispatch'
+  | 'render-recursive-views'
+  | 'custom-element-target-inputs'
+  | 'custom-element-render-dispatch'
+  | 'synthetic-view-target-inputs'
+  | 'synthetic-view-render-dispatch'
+  | 'spend-render-results'
+  | 'record-open-instructions'
+  | 'record-rendered-instructions'
+  | 'record-rendered-controllers'
+  | 'claim-finalization'
+  | 'emission'
+  | 'commit-records'
+  | 'product-details'
+  | `render-dispatch:${string}`
+  | `controller-creation:${string}`;
 
 export interface RuntimeRenderingMaterializationRequest {
   /** Store-local key shared with the template compilation pass. */
   readonly localKey: string;
+  /** Project key that owns this render analysis, when known. */
+  readonly projectKey: string | null;
   /** Custom element definition whose template is being rendered. */
   readonly definition: CustomElementDefinition;
   /** Compiled-template rows that renderer emulation spends into runtime binding models. */
@@ -117,15 +148,21 @@ export interface RuntimeRenderingMaterializationRequest {
   readonly compilerWorld: TemplateCompilerWorldEmission;
   /** Project-level compiled-template index available for controller hydration facts. */
   readonly projectContext: TemplateRuntimeAnalysisProjectContext;
+  /** Project resource index used to spend controller-local dependency registrations. */
+  readonly resourceDefinitions: ResourceDefinitionIndex | null;
   /** Current TypeChecker epoch available to controller hydration observer setup, when available. */
   readonly typeSystem: TypeSystemProject | null;
+  /** Whether framework contextual resolver slots should be published as kernel records during rendering. */
+  readonly contextResolverRecordPolicy: ContainerContextResolverRecordPolicy;
+  /** Optional fine-grained telemetry sink owned by the surrounding inquiry profile. */
+  readonly profiling?: SemanticRuntimePhaseSink | null;
 }
 
 export class RuntimeRenderingEmission {
   private readonly bindingsByInstruction = new Map<ProductHandle, RuntimeBinding>();
   private readonly effectsByOwner = new Map<ProductHandle, RuntimeBindingScopeEffect[]>();
   private readonly renderContextsByBinding = new Map<ProductHandle, RuntimeBindingRenderContext>();
-  private readonly controllersByInstruction = new Map<ProductHandle, RuntimeControllerFrame>();
+  private readonly controllersByInstruction = new Map<ProductHandle, RuntimeControllerFrame[]>();
   private readonly syntheticControllersByTemplateControllerInstruction = new Map<ProductHandle, RuntimeControllerFrame[]>();
 
   constructor(
@@ -184,7 +221,9 @@ export class RuntimeRenderingEmission {
     }
     for (const controller of controllers) {
       if (controller.instructionProductHandle != null) {
-        this.controllersByInstruction.set(controller.instructionProductHandle, controller);
+        const controllersForInstruction = this.controllersByInstruction.get(controller.instructionProductHandle) ?? [];
+        controllersForInstruction.push(controller);
+        this.controllersByInstruction.set(controller.instructionProductHandle, controllersForInstruction);
       }
       if (controller.creationKind === RuntimeControllerCreationKind.SyntheticView
         && controller.syntheticOwnerInstructionProductHandle != null) {
@@ -210,11 +249,39 @@ export class RuntimeRenderingEmission {
   }
 
   readControllerForInstruction(productHandle: ProductHandle): RuntimeControllerFrame | null {
-    return this.controllersByInstruction.get(productHandle) ?? null;
+    return this.readControllersForInstruction(productHandle)[0] ?? null;
+  }
+
+  readControllerForInstructionUnderParent(
+    productHandle: ProductHandle,
+    parent: RuntimeControllerFrame | null,
+  ): RuntimeControllerFrame | null {
+    if (parent == null) {
+      return this.readControllerForInstruction(productHandle);
+    }
+    return this.readControllersForInstruction(productHandle).find((controller) =>
+      controller.parent?.productHandle === parent.productHandle
+    ) ?? null;
+  }
+
+  readControllersForInstruction(productHandle: ProductHandle): readonly RuntimeControllerFrame[] {
+    return this.controllersByInstruction.get(productHandle) ?? [];
   }
 
   readSyntheticControllerForTemplateControllerInstruction(productHandle: ProductHandle): RuntimeControllerFrame | null {
     return this.readSyntheticControllersForTemplateControllerInstruction(productHandle)[0] ?? null;
+  }
+
+  readSyntheticControllerForTemplateControllerUnderOwner(
+    productHandle: ProductHandle,
+    owner: RuntimeControllerFrame | null,
+  ): RuntimeControllerFrame | null {
+    if (owner == null) {
+      return this.readSyntheticControllerForTemplateControllerInstruction(productHandle);
+    }
+    return this.readSyntheticControllersForTemplateControllerInstruction(productHandle).find((controller) =>
+      controller.parent?.productHandle === owner.productHandle
+    ) ?? null;
   }
 
   readSyntheticControllersForTemplateControllerInstruction(productHandle: ProductHandle): readonly RuntimeControllerFrame[] {
@@ -285,10 +352,12 @@ export class RuntimeRenderingMaterializer {
 
   materialize(input: RuntimeRenderingMaterializationRequest): RuntimeRenderingEmission {
     const emission = this.recordsForRendering(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `runtime-rendering:${input.localKey}`));
-    }
-    this.registerProductDetails(emission);
+    this.measure(input, 'commit-records', () => {
+      if (emission.records.length > 0) {
+        this.store.commit(new KernelStoreBatch(emission.records, `runtime-rendering:${input.localKey}`));
+      }
+    });
+    this.measure(input, 'product-details', () => this.registerProductDetails(emission));
     return emission;
   }
 
@@ -311,43 +380,61 @@ export class RuntimeRenderingMaterializer {
   }
 
   private recordsForRendering(input: RuntimeRenderingMaterializationRequest): RuntimeRenderingEmission {
-    const source = this.recordsForSource(input.localKey);
-    const rootController = this.controllerCreation.createRootController(
-      input.localKey,
-      input.definition,
-      input.compilerWorld.container,
-      source,
+    const source = this.measure(input, 'source-records', () => this.recordsForSource(input.localKey));
+    const rootDependencyRecords: KernelStoreRecord[] = [];
+    const rootChildContainers: ContainerChildMaterializationEmission[] = [];
+    const rootController = this.measure(input, 'root-controller', () =>
+      this.controllerCreation.createRootController(
+        input.localKey,
+        input.definition,
+        input.compilerWorld.container,
+        source,
+        input.projectKey,
+        input.resourceDefinitions,
+        rootDependencyRecords,
+        rootChildContainers,
+      )
     );
     const state = new RuntimeRenderingMaterializationState(input, source, rootController);
-    this.controllerCreation.recordControllerObserverSetupIssues(
-      rootController,
-      input.definition,
-      input.typeSystem,
-      source,
-      state.records,
-      state.controllerIssues,
+    state.records.push(...rootDependencyRecords);
+    state.childContainerEmissions.push(...rootChildContainers);
+    this.measure(input, 'controller-observer-setup', () =>
+      this.controllerCreation.recordControllerObserverSetupIssues(
+        rootController,
+        input.definition,
+        input.typeSystem,
+        source,
+        state.records,
+        state.controllerIssues,
+      )
     );
     const renderResults = this.renderResultsForState(state);
     const controllers = this.spendRenderResults(state, renderResults);
-    state.records.push(...state.claims);
-    return this.emissionForState(state, controllers);
+    this.measure(input, 'claim-finalization', () => state.records.push(...state.claims));
+    return this.measure(input, 'emission', () => this.emissionForState(state, controllers));
   }
 
   private renderResultsForState(
     state: RuntimeRenderingMaterializationState,
   ): readonly TemplateRenderingRunResult[] {
-    const initialRenderResult = this.renderRootTemplate(state);
-    return this.renderRecursiveViewResults(state, initialRenderResult);
+    const initialRenderResult = this.measure(state.input, 'render-root-template', () =>
+      this.renderRootTemplate(state)
+    );
+    return this.measure(state.input, 'render-recursive-views', () =>
+      this.renderRecursiveViewResults(state, initialRenderResult)
+    );
   }
 
   private renderRootTemplate(
     state: RuntimeRenderingMaterializationState,
   ): TemplateRenderingRunResult {
-    const renderTargets = this.renderTargetInputs(
-      state.input,
-      state.source,
-      state.records,
-      state.openSeams,
+    const renderTargets = this.measure(state.input, 'root-render-target-inputs', () =>
+      this.renderTargetInputs(
+        state.input,
+        state.source,
+        state.records,
+        state.openSeams,
+      )
     );
 
     state.rootController.recordLifecycleStep(
@@ -357,44 +444,72 @@ export class RuntimeRenderingMaterializer {
       state.input.compiledTemplate.compiledTemplate.sourceAddressHandle,
       'Rendering.render dispatched the root compiled-template instruction rows.',
     );
-    return state.input.compilerWorld.rendering.render({
-      localKey: state.input.localKey,
-      compiledTemplate: state.input.compiledTemplate.compiledTemplate,
-      targets: renderTargets,
-      instructions: state.input.compiledTemplate.instructions,
-      rootController: state.rootController,
-      provenanceHandle: state.source.provenanceHandle,
-      host: this.renderHostForState(state),
-      renderSurrogate: true,
-    } satisfies TemplateRenderingRunRequest);
+    return this.measure(state.input, 'root-render-dispatch', () =>
+      state.input.compilerWorld.rendering.render({
+        localKey: state.input.localKey,
+        compiledTemplate: state.input.compiledTemplate.compiledTemplate,
+        targets: renderTargets,
+        instructions: state.input.compiledTemplate.instructions,
+        rootController: state.rootController,
+        provenanceHandle: state.source.provenanceHandle,
+        host: this.renderHostForState(state),
+        renderSurrogate: true,
+      } satisfies TemplateRenderingRunRequest)
+    );
   }
 
   private spendRenderResults(
     state: RuntimeRenderingMaterializationState,
     renderResults: readonly TemplateRenderingRunResult[],
   ): readonly RuntimeControllerFrame[] {
-    const renderedInstructions = renderResults.flatMap((result) => result.renderedInstructions);
-    const openInstructions = renderResults.flatMap((result) => result.openInstructions);
-    const controllers = uniqueRuntimeControllers(renderResults.flatMap((result) => result.controllers));
-    const controllerBindingClaimHandles = this.controllerPublication.controllerBindingClaimHandles(state.input.localKey, controllers);
+    return this.measure(state.input, 'spend-render-results', () => {
+      const renderedInstructions = renderResults.flatMap((result) => result.renderedInstructions);
+      const openInstructions = renderResults.flatMap((result) => result.openInstructions);
+      const controllers = uniqueRuntimeControllers(renderResults.flatMap((result) => result.controllers));
+      const controllerBindingClaimHandles = this.controllerPublication.controllerBindingClaimHandles(state.input.localKey, controllers);
 
-    this.recordOpenInstructions(state, openInstructions);
+      this.measure(state.input, 'record-open-instructions', () =>
+        this.recordOpenInstructions(state, openInstructions)
+      );
 
-    this.renderedInstructionRecorder.recordRenderedInstructions(
-      renderedInstructions,
-      state.source,
-      state.records,
-      state.claims,
-      state.targetOperations,
-      state.scopeEffects,
-      state.bindingRenderContexts,
-      state.bindings,
-      state.openSeams,
-      controllerBindingClaimHandles,
+      this.measure(state.input, 'record-rendered-instructions', () =>
+        this.renderedInstructionRecorder.recordRenderedInstructions(
+          renderedInstructions,
+          state.source,
+          state.records,
+          state.claims,
+          state.targetOperations,
+          state.scopeEffects,
+          state.bindingRenderContexts,
+          state.bindings,
+          state.openSeams,
+          controllerBindingClaimHandles,
+        )
+      );
+
+      this.measure(state.input, 'record-rendered-controllers', () =>
+        this.recordRenderedControllers(state, controllers)
+      );
+      return controllers;
+    });
+  }
+
+  private measure<TValue>(
+    input: RuntimeRenderingMaterializationRequest,
+    name: RuntimeRenderingFinePhaseName,
+    read: () => TValue,
+  ): TValue {
+    const profiling = input.profiling;
+    if (profiling == null || !profiling.telemetry.captureFineGrainedPhases) {
+      return read();
+    }
+    return measureSemanticRuntimePhase(
+      profiling.phases,
+      `runtime-rendering:${name}`,
+      this.store,
+      profiling.telemetry,
+      read,
     );
-
-    this.recordRenderedControllers(state, controllers);
-    return controllers;
   }
 
   private recordOpenInstructions(
@@ -525,7 +640,7 @@ export class RuntimeRenderingMaterializer {
     const results: TemplateRenderingRunResult[] = [initialRenderResult];
     const queue = [...initialRenderResult.controllers];
     const expandedTemplateControllers = new Set<ProductHandle>();
-    const expandedCustomElements = new Set<ProductHandle>();
+    const expandedCustomElementControllers = new Set<ProductHandle>();
 
     while (queue.length > 0) {
       const controller = queue.shift()!;
@@ -539,9 +654,11 @@ export class RuntimeRenderingMaterializer {
           state,
           controller,
         );
-      } else if (isRecursiveCustomElementController(controller)
-        && !expandedCustomElements.has(controller.productHandle)) {
-        expandedCustomElements.add(controller.productHandle);
+      }
+      if (result == null
+        && isRecursiveRenderableCustomElementController(controller)
+        && !expandedCustomElementControllers.has(controller.productHandle)) {
+        expandedCustomElementControllers.add(controller.productHandle);
         result = this.renderCustomElementViewForController(
           `${state.input.localKey}:controller:${controller.productHandle}:custom-element-view`,
           state,
@@ -557,6 +674,77 @@ export class RuntimeRenderingMaterializer {
     }
 
     return results;
+  }
+
+  private renderCustomElementViewForController(
+    local: string,
+    state: RuntimeRenderingMaterializationState,
+    controller: RuntimeControllerFrame,
+  ): TemplateRenderingRunResult | null {
+    if (this.hasRecursiveCustomElementDefinitionAncestor(controller)) {
+      controller.recordRecursiveHydrationBoundary(
+        `Custom element controller '${controller.name ?? '(anonymous)'}' recursively reaches the same custom-element definition through its controller ancestry; runtime-state dependent expansion is represented as a finite aggregate boundary.`,
+      );
+      return null;
+    }
+
+    const compiledTemplate = state.input.projectContext.readCompiledTemplateEmissionForDefinition(
+      controller.definitionProductHandle,
+    );
+    if (compiledTemplate == null) {
+      return null;
+    }
+
+    const targetInputs = this.measure(state.input, 'custom-element-target-inputs', () =>
+      this.renderTargetInputsForCompiledTemplate(
+        local,
+        compiledTemplate,
+        state.source,
+        state.records,
+        state.openSeams,
+      )
+    );
+    if (targetInputs.length === 0 && compiledTemplate.compiledTemplate.targets.length > 0) {
+      return null;
+    }
+
+    controller.recordLifecycleStep(
+      RuntimeControllerLifecycleStage.Rendering,
+      RuntimeControllerLifecycleStepKind.RenderInstructions,
+      compiledTemplate.compiledTemplate.productHandle,
+      compiledTemplate.compiledTemplate.sourceAddressHandle,
+      'Rendering.render dispatched the child custom-element compiled-template instruction rows.',
+    );
+    return this.measure(state.input, 'custom-element-render-dispatch', () =>
+      state.input.compilerWorld.rendering.render({
+        localKey: `${state.input.localKey}:custom-element-view:${controller.productHandle}`,
+        compiledTemplate: compiledTemplate.compiledTemplate,
+        targets: targetInputs,
+        instructions: this.instructionsForControllerView(state, compiledTemplate),
+        rootController: controller,
+        provenanceHandle: state.source.provenanceHandle,
+        host: this.renderHostForState(state),
+        renderSurrogate: true,
+      } satisfies TemplateRenderingRunRequest)
+    );
+  }
+
+  private hasRecursiveCustomElementDefinitionAncestor(
+    controller: RuntimeControllerFrame,
+  ): boolean {
+    const definitionProductHandle = controller.definitionProductHandle;
+    if (definitionProductHandle == null) {
+      return false;
+    }
+    let current = controller.parent;
+    while (current != null) {
+      if (current.definitionProductHandle === definitionProductHandle
+        && isRecursiveRenderableCustomElementController(current)) {
+        return true;
+      }
+      current = current.parent;
+    }
+    return false;
   }
 
   private renderSyntheticViewForTemplateController(
@@ -588,14 +776,16 @@ export class RuntimeRenderingMaterializer {
       'IViewFactory.create produced an aggregate synthetic-view controller for nested instruction analysis.',
     );
     const ownerCompiledTemplate = this.compiledTemplateForControllerView(state, controller);
-    const allInstructions = this.projectInstructionsForState(state);
-    const targetInputs = this.syntheticViewRenderingTargetInputs(
-      local,
-      sequence,
-      allInstructions,
-      state.source,
-      state.records,
-      state.openSeams,
+    const instructions = this.instructionsForControllerView(state, ownerCompiledTemplate);
+    const targetInputs = this.measure(state.input, 'synthetic-view-target-inputs', () =>
+      this.syntheticViewRenderingTargetInputs(
+        local,
+        sequence,
+        instructions,
+        state.source,
+        state.records,
+        state.openSeams,
+      )
     );
     if (targetInputs.length === 0 && sequence.instructions.length > 0) {
       return null;
@@ -608,59 +798,18 @@ export class RuntimeRenderingMaterializer {
       sequence.sourceAddressHandle,
       'Rendering.render dispatched synthetic-view child instruction rows.',
     );
-    return state.input.compilerWorld.rendering.render({
-      localKey: `${state.input.localKey}:synthetic-view:${syntheticController.productHandle}`,
-      compiledTemplate: ownerCompiledTemplate.compiledTemplate,
-      targets: targetInputs,
-      instructions: allInstructions,
-      rootController: syntheticController,
-      provenanceHandle: state.source.provenanceHandle,
-      host: this.renderHostForState(state),
-      renderSurrogate: false,
-    } satisfies TemplateRenderingRunRequest);
-  }
-
-  private renderCustomElementViewForController(
-    local: string,
-    state: RuntimeRenderingMaterializationState,
-    controller: RuntimeControllerFrame,
-  ): TemplateRenderingRunResult | null {
-    const compiledTemplate = state.input.projectContext.readCompiledTemplateEmissionForDefinition(
-      controller.definitionProductHandle,
+    return this.measure(state.input, 'synthetic-view-render-dispatch', () =>
+      state.input.compilerWorld.rendering.render({
+        localKey: `${state.input.localKey}:synthetic-view:${syntheticController.productHandle}`,
+        compiledTemplate: ownerCompiledTemplate.compiledTemplate,
+        targets: targetInputs,
+        instructions,
+        rootController: syntheticController,
+        provenanceHandle: state.source.provenanceHandle,
+        host: this.renderHostForState(state),
+        renderSurrogate: false,
+      } satisfies TemplateRenderingRunRequest)
     );
-    if (compiledTemplate == null) {
-      return null;
-    }
-    const targetInputs = this.renderTargetInputsForCompiledTemplate(
-      local,
-      compiledTemplate,
-      state.source,
-      state.records,
-      state.openSeams,
-    );
-    if (targetInputs.length === 0 && compiledTemplate.renderTargets.length > 0) {
-      return null;
-    }
-    controller.recordLifecycleStep(
-      RuntimeControllerLifecycleStage.Rendering,
-      RuntimeControllerLifecycleStepKind.RenderInstructions,
-      compiledTemplate.compiledTemplate.productHandle,
-      compiledTemplate.compiledTemplate.sourceAddressHandle,
-      'Rendering.render dispatched the child custom-element compiled-template instruction rows.',
-    );
-    return state.input.compilerWorld.rendering.render({
-      localKey: local,
-      compiledTemplate: compiledTemplate.compiledTemplate,
-      targets: targetInputs,
-      instructions: [
-        ...compiledTemplate.instructions,
-        ...state.dynamicInstructions,
-      ],
-      rootController: controller,
-      provenanceHandle: state.source.provenanceHandle,
-      host: this.renderHostForState(state),
-      renderSurrogate: true,
-    } satisfies TemplateRenderingRunRequest);
   }
 
   private compiledTemplateForControllerView(
@@ -680,12 +829,12 @@ export class RuntimeRenderingMaterializer {
     return state.input.compiledTemplate;
   }
 
-  private projectInstructionsForState(
+  private instructionsForControllerView(
     state: RuntimeRenderingMaterializationState,
+    compiledTemplate: CompiledTemplateEmission,
   ): readonly TemplateInstruction[] {
-    const instructions = state.input.projectContext.readCompiledTemplateInstructions();
     return [
-      ...(instructions.length === 0 ? state.input.compiledTemplate.instructions : instructions),
+      ...compiledTemplate.instructions,
       ...state.dynamicInstructions,
     ];
   }
@@ -703,8 +852,13 @@ export class RuntimeRenderingMaterializer {
         state.childContainerEmissions,
         state.openSeams,
         state.controllerIssues,
+        (name, read) => this.measure(state.input, `controller-creation:${name}`, read),
+        state.input.contextResolverRecordPolicy,
+        state.input.projectKey,
+        state.input.resourceDefinitions,
       ),
       compileSpread: (spread) => this.spreadBindingCreator.create(spread, state),
+      measureRenderingPhase: (name, read) => this.measure(state.input, name as RuntimeRenderingFinePhaseName, read),
       recordRendererIssue: (local, renderer, instruction, phase, issueKind, message, frameworkErrorCode, sourceAddressHandle) => {
         const publication = this.rendererIssuePublisher.publish(
           local,
@@ -880,7 +1034,7 @@ function uniqueRuntimeControllers(
   return result;
 }
 
-function isRecursiveCustomElementController(
+function isRecursiveRenderableCustomElementController(
   controller: RuntimeControllerFrame,
 ): boolean {
   return controller.creationKind === RuntimeControllerCreationKind.CustomElement

@@ -78,8 +78,17 @@ projection need to stand in for branches that cannot be statically executed.
 
 ## Remaining Pressure
 
-- Recursive/runtime-state-dependent hydration still needs controller semantics
-  plus TypeChecker projection for nested template-controller scopes.
+- Recursive/runtime-state-dependent hydration now has a finite aggregate boundary
+  for self-recursive or mutually recursive custom-element definitions: the child
+  controller records a `recursive-hydration-boundary` lifecycle step and API rows
+  expose `childViewRenderingState=recursive-boundary` instead of an open seam.
+  Per-instance expansion, lifecycle-sensitive activation, and runtime-state
+  termination policy remain future controller semantics.
+- Recursive rendering can still create multiple runtime controller frames from
+  one compiled instruction product. Any scope, synthetic-view, or branch-link
+  handoff that starts from an instruction handle must carry the active parent
+  controller context; a global lookup can silently bind only one instance and
+  leave repeated/nested controller frames unscoped or unlinked.
 - Captured attributes and spread instructions have a first scope bridge, not a
   complete instance-specific recursive rendering model.
 - Event-to-expression invocation flow, value-converter `fromView`, setter body

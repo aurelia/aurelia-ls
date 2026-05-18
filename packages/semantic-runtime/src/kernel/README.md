@@ -35,6 +35,17 @@ store. It can be readable and stable enough for tooling continuations during tha
 semantic truth. Real semantic identity lives in domain fields such as resource kind/name, DI key shape,
 declaration coordinates, template owner/phase, and provenance.
 
+Handle readability is a debugging aid, not a persistence guarantee. `KernelHandleFactory` may compact long or recursive
+store/local key parts when serializing a handle, while the record itself keeps the semantic fields needed for
+navigation and explanation. Store-key parts compact earlier than local parts because the workspace/store label is
+repeated on every handle. If a consumer needs a stable name, source coordinate, route key, DI key, or type identity,
+model that as a product/identity/address field instead of parsing it back out of a handle string.
+The compact readable prefix is deliberately short; the hash is the store-local identity check, while typed records own
+the semantic payload. Prefer improving identity/address/product rows over making handle strings more descriptive.
+Current compaction thresholds intentionally favor hot-path memory pressure over long handle readability: once a store
+or local key becomes broad, the handle keeps only a short sanitized prefix plus a stable hash. If debugging needs more
+text, add a product/detail/source field that owns that meaning instead of widening handles globally.
+
 Controlled vocabulary uses stable keys, not store handles. Claim predicates, seam kinds, binding kinds,
 instruction kinds, and product kinds use centrally defined vocabulary keys with an
 explicit usage slot. New entries should be added as implementation pressure proves they are needed, with
@@ -91,6 +102,9 @@ look for the named address, identity, product, field, or domain record it should
 Source coordinates are current-world addresses. The active store can keep them useful by recomputing, remapping,
 or invalidating through provenance. Snapshot-grade source epochs, content hashes, or migration rules belong in a
 separate persistence layer if they become necessary.
+Before changing source-address representation, use telemetry's source-span role, source-file role, and handle-character
+breakdowns to distinguish true duplicate spans from unique authored anchors. Exact de-duplication is only useful when
+the same file/start/end/role repeats; otherwise the pressure is representation, inquiry depth, or query-local projection.
 
 Every enum member, exported type alias, class, and data-bearing property should carry a short source comment
 that explains its grounded use. If a value or property cannot be explained this way, it probably does not belong
@@ -106,6 +120,24 @@ and typed product-detail sidecar. Batches are record-emission units, not durable
 mutations, or semantic boundaries. The store also validates controlled vocabulary usage at commit time: product kinds
 must be declared as product-kind vocabulary, claim predicates must be declared as claim-predicate vocabulary, and claim
 endpoints must match the predicate's directional signature.
+`KernelStore.mark()` / `disposeSince(...)` is the current app-session reclamation primitive for answer-local work. It
+rolls back records plus product-detail and hot-detail sidecars created after a marker, and is intended for query
+boundaries such as `QueryClaimGraph`, not for pretending long-lived app-world records are disposable without an epoch
+model. The disposal summary includes reclaimed record-handle character mass as well as record/detail counts, because
+handle strings are a first-class memory-pressure signal for one-off public answers. Use it when an inquiry profile says
+answer-local TypeChecker products should be measured but not retained.
+Store-local sidecar indexes register through `KernelStore.registerSidecarIndex(...)`. They are not semantic storage;
+they are acceleration structures that mirror kernel/product-detail lifetime and must drop stale references during
+`disposeSince(...)`. Telemetry reports their entry counts so hidden projector/cache indexes do not become invisible heap
+owners.
+`KernelStore.readTelemetrySnapshot(...)` keeps its count lane cheap: record handle-character totals and sidecar sizes are
+maintained incrementally, while high-cardinality kind and handle-character breakdowns remain behind the explicit
+`includeBreakdowns` option. Do not add full-store scans to the default snapshot path; phase profiling calls it often.
+Use `KernelStore.readDensitySince(...)` and `readDetailDensitySince(...)` for phase-local x-rays because those operate
+from store markers and only inspect records/details admitted after the marker. Shallow product-detail and hot-detail
+density is a second opt-in lane behind `includeDetailDensity` for whole-store snapshots and behind phase-detail
+telemetry for phase-local rows. Use it when memory pressure needs to know which sidecar detail kinds and direct fields
+carry mass; do not smuggle those scans into ordinary adapter answers.
 
 The store indexes normalized kernel records first. A `MaterializedProduct` is an envelope that names kind, identity,
 address, and provenance. Claims are indexed by subject/object handles in the store instead of being duplicated on the
@@ -114,6 +146,16 @@ typed slots validate the product kind before attaching current-run detail object
 and materializer handoff; they are not kernel records, generic payloads, JSON storage, or a persistence schema. If a detail
 starts needing durable graph semantics, promote that semantics into named records, claims, identities, or addresses
 rather than widening the detail sidecar.
+`ProductDetailCatalog` also binds each detail object to its owning `MaterializedProduct` envelope through a weak
+association. Detail classes may expose `productHandle`, `identityHandle`, `sourceAddressHandle`, `addressHandle`, or
+`provenanceHandle` for ergonomic product-local navigation. Domain-specific aliases such as `hostAddressHandle` are
+also envelope-backed when they exactly equal the product address. Catalog admission normalizes own fields that exactly
+echo the envelope into non-enumerable shared getters. That keeps retained hot details from storing duplicate handle
+strings while preserving the public in-process shape. Cross-product handles such as instruction, syntax, declaration,
+or binding links remain explicit detail payload and should not be hidden as envelope facts.
+`HotDetailCatalog` performs the narrower equivalent for epoch-local hot details: an exact `handle` or `productHandle`
+echo of the hot-detail entry becomes a getter, but declaration/source/owner handles remain explicit unless another
+durable record owns that relation.
 
 `vocabulary.ts` is the public barrel for the controlled vocabulary mechanism used by claims, seams, binding
 kinds, instruction kinds, and product kinds. The implementation is split by dependency direction and slot:
@@ -160,6 +202,9 @@ generic generated identity bucket.
 
 - Direct evidence for compact explanations.
 - Field-level provenance for records whose properties come from different witnesses.
+- `fieldProvenanceWhenDistinct` is the default helper when a materializer has an owning product/source provenance and
+  optional field-specific witnesses. If a field repeats the owner provenance, rely on the product/source record instead
+  of storing a field-level echo.
 - Invalidation can walk from changed source to evidence/provenance to dependent claims and products.
 
 `claim.ts` records typed assertions:
@@ -201,6 +246,9 @@ lifetime.
 `product-details.ts` is the current hot hydration sidecar:
 
 - Detail slots are typed and tied to exactly one product-kind vocabulary key.
+- Detail entries carry the owning `MaterializedProduct` envelope, not just the product handle. That keeps envelope facts
+  derivable at the catalog boundary and gives future representation work one place to remove detail-side echoes without
+  losing navigation.
 - Details may be rich in-memory objects and may retain current-run machinery when materializers need it, including
   TypeScript checker objects in the type-system substrate.
 - The catalog validates that a product was committed and that its product kind matches the slot before accepting a
@@ -208,8 +256,30 @@ lifetime.
 - Use `ProductDetailCatalog.addAll(...)` / `addAllIfAbsent(...)` when a materializer attaches a homogeneous emission
   row family whose members carry product handles. Keep one-off conditional details explicit, especially when a product
   handle can be absent or a different slot owns the fallback.
+- Product details participate in kernel mark/dispose so answer-local product details can be reclaimed with their
+  kernel envelopes. Do not use that as a substitute for modeling app-world epochs when durable materializer products
+  need invalidation.
 - Details support inquiry and tooling expansion, but they are not a shortcut around kernel vocabulary, claims, or
   provenance when a relationship needs to become semantic.
+
+`hot-details.ts` is the lower-cost sidecar for details that do not need a durable `MaterializedProduct` envelope, such
+as TypeChecker member surfaces owned by one projected type shape. Hot details also participate in mark/dispose so
+query-local member projections can be reclaimed when the owning query profile does not retain materialized products.
+
+Sidecar indexes, such as the TypeChecker type-shape projector index, are allowed when repeated lookup would otherwise
+re-materialize expensive current-epoch objects. Keep them named, registered on the `KernelStore`, and disposable. A
+sidecar index that cannot explain what kernel/product-detail lifetime it mirrors is probably a cache policy or inquiry
+algebra problem rather than a kernel primitive.
+
+Telemetry may show that detail-side string mass is dominated by handle-valued fields such as product, identity, source,
+or declaration handles. Detail density also reports product-envelope echoes: handle fields in a detail that duplicate
+the owning `MaterializedProduct` handle, identity, address, or provenance handles. Treat those rows as representation
+and inquiry-depth pressure, not as permission to parse or drop handles casually. The handles are navigable links;
+whether they should be compressed, interned, made numeric behind a transport layer, derived from the envelope, or
+avoided at a shallower query depth is a product/runtime decision.
+Read the density rows by lane: envelope echoes are candidates for deriving from the product-detail entry or envelope,
+non-envelope handles are usually cross-product navigation, and non-handle string mass is the remaining scalar payload.
+This keeps representation work grounded in actual ownership instead of a broad "string count is high" reaction.
 
 ## Query And Answer Pressure
 

@@ -1,9 +1,17 @@
 <form class.bind="canSubmit ? 'form-ready' : 'form-pending'" submit.trigger="submit()">
-  <label for="customer-name">Name</label>
-  <input id="customer-name" value.bind="customerName">
+  <field-shell
+    input-id="customer-name"
+    label="Name"
+    type="text"
+    value.bind="customerName">
+  </field-shell>
 
-  <label for="email">Email</label>
-  <input id="email" type="email" value.bind="email">
+  <field-shell
+    input-id="email"
+    label="Email"
+    type="email"
+    value.bind="email">
+  </field-shell>
 
   <label>
     <input type="checkbox" checked.bind="urgent">
@@ -13,21 +21,29 @@
   <fieldset>
     <legend>Contact preference</legend>
     <label>
-      <input type="radio" model.bind="emailPreference" checked.bind="contactPreference">
+      <input type="radio" model.bind="state.emailPreference" checked.bind="contactPreference">
       Email
     </label>
     <label>
-      <input type="radio" model.bind="phonePreference" checked.bind="contactPreference">
+      <input type="radio" model.bind="state.phonePreference" checked.bind="contactPreference">
       Phone
     </label>
   </fieldset>
 
-  <label for="topics">Topics</label>
-  <p>Default topic: ${supportTopicSummary.label}</p>
+  <label for="primary-topic">Primary topic</label>
+  <p>Default topic: ${state.supportTopicSummary.label}</p>
+  <select id="primary-topic" value.bind="primaryTopic">
+    <option model.bind="null">Choose...</option>
+    <option model.bind="state.hardwareTopic">Hardware</option>
+    <option model.bind="state.billingTopic">Billing</option>
+    <option model.bind="state.supportTopic">Support</option>
+  </select>
+
+  <label for="topics">Additional topics</label>
   <select id="topics" multiple value.bind="topics">
-    <option model.bind="hardwareTopic">Hardware</option>
-    <option model.bind="billingTopic">Billing</option>
-    <option model.bind="supportTopic">Support</option>
+    <option model.bind="state.hardwareTopic">Hardware</option>
+    <option model.bind="state.billingTopic">Billing</option>
+    <option model.bind="state.supportTopic">Support</option>
   </select>
 
   <label for="notes">Notes</label>

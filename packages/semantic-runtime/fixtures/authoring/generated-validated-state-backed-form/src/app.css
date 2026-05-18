@@ -13,3 +13,13 @@ main {
 .form-pending {
   border-color: #9e3a2d;
 }
+
+.field-stack {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.error {
+  color: #9e3a2d;
+  margin: 0;
+}

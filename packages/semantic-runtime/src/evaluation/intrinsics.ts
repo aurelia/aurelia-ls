@@ -47,7 +47,7 @@ import {
   evaluateObjectKeys,
   evaluateObjectValues,
 } from './intrinsics/object-intrinsics.js';
-import { evaluatePromiseContinuation, evaluatePromiseThen } from './intrinsics/promise-intrinsics.js';
+import { evaluatePromiseContinuation, evaluatePromiseResolve, evaluatePromiseThen } from './intrinsics/promise-intrinsics.js';
 import { evaluateRegExpCall, evaluateRegExpConstructor } from './intrinsics/regexp-intrinsics.js';
 import {
   evaluateStringCall,
@@ -162,6 +162,9 @@ function evaluateStaticIntrinsicCall(
   }
   if (calleeText === 'Array.of') {
     return evaluateArrayOf(call, environment, moduleKey, depth + 1, host);
+  }
+  if (calleeText === 'Promise.resolve') {
+    return evaluatePromiseResolve(call, environment, moduleKey, depth + 1, host);
   }
   return null;
 }

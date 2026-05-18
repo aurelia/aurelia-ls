@@ -195,6 +195,8 @@ export type AtlasWorkRouteAnchor =
 export interface AtlasWorkRoute {
   /** Stable route id used by filters, continuations, and memory records. */
   readonly id: string;
+  /** Alternate exact handles accepted by routeId filters when memory or human-facing names intentionally differ from the canonical id. */
+  readonly aliases?: readonly string[];
   /** Human-readable route title. */
   readonly title: string;
   /** Compact summary of what this route is for. */

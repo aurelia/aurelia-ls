@@ -30,7 +30,10 @@ const runtime = await createSemanticRuntime({
     projectKey: 'minimal-app',
   }],
 });
-const app = await runtime.openApp({ projectKey: 'minimal-app' });
+const app = await runtime.openApp({
+  projectKey: 'minimal-app',
+  analysisDepth: 'binding-observation',
+});
 
 const expectedEffects = expectedSemanticEffectsForPlan(plan);
 const snapshot = readAuthoringVerificationSnapshot(app);

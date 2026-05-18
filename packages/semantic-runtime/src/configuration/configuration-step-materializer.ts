@@ -37,7 +37,7 @@ import {
 } from '../kernel/identity.js';
 import {
   compactFieldProvenance,
-  FieldProvenance,
+  fieldProvenanceWhenDistinct,
 } from '../kernel/provenance.js';
 import type {
   KernelStore,
@@ -475,8 +475,8 @@ export class ConfigurationStepMaterializer {
       callback?.reference ?? null,
       source.addressHandle,
       compactFieldProvenance<AppTaskField>([
-        key == null || key.provenanceHandle === source.provenanceHandle ? null : new FieldProvenance('key', key.provenanceHandle),
-        callback == null || callback.provenanceHandle === source.provenanceHandle ? null : new FieldProvenance('callback', callback.provenanceHandle),
+        fieldProvenanceWhenDistinct('key', key?.provenanceHandle, source.provenanceHandle),
+        fieldProvenanceWhenDistinct('callback', callback?.provenanceHandle, source.provenanceHandle),
       ]),
     );
   }
@@ -554,9 +554,7 @@ export class ConfigurationStepMaterializer {
       value.value,
       source.addressHandle,
       compactFieldProvenance<ConfigurationOptionField>([
-        value.provenanceHandle == null || value.provenanceHandle === source.provenanceHandle
-          ? null
-          : new FieldProvenance('value', value.provenanceHandle),
+        fieldProvenanceWhenDistinct('value', value.provenanceHandle, source.provenanceHandle),
       ]),
     );
   }

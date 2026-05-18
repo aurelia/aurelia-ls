@@ -27,6 +27,7 @@ import type { FullResourceDefinition } from '../resources/resource-definition.js
 import { describeAddress } from './source-reference.js';
 import type {
   SemanticRuntimeControllerHydrationHandoffKind,
+  SemanticRuntimeControllerChildViewRenderingState,
   SemanticRuntimeControllerLifecycleStepRow,
   SemanticRuntimeControllerRow,
   SemanticRuntimeTemplateControllerLinkKind,
@@ -145,7 +146,10 @@ function runtimeControllerRowsForResource(
   resource: RuntimeTemplateResourceEmission,
   context: RuntimeControllerProjectionContext,
 ): readonly SemanticRuntimeControllerRow[] {
-  return resource.runtimeAnalysis.runtimeRendering.controllers.map((controller) =>
+  return [
+    ...resource.runtimeAnalysis.runtimeRendering.controllers,
+    ...resource.runtimeAnalysis.runtimeComposition.composedControllers,
+  ].map((controller) =>
     runtimeControllerRow(resource.compilation.definition.name, controller, context)
   );
 }
@@ -562,7 +566,10 @@ function childViewRenderingState(
   controller: RuntimeControllerFrame,
   viewFactory: ProductClaimLink | null,
   syntheticView: ProductClaimLink | null,
-): 'none' | 'handoff-only' | 'expanded-aggregate' {
+): SemanticRuntimeControllerChildViewRenderingState {
+  if (controller.hasRecursiveHydrationBoundary()) {
+    return 'recursive-boundary';
+  }
   if (controller.creationKind === RuntimeControllerCreationKind.SyntheticView) {
     return 'expanded-aggregate';
   }

@@ -113,8 +113,9 @@ or runtime viewport/agent topology. Do not collapse those back into one route-co
 Template, form, and style readings follow the same one-question-per-axis rule. `template-source-ownership` answers where
 markup comes from, while `template-rendering-boundary` answers whether the template uses Shadow DOM, light DOM, or
 template-controller composition. `form-value-channel` answers which observer/value-channel semantics are visible,
-`validation-ownership` answers who owns validation, and `form-type-surface` records whether form-like value channels
-currently have strict or weak TypeChecker surfaces. `style-resource-ownership` answers where stylesheets or
+including whether checked/select controls rely on app-authored custom matcher comparison. `validation-ownership`
+answers who owns validation, and `form-type-surface` records whether form-like value channels currently have strict or
+weak TypeChecker surfaces. `style-resource-ownership` answers where stylesheets or
 style-system dependencies live, while
 `style-binding-model` answers which observer-backed class/style value channels are used: whole class tokens,
 per-class toggles, whole style rules, or per-property style values. Style resource values come from

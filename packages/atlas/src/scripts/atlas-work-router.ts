@@ -4,6 +4,7 @@ import { RepoRootLocus } from "../inquiry/locus.js";
 import { createApi } from "../session/index.js";
 import {
   answerValue,
+  assertKnownScriptArguments,
   printEmptyRows,
   printRowSectionHeader,
   scriptArgumentValue,
@@ -25,6 +26,33 @@ import type {
   AtlasWorkRouteWorksetRow,
   AtlasWorkRouterValue,
 } from "../inquiry/runtime/atlas-work-router-rows.js";
+
+assertKnownScriptArguments("atlas.work-router", [
+  "--detail",
+  "--json",
+  "--projection=",
+  "--query=",
+  "--routeId=",
+  "--route=",
+  "--domain=",
+  "--domainMode=",
+  "--relatedTo=",
+  "--role=",
+  "--lensId=",
+  "--path=",
+  "--symbolName=",
+  "--auLinkId=",
+  "--concept=",
+  "--effectKind=",
+  "--recipeKey=",
+  "--seedUse=",
+  "--rows=",
+  "--limit=",
+  "--plans",
+  "--includePlans",
+  "--fileRows=",
+  "--changedFileRows=",
+]);
 
 const detail = process.argv.includes("--detail");
 const json = process.argv.includes("--json");

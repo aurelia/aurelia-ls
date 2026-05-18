@@ -11,9 +11,12 @@ source, value, expression, or template-local slot.
 
 - Preserve current TypeChecker type/member surfaces for template and expression inquiry.
 - Build one TypeScript Program/checker epoch over the same parsed source files used by static evaluation.
+- Remap evaluator/source-discovery AST nodes to their Program-owned counterparts before calling TypeScript checker APIs.
 - Keep the checker epoch app-local: use the booted project root's `tsconfig.json` when present, otherwise fall back to
   Aurelia-app-shaped defaults instead of inheriting the semantic-runtime package's own build config.
-- Materialize type-shape and type-member product envelopes with identities, claims, provenance, and typed details.
+- Materialize type-shape product envelopes with identities, claims, provenance, and typed details.
+- Keep checker type members as hot details owned by a type-shape/member-surface projection unless a future product
+  needs durable member graph semantics.
 - Materialize declaration source spans for checker-backed members, including Program files that were not boot-admitted
   as app sources, so hover/definition targets can point at TypeScript declaration truth instead of only the owning type.
 - Allow hot product details to retain `ts.TypeChecker`, `ts.Type`, `ts.Symbol`, and declaration carriers when that
@@ -38,6 +41,9 @@ source, value, expression, or template-local slot.
 - Project repeat-local types through runtime repeat semantics, including synthetic tuple-shaped entries for
   `Map<K, V>` / `ReadonlyMap<K, V>` so `[key, value] of map` can flow into the same binding-pattern machinery as
   arrays and object destructuring.
+- Resolve authored DOM host element types through `dom-node-type.ts`, which owns the TypeChecker tag-name-map lookup for
+  HTML, SVG, and MathML plus broad element fallbacks. Observer lookup, ref targets, event-scope member refinements, and
+  future DOM-aware inquiries should reuse that substrate instead of growing parallel tag heuristics.
 - Keep repeatability aligned with Aurelia's default `RepeatableHandlerResolver`, not generic TypeScript iterability.
   Arrays, sets, maps, numbers, and nullish are built-in repeat sources; strings and arbitrary array-like objects are not
   accepted here unless a future DI/configuration model proves that an app registered an `IRepeatableHandler`.
@@ -78,6 +84,13 @@ Durable kernel records should carry product handles, identity handles, checker k
 provenance. If a checker fact needs to survive across snapshots or drive rename/refactor behavior, promote the
 specific fact into an explicit product field, identity field, claim predicate, or source address instead of hiding it
 inside the carrier.
+Checker keys are epoch keys for the projected static shape, not just declaration identities. Declared generic and
+library-backed types must include their display/instantiation in the key; `ReadonlyArray<unknown>` and
+`ReadonlyArray<string>` share a declaration but are different static surfaces for template analysis.
+The projector keeps an epoch-local checker-key/source index for convergence, but it must verify that the indexed
+product detail still exists before reuse. Query-local projections can now be reclaimed by `QueryClaimGraph` through the
+kernel mark/dispose boundary, so a stale index entry should be evicted and reprojected rather than returning a dead
+product handle.
 
 This layer is also the named split between evaluation-backed world construction and checker-backed authoring help.
 DI/configuration/resource materializers should prefer evaluation when they are deciding what the app constructed. Template
@@ -87,21 +100,115 @@ claims rather than collapsing the distinction.
 
 Fixture and ad hoc app roots are allowed to start without package-manager scaffolding. The default checker options
 therefore use bundler-style module resolution, a small `*.html` module declaration, and an optional local Aurelia
-checkout type-path map when this repository's `aurelia/packages/*/dist/types` tree is present. Real app `tsconfig.json`
-files remain authoritative and can override those defaults.
+checkout type-path map when this repository's `aurelia/packages/*/dist/types` tree is present. Roots without a
+`tsconfig.json` also get an explicit modern web library profile (`es2024`, `dom`, and `dom.iterable`) so TypeScript
+does not silently load the full `Latest` library universe just because semantic-runtime wants current syntax parsing.
+Real app `tsconfig.json` files remain authoritative: when a project supplies config but omits `lib`, semantic-runtime
+lets TypeScript choose the normal library set for that config instead of injecting the fallback fixture profile.
 
-Type-system profiles should keep both time and item volume visible. App-level pressure can make TypeScript Program
+Type-system profiles should keep time, item volume, and source-text mass visible. App-level pressure can make TypeScript Program
 construction look like undifferentiated semantic-runtime cost, but the useful question is often whether the epoch is
 spending on admitted app files, ambient declarations, framework/plugin declaration files, or a downstream inquiry depth
 that did not need checker facts at all. Keep phase item counts on the `TypeSystemProject` boundary and propagate them
-through pressure scripts before adding caches or narrowing source admission.
+through pressure scripts before adding caches or narrowing source admission. The profile also carries a compact
+compiler-options summary (`target`, `moduleResolution`, configured library count, path mapping counts, and related
+booleans) so a large Program can be explained as an intentional app config, a fallback fixture profile, or a path-map
+discovery effect before changing source admission.
+The profile also distinguishes Program root files from the final Program source-file set. A large root count outside the
+project root is not automatically waste: source-linked workspace packages and source-shipped plugins may contain real
+Aurelia resources that resource/configuration/template passes must understand. Treat root narrowing as an admission
+policy change, not a generic performance cleanup. If most external roots are only type support, design a typed root
+admission policy; if they produce resource/configuration semantics, keep them as app-world inputs and optimize the
+downstream projections instead.
+Root/source Program stats include overlapping source-text buckets beside counts: evaluated, ambient, project,
+node_modules, declaration, default-library, and external files can intentionally overlap because the question is both
+"what kind of files are present?" and "which bucket explains retained AST/text mass?". Use these rows before assuming a
+large Program count is the heap problem. A fixture can have a tiny project root and still retain most Program text in
+default libraries or framework declarations, which points at dependency-cache policy rather than app source admission.
+The profile also carries non-overlapping Program source-file group rows for the same epoch. Those rows group each
+Program file under exactly one owner, such as the project, the semantic-runtime ambient declaration, TypeScript default
+libraries, a node_modules package name, external declarations, or external source. Use the overlapping buckets for
+semantic role attribution and the group rows for "which package/source class is carrying the text" attribution before
+changing root admission, dependency-cache policy, or inquiry depth.
+`TypeSystemProject` roots the TypeScript Program from the boot-admitted app TS/JS source files, project-local TS/JS
+modules reached by static evaluation, and ambient app declarations. External static-evaluation dependencies still enter
+the source-file indexes and the compiler host can serve their parsed SourceFiles when the Program reaches them through
+imports, but external dependency modules are dependencies rather than root files. This keeps the checker epoch aligned
+with the evaluated app graph, so resource target nodes discovered by evaluation can be Program-owned without widening
+roots to every dependency source file.
+Checker-facing code should not assume every AST node that reaches semantic-runtime is owned by the TypeScript Program.
+Static evaluation, source discovery, and resource convergence can carry parsed nodes with the same file/span but a
+different AST identity from the Program epoch. Use `TypeSystemProject.readProgramNode(...)` or higher-level helpers such
+as `readRuntimeTargetType(...)` before calling `getTypeAtLocation`, `getSymbolAtLocation`, or symbol-at-location
+helpers. Returning unknown/open is better than asking the checker about an alien node and crashing the public API.
+Source addresses may carry host-facing workspace-relative paths, while project admissions carry project-relative paths.
+`TypeSystemProject.readSourceFileByPath(...)` and `readProgramSourceFileByPath(...)` accept absolute, project-relative,
+and workspace-relative paths so a materializer can start from a `SourceSpanAddress` without rebuilding path heuristics
+beside the checker epoch.
+`readProgramNode(...)` has small per-epoch counters for request count, cache hits, same-source hits, span remaps, and
+misses. Keep those counters in routed app telemetry so a correctness guard does not silently become a repeated DFS
+hotspot on larger apps.
+`checker-type-assignability.ts` owns the small shared question "is this projected checker reference assignable to that
+one?". Binding data-flow and runtime composition both use it because the CPU/memory trade-off and checker-epoch
+fallback policy should not be reimplemented at every feature boundary. It only answers when the retained carriers share
+one checker epoch, with an exact display-match fallback for already-equivalent projections; richer runtime/domain
+assignability belongs in the caller's value-channel or lifecycle semantics.
 
-`TypeSystemProjectBuilder` also owns a process-local compiler-host source-file cache for dependency/lib files reached
-through `node_modules`, such as framework package declarations, dependency declarations, and TypeScript libs. Evaluated
-app source files and sibling workspace source remain current-epoch reads, so the cache does not become a stale
-app-source store in monorepos. `pressure:app-api` reports host source-cache hits, misses, writes, and bypasses next to
-`type-system:program` timing; inspect those numbers before changing source admission or adding a second checker host
-path.
+`compiler-host-source-file-cache.ts` owns a process-local compiler-host source-file cache for dependency/lib files:
+`node_modules` sources and declaration files outside the opened project root are cacheable, while evaluated app source
+files and project-local ambient stubs stay current-epoch reads. Evaluator asset modules such as HTML/CSS-generated
+default exports stay in the evaluation graph and do not become TypeScript Program roots; the checker epoch indexes
+TS/JS-shaped roots plus ambient declarations. This intentionally trades some session memory for much lower repeated
+`ts.createProgram` cost across app epochs, especially when the local Aurelia framework checkout supplies many external
+`.d.ts` files. `pressure:app-api` and `profile:app-telemetry` report host source-cache hits, misses, writes, bypasses,
+hit/write source-text traffic, cacheable-read lanes, bypass lanes, and Program source-file composition next to
+`type-system:program` timing; inspect those numbers before changing source admission, adding a second checker host
+path, or widening cacheability to authored source. The traffic counters are the CPU/memory trade-off unit: write text
+shows dependency/library text admitted into the warm cache during a cold Program, while hit text shows how much cached
+text a later Program reused. Cache keys use canonical file paths plus the TypeScript parse options that affect
+SourceFile shape, so duplicate canonical-path entries are visible as intentional parse-option duplication rather than
+hidden map growth.
+`runtime.analysisCacheOverview()` exposes the same process-local cache entry count and lifetime counters, plus
+source-text density counts split by dependency, declaration, default-library, and external-declaration class. Counts
+and text-character mass are both reported because a small number of declaration or default-library files can dominate
+retained text/AST pressure. Use those counts to decide whether memory pressure is really coming from reusable
+TypeScript dependency/library source files or from app-world products, query-local projections, or kernel detail
+payloads. The dependency-cache density snapshot is cached inside the compiler-host cache and invalidated on cache
+writes/clear, so repeated `analysisCacheOverview()` calls do not rescan the same retained SourceFiles.
+The overview also reports parse-option buckets. Duplicate canonical-path entries can be legitimate when different
+projects parse the same dependency/library file with different target/module/JSDoc source-file options; inspect those
+buckets before collapsing cache keys or changing fallback compiler options. The duplicate parse-option set rows group
+canonical paths that appear under more than one parse-option key, without printing the paths themselves. Use that row to
+distinguish a small number of systematic option-family splits from scattered accidental cache-key drift.
+The overview also names the dominant retained source-text bucket and a suggested clear policy. This is advisory, not an
+automatic eviction decision: callers still choose whether CPU warmth or memory reclamation matters more for their
+session.
+`analysisCacheOverview({ includeTypeSystemDependencyEntries: true, rowLimit })` can also report the largest retained
+dependency SourceFile entries by bucket, canonical path, and source-text size. Keep that detail opt-in: bucket density is
+the ordinary cache-policy surface, while entry rows are for explaining a specific memory frontier or validating that a
+cache split is aimed at the right files.
+The same overview reports lifetime clear operations, cleared entry counts, cleared source-text characters, cleared
+default-library/external-declaration bucket mass, and last clear policy, so cache-churn evidence remains visible after
+the terminal output from a reclaim call is gone.
+`runtime.clearAnalysisCache({ typeSystemDependencyCacheClearPolicy: 'all' })` can drop the retained dependency/lib
+source files when a long-lived process needs memory back. Narrower policies can clear only default libraries,
+node_modules files, or external declarations when overview density shows one bucket dominating. That clear operation
+intentionally does not make authored project source files cacheable and does not reset lifetime counters; it only
+removes reusable dependency source-file objects so the next Program open pays the corresponding cold-read cost again.
+Routed public answers can apply the same clear policy at the query boundary. If the active inquiry profile is
+recompute-friendly and the routed answer disposes its app epoch, the default routed policy clears all dependency/lib
+SourceFiles because the caller is choosing low retained memory over warm Program construction. Bounded-retention
+diagnostic profiles clear default libraries by default: this sheds the largest common TypeScript bucket while keeping
+external declarations warm for follow-up diagnostics. Pass `typeSystemDependencyCacheClearPolicy: 'preserve'` when an
+MCP/LSP adapter is running as a warm session rather than a one-off answer. Treat `preserve` as an explicit
+CPU-for-memory choice: on larger dependency-heavy apps, retained dependency/lib SourceFiles can dominate live heap after
+the app-world kernel and query-local products have already been reclaimed. Use repeat-run telemetry in one process
+before choosing that policy. A useful preserve decision should show second-run compiler-host hits and lower
+Program/checker timing; if profile-default clearing still misses every dependency file on the second run, that is
+expected one-off recomputation rather than a broken cache.
+`source-file-path.ts` owns shared TypeSystem path normalization, canonical cache keys, default-library detection, and
+project-root containment checks. Keep dependency-cache and Program-composition classification on those helpers instead
+of growing parallel path predicates in `project.ts` and `compiler-host-source-file-cache.ts`.
 
 Checker declaration source is the one intentional source-address bridge that may start from a filename. Materializers
 that scan boot-admitted app sources should carry the admitted source-file address handle through their site records
@@ -151,8 +258,10 @@ re-growing member/keyed access inside the evaluator, completion, or diagnostics.
 of splitting binding-scope name resolution across evaluator, completion, or diagnostics.
 `expression-iterable-projector.ts` owns repeat/iterator expression semantics above the same type-shape access substrate:
 it evaluates the repeat source, applies Aurelia's built-in repeat source categories, synthesizes `Map`/`ReadonlyMap`
-entry tuples, and hands item types to binding-pattern local projection. Keep repeat-local scope work and diagnostics
-hooked through this projector instead of adding template-controller-specific repeat type paths.
+entry tuples, and hands item types to binding-pattern local projection. Use its combined iterator projection when a
+caller needs source type, element type, local projection, and repeatability diagnostics from one repeat effect; do not
+re-enter the evaluator separately for each piece of repeat scope construction. Keep repeat-local scope work and
+diagnostics hooked through this projector instead of adding template-controller-specific repeat type paths.
 `expression-resource-projector.ts` owns expression-level resource semantics for value converters and binding behaviors:
 compiler resource-scope lookup, converter target hydration, `toView` call projection, and duplicate behavior checks.
 Keep those resource-expression policies there instead of threading resource lookups through the evaluator switch or
@@ -171,16 +280,47 @@ callback parameter typing, object-option typing, and nested literal context do n
   introduced only when an inquiry or materializer needs it.
 - Type-shape identities are session-stable because checker objects are epoch-bound even when their source
   declarations are source-stable.
+- Type-shape projection converges within one store by origin, checker key, and the source lane that genuinely belongs
+  to the projected shape. Declaration-backed TypeChecker and evaluated-value declared surfaces converge without a
+  projection source address because their semantic type identity is the checker surface plus declaration lane; the
+  authored expression, binding, diagnostic, or cursor row must carry the user-facing source site that caused the
+  projection. Synthetic expression/template shapes keep their projection source because their identity is produced by
+  that runtime-shaped expression site.
+- Source-less scalar TypeChecker surfaces such as `string`, `number`, `boolean`, `unknown`, `any`, and `never` are the
+  simplest case of that rule. Their type-shape products converge with a null projection source because they have no
+  meaningful declaration/source navigation of their own; the caller-owned row must carry the user-facing source
+  location.
 - A projected type shape keeps two source lanes separate: `sourceAddressHandle` is the expression/template/product site
-  that caused the projection, while `declarationSourceAddressHandle` is the best TypeScript declaration span for
-  navigation and owner-type repair planning. Do not overwrite projection source with declaration source just to make a
-  cursor answer look navigable.
+  that is part of the projected shape's identity when the shape is synthetic or site-owned, while
+  `declarationSourceAddressHandle` is the best TypeScript declaration span for navigation and owner-type repair
+  planning. Do not overwrite either lane just to make a cursor answer look navigable; if the user-facing locus is an
+  expression site, keep it on the expression/binding/diagnostic product that asked for the type.
+- `CheckerTypeProjectionOrigin` should describe the type surface, not merely the caller. Template scope, observation,
+  branch narrowing, and async helpers can ask for checker-returned primitive, event, narrowed, or awaited types; those
+  remain `TypeChecker` projections. Use `SyntheticTemplateType` only for shapes the template/runtime substrate actually
+  creates, such as unknown fallbacks, literal domains, tuple/map-entry products, or synthetic nullish unions.
+- Checker-owned union and intersection keys should be structural over source-independent constituents. A union such as
+  `TicketDraft | null` has no declaration of its own, but it can still converge without a projection source because its
+  constituents carry declaration or primitive identity. Do not apply that rule to anonymous authored object/function
+  shapes whose member declaration spans are the expression site itself.
 - Checker declaration source is allowed to admit a Program-only source-file address on demand. This is not a source
   discovery fallback for app semantics; it is a navigation/provenance handoff for TypeScript declaration files reached
   through the active Program, including lib and external package declaration members.
 - Member value types are currently stored as references without automatically materializing nested type-shape
   products. If member navigation or deep completion needs those products, add a projector continuation instead of
   stuffing more raw detail into completion answers.
+- Checker type members do not have standalone durable kernel identities by default. Their hot `productHandle` is an
+  in-process follow-up key; value-type projections and scope slots should use the member declaration identity when one
+  exists, otherwise the owning type-shape identity. Do not invent a `TypeSystemIdentity` only to parent a member value.
+- Checker-backed members derive their navigable source span from the `TypeScriptDeclarationIdentity` record. Keep a
+  direct `sourceAddressHandle` on `CheckerTypeMember` only for synthetic or non-declaration-backed members.
+- `CheckerTypeProjectionRequest.memberProjection` is the explicit eager/lazy member-surface policy. Resource target
+  types use lazy projection so app construction can publish the target type and checker carrier without enumerating
+  every member up front; expression/member access can still resolve the exact member through `CheckerTypeShapeAccess`,
+  and cursor/completion-shaped inquiries should request or materialize the richer member surface when enumeration is
+  the product they actually need. Runtime binding-scope construction is also a legitimate enumeration consumer:
+  `BindingScopeSlotProjector` may spend `readOrProjectCheckerTypeMembers(...)` so view-model fields such as route
+  class references are visible to Aurelia expression lookup.
 - The expression type evaluator is deliberately member-surface-oriented, not runtime-value-oriented. Value converters
   can close over the checker-visible `toView` return type because the compiler resource scope supplies a runtime
   definition; the call projector treats the converter's input expression as the first `toView` argument and then spends
@@ -229,6 +369,9 @@ callback parameter typing, object-option typing, and nested literal context do n
 - Template project runtime analysis shares one `CheckerExpressionTypeWorld` across the resources in that compilation
   pass, including selected authoring templates. Resource-level timing profiles mark the cache before each resource and
   report deltas, so aggregate pressure can stay honest while the expression world itself has project-pass lifetime.
+- Routed app profile summaries aggregate those resource-level expression-cache deltas before app disposal. Use that
+  compact `templateExpressionTypeCache` row to decide whether a one-off public answer spent real expression-evaluator
+  work before adding a new cache, retaining an app epoch, or reopening the app only for profiling.
 - The shared expression cache is scope-sensitive. The evaluator salts each cache key with the modeled `BindingScope`,
   visible `TemplateResourceScope`, expression kind/span or source address, runtime evaluation mode, and contextual type
   before reading the world cache. Caller local keys still name the semantic role and projection handles, but callers do

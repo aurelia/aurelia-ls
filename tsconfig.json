@@ -11,6 +11,7 @@
     { "path": "packages/integration-harness" },
     { "path": "packages/semantic-workspace" },
     { "path": "packages/semantic-runtime" },
+    { "path": "packages/mcp" },
     { "path": "packages/atlas" }
   ]
 }

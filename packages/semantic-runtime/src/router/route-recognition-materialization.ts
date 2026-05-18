@@ -19,7 +19,9 @@ import {
   RouterIssueKind,
   RouterIssueModel,
   RouterIssuePhase,
+  RouteParameterValueModel,
   RouteRecognizerStateKind,
+  ViewportRequestModel,
   type ConfigurableRouteModel,
   type EndpointModel,
   type RouteConfigModel,
@@ -41,6 +43,7 @@ import { routerIssueProductRecords } from './router-issue-publication.js';
 import { routeRecognizerProductRecords } from './router-product-records.js';
 
 const RESIDUE = '$$residue';
+const DEFAULT_VIEWPORT_NAME = 'default';
 
 interface RouteRecognitionEmission {
   readonly records: readonly KernelStoreRecord[];
@@ -79,12 +82,26 @@ interface RedirectExpansionIssueDraft {
 }
 
 interface RouteRecognitionIndexes {
+  readonly routeRuntime: RouteRuntimeTopologyProjectResult;
   readonly routeContextsByIdentity: ReadonlyMap<RouteContextModel['identityHandle'], RouteContextModel>;
   readonly routeConfigContextsByIdentity: ReadonlyMap<RouteConfigContextModel['identityHandle'], RouteConfigContextModel>;
+  readonly routeConfigContextsByConfigIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigContextModel>;
   readonly routeConfigsByIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>;
   readonly viewportInstructionsByIdentity: ReadonlyMap<ViewportInstructionModel['identityHandle'], ViewportInstructionModel>;
   readonly typedInstructionsByIdentity: ReadonlyMap<TypedNavigationInstructionModel['identityHandle'], TypedNavigationInstructionModel>;
   readonly recognizerGraphs: ReadonlyMap<string, RecognizerGraph>;
+}
+
+interface ViewportInstructionRecognitionSite {
+  readonly instruction: ViewportInstructionModel;
+  readonly instructionIndexPath: string;
+}
+
+interface ChildRecognitionContext {
+  readonly routeContext: RouteContextModel | null;
+  readonly routeConfigContext: RouteConfigContextModel;
+  readonly routeConfig: RouteConfigModel;
+  readonly graph: RecognizerGraph;
 }
 
 /** RecognizedRoute products from static ViewportInstruction paths, before RouteNode transition compilation. */
@@ -151,31 +168,69 @@ export class RouteRecognitionMaterializationProjectPass {
       if (viewportInstruction == null) {
         return [];
       }
-      const path = collapsedStringPath(
-        viewportInstruction,
-        indexes.viewportInstructionsByIdentity,
-        indexes.typedInstructionsByIdentity,
+      return this.materializeViewportInstructionRecognitions(
+        store,
+        tree,
+        indexes,
+        routeContext,
+        routeConfigContext,
+        routeConfig,
+        graph,
+        {
+          instruction: viewportInstruction,
+          instructionIndexPath: String(index),
+        },
       );
-      if (path == null) {
-        return [];
-      }
-      const recognizedRoutes = recognizePath(graph, path);
-      if (recognizedRoutes == null) {
-        return this.noFallbackEmission(store, routeConfigContext, routeConfig, viewportInstruction, path, index);
-      }
-      const expanded = expandRedirectTargets(graph, recognizedRoutes, indexes.routeConfigsByIdentity);
-      return [
-        this.materializeRecognizedRoutes(
-          store,
-          graph,
-          tree,
-          viewportInstruction,
-          expanded.routes,
-          expanded.issues,
-          index,
-        ),
-      ];
     });
+  }
+
+  private materializeViewportInstructionRecognitions(
+    store: KernelStore,
+    tree: ViewportInstructionTreeModel,
+    indexes: RouteRecognitionIndexes,
+    routeContext: RouteContextModel | null,
+    routeConfigContext: RouteConfigContextModel,
+    routeConfig: RouteConfigModel,
+    graph: RecognizerGraph,
+    site: ViewportInstructionRecognitionSite,
+  ): readonly RouteRecognitionEmission[] {
+    const path = collapsedStringPath(
+      site.instruction,
+      indexes.viewportInstructionsByIdentity,
+      indexes.typedInstructionsByIdentity,
+    );
+    if (path == null) {
+      return [];
+    }
+    const recognizedRoutes = recognizePath(graph, path);
+    if (recognizedRoutes == null) {
+      return this.noFallbackEmission(store, routeConfigContext, routeConfig, site.instruction, path, site.instructionIndexPath);
+    }
+    const expanded = expandRedirectTargets(graph, recognizedRoutes, indexes.routeConfigsByIdentity);
+    return [
+      this.materializeRecognizedRoutes(
+        store,
+        graph,
+        tree,
+        site.instruction,
+        expanded.routes,
+        expanded.issues,
+        site.instructionIndexPath,
+        routeContext,
+      ),
+      ...expanded.routes.flatMap((route, routeIndex) =>
+        this.materializeResidueChildRecognitions(
+          store,
+          tree,
+          indexes,
+          routeContext,
+          graph,
+          site,
+          route,
+          routeIndex,
+        )
+      ),
+    ];
   }
 
   private materializeRecognizedRoutes(
@@ -185,7 +240,8 @@ export class RouteRecognitionMaterializationProjectPass {
     viewportInstruction: ViewportInstructionModel,
     routes: readonly RecognizedRouteDraft[],
     redirectIssues: readonly RedirectExpansionIssueDraft[],
-    instructionIndex: number,
+    instructionIndexPath: string,
+    routeContext: RouteContextModel | null,
   ): RouteRecognitionEmission {
     const recognizedRoutes = routes.map((route, routeIndex) =>
       recognizedRouteModel(
@@ -194,8 +250,9 @@ export class RouteRecognitionMaterializationProjectPass {
         tree,
         viewportInstruction,
         route,
-        instructionIndex,
+        instructionIndexPath,
         routeIndex,
+        routeContext,
       )
     );
     return {
@@ -207,19 +264,64 @@ export class RouteRecognitionMaterializationProjectPass {
             tree,
             viewportInstruction,
             route,
-            instructionIndex,
+            instructionIndexPath,
             routeIndex,
           )
         ),
         ...redirectIssues.flatMap((issue, issueIndex) =>
-          unknownRedirectIssueRecords(store, tree, viewportInstruction, issue, instructionIndex, issueIndex)
+          unknownRedirectIssueRecords(store, tree, viewportInstruction, issue, instructionIndexPath, issueIndex)
         ),
       ],
       recognizedRoutes,
       issues: redirectIssues.map((issue, issueIndex) =>
-        unknownRedirectIssueModel(store, tree, viewportInstruction, issue, instructionIndex, issueIndex)
+        unknownRedirectIssueModel(store, tree, viewportInstruction, issue, instructionIndexPath, issueIndex)
       ),
     };
+  }
+
+  private materializeResidueChildRecognitions(
+    store: KernelStore,
+    tree: ViewportInstructionTreeModel,
+    indexes: RouteRecognitionIndexes,
+    parentRouteContext: RouteContextModel | null,
+    graph: RecognizerGraph,
+    site: ViewportInstructionRecognitionSite,
+    route: RecognizedRouteDraft,
+    routeIndex: number,
+  ): readonly RouteRecognitionEmission[] {
+    if (route.residue == null || route.residue.length === 0) {
+      return [];
+    }
+    const childRecognitionContext = childRecognitionContextFor(
+      indexes,
+      parentRouteContext,
+      graph,
+      site.instruction,
+      route,
+    );
+    if (childRecognitionContext == null) {
+      return [];
+    }
+    return residualViewportInstructionSites(
+      site,
+      route.residue,
+      indexes.viewportInstructionsByIdentity,
+      indexes.typedInstructionsByIdentity,
+    ).flatMap((childSite) =>
+      this.materializeViewportInstructionRecognitions(
+        store,
+        tree,
+        indexes,
+        childRecognitionContext.routeContext,
+        childRecognitionContext.routeConfigContext,
+        childRecognitionContext.routeConfig,
+        childRecognitionContext.graph,
+        {
+          instruction: childSite.instruction,
+          instructionIndexPath: `${site.instructionIndexPath}:residue:${routeIndex}:${childSite.instructionIndexPath}`,
+        },
+      )
+    );
   }
 
   private noFallbackEmission(
@@ -228,7 +330,7 @@ export class RouteRecognitionMaterializationProjectPass {
     routeConfig: RouteConfigModel,
     viewportInstruction: ViewportInstructionModel,
     path: string,
-    instructionIndex: number,
+    instructionIndexPath: string,
   ): readonly RouteRecognitionEmission[] {
     if (path.length === 0 || routeConfig.fallback != null) {
       return [];
@@ -237,7 +339,7 @@ export class RouteRecognitionMaterializationProjectPass {
       'router-recognition-issue',
       'no-fallback',
       routeConfigContext.identityHandle,
-      instructionIndex,
+      instructionIndexPath,
       localKeyPart(path),
     ].join(':');
     const issue = new RouterIssueModel(
@@ -279,12 +381,12 @@ function unknownRedirectIssueRecords(
   tree: ViewportInstructionTreeModel,
   viewportInstruction: ViewportInstructionModel,
   draft: RedirectExpansionIssueDraft,
-  instructionIndex: number,
+  instructionIndexPath: string,
   issueIndex: number,
 ): readonly KernelStoreRecord[] {
-  const issue = unknownRedirectIssueModel(store, tree, viewportInstruction, draft, instructionIndex, issueIndex);
+  const issue = unknownRedirectIssueModel(store, tree, viewportInstruction, draft, instructionIndexPath, issueIndex);
   return routerIssueProductRecords(store, {
-    local: unknownRedirectIssueLocal(tree, viewportInstruction, draft, instructionIndex, issueIndex),
+    local: unknownRedirectIssueLocal(tree, viewportInstruction, draft, instructionIndexPath, issueIndex),
     issue,
     ownerHandle: draft.routeConfig.identityHandle,
     sourceAddressHandle: issue.sourceAddressHandle,
@@ -298,10 +400,10 @@ function unknownRedirectIssueModel(
   tree: ViewportInstructionTreeModel,
   viewportInstruction: ViewportInstructionModel,
   draft: RedirectExpansionIssueDraft,
-  instructionIndex: number,
+  instructionIndexPath: string,
   issueIndex: number,
 ): RouterIssueModel {
-  const local = unknownRedirectIssueLocal(tree, viewportInstruction, draft, instructionIndex, issueIndex);
+  const local = unknownRedirectIssueLocal(tree, viewportInstruction, draft, instructionIndexPath, issueIndex);
   const sourceAddressHandle = draft.routeConfig.redirectToSourceAddressHandle
     ?? draft.routeConfig.sourceAddressHandle
     ?? viewportInstruction.sourceAddressHandle;
@@ -331,7 +433,7 @@ function unknownRedirectIssueLocal(
   tree: ViewportInstructionTreeModel,
   viewportInstruction: ViewportInstructionModel,
   draft: RedirectExpansionIssueDraft,
-  instructionIndex: number,
+  instructionIndexPath: string,
   issueIndex: number,
 ): string {
   return [
@@ -339,7 +441,7 @@ function unknownRedirectIssueLocal(
     'unknown-redirect',
     tree.identityHandle,
     viewportInstruction.identityHandle,
-    instructionIndex,
+    instructionIndexPath,
     issueIndex,
     draft.routeConfig.identityHandle,
     localKeyPart(draft.redirectPath),
@@ -353,11 +455,18 @@ function routeRecognitionIndexes(
   routeInstructions: RouteInstructionMaterializationProjectResult,
 ): RouteRecognitionIndexes {
   return {
+    routeRuntime,
     routeContextsByIdentity: new Map(
       routeRuntime.readRouteContexts().map((routeContext) => [routeContext.identityHandle, routeContext] as const),
     ),
     routeConfigContextsByIdentity: new Map(
       routeConfigContexts.readRouteConfigContexts().map((routeConfigContext) => [routeConfigContext.identityHandle, routeConfigContext] as const),
+    ),
+    routeConfigContextsByConfigIdentity: new Map(
+      routeConfigContexts.readRouteConfigContexts().flatMap((routeConfigContext) => {
+        const identityHandle = routeConfigContext.config.identityHandle;
+        return identityHandle == null ? [] : [[identityHandle, routeConfigContext] as const];
+      }),
     ),
     routeConfigsByIdentity: new Map(
       routeConfigContexts.readRouteConfigs().map((routeConfig) => [routeConfig.identityHandle, routeConfig] as const),
@@ -434,6 +543,84 @@ function routeConfigForRouteConfigContext(
 ): RouteConfigModel | null {
   const identityHandle = routeConfigContext?.config.identityHandle ?? null;
   return identityHandle == null ? null : routeConfigsByIdentity.get(identityHandle) ?? null;
+}
+
+function childRecognitionContextFor(
+  indexes: RouteRecognitionIndexes,
+  parentRouteContext: RouteContextModel | null,
+  graph: RecognizerGraph,
+  viewportInstruction: ViewportInstructionModel,
+  route: RecognizedRouteDraft,
+): ChildRecognitionContext | null {
+  const routeConfig = routeConfigForEndpoint(route.endpoint, graph, indexes.routeConfigsByIdentity);
+  const childRouteConfigContext = routeConfig?.identityHandle == null
+    ? null
+    : indexes.routeConfigContextsByConfigIdentity.get(routeConfig.identityHandle) ?? null;
+  const childRouteConfig = routeConfigForRouteConfigContext(childRouteConfigContext, indexes.routeConfigsByIdentity);
+  const recognizerIdentity = childRouteConfigContext?.recognizer.identityHandle ?? null;
+  const childGraph = recognizerIdentity == null
+    ? null
+    : indexes.recognizerGraphs.get(recognizerIdentity) ?? null;
+  if (childRouteConfigContext == null || childRouteConfig == null || childGraph == null) {
+    return null;
+  }
+
+  const componentName = routeConfig?.component?.localName ?? null;
+  const viewportName = viewportInstruction.viewport ?? routeConfig?.viewport ?? DEFAULT_VIEWPORT_NAME;
+  const viewportAgent = componentName == null
+    ? null
+    : indexes.routeRuntime.resolveViewportAgent(
+      parentRouteContext?.identityHandle ?? null,
+      new ViewportRequestModel(viewportName, componentName),
+    );
+  const childRouteContext = indexes.routeRuntime.routeContextForRouteConfigContextAndViewportAgent(
+    childRouteConfigContext.identityHandle,
+    viewportAgent?.identityHandle ?? null,
+  );
+  return {
+    routeContext: childRouteContext,
+    routeConfigContext: childRouteConfigContext,
+    routeConfig: childRouteConfig,
+    graph: childGraph,
+  };
+}
+
+function residualViewportInstructionSites(
+  parentSite: ViewportInstructionRecognitionSite,
+  residue: string,
+  viewportInstructionsByIdentity: ReadonlyMap<ViewportInstructionModel['identityHandle'], ViewportInstructionModel>,
+  typedInstructionsByIdentity: ReadonlyMap<TypedNavigationInstructionModel['identityHandle'], TypedNavigationInstructionModel>,
+): readonly ViewportInstructionRecognitionSite[] {
+  const sites: ViewportInstructionRecognitionSite[] = [];
+
+  const visit = (instruction: ViewportInstructionModel, instructionIndexPath: string): void => {
+    const path = collapsedStringPath(instruction, viewportInstructionsByIdentity, typedInstructionsByIdentity);
+    if (path === residue) {
+      sites.push({ instruction, instructionIndexPath });
+      return;
+    }
+    instruction.children.forEach((childRef, childIndex) => {
+      const identityHandle = childRef.identityHandle;
+      const child = identityHandle == null
+        ? null
+        : viewportInstructionsByIdentity.get(identityHandle) ?? null;
+      if (child != null) {
+        visit(child, `${instructionIndexPath}.${childIndex}`);
+      }
+    });
+  };
+
+  parentSite.instruction.children.forEach((childRef, childIndex) => {
+    const identityHandle = childRef.identityHandle;
+    const child = identityHandle == null
+      ? null
+      : viewportInstructionsByIdentity.get(identityHandle) ?? null;
+    if (child != null) {
+      visit(child, `${childIndex}`);
+    }
+  });
+
+  return sites;
 }
 
 function collapsedStringPath(
@@ -1015,10 +1202,11 @@ function recognizedRouteModel(
   tree: ViewportInstructionTreeModel,
   viewportInstruction: ViewportInstructionModel,
   route: RecognizedRouteDraft,
-  instructionIndex: number,
+  instructionIndexPath: string,
   routeIndex: number,
+  routeContext: RouteContextModel | null,
 ): RecognizedRouteModel {
-  const local = recognizedRouteLocal(tree, viewportInstruction, instructionIndex, routeIndex);
+  const local = recognizedRouteLocal(tree, viewportInstruction, instructionIndexPath, routeIndex);
   return new RecognizedRouteModel(
     store.handles.product(local),
     store.handles.identity(local),
@@ -1026,13 +1214,27 @@ function recognizedRouteModel(
     route.endpoint.toReference(),
     viewportInstruction.toReference(),
     tree.toReference(),
-    tree.routeContext,
+    routeContext?.toReference() ?? tree.routeContext,
     route.path,
     route.residue,
     route.parameterCount,
+    routeParameterValues(route.parameters),
     route.redirectDepth,
     route.redirectSourceRouteConfig?.toReference() ?? null,
     viewportInstruction.sourceAddressHandle,
+  );
+}
+
+function routeParameterValues(
+  parameters: ReadonlyMap<string, string | undefined>,
+): readonly RouteParameterValueModel[] {
+  return [...parameters].map(([name, value]) =>
+    new RouteParameterValueModel(
+      name,
+      value == null ? null : decodeURIComponent(value),
+      value != null,
+      name === RESIDUE,
+    )
   );
 }
 
@@ -1042,10 +1244,10 @@ function recognizedRouteRecords(
   tree: ViewportInstructionTreeModel,
   viewportInstruction: ViewportInstructionModel,
   route: RecognizedRouteModel,
-  instructionIndex: number,
+  instructionIndexPath: string,
   routeIndex: number,
 ): readonly KernelStoreRecord[] {
-  const local = recognizedRouteLocal(tree, viewportInstruction, instructionIndex, routeIndex);
+  const local = recognizedRouteLocal(tree, viewportInstruction, instructionIndexPath, routeIndex);
   const evidenceHandle = store.handles.evidence(local);
   const provenanceHandle = store.handles.provenance(local);
   const ownerHandle = routeRecognizerOwnerHandle(graph);
@@ -1078,8 +1280,8 @@ function routeRecognizerOwnerHandle(
 function recognizedRouteLocal(
   tree: ViewportInstructionTreeModel,
   viewportInstruction: ViewportInstructionModel,
-  instructionIndex: number,
+  instructionIndexPath: string,
   routeIndex: number,
 ): string {
-  return `router-recognition:${tree.identityHandle}:instruction:${viewportInstruction.identityHandle}:${instructionIndex}:route:${routeIndex}`;
+  return `router-recognition:${tree.identityHandle}:instruction:${viewportInstruction.identityHandle}:${instructionIndexPath}:route:${routeIndex}`;
 }

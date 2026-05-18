@@ -11,7 +11,13 @@ export interface ParsedRouteExpression {
   readonly root: ParsedCompositeSegmentExpressionOrHigher;
   readonly instructions: readonly ParsedViewportInstruction[];
   readonly queryParamCount: number;
+  readonly queryParams: readonly ParsedRouteQueryParam[];
   readonly fragment: string | null;
+}
+
+export interface ParsedRouteQueryParam {
+  readonly name: string;
+  readonly value: string;
 }
 
 export type ParsedCompositeSegmentExpressionOrHigher =
@@ -150,6 +156,7 @@ function routeExpressionParseFailureMessage(
 interface ParsedUrlParts {
   readonly path: string;
   readonly queryParamCount: number;
+  readonly queryParams: readonly ParsedRouteQueryParam[];
   readonly fragment: string | null;
 }
 
@@ -162,6 +169,7 @@ export function parseRouteExpression(value: string): ParsedRouteExpression {
       root,
       instructions: instructionsForRouteExpression(root),
       queryParamCount: url.queryParamCount,
+      queryParams: url.queryParams,
       fragment: url.fragment,
     };
   }
@@ -175,6 +183,7 @@ export function parseRouteExpression(value: string): ParsedRouteExpression {
       root,
       instructions: instructionsForRouteExpression(root),
       queryParamCount: url.queryParamCount,
+      queryParams: url.queryParams,
       fragment: url.fragment,
     };
   }
@@ -185,6 +194,7 @@ export function parseRouteExpression(value: string): ParsedRouteExpression {
     root,
     instructions: instructionsForRouteExpression(root),
     queryParamCount: url.queryParamCount,
+    queryParams: url.queryParams,
     fragment: url.fragment,
   };
 }
@@ -248,24 +258,26 @@ function parseRouteUrl(value: string): ParsedUrlParts {
   const queryIndex = withoutFragment.indexOf('?');
   const path = queryIndex < 0 ? withoutFragment : withoutFragment.slice(0, queryIndex);
   const query = queryIndex < 0 ? '' : withoutFragment.slice(queryIndex + 1);
+  const queryParams = routeQueryParams(query);
   return {
     path,
-    queryParamCount: countQueryParams(query),
+    queryParamCount: queryParams.length,
+    queryParams,
     fragment: fragment == null || fragment.length === 0 ? null : fragment,
   };
 }
 
-function countQueryParams(query: string): number {
+function routeQueryParams(query: string): readonly ParsedRouteQueryParam[] {
   if (query.length === 0) {
-    return 0;
+    return [];
   }
-  let count = 0;
-  for (const [key] of new URLSearchParams(query)) {
+  const values: ParsedRouteQueryParam[] = [];
+  for (const [key, value] of new URLSearchParams(query)) {
     if (key.length > 0) {
-      count += 1;
+      values.push({ name: key, value });
     }
   }
-  return count;
+  return values;
 }
 
 function parseCompositeExpression(

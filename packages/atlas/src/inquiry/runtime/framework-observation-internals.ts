@@ -44,7 +44,11 @@ export const enum FrameworkObservationSurfaceKind {
   DirtyCheckProperty = "dirty-check-property",
   ConnectableRecord = "connectable-record",
   ConnectableHelper = "connectable-helper",
+  /** AST expression evaluation sites that collect dependencies through the same active connectable used by ProxyObservable. */
+  AstEvaluator = "ast-evaluator",
   CollectionHelper = "collection-helper",
+  /** ProxyObservable wrapping, raw/proxy identity, traps, and nested dependency collection for the active connectable circuit. */
+  ProxyObservable = "proxy-observable",
   WatchDecorator = "watch-decorator",
   WatchDefinition = "watch-definition",
   WatchRegistry = "watch-registry",
@@ -87,6 +91,25 @@ export const enum FrameworkObservationFlowSiteKind {
   ConnectableRecord = "connectable-record",
   ConnectableSubscribe = "connectable-subscribe",
   ConnectableUnsubscribe = "connectable-unsubscribe",
+  ExpressionAccessScopeDependency = "expression-access-scope-dependency",
+  ExpressionAccessMemberDependency = "expression-access-member-dependency",
+  ExpressionAccessKeyedDependency = "expression-access-keyed-dependency",
+  ExpressionCollectionDependency = "expression-collection-dependency",
+  ExpressionTrackableDependency = "expression-trackable-dependency",
+  ExpressionTrackableProxyWrap = "expression-trackable-proxy-wrap",
+  ExpressionConnectableEnter = "expression-connectable-enter",
+  ExpressionConnectableExit = "expression-connectable-exit",
+  ProxyEligibilityCheck = "proxy-eligibility-check",
+  ProxyWrap = "proxy-wrap",
+  ProxyUnwrap = "proxy-unwrap",
+  ProxyRawRead = "proxy-raw-read",
+  ProxyCacheRead = "proxy-cache-read",
+  ProxyCacheWrite = "proxy-cache-write",
+  ProxyCreate = "proxy-create",
+  ProxyDependencyCollect = "proxy-dependency-collect",
+  ProxyCollectionDependencyCollect = "proxy-collection-dependency-collect",
+  ProxyTrackableDependencyCollect = "proxy-trackable-dependency-collect",
+  ProxyTrackableCallbackInvoke = "proxy-trackable-callback-invoke",
   WatchDefinitionCreate = "watch-definition-create",
   WatchDefinitionStore = "watch-definition-store",
   WatchDefinitionRead = "watch-definition-read",
@@ -667,6 +690,162 @@ const postCollectionCallClassifications: readonly ObservationCallClassification[
     },
   ];
 
+const proxyCallClassifications: readonly ObservationCallClassification[] = [
+  {
+    calleeName: "canWrap",
+    classify: () =>
+      proxySite(
+        FrameworkObservationFlowSiteKind.ProxyEligibilityCheck,
+        "ProxyObservable.canWrap",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeName: "doNotCollect",
+    classify: () =>
+      proxySite(
+        FrameworkObservationFlowSiteKind.ProxyEligibilityCheck,
+        "ProxyObservable.doNotCollect",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeName: "wrap",
+    classify: () =>
+      proxySite(
+        FrameworkObservationFlowSiteKind.ProxyWrap,
+        "ProxyObservable.wrap",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+      ),
+  },
+  {
+    calleeName: "unwrap",
+    classify: () =>
+      proxySite(
+        FrameworkObservationFlowSiteKind.ProxyUnwrap,
+        "ProxyObservable.unwrap",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+      ),
+  },
+  {
+    calleeName: "getRaw",
+    classify: () =>
+      proxySite(
+        FrameworkObservationFlowSiteKind.ProxyRawRead,
+        "ProxyObservable.getRaw",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+      ),
+  },
+  {
+    calleeName: "getProxy",
+    classify: () =>
+      proxySite(
+        FrameworkObservationFlowSiteKind.ProxyWrap,
+        "ProxyObservable.getProxy",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+      ),
+  },
+  {
+    calleeName: "createProxy",
+    classify: () =>
+      proxySite(
+        FrameworkObservationFlowSiteKind.ProxyCreate,
+        "ProxyObservable.createProxy",
+        FrameworkRelationshipRelation.ConstructsInstance,
+      ),
+  },
+  {
+    calleeName: "get",
+    receiverText: "proxyMap",
+    classify: () =>
+      proxySite(
+        FrameworkObservationFlowSiteKind.ProxyCacheRead,
+        "proxy WeakMap.get",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeName: "set",
+    receiverText: "proxyMap",
+    classify: () =>
+      proxySite(
+        FrameworkObservationFlowSiteKind.ProxyCacheWrite,
+        "proxy WeakMap.set",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeName: "observe",
+    classify: ({ receiverText }) =>
+      proxySite(
+        FrameworkObservationFlowSiteKind.ProxyDependencyCollect,
+        receiverText === null
+          ? "IConnectable.observe"
+          : `${receiverText}.observe`,
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeName: "observeExpression",
+    classify: ({ receiverText }) =>
+      proxySite(
+        FrameworkObservationFlowSiteKind.ProxyTrackableDependencyCollect,
+        receiverText === null
+          ? "IConnectable.observeExpression"
+          : `${receiverText}.observeExpression`,
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    calleeName: "observeCollection",
+    classify: ({ receiverText }) =>
+      proxySite(
+        FrameworkObservationFlowSiteKind.ProxyCollectionDependencyCollect,
+        receiverText === null
+          ? "IConnectable.observeCollection"
+          : `${receiverText}.observeCollection`,
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeName: "observeTrackableMethodDependencies",
+    classify: () =>
+      proxySite(
+        FrameworkObservationFlowSiteKind.ProxyTrackableDependencyCollect,
+        "ProxyObservable.observeTrackableMethodDependencies",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeName: "dependency",
+    classify: () =>
+      proxySite(
+        FrameworkObservationFlowSiteKind.ProxyTrackableCallbackInvoke,
+        "trackable dependency callback",
+        FrameworkRelationshipRelation.InvokesCallback,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeText: "R$get",
+    classify: () =>
+      proxySite(
+        FrameworkObservationFlowSiteKind.ProxyRawRead,
+        "Reflect.get",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+];
+
 const watcherCallClassifications: readonly ObservationCallClassification[] = [
   {
     surfaceKind: FrameworkObservationSurfaceKind.WatchRegistry,
@@ -1108,6 +1287,12 @@ const observationClassSurfaces = new Map<
   ["SlottedLifecycleHooks", FrameworkObservationSurfaceKind.SlotWatcher],
 ]);
 
+const proxyHandlerOwnerNames = new Set([
+  "objectHandler",
+  "arrayHandler",
+  "collectionHandler",
+]);
+
 const observationFunctionSurfaces = new Map<
   string,
   FrameworkObservationSurfaceKind
@@ -1129,6 +1314,16 @@ function observationFunctionSurfaceKind(
   file: SourceFileIdentity,
   functionName: string,
 ): FrameworkObservationSurfaceKind | undefined {
+  if (
+    file.repoPath.endsWith("runtime/src/ast.eval.ts") &&
+    (functionName === "astEvaluate" ||
+      functionName === "observeTrackableMethodDependencies")
+  ) {
+    return FrameworkObservationSurfaceKind.AstEvaluator;
+  }
+  if (file.repoPath.endsWith("runtime/src/proxy-observation.ts")) {
+    return FrameworkObservationSurfaceKind.ProxyObservable;
+  }
   if (
     functionName === "decorator" &&
     file.repoPath.endsWith("runtime-html/src/watch.ts")
@@ -1182,6 +1377,15 @@ function observationObjectMethodSurface(
   file: SourceFileIdentity,
   method: ts.MethodDeclaration,
 ): { readonly surfaceKind: FrameworkObservationSurfaceKind; readonly ownerName: string } | null {
+  if (file.repoPath.endsWith("runtime/src/proxy-observation.ts")) {
+    const ownerName = objectLiteralVariableName(method);
+    return ownerName !== null && proxyHandlerOwnerNames.has(ownerName)
+      ? {
+          surfaceKind: FrameworkObservationSurfaceKind.ProxyObservable,
+          ownerName,
+        }
+      : null;
+  }
   if (!file.repoPath.endsWith("runtime-html/src/watch.ts")) {
     return null;
   }
@@ -1193,6 +1397,28 @@ function observationObjectMethodSurface(
     surfaceKind: FrameworkObservationSurfaceKind.WatchRegistry,
     ownerName: "Watch",
   };
+}
+
+function objectLiteralVariableName(method: ts.MethodDeclaration): string | null {
+  const parent = method.parent;
+  if (!ts.isObjectLiteralExpression(parent)) {
+    return null;
+  }
+  let current: ts.Node = parent;
+  while (
+    ts.isAsExpression(current.parent) ||
+    ts.isSatisfiesExpression(current.parent) ||
+    ts.isParenthesizedExpression(current.parent)
+  ) {
+    current = current.parent;
+  }
+  const container = current.parent;
+  return (
+    ts.isVariableDeclaration(container) &&
+      ts.isIdentifier(container.name)
+  )
+    ? container.name.text
+    : null;
 }
 
 export function readFrameworkObservationSurfaceMethods(
@@ -1593,6 +1819,12 @@ function executable(
 }
 
 function ownerNameForFunction(file: SourceFileIdentity, functionName: string): string {
+  if (file.repoPath.endsWith("runtime/src/ast.eval.ts")) {
+    return "astEvaluate";
+  }
+  if (file.repoPath.endsWith("runtime/src/proxy-observation.ts")) {
+    return "ProxyObservable";
+  }
   if (file.repoPath.endsWith("runtime/src/connectable.ts")) {
     return "connectable";
   }
@@ -1812,6 +2044,14 @@ function classifyCallLike(
     receiverText: propertyAccessReceiverText(sourceFile, expression),
   };
 
+  const astEvaluatorClassification = classifyAstEvaluatorCall(context);
+  if (astEvaluatorClassification !== null) {
+    return astEvaluatorClassification;
+  }
+  const proxyClassification = classifyProxyCall(context);
+  if (proxyClassification !== null) {
+    return proxyClassification;
+  }
   const watchClassification = classifyWatcherCall(context);
   if (watchClassification !== null) {
     return watchClassification;
@@ -1917,6 +2157,135 @@ function classifyWatcherCall(
   return classifyObservationCall(watcherCallClassifications, context);
 }
 
+function classifyProxyCall(
+  context: ObservationCallContext,
+): SiteClassification | null {
+  if (context.executable.surfaceKind !== FrameworkObservationSurfaceKind.ProxyObservable) {
+    return null;
+  }
+  return classifyObservationCall(proxyCallClassifications, context);
+}
+
+function classifyAstEvaluatorCall(
+  context: ObservationCallContext,
+): SiteClassification | null {
+  if (context.executable.surfaceKind !== FrameworkObservationSurfaceKind.AstEvaluator) {
+    return null;
+  }
+  const accessDependency = astEvaluatorAccessDependencySite(context);
+  if (accessDependency !== null) {
+    return accessDependency;
+  }
+  switch (context.calleeName) {
+    case "observeCollection":
+      if (context.receiverText === "c") {
+        return connectableSite(
+          FrameworkObservationFlowSiteKind.ExpressionCollectionDependency,
+          "CallMember array mutation -> IConnectable.observeCollection",
+          FrameworkRelationshipRelation.CollectsDependency,
+          FrameworkRelationshipEndpointKind.Expression,
+        );
+      }
+      return null;
+    case "observeTrackableMethodDependencies":
+      return connectableSite(
+        FrameworkObservationFlowSiteKind.ExpressionTrackableDependency,
+        "@astTrack method dependencies",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Expression,
+      );
+    case "observeExpression":
+      if (context.receiverText === "connectable") {
+        return connectableSite(
+          FrameworkObservationFlowSiteKind.ExpressionTrackableDependency,
+          "@astTrack string dependency -> IConnectable.observeExpression",
+          FrameworkRelationshipRelation.CollectsDependency,
+          FrameworkRelationshipEndpointKind.Expression,
+        );
+      }
+      return null;
+    case "wrap":
+      return proxySite(
+        FrameworkObservationFlowSiteKind.ExpressionTrackableProxyWrap,
+        "ProxyObservable.wrap for @astTrack dependency evaluation",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+      );
+    case "enterConnectable":
+      return connectableSite(
+        FrameworkObservationFlowSiteKind.ExpressionConnectableEnter,
+        "ConnectableSwitcher.enter",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Concept,
+      );
+    case "exitConnectable":
+      return connectableSite(
+        FrameworkObservationFlowSiteKind.ExpressionConnectableExit,
+        "ConnectableSwitcher.exit",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Concept,
+      );
+    default:
+      return null;
+  }
+}
+
+function astEvaluatorAccessDependencySite(
+  context: ObservationCallContext,
+): SiteClassification | null {
+  if (context.calleeName !== "observe" || context.receiverText !== "c") {
+    return null;
+  }
+  const caseLabel = enclosingCaseLabelText(context.node, context.sourceFile);
+  switch (caseLabel) {
+    case "ekAccessScope":
+      return connectableSite(
+        FrameworkObservationFlowSiteKind.ExpressionAccessScopeDependency,
+        "AccessScopeExpression -> IConnectable.observe",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Expression,
+      );
+    case "ekAccessMember":
+      return connectableSite(
+        FrameworkObservationFlowSiteKind.ExpressionAccessMemberDependency,
+        "AccessMemberExpression -> IConnectable.observe",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Expression,
+      );
+    case "ekAccessKeyed":
+      return connectableSite(
+        FrameworkObservationFlowSiteKind.ExpressionAccessKeyedDependency,
+        "AccessKeyedExpression -> IConnectable.observe",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Expression,
+      );
+    default:
+      return null;
+  }
+}
+
+function enclosingCaseLabelText(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+): string | null {
+  let current: ts.Node | undefined = node.parent;
+  while (current !== undefined) {
+    if (ts.isCaseClause(current)) {
+      return current.expression.getText(sourceFile);
+    }
+    if (
+      ts.isFunctionDeclaration(current) ||
+      ts.isFunctionExpression(current) ||
+      ts.isMethodDeclaration(current) ||
+      ts.isConstructorDeclaration(current) ||
+      ts.isArrowFunction(current)
+    ) {
+      return null;
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
 function classifyEffectCall(
   context: ObservationCallContext,
 ): SiteClassification | null {
@@ -1936,6 +2305,16 @@ function classifyObservationNewExpression(
   callSite: TypeScriptCallSiteEntry,
 ): SiteClassification | null {
   const target = callSite.calleeName || node.expression.getText(sourceFile);
+  if (
+    executable.surfaceKind === FrameworkObservationSurfaceKind.ProxyObservable &&
+    target === "Proxy"
+  ) {
+    return proxySite(
+      FrameworkObservationFlowSiteKind.ProxyCreate,
+      "Proxy",
+      FrameworkRelationshipRelation.ConstructsInstance,
+    );
+  }
   const staticClassification = newExpressionClassifications.get(target);
   if (staticClassification !== undefined) {
     return staticClassification;
@@ -2142,6 +2521,21 @@ function connectableSite(
   return lookupSite(
     siteKind,
     FrameworkRelationshipMechanism.Connectable,
+    targetName,
+    relation,
+    targetKind,
+  );
+}
+
+function proxySite(
+  siteKind: FrameworkObservationFlowSiteKind,
+  targetName: string,
+  relation: FrameworkRelationshipRelation,
+  targetKind: FrameworkRelationshipEndpointKind = FrameworkRelationshipEndpointKind.Symbol,
+): SiteClassification {
+  return lookupSite(
+    siteKind,
+    FrameworkRelationshipMechanism.ProxyObservable,
     targetName,
     relation,
     targetKind,

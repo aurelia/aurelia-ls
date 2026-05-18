@@ -5,6 +5,7 @@ import type { AtlasWorkRoute } from "./atlas-work-router-contracts.js";
 export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
   {
     id: "authoring.forms.fixture-flywheel",
+    aliases: ["authoring-fixture-flywheel"],
     title: "Authoring Forms Fixture Flywheel",
     summary:
       "Use framework docs/tests and existing recipe pressure to expand form fixtures while keeping generated fixtures distinct from non-recommended analysis fixtures.",
@@ -48,6 +49,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "service interaction",
       "service interaction binding",
       "service class",
+      "proxy observation",
+      "proxy observation authoring state fixtures",
+      "direct state binding",
+      "state member binding",
+      "state.member",
+      "forwarding getter",
+      "view-model forwarding getter",
+      "di state template binding",
       "native value binding",
       "native checked binding",
       "option model binding",
@@ -95,6 +104,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "native checked binding option model binding form fixture",
         summary:
           "Form fixture routing should find exact corpus classification handles for checked and select option-model behavior.",
+      },
+      {
+        query: "proxy observation authoring state fixtures",
+        summary:
+          "Direct DI state bindings and ProxyObservable-integrated domain-model pressure should route through the authoring fixture flywheel.",
+      },
+      {
+        query: "view-model forwarding getter state.member",
+        summary:
+          "Getter-only state forwarding in fixtures is authoring taste and observation pressure, not a generic cleanup task.",
       },
     ],
     anchors: [
@@ -655,6 +674,396 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
   },
   {
+    id: "mcp.developer-preview-shell",
+    title: "MCP Developer Preview Shell",
+    summary:
+      "Keep the public MCP package as a thin, restart-tolerant shell over semantic-runtime APIs while Atlas remains the internal navigation substrate.",
+    domains: ["mcp", "api", "semantic-runtime", "authoring", "lsp", "router"],
+    roles: ["orient", "analyze", "author", "verify", "document"],
+    terms: [
+      "mcp shell",
+      "aurelia mcp",
+      "au-mcp",
+      "mcp developer preview",
+      "developer preview shell",
+      "public mcp api",
+      "mcp public api",
+      "thin mcp shell",
+      "mcp adapter",
+      "mcp structured content",
+      "structuredContent",
+      "mcp resource",
+      "mcp prompt",
+      "mcp tool",
+      "resource link",
+      "mcp analysis cache",
+      "aurelia_analysis_cache_overview",
+      "clear analysis cache",
+      "workspace overview",
+      "aurelia_workspace_overview",
+      "projectPage",
+      "project page",
+      "aurelia_authoring_recipe_plan",
+      "aurelia_app_query_catalog",
+      "aurelia_orient_workspace",
+      "aurelia_plan_authoring_recipe",
+      "authoring recipe plan",
+      "app overview",
+      "router overview",
+      "router row sample",
+      "pagingKind",
+      "minimumAnalysisDepth",
+      "row-sample",
+      "diagnostic overview",
+      "open seam overview",
+      "template cursor info",
+      "app query catalog",
+      "mcp hand-test",
+      "mcp restart",
+    ],
+    queryCanaries: [
+      {
+        query: "set up au-mcp as a thin shell over semantic-runtime",
+        summary:
+          "Local MCP setup should route to the package shell and semantic-runtime API facade, not to old au-mcp mapping concepts.",
+      },
+      {
+        query: "mcp workspace overview app overview diagnostic overview router overview structured content",
+        summary:
+          "MCP tool-shape work should route through the public shell, compact semantic-runtime projections, and explicit pagingKind affordances.",
+      },
+      {
+        query: "aurelia_authoring_recipe_plan MCP recipe plan",
+        summary:
+          "Recipe-plan tool work should route through the public MCP shell and semantic-runtime authoring recipe plan API.",
+      },
+      {
+        query: "developer preview mcp router viewport authoring",
+        summary:
+          "Router/viewport developer-preview pressure should keep MCP packaging and semantic-runtime route facts connected.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "path",
+        pathPrefix: "packages/mcp/",
+        role: "primary",
+        summary:
+          "The MCP package owns server bootstrap, MCP tool/resource registration, direct dev invocation, and adapter-only public packaging.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/mcp/src/runtime-adapter.ts",
+        symbolName: "AureliaMcpSemanticRuntimeAdapter",
+        role: "primary",
+        summary:
+          "Adapter boundary that forwards MCP requests to semantic-runtime without becoming a second product model.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/mcp/src/tools.ts",
+        symbolName: "registerAureliaSemanticRuntimeTools",
+        role: "primary",
+        summary:
+          "MCP tool registration surface; keep handlers as parse/forward/format wrappers.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/mcp/src/prompts.ts",
+        symbolName: "registerAureliaSemanticRuntimePrompts",
+        role: "supporting",
+        summary:
+          "MCP prompt registration surface for small public workflows over stable tools and resources.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/mcp/src/resources.ts",
+        symbolName: "registerAureliaSemanticRuntimeResources",
+        role: "supporting",
+        summary:
+          "MCP resource registration surface for stable read-only semantic slices.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/runtime.ts",
+        symbolName: "SemanticRuntime",
+        role: "grounding",
+        summary:
+          "In-process app opening and cursor-locus API facade that MCP should forward to.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-query-catalog.ts",
+        symbolName: "readSemanticAppQueryCatalog",
+        role: "grounding",
+        summary:
+          "Semantic-runtime-owned app query vocabulary and pagingKind affordances for generic MCP app query tooling.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/router-overview.ts",
+        symbolName: "readSemanticRouterOverview",
+        role: "grounding",
+        summary:
+          "Summary-first router overview; row samples from multiple router families are explicit opt-in.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/contracts.ts",
+        symbolName: "SemanticAppQueryKind",
+        role: "grounding",
+        summary:
+          "Public query kind vocabulary that should drive MCP tools before adding shell-local concepts.",
+      },
+      {
+        kind: "doc",
+        path: "packages/mcp/README.md",
+        role: "primary",
+        summary:
+          "Public package boundary, local invocation commands, and thin-shell constraints.",
+      },
+      {
+        kind: "doc",
+        path: "packages/atlas/workbench/product-specific-pressures.md",
+        heading: "MCP Packaging",
+        role: "grounding",
+        summary:
+          "Product-level MCP packaging grammar: resources, tools, structured content, roots, invalidation, and resource links.",
+      },
+      {
+        kind: "memory",
+        domains: ["mcp", "api", "semantic-runtime", "authoring"],
+        role: "supporting",
+        summary:
+          "Join durable decisions about MCP timing, public API boundaries, and semantic-runtime facade constraints.",
+      },
+    ],
+    authority: [
+      "MCP package README and adapter source for public shell shape.",
+      "semantic-runtime API contracts/facade for the actual product facts.",
+      "Atlas product-specific MCP pressures for protocol grammar and token economics.",
+      "Atlas memory for the boundary that MCP is public and Atlas remains internal.",
+    ],
+    cautions: [
+      "Do not expose Atlas memory, Work Router rows, legacy maps, or internal corpus rows through MCP.",
+      "Do not implement product semantics inside MCP handlers; add or improve semantic-runtime queries instead.",
+      "MCP restart friction means direct adapter invokers must stay first-class for autonomous development.",
+      "Prefer short text plus structuredContent over JSON text dumps for token economics.",
+    ],
+    nextQuestions: [
+      "Which semantic-runtime query already owns the requested MCP answer?",
+      "Is this a stable public tool/resource, or should it stay a direct dev invoker until the semantic-runtime shape settles?",
+      "Does a repeated MCP answer pattern indicate a missing semantic-runtime summary query?",
+      "Does the MCP client need cache reset or explicit roots/project selection before the next hand-test?",
+    ],
+    relatedRouteIds: [
+      "semantic-runtime.authoring-fixture-substrate-loop",
+      "router.viewport.authoring-semantics",
+      "diagnostics.framework-error-grounding",
+      "semantic-runtime.type-system.expression-semantics",
+      "semantic-runtime.template-recursive-rendering",
+      "atlas.work-router.self-improvement",
+    ],
+  },
+  {
+    id: "semantic-runtime.inquiry-query-claim-graph",
+    title: "Semantic Runtime Query Claim Graph",
+    summary:
+      "Route inquiry-performance work through the formal answer-claim graph before adding API-local caches, eager projections, or transport-owned invalidation.",
+    domains: ["semantic-runtime", "inquiry", "api", "performance", "telemetry"],
+    roles: ["orient", "analyze", "refactor", "verify", "document", "improve-atlas"],
+    terms: [
+      "query claim graph",
+      "QueryClaimGraph",
+      "answer claim graph",
+      "claim graph storage",
+      "query outcome storage",
+      "query outcome claim",
+      "lazy answer",
+      "answer boundary",
+      "query-local products",
+      "answer-local products",
+      "inquiry profile retention",
+      "query retention policy",
+      "claim invalidation",
+      "claim disposal",
+      "source epoch disposal",
+      "source epoch invalidation",
+      "epoch key",
+      "locus key",
+      "materialization policy",
+      "query-type-projection",
+      "projection-only",
+      "static-catalog",
+      "retained answer",
+      "analysis cache overview",
+      "answerAppQuery",
+      "routed app query",
+      "query claim telemetry",
+      "MCP orientation retention",
+      "LSP cursor retention",
+      "inquiry performance",
+    ],
+    queryCanaries: [
+      {
+        query: "query claim graph API answer performance",
+        summary:
+          "Public API answer retention and query-local product pressure should route to the claim graph before API facade refactors.",
+      },
+      {
+        query: "inquiry performance source epoch disposal query-type-projection",
+        summary:
+          "Source invalidation and TypeChecker projection cleanup should route to graph-owned disposal policy.",
+      },
+      {
+        query: "MCP orientation routed app query claim graph",
+        summary:
+          "Thin MCP adapters should depend on semantic-runtime routed queries and profile-shaped claim retention.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+        symbolName: "QueryClaimGraph",
+        role: "primary",
+        summary:
+          "Answer-boundary storage for lazy query outcomes, retained records, indexed reuse, and disposal policy.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+        symbolName: "QueryClaimNode",
+        role: "primary",
+        summary:
+          "Per-answer lifetime object carrying state, parent/depth, payload shape, kernel deltas, and disposal counts.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/runtime.ts",
+        symbolName: "SemanticRuntime.answerAppQuery",
+        role: "primary",
+        summary:
+          "Thin public-adapter entrypoint that applies query catalog depth, inquiry profile, app retention, and claim graph routing.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/runtime.ts",
+        symbolName: "SemanticApp.ask",
+        role: "primary",
+        summary:
+          "Opened-app query dispatch enters QueryClaimGraph immediately around answer materialization.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-query-catalog.ts",
+        symbolName: "semanticAppQueryCatalogRow",
+        role: "grounding",
+        summary:
+          "App query catalog owns minimum analysis depth and materialization policy for public answer routing.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-query-identity.ts",
+        symbolName: "semanticAppQueryKey",
+        role: "grounding",
+        summary:
+          "App query identity helpers own claim keys, loci, and source/project/workspace epoch keys.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-query-policy.ts",
+        symbolName: "shouldDisposeAppAfterRoutedQuery",
+        role: "grounding",
+        summary:
+          "Routed app query policy owns default inquiry profile, authoring-template opt-in, depth upgrades, and app retention.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/telemetry/inquiry-profile.ts",
+        symbolName: "SEMANTIC_RUNTIME_INQUIRY_PROFILES",
+        role: "grounding",
+        summary:
+          "Consumer-shaped latency and retention lanes for CPU/memory trade-off discussion.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/kernel/store.ts",
+        symbolName: "KernelStore.mark",
+        role: "supporting",
+        summary:
+          "Kernel marks provide answer-local disposal boundaries for query-produced products and sidecars.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/scripts/app-telemetry.mjs",
+        role: "pressure",
+        summary:
+          "App telemetry prints inquiry-profile query claims, query-side kernel growth, and cache/disposal pressure.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.ProductArchitecture,
+        projection: "classes",
+        filters: {
+          pathPrefix: "packages/semantic-runtime/src/inquiry",
+          query: "QueryClaim",
+        },
+        role: "pressure",
+        summary:
+          "Product architecture class rows keep claim graph, node, and counter pressure visible.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "inquiry", "api", "performance", "telemetry"],
+        role: "grounding",
+        summary:
+          "Durable memory describes claim graph ownership, retention, indexing, and disposal guidance.",
+      },
+      {
+        kind: "doc",
+        path: "packages/semantic-runtime/src/inquiry/README.md",
+        heading: "Query Claims",
+        role: "grounding",
+        summary:
+          "Inquiry docs explain why query claims sit above kernel facts and below public answer serialization.",
+      },
+      {
+        kind: "doc",
+        path: "packages/semantic-runtime/src/api/README.md",
+        role: "supporting",
+        summary:
+          "API docs describe routed app queries, app cache boundaries, and direct facade expectations.",
+      },
+    ],
+    authority: [
+      "semantic-runtime inquiry README and QueryClaimGraph source for answer-boundary ownership.",
+      "App query catalog for materialization-policy and minimum-depth truth.",
+      "Inquiry profiles for CPU/memory retention trade-offs by consumer lane.",
+      "App telemetry output for real fixture/external pressure without adding transport-local caches.",
+    ],
+    cautions: [
+      "Do not add MCP, LSP, or script-local answer caches before checking whether QueryClaimGraph should own reuse or disposal.",
+      "Keep durable semantic facts in kernel products and claims; query claims own answer shape, query-local projections, and transport-facing retention.",
+      "If a query needs more app-world products, update the app-query catalog depth or materialization policy rather than hiding the work in runtime.ts.",
+      "Use profile-shaped retention and source/project epoch keys for invalidation; do not parse public query keys in adapters.",
+    ],
+    nextQuestions: [
+      "Is the work about durable app facts or answer-local query outcomes?",
+      "Which inquiry profile owns the latency and retention expectation?",
+      "Does the app-query catalog declare the right analysis depth and materialization policy?",
+      "Should answer-local products be retained, disposed after serialization, or moved into durable kernel products?",
+    ],
+    relatedRouteIds: [
+      "mcp.developer-preview-shell",
+      "semantic-runtime.type-system.expression-semantics",
+      "semantic-runtime.template-recursive-rendering",
+      "semantic-runtime.observation.binding-flow",
+      "semantic-runtime.evaluator.world-construction",
+      "atlas.work-router.self-improvement",
+    ],
+  },
+  {
     id: "semantic-runtime.observation.binding-flow",
     title: "Observation And Binding Flow",
     summary:
@@ -664,6 +1073,32 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     terms: [
       "observer locator",
       "property binding",
+      "ast-evaluator",
+      "ast evaluator",
+      "astEvaluate",
+      "AccessScope",
+      "AccessMember",
+      "AccessKeyed",
+      "connectable observe",
+      "IConnectable.observe",
+      "expression access dependency",
+      "unified observation circuit",
+      "active connectable circuit",
+      "proxy observable",
+      "proxy-observable",
+      "ProxyObservable",
+      "proxy observable domain modeling",
+      "proxy-observable domain model dependency products",
+      "domain model dependency products",
+      "vanilla state class observation",
+      "ordinary composed domain objects",
+      "nested collection reads",
+      "trackable method",
+      "trackable dependency",
+      "computed watcher",
+      "@computed",
+      "@watch",
+      "@astTrack",
       "checked observer",
       "select observer",
       "class binding",
@@ -706,9 +1141,24 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     queryCanaries: [
       {
+        query: "ast-evaluator AccessMember connectable observe",
+        summary:
+          "Direct expression-read dependency questions should route to framework astEvaluate observation before fixture or VM getter changes.",
+      },
+      {
         query: "observer locator",
         summary:
           "Observer-locator questions should start from framework-shaped observation, not app-specific heuristics.",
+      },
+      {
+        query: "proxy-observable domain model dependency products",
+        summary:
+          "ProxyObservable-shaped dependency products should route to the unified observation/binding flow instead of authoring-local state heuristics.",
+      },
+      {
+        query: "ProxyObservable composed state computed watcher trackable",
+        summary:
+          "Composed state dependency pressure should ground itself in framework ProxyObservable, astEvaluate, and watcher/trackable connectable semantics.",
       },
       {
         query: "checked observer",
@@ -822,11 +1272,26 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "lens",
+        lensId: LensId.FrameworkComposition,
+        projection: "emulation",
+        role: "grounding",
+        summary:
+          "Framework composition lens exposes AuCompose, CompositionContext, and CompositionController emulation obligations.",
+      },
+      {
+        kind: "lens",
         lensId: LensId.FrameworkRendering,
         projection: "summary",
         role: "grounding",
         summary:
           "Rendering and instruction setup determine where bindings are materialized.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "observation", "authoring", "state", "framework-grounding"],
+        role: "grounding",
+        summary:
+          "ProxyObservable domain-modeling memory keeps ordinary template reads and watcher/computed/trackable dependency products in one connectable observation circuit.",
       },
       {
         kind: "memory",
@@ -1297,6 +1762,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "template",
       "rendering",
       "controller",
+      "composition",
       "type-system",
       "hydration",
     ],
@@ -1325,6 +1791,20 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "promise result link hook",
       "promise pending then catch",
       "promise invalid usage",
+      "au-compose",
+      "AuCompose",
+      "dynamic composition",
+      "runtime composition",
+      "CompositionContext",
+      "CompositionController",
+      "runtime composition materializer",
+      "RuntimeCompositionMaterializer",
+      "composition controller hydration",
+      "composed controller hydration",
+      "dynamic component composition",
+      "composed dashboard",
+      "activate model handoff",
+      "activation model handoff",
       "rendered instruction recorder",
       "runtime rendered instruction",
       "pending then catch invalid usage",
@@ -1374,6 +1854,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         summary:
           "Promise-result controller link-hook pressure should route to template recursive rendering and controller semantics.",
       },
+      {
+        query: "au-compose dynamic composition recursive composed controller hydration",
+        summary:
+          "AuCompose dynamic component composition should route to the runtime composition and recursive controller-hydration frontier.",
+      },
+      {
+        query: "RuntimeCompositionMaterializer CompositionContext CompositionController",
+        summary:
+          "Runtime composition product work should route through the existing composition materializer instead of ad hoc API logic.",
+      },
     ],
     anchors: [
       {
@@ -1410,6 +1900,31 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Flow-scope materializer carries branch-local controller scope effects into nested rendering contexts.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/runtime-composition-materializer.ts",
+        symbolName: "RuntimeCompositionMaterializer",
+        role: "primary",
+        summary:
+          "AuCompose dynamic composition materializer owns CompositionContext/CompositionController rows after bind and data-flow facts exist.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/runtime-composition.ts",
+        symbolName: "CompositionController",
+        role: "primary",
+        summary:
+          "Runtime composition product model records component candidates, compiled templates, and activation model handoff.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/composition-projections.ts",
+        symbolName: "readRuntimeCompositionRows",
+        role: "supporting",
+        summary:
+          "Public API projection for runtime composition rows and aggregate authoring pressure.",
       },
       {
         kind: "source",
@@ -1486,6 +2001,34 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       },
       {
         kind: "memory",
+        domains: ["semantic-runtime", "template", "composition", "controller", "binding", "type-system"],
+        role: "grounding",
+        summary:
+          "Runtime composition memory belongs to recursive rendering when AuCompose candidate resolution or composed child hydration is touched.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/au-compose-dynamic-composition",
+        role: "pressure",
+        summary:
+          "Stress fixture for docs-shaped AuCompose dynamic component candidates.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/authoring/generated-composed-dashboard",
+        role: "pressure",
+        summary:
+          "Generated authoring fixture for recommendable dynamic component composition.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/src/authoring/composed-dashboard",
+        role: "supporting",
+        summary:
+          "Authoring recipe/source-plan files that generate the composed dashboard pressure fixture.",
+      },
+      {
+        kind: "memory",
         domains: ["semantic-runtime", "di", "controller", "recursive-rendering"],
         role: "supporting",
         summary:
@@ -1543,10 +2086,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     cautions: [
       "Do not pretend hydration is absent; the current model already emulates non-recursive hydration.",
       "Recursive rendering is gated by runtime-dependent view-model state, so controller semantics must model cardinality and scope boundaries.",
+      "Do not treat AuCompose candidate resolution as proof of recursive composed child hydration or lifecycle state.",
       "Split large controller-like surfaces only along framework interfaces when that increases clarity.",
     ],
     nextQuestions: [
       "Which nested scope facts need to be carried from template-controller semantics into TypeChecker evaluation?",
+      "Is the composition question candidate resolution, activation model handoff, composed child rendering, or lifecycle run/deactivate state?",
       "Which materializer step owns recursive descent for a known built-in controller?",
       "Which framework lifecycle/controller surfaces provide the right split points?",
     ],
@@ -1944,6 +2489,157 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "semantic-runtime.type-system.expression-semantics",
       "semantic-runtime.template-recursive-rendering",
       "semantic-runtime.evaluator.world-construction",
+      "atlas.work-router.self-improvement",
+    ],
+  },
+  {
+    id: "semantic-runtime.type-system-project-epoch",
+    title: "TypeSystem Project Epoch",
+    summary:
+      "Route checker-epoch, TypeScript Program size, source admission, compiler-host cache, and type-system performance work through the shared TypeSystemProject boundary.",
+    domains: ["semantic-runtime", "type-system", "checker", "world-construction", "performance", "telemetry"],
+    roles: ["orient", "analyze", "refactor", "verify", "improve-atlas"],
+    terms: [
+      "TypeSystemProject",
+      "type system project",
+      "type-system project",
+      "checker epoch",
+      "TypeScript Program",
+      "ts.createProgram",
+      "program root files",
+      "program source files",
+      "root file count",
+      "source-file cache",
+      "compiler-host cache",
+      "compiler host source file cache",
+      "host source cache",
+      "type-system profile",
+      "type-system performance",
+      "checker performance",
+      "program construction",
+      "root narrowing",
+      "source admission",
+      "ambient source",
+      "dependency declarations",
+      "node_modules declarations",
+      "type-system telemetry",
+      "program source-file composition",
+    ],
+    queryCanaries: [
+      {
+        query: "type-system performance TypeSystemProject program root files",
+        summary:
+          "Checker epoch performance work should route to TypeSystemProject before downstream materializers are blamed.",
+      },
+      {
+        query: "compiler-host source-file cache dependency declarations",
+        summary:
+          "Repeated Program creation cost should route to the shared compiler-host cache and source admission policy.",
+      },
+      {
+        query: "large TypeScript Program root count source admission inquiry depth",
+        summary:
+          "Program-size pressure should route through root/source-file composition telemetry and inquiry-depth policy.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/project.ts",
+        symbolName: "TypeSystemProject",
+        role: "primary",
+        summary:
+          "Current app-local TypeScript Program/checker epoch and source-file lookup API.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/project.ts",
+        symbolName: "TypeSystemProjectBuilder",
+        role: "primary",
+        summary:
+          "Builds the checker epoch from evaluated sources, ambient sources, compiler options, host, Program, and checker.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/compiler-host-source-file-cache.ts",
+        symbolName: "TypeSystemCompilerHostSourceFileCache",
+        role: "primary",
+        summary:
+          "Process-local dependency/lib source-file cache used by the compiler host.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/project-options.ts",
+        symbolName: "buildTypeSystemProjectOptions",
+        role: "grounding",
+        summary:
+          "App-local tsconfig/default option builder that determines module resolution and ambient declarations.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/configuration/app-world-project-pass.ts",
+        symbolName: "AureliaAppWorldProjectConstructionFrame",
+        role: "supporting",
+        summary:
+          "App-world construction phase that invokes TypeSystemProject and reports app-level phase timings.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/scripts/app-telemetry.mjs",
+        role: "pressure",
+        summary:
+          "Telemetry script printing TypeSystemProject phase timings, root/source-file composition, and host cache stats.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.ProductArchitecture,
+        projection: "classes",
+        filters: {
+          pathPrefix: "packages/semantic-runtime/src/type-system",
+          query: "TypeSystemProject",
+        },
+        role: "pressure",
+        summary:
+          "Product architecture class rows keep checker epoch and builder pressure visible.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "type-system", "checker", "world-construction", "performance"],
+        role: "grounding",
+        summary:
+          "Durable type-system memory owns checker epoch performance and source-admission guidance.",
+      },
+      {
+        kind: "doc",
+        path: "packages/semantic-runtime/src/type-system/README.md",
+        role: "grounding",
+        summary:
+          "Type-system substrate docs explain Program source composition, compiler-host caching, and root-narrowing cautions.",
+      },
+    ],
+    authority: [
+      "TypeSystemProject source for Program/checker epoch ownership.",
+      "Type-system README and memory record for source admission and root-narrowing cautions.",
+      "App telemetry for phase timing, source-file composition, and host cache stats.",
+      "Aurelia resource/template/type semantics for deciding whether roots are semantic inputs or type-only dependencies.",
+    ],
+    cautions: [
+      "Do not add a second TypeChecker Program path for a local feature; improve TypeSystemProject or downstream inquiry depth.",
+      "A large Program root count is not automatically waste: source-shipped plugins and workspace packages may contain real Aurelia resources.",
+      "Do not cache authored project source files behind a global dependency cache that hides edits.",
+      "If an inquiry does not need checker facts, fix the app-query depth/materialization policy before narrowing TypeScript roots.",
+    ],
+    nextQuestions: [
+      "Is the measured cost Program construction, checker creation, host source-file reads, or downstream type-shape projection?",
+      "Are large roots semantic app/resource inputs, type-only dependencies, or artifacts of source admission?",
+      "Which inquiry profile and app-query depth made this checker epoch necessary?",
+      "Can telemetry distinguish root-file pressure from final Program dependency closure before a refactor?",
+    ],
+    relatedRouteIds: [
+      "semantic-runtime.type-system.expression-semantics",
+      "semantic-runtime.inquiry-query-claim-graph",
+      "semantic-runtime.evaluator.world-construction",
+      "semantic-runtime.template-recursive-rendering",
       "atlas.work-router.self-improvement",
     ],
   },
@@ -3105,6 +3801,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "route context",
       "route tree",
       "route recognizer",
+      "route parameter",
+      "route parameters",
+      "route parameter aggregation",
+      "getRouteParameters",
+      "IRouteContext.getRouteParameters",
+      "closest parameter wins",
+      "active route node parameter values",
       "route recognition materialization",
       "RouteRecognitionMaterializationProjectPass",
       "RouteConfigContextMaterializationProjectPass",
@@ -3141,6 +3844,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "router-viewport-resolution-open",
       "viewport resolution",
       "viewport resolution open",
+      "viewport activation",
+      "router activation",
+      "router lifecycle",
+      "route lifecycle",
+      "route hooks",
+      "guard lifecycle",
+      "authoring fixture route parameter aggregation activation lifecycle",
     ],
     queryCanaries: [
       {
@@ -3202,6 +3912,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "redirectSourceRouteConfig static redirect target",
         summary:
           "Closed redirect target provenance should route through router recognition and route-tree semantics.",
+      },
+      {
+        query: "authoring fixture route parameter aggregation activation lifecycle",
+        summary:
+          "Routed fixture pressure for getRouteParameters, active route-node values, activation, and lifecycle should route through router/viewport semantics.",
       },
     ],
     anchors: [
@@ -3516,6 +4231,128 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
   },
   {
+    id: "semantic-runtime.state.store-configuration",
+    title: "State Store Configuration",
+    summary:
+      "Route @aurelia/state store configuration, state binding syntax, store lookup issues, and exact raw framework Error authority through the state plugin substrate.",
+    domains: ["semantic-runtime", "state", "configuration", "diagnostics", "binding"],
+    roles: ["orient", "analyze", "verify", "author"],
+    terms: [
+      "@aurelia/state",
+      "StateDefaultConfiguration",
+      "StateStores",
+      "StateIssues",
+      "state store",
+      "state store configuration",
+      "withStore",
+      "IStore",
+      "IStoreRegistry",
+      "fromState",
+      "state binding command",
+      "dispatch binding command",
+      "state binding behavior",
+      "raw Error authority",
+    ],
+    queryCanaries: [
+      {
+        query: "state store StateDefaultConfiguration withStore",
+        summary:
+          "State plugin store builder questions should route to explicit @aurelia/state products instead of generic configuration.",
+      },
+      {
+        query: "fromState state binding command missing store",
+        summary:
+          "State lookup diagnostics need post-template state binding products and store-registry semantics.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/state/state-store-materialization.ts",
+        symbolName: "StateStoreConfigurationMaterializationProjectPass",
+        role: "primary",
+        summary:
+          "Materializes valid StateDefaultConfiguration.init(...) and .withStore(...) builder products plus state issue products.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/state/store-lookup-issues.ts",
+        symbolName: "StateStoreLookupIssueMaterializer",
+        role: "supporting",
+        summary:
+          "Materializes missing named-store lookup failures from @fromState(...), state/dispatch commands, and state binding behavior arguments.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/state/framework-raw-error-authority.ts",
+        symbolName: "StateRawErrorAuthority",
+        role: "grounding",
+        summary:
+          "Exact raw @aurelia/state Error authority links for builder, decorator, and store-registry failures.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/state-projections.ts",
+        symbolName: "readStateStoreRows",
+        role: "supporting",
+        summary:
+          "Public StateStores/StateIssues API projections consumed by authoring orientation and diagnostics.",
+      },
+      {
+        kind: "doc",
+        path: "packages/semantic-runtime/src/state/README.md",
+        role: "grounding",
+        summary:
+          "State substrate boundary notes keep plugin-backed stores distinct from DI-owned state classes.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkErrors,
+        projection: "semantic-raw-references",
+        filters: { packageId: "state" },
+        role: "grounding",
+        summary:
+          "Framework raw Error authority rows ground @aurelia/state diagnostics.",
+      },
+      {
+        kind: "framework-corpus",
+        projection: "fixture-seeds",
+        query: "@aurelia/state StateDefaultConfiguration withStore",
+        role: "pressure",
+        summary:
+          "State docs/tests provide promoted store configuration and state binding examples before recipe authoring.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "state", "configuration", "framework-errors"],
+        role: "grounding",
+        summary:
+          "Durable memory keeps @aurelia/state plugin products separate from ordinary DI-owned state.",
+      },
+    ],
+    authority: [
+      "Aurelia state package source, especially StateDefaultConfiguration, decorators, binding commands, and StoreRegistry.",
+      "Semantic-runtime StateStores/StateIssues products and exact raw Error authority rows.",
+      "Framework docs/tests as pressure for generated or contrastive state-plugin fixtures.",
+    ],
+    cautions: [
+      "@aurelia/state is plugin-backed framework state, not a replacement name for DI-owned state classes.",
+      "Do not add state-binding diagnostics before template runtime products expose the relevant binding syntax and store names.",
+      "Raw framework Error authority should stay exact; do not invent synthetic AUR codes for state package throws.",
+    ],
+    nextQuestions: [
+      "Is the pressure valid store configuration, state binding syntax, missing store lookup, or raw Error authority?",
+      "Does this authoring lane require plugin-backed global state, or would a DI-owned state class remain the recommendable default?",
+      "Which docs/tests state examples should become generated fixtures versus contrastive pressure fixtures?",
+    ],
+    relatedRouteIds: [
+      "authoring.forms.fixture-flywheel",
+      "diagnostics.framework-error-grounding",
+      "semantic-runtime.evaluator.world-construction",
+      "semantic-runtime.observation.binding-flow",
+    ],
+  },
+  {
     id: "diagnostics.framework-error-grounding",
     title: "Framework Error Code Grounding",
     summary:
@@ -3648,6 +4485,191 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "semantic-runtime.resource-style-dependencies",
       "router.viewport.authoring-semantics",
       "authoring.forms.fixture-flywheel",
+    ],
+  },
+  {
+    id: "semantic-runtime.kernel-memory.representation",
+    title: "Semantic Runtime Kernel Memory Representation",
+    summary:
+      "Route kernel/product-detail/hot-detail/query-claim memory pressure through telemetry before changing representation, retention, or handle policy.",
+    domains: [
+      "semantic-runtime",
+      "kernel",
+      "performance",
+      "memory",
+      "product-details",
+      "hot-details",
+      "telemetry",
+      "inquiry",
+    ],
+    roles: ["orient", "analyze", "refactor", "verify", "document"],
+    terms: [
+      "kernel memory",
+      "memory pressure",
+      "product detail memory",
+      "product-detail memory",
+      "product detail envelope",
+      "product-detail envelope",
+      "product detail representation",
+      "hot detail memory",
+      "hot-detail memory",
+      "hot detail representation",
+      "handle density",
+      "handle characters",
+      "envelope echo",
+      "detail density",
+      "detail-density",
+      "query local products",
+      "answer local kernel",
+      "kernel mark dispose",
+      "kernel product detail memory envelope handles performance",
+    ],
+    queryCanaries: [
+      {
+        query: "kernel product detail memory envelope handles performance",
+        summary:
+          "The current telemetry frontier should route to kernel representation instead of missing and forcing manual memory:next spelunking.",
+      },
+      {
+        query: "product detail envelope echo handle density",
+        summary:
+          "Envelope-handle echo pressure belongs to product-detail representation and inquiry-depth policy.",
+      },
+      {
+        query: "hot detail memory query local products",
+        summary:
+          "Hot-detail and query-local product pressure should route through kernel sidecar and query-claim ownership.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/kernel/product-details.ts",
+        symbolName: "ProductDetailCatalog",
+        role: "primary",
+        summary:
+          "ProductDetailCatalog owns typed product details keyed by committed MaterializedProduct handles.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/kernel/hot-details.ts",
+        symbolName: "HotDetailCatalog",
+        role: "primary",
+        summary:
+          "HotDetailCatalog owns epoch-local typed details that should not become durable product envelopes.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/kernel/store.ts",
+        symbolName: "KernelStore",
+        role: "primary",
+        summary:
+          "KernelStore owns record/product/detail/hot-detail storage, marks, disposal, and telemetry snapshots.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/telemetry/detail-density.ts",
+        symbolName: "semanticRuntimeDetailShape",
+        role: "pressure",
+        summary:
+          "Detail-density telemetry distinguishes direct string mass, handle-shaped fields, local-key mass, and envelope echoes.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+        symbolName: "QueryClaimGraph",
+        role: "supporting",
+        summary:
+          "QueryClaimGraph owns answer-boundary retention/disposal decisions before query-local facts become durable kernel products.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/inquiry/query-claim-policy.ts",
+        symbolName: "queryClaimRetentionPolicyForProfile",
+        role: "supporting",
+        summary:
+          "Inquiry-profile policy decides whether answer-local kernel slices are retained or disposed after the public answer.",
+      },
+      {
+        kind: "doc",
+        path: "packages/semantic-runtime/src/kernel/README.md",
+        role: "grounding",
+        summary:
+          "Kernel docs describe record families, product details, hot details, and mark/dispose lifetimes.",
+      },
+      {
+        kind: "doc",
+        path: "packages/semantic-runtime/src/telemetry/README.md",
+        role: "grounding",
+        summary:
+          "Telemetry docs describe detail-density interpretation and its limits as heap evidence.",
+      },
+      {
+        kind: "doc",
+        path: "packages/semantic-runtime/src/inquiry/README.md",
+        heading: "Query Claims",
+        role: "grounding",
+        summary:
+          "Query-claim docs explain lazy answer storage and answer-local kernel disposal policy.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "kernel", "product-details", "inquiry"],
+        role: "grounding",
+        summary:
+          "Memory records intentional product-detail catalog shape and representation cautions.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "kernel", "hot-details", "performance"],
+        role: "grounding",
+        summary:
+          "Memory records hot-detail sidecar lifetime and when it should replace durable product envelopes.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "inquiry", "api", "performance"],
+        role: "supporting",
+        summary:
+          "Memory records QueryClaimGraph as the answer-boundary store for query-local work.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime profile:app-telemetry",
+        role: "pressure",
+        summary:
+          "Profile app-open/query memory and kernel growth before changing representation.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/atlas pressure:product-architecture",
+        role: "pressure",
+        summary:
+          "Check semantic-runtime record construction, large classes, and detail-density module pressure.",
+      },
+    ],
+    authority: [
+      "Measured app telemetry and detail-density rows before speculative memory refactors.",
+      "Kernel product/detail/hot-detail lifetimes and QueryClaimGraph retention policy.",
+      "User guidance that CPU/memory trade-offs must be explicit in inquiry algebra and code, not hidden behind caches.",
+    ],
+    cautions: [
+      "Do not drop navigable handles just because detail-density reports logical string mass; distinguish representation cost from exact heap ownership.",
+      "Do not add another cache when a query-claim retention/disposal policy would express the lifetime more honestly.",
+      "Do not split classes or helpers only to hide pressure from Atlas; check whether a real second lifetime or owner exists.",
+    ],
+    nextQuestions: [
+      "Is the pressure app-world construction, query-time projection, process-local dependency cache, or public answer payload?",
+      "Are product details echoing envelope handles because callers need them, or because the detail shape copied the envelope mechanically?",
+      "Should this fact be a durable product detail, a hot detail owned by another product, or query-local claim state?",
+      "Which inquiry profiles need the expensive projection fast, and which can recompute or use available products?",
+    ],
+    relatedRouteIds: [
+      "semantic-runtime.type-system.expression-semantics",
+      "semantic-runtime.evaluator.world-construction",
+      "semantic-runtime.template-recursive-rendering",
+      "atlas.source-analysis.substrate",
+      "atlas.work-router.self-improvement",
     ],
   },
   {

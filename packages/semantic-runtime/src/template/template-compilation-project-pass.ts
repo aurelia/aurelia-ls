@@ -5,6 +5,18 @@ import {
   DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
   type SemanticAppAnalysisDepth,
 } from '../configuration/app-analysis.js';
+import {
+  DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
+} from '../telemetry/inquiry-profile.js';
+import {
+  normalizeSemanticRuntimeTelemetryOptions,
+  type NormalizedSemanticRuntimeTelemetryOptions,
+  type SemanticRuntimeTelemetryOptions,
+} from '../telemetry/options.js';
+import {
+  measureSemanticRuntimePhase,
+  type SemanticRuntimePhaseTiming,
+} from '../telemetry/phase.js';
 import type { RouteConfigContextMaterializationProjectResult } from '../router/route-context-materialization.js';
 import type { RouteableComponentReference } from '../router/model.js';
 import type { AddressHandle } from '../kernel/handles.js';
@@ -20,6 +32,7 @@ import type { KernelStore } from '../kernel/store.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
+import type { StateStoreConfiguration } from '../state/model.js';
 import {
   AttributeClassificationMaterializer,
   type AttributeClassificationEmission,
@@ -139,10 +152,7 @@ export type TemplateCompilationProjectPhaseName =
   | 'compiled-template'
   | 'runtime-analysis';
 
-export interface TemplateCompilationProjectPhaseTiming {
-  readonly name: TemplateCompilationProjectPhaseName;
-  readonly milliseconds: number;
-}
+export type TemplateCompilationProjectPhaseTiming = SemanticRuntimePhaseTiming<TemplateCompilationProjectPhaseName>;
 
 export interface TemplateCompilationProjectProfile {
   readonly totalMilliseconds: number;
@@ -152,10 +162,28 @@ export interface TemplateCompilationProjectProfile {
 export interface TemplateCompilationProjectOptions {
   readonly runtimeAnalysisDepth?: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`;
   readonly evaluation?: StaticProjectEvaluationResult | null;
+  readonly stateStores?: readonly StateStoreConfiguration[];
   readonly includeAuthoringTemplates?: boolean;
   readonly authoringTemplateSourceFiles?: readonly string[];
   readonly authoringTemplateLimit?: number | null;
   readonly projectKey?: string;
+  readonly telemetry?: SemanticRuntimeTelemetryOptions | null;
+}
+
+class TemplateCompilationPhaseRecorder {
+  readonly phases: TemplateCompilationProjectPhaseTiming[] = [];
+
+  constructor(
+    private readonly store: KernelStore,
+    readonly telemetry: NormalizedSemanticRuntimeTelemetryOptions,
+  ) {}
+
+  measure<TValue>(
+    name: TemplateCompilationProjectPhaseName,
+    read: () => TValue,
+  ): TValue {
+    return measureSemanticRuntimePhase(this.phases, name, this.store, this.telemetry, read);
+  }
 }
 
 /** Template compilation-front-door result for one app-world composition. */
@@ -229,7 +257,13 @@ export class TemplateCompilationProjectPass {
     options: TemplateCompilationProjectOptions = {},
   ): TemplateCompilationProjectEmission {
     const started = performance.now();
-    const phases: TemplateCompilationProjectPhaseTiming[] = [];
+    const phaseRecorder = new TemplateCompilationPhaseRecorder(
+      this.store,
+      normalizeSemanticRuntimeTelemetryOptions(
+        options.telemetry,
+        DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
+      ),
+    );
     const runtimeAnalysisDepth = options.runtimeAnalysisDepth ?? DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH;
     const authoringTemplateLimit = normalizedAuthoringTemplateLimit(options.authoringTemplateLimit);
     const authoringTemplateSourceFiles = normalizedAuthoringTemplateSourceFiles(options.authoringTemplateSourceFiles);
@@ -238,7 +272,7 @@ export class TemplateCompilationProjectPass {
       typeSystem,
       resourceDefinitions,
       routeContexts,
-      phases,
+      phaseRecorder,
     );
     const authoringCompilations = options.includeAuthoringTemplates === true
       ? this.compileAuthoringResources(
@@ -248,36 +282,45 @@ export class TemplateCompilationProjectPass {
         appCompilations,
         authoringTemplateSourceFiles,
         authoringTemplateLimit,
-        phases,
+        phaseRecorder,
       )
       : [];
     const projectContext = templateRuntimeAnalysisProjectContext([
       ...appCompilations,
       ...authoringCompilations,
     ]);
-    const expressionWorld = new CheckerExpressionTypeWorld(this.store);
+    const expressionWorld = new CheckerExpressionTypeWorld(
+      this.store,
+      undefined,
+      undefined,
+      options.stateStores ?? [],
+    );
     const resources = this.analyzeCompiledResources(
       appCompilations,
       projectContext,
+      options.projectKey ?? null,
       options.evaluation ?? null,
       typeSystem,
+      resourceDefinitions,
       runtimeAnalysisDepth,
       expressionWorld,
-      phases,
+      phaseRecorder,
     );
     const authoringResources = this.analyzeCompiledResources(
       authoringCompilations,
       projectContext,
+      options.projectKey ?? null,
       options.evaluation ?? null,
       typeSystem,
+      resourceDefinitions,
       runtimeAnalysisDepth,
       expressionWorld,
-      phases,
+      phaseRecorder,
     );
 
     const profile: TemplateCompilationProjectProfile = {
       totalMilliseconds: performance.now() - started,
-      phases,
+      phases: phaseRecorder.phases,
     };
 
     return new TemplateCompilationProjectEmission(
@@ -295,7 +338,7 @@ export class TemplateCompilationProjectPass {
     typeSystem: TypeSystemProject | null,
     resourceDefinitions: ResourceDefinitionIndex | null,
     routeContexts: RouteConfigContextMaterializationProjectResult | null,
-    phases: TemplateCompilationProjectPhaseTiming[],
+    phases: TemplateCompilationPhaseRecorder,
   ): readonly TemplateResourceCompilationEmission[] {
     const appCompilations: TemplateResourceCompilationEmission[] = [];
 
@@ -319,8 +362,7 @@ export class TemplateCompilationProjectPass {
         seen.add(compilationKey);
 
         const localKey = templateResourceCompilationLocalKey(worldIndex, resourceIndex, definition);
-        const compilationWorld = measureTemplateCompilationPhase(
-          phases,
+        const compilationWorld = phases.measure(
           'component-compiler-world',
           () => this.compilerWorldForDefinition(
             task.compilerWorld,
@@ -360,7 +402,7 @@ export class TemplateCompilationProjectPass {
     appCompilations: readonly TemplateResourceCompilationEmission[],
     authoringTemplateSourceFiles: readonly string[],
     authoringTemplateLimit: number | null,
-    phases: TemplateCompilationProjectPhaseTiming[],
+    phases: TemplateCompilationPhaseRecorder,
   ): readonly TemplateResourceCompilationEmission[] {
     if (resourceDefinitions == null || authoringTemplateLimit === 0) {
       return [];
@@ -376,8 +418,7 @@ export class TemplateCompilationProjectPass {
     if (selectedDefinitions.length === 0) {
       return [];
     }
-    const compilerWorld = measureTemplateCompilationPhase(
-      phases,
+    const compilerWorld = phases.measure(
       'authoring-compiler-world',
       () => this.authoringCompilerWorldMaterializer.construct({
         projectKey,
@@ -407,19 +448,30 @@ export class TemplateCompilationProjectPass {
   private analyzeCompiledResources(
     compilations: readonly TemplateResourceCompilationEmission[],
     projectContext: TemplateRuntimeAnalysisProjectContext,
+    projectKey: string | null,
     evaluation: StaticProjectEvaluationResult | null,
     typeSystem: TypeSystemProject | null,
+    resourceDefinitions: ResourceDefinitionIndex | null,
     runtimeAnalysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}`,
     expressionWorld: CheckerExpressionTypeWorld,
-    phases: TemplateCompilationProjectPhaseTiming[],
+    phases: TemplateCompilationPhaseRecorder,
   ): readonly TemplateResourceRuntimeAnalysisEmission[] {
     return compilations.map((compilation) =>
       new TemplateResourceRuntimeAnalysisEmission(
         compilation,
-        measureTemplateCompilationPhase(
-          phases,
+        phases.measure(
           'runtime-analysis',
-          () => this.analyzeResource(compilation, projectContext, evaluation, typeSystem, runtimeAnalysisDepth, expressionWorld),
+          () => this.analyzeResource(
+            compilation,
+            projectContext,
+            projectKey,
+            evaluation,
+            typeSystem,
+            resourceDefinitions,
+            runtimeAnalysisDepth,
+            expressionWorld,
+            phases.telemetry,
+          ),
         ),
       )
     );
@@ -474,7 +526,7 @@ export class TemplateCompilationProjectPass {
     definition: CustomElementDefinition,
     localKey: string,
     typeSystem: TypeSystemProject | null,
-    phases: TemplateCompilationProjectPhaseTiming[] | null = null,
+    phases: TemplateCompilationPhaseRecorder,
   ): TemplateResourceCompilationEmission | null {
     const sourceKind = templateSourceKind(definition);
     if (sourceKind == null) {
@@ -526,10 +578,10 @@ export class TemplateCompilationProjectPass {
     compilerWorld: TemplateCompilerWorldEmission,
     definition: CustomElementDefinition,
     sourceKind: TemplateSourceKind,
-    phases: TemplateCompilationProjectPhaseTiming[] | null,
+    phases: TemplateCompilationPhaseRecorder,
   ): TemplateCompilationUnitEmission {
     const sourceAddressHandle = definition.template?.addressHandle ?? definition.sourceAddressHandle;
-    return measureTemplateCompilationPhase(phases, 'compilation-unit', () =>
+    return phases.measure('compilation-unit', () =>
       this.unitMaterializer.construct(new TemplateCompilationUnitConstructionRequest(
         localKey,
         TemplateCompilationUnitKind.CustomElement,
@@ -556,9 +608,9 @@ export class TemplateCompilationProjectPass {
   private parseHtml(
     localKey: string,
     unit: TemplateCompilationUnitEmission,
-    phases: TemplateCompilationProjectPhaseTiming[] | null,
+    phases: TemplateCompilationPhaseRecorder,
   ): HtmlParseEmission {
-    return measureTemplateCompilationPhase(phases, 'html-parse', () =>
+    return phases.measure('html-parse', () =>
       this.htmlParser.parse({
         localKey,
         templateSource: unit.templateSource,
@@ -573,9 +625,9 @@ export class TemplateCompilationProjectPass {
     compilerWorld: TemplateCompilerWorldEmission,
     unit: TemplateCompilationUnitEmission,
     html: HtmlParseEmission,
-    phases: TemplateCompilationProjectPhaseTiming[] | null,
+    phases: TemplateCompilationPhaseRecorder,
   ): AttributeSyntaxParseEmission {
-    return measureTemplateCompilationPhase(phases, 'attribute-syntax', () =>
+    return phases.measure('attribute-syntax', () =>
       this.attributeSyntax.parse({
         localKey,
         compilationUnit: unit.compilationUnit,
@@ -591,9 +643,9 @@ export class TemplateCompilationProjectPass {
     unit: TemplateCompilationUnitEmission,
     html: HtmlParseEmission,
     attributeSyntax: AttributeSyntaxParseEmission,
-    phases: TemplateCompilationProjectPhaseTiming[] | null,
+    phases: TemplateCompilationPhaseRecorder,
   ): AttributeClassificationEmission {
-    return measureTemplateCompilationPhase(phases, 'attribute-classification', () =>
+    return phases.measure('attribute-classification', () =>
       this.attributeClassification.classify({
         localKey,
         compilationUnit: unit.compilationUnit,
@@ -611,9 +663,9 @@ export class TemplateCompilationProjectPass {
     html: HtmlParseEmission,
     attributeSyntax: AttributeSyntaxParseEmission,
     attributeClassification: AttributeClassificationEmission,
-    phases: TemplateCompilationProjectPhaseTiming[] | null,
+    phases: TemplateCompilationPhaseRecorder,
   ): TemplateValueSiteEmission {
-    return measureTemplateCompilationPhase(phases, 'value-sites', () =>
+    return phases.measure('value-sites', () =>
       this.valueSites.materialize({
         localKey,
         compilationUnit: unit.compilationUnit,
@@ -633,9 +685,9 @@ export class TemplateCompilationProjectPass {
     attributeSyntax: AttributeSyntaxParseEmission,
     attributeClassification: AttributeClassificationEmission,
     valueSites: TemplateValueSiteEmission,
-    phases: TemplateCompilationProjectPhaseTiming[] | null,
+    phases: TemplateCompilationPhaseRecorder,
   ): BindingCommandLoweringEmission {
-    return measureTemplateCompilationPhase(phases, 'binding-command-lowering', () =>
+    return phases.measure('binding-command-lowering', () =>
       this.bindingCommandLowering.lower({
         localKey,
         compilationUnit: unit.compilationUnit,
@@ -657,9 +709,9 @@ export class TemplateCompilationProjectPass {
     attributeClassification: AttributeClassificationEmission,
     valueSites: TemplateValueSiteEmission,
     bindingCommandLowering: BindingCommandLoweringEmission,
-    phases: TemplateCompilationProjectPhaseTiming[] | null,
+    phases: TemplateCompilationPhaseRecorder,
   ): CompiledTemplateEmission {
-    return measureTemplateCompilationPhase(phases, 'compiled-template', () =>
+    return phases.measure('compiled-template', () =>
       this.compiledTemplate.materialize({
         localKey,
         compilationUnit: unit.compilationUnit,
@@ -676,13 +728,17 @@ export class TemplateCompilationProjectPass {
   analyzeResource(
     compilation: TemplateResourceCompilationEmission,
     projectContext: TemplateRuntimeAnalysisProjectContext,
+    projectKey: string | null,
     evaluation: StaticProjectEvaluationResult | null,
     typeSystem: TypeSystemProject | null,
+    resourceDefinitions: ResourceDefinitionIndex | null,
     analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` = DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
     expressionWorld: CheckerExpressionTypeWorld | null = null,
+    telemetry: SemanticRuntimeTelemetryOptions | null = null,
   ): TemplateRuntimeAnalysisEmission {
     return this.runtimeAnalysis.materialize(new TemplateRuntimeAnalysisRequest(
       compilation.localKey,
+      projectKey,
       compilation.definition,
       compilation.compiledTemplate,
       compilation.attributeSyntax,
@@ -690,8 +746,10 @@ export class TemplateCompilationProjectPass {
       projectContext,
       evaluation,
       typeSystem,
+      resourceDefinitions,
       analysisDepth,
       expressionWorld,
+      telemetry,
     ));
   }
 }
@@ -701,7 +759,7 @@ class ProjectTemplateCompilerHost implements TemplateCompilerCompileHost<Templat
     private readonly pass: TemplateCompilationProjectPass,
     private readonly compilerWorld: TemplateCompilerWorldEmission,
     private readonly typeSystem: TypeSystemProject | null,
-    private readonly phases: TemplateCompilationProjectPhaseTiming[] | null,
+    private readonly phases: TemplateCompilationPhaseRecorder,
   ) {}
 
   compile(
@@ -928,18 +986,4 @@ function normalizedAuthoringTemplateSourceFiles(
     .map((fileName) => fileName.trim().replace(/\\/g, '/'))
     .filter((fileName) => fileName.length > 0))]
     .sort();
-}
-
-function measureTemplateCompilationPhase<TValue>(
-  phases: TemplateCompilationProjectPhaseTiming[] | null,
-  name: TemplateCompilationProjectPhaseName,
-  read: () => TValue,
-): TValue {
-  const started = performance.now();
-  const value = read();
-  phases?.push({
-    name,
-    milliseconds: performance.now() - started,
-  });
-  return value;
 }

@@ -25,7 +25,7 @@
         "Guardrails belong on StaticEvaluationPolicy; speculative intrinsic attempts should checkpoint/restore seams and guardrail counters so abandoned callback evaluation degrades to imprecise values instead of poisoning the module.",
         "Use IntrinsicCallbackFrame for callback-bearing standard intrinsics so callback budget, checkpoint lifetime, and abandoned-seam restoration remain one evaluator primitive instead of per-method guardrail loops.",
         "Collection callback budget exhaustion should usually return imprecise evaluator values such as unknown membership/order; emit product-specific open seams later only when a consumer needs exact membership or order.",
-        "Standard object/array/string intrinsics such as Object.keys/values/entries/fromEntries, Array.from, array map/filter/find/findIndex/some/every/reduce/flat/flatMap/forEach/includes/indexOf/join/sort, array push/pop/shift/unshift/splice/reverse/fill mutation, and string split/replace/replaceAll belong behind evaluation/intrinsics.ts, with implementations split under evaluation/intrinsics/ by ECMAScript family and shared callback guardrails.",
+        "Standard object/array/string/promise intrinsics such as Object.keys/values/entries/fromEntries, Array.from, array map/filter/find/findIndex/some/every/reduce/flat/flatMap/forEach/includes/indexOf/join/sort, array push/pop/shift/unshift/splice/reverse/fill mutation, string split/replace/replaceAll, and Promise.resolve belong behind evaluation/intrinsics.ts, with implementations split under evaluation/intrinsics/ by ECMAScript family and shared callback guardrails.",
         "Mutating array intrinsics must update the evaluator-local receiver and carry membership/order imprecision on EvaluationArrayValue; do not return detached arrays or add feature-local array mutation shortcuts in recognizers.",
         "Binding patterns belong in evaluator environment construction. Variable declarations, function/constructor parameters, defaults, rest bindings, and loop declaration initializers should bind environment cells before recognizers inspect evaluated values.",
         "Property and element access belong in evaluation/property-access.ts. Reuse readStaticOwnProperty, writeStaticOwnProperty, and evaluateStaticPropertyValue for recognizers or follow-up expression reads instead of duplicating object/module/array/string/RegExp access semantics.",
@@ -87,6 +87,11 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/intrinsics/array-intrinsics.ts",
           "summary": "Array intrinsic implementation family with callback guardrails."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/intrinsics/promise-intrinsics.ts",
+          "summary": "Promise intrinsic implementation family, including fulfillment-lane preservation."
         },
         {
           "kind": "source",
@@ -224,15 +229,28 @@
       "guidance": [
         "Start here when local asset modules, package declaration-to-source mapping, path aliases, or module graph admission rules change.",
         "Reuse the shared boot host-file cache for package manifest reads; do not add independent manifest readers inside feature code.",
-        "Keep Aurelia framework packages on the framework-emulation path rather than pulling `aurelia` or `@aurelia/*` from node_modules into app evaluation."
+        "Keep Aurelia framework packages on the framework-emulation path rather than pulling `aurelia` or `@aurelia/*` from node_modules into app evaluation.",
+        "Module graph performance should be read through the source-host profile first: source reads/parses, TypeScript module resolution, path probes, declaration-source cache, package-policy cache, and cached file-system probes are separate trade-off lanes.",
+        "Use StaticProjectEvaluationProfile source-file composition before changing package-source admission. The profile distinguishes project, node_modules, external, TS/JS, asset, evaluated, open, and source-text buckets so a large graph can be attributed before refactoring.",
+        "Direct path probes are allowed for asset/query-shaped imports such as JSON/HTML/CSS and query-bearing specifiers. Ordinary TS/JS relative imports should let TypeScript choose source/declaration semantics first. The measured post-TypeScript path-probe retry is a deliberate `EvaluationModuleResolutionPolicy` fallback for relative specifiers whose local authored source or asset shape TypeScript did not close; read `postTsProbe`, `pathProbeBefore/After`, before/after probe milliseconds, `resolvedByPathProbeBefore/After`, and the specifier-shape counters before changing it.",
+        "Keep path-probe candidate policy semantic, not exhaustive. Explicit supported asset/source extensions are exact candidates and should not expand into `specifier.ext/index.*`; emitted JavaScript extensions can map back to TypeScript source siblings; extensionless specifiers expand through supported evaluation-module extensions and index files.",
+        "When TypeScript has already resolved a non-declaration module to an evaluation-module path, do not re-probe file existence before admitting it. Existence checks belong in candidate path probes or TypeScript's resolver, not in a duplicate post-resolution guard.",
+        "Use cached read results as the source-file miss test. `readSourceFile` should not probe file existence and then read the same path; resolver/path-probe code owns existence checks when it is choosing among candidate paths."
       ],
       "anchors": [
         {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/module-host.ts",
           "symbolName": "FileSystemEvaluationModuleSourceHost",
-          "line": 51,
+          "line": 251,
           "summary": "File-system implementation of the evaluation module source host."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/module-host.ts",
+          "symbolName": "CachedEvaluationModuleHostFileSystem",
+          "line": 132,
+          "summary": "Per-pass cached filesystem adapter and profile counters for module graph source reads and resolution."
         },
         {
           "kind": "source",
@@ -247,13 +265,20 @@
           "filePath": "packages/semantic-runtime/src/evaluation/module-host.ts",
           "minLineCount": 100,
           "minMethodCount": 4
+        },
+        {
+          "kind": "product-large-class",
+          "className": "CachedEvaluationModuleHostFileSystem",
+          "filePath": "packages/semantic-runtime/src/evaluation/module-host.ts",
+          "minLineCount": 80,
+          "minMethodCount": 4
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-17"
     },
     {
-      "id": "frontier:static-project-evaluation-pass",
+      "id": "frontier:static-project-evaluation-frame",
       "kind": "pressure-frontier",
       "domains": [
         "semantic-runtime",
@@ -261,11 +286,13 @@
         "boot",
         "world-construction"
       ],
-      "summary": "StaticProjectEvaluationPass is the shared project-level evaluation pass over boot-admitted app source files.",
-      "rationale": "Resource, configuration, DI, template, and type-system work need one shared evaluation envelope over app sources and linked source dependencies. Project-level evaluation should remain evaluator substrate and kernel open-seam emission, not an Aurelia recognizer.",
+      "summary": "StaticProjectEvaluationFrame owns the per-run project evaluation lifetime behind the shared StaticProjectEvaluationPass facade.",
+      "rationale": "Resource, configuration, DI, template, and type-system work need one shared evaluation envelope over app sources and linked source dependencies. StaticProjectEvaluationPass should stay a small public entry point; StaticProjectEvaluationFrame owns the per-run admission index, module source host, graph evaluation, result publication, and profile assembly. Project-level evaluation should remain evaluator substrate and kernel open-seam emission, not an Aurelia recognizer.",
       "guidance": [
-        "Start here when app-source admission, linked source admission, unresolved module capture, or evaluator open-seam emission changes.",
+        "Start at StaticProjectEvaluationFrame when app-source admission, linked source admission, unresolved module capture, phase timing, module-source-host profiling, or evaluator open-seam emission changes.",
+        "Keep StaticProjectEvaluationPass as a small facade over the per-run frame unless a new public evaluation mode needs a distinct entry point.",
         "Keep source roles authoritative: tests, declarations, templates, styles, manifests, and tooling configs should not enter app-world static evaluation by accident.",
+        "Use the source composition profile to separate app-authored sources from linked source-shipped packages before deciding whether a broad evaluated-source count is an admission bug or legitimate framework/plugin pressure.",
         "If a downstream materializer needs another evaluation loop, inspect whether it should consume StaticProjectEvaluationResult instead."
       ],
       "anchors": [
@@ -273,8 +300,13 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
           "symbolName": "StaticProjectEvaluationPass",
-          "line": 84,
-          "summary": "Project-level static evaluation pass."
+          "summary": "Public project-level static evaluation facade."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
+          "symbolName": "StaticProjectEvaluationFrame",
+          "summary": "Per-run project evaluation work frame and profile assembly owner."
         },
         {
           "kind": "source",
@@ -285,14 +317,14 @@
       "liveChecks": [
         {
           "kind": "product-large-class",
-          "className": "StaticProjectEvaluationPass",
+          "className": "StaticProjectEvaluationFrame",
           "filePath": "packages/semantic-runtime/src/evaluation/project-evaluation.ts",
           "minLineCount": 80,
           "minMethodCount": 3
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-17"
     },
     {
       "id": "frontier:evaluation-module-loader",

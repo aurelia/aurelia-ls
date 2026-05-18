@@ -4,6 +4,7 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { ConfigurationOptionValueKind } from '../configuration/configuration-option.js';
+import type { CheckerTypeReference } from '../type-system/type-shape.js';
 
 export type StateStoreOptionsOrHandlerKind =
   | 'absent'
@@ -34,6 +35,8 @@ export class StateStoreConfiguration {
     readonly nameSourceAddressHandle: AddressHandle | null,
     /** Source address for the initial state argument. */
     readonly initialStateSourceAddressHandle: AddressHandle | null,
+    /** Static type of the initial state object that StateBindingBehavior exposes as the binding context. */
+    readonly initialStateType: CheckerTypeReference | null,
     /** Source address for the overload-bearing options-or-handler argument. */
     readonly optionsOrHandlerSourceAddressHandle: AddressHandle | null,
     /** Source addresses for callback arguments classified as action handlers. */

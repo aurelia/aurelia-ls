@@ -33,6 +33,7 @@ import type {
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import {
+  CheckerTypeMemberProjectionPolicy,
   CheckerTypeProjector,
   type CheckerTypeProjectionRequest,
 } from '../type-system/checker-projector.js';
@@ -46,6 +47,7 @@ import {
   type NamedResourceDefinitionHeader,
 } from './resource-definition.js';
 import type { ResourceRecognitionContext } from './resource-recognition-context.js';
+import type { ResourceRecognitionEmissionPhaseName } from './resource-recognition-kernel-emitter.js';
 import {
   type AttributePatternObservation,
   type ResourceTargetObservation,
@@ -89,10 +91,16 @@ export class ResourceOpenSeamPublicationSet {
   ) {}
 }
 
+type ResourceRecognitionPublicationPhaseRecorder = <TValue>(
+  name: ResourceRecognitionEmissionPhaseName,
+  read: () => TValue,
+) => TValue;
+
 /** Publishes target, resource-identity, alias, pattern, and open-seam records for recognized resource carriers. */
 export class ResourceRecognitionPublicationSupport {
   constructor(
     readonly store: KernelStore,
+    readonly recordPhase: ResourceRecognitionPublicationPhaseRecorder = (_name, read) => read(),
   ) {}
 
   recordsForTarget(
@@ -205,17 +213,19 @@ export class ResourceRecognitionPublicationSupport {
     addressHandle: AddressHandle,
     identityHandle: IdentityHandle | null,
   ): CheckerTypeReference | null {
-    return context.typeSystem == null
-      ? null
-      : projectTargetType(
-        this.store,
-        context.typeSystem,
-        target.node,
-        local,
-        addressHandle,
-        identityHandle,
-        target.localName,
-      );
+    return this.recordPhase('kernel-emission:target-type-projection', () =>
+      context.typeSystem == null
+        ? null
+        : projectTargetType(
+          this.store,
+          context.typeSystem,
+          target.node,
+          local,
+          addressHandle,
+          identityHandle,
+          target.localName,
+        )
+    );
   }
 
   private targetAddress(
@@ -550,6 +560,7 @@ function projectTargetType(
     sourceAddressHandle,
     ownerIdentityHandle,
     display,
+    memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
   } satisfies CheckerTypeProjectionRequest);
   return typeShape.toReference();
 }

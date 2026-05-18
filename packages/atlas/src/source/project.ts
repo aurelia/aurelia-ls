@@ -27,6 +27,8 @@ export const enum SourcePackageId {
   Atlas = "atlas",
   /** Product-owned semantic runtime substrate. */
   SemanticRuntime = "semantic-runtime",
+  /** Public Model Context Protocol shell over semantic-runtime APIs. */
+  Mcp = "mcp",
 }
 
 /** Aurelia framework package ids admitted from the in-repo framework submodule when present. */
@@ -527,7 +529,8 @@ export class SourceProject {
   private identity(): string {
     const localPackageCount = this.#packageDefinitions.filter((definition) =>
       definition.id === SourcePackageId.Atlas ||
-      definition.id === SourcePackageId.SemanticRuntime
+      definition.id === SourcePackageId.SemanticRuntime ||
+      definition.id === SourcePackageId.Mcp
     ).length;
     const frameworkPackageCount = this.#packageDefinitions.filter((definition) =>
       (AURELIA_FRAMEWORK_PACKAGE_IDS as readonly string[]).includes(definition.id)
@@ -704,7 +707,7 @@ interface SourceProjectIndex {
   readonly topLevelDeclarationRows: readonly SourceDeclarationRow[];
 }
 
-/** Create the default source project over the internal inquiry and semantic-runtime packages. */
+/** Create the default source project over the internal inquiry, semantic-runtime, and MCP packages. */
 export function createSourceProject(
   /** Optional source project construction options. */
   options: SourceProjectOptions = {},
@@ -775,6 +778,12 @@ export function defaultSourcePackageDefinitions(
       packageName: "@aurelia-ls/semantic-runtime",
       rootPath: "packages/semantic-runtime",
       tsconfigPath: "packages/semantic-runtime/tsconfig.json",
+    },
+    {
+      id: SourcePackageId.Mcp,
+      packageName: "@aurelia-ls/mcp",
+      rootPath: "packages/mcp",
+      tsconfigPath: "packages/mcp/tsconfig.json",
     },
   ];
   return [

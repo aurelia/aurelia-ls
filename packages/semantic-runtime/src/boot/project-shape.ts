@@ -324,10 +324,17 @@ function aureliaSourceSignals(project: ProjectBootFrame): readonly SemanticProje
     if (text == null) {
       continue;
     }
+    if (!textCanContainAureliaFacadeSignal(text)) {
+      continue;
+    }
     countSourceFileSignals(counts, source.path, text);
   }
   return [...counts.entries()]
     .map(([signal, count]) => ({ signal, count }));
+}
+
+function textCanContainAureliaFacadeSignal(text: string): boolean {
+  return text.includes('aurelia') || text.includes('@aurelia/');
 }
 
 function readSourceText(

@@ -14,14 +14,19 @@ export interface ExpectedSemanticEffectObservationSnapshot {
   readonly components: readonly object[];
   readonly styles: readonly object[];
   readonly services: readonly object[];
+  readonly stateCompositions: readonly object[];
   readonly serviceInteractions: readonly object[];
   readonly serviceInteractionBindings: readonly object[];
   readonly compiledResources: number;
-  readonly runtimeControllers: number;
+  readonly runtimeControllers: ExpectedSemanticEffectObservableRows;
+  readonly runtimeCompositions: readonly object[];
   readonly bindingTargetAccesses: ExpectedSemanticEffectObservableRows;
   readonly targetOperations: ExpectedSemanticEffectObservableRows;
   readonly bindingValueChannels: ExpectedSemanticEffectObservableRows;
   readonly bindingBehaviorApplications: readonly object[];
+  readonly i18nTranslationKeys: readonly object[];
+  readonly i18nTranslationBindings: readonly object[];
+  readonly stateStores: readonly object[];
   readonly bindingDataFlows: ExpectedSemanticEffectObservableRows;
   readonly routeFacts: number;
   readonly routeFactRows: readonly object[];
@@ -167,6 +172,10 @@ export function observedCountForExpectedSemanticEffect(
       return snapshot.services.filter((service) =>
         matchesFilters(service, expectedEffect.filters)
       ).length;
+    case 'state-composition':
+      return snapshot.stateCompositions.filter((composition) =>
+        matchesFilters(composition, expectedEffect.filters)
+      ).length;
     case 'service-interaction':
       return snapshot.serviceInteractions.filter((interaction) =>
         matchesFilters(interaction, expectedEffect.filters)
@@ -183,7 +192,11 @@ export function observedCountForExpectedSemanticEffect(
     case 'template-compilation':
       return snapshot.compiledResources;
     case 'runtime-controller':
-      return snapshot.runtimeControllers;
+      return filteredRowCount(snapshot.runtimeControllers, expectedEffect.filters);
+    case 'runtime-composition':
+      return snapshot.runtimeCompositions.filter((composition) =>
+        matchesFilters(composition, expectedEffect.filters)
+      ).length;
     case 'binding-target-access':
       return filteredRowCount(snapshot.bindingTargetAccesses, expectedEffect.filters);
     case 'target-operation':
@@ -193,6 +206,18 @@ export function observedCountForExpectedSemanticEffect(
     case 'binding-behavior-application':
       return snapshot.bindingBehaviorApplications.filter((application) =>
         matchesFilters(application, expectedEffect.filters)
+      ).length;
+    case 'i18n-translation-key':
+      return snapshot.i18nTranslationKeys.filter((translationKey) =>
+        matchesFilters(translationKey, expectedEffect.filters)
+      ).length;
+    case 'i18n-translation-binding':
+      return snapshot.i18nTranslationBindings.filter((translationBinding) =>
+        matchesFilters(translationBinding, expectedEffect.filters)
+      ).length;
+    case 'state-store':
+      return snapshot.stateStores.filter((stateStore) =>
+        matchesFilters(stateStore, expectedEffect.filters)
       ).length;
     case 'binding-data-flow':
       return filteredRowCount(snapshot.bindingDataFlows, expectedEffect.filters);

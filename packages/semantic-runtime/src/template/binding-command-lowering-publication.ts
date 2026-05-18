@@ -25,6 +25,10 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
+  bindProductDetailEnvelope,
+  requireProductDetailEnvelope,
+} from '../kernel/product-details.js';
+import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import type {
@@ -170,10 +174,9 @@ export class BindingCommandProductPublisher {
     classification: CommandAttributeClassification,
     syntax: AttributeSyntax | null,
     attribute: HtmlAttribute | null,
-    expressionSite: TemplateValueSite | null,
   ): PublishedBindingCommandBuild {
     const handles = this.handlesForLocal(local);
-    const buildInput = this.createBindingCommandBuildInput(handles, classification, syntax, attribute, expressionSite);
+    const buildInput = this.createBindingCommandBuildInput(handles, classification, syntax, attribute);
     const claims = [
       new SemanticClaim(
         this.store.handles.claim(`${local}:builds-command-input`),
@@ -230,7 +233,6 @@ export class BindingCommandProductPublisher {
     classification: CommandAttributeClassification,
     syntax: AttributeSyntax | null,
     attribute: HtmlAttribute | null,
-    expressionSite: TemplateValueSite | null,
   ): BindingCommandBuildInput {
     return new BindingCommandBuildInput(
       handles.buildInputProductHandle,
@@ -241,7 +243,6 @@ export class BindingCommandProductPublisher {
       classification.ownerNode,
       syntax?.attribute ?? attribute?.toReference() ?? new HtmlAttributeReference(null, null, null),
       syntax?.productHandle ?? null,
-      expressionSite?.productHandle ?? null,
       classification.bindable?.reference.ownerDefinitionProductHandle ?? null,
       classification.resource?.definitionProductHandle ?? null,
       syntax?.sourceAddressHandle ?? attribute?.sourceAddressHandle ?? classification.sourceAddressHandle,
@@ -442,12 +443,14 @@ export class BindingCommandLoweringPublisher {
   publishMultiBindingAttributeSyntax(
     local: string,
     site: TemplateValueSite,
+    source: BindingCommandLoweringSourceSet,
     attribute: HtmlAttribute,
     parse: AttributeParserParseResult,
     sourceAddressHandle: AddressHandle | null,
   ): PublishedMultiBindingAttributeSyntax {
     const syntax = this.createMultiBindingAttributeSyntax(
       this.attributeSyntaxHandles(`${local}:attribute-syntax`),
+      source,
       attribute,
       parse,
       sourceAddressHandle,
@@ -744,15 +747,7 @@ export class BindingCommandLoweringPublisher {
     source: BindingCommandLoweringSourceSet,
     syntax: AttributeSyntax,
   ): readonly KernelStoreRecord[] {
-    return [
-      new MaterializedProduct(
-        syntax.productHandle,
-        KernelVocabulary.Template.AttributeSyntax.key,
-        syntax.identityHandle,
-        syntax.sourceAddressHandle,
-        source.provenanceHandle,
-      ),
-    ];
+    return [requireProductDetailEnvelope(syntax, 'template.attribute-syntax')];
   }
 
   private recordsForMultiBindingSegmentProduct(
@@ -789,14 +784,13 @@ export class BindingCommandLoweringPublisher {
 
   private createMultiBindingAttributeSyntax(
     handles: AttributeSyntaxHandleSet,
+    source: BindingCommandLoweringSourceSet,
     attribute: HtmlAttribute,
     parse: AttributeParserParseResult,
     sourceAddressHandle: AddressHandle | null,
   ): AttributeSyntax {
     const execution = parse.execution;
-    return new AttributeSyntax(
-      handles.productHandle,
-      handles.identityHandle,
+    return bindProductDetailEnvelope(new AttributeSyntax(
       execution.syntaxKind,
       execution.rawName,
       execution.rawValue,
@@ -805,9 +799,14 @@ export class BindingCommandLoweringPublisher {
       execution.parts,
       parse.pattern,
       attribute.toReference(),
-      sourceAddressHandle,
       [],
-    );
+    ), new MaterializedProduct(
+      handles.productHandle,
+      KernelVocabulary.Template.AttributeSyntax.key,
+      handles.identityHandle,
+      sourceAddressHandle,
+      source.provenanceHandle,
+    ));
   }
 
   private recordsForMultiBindingAttributeSyntax(
@@ -854,7 +853,6 @@ export class BindingCommandLoweringPublisher {
       owner.element.toReference(),
       attribute.toReference(),
       syntax.productHandle,
-      null,
       bindable.reference.ownerDefinitionProductHandle,
       bindable.reference.ownerDefinitionProductHandle,
       syntax.sourceAddressHandle ?? segment.sourceAddressHandle,

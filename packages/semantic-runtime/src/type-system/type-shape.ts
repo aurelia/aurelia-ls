@@ -4,6 +4,11 @@ import type {
   IdentityHandle,
   ProductHandle,
 } from '../kernel/handles.js';
+import {
+  productDetailAddressHandle,
+  productDetailHandle,
+  productDetailIdentityHandle,
+} from '../kernel/product-details.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
 
 export const enum CheckerTypeProjectionOrigin {
@@ -151,6 +156,8 @@ export type CheckerTypeMemberField =
   | 'source'
   | 'carrier';
 
+const CheckerTypeShapeDetailKind = 'type-system.type-shape';
+
 /**
  * Current TypeChecker carrier for a projected type.
  *
@@ -221,10 +228,8 @@ export function sameCheckerTypeReference(
 /** Type-system member detail visible to template/expression inquiry. */
 export class CheckerTypeMember {
   constructor(
-    /** Product handle for this member projection. */
+    /** Hot detail handle for this member projection; usually not a durable kernel product. */
     readonly productHandle: ProductHandle,
-    /** Identity handle for this member projection. */
-    readonly identityHandle: IdentityHandle,
     /** Runtime/authored member name. */
     readonly name: string,
     /** Broad member lane from checker declarations and symbol flags. */
@@ -239,7 +244,12 @@ export class CheckerTypeMember {
     readonly isReadonly: boolean,
     /** Declaration identity for the member, when source identity has been materialized. */
     readonly declarationIdentityHandle: IdentityHandle | null,
-    /** Best source address for navigation or explanation. */
+    /**
+     * Direct source address for synthetic or non-declaration-backed members.
+     *
+     * Checker-backed members usually leave this null because their `declarationIdentityHandle` already points at a
+     * TypeScript declaration identity whose kernel record owns the declaration source span.
+     */
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for mixed checker/source projections. */
     readonly fieldProvenance: readonly FieldProvenance<CheckerTypeMemberField>[] = [],
@@ -248,13 +258,22 @@ export class CheckerTypeMember {
   ) {}
 }
 
+/**
+ * Durable identity reached through a checker member.
+ *
+ * Type members are hot details rather than durable kernel products. Their own follow-up handle is product-shaped, but
+ * they should not invent a kernel identity record just to parent value-type projections. Prefer the declaration
+ * identity when TypeScript supplied one; otherwise fall back to the owning type shape identity.
+ */
+export function checkerTypeMemberReachableIdentityHandle(
+  member: CheckerTypeMember,
+): IdentityHandle | null {
+  return member.declarationIdentityHandle ?? member.ownerType.identityHandle;
+}
+
 /** Type-system type detail visible to template/expression inquiry. */
 export class CheckerTypeShape {
   constructor(
-    /** Product handle for this type projection. */
-    readonly productHandle: ProductHandle,
-    /** Identity handle for this type projection. */
-    readonly identityHandle: IdentityHandle,
     /** Type-system key for this projection in the current analysis epoch. */
     readonly checkerKey: string,
     /** Broad shape lane. */
@@ -275,8 +294,6 @@ export class CheckerTypeShape {
     readonly callReturnType: CheckerTypeReference | null,
     /** Instance type reached by constructing this shape, when the projection can prove one. */
     readonly constructReturnType: CheckerTypeReference | null,
-    /** Source address that caused or owns this projection. */
-    readonly sourceAddressHandle: AddressHandle | null,
     /** Best TypeScript declaration source for the projected type, when checker declarations can name one. */
     readonly declarationSourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for checker/source projections. */
@@ -284,6 +301,21 @@ export class CheckerTypeShape {
     /** Hot checker carrier for follow-up member/type reads. */
     readonly carrier: CheckerTypeCarrier | null = null,
   ) {}
+
+  /** Product handle for this type projection. */
+  get productHandle(): ProductHandle {
+    return productDetailHandle(this, CheckerTypeShapeDetailKind);
+  }
+
+  /** Identity handle for this type projection. */
+  get identityHandle(): IdentityHandle {
+    return productDetailIdentityHandle(this, CheckerTypeShapeDetailKind);
+  }
+
+  /** Source address that caused or owns this projection. */
+  get sourceAddressHandle(): AddressHandle | null {
+    return productDetailAddressHandle(this, CheckerTypeShapeDetailKind);
+  }
 
   toReference(): CheckerTypeReference {
     return new CheckerTypeReference(

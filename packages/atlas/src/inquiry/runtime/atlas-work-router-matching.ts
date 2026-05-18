@@ -81,7 +81,10 @@ function routeMatchesFilters(
   route: AtlasWorkRoute,
   filters: AtlasWorkRouterFilters,
 ): boolean {
-  if (filters.routeIds.length > 0 && !filters.routeIds.includes(route.id)) {
+  if (
+    filters.routeIds.length > 0 &&
+    !filters.routeIds.some((routeId) => routeHandleMatches(route, routeId))
+  ) {
     return false;
   }
   if (
@@ -192,10 +195,17 @@ function scoredRoute(
   let adjacent = false;
   let weak = false;
 
-  if (filters.routeIds.includes(route.id)) {
+  const matchedRouteHandle = filters.routeIds.find((routeId) =>
+    routeHandleMatches(route, routeId),
+  );
+  if (matchedRouteHandle !== undefined) {
     score += 10_000;
     exact = true;
-    matchedBy.push(`exact routeId ${route.id}`);
+    matchedBy.push(
+      matchedRouteHandle === route.id
+        ? `exact routeId ${route.id}`
+        : `exact route alias ${matchedRouteHandle} -> ${route.id}`,
+    );
   }
   if (filters.relatedTo !== undefined) {
     score += 1_500;
@@ -264,6 +274,10 @@ function scoredRoute(
       cautions: route.cautions,
     },
   };
+}
+
+function routeHandleMatches(route: AtlasWorkRoute, handle: string): boolean {
+  return route.id === handle || (route.aliases ?? []).includes(handle);
 }
 
 function suppressWeakRoutesWhenGrounded(

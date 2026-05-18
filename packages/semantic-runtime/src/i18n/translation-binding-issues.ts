@@ -68,6 +68,10 @@ import {
 import {
   I18nTranslationBindingFrameworkErrorCode,
 } from './framework-error-code.js';
+import {
+  type I18nTranslationBindingGroup,
+  i18nTranslationBindingGroups,
+} from './translation-binding-groups.js';
 
 export class I18nTranslationBindingIssueMaterializationRequest {
   constructor(
@@ -152,7 +156,7 @@ export class I18nTranslationBindingIssueMaterializer {
     };
 
     let groupIndex = 0;
-    for (const group of this.translationBindingGroups(input.runtimeRendering)) {
+    for (const group of i18nTranslationBindingGroups(input.runtimeRendering)) {
       this.recordIssuesForGroup(
         `${input.localKey}:translation-binding-group:${groupIndex}`,
         group,
@@ -169,14 +173,14 @@ export class I18nTranslationBindingIssueMaterializer {
 
   private recordIssuesForGroup(
     local: string,
-    group: readonly TranslationBinding[],
+    group: I18nTranslationBindingGroup,
     context: TranslationBindingIssueContext,
     source: I18nTranslationBindingIssueSourceSet,
     records: KernelStoreRecord[],
     issues: RuntimeBindingIssue[],
   ): void {
-    const keyBindings = group.filter((binding) => !binding.isParameterContext);
-    const parameterBindings = group.filter((binding) => binding.isParameterContext);
+    const keyBindings = group.keyBindings;
+    const parameterBindings = group.parameterBindings;
 
     parameterBindings.slice(1).forEach((binding, index) => {
       this.recordIssue(
@@ -280,29 +284,6 @@ export class I18nTranslationBindingIssueMaterializer {
         && !stringLikeDisplay(typeReference.display);
     }
     return !carrier.checker.isTypeAssignableTo(carrier.type, carrier.checker.getStringType());
-  }
-
-  private translationBindingGroups(
-    runtimeRendering: RuntimeRenderingEmission,
-  ): readonly (readonly TranslationBinding[])[] {
-    const groups = new Map<string, TranslationBinding[]>();
-    for (const binding of runtimeRendering.bindings) {
-      if (!(binding instanceof TranslationBinding)) {
-        continue;
-      }
-      const renderContext = runtimeRendering.readRenderContextForBinding(binding.productHandle);
-      const key = [
-        renderContext?.targetController.productHandle ?? 'no-target-controller',
-        binding.node.productHandle ?? 'no-node',
-      ].join(':');
-      let group = groups.get(key);
-      if (group === undefined) {
-        group = [];
-        groups.set(key, group);
-      }
-      group.push(binding);
-    }
-    return [...groups.values()];
   }
 
   private recordIssue(

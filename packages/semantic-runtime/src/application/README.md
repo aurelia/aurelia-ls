@@ -45,6 +45,13 @@ state interaction. Binding data-flow carries both the display source and the roo
 chains and single-root interpolations can still converge on the getter/setter that performs the service handoff. This
 keeps form setter/getter handoff visible as one source-backed app fact:
 `template binding -> component root member -> service/state/model operation`.
+Direct template bindings to an injected support member are also first-class topology. If a component exposes
+`readonly state = resolve(AppState)` and the template binds `state.checkout.email`, the topology API should report the
+binding-to-state read/write handoff directly instead of requiring a view-model getter whose only purpose is to shorten
+the template expression. Getter/setter rows still matter when the member performs real adaptation, validation,
+projection, or service calls. The direct lane must still spend modeled `BindingScope.locate(...)` results: the root
+name only proves a DI support handoff when the resolved scope slot points back to the injected component member. Do not
+fall back to string-root matching for this join, because template locals can legally shadow names such as `state`.
 
 Authoring topology and reopened app topology both expose stylesheet ownership through the same style asset vocabulary:
 component/global ownership, asset kind, source kind, optional source file, and optional import specifier.

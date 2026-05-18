@@ -81,10 +81,17 @@ through the app's checker by resolving the owning Aurelia package export. This k
 data-flow rows tied to the same type universe as user source. Explicit internal source fallbacks should stay rare and
 documented; the current examples are runtime-html `Show` and `AuSlot`, which are registered in framework resource
 catalogs but are not reliably exported as value targets from the package entrypoint used by the current checker epoch.
+Resource target type projection is lazy over members: the definition keeps the checker carrier and type reference, while
+member enumeration is left to expression access, diagnostics, completions, or authoring answers that actually need a
+member surface. Do not make resource recognition eager just to satisfy a later answer; that later answer should spend
+the relevant inquiry/query-claim budget.
 Validation-html catalog admission currently models the default `validate` binding behavior, `validation-errors` custom
-attribute, and `validation-container` custom element. Configuration options that disable subscriber resources or replace
-the container template are a later customization frontier; default catalog admission should stay visibly grounded in
-`ValidationHtmlConfiguration` rather than a local app heuristic.
+attribute, and `validation-container` custom element. The built-in full-definition materializer mirrors
+`validation-errors` with `controller` plus two-way default `errors` bindables, and mirrors `validation-container` with
+`controller` and `errors` bindables, so validation error presentation lowers through the same controller-view-model
+target access, value-channel, and data-flow machinery as user custom attributes/elements. Configuration options that
+disable subscriber resources or replace the container template are a later customization frontier; default catalog
+admission should stay visibly grounded in `ValidationHtmlConfiguration` rather than a local app heuristic.
 
 Recognizer classes stay kernel-free. The kernel boundary is the emitter: each observation records direct evidence
 and provenance, each closed definition header becomes a `resource.definition-header` product, and each observation gets

@@ -1,5 +1,8 @@
 import { readFrameworkConfigurationDiWorld } from "../../framework/di-world.js";
-import type { SourceProject } from "../../source/index.js";
+import {
+  requiredSourceRangeForNode,
+  type SourceProject,
+} from "../../source/index.js";
 import { BasisKind } from "../basis.js";
 import type { Inquiry } from "../inquiry.js";
 import { LensId } from "../lens.js";
@@ -21,6 +24,7 @@ import {
   type FrameworkRenderConsequenceFilters,
 } from "./framework-rendering-consequences.js";
 import { readFrameworkRelationshipEmulationObligations } from "./framework-emulation-relationship-obligations.js";
+import { auComposeCompositionDeclarations } from "./framework-au-compose.js";
 import { countBy } from "./framework-support.js";
 
 /** How semantic-runtime should approach one framework obligation. */
@@ -121,6 +125,7 @@ export function readFrameworkEmulationObligations(
     ...compilerObligations(sourceProject, filters),
     ...hydrationObligations(sourceProject, filters),
     ...renderConsequenceObligations(sourceProject, filters),
+    ...auComposeCompositionObligations(sourceProject),
   ].map(withInterpretationStatus);
   return rows.filter((row) => emulationRowMatches(row, filters)).sort(compareRows);
 }
@@ -427,6 +432,44 @@ function renderConsequenceObligations(
       sourceRowId: row.id,
       summary: `Rendering consequence ${row.consequenceKind}: ${row.summary}`,
     };
+  });
+}
+
+function auComposeCompositionObligations(
+  sourceProject: SourceProject,
+): readonly FrameworkEmulationObligationRow[] {
+  return auComposeCompositionDeclarations(sourceProject).flatMap((declaration) => {
+    const declarationName = declaration.name;
+    if (declarationName === undefined) {
+      return [];
+    }
+    const name = declarationName.text;
+    if (!name.includes("Controller")) {
+      return [];
+    }
+    const source = requiredSourceRangeForNode(sourceProject, declarationName);
+    return [{
+      id: `framework-emulation:au-compose-composition:${name}:${source.filePath}:${source.start.line}:${source.start.character}`,
+      layer: "resolved-hydration",
+      mode: "semantic-runtime-emulator",
+      obligationKind: "hydrate-runtime",
+      ownerName: "AuCompose",
+      targetName: name,
+      targetKind: "composition-controller",
+      packageId: "runtime-html",
+      packageName: "@aurelia/runtime-html",
+      closure: "partial",
+      sourceLens: LensId.FrameworkRendering,
+      sourceProjection: "relationships",
+      detailFilters: {
+        query: name,
+        relation: "defines-rendering-structure",
+      },
+      basis: [BasisKind.SourceText, BasisKind.TypeScriptChecker],
+      source,
+      sourceRowId: `framework-rendering-contract:au-compose-composition:${name}`,
+      summary: `${name} wraps dynamic composition activation, update(model), and deactivation state after AuCompose resolves a CompositionContext.`,
+    }];
   });
 }
 

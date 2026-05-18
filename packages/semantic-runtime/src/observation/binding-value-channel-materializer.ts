@@ -296,6 +296,7 @@ export class RuntimeBindingValueChannelMaterializer {
       target.targetAccess?.propertyType ?? null,
       draft.runtimeValueType,
       draft.valueDomain,
+      draft.primitiveValueDomain ?? [],
       draft.isCollection,
       draft.usesCustomMatcher ?? false,
       draft.openReason,

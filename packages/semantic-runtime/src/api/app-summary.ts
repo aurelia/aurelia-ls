@@ -1,6 +1,7 @@
 import type { ProjectBootFrame } from '../boot/frames.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import { readDiResolveCallSites } from '../di/resolve-call-recognition.js';
+import { i18nTranslationBindingGroups } from '../i18n/translation-binding-groups.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { TemplateCompilerWorldEmission } from '../template/compiler-world-materializer.js';
 import { readAppOpenSeams } from './open-seam-projections.js';
@@ -50,6 +51,11 @@ interface AppSummaryConfigurationCounts {
   readonly configurationIssues: number;
   readonly stateStores: number;
   readonly stateIssues: number;
+}
+
+interface AppSummaryI18nCounts {
+  readonly i18nTranslationKeys: number;
+  readonly i18nTranslationBindings: number;
 }
 
 interface AppSummaryDiCounts {
@@ -108,6 +114,7 @@ export function readSemanticAppSummary(
     resourceDefinitions: emission.resources.readDefinitions().length,
     ...routerSummaryCounts(emission),
     ...configurationSummaryCounts(emission),
+    ...i18nSummaryCounts(emission),
     appTasks: appTaskSummaryCount(emission),
     ...diSummaryCounts(emission, templates),
     ...compilerWorldSummaryCounts(emission.templates.compilerWorlds),
@@ -183,6 +190,15 @@ function configurationSummaryCounts(emission: AureliaAppWorldProjectEmission): A
     configurationIssues: emission.appWorld.frameworkServiceCustomizations.issues.length,
     stateStores: emission.state.readStores().length,
     stateIssues: emission.state.readIssues().length,
+  };
+}
+
+function i18nSummaryCounts(emission: AureliaAppWorldProjectEmission): AppSummaryI18nCounts {
+  return {
+    i18nTranslationKeys: emission.i18n.readTranslationKeys().length,
+    i18nTranslationBindings: sumTemplates(emission.templates.resources, (resource) =>
+      i18nTranslationBindingGroups(resource.runtimeAnalysis.runtimeRendering).length
+    ),
   };
 }
 

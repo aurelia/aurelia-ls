@@ -32,7 +32,10 @@ const runtime = await createSemanticRuntime({
     projectKey: 'generated-routed-state-backed-form',
   }],
 });
-const app = await runtime.openApp({ projectKey: 'generated-routed-state-backed-form' });
+const app = await runtime.openApp({
+  projectKey: 'generated-routed-state-backed-form',
+  analysisDepth: 'binding-observation',
+});
 
 const expectedEffects = expectedSemanticEffectsForPlan(plan);
 const snapshot = readAuthoringVerificationSnapshot(app);

@@ -41,6 +41,7 @@ import {
   RuntimeBindingSourceOperationKind,
   RuntimeBindingTargetKind,
   SpreadValueBinding,
+  StateDispatchBinding,
 } from './runtime-binding.js';
 import type {
   RuntimeRenderingEmission,
@@ -503,6 +504,16 @@ export class RuntimeControllerBindMaterializer {
     refTargetName: string,
     targetController: RuntimeControllerFrame | null,
   ): RuntimeBindingSourceOperationTarget {
+    if (binding instanceof StateDispatchBinding) {
+      return new RuntimeBindingSourceOperationTarget(
+        RuntimeBindingTargetKind.StateStore,
+        null,
+        null,
+        null,
+        null,
+      );
+    }
+
     if (!(binding instanceof RefBinding)) {
       return RuntimeBindingSourceOperationTarget.open(
         'Runtime source operation materialization currently only closes RefBinding.updateSource.',

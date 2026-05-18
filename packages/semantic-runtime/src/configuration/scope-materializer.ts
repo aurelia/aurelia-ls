@@ -98,12 +98,28 @@ export class BindingScopeMaterializer {
   ) {}
 
   construct(input: BindingScopeConstructionRequest): BindingScopeConstructionEmission {
-    const emission = this.recordsForScope(input);
-    if (emission.records.length > 0) {
-      this.store.commit(new KernelStoreBatch(emission.records, `binding-scope:${input.localKey}`));
-    }
-    this.registerProductDetails(emission);
+    const emission = this.prepare(input);
+    this.publish([emission], `binding-scope:${input.localKey}`);
     return emission;
+  }
+
+  /** Prepare Scope/BindingContext/OverrideContext records without committing them yet. */
+  prepare(input: BindingScopeConstructionRequest): BindingScopeConstructionEmission {
+    return this.recordsForScope(input);
+  }
+
+  /** Commit prepared scope records and attach their typed hot details after the products exist. */
+  publish(
+    emissions: readonly BindingScopeConstructionEmission[],
+    batchLabel: string,
+  ): void {
+    const records = emissions.flatMap((emission) => emission.records);
+    if (records.length > 0) {
+      this.store.commit(new KernelStoreBatch(records, batchLabel));
+    }
+    for (const emission of emissions) {
+      this.registerProductDetails(emission);
+    }
   }
 
   private registerProductDetails(emission: BindingScopeConstructionEmission): void {

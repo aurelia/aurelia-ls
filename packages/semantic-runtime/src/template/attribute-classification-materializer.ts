@@ -17,6 +17,10 @@ import {
   MaterializedProduct,
 } from '../kernel/materialization.js';
 import {
+  bindProductDetailEnvelope,
+  requireProductDetailEnvelope,
+} from '../kernel/product-details.js';
+import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
 import {
@@ -207,6 +211,7 @@ export class AttributeClassificationMaterializer {
     const classification = this.createAttributeClassification(
       productHandle,
       identityHandle,
+      source,
       syntax,
       owner,
       decision,
@@ -235,13 +240,12 @@ export class AttributeClassificationMaterializer {
   private createAttributeClassification(
     productHandle: ProductHandle,
     identityHandle: IdentityHandle,
+    source: AttributeClassificationSourceSet,
     syntax: AttributeSyntax,
     owner: HtmlElementAttributeOwner | null,
     decision: ClassificationDecision,
   ): AttributeClassification {
-    return new AttributeClassification(
-      productHandle,
-      identityHandle,
+    return bindProductDetailEnvelope(new AttributeClassification(
       syntax.productHandle,
       owner?.reference ?? new HtmlNodeReference(HtmlIrNodeKind.Element, null, null, syntax.attribute.addressHandle),
       decision.classificationKind,
@@ -250,9 +254,14 @@ export class AttributeClassificationMaterializer {
       decision.bindingCommand,
       decision.bindable,
       [],
-      syntax.sourceAddressHandle,
       [],
-    );
+    ), new MaterializedProduct(
+      productHandle,
+      KernelVocabulary.Template.AttributeClassification.key,
+      identityHandle,
+      syntax.sourceAddressHandle,
+      source.provenanceHandle,
+    ));
   }
 
   private claimsForAttributeClassification(
@@ -298,13 +307,7 @@ export class AttributeClassificationMaterializer {
         classification.sourceAddressHandle,
         syntax.rawName,
       ),
-      new MaterializedProduct(
-        classification.productHandle,
-        KernelVocabulary.Template.AttributeClassification.key,
-        classification.identityHandle,
-        classification.sourceAddressHandle,
-        source.provenanceHandle,
-      ),
+      requireProductDetailEnvelope(classification, 'template.attribute-classification'),
     ];
   }
 

@@ -88,18 +88,29 @@ trail is needed.
    Add `SEMANTIC_RUNTIME_PRESSURE_OUTPUT=aggregate` for broad sweeps where the
    useful signal is the combined pressure shape instead of the full per-root
    transcript.
+   For large monorepos, narrow only after the broad workspace/app-shape pass
+   with `SEMANTIC_RUNTIME_PRESSURE_PROJECT_KEYS` or
+   `SEMANTIC_RUNTIME_PRESSURE_PROJECT_ROOT_DIRS`; project-root filters may be
+   absolute or relative to each pressure root. Use that targeted lane to profile
+   one app-world without opening unrelated packages deeply.
    That script is transient local pressure output, not a commit artifact. Its
-   timing output should stay phase-oriented, not project-identified: use it to
-   decide whether large-app friction sits in static evaluation, TypeChecker
-   project construction, resource recognition, route-config recognition,
-   route-recognizer materialization, app-world composition, or template
-   compilation. Its app-root versus non-app-root split is the first
-   filter for monorepos: resource-library packages can expose useful resource
+  timing output should stay phase-oriented, not project-identified: use it to
+  decide whether large-app friction sits in static evaluation, TypeChecker
+  project construction, resource recognition, route-config recognition,
+  route-recognizer materialization, app-world composition, or template
+  compilation. Its app-root versus non-app-root split is the first
+  filter for monorepos: resource-library packages can expose useful resource
    pressure without being app startup failures. The default pressure detail mode
    buckets source-assignment and open-seam reasons into generalized categories;
    use the raw detail mode only for local debugging. If any raw open-reason
    wording from external clean-room roots is useful, generalize it manually before
-   writing durable notes.
+  writing durable notes.
+  Recent MCP hand-testing confirmed that selected app opening in dependency-heavy
+  monorepos may need an explicit depth ladder: broad workspace overview can
+  remain cheap, topology-depth app overview can return useful route/resource
+  pressure, and full binding-observation depth can exceed a generous heap budget.
+  Treat that as inquiry-depth and app-world phase pressure, not as proof that
+  MCP should hide the app.
 2. Collapse observations into abstract pressure categories:
    app topology, source admission, resource recognition, configuration
    admission, DI materialization, compiler world formation, template lowering,

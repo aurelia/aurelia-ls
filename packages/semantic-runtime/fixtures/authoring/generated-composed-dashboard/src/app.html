@@ -1,0 +1,22 @@
+<main class="dashboard-shell">
+  <header>
+    <h1>Operations Dashboard</h1>
+    <p>${state.alertCount} active alert(s)</p>
+  </header>
+
+  <au-compose template.bind="summaryTemplate" scope-behavior="scoped" tag="aside" flush-mode="async" composition.bind="summaryComposition" composing.bind="summaryPending"></au-compose>
+  <au-compose template.bind="getAsyncSummaryTemplate()" scope-behavior="scoped" flush-mode="async"></au-compose>
+
+  <section class="featured-widget">
+    <h2>Featured Inventory</h2>
+    <au-compose component="inventory-widget" model.bind="state.featuredWidget"></au-compose>
+    <au-compose component.bind="getAsyncFeaturedComponent()" model.bind="state.featuredWidget" flush-mode="async"></au-compose>
+  </section>
+
+  <section class="dashboard-grid">
+    <article repeat.for="widget of state.widgets" class="dashboard-card ${widget.kind}">
+      <h2>${widget.title}</h2>
+      <au-compose component.bind="widget.component" model.bind="widget" flush-mode="async"></au-compose>
+    </article>
+  </section>
+</main>

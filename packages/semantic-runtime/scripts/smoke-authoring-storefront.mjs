@@ -22,7 +22,10 @@ const runtime = await createSemanticRuntime({
     projectKey: 'storefront',
   }],
 });
-const app = await runtime.openApp({ projectKey: 'storefront' });
+const app = await runtime.openApp({
+  projectKey: 'storefront',
+  analysisDepth: 'binding-observation',
+});
 const store = runtime.workspace.store;
 
 const rows = (kind) => app.ask({

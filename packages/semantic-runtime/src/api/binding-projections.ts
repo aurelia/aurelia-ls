@@ -1,7 +1,11 @@
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import type { KernelStore } from '../kernel/store.js';
 import { TemplateProductDetails } from '../template/product-details.js';
-import type { RuntimeBindingDataFlow } from '../observation/runtime-binding-observation.js';
+import {
+  RuntimeBindingPrimitiveValueKind,
+  type RuntimeBindingDataFlow,
+  type RuntimeBindingPrimitiveValue,
+} from '../observation/runtime-binding-observation.js';
 import type { TemplateExpressionParse } from '../template/value-site.js';
 import {
   describeAddress,
@@ -191,6 +195,9 @@ export function readBindingValueChannelRows(
         rawTargetPropertyType: valueChannel.rawTargetPropertyType?.display ?? null,
         runtimeValueType: valueChannel.runtimeValueType?.display ?? null,
         valueDomain: valueChannel.valueDomain,
+        primitiveValueDomain: valueChannel.primitiveValueDomain,
+        primitiveValueDomainKinds: primitiveValueDomainKinds(valueChannel.primitiveValueDomain),
+        primitiveValueDomainDisplays: valueChannel.primitiveValueDomain.map(primitiveValueDisplay),
         isCollection: valueChannel.isCollection,
         usesCustomMatcher: valueChannel.usesCustomMatcher,
         openReason: valueChannel.openReason,
@@ -214,6 +221,26 @@ export function readBindingValueChannelRows(
       `${left.definitionName}:${left.targetProperty ?? ''}:${left.channelKind}:${left.runtimeValueType ?? ''}`
         .localeCompare(`${right.definitionName}:${right.targetProperty ?? ''}:${right.channelKind}:${right.runtimeValueType ?? ''}`)
     );
+}
+
+function primitiveValueDomainKinds(
+  values: readonly RuntimeBindingPrimitiveValue[],
+): readonly (RuntimeBindingPrimitiveValueKind | `${RuntimeBindingPrimitiveValueKind}`)[] {
+  return [...new Set(values.map((value) => value.kind))];
+}
+
+function primitiveValueDisplay(value: RuntimeBindingPrimitiveValue): string {
+  switch (value.kind) {
+    case RuntimeBindingPrimitiveValueKind.String:
+      return JSON.stringify(value.value);
+    case RuntimeBindingPrimitiveValueKind.Number:
+    case RuntimeBindingPrimitiveValueKind.Boolean:
+      return String(value.value);
+    case RuntimeBindingPrimitiveValueKind.Null:
+      return 'null';
+    case RuntimeBindingPrimitiveValueKind.Undefined:
+      return 'undefined';
+  }
 }
 
 export function readBindingDataFlowRows(

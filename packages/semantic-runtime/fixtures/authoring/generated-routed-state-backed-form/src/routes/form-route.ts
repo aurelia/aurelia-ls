@@ -1,5 +1,6 @@
 import { customElement } from '@aurelia/runtime-html';
 import { resolve } from '@aurelia/kernel';
+import { IRouteContext } from '@aurelia/router';
 import { StateBackedForm } from '../components/state-backed-form';
 import { AppState } from '../state/app-state';
 import template from './form-route.html';
@@ -10,21 +11,27 @@ import template from './form-route.html';
   dependencies: [StateBackedForm],
 })
 export class FormRoute {
-  private readonly state = resolve(AppState);
+  readonly state = resolve(AppState);
+  private readonly routeParams = resolve(IRouteContext).getRouteParameters<{
+    requestId: string;
+    mode?: string;
+    tag?: string | readonly string[];
+  }>({ includeQueryParams: true });
 
-  get selectedRequestId(): string {
-    return this.state.selectedRequestId;
+  get requestId(): string {
+    return this.routeParams.requestId;
   }
 
-  set selectedRequestId(value: string) {
-    this.state.selectedRequestId = value;
+  get routeMode(): string {
+    return this.routeParams.mode ?? 'edit';
   }
 
-  get requestIds(): readonly string[] {
-    return this.state.requestIds;
+  get routeTagCount(): number {
+    const tags = this.routeParams.tag;
+    if (Array.isArray(tags)) {
+      return tags.length;
+    }
+    return tags == null ? 0 : 1;
   }
 
-  get submittedCount(): number {
-    return this.state.submittedCount;
-  }
 }

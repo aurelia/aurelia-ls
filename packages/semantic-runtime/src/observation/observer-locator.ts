@@ -15,9 +15,12 @@ import {
 import {
   CheckerTypeProjectionOrigin,
   CheckerTypeReference,
-  classifyCheckerTypeShape,
   type CheckerTypeCarrier,
 } from '../type-system/type-shape.js';
+import {
+  CheckerDomNodeTypeSource,
+  resolveCheckerDomNodeType,
+} from '../type-system/dom-node-type.js';
 import {
   RuntimeBindingTargetAccessAuthority,
   RuntimeBindingTargetAccessLookup,
@@ -54,6 +57,8 @@ export class ObserverLocatorLookupRequest {
     readonly sourceAddressHandle: AddressHandle | null = null,
     /** Runtime option for node observers that would otherwise throw on property observers. */
     readonly allowDirtyCheck: boolean = false,
+    /** Whether this lookup needs a projected property type product, or only observer strategy/writability facts. */
+    readonly projectPropertyType: boolean = true,
   ) {}
 
   withLookup(lookup: RuntimeBindingTargetAccessLookup): ObserverLocatorLookupRequest {
@@ -68,6 +73,7 @@ export class ObserverLocatorLookupRequest {
       this.namespace,
       this.sourceAddressHandle,
       this.allowDirtyCheck,
+      this.projectPropertyType,
     );
   }
 }
@@ -923,54 +929,28 @@ export class ObserverLocator {
     tagName: string,
     namespace: HtmlNamespaceKind,
   ): TypeResolution | null {
-    const typeSystem = input.typeSystem;
-    if (typeSystem == null) {
-      return null;
-    }
-    const location = checkerLocation(typeSystem);
-    const mapType = this.resolveNodeTypeFromTagNameMap(typeSystem, tagName, namespace, location);
-    if (mapType != null) {
-      return {
-        checker: typeSystem.checker,
-        type: mapType,
-        reference: transientTypeReference(typeSystem.checker, mapType, input.sourceAddressHandle),
-        location,
-        source: RuntimeBindingTargetTypeSource.DomTagNameMap,
-      };
-    }
-    const fallbackType = globalDeclaredType(typeSystem, namespace === HtmlNamespaceKind.Svg ? 'SVGElement' : 'HTMLElement', location);
-    if (fallbackType == null) {
+    const resolution = input.typeSystem == null
+      ? null
+      : resolveCheckerDomNodeType(
+        input.typeSystem,
+        tagName,
+        namespace,
+        this.projector,
+        `${input.localKey}:observer-locator:target-type`,
+        input.sourceAddressHandle,
+      );
+    if (resolution == null) {
       return null;
     }
     return {
-      checker: typeSystem.checker,
-      type: fallbackType,
-      reference: transientTypeReference(typeSystem.checker, fallbackType, input.sourceAddressHandle),
-      location,
-      source: RuntimeBindingTargetTypeSource.DomGlobalFallback,
+      checker: resolution.checker,
+      type: resolution.type,
+      reference: resolution.reference,
+      location: resolution.location,
+      source: resolution.source === CheckerDomNodeTypeSource.TagNameMap
+        ? RuntimeBindingTargetTypeSource.DomTagNameMap
+        : RuntimeBindingTargetTypeSource.DomGlobalFallback,
     };
-  }
-
-  private resolveNodeTypeFromTagNameMap(
-    typeSystem: TypeSystemProject,
-    tagName: string,
-    namespace: HtmlNamespaceKind,
-    location: ts.Node | null,
-  ): ts.Type | null {
-    const lowerTagName = tagName.toLowerCase();
-    for (const mapName of tagNameMapNames(namespace)) {
-      const mapType = globalDeclaredType(typeSystem, mapName, location);
-      const tagSymbol = mapType == null
-        ? null
-        : typeSystem.checker.getPropertyOfType(mapType, lowerTagName) ?? null;
-      if (tagSymbol != null) {
-        return typeSystem.checker.getTypeOfSymbolAtLocation(
-          tagSymbol,
-          location ?? firstSymbolDeclaration(tagSymbol) ?? undefinedNode(typeSystem.checker),
-        );
-      }
-    }
-    return null;
   }
 
   private resolveProperty(
@@ -987,11 +967,15 @@ export class ObserverLocator {
         isWritable: null,
       };
     }
-    const propertyType = target.checker.getTypeOfSymbolAtLocation(symbol, target.location ?? firstSymbolDeclaration(symbol) ?? undefinedNode(target.checker));
+    const propertyType = input.projectPropertyType
+      ? target.checker.getTypeOfSymbolAtLocation(symbol, target.location ?? firstSymbolDeclaration(symbol) ?? undefinedNode(target.checker))
+      : null;
     return {
       symbol,
       type: propertyType,
-      typeReference: this.projectTypeReference(input, target.checker, propertyType, `property:${localKeyPart(input.targetProperty)}`, target.location),
+      typeReference: propertyType == null
+        ? null
+        : this.projectTypeReference(input, target.checker, propertyType, `property:${localKeyPart(input.targetProperty)}`, target.location),
       exists: true,
       isWritable: isWritableProperty(symbol),
     };
@@ -1229,16 +1213,6 @@ function isDataAttributeAccessorProperty(
     || (namespace === HtmlNamespaceKind.Svg && isStandardSvgAttribute(tagName, targetProperty));
 }
 
-function tagNameMapNames(namespace: HtmlNamespaceKind): readonly ('HTMLElementTagNameMap' | 'SVGElementTagNameMap')[] {
-  if (namespace === HtmlNamespaceKind.Svg) {
-    return ['SVGElementTagNameMap'];
-  }
-  if (namespace === HtmlNamespaceKind.Html) {
-    return ['HTMLElementTagNameMap'];
-  }
-  return ['HTMLElementTagNameMap', 'SVGElementTagNameMap'];
-}
-
 function authorityFor(
   strategy: RuntimeBindingTargetAccessStrategy,
   targetType: TypeResolution | null,
@@ -1289,20 +1263,6 @@ function observerStrategySupportsCoercer(strategy: RuntimeBindingTargetAccessStr
     || strategy === RuntimeBindingTargetAccessStrategy.ComputedObserver;
 }
 
-function globalDeclaredType(
-  typeSystem: TypeSystemProject,
-  name: string,
-  location: ts.Node | null,
-): ts.Type | null {
-  const symbol = typeSystem.checker.resolveName(
-    name,
-    location ?? undefinedNode(typeSystem.checker),
-    ts.SymbolFlags.Interface,
-    false,
-  ) ?? null;
-  return symbol == null ? null : typeSystem.checker.getDeclaredTypeOfSymbol(symbol);
-}
-
 function checkerTypeExtendsCollection(
   checker: ts.TypeChecker,
   type: ts.Type,
@@ -1330,23 +1290,6 @@ function isArrayIndexProperty(property: string): boolean {
   }
   const index = Number(property);
   return Number.isInteger(index) && index >= 0 && String(index) === property;
-}
-
-function transientTypeReference(
-  checker: ts.TypeChecker,
-  type: ts.Type,
-  sourceAddressHandle: AddressHandle | null,
-): CheckerTypeReference {
-  const display = checker.typeToString(type);
-  return new CheckerTypeReference(
-    null,
-    null,
-    display,
-    display,
-    classifyCheckerTypeShape(type),
-    CheckerTypeProjectionOrigin.TypeChecker,
-    sourceAddressHandle,
-  );
 }
 
 function isWritableProperty(symbol: ts.Symbol): boolean | null {
@@ -1379,12 +1322,6 @@ function firstDeclaration(carrier: CheckerTypeCarrier): ts.Declaration | null {
 
 function firstSymbolDeclaration(symbol: ts.Symbol): ts.Declaration | null {
   return symbol.valueDeclaration ?? symbol.declarations?.[0] ?? null;
-}
-
-function checkerLocation(typeSystem: TypeSystemProject): ts.SourceFile | null {
-  return typeSystem.program.getSourceFiles().find((sourceFile) => !sourceFile.isDeclarationFile)
-    ?? typeSystem.program.getSourceFiles()[0]
-    ?? null;
 }
 
 function undefinedNode(checker: ts.TypeChecker): ts.Node {

@@ -21,6 +21,8 @@ import type {
 import type { AddressHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import type { KernelStore } from '../kernel/store.js';
+import type { StateStoreConfiguration } from '../state/model.js';
+import { StateBindingScopeProjector } from '../state/state-binding-scope.js';
 import {
   BindingScope,
 } from '../configuration/scope.js';
@@ -68,6 +70,7 @@ import { CheckerExpressionArgumentContextProjector } from './expression-argument
 import { CheckerExpressionContextualTypeProjector } from './expression-contextual-type-projector.js';
 import { CheckerExpressionAccessProjector } from './expression-access-projector.js';
 import { CheckerExpressionIterableProjector } from './expression-iterable-projector.js';
+import type { CheckerExpressionIteratorProjection } from './expression-iterable-projector.js';
 import { CheckerExpressionResourceProjector } from './expression-resource-projector.js';
 import { CheckerExpressionScopeProjector } from './expression-scope-projector.js';
 
@@ -112,6 +115,7 @@ export class CheckerExpressionTypeEvaluator {
     /** Compiler resource scope visible at this expression site, when template compilation supplied one. */
     readonly resourceScope: TemplateResourceScope | null = null,
     readonly cache: CheckerExpressionTypeEvaluationCache = new CheckerExpressionTypeEvaluationCache(),
+    readonly stateStores: readonly StateStoreConfiguration[] = [],
   ) {
     this.typeAccess = new CheckerTypeShapeAccess(store, projector);
     this.synthesis = new CheckerExpressionTypeSynthesizer(projector);
@@ -135,6 +139,7 @@ export class CheckerExpressionTypeEvaluator {
       this.access,
       this.calls,
       resourceScope,
+      new StateBindingScopeProjector(store, stateStores),
       {
         evaluateNode: (expression, scope, localKey, sourceAddressHandle) =>
           this.evaluateNode(expression, scope, localKey, sourceAddressHandle),
@@ -231,6 +236,15 @@ export class CheckerExpressionTypeEvaluator {
     sourceAddressHandle: AddressHandle | null = null,
   ): CheckerExpressionTypeEvaluation | CheckerBindingPatternLocalProjection {
     return this.iterables.evaluateIteratorLocals(expression, scope, localKey, sourceAddressHandle);
+  }
+
+  evaluateIteratorProjection(
+    expression: ForOfStatement,
+    scope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null = null,
+  ): CheckerExpressionIteratorProjection {
+    return this.iterables.evaluateIteratorProjection(expression, scope, localKey, sourceAddressHandle);
   }
 
   private evaluateNode(

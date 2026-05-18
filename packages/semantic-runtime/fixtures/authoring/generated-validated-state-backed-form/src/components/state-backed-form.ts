@@ -1,17 +1,22 @@
 import { bindable, customElement } from '@aurelia/runtime-html';
 import { resolve } from '@aurelia/kernel';
-import { IValidationController, IValidationRules } from '@aurelia/validation-html';
+import { IValidationController, IValidationRules, type ValidationResultTarget } from '@aurelia/validation-html';
 import { AppState, type ContactPreference, type RequestTopic } from '../state/app-state';
+import { FieldShell } from './field-shell';
 import template from './state-backed-form.html';
 
 @customElement({
   name: 'state-backed-form',
   template,
+  dependencies: [FieldShell],
 })
 export class StateBackedForm {
-  private readonly state = resolve(AppState);
+  readonly state = resolve(AppState);
   private readonly validationRules = resolve(IValidationRules);
   private readonly validationController = resolve(IValidationController);
+
+  customerNameErrors: ValidationResultTarget[] = [];
+  emailErrors: ValidationResultTarget[] = [];
 
 
   @bindable requestId = '';
@@ -61,13 +66,24 @@ export class StateBackedForm {
   }
 
   get contactPreference(): ContactPreference {
-    return this.request?.contactPreference ?? this.emailPreference;
+    return this.request?.contactPreference ?? this.state.emailPreference;
   }
 
   set contactPreference(value: ContactPreference) {
     const request = this.request;
     if (request != null) {
       request.contactPreference = value;
+    }
+  }
+
+  get primaryTopic(): RequestTopic | null {
+    return this.request?.primaryTopic ?? null;
+  }
+
+  set primaryTopic(value: RequestTopic | null) {
+    const request = this.request;
+    if (request != null) {
+      request.primaryTopic = value;
     }
   }
 
@@ -84,26 +100,6 @@ export class StateBackedForm {
     if (request != null) {
       request.notes = value;
     }
-  }
-
-  get emailPreference(): ContactPreference {
-    return this.state.emailPreference;
-  }
-
-  get phonePreference(): ContactPreference {
-    return this.state.phonePreference;
-  }
-
-  get hardwareTopic(): RequestTopic {
-    return this.state.hardwareTopic;
-  }
-
-  get billingTopic(): RequestTopic {
-    return this.state.billingTopic;
-  }
-
-  get supportTopic(): RequestTopic {
-    return this.state.supportTopic;
   }
 
   get canSubmit(): boolean {

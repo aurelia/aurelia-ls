@@ -15,6 +15,7 @@ export interface ServiceRequest {
   email: string;
   urgent: boolean;
   contactPreference: ContactPreference;
+  primaryTopic: RequestTopic | null;
   topics: RequestTopic[];
   notes: string;
   submitCount: number;
@@ -89,6 +90,13 @@ export class AppState {
     const request = this.readRequest(requestId);
     if (request != null) {
       request.contactPreference = value;
+    }
+  }
+
+  updatePrimaryTopic(requestId: string, value: RequestTopic | null): void {
+    const request = this.readRequest(requestId);
+    if (request != null) {
+      request.primaryTopic = value;
     }
   }
 

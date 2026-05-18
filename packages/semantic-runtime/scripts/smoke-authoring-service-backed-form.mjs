@@ -29,7 +29,10 @@ const runtime = await createSemanticRuntime({
     projectKey: 'generated-service-backed-form',
   }],
 });
-const app = await runtime.openApp({ projectKey: 'generated-service-backed-form' });
+const app = await runtime.openApp({
+  projectKey: 'generated-service-backed-form',
+  analysisDepth: 'binding-observation',
+});
 
 const expectedEffects = expectedSemanticEffectsForPlan(plan);
 const snapshot = readAuthoringVerificationSnapshot(app);

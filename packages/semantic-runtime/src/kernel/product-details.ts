@@ -1,4 +1,9 @@
-import type { ProductHandle } from './handles.js';
+import type {
+  AddressHandle,
+  IdentityHandle,
+  ProductHandle,
+  ProvenanceHandle,
+} from './handles.js';
 import type { MaterializedProduct } from './materialization.js';
 import type { ProductKindKey } from './vocabulary.js';
 
@@ -32,22 +37,202 @@ export class ProductDetailEntry<
   TProductKind extends ProductKindKey = ProductKindKey,
 > {
   constructor(
-    /** Product handle whose durable envelope owns this detail. */
-    readonly productHandle: ProductHandle,
+    /** Durable materialized-product envelope that owns this detail. */
+    readonly product: MaterializedProduct,
     /** Slot that typed and admitted this detail. */
     readonly slot: ProductDetailSlot<TDetail, TProductKind>,
     /** Rich in-memory product model for materializer and inquiry use. */
     readonly detail: TDetail,
   ) {}
+
+  /** Product handle whose durable envelope owns this detail. */
+  get productHandle(): ProductHandle {
+    return this.product.handle;
+  }
 }
 
 type ReadProduct = (handle: ProductHandle) => MaterializedProduct | null;
 type ProductDetailWithHandle = { readonly productHandle: ProductHandle };
 
+const productEnvelopeByDetail = new WeakMap<object, MaterializedProduct>();
+
+const productHandleAccessor = {
+  configurable: true,
+  enumerable: false,
+  get: productDetailProductHandleGetter,
+} as const;
+
+const identityHandleAccessor = {
+  configurable: true,
+  enumerable: false,
+  get: productDetailIdentityHandleGetter,
+} as const;
+
+const optionalIdentityHandleAccessor = {
+  configurable: true,
+  enumerable: false,
+  get: productDetailOptionalIdentityHandleGetter,
+} as const;
+
+const addressHandleAccessor = {
+  configurable: true,
+  enumerable: false,
+  get: productDetailAddressHandleGetter,
+} as const;
+
+const provenanceHandleAccessor = {
+  configurable: true,
+  enumerable: false,
+  get: productDetailProvenanceHandleGetter,
+} as const;
+
+/**
+ * Bind a rich product-detail object to the materialized-product envelope that owns it.
+ *
+ * Detail models should only store domain facts. Handles that already live on the product envelope can be exposed through
+ * getters backed by this weak association, which keeps hot detail objects from duplicating long handle strings.
+ */
+export function bindProductDetailEnvelope<TDetail>(
+  detail: TDetail,
+  product: MaterializedProduct,
+): TDetail {
+  if (detail == null || typeof detail !== 'object') {
+    return detail;
+  }
+  const existing = productEnvelopeByDetail.get(detail);
+  if (existing != null && existing.handle !== product.handle) {
+    throw new Error(`Product detail is already bound to ${existing.handle}; cannot rebind to ${product.handle}.`);
+  }
+  productEnvelopeByDetail.set(detail, product);
+  hideEnvelopeHandleEchoes(detail, product);
+  return detail;
+}
+
+export function readProductDetailEnvelope(detail: unknown): MaterializedProduct | null {
+  return detail == null || typeof detail !== 'object'
+    ? null
+    : productEnvelopeByDetail.get(detail) ?? null;
+}
+
+export function requireProductDetailEnvelope(
+  detail: unknown,
+  detailKind: string,
+): MaterializedProduct {
+  const product = readProductDetailEnvelope(detail);
+  if (product == null) {
+    throw new Error(`Product detail ${detailKind} is not bound to a materialized-product envelope.`);
+  }
+  return product;
+}
+
+export function productDetailHandle(
+  detail: unknown,
+  detailKind: string,
+): ProductHandle {
+  return requireProductDetailEnvelope(detail, detailKind).handle;
+}
+
+export function productDetailIdentityHandle(
+  detail: unknown,
+  detailKind: string,
+): IdentityHandle {
+  const identityHandle = requireProductDetailEnvelope(detail, detailKind).identityHandle;
+  if (identityHandle == null) {
+    throw new Error(`Product detail ${detailKind} is bound to a product without an identity handle.`);
+  }
+  return identityHandle;
+}
+
+export function productDetailOptionalIdentityHandle(
+  detail: unknown,
+  detailKind: string,
+): IdentityHandle | null {
+  return requireProductDetailEnvelope(detail, detailKind).identityHandle;
+}
+
+export function productDetailAddressHandle(
+  detail: unknown,
+  detailKind: string,
+): AddressHandle | null {
+  return requireProductDetailEnvelope(detail, detailKind).addressHandle;
+}
+
+export function productDetailRequiredAddressHandle(
+  detail: unknown,
+  detailKind: string,
+): AddressHandle {
+  const addressHandle = productDetailAddressHandle(detail, detailKind);
+  if (addressHandle == null) {
+    throw new Error(`Product detail ${detailKind} is bound to a product without an address handle.`);
+  }
+  return addressHandle;
+}
+
+export function productDetailProvenanceHandle(
+  detail: unknown,
+  detailKind: string,
+): ProvenanceHandle {
+  return requireProductDetailEnvelope(detail, detailKind).provenanceHandle;
+}
+
+function hideEnvelopeHandleEchoes(
+  detail: object,
+  product: MaterializedProduct,
+): void {
+  hideEnvelopeHandleEcho(detail, 'productHandle', product.handle, productHandleAccessor);
+  hideEnvelopeHandleEcho(detail, 'identityHandle', product.identityHandle, identityHandleAccessor);
+  hideEnvelopeHandleEcho(detail, 'primaryIdentityHandle', product.identityHandle, optionalIdentityHandleAccessor);
+  hideEnvelopeHandleEcho(detail, 'sourceAddressHandle', product.addressHandle, addressHandleAccessor);
+  hideEnvelopeHandleEcho(detail, 'addressHandle', product.addressHandle, addressHandleAccessor);
+  hideEnvelopeHandleEcho(detail, 'hostAddressHandle', product.addressHandle, addressHandleAccessor);
+  hideEnvelopeHandleEcho(detail, 'provenanceHandle', product.provenanceHandle, provenanceHandleAccessor);
+}
+
+function hideEnvelopeHandleEcho<TValue>(
+  detail: object,
+  field: string,
+  envelopeValue: TValue,
+  accessor: PropertyDescriptor,
+): void {
+  if (!Object.prototype.hasOwnProperty.call(detail, field)) {
+    return;
+  }
+  const currentValue = (detail as Record<string, unknown>)[field];
+  if (currentValue !== envelopeValue) {
+    return;
+  }
+  Object.defineProperty(detail, field, accessor);
+}
+
+function productDetailProductHandleGetter(this: object): ProductHandle {
+  return requireProductDetailEnvelope(this, 'product detail').handle;
+}
+
+function productDetailIdentityHandleGetter(this: object): IdentityHandle {
+  const identityHandle = requireProductDetailEnvelope(this, 'product detail').identityHandle;
+  if (identityHandle == null) {
+    throw new Error('Product detail is bound to a product without an identity handle.');
+  }
+  return identityHandle;
+}
+
+function productDetailOptionalIdentityHandleGetter(this: object): IdentityHandle | null {
+  return requireProductDetailEnvelope(this, 'product detail').identityHandle;
+}
+
+function productDetailAddressHandleGetter(this: object): AddressHandle | null {
+  return requireProductDetailEnvelope(this, 'product detail').addressHandle;
+}
+
+function productDetailProvenanceHandleGetter(this: object): ProvenanceHandle {
+  return requireProductDetailEnvelope(this, 'product detail').provenanceHandle;
+}
+
 /** Hot in-memory catalog for typed product details keyed by durable product handles. */
 export class ProductDetailCatalog {
   private readonly entriesByHandle = new Map<ProductHandle, ProductDetailEntry<unknown>>();
   private readonly handlesByDetailKind = new Map<string, Set<ProductHandle>>();
+  private readonly handleOrder: ProductHandle[] = [];
 
   constructor(
     private readonly readProduct: ReadProduct,
@@ -73,8 +258,10 @@ export class ProductDetailCatalog {
       throw new Error(`Duplicate product detail for ${productHandle}.`);
     }
 
-    const entry = new ProductDetailEntry(productHandle, slot, detail);
+    bindProductDetailEnvelope(detail, product);
+    const entry = new ProductDetailEntry(product, slot, detail);
     this.entriesByHandle.set(productHandle, entry as ProductDetailEntry<unknown>);
+    this.handleOrder.push(productHandle);
     this.addHandleForSlot(slot, productHandle);
     return entry;
   }
@@ -150,6 +337,51 @@ export class ProductDetailCatalog {
 
   readEntries(): readonly ProductDetailEntry<unknown>[] {
     return [...this.entriesByHandle.values()];
+  }
+
+  readEntriesSince(marker: number): readonly ProductDetailEntry<unknown>[] {
+    return this.handleOrder
+      .slice(marker)
+      .map((handle) => this.entriesByHandle.get(handle) ?? null)
+      .filter((entry): entry is ProductDetailEntry<unknown> => entry != null);
+  }
+
+  get size(): number {
+    return this.entriesByHandle.size;
+  }
+
+  readDetailKindCounts(): ReadonlyMap<string, number> {
+    return new Map([...this.handlesByDetailKind.entries()]
+      .map(([detailKind, handles]) => [detailKind, handles.size]));
+  }
+
+  mark(): number {
+    return this.handleOrder.length;
+  }
+
+  remove(productHandle: ProductHandle): ProductDetailEntry<unknown> | null {
+    const entry = this.entriesByHandle.get(productHandle) ?? null;
+    if (entry == null) {
+      return null;
+    }
+    this.entriesByHandle.delete(productHandle);
+    const handles = this.handlesByDetailKind.get(entry.slot.detailKind);
+    handles?.delete(productHandle);
+    if (handles?.size === 0) {
+      this.handlesByDetailKind.delete(entry.slot.detailKind);
+    }
+    return entry;
+  }
+
+  removeSince(marker: number): number {
+    let removed = 0;
+    while (this.handleOrder.length > marker) {
+      const handle = this.handleOrder.pop();
+      if (handle != null && this.remove(handle) != null) {
+        removed += 1;
+      }
+    }
+    return removed;
   }
 
   private addHandleForSlot(

@@ -101,6 +101,7 @@ export const enum RuntimeBindingTargetOperationKind {
 
 export const enum RuntimeBindingSourceOperationKind {
   RefAssignTarget = 'ref-assign-target',
+  StateDispatchAction = 'state-dispatch-action',
   Open = 'open',
 }
 
@@ -125,6 +126,7 @@ export const enum RuntimeBindingTargetKind {
   Host = 'host',
   Controller = 'controller',
   ControllerViewModel = 'controller-view-model',
+  StateStore = 'state-store',
   Unknown = 'unknown',
 }
 
@@ -299,7 +301,6 @@ export class LetBindingScopeEffect {
     readonly identityHandle: IdentityHandle,
     readonly binding: RuntimeBindingReference,
     readonly ownerInstructionProductHandle: ProductHandle,
-    readonly ownerInstructionIdentityHandle: IdentityHandle,
     readonly target: string,
     readonly expressionProductHandle: ProductHandle | null,
     readonly targetContext: LetBindingTargetContext,
@@ -326,7 +327,6 @@ export class IteratorBindingScopeEffect {
     readonly identityHandle: IdentityHandle,
     readonly binding: RuntimeBindingReference,
     readonly ownerInstructionProductHandle: ProductHandle,
-    readonly ownerInstructionIdentityHandle: IdentityHandle,
     readonly localNames: readonly string[],
     readonly iterableExpressionProductHandle: ProductHandle | null,
     readonly templateControllerName: string | null,
@@ -553,7 +553,6 @@ export class RuntimeTargetOperation {
     readonly binding: RuntimeBindingReference | null,
     readonly renderer: RuntimeRendererReference | null,
     readonly instructionProductHandle: ProductHandle | null,
-    readonly instructionIdentityHandle: IdentityHandle | null,
     readonly targetKind: RuntimeBindingTargetKind,
     readonly targetNode: HtmlNodeReference | null,
     readonly targetControllerProductHandle: ProductHandle | null,
@@ -591,7 +590,6 @@ export class RuntimeSourceOperation {
     readonly identityHandle: IdentityHandle,
     readonly binding: RuntimeBindingReference,
     readonly instructionProductHandle: ProductHandle,
-    readonly instructionIdentityHandle: IdentityHandle,
     readonly targetKind: RuntimeBindingTargetKind,
     readonly targetNode: HtmlNodeReference | null,
     readonly targetControllerProductHandle: ProductHandle | null,
@@ -628,7 +626,6 @@ export class PropertyBinding {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly instructionProductHandle: ProductHandle,
-    readonly instructionIdentityHandle: IdentityHandle,
     readonly renderer: RuntimeRendererReference,
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference | null,
@@ -668,7 +665,6 @@ export class AttributeBinding {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly instructionProductHandle: ProductHandle,
-    readonly instructionIdentityHandle: IdentityHandle,
     readonly renderer: RuntimeRendererReference,
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
@@ -713,7 +709,6 @@ export class LetBinding {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly instructionProductHandle: ProductHandle,
-    readonly instructionIdentityHandle: IdentityHandle,
     readonly renderer: RuntimeRendererReference,
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
@@ -743,7 +738,6 @@ export class ListenerBinding {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly instructionProductHandle: ProductHandle,
-    readonly instructionIdentityHandle: IdentityHandle,
     readonly renderer: RuntimeRendererReference,
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
@@ -785,7 +779,6 @@ export class InterpolationBinding {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly instructionProductHandle: ProductHandle,
-    readonly instructionIdentityHandle: IdentityHandle,
     readonly renderer: RuntimeRendererReference,
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference | null,
@@ -822,7 +815,6 @@ export class RefBinding {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly instructionProductHandle: ProductHandle,
-    readonly instructionIdentityHandle: IdentityHandle,
     readonly renderer: RuntimeRendererReference,
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
@@ -864,7 +856,6 @@ export class ContentBinding {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly instructionProductHandle: ProductHandle,
-    readonly instructionIdentityHandle: IdentityHandle,
     readonly renderer: RuntimeRendererReference,
     readonly node: HtmlNodeReference,
     readonly expressionProductHandle: ProductHandle | null,
@@ -902,7 +893,6 @@ export class SpreadBinding {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly instructionProductHandle: ProductHandle,
-    readonly instructionIdentityHandle: IdentityHandle,
     readonly renderer: RuntimeRendererReference,
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
@@ -937,7 +927,6 @@ export class SpreadValueBinding {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly instructionProductHandle: ProductHandle,
-    readonly instructionIdentityHandle: IdentityHandle,
     readonly renderer: RuntimeRendererReference,
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
@@ -980,7 +969,6 @@ export class TranslationBinding {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly instructionProductHandle: ProductHandle,
-    readonly instructionIdentityHandle: IdentityHandle,
     readonly renderer: RuntimeRendererReference,
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
@@ -1011,13 +999,13 @@ export class StateBinding {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly instructionProductHandle: ProductHandle,
-    readonly instructionIdentityHandle: IdentityHandle,
     readonly renderer: RuntimeRendererReference,
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
     readonly target: string,
     readonly rawExpression: string,
     readonly storeName: string | null,
+    readonly expressionProductHandle: ProductHandle | null,
     readonly scopeEffects: readonly RuntimeBindingScopeEffectReference[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingField>[] = [],
@@ -1029,6 +1017,14 @@ export class StateBinding {
 
   readScopeEffects(): readonly RuntimeBindingScopeEffectReference[] {
     return this.scopeEffects;
+  }
+
+  bind(input: RuntimeBindingBindContext): RuntimeBindingBindContribution {
+    return input.targetAccess(
+      this,
+      RuntimeBindingTargetAccessLookup.Accessor,
+      this.target,
+    );
   }
 }
 
@@ -1041,17 +1037,21 @@ export class StateDispatchBinding {
     readonly productHandle: ProductHandle,
     readonly identityHandle: IdentityHandle,
     readonly instructionProductHandle: ProductHandle,
-    readonly instructionIdentityHandle: IdentityHandle,
     readonly renderer: RuntimeRendererReference,
     readonly node: HtmlNodeReference,
     readonly attribute: HtmlAttributeReference,
     readonly eventName: string,
     readonly rawExpression: string,
     readonly storeName: string | null,
+    readonly expressionProductHandle: ProductHandle | null,
     readonly scopeEffects: readonly RuntimeBindingScopeEffectReference[],
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingField>[] = [],
   ) {}
+
+  get target(): string {
+    return this.eventName;
+  }
 
   toReference(): RuntimeBindingReference {
     return new RuntimeBindingReference(this.bindingKind, this.productHandle, this.identityHandle, this.sourceAddressHandle);
@@ -1059,6 +1059,35 @@ export class StateDispatchBinding {
 
   readScopeEffects(): readonly RuntimeBindingScopeEffectReference[] {
     return this.scopeEffects;
+  }
+
+  bind(input: RuntimeBindingBindContext): RuntimeBindingBindContribution {
+    const eventListener = input.targetOperation(
+      this,
+      this.eventName,
+      this.eventName,
+      RuntimeBindingTargetOperationKind.EventListenerAdd,
+      [this.eventName],
+    );
+    const dispatchAction = input.sourceOperation(
+      this,
+      this.storeName ?? 'default',
+      RuntimeBindingSourceOperationKind.StateDispatchAction,
+    );
+    return new RuntimeBindingBindContribution(
+      [
+        ...eventListener.targetAccesses,
+        ...dispatchAction.targetAccesses,
+      ],
+      [
+        ...eventListener.targetOperations,
+        ...dispatchAction.targetOperations,
+      ],
+      [
+        ...eventListener.sourceOperations,
+        ...dispatchAction.sourceOperations,
+      ],
+    );
   }
 }
 
@@ -1086,7 +1115,9 @@ export function bindRuntimeBinding(
     || binding instanceof ContentBinding
     || binding instanceof ListenerBinding
     || binding instanceof RefBinding
-    || binding instanceof SpreadValueBinding) {
+    || binding instanceof SpreadValueBinding
+    || binding instanceof StateBinding
+    || binding instanceof StateDispatchBinding) {
     return binding.bind(input);
   }
   return RuntimeBindingBindContribution.none();

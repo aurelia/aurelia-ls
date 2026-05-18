@@ -56,7 +56,9 @@ The tooling model should keep that split:
   diagnostics, and authoring should use these APIs rather than reimplementing parent/override/boundary traversal.
 - `binding-scope-slot-projector.ts` owns the TypeChecker-backed handoff from projected context type members into
   binding-context slot drafts. Keep that projection out of scope product publication so `Scope` remains the runtime
-  lookup surface and the type-system layer remains the source of static member surfaces.
+  lookup surface and the type-system layer remains the source of static member surfaces. If the context type was
+  projected with a lazy member policy, scope construction is allowed to request the enumerable member surface here;
+  missing slots at this layer should not be patched in downstream router, observation, or completion code.
 - `scope-api-issues.ts` owns direct authored calls to Aurelia's runtime `Scope` static API when source or TypeChecker
   facts prove a null/undefined first argument. It claims runtime `null_scope` (`AUR0203`) for
   `Scope.fromParent(...)`/`Scope.getContext(...)` null scopes and runtime `create_scope_with_null_context` (`AUR0204`)

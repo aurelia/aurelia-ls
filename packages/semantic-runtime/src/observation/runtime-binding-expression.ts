@@ -7,6 +7,8 @@ import {
   PropertyBinding,
   RefBinding,
   SpreadValueBinding,
+  StateBinding,
+  StateDispatchBinding,
   type RuntimeBinding,
 } from '../template/runtime-binding.js';
 import type {
@@ -19,7 +21,9 @@ export type RuntimeExpressionBinding =
   | InterpolationBinding
   | ContentBinding
   | RefBinding
-  | SpreadValueBinding;
+  | SpreadValueBinding
+  | StateBinding
+  | StateDispatchBinding;
 
 export function isRuntimeExpressionBinding(
   binding: RuntimeBinding,
@@ -29,7 +33,9 @@ export function isRuntimeExpressionBinding(
     || binding instanceof InterpolationBinding
     || binding instanceof ContentBinding
     || binding instanceof RefBinding
-    || binding instanceof SpreadValueBinding;
+    || binding instanceof SpreadValueBinding
+    || binding instanceof StateBinding
+    || binding instanceof StateDispatchBinding;
 }
 
 export function expressionProductHandleForBinding(

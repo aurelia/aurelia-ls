@@ -584,11 +584,11 @@ function readInstanceMemberSymbol(
   if (context.typeSystem == null) {
     return null;
   }
+  const instanceType = context.typeSystem.readRuntimeTargetType(targetClass);
+  if (instanceType == null) {
+    return null;
+  }
   const checker = context.typeSystem.checker;
-  const classSymbol = targetClass.name == null ? null : checker.getSymbolAtLocation(targetClass.name) ?? null;
-  const instanceType = classSymbol == null
-    ? checker.getTypeAtLocation(targetClass)
-    : checker.getDeclaredTypeOfSymbol(classSymbol);
   return checker.getPropertyOfType(instanceType, propertyName) ?? null;
 }
 
@@ -609,7 +609,11 @@ function readMemberCallableState(
   if (context.typeSystem == null) {
     return WatchCallbackResolution.Unknown;
   }
-  const type = context.typeSystem.checker.getTypeOfSymbolAtLocation(symbol, targetClass);
+  const checkerTargetClass = context.typeSystem.readProgramNode(targetClass);
+  if (checkerTargetClass == null) {
+    return WatchCallbackResolution.Unknown;
+  }
+  const type = context.typeSystem.checker.getTypeOfSymbolAtLocation(symbol, checkerTargetClass);
   if ((type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown)) !== 0) {
     return WatchCallbackResolution.Unknown;
   }
