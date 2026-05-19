@@ -23,13 +23,15 @@ import type {
 } from './binding-value-channel-draft-types.js';
 import {
   RuntimeBindingValueChannelDraftSupport,
-  booleanLiteralForExpression,
   isBroadTypeShape,
   sourceTypeHasAssignableArrayPart,
   stringLiteralTypesForDomain,
 } from './binding-value-channel-draft-support.js';
 import {
-  RuntimeBindingPrimitiveValueKind,
+  runtimeBindingBooleanLiteralForExpression,
+  uniqueRuntimeBindingPrimitiveValueDomain,
+} from './runtime-binding-primitive-value.js';
+import {
   RuntimeBindingValueChannelAuthority,
   RuntimeBindingValueChannelKind,
   type RuntimeBindingPrimitiveValue,
@@ -120,6 +122,7 @@ export class SelectValueObserverChannelDrafts {
       optionValues,
       sourceShape.elementType ?? null,
       valueDomain,
+      primitiveValueDomain,
     );
     if (runtimeValueType == null) {
       return {
@@ -271,7 +274,7 @@ export class SelectValueObserverChannelDrafts {
     if (valueDomain.length > 0) {
       return this.owner.types.stringLiteralDomainType(local, valueDomain, binding.sourceAddressHandle);
     }
-    return this.commonOptionValueType(optionValues);
+    return this.optionValueUnionType(local, binding, optionValues);
   }
 
   private selectDynamicRuntimeValueType(
@@ -321,11 +324,11 @@ export class SelectValueObserverChannelDrafts {
   ): boolean | null {
     const parse = this.owner.readParse(binding.expressionProductHandle);
     const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
-    const literal = ast == null ? null : booleanLiteralForExpression(ast);
+    const literal = ast == null ? null : runtimeBindingBooleanLiteralForExpression(ast);
     if (literal != null) {
       return literal;
     }
-    const scope = context.instructionScopes.get(binding.instructionProductHandle) ?? null;
+    const scope = context.instructionScopes.scopeForBinding(context.input.runtimeBindings, binding);
     const sourceType = this.owner.sourceTypeForBinding(binding, scope, context.evaluator);
     const literalValues = this.owner.types.booleanLiteralDomainForType(sourceType);
     return literalValues.length === 1 ? literalValues[0]! : null;
@@ -395,6 +398,7 @@ export class SelectValueObserverChannelDrafts {
       optionValues,
       readSourceType(),
       valueDomain,
+      primitiveValueDomain,
     );
     if (runtimeValueType == null) {
       return {
@@ -432,19 +436,32 @@ export class SelectValueObserverChannelDrafts {
     optionValues: readonly BindingValueExpression[],
     sourceType: CheckerTypeReference | null,
     valueDomain: readonly string[],
+    primitiveValueDomain: readonly RuntimeBindingPrimitiveValue[],
   ): CheckerTypeReference | null {
     if (valueDomain.length > 0) {
-      return this.owner.types.stringLiteralDomainType(local, valueDomain, binding.sourceAddressHandle);
+      return this.owner.types.primitiveLiteralDomainType(local, primitiveValueDomain, binding.sourceAddressHandle)
+        ?? this.owner.types.stringLiteralDomainType(local, valueDomain, binding.sourceAddressHandle);
     }
-    return this.commonOptionValueType(optionValues) ?? sourceType ?? fallbackType;
+    return this.optionValueUnionType(local, binding, optionValues)
+      ?? sourceType
+      ?? fallbackType;
+  }
+
+  private optionValueUnionType(
+    local: string,
+    binding: PropertyBinding,
+    optionValues: readonly BindingValueExpression[],
+  ): CheckerTypeReference | null {
+    const typed = this.typedOptionValues(optionValues);
+    return typed.length === 0
+      ? null
+      : this.owner.types.unionValueType(`${local}:typed-options`, typed, binding.sourceAddressHandle);
   }
 
   private commonOptionValueType(
     optionValues: readonly BindingValueExpression[],
   ): CheckerTypeReference | null {
-    const typed = optionValues
-      .map((option) => option.valueType)
-      .filter((valueType): valueType is CheckerTypeReference => valueType != null);
+    const typed = this.typedOptionValues(optionValues);
     if (typed.length === 0) {
       return null;
     }
@@ -453,32 +470,18 @@ export class SelectValueObserverChannelDrafts {
       ? first
       : null;
   }
+
+  private typedOptionValues(
+    optionValues: readonly BindingValueExpression[],
+  ): readonly CheckerTypeReference[] {
+    return optionValues
+      .map((option) => option.valueType)
+      .filter((valueType): valueType is CheckerTypeReference => valueType != null);
+  }
 }
 
 function uniquePrimitiveValueDomain(
   optionValues: readonly BindingValueExpression[],
 ): readonly RuntimeBindingPrimitiveValue[] {
-  const seen = new Set<string>();
-  const result: RuntimeBindingPrimitiveValue[] = [];
-  for (const value of optionValues.flatMap((option) => option.primitiveValueDomain)) {
-    const key = primitiveValueKey(value);
-    if (seen.has(key)) {
-      continue;
-    }
-    seen.add(key);
-    result.push(value);
-  }
-  return result;
-}
-
-function primitiveValueKey(value: RuntimeBindingPrimitiveValue): string {
-  switch (value.kind) {
-    case RuntimeBindingPrimitiveValueKind.String:
-    case RuntimeBindingPrimitiveValueKind.Number:
-    case RuntimeBindingPrimitiveValueKind.Boolean:
-      return `${value.kind}:${String(value.value)}`;
-    case RuntimeBindingPrimitiveValueKind.Null:
-    case RuntimeBindingPrimitiveValueKind.Undefined:
-      return value.kind;
-  }
+  return uniqueRuntimeBindingPrimitiveValueDomain(optionValues.flatMap((option) => option.primitiveValueDomain));
 }

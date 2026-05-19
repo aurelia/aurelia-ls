@@ -144,7 +144,7 @@ export class __ROOT_COMPONENT_CLASS__ {}
 const ROOT_TEMPLATE_SOURCE = sourceText(`<main class="task-shell">
   <header>
     <h1>\${title & state}</h1>
-    <p textcontent.bind="label & state:'filters'"></p>
+    <p>\${label & state:'filters'}</p>
   </header>
 
   <section class="task-entry" aria-labelledby="new-task">

@@ -1,38 +1,40 @@
-<form class.bind="canSubmit ? 'form-ready' : 'form-pending'" submit.trigger="submit()">
+<let request.bind="state.readRequest(requestId)"></let>
+<template if.bind="request != null">
+  <form class.bind="request.canSubmit ? 'form-ready' : 'form-pending'" submit.trigger="submit()">
   <field-shell
     input-id="customer-name"
     label="Name"
     type="text"
-    value.bind="customerName">
+    value.bind="request.customerName">
   </field-shell>
 
   <field-shell
     input-id="email"
     label="Email"
     type="email"
-    value.bind="email">
+    value.bind="request.email">
   </field-shell>
 
   <label>
-    <input type="checkbox" checked.bind="urgent">
+    <input type="checkbox" checked.bind="request.urgent">
     Urgent
   </label>
 
   <fieldset>
     <legend>Contact preference</legend>
     <label>
-      <input type="radio" model.bind="state.emailPreference" checked.bind="contactPreference">
+      <input type="radio" model.bind="state.emailPreference" checked.bind="request.contactPreference">
       Email
     </label>
     <label>
-      <input type="radio" model.bind="state.phonePreference" checked.bind="contactPreference">
+      <input type="radio" model.bind="state.phonePreference" checked.bind="request.contactPreference">
       Phone
     </label>
   </fieldset>
 
   <label for="primary-topic">Primary topic</label>
   <p>Default topic: ${state.supportTopicSummary.label}</p>
-  <select id="primary-topic" value.bind="primaryTopic">
+  <select id="primary-topic" value.bind="request.primaryTopic">
     <option model.bind="null">Choose...</option>
     <option model.bind="state.hardwareTopic">Hardware</option>
     <option model.bind="state.billingTopic">Billing</option>
@@ -40,14 +42,16 @@
   </select>
 
   <label for="topics">Additional topics</label>
-  <select id="topics" multiple value.bind="topics">
+  <select id="topics" multiple value.bind="request.topics">
     <option model.bind="state.hardwareTopic">Hardware</option>
     <option model.bind="state.billingTopic">Billing</option>
     <option model.bind="state.supportTopic">Support</option>
   </select>
 
   <label for="notes">Notes</label>
-  <textarea id="notes" value.bind="notes"></textarea>
+  <textarea id="notes" value.bind="request.notes"></textarea>
 
-  <button type="submit" disabled.bind="!canSubmit">Submit request</button>
-</form>
+    <button type="submit" disabled.bind="!request.canSubmit">Submit request</button>
+  </form>
+</template>
+<p else>Loading request...</p>

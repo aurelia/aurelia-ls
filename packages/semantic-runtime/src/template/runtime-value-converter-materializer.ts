@@ -4,6 +4,7 @@ import {
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type {
+  AddressHandle,
   EvidenceHandle,
   IdentityHandle,
   ProductHandle,
@@ -34,6 +35,7 @@ import { TemplateProductDetails } from './product-details.js';
 import type { RuntimeBinding } from './runtime-binding.js';
 import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-expression-products.js';
 import { appendRuntimeBindingProductValue } from './runtime-binding-product-index.js';
+import { sourceAddressForRuntimeExpressionSpan } from './runtime-expression-source-address.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import type { TemplateExpressionParse } from './value-site.js';
 import {
@@ -175,14 +177,21 @@ export class RuntimeValueConverterMaterializer {
       return null;
     }
     const issue = this.issueForValueConverter(input, converter);
-    const application = this.applicationProduct(local, binding, converter, source);
+    const expressionSource = sourceAddressForRuntimeExpressionSpan(
+      this.store,
+      local,
+      binding.sourceAddressHandle,
+      converter.name.span,
+    );
+    const application = this.applicationProduct(local, binding, converter, expressionSource.handle, source);
     const issueProduct = issue == null
       ? null
-      : this.issueProduct(`${local}:issue:${issue.issueKind}`, application, binding, issue, source);
+      : this.issueProduct(`${local}:issue:${issue.issueKind}`, application, binding, issue, expressionSource.handle, source);
     return new RuntimeValueConverterPublication(
       application,
       issueProduct == null ? [] : [issueProduct],
       [
+        ...expressionSource.records,
         ...recordsForApplication(application, binding.identityHandle, source.provenanceHandle),
         ...(issueProduct == null
           ? []
@@ -209,6 +218,7 @@ export class RuntimeValueConverterMaterializer {
     local: string,
     binding: RuntimeBinding,
     converter: ValueConverterExpression,
+    sourceAddressHandle: AddressHandle | null,
     source: RuntimeValueConverterSourceSet,
   ): RuntimeValueConverterApplication {
     return new RuntimeValueConverterApplication(
@@ -218,7 +228,7 @@ export class RuntimeValueConverterMaterializer {
       RuntimeValueConverterApplicationPhase.ToView,
       converter.name.name,
       converter.args.length,
-      binding.sourceAddressHandle,
+      sourceAddressHandle,
     );
   }
 
@@ -227,6 +237,7 @@ export class RuntimeValueConverterMaterializer {
     application: RuntimeValueConverterApplication,
     binding: RuntimeBinding,
     issue: BuiltInValueConverterInvocationIssue,
+    sourceAddressHandle: AddressHandle | null,
     source: RuntimeValueConverterSourceSet,
   ): RuntimeValueConverterIssue {
     return new RuntimeValueConverterIssue(
@@ -238,7 +249,7 @@ export class RuntimeValueConverterMaterializer {
       issue.issueKind,
       issue.message,
       issue.frameworkErrorCode,
-      binding.sourceAddressHandle,
+      sourceAddressHandle,
     );
   }
 
@@ -326,6 +337,8 @@ function valueConverterExpressions(expression: ExpressionAstNode): readonly Valu
       ];
     case 'BindingBehavior':
       return valueConverterExpressions(expression.expression);
+    case 'Interpolation':
+      return expression.expressions.flatMap((part) => valueConverterExpressions(part));
     default:
       return [];
   }

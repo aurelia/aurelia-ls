@@ -150,6 +150,7 @@ export const enum FrameworkRelationshipMechanism {
   Connectable = "connectable",
   CollectionObserver = "collection-observer",
   ProxyObservable = "proxy-observable",
+  ComputedDecorator = "computed-decorator",
   WatchDecorator = "watch-decorator",
   WatchRegistry = "watch-registry",
   WatchMetadata = "watch-metadata",

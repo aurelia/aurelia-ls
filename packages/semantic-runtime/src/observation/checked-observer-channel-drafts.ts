@@ -1,4 +1,5 @@
 import type { HtmlElement } from '../template/html-ir.js';
+import type { CheckerTypeReference } from '../type-system/type-shape.js';
 import { normalizeHtmlTagName } from '../template/html-ir.js';
 import {
   PropertyBinding,
@@ -6,6 +7,7 @@ import {
 } from '../template/runtime-binding.js';
 import type {
   BindingSourceTypeReader,
+  BindingValueExpression,
   BindingValueChannelDraftContext,
   CheckedSourceShape,
   RuntimeBindingValueChannelDraft,
@@ -67,7 +69,7 @@ export class CheckedObserverChannelDrafts {
     usesCustomMatcher: boolean,
   ): RuntimeBindingValueChannelDraft {
     const elementValue = this.owner.inputRuntimeValue(local, input, context);
-    if (elementValue.valueType == null && elementValue.valueDomain.length === 0) {
+    if (elementValue.valueType == null && elementValue.valueDomain.length === 0 && elementValue.primitiveValueDomain.length === 0) {
       return {
         channelKind: RuntimeBindingValueChannelKind.CheckedModel,
         authority: RuntimeBindingValueChannelAuthority.Open,
@@ -83,12 +85,7 @@ export class CheckedObserverChannelDrafts {
       authority: elementValue.valueType == null
         ? RuntimeBindingValueChannelAuthority.StaticTemplate
         : RuntimeBindingValueChannelAuthority.BindingExpressionAndTypeChecker,
-        runtimeValueType: elementValue.valueType
-          ?? this.owner.types.stringLiteralDomainType(
-            `${binding.productHandle}:checked-radio-domain`,
-            elementValue.valueDomain,
-            binding.sourceAddressHandle,
-          ),
+        runtimeValueType: this.elementValueType(`${binding.productHandle}:checked-radio-domain`, binding, elementValue),
         valueDomain: elementValue.valueDomain,
         primitiveValueDomain: elementValue.primitiveValueDomain,
         isCollection: false,
@@ -161,12 +158,7 @@ export class CheckedObserverChannelDrafts {
         authority: elementValue.valueType == null
           ? RuntimeBindingValueChannelAuthority.StaticTemplateAndTypeChecker
           : RuntimeBindingValueChannelAuthority.BindingExpressionAndTypeChecker,
-        runtimeValueType: elementValue.valueType
-          ?? this.owner.types.stringLiteralDomainType(
-            `${local}:checked-collection-domain`,
-            valueDomain,
-            binding.sourceAddressHandle,
-        ),
+        runtimeValueType: this.elementValueType(`${local}:checked-collection-domain`, binding, elementValue),
         valueDomain,
         primitiveValueDomain: elementValue.primitiveValueDomain,
         isCollection: true,
@@ -179,17 +171,22 @@ export class CheckedObserverChannelDrafts {
       authority: elementValue.valueType == null
         ? RuntimeBindingValueChannelAuthority.StaticTemplateAndTypeChecker
         : RuntimeBindingValueChannelAuthority.BindingExpressionAndTypeChecker,
-      runtimeValueType: elementValue.valueType
-        ?? this.owner.types.stringLiteralDomainType(
-          `${local}:checked-map-key-domain`,
-          valueDomain,
-          binding.sourceAddressHandle,
-        ),
+      runtimeValueType: this.elementValueType(`${local}:checked-map-key-domain`, binding, elementValue),
       valueDomain,
       primitiveValueDomain: elementValue.primitiveValueDomain,
       isCollection: true,
       usesCustomMatcher,
       openReason: null,
     };
+  }
+
+  private elementValueType(
+    local: string,
+    binding: PropertyBinding,
+    elementValue: BindingValueExpression,
+  ): CheckerTypeReference {
+    return elementValue.valueType
+      ?? this.owner.types.primitiveLiteralDomainType(local, elementValue.primitiveValueDomain, binding.sourceAddressHandle)
+      ?? this.owner.types.stringLiteralDomainType(local, elementValue.valueDomain, binding.sourceAddressHandle);
   }
 }

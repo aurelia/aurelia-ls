@@ -1,6 +1,7 @@
 import { customElement, type ICompositionController } from '@aurelia/runtime-html';
 import { ChartWidget } from './widgets/chart-widget';
 import { InventoryWidget } from './widgets/inventory-widget';
+import { WidgetHost, type WidgetKit } from './widget-host';
 import template from './compose-dashboard-app.html';
 
 export interface DashboardWidgetModel {
@@ -19,7 +20,7 @@ class SummaryPanel {
 @customElement({
   name: 'compose-dashboard-app',
   template,
-  dependencies: [ChartWidget, InventoryWidget],
+  dependencies: [ChartWidget, InventoryWidget, WidgetHost],
 })
 export class ComposeDashboardApp {
   readonly summaryTemplate = '<p>Selected widget summary</p>';
@@ -29,7 +30,29 @@ export class ComposeDashboardApp {
     },
   };
   readonly summaryClass = SummaryPanel;
+  readonly selectedWidgetId = 'stock';
   composition: ICompositionController | null = null;
+
+  readonly kit: WidgetKit = {
+    widgets: [
+      {
+        id: 'sales',
+        component: ChartWidget,
+        data: { title: 'Sales trend' },
+        isApplicable(id: string): boolean {
+          return id === this.id;
+        },
+      },
+      {
+        id: 'stock',
+        component: InventoryWidget,
+        data: { title: 'Inventory' },
+        isApplicable(id: string): boolean {
+          return id === this.id;
+        },
+      },
+    ],
+  };
 
   readonly widgets: readonly DashboardWidgetModel[] = [
     {
@@ -47,7 +70,11 @@ export class ComposeDashboardApp {
   ];
 
   get selectedWidget(): DashboardWidgetModel {
-    return this.widgets[0]!;
+    return this.widgets.find((widget) => widget.id === this.selectedWidgetId) ?? this.widgets[0]!;
+  }
+
+  get selectedWidgetComponent(): typeof ChartWidget | typeof InventoryWidget {
+    return this.selectedWidget.component;
   }
 
   getAsyncComponent(): Promise<typeof ChartWidget> {

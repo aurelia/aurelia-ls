@@ -32,6 +32,7 @@ import {
   type RuntimeBindingTargetAccess,
   type RuntimeBindingTargetOperation,
 } from './runtime-binding.js';
+import type { RuntimeWatcher } from './runtime-watcher.js';
 
 export const enum RuntimeControllerCreationKind {
   RootCustomElement = 'root-custom-element',
@@ -153,6 +154,7 @@ export class RuntimeControllerBindResult {
  */
 export class RuntimeControllerFrame {
   private readonly bindings: RuntimeBinding[] = [];
+  private readonly watchers: RuntimeWatcher[] = [];
   private readonly children: RuntimeControllerFrame[] = [];
   private readonly lifecycleSteps: RuntimeControllerLifecycleStep[] = [];
   private scope: BindingScopeReference | null = null;
@@ -194,6 +196,17 @@ export class RuntimeControllerFrame {
       binding.productHandle,
       binding.sourceAddressHandle,
       `Controller.addBinding admitted a ${binding.bindingKind} binding.`,
+    );
+  }
+
+  addWatcher(watcher: RuntimeWatcher): void {
+    this.watchers.push(watcher);
+    this.recordLifecycleStep(
+      RuntimeControllerLifecycleStage.BindingAdmission,
+      RuntimeControllerLifecycleStepKind.AddBinding,
+      watcher.productHandle,
+      watcher.sourceAddressHandle,
+      `Controller.addBinding admitted a ${watcher.watcherKind} watcher.`,
     );
   }
 
@@ -283,6 +296,10 @@ export class RuntimeControllerFrame {
 
   readBindings(): readonly RuntimeBinding[] {
     return [...this.bindings];
+  }
+
+  readWatchers(): readonly RuntimeWatcher[] {
+    return [...this.watchers];
   }
 
   readChildren(): readonly RuntimeControllerFrame[] {

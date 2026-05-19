@@ -168,9 +168,17 @@ such as `IAttrMapper`/`AttrMapper` and `NodeObserverLocator`/`INodeObserverLocat
 through the shared evaluator where possible, and publishes explicit service configuration for app-root compiler worlds
 and bind-time observer lookup. `AttrMapper.useTwoWay(...)` therefore affects compiler-world binding mode decisions,
 and `NodeObserverLocator.useConfig(...)`, accessor overrides, and closed `allowDirtyCheck` assignments affect the per-world observer locator used by
-`Controller.bind` analysis. If a new callback shape needs more expression closure, improve the ECMAScript evaluator or
+`Controller.bind` analysis. The callback argument is treated as a framework service only when the `AppTask` key is that
+service, and as a container only when the key is `IContainer`; no-key tasks and arbitrary DI keys must not masquerade as
+containers merely because their parameter is later used with `.get(...)`. If a new callback shape needs more expression closure, improve the ECMAScript evaluator or
 expression reader first; do not hide one-off callback parsing inside compiler-world, renderer, or observation
 materializers.
+This does not mean every host-node binding consults the node observer configuration. The renderer still asks the
+framework-shaped binding for an accessor or observer according to binding mode and instruction kind. Custom
+`NodeObserverLocator.useConfig(...)` entries are spent by observer lookup paths such as `.two-way` / `.from-view`, while
+ordinary `.bind` on an unknown host property can close through `ElementPropertyAccessor` unless app configuration also
+overrides the accessor. Keep that handoff in observation/template products rather than treating service customization as
+a global DOM-property mapping table.
 Duplicate node observer mappings are framework errors, not silent overwrites. `NodeObserverLocator.useConfig(...)` and
 `useConfigGlobal(...)` throw `runtime-html ErrorNames.node_observer_mapping_existed` (`AUR0653`) when a mapping already
 exists, including built-in mappings such as `INPUT.value` and global mappings such as `textContent`. The configuration

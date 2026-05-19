@@ -38,15 +38,18 @@ let projectCompilerOptionsCacheClearOperations = 0;
 let projectCompilerOptionsCacheClearedEntries = 0;
 
 /** Read compiler options for one boot project, with semantic-runtime defaults and local tsconfig overrides. */
-export function buildProjectCompilerOptions(rootDir: string): ts.CompilerOptions {
-  const cacheKey = projectCompilerOptionsCacheKey(rootDir);
+export function buildProjectCompilerOptions(
+  rootDir: string,
+  discoveryRootDirs: readonly string[] = [],
+): ts.CompilerOptions {
+  const cacheKey = projectCompilerOptionsCacheKey(rootDir, discoveryRootDirs);
   const cached = projectCompilerOptionsCache.get(cacheKey);
   if (cached != null) {
     projectCompilerOptionsCacheHits += 1;
     return cloneCompilerOptions(cached.options);
   }
   projectCompilerOptionsCacheMisses += 1;
-  const options = buildProjectCompilerOptionsUncached(rootDir);
+  const options = buildProjectCompilerOptionsUncached(rootDir, discoveryRootDirs);
   projectCompilerOptionsCache.set(cacheKey, {
     options: cloneCompilerOptions(options),
     pathMappingCount: Object.keys(options.paths ?? {}).length,
@@ -83,8 +86,11 @@ export function clearProjectCompilerOptionsCache(): ProjectCompilerOptionsCacheO
   return readProjectCompilerOptionsCacheOverview();
 }
 
-function buildProjectCompilerOptionsUncached(rootDir: string): ts.CompilerOptions {
-  const defaults = defaultProjectCompilerOptions(rootDir);
+function buildProjectCompilerOptionsUncached(
+  rootDir: string,
+  discoveryRootDirs: readonly string[],
+): ts.CompilerOptions {
+  const defaults = defaultProjectCompilerOptions(rootDir, discoveryRootDirs);
   const configFile = path.join(rootDir, 'tsconfig.json');
   if (!ts.sys.fileExists(configFile)) {
     return defaults;
@@ -117,9 +123,14 @@ function buildProjectCompilerOptionsUncached(rootDir: string): ts.CompilerOption
   return merged;
 }
 
-function projectCompilerOptionsCacheKey(rootDir: string): string {
-  const resolved = normalizePosixPath(path.resolve(rootDir));
-  return process.platform === 'win32' ? resolved.toLowerCase() : resolved;
+function projectCompilerOptionsCacheKey(
+  rootDir: string,
+  discoveryRootDirs: readonly string[],
+): string {
+  const key = [rootDir, ...discoveryRootDirs]
+    .map((entry) => normalizePosixPath(path.resolve(entry)))
+    .join('|');
+  return process.platform === 'win32' ? key.toLowerCase() : key;
 }
 
 function cloneCompilerOptions(options: ts.CompilerOptions): ts.CompilerOptions {
@@ -159,10 +170,14 @@ function pathMappingTargetCount(
   return Object.values(paths ?? {}).reduce((total, targets) => total + targets.length, 0);
 }
 
-function defaultProjectCompilerOptions(rootDir: string): ts.CompilerOptions {
+function defaultProjectCompilerOptions(
+  rootDir: string,
+  discoveryRootDirs: readonly string[],
+): ts.CompilerOptions {
+  const roots = uniqueDiscoveryRoots(rootDir, discoveryRootDirs);
   const paths = {
-    ...discoverAureliaTypePaths(rootDir),
-    ...discoverWorkspacePackageSourcePaths(rootDir),
+    ...discoverAureliaTypePaths(rootDir, roots),
+    ...discoverWorkspacePackageSourcePaths(rootDir, roots),
     ...discoverExternalPackageSourcePaths(rootDir),
   };
   return {
@@ -191,8 +206,8 @@ function defaultProjectCompilerOptions(rootDir: string): ts.CompilerOptions {
   };
 }
 
-function discoverAureliaTypePaths(rootDir: string): Record<string, string[]> {
-  const workspaceRoot = discoverAureliaCheckoutRoot(rootDir);
+function discoverAureliaTypePaths(rootDir: string, discoveryRoots: readonly string[]): Record<string, string[]> {
+  const workspaceRoot = firstDiscoveredRoot(discoveryRoots, discoverAureliaCheckoutRoot);
   if (workspaceRoot == null) {
     return {};
   }
@@ -230,13 +245,12 @@ function discoverAureliaCheckoutRoot(rootDir: string): string | null {
   }
 }
 
-function discoverWorkspacePackageSourcePaths(rootDir: string): Record<string, string[]> {
-  const workspaceRoot = discoverPackageWorkspaceRoot(rootDir);
-  if (workspaceRoot == null) {
-    return {};
+function discoverWorkspacePackageSourcePaths(rootDir: string, discoveryRoots: readonly string[]): Record<string, string[]> {
+  const mappings: Record<string, string[]> = {};
+  for (const workspaceRoot of discoveredRoots(discoveryRoots, discoverPackageWorkspaceRoot)) {
+    Object.assign(mappings, packageSourcePathsForRoot(rootDir, workspaceRoot));
   }
-
-  return packageSourcePathsForRoot(rootDir, workspaceRoot);
+  return mappings;
 }
 
 function discoverExternalPackageSourcePaths(rootDir: string): Record<string, string[]> {
@@ -350,6 +364,53 @@ function externalSourceRoots(): readonly string[] {
         .map((entry) => entry.trim())
         .filter((entry) => entry.length > 0)
   );
+}
+
+function uniqueDiscoveryRoots(rootDir: string, discoveryRootDirs: readonly string[]): readonly string[] {
+  const roots: string[] = [];
+  const seen = new Set<string>();
+  for (const entry of [rootDir, ...discoveryRootDirs]) {
+    const resolved = path.resolve(entry);
+    const key = process.platform === 'win32'
+      ? normalizePosixPath(resolved).toLowerCase()
+      : normalizePosixPath(resolved);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    roots.push(resolved);
+  }
+  return roots;
+}
+
+function firstDiscoveredRoot(
+  roots: readonly string[],
+  discover: (rootDir: string) => string | null,
+): string | null {
+  return discoveredRoots(roots, discover)[0] ?? null;
+}
+
+function discoveredRoots(
+  roots: readonly string[],
+  discover: (rootDir: string) => string | null,
+): readonly string[] {
+  const result: string[] = [];
+  const seen = new Set<string>();
+  for (const root of roots) {
+    const discovered = discover(root);
+    if (discovered == null) {
+      continue;
+    }
+    const key = process.platform === 'win32'
+      ? normalizePosixPath(path.resolve(discovered)).toLowerCase()
+      : normalizePosixPath(path.resolve(discovered));
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    result.push(discovered);
+  }
+  return result;
 }
 
 function mergePathMappings(

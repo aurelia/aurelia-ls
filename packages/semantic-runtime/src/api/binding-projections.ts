@@ -2,10 +2,14 @@ import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-
 import type { KernelStore } from '../kernel/store.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import {
-  RuntimeBindingPrimitiveValueKind,
+  RuntimeObservedDependencyKind,
   type RuntimeBindingDataFlow,
-  type RuntimeBindingPrimitiveValue,
+  type RuntimeBindingObservedDependency,
 } from '../observation/runtime-binding-observation.js';
+import {
+  runtimeBindingPrimitiveValueApiDisplay,
+  runtimeBindingPrimitiveValueDomainKinds,
+} from '../observation/runtime-binding-primitive-value.js';
 import type { TemplateExpressionParse } from '../template/value-site.js';
 import {
   describeAddress,
@@ -13,11 +17,22 @@ import {
 import type {
   SemanticBindingDataFlowRow,
   SemanticBindingBehaviorApplicationRow,
+  SemanticBindingObservedDependencyRow,
   SemanticBindingSourceOperationRow,
   SemanticBindingTargetAccessRow,
   SemanticBindingValueChannelRow,
+  SemanticObservedMemberSourceState,
   SemanticTargetOperationRow,
 } from './contracts.js';
+import {
+  resourceLocalBindingBehaviorApplications,
+  resourceLocalBindingDataFlows,
+  resourceLocalBindingObservedDependencies,
+  resourceLocalBindingSourceOperations,
+  resourceLocalBindingTargetAccesses,
+  resourceLocalBindingTargetOperations,
+  resourceLocalBindingValueChannels,
+} from './runtime-resource-ownership.js';
 
 export function readBindingTargetAccessRows(
   emission: AureliaAppWorldProjectEmission,
@@ -26,7 +41,7 @@ export function readBindingTargetAccessRows(
 ): readonly SemanticBindingTargetAccessRow[] {
   return bindingProjectionResources(emission)
     .flatMap((resource): readonly SemanticBindingTargetAccessRow[] =>
-      resource.runtimeAnalysis.controllerBind.targetAccesses.map((access) => ({
+      resourceLocalBindingTargetAccesses(store, resource).map((access) => ({
         definitionName: resource.compilation.definition.name,
         bindingKind: access.binding.bindingKind,
         lookup: access.lookup,
@@ -69,10 +84,7 @@ export function readTargetOperationRows(
 ): readonly SemanticTargetOperationRow[] {
   return bindingProjectionResources(emission)
     .flatMap((resource): readonly SemanticTargetOperationRow[] =>
-      [
-        ...resource.runtimeAnalysis.runtimeRendering.targetOperations,
-        ...resource.runtimeAnalysis.controllerBind.targetOperations,
-      ].map((operation) => ({
+      resourceLocalBindingTargetOperations(store, resource).map((operation) => ({
         definitionName: resource.compilation.definition.name,
         ownerKind: operation.ownerKind,
         bindingKind: operation.binding?.bindingKind ?? null,
@@ -110,7 +122,7 @@ export function readBindingSourceOperationRows(
 ): readonly SemanticBindingSourceOperationRow[] {
   return bindingProjectionResources(emission)
     .flatMap((resource): readonly SemanticBindingSourceOperationRow[] =>
-      resource.runtimeAnalysis.controllerBind.sourceOperations.map((operation) => ({
+      resourceLocalBindingSourceOperations(store, resource).map((operation) => ({
         definitionName: resource.compilation.definition.name,
         bindingKind: operation.binding.bindingKind,
         targetKind: operation.targetKind,
@@ -144,7 +156,7 @@ export function readBindingBehaviorApplicationRows(
 ): readonly SemanticBindingBehaviorApplicationRow[] {
   return bindingProjectionResources(emission)
     .flatMap((resource): readonly SemanticBindingBehaviorApplicationRow[] =>
-      resource.runtimeAnalysis.bindingBehavior.applications.map((application) => ({
+      resourceLocalBindingBehaviorApplications(store, resource).map((application) => ({
         definitionName: resource.compilation.definition.name,
         bindingKind: application.binding.bindingKind,
         behaviorName: application.behaviorName,
@@ -177,7 +189,7 @@ export function readBindingValueChannelRows(
 ): readonly SemanticBindingValueChannelRow[] {
   return bindingProjectionResources(emission)
     .flatMap((resource): readonly SemanticBindingValueChannelRow[] =>
-      resource.runtimeAnalysis.bindingValueChannel.valueChannels.map((valueChannel) => ({
+      resourceLocalBindingValueChannels(store, resource).map((valueChannel) => ({
         definitionName: resource.compilation.definition.name,
         bindingKind: valueChannel.binding.bindingKind,
         targetKind: valueChannel.targetAccess?.targetKind
@@ -196,8 +208,8 @@ export function readBindingValueChannelRows(
         runtimeValueType: valueChannel.runtimeValueType?.display ?? null,
         valueDomain: valueChannel.valueDomain,
         primitiveValueDomain: valueChannel.primitiveValueDomain,
-        primitiveValueDomainKinds: primitiveValueDomainKinds(valueChannel.primitiveValueDomain),
-        primitiveValueDomainDisplays: valueChannel.primitiveValueDomain.map(primitiveValueDisplay),
+        primitiveValueDomainKinds: runtimeBindingPrimitiveValueDomainKinds(valueChannel.primitiveValueDomain),
+        primitiveValueDomainDisplays: valueChannel.primitiveValueDomain.map(runtimeBindingPrimitiveValueApiDisplay),
         isCollection: valueChannel.isCollection,
         usesCustomMatcher: valueChannel.usesCustomMatcher,
         openReason: valueChannel.openReason,
@@ -223,26 +235,6 @@ export function readBindingValueChannelRows(
     );
 }
 
-function primitiveValueDomainKinds(
-  values: readonly RuntimeBindingPrimitiveValue[],
-): readonly (RuntimeBindingPrimitiveValueKind | `${RuntimeBindingPrimitiveValueKind}`)[] {
-  return [...new Set(values.map((value) => value.kind))];
-}
-
-function primitiveValueDisplay(value: RuntimeBindingPrimitiveValue): string {
-  switch (value.kind) {
-    case RuntimeBindingPrimitiveValueKind.String:
-      return JSON.stringify(value.value);
-    case RuntimeBindingPrimitiveValueKind.Number:
-    case RuntimeBindingPrimitiveValueKind.Boolean:
-      return String(value.value);
-    case RuntimeBindingPrimitiveValueKind.Null:
-      return 'null';
-    case RuntimeBindingPrimitiveValueKind.Undefined:
-      return 'undefined';
-  }
-}
-
 export function readBindingDataFlowRows(
   emission: AureliaAppWorldProjectEmission,
   store: KernelStore,
@@ -250,13 +242,30 @@ export function readBindingDataFlowRows(
 ): readonly SemanticBindingDataFlowRow[] {
   return bindingProjectionResources(emission)
     .flatMap((resource): readonly SemanticBindingDataFlowRow[] =>
-      resource.runtimeAnalysis.bindingDataFlow.dataFlows.map((dataFlow) =>
+      resourceLocalBindingDataFlows(store, resource).map((dataFlow) =>
         bindingDataFlowRow(resource.compilation.definition.name, dataFlow, store, handles)
       )
     )
     .sort((left, right) =>
       `${left.definitionName}:${left.sourceName ?? ''}:${left.direction}:${left.targetProperty ?? ''}`
         .localeCompare(`${right.definitionName}:${right.sourceName ?? ''}:${right.direction}:${right.targetProperty ?? ''}`)
+    );
+}
+
+export function readBindingObservedDependencyRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): readonly SemanticBindingObservedDependencyRow[] {
+  return bindingProjectionResources(emission)
+    .flatMap((resource): readonly SemanticBindingObservedDependencyRow[] =>
+      resourceLocalBindingObservedDependencies(store, resource).map((dependency) =>
+        bindingObservedDependencyRow(resource.compilation.definition.name, dependency, store, handles)
+      )
+    )
+    .sort((left, right) =>
+      `${left.definitionName}:${left.sourceName ?? ''}:${left.dependencyKind}:${left.memberName ?? ''}`
+        .localeCompare(`${right.definitionName}:${right.sourceName ?? ''}:${right.dependencyKind}:${right.memberName ?? ''}`)
     );
 }
 
@@ -291,6 +300,7 @@ function bindingDataFlowRow(
     sourceTypeOpenReason: dataFlow.sourceTypeOpenReason,
     sourceTypeOpenKind: dataFlow.sourceTypeOpenKind,
     sourceAssignmentTargetType: dataFlow.sourceAssignmentTargetType?.display ?? null,
+    sourceAssignmentTargetSource: describeAddress(store, dataFlow.sourceAssignmentTargetSourceAddressHandle),
     targetKind: dataFlow.targetAccess?.targetKind
       ?? dataFlow.targetOperation?.targetKind
       ?? dataFlow.sourceOperation?.targetKind
@@ -325,12 +335,93 @@ function bindingDataFlowRow(
         bindingScopeProductHandle: dataFlow.bindingScope?.productHandle ?? null,
         sourceTypeProductHandle: dataFlow.sourceType?.productHandle ?? null,
         sourceAssignmentTargetTypeProductHandle: dataFlow.sourceAssignmentTargetType?.productHandle ?? null,
+        sourceAssignmentTargetSourceAddressHandle: dataFlow.sourceAssignmentTargetSourceAddressHandle,
         targetPropertyTypeProductHandle: dataFlow.targetPropertyType?.productHandle ?? null,
         targetValueTypeProductHandle: dataFlow.targetValueType?.productHandle ?? null,
         sourceAddressHandle: dataFlow.sourceAddressHandle,
       },
     } : {}),
   };
+}
+
+function bindingObservedDependencyRow(
+  definitionName: string,
+  dependency: RuntimeBindingObservedDependency,
+  store: KernelStore,
+  handles: boolean,
+): SemanticBindingObservedDependencyRow {
+  return {
+    definitionName,
+    bindingKind: dependency.binding.bindingKind,
+    dependencyKind: dependency.dependencyKind,
+    expressionKind: dependency.expressionKind,
+    sourceName: dependency.sourceName,
+    sourceRootName: dependency.sourceRootName,
+    memberName: dependency.memberName,
+    keyExpression: dependency.keyExpression,
+    methodName: dependency.methodName,
+    observedMemberKind: dependency.observedMemberKind,
+    observedMemberSource: describeAddress(store, dependency.observedMemberSourceAddressHandle),
+    observedMemberSourceState: observedMemberSourceState(dependency),
+    spanStart: dependency.spanStart,
+    spanEnd: dependency.spanEnd,
+    source: describeAddress(store, dependency.sourceAddressHandle),
+    ...(handles ? {
+      handles: {
+        bindingProductHandle: dependency.binding.productHandle,
+        dataFlowProductHandle: dependency.dataFlowProductHandle,
+        observedDependencyProductHandle: dependency.productHandle,
+        expressionProductHandle: dependency.expressionProductHandle,
+        bindingScopeProductHandle: dependency.bindingScope?.productHandle ?? null,
+        observedMemberSourceAddressHandle: dependency.observedMemberSourceAddressHandle,
+        sourceAddressHandle: dependency.sourceAddressHandle,
+      },
+    } : {}),
+  };
+}
+
+function observedMemberSourceState(
+  dependency: RuntimeBindingObservedDependency,
+): SemanticObservedMemberSourceState {
+  if (dependency.observedMemberSourceAddressHandle != null) {
+    return 'source';
+  }
+  if (isTemporaryObservedCollectionOwner(dependency)) {
+    return 'temporary-value';
+  }
+  if (isRuntimeScopeName(dependency.sourceName) || isRuntimeScopeName(dependency.sourceRootName)) {
+    return 'runtime-scope-name';
+  }
+  if (
+    dependency.memberName == null
+    && dependency.keyExpression == null
+    && (dependency.expressionKind === 'AccessScope' || dependency.expressionKind === 'CallScope')
+  ) {
+    return 'scope-open';
+  }
+  return 'open';
+}
+
+function isTemporaryObservedCollectionOwner(
+  dependency: RuntimeBindingObservedDependency,
+): boolean {
+  return (
+    (
+      dependency.dependencyKind === RuntimeObservedDependencyKind.TemplateCollectionRead
+      || dependency.dependencyKind === RuntimeObservedDependencyKind.ProxyCollectionRead
+      || dependency.dependencyKind === RuntimeObservedDependencyKind.DeepCollectionRead
+    )
+    && dependency.memberName == null
+    && dependency.keyExpression == null
+    && dependency.methodName != null
+    && dependency.sourceName != null
+    && dependency.sourceRootName != null
+    && dependency.sourceName !== dependency.sourceRootName
+  );
+}
+
+function isRuntimeScopeName(name: string | null): boolean {
+  return name?.startsWith('$') === true;
 }
 
 function expressionParseForDataFlow(

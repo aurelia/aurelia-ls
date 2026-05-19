@@ -60,11 +60,33 @@
     ${item.label}
   </label>
 
+  <label repeat.for="item of items">
+    <input
+      type="checkbox"
+      model.bind="item"
+      checked.bind="readonlyItemSet"
+      matcher.bind="matchItems">
+    ${item.label}
+  </label>
+
+  <label repeat.for="item of items">
+    <input
+      type="checkbox"
+      model.bind="item"
+      checked.bind="readonlyItemMap"
+      matcher.bind="matchItems">
+    ${item.label}
+  </label>
+
   <select value.bind="selectedOption" matcher.bind="matchItems">
     <option repeat.for="item of items" model.bind="item">${item.label}</option>
   </select>
 
   <select multiple value.bind="selectedOptions" matcher.bind="matchItems">
+    <option repeat.for="item of items" model.bind="item">${item.label}</option>
+  </select>
+
+  <select multiple value.bind="readonlySelectedItems" matcher.bind="matchItems">
     <option repeat.for="item of items" model.bind="item">${item.label}</option>
   </select>
 </section>

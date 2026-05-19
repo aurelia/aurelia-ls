@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import { isNestedExecutionBoundary } from '../evaluation/ts-syntax.js';
 import {
   SourceSpanAddress,
   SourceSpanRole,
@@ -104,7 +105,7 @@ function visitActivationNode(
   node: ts.Node,
   sites: RuntimeControllerActivationDiSite[],
 ): void {
-  if (isFunctionBoundary(node)) {
+  if (isNestedExecutionBoundary(node)) {
     return;
   }
   if (ts.isCallExpression(node) && isResolveIViewFactoryCall(node, bindings)) {
@@ -216,13 +217,4 @@ function sourceSiteForNode(
 
 function isStaticClassElement(member: ts.ClassElement): boolean {
   return (ts.getCombinedModifierFlags(member) & ts.ModifierFlags.Static) !== 0;
-}
-
-function isFunctionBoundary(node: ts.Node): boolean {
-  return ts.isFunctionExpression(node)
-    || ts.isArrowFunction(node)
-    || ts.isFunctionDeclaration(node)
-    || ts.isMethodDeclaration(node)
-    || ts.isGetAccessorDeclaration(node)
-    || ts.isSetAccessorDeclaration(node);
 }

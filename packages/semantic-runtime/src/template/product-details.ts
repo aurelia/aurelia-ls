@@ -58,6 +58,7 @@ import type {
   RuntimeBindingTargetAccess,
   RuntimeBindingTargetOperation,
 } from './runtime-binding.js';
+import type { RuntimeWatcher } from './runtime-watcher.js';
 import type {
   RuntimeBindingIssue as RuntimeBindingIssueProduct,
 } from './runtime-binding-issue.js';
@@ -294,6 +295,11 @@ export const TemplateProductDetails = {
     KernelVocabulary.Binding.RuntimeBinding.key,
     'binding.runtime-binding',
     'Runtime binding instance detail emulated from renderer semantics.',
+  ),
+  RuntimeWatcher: defineProductDetailSlot<RuntimeWatcher>(
+    KernelVocabulary.Binding.RuntimeWatcher.key,
+    'binding.runtime-watcher',
+    'Controller-owned ComputedWatcher or ExpressionWatcher detail created from resource watch metadata.',
   ),
   RuntimeBindingIssue: defineProductDetailSlot<RuntimeBindingIssueProduct>(
     KernelVocabulary.Binding.RuntimeBindingIssue.key,

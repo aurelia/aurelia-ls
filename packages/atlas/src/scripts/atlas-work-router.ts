@@ -192,7 +192,8 @@ function printRoutes(
 }
 
 function shouldPrintRoutePlans(): boolean {
-  return projection === "route-plan" ||
+  return projection === "next" ||
+    projection === "route-plan" ||
     projection === "next-questions" ||
     includePlans ||
     (
@@ -235,6 +236,9 @@ function printRoutePlans(
     }
     if (plan.docAnchors.length > 0) {
       console.log(`  docs: ${plan.docAnchors.slice(0, detail ? 5 : 3).map((row) => row.path).join("; ")}`);
+    }
+    if (plan.pathAnchors.length > 0) {
+      console.log(`  paths: ${plan.pathAnchors.slice(0, detail ? 5 : 3).map((row) => row.pathPrefix).join("; ")}`);
     }
     if (plan.fixtureSeeds.length > 0) {
       console.log(`  fixture seeds: ${plan.fixtureSeeds.slice(0, detail ? 5 : 3).map(fixtureSeedLabel).join("; ")}`);

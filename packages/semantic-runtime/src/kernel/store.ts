@@ -42,6 +42,7 @@ import {
 import {
   readSemanticRuntimeDetailDensityRows,
 } from '../telemetry/detail-density.js';
+import { normalizeHostPath } from './source-address.js';
 
 interface KernelStoreCommitIndex {
   readonly addresses: ReadonlyMap<AddressHandle, SemanticAddress>;
@@ -274,6 +275,15 @@ export class KernelStore {
     }
   }
 
+  /** Commit only the records from a batch whose handles are not already present in this store. */
+  commitMissing(batch: KernelStoreBatch): void {
+    const missing = batch.records.filter((record) => !this.records.has(record.handle as KernelRecordHandle));
+    if (missing.length === 0) {
+      return;
+    }
+    this.commit(new KernelStoreBatch(missing, batch.label));
+  }
+
   mark(): KernelStoreMarker {
     return {
       records: this.recordOrder.length,
@@ -377,7 +387,7 @@ export class KernelStore {
   }
 
   readSourceFileAddressesByFileName(fileName: string): readonly SourceFileAddress[] {
-    const normalizedFileName = normalizeSourcePath(fileName);
+    const normalizedFileName = normalizeHostPath(fileName);
     const matches = new Map<AddressHandle, SourceFileAddress>();
     for (const candidate of sourcePathSuffixes(fileName)) {
       for (const handle of this.sourceFileAddressesByPath.get(candidate) ?? []) {
@@ -861,15 +871,11 @@ export class KernelStore {
   }
 }
 
-function normalizeSourcePath(fileName: string): string {
-  return fileName.replace(/\\/g, '/');
-}
-
 function sourcePathMatchScore(
   addressPath: string,
   normalizedFileName: string,
 ): number {
-  const normalizedAddressPath = normalizeSourcePath(addressPath);
+  const normalizedAddressPath = normalizeHostPath(addressPath);
   if (normalizedAddressPath === normalizedFileName) {
     return 1_000_000 + normalizedAddressPath.length;
   }
@@ -900,7 +906,7 @@ function commonPathSuffixLength(
 }
 
 function sourcePathSuffixes(fileName: string): readonly string[] {
-  const normalized = normalizeSourcePath(fileName);
+  const normalized = normalizeHostPath(fileName);
   const parts = normalized.split('/').filter((part) => part.length > 0);
   const suffixes = new Set<string>([normalized]);
   for (let index = 0; index < parts.length; index++) {

@@ -25,7 +25,8 @@
         "Keep compiler-host source-text traffic visible beside hit/miss/write counts. Write text shows dependency/library SourceFiles admitted into the warm cache during cold Program construction; hit text shows how much cached SourceFile text the next Program reused.",
         "Keep optional phase-memory attribution flowing through routed app profile summaries. One-off public calls need to see whether TypeSystem Program construction is the heap/RSS frontier even after the app epoch and dependency SourceFile cache are disposed.",
         "Keep the TypeSystem compiler-options profile visible beside Program source-file counts. Target, module resolution, configured library count, baseUrl, and path-mapping counts explain whether TypeScript breadth came from app config, fallback fixture defaults, or source-map discovery before source admission is changed.",
-        "Project compiler options are boot-owned and process-cached by project root, then cloned for each TypeScript consumer. If static evaluation and TypeSystem setup both need options for the same root, the second read should hit that cache rather than rediscovering workspace/source-root mappings. Aurelia framework package type mappings are discovered dynamically from `aurelia/packages/*/package.json` plus `dist/types/index.d.ts`; do not reintroduce a hand-maintained package list, because generated fixtures may import validation-html, i18n, state, dialog, or other framework package APIs that need exact checker types.",
+        "Project compiler options are boot-owned and process-cached by project root plus discovery roots, then cloned for each TypeScript consumer. If static evaluation and TypeSystem setup both need options for the same root/discovery set, the second read should hit that cache rather than rediscovering workspace/source-root mappings. Aurelia framework package type mappings are discovered dynamically from `aurelia/packages/*/package.json` plus `dist/types/index.d.ts`; do not reintroduce a hand-maintained package list, because generated fixtures may import validation-html, i18n, state, dialog, or other framework package APIs that need exact checker types.",
+        "Out-of-tree generated fixtures must build TypeSystem compiler options with both the fixture root and the semantic-runtime workspace root as a discovery root. Otherwise local Aurelia checkout paths and workspace package mappings disappear, DI state projections degrade to `any`, and correct template scope/observer behavior can be mistaken for a binding semantics failure.",
         "No-tsconfig roots use semantic-runtime's fallback modern web library profile instead of TypeScript's full Latest library universe; real app tsconfig files remain authoritative and should keep TypeScript's own lib defaults when they omit an explicit lib.",
         "Program roots should be boot-admitted app TS/JS source files, project-local TS/JS modules reached by static evaluation, and ambient declarations. Evaluated external dependency modules stay indexed and reachable through imports, but should not be counted as root files merely because static evaluation visited them.",
         "Treat TypeSystem Program-node source-file misses as app-graph alignment pressure before adding local checker fallbacks. If a resource target node came from a project-local evaluated TS/JS module, that module should probably be a Program root; external/dependency misses need a separate admission policy.",
@@ -133,6 +134,7 @@
         "Thread this world through new speculative lifecycle or control-flow contexts instead of adding another expression evaluator constructor path.",
         "Routed app profile summaries aggregate per-resource expression-cache deltas as `templateExpressionTypeCache` before optional app disposal. Use that row to decide whether one-off public answers are paying expression-evaluator cost before retaining app epochs or adding another cache.",
         "CheckerExpressionTypeEvaluator is `auLink`ed to runtime `astEvaluate`; keep it isomorphic to Aurelia expression semantics while returning TypeChecker-backed type-shape facts rather than runtime values.",
+        "Optional callable target parameters such as `Array.prototype.sort(compareFn?)` should type inline Aurelia arrows from the non-nullish callable signature; do not let `undefined` in the callback value union degrade callback locals to `unknown`.",
         "Preserve callable open kinds when expression evaluation cannot close a call/construct target so observation and diagnostics can map only the modeled subset to exact runtime AST error codes.",
         "Preserve value-converter and binding-behavior resource-lookup open kinds separately from callable open kinds. Missing converter/behavior resources and duplicate authored binding-behavior names map to runtime-html binding-utils codes and repair differently from non-callable expression targets.",
         "When an open result has a repairable subject narrower than the expression span, preserve it on CheckerExpressionTypeOpen. Scope-slot typing pressure should cross into diagnostics as a scope-slot action target, not as a selected-member heuristic.",
@@ -205,6 +207,52 @@
       ],
       "createdAt": "2026-05-12",
       "updatedAt": "2026-05-17"
+    },
+    {
+      "id": "reuse:checker-backed-union-projection",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "type-system",
+        "checker",
+        "observation",
+        "binding"
+      ],
+      "summary": "Checker-backed union projection keeps mixed runtime value domains assignable through TypeScript when all alternatives share one checker epoch.",
+      "rationale": "Select/checked value-channel work showed that falling back from mixed option value types to the bound source type can hide real target-to-source mismatches. When alternatives such as `model.bind=\"null\"` and `value.bind=\"product.id\"` are TypeChecker-visible, the runtime value is a union like `string | null`, and data-flow assignability should compare that union directly.",
+      "guidance": [
+        "Use checkerBackedUnionTypeForReferences before synthesizing a display-only union when every branch still has a hot TypeChecker carrier from the same checker epoch.",
+        "Keep display-only synthetic unions for runtime-shaped values that do not have checker carriers; do not use them to claim TypeChecker assignability.",
+        "Observation value channels are consumers of this substrate, not owners of local checker-union factories."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-type-union.ts",
+          "symbolName": "checkerBackedUnionTypeForReferences",
+          "summary": "Shared bridge from projected type references to a TypeChecker-owned union."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/binding-value-channel-draft-support.ts",
+          "symbolName": "RuntimeBindingValueChannelTypeSupport",
+          "summary": "Value-channel type support consumes checker-backed unions for mixed option domains."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:select-checked-value-channels",
+          "summary": "Contract covering repeated option DOM value.bind stringification as `string | null`."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/checker-type-union.ts",
+          "symbolName": "checkerBackedUnionTypeForReferences"
+        }
+      ],
+      "createdAt": "2026-05-19",
+      "updatedAt": "2026-05-19"
     },
     {
       "id": "frontier:checker-expression-type-synthesizer",
@@ -418,6 +466,8 @@
         "Use this projector as the grounding point before adding cursor-aware call-argument contexts for callback bodies such as collection methods.",
         "Arrow-function contextual parameter typing also belongs here: reuse the call projector's callable-parameter path so overload, arity, and rest-parameter policy do not drift into the expression evaluator.",
         "Keep runtime argument context and callback rest-parameter context distinct. Target rest parameters unwrap for ordinary argument values and positional callback parameters, but arrow rest bindings should preserve the rest array or synthesize a tuple-shaped remaining-argument type.",
+        "Inline Aurelia arrow functions cannot express TypeScript type-predicate returns. When overloaded callback APIs such as Array.prototype.filter differ only by a type-predicate callback return, reject the type-guard overload for inline arrows and preserve the common callback parameter surface for contextual parameter typing.",
+        "If collection callback diagnostics lose owner precision while data-flow still closes the expression, inspect this projector before adding observation or diagnostics special cases. The template-collection-observation fixture covers products.filter(...).map(...).join(...) as the canary.",
         "Keep fromView, generic inference from synthetic arguments, custom expression plugins, and richer collection prototype semantics explicit until their missing facts are modeled."
       ],
       "anchors": [
@@ -449,7 +499,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-05-19"
     }
   ]
 }

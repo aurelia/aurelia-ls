@@ -19,6 +19,25 @@ const projection = scriptArgumentValue("--projection=") ?? "summary";
 const rows = scriptNumberArgumentValue("--rows=");
 const displayRowLimit = rows ?? (detail ? 60 : 20);
 const answerRowBudget = rows ?? (detail ? 120 : 40);
+const KNOWN_PROJECTIONS = [
+  "summary",
+  "entities",
+  "binding-lookups",
+  "binding-setups",
+  "surface-methods",
+  "flow-sites",
+  "dependency-circuit",
+  "collection-methods",
+  "observer-locator-decisions",
+  "flow-entity-links",
+  "relationships",
+] as const;
+
+if (!KNOWN_PROJECTIONS.includes(projection as typeof KNOWN_PROJECTIONS[number])) {
+  console.error(`framework.observation received unknown projection '${projection}'.`);
+  console.error(`Known projections: ${KNOWN_PROJECTIONS.join(", ")}`);
+  process.exit(1);
+}
 
 const filters = {
   ...scriptOptionalStringFilter("packageId"),
@@ -28,6 +47,10 @@ const filters = {
   ...scriptOptionalStringFilter("siteKind"),
   ...scriptOptionalStringFilter("methodName"),
   ...scriptOptionalStringFilter("targetName"),
+  ...scriptOptionalStringFilter("circuitRole"),
+  ...scriptOptionalStringFilter("receiverKind"),
+  ...scriptOptionalStringFilter("actionKind"),
+  ...scriptOptionalStringFilter("decisionKind"),
   ...scriptOptionalStringFilter("matchBasis"),
   ...scriptOptionalStringFilter("relation"),
   ...scriptOptionalStringFilter("mechanism"),
@@ -71,6 +94,9 @@ printBindingLookupRows(value, displayRowLimit, detail);
 printBindingSetupRows(value, displayRowLimit, detail);
 printSurfaceRows(value, displayRowLimit, detail);
 printFlowRows(value, displayRowLimit, detail);
+printDependencyCircuitRows(value, displayRowLimit, detail);
+printCollectionMethodRows(value, displayRowLimit, detail);
+printObserverLocatorDecisionRows(value, displayRowLimit, detail);
 printFlowEntityLinkRows(value, displayRowLimit, detail);
 printRelationshipRows(value, displayRowLimit, detail);
 
@@ -85,6 +111,9 @@ function printRollup(
   console.log(`- binding observation setups: ${value.bindingSetupCount ?? 0}`);
   console.log(`- surface methods: ${value.surfaceMethodCount ?? 0}`);
   console.log(`- flow sites: ${value.flowSiteCount ?? 0}`);
+  console.log(`- dependency-circuit rows: ${value.dependencyCircuitCount ?? 0}`);
+  console.log(`- collection method rows: ${value.collectionMethodCount ?? 0}`);
+  console.log(`- ObserverLocator decisions: ${value.observerLocatorDecisionCount ?? 0}`);
   console.log(`- flow-to-entity links: ${value.flowEntityLinkCount ?? 0}`);
   console.log(`- relationships: ${value.relationshipCount ?? 0}`);
   if (!includeCounts) {
@@ -96,6 +125,12 @@ function printRollup(
   printCounts("binding setup kinds", value.bindingSetupKinds ?? {}, 30);
   printCounts("surface kinds", value.surfaceKinds ?? {}, 30);
   printCounts("flow site kinds", value.flowSiteKinds ?? {}, 40);
+  printCounts("dependency circuit roles", value.dependencyCircuitRoles ?? {}, 40);
+  printCounts("collection method surface kinds", value.collectionMethodSurfaceKinds ?? {}, 30);
+  printCounts("collection method receiver kinds", value.collectionMethodReceiverKinds ?? {}, 30);
+  printCounts("collection method action kinds", value.collectionMethodActionKinds ?? {}, 30);
+  printCounts("ObserverLocator decision kinds", value.observerLocatorDecisionKinds ?? {}, 40);
+  printCounts("ObserverLocator runtime branches", value.observerLocatorRuntimeBranches ?? {}, 40);
   printCounts("flow entity match bases", value.flowEntityMatchBases ?? {}, 30);
   printCounts("relationship relations", value.relationshipRelations ?? {}, 30);
   printCounts("relationship mechanisms", value.relationshipMechanisms ?? {}, 30);
@@ -207,6 +242,77 @@ function printFlowRows(
       `- ${row.packageId}:${row.surfaceKind}/${row.siteKind} ${row.ownerName}.${row.methodName} ${row.relation} ${row.targetName}; ${sourceLabel(row)}`,
     );
     if (includeDetail) {
+      console.log(`  expression=${row.expressionText}`);
+      console.log(`  ${row.summary}`);
+    }
+  }
+}
+
+function printDependencyCircuitRows(
+  value: FrameworkObservationValue | undefined,
+  limit: number,
+  includeDetail: boolean,
+): void {
+  const rows = value?.dependencyCircuits ?? [];
+  if (rows.length === 0) {
+    return;
+  }
+  console.log("");
+  console.log("dependency circuit");
+  printEmptyRows(rows, "no framework observation dependency-circuit rows returned");
+  for (const row of rows.slice(0, limit)) {
+    console.log(
+      `- ${row.packageId}:${row.circuitRole} ${row.ownerName}.${row.methodName} ${row.siteKind}; ${sourceLabel(row)}`,
+    );
+    if (includeDetail) {
+      console.log(`  target=${row.targetName}`);
+      console.log(`  expression=${row.expressionText}`);
+      console.log(`  ${row.summary}`);
+    }
+  }
+}
+
+function printCollectionMethodRows(
+  value: FrameworkObservationValue | undefined,
+  limit: number,
+  includeDetail: boolean,
+): void {
+  const rows = value?.collectionMethods ?? [];
+  if (rows.length === 0) {
+    return;
+  }
+  console.log("");
+  console.log("collection methods");
+  printEmptyRows(rows, "no framework observation collection method rows returned");
+  for (const row of rows.slice(0, limit)) {
+    console.log(
+      `- ${row.packageId}:${row.surfaceKind} ${row.receiverKind}.${row.methodName} ${row.actionKind}; ${sourceLabel(row)}`,
+    );
+    if (includeDetail) {
+      console.log(`  source=${row.sourceMethodName}; callbackConnectable=${row.callbackConnectable}; wrapsCallbackValue=${row.wrapsCallbackValue}; wrapsResult=${row.wrapsResult}`);
+      console.log(`  ${row.summary}`);
+    }
+  }
+}
+
+function printObserverLocatorDecisionRows(
+  value: FrameworkObservationValue | undefined,
+  limit: number,
+  includeDetail: boolean,
+): void {
+  const rows = value?.observerLocatorDecisions ?? [];
+  if (rows.length === 0) {
+    return;
+  }
+  console.log("");
+  console.log("ObserverLocator decisions");
+  printEmptyRows(rows, "no framework ObserverLocator decision rows returned");
+  for (const row of rows.slice(0, limit)) {
+    console.log(
+      `- ${row.packageId}:${row.decisionKind} -> ${row.runtimeProduct}; ${sourceLabel(row)}`,
+    );
+    if (includeDetail) {
+      console.log(`  trigger=${row.trigger}; branch=${row.runtimeBranch}`);
       console.log(`  expression=${row.expressionText}`);
       console.log(`  ${row.summary}`);
     }

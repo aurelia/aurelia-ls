@@ -5,7 +5,10 @@
 
 <au-compose component.bind="summaryComponent" model.bind="selectedWidget" template.bind="summaryTemplate"></au-compose>
 <au-compose component.bind="summaryClass" model.bind="selectedWidget" template.bind="summaryTemplate"></au-compose>
+<au-compose component.bind="selectedWidgetComponent" model.bind="selectedWidget"></au-compose>
 <au-compose component.bind="getAsyncComponent()" model.bind="selectedWidget"></au-compose>
 <au-compose template.bind="getAsyncTemplate()" scope-behavior="scoped" composition.bind="composition"></au-compose>
 <au-compose component="chart-widget" model.bind="selectedWidget"></au-compose>
 <au-compose component="inventory-widget" model="static-widget"></au-compose>
+
+<widget-host kit.bind="kit"></widget-host>

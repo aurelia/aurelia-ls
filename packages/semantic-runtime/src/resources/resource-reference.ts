@@ -29,6 +29,7 @@ export class ResourceTargetReference {
     readonly addressHandle: AddressHandle | null,
     readonly localName: string | null,
     readonly targetType: CheckerTypeReference | null = null,
+    readonly moduleKey: string | null = null,
   ) {}
 }
 

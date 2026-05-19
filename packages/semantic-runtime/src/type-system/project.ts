@@ -15,7 +15,7 @@ import {
 import {
   SourceFileRole,
 } from '../kernel/address.js';
-import { buildTypeSystemProjectOptions } from './project-options.js';
+import { buildWorkspaceTypeSystemProjectOptions } from './project-options.js';
 import {
   diffCompilerHostSourceFileCacheStats,
   sharedCompilerHostSourceFileCache,
@@ -383,7 +383,7 @@ export class TypeSystemProjectBuilder {
     const evaluatedSourcePaths = normalizedTypeSystemPathSet(sourceFiles.byPath.keys());
 
     const projectOptions = measureTypeSystemProjectPhase(phases, 'project-options', () =>
-      buildTypeSystemProjectOptions(project.rootDir)
+      buildWorkspaceTypeSystemProjectOptions(project.rootDir, project.workspaceRootDir)
     );
     const ambientSourcePaths = normalizedTypeSystemPathSet(
       projectOptions.ambientSourceFiles.map((sourceFile) => sourceFile.fileName),

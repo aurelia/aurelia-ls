@@ -105,6 +105,11 @@ checkout type-path map when this repository's `aurelia/packages/*/dist/types` tr
 does not silently load the full `Latest` library universe just because semantic-runtime wants current syntax parsing.
 Real app `tsconfig.json` files remain authoritative: when a project supplies config but omits `lib`, semantic-runtime
 lets TypeScript choose the normal library set for that config instead of injecting the fallback fixture profile.
+Out-of-tree temporary fixtures still need the analysis workspace as a discovery root. A generated project under the
+host temp directory may not contain the local Aurelia checkout or workspace package paths, but its TypeChecker epoch
+must still resolve those declarations relative to the semantic-runtime workspace that opened it. `TypeSystemProject`
+therefore builds compiler options with both `project.rootDir` and `project.workspaceRootDir`; otherwise DI state and
+framework imports degrade to `any`, which can look like a scope/observer bug even when template semantics are correct.
 
 Type-system profiles should keep time, item volume, and source-text mass visible. App-level pressure can make TypeScript Program
 construction look like undifferentiated semantic-runtime cost, but the useful question is often whether the epoch is
@@ -233,6 +238,15 @@ projections to produce a type-shape handle that inquiry can consume. It is a hig
 evaluation and is linked to Aurelia's `astEvaluate` even though the product returns a type-system result rather than a
 runtime value. Keep the emulator isomorphic to Aurelia expression evaluation and `Scope` lookup where those semantics
 determine which member surface is visible, while leaving unsupported expression families explicit as open results.
+Offset-based member-owner projection must follow the same wrapper forms as `astEvaluate`: `BindingBehavior` and
+`ValueConverter` are not member owners, but their wrapped expression can contain the member access that an LSP hover,
+binding observed-dependency row, or repair target needs. Value-converter arguments are source-read expressions because
+`astEvaluate(...)` evaluates them with the current connectable; binding-behavior arguments are bind-time inputs and
+should not become observed source dependencies merely because they contain member reads. If one expression path unwraps
+these forms for data-flow while another path does not, source/member routes become accidentally asymmetric even though
+the runtime expression is valid. Interpolation holes are separate runtime expression parts: type and observation
+consumers that need per-hole binding-behavior handoffs should project each part instead of relying on the outer
+`Interpolation` AST as one scope.
 `evaluateWithScope(...)` also accepts a small runtime context for framework choices that affect evaluation. The modeled
 mode bits mirror Aurelia's `astEvaluate` call shape: `connectable` controls the source-to-target dependency-collection
 guard, while `strict` controls whether nullish member/keyed/call reads become runtime errors or ordinary `undefined`
@@ -247,8 +261,10 @@ owns synthetic expression/template type-shape construction, `expression-call-pro
 call/construct signature selection and return projection, `expression-argument-context-projector.ts` owns the bridge
 from Aurelia callable AST forms to contextual argument types, and
 `checker-type-shape-access.ts` owns reusable member, apparent-member, keyed, finite-keyed, index-signature, and
-member-write access over projected type-shape products. Observation maps those lower-level access results into Aurelia
-`astAssign` policy instead of reopening checker member lookup beside expression evaluation.
+member-write access over projected type-shape products. `checker-type-union.ts` owns the narrow bridge to TypeScript's
+checker-backed union factory when all alternatives come from the same hot checker epoch. Observation maps those
+lower-level access results into Aurelia `astAssign` policy instead of reopening checker member lookup beside expression
+evaluation.
 `expression-access-projector.ts` sits one layer above that lower type-shape access substrate: it owns Aurelia
 AccessMember/AccessKeyed/CallMember callee semantics, including owner/key evaluation, optional and non-strict nullish
 reads, finite keyed access, and index-signature fallback. Keep runtime expression access policy there instead of
@@ -256,6 +272,15 @@ re-growing member/keyed access inside the evaluator, completion, or diagnostics.
 `expression-scope-projector.ts` owns runtime `Scope` lookup projection for `$this`, `$parent`/ancestor access,
 `AccessBoundary`, `AccessScope`, `$host`, slot lookup, and globals. Keep lookup-kind/open-subject policy there instead
 of splitting binding-scope name resolution across evaluator, completion, or diagnostics.
+Expression results intentionally carry a value-source address in addition to their reusable type-shape handle. This is
+especially important for source-independent shapes such as `any`: the type product should still converge without a
+source address, while a cursor diagnostic for `untypedRow.label` can target the `untypedRow: any` type annotation or
+member declaration when that value route is known.
+When an expression result crosses back into a `CheckerTypeReference`, preserve the value route with
+`checkerTypeReferenceWithSource(...)` instead of taking the bare `typeShape.toReference()`. Repeat locals and binding
+patterns are a good canary: an `any[]` repeat source should still let weak-owner diagnostics target the iterable owner
+or repeat slot type annotation that introduced the local, even though the reused `any` type product remains
+source-independent.
 `expression-iterable-projector.ts` owns repeat/iterator expression semantics above the same type-shape access substrate:
 it evaluates the repeat source, applies Aurelia's built-in repeat source categories, synthesizes `Map`/`ReadonlyMap`
 entry tuples, and hands item types to binding-pattern local projection. Use its combined iterator projection when a
@@ -295,6 +320,10 @@ callback parameter typing, object-option typing, and nested literal context do n
   `declarationSourceAddressHandle` is the best TypeScript declaration span for navigation and owner-type repair
   planning. Do not overwrite either lane just to make a cursor answer look navigable; if the user-facing locus is an
   expression site, keep it on the expression/binding/diagnostic product that asked for the type.
+- Member value routes add a narrower source lane on top of declaration source: an explicit property/parameter type
+  annotation, function/method return type, or setter parameter type can be recorded with `SourceSpanRole.Type` and
+  carried on the `CheckerTypeReference` for that value. Weak-owner repair planning should prefer that role when it
+  exists, then fall back to declaration/name navigation only when the value-producing type span is absent.
 - `CheckerTypeProjectionOrigin` should describe the type surface, not merely the caller. Template scope, observation,
   branch narrowing, and async helpers can ask for checker-returned primitive, event, narrowed, or awaited types; those
   remain `TypeChecker` projections. Use `SyntheticTemplateType` only for shapes the template/runtime substrate actually
@@ -397,7 +426,16 @@ callback parameter typing, object-option typing, and nested literal context do n
 - `CheckerExpressionCallProjector` owns the distinction between runtime argument context and callback parameter binding
   context. Target rest parameters unwrap to their element type for ordinary arguments and positional callback
   parameters, but arrow rest bindings preserve the target rest array or synthesize a tuple-shaped remaining-argument
-  product when the target signature is fixed-arity.
+  product when the target signature is fixed-arity. Optional callable target parameters, such as
+  `Array.prototype.sort(compareFn?)`, should spend the non-nullish callable signature when typing arrow parameters; a
+  union with `undefined` at the callback value boundary must not force callback locals back to `unknown`.
+- Overload narrowing must account for TypeScript callback overloads whose parameter surfaces are identical but return
+  contracts differ. `Array.prototype.filter` is the important canary: Aurelia template arrows cannot spell a TypeScript
+  type-predicate return, so inline arrows should reject the type-guard overload and choose the ordinary predicate
+  overload. Contextual callback typing may still use a common callable parameter surface across those overloads so the
+  callback-local `product` in `products.filter(product => product.tags.includes(label))` remains `Product` while the
+  call return closes as `Product[]`, not `S[] | Product[]`. Keep this policy in the call projector instead of teaching
+  diagnostics or observation to special-case array methods.
 - Template completion and file/app diagnostic scans also enter through `CheckerExpressionTypeWorld`. The query object
   stays product-handle-shaped, but cursor-context construction may receive a hot world so repeated diagnostic probes
   share the same projector/evaluator cache instead of rebuilding a local TypeChecker expression stack per member span.
@@ -407,6 +445,11 @@ callback parameter typing, object-option typing, and nested literal context do n
 - Synthetic union shapes preserve only members and secondary type references common to every branch. If a future inquiry
   needs branch-aware completions, add an explicit answer continuation instead of weakening the union product into a bag
   of possible names.
+- When all union alternatives still carry hot TypeChecker types from the same checker epoch, use
+  `checkerBackedUnionTypeForReferences` before falling back to a synthetic union display. This matters for runtime
+  value-channel facts such as `option model.bind="null"` plus `option value.bind="product.id"`: the target value is
+  really `string | null`, and target-to-source assignability should compare that checker-owned union rather than hide
+  behind the bound source type.
 - Template-controller branch narrowing is deliberately explicit and local. The current closed branch profile handles
   scope-name truthiness, loose nullish comparisons, simple boolean negation, truthy `&&`, falsy `||`, and adjacent
   `else` negative narrowing. Broader control-flow analysis should continue to land as named semantic profiles rather

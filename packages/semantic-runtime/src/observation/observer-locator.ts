@@ -13,6 +13,10 @@ import {
   checkerCollectionSymbolName,
 } from '../type-system/checker-related-types.js';
 import {
+  firstSymbolDeclaration,
+  undefinedCheckerNode,
+} from '../type-system/checker-node-helpers.js';
+import {
   CheckerTypeProjectionOrigin,
   CheckerTypeReference,
   type CheckerTypeCarrier,
@@ -34,6 +38,10 @@ import {
 } from '../template/html-ir.js';
 import { isStandardSvgAttribute } from './svg-analyzer-data.generated.js';
 import { RuntimeHtmlObservationFrameworkErrorCode } from './framework-error-code.js';
+import {
+  isNodeNamespaceAttribute,
+  nodeNamespaceAttribute,
+} from './node-namespace-attributes.js';
 
 export class ObserverLocatorLookupRequest {
   constructor(
@@ -142,14 +150,20 @@ type PropertyResolution = {
   readonly type: ts.Type | null;
   readonly typeReference: CheckerTypeReference | null;
   readonly exists: boolean | null;
+  readonly hasAccessorDescriptor: boolean | null;
   readonly isWritable: boolean | null;
 };
+
+type ComputedObserverExplicitDependency =
+  | string
+  | symbol
+  | ((obj: unknown, observer?: unknown) => unknown);
 
 export type NodeObserverConfig = {
   readonly type?: typeof ValueAttributeObserver | typeof CheckedObserver | typeof SelectValueObserver;
   readonly events: readonly string[];
   readonly readonly: boolean;
-  readonly default: unknown;
+  readonly default?: unknown;
 };
 
 export class NodeObserverLocatorNodeConfig {
@@ -268,6 +282,35 @@ export class DataAttributeAccessor {
 }
 
 /**
+ * Semantic-runtime model of Aurelia's AttributeNSAccessor.
+ *
+ * Runtime-html selects this accessor for a small XML namespace table before falling back to the generic SVG/data
+ * attribute accessor. The semantic model keeps the namespace URI visible so future projections can explain why an
+ * authored `xlink:*`, `xml:*`, or `xmlns*` target did not follow the ordinary attribute path.
+ */
+@auLink('runtime-html:AttributeNSAccessor')
+export class AttributeNSAccessor {
+  readonly type = RuntimeBindingTargetAccessStrategy.AttributeNSAccessor;
+  private value: string | null = null;
+
+  constructor(
+    readonly namespace: string,
+  ) {}
+
+  getValue(): string | null {
+    return this.value;
+  }
+
+  setValue(newValue: string | null): void {
+    this.value = newValue;
+  }
+
+  subscribe(): void {}
+
+  unsubscribe(): void {}
+}
+
+/**
  * Semantic-runtime model of Aurelia's SetterObserver.
  *
  * Runtime creates a setter observer for ordinary data properties and for missing object keys. The static emulator keeps
@@ -313,8 +356,9 @@ export class SetterObserver {
 /**
  * Semantic-runtime model of Aurelia's ComputedObserver branch.
  *
- * The framework reaches this when object observer creation sees an accessor descriptor. The static variant approximates
- * that branch through TypeChecker writability: a readable but non-writable member is treated as computed/readonly.
+ * The framework reaches this when object observer creation sees a configurable accessor descriptor or receives a
+ * function key directly. The static variant uses TypeScript accessor declarations as the descriptor signal; `readonly`
+ * data fields are TypeScript write-policy facts, not proof that runtime `ObserverLocator` would choose this branch.
  */
 @auLink('runtime:ComputedObserver')
 export class ComputedObserver {
@@ -364,6 +408,55 @@ export class ComputedObserver {
   unsubscribe(): void {}
 
   useCallback(): void {}
+
+  useCoercer(): void {}
+
+  useFlush(): void {}
+}
+
+/**
+ * Semantic-runtime model of Aurelia's ControlledComputedObserver branch.
+ *
+ * The public target-access strategy is still computed-observer shaped, but the framework uses this separate observer
+ * when computed metadata provides explicit dependencies. Keep it named so source-observer projection work can
+ * distinguish explicit dependency observation from proxy/body collection without routing through decorator metadata
+ * alone.
+ */
+@auLink('runtime:ControlledComputedObserver')
+export class ControlledComputedObserver {
+  readonly type = RuntimeBindingTargetAccessStrategy.ComputedObserver;
+  readonly doNotCache = false;
+  readonly observers: readonly unknown[] = [];
+  private value: unknown = undefined;
+  private callback: ((newValue: unknown, oldValue: unknown) => void) | null = null;
+
+  constructor(
+    readonly dependencies: readonly ComputedObserverExplicitDependency[] = [],
+    readonly flush: 'sync' | 'async' = 'async',
+    readonly deep = false,
+  ) {}
+
+  getValue(): unknown {
+    return this.value;
+  }
+
+  setValue(value: unknown): void {
+    const oldValue = this.value;
+    this.value = value;
+    this.callback?.(value, oldValue);
+  }
+
+  handleChange(): void {}
+
+  handleCollectionChange(): void {}
+
+  subscribe(): void {}
+
+  unsubscribe(): void {}
+
+  useCallback(callback: (newValue: unknown, oldValue: unknown) => void): void {
+    this.callback = callback;
+  }
 
   useCoercer(): void {}
 
@@ -475,7 +568,7 @@ export class CheckedObserver {
   readonly oL: ObserverLocator | null = null;
   private value: unknown = undefined;
   private oldValue: unknown = undefined;
-  private config: NodeObserverConfig = { events: checkedEvents, readonly: false, default: false };
+  private config: NodeObserverConfig = { events: checkedEvents, readonly: false };
 
   constructor() {}
 
@@ -593,8 +686,8 @@ export class NodeObserverLocator {
       INPUT: {
         value: inputEventsConfig,
         valueAsNumber: { events: inputEvents, readonly: false, default: 0 },
-        checked: { type: CheckedObserver, events: inputEvents, readonly: false, default: false },
-        files: { events: inputEvents, readonly: true, default: '' },
+        checked: { type: CheckedObserver, events: inputEvents, readonly: false },
+        files: { events: inputEvents, readonly: true },
       },
       SELECT: {
         value: { type: SelectValueObserver, events: selectEvents, readonly: false, default: '' },
@@ -777,8 +870,10 @@ export class ObserverLocator {
     return null;
   }
 
-  getComputedObserver(): ComputedObserver {
-    return new ComputedObserver();
+  getComputedObserver(explicitDependencies: readonly ComputedObserverExplicitDependency[] = []): ComputedObserver | ControlledComputedObserver {
+    return explicitDependencies.length === 0
+      ? new ComputedObserver()
+      : new ControlledComputedObserver(explicitDependencies);
   }
 
   getArrayObserver(): null {
@@ -964,11 +1059,15 @@ export class ObserverLocator {
         type: null,
         typeReference: null,
         exists: false,
+        hasAccessorDescriptor: null,
         isWritable: null,
       };
     }
     const propertyType = input.projectPropertyType
-      ? target.checker.getTypeOfSymbolAtLocation(symbol, target.location ?? firstSymbolDeclaration(symbol) ?? undefinedNode(target.checker))
+      ? target.checker.getTypeOfSymbolAtLocation(
+        symbol,
+        target.location ?? firstSymbolDeclaration(symbol) ?? undefinedCheckerNode(target.checker, 'semantic-runtime-observer-locator.ts'),
+      )
       : null;
     return {
       symbol,
@@ -977,6 +1076,7 @@ export class ObserverLocator {
         ? null
         : this.projectTypeReference(input, target.checker, propertyType, `property:${localKeyPart(input.targetProperty)}`, target.location),
       exists: true,
+      hasAccessorDescriptor: hasAccessorDeclaration(symbol),
       isWritable: isWritableProperty(symbol),
     };
   }
@@ -1041,14 +1141,14 @@ function nodeObserverStrategy(
   if (config != null) {
     return nodeObserverStrategyForConfig(config);
   }
+  if (isNodeNamespaceAttribute(targetProperty)) {
+    return RuntimeBindingTargetAccessStrategy.AttributeNSAccessor;
+  }
   if (isDataAttributeAccessorProperty(tagName, namespace, targetProperty)) {
     return RuntimeBindingTargetAccessStrategy.DataAttributeAccessor;
   }
   if (targetProperty === 'model') {
     return RuntimeBindingTargetAccessStrategy.SetterObserver;
-  }
-  if (isAttributeAccessorProperty(targetProperty)) {
-    return RuntimeBindingTargetAccessStrategy.AttributeAccessor;
   }
   if (property?.exists === true && allowDirtyCheck) {
     return RuntimeBindingTargetAccessStrategy.DirtyCheck;
@@ -1064,11 +1164,14 @@ function nodeAccessorStrategy(
   namespace: HtmlNamespaceKind,
   targetProperty: string,
 ): RuntimeBindingTargetAccessStrategy {
+  if (isNodeNamespaceAttribute(targetProperty)) {
+    return RuntimeBindingTargetAccessStrategy.AttributeNSAccessor;
+  }
   if (isDataAttributeAccessorProperty(tagName, namespace, targetProperty)) {
     return RuntimeBindingTargetAccessStrategy.DataAttributeAccessor;
   }
   if (isAttributeAccessorProperty(targetProperty)) {
-    return RuntimeBindingTargetAccessStrategy.AttributeAccessor;
+    return RuntimeBindingTargetAccessStrategy.DataAttributeAccessor;
   }
   return RuntimeBindingTargetAccessStrategy.ElementPropertyAccessor;
 }
@@ -1112,10 +1215,13 @@ function nodeObserverStrategyNotFound(
   if (targetProperty === 'class' || targetProperty === 'style' || targetProperty === 'css') {
     return false;
   }
+  if (isNodeNamespaceAttribute(targetProperty)) {
+    return false;
+  }
   if (isDataAttributeAccessorProperty(tagName, namespace, targetProperty)) {
     return false;
   }
-  return !isAttributeAccessorProperty(targetProperty);
+  return true;
 }
 
 function objectAccessStrategy(
@@ -1157,7 +1263,7 @@ function collectionAccessStrategy(
 }
 
 function isComputedObserverProperty(property: PropertyResolution | null): boolean {
-  return property?.exists === true && property.isWritable === false;
+  return property?.exists === true && property.hasAccessorDescriptor === true;
 }
 
 function nodeObserverStrategyForConfig(config: NodeObserverConfig): RuntimeBindingTargetAccessStrategy {
@@ -1208,6 +1314,9 @@ function isDataAttributeAccessorProperty(
   namespace: HtmlNamespaceKind,
   targetProperty: string,
 ): boolean {
+  if (nodeNamespaceAttribute(targetProperty) != null) {
+    return false;
+  }
   return targetProperty.startsWith('data-')
     || targetProperty.startsWith('aria-')
     || (namespace === HtmlNamespaceKind.Svg && isStandardSvgAttribute(tagName, targetProperty));
@@ -1311,6 +1420,17 @@ function isWritableProperty(symbol: ts.Symbol): boolean | null {
   return true;
 }
 
+function hasAccessorDeclaration(symbol: ts.Symbol): boolean | null {
+  const declarations = symbol.declarations ?? [];
+  if (declarations.length === 0) {
+    return null;
+  }
+  return declarations.some((declaration) =>
+    ts.isGetAccessorDeclaration(declaration)
+    || ts.isSetAccessorDeclaration(declaration)
+  );
+}
+
 function hasReadonlyModifier(declaration: ts.Declaration): boolean {
   return ts.canHaveModifiers(declaration)
     && ts.getModifiers(declaration)?.some((modifier) => modifier.kind === ts.SyntaxKind.ReadonlyKeyword) === true;
@@ -1318,18 +1438,4 @@ function hasReadonlyModifier(declaration: ts.Declaration): boolean {
 
 function firstDeclaration(carrier: CheckerTypeCarrier): ts.Declaration | null {
   return carrier.declarations[0] ?? null;
-}
-
-function firstSymbolDeclaration(symbol: ts.Symbol): ts.Declaration | null {
-  return symbol.valueDeclaration ?? symbol.declarations?.[0] ?? null;
-}
-
-function undefinedNode(checker: ts.TypeChecker): ts.Node {
-  return checker.getSymbolAtLocation(checkerLocationFromProgram(checker))?.valueDeclaration
-    ?? checkerLocationFromProgram(checker);
-}
-
-function checkerLocationFromProgram(checker: ts.TypeChecker): ts.SourceFile {
-  return checker.getAmbientModules()[0]?.declarations?.[0]?.getSourceFile()
-    ?? ts.createSourceFile('semantic-runtime-observer-locator.ts', '', ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
 }

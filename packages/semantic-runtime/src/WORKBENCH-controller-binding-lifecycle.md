@@ -75,6 +75,13 @@ projection need to stand in for branches that cannot be statically executed.
 - SVG element/attribute observer data is generated from Aurelia
   `runtime-html` `SVGAnalyzer` and is only used for authored SVG-namespace
   nodes.
+- Source-expression evaluation now uses a context-aware runtime instruction
+  scope lookup. A runtime binding first resolves the controller that rendered it,
+  then asks for the scope application for that instruction under that controller;
+  only a genuinely unambiguous definition-level scope may be used as fallback.
+  This keeps recursive custom-element rendering, synthetic views, and captured
+  `...$attrs` spread bindings from sharing the first scope attached to a reused
+  instruction product.
 
 ## Remaining Pressure
 
@@ -89,8 +96,12 @@ projection need to stand in for branches that cannot be statically executed.
   handoff that starts from an instruction handle must carry the active parent
   controller context; a global lookup can silently bind only one instance and
   leave repeated/nested controller frames unscoped or unlinked.
-- Captured attributes and spread instructions have a first scope bridge, not a
-  complete instance-specific recursive rendering model.
+- Captured attributes and spread-created dynamic instructions now spend exact
+  captured hydration-instruction plus runtime-controller context claims, then
+  follow framework `SpreadBinding.bind(...)`: inner bindings use the
+  hydration-context controller scope's parent. If that controller or parent
+  scope is missing, scope construction should stay honest instead of falling
+  back to root scope or definition-wide captured-attribute buckets.
 - Event-to-expression invocation flow, value-converter `fromView`, setter body
   tracing, matcher-specific comparison, and richer coercion/strictness policy
   remain outside the closed binding data-flow slice.

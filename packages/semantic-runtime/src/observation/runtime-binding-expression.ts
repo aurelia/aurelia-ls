@@ -11,6 +11,7 @@ import {
   StateDispatchBinding,
   type RuntimeBinding,
 } from '../template/runtime-binding.js';
+import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type {
   TemplateInstructionScopeApplication,
 } from '../template/template-controller-scope-materializer.js';
@@ -47,14 +48,72 @@ export function expressionProductHandleForBinding(
   return binding.expressionProductHandle;
 }
 
-export function instructionScopeMap(
-  applications: readonly TemplateInstructionScopeApplication[],
-): ReadonlyMap<ProductHandle, BindingScope> {
-  const result = new Map<ProductHandle, BindingScope>();
-  for (const application of applications) {
-    if (!result.has(application.instructionProductHandle)) {
-      result.set(application.instructionProductHandle, application.scope);
+/**
+ * Resolves the runtime Scope for a binding expression without collapsing recursive render contexts.
+ *
+ * Instruction products are definition-level identities. Recursive rendering can spend the same instruction under
+ * several runtime controllers, so downstream observation/data-flow phases must use the binding's render context before
+ * falling back to a definition-level unambiguous scope.
+ */
+export class RuntimeInstructionScopeLookup {
+  private readonly applicationsByInstruction = new Map<ProductHandle, TemplateInstructionScopeApplication[]>();
+
+  constructor(
+    applications: readonly TemplateInstructionScopeApplication[],
+  ) {
+    for (const application of applications) {
+      const instructionApplications = this.applicationsByInstruction.get(application.instructionProductHandle) ?? [];
+      instructionApplications.push(application);
+      this.applicationsByInstruction.set(application.instructionProductHandle, instructionApplications);
     }
   }
-  return result;
+
+  scopeForBinding(
+    runtimeBindings: RuntimeRenderingEmission,
+    binding: RuntimeBinding,
+  ): BindingScope | null {
+    const renderContext = runtimeBindings.readRenderContextForBinding(binding.productHandle);
+    return this.scopeForInstruction(
+      binding.instructionProductHandle,
+      renderContext?.renderingController.productHandle ?? null,
+    );
+  }
+
+  scopeForInstruction(
+    instructionProductHandle: ProductHandle,
+    controllerProductHandle: ProductHandle | null,
+  ): BindingScope | null {
+    const applications = this.applicationsByInstruction.get(instructionProductHandle) ?? [];
+    if (controllerProductHandle != null) {
+      for (let index = applications.length - 1; index >= 0; index--) {
+        const application = applications[index]!;
+        if (application.controllerProductHandle === controllerProductHandle) {
+          return application.scope;
+        }
+      }
+    }
+    return unambiguousApplicationScope(applications);
+  }
+}
+
+export function instructionScopeLookup(
+  applications: readonly TemplateInstructionScopeApplication[],
+): RuntimeInstructionScopeLookup {
+  return new RuntimeInstructionScopeLookup(applications);
+}
+
+function unambiguousApplicationScope(
+  applications: readonly TemplateInstructionScopeApplication[],
+): BindingScope | null {
+  let scope: BindingScope | null = null;
+  for (const application of applications) {
+    if (scope == null) {
+      scope = application.scope;
+      continue;
+    }
+    if (scope.productHandle !== application.scope.productHandle) {
+      return null;
+    }
+  }
+  return scope;
 }

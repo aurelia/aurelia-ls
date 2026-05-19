@@ -4,6 +4,7 @@ import {
   NodeObserverLocator,
   StandardConfiguration,
 } from '@aurelia/runtime-html';
+import { IContainer } from '@aurelia/kernel';
 import { NodeObserverConfigErrorsApp } from './node-observer-config-errors-app';
 
 const appNodeObserverConfig = {
@@ -20,6 +21,10 @@ new Aurelia()
       locator.useConfigGlobal('textContent', appNodeObserverConfig);
       locator.useConfig('MY-ELEMENT', 'value', appNodeObserverConfig);
       locator.useConfig('MY-ELEMENT', 'value', appNodeObserverConfig);
+    }),
+    AppTask.creating(IContainer, (container) => {
+      const locator = container.get(NodeObserverLocator);
+      locator.useConfig('CONTAINER-ELEMENT', 'value', appNodeObserverConfig);
     }),
   )
   .app({

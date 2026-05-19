@@ -78,6 +78,7 @@ export const KernelVocabulary = {
   },
   Observation: {
     ...KernelProductKinds.Observation,
+    ...KernelClaimPredicates.Observation,
   },
   Compiler: {
     ...KernelOpenSeamKinds.Compiler,

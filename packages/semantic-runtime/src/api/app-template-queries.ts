@@ -29,6 +29,15 @@ import {
   type SemanticTemplateDiagnosticRow,
   type SemanticTemplateDiagnosticsResult,
 } from './contracts.js';
+import {
+  resourceLocalBindingDataFlows,
+  resourceLocalBindingObservedDependencies,
+  resourceLocalBindingSourceOperations,
+  resourceLocalBindingTargetAccesses,
+  resourceLocalBindingTargetOperations,
+  resourceLocalBindingValueChannels,
+  resourceLocalRuntimeBindings,
+} from './runtime-resource-ownership.js';
 
 type TemplateResourceEmission = AureliaAppWorldProjectEmission['templates']['resources'][number];
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
@@ -126,53 +135,56 @@ function templateCompilationRows(
   compilationLane: TemplateCompilationLane,
   handles: boolean,
 ): readonly SemanticTemplateCompilationRow[] {
-  return resources.map((resource): SemanticTemplateCompilationRow => ({
-    compilationLane,
-    analysisDepth: resource.runtimeAnalysis.analysisDepth,
-    definitionName: resource.compilation.definition.name,
-    compilerWorld: compilerWorldLabel(store, resource.compilation.compilerWorld),
-    templateSourceKind: resource.compilation.unit.templateSource.sourceKind,
-    htmlNodes: resource.compilation.html.nodes.length,
-    htmlAttributes: resource.compilation.html.attributes.length,
-    recoveries: resource.compilation.html.recoveries.length,
-    attributeSyntaxes: resource.compilation.attributeSyntax.syntaxes.length,
-    classifications: resource.compilation.attributeClassification.classifications.length,
-    valueSites: resource.compilation.valueSites.sites.length + resource.compilation.bindingCommandLowering.valueSites.length,
-    expressionParses: resource.compilation.valueSites.parses.length
-      + resource.compilation.bindingCommandLowering.expressionParses.length,
-    bindingCommandLowerings: resource.compilation.bindingCommandLowering.lowerings.length
-      + resource.compilation.bindingCommandLowering.multiBindingLowerings.length,
-    instructions: resource.compilation.compiledTemplate.instructions.length,
-    renderTargets: resource.compilation.compiledTemplate.renderTargets.length,
-    runtimeControllers: resource.runtimeAnalysis.runtimeRendering.controllers.length,
-    runtimeChildContainers: resource.runtimeAnalysis.runtimeRendering.childContainers.length,
-    runtimeChildContextResolverSlots: resource.runtimeAnalysis.runtimeRendering.childContextResolverSlots.length,
-    runtimeBindings: resource.runtimeAnalysis.runtimeRendering.bindings.length,
-    runtimeTargetOperations: resource.runtimeAnalysis.runtimeRendering.targetOperations.length
-      + resource.runtimeAnalysis.controllerBind.targetOperations.length,
-    runtimeRendererTargetOperations: resource.runtimeAnalysis.runtimeRendering.targetOperations.length,
-    runtimeBindingTargetAccesses: resource.runtimeAnalysis.controllerBind.targetAccesses.length,
-    runtimeBindingTargetOperations: resource.runtimeAnalysis.controllerBind.targetOperations.length,
-    runtimeBindingSourceOperations: resource.runtimeAnalysis.controllerBind.sourceOperations.length,
-    runtimeBindingValueChannels: resource.runtimeAnalysis.bindingValueChannel.valueChannels.length,
-    runtimeBindingDataFlows: resource.runtimeAnalysis.bindingDataFlow.dataFlows.length,
-    bindingScopes: resource.runtimeAnalysis.scopes.readScopes().length,
-    openSeams: resource.compilation.compiledTemplate.openSeams.length
-      + resource.runtimeAnalysis.runtimeRendering.openSeams.length
-      + resource.runtimeAnalysis.controllerBind.openSeams.length
-      + resource.runtimeAnalysis.bindingValueChannel.openSeams.length
-      + resource.runtimeAnalysis.bindingDataFlow.openSeams.length,
-    source: describeAddress(
-      store,
-      resource.compilation.definition.template?.addressHandle ?? resource.compilation.definition.sourceAddressHandle,
-    ),
-    ...(handles ? {
-      handles: {
-        definitionProductHandle: resource.compilation.definition.productHandle,
-        compilerWorldProductHandle: resource.compilation.compilerWorld.world.productHandle,
-        sourceAddressHandle: resource.compilation.definition.template?.addressHandle
-          ?? resource.compilation.definition.sourceAddressHandle,
-      },
-    } : {}),
-  }));
+  return resources.map((resource): SemanticTemplateCompilationRow => {
+    const targetOperations = resourceLocalBindingTargetOperations(store, resource);
+    return {
+      compilationLane,
+      analysisDepth: resource.runtimeAnalysis.analysisDepth,
+      definitionName: resource.compilation.definition.name,
+      compilerWorld: compilerWorldLabel(store, resource.compilation.compilerWorld),
+      templateSourceKind: resource.compilation.unit.templateSource.sourceKind,
+      htmlNodes: resource.compilation.html.nodes.length,
+      htmlAttributes: resource.compilation.html.attributes.length,
+      recoveries: resource.compilation.html.recoveries.length,
+      attributeSyntaxes: resource.compilation.attributeSyntax.syntaxes.length,
+      classifications: resource.compilation.attributeClassification.classifications.length,
+      valueSites: resource.compilation.valueSites.sites.length + resource.compilation.bindingCommandLowering.valueSites.length,
+      expressionParses: resource.compilation.valueSites.parses.length
+        + resource.compilation.bindingCommandLowering.expressionParses.length,
+      bindingCommandLowerings: resource.compilation.bindingCommandLowering.lowerings.length
+        + resource.compilation.bindingCommandLowering.multiBindingLowerings.length,
+      instructions: resource.compilation.compiledTemplate.instructions.length,
+      renderTargets: resource.compilation.compiledTemplate.renderTargets.length,
+      runtimeControllers: resource.runtimeAnalysis.runtimeRendering.controllers.length,
+      runtimeChildContainers: resource.runtimeAnalysis.runtimeRendering.childContainers.length,
+      runtimeChildContextResolverSlots: resource.runtimeAnalysis.runtimeRendering.childContextResolverSlots.length,
+      runtimeBindings: resourceLocalRuntimeBindings(store, resource).length,
+      runtimeTargetOperations: targetOperations.length,
+      runtimeRendererTargetOperations: targetOperations.filter((operation) => operation.binding == null).length,
+      runtimeBindingTargetAccesses: resourceLocalBindingTargetAccesses(store, resource).length,
+      runtimeBindingTargetOperations: targetOperations.filter((operation) => operation.binding != null).length,
+      runtimeBindingSourceOperations: resourceLocalBindingSourceOperations(store, resource).length,
+      runtimeBindingValueChannels: resourceLocalBindingValueChannels(store, resource).length,
+      runtimeBindingDataFlows: resourceLocalBindingDataFlows(store, resource).length,
+      runtimeBindingObservedDependencies: resourceLocalBindingObservedDependencies(store, resource).length,
+      bindingScopes: resource.runtimeAnalysis.scopes.readScopes().length,
+      openSeams: resource.compilation.compiledTemplate.openSeams.length
+        + resource.runtimeAnalysis.runtimeRendering.openSeams.length
+        + resource.runtimeAnalysis.controllerBind.openSeams.length
+        + resource.runtimeAnalysis.bindingValueChannel.openSeams.length
+        + resource.runtimeAnalysis.bindingDataFlow.openSeams.length,
+      source: describeAddress(
+        store,
+        resource.compilation.definition.template?.addressHandle ?? resource.compilation.definition.sourceAddressHandle,
+      ),
+      ...(handles ? {
+        handles: {
+          definitionProductHandle: resource.compilation.definition.productHandle,
+          compilerWorldProductHandle: resource.compilation.compilerWorld.world.productHandle,
+          sourceAddressHandle: resource.compilation.definition.template?.addressHandle
+            ?? resource.compilation.definition.sourceAddressHandle,
+        },
+      } : {}),
+    };
+  });
 }

@@ -19,6 +19,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "expected semantic effects",
       "validation",
       "validate binding behavior",
+      "ValidationController",
+      "validation controller usage",
+      "validation property info",
       "binding behavior application",
       "generated fixture",
       "analysis fixture",
@@ -60,9 +63,17 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "native value binding",
       "native checked binding",
       "option model binding",
+      "checked collection binding",
+      "checked map binding",
+      "custom matcher binding",
+      "select multiple binding",
       "classificationKey native-value-binding",
       "classificationKey native-checked-binding",
       "classificationKey option-model-binding",
+      "classificationKey checked-collection-binding",
+      "classificationKey checked-map-binding",
+      "classificationKey custom-matcher-binding",
+      "classificationKey select-multiple-binding",
     ],
     queryCanaries: [
       {
@@ -249,6 +260,50 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "grounding",
         summary:
           "Option model binding seeds ground select option identity and model/value channel behavior.",
+      },
+      {
+        kind: "framework-corpus",
+        projection: "fixture-seeds",
+        concept: "forms",
+        seedUse: "behavior-grounding",
+        classificationKind: "surface",
+        classificationKey: "checked-collection-binding",
+        role: "grounding",
+        summary:
+          "Checked collection binding seeds ground checkbox Array/Set membership observer behavior.",
+      },
+      {
+        kind: "framework-corpus",
+        projection: "fixture-seeds",
+        concept: "forms",
+        seedUse: "behavior-grounding",
+        classificationKind: "surface",
+        classificationKey: "checked-map-binding",
+        role: "grounding",
+        summary:
+          "Checked Map binding seeds ground checkbox Map key with boolean value observer behavior.",
+      },
+      {
+        kind: "framework-corpus",
+        projection: "fixture-seeds",
+        concept: "forms",
+        seedUse: "behavior-grounding",
+        classificationKind: "surface",
+        classificationKey: "custom-matcher-binding",
+        role: "grounding",
+        summary:
+          "Custom matcher binding seeds ground checked/select model identity matching.",
+      },
+      {
+        kind: "framework-corpus",
+        projection: "fixture-seeds",
+        concept: "forms",
+        seedUse: "behavior-grounding",
+        classificationKind: "surface",
+        classificationKey: "select-multiple-binding",
+        role: "grounding",
+        summary:
+          "Multiple select binding seeds ground array mutation and non-multiple array diagnostics.",
       },
       {
         kind: "framework-corpus",
@@ -664,13 +719,183 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     relatedRouteIds: [
       "authoring.forms.fixture-flywheel",
+      "semantic-runtime.proxy-observation-domain-modeling",
       "semantic-runtime.observation.binding-flow",
       "semantic-runtime.template-recursive-rendering",
       "semantic-runtime.type-system.expression-semantics",
       "semantic-runtime.evaluator.world-construction",
       "router.viewport.authoring-semantics",
+      "semantic-runtime.semantic-contract-verification",
       "atlas.work-router.self-improvement",
       "atlas.framework-corpus.navigation",
+    ],
+  },
+  {
+    id: "semantic-runtime.semantic-contract-verification",
+    title: "Semantic Runtime Semantic Contract Verification",
+    summary:
+      "Use route-scoped semantic contracts, framework corpus witnesses, expected effects, and inquiry budgets to catch regressions without freezing bold refactors.",
+    domains: [
+      "semantic-runtime",
+      "testing",
+      "verification",
+      "fixtures",
+      "inquiry",
+      "framework-corpus",
+    ],
+    roles: ["orient", "verify", "analyze", "document", "improve-atlas"],
+    terms: [
+      "semantic contract harness",
+      "semantic contract verification",
+      "route scoped contract",
+      "route-scoped contract",
+      "route scoped testing",
+      "semantic regression witness",
+      "framework corpus witness",
+      "framework test witness",
+      "docs witness",
+      "fixture contract",
+      "proxy observation contract",
+      "runtime watcher expected effect",
+      "expected semantic effect contract",
+      "behavior grounding witness",
+      "fast testing lane",
+      "slow confidence lane",
+      "auLink pseudo-test",
+      "auLink as grounding",
+      "query cost contract",
+      "inquiry budget contract",
+      "semantic effects not snapshots",
+    ],
+    queryCanaries: [
+      {
+        query: "semantic contract harness route scoped testing expected effects framework witnesses",
+        summary:
+          "Testing-strategy work should route to semantic contracts rather than a full snapshot suite.",
+      },
+      {
+        query: "how do we catch semantic-runtime regressions without slowing bold refactors",
+        summary:
+          "Regression confidence should route to route-scoped semantic witnesses and inquiry budgets.",
+      },
+      {
+        query: "auLink pseudo tests are not enough semantic contract lane",
+        summary:
+          "auLink remains framework grounding, while behavior regression pressure belongs in semantic contracts.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/authoring/expected-effect.ts",
+        symbolName: "ExpectedSemanticEffect",
+        role: "primary",
+        summary:
+          "Expected effects are the first semantic-contract vocabulary for generated and repaired apps.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/authoring/verification.ts",
+        symbolName: "readAuthoringVerificationSnapshot",
+        role: "primary",
+        summary:
+          "Opened-app verification snapshot collector for row-backed expected effects.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+        symbolName: "QueryClaimGraph",
+        role: "supporting",
+        summary:
+          "Inquiry-profile retention and materialization policy should be contractable for public query surfaces.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkCorpus,
+        projection: "fixture-seeds",
+        role: "grounding",
+        summary:
+          "Docs and framework tests seed promoted-pattern and behavior-grounding witnesses.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.AtlasWorkRouter,
+        projection: "route-plan",
+        role: "grounding",
+        summary:
+          "Work Router should select focused contract witnesses by route instead of running a monolithic suite.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "testing", "verification", "inquiry"],
+        role: "grounding",
+        summary:
+          "Durable memory for the semantic-contract harness and inquiry-budget test policy.",
+      },
+      {
+        kind: "doc",
+        path: ".temp/mcp-preview-and-testing-alignment-2026-05-18.md",
+        role: "grounding",
+        summary:
+          "Scratch alignment for the route-scoped semantic contract testing strategy.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/atlas work:router -- --projection=route-health",
+        role: "supporting",
+        summary:
+          "Fast route-health lane for checking route canaries before selecting deeper witnesses.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:proxy-observation",
+        role: "supporting",
+        summary:
+          "Focused observation contract over watcher runtime products and proxy observed-dependency rows.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:trackable-method-observation",
+        role: "supporting",
+        summary:
+          "Focused observation contract over binding-owned @computed/@astTrack trackable method dependency rows.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime fixtures:authoring",
+        role: "supporting",
+        summary:
+          "Current generated-fixture lane that should eventually feed semantic contract witnesses.",
+      },
+    ],
+    authority: [
+      "Expected semantic effects and opened-app verification snapshots for contract facts.",
+      "Work Router for route-scoped witness selection.",
+      "Aurelia framework docs/tests through framework.corpus for promoted and behavior-grounded seeds.",
+      "QueryClaimGraph and app-query catalog rows for inquiry cost, retention, and public-answer budgets.",
+    ],
+    cautions: [
+      "Do not import the whole Aurelia framework test suite as the default verification lane.",
+      "Do not add broad snapshots of public DTOs when a semantic effect or row-backed fact would state the intended behavior.",
+      "Do not treat auLink mirror coverage as behavior regression coverage; it is framework grounding and architecture alignment.",
+      "Do not let tests enforce compatibility shims when a bold ontology or substrate refactor is the cleaner answer.",
+    ],
+    nextQuestions: [
+      "Which Work Router route owns the changed code or product concern?",
+      "Which semantic products or expected effects should be asserted for this route?",
+      "Which framework docs/tests examples seed this witness, and are they promoted patterns or behavior grounding?",
+      "Does the inquiry profile need cost, retention, paging, or materialization-budget assertions?",
+    ],
+    relatedRouteIds: [
+      "semantic-runtime.authoring-fixture-substrate-loop",
+      "authoring.forms.fixture-flywheel",
+      "semantic-runtime.inquiry-query-claim-graph",
+      "diagnostics.framework-error-grounding",
+      "semantic-runtime.proxy-observation-domain-modeling",
+      "semantic-runtime.observation.binding-flow",
+      "semantic-runtime.template-recursive-rendering",
+      "atlas.framework-corpus.navigation",
+      "atlas.work-router.self-improvement",
     ],
   },
   {
@@ -720,6 +945,17 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "app query catalog",
       "mcp hand-test",
       "mcp restart",
+      "mcp token economy",
+      "mcp clean code",
+      "minimal Aurelia code",
+      "idiomatic Aurelia code",
+      "low boilerplate Aurelia",
+      "terse authoring guidance",
+      "core observation MCP",
+      "core router MCP",
+      "plugin patterns MCP",
+      "advertised Aurelia patterns",
+      "first MCP delivery cut",
     ],
     queryCanaries: [
       {
@@ -741,6 +977,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "developer preview mcp router viewport authoring",
         summary:
           "Router/viewport developer-preview pressure should keep MCP packaging and semantic-runtime route facts connected.",
+      },
+      {
+        query: "mcp clean terse idiomatic aurelia code core observation router plugins",
+        summary:
+          "First-preview delivery pressure should route to token-efficient authoring guidance, core observation, common router use, and plugin patterns before fringe API completeness.",
       },
     ],
     anchors: [
@@ -837,6 +1078,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         summary:
           "Join durable decisions about MCP timing, public API boundaries, and semantic-runtime facade constraints.",
       },
+      {
+        kind: "memory",
+        domains: ["mcp", "authoring", "token-economy", "observation", "router"],
+        role: "grounding",
+        summary:
+          "First-preview delivery priority: compact idiomatic Aurelia guidance beats fringe API completeness.",
+      },
     ],
     authority: [
       "MCP package README and adapter source for public shell shape.",
@@ -849,19 +1097,25 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Do not implement product semantics inside MCP handlers; add or improve semantic-runtime queries instead.",
       "MCP restart friction means direct adapter invokers must stay first-class for autonomous development.",
       "Prefer short text plus structuredContent over JSON text dumps for token economics.",
+      "Do not make full au-compose support or pixel-perfect au-viewport parity a first-preview blocker.",
+      "Do not accept verbose generated Aurelia code as a harmless preview limitation; code quality and token economy are core preview value.",
+      "Core observation, common router flows, plugins, and advertised patterns outrank fringe API coverage for the first public MCP cut.",
     ],
     nextQuestions: [
       "Which semantic-runtime query already owns the requested MCP answer?",
       "Is this a stable public tool/resource, or should it stay a direct dev invoker until the semantic-runtime shape settles?",
       "Does a repeated MCP answer pattern indicate a missing semantic-runtime summary query?",
       "Does the MCP client need cache reset or explicit roots/project selection before the next hand-test?",
+      "Will this answer help another AI write less, cleaner Aurelia code, or is it exposing breadth without authoring leverage?",
     ],
     relatedRouteIds: [
       "semantic-runtime.authoring-fixture-substrate-loop",
+      "semantic-runtime.proxy-observation-domain-modeling",
       "router.viewport.authoring-semantics",
       "diagnostics.framework-error-grounding",
       "semantic-runtime.type-system.expression-semantics",
       "semantic-runtime.template-recursive-rendering",
+      "semantic-runtime.semantic-contract-verification",
       "atlas.work-router.self-improvement",
     ],
   },
@@ -995,8 +1249,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Kernel marks provide answer-local disposal boundaries for query-produced products and sidecars.",
       },
       {
-        kind: "source",
-        filePath: "packages/semantic-runtime/scripts/app-telemetry.mjs",
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime profile:app-telemetry",
         role: "pressure",
         summary:
           "App telemetry prints inquiry-profile query claims, query-side kernel growth, and cache/disposal pressure.",
@@ -1058,6 +1312,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "mcp.developer-preview-shell",
       "semantic-runtime.type-system.expression-semantics",
       "semantic-runtime.template-recursive-rendering",
+      "semantic-runtime.proxy-observation-domain-modeling",
       "semantic-runtime.observation.binding-flow",
       "semantic-runtime.evaluator.world-construction",
       "atlas.work-router.self-improvement",
@@ -1065,6 +1320,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
   },
   {
     id: "semantic-runtime.observation.binding-flow",
+    aliases: [
+      "semantic-runtime.select-checked-value-channels",
+      "select-and-checked-value-channel-drafts",
+      "frontier:select-and-checked-value-channel-drafts",
+    ],
     title: "Observation And Binding Flow",
     summary:
       "Model binding and observer data flow through framework-shaped concepts before adding more fixture or authoring behavior.",
@@ -1097,6 +1357,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "trackable dependency",
       "computed watcher",
       "@computed",
+      "computed decorator metadata",
+      "computed-decorator",
       "@watch",
       "@astTrack",
       "checked observer",
@@ -1118,8 +1380,26 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "target-to-source-type-mismatch",
       "binding data flow value channel",
       "select value channel",
+      "select checked value channel contract",
+      "select single option source-to-target",
+      "radio source-to-target",
+      "option model domain",
+      "directional assignability",
+      "AUR0654",
       "binding behavior materializer",
       "runtime binding behavior",
+      "validate binding behavior",
+      "ValidationController",
+      "ValidationController getPropertyInfo",
+      "validation property info",
+      "validation-html bridge role evidence",
+      "AUR4205",
+      "AUR4206",
+      "binding behavior bind-time scope handoff",
+      "binding-expression bind-time",
+      "RuntimeBindingExpressionScopeProjector",
+      "InterpolationPartBinding",
+      "state binding behavior interpolation",
       "framework service customization",
       "source assignment reason fixtures",
       "mixed-form-surfaces",
@@ -1138,6 +1418,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "binding-source-slot-no-static-value",
       "RuntimeBoundControllerValueTable",
       "bound controller value flow",
+      "bound controller Array.find",
+      "Array.find receiver did not reduce to a known array",
+      "property method this binding",
+      "ObserverLocator function key ComputedObserver",
+      "function-key computed observer",
     ],
     queryCanaries: [
       {
@@ -1149,6 +1434,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "observer locator",
         summary:
           "Observer-locator questions should start from framework-shaped observation, not app-specific heuristics.",
+      },
+      {
+        query: "ObserverLocator getObserver function key ComputedObserver",
+        summary:
+          "Function-key ObserverLocator questions should route to framework observer selection before computed-decorator or authoring policy changes.",
       },
       {
         query: "proxy-observable domain model dependency products",
@@ -1196,6 +1486,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Parent-to-child controller value flow belongs to observation/binding data flow even when recursive rendering exposes it.",
       },
       {
+        query: "Array.find receiver did not reduce to a known array bound controller widget kit",
+        summary:
+          "Array.find receiver gaps on child-bound controller state should route to bound-controller value flow and evaluator semantics before composition-local patches.",
+      },
+      {
         query: "binding-source-slot-no-static-value",
         summary:
           "Source-slot static value gaps belong to binding data-flow and TypeChecker handoff pressure.",
@@ -1211,9 +1506,19 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Fixture-owner pressure rows for form value-channel assignability should route to observation/binding flow.",
       },
       {
+        query: "select checked value channel contract directional assignability AUR0654",
+        summary:
+          "Select/radio/checked directional value-channel work should route to observation binding-flow and its focused contract.",
+      },
+      {
         query: "runtime-expression-unassignable runtime-ast-errors binding source assignment",
         summary:
           "Runtime astAssign source-assignment pressure should route to binding data-flow before API diagnostic wording.",
+      },
+      {
+        query: "ValidationController bridge role evidence validate property info",
+        summary:
+          "Validation controller property-info and validate binding-behavior questions should route through binding-flow and validation-html framework grounding before bridge evidence is closed.",
       },
     ],
     anchors: [
@@ -1247,6 +1552,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath:
+          "packages/semantic-runtime/src/observation/runtime-binding-expression-scope.ts",
+        symbolName: "RuntimeBindingExpressionScopeProjector",
+        role: "primary",
+        summary:
+          "Binding-behavior bind-time scope handoff projector used before data-flow and observed-dependency source reads.",
+      },
+      {
+        kind: "source",
+        filePath:
           "packages/semantic-runtime/src/template/runtime-binding-behavior-materializer.ts",
         symbolName: "RuntimeBindingBehaviorMaterializer",
         role: "supporting",
@@ -1256,11 +1570,50 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       {
         kind: "source",
         filePath:
-          "packages/semantic-runtime/src/observation/binding-source-value-evaluator.ts",
+          "packages/semantic-runtime/src/observation/runtime-bound-controller-value.ts",
         symbolName: "RuntimeBoundControllerValueTable",
         role: "supporting",
         summary:
           "Parent-to-child bound controller value table feeds binding-source evaluation across recursive rendering contexts.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:observer-locator-target-access",
+        role: "supporting",
+        summary:
+          "Focused contract for ObserverLocator target access, ComputedObserver targets, and node observer diagnostics.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:select-checked-value-channels",
+        role: "supporting",
+        summary:
+          "Focused contract for checked/select/radio/model/matcher value-channel semantics and directional assignability.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:template-collection-observation",
+        role: "supporting",
+        summary:
+          "Focused contract for TypeChecker-gated template collection dependency rows and callback-local false-positive rejection.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:runtime-composition-bound-controller",
+        role: "supporting",
+        summary:
+          "Focused contract for broad Constructable AuCompose child values, bound-controller table handoff, and receiver-bound method predicates.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkObservation,
+        projection: "dependency-circuit",
+        filters: {
+          circuitRole: "binding-expression-bind-time",
+        },
+        role: "grounding",
+        summary:
+          "Framework astBind rows show binding-behavior arguments evaluated without an active connectable before inner expression bind handoff; runtime-html InterpolationPartBinding supplies this path for interpolation holes.",
       },
       {
         kind: "lens",
@@ -1269,6 +1622,17 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "grounding",
         summary:
           "Framework observation lens should be consulted before changing observer semantics.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkObservation,
+        projection: "relationships",
+        filters: {
+          surfaceKind: "computed-decorator",
+        },
+        role: "grounding",
+        summary:
+          "@computed metadata handoff belongs to framework observation's computed-decorator surface before binding-flow or authoring policy changes.",
       },
       {
         kind: "lens",
@@ -1353,6 +1717,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         summary:
           "Binding-flow work should preserve TypeChecker source-to-target data-flow evidence.",
       },
+      {
+        kind: "path",
+        pathPrefix:
+          "packages/semantic-runtime/scripts/contract-select-checked-value-channels.mjs",
+        role: "pressure",
+        summary:
+          "Focused contract for select/checked value-channel domains, directional assignability, matcher rows, and AUR0654.",
+      },
     ],
     authority: [
       "Aurelia framework observation, rendering, binding, and attr-mapper source.",
@@ -1370,10 +1742,696 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Which framework tests demonstrate checked/select/class/style edge behavior?",
     ],
     relatedRouteIds: [
+      "semantic-runtime.proxy-observation-domain-modeling",
       "authoring.forms.fixture-flywheel",
       "semantic-runtime.template-recursive-rendering",
       "semantic-runtime.evaluator.world-construction",
       "semantic-runtime.type-system.expression-semantics",
+    ],
+  },
+  {
+    id: "semantic-runtime.proxy-observation-domain-modeling",
+    title: "Proxy Observation Domain Modeling",
+    summary:
+      "Use Aurelia's integrated astEvaluate/connectable/ProxyObservable circuit to guide clean domain-state authoring, object-vs-ID binding choices, and proxy escape diagnostics.",
+    domains: [
+      "semantic-runtime",
+      "observation",
+      "authoring",
+      "state",
+      "domain-modeling",
+      "mcp",
+      "testing",
+    ],
+    roles: ["orient", "analyze", "author", "verify", "refactor", "improve-atlas"],
+    terms: [
+      "proxy observation",
+      "proxy observable",
+      "proxy-observable",
+      "ProxyObservable",
+      "proxy observation domain modeling",
+      "proxy-observable domain modeling",
+      "proxy observation authoring",
+      "proxy observation authoring state fixtures",
+      "observation dependency circuit",
+      "dependency-circuit observation",
+      "domain state observation",
+      "domain model observation",
+      "connectable observation circuit",
+      "active connectable circuit",
+      "astEvaluate proxy observable",
+      "ast evaluator proxy observable",
+      "ordinary template reads",
+      "direct DI state binding",
+      "direct state member binding",
+      "state.member binding",
+      "view-model forwarding getter",
+      "forwarding getter boilerplate",
+      "one-hop forwarding accessor",
+      "one-hop forwarding getter",
+      "one-hop-forwarding-accessor-pressure",
+      "template model access",
+      "template-model-access",
+      "object binding versus ID binding",
+      "object binding vs ID binding",
+      "bind to IDs not objects",
+      "direct object binding",
+      "id binding",
+      "domain model connectedness",
+      "nested collection reads",
+      "collection proxy reads",
+      "proxy dependency alias",
+      "proxy dependency destructuring",
+      "TypeChecker collection method discrimination",
+      "collection method false positive",
+      "string includes proxy collection false positive",
+      "plain object get proxy collection false positive",
+      "computed watch trackable dependencies",
+      "computed decorator metadata",
+      "computed-decorator",
+      "computed observer dependency",
+      "computed-observer-dependency",
+      "computed observer source",
+      "computed-observer-source",
+      "computed-observer-sources",
+      "computed-observer-observed-dependencies",
+      "ComputedObserverSource",
+      "ComputedObserver dependency collection",
+      "ControlledComputedObserver dependency handoff",
+      "controlled computed observer explicit dependencies",
+      "controlled computed string deps",
+      "controlled computed function deps",
+      "controlled computed deep observation",
+      "controlled computed observeDeep",
+      "computed deep dependency",
+      "deep-property-read",
+      "deep-collection-read",
+      "@computed @watch ProxyObservable",
+      "runtime watcher",
+      "runtime watchers",
+      "runtime-watchers",
+      "runtime watcher observed dependencies",
+      "runtime-watcher-observed-dependencies",
+      "RuntimeWatcherObservedDependency",
+      "proxy-property-read",
+      "proxy-collection-read",
+      "ComputedWatcher",
+      "ExpressionWatcher",
+      "definition.watches",
+      "Controller.addBinding watcher",
+      "IObservation watch",
+      "Observation.watch source effect",
+      "Observation.run source effect",
+      "source-level IObservation.watch",
+      "source-level IObservation.run",
+      "runtime effects",
+      "runtime-effects",
+      "runtime effect observed dependencies",
+      "runtime-effect-observed-dependencies",
+      "connectable-run",
+      "observable-property-read",
+      "@observable getter reads",
+      "effect-owned observed dependency",
+      "trackable method dependency",
+      "external object proxy escape",
+      "external library object proxy escape",
+      "raw proxy escape",
+      "unwrap proxy",
+      "ProxyObservable.getRaw",
+      "ProxyObservable.unwrap",
+      "proxy observable escapes",
+      "proxy-observable-escapes",
+      "observed dependency product",
+      "observed dependency source route",
+      "member-owner projection",
+      "BindingBehavior member owner",
+      "ValueConverter member owner",
+      "observed dependency semantic identity",
+      "runtime observed dependency draft",
+      "distinctRuntimeObservedDependencyDrafts",
+      "runtime-observed-dependency-draft",
+      "proxy observation semantic contract",
+      "proxy observation broad fixture",
+      "clean Aurelia code proxy observation",
+      "low boilerplate Aurelia observation",
+      "MCP clean code observation",
+    ],
+    queryCanaries: [
+      {
+        query: "proxy observation domain state ast evaluator connectable observer locator authoring",
+        summary:
+          "Proxy/domain-state observation should route to its own modeling route before broader binding-flow or fixture routes.",
+      },
+      {
+        query: "object binding versus ID binding proxy observation clean Aurelia code",
+        summary:
+          "Object-vs-ID binding is authoring taste and domain modeling pressure, not a universal correctness rule.",
+      },
+      {
+        query: "external library object proxy escape raw unwrap ProxyObservable",
+        summary:
+          "Proxy escape and external-object pressure should route to framework-grounded proxy observation rather than generic diagnostics.",
+      },
+      {
+        query: "computed watch trackable dependencies ProxyObservable nested collection reads",
+        summary:
+          "Watcher/computed/trackable dependency reads over nested objects and collections should start from the integrated observation circuit.",
+      },
+      {
+        query: "IObservation watch source effect function getter observed dependency",
+        summary:
+          "Direct Observation.watch/run source effects should route to proxy observation and RuntimeEffect grounding before binding or resource-watch products.",
+      },
+      {
+        query: "one-hop forwarding accessor direct state template binding",
+        summary:
+          "One-hop state/domain accessors are authoring taste pressure over topology and observation facts, not generic getter or code-style cleanup.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkObservation,
+        projection: "dependency-circuit",
+        filters: {
+          circuitRole: "template-expression-read",
+        },
+        role: "grounding",
+        summary:
+          "Framework dependency-circuit rows show ordinary template expression reads feeding the active connectable.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkObservation,
+        projection: "observer-locator-decisions",
+        role: "grounding",
+        summary:
+          "Framework ObserverLocator decision rows show accessor-descriptor and function-key ComputedObserver branches without a decorator-first shortcut.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkObservation,
+        projection: "dependency-circuit",
+        filters: {
+          surfaceKind: "proxy-observable",
+        },
+        role: "grounding",
+        summary:
+          "Framework dependency-circuit rows show ProxyObservable wrapping, raw/proxy cache, collection reads, and dependency collection.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkObservation,
+        projection: "dependency-circuit",
+        filters: {
+          circuitRole: "watcher-effect-dependency",
+        },
+        role: "grounding",
+        summary:
+          "Framework Observation._doWatch rows show string expressions through getExpressionObserver and function getters through ObserverLocator.getObserver.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkObservation,
+        projection: "relationships",
+        filters: {
+          surfaceKind: "computed-decorator",
+        },
+        role: "grounding",
+        summary:
+          "Framework computed-decorator relationships show @computed metadata handoff to ComputedPropertyInfo, ComputedMethodOptions, astTrackableMethodMarker, and IObserverLocator.getComputedObserver.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkObservation,
+        projection: "dependency-circuit",
+        filters: {
+          circuitRole: "computed-observer-dependency",
+        },
+        role: "grounding",
+        summary:
+          "Framework dependency-circuit rows show ComputedObserver auto-dependency collection and ControlledComputedObserver explicit dependency handoff.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkObservation,
+        projection: "flow-sites",
+        filters: {
+          surfaceKind: "controlled-computed-observer",
+        },
+        role: "grounding",
+        summary:
+          "ControlledComputedObserver flow rows show string deps through getExpressionObserver, non-string deps through getObserver, and deep observation through a function-key observer.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.FrameworkObservation,
+        projection: "surface-methods",
+        filters: {
+          surfaceKind: "proxy-observable",
+        },
+        role: "grounding",
+        summary:
+          "ProxyObservable surface methods are the first read before modeling proxy entry/exit semantics.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/atlas/src/inquiry/runtime/framework-observation-internals.ts",
+        symbolName: "FrameworkObservationSurfaceKind",
+        role: "primary",
+        summary:
+          "Atlas framework observation classifier admits ast-evaluator, proxy-observable, computed-observer, and controlled-computed-observer surfaces.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/runtime-binding-observation.ts",
+        symbolName: "RuntimeBindingObservedDependency",
+        role: "primary",
+        summary:
+          "Binding-owned observed dependency product detail for source-side template connectable reads.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/runtime-effect.ts",
+        symbolName: "RuntimeEffect",
+        role: "primary",
+        summary:
+          "Source-level IEffect model for direct Observation.watch(...) and Observation.run(...) effects, distinct from resource watchers and template bindings.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/runtime-effect.ts",
+        symbolName: "RuntimeEffectObservedDependency",
+        role: "primary",
+        summary:
+          "Effect-owned observed dependency product detail for source-level Observation.watch(...) and Observation.run(...) calls.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/runtime-effect-materializer.ts",
+        symbolName: "RuntimeEffectMaterializer",
+        role: "primary",
+        summary:
+          "Publication boundary for source-level Observation.watch(...) / Observation.run(...) effects and observed dependencies.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/computed-observation.ts",
+        symbolName: "ComputedObservationDefinition",
+        role: "primary",
+        summary:
+          "Source-backed @computed getter/method dependency declaration product, separate from getter observer execution.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/computed-observer-source.ts",
+        symbolName: "ComputedObserverSource",
+        role: "primary",
+        summary:
+          "Source-backed ComputedObserver/ControlledComputedObserver product detail for getter observation.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/computed-observer-source-materializer.ts",
+        symbolName: "ComputedObserverSourceMaterializer",
+        role: "primary",
+        summary:
+          "Publication boundary for getter source-observer products and observed dependency rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/binding-data-flow-materializer.ts",
+        symbolName: "RuntimeBindingDataFlowMaterializer",
+        role: "primary",
+        summary:
+          "Binding data-flow publishes observed dependency facts for source-to-target template bindings.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/binding-projections.ts",
+        symbolName: "readBindingObservedDependencyRows",
+        role: "primary",
+        summary:
+          "Public binding-observed-dependencies query projection for API/authoring consumers.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/observation-projections.ts",
+        symbolName: "readComputedObservationDefinitionRows",
+        role: "primary",
+        summary:
+          "Public computed-observation-definitions query projection for valid @computed declaration rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/observation-projections.ts",
+        symbolName: "readComputedObserverSourceRows",
+        role: "primary",
+        summary:
+          "Public computed-observer-sources query projection for getter observer execution rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/observation-projections.ts",
+        symbolName: "readRuntimeEffectRows",
+        role: "primary",
+        summary:
+          "Public runtime-effects query projection for direct Observation.watch(...) and Observation.run(...) source calls.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/observation-projections.ts",
+        symbolName: "readRuntimeEffectObservedDependencyRows",
+        role: "primary",
+        summary:
+          "Public runtime-effect-observed-dependencies query projection for effect-owned dependency rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/runtime-watcher.ts",
+        symbolName: "RuntimeWatcher",
+        role: "primary",
+        summary:
+          "Controller-owned ComputedWatcher/ExpressionWatcher product union for accepted resource watch metadata.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/runtime-watcher-factory.ts",
+        symbolName: "runtimeWatchersForDefinition",
+        role: "primary",
+        summary:
+          "Runtime watcher creation from resource definition.watches during controller hydration.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/runtime-watcher-publication.ts",
+        symbolName: "runtimeWatcherRecordsForController",
+        role: "primary",
+        summary:
+          "Runtime watcher binding identity, materialization, and controller ownership publication.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/runtime-watcher-observation.ts",
+        symbolName: "RuntimeWatcherObservedDependency",
+        role: "primary",
+        summary:
+          "Watcher-owned observed dependency product detail for ExpressionWatcher astEvaluate execution rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/connectable-observed-dependency.ts",
+        symbolName: "collectRuntimeConnectableObservedDependencyDrafts",
+        role: "primary",
+        summary:
+          "Shared astEvaluate/connectable dependency collector used by binding data-flow and ExpressionWatcher products, with caller-owned collection-read policy for runtime array receivers.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/proxy-observable-dependency.ts",
+        symbolName: "ProxyObservable",
+        role: "primary",
+        summary:
+          "auLink-backed semantic ProxyObservable surface with the TypeScript-body dependency collector for computed watcher property, TypeChecker-discriminated collection, iterator, trackable-method, and simple alias/destructuring reads.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/proxy-observable-dependency.ts",
+        symbolName: "RuntimeProxyObservedDependencyDraftCollector",
+        role: "primary",
+        summary:
+          "Collector state for root names, local aliases, TypeChecker receiver checks, property reads, and collection callbacks in computed watcher proxy dependency functions.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/trackable-method-observed-dependency.ts",
+        symbolName: "collectRuntimeTrackableMethodObservedDependencyDrafts",
+        role: "primary",
+        summary:
+          "Binding-owned @computed/@astTrack method-call dependency collector for observed astEvaluate expressions.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/runtime-observed-dependency-draft.ts",
+        symbolName: "distinctRuntimeObservedDependencyDrafts",
+        role: "primary",
+        summary:
+          "Shared semantic-identity dedupe for binding, watcher, computed-observer, proxy, and trackable observed-dependency drafts.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/controller-projections.ts",
+        symbolName: "readRuntimeWatcherObservedDependencyRows",
+        role: "primary",
+        summary:
+          "Public runtime-watcher-observed-dependencies query projection for API/authoring consumers.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/controller-projections.ts",
+        symbolName: "readRuntimeWatcherRows",
+        role: "primary",
+        summary:
+          "Public runtime-watchers query projection for API/authoring consumers.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/binding-source-value-evaluator.ts",
+        symbolName: "RuntimeBindingSourceValueEvaluator",
+        role: "primary",
+        summary:
+          "Binding source evaluation is the runtime-shaped handoff for expression reads under controller/scope context.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/app-topology.ts",
+        symbolName: "directInjectionServiceInteractionBindingRowsForDataFlow",
+        role: "supporting",
+        summary:
+          "Direct DI state/service template bindings should stay visible without forcing forwarding getters.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/authoring-orientation.ts",
+        symbolName: "templateModelAccessValues",
+        role: "supporting",
+        summary:
+          "Authoring orientation reports direct state/domain template access, plain getter observation, and source-proven one-hop forwarding accessor pressure.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/expression-type-evaluator.ts",
+        symbolName: "CheckerExpressionTypeEvaluator",
+        role: "supporting",
+        summary:
+          "TypeChecker expression semantics are adjacent when observed dependencies need member/collection shape facts.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/expression-member-owner-projector.ts",
+        symbolName: "CheckerExpressionMemberOwnerProjector",
+        role: "supporting",
+        summary:
+          "Offset-aware owner projection keeps binding-observed-dependency and cursor/member inquiries aligned through wrappers such as BindingBehavior and ValueConverter.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "observation", "authoring", "state", "framework-grounding"],
+        role: "grounding",
+        summary:
+          "ProxyObservable domain-modeling memory records the integrated astEvaluate/ProxyObservable observation circuit.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "application", "authoring", "observation", "fixtures", "topology"],
+        role: "grounding",
+        summary:
+          "Direct DI state template-binding memory keeps state.member bindings as topology facts without VM forwarding getters.",
+      },
+      {
+        kind: "memory",
+        domains: ["mcp", "authoring", "token-economy", "observation", "router"],
+        role: "grounding",
+        summary:
+          "MCP preview memory ties observation semantics to clean, low-boilerplate Aurelia guidance.",
+      },
+      {
+        kind: "framework-corpus",
+        projection: "fixture-seeds",
+        concept: "observation",
+        seedUse: "authoring-taste",
+        role: "pressure",
+        summary:
+          "Docs-promoted observation snippets can seed recommendable low-boilerplate authoring fixtures.",
+      },
+      {
+        kind: "framework-corpus",
+        projection: "fixture-seeds",
+        concept: "observation",
+        seedUse: "behavior-grounding",
+        role: "pressure",
+        summary:
+          "Framework-test observation snippets can seed behavior-grounding and contrastive semantic contracts.",
+      },
+      {
+        kind: "framework-corpus",
+        projection: "expected-effects",
+        effectKind: "binding-data-flow",
+        role: "grounding",
+        summary:
+          "Observed dependency products should connect to binding data-flow facts where template reads drive them.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/watcher-proxy-dependencies",
+        role: "pressure",
+        summary:
+          "Pressure fixture for direct-chain, alias/destructuring, and non-collection method boundary ComputedWatcher ProxyObservable dependency rows.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/trackable-method-dependencies",
+        role: "pressure",
+        summary:
+          "Pressure fixture for binding-owned @computed/@astTrack trackable method dependency rows and explicit-vs-proxy execution.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/computed-decorator-contexts",
+        role: "pressure",
+        summary:
+          "Pressure fixture for valid @computed declarations, plain getter-descriptor ComputedObserver rows, and first controlled-computed deep rows.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/template-collection-observation",
+        role: "pressure",
+        summary:
+          "Pressure fixture for astEvaluate array collection reads versus string/object/callback-local method false positives.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/one-hop-forwarding-accessor",
+        role: "pressure",
+        summary:
+          "Contrastive pressure fixture for a component getter that only forwards an injected state member beside direct state template binding.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/source-observation-effects",
+        role: "pressure",
+        summary:
+          "Pressure fixture for direct Observation.watch/run source effects and effect-owned observed-dependency rows.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/proxy-observable-escapes",
+        role: "pressure",
+        summary:
+          "Pressure fixture for neutral source-level ProxyObservable getRaw/unwrap escape rows.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/proxy-observable-escape.ts",
+        symbolName: "ProxyObservableEscape",
+        role: "primary",
+        summary:
+          "Source-level product for direct ProxyObservable getRaw/unwrap proxy-exit facts.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/proxy-observable-escape-materializer.ts",
+        symbolName: "ProxyObservableEscapeMaterializer",
+        role: "primary",
+        summary:
+          "Import-aware materializer for source-level ProxyObservable getRaw/unwrap calls.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:computed-observer-source",
+        role: "pressure",
+        summary:
+          "Focused semantic contract for ComputedObserverSource, ControlledComputedObserver, dependency-literal provenance, and controlled-computed deep rows.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:one-hop-forwarding-accessor",
+        role: "pressure",
+        summary:
+          "Focused semantic contract for template-model-access one-hop forwarding accessor pressure.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:template-collection-observation",
+        role: "pressure",
+        summary:
+          "Focused semantic contract for TypeChecker-gated template collection dependency rows and callback-local false-positive rejection.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:runtime-effect-observation",
+        role: "pressure",
+        summary:
+          "Focused semantic contract for source-level Observation.watch/run effects and observed-dependency rows.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:proxy-observable-escapes",
+        role: "pressure",
+        summary:
+          "Focused semantic contract for source-level ProxyObservable getRaw/unwrap escape rows.",
+      },
+      {
+        kind: "doc",
+        path: "packages/semantic-runtime/src/observation/README.md",
+        heading: "Proxy Observation",
+        role: "grounding",
+        summary:
+          "Semantic-runtime observation docs describe ProxyObservable as part of the same circuit as ordinary binding reads.",
+      },
+      {
+        kind: "doc",
+        path: ".temp/proxy-observation-authoring-substrate-run-2026-05-18.md",
+        role: "grounding",
+        summary:
+          "Scratch run scaffold capturing object-vs-ID binding, proxy escape, and broad fixture pressure.",
+      },
+    ],
+    authority: [
+      "Aurelia framework observation flow sites for astEvaluate, ProxyObservable, connectables, watchers, and collection observers.",
+      "semantic-runtime observation data-flow and binding-source evaluation products for actual app facts.",
+      "Authoring taste and MCP token-economy decisions for clean-code guidance.",
+      "Semantic contract fixtures only after the product facts are modeled; avoid snapshots as the authority.",
+    ],
+    cautions: [
+      "Do not turn ID binding into universal truth; direct object binding can be appropriate when the domain model and view model are intentionally close.",
+      "Do not use ProxyObservable as a reason to add view-model forwarding getters for ordinary state.member template reads.",
+      "Keep observed-dependency rows product-owned: binding data-flow owns source-to-target binding reads; computed-observation definitions own source declarations; ComputedObserverSource owns getter source-observer availability/projection; RuntimeEffect owns direct Observation.watch/run source-call reads; runtime watchers own controller watcher admission; ExpressionWatcher owns string-expression watcher reads; ComputedWatcher owns first ProxyObservable dependency reads; binding-owned trackable method calls own @computed/@astTrack method dependency rows.",
+      "Do not collapse source-level Observation.watch/run effects into resource @watch metadata or renderer-owned binding rows; they are source-call IEffect products.",
+      "Controlled-computed deep rows are source-observer-owned TypeChecker projections of observeDeep, not live object graph traversal and not binding-owned template reads.",
+      "Observed-dependency rows should dedupe repeated reads by semantic dependency identity rather than parser span; preserve source spans as evidence, not as row identity.",
+      "When TypeChecker receiver facts are available, collection-call proxy rows should be array/map/set-shaped. String and plain object methods are property-read pressure, not collection dependency rows.",
+      "External-library and host-owned objects may need raw/unwrapped or non-proxied handling; model the escape as a framework-grounded concern, not as generic object-binding failure.",
+      "ProxyObservable getRaw/unwrap rows are neutral source facts. Do not promote them into diagnostics or authoring recommendations without an explicit policy question.",
+    ],
+    nextQuestions: [
+      "Which framework flow-site shows this dependency entering or leaving the connectable/proxy observation circuit?",
+      "Is the app question about ordinary template binding data-flow, watcher/computed/trackable dependency capture, or authoring taste?",
+      "Does the question need the public binding-observed-dependencies rows, or lower-level framework observation lenses before changing product semantics?",
+      "Does the question need public runtime-effects rows for direct Observation.watch/run source calls, public proxy-observable-escapes rows for ProxyObservable getRaw/unwrap calls, public runtime-watchers rows for controller-owned @watch/static watch admission, runtime-watcher-observed-dependencies for ExpressionWatcher or first ComputedWatcher ProxyObservable reads, binding-observed-dependencies for @computed/@astTrack method calls, or computed-observer-sources for getter source-observer availability/projection?",
+      "Would object binding, ID binding, or direct DI state binding produce the least boilerplate while preserving scalability for this domain?",
+      "Would a dedicated broad fixture replace repeated external probing for this pattern?",
+    ],
+    relatedRouteIds: [
+      "semantic-runtime.observation.binding-flow",
+      "authoring.forms.fixture-flywheel",
+      "semantic-runtime.semantic-contract-verification",
+      "semantic-runtime.type-system.expression-semantics",
+      "semantic-runtime.template-recursive-rendering",
+      "semantic-runtime.inquiry-query-claim-graph",
+      "mcp.developer-preview-shell",
+      "atlas.framework-corpus.navigation",
+      "atlas.work-router.self-improvement",
     ],
   },
   {
@@ -1805,6 +2863,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "composed dashboard",
       "activate model handoff",
       "activation model handoff",
+      "renderingContextKind",
+      "definition-resource",
+      "recursive-resource-instance",
+      "definition-local resource analysis",
+      "bound controller Array.find",
+      "Array.find receiver did not reduce to a known array",
+      "property method this binding",
       "rendered instruction recorder",
       "runtime rendered instruction",
       "pending then catch invalid usage",
@@ -1863,6 +2928,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "RuntimeCompositionMaterializer CompositionContext CompositionController",
         summary:
           "Runtime composition product work should route through the existing composition materializer instead of ad hoc API logic.",
+      },
+      {
+        query: "AuCompose bound controller Array.find property method this binding",
+        summary:
+          "Broad child component values should reopen bound-controller value flow and evaluator call semantics, not AuCompose-only candidate heuristics.",
+      },
+      {
+        query: "runtime composition renderingContextKind definition-resource recursive-resource-instance",
+        summary:
+          "Runtime composition context-kind pressure should distinguish public resource definition analysis from recursive parent-supplied use-site rows.",
       },
     ],
     anchors: [
@@ -1925,6 +3000,23 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Public API projection for runtime composition rows and aggregate authoring pressure.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/observation/runtime-bound-controller-value.ts",
+        symbolName: "RuntimeBoundControllerValueTable",
+        role: "supporting",
+        summary:
+          "Parent-to-child bound controller value table feeds child resource analysis and runtime composition binding-source evaluation.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/evaluation/evaluator.ts",
+        symbolName: "evaluateCallExpression",
+        role: "supporting",
+        summary:
+          "Static evaluator call semantics include receiver-bound property method calls needed by child component predicates.",
       },
       {
         kind: "source",
@@ -2011,7 +3103,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         pathPrefix: "packages/semantic-runtime/fixtures/pressure/au-compose-dynamic-composition",
         role: "pressure",
         summary:
-          "Stress fixture for docs-shaped AuCompose dynamic component candidates.",
+          "Stress fixture for docs-shaped AuCompose dynamic component candidates and child-bound broad Constructable values.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:runtime-composition-bound-controller",
+        role: "supporting",
+        summary:
+          "Focused contract for bound controller values feeding AuCompose component/model resolution through a child custom element.",
       },
       {
         kind: "path",
@@ -2270,6 +3369,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "parser corridor",
       "parser corridors",
       "template completion cursor context",
+      "expected-empty plain HTML attribute value",
+      "expected-empty plain-html-attribute-value",
+      "plain HTML attribute value completion",
+      "cursor locus pressure",
       "TemplateCompletionCursorContextBuilder",
       "CompletedInputPrimaryCorridor",
       "CompletedInputTemplateCorridor",
@@ -2306,6 +3409,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "parse result inspection recursive AST traversal",
         summary:
           "Reusable parse-result traversal questions belong to expression parser inspection, not consumer-local switches.",
+      },
+      {
+        query: "expected-empty plain HTML attribute value completion miss cursor pressure",
+        summary:
+          "Expected-empty completion outcomes should route to template cursor/completion pressure instead of becoming invisible Work Router misses.",
       },
     ],
     anchors: [
@@ -2425,6 +3533,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Cursor-context builder that resolves template loci into completion query handles using parser, scope, and resource products.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime pressure:cursor-loci",
+        role: "pressure",
+        summary:
+          "Cursor-locus pressure script buckets expected-empty, weak-type, exception, and public API mismatch completion outcomes.",
       },
       {
         kind: "path",
@@ -2584,8 +3699,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "App-world construction phase that invokes TypeSystemProject and reports app-level phase timings.",
       },
       {
-        kind: "source",
-        filePath: "packages/semantic-runtime/scripts/app-telemetry.mjs",
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime profile:app-telemetry",
         role: "pressure",
         summary:
           "Telemetry script printing TypeSystemProject phase timings, root/source-file composition, and host cache stats.",
@@ -3000,6 +4115,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "processContent",
       "children decorator",
       "slotted decorator",
+      "CustomElement.define",
+      "nested resource definition call",
+      "validation-container",
+      "ValidationContainerCustomElement",
       "resource open seam",
       "resource alias claim",
       "resource source address",
@@ -3024,6 +4143,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "resource metadata annotations @alias @containerless @useShadowDOM @capture @children @slotted",
         summary:
           "Resource annotation metadata should route to definition convergence before recognition or template rendering.",
+      },
+      {
+        query: "CustomElement.define nested resource definition call validation-container",
+        summary:
+          "Framework configuration-time resource definitions are resource convergence/admission visibility work.",
       },
     ],
     anchors: [
@@ -3369,6 +4493,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "module loader",
       "ModuleLoader",
       "IModuleLoader",
+      "AnalyzedModule",
+      "ModuleItem",
+      "module loader import analysis",
+      "module bridge role evidence",
       "aliasedResourcesRegistry",
       "aliasedResourcesRegistry IRegistry module loader",
       "analyzed module exports",
@@ -3414,6 +4542,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "aliasedResourcesRegistry IRegistry module loader",
         summary:
           "Kernel module-loader registry factories should route to evaluator/world construction, not generic resource or registration patches.",
+      },
+      {
+        query: "AnalyzedModule ModuleItem bridge role evidence module loader import analysis evaluator world construction",
+        summary:
+          "Kernel analyzed-module bridge-role questions should route to module-loader and evaluator/world-construction substrate.",
       },
     ],
     anchors: [
@@ -4142,6 +5275,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "translation binding",
       "t-params",
       "translation key binding",
+      "I18nKeyEvaluationResult",
+      "I18nService.evaluate",
+      "i18n bridge role evidence",
+      "i18n key evaluation result",
+      "semicolon translation keys",
       "I18nTranslationBindingIssueMaterializer",
       "AUR4000",
       "AUR4001",
@@ -4159,6 +5297,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "translation key binding parameter binding same target element",
         summary:
           "Translation parameter joins need rendered binding products before generic diagnostic projection.",
+      },
+      {
+        query: "I18nKeyEvaluationResult bridge role evidence I18nService evaluate translation key",
+        summary:
+          "i18n key-evaluation bridge-role questions should route to the translation-binding lifecycle and key-evaluation substrate.",
       },
     ],
     anchors: [
@@ -4350,6 +5493,136 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "diagnostics.framework-error-grounding",
       "semantic-runtime.evaluator.world-construction",
       "semantic-runtime.observation.binding-flow",
+    ],
+  },
+  {
+    id: "diagnostics.template-repair-policy",
+    title: "Template Diagnostic Repair Policy",
+    summary:
+      "Route weak owner typing, missing member, assignment strictness, source-route, and diagnostic action-target pressure through the shared template diagnostic policy.",
+    domains: ["diagnostics", "template", "type-system", "repair", "source-provenance"],
+    roles: ["orient", "analyze", "verify", "document"],
+    terms: [
+      "template diagnostics",
+      "cursor diagnostics",
+      "file diagnostics",
+      "weak owner",
+      "weak-owner diagnostics",
+      "weak expression member owner",
+      "weak-expression-member-owner",
+      "expression-member-owner-type:any",
+      "expression-member-owner-type:index-signature-only",
+      "missing expression member",
+      "missing-expression-member",
+      "selected member missing",
+      "source route",
+      "source-route",
+      "owner type source",
+      "value-producing source route",
+      "repair cluster",
+      "repair clusters",
+      "action target",
+      "diagnostic suggestion",
+      "replace any owner",
+      "declare explicit member",
+      "scope slot type",
+      "missing slot type",
+      "binding assignment strictness",
+    ],
+    queryCanaries: [
+      {
+        query: "weak expression member owner any source route repair planning",
+        summary:
+          "Weak-owner repair/source-route pressure should route to template diagnostic policy before generic authoring repair loops.",
+      },
+      {
+        query: "expression-member-owner-type:any action target",
+        summary:
+          "Any-owner diagnostics need source-route/action-target policy, not autocomplete fallback.",
+      },
+      {
+        query: "missing-expression-member declare explicit member",
+        summary:
+          "Missing member diagnostics should route through the same diagnostic repair policy as weak owner rows.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/template-diagnostic-policy.ts",
+        symbolName: "weakOwnerDiagnostic",
+        role: "primary",
+        summary:
+          "Weak owner diagnostic row and suggestion policy.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/template-completion.ts",
+        symbolName: "readSemanticTemplateDiagnostics",
+        role: "primary",
+        summary:
+          "File/app-locus template diagnostic reader that lifts cursor diagnostic policy.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/expression-member-owner-projector.ts",
+        symbolName: "CheckerExpressionMemberOwnerProjector",
+        role: "supporting",
+        summary:
+          "TypeChecker member-owner projection used by cursor, completion, and diagnostic pressure.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/type-shape.ts",
+        symbolName: "checkerTypeReferenceWithSource",
+        role: "supporting",
+        summary:
+          "Carries value-producing source routes for source-independent weak types such as any.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:template-diagnostics",
+        role: "pressure",
+        summary:
+          "Focused semantic contract for weak-owner diagnostics, source routes, and binding-assignment repair targets.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/weak-owner-repair-planning",
+        role: "pressure",
+        summary:
+          "Pressure fixture for missing slot types, any owners, index-signature-only owners, and source-backed repair targets.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "diagnostics", "template", "type-system"],
+        role: "grounding",
+        summary:
+          "Durable memory tracks weak-owner diagnostics as TypeChecker/source-route pressure rather than authoring theatre.",
+      },
+    ],
+    authority: [
+      "TypeScript checker owner/member facts and semantic-runtime value-producing source routes.",
+      "Template diagnostic policy that turns weak or missing owner/member facts into structured suggestions.",
+      "Focused semantic contracts and synthetic fixtures before external app pressure is generalized.",
+    ],
+    cautions: [
+      "Do not treat weak typing as an autocomplete failure; it can be the correct diagnostic outcome.",
+      "Do not cluster repair pressure without preserving concrete action-target source when one exists.",
+      "Do not add local TypeChecker walks in diagnostics when CheckerExpressionTypeEvaluator or CheckerExpressionMemberOwnerProjector should own the fact.",
+    ],
+    nextQuestions: [
+      "Is this diagnostic missing a source route, an owner/member projection, or only a policy/suggestion shape?",
+      "Can an in-repo weak-owner fixture isolate the pressure before external app sampling?",
+      "Which query locus needs the diagnostic: cursor, file, app, authoring orientation, or repair plan?",
+    ],
+    relatedRouteIds: [
+      "semantic-runtime.type-system.expression-semantics",
+      "semantic-runtime.observation.binding-flow",
+      "semantic-runtime.binding-scope",
+      "semantic-runtime.inquiry-query-claim-graph",
+      "diagnostics.framework-error-grounding",
+      "authoring.forms.fixture-flywheel",
     ],
   },
   {

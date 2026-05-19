@@ -122,6 +122,7 @@ export class CheckerExpressionResourceProjector {
       scope,
       `${localKey}:converter:${definition.name}:toView-return`,
       sourceAddressHandle,
+      toView.sourceAddressHandle,
     );
   }
 

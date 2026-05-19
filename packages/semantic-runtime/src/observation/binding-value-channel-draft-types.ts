@@ -1,10 +1,9 @@
-import type { BindingScope } from '../configuration/scope.js';
-import type { ProductHandle } from '../kernel/handles.js';
 import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { CheckerExpressionTypeEvaluator } from '../type-system/expression-type-evaluator.js';
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { RuntimeExpressionBinding } from './runtime-binding-expression.js';
+import type { RuntimeInstructionScopeLookup } from './runtime-binding-expression.js';
 import type {
   RuntimeBindingValueChannelAuthority,
   RuntimeBindingValueChannelKind,
@@ -29,7 +28,7 @@ export interface BindingValueChannelDraftContext {
   readonly input: {
     readonly runtimeBindings: RuntimeRenderingEmission;
   };
-  readonly instructionScopes: ReadonlyMap<ProductHandle, BindingScope>;
+  readonly instructionScopes: RuntimeInstructionScopeLookup;
   readonly evaluator: CheckerExpressionTypeEvaluator;
 }
 

@@ -97,6 +97,7 @@ export class CheckerExpressionAccessProjector {
       owner.typeShape,
       expression.name.name,
       `${localKey}:member:${expression.name.name}`,
+      owner.sourceAddressHandle,
     );
   }
 
@@ -137,6 +138,7 @@ export class CheckerExpressionAccessProjector {
         owner.typeShape,
         literalKey,
         `${localKey}:keyed-member:${literalKey}`,
+        owner.sourceAddressHandle,
       );
       if (
         literalMember.kind === CheckerExpressionTypeEvaluationResultKind.Type
@@ -157,6 +159,7 @@ export class CheckerExpressionAccessProjector {
       key.typeShape,
       `${localKey}:finite-key`,
       sourceAddressHandle,
+      owner.sourceAddressHandle,
     );
     if (finiteKeyAccess != null) {
       return finiteKeyAccess;
@@ -170,6 +173,8 @@ export class CheckerExpressionAccessProjector {
         `${localKey}:keyed-index`,
         CheckerExpressionTypeOpenKind.MissingMemberValueType,
         `Indexed value type for '${owner.typeShape.display}' could not be hydrated.`,
+        null,
+        owner.sourceAddressHandle ?? indexedValueType.sourceAddressHandle,
       );
     }
 
@@ -179,6 +184,7 @@ export class CheckerExpressionAccessProjector {
       key.typeShape,
       localKey,
       sourceAddressHandle,
+      owner.sourceAddressHandle,
     );
     if (indexSignature != null) {
       return indexSignature;
@@ -226,6 +232,7 @@ export class CheckerExpressionAccessProjector {
       owner.typeShape,
       expression.name.name,
       `${localKey}:call-member:${expression.name.name}`,
+      owner.sourceAddressHandle,
     );
   }
 
@@ -234,13 +241,18 @@ export class CheckerExpressionAccessProjector {
     ownerType: CheckerTypeShape,
     memberName: string,
     localKey: string,
+    ownerSourceAddressHandle: AddressHandle | null = ownerType.sourceAddressHandle,
   ): CheckerExpressionTypeEvaluation {
     if (ownerType.shapeKind === CheckerTypeShapeKind.Any) {
-      return this.support.type(ownerType, `Member '${memberName}' on any remains any.`);
+      return this.support.type(ownerType, `Member '${memberName}' on any remains any.`, ownerSourceAddressHandle);
     }
     const access = this.typeAccess.memberValueAccess(ownerType, memberName, localKey);
     if (access.accessKind === CheckerTypeShapeMemberValueAccessKind.Type && access.valueType != null) {
-      return this.support.type(access.valueType, `Resolved member '${memberName}' value type for '${ownerType.display}'.`);
+      return this.support.type(
+        access.valueType,
+        `Resolved member '${memberName}' value type for '${ownerType.display}'.`,
+        access.sourceAddressHandle,
+      );
     }
     if (access.accessKind === CheckerTypeShapeMemberValueAccessKind.Missing) {
       return this.support.open(
@@ -293,12 +305,17 @@ export class CheckerExpressionAccessProjector {
     keyType: CheckerTypeShape,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
+    ownerSourceAddressHandle: AddressHandle | null,
   ): CheckerExpressionTypeEvaluation | null {
     const valueType = this.typeAccess.indexSignatureValueType(ownerType, keyType, localKey, sourceAddressHandle);
     if (valueType == null) {
       return null;
     }
-    return this.support.type(valueType, `Projected index-signature value type for keyed access on '${ownerType.display}'.`);
+    return this.support.type(
+      valueType,
+      `Projected index-signature value type for keyed access on '${ownerType.display}'.`,
+      ownerSourceAddressHandle ?? ownerType.sourceAddressHandle,
+    );
   }
 
   private evaluateFiniteKeyedAccess(
@@ -307,6 +324,7 @@ export class CheckerExpressionAccessProjector {
     keyType: CheckerTypeShape,
     localKey: string,
     sourceAddressHandle: AddressHandle | null,
+    ownerSourceAddressHandle: AddressHandle | null,
   ): CheckerExpressionTypeEvaluation | null {
     const valueTypes = this.typeAccess.finiteKeyedValueTypes(ownerType, keyType, localKey);
     if (valueTypes == null) {
@@ -314,7 +332,11 @@ export class CheckerExpressionAccessProjector {
     }
 
     return this.support.evaluateTypeUnion(
-      valueTypes.map((valueType) => this.support.type(valueType, `Projected finite keyed access member for '${ownerType.display}'.`)),
+      valueTypes.map((valueType) => this.support.type(
+        valueType,
+        `Projected finite keyed access member for '${ownerType.display}'.`,
+        valueType.sourceAddressHandle ?? ownerSourceAddressHandle ?? ownerType.sourceAddressHandle,
+      )),
       `${localKey}:result`,
       sourceAddressHandle,
       `Projected finite keyed access for '${ownerType.display}' through '${keyType.display}'.`,

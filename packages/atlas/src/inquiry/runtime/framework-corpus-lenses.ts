@@ -517,6 +517,18 @@ function formFixtureSeedFocusScore(row: FrameworkCorpusFixtureSeedRow): number {
   if (frameworkCorpusFixtureSeedHasClassificationKey(row, "native-checked-binding")) {
     score += 90;
   }
+  if (frameworkCorpusFixtureSeedHasClassificationKey(row, "checked-collection-binding")) {
+    score += 80;
+  }
+  if (frameworkCorpusFixtureSeedHasClassificationKey(row, "checked-map-binding")) {
+    score += 80;
+  }
+  if (frameworkCorpusFixtureSeedHasClassificationKey(row, "custom-matcher-binding")) {
+    score += 70;
+  }
+  if (frameworkCorpusFixtureSeedHasClassificationKey(row, "select-multiple-binding")) {
+    score += 70;
+  }
   if (frameworkCorpusFixtureSeedHasClassificationKey(row, "option-model-binding")) {
     score += 70;
   }
@@ -628,6 +640,8 @@ function snippetKindWeight(kind: FrameworkCorpusTestSnippetRow["kind"]): number 
   switch (kind) {
     case "create-fixture-call":
       return 100;
+    case "object-test-case":
+      return 90;
     case "it-call":
       return 50;
     case "describe-call":

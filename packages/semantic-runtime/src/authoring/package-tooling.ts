@@ -177,8 +177,6 @@ function tsconfigText(): string {
       strict: true,
       skipLibCheck: true,
       allowArbitraryExtensions: true,
-      experimentalDecorators: true,
-      useDefineForClassFields: false,
       noEmit: true,
     },
     include: ['src'],

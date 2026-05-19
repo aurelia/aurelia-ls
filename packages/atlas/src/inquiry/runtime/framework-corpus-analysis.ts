@@ -8,10 +8,11 @@ import {
   countNamedEntriesBy,
   uniqueSortedStrings,
 } from "../../collections.js";
-import { SourceProjectMemo, type SourceProject } from "../../source/index.js";
+import { propertyNameText, SourceProjectMemo, type SourceProject } from "../../source/index.js";
+import { escapeRegExp } from "../../text-regex.js";
 import type { SourceRange } from "../locus.js";
 
-export const FRAMEWORK_CORPUS_ANALYSIS_VERSION = "framework-corpus-analysis.v18";
+export const FRAMEWORK_CORPUS_ANALYSIS_VERSION = "framework-corpus-analysis.v22";
 
 const frameworkCorpusAnalysisMemo =
   new SourceProjectMemo<FrameworkCorpusAnalysis>();
@@ -37,7 +38,8 @@ export type FrameworkCorpusDocSnippetKind = "code-fence";
 export type FrameworkCorpusTestSnippetKind =
   | "describe-call"
   | "it-call"
-  | "create-fixture-call";
+  | "create-fixture-call"
+  | "object-test-case";
 
 export type FrameworkCorpusFixtureSeedSourceKind =
   | "doc-snippet"
@@ -53,11 +55,15 @@ export type FrameworkCorpusExpectedEffectHint =
   | "authoring-repair"
   | "authoring-taste"
   | "binding-data-flow"
+  | "binding-observed-dependency"
   | "binding-behavior-application"
   | "binding-target-access"
   | "binding-value-channel"
   | "component"
   | "component-role"
+  | "computed-observation-definition"
+  | "computed-observer-observed-dependency"
+  | "computed-observer-source"
   | "dependency-injection"
   | "external-template"
   | "open-seam-closure"
@@ -334,7 +340,7 @@ const CONCEPT_DESCRIPTORS: readonly ConceptDescriptor[] = [
   // Controller, resource, component, and binding lifecycle phases.
   { id: "lifecycle", pattern: /\b(?:binding|bound|attaching|attached|detaching|detached|hydrating|hydrated|dispose|unbinding)\b/giu },
   // Observer locator, subscriber, accessor, and reactivity concepts.
-  { id: "observation", pattern: /\b(?:observe|observer|observation|observable|subscriber|accessor|dirty-check|collection observer)\b/giu },
+  { id: "observation", pattern: /\b(?:observe|observer|observation|observable|subscriber|accessor|dirty-check|collection observer|ObserverLocator|NodeObserverLocator|getObserver|ComputedObserver|ControlledComputedObserver|SetterObserver|DirtyCheckProperty|ProxyObservable)\b/giu },
   // Custom elements, custom attributes, value converters, binding behaviors, and resource registries.
   { id: "resources", pattern: /\b(?:custom element|custom-element|custom attribute|custom-attribute|value converter|value-converter|binding behavior|binding-behavior|template controller|resource)\b/giu },
   // Router configuration, routeable components, viewports, and route recognizer pressure.
@@ -491,6 +497,30 @@ function frameworkTestSnippetRows(repoRoot: string): readonly FrameworkCorpusTes
       const sourceFile = ts.createSourceFile(filePath, text, ts.ScriptTarget.Latest, true);
       const snippets: FrameworkCorpusTestSnippetRow[] = [];
       visit(sourceFile, (node) => {
+        if (ts.isObjectLiteralExpression(node) && isFrameworkObjectTestCase(node)) {
+          const snippetText = text.slice(node.getStart(sourceFile), node.getEnd());
+          const concepts = conceptsFromCounts(conceptCountsFor(snippetText, {
+            aureliaInterpolation: "mixed-template-host",
+          }));
+          const source = sourceRangeForOffsets(
+            filePath,
+            text,
+            node.getStart(sourceFile),
+            node.getEnd(),
+          );
+          snippets.push({
+            id: `framework-test-snippet:${filePath}:${node.getStart(sourceFile)}`,
+            filePath,
+            group: sourceGroup(filePath, `${FRAMEWORK_TESTS_ROOT}/src/`),
+            kind: "object-test-case",
+            name: objectTestCaseName(node),
+            generated: filePath.includes("/generated/"),
+            concepts,
+            source,
+            preview: compactPreview(snippetText),
+            summary: `Framework test object-test-case in ${filePath} at line ${source.start.line + 1} with ${conceptSummary(concepts)}.`,
+          });
+        }
         if (!ts.isCallExpression(node)) {
           return;
         }
@@ -688,6 +718,9 @@ function fixtureSeedForTestSnippet(
   descriptors: ReadonlyMap<string, FrameworkCorpusExpectedEffectDescriptorRow>,
   snippetText: string,
 ): readonly FrameworkCorpusFixtureSeedRow[] {
+  if (!isConcreteBehaviorSeedSnippetKind(row.kind)) {
+    return [];
+  }
   const effectHints = expectedEffectHintsForSnippet(row.concepts, snippetText);
   const recipeHints = recipeHintsForConcepts(row.concepts, snippetText);
   const classificationReasons = fixtureSeedClassificationReasons(
@@ -695,7 +728,7 @@ function fixtureSeedForTestSnippet(
     snippetText,
     effectHints,
     recipeHints,
-    row.kind === "create-fixture-call",
+    row.kind === "create-fixture-call" || row.kind === "object-test-case",
   );
   if (effectHints.length === 0 && recipeHints.length === 0) {
     return [];
@@ -719,6 +752,19 @@ function fixtureSeedForTestSnippet(
     preview: row.preview,
     summary: `Framework-test fixture seed for ${effectHints.join(", ") || "recipe exploration"} from ${row.filePath}.`,
   }];
+}
+
+function isConcreteBehaviorSeedSnippetKind(
+  kind: FrameworkCorpusTestSnippetKind,
+): boolean {
+  switch (kind) {
+    case "create-fixture-call":
+    case "object-test-case":
+    case "it-call":
+      return true;
+    case "describe-call":
+      return false;
+  }
 }
 
 function expectedEffectDescriptorMap(
@@ -879,7 +925,7 @@ function expectedEffectsForConcept(
     case "lifecycle":
       return ["runtime-controller"];
     case "observation":
-      return ["binding-target-access", "binding-value-channel"];
+      return ["binding-target-access"];
     case "resources":
       return ["resource-definition", "component"];
     case "router":
@@ -919,10 +965,24 @@ function expectedEffectsForSourceText(
     effects.add("binding-value-channel");
     effects.add("binding-data-flow");
   }
+  if (hasTemplateObservedDependencySurface(snippetText)) {
+    effects.add("binding-observed-dependency");
+  }
+  if (hasObserverLocatorTargetAccessSurface(snippetText)) {
+    effects.add("binding-target-access");
+  }
+  if (hasComputedDecoratorSurface(snippetText)) {
+    effects.add("computed-observation-definition");
+  }
+  if (hasComputedGetterSurface(snippetText)) {
+    effects.add("computed-observer-source");
+    effects.add("computed-observer-observed-dependency");
+  }
   if (hasBindingBehaviorApplicationSurface(snippetText)) {
     effects.add("binding-behavior-application");
     effects.add("binding-target-access");
     effects.add("binding-data-flow");
+    effects.add("binding-observed-dependency");
   }
   if (hasTargetOperationSurface(snippetText)) {
     effects.add("target-operation");
@@ -962,6 +1022,34 @@ function hasNativeCheckedBindingSurface(snippetText: string): boolean {
   );
 }
 
+function hasCheckedCollectionBindingSurface(snippetText: string): boolean {
+  if (!hasNativeCheckedBindingSurface(snippetText)) {
+    return false;
+  }
+  return /\b(?:Set\s*<|new\s+Set\b|selected\s*:\s*Set|\bSet\b)/u.test(snippetText) ||
+    /\b(?:selected\s*:\s*(?:any|unknown|string|number|boolean)?\s*\[\]|selected\s*=\s*\[\]|selectedItems\s*[:=]|Array\.from)/u.test(snippetText);
+}
+
+function hasCheckedMapBindingSurface(snippetText: string): boolean {
+  return hasNativeCheckedBindingSurface(snippetText) &&
+    /\b(?:Map\s*<|new\s+Map\b|selected\s*:\s*Map|\bMap\b)/u.test(snippetText);
+}
+
+function hasCustomMatcherBindingSurface(snippetText: string): boolean {
+  return htmlLikeTagTexts(snippetText).some((tagText) =>
+    /^(?:<\s*input|<\s*select|<\s*option)\b/iu.test(tagText) &&
+    /\bmatcher\.(?:bind|two-way|from-view|to-view)\b/u.test(tagText)
+  );
+}
+
+function hasSelectMultipleBindingSurface(snippetText: string): boolean {
+  return htmlLikeTagTexts(snippetText).some((tagText) =>
+    /^<\s*select\b/iu.test(tagText) &&
+    /\bmultiple\b/iu.test(tagText) &&
+    /\bvalue\.(?:bind|two-way|from-view|to-view)\b/u.test(tagText)
+  );
+}
+
 function hasOptionModelBindingSurface(snippetText: string): boolean {
   return htmlLikeTagTexts(snippetText).some((tagText) =>
     /^<\s*option\b/iu.test(tagText) &&
@@ -986,6 +1074,37 @@ function hasValidationBindingBehaviorSurface(snippetText: string): boolean {
     || /\bvalidate binding behavior\b/iu.test(snippetText);
 }
 
+function hasTemplateObservedDependencySurface(snippetText: string): boolean {
+  return bindingExpressionSurfaceTexts(snippetText).length > 0;
+}
+
+function hasObserverLocatorTargetAccessSurface(snippetText: string): boolean {
+  return /\bgetObserver\s*\(/u.test(snippetText) ||
+    hasObserverLocatorDescriptorMatrixSurface(snippetText);
+}
+
+function hasObserverLocatorDescriptorMatrixSurface(snippetText: string): boolean {
+  return /\bgetObserver\(\)\s*-\s*descriptor=/u.test(snippetText) &&
+    /\bhasGetter\b/u.test(snippetText) &&
+    /\bhasSetter\b/u.test(snippetText) &&
+    /\bconfigurable\b/u.test(snippetText);
+}
+
+function hasObserverLocatorSetterOnlyDescriptorCase(snippetText: string): boolean {
+  return hasObserverLocatorDescriptorMatrixSurface(snippetText) &&
+    /\bhasSetter\s*&&\s*!hasGetter\b/u.test(snippetText) &&
+    /\bComputedObserver\b/u.test(snippetText) &&
+    /\bDirtyCheckProperty\b/u.test(snippetText);
+}
+
+function hasComputedDecoratorSurface(snippetText: string): boolean {
+  return /@computed(?:\s*\(|\b)/u.test(snippetText);
+}
+
+function hasComputedGetterSurface(snippetText: string): boolean {
+  return /\bget\s+[A-Za-z_$][\w$]*\s*\(/u.test(snippetText);
+}
+
 function hasBindingSurfaceChannel(
   snippetText: string,
   channelKind: string,
@@ -1001,8 +1120,25 @@ function expectedEffectFiltersForSourceText(
   if (effectKind === "binding-behavior-application") {
     return bindingBehaviorApplicationFilters(snippetText);
   }
+  if (effectKind === "binding-observed-dependency") {
+    return bindingObservedDependencyFilters(snippetText);
+  }
+  if (effectKind === "computed-observation-definition") {
+    return computedObservationDefinitionFilters(snippetText);
+  }
+  if (effectKind === "computed-observer-source") {
+    return computedObserverSourceFilters(snippetText);
+  }
+  if (effectKind === "computed-observer-observed-dependency") {
+    return computedObserverObservedDependencyFilters(snippetText);
+  }
   if (effectKind === "binding-target-access" || effectKind === "binding-value-channel" || effectKind === "binding-data-flow") {
-    return bindingSurfaceFilters(effectKind, snippetText);
+    return [
+      ...bindingSurfaceFilters(effectKind, snippetText),
+      ...(effectKind === "binding-target-access"
+        ? observerLocatorTargetAccessFilters(snippetText)
+        : []),
+    ];
   }
   if (effectKind === "target-operation") {
     return targetOperationFilters(snippetText);
@@ -1035,6 +1171,445 @@ function bindingBehaviorApplicationFilters(
       }]
       : []),
   ];
+}
+
+function observerLocatorTargetAccessFilters(
+  snippetText: string,
+): readonly FrameworkCorpusFixtureSeedExpectedEffectFilterRow[] {
+  if (!hasObserverLocatorDescriptorMatrixSurface(snippetText)) {
+    return [];
+  }
+  const filters: FrameworkCorpusFixtureSeedExpectedEffectFilterRow[] = [{
+    field: "observerLocatorCase",
+    value: "descriptor-matrix",
+    summary: "Snippet is the ObserverLocator descriptor matrix for object target access.",
+  }];
+  if (hasObserverLocatorSetterOnlyDescriptorCase(snippetText)) {
+    filters.push({
+      field: "includedDecision",
+      value: "setter-only-configurable-computed-observer",
+      summary: "Matrix includes the setter-only accessor case where configurable descriptors use ComputedObserver.",
+    });
+  }
+  return filters;
+}
+
+function computedObservationDefinitionFilters(
+  snippetText: string,
+): readonly FrameworkCorpusFixtureSeedExpectedEffectFilterRow[] {
+  const filters: FrameworkCorpusFixtureSeedExpectedEffectFilterRow[] = [];
+  const memberKind = singleComputedMemberKind(snippetText, true);
+  if (memberKind !== null) {
+    filters.push({
+      field: "memberKind",
+      value: memberKind,
+      summary: `Snippet has one computed decorator member kind: ${memberKind}.`,
+    });
+  }
+  pushSingleComputedMemberNameFilter(filters, snippetText, true);
+  pushComputedDependencyModeFilter(filters, snippetText);
+  return filters;
+}
+
+function computedObserverSourceFilters(
+  snippetText: string,
+): readonly FrameworkCorpusFixtureSeedExpectedEffectFilterRow[] {
+  const filters: FrameworkCorpusFixtureSeedExpectedEffectFilterRow[] = [];
+  const observerKind = singleComputedGetterObserverKind(snippetText);
+  if (observerKind !== null) {
+    filters.push({
+      field: "observerKind",
+      value: observerKind,
+      summary: "Snippet maps to one framework computed observer family for getter observation.",
+    });
+  }
+  const triggerKind = singleComputedGetterTriggerKind(snippetText);
+  if (triggerKind !== null) {
+    filters.push({
+      field: "triggerKind",
+      value: triggerKind,
+      summary: triggerKind === "getter-owned-observer"
+        ? "Snippet uses a getter-owned @computed observer hook."
+        : "Snippet exposes an ordinary getter descriptor that ObserverLocator can observe.",
+    });
+  }
+  pushSingleComputedSourceMemberNameFilter(filters, snippetText);
+  pushComputedSourceDependencyModeFilter(filters, snippetText);
+  return filters;
+}
+
+function computedObserverObservedDependencyFilters(
+  snippetText: string,
+): readonly FrameworkCorpusFixtureSeedExpectedEffectFilterRow[] {
+  const filters: FrameworkCorpusFixtureSeedExpectedEffectFilterRow[] = [];
+  const dependencyKind = computedObserverDependencyKind(snippetText);
+  if (dependencyKind !== null) {
+    filters.push({
+      field: "dependencyKind",
+      value: dependencyKind,
+      summary: `Snippet has one locally-inferred computed observer dependency kind: ${dependencyKind}.`,
+    });
+  }
+  pushSingleComputedSourceMemberNameFilter(filters, snippetText);
+  return filters;
+}
+
+function pushSingleComputedSourceMemberNameFilter(
+  filters: FrameworkCorpusFixtureSeedExpectedEffectFilterRow[],
+  snippetText: string,
+): void {
+  const memberName = singleHintValue(computedSourceGetterNames(snippetText), (name) => name);
+  if (memberName !== null) {
+    filters.push({
+      field: "memberName",
+      value: memberName,
+      summary: `Snippet has one computed getter source name: ${memberName}.`,
+    });
+  }
+}
+
+function pushSingleComputedMemberNameFilter(
+  filters: FrameworkCorpusFixtureSeedExpectedEffectFilterRow[],
+  snippetText: string,
+  decoratedOnly: boolean,
+): void {
+  const memberName = singleHintValue(computedGetterNames(snippetText, decoratedOnly), (name) => name);
+  if (memberName !== null) {
+    filters.push({
+      field: "memberName",
+      value: memberName,
+      summary: `Snippet has one computed getter/member name: ${memberName}.`,
+    });
+  }
+}
+
+function pushComputedDependencyModeFilter(
+  filters: FrameworkCorpusFixtureSeedExpectedEffectFilterRow[],
+  snippetText: string,
+): void {
+  filters.push({
+    field: "dependencyMode",
+    value: computedDependencyMode(snippetText),
+    summary: "Snippet has one locally-inferred computed dependency mode.",
+  });
+}
+
+function pushComputedSourceDependencyModeFilter(
+  filters: FrameworkCorpusFixtureSeedExpectedEffectFilterRow[],
+  snippetText: string,
+): void {
+  const dependencyMode = singleComputedGetterDependencyMode(snippetText);
+  if (dependencyMode !== null) {
+    filters.push({
+      field: "dependencyMode",
+      value: dependencyMode,
+      summary: "Snippet has one locally-inferred computed getter dependency mode.",
+    });
+  }
+}
+
+function singleComputedMemberKind(
+  snippetText: string,
+  decoratedOnly: boolean,
+): "getter" | "method" | null {
+  if (!decoratedOnly || !hasComputedDecoratorSurface(snippetText)) {
+    return hasComputedGetterSurface(snippetText) ? "getter" : null;
+  }
+  const kinds = uniqueSortedStrings([...snippetText.matchAll(/@computed(?:\s*\([^)]*\))?\s+(?:public\s+|protected\s+|private\s+|static\s+|override\s+|readonly\s+|accessor\s+)*((?:get)\s+)?[A-Za-z_$][\w$]*\s*\(/gu)]
+    .map((match) => match[1] === undefined ? "method" : "getter"));
+  return kinds.length === 1 ? kinds[0] as "getter" | "method" : null;
+}
+
+function computedGetterNames(
+  snippetText: string,
+  decoratedOnly: boolean,
+): readonly string[] {
+  const pattern = decoratedOnly
+    ? /@computed(?:\s*\([^)]*\))?\s+(?:public\s+|protected\s+|private\s+|static\s+|override\s+|readonly\s+|accessor\s+)*get\s+([A-Za-z_$][\w$]*)\s*\(/gu
+    : /\bget\s+([A-Za-z_$][\w$]*)\s*\(/gu;
+  return uniqueSortedStrings([...snippetText.matchAll(pattern)]
+    .map((match) => match[1] ?? "")
+    .filter((name) => name.length > 0));
+}
+
+function computedSourceGetterNames(
+  snippetText: string,
+): readonly string[] {
+  return uniqueSortedStrings(computedGetterSurfaceHints(snippetText).map((hint) => hint.memberName));
+}
+
+function singleComputedGetterObserverKind(
+  snippetText: string,
+): "computed-observer" | "controlled-computed-observer" | null {
+  const dependencyMode = singleComputedGetterDependencyMode(snippetText);
+  if (dependencyMode === null) {
+    return null;
+  }
+  return dependencyMode === "proxy-auto-track" ? "computed-observer" : "controlled-computed-observer";
+}
+
+function singleComputedGetterTriggerKind(
+  snippetText: string,
+): "accessor-descriptor" | "getter-owned-observer" | null {
+  const hints = computedGetterSurfaceHints(snippetText);
+  const triggerKinds = uniqueSortedStrings(hints.map((hint) => hint.decorated ? "getter-owned-observer" : "accessor-descriptor"));
+  return triggerKinds.length === 1 ? triggerKinds[0] as "accessor-descriptor" | "getter-owned-observer" : null;
+}
+
+function singleComputedGetterDependencyMode(
+  snippetText: string,
+): "proxy-auto-track" | "explicit-property-keys" | "dependency-function" | "disabled" | "open" | null {
+  const hints = computedGetterSurfaceHints(snippetText);
+  if (hints.length !== 1) {
+    return null;
+  }
+  const [hint] = hints;
+  if (hint === undefined) {
+    return null;
+  }
+  return hint.decorated
+    ? computedDependencyModeFromArguments(hint.decoratorArguments)
+    : "proxy-auto-track";
+}
+
+interface ComputedGetterSurfaceHint {
+  readonly memberName: string;
+  readonly decorated: boolean;
+  readonly decoratorArguments: readonly string[];
+}
+
+function computedGetterSurfaceHints(
+  snippetText: string,
+): readonly ComputedGetterSurfaceHint[] {
+  const decoratedByName = new Map<string, string[]>();
+  for (const match of snippetText.matchAll(/@computed(?:\s*\(([^)]*)\))?\s+(?:public\s+|protected\s+|private\s+|static\s+|override\s+|readonly\s+|accessor\s+)*get\s+([A-Za-z_$][\w$]*)\s*\(/gu)) {
+    const memberName = match[2];
+    if (memberName === undefined) {
+      continue;
+    }
+    const args = decoratedByName.get(memberName) ?? [];
+    const rawArguments = match[1]?.trim() ?? "";
+    if (rawArguments.length > 0) {
+      args.push(rawArguments);
+    }
+    decoratedByName.set(memberName, args);
+  }
+
+  return uniqueSortedStrings([...snippetText.matchAll(/\bget\s+([A-Za-z_$][\w$]*)\s*\(/gu)]
+    .map((match) => match[1] ?? "")
+    .filter((name) => name.length > 0))
+    .map((memberName) => {
+      const decoratorArguments = decoratedByName.get(memberName);
+      return {
+        memberName,
+        decorated: decoratorArguments !== undefined,
+        decoratorArguments: decoratorArguments ?? [],
+      };
+    });
+}
+
+function computedDependencyMode(
+  snippetText: string,
+): "proxy-auto-track" | "explicit-property-keys" | "dependency-function" | "disabled" | "open" {
+  if (!hasComputedDecoratorSurface(snippetText)) {
+    return "proxy-auto-track";
+  }
+  return computedDependencyModeFromArguments(computedDecoratorArguments(snippetText));
+}
+
+function computedDependencyModeFromArguments(
+  argumentTexts: readonly string[],
+): "proxy-auto-track" | "explicit-property-keys" | "dependency-function" | "disabled" | "open" {
+  const argumentsText = argumentTexts.join("\n");
+  if (argumentsText.length === 0) {
+    return "proxy-auto-track";
+  }
+  if (/\bdeps\s*:\s*\[\s*\]/u.test(argumentsText)) {
+    return "disabled";
+  }
+  if (/\bdeps\s*:\s*(?:\([^)]*\)\s*=>|[A-Za-z_$][\w$]*\s*=>|function\b)/u.test(argumentsText)) {
+    return "dependency-function";
+  }
+  if (/\bdeps\s*:\s*\[/u.test(argumentsText) || /(?:^|,)\s*['"`][^'"`]+['"`]/u.test(argumentsText)) {
+    return "explicit-property-keys";
+  }
+  if (/\bdeps\s*:/u.test(argumentsText)) {
+    return "open";
+  }
+  return "proxy-auto-track";
+}
+
+function computedDecoratorArguments(snippetText: string): readonly string[] {
+  return computedDecoratorOccurrences(snippetText)
+    .map((occurrence) => occurrence.argumentsText)
+    .filter((argumentsText) => argumentsText.length > 0);
+}
+
+interface ComputedDecoratorOccurrence {
+  readonly argumentsText: string;
+  readonly endOffset: number;
+}
+
+function computedDecoratorOccurrences(
+  snippetText: string,
+): readonly ComputedDecoratorOccurrence[] {
+  const occurrences: ComputedDecoratorOccurrence[] = [];
+  let searchOffset = 0;
+  while (searchOffset < snippetText.length) {
+    const startOffset = snippetText.indexOf("@computed", searchOffset);
+    if (startOffset < 0) {
+      break;
+    }
+    let offset = startOffset + "@computed".length;
+    while (offset < snippetText.length && /\s/u.test(snippetText[offset]!)) {
+      offset++;
+    }
+    if (snippetText[offset] !== "(") {
+      occurrences.push({
+        argumentsText: "",
+        endOffset: offset,
+      });
+      searchOffset = offset;
+      continue;
+    }
+    const balanced = readBalancedParenthesizedText(snippetText, offset);
+    occurrences.push({
+      argumentsText: balanced.content.trim(),
+      endOffset: balanced.endOffset,
+    });
+    searchOffset = balanced.endOffset;
+  }
+  return occurrences;
+}
+
+function readBalancedParenthesizedText(
+  text: string,
+  openOffset: number,
+): { readonly content: string; readonly endOffset: number } {
+  let depth = 0;
+  let quote: "'" | "\"" | "`" | null = null;
+  let escaped = false;
+  for (let offset = openOffset; offset < text.length; offset++) {
+    const char = text[offset]!;
+    if (quote !== null) {
+      if (escaped) {
+        escaped = false;
+        continue;
+      }
+      if (char === "\\") {
+        escaped = true;
+        continue;
+      }
+      if (char === quote) {
+        quote = null;
+      }
+      continue;
+    }
+    if (char === "'" || char === "\"" || char === "`") {
+      quote = char;
+      continue;
+    }
+    if (char === "(") {
+      depth++;
+      continue;
+    }
+    if (char === ")") {
+      depth--;
+      if (depth === 0) {
+        return {
+          content: text.slice(openOffset + 1, offset),
+          endOffset: offset + 1,
+        };
+      }
+    }
+  }
+  return {
+    content: text.slice(openOffset + 1),
+    endOffset: text.length,
+  };
+}
+
+function computedObserverDependencyKind(
+  snippetText: string,
+): "proxy-property-read" | "proxy-collection-read" | "deep-property-read" | "deep-collection-read" | null {
+  if (/\bdeep\s*:\s*true/u.test(snippetText)) {
+    return /\b(?:Array|Map|Set)\b|\.(?:map|filter|find|values|keys|entries|forEach)\s*\(/u.test(snippetText)
+      ? "deep-collection-read"
+      : "deep-property-read";
+  }
+  if (/\b(?:Array|Map|Set)\b|\.(?:map|filter|find|values|keys|entries|forEach)\s*\(/u.test(snippetText)) {
+    return "proxy-collection-read";
+  }
+  return hasComputedGetterSurface(snippetText) ? "proxy-property-read" : null;
+}
+
+function bindingObservedDependencyFilters(
+  snippetText: string,
+): readonly FrameworkCorpusFixtureSeedExpectedEffectFilterRow[] {
+  const expressions = bindingExpressionSurfaceTexts(snippetText);
+  if (expressions.length === 0) {
+    return [];
+  }
+  const filters: FrameworkCorpusFixtureSeedExpectedEffectFilterRow[] = [{
+    field: "dependencyKind",
+    value: observedDependencyKindForExpressions(expressions),
+    summary: "Snippet contains template expression reads collected by Aurelia's active connectable.",
+  }];
+  const sourceName = singleSimpleObservedDependencySourceName(expressions);
+  if (sourceName !== null) {
+    filters.push({
+      field: "sourceName",
+      value: sourceName,
+      summary: `Snippet has one simple observed dependency source expression: ${sourceName}.`,
+    });
+  }
+  return filters;
+}
+
+function observedDependencyKindForExpressions(
+  expressions: readonly string[],
+): "template-expression-read" | "template-collection-read" {
+  return expressions.some((expression) =>
+    /\.\s*(?:map|filter|find|findIndex|flatMap|some|every|reduce|reduceRight|sort|reverse|includes|indexOf|lastIndexOf|join|slice|forEach)\s*\(/u.test(expression)
+  )
+    ? "template-collection-read"
+    : "template-expression-read";
+}
+
+function singleSimpleObservedDependencySourceName(expressions: readonly string[]): string | null {
+  const sourceNames = expressions.map(simpleObservedDependencySourceName);
+  if (sourceNames.some((sourceName) => sourceName === undefined)) {
+    return null;
+  }
+  return singleHintValue(sourceNames, (sourceName) => sourceName);
+}
+
+function simpleObservedDependencySourceName(expression: string): string | undefined {
+  const normalized = expression
+    .replace(/&\s*[A-Za-z_$][\w$-]*(?:\s*:\s*(?:"[^"]*"|'[^']*'|`[^`]*`|[^&]+))*/gu, "")
+    .trim();
+  return /^[A-Za-z_$][\w$]*(?:\.[A-Za-z_$][\w$]*)*$/u.test(normalized)
+    ? normalized
+    : undefined;
+}
+
+function bindingExpressionSurfaceTexts(snippetText: string): readonly string[] {
+  return uniqueSortedStrings([
+    ...bindingCommandExpressionTexts(snippetText),
+    ...interpolationExpressionTexts(snippetText),
+  ]);
+}
+
+function bindingCommandExpressionTexts(snippetText: string): readonly string[] {
+  return [...snippetText.matchAll(/\b[\w:-]+\.(?:bind|two-way|from-view|to-view)\s*=\s*(["'`])([\s\S]*?)\1/gu)]
+    .map((match) => match[2]?.trim() ?? "")
+    .filter((expression) => expression.length > 0);
+}
+
+function interpolationExpressionTexts(snippetText: string): readonly string[] {
+  return [...snippetText.matchAll(/\$\{([\s\S]*?)\}/gu)]
+    .map((match) => match[1]?.trim() ?? "")
+    .filter((expression) => expression.length > 0);
 }
 
 function bindingSurfaceFilters(
@@ -1255,9 +1830,9 @@ function isValueChannelTargetProperty(targetProperty: string): boolean {
   }
 }
 
-function singleHintValue<TValue extends string>(
-  hints: readonly BindingSurfaceHint[],
-  read: (hint: BindingSurfaceHint) => TValue | undefined,
+function singleHintValue<THint, TValue extends string>(
+  hints: readonly THint[],
+  read: (hint: THint) => TValue | undefined,
 ): TValue | null {
   const values = uniqueSortedStrings(hints
     .map(read)
@@ -1402,6 +1977,12 @@ function fixtureSeedClassificationReasons(
     if (hasValueChannelBindingSurface(snippetText)) {
       add("surface", "value-channel-binding", "Snippet contains an observer-backed binding value channel such as value/model/checked/class/style.");
     }
+    if (hasComputedDecoratorSurface(snippetText)) {
+      add("surface", "computed-decorator", "Snippet declares @computed metadata for getter or trackable method observation.");
+    }
+    if (hasComputedGetterSurface(snippetText)) {
+      add("surface", "computed-getter", "Snippet declares a getter surface that can enter ObserverLocator computed observation.");
+    }
     if (hasBindingSurfaceChannel(snippetText, "class-attribute-tokens")) {
       add("surface", "class-token-binding", "Snippet contains a whole-class binding channel such as class.bind or class interpolation.");
     }
@@ -1422,6 +2003,18 @@ function fixtureSeedClassificationReasons(
     }
     if (hasNativeCheckedBindingSurface(snippetText)) {
       add("surface", "native-checked-binding", "Snippet binds the native checked property on an input control.");
+    }
+    if (hasCheckedCollectionBindingSurface(snippetText)) {
+      add("surface", "checked-collection-binding", "Snippet combines checked binding with array or Set collection membership semantics.");
+    }
+    if (hasCheckedMapBindingSurface(snippetText)) {
+      add("surface", "checked-map-binding", "Snippet combines checked binding with Map key/boolean-value semantics.");
+    }
+    if (hasCustomMatcherBindingSurface(snippetText)) {
+      add("surface", "custom-matcher-binding", "Snippet binds matcher for checked or select value identity.");
+    }
+    if (hasSelectMultipleBindingSurface(snippetText)) {
+      add("surface", "select-multiple-binding", "Snippet binds a multiple select value channel.");
     }
     if (hasOptionModelBindingSurface(snippetText)) {
       add("surface", "option-model-binding", "Snippet binds option.model for select option value identity.");
@@ -1474,6 +2067,12 @@ function fixtureSeedClassificationReasons(
     if (hasStateSurface(snippetText)) {
       add("surface", "state-store", "Snippet contains a concrete state/store type, path, API, or DI resolution surface.");
     }
+  }
+  if (hasObserverLocatorDescriptorMatrixSurface(snippetText)) {
+    add("surface", "observer-locator-descriptor-matrix", "Snippet is the ObserverLocator descriptor matrix that grounds accessor descriptor target-access decisions.");
+  }
+  if (hasObserverLocatorSetterOnlyDescriptorCase(snippetText)) {
+    add("surface", "observer-locator-setter-only-accessor", "Snippet includes the setter-only accessor branch where configurable descriptors select ComputedObserver.");
   }
 
   for (const effect of effectHints) {
@@ -1609,10 +2208,6 @@ function hasAuComposeObjectComponentSurface(snippetText: string): boolean {
     /^<\s*au-compose\b/iu.test(tagText)
     && /\bcomponent\.bind\s*=\s*["']\s*(?:\{|new\s+|[A-Za-z_$][\w$]*Class\b)/u.test(tagText)
   );
-}
-
-function escapeRegExp(value: string): string {
-  return value.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function countConceptRows(
@@ -1803,6 +2398,31 @@ function testSnippetName(node: ts.CallExpression): string | null {
   return first !== undefined && ts.isStringLiteralLike(first)
     ? compactPreview(first.text).slice(0, 120)
     : null;
+}
+
+function isFrameworkObjectTestCase(node: ts.ObjectLiteralExpression): boolean {
+  const names = new Set(node.properties
+    .filter(ts.isPropertyAssignment)
+    .map((property) => propertyNameText(property.name))
+    .filter((name): name is string => name !== null));
+  return names.has("title") &&
+    (names.has("template") || names.has("ViewModel") || names.has("assertFn"));
+}
+
+function objectTestCaseName(node: ts.ObjectLiteralExpression): string | null {
+  for (const property of node.properties) {
+    if (
+      !ts.isPropertyAssignment(property) ||
+      propertyNameText(property.name) !== "title"
+    ) {
+      continue;
+    }
+    const initializer = property.initializer;
+    return ts.isStringLiteralLike(initializer)
+      ? compactPreview(initializer.text).slice(0, 120)
+      : null;
+  }
+  return null;
 }
 
 function visit(node: ts.Node, visitor: (node: ts.Node) => void): void {
@@ -1999,6 +2619,8 @@ function fixtureSeedSnippetWeight(
   switch (kind) {
     case "create-fixture-call":
       return 100;
+    case "object-test-case":
+      return 90;
     case "it-call":
       return 80;
     case "code-fence":

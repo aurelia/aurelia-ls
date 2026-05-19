@@ -33,8 +33,14 @@ export type ExpectedSemanticEffectKind =
   | 'external-template'
   /** The reopened app should expose compiled template analysis. */
   | 'template-compilation'
+  /** The reopened app should expose template diagnostic rows. */
+  | 'template-diagnostic'
   /** The reopened app should expose runtime controller/hydration facts. */
   | 'runtime-controller'
+  /** The reopened app should expose controller-owned runtime watcher facts. */
+  | 'runtime-watcher'
+  /** The reopened app should expose concrete observed dependencies collected by runtime watchers. */
+  | 'runtime-watcher-observed-dependency'
   /** The reopened app should expose dynamic AuCompose runtime composition facts. */
   | 'runtime-composition'
   /** The reopened app should expose observer/accessor target facts for template bindings. */
@@ -45,6 +51,14 @@ export type ExpectedSemanticEffectKind =
   | 'binding-value-channel'
   /** The reopened app should expose runtime binding-behavior application facts. */
   | 'binding-behavior-application'
+  /** The reopened app should expose source-side template connectable dependency reads for template bindings. */
+  | 'binding-observed-dependency'
+  /** The reopened app should expose source-backed @computed getter/method dependency declarations. */
+  | 'computed-observation-definition'
+  /** The reopened app should expose ObserverLocator ComputedObserver/ControlledComputedObserver source rows for getters. */
+  | 'computed-observer-source'
+  /** The reopened app should expose source-side dependency reads projected for computed observer getter semantics. */
+  | 'computed-observer-observed-dependency'
   /** The reopened app should expose static i18n translation-key products. */
   | 'i18n-translation-key'
   /** The reopened app should expose rendered i18n TranslationBinding target groups. */
@@ -63,6 +77,8 @@ export type ExpectedSemanticEffectKind =
   | 'authoring-taste'
   /** The authoring orientation should report repair rows or repair clusters matching the requested filters. */
   | 'authoring-repair'
+  /** The reopened app should expose open seam rows matching the requested filters. */
+  | 'open-seam'
   /** The reopened app should have no open seams for the requested scope. */
   | 'open-seam-closure';
 

@@ -8,6 +8,7 @@ import {
 } from '../di/container-materializer.js';
 import type { Container } from '../di/container.js';
 import { ConfigurationProductDetails } from '../configuration/product-details.js';
+import { ObservationProductDetails } from '../observation/product-details.js';
 import {
   EvidenceKind,
   EvidenceRole,
@@ -19,7 +20,9 @@ import type {
   ProvenanceHandle,
 } from '../kernel/handles.js';
 import { SemanticClaim } from '../kernel/claim.js';
-import { ConfigurationIdentity } from '../kernel/identity.js';
+import {
+  ConfigurationIdentity,
+} from '../kernel/identity.js';
 import {
   MaterializationRecord,
   MaterializedProduct,
@@ -47,6 +50,15 @@ import {
   RuntimeControllerLifecycleStepKind,
 } from '../template/runtime-controller.js';
 import type { TemplateCompilationProjectEmission } from '../template/template-compilation-project-pass.js';
+import { TemplateProductDetails } from '../template/product-details.js';
+import {
+  runtimeWatchersForDefinition,
+} from '../template/runtime-watcher-factory.js';
+import {
+  runtimeWatcherClaimsForController,
+  runtimeWatcherRecordsForController,
+} from '../template/runtime-watcher-publication.js';
+import type { TypeSystemProject } from '../type-system/project.js';
 
 /** ComponentAgent products created by pre-activation route-tree compilation. */
 export class RouteComponentAgentMaterializationProjectResult {
@@ -80,8 +92,9 @@ export class RouteComponentAgentMaterializationProjectPass {
     routeRuntime: RouteRuntimeTopologyProjectResult,
     routeTree: RouteTreeMaterializationProjectResult,
     templates: TemplateCompilationProjectEmission,
+    typeSystem: TypeSystemProject,
   ): RouteComponentAgentMaterializationProjectResult {
-    const emissions = this.componentAgentEmissions(routeRuntime, routeTree, templates);
+    const emissions = this.componentAgentEmissions(routeRuntime, routeTree, templates, typeSystem);
     this.commitComponentAgentRecords(project, emissions);
     this.publishControllerDetails(emissions);
     return new RouteComponentAgentMaterializationProjectResult(
@@ -95,6 +108,7 @@ export class RouteComponentAgentMaterializationProjectPass {
     routeRuntime: RouteRuntimeTopologyProjectResult,
     routeTree: RouteTreeMaterializationProjectResult,
     templates: TemplateCompilationProjectEmission,
+    typeSystem: TypeSystemProject,
   ): readonly ComponentAgentEmission[] {
     const routeContextsByIdentity = routeContextsByIdentityHandle(routeRuntime);
     const compiledTemplateByDefinition = compiledTemplatesByDefinition(templates);
@@ -106,6 +120,7 @@ export class RouteComponentAgentMaterializationProjectPass {
         routeContextsByIdentity,
         compiledTemplateByDefinition,
         routeNode,
+        typeSystem,
       )
     );
   }
@@ -131,6 +146,11 @@ export class RouteComponentAgentMaterializationProjectPass {
         ConfigurationProductDetails.Controller,
         emission.controller.productHandle,
         emission.controller.toControllerProduct(),
+      );
+      this.store.productDetails.addAll(TemplateProductDetails.RuntimeWatcher, emission.controller.readWatchers());
+      this.store.productDetails.addAll(
+        ObservationProductDetails.RuntimeWatcherObservedDependency,
+        emission.controller.readWatchers().flatMap((watcher) => watcher.observedDependencies),
       );
     }
   }
@@ -171,6 +191,7 @@ function componentAgentEmissionForRouteNode(
   routeContextsByIdentity: ReadonlyMap<IdentityHandle | null, RouteContextModel>,
   compiledTemplateByDefinition: ReadonlyMap<string, ProductHandle>,
   routeNode: RouteNodeModel,
+  typeSystem: TypeSystemProject,
 ): readonly ComponentAgentEmission[] {
   if (routeNode.recognizedRoute == null) {
     return [];
@@ -191,6 +212,7 @@ function componentAgentEmissionForRouteNode(
     routeContextContainer,
     customElementDefinitionForRouteNode(store, routeNode),
     compiledTemplateByDefinition.get(routeNode.component?.resolvedProductHandle ?? '') ?? null,
+    typeSystem,
   )];
 }
 
@@ -202,6 +224,7 @@ function componentAgentEmission(
   routeContextContainer: Container | null,
   definition: CustomElementDefinition | null,
   compiledTemplateProductHandle: ProductHandle | null,
+  typeSystem: TypeSystemProject,
 ): ComponentAgentEmission {
   const handles = componentAgentHandles(store, routeNode);
   const controllerEmission = componentAgentControllerEmission(
@@ -213,6 +236,7 @@ function componentAgentEmission(
     definition,
     compiledTemplateProductHandle,
     handles.provenanceHandle,
+    typeSystem,
   );
   const componentAgent = componentAgentModel(
     handles.productHandle,
@@ -264,6 +288,7 @@ function componentAgentControllerEmission(
   definition: CustomElementDefinition | null,
   compiledTemplateProductHandle: ProductHandle | null,
   provenanceHandle: ProvenanceHandle,
+  typeSystem: TypeSystemProject,
 ): RoutedControllerEmission | null {
   return routeContextContainer == null || definition == null
     ? null
@@ -276,6 +301,7 @@ function componentAgentControllerEmission(
       definition,
       compiledTemplateProductHandle,
       provenanceHandle,
+      typeSystem,
     );
 }
 
@@ -343,6 +369,7 @@ function routedControllerEmission(
   definition: CustomElementDefinition,
   compiledTemplateProductHandle: ProductHandle | null,
   provenanceHandle: ProvenanceHandle,
+  typeSystem: TypeSystemProject,
 ): RoutedControllerEmission {
   const sourceAddressHandle = routeNode.sourceAddressHandle;
   const childContainer = routedComponentChildContainer(
@@ -359,6 +386,9 @@ function routedControllerEmission(
     sourceAddressHandle,
     provenanceHandle,
   );
+  for (const watcher of runtimeWatchersForDefinition(store, local, controller, definition, typeSystem)) {
+    controller.addWatcher(watcher);
+  }
   recordRoutedControllerHydration(controller, childContainer, sourceAddressHandle);
   const claim = routedControllerCompiledTemplateClaim(store, local, controller, compiledTemplateProductHandle, provenanceHandle);
   return {
@@ -456,6 +486,8 @@ function recordsForRoutedController(
   claim: SemanticClaim | null,
   provenanceHandle: ProvenanceHandle,
 ): readonly KernelStoreRecord[] {
+  const watcherClaims = runtimeWatcherClaimsForController(store, local, controller, provenanceHandle);
+  const claims = claim == null ? watcherClaims : [claim, ...watcherClaims];
   return [
     ...childContainer.records,
     new ConfigurationIdentity(
@@ -476,9 +508,10 @@ function recordsForRoutedController(
       store.handles.materialization(`${local}:runtime-controller`),
       controller.identityHandle,
       [controller.productHandle],
-      claim == null ? [] : [claim.handle],
+      claims.map((claim) => claim.handle),
     ),
-    ...(claim == null ? [] : [claim]),
+    ...runtimeWatcherRecordsForController(store, local, controller, provenanceHandle, watcherClaims),
+    ...claims,
   ];
 }
 

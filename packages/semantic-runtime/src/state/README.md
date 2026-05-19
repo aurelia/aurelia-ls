@@ -16,6 +16,12 @@ binding context is the configured store's initial-state type. `& state` binding 
 expression-evaluation handoff; `.state` / `.dispatch` commands publish the prepared scope as their instruction
 expression scope because framework `StateBinding.bind(...)` and `StateDispatchBinding.bind(...)` create that scope
 during controller bind.
+`observation/runtime-binding-expression-scope.ts` spends the same handoff for source data-flow and observed-dependency
+projection. This matters because Aurelia `astBind(...)` lets the state binding behavior call `binding.useScope(...)`
+before later source evaluation, while `astEvaluate(...)` simply unwraps binding behaviors. Binding-behavior arguments
+are evaluated during bind with no active connectable, so they are not ordinary observed source dependencies. Interpolation
+holes participate through runtime-html `InterpolationPartBinding`: each hole binds its own expression, so `& state`
+inside text interpolation can install the same store-backed scope as a bind-command expression.
 
 Raw framework errors are linked through `StateRawErrorAuthority` because `@aurelia/state` currently throws plain
 `Error` instances instead of `ErrorNames`/AUR codes. Only add a raw authority constant when semantic-runtime has a

@@ -30,6 +30,11 @@ import {
   standardFormTemplateBindingExpectedEffects,
 } from './form-recipe-expected-effects.js';
 import {
+  requestCanSubmitComputedObserverDependencyEffect,
+  requestCanSubmitComputedObserverSourceEffect,
+  requestCanSubmitTemplateObservedDependencyEffect,
+} from './form-expected-effects.js';
+import {
   componentStyleAssetPlanStep,
   entrypointPlanStep,
   externalTemplatePlanStep,
@@ -147,6 +152,9 @@ export function buildRoutedStateBackedFormPlan(request: RoutedStateBackedFormRec
       [
         new AuthoringPreference('state-ownership', 'di-owned-state-class'),
         new AuthoringPreference('component-interface', 'scalar-id-inputs'),
+        new AuthoringPreference('template-model-access', 'direct-state-domain-template-binding'),
+        new AuthoringPreference('template-model-access', 'template-local-domain-adaptation'),
+        new AuthoringPreference('template-model-access', 'meaningful-viewmodel-adaptation'),
         new AuthoringPreference('navigation-ownership', 'static-route-config'),
         new AuthoringPreference('navigation-ownership', 'decorator-route-config'),
         new AuthoringPreference('navigation-ownership', 'child-routes-property-route-config'),
@@ -611,6 +619,23 @@ function routedStateBackedFormExpectedEffects(
       new ExpectedSemanticEffectFilter('originKind', 'child-routes-property'),
       new ExpectedSemanticEffectFilter('valueKind', 'object-literal'),
     ]),
+    requestCanSubmitComputedObserverSourceEffect(
+      'Routed form app models request submit readiness as a plain domain getter observer.',
+    ),
+    requestCanSubmitComputedObserverDependencyEffect(
+      'Routed form request submit-readiness getter observes customerName.',
+      'this.customerName',
+    ),
+    requestCanSubmitComputedObserverDependencyEffect(
+      'Routed form request submit-readiness getter observes email.',
+      'this.email',
+    ),
+    requestCanSubmitTemplateObservedDependencyEffect(
+      'Routed form template observes request.canSubmit without a view-model forwarding getter.',
+      'request.canSubmit',
+      'request',
+      'canSubmit',
+    ),
     ExpectedSemanticEffect.discriminatorCapability('Routed form app exposes verifiable router authoring for the modeled route topology.', 'router', 'verifiable'),
     ExpectedSemanticEffect.discriminatorTaste('Routed form app reports static route config.', 'navigation-ownership', 'static-route-config', 'route'),
     ExpectedSemanticEffect.signatureTaste('Routed form app reports decorator route config.', 'navigation-ownership', 'decorator-route-config', 'route'),

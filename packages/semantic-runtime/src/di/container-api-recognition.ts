@@ -218,7 +218,7 @@ function booleanArgument(
   return null;
 }
 
-function isAureliaContainerReceiver(
+export function isAureliaContainerReceiver(
   checker: ts.TypeChecker,
   receiver: ts.Expression,
   methodKind: DiContainerApiMethodKind,

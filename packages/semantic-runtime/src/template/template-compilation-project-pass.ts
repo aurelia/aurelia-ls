@@ -32,6 +32,10 @@ import type { KernelStore } from '../kernel/store.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
+import {
+  runtimeBoundControllerValueTableForTemplateResources,
+  type RuntimeBoundControllerValueTable,
+} from '../observation/runtime-bound-controller-value.js';
 import type { StateStoreConfiguration } from '../state/model.js';
 import {
   AttributeClassificationMaterializer,
@@ -456,8 +460,10 @@ export class TemplateCompilationProjectPass {
     expressionWorld: CheckerExpressionTypeWorld,
     phases: TemplateCompilationPhaseRecorder,
   ): readonly TemplateResourceRuntimeAnalysisEmission[] {
-    return compilations.map((compilation) =>
-      new TemplateResourceRuntimeAnalysisEmission(
+    const resources: TemplateResourceRuntimeAnalysisEmission[] = [];
+    for (const compilation of compilations) {
+      const boundControllerValues = runtimeBoundControllerValueTableForTemplateResources(resources);
+      resources.push(new TemplateResourceRuntimeAnalysisEmission(
         compilation,
         phases.measure(
           'runtime-analysis',
@@ -471,10 +477,12 @@ export class TemplateCompilationProjectPass {
             runtimeAnalysisDepth,
             expressionWorld,
             phases.telemetry,
+            boundControllerValues,
           ),
         ),
-      )
-    );
+      ));
+    }
+    return resources;
   }
 
   private compilerWorldForDefinition(
@@ -735,6 +743,7 @@ export class TemplateCompilationProjectPass {
     analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` = DEFAULT_SEMANTIC_APP_ANALYSIS_DEPTH,
     expressionWorld: CheckerExpressionTypeWorld | null = null,
     telemetry: SemanticRuntimeTelemetryOptions | null = null,
+    boundControllerValues?: RuntimeBoundControllerValueTable,
   ): TemplateRuntimeAnalysisEmission {
     return this.runtimeAnalysis.materialize(new TemplateRuntimeAnalysisRequest(
       compilation.localKey,
@@ -750,6 +759,7 @@ export class TemplateCompilationProjectPass {
       analysisDepth,
       expressionWorld,
       telemetry,
+      boundControllerValues,
     ));
   }
 }

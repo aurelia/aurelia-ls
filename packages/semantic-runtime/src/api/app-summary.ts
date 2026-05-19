@@ -6,6 +6,16 @@ import type { KernelStore } from '../kernel/store.js';
 import type { TemplateCompilerWorldEmission } from '../template/compiler-world-materializer.js';
 import { readAppOpenSeams } from './open-seam-projections.js';
 import type { SemanticAppSummary, SemanticSourceRoleCount } from './contracts.js';
+import {
+  resourceLocalBindingBehaviorApplications,
+  resourceLocalBindingDataFlows,
+  resourceLocalBindingObservedDependencies,
+  resourceLocalBindingSourceOperations,
+  resourceLocalBindingTargetAccesses,
+  resourceLocalBindingTargetOperations,
+  resourceLocalBindingValueChannels,
+  resourceLocalRuntimeBindings,
+} from './runtime-resource-ownership.js';
 
 type TemplateResourceEmission = AureliaAppWorldProjectEmission['templates']['resources'][number];
 
@@ -81,6 +91,8 @@ interface AppSummaryTemplateCounts {
   readonly compiledResources: number;
   readonly compiledInstructions: number;
   readonly runtimeBindings: number;
+  readonly runtimeWatchers: number;
+  readonly runtimeWatcherObservedDependencies: number;
   readonly runtimeTargetOperations: number;
   readonly runtimeRendererTargetOperations: number;
   readonly runtimeBindingTargetAccesses: number;
@@ -89,6 +101,7 @@ interface AppSummaryTemplateCounts {
   readonly runtimeBindingBehaviorApplications: number;
   readonly runtimeBindingValueChannels: number;
   readonly runtimeBindingDataFlows: number;
+  readonly runtimeBindingObservedDependencies: number;
   readonly runtimeBindingDataFlowSourceTypeGaps: number;
   readonly runtimeBindingDataFlowSourceAssignmentPressures: number;
   readonly bindingScopes: number;
@@ -114,11 +127,17 @@ export function readSemanticAppSummary(
     resourceDefinitions: emission.resources.readDefinitions().length,
     ...routerSummaryCounts(emission),
     ...configurationSummaryCounts(emission),
+    computedObservationDefinitions: emission.computedObservation.readDefinitions().length,
+    computedObserverSources: emission.computedObserverSources.readComputedObservers().length,
+    computedObserverObservedDependencies: emission.computedObserverSources.readObservedDependencies().length,
+    runtimeEffects: emission.runtimeEffects.readEffects().length,
+    runtimeEffectObservedDependencies: emission.runtimeEffects.readObservedDependencies().length,
+    proxyObservableEscapes: emission.proxyObservableEscapes.readEscapes().length,
     ...i18nSummaryCounts(emission),
     appTasks: appTaskSummaryCount(emission),
     ...diSummaryCounts(emission, templates),
     ...compilerWorldSummaryCounts(emission.templates.compilerWorlds),
-    ...templateSummaryCounts(templates),
+    ...templateSummaryCounts(emission, store),
     ...kernelSummaryCounts(store, appOpenSeams.length),
   };
 }
@@ -237,12 +256,16 @@ function compilerWorldSummaryCounts(
   };
 }
 
-function templateSummaryCounts(templates: readonly TemplateResourceEmission[]): AppSummaryTemplateCounts {
+function templateSummaryCounts(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+): AppSummaryTemplateCounts {
+  const templates = emission.templates.resources;
   const runtimeRendererTargetOperations = sumTemplates(templates, (resource) =>
-    resource.runtimeAnalysis.runtimeRendering.targetOperations.length
+    resourceLocalBindingTargetOperations(store, resource).filter((operation) => operation.binding == null).length
   );
   const runtimeBindingTargetOperations = sumTemplates(templates, (resource) =>
-    resource.runtimeAnalysis.controllerBind.targetOperations.length
+    resourceLocalBindingTargetOperations(store, resource).filter((operation) => operation.binding != null).length
   );
   return {
     compiledResources: templates.length,
@@ -250,34 +273,79 @@ function templateSummaryCounts(templates: readonly TemplateResourceEmission[]): 
       resource.compilation.compiledTemplate.instructions.length
     ),
     runtimeBindings: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.runtimeRendering.bindings.length
+      resourceLocalRuntimeBindings(store, resource).length
     ),
+    runtimeWatchers: runtimeWatcherCount(emission),
+    runtimeWatcherObservedDependencies: runtimeWatcherObservedDependencyCount(emission),
     runtimeTargetOperations: runtimeRendererTargetOperations + runtimeBindingTargetOperations,
     runtimeRendererTargetOperations,
     runtimeBindingTargetAccesses: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.controllerBind.targetAccesses.length
+      resourceLocalBindingTargetAccesses(store, resource).length
     ),
     runtimeBindingTargetOperations,
     runtimeBindingSourceOperations: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.controllerBind.sourceOperations.length
+      resourceLocalBindingSourceOperations(store, resource).length
     ),
     runtimeBindingBehaviorApplications: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.bindingBehavior.applications.length
+      resourceLocalBindingBehaviorApplications(store, resource).length
     ),
     runtimeBindingValueChannels: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.bindingValueChannel.valueChannels.length
+      resourceLocalBindingValueChannels(store, resource).length
     ),
     runtimeBindingDataFlows: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.bindingDataFlow.dataFlows.length
+      resourceLocalBindingDataFlows(store, resource).length
+    ),
+    runtimeBindingObservedDependencies: sumTemplates(templates, (resource) =>
+      resourceLocalBindingObservedDependencies(store, resource).length
     ),
     runtimeBindingDataFlowSourceTypeGaps: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.bindingDataFlow.dataFlows.filter((dataFlow) => dataFlow.sourceTypeOpenReason != null).length
+      resourceLocalBindingDataFlows(store, resource).filter((dataFlow) => dataFlow.sourceTypeOpenReason != null).length
     ),
     runtimeBindingDataFlowSourceAssignmentPressures: sumTemplates(templates, (resource) =>
-      resource.runtimeAnalysis.bindingDataFlow.dataFlows.filter((dataFlow) => dataFlow.sourceAssignmentReason != null).length
+      resourceLocalBindingDataFlows(store, resource).filter((dataFlow) => dataFlow.sourceAssignmentReason != null).length
     ),
     bindingScopes: sumTemplates(templates, (resource) => resource.runtimeAnalysis.scopes.readScopes().length),
   };
+}
+
+function runtimeWatcherCount(emission: AureliaAppWorldProjectEmission): number {
+  const watcherHandles = new Set<unknown>();
+  for (const resource of emission.templates.resources) {
+    for (const watcher of resource.runtimeAnalysis.runtimeRendering.watchers) {
+      watcherHandles.add(watcher.productHandle);
+    }
+    for (const controller of resource.runtimeAnalysis.runtimeComposition.composedControllers) {
+      for (const watcher of controller.readWatchers()) {
+        watcherHandles.add(watcher.productHandle);
+      }
+    }
+  }
+  for (const controller of emission.routeComponentAgents.readControllers()) {
+    for (const watcher of controller.readWatchers()) {
+      watcherHandles.add(watcher.productHandle);
+    }
+  }
+  return watcherHandles.size;
+}
+
+function runtimeWatcherObservedDependencyCount(emission: AureliaAppWorldProjectEmission): number {
+  let count = 0;
+  for (const resource of emission.templates.resources) {
+    for (const watcher of resource.runtimeAnalysis.runtimeRendering.watchers) {
+      count += watcher.observedDependencies.length;
+    }
+    for (const controller of resource.runtimeAnalysis.runtimeComposition.composedControllers) {
+      for (const watcher of controller.readWatchers()) {
+        count += watcher.observedDependencies.length;
+      }
+    }
+  }
+  for (const controller of emission.routeComponentAgents.readControllers()) {
+    for (const watcher of controller.readWatchers()) {
+      count += watcher.observedDependencies.length;
+    }
+  }
+  return count;
 }
 
 function kernelSummaryCounts(store: KernelStore, kernelOpenSeams: number): AppSummaryKernelCounts {

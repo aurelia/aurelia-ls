@@ -16,15 +16,69 @@ still be realistic app code rather than artificial parser torture cases.
   weak metadata bags, dynamic native controls, a custom two-way picklist, and an authored member access on a known
   primitive owner. It exists to pressure diagnostics, authoring orientation, binding observer inference, missing-member
   policy, and weak-type explanations without teaching the authoring API to generate the same shape.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:template-diagnostics` protects its target-to-source assignment
+  strictness diagnostics, including the declaration source used as the future repair/code-action target.
 - `module-loader-invalid-transform-input` captures `aliasedResourcesRegistry(...)` being given a statically closed
   primitive module input. It preserves kernel `ModuleLoader` `invalid_module_transform_input` / `AUR0021` pressure in
   the evaluation issue lane without teaching authoring recipes to generate invalid registry module inputs.
-- `computed-decorator-contexts` captures valid getter/method `@computed(...)` usage beside field, setter, and auto-accessor
-  call-form targets. It preserves runtime `computed_not_getter` / `AUR0228` as an observation source issue without
-  claiming the different bare `@computed` direct-method overload path.
-- `weak-owner-repair-planning` captures a repeat local whose iterable owner is unresolved, then reads multiple members
-  from that local. It exists to pressure repair planning around the difference between the diagnostic member span and
-  the scope slot that actually needs typing.
+- `computed-decorator-contexts` captures valid getter/method `@computed(...)` usage, including direct and config-object
+  getter dependency functions plus `deep: true` explicit dependency keys, beside field, setter, and auto-accessor
+  call-form targets. It preserves runtime `computed_not_getter` / `AUR0228` as an observation source issue while
+  pressure-testing the separate `ComputedObserverSource` source-observer projection lane for plain getter descriptors,
+  getter-owned `ControlledComputedObserver`, dependency-literal provenance, and first TypeChecker-shaped deep
+  property/collection rows.
+- `watcher-proxy-dependencies` captures a valid `@watch` dependency collection function that reads root properties,
+  collection methods, local aliases/destructuring, and wrapped callback element properties through Aurelia's
+  `ProxyObservable` path. It preserves computed watcher dependency pressure without treating those reads as ordinary
+  renderer binding expressions. The fixture also covers array `reduce` current-item wrapping, array
+  `every`/`findIndex`/`flatMap`/`slice` collection reads, raw array `sort` comparator values, map `forEach` value/key
+  wrapping, map `has`, explicit `keys()`/`values()` iterator paths, and wrapped result chains, which are easy to
+  mis-model if callback parameters or collection methods are treated uniformly. It also rejects arbitrary object-method
+  callback execution until a framework wrapper or evaluator-proven invocation boundary exists. It also covers
+  `@nowrap` class and field escape hatches so external or host-owned objects can leave proxy observation without
+  creating fake downstream dependency rows, and TypeScript default-library object brands such as `Date`, `Error`,
+  `URL`, and `RegExp` whose owning property reads are observable but whose returned host objects should not become
+  downstream proxy carriers.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:proxy-observation` is the focused semantic contract for this
+  fixture.
+- `source-observation-effects` captures direct `IObservation.watch(...)` source calls: a function getter that enters
+  the ObserverLocator function-key `ComputedObserver` branch and a string expression that enters the
+  `getExpressionObserver(...)` / astEvaluate branch. It preserves source-level effect ownership separately from
+  resource `@watch` metadata and template binding dependency rows, and keeps `Container.get(IObservation)`
+  recognition on the shared TypeChecker-backed container API lane. It also covers direct `IObservation.run(...)`
+  effects where synchronous `@observable` getter reads are collected through the active `RunEffect` connectable window,
+  plus a dynamic string watch expression that should preserve the source effect while leaving dependency evaluation
+  open.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:runtime-effect-observation` is the focused semantic contract
+  for this fixture.
+- `proxy-observable-escapes` captures direct source calls to `ProxyObservable.getRaw(...)` and
+  `ProxyObservable.unwrap(...)`. It preserves neutral source-level facts about raw/proxy boundary crossings so later
+  authoring or diagnostic policy can reason about external-library handoff and unnecessary escapes without baking that
+  judgment into the observation substrate.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:proxy-observable-escapes` is the focused semantic contract for
+  this fixture.
+- `template-collection-observation` captures binding-expression collection observation for array method calls, nested
+  callback locals, dynamic keyed owners, and non-array lookalikes. It keeps template `astEvaluate` array collection
+  semantics separate from ProxyObservable collection wrappers: `forEach` / `findLast` callback bodies can be observed
+  without becoming collection rows, `includes` becomes a collection row without inventing callback locals, and object
+  methods named `map` or `get` do not inherit array/map semantics by name. Template `sort` is intentionally present as
+  the mirror-image of the proxy watcher sort case: `astEvaluate` executes the Aurelia arrow callback under the active
+  connectable, so comparator member reads are template dependencies even though proxy sort comparator values stay raw.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:template-collection-observation` is the focused semantic
+  contract for this fixture.
+- `one-hop-forwarding-accessor` captures a component getter that only returns a property chain rooted at a DI-injected
+  state class, beside a meaningful presentation getter, an unused getter, and a direct `state.*` template binding. It
+  exists to pressure authoring orientation toward low-boilerplate guidance without treating every getter as suspect or
+  every source-observer candidate as a template-read observation.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:one-hop-forwarding-accessor` is the focused semantic contract
+  for this fixture.
+- `weak-owner-repair-planning` captures missing repeat-local slot typing, an `any[]` repeat local, an `any`-typed owner
+  property/method return, an index-signature-only owner, and a typed owner with a genuinely missing member. It exists to
+  pressure repair planning around the difference between the diagnostic member span, the scope slot that needs typing,
+  the iterable/source slot that introduced a weak repeat local, the authored TypeScript type annotation or return type
+  that should receive a future owner-type repair, and the inspect-owner fallback for non-weak missing members.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:template-diagnostics` is the focused semantic contract for this
+  fixture, including the shared repair cluster with member hints.
 - `di-resource-duplicates` captures two source-registered runtime-html resources with the same custom-element name. It
   preserves the runtime-html definition registrar duplicate warning (`element_existed` / `AUR0153`) as a
   resource-registration issue without teaching authoring recipes to generate colliding resource names. Kernel
@@ -65,11 +119,19 @@ still be realistic app code rather than artificial parser torture cases.
   teaching authoring recipes to decorate non-method members.
 - `checked-select-custom-matcher` captures `matcher.bind` on checked and select observers with object-valued
   `model.bind` options. It preserves the observer comparison handoff as value-channel facts and authoring
-  `custom-matcher-comparison` taste without teaching generated authoring recipes to prefer matcher-heavy forms.
+  `custom-matcher-comparison` taste across the exhaustive checked/select matrix. Generated authoring forms carry one
+  deliberate object-select matcher example; this pressure fixture still owns the broader behavior-grounding surface. It
+  is also part of `contract:select-checked-value-channels`, which protects checked array/set membership, map keyed-boolean
+  membership, radio object values, and select object values from collapsing into boolean or string-only channels. The
+  fixture also keeps readonly collection sources asymmetric: source-to-target observer synchronization can read
+  `ReadonlySet`, `ReadonlyMap`, and readonly arrays, while target-to-source flow rejects mutation.
 - `router-dynamic-pattern` captures router-resource `href` values produced by view-model methods returning a static
   route prefix with a runtime repeat-local hole, an external-link-like field, and a bare external-module boundary. It
   pressures evaluator string-pattern propagation, router recognition, and runtime-boundary repair planning without
   teaching semantic-runtime to classify arbitrary dynamic external links as internal routes.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:router-dynamic-pattern` protects both sides of that split: the
+  internal string-pattern link must materialize recognized route facts, while the bare external-module link must remain
+  an explicit router open seam instead of being guessed as internal or reported as a router issue.
 - `router-eager-path-generation-errors` captures an object navigation instruction whose routeable component resolves to
   a child route with a missing required parameter. It preserves `RouteConfigContext._generateViewportInstruction`
   `rcEagerPathGenerationFailed` / `AUR3166` pressure without teaching authoring recipes to omit route params.
@@ -113,15 +175,29 @@ still be realistic app code rather than artificial parser torture cases.
 - `runtime-observer-write-errors` captures target-side observer writes that Aurelia rejects after ObserverLocator has
   already selected a framework observer: source-to-target binding into a getter-only computed target (`AUR0221`) and a
   Map/Set `size` observer (`AUR0220`). It preserves the data-flow distinction between target observer selection and
-  write-time framework failure without teaching authoring recipes to create readonly bindable targets.
+  write-time framework failure without teaching authoring recipes to create readonly bindable targets. The same fixture
+  now includes a setter-only target to prove that only getter descriptors enter the computed-observer branch; setter-only
+  accessors remain runtime `SetterObserver` targets. It also carries a small SVG namespace-attribute target-access case:
+  Aurelia's `xlink:*`/selected `xml:*` namespace table must route through `AttributeNSAccessor`, while SVG XML attributes
+  outside that table remain generic SVG/data attributes. The plain `href.bind` case proves the accessor-time attr lane
+  uses the framework `DataAttributeAccessor` mirror rather than an invented attribute-accessor strategy.
+- `node-observer-strategy-errors` captures observer-forcing host-node bindings with `NodeObserverLocator.allowDirtyCheck`
+  disabled. Known native node properties such as `id.two-way` and `href.two-way` should report the exact runtime-html
+  `AUR0652` target-access diagnostic instead of reusing the accessor-only attr path.
+- `node-observer-config-errors` captures AppTask-time `NodeObserverLocator` service customization, including duplicate
+  built-in/global mappings (`AUR0653`) and a valid custom host-node observer configuration. The valid mapping is consumed
+  by an observer-forcing binding mode so the fixture preserves the framework split between `getAccessor(...)` and
+  `getObserver(...)` instead of pretending `useConfig(...)` rewrites every host-node property accessor.
 - `select-multiple-binding-order` mirrors Aurelia runtime-html select observer tests where `multiple.bind="true"` can
   appear before, between, or after other bound attributes. It pressure-tests the value-channel handoff from bound
   `multiple` evidence into single, multiple, and dynamic `SelectValueObserver` modes, including a dynamic source that
-  must accept both scalar option values and array-valued selection updates.
+  must accept both scalar option values and array-valued selection updates. It is covered by
+  `contract:select-checked-value-channels` so the static/dynamic split remains explicit.
 - `select-model-primitives` mirrors Aurelia forms docs/tests where `option model.bind="null"`, boolean option models,
   object-valued option models, and nullable radio `model.bind` values are framework-valid. It preserves primitive
   `model.bind` value-domain pressure so semantic-runtime does not flatten null/boolean/number model values into the
-  string-only `valueDomain` lane.
+  string-only `valueDomain` lane. Its contract coverage also preserves the directional distinction between
+  source-to-target synchronization acceptance and target-to-source option/model writeback domains.
 - `runtime-html-au-compose-errors` captures static `AuCompose` bindable setter failures for invalid `scope-behavior`
   and `flush-mode` literals. It preserves the controller-owned handoff from compiler-lowered `SetPropertyInstruction`
   rows to exact runtime-html `AUR0805` / `AUR0809` diagnostics while leaving runtime composition/lifecycle errors out
@@ -132,8 +208,12 @@ still be realistic app code rather than artificial parser torture cases.
   fulfillment lane, while sibling template-only compositions use a plain object view-model component and a non-resource
   class component. It pressures Aurelia's runtime-html composition controller semantics, candidate template analysis
   coverage, child-container handoff, object/class view-model composition, static component name resolution, and
-  `activate(model)` boundary without claiming live recursive
-  composed-child hydration.
+  `activate(model)` boundary without claiming live recursive composed-child hydration. The fixture also includes a
+  child custom element that receives a broad `Constructable`-typed widget kit through bindables and resolves a concrete
+  component with `Array.find(...)` plus an instance method predicate. That preserves the substrate pressure where
+  recursive rendering needs parent-to-child bound controller values, the static evaluator needs method-call `this`
+  binding, and exact object literals should return `undefined` for absent properties instead of widening into unknown
+  object shape.
 - `runtime-html-spread-renderer-errors` captures a valid custom-element bindable spread beside `$element.spread` on the
   same custom element. It preserves the `SpreadValueRenderer` dispatch failure for `spreading_invalid_target` /
   `AUR0820` without making invalid spread targets part of generated authoring recipes.
@@ -146,7 +226,9 @@ still be realistic app code rather than artificial parser torture cases.
 - `runtime-html-view-factory-provider-errors` captures an ordinary custom attribute that resolves `IViewFactory`
   beside a template controller that resolves the same key legitimately. It preserves the runtime-html
   `ViewFactoryProvider.resolve()` not-ready branch (`AUR0755`) without teaching authoring recipes to inject
-  template-controller-only context services into ordinary resources.
+  template-controller-only context services into ordinary resources. The ordinary attribute also contains a nested
+  class expression that resolves `IViewFactory`; that nested class is not activation-time execution and must not create
+  a second provider-not-ready diagnostic.
 - `synthetic-writeback-local` captures a two-way custom-attribute bindable that writes into a `$`-prefixed local such
   as `display-data.bind: $displayData`, then uses that local in later template scope. It preserves Aurelia's runtime
   writeback-local behavior without telling users to declare the synthetic local on their view-model.

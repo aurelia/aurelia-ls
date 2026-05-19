@@ -4,6 +4,7 @@ import {
   EvidenceRole,
 } from '../kernel/evidence.js';
 import type {
+  AddressHandle,
   EvidenceHandle,
   IdentityHandle,
   ProductHandle,
@@ -70,6 +71,7 @@ import {
 } from './runtime-binding-behavior-effect.js';
 import { RuntimeHtmlBindingBehaviorFrameworkErrorCode } from './framework-error-code.js';
 import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-expression-products.js';
+import { sourceAddressForRuntimeExpressionSpan } from './runtime-expression-source-address.js';
 import { appendRuntimeBindingProductValue } from './runtime-binding-product-index.js';
 
 export class RuntimeBindingBehaviorMaterializationRequest {
@@ -241,14 +243,21 @@ export class RuntimeBindingBehaviorMaterializer {
     if (issue === undefined) {
       return null;
     }
-    const application = this.applicationProduct(local, binding, targetAccess, behavior, source);
+    const expressionSource = sourceAddressForRuntimeExpressionSpan(
+      this.store,
+      local,
+      binding.sourceAddressHandle,
+      behavior.name.span,
+    );
+    const application = this.applicationProduct(local, binding, targetAccess, behavior, expressionSource.handle, source);
     const issueProduct = issue == null
       ? null
-      : this.issueProduct(`${local}:issue:${issue.issueKind}`, application, binding, targetAccess, issue, source);
+      : this.issueProduct(`${local}:issue:${issue.issueKind}`, application, binding, targetAccess, issue, expressionSource.handle, source);
     return new RuntimeBindingBehaviorPublication(
       application,
       issueProduct == null ? [] : [issueProduct],
       [
+        ...expressionSource.records,
         ...recordsForApplication(application, binding.identityHandle, source.provenanceHandle),
         ...(issueProduct == null
           ? []
@@ -381,6 +390,7 @@ export class RuntimeBindingBehaviorMaterializer {
     binding: RuntimeBinding,
     targetAccess: RuntimeBindingTargetAccess | null,
     behavior: BindingBehaviorExpression,
+    sourceAddressHandle: AddressHandle | null,
     source: RuntimeBindingBehaviorSourceSet,
   ): RuntimeBindingBehaviorApplication {
     return new RuntimeBindingBehaviorApplication(
@@ -392,7 +402,7 @@ export class RuntimeBindingBehaviorMaterializer {
       behavior.name.name,
       behavior.args.length,
       behavior.args.flatMap(staticArgumentValueForArg),
-      binding.sourceAddressHandle,
+      sourceAddressHandle,
     );
   }
 
@@ -402,6 +412,7 @@ export class RuntimeBindingBehaviorMaterializer {
     binding: RuntimeBinding,
     targetAccess: RuntimeBindingTargetAccess | null,
     issue: BuiltInBindingBehaviorBindIssue,
+    sourceAddressHandle: AddressHandle | null,
     source: RuntimeBindingBehaviorSourceSet,
   ): RuntimeBindingBehaviorIssue {
     return new RuntimeBindingBehaviorIssue(
@@ -414,7 +425,7 @@ export class RuntimeBindingBehaviorMaterializer {
       issue.issueKind,
       issue.message,
       issue.frameworkErrorCode,
-      binding.sourceAddressHandle,
+      sourceAddressHandle,
     );
   }
 

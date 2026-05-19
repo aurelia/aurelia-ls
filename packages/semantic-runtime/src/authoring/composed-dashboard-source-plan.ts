@@ -88,7 +88,6 @@ function composedDashboardRootComponentFile(model: ComposedDashboardSourcePlanMo
       ROOT_TEMPLATE_MODULE: moduleSpecifier(model.rootComponentPath, model.rootTemplatePath, true),
       STATE_CLASS: model.stateClassName,
       STATE_MODULE: moduleSpecifier(model.rootComponentPath, model.statePath, false),
-      WIDGET_MODEL_NAME: model.widgetModelName,
     }),
   );
 }
@@ -184,11 +183,11 @@ new Aurelia()
   .start();
 `);
 
-const ROOT_COMPONENT_SOURCE = sourceText(`import { customElement, type ICompositionController } from '@aurelia/runtime-html';
+const ROOT_COMPONENT_SOURCE = sourceText(`import { customElement } from '@aurelia/runtime-html';
 import { resolve } from '@aurelia/kernel';
 import { __CHART_WIDGET_CLASS__ } from '__CHART_WIDGET_MODULE__';
 import { __INVENTORY_WIDGET_CLASS__ } from '__INVENTORY_WIDGET_MODULE__';
-import { __STATE_CLASS__, type __WIDGET_MODEL_NAME__ } from '__STATE_MODULE__';
+import { __STATE_CLASS__ } from '__STATE_MODULE__';
 import template from '__ROOT_TEMPLATE_MODULE__';
 
 @customElement({
@@ -198,14 +197,10 @@ import template from '__ROOT_TEMPLATE_MODULE__';
 })
 export class __ROOT_COMPONENT_CLASS__ {
   readonly state = resolve(__STATE_CLASS__);
-  summaryComposition?: ICompositionController;
+  summaryComposition?: unknown;
   summaryPending?: Promise<void> | void;
 
   readonly summaryTemplate = '<p class="dashboard-summary">Alert summary is composed at runtime.</p>';
-
-  get isSummaryLoading(): boolean {
-    return this.summaryPending != null;
-  }
 
   getAsyncSummaryTemplate(): Promise<string> {
     return Promise.resolve(this.summaryTemplate);

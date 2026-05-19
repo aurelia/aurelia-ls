@@ -28,6 +28,7 @@ import {
 } from '../type-system/binding-pattern-locals.js';
 import {
   CheckerTypeProjectionOrigin,
+  checkerTypeReferenceWithSource,
   type CheckerTypeReference,
 } from '../type-system/type-shape.js';
 import {
@@ -155,7 +156,7 @@ export class TemplateScopeTypeProjector {
       effect.sourceAddressHandle,
     );
     return evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
-      ? evaluation.typeReference
+      ? checkerTypeReferenceWithSource(evaluation.typeReference, evaluation.sourceAddressHandle)
       : null;
   }
 
@@ -195,7 +196,7 @@ export class TemplateScopeTypeProjector {
       effect.sourceAddressHandle,
     );
     const elementType = projection.element.kind === CheckerExpressionTypeEvaluationResultKind.Type
-      ? projection.element.typeReference
+      ? checkerTypeReferenceWithSource(projection.element.typeReference, projection.element.sourceAddressHandle)
       : null;
     const localProjection = projection.locals instanceof CheckerBindingPatternLocalProjection
       ? projection.locals

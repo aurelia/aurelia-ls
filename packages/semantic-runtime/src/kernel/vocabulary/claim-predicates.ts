@@ -310,6 +310,17 @@ export const KernelClaimPredicates = {
       ),
     ),
 
+    /** A modeled controller owns a runtime watcher through Controller.addBinding. */
+    ControllerOwnsRuntimeWatcher: defineClaimPredicate(
+      KernelVocabularyNamespace.Configuration,
+      'controller-owns-runtime-watcher',
+      'A modeled controller owns a ComputedWatcher or ExpressionWatcher through Controller.addBinding during watcher setup.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Configuration.Controller),
+        productEndpoint(KernelProductKinds.Binding.RuntimeWatcher),
+      ),
+    ),
+
     /** A modeled controller is associated with the compiled template for its resource definition. */
     ControllerUsesCompiledTemplate: defineClaimPredicate(
       KernelVocabularyNamespace.Configuration,
@@ -1095,6 +1106,39 @@ export const KernelClaimPredicates = {
       ),
     ),
 
+    /** A runtime binding exposes a source-side dependency read collected by template connectable observation. */
+    RuntimeBindingUsesObservedDependency: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'runtime-binding-uses-observed-dependency',
+      'A runtime binding exposes a source-side dependency read collected during source-to-target template connectable observation.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.RuntimeBinding),
+        productEndpoint(KernelProductKinds.Binding.ObservedDependency),
+      ),
+    ),
+
+    /** A runtime watcher exposes a source-side dependency read collected by watcher execution. */
+    RuntimeWatcherUsesObservedDependency: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'runtime-watcher-uses-observed-dependency',
+      'A runtime watcher exposes a source-side dependency read collected during watcher expression evaluation.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.RuntimeWatcher),
+        productEndpoint(KernelProductKinds.Binding.ObservedDependency),
+      ),
+    ),
+
+    /** A runtime binding data-flow edge is explained by a source-side observed dependency. */
+    DataFlowUsesObservedDependency: defineClaimPredicate(
+      KernelVocabularyNamespace.Binding,
+      'data-flow-uses-observed-dependency',
+      'A runtime binding data-flow edge is explained by a source-side dependency read collected during source-to-target evaluation.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Binding.DataFlow),
+        productEndpoint(KernelProductKinds.Binding.ObservedDependency),
+      ),
+    ),
+
     /** A binding scope effect produced a modeled runtime Scope. */
     ScopeEffectCreatesBindingScope: defineClaimPredicate(
       KernelVocabularyNamespace.Binding,
@@ -1103,6 +1147,30 @@ export const KernelClaimPredicates = {
       claimSignature(
         productEndpoint(KernelProductKinds.Binding.ScopeEffect),
         productEndpoint(KernelProductKinds.Configuration.BindingScope),
+      ),
+    ),
+  },
+  Observation: {
+
+    /** A source-backed observer exposes a dependency read collected by its execution path. */
+    SourceObserverUsesObservedDependency: defineClaimPredicate(
+      KernelVocabularyNamespace.Observation,
+      'source-observer-uses-observed-dependency',
+      'A source-backed observer exposes a dependency read collected by computed-observer or controlled-computed-observer execution.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Observation.SourceObserver),
+        productEndpoint(KernelProductKinds.Binding.ObservedDependency),
+      ),
+    ),
+
+    /** A source-level IEffect exposes a dependency read collected by its observer path. */
+    RuntimeEffectUsesObservedDependency: defineClaimPredicate(
+      KernelVocabularyNamespace.Observation,
+      'runtime-effect-uses-observed-dependency',
+      'A source-level IEffect exposes a dependency read collected by Observation.watch(...) execution.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Observation.RuntimeEffect),
+        productEndpoint(KernelProductKinds.Binding.ObservedDependency),
       ),
     ),
   },
@@ -1116,6 +1184,28 @@ export const KernelClaimPredicates = {
       claimSignature(
         productEndpoint(KernelProductKinds.Instruction.Instruction),
         productEndpoint(KernelProductKinds.Template.AttributeSyntax),
+      ),
+    ),
+
+    /** A runtime-compiled spread instruction used the hydrate-element instruction that owned the captured AttrSyntax. */
+    DynamicInstructionUsesCapturedAttributeContextInstruction: defineClaimPredicate(
+      KernelVocabularyNamespace.Instruction,
+      'dynamic-instruction-uses-captured-attribute-context-instruction',
+      'A dynamic instruction allocated during TemplateCompiler.compileSpread used the hydrate-element instruction whose captured AttrSyntax products formed the spread compilation input.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Instruction.Instruction),
+        productEndpoint(KernelProductKinds.Instruction.Instruction),
+      ),
+    ),
+
+    /** A runtime-compiled spread instruction used a concrete hydration context controller. */
+    DynamicInstructionUsesCapturedAttributeContextController: defineClaimPredicate(
+      KernelVocabularyNamespace.Instruction,
+      'dynamic-instruction-uses-captured-attribute-context-controller',
+      'A dynamic instruction allocated during TemplateCompiler.compileSpread used a concrete hydration context controller, distinguishing repeated uses of the same lowered instruction.',
+      claimSignature(
+        productEndpoint(KernelProductKinds.Instruction.Instruction),
+        productEndpoint(KernelProductKinds.Configuration.Controller),
       ),
     ),
 

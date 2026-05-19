@@ -571,6 +571,15 @@ export class CompletedInputPrimaryCorridor {
       : String(keyTok.value);
     const colon = this.state.peekToken();
     if (colon.type !== TokenType.Colon) {
+      if (keyTok.type === TokenType.Identifier) {
+        const shorthand = this.objectLiteralShorthandValue(keyTok);
+        if (isParseFailure(shorthand)) {
+          return shorthand;
+        }
+        keys.push(key);
+        values.push(shorthand);
+        return this.parseObjectLiteralSeparator(start, keys, values);
+      }
       return this.companionBuilder.missingObjectValueSeparatorFailure(
         "Expected ':' after object literal key",
         colon,
@@ -588,6 +597,31 @@ export class CompletedInputPrimaryCorridor {
     keys.push(key);
     values.push(value);
     return this.parseObjectLiteralSeparator(start, keys, values);
+  }
+
+  private objectLiteralShorthandValue(token: Token): ParseOutcome<AccessScopeExpression | AccessGlobalExpression> {
+    const name = this.deps.tokenToIdentifierName(token);
+    if (name === 'import') {
+      return this.state.failures.error(
+        "Bare 'import' is not allowed in binding expressions",
+        token,
+        ExpressionFrameworkErrorCode.ParseUnexpectedKeywordImport,
+      );
+    }
+
+    const identifier = this.deps.identifierFromToken(token);
+    if (this.deps.isGlobalName(name)) {
+      return new AccessGlobalExpression(
+        this.state.spanFromToken(token),
+        identifier,
+      );
+    }
+
+    return new AccessScopeExpression(
+      this.state.spanFromToken(token),
+      identifier,
+      0,
+    );
   }
 
   private parseObjectLiteralValue(

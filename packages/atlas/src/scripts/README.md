@@ -27,7 +27,9 @@ helpers.
   for exact intersections and use `--domainMode=any` for nearby-route-family exploration. `surfaceRole`
   narrows untracked product-class pressure by the product-architecture role classifier. `memory:next` prints the
   checkpoint-friendly ranked next-action lane computed from live memory state rather than stored as a static task list,
-  including shard path/line for record-backed next actions. Source/file/auLink existence checks report `present`; they
+  including shard path/line for record-backed next actions. Exact `--recordId` next reads can return a consult row for
+  reference or when-touched records so checkpoint recovery can land on durable guidance without turning those records
+  into global next-work. Source/file/auLink existence checks report `present`; they
   keep records grounded without making a pressure frontier live unless paired with a pressure-shaped live check.
 - [atlas-memory-write.ts](atlas-memory-write.ts) is the structured write-side helper for durable memory storage. Use
   `memory:write -- --mode=list-shards` to inspect shard targets, `memory:write -- --template ...` to print a record
@@ -62,7 +64,7 @@ helpers.
   `classificationKind`, `classificationKey`, `expectedEffectFilterField`, and `expectedEffectFilterValue` filters; the
   route-plan seed selection diversifies across the more specific anchors first so one broad concept lane does not hide
   exact fixture canaries such as checked bindings or select option models.
-  Use `--projection=route-plan --detail` after route selection to print authority lanes, memory-next summaries,
+  Use `--projection=next --detail` or `--projection=route-plan --detail` after route selection to print authority lanes, memory-next summaries,
   query-canary counts, cautions, and several next questions. With no explicit filters, route-plan ranks routes from
   live `memory:next` pressure and live product/source pressure through exact route memory/source/path/auLink overlap
   before falling back to catalog orientation. Product pressure is source-anchor structural evidence, not prose search:
@@ -72,7 +74,7 @@ helpers.
   `--rows` controls the answer row budget; compact CLI output may display a smaller section slice, and section headers
   say when they are showing only part of the returned rows.
   Use `--projection=next-questions` when the immediate need
-  is autonomous continuation prompts from the selected route plan. Use `--projection=workset` when a checkpoint needs the
+  is only autonomous continuation prompts from the selected route plan. Use `--projection=workset` when a checkpoint needs the
   current git worktree grouped by route-owned source/doc/path anchors, route-owned memory source/doc/fixture/live-check
   anchors, and memory shards. Workset rows are reported as `workset-structural` route matches so a checkpoint can tell
   actual dirty-file evidence apart from catalog orientation. Workset detail output prints changed-file samples without
@@ -202,10 +204,20 @@ helpers.
   accessor, binding value-channel, dirty-check, watcher, effect, or collection-observer semantics so the work starts
   from Aurelia's actual observation subsystem rather than local product guesses.
 - [framework-observation.ts](framework-observation.ts) is the targeted human CLI for `framework.observation` rows. Use
-  `framework:observation -- --projection=surface-methods --surfaceKind=proxy-observable --detail` before changing
+  `framework:observation -- --projection=observer-locator-decisions --detail` before changing getter/accessor
+  selection semantics, `--projection=surface-methods --surfaceKind=proxy-observable --detail` before changing
   ProxyObservable-adjacent behavior, `--projection=flow-sites --surfaceKind=ast-evaluator --detail` before changing
-  direct expression-read dependency semantics, or `--projection=flow-sites` with `--siteKind=...` when observation flow
-  needs a narrower source-backed read than the pressure rollup.
+  direct expression-read dependency semantics, `--projection=flow-sites --surfaceKind=computed-observer --detail`
+  before changing auto getter/body dependency collection, or
+  `--projection=flow-sites --surfaceKind=controlled-computed-observer --detail` before changing explicit dependency
+  metadata semantics. `--projection=surface-methods --surfaceKind=attribute-ns-accessor --detail` exposes the
+  runtime-html namespace attribute accessor surface that sits beside the generic data/SVG attribute accessor. Use
+  `--projection=flow-sites` with `--siteKind=...` when observation flow needs a narrower
+  source-backed read than the pressure rollup. Use `--projection=dependency-circuit --detail` to see the compact roles
+  that stitch astEvaluate, connectable boundaries, ProxyObservable identity/escape paths, computed-observer dependency
+  lookup, watcher/effect dependencies, and observer-location sites into one derived observation circuit. Use
+  `--projection=collection-methods --detail` before changing collection-read modeling so the astEvaluate
+  `autoObserveArrayMethods` list and ProxyObservable array/map/set wrappers are compared in one source-backed table.
 - [framework-router-pressure.ts](framework-router-pressure.ts) prints the framework router rollup, curated route-flow
   spine health, relationship axis distributions, and flow self-audit rows from `framework.router`.
 - [framework-router.ts](framework-router.ts) prints the queryable `framework.router` lens for targeted router,

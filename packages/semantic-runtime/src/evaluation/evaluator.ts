@@ -985,6 +985,10 @@ export class StaticEvaluator {
     if (functionPrototypeCall != null) {
       return functionPrototypeCall;
     }
+    const propertyFunctionCall = this.evaluatePropertyFunctionCall(call, environment, moduleKey, depth + 1);
+    if (propertyFunctionCall != null) {
+      return propertyFunctionCall;
+    }
 
     const callee = this.evaluateExpression(call.expression, environment, moduleKey, depth + 1);
     if (hasQuestionDotToken(call) && isNullishEvaluationValue(callee)) {
@@ -1000,6 +1004,67 @@ export class StaticEvaluator {
       return this.evaluateFunctionCall(callee, call, environment, moduleKey, depth + 1);
     }
     return this.unknown('Call expression is not a known intrinsic or simple local function.', call, moduleKey, EvaluationOpenSeamKind.DynamicCall);
+  }
+
+  private evaluatePropertyFunctionCall(
+    call: ts.CallExpression,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+    depth: number,
+  ): EvaluationValue | null {
+    const expression = skipStaticOuterExpression(call.expression);
+    if (!ts.isPropertyAccessExpression(expression)) {
+      return null;
+    }
+    const receiver = this.evaluateExpression(expression.expression, environment, moduleKey, depth + 1);
+    if (hasQuestionDotToken(expression) && isNullishEvaluationValue(receiver)) {
+      return new EvaluationUndefinedValue(call);
+    }
+    if (receiver.kind === EvaluationValueKind.Unknown) {
+      return this.materializeUnknownUse(
+        receiver,
+        call,
+        moduleKey,
+        `Call member '${expression.name.text}' depended on an open receiver.`,
+        EvaluationOpenSeamKind.DynamicCall,
+      );
+    }
+    if (receiver.kind === EvaluationValueKind.BoundaryValue) {
+      return boundaryDependencyValue(call, receiver);
+    }
+
+    const callee = evaluateStaticPropertyValue(receiver, expression.name.text, expression, moduleKey, depth + 1, this.propertyAccessHost);
+    if (callee.kind === EvaluationValueKind.Unknown) {
+      return this.materializeUnknownUse(
+        callee,
+        call,
+        moduleKey,
+        `Call member '${expression.name.text}' depended on an open method value.`,
+        EvaluationOpenSeamKind.DynamicCall,
+      );
+    }
+    if (callee.kind === EvaluationValueKind.BoundaryValue) {
+      return boundaryDependencyValue(call, callee);
+    }
+    if (callee.kind !== EvaluationValueKind.Function) {
+      return this.unknown(
+        `Call member '${expression.name.text}' did not reduce to a known function.`,
+        call,
+        moduleKey,
+        EvaluationOpenSeamKind.DynamicCall,
+      );
+    }
+    const argumentValues = call.arguments.map((argument) =>
+      this.evaluateExpression(argument, environment, moduleKey, depth + 1)
+    );
+    return this.evaluateFunctionWithArguments(
+      callee,
+      call,
+      argumentValues,
+      moduleKey,
+      depth + 1,
+      receiver,
+    );
   }
 
   private evaluateFunctionPrototypeCall(

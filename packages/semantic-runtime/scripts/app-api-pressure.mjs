@@ -101,8 +101,8 @@ function printInputSummary(aggregate, requestMilliseconds) {
   console.log(
     `- source/app: projects=${aggregate.projects}, selected=${aggregate.selectedProjects}, ` +
     `opened=${aggregate.openedAppWorlds}, files=${aggregate.sourceFiles}, templates=${aggregate.appRuntimeTemplatesSeen}, ` +
-    `resources=${aggregate.resourceDefinitions}, controllers=${aggregate.runtimeControllers}, ` +
-    `targetAccesses=${aggregate.bindingTargetAccesses}, behaviorApps=${aggregate.bindingBehaviorApplications}, valueChannels=${aggregate.bindingValueChannels}, dataFlows=${aggregate.bindingDataFlows}`,
+    `resources=${aggregate.resourceDefinitions}, controllers=${aggregate.runtimeControllers}, runtimeWatchers=${aggregate.runtimeWatchers}, watcherObservedDeps=${aggregate.runtimeWatcherObservedDependencies}, ` +
+    `targetAccesses=${aggregate.bindingTargetAccesses}, behaviorApps=${aggregate.bindingBehaviorApplications}, valueChannels=${aggregate.bindingValueChannels}, dataFlows=${aggregate.bindingDataFlows}, observedDeps=${aggregate.bindingObservedDependencies}`,
   );
   console.log(
     `- authoring: coverage=${aggregate.authoringOrientationCoverageRows}, taste=${aggregate.authoringOrientationTasteValues}, ` +
@@ -116,10 +116,18 @@ function printInputSummary(aggregate, requestMilliseconds) {
     metricPart('stateStores', aggregate.stateStores),
     metricPart('diResolve', aggregate.diResolveCallSites),
     metricPart('diIssues', aggregate.diIssues),
+    metricPart('computedDefs', aggregate.computedObservationDefinitions),
+    metricPart('computedObservers', aggregate.computedObserverSources),
+    metricPart('computedObserverDeps', aggregate.computedObserverObservedDependencies),
+    metricPart('runtimeEffects', aggregate.runtimeEffects),
+    metricPart('runtimeEffectDeps', aggregate.runtimeEffectObservedDependencies),
+    metricPart('proxyEscapes', aggregate.proxyObservableEscapes),
     metricPart('i18nKeys', aggregate.i18nTranslationKeys),
     metricPart('i18nBindings', aggregate.i18nTranslationBindings),
     metricPart('bindables', aggregate.bindables),
     metricPart('watches', aggregate.watches),
+    metricPart('runtimeWatchers', aggregate.runtimeWatchers),
+    metricPart('watcherObservedDeps', aggregate.runtimeWatcherObservedDependencies),
     metricPart('topologyServices', aggregate.appTopologyServices),
     metricPart('topologyInjections', aggregate.appTopologyInjections),
     metricPart('topologyServiceInteractions', aggregate.appTopologyServiceInteractions),
@@ -342,6 +350,7 @@ function printAggregateCounts(aggregate) {
   printCounts('app topology state composition value type shapes', aggregate.appTopologyStateCompositionValueTypeShapes);
   printCounts('app topology state composition source coverage', aggregate.appTopologyStateCompositionSourceCoverage);
   printCounts('runtime composition component resolution', aggregate.runtimeCompositionComponentResolutionKinds);
+  printCounts('runtime composition rendering contexts', aggregate.runtimeCompositionRenderingContextKinds);
   printCounts('runtime composition model resolution', aggregate.runtimeCompositionModelResolutionKinds);
   printCounts('runtime composition scope behavior', aggregate.runtimeCompositionScopeBehavior);
   printCounts('runtime composition flush mode', aggregate.runtimeCompositionFlushMode);
@@ -367,6 +376,7 @@ function printAggregateCounts(aggregate) {
   printCounts('runtime composition activation parameter types', aggregate.runtimeCompositionActivationParameterTypes, 12);
   printCounts('runtime composition activation assignability', aggregate.runtimeCompositionActivationAssignability);
   printCounts('runtime composition source coverage', aggregate.runtimeCompositionSourceCoverage);
+  printCounts('runtime composition open rendering contexts', aggregate.openRuntimeCompositionRenderingContextKinds, 12);
   printCounts('runtime composition open reasons', aggregate.runtimeCompositionOpenReasons, 12);
   printCounts('runtime composition open reason kinds', aggregate.runtimeCompositionOpenReasonKinds, 12);
   printCounts('app topology style asset kinds', aggregate.appTopologyStyleAssetKinds);
@@ -529,6 +539,24 @@ function printAggregateCounts(aggregate) {
   printCounts('di issue framework error codes', aggregate.diIssueFrameworkErrorCodes, 18);
   printCounts('observation issue kinds', aggregate.observationIssueKinds);
   printCounts('observation issue framework error codes', aggregate.observationIssueFrameworkErrorCodes, 18);
+  printCounts('computed observation member kinds', aggregate.computedObservationMemberKinds);
+  printCounts('computed observation dependency modes', aggregate.computedObservationDependencyModes);
+  printCounts('computed observation dependency-function counts', aggregate.computedObservationDependencyFunctionCounts);
+  printCounts('computed observation flush modes', aggregate.computedObservationFlushModes);
+  printCounts('computed observer source kinds', aggregate.computedObserverSourceKinds);
+  printCounts('computed observer source triggers', aggregate.computedObserverSourceTriggers);
+  printCounts('computed observer source dependency modes', aggregate.computedObserverSourceDependencyModes);
+  printCounts('computed observer observed-dependency kinds', aggregate.computedObserverObservedDependencyKinds);
+  printCounts('computed observer observed-dependency roots', aggregate.computedObserverObservedDependencyRootNames, 18);
+  printCounts('computed observer observed-dependency methods', aggregate.computedObserverObservedDependencyMethods, 18);
+  printCounts('runtime effect kinds', aggregate.runtimeEffectKinds);
+  printCounts('runtime effect dependency evaluation', aggregate.runtimeEffectDependencyEvaluationKinds);
+  printCounts('runtime effect immediate', aggregate.runtimeEffectImmediate);
+  printCounts('runtime effect observed-dependency kinds', aggregate.runtimeEffectObservedDependencyKinds);
+  printCounts('runtime effect observed-dependency roots', aggregate.runtimeEffectObservedDependencyRootNames, 18);
+  printCounts('runtime effect observed-dependency methods', aggregate.runtimeEffectObservedDependencyMethods, 18);
+  printCounts('proxy observable escape kinds', aggregate.proxyObservableEscapeKinds);
+  printCounts('proxy observable escape roots', aggregate.proxyObservableEscapeRoots, 18);
   printCounts('validation issue kinds', aggregate.validationIssueKinds);
   printCounts('validation issue framework error codes', aggregate.validationIssueFrameworkErrorCodes, 18);
   printCounts('fetch-client issue kinds', aggregate.fetchClientIssueKinds);
@@ -541,7 +569,20 @@ function printAggregateCounts(aggregate) {
   printCounts('runtime controllers: creation kinds', aggregate.runtimeControllerCreationKinds);
   printCounts('runtime controllers: hydration handoff', aggregate.runtimeControllerHydrationHandoff);
   printCounts('runtime controllers: child-view rendering state', aggregate.runtimeControllerChildViewRenderingState);
+  printCounts('runtime watchers: kinds', aggregate.runtimeWatcherKinds);
+  printCounts('runtime watchers: dependency evaluation', aggregate.runtimeWatcherDependencyEvaluationKinds);
+  printCounts('runtime watchers: expression kinds', aggregate.runtimeWatcherExpressionKinds);
+  printCounts('runtime watchers: expression property-key kinds', aggregate.runtimeWatcherExpressionPropertyKeyKinds);
+  printCounts('runtime watchers: callback kinds', aggregate.runtimeWatcherCallbackKinds);
+  printCounts('runtime watchers: callback method-name kinds', aggregate.runtimeWatcherCallbackMethodNameKinds);
+  printCounts('runtime watchers: flush modes', aggregate.runtimeWatcherFlushModes);
+  printCounts('runtime watchers: source coverage', aggregate.runtimeWatcherSourceCoverage);
+  printCounts('runtime watcher observed-dependency kinds', aggregate.runtimeWatcherObservedDependencyKinds);
+  printCounts('runtime watcher observed-dependency expression kinds', aggregate.runtimeWatcherObservedDependencyExpressionKinds);
+  printCounts('runtime watcher observed-dependency root names', aggregate.runtimeWatcherObservedDependencyRootNames, 18);
+  printCounts('runtime watcher observed-dependency methods', aggregate.runtimeWatcherObservedDependencyMethods, 18);
   printCounts('runtime composition component resolution', aggregate.runtimeCompositionComponentResolutionKinds);
+  printCounts('runtime composition rendering contexts', aggregate.runtimeCompositionRenderingContextKinds);
   printCounts('runtime composition model resolution', aggregate.runtimeCompositionModelResolutionKinds);
   printCounts('runtime composition scope behavior', aggregate.runtimeCompositionScopeBehavior);
   printCounts('runtime composition flush mode', aggregate.runtimeCompositionFlushMode);
@@ -567,6 +608,7 @@ function printAggregateCounts(aggregate) {
   printCounts('runtime composition activation parameter types', aggregate.runtimeCompositionActivationParameterTypes, 12);
   printCounts('runtime composition activation assignability', aggregate.runtimeCompositionActivationAssignability);
   printCounts('runtime composition source coverage', aggregate.runtimeCompositionSourceCoverage);
+  printCounts('runtime composition open rendering contexts', aggregate.openRuntimeCompositionRenderingContextKinds, 12);
   printCounts('runtime composition open reasons', aggregate.runtimeCompositionOpenReasons, 12);
   printCounts('runtime composition open reason kinds', aggregate.runtimeCompositionOpenReasonKinds, 12);
   printCounts('bindable modes', aggregate.bindableModes);
@@ -614,6 +656,11 @@ function printAggregateCounts(aggregate) {
   printCounts('binding data-flow source assignment pressure classes', aggregate.bindingDataFlowSourceAssignmentPressureClasses, 18);
   printCounts('binding data-flow source assignment reason fixtures', aggregate.bindingDataFlowSourceAssignmentReasonFixtureKeys, 18);
   printCounts('binding data-flow open reasons', aggregate.bindingDataFlowOpenReasons, 12);
+  printCounts('binding observed-dependency kinds', aggregate.bindingObservedDependencyKinds);
+  printCounts('binding observed-dependency expression kinds', aggregate.bindingObservedDependencyExpressionKinds);
+  printCounts('binding observed-dependency member kinds', aggregate.bindingObservedDependencyMemberKinds);
+  printCounts('binding observed-dependency member source states', aggregate.bindingObservedDependencyMemberSourceStates);
+  printCounts('binding observed-dependency methods', aggregate.bindingObservedDependencyMethods, 12);
   printCounts('open seam kinds', aggregate.openSeamKinds);
   printCounts('open seam reason kinds', aggregate.openSeamReasonKinds, 12);
   printCounts('open seam reason fixtures', aggregate.openSeamReasonFixtureKeys, 18);
@@ -691,7 +738,15 @@ function printCompactAggregateCounts(aggregate) {
   printCompactCounts('resources.issues', aggregate.resourceIssueKinds);
   printCompactCounts('resources.error-codes', aggregate.resourceIssueFrameworkErrorCodes);
   printCompactCounts('controllers.child-view-rendering', aggregate.runtimeControllerChildViewRenderingState);
+  printCompactCounts('runtime-watchers.kinds', aggregate.runtimeWatcherKinds);
+  printCompactCounts('runtime-watchers.dependency-evaluation', aggregate.runtimeWatcherDependencyEvaluationKinds);
+  printCompactCounts('runtime-watchers.expressions', aggregate.runtimeWatcherExpressionKinds);
+  printCompactCounts('runtime-watchers.callbacks', aggregate.runtimeWatcherCallbackKinds);
+  printCompactCounts('runtime-watchers.flush', aggregate.runtimeWatcherFlushModes);
+  printCompactCounts('runtime-watchers.observed-dependency-kinds', aggregate.runtimeWatcherObservedDependencyKinds);
+  printCompactCounts('runtime-watchers.observed-dependency-methods', aggregate.runtimeWatcherObservedDependencyMethods);
   printCompactCounts('runtime-compositions.component-resolution', aggregate.runtimeCompositionComponentResolutionKinds);
+  printCompactCounts('runtime-compositions.rendering-contexts', aggregate.runtimeCompositionRenderingContextKinds);
   printCompactCounts('runtime-compositions.model-resolution', aggregate.runtimeCompositionModelResolutionKinds);
   printCompactCounts('runtime-compositions.scope-behavior', aggregate.runtimeCompositionScopeBehavior);
   printCompactCounts('runtime-compositions.flush-mode', aggregate.runtimeCompositionFlushMode);
@@ -712,6 +767,7 @@ function printCompactAggregateCounts(aggregate) {
   printCompactCounts('runtime-compositions.composed-child-controller-counts', aggregate.runtimeCompositionComposedChildControllerCounts);
   printCompactCounts('runtime-compositions.activation-handoffs', aggregate.runtimeCompositionActivationHandoffKinds);
   printCompactCounts('runtime-compositions.activation-assignability', aggregate.runtimeCompositionActivationAssignability);
+  printCompactCounts('runtime-compositions.open-rendering-contexts', aggregate.openRuntimeCompositionRenderingContextKinds);
   printCompactCounts('runtime-compositions.open-reasons', aggregate.runtimeCompositionOpenReasons);
   printCompactCounts('di.key-kinds', aggregate.diKeyIdentityKinds);
   printCompactCounts('state.stores', aggregate.stateStoreDefaultness);
@@ -744,9 +800,28 @@ function printCompactAggregateCounts(aggregate) {
   printCompactCounts('bindings.data-flow-open', aggregate.bindingDataFlowOpenReasons);
   printCompactCounts('bindings.data-flow-error-codes', aggregate.bindingDataFlowFrameworkErrorCodes);
   printCompactCounts('bindings.data-flow-error-code-fixtures', aggregate.bindingDataFlowFrameworkErrorCodeFixtureKeys, 8);
+  printCompactCounts('bindings.observed-dependency-kinds', aggregate.bindingObservedDependencyKinds);
+  printCompactCounts('bindings.observed-dependency-member-kinds', aggregate.bindingObservedDependencyMemberKinds);
+  printCompactCounts('bindings.observed-dependency-member-source-states', aggregate.bindingObservedDependencyMemberSourceStates);
+  printCompactCounts('bindings.observed-dependency-methods', aggregate.bindingObservedDependencyMethods);
 
   printCompactCounts('observation.issues', aggregate.observationIssueKinds);
   printCompactCounts('observation.error-codes', aggregate.observationIssueFrameworkErrorCodes);
+  printCompactCounts('observation.computed-members', aggregate.computedObservationMemberKinds);
+  printCompactCounts('observation.computed-dependencies', aggregate.computedObservationDependencyModes);
+  printCompactCounts('observation.computed-function-deps', aggregate.computedObservationDependencyFunctionCounts);
+  printCompactCounts('observation.computed-flush', aggregate.computedObservationFlushModes);
+  printCompactCounts('observation.computed-observer-kinds', aggregate.computedObserverSourceKinds);
+  printCompactCounts('observation.computed-observer-triggers', aggregate.computedObserverSourceTriggers);
+  printCompactCounts('observation.computed-observer-dependencies', aggregate.computedObserverSourceDependencyModes);
+  printCompactCounts('observation.computed-observer-observed-deps', aggregate.computedObserverObservedDependencyKinds);
+  printCompactCounts('observation.computed-observer-methods', aggregate.computedObserverObservedDependencyMethods);
+  printCompactCounts('observation.runtime-effects', aggregate.runtimeEffectKinds);
+  printCompactCounts('observation.runtime-effect-evaluation', aggregate.runtimeEffectDependencyEvaluationKinds);
+  printCompactCounts('observation.runtime-effect-immediate', aggregate.runtimeEffectImmediate);
+  printCompactCounts('observation.runtime-effect-observed-deps', aggregate.runtimeEffectObservedDependencyKinds);
+  printCompactCounts('observation.runtime-effect-methods', aggregate.runtimeEffectObservedDependencyMethods);
+  printCompactCounts('observation.proxy-escapes', aggregate.proxyObservableEscapeKinds);
   printCompactCounts('watches.expressions', aggregate.watchExpressionKinds);
   printCompactCounts('watches.callbacks', aggregate.watchCallbackKinds);
 
@@ -808,6 +883,7 @@ function printRawAggregateCounts(aggregate) {
   printCounts('app topology state composition value type shapes', aggregate.appTopologyStateCompositionValueTypeShapes);
   printCounts('app topology state composition source coverage', aggregate.appTopologyStateCompositionSourceCoverage);
   printCounts('runtime composition component resolution', aggregate.runtimeCompositionComponentResolutionKinds);
+  printCounts('runtime composition rendering contexts', aggregate.runtimeCompositionRenderingContextKinds);
   printCounts('runtime composition model resolution', aggregate.runtimeCompositionModelResolutionKinds);
   printCounts('runtime composition scope behavior', aggregate.runtimeCompositionScopeBehavior);
   printCounts('runtime composition flush mode', aggregate.runtimeCompositionFlushMode);
@@ -829,6 +905,7 @@ function printRawAggregateCounts(aggregate) {
   printCounts('runtime composition activation parameter types', aggregate.runtimeCompositionActivationParameterTypes, 12);
   printCounts('runtime composition activation assignability', aggregate.runtimeCompositionActivationAssignability);
   printCounts('runtime composition source coverage', aggregate.runtimeCompositionSourceCoverage);
+  printCounts('runtime composition open rendering contexts', aggregate.openRuntimeCompositionRenderingContextKinds, 12);
   printCounts('runtime composition open reasons', aggregate.runtimeCompositionOpenReasons, 12);
   printCounts('runtime composition open reason kinds', aggregate.runtimeCompositionOpenReasonKinds, 12);
   printCounts('app topology style asset kinds', aggregate.appTopologyStyleAssetKinds);
@@ -974,6 +1051,24 @@ function printRawAggregateCounts(aggregate) {
   printCounts('resource issue framework error codes', aggregate.resourceIssueFrameworkErrorCodes, 18);
   printCounts('observation issue kinds', aggregate.observationIssueKinds);
   printCounts('observation issue framework error codes', aggregate.observationIssueFrameworkErrorCodes, 18);
+  printCounts('computed observation member kinds', aggregate.computedObservationMemberKinds);
+  printCounts('computed observation dependency modes', aggregate.computedObservationDependencyModes);
+  printCounts('computed observation dependency-function counts', aggregate.computedObservationDependencyFunctionCounts);
+  printCounts('computed observation flush modes', aggregate.computedObservationFlushModes);
+  printCounts('computed observer source kinds', aggregate.computedObserverSourceKinds);
+  printCounts('computed observer source triggers', aggregate.computedObserverSourceTriggers);
+  printCounts('computed observer source dependency modes', aggregate.computedObserverSourceDependencyModes);
+  printCounts('computed observer observed-dependency kinds', aggregate.computedObserverObservedDependencyKinds);
+  printCounts('computed observer observed-dependency roots', aggregate.computedObserverObservedDependencyRootNames, 18);
+  printCounts('computed observer observed-dependency methods', aggregate.computedObserverObservedDependencyMethods, 18);
+  printCounts('runtime effect kinds', aggregate.runtimeEffectKinds);
+  printCounts('runtime effect dependency evaluation', aggregate.runtimeEffectDependencyEvaluationKinds);
+  printCounts('runtime effect immediate', aggregate.runtimeEffectImmediate);
+  printCounts('runtime effect observed-dependency kinds', aggregate.runtimeEffectObservedDependencyKinds);
+  printCounts('runtime effect observed-dependency roots', aggregate.runtimeEffectObservedDependencyRootNames, 18);
+  printCounts('runtime effect observed-dependency methods', aggregate.runtimeEffectObservedDependencyMethods, 18);
+  printCounts('proxy observable escape kinds', aggregate.proxyObservableEscapeKinds);
+  printCounts('proxy observable escape roots', aggregate.proxyObservableEscapeRoots, 18);
   printCounts('DI key identity kinds', aggregate.diKeyIdentityKinds);
   printCounts('DI key identity declaration coverage', aggregate.diKeyIdentityDeclarationCoverage);
   printCounts('DI key identity declaration address coverage', aggregate.diKeyIdentityDeclarationAddressCoverage);
@@ -1138,6 +1233,12 @@ function printRawAggregateCounts(aggregate) {
   printCounts('binding data-flow source assignment by target type surface', aggregate.bindingDataFlowSourceAssignmentTargetTypeSurfaces, 18);
   printCounts('binding data-flow source assignment by writeability', aggregate.bindingDataFlowSourceAssignmentWriteability, 18);
   printCounts('binding data-flow open reasons', aggregate.bindingDataFlowOpenReasons, 12);
+  printCounts('binding observed-dependency kinds', aggregate.bindingObservedDependencyKinds);
+  printCounts('binding observed-dependency expression kinds', aggregate.bindingObservedDependencyExpressionKinds);
+  printCounts('binding observed-dependency root names', aggregate.bindingObservedDependencyRootNames, 18);
+  printCounts('binding observed-dependency member kinds', aggregate.bindingObservedDependencyMemberKinds);
+  printCounts('binding observed-dependency member source states', aggregate.bindingObservedDependencyMemberSourceStates);
+  printCounts('binding observed-dependency methods', aggregate.bindingObservedDependencyMethods, 18);
   printCounts('open seam kinds', aggregate.openSeamKinds);
   printCounts('open seam reason kinds', aggregate.openSeamReasonKinds, 12);
   printCounts('open seam reason fixtures', aggregate.openSeamReasonFixtureKeys, 18);
@@ -1222,6 +1323,8 @@ async function readPressureForRoot(root) {
     diKeyIdentities: 0,
     diResolveCallSites: 0,
     runtimeControllers: 0,
+    runtimeWatchers: 0,
+    runtimeWatcherObservedDependencies: 0,
     runtimeCompositions: 0,
     runtimeCompositionResolvedComponents: 0,
     runtimeCompositionCompiledTemplates: 0,
@@ -1240,6 +1343,12 @@ async function readPressureForRoot(root) {
     evaluationIssues: 0,
     diIssues: 0,
     observationIssues: 0,
+    computedObservationDefinitions: 0,
+    computedObserverSources: 0,
+    computedObserverObservedDependencies: 0,
+    runtimeEffects: 0,
+    runtimeEffectObservedDependencies: 0,
+    proxyObservableEscapes: 0,
     validationIssues: 0,
     fetchClientIssues: 0,
     dialogIssues: 0,
@@ -1248,6 +1357,7 @@ async function readPressureForRoot(root) {
     bindingBehaviorApplications: 0,
     bindingValueChannels: 0,
     bindingDataFlows: 0,
+    bindingObservedDependencies: 0,
     openBindingDataFlows: 0,
     bindingDataFlowSourceAssignmentPressures: 0,
     unresolvedModuleEdges: 0,
@@ -1285,6 +1395,27 @@ async function readPressureForRoot(root) {
     diIssueFrameworkErrorCodes: {},
     observationIssueKinds: {},
     observationIssueFrameworkErrorCodes: {},
+    computedObservationMemberKinds: {},
+    computedObservationDependencyModes: {},
+    computedObservationDependencyFunctionCounts: {},
+    computedObservationFlushModes: {},
+    computedObserverSourceKinds: {},
+    computedObserverSourceTriggers: {},
+    computedObserverSourceDependencyModes: {},
+    computedObserverSourceDependencyFunctionCounts: {},
+    computedObserverObservedDependencyKinds: {},
+    computedObserverObservedDependencyExpressionKinds: {},
+    computedObserverObservedDependencyRootNames: {},
+    computedObserverObservedDependencyMethods: {},
+    runtimeEffectKinds: {},
+    runtimeEffectDependencyEvaluationKinds: {},
+    runtimeEffectImmediate: {},
+    runtimeEffectObservedDependencyKinds: {},
+    runtimeEffectObservedDependencyExpressionKinds: {},
+    runtimeEffectObservedDependencyRootNames: {},
+    runtimeEffectObservedDependencyMethods: {},
+    proxyObservableEscapeKinds: {},
+    proxyObservableEscapeRoots: {},
     validationIssueKinds: {},
     validationIssueFrameworkErrorCodes: {},
     fetchClientIssueKinds: {},
@@ -1315,7 +1446,20 @@ async function readPressureForRoot(root) {
     runtimeControllerReadiness: {},
     runtimeControllerHydrationHandoff: {},
     runtimeControllerChildViewRenderingState: {},
+    runtimeWatcherKinds: {},
+    runtimeWatcherDependencyEvaluationKinds: {},
+    runtimeWatcherExpressionKinds: {},
+    runtimeWatcherExpressionPropertyKeyKinds: {},
+    runtimeWatcherCallbackKinds: {},
+    runtimeWatcherCallbackMethodNameKinds: {},
+    runtimeWatcherFlushModes: {},
+    runtimeWatcherSourceCoverage: {},
+    runtimeWatcherObservedDependencyKinds: {},
+    runtimeWatcherObservedDependencyExpressionKinds: {},
+    runtimeWatcherObservedDependencyRootNames: {},
+    runtimeWatcherObservedDependencyMethods: {},
     runtimeCompositionComponentResolutionKinds: {},
+    runtimeCompositionRenderingContextKinds: {},
     runtimeCompositionModelResolutionKinds: {},
     runtimeCompositionScopeBehavior: {},
     runtimeCompositionFlushMode: {},
@@ -1341,6 +1485,7 @@ async function readPressureForRoot(root) {
     runtimeCompositionActivationParameterTypes: {},
     runtimeCompositionActivationAssignability: {},
     runtimeCompositionSourceCoverage: {},
+    openRuntimeCompositionRenderingContextKinds: {},
     runtimeCompositionOpenReasons: {},
     runtimeCompositionOpenReasonKinds: {},
     routeTreeOptions: {},
@@ -1487,6 +1632,12 @@ async function readPressureForRoot(root) {
     bindingDataFlowSourceAssignmentTargetTypeSurfaces: {},
     bindingDataFlowSourceAssignmentWriteability: {},
     bindingDataFlowOpenReasons: {},
+    bindingObservedDependencyKinds: {},
+    bindingObservedDependencyExpressionKinds: {},
+    bindingObservedDependencyRootNames: {},
+    bindingObservedDependencyMemberKinds: {},
+    bindingObservedDependencyMemberSourceStates: {},
+    bindingObservedDependencyMethods: {},
     openSeamKinds: {},
     openSeamReasonKinds: {},
     openSeamReasonFixtureKeys: {},
@@ -1951,6 +2102,85 @@ async function readPressureForRoot(root) {
         increment(aggregate.observationIssueFrameworkErrorCodes, row.frameworkErrorCode ?? 'none');
       }
 
+      const computedObservationDefinitionRows = await measure(timings, 'query-computed-observation-definitions', () =>
+        pagedRows(app, SemanticAppQueryKind.ComputedObservationDefinitions),
+      );
+      increment(aggregate.outcomes, `computed-observation-definitions:${computedObservationDefinitionRows.outcome}`);
+      increment(aggregate.pageCounts, 'computed-observation-definitions', computedObservationDefinitionRows.pages);
+      aggregate.computedObservationDefinitions += computedObservationDefinitionRows.rows.length;
+      for (const row of computedObservationDefinitionRows.rows) {
+        increment(aggregate.computedObservationMemberKinds, row.memberKind);
+        increment(aggregate.computedObservationDependencyModes, row.dependencyMode);
+        increment(aggregate.computedObservationDependencyFunctionCounts, cardinalityBucket(row.dependencyFunctionCount ?? 0));
+        increment(aggregate.computedObservationFlushModes, row.flush);
+      }
+
+      const computedObserverSourceRows = await measure(timings, 'query-computed-observer-sources', () =>
+        pagedRows(app, SemanticAppQueryKind.ComputedObserverSources),
+      );
+      increment(aggregate.outcomes, `computed-observer-sources:${computedObserverSourceRows.outcome}`);
+      increment(aggregate.pageCounts, 'computed-observer-sources', computedObserverSourceRows.pages);
+      aggregate.computedObserverSources += computedObserverSourceRows.rows.length;
+      for (const row of computedObserverSourceRows.rows) {
+        increment(aggregate.computedObserverSourceKinds, row.observerKind);
+        increment(aggregate.computedObserverSourceTriggers, row.triggerKind);
+        increment(aggregate.computedObserverSourceDependencyModes, row.dependencyMode);
+        increment(aggregate.computedObserverSourceDependencyFunctionCounts, cardinalityBucket(row.dependencyFunctionCount ?? 0));
+      }
+
+      const computedObserverObservedDependencyRows = await measure(timings, 'query-computed-observer-observed-dependencies', () =>
+        pagedRows(app, SemanticAppQueryKind.ComputedObserverObservedDependencies),
+      );
+      increment(aggregate.outcomes, `computed-observer-observed-dependencies:${computedObserverObservedDependencyRows.outcome}`);
+      increment(aggregate.pageCounts, 'computed-observer-observed-dependencies', computedObserverObservedDependencyRows.pages);
+      aggregate.computedObserverObservedDependencies += computedObserverObservedDependencyRows.rows.length;
+      for (const row of computedObserverObservedDependencyRows.rows) {
+        increment(aggregate.computedObserverObservedDependencyKinds, row.dependencyKind);
+        increment(aggregate.computedObserverObservedDependencyExpressionKinds, row.expressionKind);
+        increment(aggregate.computedObserverObservedDependencyRootNames, row.sourceRootName ?? 'none');
+        if (row.methodName != null) {
+          increment(aggregate.computedObserverObservedDependencyMethods, row.methodName);
+        }
+      }
+
+      const runtimeEffectRows = await measure(timings, 'query-runtime-effects', () =>
+        pagedRows(app, SemanticAppQueryKind.RuntimeEffects),
+      );
+      increment(aggregate.outcomes, `runtime-effects:${runtimeEffectRows.outcome}`);
+      increment(aggregate.pageCounts, 'runtime-effects', runtimeEffectRows.pages);
+      aggregate.runtimeEffects += runtimeEffectRows.rows.length;
+      for (const row of runtimeEffectRows.rows) {
+        increment(aggregate.runtimeEffectKinds, row.effectKind);
+        increment(aggregate.runtimeEffectDependencyEvaluationKinds, row.dependencyEvaluationKind);
+        increment(aggregate.runtimeEffectImmediate, row.immediate == null ? 'open' : String(row.immediate));
+      }
+
+      const runtimeEffectObservedDependencyRows = await measure(timings, 'query-runtime-effect-observed-dependencies', () =>
+        pagedRows(app, SemanticAppQueryKind.RuntimeEffectObservedDependencies),
+      );
+      increment(aggregate.outcomes, `runtime-effect-observed-dependencies:${runtimeEffectObservedDependencyRows.outcome}`);
+      increment(aggregate.pageCounts, 'runtime-effect-observed-dependencies', runtimeEffectObservedDependencyRows.pages);
+      aggregate.runtimeEffectObservedDependencies += runtimeEffectObservedDependencyRows.rows.length;
+      for (const row of runtimeEffectObservedDependencyRows.rows) {
+        increment(aggregate.runtimeEffectObservedDependencyKinds, row.dependencyKind);
+        increment(aggregate.runtimeEffectObservedDependencyExpressionKinds, row.expressionKind);
+        increment(aggregate.runtimeEffectObservedDependencyRootNames, row.sourceRootName ?? 'none');
+        if (row.methodName != null) {
+          increment(aggregate.runtimeEffectObservedDependencyMethods, row.methodName);
+        }
+      }
+
+      const proxyObservableEscapeRows = await measure(timings, 'query-proxy-observable-escapes', () =>
+        pagedRows(app, SemanticAppQueryKind.ProxyObservableEscapes),
+      );
+      increment(aggregate.outcomes, `proxy-observable-escapes:${proxyObservableEscapeRows.outcome}`);
+      increment(aggregate.pageCounts, 'proxy-observable-escapes', proxyObservableEscapeRows.pages);
+      aggregate.proxyObservableEscapes += proxyObservableEscapeRows.rows.length;
+      for (const row of proxyObservableEscapeRows.rows) {
+        increment(aggregate.proxyObservableEscapeKinds, row.escapeKind);
+        increment(aggregate.proxyObservableEscapeRoots, row.argumentRootName ?? 'none');
+      }
+
       const validationIssueRows = await measure(timings, 'query-validation-issues', () =>
         pagedRows(app, SemanticAppQueryKind.ValidationIssues),
       );
@@ -2106,6 +2336,38 @@ async function readPressureForRoot(root) {
         increment(aggregate.runtimeControllerChildViewRenderingState, row.childViewRenderingState);
       }
 
+      const runtimeWatcherRows = await measure(timings, 'query-runtime-watchers', () =>
+        pagedRows(app, SemanticAppQueryKind.RuntimeWatchers),
+      );
+      increment(aggregate.outcomes, `runtime-watchers:${runtimeWatcherRows.outcome}`);
+      increment(aggregate.pageCounts, 'runtime-watchers', runtimeWatcherRows.pages);
+      aggregate.runtimeWatchers += runtimeWatcherRows.rows.length;
+      for (const row of runtimeWatcherRows.rows) {
+        increment(aggregate.runtimeWatcherKinds, row.watcherKind);
+        increment(aggregate.runtimeWatcherDependencyEvaluationKinds, row.dependencyEvaluationKind);
+        increment(aggregate.runtimeWatcherExpressionKinds, row.expressionKind);
+        increment(aggregate.runtimeWatcherExpressionPropertyKeyKinds, row.expressionPropertyKeyKind ?? 'none');
+        increment(aggregate.runtimeWatcherCallbackKinds, row.callbackKind);
+        increment(aggregate.runtimeWatcherCallbackMethodNameKinds, row.callbackMethodNameKind ?? 'none');
+        increment(aggregate.runtimeWatcherFlushModes, row.flush);
+        increment(aggregate.runtimeWatcherSourceCoverage, row.source == null ? 'no-source' : 'source');
+      }
+
+      const runtimeWatcherObservedDependencyRows = await measure(timings, 'query-runtime-watcher-observed-dependencies', () =>
+        pagedRows(app, SemanticAppQueryKind.RuntimeWatcherObservedDependencies),
+      );
+      increment(aggregate.outcomes, `runtime-watcher-observed-dependencies:${runtimeWatcherObservedDependencyRows.outcome}`);
+      increment(aggregate.pageCounts, 'runtime-watcher-observed-dependencies', runtimeWatcherObservedDependencyRows.pages);
+      aggregate.runtimeWatcherObservedDependencies += runtimeWatcherObservedDependencyRows.rows.length;
+      for (const row of runtimeWatcherObservedDependencyRows.rows) {
+        increment(aggregate.runtimeWatcherObservedDependencyKinds, row.dependencyKind);
+        increment(aggregate.runtimeWatcherObservedDependencyExpressionKinds, row.expressionKind);
+        increment(aggregate.runtimeWatcherObservedDependencyRootNames, row.sourceRootName ?? 'none');
+        if (row.methodName != null) {
+          increment(aggregate.runtimeWatcherObservedDependencyMethods, row.methodName);
+        }
+      }
+
       const runtimeCompositionRows = await measure(timings, 'query-runtime-compositions', () =>
         pagedRows(app, SemanticAppQueryKind.RuntimeCompositions),
       );
@@ -2119,6 +2381,7 @@ async function readPressureForRoot(root) {
         aggregate.runtimeCompositionCandidateResourceControllers += row.candidateResourceControllerCount ?? 0;
         aggregate.runtimeCompositionComposedChildControllers += row.composedChildControllerCount ?? 0;
         increment(aggregate.runtimeCompositionComponentResolutionKinds, row.componentResolutionKind);
+        increment(aggregate.runtimeCompositionRenderingContextKinds, row.renderingContextKind ?? 'unknown');
         increment(aggregate.runtimeCompositionModelResolutionKinds, row.modelResolutionKind);
         increment(aggregate.runtimeCompositionScopeBehavior, row.scopeBehavior ?? 'dynamic-or-open');
         increment(aggregate.runtimeCompositionFlushMode, row.flushMode ?? 'dynamic-or-open');
@@ -2168,6 +2431,7 @@ async function readPressureForRoot(root) {
         increment(aggregate.runtimeCompositionSourceCoverage, sourceReferenceState(row.source));
         if (row.openReason != null) {
           aggregate.openRuntimeCompositions += 1;
+          increment(aggregate.openRuntimeCompositionRenderingContextKinds, row.renderingContextKind ?? 'unknown');
           increment(aggregate.runtimeCompositionOpenReasons, row.openReason);
         }
         for (const reasonKind of row.reasonKinds ?? []) {
@@ -2466,11 +2730,29 @@ async function readPressureForRoot(root) {
             increment(aggregate.bindingDataFlowOpenReasons, row.openReason);
           }
         }
+
+        const observedDependencyRows = await measure(timings, 'query-binding-observed-dependencies', () =>
+          pagedRows(app, SemanticAppQueryKind.BindingObservedDependencies),
+        );
+        increment(aggregate.outcomes, `binding-observed-dependencies:${observedDependencyRows.outcome}`);
+        increment(aggregate.pageCounts, 'binding-observed-dependencies', observedDependencyRows.pages);
+        aggregate.bindingObservedDependencies += observedDependencyRows.rows.length;
+        for (const row of observedDependencyRows.rows) {
+          increment(aggregate.bindingObservedDependencyKinds, row.dependencyKind);
+          increment(aggregate.bindingObservedDependencyExpressionKinds, row.expressionKind);
+          increment(aggregate.bindingObservedDependencyRootNames, row.sourceRootName ?? 'none');
+          increment(aggregate.bindingObservedDependencyMemberKinds, row.observedMemberKind ?? 'none');
+          increment(aggregate.bindingObservedDependencyMemberSourceStates, row.observedMemberSourceState ?? (row.observedMemberSource == null ? 'open' : 'source'));
+          if (row.methodName != null) {
+            increment(aggregate.bindingObservedDependencyMethods, row.methodName);
+          }
+        }
       } else {
         increment(aggregate.outcomes, 'binding-target-accesses:skipped-by-analysis-depth');
         increment(aggregate.outcomes, 'binding-behavior-applications:skipped-by-analysis-depth');
         increment(aggregate.outcomes, 'binding-value-channels:skipped-by-analysis-depth');
         increment(aggregate.outcomes, 'binding-data-flows:skipped-by-analysis-depth');
+        increment(aggregate.outcomes, 'binding-observed-dependencies:skipped-by-analysis-depth');
       }
 
       const seamRows = await measure(timings, 'query-open-seams', () =>

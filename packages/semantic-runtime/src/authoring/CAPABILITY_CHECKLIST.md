@@ -103,6 +103,9 @@ that every item belongs in one API surface. Update it when capability boundaries
   now materialize aggregate composed child-controller handoff. Lifecycle activation/deactivation, template-only runtime
   template compilation, and recursive composed child rendering remain open.
 - [ ] Template-to-TypeChecker handoff for member lookup, autocomplete, diagnostics, and speculative synthetic views.
+- [ ] Template model-access policy through the `template-model-access` taste axis. Direct state/domain bindings,
+  template-local lookup/narrowing, meaningful view-model adapters, and one-hop forwarding pressure should stay
+  distinguishable so generated code can stay compact without hiding real adaptation boundaries.
 - [ ] ID-based component boundaries where app components receive primitive identity/configuration inputs and resolve
   domain state themselves. The storefront fixture avoids object/function bindables across app-component boundaries.
   App/resource bindable projections now carry value type surfaces, and the pressure fixture proves object and
@@ -112,8 +115,10 @@ that every item belongs in one API surface. Update it when capability boundaries
 ## Domain, Dependency Injection, And Integration
 
 - [ ] Domain model classes, state classes, repositories, use-case classes, and app services.
-- [ ] DI-injectable state classes can compose smaller state classes and expose viewmodel data through getters. The
-  storefront fixture now exercises this source shape; semantic DI/materialization of state composition remains open.
+- [ ] DI-injectable state classes can compose smaller state classes and expose template-facing data directly or
+  through getters when the getter is a real domain/adaptation boundary. The storefront fixture now exercises composed
+  state plus plain getter observation; generated recipes should not add one-hop view-model forwarding getters merely
+  to shorten `state.member` template expressions. Semantic DI/materialization of state composition remains open.
 - [ ] DI keys, registrations, lifetimes, aliases, factories, injection sites, and container visibility. Runtime
   child containers for renderer-created controllers now materialize with self/context resolver slots; view-model
   instance providers, definition dependency registration, and cross-template parent container chains remain open.

@@ -16,7 +16,7 @@ export class FormRoute {
     requestId: string;
     mode?: string;
     tag?: string | readonly string[];
-  }>({ includeQueryParams: true });
+  }, 'child-first'>({ includeQueryParams: true, mergeStrategy: 'child-first' });
 
   get requestId(): string {
     return this.routeParams.requestId;

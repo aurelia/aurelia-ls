@@ -29,6 +29,10 @@ import {
 import type { RuntimeRenderingSourceSet } from './runtime-rendering-source.js';
 import type { RuntimeViewFactoryMaterialization } from './runtime-view-factory-materializer.js';
 import type { TemplateRuntimeAnalysisProjectContext } from './template-runtime-analysis-context.js';
+import {
+  runtimeWatcherClaimsForController,
+  runtimeWatcherRecordsForController,
+} from './runtime-watcher-publication.js';
 
 class RuntimeControllerPublication {
   constructor(
@@ -115,6 +119,7 @@ export class RuntimeControllerPublicationMaterializer {
     return [
       ...this.childClaimsForController(local, controller, source),
       ...this.bindingClaimsForController(local, controller, source),
+      ...this.watcherClaimsForController(local, controller, source),
       ...nullableClaim(this.instructionCreatesControllerClaim(local, controller, source)),
       ...nullableClaim(this.controllerUsesCompiledTemplateClaim(local, controller, projectContext, source)),
       ...nullableClaim(this.controllerUsesInstructionSequenceClaim(local, controller, source)),
@@ -149,6 +154,14 @@ export class RuntimeControllerPublicationMaterializer {
       binding.productHandle,
       source.provenanceHandle,
     ));
+  }
+
+  private watcherClaimsForController(
+    local: string,
+    controller: RuntimeControllerFrame,
+    source: RuntimeRenderingSourceSet,
+  ): readonly SemanticClaim[] {
+    return runtimeWatcherClaimsForController(this.store, local, controller, source.provenanceHandle);
   }
 
   private instructionCreatesControllerClaim(
@@ -257,6 +270,7 @@ export class RuntimeControllerPublicationMaterializer {
         [controller.productHandle],
         publication.materializationClaimHandles,
       ),
+      ...runtimeWatcherRecordsForController(this.store, local, controller, source.provenanceHandle, publication.claims),
       ...publication.claims,
     ];
   }

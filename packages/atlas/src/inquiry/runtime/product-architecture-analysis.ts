@@ -1722,11 +1722,11 @@ function classSurfaceRole(
   }
   if (
     name === "Candidate" ||
-    endsWithAny(name, ["Frame", "Run", "Context", "State", "Traversal", "Invocation", "Requirement", "Counter", "Counters", "Accumulator", "Metrics"])
+    endsWithAny(name, ["Frame", "Run", "Context", "State", "Traversal", "Invocation", "Requirement", "Counter", "Counters", "Accumulator", "Collector", "Metrics"])
   ) {
     return {
       role: ProductArchitectureClassSurfaceRole.WorkFrame,
-      reason: "bounded pass, invocation, context, requirement, candidate, traversal, counter, or accumulator state shape",
+      reason: "bounded pass, invocation, context, requirement, candidate, traversal, counter, accumulator, or collector state shape",
     };
   }
   if (

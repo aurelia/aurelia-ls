@@ -189,6 +189,8 @@ export function targetReferenceForFunction(
     null,
     addressHandle,
     localName,
+    null,
+    value.environment.moduleKey,
   );
 }
 

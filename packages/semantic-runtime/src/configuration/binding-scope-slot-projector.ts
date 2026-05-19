@@ -5,12 +5,16 @@ import type {
   CheckerTypeShape,
 } from '../type-system/type-shape.js';
 import { checkerTypeMemberReachableIdentityHandle } from '../type-system/type-shape.js';
+import { checkerTypeReferenceWithSource } from '../type-system/type-shape.js';
 import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
 import {
   BindingContextSlotDraft,
   type BindingScopeConstructionRequest,
 } from './scope.js';
-import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
+import {
+  checkerTypeMemberSourceAddressHandle,
+  checkerTypeMemberValueSourceAddressHandle,
+} from '../type-system/checker-type-member-source.js';
 
 /** Projects TypeChecker-backed context type surfaces into runtime binding-context slot drafts. */
 export class BindingScopeSlotProjector {
@@ -67,11 +71,17 @@ function slotDraftForTypeMember(
   store: KernelStore,
   member: CheckerTypeMember,
 ): BindingContextSlotDraft {
+  const valueSourceAddressHandle = checkerTypeMemberValueSourceAddressHandle(store, member);
   return new BindingContextSlotDraft(
     member.name,
     checkerTypeMemberReachableIdentityHandle(member),
     member.productHandle,
-    member.valueType,
+    member.valueType == null
+      ? null
+      : checkerTypeReferenceWithSource(
+        member.valueType,
+        member.valueType.sourceAddressHandle ?? valueSourceAddressHandle,
+      ),
     checkerTypeMemberSourceAddressHandle(store, member),
     [],
   );

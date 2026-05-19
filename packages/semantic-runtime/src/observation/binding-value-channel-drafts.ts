@@ -52,7 +52,7 @@ class RuntimeBindingValueChannelDraftFrame {
     private readonly sourceOperation: RuntimeBindingSourceOperation | null,
     private readonly context: BindingValueChannelDraftContext,
   ) {
-    const scope = context.instructionScopes.get(binding.instructionProductHandle) ?? null;
+    const scope = context.instructionScopes.scopeForBinding(context.input.runtimeBindings, binding);
     this.readSourceType = support.sourceTypeReaderForBinding(
       binding,
       scope,
@@ -90,7 +90,7 @@ class RuntimeBindingValueChannelDraftFrame {
         return this.directBinding.classValueChannelDraft(this.binding, targetAccess, this.readSourceType);
       case RuntimeBindingTargetAccessStrategy.StyleAttributeAccessor:
         return this.directBinding.styleValueChannelDraft(this.binding, targetAccess, this.readSourceType);
-      case RuntimeBindingTargetAccessStrategy.AttributeAccessor:
+      case RuntimeBindingTargetAccessStrategy.AttributeNSAccessor:
       case RuntimeBindingTargetAccessStrategy.DataAttributeAccessor:
         return this.directBinding.attributeValueChannelDraft(this.readSourceType, targetAccess);
       case RuntimeBindingTargetAccessStrategy.SelectValueObserver:

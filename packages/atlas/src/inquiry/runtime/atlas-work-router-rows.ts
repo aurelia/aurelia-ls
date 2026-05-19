@@ -3,6 +3,7 @@ import type {
   AtlasWorkRouteDocAnchor,
   AtlasWorkRouteLensAnchor,
   AtlasWorkRouteMatchStrength,
+  AtlasWorkRoutePathAnchor,
   AtlasWorkRouteRole,
   AtlasWorkRouteScriptAnchor,
   AtlasWorkRouteSourceAnchor,
@@ -116,6 +117,8 @@ export interface AtlasWorkRoutePlanRow {
   readonly scriptAnchors: readonly AtlasWorkRouteScriptAnchor[];
   /** Documentation anchors that explain route intent or boundaries. */
   readonly docAnchors: readonly AtlasWorkRouteDocAnchor[];
+  /** Route-owned paths that should be treated as local workset or pressure-fixture lanes. */
+  readonly pathAnchors: readonly AtlasWorkRoutePathAnchor[];
   /** Memory rows that match route source, structurally filtered lens, doc, script, auLink, or memory anchors. */
   readonly memoryRecords: readonly AtlasMemoryRecordRow[];
   /** Memory next actions that match route source, structurally filtered lens, doc, script, auLink, or memory anchors. */

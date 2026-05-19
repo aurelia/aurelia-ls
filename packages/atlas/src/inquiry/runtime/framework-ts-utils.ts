@@ -8,6 +8,7 @@ import {
 import {
   isNestedExecutionBoundary,
   objectLiteralProperty,
+  propertyNameText,
   SourceProjectKeyedMemo,
   unwrapExpression,
   type SourceProject,
@@ -364,18 +365,87 @@ export function readStaticStringProperty(
   expression: ts.Expression,
   propertyName: string,
 ): string | null {
-  const property = objectLiteralProperty(
-    unwrapExpression(expression),
+  return readStaticStringPropertyFromExpression(
+    sourceProject,
+    expression,
     propertyName,
+    new Set(),
   );
-  if (property === null || !ts.isPropertyAssignment(property)) {
+}
+
+function readStaticStringPropertyFromExpression(
+  sourceProject: SourceProject,
+  expression: ts.Expression,
+  propertyName: string,
+  seen: Set<ts.Node>,
+): string | null {
+  const current = unwrapExpression(expression);
+  if (seen.has(current)) {
     return null;
   }
-  return readStaticStringLikeExpression(
-    sourceProject,
-    property.initializer,
-    false,
+  seen.add(current);
+  if (ts.isObjectLiteralExpression(current)) {
+    for (let index = current.properties.length - 1; index >= 0; index -= 1) {
+      const property = current.properties[index]!;
+      if (
+        ts.isPropertyAssignment(property) &&
+        propertyNameText(property.name) === propertyName
+      ) {
+        return readStaticStringLikeExpression(
+          sourceProject,
+          property.initializer,
+          false,
+        );
+      }
+      if (ts.isSpreadAssignment(property)) {
+        const spreadValue = readStaticStringPropertyFromExpression(
+          sourceProject,
+          property.expression,
+          propertyName,
+          seen,
+        );
+        if (spreadValue !== null) {
+          return spreadValue;
+        }
+      }
+    }
+    return null;
+  }
+  if (ts.isIdentifier(current)) {
+    const initializer = initializerForIdentifier(sourceProject, current);
+    return initializer === null
+      ? null
+      : readStaticStringPropertyFromExpression(
+          sourceProject,
+          initializer,
+          propertyName,
+          seen,
+        );
+  }
+  return null;
+}
+
+function initializerForIdentifier(
+  sourceProject: SourceProject,
+  identifier: ts.Identifier,
+): ts.Expression | null {
+  const local = localVariableInitializerForIdentifier(identifier);
+  if (local !== null) {
+    return local;
+  }
+  const symbol = sourceProject.checker.getSymbolAtLocation(identifier);
+  if (symbol === undefined) {
+    return null;
+  }
+  const resolved =
+    (symbol.flags & ts.SymbolFlags.Alias) !== 0
+      ? sourceProject.checker.getAliasedSymbol(symbol)
+      : symbol;
+  const declaration = (resolved.getDeclarations() ?? []).find(
+    (candidate): candidate is ts.VariableDeclaration =>
+      ts.isVariableDeclaration(candidate) && candidate.initializer !== undefined,
   );
+  return declaration?.initializer ?? null;
 }
 
 export function readStaticStringLikeExpression(

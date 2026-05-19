@@ -17,6 +17,9 @@ export function bindingBehaviorExpressions(expression: ExpressionAstNode): reado
   if (expression instanceof ValueConverterExpression) {
     return bindingBehaviorExpressions(expression.expression);
   }
+  if (expression.$kind === 'Interpolation') {
+    return expression.expressions.flatMap((part) => bindingBehaviorExpressions(part));
+  }
   return [];
 }
 

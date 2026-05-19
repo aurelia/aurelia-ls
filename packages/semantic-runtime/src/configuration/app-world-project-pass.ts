@@ -148,6 +148,30 @@ import {
   ComputedDecoratorIssueMaterializer,
 } from '../observation/computed-decorator-issues.js';
 import {
+  ComputedObservationMaterializer,
+} from '../observation/computed-observation-materializer.js';
+import type {
+  ComputedObservationProjectResult,
+} from '../observation/computed-observation.js';
+import {
+  ComputedObserverSourceMaterializer,
+} from '../observation/computed-observer-source-materializer.js';
+import type {
+  ComputedObserverSourceProjectResult,
+} from '../observation/computed-observer-source.js';
+import {
+  ProxyObservableEscapeMaterializer,
+} from '../observation/proxy-observable-escape-materializer.js';
+import type {
+  ProxyObservableEscapeProjectResult,
+} from '../observation/proxy-observable-escape.js';
+import {
+  RuntimeEffectMaterializer,
+} from '../observation/runtime-effect-materializer.js';
+import type {
+  RuntimeEffectProjectResult,
+} from '../observation/runtime-effect.js';
+import {
   ObservableDecoratorIssueMaterializer,
 } from '../observation/observable-decorator-issues.js';
 import {
@@ -164,6 +188,10 @@ export type AureliaAppWorldProjectPhaseName =
   | 'module-loader-issues'
   | 'framework-api-issues'
   | 'observation-source-issues'
+  | 'computed-observation-definitions'
+  | 'computed-observer-sources'
+  | 'runtime-effects'
+  | 'proxy-observable-escapes'
   | 'resource-recognition'
   | 'resource-index'
   | 'resource-definition-api-issues'
@@ -231,6 +259,14 @@ export class AureliaAppWorldProjectEmission {
     readonly evaluationIssues: EvaluationIssueProjectResult,
     /** Source-backed observation diagnostics over project TypeScript files. */
     readonly observation: ObservationSourceIssueProjectResult,
+    /** Valid @computed getter/method dependency declarations over project TypeScript files. */
+    readonly computedObservation: ComputedObservationProjectResult,
+    /** Source-backed ComputedObserver / ControlledComputedObserver execution sources for authored getters. */
+    readonly computedObserverSources: ComputedObserverSourceProjectResult,
+    /** Source-level IEffect products for direct observation API calls. */
+    readonly runtimeEffects: RuntimeEffectProjectResult,
+    /** Source-level ProxyObservable raw/unwrap escape API calls. */
+    readonly proxyObservableEscapes: ProxyObservableEscapeProjectResult,
     /** Resource recognition and convergence over the project. */
     readonly resources: ResourceRecognitionProjectResult,
     /** Product-handle and declaration index for converged resource definitions. */
@@ -316,6 +352,10 @@ class AureliaAppWorldProjectConstructionFrame {
     const typeSystem = this.buildTypeSystem(evaluation);
     const evaluationIssues = this.materializeEvaluationIssues(evaluation, typeSystem);
     const observation = this.materializeObservationSourceIssues(typeSystem);
+    const computedObservation = this.materializeComputedObservationDefinitions(typeSystem);
+    const computedObserverSources = this.materializeComputedObserverSources(typeSystem);
+    const runtimeEffects = this.materializeRuntimeEffects(typeSystem);
+    const proxyObservableEscapes = this.materializeProxyObservableEscapes(typeSystem);
     const resources = this.recognizeResources(evaluation, typeSystem);
     const resourceIndex = this.indexResources(resources);
     this.materializeResourceDefinitionApiIssues(typeSystem, resources);
@@ -358,7 +398,12 @@ class AureliaAppWorldProjectConstructionFrame {
       routeInstructions,
       routeRecognition,
     );
-    const routeComponentAgents = this.materializeRouteComponentAgents(routeRuntimeTopology, routeTree, templates);
+    const routeComponentAgents = this.materializeRouteComponentAgents(
+      routeRuntimeTopology,
+      routeTree,
+      templates,
+      typeSystem,
+    );
     return new AureliaAppWorldProjectEmission(
       this.analysisDepth,
       this.project,
@@ -366,6 +411,10 @@ class AureliaAppWorldProjectConstructionFrame {
       typeSystem,
       evaluationIssues,
       observation,
+      computedObservation,
+      computedObserverSources,
+      runtimeEffects,
+      proxyObservableEscapes,
       resources,
       resourceIndex,
       routes,
@@ -423,6 +472,38 @@ class AureliaAppWorldProjectConstructionFrame {
         new ComputedDecoratorIssueMaterializer(this.store).materialize(this.project, typeSystem),
         new ObservableDecoratorIssueMaterializer(this.store).materialize(this.project, typeSystem),
       ])
+    );
+  }
+
+  private materializeComputedObservationDefinitions(
+    typeSystem: TypeSystemProject,
+  ): ComputedObservationProjectResult {
+    return this.measure('computed-observation-definitions', () =>
+      new ComputedObservationMaterializer(this.store).materialize(this.project, typeSystem)
+    );
+  }
+
+  private materializeComputedObserverSources(
+    typeSystem: TypeSystemProject,
+  ): ComputedObserverSourceProjectResult {
+    return this.measure('computed-observer-sources', () =>
+      new ComputedObserverSourceMaterializer(this.store).materialize(this.project, typeSystem)
+    );
+  }
+
+  private materializeRuntimeEffects(
+    typeSystem: TypeSystemProject,
+  ): RuntimeEffectProjectResult {
+    return this.measure('runtime-effects', () =>
+      new RuntimeEffectMaterializer(this.store).materialize(this.project, typeSystem)
+    );
+  }
+
+  private materializeProxyObservableEscapes(
+    typeSystem: TypeSystemProject,
+  ): ProxyObservableEscapeProjectResult {
+    return this.measure('proxy-observable-escapes', () =>
+      new ProxyObservableEscapeMaterializer(this.store).materialize(this.project, typeSystem)
     );
   }
 
@@ -764,6 +845,7 @@ class AureliaAppWorldProjectConstructionFrame {
     routeRuntimeTopology: RouteRuntimeTopologyProjectResult,
     routeTree: RouteTreeMaterializationProjectResult,
     templates: TemplateCompilationProjectEmission,
+    typeSystem: TypeSystemProject,
   ): RouteComponentAgentMaterializationProjectResult {
     return this.measure('route-component-agent-materialization', () =>
       new RouteComponentAgentMaterializationProjectPass(this.store).materializeAndEmit(
@@ -771,6 +853,7 @@ class AureliaAppWorldProjectConstructionFrame {
         routeRuntimeTopology,
         routeTree,
         templates,
+        typeSystem,
       )
     );
   }

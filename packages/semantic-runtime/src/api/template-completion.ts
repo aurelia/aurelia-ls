@@ -20,7 +20,7 @@ import {
 } from '../kernel/source-address.js';
 import type { SourceSpanAddress } from '../kernel/address.js';
 import { sourceSpanContainsOffset } from '../kernel/address.js';
-import type { ProductHandle } from '../kernel/handles.js';
+import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
@@ -119,6 +119,10 @@ import {
   routerIssueDiagnostic,
   templateCompilerErrorDiagnostic,
 } from './template-diagnostic-policy.js';
+import {
+  resourceLocalBindingDataFlows,
+  resourceLocalBindingTargetAccesses,
+} from './runtime-resource-ownership.js';
 
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
 
@@ -244,7 +248,7 @@ function bindingSourceAssignmentCursorDiagnostics(
   if (cursorOffset == null) {
     return [];
   }
-  return selection.resource.runtimeAnalysis.bindingDataFlow.dataFlows.flatMap((dataFlow) => {
+  return resourceLocalBindingDataFlows(store, selection.resource).flatMap((dataFlow) => {
     const span = sourceSpanForHandle(store, dataFlow.sourceAddressHandle);
     if (span == null || !sourceSpanContainsOffset(span, cursorOffset)) {
       return [];
@@ -335,7 +339,7 @@ function templateDiagnosticExpectedValueTypeForCursor(
   if (cursorOffset == null || !valueSiteSupportsBindingTargetExpectedType(valueSiteKind)) {
     return null;
   }
-  for (const dataFlow of selection.resource.runtimeAnalysis.bindingDataFlow.dataFlows) {
+  for (const dataFlow of resourceLocalBindingDataFlows(store, selection.resource)) {
     const span = sourceSpanForHandle(store, dataFlow.sourceAddressHandle);
     if (span == null || !sourceSpanContainsOffset(span, cursorOffset)) {
       continue;
@@ -687,7 +691,7 @@ function bindingDataFlowDiagnosticRowsForSelection(
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
-  return selection.resource.runtimeAnalysis.bindingDataFlow.dataFlows.flatMap((dataFlow) => {
+  return resourceLocalBindingDataFlows(store, selection.resource).flatMap((dataFlow) => {
     const source = describeAddress(store, dataFlow.sourceAddressHandle);
     if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
       return [];
@@ -736,7 +740,7 @@ function targetAccessDiagnosticRowsForSelection(
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
-  return selection.resource.runtimeAnalysis.controllerBind.targetAccesses.flatMap((targetAccess) => {
+  return resourceLocalBindingTargetAccesses(store, selection.resource).flatMap((targetAccess) => {
     const source = describeAddress(store, targetAccess.sourceAddressHandle);
     if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
       return [];
@@ -1695,7 +1699,12 @@ function templateCursorInfoResult(
   const html = cursorHtmlRow(store, cursorContext, includeHandles);
   const valueSite = cursorValueSiteRow(store, cursorContext, includeHandles);
   const selectedMember = cursorSelectedMemberRow(store, cursorContext, includeHandles);
-  const memberOwnerType = cursorMemberOwnerTypeRow(store, query.memberOwnerTypeProductHandle, includeHandles);
+  const memberOwnerType = cursorMemberOwnerTypeRow(
+    store,
+    query.memberOwnerTypeProductHandle,
+    cursorContext.memberOwnerTypeSourceAddressHandle,
+    includeHandles,
+  );
   const expectedValueType = templateDiagnosticExpectedValueTypeForCursor(
     store,
     selection,
@@ -1854,6 +1863,7 @@ function cursorBindableRow(
 function cursorMemberOwnerTypeRow(
   store: KernelStore,
   productHandle: TemplateCompletionCursorContext['query']['memberOwnerTypeProductHandle'],
+  sourceAddressHandle: AddressHandle | null,
   includeHandles: boolean,
 ): SemanticTemplateCursorInfoResult['memberOwnerType'] {
   const typeShape = productHandle == null
@@ -1866,13 +1876,13 @@ function cursorMemberOwnerTypeRow(
     display: typeShape.display,
     shapeKind: typeShape.shapeKind,
     origin: typeShape.origin,
-    source: describeAddress(store, typeShape.sourceAddressHandle),
+    source: describeAddress(store, sourceAddressHandle ?? typeShape.sourceAddressHandle),
     declarationSource: describeAddress(store, typeShape.declarationSourceAddressHandle),
     ...(includeHandles ? {
       handles: {
         productHandle: typeShape.productHandle,
         identityHandle: typeShape.identityHandle,
-        sourceAddressHandle: typeShape.sourceAddressHandle,
+        sourceAddressHandle: sourceAddressHandle ?? typeShape.sourceAddressHandle,
         declarationSourceAddressHandle: typeShape.declarationSourceAddressHandle,
       },
     } : {}),

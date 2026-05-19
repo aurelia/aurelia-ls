@@ -5,7 +5,10 @@ import type {
   ProductHandle,
 } from '../kernel/handles.js';
 import type { FieldProvenance } from '../kernel/provenance.js';
-import type { CheckerTypeReference } from '../type-system/type-shape.js';
+import type {
+  CheckerTypeMemberKind,
+  CheckerTypeReference,
+} from '../type-system/type-shape.js';
 import type {
   RuntimeBindingReference,
   RuntimeBindingSourceOperationReference,
@@ -94,6 +97,16 @@ export const enum RuntimeBindingDataFlowSourceKind {
   Open = 'open',
 }
 
+export const enum RuntimeObservedDependencyKind {
+  TemplateExpressionRead = 'template-expression-read',
+  TemplateCollectionRead = 'template-collection-read',
+  ProxyPropertyRead = 'proxy-property-read',
+  ProxyCollectionRead = 'proxy-collection-read',
+  ObservablePropertyRead = 'observable-property-read',
+  DeepPropertyRead = 'deep-property-read',
+  DeepCollectionRead = 'deep-collection-read',
+}
+
 export const enum RuntimeBindingDataFlowSourceAssignmentKind {
   RuntimeAssignable = 'runtime-assignable',
   RuntimeAssignableWithTypeScriptStrictness = 'runtime-assignable-with-typescript-strictness',
@@ -137,6 +150,7 @@ export type RuntimeBindingDataFlowField =
   | 'sourceTypeOpenReason'
   | 'sourceTypeOpenKind'
   | 'sourceAssignmentTargetType'
+  | 'sourceAssignmentTargetSource'
   | 'targetPropertyType'
   | 'targetValueType'
   | 'sourceWritable'
@@ -145,8 +159,25 @@ export type RuntimeBindingDataFlowField =
   | 'sourceAssignmentReasonKinds'
   | 'sourceToTargetAssignable'
   | 'targetToSourceAssignable'
+  | 'observedDependencies'
   | 'frameworkErrorCode'
   | 'openReason'
+  | 'source';
+
+export type RuntimeBindingObservedDependencyField =
+  | 'binding'
+  | 'dataFlow'
+  | 'expression'
+  | 'dependencyKind'
+  | 'expressionKind'
+  | 'sourceName'
+  | 'sourceRootName'
+  | 'memberName'
+  | 'keyExpression'
+  | 'methodName'
+  | 'observedMemberKind'
+  | 'observedMemberSource'
+  | 'span'
   | 'source';
 
 export type RuntimeBindingValueChannelField =
@@ -177,6 +208,31 @@ export class RuntimeBindingValueChannelReference {
     readonly identityHandle: IdentityHandle | null,
     /** Source or generated address for the binding site. */
     readonly addressHandle: AddressHandle | null,
+  ) {}
+}
+
+/** Expression read that participates in runtime template connectable dependency collection for a binding. */
+export class RuntimeBindingObservedDependency {
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly binding: RuntimeBindingReference,
+    readonly dataFlowProductHandle: ProductHandle,
+    readonly expressionProductHandle: ProductHandle | null,
+    readonly bindingScope: BindingScopeReference | null,
+    readonly dependencyKind: RuntimeObservedDependencyKind,
+    readonly expressionKind: string,
+    readonly sourceName: string | null,
+    readonly sourceRootName: string | null,
+    readonly memberName: string | null,
+    readonly keyExpression: string | null,
+    readonly methodName: string | null,
+    readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null,
+    readonly observedMemberSourceAddressHandle: AddressHandle | null,
+    readonly spanStart: number | null,
+    readonly spanEnd: number | null,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingObservedDependencyField>[] = [],
   ) {}
 }
 
@@ -240,6 +296,7 @@ export class RuntimeBindingDataFlow {
     readonly sourceTypeOpenReason: string | null,
     readonly sourceTypeOpenKind: CheckerExpressionTypeOpenKind | `${CheckerExpressionTypeOpenKind}` | null,
     readonly sourceAssignmentTargetType: CheckerTypeReference | null,
+    readonly sourceAssignmentTargetSourceAddressHandle: AddressHandle | null,
     readonly targetPropertyType: CheckerTypeReference | null,
     readonly targetValueType: CheckerTypeReference | null,
     readonly sourceWritable: boolean | null,

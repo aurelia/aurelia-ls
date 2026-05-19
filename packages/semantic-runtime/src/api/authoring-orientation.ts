@@ -1,3 +1,4 @@
+import ts from 'typescript';
 import type { ProjectBootFrame } from '../boot/frames.js';
 import { readSemanticProjectShape } from '../boot/project-shape.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
@@ -58,11 +59,13 @@ import { CheckerTypeShapeKind } from '../type-system/type-shape.js';
 import { sourceRoleCounts } from './app-summary.js';
 import {
   readSemanticApplicationTopology,
+  semanticApplicationComponentMemberKey,
   SemanticApplicationComponentRoleKind,
 } from './app-topology.js';
 import {
   readBindingBehaviorApplicationRows,
   readBindingDataFlowRows,
+  readBindingObservedDependencyRows,
   readBindingTargetAccessRows,
   readTargetOperationRows,
   readBindingValueChannelRows,
@@ -92,8 +95,11 @@ import type {
   SemanticAuthoringTasteValueRow,
   SemanticBindingBehaviorApplicationRow,
   SemanticBindingDataFlowRow,
+  SemanticBindingObservedDependencyRow,
   SemanticBindingTargetAccessRow,
   SemanticBindingValueChannelRow,
+  SemanticComputedObserverObservedDependencyRow,
+  SemanticComputedObserverSourceRow,
   SemanticI18nTranslationBindingRow,
   SemanticI18nTranslationKeyRow,
   SemanticStateStoreRow,
@@ -101,19 +107,36 @@ import type {
   SemanticResourceDeclarationMode,
   SemanticRuntimeControllerRow,
   SemanticRuntimeCompositionRow,
+  SemanticRuntimeWatcherObservedDependencyRow,
+  SemanticRuntimeWatcherRow,
   SemanticTemplateDiagnosticRow,
   SemanticTemplateCursorSuggestionRow,
   SemanticTemplateCursorSuggestionValueTypeSource,
 } from './contracts.js';
 import { readAppOpenSeams } from './open-seam-projections.js';
+import {
+  readComputedObservationDefinitionRows,
+  readComputedObserverObservedDependencyRows,
+  readComputedObserverSourceRows,
+} from './observation-projections.js';
 import { readResourceDefinitionRows } from './resource-projections.js';
-import { readRuntimeControllerRows } from './controller-projections.js';
+import {
+  readRuntimeControllerRows,
+  readRuntimeWatcherObservedDependencyRows,
+  readRuntimeWatcherRows,
+} from './controller-projections.js';
 import { readRuntimeCompositionRows } from './composition-projections.js';
 import { readSemanticRouteEffectFactRows } from './route-effect-facts.js';
 import { RuntimeBindingValueChannelKind } from '../observation/runtime-binding-observation.js';
+import { ComputedObserverRuntimeKind } from '../observation/computed-observer-source.js';
 import { RuntimeBindingTargetKind } from '../template/runtime-binding.js';
+import { unwrapExpression } from '../evaluation/ts-syntax.js';
 import { describeAddress, type SemanticSourceReference } from './source-reference.js';
 import { readSemanticTemplateDiagnostics } from './template-completion.js';
+import {
+  normalizeHostPath,
+  sourcePathMatchesFileName,
+} from '../kernel/source-address.js';
 
 interface OrientationFacts {
   readonly project: ProjectBootFrame;
@@ -122,11 +145,17 @@ interface OrientationFacts {
   readonly topology: ReturnType<typeof readSemanticApplicationTopology>;
   readonly resourceDefinitions: ReturnType<typeof readResourceDefinitionRows>;
   readonly runtimeControllers: readonly SemanticRuntimeControllerRow[];
+  readonly runtimeWatchers: readonly SemanticRuntimeWatcherRow[];
+  readonly runtimeWatcherObservedDependencies: readonly SemanticRuntimeWatcherObservedDependencyRow[];
   readonly runtimeCompositions: readonly SemanticRuntimeCompositionRow[];
   readonly bindingTargetAccesses: readonly SemanticBindingTargetAccessRow[];
   readonly targetOperations: readonly SemanticTargetOperationRow[];
   readonly bindingValueChannels: readonly SemanticBindingValueChannelRow[];
   readonly bindingBehaviorApplications: readonly SemanticBindingBehaviorApplicationRow[];
+  readonly bindingObservedDependencies: readonly SemanticBindingObservedDependencyRow[];
+  readonly computedObservationDefinitions: ReturnType<typeof readComputedObservationDefinitionRows>;
+  readonly computedObserverSources: readonly SemanticComputedObserverSourceRow[];
+  readonly computedObserverObservedDependencies: readonly SemanticComputedObserverObservedDependencyRow[];
   readonly i18nTranslationKeys: readonly SemanticI18nTranslationKeyRow[];
   readonly i18nTranslationBindings: readonly SemanticI18nTranslationBindingRow[];
   readonly stateStores: readonly SemanticStateStoreRow[];
@@ -192,11 +221,17 @@ function orientationFacts(
     topology: readSemanticApplicationTopology(store, emission, false),
     resourceDefinitions: readResourceDefinitionRows(emission, store, false),
     runtimeControllers: readRuntimeControllerRows(emission, store, false),
+    runtimeWatchers: readRuntimeWatcherRows(emission, store, false),
+    runtimeWatcherObservedDependencies: readRuntimeWatcherObservedDependencyRows(emission, store, false),
     runtimeCompositions: readRuntimeCompositionRows(emission, store, false),
     bindingTargetAccesses: readBindingTargetAccessRows(emission, store, false),
     targetOperations: readTargetOperationRows(emission, store, false),
     bindingValueChannels: readBindingValueChannelRows(emission, store, false),
     bindingBehaviorApplications: readBindingBehaviorApplicationRows(emission, store, false),
+    bindingObservedDependencies: readBindingObservedDependencyRows(emission, store, false),
+    computedObservationDefinitions: readComputedObservationDefinitionRows(emission, store, false),
+    computedObserverSources: readComputedObserverSourceRows(emission, store, false),
+    computedObserverObservedDependencies: readComputedObserverObservedDependencyRows(emission, store, false),
     i18nTranslationKeys: readI18nTranslationKeyRows(emission, store, false),
     i18nTranslationBindings: readI18nTranslationBindingRows(emission, store, false),
     stateStores: readStateStoreRows(emission, store, false),
@@ -281,6 +316,10 @@ function coverageRows(facts: OrientationFacts): readonly SemanticAuthoringCovera
     coverage('binding-value-channels', 'Binding Value Channels', 'binding-value-channel', 'template', countState(facts.bindingValueChannels.length), 'type-checker', facts.bindingValueChannels.length, 'Observer-backed runtime value channels are queryable.'),
     coverage('binding-behavior-applications', 'Binding Behavior Applications', 'binding-behavior-application', 'template', countState(facts.bindingBehaviorApplications.length), 'framework-emulated', facts.bindingBehaviorApplications.length, 'Runtime binding-behavior applications are queryable after binding target facts exist.'),
     coverage('binding-data-flows', 'Binding Data Flows', 'binding-data-flow', 'template', countState(facts.bindingDataFlows.length), 'type-checker', facts.bindingDataFlows.length, 'Template source/target data-flow rows are queryable.'),
+    coverage('binding-observed-dependencies', 'Binding Observed Dependencies', 'binding-observed-dependency', 'template', countState(facts.bindingObservedDependencies.length), 'framework-emulated', facts.bindingObservedDependencies.length, 'Source-side template connectable dependency rows are queryable for source-to-target bindings.'),
+    coverage('computed-observation-definitions', 'Computed Observation Definitions', 'computed-observation-definition', 'component', countState(facts.computedObservationDefinitions.length), 'framework-emulated', facts.computedObservationDefinitions.length, 'Source-backed @computed getter and trackable-method dependency declarations are queryable.'),
+    coverage('computed-observer-sources', 'Computed Observer Sources', 'computed-observer-source', 'component', countState(facts.computedObserverSources.length), 'framework-emulated', facts.computedObserverSources.length, 'ObserverLocator ComputedObserver and ControlledComputedObserver source rows are queryable for getter observation semantics.'),
+    coverage('computed-observer-observed-dependencies', 'Computed Observer Observed Dependencies', 'computed-observer-observed-dependency', 'component', countState(facts.computedObserverObservedDependencies.length), 'framework-emulated', facts.computedObserverObservedDependencies.length, 'Computed observer dependency reads are queryable as source-observer projection data flow.'),
     coverage('template-diagnostics', 'Template Diagnostics', 'diagnostic', 'template', diagnostics === 0 ? 'observable' : 'repairable', 'type-checker', diagnostics, diagnostics === 0 ? 'Template diagnostics can be queried; current app has no diagnostic rows.' : 'Template diagnostics are present as repair pressure.'),
     coverage('open-seams', 'Open Seams', 'open-seam', 'app', facts.openSeams.length === 0 ? 'verifiable' : 'partial', 'generated-projection', facts.openSeams.length, facts.openSeams.length === 0 ? 'No app open seams are currently reported.' : 'Open seams remain and should gate authoring promises.', facts.openSeams.length === 0 ? [] : ['semantic-fact-partial']),
   ];
@@ -317,6 +356,7 @@ function tasteRows(facts: OrientationFacts): readonly SemanticAuthoringTasteAxis
     tasteAxis('resource-admission-mode', resourceAdmissionValues(facts)),
     tasteAxis('state-ownership', stateOwnershipValues(facts)),
     tasteAxis('component-interface', componentInterfaceValues(facts)),
+    tasteAxis('template-model-access', templateModelAccessValues(facts)),
     tasteAxis('navigation-ownership', navigationOwnershipValues(facts)),
     tasteAxis('template-source-ownership', templateSourceOwnershipValues(facts)),
     tasteAxis('template-rendering-boundary', templateRenderingBoundaryValues(facts)),
@@ -735,6 +775,205 @@ function componentInterfaceValues(facts: OrientationFacts): readonly SemanticAut
     values.push(tasteValue('callback-function-inputs', 'likely', 'type-checker', 'component', 'Bindable member types include callable values.', callbackBindables.length));
   }
   return values;
+}
+
+function templateModelAccessValues(facts: OrientationFacts): readonly SemanticAuthoringTasteValueRow[] {
+  const directStateDomainBindings = directStateDomainTemplateBindingCount(facts);
+  const oneHopForwardingAccessors = oneHopForwardingAccessorCount(facts);
+  const ordinaryGetterObservers = sourceBackedGetterObservationCount(facts);
+  const values: SemanticAuthoringTasteValueRow[] = [];
+  if (directStateDomainBindings > 0) {
+    values.push(tasteValue(
+      'direct-state-domain-template-binding',
+      'likely',
+      'generated-projection',
+      'template',
+      'App topology service-interaction binding rows show template bindings whose source root is an injected state/domain member.',
+      directStateDomainBindings,
+    ));
+  }
+  if (oneHopForwardingAccessors > 0) {
+    values.push(tasteValue(
+      'one-hop-forwarding-accessor-pressure',
+      'likely',
+      'source',
+      'component',
+      'Component accessors return a plain property chain rooted at an injected state/domain member; the template can often bind that state/domain path directly.',
+      oneHopForwardingAccessors,
+    ));
+  }
+  if (ordinaryGetterObservers > 0) {
+    values.push(tasteValue(
+      'source-backed-getter-observation',
+      'likely',
+      'framework-emulated',
+      'component',
+      'Binding observed-dependency rows show template reads of ordinary accessor descriptor getters with source-backed ComputedObserver availability, without @computed metadata.',
+      ordinaryGetterObservers,
+    ));
+  }
+  return values;
+}
+
+function sourceBackedGetterObservationCount(facts: OrientationFacts): number {
+  const sourceBackedGetterKeys = facts.computedObserverSources
+    .filter((observer) =>
+      observer.observerKind === ComputedObserverRuntimeKind.ComputedObserver
+      && observer.triggerKind === 'accessor-descriptor'
+      && observer.memberName != null
+      && observer.source?.path != null
+    );
+  if (sourceBackedGetterKeys.length === 0) {
+    return 0;
+  }
+
+  return facts.bindingObservedDependencies.filter((dependency) =>
+    dependency.observedMemberKind === 'accessor'
+    && dependency.observedMemberSource?.path != null
+    && sourceBackedGetterKeys.some((observer) =>
+      observer.memberName === observedDependencyMemberName(dependency)
+      && sourcePathMatchesFileName(dependency.observedMemberSource!.path!, observer.source!.path!)
+    )
+  ).length;
+}
+
+function observedDependencyMemberName(
+  dependency: SemanticBindingObservedDependencyRow,
+): string | null {
+  return dependency.memberName ?? dependency.sourceName;
+}
+
+function directStateDomainTemplateBindingCount(facts: OrientationFacts): number {
+  const directRoots = new Set(
+    facts.topology.injections
+      .filter((injection) =>
+        injection.consumerClassName != null
+        && injection.consumerMemberName != null
+        && isStateDomainRole(injection.keyDeclarationRole)
+      )
+      .map((injection) =>
+        semanticApplicationComponentMemberKey(injection.consumerClassName!, injection.consumerMemberName!)
+      ),
+  );
+  return facts.topology.serviceInteractionBindings.filter((binding) =>
+    isStateDomainRole(binding.interactionTargetRole)
+    && directRoots.has(semanticApplicationComponentMemberKey(binding.componentClassName, binding.bindingSourceRootName))
+  ).length;
+}
+
+function oneHopForwardingAccessorCount(facts: OrientationFacts): number {
+  const injectedStateDomainMembersByComponent = new Map<string, Set<string>>();
+  for (const injection of facts.topology.injections) {
+    if (
+      injection.consumerClassName == null
+      || injection.consumerMemberName == null
+      || !isStateDomainRole(injection.keyDeclarationRole)
+    ) {
+      continue;
+    }
+    const key = componentSourceClassKey(injection.consumerPath, injection.consumerClassName);
+    const members = injectedStateDomainMembersByComponent.get(key) ?? new Set<string>();
+    members.add(injection.consumerMemberName);
+    injectedStateDomainMembersByComponent.set(key, members);
+  }
+
+  let count = 0;
+  for (const component of facts.topology.components) {
+    if (component.className == null || component.source?.path == null) {
+      continue;
+    }
+    const componentSourcePath = projectRelativeSourcePath(facts.project, component.source.path);
+    const injectedMembers = injectedStateDomainMembersByComponent.get(
+      componentSourceClassKey(componentSourcePath, component.className),
+    );
+    if (injectedMembers == null || injectedMembers.size === 0) {
+      continue;
+    }
+    const sourceFile = facts.emission.typeSystem.readSourceFileByPath(componentSourcePath);
+    if (sourceFile == null) {
+      continue;
+    }
+    count += countOneHopForwardingAccessors(sourceFile, component.className, injectedMembers);
+  }
+  return count;
+}
+
+function countOneHopForwardingAccessors(
+  sourceFile: ts.SourceFile,
+  className: string,
+  injectedMembers: ReadonlySet<string>,
+): number {
+  let count = 0;
+  for (const statement of sourceFile.statements) {
+    if (!ts.isClassDeclaration(statement) || statement.name?.text !== className) {
+      continue;
+    }
+    for (const member of statement.members) {
+      if (ts.isGetAccessorDeclaration(member) && getterReturnsInjectedPropertyChain(member, injectedMembers)) {
+        count++;
+      }
+    }
+  }
+  return count;
+}
+
+function getterReturnsInjectedPropertyChain(
+  getter: ts.GetAccessorDeclaration,
+  injectedMembers: ReadonlySet<string>,
+): boolean {
+  const statements = getter.body?.statements ?? [];
+  if (statements.length !== 1) {
+    return false;
+  }
+  const statement = statements[0] ?? null;
+  if (statement == null) {
+    return false;
+  }
+  if (!ts.isReturnStatement(statement) || statement.expression == null) {
+    return false;
+  }
+  const chain = thisPropertyAccessChain(statement.expression);
+  const root = chain[0] ?? null;
+  return chain.length >= 2 && root != null && injectedMembers.has(root);
+}
+
+function thisPropertyAccessChain(expression: ts.Expression): readonly string[] {
+  const names: string[] = [];
+  let current = unwrapExpression(expression);
+  while (ts.isPropertyAccessExpression(current)) {
+    names.unshift(current.name.text);
+    current = unwrapExpression(current.expression);
+  }
+  return current.kind === ts.SyntaxKind.ThisKeyword ? names : [];
+}
+
+function componentSourceClassKey(sourcePath: string, className: string): string {
+  return `${normalizeHostPath(sourcePath)}\0${className}`;
+}
+
+function projectRelativeSourcePath(project: ProjectBootFrame, sourcePath: string): string {
+  const normalizedRoot = normalizeHostPath(project.rootDir);
+  const normalizedSource = normalizeHostPath(sourcePath);
+  const rootRelativeSource = removePathPrefix(normalizedSource, normalizedRoot);
+  if (rootRelativeSource !== normalizedSource) {
+    return rootRelativeSource;
+  }
+  const workspaceRelativeRoot = removePathPrefix(normalizedRoot, normalizeHostPath(project.workspaceRootDir));
+  return removePathPrefix(normalizedSource, workspaceRelativeRoot);
+}
+
+function removePathPrefix(sourcePath: string, prefixPath: string): string {
+  if (prefixPath.length === 0 || sourcePath === prefixPath) {
+    return sourcePath;
+  }
+  const prefix = `${prefixPath}/`;
+  return sourcePath.startsWith(prefix)
+    ? sourcePath.slice(prefix.length)
+    : sourcePath;
+}
+
+function isStateDomainRole(role: string | null): boolean {
+  return role === 'state-source' || role === 'model-source';
 }
 
 function navigationOwnershipValues(facts: OrientationFacts): readonly SemanticAuthoringTasteValueRow[] {
@@ -1419,6 +1658,10 @@ function surfaceRows(facts: OrientationFacts): readonly SemanticAuthoringAvailab
     surface('binding-value-channels', 'binding-value-channel', 'template', 'Binding value channels', facts.bindingValueChannels.length, 'type-checker', countState(facts.bindingValueChannels.length), 'Observer-backed runtime value-channel rows.'),
     surface('binding-behavior-applications', 'binding-behavior-application', 'template', 'Binding behavior applications', facts.bindingBehaviorApplications.length, 'framework-emulated', countState(facts.bindingBehaviorApplications.length), 'Runtime binding-behavior application rows.'),
     surface('binding-data-flows', 'binding-data-flow', 'template', 'Binding data flows', facts.bindingDataFlows.length, 'type-checker', countState(facts.bindingDataFlows.length), 'TypeChecker-backed binding data-flow rows.'),
+    surface('binding-observed-dependencies', 'binding-observed-dependency', 'template', 'Binding observed dependencies', facts.bindingObservedDependencies.length, 'framework-emulated', countState(facts.bindingObservedDependencies.length), 'Source-side template connectable dependency rows.'),
+    surface('computed-observation-definitions', 'computed-observation-definition', 'component', 'Computed observation definitions', facts.computedObservationDefinitions.length, 'framework-emulated', countState(facts.computedObservationDefinitions.length), 'Source-backed @computed dependency declarations.'),
+    surface('computed-observer-sources', 'computed-observer-source', 'component', 'Computed observer sources', facts.computedObserverSources.length, 'framework-emulated', countState(facts.computedObserverSources.length), 'ObserverLocator getter source-observer rows.'),
+    surface('computed-observer-observed-dependencies', 'computed-observer-observed-dependency', 'component', 'Computed observer observed dependencies', facts.computedObserverObservedDependencies.length, 'framework-emulated', countState(facts.computedObserverObservedDependencies.length), 'Computed observer source dependency rows.'),
     surface('template-diagnostics', 'diagnostic', 'template', 'Template diagnostics', facts.templateDiagnostics.length, 'type-checker', facts.templateDiagnostics.length === 0 ? 'observable' : 'repairable', 'Template diagnostics available for authoring repair pressure.'),
     surface('open-seams', 'open-seam', 'app', 'Open seams', facts.openSeams.length, 'generated-projection', facts.openSeams.length === 0 ? 'verifiable' : 'partial', 'Open semantic seam rows.'),
   ];
@@ -1466,11 +1709,18 @@ function expectedEffectObservationSnapshot(
     serviceInteractions: facts.topology.serviceInteractions,
     serviceInteractionBindings: facts.topology.serviceInteractionBindings,
     compiledResources: facts.emission.templates.resources.length,
+    templateDiagnostics: facts.templateDiagnostics,
     runtimeControllers: facts.runtimeControllers,
+    runtimeWatchers: facts.runtimeWatchers,
+    runtimeWatcherObservedDependencies: facts.runtimeWatcherObservedDependencies,
     runtimeCompositions: facts.runtimeCompositions,
     bindingTargetAccesses: facts.bindingTargetAccesses,
     targetOperations: facts.targetOperations,
     bindingValueChannels: facts.bindingValueChannels,
+    bindingObservedDependencies: facts.bindingObservedDependencies,
+    computedObservationDefinitions: facts.computedObservationDefinitions,
+    computedObserverSources: facts.computedObserverSources,
+    computedObserverObservedDependencies: facts.computedObserverObservedDependencies,
     bindingBehaviorApplications: facts.bindingBehaviorApplications,
     i18nTranslationKeys: facts.i18nTranslationKeys,
     i18nTranslationBindings: facts.i18nTranslationBindings,
@@ -1992,7 +2242,7 @@ function actionTargetSourceCoverage(
 }
 
 function repairClusterKey(row: SemanticAuthoringRepairRow): string {
-  return [
+  const signature = [
     row.evidenceKind,
     row.repairKind,
     row.operationKind,
@@ -2009,6 +2259,15 @@ function repairClusterKey(row: SemanticAuthoringRepairRow): string {
       : `target-surface:${repairActionTargetSurfaceKey(row.suggestion.actionTarget)}`,
     ...[...row.missingInputs].sort(),
     ...[...row.openSeamReasonKinds].sort(),
+  ].join(':');
+  return [
+    'repair-cluster',
+    row.evidenceKind,
+    row.repairKind,
+    row.diagnosticKind ?? row.seamKindKey ?? 'none',
+    row.suggestion?.suggestionKind ?? 'none',
+    row.suggestion?.actionTarget?.targetKind ?? 'none',
+    stableKeyFingerprint(signature),
   ].join(':');
 }
 
@@ -2096,6 +2355,15 @@ function sourceReferenceClusterKey(
 
 function encodedKeyPart(value: string): string {
   return encodeURIComponent(value);
+}
+
+function stableKeyFingerprint(value: string): string {
+  let hash = 0x811c9dc5;
+  for (let index = 0; index < value.length; index += 1) {
+    hash ^= value.charCodeAt(index);
+    hash = Math.imul(hash, 0x01000193);
+  }
+  return (hash >>> 0).toString(36);
 }
 
 function repairMemberHintValueTypeCoverage(

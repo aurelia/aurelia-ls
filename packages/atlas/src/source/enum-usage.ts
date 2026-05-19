@@ -6,6 +6,7 @@ import {
   uniqueByKey,
   uniqueSortedStrings,
 } from "../collections.js";
+import { escapeRegExp } from "../text-regex.js";
 import {
   PhaseProfiler,
   type PhaseProfileRow,
@@ -1305,10 +1306,6 @@ function enumNameForDeclaration(declaration: ts.Declaration): string | null {
 
 function containsWord(text: string, word: string): boolean {
   return new RegExp(`(^|[^A-Za-z0-9_$])${escapeRegExp(word)}($|[^A-Za-z0-9_$])`, "u").test(text);
-}
-
-function escapeRegExp(text: string): string {
-  return text.replace(/[.*+?^${}()|[\]\\]/gu, "\\$&");
 }
 
 function unwrapTranslationExpression(node: ts.Node): ts.Node {

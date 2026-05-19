@@ -115,9 +115,9 @@ in the kernel yet.
 `handles.ts` defines branded store-local handles and `KernelHandleFactory`, the scoped minting API for normalized
 record links.
 
-`store.ts` defines the hot in-memory `KernelStore`, batch commit surface, handle expansion, cheap navigation indexes,
-and typed product-detail sidecar. Batches are record-emission units, not durable transactions, vocabulary
-mutations, or semantic boundaries. The store also validates controlled vocabulary usage at commit time: product kinds
+`store.ts` defines the hot in-memory `KernelStore`, batch commit surface, missing-record commit guard, handle expansion,
+cheap navigation indexes, and typed product-detail sidecar. Batches are record-emission units, not durable transactions,
+vocabulary mutations, or semantic boundaries. The store also validates controlled vocabulary usage at commit time: product kinds
 must be declared as product-kind vocabulary, claim predicates must be declared as claim-predicate vocabulary, and claim
 endpoints must match the predicate's directional signature.
 `KernelStore.mark()` / `disposeSince(...)` is the current app-session reclamation primitive for answer-local work. It

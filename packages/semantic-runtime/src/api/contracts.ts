@@ -171,6 +171,7 @@ import type { TemplateResourceVisibilityKind } from '../template/compiler-world-
 import type { TemplateInstructionKind } from '../template/instruction-ir.js';
 import type {
   RuntimeBindingDataFlowDirection,
+  RuntimeObservedDependencyKind,
   RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceAssignmentReasonKind,
   RuntimeBindingDataFlowSourceKind,
@@ -183,6 +184,21 @@ import type {
   ObservationIssueKind,
   ObservationIssuePhase,
 } from '../observation/observation-issue.js';
+import type {
+  ComputedObservationDependencyMode,
+  ComputedObservationMemberKind,
+} from '../observation/computed-observation.js';
+import type {
+  ComputedObserverRuntimeKind,
+  ComputedObserverSourceTriggerKind,
+} from '../observation/computed-observer-source.js';
+import type {
+  RuntimeEffectDependencyEvaluationKind,
+  RuntimeEffectKind,
+} from '../observation/runtime-effect.js';
+import type {
+  ProxyObservableEscapeKind,
+} from '../observation/proxy-observable-escape.js';
 import type {
   RuntimeBindingKind,
   RuntimeBindingSourceOperationAuthority,
@@ -205,6 +221,10 @@ import type {
   RuntimeControllerLifecycleStepKind,
   RuntimeControllerReadinessKind,
 } from '../template/runtime-controller.js';
+import type {
+  RuntimeWatcherDependencyEvaluationKind,
+  RuntimeWatcherKind,
+} from '../template/runtime-watcher.js';
 import type {
   CompositionActivateMethodKind,
   CompositionActivationModelHandoffKind,
@@ -300,6 +320,12 @@ export const enum SemanticAppQueryKind {
   ConfigurationIssues = 'configuration-issues',
   DiIssues = 'di-issues',
   ObservationIssues = 'observation-issues',
+  ComputedObservationDefinitions = 'computed-observation-definitions',
+  ComputedObserverSources = 'computed-observer-sources',
+  ComputedObserverObservedDependencies = 'computed-observer-observed-dependencies',
+  RuntimeEffects = 'runtime-effects',
+  RuntimeEffectObservedDependencies = 'runtime-effect-observed-dependencies',
+  ProxyObservableEscapes = 'proxy-observable-escapes',
   AppTopology = 'app-topology',
   StateStores = 'state-stores',
   StateIssues = 'state-issues',
@@ -334,6 +360,8 @@ export const enum SemanticAppQueryKind {
   TemplateCursorInfo = 'template-cursor-info',
   TemplateDiagnostics = 'template-diagnostics',
   RuntimeControllers = 'runtime-controllers',
+  RuntimeWatchers = 'runtime-watchers',
+  RuntimeWatcherObservedDependencies = 'runtime-watcher-observed-dependencies',
   RuntimeCompositions = 'runtime-compositions',
   BindingTargetAccesses = 'binding-target-accesses',
   TargetOperations = 'target-operations',
@@ -342,6 +370,7 @@ export const enum SemanticAppQueryKind {
   BindingBehaviorApplications = 'binding-behavior-applications',
   BindingValueChannels = 'binding-value-channels',
   BindingDataFlows = 'binding-data-flows',
+  BindingObservedDependencies = 'binding-observed-dependencies',
 }
 
 export const SEMANTIC_APP_QUERY_KINDS = [
@@ -359,6 +388,12 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.ConfigurationIssues,
   SemanticAppQueryKind.DiIssues,
   SemanticAppQueryKind.ObservationIssues,
+  SemanticAppQueryKind.ComputedObservationDefinitions,
+  SemanticAppQueryKind.ComputedObserverSources,
+  SemanticAppQueryKind.ComputedObserverObservedDependencies,
+  SemanticAppQueryKind.RuntimeEffects,
+  SemanticAppQueryKind.RuntimeEffectObservedDependencies,
+  SemanticAppQueryKind.ProxyObservableEscapes,
   SemanticAppQueryKind.AppTopology,
   SemanticAppQueryKind.StateStores,
   SemanticAppQueryKind.StateIssues,
@@ -393,6 +428,8 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.TemplateCursorInfo,
   SemanticAppQueryKind.TemplateDiagnostics,
   SemanticAppQueryKind.RuntimeControllers,
+  SemanticAppQueryKind.RuntimeWatchers,
+  SemanticAppQueryKind.RuntimeWatcherObservedDependencies,
   SemanticAppQueryKind.RuntimeCompositions,
   SemanticAppQueryKind.BindingTargetAccesses,
   SemanticAppQueryKind.TargetOperations,
@@ -401,6 +438,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.BindingBehaviorApplications,
   SemanticAppQueryKind.BindingValueChannels,
   SemanticAppQueryKind.BindingDataFlows,
+  SemanticAppQueryKind.BindingObservedDependencies,
 ] as const;
 
 export const enum SemanticRuntimeDetail {
@@ -1260,6 +1298,10 @@ export type SemanticAuthoringSurfaceKind =
   | 'binding-target-access'
   | 'target-operation'
   | 'binding-value-channel'
+  | 'binding-observed-dependency'
+  | 'computed-observation-definition'
+  | 'computed-observer-source'
+  | 'computed-observer-observed-dependency'
   | 'binding-behavior-application'
   | 'binding-data-flow'
   | 'diagnostic'
@@ -1929,6 +1971,8 @@ export interface SemanticAppSummary {
   readonly compiledResources: number;
   readonly compiledInstructions: number;
   readonly runtimeBindings: number;
+  readonly runtimeWatchers: number;
+  readonly runtimeWatcherObservedDependencies: number;
   readonly runtimeTargetOperations: number;
   readonly runtimeRendererTargetOperations: number;
   readonly runtimeBindingTargetAccesses: number;
@@ -1937,6 +1981,13 @@ export interface SemanticAppSummary {
   readonly runtimeBindingBehaviorApplications: number;
   readonly runtimeBindingValueChannels: number;
   readonly runtimeBindingDataFlows: number;
+  readonly runtimeBindingObservedDependencies: number;
+  readonly computedObservationDefinitions: number;
+  readonly computedObserverSources: number;
+  readonly computedObserverObservedDependencies: number;
+  readonly runtimeEffects: number;
+  readonly runtimeEffectObservedDependencies: number;
+  readonly proxyObservableEscapes: number;
   readonly runtimeBindingDataFlowSourceTypeGaps: number;
   readonly runtimeBindingDataFlowSourceAssignmentPressures: number;
   readonly bindingScopes: number;
@@ -2265,6 +2316,143 @@ export interface SemanticObservationIssuesResult {
   readonly rows: readonly SemanticObservationIssueRow[];
 }
 
+export interface SemanticComputedObservationDefinitionRow {
+  readonly projectKey: string;
+  readonly memberKind: ComputedObservationMemberKind | `${ComputedObservationMemberKind}`;
+  readonly memberName: string | null;
+  readonly dependencyMode: ComputedObservationDependencyMode | `${ComputedObservationDependencyMode}`;
+  readonly dependencyKeys: readonly string[];
+  readonly dependencyFunctionCount: number;
+  readonly flush: 'sync' | 'async';
+  readonly deep: boolean | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticComputedObservationDefinitionsResult {
+  readonly rows: readonly SemanticComputedObservationDefinitionRow[];
+}
+
+export interface SemanticComputedObserverSourceRow {
+  readonly projectKey: string;
+  readonly observerKind: ComputedObserverRuntimeKind | `${ComputedObserverRuntimeKind}`;
+  readonly triggerKind: ComputedObserverSourceTriggerKind | `${ComputedObserverSourceTriggerKind}`;
+  readonly className: string | null;
+  readonly memberName: string | null;
+  readonly dependencyMode: ComputedObservationDependencyMode | `${ComputedObservationDependencyMode}`;
+  readonly dependencyKeys: readonly string[];
+  readonly dependencyFunctionCount: number;
+  readonly flush: 'sync' | 'async';
+  readonly deep: boolean | null;
+  readonly observedDependencies: number;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticComputedObserverSourcesResult {
+  readonly rows: readonly SemanticComputedObserverSourceRow[];
+}
+
+export interface SemanticComputedObserverObservedDependencyRow {
+  readonly projectKey: string;
+  readonly observerKind: ComputedObserverRuntimeKind | `${ComputedObserverRuntimeKind}`;
+  readonly className: string | null;
+  readonly memberName: string | null;
+  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
+  readonly expressionKind: string;
+  readonly sourceName: string | null;
+  readonly sourceRootName: string | null;
+  readonly dependencyMemberName: string | null;
+  readonly keyExpression: string | null;
+  readonly methodName: string | null;
+  readonly spanStart: number | null;
+  readonly spanEnd: number | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly computedObserverProductHandle: ProductHandle | null;
+    readonly observedDependencyProductHandle: ProductHandle;
+    readonly observedDependencyIdentityHandle: IdentityHandle;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticComputedObserverObservedDependenciesResult {
+  readonly rows: readonly SemanticComputedObserverObservedDependencyRow[];
+}
+
+export interface SemanticRuntimeEffectRow {
+  readonly projectKey: string;
+  readonly effectKind: RuntimeEffectKind | `${RuntimeEffectKind}`;
+  readonly dependencyEvaluationKind: RuntimeEffectDependencyEvaluationKind | `${RuntimeEffectDependencyEvaluationKind}`;
+  readonly immediate: boolean | null;
+  readonly observedDependencies: number;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly effectProductHandle: ProductHandle | null;
+    readonly effectIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRuntimeEffectResult {
+  readonly rows: readonly SemanticRuntimeEffectRow[];
+}
+
+export interface SemanticRuntimeEffectObservedDependencyRow {
+  readonly projectKey: string;
+  readonly effectKind: RuntimeEffectKind | `${RuntimeEffectKind}`;
+  readonly dependencyEvaluationKind: RuntimeEffectDependencyEvaluationKind | `${RuntimeEffectDependencyEvaluationKind}`;
+  readonly immediate: boolean | null;
+  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
+  readonly expressionKind: string;
+  readonly sourceName: string | null;
+  readonly sourceRootName: string | null;
+  readonly memberName: string | null;
+  readonly keyExpression: string | null;
+  readonly methodName: string | null;
+  readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
+  readonly observedMemberSource: SemanticSourceReference | null;
+  readonly spanStart: number | null;
+  readonly spanEnd: number | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly effectProductHandle: ProductHandle | null;
+    readonly observedDependencyProductHandle: ProductHandle;
+    readonly observedDependencyIdentityHandle: IdentityHandle;
+    readonly observedMemberSourceAddressHandle: AddressHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRuntimeEffectObservedDependenciesResult {
+  readonly rows: readonly SemanticRuntimeEffectObservedDependencyRow[];
+}
+
+export interface SemanticProxyObservableEscapeRow {
+  readonly projectKey: string;
+  readonly escapeKind: ProxyObservableEscapeKind | `${ProxyObservableEscapeKind}`;
+  readonly argumentSourceName: string | null;
+  readonly argumentRootName: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly escapeProductHandle: ProductHandle | null;
+    readonly escapeIdentityHandle: IdentityHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticProxyObservableEscapesResult {
+  readonly rows: readonly SemanticProxyObservableEscapeRow[];
+}
+
 export type SemanticAppDiagnosticDomain =
   | 'evaluation'
   | 'configuration'
@@ -2419,6 +2607,12 @@ export interface SemanticI18nTranslationBindingRow {
   readonly staticKeys: readonly string[];
   readonly staticTargets: readonly SemanticI18nTranslationBindingTargetRow[];
   readonly hasParameterBinding: boolean;
+  /** Distinct connectable source expression names read by `t-params.bind` parameter bindings. */
+  readonly parameterSourceNames: readonly string[];
+  /** Distinct root scope names for `t-params.bind` parameter binding source expressions. */
+  readonly parameterSourceRootNames: readonly string[];
+  /** Distinct member names reached by `t-params.bind` parameter binding source expressions. */
+  readonly parameterMemberNames: readonly string[];
   readonly issueCount: number;
   readonly frameworkErrorCodes: readonly string[];
   readonly source: SemanticSourceReference | null;
@@ -3226,6 +3420,7 @@ export interface SemanticTemplateCompilationRow {
   readonly runtimeBindingSourceOperations: number;
   readonly runtimeBindingValueChannels: number;
   readonly runtimeBindingDataFlows: number;
+  readonly runtimeBindingObservedDependencies: number;
   readonly bindingScopes: number;
   readonly openSeams: number;
   readonly source: SemanticSourceReference | null;
@@ -3540,6 +3735,7 @@ export interface SemanticRuntimeControllerRow {
   readonly parentControllerName: string | null;
   readonly childControllers: number;
   readonly runtimeBindings: number;
+  readonly runtimeWatchers: number;
   readonly hasScope: boolean;
   readonly hasViewFactory: boolean;
   readonly viewFactoryDefinitionName: string | null;
@@ -3579,8 +3775,76 @@ export interface SemanticRuntimeControllerResult {
   readonly rows: readonly SemanticRuntimeControllerRow[];
 }
 
+export interface SemanticRuntimeWatcherRow {
+  readonly renderingDefinitionName: string;
+  readonly controllerName: string | null;
+  readonly definitionName: string | null;
+  readonly definitionClassName: string | null;
+  readonly watcherKind: RuntimeWatcherKind | `${RuntimeWatcherKind}`;
+  readonly dependencyEvaluationKind: RuntimeWatcherDependencyEvaluationKind | `${RuntimeWatcherDependencyEvaluationKind}`;
+  readonly watchIndex: number;
+  readonly expressionKind: WatchExpressionKind | `${WatchExpressionKind}`;
+  readonly expressionPropertyKeyKind: WatchPropertyKeyKind | `${WatchPropertyKeyKind}` | null;
+  readonly expressionPropertyKey: string | null;
+  readonly callbackKind: WatchCallbackKind | `${WatchCallbackKind}`;
+  readonly callbackMethodNameKind: WatchPropertyKeyKind | `${WatchPropertyKeyKind}` | null;
+  readonly callbackMethodName: string | null;
+  readonly flush: WatchFlushMode | `${WatchFlushMode}`;
+  readonly observedDependencies: number;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly watcherProductHandle: ProductHandle;
+    readonly watcherIdentityHandle: IdentityHandle;
+    readonly controllerProductHandle: ProductHandle;
+    readonly controllerIdentityHandle: IdentityHandle;
+    readonly definitionProductHandle: ProductHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRuntimeWatcherResult {
+  readonly rows: readonly SemanticRuntimeWatcherRow[];
+}
+
+export interface SemanticRuntimeWatcherObservedDependencyRow {
+  readonly renderingDefinitionName: string;
+  readonly controllerName: string | null;
+  readonly definitionName: string | null;
+  readonly definitionClassName: string | null;
+  readonly watcherKind: RuntimeWatcherKind | `${RuntimeWatcherKind}`;
+  readonly watchIndex: number;
+  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
+  readonly expressionKind: string;
+  readonly sourceName: string | null;
+  readonly sourceRootName: string | null;
+  readonly memberName: string | null;
+  readonly keyExpression: string | null;
+  readonly methodName: string | null;
+  readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
+  readonly observedMemberSource: SemanticSourceReference | null;
+  readonly spanStart: number | null;
+  readonly spanEnd: number | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly watcherProductHandle: ProductHandle | null;
+    readonly observedDependencyProductHandle: ProductHandle;
+    readonly observedDependencyIdentityHandle: IdentityHandle;
+    readonly observedMemberSourceAddressHandle: AddressHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRuntimeWatcherObservedDependencyResult {
+  readonly rows: readonly SemanticRuntimeWatcherObservedDependencyRow[];
+}
+
 export interface SemanticRuntimeCompositionRow {
   readonly renderingDefinitionName: string;
+  /**
+   * Whether this row came from analyzing a resource's own template, or from a recursive rendering pass where a parent
+   * controller supplied child bindable values.
+   */
+  readonly renderingContextKind: SemanticRuntimeCompositionRenderingContextKind;
   readonly hostControllerName: string | null;
   readonly parentControllerName: string | null;
   /** Effective au-compose scope behavior when static/defaulted; null means dynamic or unresolved. */
@@ -3641,6 +3905,10 @@ export interface SemanticRuntimeCompositionRow {
     readonly sourceAddressHandle: AddressHandle | null;
   };
 }
+
+export type SemanticRuntimeCompositionRenderingContextKind =
+  | 'definition-resource'
+  | 'recursive-resource-instance';
 
 export type SemanticRuntimeCompositionCandidateAnalysisState =
   | 'none'
@@ -3826,6 +4094,7 @@ export interface SemanticBindingDataFlowRow {
   readonly sourceTypeOpenReason: string | null;
   readonly sourceTypeOpenKind: CheckerExpressionTypeOpenKind | `${CheckerExpressionTypeOpenKind}` | null;
   readonly sourceAssignmentTargetType: string | null;
+  readonly sourceAssignmentTargetSource: SemanticSourceReference | null;
   readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
   readonly targetProperty: string | null;
   readonly targetOperationKind: RuntimeBindingTargetOperationKind | `${RuntimeBindingTargetOperationKind}` | null;
@@ -3853,6 +4122,7 @@ export interface SemanticBindingDataFlowRow {
     readonly bindingScopeProductHandle: ProductHandle | null;
     readonly sourceTypeProductHandle: ProductHandle | null;
     readonly sourceAssignmentTargetTypeProductHandle: ProductHandle | null;
+    readonly sourceAssignmentTargetSourceAddressHandle: AddressHandle | null;
     readonly targetPropertyTypeProductHandle: ProductHandle | null;
     readonly targetValueTypeProductHandle: ProductHandle | null;
     readonly sourceAddressHandle: AddressHandle | null;
@@ -3861,4 +4131,42 @@ export interface SemanticBindingDataFlowRow {
 
 export interface SemanticBindingDataFlowResult {
   readonly rows: readonly SemanticBindingDataFlowRow[];
+}
+
+export type SemanticObservedMemberSourceState =
+  | 'source'
+  | 'temporary-value'
+  | 'runtime-scope-name'
+  | 'scope-open'
+  | 'open';
+
+export interface SemanticBindingObservedDependencyRow {
+  readonly definitionName: string;
+  readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
+  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
+  readonly expressionKind: string;
+  readonly sourceName: string | null;
+  readonly sourceRootName: string | null;
+  readonly memberName: string | null;
+  readonly keyExpression: string | null;
+  readonly methodName: string | null;
+  readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
+  readonly observedMemberSource: SemanticSourceReference | null;
+  readonly observedMemberSourceState: SemanticObservedMemberSourceState;
+  readonly spanStart: number | null;
+  readonly spanEnd: number | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly bindingProductHandle: ProductHandle | null;
+    readonly dataFlowProductHandle: ProductHandle;
+    readonly observedDependencyProductHandle: ProductHandle;
+    readonly expressionProductHandle: ProductHandle | null;
+    readonly bindingScopeProductHandle: ProductHandle | null;
+    readonly observedMemberSourceAddressHandle: AddressHandle | null;
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticBindingObservedDependencyResult {
+  readonly rows: readonly SemanticBindingObservedDependencyRow[];
 }

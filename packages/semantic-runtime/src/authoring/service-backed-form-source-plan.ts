@@ -252,16 +252,22 @@ export interface RequestTopicSummary {
   label: string;
 }
 
-export interface ServiceRequest {
-  id: string;
-  customerName: string;
-  email: string;
-  urgent: boolean;
-  contactPreference: ContactPreference;
-  primaryTopic: RequestTopic | null;
-  topics: RequestTopic[];
-  notes: string;
-  submitCount: number;
+export class ServiceRequest {
+  constructor(
+    readonly id: string,
+    public customerName: string,
+    public email: string,
+    public urgent: boolean,
+    public contactPreference: ContactPreference,
+    public primaryTopic: RequestTopic | null,
+    public topics: RequestTopic[],
+    public notes: string,
+    public submitCount: number,
+  ) {}
+
+  get canSubmit(): boolean {
+    return this.customerName !== '' && this.email !== '';
+  }
 }
 
 export class __STATE_CLASS__ {
@@ -308,48 +314,6 @@ export class __STATE_CLASS__ {
     }
   }
 
-  updateCustomerName(requestId: string, value: string): void {
-    const request = this.readRequest(requestId);
-    if (request != null) {
-      request.customerName = value;
-    }
-  }
-
-  updateEmail(requestId: string, value: string): void {
-    const request = this.readRequest(requestId);
-    if (request != null) {
-      request.email = value;
-    }
-  }
-
-  updateUrgency(requestId: string, value: boolean): void {
-    const request = this.readRequest(requestId);
-    if (request != null) {
-      request.urgent = value;
-    }
-  }
-
-  updateContactPreference(requestId: string, value: ContactPreference): void {
-    const request = this.readRequest(requestId);
-    if (request != null) {
-      request.contactPreference = value;
-    }
-  }
-
-  updatePrimaryTopic(requestId: string, value: RequestTopic | null): void {
-    const request = this.readRequest(requestId);
-    if (request != null) {
-      request.primaryTopic = value;
-    }
-  }
-
-  updateNotes(requestId: string, value: string): void {
-    const request = this.readRequest(requestId);
-    if (request != null) {
-      request.notes = value;
-    }
-  }
-
   async submitRequest(requestId: string): Promise<void> {
     const request = this.readRequest(requestId);
     if (request != null) {
@@ -367,7 +331,7 @@ export class __STATE_CLASS__ {
 }
 `);
 
-const SERVICE_SOURCE = sourceText(`import type { ServiceRequest } from '__STATE_MODULE__';
+const SERVICE_SOURCE = sourceText(`import { ServiceRequest } from '__STATE_MODULE__';
 
 export class __SERVICE_CLASS__ {
   async loadRequests(): Promise<readonly ServiceRequest[]> {
@@ -383,23 +347,23 @@ export class __SERVICE_CLASS__ {
 }
 
 function createRequest(id: string, customerName: string): ServiceRequest {
-  return {
+  return new ServiceRequest(
     id,
     customerName,
-    email: \`\${customerName.toLowerCase().replace(' ', '.')}@example.test\`,
-    urgent: false,
-    contactPreference: 'email',
-    primaryTopic: null,
-    topics: ['support'],
-    notes: '',
-    submitCount: 0,
-  };
+    \`\${customerName.toLowerCase().replace(' ', '.')}@example.test\`,
+    false,
+    'email',
+    null,
+    ['support'],
+    '',
+    0,
+  );
 }
 `);
 
 const FORM_COMPONENT_SOURCE = sourceText(`import { bindable, customElement } from '@aurelia/runtime-html';
 import { resolve } from '@aurelia/kernel';
-import { __STATE_CLASS__, type ContactPreference, type RequestTopic } from '__STATE_MODULE__';
+import { __STATE_CLASS__ } from '__STATE_MODULE__';
 import { __FIELD_SHELL_CLASS__ } from '__FIELD_SHELL_MODULE__';
 import template from '__FORM_TEMPLATE_MODULE__';
 
@@ -413,107 +377,49 @@ export class __FORM_COMPONENT_CLASS__ {
 
   @bindable requestId = '';
 
-  get customerName(): string {
-    return this.request?.customerName ?? '';
-  }
-
-  set customerName(value: string) {
-    this.state.updateCustomerName(this.requestId, value);
-  }
-
-  get email(): string {
-    return this.request?.email ?? '';
-  }
-
-  set email(value: string) {
-    this.state.updateEmail(this.requestId, value);
-  }
-
-  get urgent(): boolean {
-    return this.request?.urgent ?? false;
-  }
-
-  set urgent(value: boolean) {
-    this.state.updateUrgency(this.requestId, value);
-  }
-
-  get contactPreference(): ContactPreference {
-    return this.request?.contactPreference ?? this.state.emailPreference;
-  }
-
-  set contactPreference(value: ContactPreference) {
-    this.state.updateContactPreference(this.requestId, value);
-  }
-
-  get primaryTopic(): RequestTopic | null {
-    return this.request?.primaryTopic ?? null;
-  }
-
-  set primaryTopic(value: RequestTopic | null) {
-    this.state.updatePrimaryTopic(this.requestId, value);
-  }
-
-  get topics(): RequestTopic[] {
-    return this.request?.topics ?? [];
-  }
-
-  get notes(): string {
-    return this.request?.notes ?? '';
-  }
-
-  set notes(value: string) {
-    this.state.updateNotes(this.requestId, value);
-  }
-
-  get canSubmit(): boolean {
-    return this.customerName !== '' && this.email !== '';
-  }
-
   submit(): void {
     void this.state.submitRequest(this.requestId);
-  }
-
-  private get request() {
-    return this.state.readRequest(this.requestId);
   }
 }
 `);
 
-const FORM_TEMPLATE_SOURCE = sourceText(`<form class.bind="canSubmit ? 'form-ready' : 'form-pending'" submit.trigger="submit()">
+const FORM_TEMPLATE_SOURCE = sourceText(`<let request.bind="state.readRequest(requestId)"></let>
+<template if.bind="request != null">
+  <form class.bind="request.canSubmit ? 'form-ready' : 'form-pending'" submit.trigger="submit()">
   <__FIELD_SHELL_ELEMENT_NAME__
     input-id="customer-name"
     label="Name"
     type="text"
-    value.bind="customerName">
+    value.bind="request.customerName">
   </__FIELD_SHELL_ELEMENT_NAME__>
 
   <__FIELD_SHELL_ELEMENT_NAME__
     input-id="email"
     label="Email"
     type="email"
-    value.bind="email">
+    value.bind="request.email">
   </__FIELD_SHELL_ELEMENT_NAME__>
 
   <label>
-    <input type="checkbox" checked.bind="urgent">
+    <input type="checkbox" checked.bind="request.urgent">
     Urgent
   </label>
 
   <fieldset>
     <legend>Contact preference</legend>
     <label>
-      <input type="radio" model.bind="state.emailPreference" checked.bind="contactPreference">
+      <input type="radio" model.bind="state.emailPreference" checked.bind="request.contactPreference">
       Email
     </label>
     <label>
-      <input type="radio" model.bind="state.phonePreference" checked.bind="contactPreference">
+      <input type="radio" model.bind="state.phonePreference" checked.bind="request.contactPreference">
       Phone
     </label>
   </fieldset>
 
   <label for="primary-topic">Primary topic</label>
   <p>Default topic: \${state.supportTopicSummary.label}</p>
-  <select id="primary-topic" value.bind="primaryTopic">
+  <select id="primary-topic" value.bind="request.primaryTopic">
     <option model.bind="null">Choose...</option>
     <option model.bind="state.hardwareTopic">Hardware</option>
     <option model.bind="state.billingTopic">Billing</option>
@@ -521,15 +427,17 @@ const FORM_TEMPLATE_SOURCE = sourceText(`<form class.bind="canSubmit ? 'form-rea
   </select>
 
   <label for="topics">Additional topics</label>
-  <select id="topics" multiple value.bind="topics">
+  <select id="topics" multiple value.bind="request.topics">
     <option model.bind="state.hardwareTopic">Hardware</option>
     <option model.bind="state.billingTopic">Billing</option>
     <option model.bind="state.supportTopic">Support</option>
   </select>
 
   <label for="notes">Notes</label>
-  <textarea id="notes" value.bind="notes"></textarea>
+  <textarea id="notes" value.bind="request.notes"></textarea>
 
-  <button type="submit" disabled.bind="!canSubmit">Submit request</button>
-</form>
+    <button type="submit" disabled.bind="!request.canSubmit">Submit request</button>
+  </form>
+</template>
+<p else>Loading request...</p>
 `);

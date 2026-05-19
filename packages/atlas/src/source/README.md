@@ -82,9 +82,10 @@ runtime exports.
   resolution.
 - Build source-index bases such as `auLink` anchors and framework discovery seeds on demand within the current
   source-project epoch. auLink framework target rows preserve raw candidate lists and also expose type/value
-  composition (`interface-class-pair`, `interface-variable-pair`, etc.) plus preferred type/value candidates. Declaration
-  merges with one type side and one value side are treated as conceptually resolved targets, so callers can distinguish
-  honest TypeScript merges from unresolved bridge ambiguity without losing the underlying declarations. Framework
+  composition (`interface-class-pair`, `interface-variable-pair`, `function-overload-set`, etc.) plus preferred
+  type/value candidates. Declaration merges with one type side and one value side, and same-symbol function overload
+  sets, are treated as conceptually resolved targets, so callers can distinguish honest TypeScript merges and overloads
+  from unresolved bridge ambiguity without losing the underlying declarations. Framework
   projection rows should fill on demand unless profiling proves their owning substrate cannot be made cheap.
 - Stay semantics-neutral: source declarations are not vocabulary facts, product claims, DI facts, or framework facts.
 - Provide a boring base that TypeChecker-driven product, self-analysis, and source navigation lenses can share.

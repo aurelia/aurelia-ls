@@ -273,6 +273,14 @@ export function expressionAstNodeContainsKind(
   return findInExpression(expression, (candidate) => candidate.$kind === kind ? true : null) === true;
 }
 
+export function unwrapExpressionAstNodeParens(
+  expression: ExpressionAstNode,
+): ExpressionAstNode {
+  return expression.$kind === 'Paren'
+    ? unwrapExpressionAstNodeParens(expression.expression)
+    : expression;
+}
+
 function findInExpressionAtOffset<T>(
   expression: ExpressionAstNode,
   offset: number,

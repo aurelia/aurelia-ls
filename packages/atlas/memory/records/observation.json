@@ -58,12 +58,23 @@
       "domains": [
         "semantic-runtime",
         "observation",
-        "framework-errors"
+        "framework-errors",
+        "source-api",
+        "effect"
       ],
-      "summary": "RuntimeEffect owns the framework-shaped IEffect stop lifecycle and the exact stopped-effect diagnostic.",
+      "summary": "RuntimeEffect owns source-level Observation.watch/run effects, effect-owned observed dependencies, and the framework-shaped IEffect stop lifecycle.",
       "rationale": "Aurelia runtime throws stopping_a_stopped_effect from Observation.watch and RunEffect stop guards, while method_not_implemented in ast evaluator/connectable mixins is an internal stub guard. Semantic-runtime should model the concrete effect lifecycle without claiming user-extensible evaluator/connectable stubs until those products exist.",
       "guidance": [
-        "Use RuntimeEffect when a product needs Observation.watch or RunEffect stop-state semantics.",
+        "Use RuntimeEffect when a product needs direct Observation.watch/run source-call rows or IEffect stop-state semantics.",
+        "RuntimeEffect source product publication goes through source-observation-product-publication.ts; only effect-owned dependency rows go through source-observed-dependency-publication.ts.",
+        "Source-level IObservation.watch(...) calls publish runtime-effect products and effect-owned observed-dependency rows; do not route those facts through resource watchers or renderer-owned bindings.",
+        "Effect-owned observed-dependency publication goes through source-observed-dependency-publication.ts so exact source-file handles flow from the recognized source site instead of being rediscovered from the broader effect carrier address.",
+        "The watch materializer follows framework Observation._doWatch: string expressions route through getExpressionObserver, function getters route through ObserverLocator.getObserver(obj, function) and therefore the function-key ComputedObserver branch.",
+        "Dynamic watch expressions should still publish a runtime-effect row with dependencyEvaluationKind=open and no fabricated observed-dependency rows. That shape means the source effect was seen but the expression string could not be statically closed.",
+        "Source-level IObservation.run(...) calls publish runtime-effect products on the connectable-run path and currently collect direct synchronous @observable getter reads inside the RunEffect connectable window.",
+        "Observation.run(...) nested async callbacks and explicit cleanup/recursion diagnostics remain open because they require separate connectable-window and effect-recursion projection.",
+        "Effect-owned observed dependencies should be kept separate from binding-observed-dependencies and runtime-watcher-observed-dependencies; direct Observation.watch/run calls are source API effects, not renderer-owned binding setup.",
+        "Framework corpus queries for `IObservation watch` expose promoted docs and behavior-grounding tests; use those as pressure seeds before inventing app-local watch semantics.",
         "A first stop is a normal lifecycle transition; a second stop carries runtime stopping_a_stopped_effect / AUR0225.",
         "Leave runtime method_not_implemented / AUR0099 unclaimed for AST evaluator mixins and connectable defaults until semantic-runtime admits user-extensible evaluator or connectable classes.",
         "Check framework.errors usages before reclassifying runtime observation lifecycle diagnostics."
@@ -73,7 +84,36 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/observation/runtime-effect.ts",
           "symbolName": "RuntimeEffect",
-          "summary": "Framework-shaped IEffect lifecycle model."
+          "summary": "Source-level IEffect and Observation.watch/run product model."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-effect-materializer.ts",
+          "symbolName": "RuntimeEffectMaterializer",
+          "summary": "Source-level Observation.watch/run effect and observed-dependency materializer."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/source-observation-product-publication.ts",
+          "symbolName": "sourceObservationProductRecords",
+          "summary": "Shared source/evidence/provenance envelope for source-backed observation products."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/source-observed-dependency-publication.ts",
+          "symbolName": "sourceObservedDependencyRecords",
+          "summary": "Shared publication primitive for source observer/effect-owned observed-dependency rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/observation-projections.ts",
+          "symbolName": "readRuntimeEffectRows",
+          "summary": "Public runtime-effects query projection."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:runtime-effect-observation",
+          "summary": "Focused semantic contract for source-level Observation.watch/run effect rows."
         },
         {
           "kind": "source",
@@ -87,6 +127,15 @@
           "projection": "diagnostic-codes",
           "query": "stopping_a_stopped_effect",
           "summary": "Exact framework usage and disposition for AUR0225."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.observation",
+          "projection": "dependency-circuit",
+          "filters": {
+            "circuitRole": "watcher-effect-dependency"
+          },
+          "summary": "Framework Observation._doWatch and Observation.run rows show watch and RunEffect dependency routes."
         }
       ],
       "liveChecks": [
@@ -94,10 +143,17 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/observation/runtime-effect.ts",
           "symbolName": "RuntimeEffect"
+        },
+        {
+          "kind": "product-large-class",
+          "className": "RuntimeEffectMaterializer",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-effect-materializer.ts",
+          "minLineCount": 80,
+          "minMethodCount": 2
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-05-19"
     },
     {
       "id": "frontier:observer-locator",
@@ -118,6 +174,13 @@
         "AUR0652 is an exact framework error only for the NodeObserverLocator.getObserver path where dirty checking is disabled, the native node property exists, and no configured observer/data/namespace/class/style branch applies. Do not spend it for unknown TypeChecker input.",
         "AUR0652 diagnostics should carry configure-node-observer guidance toward NodeObserverLocator.useConfig(...) or a framework-supported observable target, so repair planning sees runtime-policy pressure instead of a generic inspection task.",
         "Exact target-access framework errors are closed diagnostics, not open observer seams. Keep RuntimeBindingTargetAccess.openReason for unresolved ObserverLocator semantics, use diagnosticReason/frameworkErrorCode for the framework throw, and let value-channel publish rejected-target-access without opening data flow.",
+        "Custom NodeObserverLocator service configuration is not a host-node heuristic. It is consumed by observer lookup paths such as two-way/from-view bindings, while accessor lookup paths can still use ElementPropertyAccessor unless an accessor override is configured.",
+        "Aurelia's runtime-html namespace attribute table is a distinct NodeObserverLocator branch. Model xlink/xml/xmlns table entries as AttributeNSAccessor before the generic SVG/data-attribute accessor path.",
+        "Atlas framework.observation observer-locator-decisions includes both the core runtime ObserverLocator branch table and the runtime-html NodeObserverLocator table. Filter by surfaceKind=node-observer-locator when target-access work needs configured node observers, accessor overrides, class/style accessors, namespace/data attributes, dirty-check fallback, or missing-property SetterObserver grounding.",
+        "Core ObserverLocator configurable accessor descriptors select ComputedObserver, including setter-only descriptors. Keep ComputedObserverSource getter projection separate: setter-only target access can be a ComputedObserver strategy without creating a getter source-observer row.",
+        "Direct source calls to IObserverLocator/ObserverLocator.getObserver(...), getAccessor(...), or getExpressionObserver(...) are not the same product as binding target-access rows or ComputedObserverSource getter projection. Admit a source-level observer-lookup product before claiming runtime API/lifecycle errors or function-key lookup calls outside Observation.watch(...).",
+        "Atlas framework corpus fixture seeds expose the framework ObserverLocator descriptor matrix through `classificationKey=observer-locator-descriptor-matrix`, and the setter-only branch through `classificationKey=observer-locator-setter-only-accessor` or `expectedEffectFilterField=includedDecision` with `setter-only-configurable-computed-observer`.",
+        "The href/src/role/size/popover attr-accessor list belongs to NodeObserverLocator.getAccessor only. Observer-forcing bindings must not reuse that accessor branch; they follow getObserver, where known native properties may dirty-check or spend AUR0652 when dirty checking is disabled.",
         "External app pressure that shows node element-property access with missing property types should be split by targetTypeSource before changing observer selection or diagnostics."
       ],
       "anchors": [
@@ -134,6 +197,12 @@
           "symbolName": "NodeObserverLocator",
           "line": 430,
           "summary": "Node-specific observer locator."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/node-namespace-attributes.ts",
+          "symbolName": "nodeNamespaceAttribute",
+          "summary": "Framework runtime-html namespace attribute table mirror for AttributeNSAccessor routing."
         },
         {
           "kind": "source",
@@ -156,8 +225,24 @@
         {
           "kind": "lens",
           "lensId": "framework.observation",
+          "projection": "observer-locator-decisions",
+          "summary": "Framework ObserverLocator and NodeObserverLocator decision table."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.observation",
           "projection": "relationships",
           "summary": "Framework observation relationship grounding."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:node-observer-service-customization",
+          "summary": "Focused semantic contract for NodeObserverLocator service state consumed by observer lookup rather than host-node accessor lookup."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:observer-locator-target-access",
+          "summary": "Focused semantic contract for accessor-descriptor ComputedObserver targets, readonly data fields, node accessor paths, and map/set size observers."
         }
       ],
       "liveChecks": [
@@ -187,7 +272,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-05-19"
     },
     {
       "id": "frontier:bound-controller-value-flow",
@@ -203,6 +288,7 @@
       "rationale": "External app pressure showed dynamic router href values flowing through child view-model methods and parent-bound callback properties. The right substrate is the binding source/value layer because Aurelia bindable property instructions target child controllers while the source expression belongs to the parent scope. Template-controller overlays can copy a view-model binding context while changing scope ownership, so the table must also recognize unambiguous view-model definition/type ownership rather than relying only on exact controller product handles.",
       "guidance": [
         "Keep router, diagnostics, and authoring inquiries as consumers of this binding-owned value flow; do not add router-local expression shortcuts for parent-to-child bindable values.",
+        "Keep RuntimeBoundControllerValueTable in runtime-bound-controller-value.ts as the binding/rendering handoff; RuntimeBindingSourceValueEvaluator should consume it, not own its table-construction policy.",
         "When synthetic or narrowed scopes obscure the original controller owner, prefer definition/type-grounded lookup over broad fallback heuristics.",
         "If multiple call sites bind the same definition property, keep the value open unless a future recursive rendering context can pick the exact call site.",
         "Treat remaining dynamic state/service boundaries after this handoff as evaluator or DI/state-store pressure, not as missing router semantics."
@@ -210,10 +296,16 @@
       "anchors": [
         {
           "kind": "source",
-          "filePath": "packages/semantic-runtime/src/observation/binding-source-value-evaluator.ts",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-bound-controller-value.ts",
           "symbolName": "RuntimeBoundControllerValueTable",
-          "line": 153,
+          "line": 60,
           "summary": "Parent-to-child bound controller value table."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-bound-controller-value.ts",
+          "symbolName": "runtimeBoundControllerValueTableForTemplateResources",
+          "summary": "Template-resource handoff that builds the bound-controller value table from rendering, bind, and scope emissions."
         },
         {
           "kind": "source",
@@ -232,18 +324,18 @@
         {
           "kind": "product-large-class",
           "className": "RuntimeBoundControllerValueTable",
-          "filePath": "packages/semantic-runtime/src/observation/binding-source-value-evaluator.ts",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-bound-controller-value.ts",
           "minLineCount": 80,
           "minMethodCount": 8
         },
         {
           "kind": "source-declaration-exists",
-          "filePath": "packages/semantic-runtime/src/observation/binding-source-value-evaluator.ts",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-bound-controller-value.ts",
           "symbolName": "runtimeBoundControllerValueTableForTemplateResources"
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-05-19"
     },
     {
       "id": "frontier:proxy-observable-domain-modeling",
@@ -260,26 +352,227 @@
       "guidance": [
         "Do not use ProxyObservable as a reason to require view-model forwarding getters for ordinary template bindings; framework `astEvaluate` connects AccessScope, AccessMember, and AccessKeyed reads through the active connectable.",
         "Start here when composed state classes, @computed, @watch/static watches, @astTrack/trackable methods, or nested array/map/set reads need dependency products beyond ordinary binding data-flow rows.",
+        "@computed is two framework surfaces sharing one decorator: getter declarations add computed metadata consumed by ObserverLocator.getComputedObserver, while method declarations write the astTrackableMethodMarker used by @astTrack. Ordinary accessor getters do not need @computed to be observed; ObserverLocator creates ComputedObserver from configurable accessor descriptors and function-key observer requests, so setter-only configurable descriptors also follow the framework ComputedObserver branch. Nullish deps config is omitted deps in the framework, not an open explicit dependency declaration.",
         "Ground direct template reads and ProxyObservable work in the same Atlas framework.observation graph: ast-evaluator rows show where expression evaluation calls the active connectable, while proxy-observable rows show how wrapped nested reads and collection reads feed the same dependency collection model.",
+        "Use framework.observation dependency-circuit rows for the compact end-to-end map. The role split keeps template-expression-read, template-collection-read, template-callback-evaluation, proxy-identity, proxy-escape, proxy-property-dependency, proxy-collection-dependency, trackable-expression-dependency, computed-observer-dependency, watcher-effect-dependency, observer-location, and adjacent scheduling/setup facts visible without re-reading the full flow-site list.",
+        "Use framework.observation collection-methods rows before changing semantic-runtime collection method sets. They compare astEvaluate's autoObserveArrayMethods with ProxyObservable's array/map/set wrappers and expose whether the wrapper collects the collection, invokes callbacks in the active connectable turn, wraps callback values, or wraps returned values.",
+        "Keep semantic-runtime ProxyObservable collection-method policy centralized by receiver kind. Observed collection reads, intercepted wrapper methods, and wrapped result carriers are separate concepts, but they should live in one table so array/map/set changes do not recreate parallel switch helpers.",
         "For fixture pressure, start from framework corpus computed/watch/computed-method proxy-observation seeds before inventing an @astTrack-specific recipe; the current corpus surfaces computed/watch pressure more clearly than astTrack.",
         "Keep source-level decorator misuse diagnostics in the observation-source-issues lane; this frontier is about valid dependency semantics and domain-model observability, not decorator error ownership.",
-        "As of the 2026-05-18 pause, Atlas can see framework astEvaluate/proxy-observable handoffs but semantic-runtime does not yet publish a first-class per-expression observed-dependency product. Add that only where it is wired to binding data-flow, watcher/computed execution, or repair diagnostics; do not add an inert companion row just to mirror the framework flow-site list.",
-        "If fixture recipes start depending on nested composed state or collection reads, add an explicit semantic product for ProxyObservable-style dependency reads rather than hiding the behavior in authoring verification or topology joins."
+        "Semantic-runtime now publishes binding-owned RuntimeBindingObservedDependency products from RuntimeBindingDataFlowMaterializer for source-to-target expression evaluation. Use binding-observed-dependencies when authoring, diagnostics, or repair planning need concrete AccessScope/AccessMember/AccessKeyed, collection-call, or callback-local member dependency rows. Template collection-read rows are decided from the CallMember owner site so contextual arrow callback locals participate; array calls stay visible while string/object method-name false positives are rejected when checker facts are visible.",
+        "Semantic-runtime now publishes ComputedObservationDefinition products for valid @computed getter and trackable-method declarations. Use computed-observation-definitions when authoring needs explicit/proxy-auto dependency declaration facts, including dependency-function counts, not invalid decorator diagnostics.",
+        "Semantic-runtime now publishes controller-owned ComputedWatcher and ExpressionWatcher products from resource definition.watches. Use runtime-watchers when authoring, diagnostics, or fixture pressure needs the runtime controller admission lane for @watch/static watches.",
+        "ExpressionWatcher products now publish runtime-watcher-observed-dependencies by reusing the binding-owned astEvaluate connectable dependency collector. Use those rows when @watch/static watch guidance needs concrete AccessScope/AccessMember/AccessKeyed or collection-call dependency facts.",
+        "ComputedWatcher products now publish runtime-watcher-observed-dependencies for ProxyObservable property, dynamic keyed property, collection, iterator, ownKeys, destructuring, wrapped method-result, and trackable-method reads rooted in dependency collection function bodies. Collection method rows are TypeChecker-discriminated when receiver types are visible, so string/object methods keep property-read facts without becoming array/map/set proxy collection rows; weak or unavailable checker facts stay permissive. Callback roots must mirror framework wrapper positions and `ProxyObservable.canWrap(...)`: array reduce/reduceRight observes the current item, not the accumulator, map/set forEach can observe both value and key, array sort comparator values execute while the connectable is active but are raw and do not become proxy roots, and primitive callback values, primitive map keys, primitive aliases, and function values do not become downstream proxy roots. Generic function/arrow arguments are not traversed as executed callback bodies unless a framework wrapper, trackable method, or future evaluator-proven call site owns that execution boundary. For-of/spread over arrays/maps/sets observes the iterator collection path, explicit keys()/values()/entries() calls keep their method names, array destructuring treats proxy-wrappable yielded values as wrapped roots, array for-in observes the implicit length read from arrayHandler.ownKeys, wrapped collection method results stay visible for downstream reads such as map.get(key).name, map.set(...).get(...), set.add(...).has(...), items.flat(...).some(...), items.flatMap(...).includes(...), or items.slice(...).map(...).join(...), and dynamic element access keeps the authored keyExpression while letting proxy-wrappable keyed results become the next wrapped carrier. The proxy-observation contract now pins array every/findIndex/indexOf/lastIndexOf/flat/flatMap/reduceRight/sort/slice, map has/keys/set-result chains, set add-result chains, explicit array/map/set iterator methods, and wrapped result chains against the framework surface. Ordinary object method calls spend the object-handler method-property read, while intercepted array/map/set wrapper methods do not; proxy-observed @computed/@astTrack method calls use that same method-property read plus omitted/nullish-deps body proxy reads or explicit dependency declarations. Use those rows for valid @watch dependency-function pressure before adding source-local watcher shortcuts.",
+        "Framework `@nowrap` is a real ProxyObservable escape hatch, not an authoring heuristic: class-level nowrap makes `wrap(value)` return the raw object, so semantic-runtime should observe the owning proxied property but stop downstream proxy property/collection rows under that raw value; field-level nowrap makes the proxied owner `get` trap return the raw property without calling `connectable.observe(...)`, so the field itself and later reads below it must stay absent. Use TypeChecker-backed decorator recognition for the static approximation and keep weak/unavailable checker facts permissive.",
+        "Framework `ProxyObservable.canWrap(...)` is brand-based at runtime. Semantic-runtime approximates this statically by rejecting TypeScript default-library non-plain object brands such as Date, Error, URL, and RegExp as downstream proxy carriers while still observing the owning proxied property read. Do not maintain short hard-coded deny lists for host objects; keep the rule as a default-library brand approximation, and keep user/external class instances proxy-wrappable unless @nowrap, function, primitive, or collection rules say otherwise.",
+        "RuntimeWatcherObservedDependency rows preserve observedMemberKind and observedMemberSource like binding observed-dependency rows. Use runtime-watcher-observed-dependencies when hover/diagnostic/authoring work needs to explain a watcher read against the authored member or TypeScript/library member that would be observed.",
+        "Binding and watcher observed-dependency rows now publish per-dependency SourceSpanAddress records when their carrier can be narrowed to an admitted source file. Template bindings parse against the ValueSite source context; property-key ExpressionWatcher strings parse against the string-body source context; ProxyObservable watcher dependencies use the dependency function carrier. If a future row exposes `spanStart` / `spanEnd` but the public `source` regresses to an unexpanded or broader carrier, fix the runtime-expression source publication boundary rather than adding API-local span math.",
+        "Observed-dependency rows are semantic dependency products, not raw read-event counters. Use the shared runtime observed-dependency draft helper to dedupe repeated reads by dependency identity rather than by parser span, while keeping distinct lanes for template reads, proxy reads, collection methods, and trackable call evidence.",
+        "Keep observed-dependency publication attached to the product that owns the semantic question. Binding data-flow owns concrete binding reads; ComputedObservationDefinition owns source declarations; ComputedObserverSource owns getter source-observer availability/projection; RuntimeWatcher owns controller watcher admission; ExpressionWatcher owns string-expression watcher reads; ComputedWatcher owns ProxyObservable dependency reads; binding and proxy execution both reuse the shared @computed/@astTrack method dependency recognizer.",
+        "Treat object binding versus ID binding as an authoring/domain-modeling decision, not a universal correctness rule. Direct object binding can be appropriate when the domain model and view model are intentionally close; ID handoff can be better when routeability, lazy loading, component independence, or stale-object avoidance matters.",
+        "Model proxy-observation escape hatches for external-library or host-owned objects as first-class guidance when framework evidence supports it; do not collapse them into a blanket object-binding warning.",
+        "Semantic-runtime now publishes source-level ProxyObservableEscape rows for direct ProxyObservable.getRaw(...) and ProxyObservable.unwrap(...) calls. Treat these as neutral proxy-exit facts that can feed future diagnostics or authoring policy, not as automatic evidence that the escape is correct or incorrect.",
+        "Recent compact external app and cursor-locus checks show runtime watcher/computed/proxy rows visible at app scale. When remaining cursor partials are weak expression-member owner types (`any` or index-signature-only), route that pressure to diagnostics/template repair policy and TypeChecker expression semantics rather than reopening proxy-observation plumbing."
       ],
       "anchors": [
         {
           "kind": "lens",
           "lensId": "framework.observation",
-          "projection": "flow-sites",
-          "surfaceKind": "ast-evaluator",
-          "summary": "Atlas rows for framework astEvaluate AccessScope, AccessMember, AccessKeyed, collection, and @astTrack dependency-collection flow sites."
+          "projection": "dependency-circuit",
+          "circuitRole": "template-expression-read",
+          "summary": "Atlas rows for framework astEvaluate AccessScope, AccessMember, and AccessKeyed dependency-collection flow sites."
         },
         {
           "kind": "lens",
           "lensId": "framework.observation",
-          "projection": "flow-sites",
+          "projection": "observer-locator-decisions",
+          "summary": "Atlas rows for framework ObserverLocator primitive, function-key computed, getter-descriptor computed, collection, node delegation, and setter fallback decisions."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.observation",
+          "projection": "dependency-circuit",
           "surfaceKind": "proxy-observable",
-          "summary": "Atlas rows for framework ProxyObservable wrapping, raw/proxy cache, and dependency-collection flow sites."
+          "summary": "Atlas rows for framework ProxyObservable identity, escape, property, collection, and trackable dependency-circuit roles."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.observation",
+          "projection": "collection-methods",
+          "summary": "Atlas rows comparing astEvaluate collection auto-observe methods with ProxyObservable collection wrapper methods."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.observation",
+          "projection": "dependency-circuit",
+          "circuitRole": "computed-observer-dependency",
+          "summary": "Atlas rows for framework ComputedObserver auto-dependency collection and ControlledComputedObserver explicit dependency handoff."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.observation",
+          "projection": "relationships",
+          "surfaceKind": "computed-decorator",
+          "summary": "Atlas rows for @computed metadata handoff to ComputedPropertyInfo, ComputedMethodOptions, astTrackableMethodMarker, and IObserverLocator.getComputedObserver."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-observation.ts",
+          "symbolName": "RuntimeBindingObservedDependency",
+          "summary": "Binding-owned observed dependency product detail."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/binding-data-flow-materializer.ts",
+          "symbolName": "RuntimeBindingDataFlowMaterializer",
+          "summary": "Publication boundary for binding data-flow and binding observed-dependency products."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/binding-projections.ts",
+          "symbolName": "readBindingObservedDependencyRows",
+          "summary": "Public API projection for binding-observed-dependencies rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/computed-observation.ts",
+          "symbolName": "ComputedObservationDefinition",
+          "summary": "Source-backed @computed getter/method dependency declaration product."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/observation-projections.ts",
+          "symbolName": "readComputedObservationDefinitionRows",
+          "summary": "Public API projection for computed-observation-definitions rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-watcher.ts",
+          "symbolName": "RuntimeWatcher",
+          "summary": "Controller-owned ComputedWatcher/ExpressionWatcher execution product union."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-watcher-factory.ts",
+          "symbolName": "runtimeWatchersForDefinition",
+          "summary": "Factory that materializes runtime watchers from resource definition.watches during controller creation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-watcher-publication.ts",
+          "symbolName": "runtimeWatcherRecordsForController",
+          "summary": "Publication boundary for runtime watcher identities, products, materialization records, and controller ownership claims."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/runtime-expression-source-address.ts",
+          "symbolName": "runtimeExpressionParseContextForAddress",
+          "summary": "Shared runtime expression source-span helper used by template value-site parsing and property-key watcher parsing."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-watcher-observation.ts",
+          "symbolName": "RuntimeWatcherObservedDependency",
+          "summary": "Watcher-owned observed dependency product detail for expression watcher execution."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/connectable-observed-dependency.ts",
+          "symbolName": "collectRuntimeConnectableObservedDependencyDrafts",
+          "summary": "Shared astEvaluate/connectable dependency collector for binding data-flow and ExpressionWatcher rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/proxy-observable-dependency.ts",
+          "symbolName": "ProxyObservable",
+          "summary": "auLink-backed semantic ProxyObservable surface with the conservative TypeScript-body dependency collector for property, dynamic keyed property, TypeChecker-discriminated collection, iterator, ownKeys, spread/destructuring, alias, wrapped method-result, and trackable method reads."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/proxy-observable-dependency.ts",
+          "symbolName": "proxyCollectionMethodPolicies",
+          "summary": "Per-receiver policy table for observed collection methods, intercepted wrapper methods, and wrapped result carriers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/proxy-observable-dependency.ts",
+          "symbolName": "RuntimeProxyObservedDependencyDraftCollector",
+          "summary": "Collector state for root names, local aliases, TypeChecker receiver checks, static/dynamic property reads, collection callbacks, for-of/spread iteration, for-in ownKeys, array destructuring yielded roots, wrapped method-result carriers, and trackable method calls in proxy dependency functions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/proxy-observable-escape.ts",
+          "symbolName": "ProxyObservableEscape",
+          "summary": "Source-level product for direct ProxyObservable.getRaw(...) and ProxyObservable.unwrap(...) calls."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/proxy-observable-escape-materializer.ts",
+          "symbolName": "ProxyObservableEscapeMaterializer",
+          "summary": "Import-aware publication boundary for source-level ProxyObservable escape rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/observation-projections.ts",
+          "symbolName": "readProxyObservableEscapeRows",
+          "summary": "Public API projection for proxy-observable-escapes rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/trackable-method-dependency-recognition.ts",
+          "symbolName": "readTrackableMethodDependency",
+          "summary": "Shared @computed/@astTrack method dependency recognizer used by binding astEvaluate and ProxyObservable execution lanes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/trackable-method-observed-dependency.ts",
+          "symbolName": "collectRuntimeTrackableMethodObservedDependencyDrafts",
+          "summary": "Binding-owned trackable method dependency collector for @computed/@astTrack calls in observed template expressions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/trackable-method-observed-dependency.ts",
+          "symbolName": "RuntimeTrackableMethodObservedDependencyCollector",
+          "summary": "Pass-local work frame for discovering observed @computed/@astTrack method call dependencies from binding expressions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-observed-dependency-draft.ts",
+          "symbolName": "distinctRuntimeObservedDependencyDrafts",
+          "summary": "Shared semantic-identity dedupe for binding, watcher, computed-observer, proxy, and trackable observed-dependency drafts."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:proxy-observation",
+          "summary": "Focused semantic contract for ComputedWatcher ProxyObservable dependency rows, collection method receiver checks, reduce/reduceRight item wrapping, array/map/set iterator methods, for-in ownKeys length reads, spread iteration, destructuring yielded roots, wrapped method-result reads including map.set and set.add chains, chained derived arrays, dynamic keyed reads, @nowrap raw-value exits, and watcher member-kind projection."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:runtime-watcher-expression-source",
+          "summary": "Focused semantic contract for property-key ExpressionWatcher parsing and exact observed-dependency source-span publication."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:proxy-observable-escapes",
+          "summary": "Focused semantic contract for source-level ProxyObservable getRaw/unwrap escape rows."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:observer-locator-target-access",
+          "summary": "Focused semantic contract for configurable accessor ComputedObserver targets, readonly data fields, and map/set size observers."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/controller-projections.ts",
+          "symbolName": "readRuntimeWatcherObservedDependencyRows",
+          "summary": "Public API projection for runtime-watcher-observed-dependencies rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/controller-projections.ts",
+          "symbolName": "readRuntimeWatcherRows",
+          "summary": "Public API projection for runtime-watchers rows."
         },
         {
           "kind": "source",
@@ -296,6 +589,21 @@
           "kind": "doc",
           "path": "packages/semantic-runtime/src/authoring/README.md",
           "summary": "Authoring guidance for direct DI state exposure and sparse view-model adaptation getters."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/watcher-proxy-dependencies",
+          "summary": "Pressure fixture for direct-chain, alias/destructuring, non-collection method boundary, array/map/set collection wrappers, iterator methods, for-in ownKeys, spread, wrapped method-result, chained derived-array, dynamic keyed, @nowrap raw-value exits, and trackable-method ComputedWatcher ProxyObservable dependency rows."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/proxy-observable-escapes",
+          "summary": "Pressure fixture for neutral source-level ProxyObservable getRaw/unwrap escape rows."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/trackable-method-dependencies",
+          "summary": "Pressure fixture for observed @computed/@astTrack method calls, omitted-deps proxy execution, explicit string deps, and function deps."
         }
       ],
       "liveChecks": [
@@ -316,11 +624,230 @@
         {
           "kind": "source-file-exists",
           "filePath": "packages/semantic-runtime/src/observation/README.md"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-observation.ts",
+          "symbolName": "RuntimeBindingObservedDependency"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/binding-projections.ts",
+          "symbolName": "readBindingObservedDependencyRows"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/computed-observation.ts",
+          "symbolName": "ComputedObservationDefinition"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/runtime-watcher.ts",
+          "symbolName": "RuntimeWatcher"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-watcher-observation.ts",
+          "symbolName": "RuntimeWatcherObservedDependency"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-observed-dependency-draft.ts",
+          "symbolName": "distinctRuntimeObservedDependencyDrafts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-proxy-observation.mjs"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-observer-locator-target-access.mjs"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/proxy-observable-dependency.ts",
+          "symbolName": "ProxyObservable"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/proxy-observable-dependency.ts",
+          "symbolName": "proxyCollectionMethodPolicies"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/trackable-method-dependency-recognition.ts",
+          "symbolName": "readTrackableMethodDependency"
+        },
+        {
+          "kind": "product-large-class",
+          "filePath": "packages/semantic-runtime/src/observation/proxy-observable-dependency.ts",
+          "className": "RuntimeProxyObservedDependencyDraftCollector",
+          "minLineCount": 120,
+          "minMethodCount": 8
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/trackable-method-observed-dependency.ts",
+          "symbolName": "collectRuntimeTrackableMethodObservedDependencyDrafts"
+        },
+        {
+          "kind": "product-large-class",
+          "filePath": "packages/semantic-runtime/src/observation/trackable-method-observed-dependency.ts",
+          "className": "RuntimeTrackableMethodObservedDependencyCollector",
+          "minLineCount": 120,
+          "minMethodCount": 6
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/controller-projections.ts",
+          "symbolName": "readRuntimeWatcherObservedDependencyRows"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/controller-projections.ts",
+          "symbolName": "readRuntimeWatcherRows"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/fixtures/pressure/watcher-proxy-dependencies/src/watcher-proxy-dependencies-app.ts"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/fixtures/pressure/trackable-method-dependencies/src/trackable-method-dependencies-app.ts"
         }
       ],
       "nextActionPolicy": "when-touched",
       "createdAt": "2026-05-18",
-      "updatedAt": "2026-05-18"
+      "updatedAt": "2026-05-19"
+    },
+    {
+      "id": "frontier:computed-observer-source-projection",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "observation",
+        "computed-observer",
+        "type-system",
+        "framework-grounding"
+      ],
+      "summary": "ComputedObserverSource is the product-owned source-observer availability/projection lane for getter observation, separate from @computed declaration metadata and concrete binding usage.",
+      "rationale": "Framework ObserverLocator creates ComputedObserver for configurable accessor descriptors and function-key observer requests, while getter-owned @computed metadata can create ControlledComputedObserver for explicit deps. Semantic-runtime now publishes ComputedObserverSource and ComputedObserverObservedDependency rows so plain getters, decorator-owned explicit deps, dependency functions, and exact dependency-literal provenance are visible without confusing ComputedObservationDefinition declaration metadata with concrete runtime observer lookup usage.",
+      "guidance": [
+        "Start from framework.observation dependency-circuit rows with circuitRole=computed-observer-dependency and observer-locator-decisions before changing computed getter dependency semantics.",
+        "Keep ComputedObservationDefinition as source declaration metadata; do not make it publish live dependency rows just because it knows the decorator shape.",
+        "Use computed-observer-sources when callers need to know whether an authored getter would enter the getter-descriptor ComputedObserver path or the getter-owned ControlledComputedObserver path if observed.",
+        "Do not treat a ComputedObserverSource row alone as proof that a template or watcher actually observed the getter. Pair it with binding-observed-dependencies, runtime-watcher-observed-dependencies, or target-access rows when concrete use matters.",
+        "BindingObservedDependencies now carry observedMemberKind and observedMemberSource for TypeChecker-closed member reads, plus scope-slot/context source for root AccessScope/CallScope reads. Use those fields as the concrete template-read side of the source/use bridge before claiming that a getter source-observer projection is used.",
+        "BindingObservedDependencies also expose observedMemberSourceState. Treat source as closed provenance; temporary-value as honest intermediate collection call-result pressure; runtime-scope-name as runtime/synthetic scope pressure such as $host or writeback locals; and scope-open as a genuinely unresolved scope route rather than collapsing all null member sources into missing provenance.",
+        "Use computed-observer-observed-dependencies for dependency rows collected from plain getter bodies, dependency functions, and explicit dependency strings. Explicit string dependency rows should point at the dependency literal span when possible, not just the enclosing getter.",
+        "ComputedObserverSource product publication goes through source-observation-product-publication.ts; only its source-owned dependency rows go through source-observed-dependency-publication.ts.",
+        "Computed observer source dependency publication goes through source-observed-dependency-publication.ts so it shares the source-observer-owned record shape with runtime effects without collapsing into binding-owned or watcher-owned observed dependency publication.",
+        "Partially readable explicit dependency declarations stay on the getter-owned ControlledComputedObserver path when info.deps is present. Preserve closed string/function dependency rows, keep the source mode open, and do not fall back to getter-body proxy observation.",
+        "Do not fold direct ObserverLocator.getObserver(obj, fn) function-key requests into ComputedObserverSource. They are concrete runtime lookup call sites that should get their own product if/when exposed; ComputedObserverSource is the source-backed getter availability/projection lane.",
+        "Explicit dependency keys with deep: true now publish first TypeChecker-shaped deep-property-read and deep-collection-read rows from ComputedObserverSource. Treat this as controlled-computed observeDeep projection, not as live per-instance object traversal.",
+        "Do not hide future deep gaps in authoring guidance. Dependency-function deep returns, optional/dynamic dependency expressions, and recursive collection element traversal should expand ComputedObserverSource if product pressure needs them.",
+        "Continue to treat direct @computed method declarations as trackable method declaration metadata; they are not getter source observers.",
+        "Atlas framework corpus fixture seeds mirror that split: method-level @computed snippets seed computed-observation-definition, while computed-observer-source and computed-observer-observed-dependency seeds require an ordinary or decorator-owned getter source.",
+        "Atlas bridge auLink exposes runtime:computed / ComputedPropertyInfo / ComputedMethodOptions role evidence through framework.observation computed-decorator relationships. Keep ComputedObservationDefinition as the single semantic-runtime source declaration lane rather than adding product-side duplicate placements for decorator metadata.",
+        "The current semantic-runtime lane is static and source-backed. If deeper runtime emulation becomes necessary, add a concrete lookup/use join rather than pretending source-observer projection alone is runtime execution."
+      ],
+      "anchors": [
+        {
+          "kind": "lens",
+          "lensId": "framework.observation",
+          "projection": "dependency-circuit",
+          "circuitRole": "computed-observer-dependency",
+          "summary": "Framework rows for ComputedObserver auto-dependency collection and ControlledComputedObserver explicit dependency handoff."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.observation",
+          "projection": "observer-locator-decisions",
+          "summary": "Framework rows for getter-descriptor and function-key admission into ComputedObserver."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/computed-observer-source.ts",
+          "symbolName": "ComputedObserverSource",
+          "summary": "Source-backed ComputedObserver/ControlledComputedObserver product detail."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/computed-observer-source-materializer.ts",
+          "symbolName": "ComputedObserverSourceMaterializer",
+          "summary": "Publication boundary for getter source-observer products and observed dependency rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/source-observation-product-publication.ts",
+          "symbolName": "sourceObservationProductRecords",
+          "summary": "Shared source/evidence/provenance envelope for source-backed observation products."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/source-observed-dependency-publication.ts",
+          "symbolName": "sourceObservedDependencyRecords",
+          "summary": "Shared publication primitive for source observer/effect-owned observed-dependency rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/computed-observation.ts",
+          "symbolName": "ComputedObservationDefinition",
+          "summary": "Declaration metadata that must stay separate from computed-observer execution rows."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/observation-projections.ts",
+          "symbolName": "readComputedObserverSourceRows",
+          "summary": "Public API projection for computed-observer-sources rows."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:computed-observer-source",
+          "summary": "Focused semantic contract for plain getter ComputedObserver, decorator-owned ControlledComputedObserver, open explicit deps, exact dependency-literal provenance, and first deep dependency rows."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/computed-decorator-contexts",
+          "summary": "Pressure fixture for @computed declarations, plain getter-descriptor observation, and controlled-computed deep dependency projection."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/computed-observer-source.ts",
+          "symbolName": "ComputedObserverSource"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/computed-observer-source-materializer.ts",
+          "symbolName": "ComputedObserverSourceMaterializer"
+        },
+        {
+          "kind": "product-large-class",
+          "filePath": "packages/semantic-runtime/src/observation/computed-observer-source-materializer.ts",
+          "className": "ComputedObserverSourceMaterializer",
+          "minLineCount": 80,
+          "minMethodCount": 2
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/computed-observation.ts",
+          "symbolName": "ComputedObservationDefinition"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/observation-projections.ts",
+          "symbolName": "readComputedObserverSourceRows"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-computed-observer-source.mjs"
+        }
+      ],
+      "nextActionPolicy": "when-touched",
+      "createdAt": "2026-05-18",
+      "updatedAt": "2026-05-19"
     },
     {
       "id": "frontier:select-and-checked-value-channel-drafts",
@@ -340,10 +867,15 @@
         "Bound select `multiple` semantics are attribute-order independent: find the `multiple` PropertyBinding among sibling lowered bindings, then classify literal true, literal false, or dynamic mode.",
         "When a dynamic select's option values are a static string domain, use checker string-literal types from the source carrier before declaring the source open; synthetic domain projections may not carry their own checker.",
         "Do not collapse `model.bind` primitive values into string-only `valueDomain`: null, boolean, number, and undefined model values belong in `primitiveValueDomain` so select/radio comparison and data-flow assignability mirror Aurelia's direct model comparison.",
+        "Keep `model.bind` and `value.bind` separate in select/checked element value channels. `model.bind` preserves Aurelia's arbitrary runtime identity path; `value.bind` follows the DOM value property path and should stringify numeric/boolean/nullish primitive literals before target-to-source assignability compares them with the bound source. Non-literal DOM value.bind expressions should project checker-backed string when a checker carrier exists.",
+        "Primitive radio/checkbox model domains should synthesize runtime value-type display from `primitiveValueDomain` before falling back to string-token domains, so closed `null`, boolean, number, and undefined models do not depend on a successful checker projection merely to avoid an open channel.",
+        "Option `model/value` bindings on the repeated option element itself can be consumed through recursive rendering emission because the parent select owns the authored option node and the child synthetic view supplies the option binding/scope. Deeper cases where a nested template controller produces descendant option nodes not owned by the parent select's authored children remain recursive-rendering topology pressure.",
         "Use weak typing as diagnostic/repair pressure rather than inventing value domains the TypeChecker cannot support.",
         "AUR0654 belongs at binding data-flow, not value-channel drafting: SelectValueObserverChannelDrafts proves the single-select channel, while RuntimeBindingDataFlowMaterializer compares that channel with the TypeChecker source array shape.",
+        "Single-select and radio assignability is directional: target-to-source writeback uses the option/model domain, while source-to-target synchronization accepts null or other non-matching scalar/object values and simply leaves options unchecked/unselected. Do not report those source-to-target cases as TypeChecker mismatches just because the option domain is narrower.",
+        "Collection select/checked assignability is also directional: readonly collection types can feed source-to-target synchronization, but target-to-source mutation requires mutable Array/Set/Map shapes because framework event handlers mutate with push/splice, add/delete, and set.",
         "Custom matcher presence is now a value-channel fact (`usesCustomMatcher`) for checked/select observers. Do not execute matcher bodies in the static analyzer; use the fact to keep default equality and app-supplied comparison visibly distinct.",
-        "`fixtures/pressure/checked-select-custom-matcher` covers checked array/set collection membership, checked map keyed-boolean membership, checked radio values, single select option values, and multi-select option values with object-valued `model.bind` plus `matcher.bind`, and also covers static `value` radio/checkbox branches for the CheckedObserver value-channel path."
+        "`fixtures/pressure/select-model-primitives` covers nullable/boolean/number `model.bind` select and radio domains, direct DOM `value.bind` numeric select/radio coercion, and repeated option `value.bind` nonliteral DOM stringification through a checker-backed `string | null` union. `fixtures/pressure/checked-select-custom-matcher` covers checked array/set collection membership, checked map keyed-boolean membership, checked radio values, single select option values, and multi-select option values with object-valued `model.bind` plus `matcher.bind`, also covers readonly collection source-to-target read vs target-to-source mutation asymmetry, and also covers static `value` radio/checkbox branches for the CheckedObserver value-channel path."
       ],
       "anchors": [
         {
@@ -365,6 +897,28 @@
           "summary": "Framework binding observer lookup rows."
         },
         {
+          "kind": "lens",
+          "lensId": "framework.observation",
+          "projection": "flow-sites",
+          "surfaceKind": "checked-observer",
+          "summary": "Framework CheckedObserver flow rows for synchronize, collection subscription, and subscriber notification behavior."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.observation",
+          "projection": "flow-sites",
+          "surfaceKind": "select-value-observer",
+          "summary": "Framework SelectValueObserver flow rows for multiple-select array observation, mapped errors, and sync behavior."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.corpus",
+          "projection": "fixture-seeds",
+          "concept": "forms",
+          "classificationKey": "checked-map-binding",
+          "summary": "Framework checked-observer table-driven Map tests are discoverable as behavior-grounding fixture seeds."
+        },
+        {
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/observation/framework-error-code.ts",
           "symbolName": "RuntimeHtmlObservationFrameworkErrorCode",
@@ -378,7 +932,12 @@
         {
           "kind": "fixture",
           "path": "packages/semantic-runtime/fixtures/pressure/select-model-primitives",
-          "summary": "Pressure fixture for nullable/boolean/object select and radio primitive model domains."
+          "summary": "Pressure fixture for nullable/boolean/object select and radio primitive model domains plus direct and repeated DOM value.bind string coercion."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:select-checked-value-channels",
+          "summary": "Focused contract for select/checked value-channel domains, directional assignability, matcher rows, collection membership, and AUR0654."
         }
       ],
       "liveChecks": [
@@ -399,10 +958,14 @@
         {
           "kind": "source-file-exists",
           "filePath": "packages/semantic-runtime/fixtures/pressure/checked-select-custom-matcher/src/checked-select-custom-matcher-app.html"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-select-checked-value-channels.mjs"
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-05-18"
     },
     {
       "id": "frontier:binding-value-channel-materializer",
@@ -420,6 +983,7 @@
         "Start here when a binding needs runtime intake type, observer-specific value domain, source-type reads, model/value sibling lookup, or value-channel open reasons.",
         "Keep draft/type-domain helpers separate from product publication; publication should not rediscover template/node/value-site facts.",
         "RuntimeBindingValueChannelDraftFrame is the per-binding read epoch: it caches the lazy source-type reader and owns source-operation, direct target-operation, target-access, rejected-target-access, and observer-specific handoff decisions before select/checked/direct collaborators take over.",
+        "Use runtime-binding-primitive-value.ts for primitive option/model/value facts: expression literal extraction, DOM value coercion, public row display, TypeScript literal display, uniqueness, and checker assignability should not grow local switch walkers.",
         "Use the select/checked frontier for form-specific branch semantics, but keep the generic value-channel materializer as the publication boundary."
       ],
       "anchors": [
@@ -447,6 +1011,12 @@
           "filePath": "packages/semantic-runtime/src/observation/binding-value-channel-draft-support.ts",
           "symbolName": "RuntimeBindingValueChannelDraftSupport",
           "summary": "Shared value-channel lookup and source-type support."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-primitive-value.ts",
+          "symbolName": "runtimeBindingPrimitiveValueFromExpressionValue",
+          "summary": "Shared primitive binding-value substrate for value-channel drafts, data-flow assignability, and public row display."
         },
         {
           "kind": "source",
@@ -495,6 +1065,11 @@
           "minMethodCount": 8
         },
         {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-primitive-value.ts",
+          "symbolName": "runtimeBindingPrimitiveValueFromExpressionValue"
+        },
+        {
           "kind": "product-large-class",
           "className": "DirectBindingValueChannelDrafts",
           "filePath": "packages/semantic-runtime/src/observation/direct-binding-value-channel-drafts.ts",
@@ -503,7 +1078,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-05-19"
     },
     {
       "id": "frontier:binding-data-flow-materializer",
@@ -520,13 +1095,30 @@
       "guidance": [
         "Start here when source/target assignability, source write capability, source expression projection, contextual target typing, or weak-typing diagnostics are involved.",
         "Keep expression parsing as authored syntax and observation data-flow as runtime binding semantics over target products and Scope slots.",
+        "When evaluating a runtime binding source, resolve the scope through RuntimeInstructionScopeLookup and the binding's rendering controller. Instruction products are definition-level identities and may be rendered under several controller/synthetic-view contexts; a global instruction-to-scope map is a modeling regression unless there is exactly one unambiguous scope.",
         "Target-side observer write failures belong here: spend runtime assign_readonly_size / AUR0220 for source-to-target writes through CollectionSizeObserver and assign_readonly_readonly_property_from_computed / AUR0221 for source-to-target writes through getter-only ComputedObserver targets.",
+        "For select/radio value channels, keep data-flow assignability directional: observer source-to-target synchronization can accept null or non-matching scalar/object values even when target-to-source user-event writeback is narrowed to the option/model domain.",
         "Runtime AST source-assignment diagnostics such as runtime-expression-unassignable, host-access-scope-assignment, and nullish-assignment are binding data-flow/source write capability pressure, not API-policy wording.",
         "For member-expression writes, consume CheckerTypeShapeAccess.memberWriteAccess and map that lower-level result into Aurelia astAssign policy; do not duplicate checker/apparent-property or string-index lookup in observation.",
         "Access-scope writes should use the same binding-context TypeChecker fallback as expression reads when no explicit Scope slot exists; ordinary getter/setter view-model properties should not require eager slot materialization just to prove target-to-source assignment.",
+        "When source writeability resolves through a TypeChecker-backed scope/context member, preserve that member's declaration address as sourceAssignmentTargetSource so diagnostics and repair planning target the authored accessor/member rather than only the template binding span.",
+        "Synthetic writeback-local scope slots should project the target bindable's TypeChecker member on demand; do not read only the cached TypeShape.members array, because many resource target shapes are summary-first until member surfaces are requested.",
+        "When a synthetic writeback local is typed, repeat locals and cursor diagnostics should close through that scope slot. When the target bindable is truly weak, the remaining pressure should be `any` or index-signature weak-owner guidance, not a missing slot-type handoff.",
         "Framework astAssign default-handles unsupported expression kinds as no-ops, so runtime-expression-unassignable should stay framework-runtime-behavior without an AUR code; reserved $host and strict nullish assignment spend exact runtime AUR0106/AUR0116 codes.",
         "Carry source expression open kinds forward on data-flow rows; runtime AST callable diagnostics should consume that product field instead of reparsing expressions in API policy.",
-        "Preserve source-type open reasons on rows when TypeChecker facts are weak; do not manufacture members to make autocomplete look better."
+        "For weak-owner read diagnostics, preserve the expression result's value-producing source route separately from the reusable type-shape source. Source-independent `any` should not gain a fake type source, but `untypedRow.label` should still be able to target the `untypedRow: any` type annotation or member declaration when the evaluator can prove that route.",
+        "Keep typed missing-member diagnostics distinct from weak-owner diagnostics. A non-weak owner missing a member should usually suggest inspect-owner-type or declare-member according to the owner shape, not replace-any-owner or declare-scope-slot.",
+        "Binding observed-dependency rows should preserve the best-known owner source route when the concrete member declaration is unavailable. This is an owner-source fallback, not proof that a weak `any` or index-signature member has a source declaration.",
+        "Dynamic keyed template reads should preserve the authored key expression in both binding data-flow and observed-dependency source displays. Use the shared expression-source-name helper rather than letting one lane print `items[]` while another prints `items[selectedIndex]`.",
+        "When evaluator results become scope-slot or binding-pattern `CheckerTypeReference` values, preserve that value route with `checkerTypeReferenceWithSource(...)`; otherwise `any[]` repeat locals lose the iterable owner type annotation source even though diagnostics can still see the reusable `any` product.",
+        "Preserve source-type open reasons on rows when TypeChecker facts are weak; do not manufacture members to make autocomplete look better.",
+        "Template collection-read dependency rows are TypeChecker-gated to mirror framework astEvaluate: publish them for receivers that may still be runtime arrays, reject visible string/object method false positives, and stay permissive when the receiver type is weak or open.",
+        "Collection-read rows and inline callback-body observation share the same array-owner gate but not the same method set. `autoObserveArrayMethods` drives collection-read rows such as includes; callback-executing array methods drive arrow-body dependency rows such as forEach, findLast, and toSorted even when those methods are not Aurelia collection-read methods. Do not execute callback-local dependency collection merely because a non-array object has a method named map, filter, or includes; arbitrary user method callback invocation is runtime-execution pressure until the evaluator can prove the callee calls the returned arrow closure.",
+        "Nested inline callback-body observation must inherit outer callback-local names. A nested callback may observe `item.name` and `tag.length`, but should not publish a bare template-scope read for outer `item`, and callback-local function calls such as `format(value)` should visit arguments without publishing `format` as a source read.",
+        "Collection observed-dependency rows should source-route the observed collection owner, not the array method token. Direct owners such as items.map(...) may point to the items slot/member; temporary call-result owners such as items.map(...).join(...) should stay open.",
+        "Binding observed-dependency parser spans now materialize as exact source addresses through `runtime-expression-source-address.ts` when the binding carrier has an admitted source file. Keep rename/edit/fix loci on those structured source handles; if exactness regresses, fix the materialization/publication boundary rather than adding API-local span math.",
+        "RuntimeBindingExpressionScopeProjector owns binding-behavior bind-time scope handoffs for data-flow and observed dependencies. Use it when a behavior such as & state changes the later source-evaluation scope; do not project those reads through the original instruction scope. This includes interpolation holes, because runtime-html binds each InterpolationPartBinding expression before source evaluation.",
+        "Member-owner projection must descend through BindingBehavior and ValueConverter wrappers just like astEvaluate. Value-converter arguments are observed source reads, while binding-behavior arguments are bind-time inputs evaluated with no active connectable and should not become observed-dependency rows."
       ],
       "anchors": [
         {
@@ -551,9 +1143,69 @@
           "summary": "Source expression projection collaborator."
         },
         {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-expression-scope.ts",
+          "symbolName": "RuntimeBindingExpressionScopeProjector",
+          "summary": "Binding-behavior bind-time scope handoff projector for data-flow and observed dependencies."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-expression.ts",
+          "symbolName": "RuntimeInstructionScopeLookup",
+          "summary": "Context-aware binding source scope lookup for recursive rendering and synthetic-view contexts."
+        },
+        {
           "kind": "doc",
           "path": "packages/semantic-runtime/src/observation/README.md",
           "summary": "Binding data-flow split and weak-typing guidance."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/connectable-observed-dependency.ts",
+          "symbolName": "collectRuntimeConnectableObservedDependencyDrafts",
+          "summary": "Connectable dependency collector with caller-supplied CallMember collection-read policy."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/expression-source-name.ts",
+          "symbolName": "expressionSourceName",
+          "summary": "Shared display/root source-name helper for binding data-flow and connectable observed-dependency rows, including dynamic keyed paths."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/expression-member-owner-projector.ts",
+          "symbolName": "CheckerExpressionMemberOwnerProjector",
+          "summary": "Offset-aware member-owner projector used by observed-dependency source routing and cursor/member inquiries."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:template-collection-observation",
+          "summary": "Focused contract for astEvaluate array-only template collection observation."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:template-diagnostics",
+          "summary": "Focused contract for weak-owner diagnostics and source-backed binding-assignment repair targets."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:select-checked-value-channels",
+          "summary": "Focused contract for directional select/checked value-channel data-flow semantics."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/template-collection-observation",
+          "summary": "Pressure fixture for direct and derived array collection reads, array-gated callback body observation, dynamic keyed template source routes, and string/object/callback-local method false positives."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/synthetic-writeback-local",
+          "summary": "Pressure fixture for typed two-way custom-attribute bindables that create `$`-prefixed runtime writeback locals consumed by later repeat scopes."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/weak-owner-repair-planning",
+          "summary": "Pressure fixture for missing scope-slot types, any[] repeat-local source routes, any-typed owner declarations, index-signature-only owner repair targets, and typed missing-member inspect-owner fallback."
         }
       ],
       "liveChecks": [
@@ -591,10 +1243,33 @@
           "filePath": "packages/semantic-runtime/src/observation/binding-data-flow-materializer.ts",
           "minLineCount": 120,
           "minMethodCount": 5
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/connectable-observed-dependency.ts",
+          "symbolName": "collectRuntimeConnectableObservedDependencyDrafts"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/expression/expression-source-name.ts",
+          "symbolName": "expressionSourceName"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-expression-scope.ts",
+          "symbolName": "RuntimeBindingExpressionScopeProjector"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-template-collection-observation.mjs"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-template-diagnostics.mjs"
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-05-19"
     },
     {
       "id": "reuse:forms-observation-value-channels",

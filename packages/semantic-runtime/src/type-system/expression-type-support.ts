@@ -30,7 +30,8 @@ import { checkerTypeMemberSourceAddressHandle } from './checker-type-member-sour
 import {
   CheckerTypeProjectionOrigin,
   checkerTypeMemberReachableIdentityHandle,
-  type CheckerTypeReference,
+  checkerTypeReferenceWithSource,
+  CheckerTypeReference,
   type CheckerTypeShape,
 } from './type-shape.js';
 
@@ -117,7 +118,7 @@ export class CheckerExpressionTypeSupport {
     localKey: string,
   ): CheckerTypeReference {
     if (reference.productHandle != null) {
-      return reference;
+      return checkerTypeReferenceWithSource(reference, reference.sourceAddressHandle ?? slot.sourceAddressHandle);
     }
 
     const member = slot.targetProductHandle == null
@@ -128,17 +129,21 @@ export class CheckerExpressionTypeSupport {
     }
 
     const sourceNode = member.carrier.declarations[0] ?? null;
-    return this.projector.ensureProjection({
+    const sourceAddressHandle = reference.sourceAddressHandle
+      ?? slot.sourceAddressHandle
+      ?? checkerTypeMemberSourceAddressHandle(this.store, member);
+    const projected = this.projector.ensureProjection({
       localKey: `${localKey}:projected-type`,
       checker: member.carrier.checker,
       type: member.carrier.valueType,
       origin: CheckerTypeProjectionOrigin.TypeChecker,
       sourceNode,
-      sourceAddressHandle: slot.sourceAddressHandle ?? checkerTypeMemberSourceAddressHandle(this.store, member),
+      sourceAddressHandle,
       ownerIdentityHandle: checkerTypeMemberReachableIdentityHandle(member),
       display: reference.display ?? member.valueType?.display ?? null,
       memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
     } satisfies CheckerTypeProjectionRequest).toReference();
+    return checkerTypeReferenceWithSource(projected, sourceAddressHandle ?? projected.sourceAddressHandle);
   }
 
   resolveGlobalType(
@@ -194,21 +199,23 @@ export class CheckerExpressionTypeSupport {
     openKind: CheckerExpressionTypeOpenKind,
     openSummary: string,
     subject: CheckerExpressionTypeOpenSubject | null = null,
+    sourceAddressHandle: AddressHandle | null = reference.sourceAddressHandle,
   ): CheckerExpressionTypeEvaluation {
-    if (reference.productHandle == null) {
-      return this.open(openKind, expression, openSummary, reference, subject);
+    const sourceReference = checkerTypeReferenceWithSource(reference, sourceAddressHandle);
+    if (sourceReference.productHandle == null) {
+      return this.open(openKind, expression, openSummary, sourceReference, subject);
     }
-    const typeShape = this.typeAccess.resolveReference(reference);
+    const typeShape = this.typeAccess.resolveReference(sourceReference);
     if (typeShape == null) {
       return this.open(
         CheckerExpressionTypeOpenKind.MissingTypeDetail,
         expression,
         openSummary,
-        reference,
+        sourceReference,
         subject,
       );
     }
-    return this.type(typeShape, `Resolved type reference for ${localKey}.`);
+    return this.type(typeShape, `Resolved type reference for ${localKey}.`, sourceReference.sourceAddressHandle);
   }
 
   evaluateTypeUnion(
@@ -230,7 +237,7 @@ export class CheckerExpressionTypeSupport {
       localKey,
       sourceAddressHandle,
     );
-    return this.type(typeShape, summary);
+    return this.type(typeShape, summary, sourceAddressHandle);
   }
 
   projectPrimitive(
@@ -290,14 +297,15 @@ export class CheckerExpressionTypeSupport {
       display: checker.typeToString(type),
       memberProjection: options.memberProjection ?? CheckerTypeMemberProjectionPolicy.Eager,
     } satisfies CheckerTypeProjectionRequest);
-    return this.type(typeShape, summary);
+    return this.type(typeShape, summary, sourceAddressHandle);
   }
 
   type(
     typeShape: CheckerTypeShape,
     summary: string,
+    sourceAddressHandle: AddressHandle | null = typeShape.sourceAddressHandle,
   ): CheckerExpressionType {
-    return new CheckerExpressionType(typeShape, typeShape.toReference(), summary);
+    return new CheckerExpressionType(typeShape, typeShape.toReference(), summary, sourceAddressHandle);
   }
 
   open(

@@ -49,6 +49,14 @@ export class CheckerExpressionType {
     readonly typeReference: CheckerTypeReference,
     /** Compact explanation of the route used to reach the type. */
     readonly summary: string,
+    /**
+     * Source site of the value-producing expression route, when narrower than the projected type itself.
+     *
+     * Source-independent shapes such as `any` deliberately reuse one type product without a source address. Cursor
+     * diagnostics still need to know when that `any` came from an authored property, bindable, or scope slot so a
+     * repair can target the declaration instead of only the template expression.
+     */
+    readonly sourceAddressHandle: AddressHandle | null = typeReference.sourceAddressHandle,
   ) {}
 }
 

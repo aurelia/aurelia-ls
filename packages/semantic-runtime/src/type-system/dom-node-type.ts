@@ -12,6 +12,10 @@ import {
   CheckerTypeProjectionOrigin,
   type CheckerTypeReference,
 } from './type-shape.js';
+import {
+  firstSymbolDeclaration,
+  undefinedCheckerNode,
+} from './checker-node-helpers.js';
 
 export const enum CheckerDomNodeTypeSource {
   TagNameMap = 'tag-name-map',
@@ -75,7 +79,7 @@ export function resolveCheckerDomNodeTypeFromTagNameMap(
     if (tagSymbol != null) {
       return typeSystem.checker.getTypeOfSymbolAtLocation(
         tagSymbol,
-        location ?? firstSymbolDeclaration(tagSymbol) ?? undefinedNode(typeSystem.checker),
+        location ?? firstSymbolDeclaration(tagSymbol) ?? undefinedCheckerNode(typeSystem.checker, 'semantic-runtime-dom-node-type.ts'),
       );
     }
   }
@@ -89,7 +93,7 @@ export function globalDeclaredType(
 ): ts.Type | null {
   const symbol = typeSystem.checker.resolveName(
     name,
-    location ?? undefinedNode(typeSystem.checker),
+    location ?? undefinedCheckerNode(typeSystem.checker, 'semantic-runtime-dom-node-type.ts'),
     ts.SymbolFlags.Interface,
     false,
   ) ?? null;
@@ -145,18 +149,4 @@ function fallbackElementTypeName(namespace: HtmlNamespaceKind): string {
     case HtmlNamespaceKind.Unknown:
       return 'HTMLElement';
   }
-}
-
-function firstSymbolDeclaration(symbol: ts.Symbol): ts.Declaration | null {
-  return symbol.valueDeclaration ?? symbol.declarations?.[0] ?? null;
-}
-
-function undefinedNode(checker: ts.TypeChecker): ts.Node {
-  return checker.getSymbolAtLocation(checkerLocationFromProgram(checker))?.valueDeclaration
-    ?? checkerLocationFromProgram(checker);
-}
-
-function checkerLocationFromProgram(checker: ts.TypeChecker): ts.SourceFile {
-  return checker.getAmbientModules()[0]?.declarations?.[0]?.getSourceFile()
-    ?? ts.createSourceFile('semantic-runtime-dom-node-type.ts', '', ts.ScriptTarget.Latest, false, ts.ScriptKind.TS);
 }

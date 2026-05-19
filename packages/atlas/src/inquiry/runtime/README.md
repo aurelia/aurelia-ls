@@ -87,14 +87,19 @@ This is not a compatibility layer for old readers and not the default caller sur
   docs, and cautions. Prefer exact route/domain/lens/source/symbol/auLink/corpus filters, including `effectKind`,
   `recipeKey`, and `seedUse`, before prose `query`; weak text matches are route-substrate pressure, not a success
   condition. Framework corpus seed rows carry typed classification reasons, so broad or surprising route fixture seeds
-  should be inspected through those reasons before being treated as authoring taste. Route-owned corpus `query` anchors
-  are the preferred way to keep a route's seed lane precise when a broad concept/effect pair admits adjacent examples.
+  should be inspected through those reasons before being treated as authoring taste. Test fixture seeds are admitted from
+  concrete behavior snippets (`it(...)`, `createFixture(...)`, and extracted object cases), while `describe(...)` suite
+  wrappers remain available in test-snippet projections but do not become fixture seeds. Route-owned corpus `query`
+  anchors are the preferred way to keep a route's seed lane precise when a broad concept/effect pair admits adjacent
+  examples.
   `route-plan` returns the full selected plan; when no explicit filter is supplied, it ranks route plans from live
   `atlas.memory:next` pressure and live product/source pressure using exact memory, source, path, and auLink anchor
   overlap before falling back to catalog order. Symbol-qualified source anchors rank named declaration/class/function/
   variable rows rather than broad module/file rows, and Atlas catalog/contract/barrel module shapes are damped so
-  static catalog size remains visible without acting like implementation pressure. `next-questions` is the same route-plan family foregrounded for autonomous continuation prompts so
-  agents do not have to rediscover route-specific steering after compaction.
+  static catalog size remains visible without acting like implementation pressure. `next` is the checkpoint-friendly
+  alias for that same route-plan family when the caller is asking "what should I do next?", while `next-questions`
+  foregrounds the autonomous continuation prompts so agents do not have to rediscover route-specific steering after
+  compaction.
   Prose `query` matching still uses route-owned structural vocabulary: a distinctive multi-token route term, symbol,
   source anchor, or canary phrase may be contained inside a larger natural-language query, while single-token fragments
   are not enough by themselves. This keeps checkpoint phrases like `CheckerExpressionTypeEvaluator method breakdown`
@@ -391,13 +396,24 @@ This is not a compatibility layer for old readers and not the default caller sur
   axes from the framework substrate.
 - [framework-observation-lenses.ts](framework-observation-lenses.ts) exposes `framework.observation`. It joins the
   observer/reactivity entity catalog with binding observer/accessor lookup rows, binding observation setup overrides,
-  observation subsystem surface/flow rows, flow-to-entity links, and normalized observation relationships derived from
-  rendering plus observer-locator internals. Binding lookup and flow-to-entity semantic hops are emitted through
+  observation subsystem surface/flow rows, compact dependency-circuit roles, collection method inventory,
+  compact ObserverLocator decision rows,
+  flow-to-entity links, and normalized
+  observation relationships derived from rendering plus observer-locator internals. Binding lookup and flow-to-entity semantic hops are emitted through
   declared semantic route specs with explicit source/checker basis. Narrow page projections intentionally compute only their
-  own row family; use `summary` when the full observation rollup is worth paying for.
+  own row family; use `summary` when the full observation rollup is worth paying for. The dependency-circuit projection
+  keeps ordinary `astEvaluate` access reads, array collection reads, arrow callback body evaluation with the captured
+  connectable, ProxyObservable traps, watcher/effect boundaries, and ObserverLocator decisions in one routeable view.
+  Prefer that before manually reading framework observation source for callback/proxy/getter category questions.
+  The collection-methods projection keeps `astEvaluate`'s array auto-observe list beside `ProxyObservable`'s
+  array/map/set wrappers, including which wrappers collect the collection, invoke callbacks inside the active
+  connectable turn, and wrap callback/result values. Prefer it before changing semantic-runtime collection method sets.
 - [framework-observation-internals.ts](framework-observation-internals.ts) indexes source-backed observation machinery:
   `ObserverLocator`, `NodeObserverLocator`, dirty-checking, collection helper functions, observer cache access, and
-  connectable subscribe/unsubscribe mechanics. It also records watcher/effect surfaces around `@watch`,
+  connectable subscribe/unsubscribe mechanics. It also records the `ComputedObserver` auto-dependency path and
+  `ControlledComputedObserver` explicit-dependency handoff: string dependencies use expression observers, direct symbol
+  or function dependencies re-enter `IObserverLocator.getObserver`, and deep observation creates a function-key observer
+  over a recursive connectable walk. It also records watcher/effect surfaces around `@watch`,
   the `Watch` registry, CE/CA resource watch metadata merges, `createWatchers`, `ComputedWatcher`,
   `ExpressionWatcher`, `Observation`, private effect runners, and slot watchers, including parser/access-scope branches
   and dependency-collection entry/exit points. It can associate internal flow-site targets with public `runtime` and

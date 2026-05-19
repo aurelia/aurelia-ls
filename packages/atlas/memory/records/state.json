@@ -16,6 +16,7 @@
         "Use StateStores for valid StateDefaultConfiguration.init(...) and .withStore(...) builder facts before AppTask execution.",
         "StateStoreConfiguration carries the TypeChecker-projected initial-state argument type so & state binding behavior can evaluate against store.getState() without executing the store.",
         "StateBindingScopeProjector mirrors createStateBindingScope(state, scope): boundary scope, parent is the original template scope, binding context comes from the configured store state type, and dynamic store-name arguments stay open. Binding behaviors use it as an evaluator handoff; state/dispatch commands publish the prepared scope as their instruction expression scope.",
+        "RuntimeBindingExpressionScopeProjector spends the same state binding-behavior handoff for binding data-flow and observed dependencies: astBind lets StateBindingBehavior call binding.useScope(...), while astEvaluate later unwraps binding behaviors and evaluates the inner expression against that effective scope. Interpolation holes use the same handoff because runtime-html binds each hole through InterpolationPartBinding before evaluating it.",
         "Use StateIssues for builder/store-registry raw Error rows: withStore after registration, reserved default store names, duplicate store registration, missing named-store lookup, and invalid @fromState(...) target contexts.",
         "State store lookup issues are post-template because state/dispatch binding commands and & state:'name' binding behaviors are visible only after template runtime products and expression parses exist.",
         ".state and .dispatch commands are full value-site/data-flow surfaces: StateBinding exposes store-state reads into target access/value-channel flow, and StateDispatchBinding exposes event listener target operations plus state-dispatch-action source operations/value channels.",
@@ -36,6 +37,12 @@
           "filePath": "packages/semantic-runtime/src/state/state-binding-scope.ts",
           "symbolName": "StateBindingScopeProjector",
           "summary": "Projects & state binding behavior and state/dispatch command expressions into store-backed binding scopes."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-expression-scope.ts",
+          "symbolName": "RuntimeBindingExpressionScopeProjector",
+          "summary": "Projects binding-behavior bind-time scope handoffs for data-flow and observed-dependency source reads."
         },
         {
           "kind": "source",
@@ -78,6 +85,11 @@
         },
         {
           "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-expression-scope.ts",
+          "symbolName": "RuntimeBindingExpressionScopeProjector"
+        },
+        {
+          "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/state/framework-raw-error-authority.ts",
           "symbolName": "StateRawErrorAuthority"
         },
@@ -93,7 +105,7 @@
         }
       ],
       "createdAt": "2026-05-14",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-05-19"
     }
   ]
 }

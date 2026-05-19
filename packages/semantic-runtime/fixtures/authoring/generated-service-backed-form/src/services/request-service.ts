@@ -1,4 +1,4 @@
-import type { ServiceRequest } from '../state/app-state';
+import { ServiceRequest } from '../state/app-state';
 
 export class RequestService {
   async loadRequests(): Promise<readonly ServiceRequest[]> {
@@ -14,15 +14,15 @@ export class RequestService {
 }
 
 function createRequest(id: string, customerName: string): ServiceRequest {
-  return {
+  return new ServiceRequest(
     id,
     customerName,
-    email: `${customerName.toLowerCase().replace(' ', '.')}@example.test`,
-    urgent: false,
-    contactPreference: 'email',
-    primaryTopic: null,
-    topics: ['support'],
-    notes: '',
-    submitCount: 0,
-  };
+    `${customerName.toLowerCase().replace(' ', '.')}@example.test`,
+    false,
+    'email',
+    null,
+    ['support'],
+    '',
+    0,
+  );
 }

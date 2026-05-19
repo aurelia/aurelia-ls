@@ -222,11 +222,11 @@ Do not add an app generator here until the semantic edit loop is real enough to 
   only folder/class ownership. Direct component-to-service or service-to-state facades remain observable app shapes, but
   are no longer the recommendable generated recipe default.
 - `api.AppTopology.serviceInteractionBindings` joins binding data-flow rows to the component member whose body performs
-  the service/state/model read, write, or call. The service-backed form recipe verifies two-way setter handoff into DI
-  state and template reads of state projection properties through this row, while separate state-to-service interaction
-  facts prove the side-effect boundary. Binding data-flow now carries a `sourceRootName` beside the display source,
-  letting single-root interpolations such as projection-object member reads join back to the getter that owns the
-  interaction.
+  the service/state/model read, write, or call. The service-backed form recipe now verifies component-to-state reads and
+  calls, direct object-backed `with.bind` form-field data flow, and separate state-to-service interaction facts for the
+  side-effect boundary. Do not restore per-field component setter handoffs merely to make the topology join easier.
+  Binding data-flow now carries a `sourceRootName` beside the display source, letting single-root interpolations and
+  object-backed field reads join back to the owning component/state surface when a meaningful interaction exists.
 - `api.AppTopology` also projects `stateCompositions` for public state-class properties whose TypeChecker value is a
   project-local class instance. Storefront currently exposes `StorefrontState -> CatalogState/CartState/CheckoutState`
   as source-backed composition rows, keeping idiomatic composed state visible without teaching topology to guess from

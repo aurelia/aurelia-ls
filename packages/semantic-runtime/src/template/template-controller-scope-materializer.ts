@@ -10,6 +10,7 @@ import {
 } from '../configuration/scope.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
 import { RuntimeBindingSourceValueEvaluator } from '../observation/binding-source-value-evaluator.js';
+import type { RuntimeBoundControllerValueTable } from '../observation/runtime-bound-controller-value.js';
 import {
   BindingScopeConstructionEmission,
   BindingScopeMaterializer,
@@ -51,6 +52,7 @@ import {
   type CheckerTypeReference,
 } from '../type-system/type-shape.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
+import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
 import {
   ProvenanceRecord,
 } from '../kernel/provenance.js';
@@ -158,6 +160,8 @@ export interface TemplateScopeConstructionRequest {
   readonly resourceScope: TemplateResourceScope | null;
   /** Runtime-analysis expression world shared by scope, observation, and data-flow phases. */
   readonly expressionWorld: CheckerExpressionTypeWorld;
+  /** Project-level parent-to-child bindable value table shared with binding-source value reduction. */
+  readonly boundControllerValues?: RuntimeBoundControllerValueTable;
   /** Optional fine-grained telemetry sink owned by the surrounding inquiry profile. */
   readonly profiling?: SemanticRuntimePhaseSink | null;
 }
@@ -195,6 +199,8 @@ export class TemplateScopeConstructionEmission {
 export interface TemplateInstructionScopeApplication {
   /** Instruction whose expression-owned work observes this scope. */
   readonly instructionProductHandle: ProductHandle;
+  /** Controller context that rendered or owns this application, when runtime rendering made it concrete. */
+  readonly controllerProductHandle: ProductHandle | null;
   /** Runtime Scope visible to that instruction before the instruction mutates later scope state. */
   readonly scope: BindingScope;
 }
@@ -206,6 +212,11 @@ export interface TemplateControllerLinkApplication {
   readonly targetController: RuntimeControllerFrame;
   /** Instruction whose link hook produced this relationship. */
   readonly sourceInstruction: HydrateTemplateControllerInstruction;
+}
+
+interface DynamicCapturedAttributeContext {
+  readonly instructionProductHandle: ProductHandle;
+  readonly controllerProductHandle: ProductHandle;
 }
 
 export class TemplateScopeConstructionFrame {
@@ -263,8 +274,12 @@ export class TemplateScopeConstructionFrame {
       : this.instructionsByProduct.get(productHandle) ?? null;
   }
 
-  addInstructionScope(instructionProductHandle: ProductHandle, scope: BindingScope): void {
-    this.instructionScopes.push({ instructionProductHandle, scope });
+  addInstructionScope(
+    instructionProductHandle: ProductHandle,
+    scope: BindingScope,
+    controllerProductHandle: ProductHandle | null,
+  ): void {
+    this.instructionScopes.push({ instructionProductHandle, controllerProductHandle, scope });
   }
 
   hasInstructionScope(instructionProductHandle: ProductHandle): boolean {
@@ -275,6 +290,13 @@ export class TemplateScopeConstructionFrame {
     this.scopeEmissions.push(emission);
     this.derivedScopes.push(emission.scope);
     return emission.scope;
+  }
+
+  readScopes(): readonly BindingScope[] {
+    return [
+      this.root.scope,
+      ...this.derivedScopes,
+    ];
   }
 
   addTemplateControllerLink(link: TemplateControllerLinkApplication): void {
@@ -422,9 +444,18 @@ export class TemplateControllerScopeMaterializer {
       if (frame.hasInstructionScope(instruction.productHandle)) {
         continue;
       }
+      const capturedContext = this.capturedAttributeContextForDynamicInstruction(instruction.productHandle);
+      if (capturedContext == null) {
+        continue;
+      }
+      const capturedScope = this.capturedAttributeSourceScope(frame, capturedContext);
+      if (capturedScope == null) {
+        continue;
+      }
       frame.addInstructionScope(
         instruction.productHandle,
-        this.capturedAttributeScopeForDynamicInstruction(instruction.productHandle, frame.instructionScopes) ?? frame.root.scope,
+        capturedScope,
+        capturedContext.controllerProductHandle,
       );
     }
   }
@@ -469,6 +500,7 @@ export class TemplateControllerScopeMaterializer {
         this.measure(frame.input, 'instruction-expression-scope', () =>
           this.constructInstructionExpressionScope(frame, current, instruction, `${localSuffix}:instruction:${index}:expression`)
         ),
+        controllerContext?.productHandle ?? null,
       );
       current = this.measure(
         frame.input,
@@ -493,7 +525,7 @@ export class TemplateControllerScopeMaterializer {
     controllerContext: RuntimeControllerFrame | null,
   ): BindingScope {
     this.measure(frame.input, 'owned-binding-instruction-scopes', () =>
-      this.recordOwnedBindingInstructionScopes(instruction, currentScope, frame, localSuffix)
+      this.recordOwnedBindingInstructionScopes(instruction, currentScope, frame, localSuffix, controllerContext)
     );
 
     if (instruction instanceof HydrateLetElementInstruction) {
@@ -625,6 +657,7 @@ export class TemplateControllerScopeMaterializer {
     scope: BindingScope,
     frame: TemplateScopeConstructionFrame,
     localSuffix: string,
+    controllerContext: RuntimeControllerFrame | null,
   ): void {
     ownedBindingInstructionProductHandles(instruction).forEach((productHandle, index) => {
       const childInstruction = frame.readInstruction(productHandle);
@@ -634,6 +667,7 @@ export class TemplateControllerScopeMaterializer {
       frame.addInstructionScope(
         childInstruction.productHandle,
         this.constructInstructionExpressionScope(frame, scope, childInstruction, `${localSuffix}:owned:${index}:expression`),
+        controllerContext?.productHandle ?? null,
       );
     });
   }
@@ -762,67 +796,51 @@ export class TemplateControllerScopeMaterializer {
     return slots;
   }
 
-  private capturedAttributeScopeForDynamicInstruction(
+  private capturedAttributeContextForDynamicInstruction(
     instructionProductHandle: ProductHandle,
-    currentInstructionScopes: readonly TemplateInstructionScopeApplication[],
-  ): BindingScope | null {
+  ): DynamicCapturedAttributeContext | null {
+    let contextInstructionProductHandle: ProductHandle | null = null;
+    let contextControllerProductHandle: ProductHandle | null = null;
     for (const claimHandle of this.store.readClaimsForSubject(instructionProductHandle)) {
       const claim = this.store.readClaim(claimHandle);
-      if (claim?.predicateKey !== KernelVocabulary.Instruction.DynamicInstructionOriginatesFromCapturedAttributeSyntax.key) {
-        continue;
+      if (claim?.predicateKey === KernelVocabulary.Instruction.DynamicInstructionUsesCapturedAttributeContextInstruction.key) {
+        const candidate = claim.objectHandle as ProductHandle;
+        if (this.store.readProduct(candidate)?.productKindKey === KernelVocabulary.Instruction.Instruction.key) {
+          contextInstructionProductHandle = candidate;
+        }
       }
-      const capturedSyntaxProductHandle = claim.objectHandle as ProductHandle;
-      if (this.store.readProduct(capturedSyntaxProductHandle)?.productKindKey !== KernelVocabulary.Template.AttributeSyntax.key) {
-        continue;
-      }
-      const scope = this.scopeForCapturedSyntax(capturedSyntaxProductHandle, currentInstructionScopes);
-      if (scope != null) {
-        return scope;
+      if (claim?.predicateKey === KernelVocabulary.Instruction.DynamicInstructionUsesCapturedAttributeContextController.key) {
+        const candidate = claim.objectHandle as ProductHandle;
+        if (this.store.readProduct(candidate)?.productKindKey === KernelVocabulary.Configuration.Controller.key) {
+          contextControllerProductHandle = candidate;
+        }
       }
     }
-    return null;
+    return contextInstructionProductHandle == null || contextControllerProductHandle == null
+      ? null
+      : {
+        instructionProductHandle: contextInstructionProductHandle,
+        controllerProductHandle: contextControllerProductHandle,
+      };
   }
 
-  private scopeForCapturedSyntax(
-    capturedSyntaxProductHandle: ProductHandle,
-    currentInstructionScopes: readonly TemplateInstructionScopeApplication[],
+  private capturedAttributeSourceScope(
+    frame: TemplateScopeConstructionFrame,
+    context: DynamicCapturedAttributeContext,
   ): BindingScope | null {
-    for (const entry of this.store.productDetails.readBySlot(TemplateProductDetails.Instruction)) {
-      const instruction = entry.detail;
-      if (!(instruction instanceof HydrateElementInstruction)
-        || !instruction.captureSyntaxProductHandles.includes(capturedSyntaxProductHandle)) {
-        continue;
-      }
-      const currentScope = currentInstructionScopes.find((application) =>
-        application.instructionProductHandle === instruction.productHandle
-      )?.scope ?? null;
-      if (currentScope != null) {
-        return currentScope;
-      }
-      const storedScope = this.storedInstructionScope(instruction.productHandle);
-      if (storedScope != null) {
-        return storedScope;
-      }
+    const controller = runtimeControllerForProductHandle(frame.input.runtimeBindings, context.controllerProductHandle);
+    if (controller == null || controller.instructionProductHandle !== context.instructionProductHandle) {
+      return null;
     }
-    return null;
-  }
-
-  private storedInstructionScope(instructionProductHandle: ProductHandle): BindingScope | null {
-    for (const claimHandle of this.store.readClaimsForSubject(instructionProductHandle)) {
-      const claim = this.store.readClaim(claimHandle);
-      if (claim?.predicateKey !== KernelVocabulary.Configuration.InstructionUsesBindingScope.key) {
-        continue;
-      }
-      const scopeProductHandle = claim.objectHandle as ProductHandle;
-      if (this.store.readProduct(scopeProductHandle)?.productKindKey !== KernelVocabulary.Configuration.BindingScope.key) {
-        continue;
-      }
-      const scope = this.store.productDetails.read(ConfigurationProductDetails.BindingScope, scopeProductHandle);
-      if (scope != null) {
-        return scope;
-      }
+    const controllerScopeReference = controller.readScopeReference();
+    if (controllerScopeReference == null) {
+      return null;
     }
-    return null;
+    const controllerScope = frame.readScopes().find((scope) =>
+      scope.productHandle === controllerScopeReference.productHandle
+    ) ?? null;
+    // SpreadBinding.bind uses the hydration-context controller scope's parent as the inner binding scope.
+    return controllerScope?.parent ?? null;
   }
 
   private constructChildElementScope(
@@ -967,7 +985,7 @@ export class TemplateControllerScopeMaterializer {
     const input = frame.input;
     const sourceValueEvaluator = input.evaluation == null
       ? null
-      : new RuntimeBindingSourceValueEvaluator(this.store, input.evaluation);
+      : new RuntimeBindingSourceValueEvaluator(this.store, input.evaluation, input.boundControllerValues);
     const iteratorProjection = this.measure(input, 'iterator-type-projection', () =>
       this.typeSupport.iteratorProjection(input, parent, effect, localSuffix)
     );
@@ -1262,7 +1280,10 @@ function bindableTargetMember(
     return null;
   }
   const targetType = store.productDetails.read(TypeSystemProductDetails.TypeShape, targetTypeProductHandle);
-  return targetType?.members.find((member) => member.name === bindable.name) ?? null;
+  return targetType == null
+    ? null
+    : readOrProjectCheckerTypeMembers(store, targetType, targetTypeProductHandle)
+      .find((member) => member.name === bindable.name) ?? null;
 }
 
 function uniqueCompiledTemplateEmissions(
@@ -1278,6 +1299,18 @@ function uniqueCompiledTemplateEmissions(
     unique.push(emission);
   }
   return unique;
+}
+
+function runtimeControllerForProductHandle(
+  rendering: RuntimeRenderingEmission,
+  productHandle: ProductHandle,
+): RuntimeControllerFrame | null {
+  if (rendering.rootController.productHandle === productHandle) {
+    return rendering.rootController;
+  }
+  return rendering.controllers.find((controller) =>
+    controller.productHandle === productHandle
+  ) ?? null;
 }
 
 function uniqueInstructionScopeApplications(

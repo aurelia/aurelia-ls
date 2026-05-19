@@ -49,7 +49,7 @@ export function assertHitAnswer<TValue>(
   answer: Answer<unknown>,
 ): asserts answer is Answer<TValue> & { readonly value: TValue } {
   if (answer.outcome !== OutcomeKind.Hit || answer.value == null) {
-    throw new Error(`${label} returned ${answer.outcome}.`);
+    throw new Error(answerOutcomeMessage(label, answer));
   }
 }
 
@@ -59,8 +59,27 @@ export function assertHitOrMissAnswer(
   answer: Answer<unknown>,
 ): void {
   if (answer.outcome !== OutcomeKind.Hit && answer.outcome !== OutcomeKind.Miss) {
-    throw new Error(`${label} returned ${answer.outcome}.`);
+    throw new Error(answerOutcomeMessage(label, answer));
   }
+}
+
+function answerOutcomeMessage(
+  label: string,
+  answer: Answer<unknown>,
+): string {
+  const continuationLines = answer.continuations
+    .slice(0, 6)
+    .map((continuation) => {
+      const inquiry = continuation.inquiry;
+      return `  - ${continuation.id ?? "<unnamed>"}: ${inquiry.lens}:${inquiry.projection ?? "<default>"}`;
+    });
+  return [
+    `${label} returned ${answer.outcome}.`,
+    answer.summary,
+    continuationLines.length === 0
+      ? undefined
+      : `Suggested continuations:\n${continuationLines.join("\n")}`,
+  ].filter((part): part is string => part !== undefined && part.length > 0).join("\n");
 }
 
 /** Read a value payload from an optional pressure answer. */

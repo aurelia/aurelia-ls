@@ -63,6 +63,20 @@ const enum FrameworkServiceKind {
   NodeObserverLocator = 'node-observer-locator',
 }
 
+const enum AppTaskCallbackTargetKind {
+  Container = 'container',
+  FrameworkService = 'framework-service',
+}
+
+type AppTaskCallbackTarget =
+  | {
+      readonly kind: AppTaskCallbackTargetKind.Container;
+    }
+  | {
+      readonly kind: AppTaskCallbackTargetKind.FrameworkService;
+      readonly service: FrameworkServiceKind;
+    };
+
 const builtInNodeObserverConfigKeys = [
   nodeConfigKey('INPUT', 'value'),
   nodeConfigKey('INPUT', 'valueAsNumber'),
@@ -353,13 +367,13 @@ function recognizeAppTaskServiceCustomizations(
   const containerLocals = new Set<string>();
   const firstParameter = callback.parameters[0]?.name;
   if (firstParameter != null && ts.isIdentifier(firstParameter)) {
-    const keyedService = appTask.keyExpression == null
+    const callbackTarget = appTask.keyExpression == null
       ? null
-      : serviceKindForKeyExpression(appTask.keyExpression);
-    if (keyedService == null) {
+      : appTaskCallbackTargetForKeyExpression(appTask.keyExpression);
+    if (callbackTarget?.kind === AppTaskCallbackTargetKind.Container) {
       containerLocals.add(firstParameter.text);
-    } else {
-      serviceLocals.set(firstParameter.text, keyedService);
+    } else if (callbackTarget?.kind === AppTaskCallbackTargetKind.FrameworkService) {
+      serviceLocals.set(firstParameter.text, callbackTarget.service);
     }
   }
 
@@ -549,6 +563,19 @@ function serviceKindForContainerGet(
     : serviceKindForKeyExpression(key);
 }
 
+function appTaskCallbackTargetForKeyExpression(expression: ts.Expression): AppTaskCallbackTarget | null {
+  const service = serviceKindForKeyExpression(expression);
+  if (service != null) {
+    return {
+      kind: AppTaskCallbackTargetKind.FrameworkService,
+      service,
+    };
+  }
+  return isContainerKeyExpression(expression)
+    ? { kind: AppTaskCallbackTargetKind.Container }
+    : null;
+}
+
 function serviceKindForKeyExpression(expression: ts.Expression): FrameworkServiceKind | null {
   const name = readReferenceName(expression);
   switch (name) {
@@ -561,6 +588,10 @@ function serviceKindForKeyExpression(expression: ts.Expression): FrameworkServic
     default:
       return null;
   }
+}
+
+function isContainerKeyExpression(expression: ts.Expression): boolean {
+  return readReferenceName(expression) === 'IContainer';
 }
 
 function readAttributeMappings(

@@ -6,4 +6,13 @@
       ${item.status}
     </li>
   </ul>
+  <ul>
+    <li repeat.for="typedRow of anyRows">
+      ${typedRow.name}
+    </li>
+  </ul>
+  <p>${untypedRow.label}</p>
+  <p>${makeUntypedRow().label}</p>
+  <p>${indexedRow.status}</p>
+  <p>${title.missing}</p>
 </section>

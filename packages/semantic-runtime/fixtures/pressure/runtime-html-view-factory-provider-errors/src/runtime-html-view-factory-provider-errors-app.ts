@@ -11,8 +11,16 @@ export class RuntimeHtmlViewFactoryProviderErrorsApp {
 @customAttribute('needs-view-factory')
 export class NeedsViewFactoryAttribute {
   private readonly viewFactory = resolve(IViewFactory);
+  private readonly nestedFactoryConsumer = class {
+    private readonly viewFactory = resolve(IViewFactory);
+
+    get factoryName(): string {
+      return this.viewFactory.name;
+    }
+  };
 
   get factoryName(): string {
+    void this.nestedFactoryConsumer;
     return this.viewFactory.name;
   }
 }

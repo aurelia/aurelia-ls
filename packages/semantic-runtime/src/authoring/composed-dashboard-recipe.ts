@@ -89,6 +89,8 @@ export function buildComposedDashboardPlan(request: ComposedDashboardRecipeReque
       null,
       [
         new AuthoringPreference('state-ownership', 'di-owned-state-class'),
+        new AuthoringPreference('template-model-access', 'direct-state-domain-template-binding'),
+        new AuthoringPreference('template-model-access', 'meaningful-viewmodel-adaptation'),
         new AuthoringPreference('template-source-ownership', 'external-template-file'),
         new AuthoringPreference('template-rendering-boundary', 'dynamic-component-composition'),
         new AuthoringPreference('build-tool-profile', 'host-selected-build-tool'),

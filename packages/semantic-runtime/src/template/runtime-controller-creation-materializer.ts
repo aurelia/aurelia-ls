@@ -86,6 +86,9 @@ import {
   RuntimeControllerIssuePublisher,
 } from './runtime-controller-issue.js';
 import {
+  runtimeWatchersForDefinition,
+} from './runtime-watcher-factory.js';
+import {
   directDependencyDefinitions,
 } from './resource-scope-builder.js';
 
@@ -103,6 +106,7 @@ type RuntimeControllerCreationPhaseName =
   | `child-container:${ContainerChildMaterializationPhaseName}`
   | 'child-frame'
   | 'controller-dependencies'
+  | 'watcher-setup'
   | 'child-hydration'
   | 'observer-setup'
   | 'activation-di-issues'
@@ -137,6 +141,7 @@ export class RuntimeControllerCreationMaterializer {
     definition: CustomElementDefinition,
     rootContainer: Container,
     source: RuntimeRenderingSourceSet,
+    typeSystem: TypeSystemProject | null,
     projectKey: string | null,
     resourceDefinitions: ResourceDefinitionIndex | null,
     records: KernelStoreRecord[],
@@ -180,6 +185,7 @@ export class RuntimeControllerCreationMaterializer {
       source.provenanceHandle,
       records,
     );
+    this.recordControllerWatchers(`${localKey}:controller:root`, frame, definition, typeSystem);
     return frame;
   }
 
@@ -229,6 +235,9 @@ export class RuntimeControllerCreationMaterializer {
         source.provenanceHandle,
         records,
       )
+    );
+    measure('watcher-setup', () =>
+      this.recordControllerWatchers(`${creation.local}:controller`, frame, definition, typeSystem)
     );
     measure('child-hydration', () => this.recordChildControllerHydration(frame, childContainer));
     measure('observer-setup', () =>
@@ -370,6 +379,17 @@ export class RuntimeControllerCreationMaterializer {
       childContainer.container.sourceAddressHandle,
       'AppRoot created a runtime child container for the root custom element controller.',
     );
+  }
+
+  recordControllerWatchers(
+    local: string,
+    frame: RuntimeControllerFrame,
+    definition: CustomElementDefinition | CustomAttributeDefinition | null,
+    typeSystem: TypeSystemProject | null = null,
+  ): void {
+    for (const watcher of runtimeWatchersForDefinition(this.store, local, frame, definition, typeSystem)) {
+      frame.addWatcher(watcher);
+    }
   }
 
   private recordControllerResourceDependencies(

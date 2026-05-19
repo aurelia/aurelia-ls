@@ -52,6 +52,7 @@ function runtimeCompositionRowsForResource(
   return resource.runtimeAnalysis.runtimeComposition.controllers.map((composition) =>
     runtimeCompositionRow(
       resource.compilation.definition.name,
+      resource.runtimeAnalysis.runtimeRendering.rootController.productHandle,
       composition,
       contextsByProduct.get(composition.context.productHandle) ?? null,
       controllersByProduct,
@@ -64,6 +65,7 @@ function runtimeCompositionRowsForResource(
 
 function runtimeCompositionRow(
   renderingDefinitionName: string,
+  rootControllerProductHandle: ProductHandle,
   composition: CompositionController,
   context: CompositionContext | null,
   controllersByProduct: ReadonlyMap<ProductHandle, RuntimeControllerFrame>,
@@ -101,6 +103,9 @@ function runtimeCompositionRow(
   );
   return {
     renderingDefinitionName,
+    renderingContextKind: composition.parentControllerProductHandle === rootControllerProductHandle
+      ? 'definition-resource'
+      : 'recursive-resource-instance',
     hostControllerName: hostController?.name ?? null,
     parentControllerName: parentController?.name ?? null,
     scopeBehavior: context?.scopeBehavior ?? null,

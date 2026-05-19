@@ -1,7 +1,4 @@
 import ts from 'typescript';
-import type {
-  BindingScope,
-} from '../configuration/scope.js';
 import { ConfigurationProductDetails } from '../configuration/product-details.js';
 import {
   ContainerChildMaterializationRequest,
@@ -57,6 +54,10 @@ import {
   RuntimeBindingSourceValueEvaluator,
   bindingExpressionAstForProduct,
 } from '../observation/binding-source-value-evaluator.js';
+import {
+  instructionScopeLookup,
+  type RuntimeInstructionScopeLookup,
+} from '../observation/runtime-binding-expression.js';
 import type { RuntimeBindingDataFlowEmission } from '../observation/binding-data-flow-materializer.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
@@ -221,7 +222,7 @@ export class RuntimeCompositionMaterializer {
     const openSeams: OpenSeam[] = [];
     const records: KernelStoreRecord[] = [...source.records];
     const bindingsByProduct = new Map(input.runtimeRendering.bindings.map((binding) => [binding.productHandle, binding]));
-    const scopesByInstruction = new Map(input.scopes.instructionScopes.map((scope) => [scope.instructionProductHandle, scope.scope]));
+    const scopesByInstruction = instructionScopeLookup(input.scopes.instructionScopes);
 
     input.runtimeRendering.controllers.forEach((controller, index) => {
       if (!isAuComposeController(controller)) {
@@ -466,7 +467,7 @@ export class RuntimeCompositionMaterializer {
   private evaluateBinding(
     input: RuntimeCompositionMaterializationRequest,
     binding: RuntimeBinding | null,
-    scopesByInstruction: ReadonlyMap<ProductHandle, BindingScope>,
+    scopesByInstruction: RuntimeInstructionScopeLookup,
   ): EvaluatedBinding {
     if (!(binding instanceof PropertyBinding)) {
       return {
@@ -479,7 +480,7 @@ export class RuntimeCompositionMaterializer {
     }
     const flow = input.bindingDataFlow.readDataFlowsForBinding(binding.productHandle)[0] ?? null;
     const expression = bindingExpressionAstForProduct(this.store, binding.expressionProductHandle);
-    const scope = scopesByInstruction.get(binding.instructionProductHandle) ?? null;
+    const scope = scopesByInstruction.scopeForBinding(input.runtimeRendering, binding);
     if (expression == null || scope == null || input.sourceValueEvaluator == null) {
       return {
         binding,
@@ -504,7 +505,7 @@ export class RuntimeCompositionMaterializer {
   private evaluateModelInput(
     input: RuntimeCompositionMaterializationRequest,
     binding: RuntimeBinding | null,
-    scopesByInstruction: ReadonlyMap<ProductHandle, BindingScope>,
+    scopesByInstruction: RuntimeInstructionScopeLookup,
     staticModel: string | null,
   ): EvaluatedBinding {
     if (binding != null || staticModel == null) {

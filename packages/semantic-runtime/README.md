@@ -20,6 +20,18 @@ Run the aggregate app API pressure lane with:
 pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api
 ```
 
+Run route-scoped semantic contracts with:
+
+```powershell
+pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --route observation
+pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --domain forms --tier route
+```
+
+The suite builds once, then runs the selected row-backed contracts or authoring smokes directly. Use `--list` to see the
+available routes, domains, tiers, and scripts. This is the first lightweight contract lane for bold refactors: it checks
+semantic effects and public product rows, not snapshots or internal helper shapes. Successful child scripts are compact
+by default; pass `--verbose` when a contract needs its full JSON output during debugging.
+
 Run the inquiry-aware construction/query telemetry lane with:
 
 ```powershell

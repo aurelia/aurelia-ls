@@ -18,7 +18,11 @@ pnpm --filter @aurelia-ls/atlas pressure:framework-corpus
 pnpm --filter @aurelia-ls/atlas framework:corpus -- --projection=doc-snippets --concept=forms
 pnpm --filter @aurelia-ls/atlas pressure:framework-resources
 pnpm --filter @aurelia-ls/atlas pressure:framework-observation
+pnpm --filter @aurelia-ls/atlas framework:observation -- --projection=observer-locator-decisions --detail
+pnpm --filter @aurelia-ls/atlas framework:observation -- --projection=collection-methods --detail
 pnpm --filter @aurelia-ls/atlas framework:observation -- --projection=surface-methods --surfaceKind=proxy-observable --detail
+pnpm --filter @aurelia-ls/atlas framework:observation -- --projection=flow-sites --surfaceKind=computed-observer --detail
+pnpm --filter @aurelia-ls/atlas framework:observation -- --projection=flow-sites --surfaceKind=controlled-computed-observer --detail
 pnpm --filter @aurelia-ls/atlas framework:observation -- --projection=flow-sites --surfaceKind=ast-evaluator --detail
 pnpm --filter @aurelia-ls/atlas pressure:framework-router
 pnpm --filter @aurelia-ls/atlas pressure:plugin-architecture
@@ -49,7 +53,9 @@ pnpm --filter @aurelia-ls/atlas self-check
   rather than a static task list. Active pressure-frontiers can be
   `nextActionPolicy=when-touched`: those are reusable grounding rows for matching
   tasks, not default autonomous work just because their source handles still
-  exist. The script
+  exist. Exact `memory:next -- --recordId=...` lookups still return consult rows
+  for queryable reference/when-touched records, so checkpoint recovery can use
+  one command without promoting those records into global next-work. The script
   forwards `--query`, `--path`, `--domain`, `--kind`, `--status`,
   `--recordId`, and `--name` filters, plus `--surfaceRole` for untracked product-class pressure,
   `--liveCheckKind` for the mechanism that keeps a durable record honest,
@@ -220,8 +226,9 @@ pnpm --filter @aurelia-ls/atlas self-check
   the printed reason spelling in `classificationKey`, such as
   `surface:option-model-binding`, and normalizes it into the same kind/key
   filter. Surface reason filters intentionally match local doc code fences and
-  test `createFixture(...)` call snippets, not parent `describe`/`it` carrier
-  ranges that merely contain nested markup.
+  concrete test behavior snippets (`it(...)`, `createFixture(...)`, and
+  extracted object test cases), not parent `describe(...)` suite ranges that
+  merely contain nested tests.
   Style/class fixture seeds split stylesheet assets, observer-backed
   class/style value channels, and direct renderer target operations; target
   operations are classified only from HTML-like tag spans so TypeScript
@@ -243,6 +250,15 @@ pnpm --filter @aurelia-ls/atlas self-check
   fixture seeds separately from seedable `corpus-pattern` gaps when they exist;
   do not chase reopen-baseline, closure, or authoring-orientation contracts as
   missing docs snippets.
+  Template binding and interpolation snippets now seed `binding-observed-dependency`
+  when they expose concrete source expressions, so direct state/domain reads can
+  be found through `framework:corpus -- --projection=fixture-seeds --effectKind=binding-observed-dependency`
+  instead of only through recipe-local expectations.
+  Computed fixture seeds split `computed-observation-definition` from
+  getter-side `computed-observer-source`/`computed-observer-observed-dependency`:
+  direct `@computed` methods are trackable-method declaration pressure, not
+  getter observer source rows, while a plain getter that calls a computed method
+  still seeds the getter descriptor path.
   Fixture seed source ranges can be followed through the row-level `ts.source`
   continuation with `projection=text`; docs and framework tests outside the
   TypeScript Program are source-text-backed only, so switch to checker lenses
@@ -252,12 +268,28 @@ pnpm --filter @aurelia-ls/atlas self-check
   prints observer entities, binding observer lookups and setup overrides,
   observation flow sites, flow-to-entity links, and relationship axes for
   ObserverLocator, NodeObserverLocator, collection observers, dirty checking,
-  connectables, AST expression evaluation, watchers, effects, slot watchers, and ProxyObservable. Use the
+  connectables, AST expression evaluation, watchers, effects, slot watchers, ComputedObserver, ControlledComputedObserver, and ProxyObservable. Use the
   targeted `framework:observation` CLI when a subsystem needs source-backed rows,
-  for example `--projection=surface-methods --surfaceKind=proxy-observable` or
+  for example `--projection=observer-locator-decisions`,
+  `--projection=surface-methods --surfaceKind=proxy-observable`, or
   `--projection=flow-sites --surfaceKind=proxy-observable`. Use
+  `--projection=flow-sites --surfaceKind=computed-observer` for getter/body
+  dependency collection, and
+  `--projection=flow-sites --surfaceKind=controlled-computed-observer` for
+  explicit string/property/function dependency metadata and deep observation. Use
+  `--projection=dependency-circuit --detail` when the question is how
+  astEvaluate, active connectables, ProxyObservable, watchers/effects, and
+  computed-observer lookup sites fit together as one dependency circuit. That
+  projection includes the `template-callback-evaluation` row for ArrowFunction
+  body evaluation with the captured connectable, so callback/proxy questions no
+  longer need a manual `ast.eval.ts` read as the first move. Use
   `--projection=flow-sites --surfaceKind=ast-evaluator` before adding fixture
   boilerplate or product semantics around direct `state.member` template reads.
+  The ObserverLocator decision projection is the first read for getter/accessor
+  category questions: ordinary getter descriptors and function-key observer
+  requests create ComputedObserver without requiring `@computed`, while
+  TypeScript `readonly` remains a write-policy fact rather than observer
+  selection evidence.
 - `framework.router` is the router grounding lane. Use it before adding more
   semantic-runtime router/route-recognizer behavior; it maps router and
   route-recognizer source into an ordered route-config/navigation `flow`
@@ -871,3 +903,8 @@ Inferred maintenance heuristics:
   `multiple.bind` becomes a `select-dynamic-option-value` channel when the value source can carry both scalar and array
   runtime branches; it remains an open value-channel seam only when the source type cannot plausibly support both
   branches.
+- Proxy observation and template `astEvaluate` belong to one connectable observation circuit. Ordinary accessor getters
+  do not require `@computed`; `ObserverLocator` reaches `ComputedObserver` through function-key requests and configurable
+  accessor descriptors, while `@computed` adds declaration metadata, explicit deps, or trackable method markers. Future
+  authoring/fixture work should keep direct `state.member` template binding, object binding, and ID-first boundaries as
+  contextual modeling choices rather than adding one-hop view-model forwarding getters to make observation visible.

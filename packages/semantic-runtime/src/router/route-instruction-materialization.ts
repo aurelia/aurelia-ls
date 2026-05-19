@@ -28,8 +28,10 @@ import {
   RuntimeBindingSourceValueEvaluation,
   RuntimeBindingSourceValueEvaluationKind,
   RuntimeBindingSourceValueEvaluator,
-  runtimeBoundControllerValueTableForTemplateResources,
 } from '../observation/binding-source-value-evaluator.js';
+import {
+  runtimeBoundControllerValueTableForTemplateResources,
+} from '../observation/runtime-bound-controller-value.js';
 import { HtmlAttribute, HtmlElement } from '../template/html-ir.js';
 import {
   HydrateAttributeInstruction,

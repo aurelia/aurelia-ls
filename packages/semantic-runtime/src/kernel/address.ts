@@ -45,6 +45,8 @@ export const enum SourceSpanRole {
   Name = 'name',
   /** A value region such as an attribute value, initializer, or string literal body. */
   Value = 'value',
+  /** A TypeScript type annotation or return type that owns a checker-projected value surface. */
+  Type = 'type',
   /** An initializer expression whose value produced a semantic fact. */
   Initializer = 'initializer',
   /** A larger range used for highlighting or explanation, not precise rename. */

@@ -127,6 +127,7 @@ import {
 } from '../telemetry/memory.js';
 import {
   readBindingDataFlowRows,
+  readBindingObservedDependencyRows,
   readBindingBehaviorApplicationRows,
   readBindingSourceOperationRows,
   readBindingTargetAccessRows,
@@ -135,6 +136,8 @@ import {
 } from './binding-projections.js';
 import {
   readRuntimeControllerRows,
+  readRuntimeWatcherObservedDependencyRows,
+  readRuntimeWatcherRows,
 } from './controller-projections.js';
 import {
   readRuntimeCompositionRows,
@@ -153,7 +156,13 @@ import {
   readEvaluationIssueRows,
 } from './evaluation-projections.js';
 import {
+  readComputedObservationDefinitionRows,
+  readComputedObserverObservedDependencyRows,
+  readComputedObserverSourceRows,
   readObservationIssueRows,
+  readProxyObservableEscapeRows,
+  readRuntimeEffectObservedDependencyRows,
+  readRuntimeEffectRows,
 } from './observation-projections.js';
 import {
   openSeamSummaryRows,
@@ -231,6 +240,7 @@ import {
   type SemanticAuthoringRecipePlanRequest,
   type SemanticAuthoringRecipePlanResult,
   type SemanticBindingDataFlowResult,
+  type SemanticBindingObservedDependencyResult,
   type SemanticBindingBehaviorApplicationResult,
   type SemanticBindingSourceOperationResult,
   type SemanticBindingTargetAccessResult,
@@ -246,7 +256,13 @@ import {
   type SemanticOpenSeamRow,
   type SemanticOpenSeamSummaryResult,
   type SemanticOpenSeamsResult,
+  type SemanticComputedObservationDefinitionsResult,
+  type SemanticComputedObserverObservedDependenciesResult,
+  type SemanticComputedObserverSourcesResult,
   type SemanticObservationIssuesResult,
+  type SemanticProxyObservableEscapesResult,
+  type SemanticRuntimeEffectObservedDependenciesResult,
+  type SemanticRuntimeEffectResult,
   type SemanticResourceDefinitionsResult,
   type SemanticResourceIssuesResult,
   type SemanticResourceVisibilityResult,
@@ -256,6 +272,8 @@ import {
   type SemanticRuntimeAnswer,
   type SemanticRuntimeCompositionResult,
   type SemanticRuntimeControllerResult,
+  type SemanticRuntimeWatcherObservedDependencyResult,
+  type SemanticRuntimeWatcherResult,
   type SemanticRuntimeOptions,
   type SemanticRuntimePageInput,
   type SemanticRuntimeSourceCursorInput,
@@ -1731,6 +1749,18 @@ export class SemanticApp {
         return this.answerQuery(query, () => this.diIssues(query.page, query.detail));
       case SemanticAppQueryKind.ObservationIssues:
         return this.answerQuery(query, () => this.observationIssues(query.page, query.detail));
+      case SemanticAppQueryKind.ComputedObservationDefinitions:
+        return this.answerQuery(query, () => this.computedObservationDefinitions(query.page, query.detail));
+      case SemanticAppQueryKind.ComputedObserverSources:
+        return this.answerQuery(query, () => this.computedObserverSources(query.page, query.detail));
+      case SemanticAppQueryKind.ComputedObserverObservedDependencies:
+        return this.answerQuery(query, () => this.computedObserverObservedDependencies(query.page, query.detail));
+      case SemanticAppQueryKind.RuntimeEffects:
+        return this.answerQuery(query, () => this.runtimeEffects(query.page, query.detail));
+      case SemanticAppQueryKind.RuntimeEffectObservedDependencies:
+        return this.answerQuery(query, () => this.runtimeEffectObservedDependencies(query.page, query.detail));
+      case SemanticAppQueryKind.ProxyObservableEscapes:
+        return this.answerQuery(query, () => this.proxyObservableEscapes(query.page, query.detail));
       case SemanticAppQueryKind.AppTopology:
         return this.answerQuery(query, () => this.appTopology(query.detail, query.includeTypeSurfaces));
       case SemanticAppQueryKind.StateStores:
@@ -1768,6 +1798,10 @@ export class SemanticApp {
         return this.answerQuery(query, () => this.templateQueries.templateDiagnostics(query));
       case SemanticAppQueryKind.RuntimeControllers:
         return this.answerQuery(query, () => this.runtimeControllers(query.page, query.detail));
+      case SemanticAppQueryKind.RuntimeWatchers:
+        return this.answerQuery(query, () => this.runtimeWatchers(query.page, query.detail));
+      case SemanticAppQueryKind.RuntimeWatcherObservedDependencies:
+        return this.answerQuery(query, () => this.runtimeWatcherObservedDependencies(query.page, query.detail));
       case SemanticAppQueryKind.RuntimeCompositions:
         return this.answerQuery(query, () => this.runtimeCompositions(query.page, query.detail));
       case SemanticAppQueryKind.BindingTargetAccesses:
@@ -1784,6 +1818,8 @@ export class SemanticApp {
         return this.answerQuery(query, () => this.bindingValueChannels(query.page, query.detail));
       case SemanticAppQueryKind.BindingDataFlows:
         return this.answerQuery(query, () => this.bindingDataFlows(query.page, query.detail));
+      case SemanticAppQueryKind.BindingObservedDependencies:
+        return this.answerQuery(query, () => this.bindingObservedDependencies(query.page, query.detail));
       default:
         return this.answerQuery(query, () => answer(
           SemanticRuntimeAnswerOutcome.Unsupported,
@@ -2276,6 +2312,138 @@ export class SemanticApp {
     );
   }
 
+  computedObservationDefinitions(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticComputedObservationDefinitionsResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticComputedObservationDefinitionsResult>({
+      kind: SemanticAppQueryKind.ComputedObservationDefinitions,
+      page,
+      detail,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const rows = readComputedObservationDefinitionRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} computed observation definition row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  computedObserverSources(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticComputedObserverSourcesResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticComputedObserverSourcesResult>({
+      kind: SemanticAppQueryKind.ComputedObserverSources,
+      page,
+      detail,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const rows = readComputedObserverSourceRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} computed observer source row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  computedObserverObservedDependencies(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticComputedObserverObservedDependenciesResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticComputedObserverObservedDependenciesResult>({
+      kind: SemanticAppQueryKind.ComputedObserverObservedDependencies,
+      page,
+      detail,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const rows = readComputedObserverObservedDependencyRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} computed observer observed dependency row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  runtimeEffects(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticRuntimeEffectResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticRuntimeEffectResult>({
+      kind: SemanticAppQueryKind.RuntimeEffects,
+      page,
+      detail,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const rows = readRuntimeEffectRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} source-level runtime effect row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  runtimeEffectObservedDependencies(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticRuntimeEffectObservedDependenciesResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticRuntimeEffectObservedDependenciesResult>({
+      kind: SemanticAppQueryKind.RuntimeEffectObservedDependencies,
+      page,
+      detail,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const rows = readRuntimeEffectObservedDependencyRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} source-level runtime effect observed-dependency row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  proxyObservableEscapes(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticProxyObservableEscapesResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticProxyObservableEscapesResult>({
+      kind: SemanticAppQueryKind.ProxyObservableEscapes,
+      page,
+      detail,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const rows = readProxyObservableEscapeRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} source-level ProxyObservable escape row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
   appTopology(
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
     includeTypeSurfaces: boolean | null | undefined = false,
@@ -2567,6 +2735,50 @@ export class SemanticApp {
     );
   }
 
+  runtimeWatchers(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticRuntimeWatcherResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticRuntimeWatcherResult>({
+      kind: SemanticAppQueryKind.RuntimeWatchers,
+      page,
+      detail,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const rows = readRuntimeWatcherRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} runtime watcher row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  runtimeWatcherObservedDependencies(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticRuntimeWatcherObservedDependencyResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticRuntimeWatcherObservedDependencyResult>({
+      kind: SemanticAppQueryKind.RuntimeWatcherObservedDependencies,
+      page,
+      detail,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const rows = readRuntimeWatcherObservedDependencyRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} runtime watcher observed-dependency row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
   runtimeCompositions(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
@@ -2787,6 +2999,36 @@ export class SemanticApp {
     return answer(
       outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} runtime binding data-flow row(s).`,
+      { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  bindingObservedDependencies(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticBindingObservedDependencyResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticBindingObservedDependencyResult>({
+      kind: SemanticAppQueryKind.BindingObservedDependencies,
+      page,
+      detail,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const unsupported = this.requireAnalysisDepth(
+      SemanticAppAnalysisDepth.BindingObservation,
+      'runtime binding observed-dependency rows',
+      { rows: [] } satisfies SemanticBindingObservedDependencyResult,
+    );
+    if (unsupported != null) {
+      return unsupported;
+    }
+    const rows = readBindingObservedDependencyRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
+    const paged = pageRows(rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${rows.length} runtime binding observed-dependency row(s).`,
       { rows: paged.rows },
       paged.page,
     );

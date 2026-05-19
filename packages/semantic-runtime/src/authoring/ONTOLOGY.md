@@ -112,7 +112,17 @@ or runtime viewport/agent topology. Do not collapse those back into one route-co
 
 Template, form, and style readings follow the same one-question-per-axis rule. `template-source-ownership` answers where
 markup comes from, while `template-rendering-boundary` answers whether the template uses Shadow DOM, light DOM, or
-template-controller composition. `form-value-channel` answers which observer/value-channel semantics are visible,
+template-controller composition. `template-model-access` answers how bindings cross from a component view-model into
+state/domain objects and when a view-model member is justified. Its primitive policy values allow direct DI
+state/domain template bindings, template-local ID/nullable-object adaptation, and meaningful view-model adapters; its
+observed `direct-state-domain-template-binding` value is backed by topology service-interaction binding rows whose root
+is an injected state/domain member, and `source-backed-getter-observation` joins binding observed-dependency rows to
+ObserverLocator ComputedObserver rows for ordinary accessor descriptors so usage and source-observer availability stay
+separate. Its derived `one-hop-forwarding-accessor-pressure` value is
+reserved for a source-proven component accessor whose single return expression is a property chain rooted at an injected
+state/domain member; calculations, route adapters, service calls, and ID-to-object lookups are intentionally outside
+that first reading. Do not add `@computed` or one-hop view-model accessors just to make a getter observable or to
+shorten `state.member` paths. `form-value-channel` answers which observer/value-channel semantics are visible,
 including whether checked/select controls rely on app-authored custom matcher comparison. `validation-ownership`
 answers who owns validation, and `form-type-surface` records whether form-like value channels currently have strict or
 weak TypeChecker surfaces. `style-resource-ownership` answers where stylesheets or

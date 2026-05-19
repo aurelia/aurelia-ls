@@ -35,6 +35,21 @@ resolve DI state, templates may bind directly into ordinary state classes, and v
 for real adaptation rather than one-hop member forwarding. The state class owns service/repository calls for loading and
 submission side effects. Its discriminator effects therefore prove state-to-service calls plus template-to-state binding
 handoff, not component bindability through a service object.
+The generated service-backed form resolves DI state in the component, but the nullable request lookup is now expressed
+in the template with `<let request.bind="state.readRequest(requestId)"></let>` followed by `if.bind` narrowing. The
+template then binds directly to `request.customerName`, `request.email`, `request.urgent`, `request.contactPreference`,
+and the select values. That direct object-backed path is intentional: it proves ordinary domain-object binding, the
+runtime `LetBinding` scope handoff, and capture/spread field-shell handoff without `with.bind`, `$parent`, one-hop
+view-model forwarding getters, or per-field component setters.
+The plain, localized, and validated state-backed form recipes use the same template-local request lookup. The scalar
+`requestId` remains the component interface, while `<let>` owns the id-to-domain-object adaptation for the template.
+Domain getters such as `ServiceRequest.canSubmit` remain real derived state; generated view-model getters whose main
+purpose is shortening `state.member` or `state.readRequest(id)` paths should not reappear. Validated variants register
+validation rules on the `ServiceRequest` class, because Aurelia's validation accessor parser accepts property chains,
+not arbitrary state lookup calls. That keeps validation metadata attached to the same domain model that the rendered
+controls edit without restoring a component-level forwarding getter. The final verification filters binding data-flow and observed-dependency
+rows for the exact `request.urgent`, `request.contactPreference`, `request.primaryTopic`, and `request.topics` channels,
+so checkbox, radio, single-select, and multiple-select semantics are protected as direct domain-object binding facts.
 The localized state-backed form recipe keeps the recommendable DI-owned state/form shape and adds `@aurelia/i18n`
 plugin registration with static `I18nConfiguration` resources, `t` attributes, and `t-params.bind` values. Its
 discriminator effects prove plugin admission plus `i18n-translation-key` and `i18n-translation-binding` rows, so
@@ -47,7 +62,8 @@ state lookups so recommendable templates do not depend on nullable object reads 
 composition, service interaction bindings, state composition verification, promise pending/then/catch branch
 controllers, switch/case/default-case availability states, and class/style interpolation plus per-token `.class` and
 per-property `.style` bindings backed by row-level target access, value-channel, data-flow, and style-binding taste
-verification.
+verification. It also verifies `binding-observed-dependency` rows for direct state-member reads, so direct DI state
+template binding is protected as an observation feature rather than justified by prose alone.
 The composed dashboard recipe is the first generated app-building recipe that verifies dynamic component composition.
 It uses DI-owned widget state, repeated dashboard cards, a TypeChecker-visible union of widget component classes, and
 `<au-compose component.bind model.bind>` handoff. Its discriminator effect is `runtime-composition`, backed by
@@ -65,8 +81,10 @@ The state-store todo recipe is the first generated `@aurelia/state` recipe. It u
 admission, default/named `state-store` rows, `aurelia-state-store` ownership taste, and state binding-behavior
 applications. The semantic-runtime state substrate also projects initial-state argument types so `& state` and `.state`
 expressions evaluate against store-backed binding scopes, while `.dispatch` emits state-store action source operations
-and payload value channels. The generated input dispatch expression also verifies that `$event.target.value` refines
-through the authored native input element.
+and payload value channels. The generated template intentionally keeps simple heading/body reads as interpolation holes
+with `& state`: runtime-html binds each interpolation part through `InterpolationPartBinding`, so binding-behavior
+bind-time scope handoffs are an interpolation-part feature as well as a bind-command feature. The generated input
+dispatch expression verifies that `$event.target.value` refines through the authored native input element.
 `recipe.ts` also exposes `expectedSemanticEffectsForPlan(...)` and recipe expected-effect coverage by building the plan
 from stable seed inputs and compressing duplicate semantic targets across step-local and final verification effects.
 Use that API and
@@ -123,6 +141,10 @@ target-element binding groups with closed lifecycle issue counts and framework-s
 `targetProperties=title` or `targetKinds=text-content`. Keep both distinct from i18n template diagnostics: translation-key
 rows describe catalog availability, translation-binding rows describe successful rendered lifecycles, and
 `AUR4000`/`AUR4001`/`AUR4002` diagnostics describe `TranslationBinding` lifecycle failures after rendering.
+Template diagnostics have their own expected-effect family (`template-diagnostic`) backed by
+`api.TemplateDiagnostics`. Use it for route-scoped repair or LSP-style witnesses such as weak owner typing; keep it
+separate from ordinary completion pressure so a missing owner type becomes diagnostic/repair evidence instead of fake
+candidate synthesis.
 `AuthoringOrientation` reports package tooling as `partial` when no project-tooling source roles are visible and
 `observable` when package manifest, tooling config, or declaration rows are admitted; build-tool and package-manager
 execution still remain product-open policy.
@@ -146,6 +168,9 @@ au-viewport products, ViewportAgents, router instruction trees, recognizer produ
 ComponentAgent handoffs. Use those filters when a recipe needs to prove an intended router/viewport authoring lane
 instead of accepting any route topology as equivalent. Shared router expected-effect constructors live in
 `route-expected-effects.ts`.
+Open seam expectations have a separate `open-seam` row-backed effect for pressure fixtures that intentionally preserve
+runtime boundaries, while `open-seam-closure` remains the absence check used by generated recipes. Use this split when a
+fixture should prove both that a static router lane closes and that a dynamic runtime-intent boundary stays explicit.
 The routed state-backed form recipe now uses a parameterized route (`form/:requestId`), a sibling static navigation
 target (`form/request-1+summary?mode=edit&tag=primary&tag=priority#details`), named route viewports (`main` and
 `sidebar`), and `IRouteContext.getRouteParameters({ includeQueryParams: true })` inside the routed view-model so the
@@ -166,16 +191,19 @@ verification expects `style-resource` facts, `component-stylesheet` taste, `clas
 target-access, value-channel, and data-flow facts through structured `targetKind=node` plus `targetProperty=value`
 expected-effect filters, a `target-operation` fact for captured `type="email"` spread into the inner native input,
 captured `valueSiteKind=captured-value` two-way value data-flow, and checked/radio target-access, value-channel, and
-data-flow facts through `targetProperty=checked`.
+data-flow facts through `targetProperty=checked`. State-backed variants additionally assert `request.*` source names and
+select/checked value-channel kinds so the recipe cannot accidentally drift back toward view-model field facades.
 Primitive form/style expected-effect constructors live in `form-expected-effects.ts`, while
 `form-recipe-expected-effects.ts` composes those primitives with project-tooling, component-role, external-template, and
 runtime-controller expectations for recommendable generated form apps. Recipe builders should reuse the recipe-level
 composition when they mean the same standard form semantics, then add only their state, service, validation, or router
 discriminator effects locally.
 The standard form recipes now include a nullable single-select beside the multi-select array control, mirroring the
-Aurelia docs pattern of `option model.bind="null"` for "choose later" placeholders. Verification asserts that the
-binding value-channel API exposes the primitive `null` model domain, which keeps generated forms honest about
-non-string runtime model values without recommending custom matcher-heavy object selection as the default.
+Aurelia docs pattern of `option model.bind="null"` for "choose later" placeholders. State-backed variants also include
+one object-valued assignee select with `matcher.bind="state.sameSupportAgent"` because the docs present object model
+values and app-authored matchers as a legitimate form pattern. Verification asserts both the primitive `null` model
+domain and the `usesCustomMatcher` value-channel row, while keeping matcher-heavy matrices in pressure fixtures rather
+than treating object comparison as the universal form recommendation.
 `form-recipe-plan-steps.ts` carries the shared recommendable form-app plan steps for project files, entrypoint, root
 component, component stylesheet, external templates, form component creation, template binding, and verification. Use
 those helpers for the repeated standard form scaffolding shape, then keep recipe-specific state, service, validation,
@@ -190,6 +218,22 @@ the framework handoff to app-supplied equality without executing matcher bodies.
 binding value channels, binding behavior applications, and binding data flows as separate surfaces. Keep those lanes
 distinct when widening authoring verification: observer/accessor lookup, direct renderer/binding writes, transported
 value shape, behavior application, and TypeChecker source/target flow answer different questions.
+They also expose binding observed dependencies, computed observation definitions, and computed observer sources
+separately. Binding observed dependencies prove that an authored template expression would be observed by Aurelia's
+template connectable circuit;
+computed definitions prove source-backed `@computed` declarations, while computed observer sources prove ordinary
+getter descriptor or getter-owned observer execution. Do not add `@computed` to generated code merely to make a
+getter observable; plain accessors enter the observer-locator/computed-observer lane.
+The `template-model-access` taste axis is the durable policy vocabulary for this: generated recipes may prefer direct
+DI state/domain bindings, template-local lookup/narrowing, and meaningful view-model adapters, while treating one-hop
+view-model forwarding accessors as pressure rather than boilerplate to recreate. Orientation reports direct injected
+state/domain template binding only through `AppTopology.serviceInteractionBindings`, where the binding root is proven to
+be an injected state/domain member, and reports framework-grounded `source-backed-getter-observation` only when binding
+observed-dependency rows show a template read of an ordinary accessor descriptor that has a source-backed
+ComputedObserver path. It reports `one-hop-forwarding-accessor-pressure` only from a conservative source shape: a
+component accessor whose whole body returns a property chain rooted at an injected state/domain member. Template-local
+domain reads such as `request.*` should still be proved through binding observed-dependency and data-flow expected
+effects rather than path-name guesses.
 Coverage and surfaces also both advertise resource visibility and runtime controllers, so callers do not have to know
 whether compiler-world visibility or hydration facts are filed under coverage-only rows.
 The validated state-backed form recipe deliberately stays separate from the plain form recipe. It adds
@@ -211,7 +255,8 @@ step-local effects often carry the signature or discriminator facts that make a 
 Use `readAuthoringVerificationSnapshot(app)` when verifying a reopened app from the public API. It collects the summary,
 topology, orientation, open seams, runtime controller rows, runtime compositions, i18n translation keys,
 i18n translation bindings, route-effect fact rows,
-binding-behavior applications, target accesses, direct target operations, value channels, and data-flow rows with
+template diagnostics, binding-behavior applications, target accesses, direct target operations, value channels, observed dependencies,
+computed observation definitions, computed observer sources, computed observer observed dependencies, and data-flow rows with
 pagination, so recipe and repair smokes do not each decide which row families matter for filtered expected effects. Use
 `target-operation` effects for renderer or
 binding writes that deliberately bypass the observer locator, such as captured static attributes, class/style renderers,
@@ -234,6 +279,11 @@ and tooling plans before reopen verification.
 The durable fixture materializer derives from `AuthoringRecipeDescriptors` and writes every recipe source plan under
 `fixtures/authoring/generated-*`, replacing each generated folder first so stale files do not survive recipe changes.
 Adding a concrete recipe no longer requires a second hand-maintained fixture list.
+The generated fixture TypeScript canary lives at `scripts/typecheck-authoring-fixtures.mjs` and is exposed as
+`check:authoring-fixtures`. It builds temporary tsconfig overlays for the durable `generated-*` folders and resolves
+`@aurelia/*` imports through the in-repo framework declaration output, so recipe source-plan typing can be checked
+without turning every authoring loop into a standalone package install. Treat failures there as generated source-plan or
+public-declaration pressure before changing semantic verification effects.
 Repair plans live in `repair-plan.ts`; they turn observed repair clusters into operations and semantic closure effects
 without claiming code-action/source-edit policy is solved.
 

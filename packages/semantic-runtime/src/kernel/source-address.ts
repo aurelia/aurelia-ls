@@ -85,6 +85,41 @@ export function addressBelongsToSourceFiles(
   return sourceFileHandle != null && sourceFileHandles.has(sourceFileHandle);
 }
 
+/** Narrow a kernel address to an exact source span, following template/generated anchors when possible. */
+export function sourceSpanAddressForAddress(
+  store: KernelStore,
+  addressHandle: AddressHandle | null,
+  seen: Set<AddressHandle> = new Set(),
+): SourceSpanAddress | null {
+  if (addressHandle == null || seen.has(addressHandle)) {
+    return null;
+  }
+  seen.add(addressHandle);
+
+  const address = store.readAddress(addressHandle);
+  if (address == null) {
+    return null;
+  }
+
+  switch (address.kind) {
+    case 'source-file-address':
+      return null;
+    case 'source-span-address':
+      return address;
+    case 'template-address':
+      return sourceSpanAddressForAddress(store, address.authoredSourceHandle, seen);
+    case 'template-node-address':
+      return sourceSpanAddressForAddress(store, address.authoredSourceHandle, seen)
+        ?? sourceSpanAddressForAddress(store, address.templateHandle, seen);
+    case 'generated-address':
+      return address.anchorHandle != null && store.readAddress(address.anchorHandle as AddressHandle) != null
+        ? sourceSpanAddressForAddress(store, address.anchorHandle as AddressHandle, seen)
+        : null;
+    case 'external-address':
+      return null;
+  }
+}
+
 export function sourceFileHandleForAddress(
   store: KernelStore,
   addressHandle: AddressHandle | null,

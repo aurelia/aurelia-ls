@@ -104,6 +104,9 @@ export function evaluateStaticPropertyValue(
   if (receiver.kind === EvaluationValueKind.BoundaryValue) {
     return new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}.${propertyName}`, node);
   }
+  if (receiver.kind === EvaluationValueKind.Object && !receiver.mayHaveUnknownProperties) {
+    return new EvaluationUndefinedValue(node);
+  }
   if (
     receiver.kind === EvaluationValueKind.Object
     || receiver.kind === EvaluationValueKind.Function
@@ -178,6 +181,9 @@ export function evaluateStaticElementAccess(
     }
     if (receiver.kind === EvaluationValueKind.BoundaryValue) {
       return new EvaluationBoundaryValue(receiver.boundaryKind, `${receiver.path}[${JSON.stringify(name)}]`, expression);
+    }
+    if (receiver.kind === EvaluationValueKind.Object && !receiver.mayHaveUnknownProperties) {
+      return new EvaluationUndefinedValue(expression);
     }
     if (
       receiver.kind === EvaluationValueKind.Object

@@ -3057,12 +3057,27 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "surface-methods",
         summary:
-          "ObserverLocator, NodeObserverLocator, DirtyChecker, connectable, watch decorator/registry/metadata, watcher, effect, and slot-watcher method/function declarations.",
+          "ObserverLocator, NodeObserverLocator, DirtyChecker, connectable, ComputedObserver, ControlledComputedObserver, watch decorator/registry/metadata, watcher, effect, and slot-watcher method/function declarations.",
       },
       {
         id: "flow-sites",
         summary:
-          "Source-backed observation flow sites inside locator, dirty-checker, collection, connectable, watcher, effect, and slot-watcher surfaces.",
+          "Source-backed observation flow sites inside locator, dirty-checker, collection, connectable, computed-observer, controlled-computed-observer, watcher, effect, and slot-watcher surfaces.",
+      },
+      {
+        id: "dependency-circuit",
+        summary:
+          "Compact dependency-circuit roles derived from observation flow sites, including astEvaluate reads, astBind wrapper handoffs, connectable boundaries, ProxyObservable identity/escape paths, proxy dependency traps, computed-observer dependency lookup, watcher/effect dependency capture, and observer-location sites.",
+      },
+      {
+        id: "collection-methods",
+        summary:
+          "Compact collection method inventory comparing astEvaluate array auto-observe methods with ProxyObservable array/map/set wrapper methods and collection dependency collection.",
+      },
+      {
+        id: "observer-locator-decisions",
+        summary:
+          "Compact ObserverLocator decision table derived from source-backed flow sites, including primitive, function-key computed, getter-descriptor computed, collection, node delegation, and setter fallback branches.",
       },
       {
         id: "flow-entity-links",
@@ -3108,7 +3123,7 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "surfaceKind",
         role: ParameterRole.Filter,
         summary:
-          "Filter observation surface rows by observer-locator, node-observer-locator, dirty-checker, dirty-check-property, connectable-record, connectable-helper, collection-helper, watch-decorator, watch-definition, watch-registry, resource-watch-metadata, watcher-setup, watcher, effect, or slot-watcher.",
+          "Filter observation surface rows by observer-locator, node-observer-locator, dirty-checker, dirty-check-property, connectable-record, connectable-helper, ast-evaluator, collection-helper, proxy-observable, computed-observer, controlled-computed-observer, watch-decorator, watch-definition, watch-registry, resource-watch-metadata, watcher-setup, watcher, effect, or slot-watcher.",
       },
       {
         id: "siteKind",
@@ -3127,6 +3142,30 @@ export const LensCatalog: readonly LensSpec[] = [
         role: ParameterRole.Filter,
         summary:
           "Filter observation flow or relationship rows by exact target symbol or concept name.",
+      },
+      {
+        id: "circuitRole",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter dependency-circuit rows by template-expression-read, template-collection-read, connectable-boundary, trackable-expression-dependency, proxy-identity, proxy-escape, proxy-property-dependency, proxy-collection-dependency, proxy-trackable-dependency, computed-observer-dependency, watcher-effect-dependency, observer-location, or observation-adjacency.",
+      },
+      {
+        id: "receiverKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter collection method rows by array, map, set, map-or-set, or collection receiver.",
+      },
+      {
+        id: "actionKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter collection method rows by template-array-auto-observe, proxy-wrapper-collects, or proxy-wrapper-no-collection-collect.",
+      },
+      {
+        id: "decisionKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter ObserverLocator decision rows by primitive-target, function-key-computed-observer, accessor-descriptor-computed-observer, computed-observer-auto-dependencies, controlled-computed-observer-explicit-dependencies, ordinary-data-setter-observer, or another exact decision kind.",
       },
       {
         id: "matchBasis",
@@ -4409,6 +4448,8 @@ export const LensCatalog: readonly LensSpec[] = [
           "seed-untracked-area",
           "inspect-untracked-frontier",
           "continue-live-frontier",
+          "consult-live-frontier",
+          "consult-memory-record",
           "consult-reuse-guide",
         ],
       },
@@ -4533,6 +4574,11 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "routes",
         summary:
           "Paged route rows with explicit match authority and anchor counts.",
+      },
+      {
+        id: "next",
+        summary:
+          "Checkpoint-friendly alias for selected route plans with memory next actions and route-specific next questions.",
       },
       {
         id: "route-plan",

@@ -179,6 +179,7 @@ function stateBackedFormComponentFile(
       FIELD_SHELL_MODULE: moduleSpecifier(model.formComponentPath, model.fieldShellComponentPath, false),
       FORM_TEMPLATE_MODULE: moduleSpecifier(model.formComponentPath, model.formTemplatePath, true),
       STATE_CLASS: model.stateClassName,
+      STATE_IMPORTS: `${model.stateClassName}${validation.stateImport}`,
       STATE_MODULE: moduleSpecifier(model.formComponentPath, model.statePath, false),
       SUBMIT_BODY: validation.submitBody,
       SUBMIT_RETURN_TYPE: validation.submitReturnType,
@@ -226,6 +227,7 @@ function stateBackedFormTemplateFile(
 function stateBackedFormDependencySpecifiers(model: StateBackedFormSourcePlanModel): readonly string[] {
   const specifiers = new Set<string>(['@aurelia/kernel']);
   if (model.validationEnabled === true) {
+    specifiers.add('@aurelia/validation');
     specifiers.add('@aurelia/validation-html');
   }
   if (model.i18nEnabled === true) {
@@ -238,6 +240,7 @@ interface StateBackedFormValidationTokens {
   readonly entrypointImport: string;
   readonly registrationArgument: string;
   readonly formImport: string;
+  readonly stateImport: string;
   readonly formFields: string;
   readonly constructorBody: string;
   readonly submitReturnType: string;
@@ -267,7 +270,8 @@ function stateBackedFormValidationTokens(
     ? {
       entrypointImport: "import { ValidationHtmlConfiguration } from '@aurelia/validation-html';\n",
       registrationArgument: ', ValidationHtmlConfiguration',
-      formImport: "import { IValidationController, IValidationRules, type ValidationResultTarget } from '@aurelia/validation-html';\n",
+      formImport: "import { IValidationRules } from '@aurelia/validation';\nimport { IValidationController, type ValidationResultTarget } from '@aurelia/validation-html';\n",
+      stateImport: ', ServiceRequest',
       formFields: `  private readonly validationRules = resolve(IValidationRules);
   private readonly validationController = resolve(IValidationController);
 
@@ -277,10 +281,10 @@ function stateBackedFormValidationTokens(
       constructorBody: `
   constructor() {
     this.validationRules
-      .on(this)
-      .ensure('customerName')
+      .on(ServiceRequest)
+      .ensure((request) => request.customerName)
       .required()
-      .ensure('email')
+      .ensure((request) => request.email)
       .required()
       .email();
   }
@@ -290,8 +294,8 @@ function stateBackedFormValidationTokens(
     if (result.valid) {
       this.state.submitRequest(this.requestId);
     }`,
-      customerNameBinding: validateValueBinding('customerName', validationTrigger),
-      emailBinding: validateValueBinding('email', validationTrigger),
+      customerNameBinding: validateValueBinding('request.customerName', validationTrigger),
+      emailBinding: validateValueBinding('request.email', validationTrigger),
       customerNameErrorCollectionName: 'customerNameErrors',
       emailErrorCollectionName: 'emailErrors',
     }
@@ -299,12 +303,13 @@ function stateBackedFormValidationTokens(
       entrypointImport: '',
       registrationArgument: '',
       formImport: '',
+      stateImport: '',
       formFields: '',
       constructorBody: '',
       submitReturnType: 'submit(): void',
       submitBody: '    this.state.submitRequest(this.requestId);',
-      customerNameBinding: 'value.bind="customerName"',
-      emailBinding: 'value.bind="email"',
+      customerNameBinding: 'value.bind="request.customerName"',
+      emailBinding: 'value.bind="request.email"',
       customerNameErrorCollectionName: null,
       emailErrorCollectionName: null,
     };
@@ -374,10 +379,10 @@ function stateBackedFormI18nTokens(i18nEnabled: boolean): StateBackedFormI18nTok
     })`,
       rootTitle: '<h1 t="app.title"></h1>',
       requestLabel: '<label for="request-selector" t="app.request"></label>',
-      submittedCount: '<p t="app.submitted" t-params.bind="{ count: submittedCount }"></p>',
+      submittedCount: '<p t="app.submitted" t-params.bind="{ count: state.submittedCount }"></p>',
       formSummary: '\n  <p t="form.summary" t-params.bind="{ requestId }"></p>\n',
       contactPreferenceLegend: '<legend t="form.contactPreference"></legend>',
-      submitLabel: '<button type="submit" disabled.bind="!canSubmit" t="[title]form.submit;form.submit"></button>',
+      submitLabel: '<button type="submit" disabled.bind="!request.canSubmit" t="[title]form.submit;form.submit"></button>',
     }
     : {
       entrypointImport: '',
@@ -387,7 +392,7 @@ function stateBackedFormI18nTokens(i18nEnabled: boolean): StateBackedFormI18nTok
       submittedCount: '<p>${state.submittedCount} submitted request(s)</p>',
       formSummary: '',
       contactPreferenceLegend: '<legend>Contact preference</legend>',
-      submitLabel: '<button type="submit" disabled.bind="!canSubmit">Submit request</button>',
+      submitLabel: '<button type="submit" disabled.bind="!request.canSubmit">Submit request</button>',
     };
 }
 
@@ -464,16 +469,28 @@ const ROOT_STYLE_SOURCE = sourceText(`main {
 const STATE_SOURCE = sourceText(`export type ContactPreference = 'email' | 'phone';
 export type RequestTopic = 'hardware' | 'billing' | 'support';
 
-export interface ServiceRequest {
-  id: string;
-  customerName: string;
-  email: string;
-  urgent: boolean;
-  contactPreference: ContactPreference;
-  primaryTopic: RequestTopic | null;
-  topics: RequestTopic[];
-  notes: string;
-  submitCount: number;
+export interface SupportAgent {
+  readonly id: string;
+  readonly name: string;
+}
+
+export class ServiceRequest {
+  constructor(
+    readonly id: string,
+    public customerName: string,
+    public email: string,
+    public urgent: boolean,
+    public contactPreference: ContactPreference,
+    public primaryTopic: RequestTopic | null,
+    public assignee: SupportAgent | null,
+    public topics: RequestTopic[],
+    public notes: string,
+    public submitCount: number,
+  ) {}
+
+  get canSubmit(): boolean {
+    return this.customerName !== '' && this.email !== '';
+  }
 }
 
 export class __STATE_CLASS__ {
@@ -485,15 +502,15 @@ export class __STATE_CLASS__ {
   readonly hardwareTopic: RequestTopic = 'hardware';
   readonly billingTopic: RequestTopic = 'billing';
   readonly supportTopic: RequestTopic = 'support';
+  readonly supportAgents: readonly SupportAgent[] = [
+    { id: 'agent-ada', name: 'Ada' },
+    { id: 'agent-grace', name: 'Grace' },
+  ];
 
   private readonly requests = new Map<string, ServiceRequest>([
     ['request-1', createRequest('request-1', 'Ada Lovelace')],
     ['request-2', createRequest('request-2', 'Grace Hopper')],
   ]);
-
-  get selectedRequest(): ServiceRequest | null {
-    return this.readRequest(this.selectedRequestId);
-  }
 
   get submittedCount(): number {
     let count = 0;
@@ -513,27 +530,32 @@ export class __STATE_CLASS__ {
       request.submitCount += 1;
     }
   }
+
+  sameSupportAgent(left: SupportAgent | null, right: SupportAgent | null): boolean {
+    return left?.id === right?.id;
+  }
 }
 
 function createRequest(id: string, customerName: string): ServiceRequest {
-  return {
+  return new ServiceRequest(
     id,
     customerName,
-    email: \`\${customerName.toLowerCase().replace(' ', '.')}@example.test\`,
-    urgent: false,
-    contactPreference: 'email',
-    primaryTopic: null,
-    topics: ['support'],
-    notes: '',
-    submitCount: 0,
-  };
+    \`\${customerName.toLowerCase().replace(' ', '.')}@example.test\`,
+    false,
+    'email',
+    null,
+    null,
+    ['support'],
+    '',
+    0,
+  );
 }
 `);
 
 const FORM_COMPONENT_SOURCE = sourceText(`import { bindable, customElement } from '@aurelia/runtime-html';
 import { resolve } from '@aurelia/kernel';
 __VALIDATION_FORM_IMPORT__\
-import { __STATE_CLASS__, type ContactPreference, type RequestTopic } from '__STATE_MODULE__';
+import { __STATE_IMPORTS__ } from '__STATE_MODULE__';
 import { __FIELD_SHELL_CLASS__ } from '__FIELD_SHELL_MODULE__';
 import template from '__FORM_TEMPLATE_MODULE__';
 
@@ -545,134 +567,64 @@ import template from '__FORM_TEMPLATE_MODULE__';
 export class __FORM_COMPONENT_CLASS__ {
   readonly state = resolve(__STATE_CLASS__);
 __VALIDATION_FIELDS__
-
   @bindable requestId = '';
 __VALIDATION_CONSTRUCTOR__
-
-  get customerName(): string {
-    return this.request?.customerName ?? '';
-  }
-
-  set customerName(value: string) {
-    const request = this.request;
-    if (request != null) {
-      request.customerName = value;
-    }
-  }
-
-  get email(): string {
-    return this.request?.email ?? '';
-  }
-
-  set email(value: string) {
-    const request = this.request;
-    if (request != null) {
-      request.email = value;
-    }
-  }
-
-  get urgent(): boolean {
-    return this.request?.urgent ?? false;
-  }
-
-  set urgent(value: boolean) {
-    const request = this.request;
-    if (request != null) {
-      request.urgent = value;
-    }
-  }
-
-  get contactPreference(): ContactPreference {
-    return this.request?.contactPreference ?? this.state.emailPreference;
-  }
-
-  set contactPreference(value: ContactPreference) {
-    const request = this.request;
-    if (request != null) {
-      request.contactPreference = value;
-    }
-  }
-
-  get primaryTopic(): RequestTopic | null {
-    return this.request?.primaryTopic ?? null;
-  }
-
-  set primaryTopic(value: RequestTopic | null) {
-    const request = this.request;
-    if (request != null) {
-      request.primaryTopic = value;
-    }
-  }
-
-  get topics(): RequestTopic[] {
-    return this.request?.topics ?? [];
-  }
-
-  get notes(): string {
-    return this.request?.notes ?? '';
-  }
-
-  set notes(value: string) {
-    const request = this.request;
-    if (request != null) {
-      request.notes = value;
-    }
-  }
-
-  get canSubmit(): boolean {
-    return this.customerName !== '' && this.email !== '';
-  }
-
   __SUBMIT_RETURN_TYPE__ {
 __SUBMIT_BODY__
-  }
-
-  private get request() {
-    return this.state.readRequest(this.requestId);
   }
 }
 `);
 
-const FORM_TEMPLATE_SOURCE = sourceText(`<form class.bind="canSubmit ? 'form-ready' : 'form-pending'" submit.trigger="submit()">__FORM_SUMMARY__
+const FORM_TEMPLATE_SOURCE = sourceText(`<let request.bind="state.readRequest(requestId)"></let>
+<template if.bind="request != null">
+  <form class.bind="request.canSubmit ? 'form-ready' : 'form-pending'" submit.trigger="submit()">__FORM_SUMMARY__
 __CUSTOMER_NAME_FIELD__
 
 __EMAIL_FIELD__
 
   <label>
-    <input type="checkbox" checked.bind="urgent">
+    <input type="checkbox" checked.bind="request.urgent">
     Urgent
   </label>
 
   <fieldset>
     __CONTACT_PREFERENCE_LEGEND__
     <label>
-      <input type="radio" model.bind="state.emailPreference" checked.bind="contactPreference">
+      <input type="radio" model.bind="state.emailPreference" checked.bind="request.contactPreference">
       Email
     </label>
     <label>
-      <input type="radio" model.bind="state.phonePreference" checked.bind="contactPreference">
+      <input type="radio" model.bind="state.phonePreference" checked.bind="request.contactPreference">
       Phone
     </label>
   </fieldset>
 
   <label for="primary-topic">Primary topic</label>
-  <select id="primary-topic" value.bind="primaryTopic">
+  <select id="primary-topic" value.bind="request.primaryTopic">
     <option model.bind="null">Choose...</option>
     <option model.bind="state.hardwareTopic">Hardware</option>
     <option model.bind="state.billingTopic">Billing</option>
     <option model.bind="state.supportTopic">Support</option>
   </select>
 
+  <label for="assignee">Assignee</label>
+  <select id="assignee" value.bind="request.assignee" matcher.bind="state.sameSupportAgent">
+    <option model.bind="null">Unassigned</option>
+    <option repeat.for="agent of state.supportAgents" model.bind="agent">\${agent.name}</option>
+  </select>
+
   <label for="topics">Additional topics</label>
-  <select id="topics" multiple value.bind="topics">
+  <select id="topics" multiple value.bind="request.topics">
     <option model.bind="state.hardwareTopic">Hardware</option>
     <option model.bind="state.billingTopic">Billing</option>
     <option model.bind="state.supportTopic">Support</option>
   </select>
 
   <label for="notes">Notes</label>
-  <textarea id="notes" value.bind="notes"></textarea>
+  <textarea id="notes" value.bind="request.notes"></textarea>
 
   __SUBMIT_LABEL__
-</form>
+  </form>
+</template>
+<p else>Loading request...</p>
 `);

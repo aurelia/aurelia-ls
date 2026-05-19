@@ -29,6 +29,13 @@ import {
   standardFormTemplateBindingExpectedEffects,
 } from './form-recipe-expected-effects.js';
 import {
+  customMatcherComparisonTasteEffect,
+  customMatcherValueChannelEffect,
+  requestCanSubmitComputedObserverDependencyEffect,
+  requestCanSubmitComputedObserverSourceEffect,
+  requestCanSubmitTemplateObservedDependencyEffect,
+  stateRequestFieldDataFlowEffect,
+  stateRequestFieldObservedDependencyEffect,
   validationErrorsDataFlowEffect,
   validationErrorsTargetAccessEffect,
   validationErrorsValueChannelEffect,
@@ -191,12 +198,16 @@ function stateBackedFormPreferences(model: StateBackedFormRecipeModel): readonly
   return [
     new AuthoringPreference('state-ownership', 'di-owned-state-class'),
     new AuthoringPreference('component-interface', 'scalar-id-inputs'),
+    new AuthoringPreference('template-model-access', 'direct-state-domain-template-binding'),
+    new AuthoringPreference('template-model-access', 'template-local-domain-adaptation'),
+    new AuthoringPreference('template-model-access', 'meaningful-viewmodel-adaptation'),
     new AuthoringPreference('template-source-ownership', 'external-template-file'),
     new AuthoringPreference('style-resource-ownership', 'component-stylesheet'),
     new AuthoringPreference('style-binding-model', 'class-token-binding'),
     new AuthoringPreference('form-value-channel', 'native-control-value-binding'),
     new AuthoringPreference('form-value-channel', 'checked-model-binding'),
     new AuthoringPreference('form-value-channel', 'select-model-binding'),
+    new AuthoringPreference('form-value-channel', 'custom-matcher-comparison'),
     new AuthoringPreference('build-tool-profile', 'host-selected-build-tool'),
     ...(model.validationEnabled
       ? [new AuthoringPreference('validation-ownership', 'validation-controller-usage')]
@@ -392,6 +403,7 @@ function stateBackedFormExpectedEffects(model: StateBackedFormRecipeModel): read
       externalTemplateCount: 3,
       compiledTemplateCount: 3,
     }),
+    ...stateBackedDirectRequestExpectedEffects('Generated form app'),
     ...(model.validationEnabled
       ? [
         ExpectedSemanticEffect.discriminatorFact('Validated form app materializes validate binding behavior applications.', 'binding-behavior-application', 'template', 'binding-behavior', 'present', null, [
@@ -418,6 +430,18 @@ function stateBackedFormExpectedEffects(model: StateBackedFormRecipeModel): read
           new ExpectedSemanticEffectFilter('hasParameterBinding', true),
           new ExpectedSemanticEffectFilter('issueCount', 0),
         ]),
+        ExpectedSemanticEffect.signatureFact('Localized form app reads DI state directly for translated submitted-count parameters.', 'i18n-translation-binding', 'template', 'template-binding', 'present', null, [
+          new ExpectedSemanticEffectFilter('staticKey', 'app.submitted'),
+          new ExpectedSemanticEffectFilter('parameterSourceNames', 'state.submittedCount'),
+          new ExpectedSemanticEffectFilter('parameterSourceRootNames', 'state'),
+          new ExpectedSemanticEffectFilter('issueCount', 0),
+        ]),
+        ExpectedSemanticEffect.signatureFact('Localized form app observes shorthand object-literal translation parameters.', 'i18n-translation-binding', 'template', 'template-binding', 'present', null, [
+          new ExpectedSemanticEffectFilter('staticKey', 'form.summary'),
+          new ExpectedSemanticEffectFilter('parameterSourceNames', 'requestId'),
+          new ExpectedSemanticEffectFilter('parameterSourceRootNames', 'requestId'),
+          new ExpectedSemanticEffectFilter('issueCount', 0),
+        ]),
         ExpectedSemanticEffect.signatureFact('Localized form app renders the translated submit label binding.', 'i18n-translation-binding', 'template', 'template-binding', 'present', null, [
           new ExpectedSemanticEffectFilter('staticKey', 'form.submit'),
           new ExpectedSemanticEffectFilter('issueCount', 0),
@@ -431,6 +455,89 @@ function stateBackedFormExpectedEffects(model: StateBackedFormRecipeModel): read
         ExpectedSemanticEffect.signatureTaste('Localized form app reports plugin registration admission.', 'resource-admission-mode', 'plugin-registration-admission', 'plugin'),
       ]
       : []),
+  ];
+}
+
+function stateBackedDirectRequestExpectedEffects(prefix: string): readonly ExpectedSemanticEffect[] {
+  return [
+    stateRequestFieldDataFlowEffect(
+      `${prefix} binds request.urgent through the checked boolean value channel.`,
+      'request.urgent',
+      'checked',
+      'checked-boolean',
+    ),
+    stateRequestFieldDataFlowEffect(
+      `${prefix} binds request.contactPreference through radio model value channels.`,
+      'request.contactPreference',
+      'checked',
+      'checked-radio-value',
+    ),
+    stateRequestFieldDataFlowEffect(
+      `${prefix} binds request.primaryTopic through a single-select option value channel.`,
+      'request.primaryTopic',
+      'value',
+      'select-single-option-value',
+    ),
+    stateRequestFieldDataFlowEffect(
+      `${prefix} binds request.assignee through an object-valued single-select option channel.`,
+      'request.assignee',
+      'value',
+      'select-single-option-value',
+    ),
+    stateRequestFieldDataFlowEffect(
+      `${prefix} binds request.topics through a multiple-select option values channel.`,
+      'request.topics',
+      'value',
+      'select-multiple-option-values',
+    ),
+    stateRequestFieldObservedDependencyEffect(
+      `${prefix} observes request.urgent directly from the template without a forwarding getter.`,
+      'request.urgent',
+      'urgent',
+    ),
+    stateRequestFieldObservedDependencyEffect(
+      `${prefix} observes request.contactPreference directly from the template without a forwarding getter.`,
+      'request.contactPreference',
+      'contactPreference',
+    ),
+    stateRequestFieldObservedDependencyEffect(
+      `${prefix} observes request.primaryTopic directly from the template without a forwarding getter.`,
+      'request.primaryTopic',
+      'primaryTopic',
+    ),
+    stateRequestFieldObservedDependencyEffect(
+      `${prefix} observes request.assignee directly from the template without a forwarding getter.`,
+      'request.assignee',
+      'assignee',
+    ),
+    stateRequestFieldObservedDependencyEffect(
+      `${prefix} observes request.topics directly from the template without a forwarding getter.`,
+      'request.topics',
+      'topics',
+    ),
+    requestCanSubmitComputedObserverSourceEffect(
+      `${prefix} models request submit readiness as a plain domain getter observer.`,
+    ),
+    requestCanSubmitComputedObserverDependencyEffect(
+      `${prefix} plain request submit-readiness getter observes customerName.`,
+      'this.customerName',
+    ),
+    requestCanSubmitComputedObserverDependencyEffect(
+      `${prefix} plain request submit-readiness getter observes email.`,
+      'this.email',
+    ),
+    requestCanSubmitTemplateObservedDependencyEffect(
+      `${prefix} observes request.canSubmit directly from the template without a view-model forwarding getter.`,
+      'request.canSubmit',
+      'request',
+      'canSubmit',
+    ),
+    customMatcherValueChannelEffect(
+      `${prefix} marks assignee select equality as an app-authored matcher value channel.`,
+    ),
+    customMatcherComparisonTasteEffect(
+      `${prefix} reports custom matcher comparison as an intentional form value-channel taste.`,
+    ),
   ];
 }
 

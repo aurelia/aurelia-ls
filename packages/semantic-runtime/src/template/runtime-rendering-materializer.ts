@@ -48,6 +48,7 @@ import {
   type RuntimeBindingScopeEffect,
   RuntimeTargetOperation,
 } from './runtime-binding.js';
+import type { RuntimeWatcher } from './runtime-watcher.js';
 import {
   RuntimeRendererAllocation,
 } from './runtime-renderer.js';
@@ -59,6 +60,7 @@ import {
   type TemplateRenderingTargetPlan,
 } from './compiler-world.js';
 import { TemplateProductDetails } from './product-details.js';
+import { ObservationProductDetails } from '../observation/product-details.js';
 import {
   RuntimeControllerCreationKind,
   RuntimeControllerFrame,
@@ -172,6 +174,8 @@ export class RuntimeRenderingEmission {
     readonly controllers: readonly RuntimeControllerFrame[],
     /** Runtime binding instances materialized from lowered instruction products. */
     readonly bindings: readonly RuntimeBinding[],
+    /** Runtime watcher bindings materialized from resource watch metadata during controller hydration. */
+    readonly watchers: readonly RuntimeWatcher[],
     /** Immediate renderer-owned target mutations materialized during runtime Rendering. */
     readonly targetOperations: readonly RuntimeTargetOperation[],
     /** Binding effects that can create or mutate runtime template scope. */
@@ -363,6 +367,11 @@ export class RuntimeRenderingMaterializer {
 
   private registerProductDetails(emission: RuntimeRenderingEmission): void {
     this.store.productDetails.addAll(TemplateProductDetails.RuntimeBinding, emission.bindings);
+    this.store.productDetails.addAll(TemplateProductDetails.RuntimeWatcher, emission.watchers);
+    this.store.productDetails.addAll(
+      ObservationProductDetails.RuntimeWatcherObservedDependency,
+      emission.watchers.flatMap((watcher) => watcher.observedDependencies),
+    );
     this.store.productDetails.addAll(TemplateProductDetails.RuntimeBindingTargetOperation, emission.targetOperations);
     this.store.productDetails.addAll(TemplateProductDetails.RuntimeBindingScopeEffect, emission.scopeEffects);
     this.store.productDetails.addAll(TemplateProductDetails.RuntimeControllerIssue, emission.controllerIssues);
@@ -389,6 +398,7 @@ export class RuntimeRenderingMaterializer {
         input.definition,
         input.compilerWorld.container,
         source,
+        input.typeSystem,
         input.projectKey,
         input.resourceDefinitions,
         rootDependencyRecords,
@@ -555,6 +565,7 @@ export class RuntimeRenderingMaterializer {
       state.rootController,
       controllers,
       state.bindings,
+      uniqueRuntimeWatchers(controllers.flatMap((controller) => controller.readWatchers())),
       state.targetOperations,
       state.scopeEffects,
       state.viewFactories,
@@ -1030,6 +1041,21 @@ function uniqueRuntimeControllers(
     }
     seen.add(controller.productHandle);
     result.push(controller);
+  }
+  return result;
+}
+
+function uniqueRuntimeWatchers(
+  watchers: readonly RuntimeWatcher[],
+): readonly RuntimeWatcher[] {
+  const seen = new Set<ProductHandle>();
+  const result: RuntimeWatcher[] = [];
+  for (const watcher of watchers) {
+    if (seen.has(watcher.productHandle)) {
+      continue;
+    }
+    seen.add(watcher.productHandle);
+    result.push(watcher);
   }
   return result;
 }

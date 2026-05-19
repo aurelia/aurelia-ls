@@ -29,7 +29,7 @@ import {
   sourceRangeForObserverEntity,
 } from "./framework-observer-entities.js";
 import { sourceRangeFromFileSpan } from "./framework-support.js";
-import { matchesFilterValue } from "./lens-filter-utils.js";
+import { matchesFilterValue, queryMatches } from "./lens-filter-utils.js";
 import {
   isNestedExecutionBoundary,
   propertyNameText,
@@ -40,6 +40,16 @@ import {
 export const enum FrameworkObservationSurfaceKind {
   ObserverLocator = "observer-locator",
   NodeObserverLocator = "node-observer-locator",
+  /** Runtime-html checked input observer, including checkbox collection/map and radio value semantics. */
+  CheckedObserver = "checked-observer",
+  /** Runtime-html select value observer, including single/multiple select and option model semantics. */
+  SelectValueObserver = "select-value-observer",
+  /** Runtime-html value attribute observer for ordinary input/textarea value-like properties. */
+  ValueAttributeObserver = "value-attribute-observer",
+  /** Runtime-html attribute accessor for data/aria-style node attributes. */
+  DataAttributeAccessor = "data-attribute-accessor",
+  /** Runtime-html XML namespace attribute accessor selected from NodeObserverLocator's namespace table. */
+  AttributeNSAccessor = "attribute-ns-accessor",
   DirtyChecker = "dirty-checker",
   DirtyCheckProperty = "dirty-check-property",
   ConnectableRecord = "connectable-record",
@@ -49,6 +59,12 @@ export const enum FrameworkObservationSurfaceKind {
   CollectionHelper = "collection-helper",
   /** ProxyObservable wrapping, raw/proxy identity, traps, and nested dependency collection for the active connectable circuit. */
   ProxyObservable = "proxy-observable",
+  /** Runtime ComputedObserver dependency collection for ordinary getter descriptors and function-key observer requests. */
+  ComputedObserver = "computed-observer",
+  /** Runtime ControlledComputedObserver dependency lookup for explicit @computed dependency metadata. */
+  ControlledComputedObserver = "controlled-computed-observer",
+  /** `@computed` decorator metadata handoff into getter observers and trackable method calls. */
+  ComputedDecorator = "computed-decorator",
   WatchDecorator = "watch-decorator",
   WatchDefinition = "watch-definition",
   WatchRegistry = "watch-registry",
@@ -84,6 +100,13 @@ export const enum FrameworkObservationFlowSiteKind {
   NodeAccessorOverride = "node-accessor-override",
   NodeObserver = "node-observer",
   NodeAccessor = "node-accessor",
+  NodeObserverSubscribe = "node-observer-subscribe",
+  NodeObserverUnsubscribe = "node-observer-unsubscribe",
+  NodeObserverNotify = "node-observer-notify",
+  NodeObserverValueSync = "node-observer-value-sync",
+  NodeObserverCollectionSync = "node-observer-collection-sync",
+  NodeObserverDomMutationObserver = "node-observer-dom-mutation-observer",
+  NodeObserverDiagnostic = "node-observer-diagnostic",
   DirtyCheckSchedule = "dirty-check-schedule",
   DirtyCheckTrack = "dirty-check-track",
   DirtyCheckUntrack = "dirty-check-untrack",
@@ -95,10 +118,43 @@ export const enum FrameworkObservationFlowSiteKind {
   ExpressionAccessMemberDependency = "expression-access-member-dependency",
   ExpressionAccessKeyedDependency = "expression-access-keyed-dependency",
   ExpressionCollectionDependency = "expression-collection-dependency",
+  ExpressionCallbackBodyEvaluation = "expression-callback-body-evaluation",
   ExpressionTrackableDependency = "expression-trackable-dependency",
   ExpressionTrackableProxyWrap = "expression-trackable-proxy-wrap",
   ExpressionConnectableEnter = "expression-connectable-enter",
   ExpressionConnectableExit = "expression-connectable-exit",
+  BindingBehaviorBindArgumentEvaluation = "binding-behavior-bind-argument-evaluation",
+  BindingBehaviorBindExpressionHandoff = "binding-behavior-bind-expression-handoff",
+  ValueConverterBindExpressionHandoff = "value-converter-bind-expression-handoff",
+  ComputedObserverProxyWrap = "computed-observer-proxy-wrap",
+  ComputedObserverProxyUnwrap = "computed-observer-proxy-unwrap",
+  ComputedObserverGetterInvoke = "computed-observer-getter-invoke",
+  ComputedObserverSetterInvoke = "computed-observer-setter-invoke",
+  ComputedObserverConnectableEnter = "computed-observer-connectable-enter",
+  ComputedObserverConnectableExit = "computed-observer-connectable-exit",
+  ComputedObserverDependencyClear = "computed-observer-dependency-clear",
+  ComputedObserverQueue = "computed-observer-queue",
+  ComputedObserverNotify = "computed-observer-notify",
+  ControlledComputedDependencyBranch = "controlled-computed-dependency-branch",
+  ControlledComputedExpressionDependency = "controlled-computed-expression-dependency",
+  ControlledComputedObserverDependency = "controlled-computed-observer-dependency",
+  ControlledComputedDeepObserver = "controlled-computed-deep-observer",
+  ControlledComputedDeepPropertyDependency = "controlled-computed-deep-property-dependency",
+  ControlledComputedDeepCollectionDependency = "controlled-computed-deep-collection-dependency",
+  ControlledComputedProxyUnwrap = "controlled-computed-proxy-unwrap",
+  ControlledComputedGetterInvoke = "controlled-computed-getter-invoke",
+  ControlledComputedSubscribe = "controlled-computed-subscribe",
+  ControlledComputedUnsubscribe = "controlled-computed-unsubscribe",
+  ControlledComputedQueue = "controlled-computed-queue",
+  ControlledComputedNotify = "controlled-computed-notify",
+  /** Getter-side @computed options consumed by ObserverLocator.getComputedObserver. */
+  ComputedDecoratorPropertyInfo = "computed-decorator-property-info",
+  /** Method-side @computed options stored under astTrackableMethodMarker. */
+  ComputedDecoratorMethodOptions = "computed-decorator-method-options",
+  /** @computed getter hook that delegates observer creation to IObserverLocator. */
+  ComputedDecoratorGetterObserver = "computed-decorator-getter-observer",
+  /** @computed method branch that writes trackable-method metadata. */
+  ComputedDecoratorTrackableMethod = "computed-decorator-trackable-method",
   ProxyEligibilityCheck = "proxy-eligibility-check",
   ProxyWrap = "proxy-wrap",
   ProxyUnwrap = "proxy-unwrap",
@@ -846,6 +902,429 @@ const proxyCallClassifications: readonly ObservationCallClassification[] = [
   },
 ];
 
+const computedObserverCallClassifications: readonly ObservationCallClassification[] = [
+  {
+    calleeName: "wrap",
+    classify: () =>
+      computedObserverSite(
+        FrameworkObservationFlowSiteKind.ComputedObserverProxyWrap,
+        "ProxyObservable.wrap",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+        FrameworkRelationshipMechanism.ProxyObservable,
+      ),
+  },
+  {
+    calleeName: "unwrap",
+    classify: () =>
+      computedObserverSite(
+        FrameworkObservationFlowSiteKind.ComputedObserverProxyUnwrap,
+        "ProxyObservable.unwrap",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+        FrameworkRelationshipMechanism.ProxyObservable,
+      ),
+  },
+  {
+    calleeName: "enterConnectable",
+    classify: () =>
+      computedObserverSite(
+        FrameworkObservationFlowSiteKind.ComputedObserverConnectableEnter,
+        "enterConnectable",
+        FrameworkRelationshipRelation.CollectsDependency,
+      ),
+  },
+  {
+    calleeName: "exitConnectable",
+    classify: () =>
+      computedObserverSite(
+        FrameworkObservationFlowSiteKind.ComputedObserverConnectableExit,
+        "exitConnectable",
+        FrameworkRelationshipRelation.CollectsDependency,
+      ),
+  },
+  {
+    calleeName: "call",
+    receiverText: "this.$get",
+    classify: () =>
+      computedObserverSite(
+        FrameworkObservationFlowSiteKind.ComputedObserverGetterInvoke,
+        "ComputedGetterFn",
+        FrameworkRelationshipRelation.EvaluatesExpression,
+        FrameworkRelationshipMechanism.Connectable,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    calleeName: "call",
+    receiverText: "this.$set",
+    classify: () =>
+      computedObserverSite(
+        FrameworkObservationFlowSiteKind.ComputedObserverSetterInvoke,
+        "computed setter",
+        FrameworkRelationshipRelation.InvokesCallback,
+        FrameworkRelationshipMechanism.Connectable,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeName: ["clear", "clearAll"],
+    receiverText: "this.obs",
+    classify: ({ calleeName }) =>
+      computedObserverSite(
+        FrameworkObservationFlowSiteKind.ComputedObserverDependencyClear,
+        `computed observer record ${calleeName}`,
+        FrameworkRelationshipRelation.CollectsDependency,
+      ),
+  },
+  {
+    calleeName: "queueTask",
+    classify: () =>
+      computedObserverSite(
+        FrameworkObservationFlowSiteKind.ComputedObserverQueue,
+        "queueTask",
+        FrameworkRelationshipRelation.SchedulesEffect,
+      ),
+  },
+  {
+    calleeName: ["notify", "notifyDirty"],
+    receiverText: "this.subs",
+    classify: ({ calleeName }) =>
+      computedObserverSite(
+        FrameworkObservationFlowSiteKind.ComputedObserverNotify,
+        `computed observer subscribers ${calleeName}`,
+        FrameworkRelationshipRelation.InvokesCallback,
+      ),
+  },
+];
+
+const controlledComputedObserverCallClassifications: readonly ObservationCallClassification[] = [
+  {
+    calleeName: "isString",
+    callTextIncludes: "dep",
+    classify: () =>
+      controlledComputedObserverSite(
+        FrameworkObservationFlowSiteKind.ControlledComputedDependencyBranch,
+        "controlled computed dependency kind",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeName: "getExpressionObserver",
+    classify: ({ receiverText }) =>
+      controlledComputedObserverSite(
+        FrameworkObservationFlowSiteKind.ControlledComputedExpressionDependency,
+        observerLocatorApiTarget(receiverText, "getExpressionObserver"),
+        FrameworkRelationshipRelation.LooksUpObserver,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    calleeName: "getObserver",
+    callTextIncludes: "requestor.getObserver",
+    classify: () =>
+      controlledComputedObserverSite(
+        FrameworkObservationFlowSiteKind.ControlledComputedDeepObserver,
+        "IObserverLocator.getObserver function-key deep observer",
+        FrameworkRelationshipRelation.LooksUpObserver,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    calleeName: "getObserver",
+    classify: ({ receiverText }) =>
+      controlledComputedObserverSite(
+        FrameworkObservationFlowSiteKind.ControlledComputedObserverDependency,
+        observerLocatorApiTarget(receiverText, "getObserver"),
+        FrameworkRelationshipRelation.LooksUpObserver,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    calleeName: "observeDeep",
+    classify: () =>
+      controlledComputedObserverSite(
+        FrameworkObservationFlowSiteKind.ControlledComputedDeepObserver,
+        "observeDeep",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeName: "observe",
+    receiverText: "connectable",
+    classify: () =>
+      controlledComputedObserverSite(
+        FrameworkObservationFlowSiteKind.ControlledComputedDeepPropertyDependency,
+        "deep object property dependency",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeName: "observeCollection",
+    receiverText: "connectable",
+    classify: () =>
+      controlledComputedObserverSite(
+        FrameworkObservationFlowSiteKind.ControlledComputedDeepCollectionDependency,
+        "deep collection dependency",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeName: "unwrap",
+    classify: () =>
+      controlledComputedObserverSite(
+        FrameworkObservationFlowSiteKind.ControlledComputedProxyUnwrap,
+        "ProxyObservable.unwrap",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+        FrameworkRelationshipEndpointKind.Concept,
+        FrameworkRelationshipMechanism.ProxyObservable,
+      ),
+  },
+  {
+    calleeName: "call",
+    receiverText: "this.getter",
+    classify: () =>
+      controlledComputedObserverSite(
+        FrameworkObservationFlowSiteKind.ControlledComputedGetterInvoke,
+        "controlled computed getter",
+        FrameworkRelationshipRelation.EvaluatesExpression,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    calleeName: "subscribe",
+    classify: ({ receiverText }) =>
+      controlledComputedObserverSite(
+        FrameworkObservationFlowSiteKind.ControlledComputedSubscribe,
+        receiverText === null ? "observer.subscribe" : `${receiverText}.subscribe`,
+        FrameworkRelationshipRelation.ConfiguresObservation,
+      ),
+  },
+  {
+    calleeName: "unsubscribe",
+    classify: ({ receiverText }) =>
+      controlledComputedObserverSite(
+        FrameworkObservationFlowSiteKind.ControlledComputedUnsubscribe,
+        receiverText === null ? "observer.unsubscribe" : `${receiverText}.unsubscribe`,
+        FrameworkRelationshipRelation.ConfiguresObservation,
+      ),
+  },
+  {
+    calleeName: "useFlush",
+    classify: ({ receiverText }) =>
+      controlledComputedObserverSite(
+        FrameworkObservationFlowSiteKind.ControlledComputedSubscribe,
+        receiverText === null ? "observer.useFlush" : `${receiverText}.useFlush`,
+        FrameworkRelationshipRelation.ConfiguresObservation,
+      ),
+  },
+  {
+    calleeName: "queueTask",
+    classify: () =>
+      controlledComputedObserverSite(
+        FrameworkObservationFlowSiteKind.ControlledComputedQueue,
+        "queueTask",
+        FrameworkRelationshipRelation.SchedulesEffect,
+      ),
+  },
+  {
+    calleeName: "notify",
+    receiverText: "this.subs",
+    classify: () =>
+      controlledComputedObserverSite(
+        FrameworkObservationFlowSiteKind.ControlledComputedNotify,
+        "controlled computed subscribers",
+        FrameworkRelationshipRelation.InvokesCallback,
+      ),
+  },
+  {
+    calleeName: "call",
+    receiverText: "this._callback",
+    classify: () =>
+      controlledComputedObserverSite(
+        FrameworkObservationFlowSiteKind.ControlledComputedNotify,
+        "controlled computed callback",
+        FrameworkRelationshipRelation.InvokesCallback,
+      ),
+  },
+];
+
+const computedDecoratorCallClassifications: readonly ObservationCallClassification[] = [
+  {
+    calleeName: "getComputedObserver",
+    classify: ({ receiverText }) =>
+      computedDecoratorSite(
+        FrameworkObservationFlowSiteKind.ComputedDecoratorGetterObserver,
+        observerLocatorApiTarget(receiverText, "getComputedObserver"),
+        FrameworkRelationshipRelation.ConfiguresObservation,
+      ),
+  },
+  {
+    calleeName: "rtObjectAssign",
+    callTextIncludes: "astTrackableMethodMarker",
+    classify: () =>
+      computedDecoratorSite(
+        FrameworkObservationFlowSiteKind.ComputedDecoratorTrackableMethod,
+        "astTrackableMethodMarker",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+      ),
+  },
+];
+
+const nodeObserverCallClassifications: readonly ObservationCallClassification[] = [
+  {
+    calleeName: "subscribe",
+    classify: ({ receiverText }) =>
+      nodeSite(
+        FrameworkObservationFlowSiteKind.NodeObserverSubscribe,
+        receiverText === null ? "observer.subscribe" : `${receiverText}.subscribe`,
+        FrameworkRelationshipRelation.ConfiguresObservation,
+      ),
+  },
+  {
+    calleeName: "unsubscribe",
+    classify: ({ receiverText }) =>
+      nodeSite(
+        FrameworkObservationFlowSiteKind.NodeObserverUnsubscribe,
+        receiverText === null ? "observer.unsubscribe" : `${receiverText}.unsubscribe`,
+        FrameworkRelationshipRelation.ConfiguresObservation,
+      ),
+  },
+  {
+    calleeName: "notify",
+    receiverText: "this.subs",
+    classify: ({ executable }) =>
+      nodeSite(
+        FrameworkObservationFlowSiteKind.NodeObserverNotify,
+        `${executable.ownerName} subscribers`,
+        FrameworkRelationshipRelation.InvokesCallback,
+      ),
+  },
+  {
+    calleeName: [
+      "_synchronizeElement",
+      "syncOptions",
+      "syncValue",
+      "_flush",
+      "_flushChanges",
+    ],
+    classify: ({ executable, calleeName }) =>
+      nodeSite(
+        FrameworkObservationFlowSiteKind.NodeObserverValueSync,
+        `${executable.ownerName}.${calleeName}`,
+        FrameworkRelationshipRelation.ConfiguresObservation,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeName: ["_observe", "_observeArray"],
+    classify: ({ executable, calleeName }) =>
+      nodeSite(
+        FrameworkObservationFlowSiteKind.NodeObserverCollectionSync,
+        `${executable.ownerName}.${calleeName}`,
+        FrameworkRelationshipRelation.ConfiguresObservation,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeName: "createMutationObserver",
+    classify: () =>
+      nodeSite(
+        FrameworkObservationFlowSiteKind.NodeObserverDomMutationObserver,
+        "createMutationObserver",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeName: "createMappedError",
+    classify: () =>
+      nodeSite(
+        FrameworkObservationFlowSiteKind.NodeObserverDiagnostic,
+        "node observer mapped error",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+];
+
+const astEvaluatorCallClassifications: readonly ObservationCallClassification[] = [
+  {
+    calleeName: "observeCollection",
+    receiverText: "c",
+    classify: () =>
+      connectableSite(
+        FrameworkObservationFlowSiteKind.ExpressionCollectionDependency,
+        "CallMember array mutation -> IConnectable.observeCollection",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    calleeName: "astEvaluate",
+    callTextIncludes: "ast.body, functionScope, e, c",
+    classify: () =>
+      connectableSite(
+        FrameworkObservationFlowSiteKind.ExpressionCallbackBodyEvaluation,
+        "ArrowFunction callback body astEvaluate with captured connectable",
+        FrameworkRelationshipRelation.EvaluatesExpression,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    calleeName: "observeTrackableMethodDependencies",
+    classify: () =>
+      connectableSite(
+        FrameworkObservationFlowSiteKind.ExpressionTrackableDependency,
+        "@astTrack method dependencies",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    calleeName: "observeExpression",
+    receiverText: "connectable",
+    classify: () =>
+      connectableSite(
+        FrameworkObservationFlowSiteKind.ExpressionTrackableDependency,
+        "@astTrack string dependency -> IConnectable.observeExpression",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Expression,
+      ),
+  },
+  {
+    calleeName: "wrap",
+    classify: () =>
+      proxySite(
+        FrameworkObservationFlowSiteKind.ExpressionTrackableProxyWrap,
+        "ProxyObservable.wrap for @astTrack dependency evaluation",
+        FrameworkRelationshipRelation.ConfiguresObservation,
+      ),
+  },
+  {
+    calleeName: "enterConnectable",
+    classify: () =>
+      connectableSite(
+        FrameworkObservationFlowSiteKind.ExpressionConnectableEnter,
+        "ConnectableSwitcher.enter",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+  {
+    calleeName: "exitConnectable",
+    classify: () =>
+      connectableSite(
+        FrameworkObservationFlowSiteKind.ExpressionConnectableExit,
+        "ConnectableSwitcher.exit",
+        FrameworkRelationshipRelation.CollectsDependency,
+        FrameworkRelationshipEndpointKind.Concept,
+      ),
+  },
+];
+
 const watcherCallClassifications: readonly ObservationCallClassification[] = [
   {
     surfaceKind: FrameworkObservationSurfaceKind.WatchRegistry,
@@ -1275,9 +1754,16 @@ const observationClassSurfaces = new Map<
   ["ObserverLocator", FrameworkObservationSurfaceKind.ObserverLocator],
   ["DefaultNodeObserverLocator", FrameworkObservationSurfaceKind.NodeObserverLocator],
   ["NodeObserverLocator", FrameworkObservationSurfaceKind.NodeObserverLocator],
+  ["CheckedObserver", FrameworkObservationSurfaceKind.CheckedObserver],
+  ["SelectValueObserver", FrameworkObservationSurfaceKind.SelectValueObserver],
+  ["ValueAttributeObserver", FrameworkObservationSurfaceKind.ValueAttributeObserver],
+  ["DataAttributeAccessor", FrameworkObservationSurfaceKind.DataAttributeAccessor],
+  ["AttributeNSAccessor", FrameworkObservationSurfaceKind.AttributeNSAccessor],
   ["DirtyChecker", FrameworkObservationSurfaceKind.DirtyChecker],
   ["DirtyCheckProperty", FrameworkObservationSurfaceKind.DirtyCheckProperty],
   ["BindingObserverRecord", FrameworkObservationSurfaceKind.ConnectableRecord],
+  ["ComputedObserver", FrameworkObservationSurfaceKind.ComputedObserver],
+  ["ControlledComputedObserver", FrameworkObservationSurfaceKind.ControlledComputedObserver],
   ["WatchDefinition", FrameworkObservationSurfaceKind.WatchDefinition],
   ["ComputedWatcher", FrameworkObservationSurfaceKind.Watcher],
   ["ExpressionWatcher", FrameworkObservationSurfaceKind.Watcher],
@@ -1305,6 +1791,7 @@ const observationFunctionSurfaces = new Map<
   ["getObserverRecord", FrameworkObservationSurfaceKind.ConnectableHelper],
   ["unsubscribeAll", FrameworkObservationSurfaceKind.ConnectableHelper],
   ["unsubscribeStale", FrameworkObservationSurfaceKind.ConnectableHelper],
+  ["computed", FrameworkObservationSurfaceKind.ComputedDecorator],
   ["watch", FrameworkObservationSurfaceKind.WatchDecorator],
   ["addDefinition", FrameworkObservationSurfaceKind.WatchDecorator],
   ["createWatchers", FrameworkObservationSurfaceKind.WatcherSetup],
@@ -1317,6 +1804,8 @@ function observationFunctionSurfaceKind(
   if (
     file.repoPath.endsWith("runtime/src/ast.eval.ts") &&
     (functionName === "astEvaluate" ||
+      functionName === "astBind" ||
+      functionName === "astUnbind" ||
       functionName === "observeTrackableMethodDependencies")
   ) {
     return FrameworkObservationSurfaceKind.AstEvaluator;
@@ -1329,6 +1818,12 @@ function observationFunctionSurfaceKind(
     file.repoPath.endsWith("runtime-html/src/watch.ts")
   ) {
     return FrameworkObservationSurfaceKind.WatchDecorator;
+  }
+  if (
+    file.repoPath.endsWith("runtime/src/controlled-computed-observer.ts") &&
+    (functionName === "observeDeep" || functionName === "walk")
+  ) {
+    return FrameworkObservationSurfaceKind.ControlledComputedObserver;
   }
   return observationFunctionSurfaces.get(functionName);
 }
@@ -1828,6 +2323,11 @@ function ownerNameForFunction(file: SourceFileIdentity, functionName: string): s
   if (file.repoPath.endsWith("runtime/src/connectable.ts")) {
     return "connectable";
   }
+  if (file.repoPath.endsWith("runtime/src/controlled-computed-observer.ts")) {
+    return functionName === "walk"
+      ? "ControlledComputedObserver.observeDeep"
+      : "ControlledComputedObserver";
+  }
   if (functionName === "getCollectionObserver") {
     return "module";
   }
@@ -1882,7 +2382,11 @@ function flowSitesForExecutable(
 ): readonly FrameworkObservationFlowSiteRow[] {
   const rows: FrameworkObservationFlowSiteRow[] = [];
   const visit = (node: ts.Node): void => {
-    if (node !== executable.body && isNestedExecutionBoundary(node)) {
+    if (
+      node !== executable.body &&
+      isNestedExecutionBoundary(node) &&
+      !shouldTraverseNestedObservationFlow(executable, node)
+    ) {
       return;
     }
     if (ts.isCallExpression(node) || ts.isNewExpression(node)) {
@@ -1903,10 +2407,82 @@ function flowSitesForExecutable(
         rows.push(row);
       }
     }
+    if (ts.isTypeReferenceNode(node)) {
+      const row = flowSiteForTypeReference(executable, node);
+      if (row !== null) {
+        rows.push(row);
+      }
+    }
     ts.forEachChild(node, visit);
   };
   visit(executable.body);
   return rows;
+}
+
+function shouldTraverseNestedObservationFlow(
+  executable: ObservationExecutable,
+  node: ts.Node,
+): boolean {
+  if (isAstEvaluateArrowFunctionRuntimeCallback(executable, node)) {
+    return true;
+  }
+  if (isAstBindBindingBehaviorArgumentMap(executable, node)) {
+    return true;
+  }
+  if (executable.surfaceKind === FrameworkObservationSurfaceKind.ComputedDecorator) {
+    return true;
+  }
+  if (
+    executable.surfaceKind !== FrameworkObservationSurfaceKind.ControlledComputedObserver ||
+    executable.ownerName !== "ControlledComputedObserver" ||
+    executable.methodName !== "_observe"
+  ) {
+    return false;
+  }
+  if (!ts.isArrowFunction(node) && !ts.isFunctionExpression(node)) {
+    return false;
+  }
+  const parent = node.parent;
+  if (!ts.isCallExpression(parent) || !parent.arguments.includes(node as ts.Expression)) {
+    return false;
+  }
+  const expression = unwrapExpression(parent.expression);
+  return (
+    ts.isPropertyAccessExpression(expression) &&
+    expression.name.text === "forEach" &&
+    expression.expression.getText(executable.sourceFile) === "this.dependencies"
+  );
+}
+
+function isAstEvaluateArrowFunctionRuntimeCallback(
+  executable: ObservationExecutable,
+  node: ts.Node,
+): boolean {
+  if (
+    executable.surfaceKind !== FrameworkObservationSurfaceKind.AstEvaluator ||
+    executable.methodName !== "astEvaluate" ||
+    !ts.isArrowFunction(node)
+  ) {
+    return false;
+  }
+  return enclosingCaseLabelText(node, executable.sourceFile) === "ekArrowFunction";
+}
+
+function isAstBindBindingBehaviorArgumentMap(
+  executable: ObservationExecutable,
+  node: ts.Node,
+): boolean {
+  if (
+    executable.surfaceKind !== FrameworkObservationSurfaceKind.AstEvaluator ||
+    executable.methodName !== "astBind" ||
+    (!ts.isArrowFunction(node) && !ts.isFunctionExpression(node))
+  ) {
+    return false;
+  }
+  return (
+    isAstArgsMapCallback(node, executable.sourceFile) &&
+    enclosingCaseLabelText(node.parent, executable.sourceFile) === "ekBindingBehavior"
+  );
 }
 
 function flowSiteForCallLike(
@@ -1987,6 +2563,26 @@ function flowSiteForPropertyAccess(
   );
 }
 
+function flowSiteForTypeReference(
+  executable: ObservationExecutable,
+  node: ts.TypeReferenceNode,
+): FrameworkObservationFlowSiteRow | null {
+  const classification = classifyTypeReference(executable, node);
+  if (classification === null) {
+    return null;
+  }
+  return flowSiteRow(
+    executable,
+    classification,
+    node.getText(executable.sourceFile),
+    sourceRangeForSourceFileNode(
+      executable.file.repoPath,
+      executable.sourceFile,
+      node,
+    ),
+  );
+}
+
 function flowSiteRow(
   executable: ObservationExecutable,
   classification: SiteClassification,
@@ -2052,6 +2648,19 @@ function classifyCallLike(
   if (proxyClassification !== null) {
     return proxyClassification;
   }
+  const computedObserverClassification = classifyComputedObserverCall(context);
+  if (computedObserverClassification !== null) {
+    return computedObserverClassification;
+  }
+  const controlledComputedObserverClassification =
+    classifyControlledComputedObserverCall(context);
+  if (controlledComputedObserverClassification !== null) {
+    return controlledComputedObserverClassification;
+  }
+  const computedDecoratorClassification = classifyComputedDecoratorCall(context);
+  if (computedDecoratorClassification !== null) {
+    return computedDecoratorClassification;
+  }
   const watchClassification = classifyWatcherCall(context);
   if (watchClassification !== null) {
     return watchClassification;
@@ -2059,6 +2668,10 @@ function classifyCallLike(
   const effectClassification = classifyEffectCall(context);
   if (effectClassification !== null) {
     return effectClassification;
+  }
+  const nodeObserverClassification = classifyNodeObserverCall(context);
+  if (nodeObserverClassification !== null) {
+    return nodeObserverClassification;
   }
 
   const preCollectionClassification = classifyObservationCall(
@@ -2143,12 +2756,32 @@ function observerLocatorApiTarget(
   if (
     receiverText !== null &&
     (receiverText === "this.oL" ||
+      receiverText === "requestor" ||
       receiverText.endsWith(".oL") ||
       receiverText.toLowerCase().includes("observerlocator"))
   ) {
     return `IObserverLocator.${methodName}`;
   }
   return receiverText === null ? methodName : `${receiverText}.${methodName}`;
+}
+
+function classifyNodeObserverCall(
+  context: ObservationCallContext,
+): SiteClassification | null {
+  if (!isRuntimeHtmlNodeObserverSurface(context.executable.surfaceKind)) {
+    return null;
+  }
+  return classifyObservationCall(nodeObserverCallClassifications, context);
+}
+
+function isRuntimeHtmlNodeObserverSurface(
+  surfaceKind: FrameworkObservationSurfaceKind,
+): boolean {
+  return surfaceKind === FrameworkObservationSurfaceKind.CheckedObserver ||
+    surfaceKind === FrameworkObservationSurfaceKind.SelectValueObserver ||
+    surfaceKind === FrameworkObservationSurfaceKind.ValueAttributeObserver ||
+    surfaceKind === FrameworkObservationSurfaceKind.DataAttributeAccessor ||
+    surfaceKind === FrameworkObservationSurfaceKind.AttributeNSAccessor;
 }
 
 function classifyWatcherCall(
@@ -2166,63 +2799,122 @@ function classifyProxyCall(
   return classifyObservationCall(proxyCallClassifications, context);
 }
 
+function classifyComputedObserverCall(
+  context: ObservationCallContext,
+): SiteClassification | null {
+  if (context.executable.surfaceKind !== FrameworkObservationSurfaceKind.ComputedObserver) {
+    return null;
+  }
+  return classifyObservationCall(computedObserverCallClassifications, context);
+}
+
+function classifyControlledComputedObserverCall(
+  context: ObservationCallContext,
+): SiteClassification | null {
+  if (context.executable.surfaceKind !== FrameworkObservationSurfaceKind.ControlledComputedObserver) {
+    return null;
+  }
+  return classifyObservationCall(
+    controlledComputedObserverCallClassifications,
+    context,
+  );
+}
+
+function classifyComputedDecoratorCall(
+  context: ObservationCallContext,
+): SiteClassification | null {
+  if (context.executable.surfaceKind !== FrameworkObservationSurfaceKind.ComputedDecorator) {
+    return null;
+  }
+  return classifyObservationCall(computedDecoratorCallClassifications, context);
+}
+
+function classifyTypeReference(
+  executable: ObservationExecutable,
+  node: ts.TypeReferenceNode,
+): SiteClassification | null {
+  if (executable.surfaceKind !== FrameworkObservationSurfaceKind.ComputedDecorator) {
+    return null;
+  }
+  const typeName = typeReferenceName(node);
+  if (typeName === "ComputedPropertyInfo") {
+    return computedDecoratorSite(
+      FrameworkObservationFlowSiteKind.ComputedDecoratorPropertyInfo,
+      typeName,
+      FrameworkRelationshipRelation.ConfiguresObservation,
+    );
+  }
+  if (typeName === "ComputedMethodOptions") {
+    return computedDecoratorSite(
+      FrameworkObservationFlowSiteKind.ComputedDecoratorMethodOptions,
+      typeName,
+      FrameworkRelationshipRelation.ConfiguresObservation,
+    );
+  }
+  return null;
+}
+
+function typeReferenceName(node: ts.TypeReferenceNode): string {
+  const name = node.typeName;
+  return ts.isIdentifier(name) ? name.text : name.right.text;
+}
+
 function classifyAstEvaluatorCall(
   context: ObservationCallContext,
 ): SiteClassification | null {
   if (context.executable.surfaceKind !== FrameworkObservationSurfaceKind.AstEvaluator) {
     return null;
   }
+  const bindPhaseSite = astEvaluatorBindPhaseSite(context);
+  if (bindPhaseSite !== null) {
+    return bindPhaseSite;
+  }
   const accessDependency = astEvaluatorAccessDependencySite(context);
   if (accessDependency !== null) {
     return accessDependency;
   }
-  switch (context.calleeName) {
-    case "observeCollection":
-      if (context.receiverText === "c") {
-        return connectableSite(
-          FrameworkObservationFlowSiteKind.ExpressionCollectionDependency,
-          "CallMember array mutation -> IConnectable.observeCollection",
-          FrameworkRelationshipRelation.CollectsDependency,
-          FrameworkRelationshipEndpointKind.Expression,
-        );
-      }
-      return null;
-    case "observeTrackableMethodDependencies":
-      return connectableSite(
-        FrameworkObservationFlowSiteKind.ExpressionTrackableDependency,
-        "@astTrack method dependencies",
-        FrameworkRelationshipRelation.CollectsDependency,
+  return classifyObservationCall(astEvaluatorCallClassifications, context);
+}
+
+function astEvaluatorBindPhaseSite(
+  context: ObservationCallContext,
+): SiteClassification | null {
+  if (context.executable.methodName !== "astBind") {
+    return null;
+  }
+  const caseLabel = enclosingCaseLabelTextAllowingAstArgsMapCallback(
+    context.node,
+    context.sourceFile,
+  );
+  if (
+    context.calleeName === "astEvaluate" &&
+    caseLabel === "ekBindingBehavior" &&
+    context.callText.includes(", null)")
+  ) {
+    return bindingLifecycleSite(
+      FrameworkObservationFlowSiteKind.BindingBehaviorBindArgumentEvaluation,
+      "BindingBehavior argument astEvaluate with no active connectable",
+      FrameworkRelationshipRelation.EvaluatesExpression,
+      FrameworkRelationshipEndpointKind.Expression,
+    );
+  }
+  if (context.calleeName !== "astBind") {
+    return null;
+  }
+  switch (caseLabel) {
+    case "ekBindingBehavior":
+      return bindingLifecycleSite(
+        FrameworkObservationFlowSiteKind.BindingBehaviorBindExpressionHandoff,
+        "BindingBehavior inner expression astBind handoff",
+        FrameworkRelationshipRelation.ConfiguresObservation,
         FrameworkRelationshipEndpointKind.Expression,
       );
-    case "observeExpression":
-      if (context.receiverText === "connectable") {
-        return connectableSite(
-          FrameworkObservationFlowSiteKind.ExpressionTrackableDependency,
-          "@astTrack string dependency -> IConnectable.observeExpression",
-          FrameworkRelationshipRelation.CollectsDependency,
-          FrameworkRelationshipEndpointKind.Expression,
-        );
-      }
-      return null;
-    case "wrap":
-      return proxySite(
-        FrameworkObservationFlowSiteKind.ExpressionTrackableProxyWrap,
-        "ProxyObservable.wrap for @astTrack dependency evaluation",
+    case "ekValueConverter":
+      return bindingLifecycleSite(
+        FrameworkObservationFlowSiteKind.ValueConverterBindExpressionHandoff,
+        "ValueConverter inner expression astBind handoff",
         FrameworkRelationshipRelation.ConfiguresObservation,
-      );
-    case "enterConnectable":
-      return connectableSite(
-        FrameworkObservationFlowSiteKind.ExpressionConnectableEnter,
-        "ConnectableSwitcher.enter",
-        FrameworkRelationshipRelation.CollectsDependency,
-        FrameworkRelationshipEndpointKind.Concept,
-      );
-    case "exitConnectable":
-      return connectableSite(
-        FrameworkObservationFlowSiteKind.ExpressionConnectableExit,
-        "ConnectableSwitcher.exit",
-        FrameworkRelationshipRelation.CollectsDependency,
-        FrameworkRelationshipEndpointKind.Concept,
+        FrameworkRelationshipEndpointKind.Expression,
       );
     default:
       return null;
@@ -2284,6 +2976,56 @@ function enclosingCaseLabelText(
     current = current.parent;
   }
   return null;
+}
+
+function enclosingCaseLabelTextAllowingAstArgsMapCallback(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+): string | null {
+  let current: ts.Node | undefined = node.parent;
+  while (current !== undefined) {
+    if (ts.isCaseClause(current)) {
+      return current.expression.getText(sourceFile);
+    }
+    if (
+      ts.isArrowFunction(current) ||
+      ts.isFunctionExpression(current)
+    ) {
+      if (isAstArgsMapCallback(current, sourceFile)) {
+        current = current.parent;
+        continue;
+      }
+      return null;
+    }
+    if (
+      ts.isFunctionDeclaration(current) ||
+      ts.isMethodDeclaration(current) ||
+      ts.isConstructorDeclaration(current)
+    ) {
+      return null;
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
+function isAstArgsMapCallback(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+): boolean {
+  if (!ts.isArrowFunction(node) && !ts.isFunctionExpression(node)) {
+    return false;
+  }
+  const parent = node.parent;
+  if (!ts.isCallExpression(parent) || !parent.arguments.includes(node as ts.Expression)) {
+    return false;
+  }
+  const expression = unwrapExpression(parent.expression);
+  return (
+    ts.isPropertyAccessExpression(expression) &&
+    expression.name.text === "map" &&
+    expression.expression.getText(sourceFile) === "ast.args"
+  );
 }
 
 function classifyEffectCall(
@@ -2527,6 +3269,21 @@ function connectableSite(
   );
 }
 
+function bindingLifecycleSite(
+  siteKind: FrameworkObservationFlowSiteKind,
+  targetName: string,
+  relation: FrameworkRelationshipRelation,
+  targetKind: FrameworkRelationshipEndpointKind = FrameworkRelationshipEndpointKind.Concept,
+): SiteClassification {
+  return lookupSite(
+    siteKind,
+    FrameworkRelationshipMechanism.BindingLifecycle,
+    targetName,
+    relation,
+    targetKind,
+  );
+}
+
 function proxySite(
   siteKind: FrameworkObservationFlowSiteKind,
   targetName: string,
@@ -2536,6 +3293,41 @@ function proxySite(
   return lookupSite(
     siteKind,
     FrameworkRelationshipMechanism.ProxyObservable,
+    targetName,
+    relation,
+    targetKind,
+  );
+}
+
+function computedObserverSite(
+  siteKind: FrameworkObservationFlowSiteKind,
+  targetName: string,
+  relation: FrameworkRelationshipRelation,
+  mechanism: FrameworkRelationshipMechanism = FrameworkRelationshipMechanism.Connectable,
+  targetKind: FrameworkRelationshipEndpointKind = FrameworkRelationshipEndpointKind.Concept,
+): SiteClassification {
+  return lookupSite(siteKind, mechanism, targetName, relation, targetKind);
+}
+
+function controlledComputedObserverSite(
+  siteKind: FrameworkObservationFlowSiteKind,
+  targetName: string,
+  relation: FrameworkRelationshipRelation,
+  targetKind: FrameworkRelationshipEndpointKind = FrameworkRelationshipEndpointKind.Concept,
+  mechanism: FrameworkRelationshipMechanism = FrameworkRelationshipMechanism.ObserverLocator,
+): SiteClassification {
+  return lookupSite(siteKind, mechanism, targetName, relation, targetKind);
+}
+
+function computedDecoratorSite(
+  siteKind: FrameworkObservationFlowSiteKind,
+  targetName: string,
+  relation: FrameworkRelationshipRelation,
+  targetKind: FrameworkRelationshipEndpointKind = FrameworkRelationshipEndpointKind.Symbol,
+): SiteClassification {
+  return lookupSite(
+    siteKind,
+    FrameworkRelationshipMechanism.ComputedDecorator,
     targetName,
     relation,
     targetKind,
@@ -2892,16 +3684,15 @@ function observationSurfaceMethodMatches(
       row.surfaceKind === filters.surfaceKind) &&
     (filters.methodName === undefined ||
       row.methodName === filters.methodName) &&
-    (filters.query === undefined ||
-      [
-        row.packageId,
-        row.surfaceKind,
-        row.ownerName,
-        row.methodName,
-        ...row.parameterNames,
-        ...row.parameterTypes.filter((type): type is string => type !== null),
-        row.declaredReturnType ?? "",
-      ].some((value) => value.includes(filters.query!)))
+    queryMatches(filters.query, [
+      row.packageId,
+      row.surfaceKind,
+      row.ownerName,
+      row.methodName,
+      ...row.parameterNames,
+      ...row.parameterTypes.filter((type): type is string => type !== null),
+      row.declaredReturnType ?? "",
+    ])
   );
 }
 
@@ -2922,17 +3713,16 @@ function observationFlowSiteMatches(
     (filters.mechanism === undefined ||
       row.mechanism === filters.mechanism) &&
     (filters.phase === undefined || row.phase === filters.phase) &&
-    (filters.query === undefined ||
-      [
-        row.packageId,
-        row.surfaceKind,
-        row.siteKind,
-        row.ownerName,
-        row.methodName,
-        row.targetName,
-        row.expressionText,
-        row.summary,
-      ].some((value) => value.includes(filters.query!)))
+    queryMatches(filters.query, [
+      row.packageId,
+      row.surfaceKind,
+      row.siteKind,
+      row.ownerName,
+      row.methodName,
+      row.targetName,
+      row.expressionText,
+      row.summary,
+    ])
   );
 }
 
@@ -2954,21 +3744,20 @@ function observationRelationshipMatches(
     (filters.targetName === undefined ||
       row.targetName === filters.targetName ||
       row.to.name === filters.targetName) &&
-    (filters.query === undefined ||
-      [
-        row.packageId,
-        row.surfaceKind,
-        row.siteKind,
-        row.ownerName,
-        row.methodName,
-        row.relation,
-        row.mechanism,
-        row.phase,
-        row.targetName,
-        row.from.name,
-        row.to.name,
-        row.summary,
-      ].some((value) => value.includes(filters.query!)))
+    queryMatches(filters.query, [
+      row.packageId,
+      row.surfaceKind,
+      row.siteKind,
+      row.ownerName,
+      row.methodName,
+      row.relation,
+      row.mechanism,
+      row.phase,
+      row.targetName,
+      row.from.name,
+      row.to.name,
+      row.summary,
+    ])
   );
 }
 
@@ -2994,20 +3783,19 @@ function observationFlowEntityLinkMatches(
       row.entityObserverKinds.includes(filters.observerKind)) &&
     (filters.observerCapability === undefined ||
       row.entityObserverCapabilities.includes(filters.observerCapability)) &&
-    (filters.query === undefined ||
-      [
-        row.packageId,
-        row.surfaceKind,
-        row.siteKind,
-        row.ownerName,
-        row.methodName,
-        row.targetName,
-        row.matchBasis,
-        row.entityPackageId,
-        row.entityExportName,
-        row.entityResolvedName,
-        row.summary,
-      ].some((value) => value.includes(filters.query!)))
+    queryMatches(filters.query, [
+      row.packageId,
+      row.surfaceKind,
+      row.siteKind,
+      row.ownerName,
+      row.methodName,
+      row.targetName,
+      row.matchBasis,
+      row.entityPackageId,
+      row.entityExportName,
+      row.entityResolvedName,
+      row.summary,
+    ])
   );
 }
 

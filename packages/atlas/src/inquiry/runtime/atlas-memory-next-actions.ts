@@ -26,6 +26,7 @@ export interface AtlasMemoryNextActionRow {
     | "inspect-untracked-frontier"
     | "continue-live-frontier"
     | "consult-live-frontier"
+    | "consult-memory-record"
     | "consult-intentional-shape"
     | "consult-reuse-guide";
   /** Stable row id. */
@@ -81,6 +82,23 @@ export function atlasMemoryNextActionRows(
       .filter((row) => row.kind === "reuse-guide")
       .map(reuseGuideNextAction),
   ].sort(compareNextActions);
+}
+
+/** Turn an exact durable-memory lookup into a consultable next-action row. */
+export function atlasMemoryConsultRecordNextAction(
+  record: AtlasMemoryRecordRow,
+): AtlasMemoryNextActionRow {
+  return {
+    kind: "consult-memory-record",
+    id: `atlas.memory:next:record:${record.id}`,
+    rank: 3_250 + record.liveChecks.length,
+    status: record.status,
+    domains: record.domains,
+    summary: `Consult memory record ${record.id}: ${record.summary}`,
+    rationale:
+      "An exact memory record lookup matched durable guidance that is not global next-work; surface it as checkpoint context without promoting it to the unfiltered work queue.",
+    record,
+  };
 }
 
 function storageIssueNextAction(

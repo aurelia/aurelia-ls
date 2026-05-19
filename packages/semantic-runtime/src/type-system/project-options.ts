@@ -16,6 +16,16 @@ export function buildTypeSystemProjectOptions(rootDir: string): TypeSystemProjec
   );
 }
 
+export function buildWorkspaceTypeSystemProjectOptions(
+  rootDir: string,
+  workspaceRootDir: string,
+): TypeSystemProjectOptions {
+  return new TypeSystemProjectOptions(
+    buildProjectCompilerOptions(rootDir, [workspaceRootDir]),
+    [semanticRuntimeAmbientSourceFile(rootDir)],
+  );
+}
+
 function semanticRuntimeAmbientSourceFile(rootDir: string): ts.SourceFile {
   const fileName = path.join(rootDir, '.semantic-runtime', 'ambient.d.ts');
   return ts.createSourceFile(

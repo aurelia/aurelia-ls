@@ -72,11 +72,13 @@
         "fixtures",
         "topology"
       ],
-      "summary": "Direct template bindings to DI-injected state should remain visible as topology binding handoffs without requiring view-model forwarding getters.",
-      "rationale": "Idiomatic Aurelia can bind templates to ordinary DI-owned state objects. A getter that only shortens `state.member` adds boilerplate and should not be required for AppTopology or authoring verification to see service/state flow.",
+      "summary": "Direct template bindings to DI-injected state and domain objects should remain visible without requiring view-model forwarding getters.",
+      "rationale": "Idiomatic Aurelia can bind templates to ordinary DI-owned state and domain objects. A getter that only shortens `state.member` or forwards one domain property adds boilerplate and should not be required for AppTopology, observation, or authoring verification to see service/state flow.",
       "guidance": [
         "Prefer `state.member` template bindings over view-model getters when the getter only forwards to DI-owned state.",
-        "Keep getters/setters for real adaptation points: nullable object lookup, id-to-object projection, route/query projection, presentation state, validation policy, or service calls.",
+        "Keep getters/setters for real adaptation points: route/query projection, presentation state, validation policy, service calls, or domain behavior. Nullable id-to-object lookup can be a real adaptation boundary, but generated form recipes currently express that boundary as a template-local `<let request.bind=\"state.readRequest(requestId)\"></let>` plus `if.bind` narrowing so the component does not grow a forwarding getter.",
+        "ID-first boundaries and direct object bindings are both legitimate depending on the domain shape. Generated state-backed forms use a scalar ID at the component boundary, a template-local request object, and one object-valued `request.assignee` select with an app-authored matcher because the form model really owns that selected object.",
+        "Prefer domain-object getters for real domain behavior such as submit readiness. Generated form recipes model `ServiceRequest.canSubmit` as a plain accessor getter and bind to `request.canSubmit`/`canSubmit`; semantic-runtime should prove that through computed-observer-source rows and binding-observed-dependency rows instead of regenerating a view-model `canSubmit` alias.",
         "When a binding source root is an injected state/service/model member, AppTopology.serviceInteractionBindings should publish direct read/write handoff rows from the binding data-flow instead of requiring a component-member TypeScript body.",
         "Keep the direct handoff scope-backed: use the binding row's materialized BindingScope to prove that the root slot resolves to the injected component member source, so template locals named `state` do not become false service/state interactions.",
         "Ground ordinary `state.member` observability in Aurelia expression connectable reads. ProxyObservable feeds watcher/trackable/nested-collection reads into the same observation circuit, but it is not a reason to reintroduce forwarding getters."
@@ -105,6 +107,17 @@
           "summary": "Observation notes for ordinary template connectable reads and ProxyObservable as one integrated observation circuit."
         },
         {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/state-backed-form-source-plan.ts",
+          "symbolName": "stateBackedFormSourcePlan",
+          "summary": "Generated state-backed form recipe source plan using a ServiceRequest domain class and direct request.canSubmit template bindings."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/authoring/generated-state-backed-form",
+          "summary": "Generated authoring fixture that binds request fields and request.canSubmit directly without view-model forwarding getters."
+        },
+        {
           "kind": "fixture",
           "path": "packages/semantic-runtime/fixtures/authoring/storefront",
           "summary": "Hand-authored authoring fixture using direct nested checkout state bindings."
@@ -120,10 +133,14 @@
           "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
           "symbolName": "serviceInteractionOperationKindsForDataFlow"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/fixtures/authoring/generated-state-backed-form/src/state/app-state.ts"
         }
       ],
       "createdAt": "2026-05-18",
-      "updatedAt": "2026-05-18"
+      "updatedAt": "2026-05-19"
     }
   ]
 }

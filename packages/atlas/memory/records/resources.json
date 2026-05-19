@@ -273,7 +273,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-19"
     },
     {
       "id": "frontier:built-in-resource-catalog-materializer",
@@ -291,6 +291,7 @@
         "Start here when framework built-ins, configured resource catalogs, i18n/state/runtime-html/validation-html resource visibility, or built-in full definitions are involved.",
         "Keep catalog grouping and configured catalog selection distinct from per-resource publication and built-in full-definition construction.",
         "ValidationHtmlConfiguration admits a default validation-html catalog with ValidateBindingBehavior, ValidationErrorsCustomAttribute, and ValidationContainerCustomElement; option-sensitive subscriber toggles are still a future customization frontier.",
+        "Atlas resource convergence now sees nested framework definition calls such as CustomElement.define({ ...defaultContainerDefinition, template }, ValidationContainerCustomElement); use the convergence lens before assuming framework resources must be decorator/static-$au carriers.",
         "Use `framework:resources -- --projection=convergence` and framework.discovery bundle rows before assuming StandardConfiguration is the only source of built-in resource visibility."
       ],
       "anchors": [

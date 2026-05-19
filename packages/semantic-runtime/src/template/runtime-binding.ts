@@ -61,7 +61,7 @@ export const enum RuntimeBindingTargetAccessStrategy {
   CheckedObserver = 'checked-observer',
   SelectValueObserver = 'select-value-observer',
   ElementPropertyAccessor = 'element-property-accessor',
-  AttributeAccessor = 'attribute-accessor',
+  AttributeNSAccessor = 'attribute-ns-accessor',
   DataAttributeAccessor = 'data-attribute-accessor',
   ClassAttributeAccessor = 'class-attribute-accessor',
   StyleAttributeAccessor = 'style-attribute-accessor',

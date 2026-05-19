@@ -354,16 +354,22 @@ const ROOT_STYLE_SOURCE = sourceText(`main {
 const STATE_SOURCE = sourceText(`export type ContactPreference = 'email' | 'phone';
 export type RequestTopic = 'hardware' | 'billing' | 'support';
 
-export interface ServiceRequest {
-  id: string;
-  customerName: string;
-  email: string;
-  urgent: boolean;
-  contactPreference: ContactPreference;
-  primaryTopic: RequestTopic | null;
-  topics: RequestTopic[];
-  notes: string;
-  submitCount: number;
+export class ServiceRequest {
+  constructor(
+    readonly id: string,
+    public customerName: string,
+    public email: string,
+    public urgent: boolean,
+    public contactPreference: ContactPreference,
+    public primaryTopic: RequestTopic | null,
+    public topics: RequestTopic[],
+    public notes: string,
+    public submitCount: number,
+  ) {}
+
+  get canSubmit(): boolean {
+    return this.customerName !== '' && this.email !== '';
+  }
 }
 
 export class __STATE_CLASS__ {
@@ -380,10 +386,6 @@ export class __STATE_CLASS__ {
     ['request-1', createRequest('request-1', 'Ada Lovelace')],
     ['request-2', createRequest('request-2', 'Grace Hopper')],
   ]);
-
-  get selectedRequest(): ServiceRequest | null {
-    return this.readRequest(this.selectedRequestId);
-  }
 
   get submittedCount(): number {
     let count = 0;
@@ -406,17 +408,17 @@ export class __STATE_CLASS__ {
 }
 
 function createRequest(id: string, customerName: string): ServiceRequest {
-  return {
+  return new ServiceRequest(
     id,
     customerName,
-    email: \`\${customerName.toLowerCase().replace(' ', '.')}@example.test\`,
-    urgent: false,
-    contactPreference: 'email',
-    primaryTopic: null,
-    topics: ['support'],
-    notes: '',
-    submitCount: 0,
-  };
+    \`\${customerName.toLowerCase().replace(' ', '.')}@example.test\`,
+    false,
+    'email',
+    null,
+    ['support'],
+    '',
+    0,
+  );
 }
 `);
 
@@ -438,7 +440,7 @@ export class __ROUTE_COMPONENT_CLASS__ {
     __ROUTE_PARAMETER_NAME__: string;
     __ROUTE_QUERY_MODE_NAME__?: string;
     __ROUTE_QUERY_TAG_NAME__?: string | readonly string[];
-  }>({ includeQueryParams: true });
+  }, 'child-first'>({ includeQueryParams: true, mergeStrategy: 'child-first' });
 
   get requestId(): string {
     return this.routeParams.__ROUTE_PARAMETER_NAME__;
@@ -491,7 +493,7 @@ const SUMMARY_ROUTE_TEMPLATE_SOURCE = sourceText(`<aside>
 
 const FORM_COMPONENT_SOURCE = sourceText(`import { bindable, customElement } from '@aurelia/runtime-html';
 import { resolve } from '@aurelia/kernel';
-import { __STATE_CLASS__, type ContactPreference, type RequestTopic } from '__STATE_MODULE__';
+import { __STATE_CLASS__ } from '__STATE_MODULE__';
 import { __FIELD_SHELL_CLASS__ } from '__FIELD_SHELL_MODULE__';
 import template from '__FORM_TEMPLATE_MODULE__';
 
@@ -505,124 +507,48 @@ export class __FORM_COMPONENT_CLASS__ {
 
   @bindable requestId = '';
 
-  get customerName(): string {
-    return this.request?.customerName ?? '';
-  }
-
-  set customerName(value: string) {
-    const request = this.request;
-    if (request != null) {
-      request.customerName = value;
-    }
-  }
-
-  get email(): string {
-    return this.request?.email ?? '';
-  }
-
-  set email(value: string) {
-    const request = this.request;
-    if (request != null) {
-      request.email = value;
-    }
-  }
-
-  get urgent(): boolean {
-    return this.request?.urgent ?? false;
-  }
-
-  set urgent(value: boolean) {
-    const request = this.request;
-    if (request != null) {
-      request.urgent = value;
-    }
-  }
-
-  get contactPreference(): ContactPreference {
-    return this.request?.contactPreference ?? this.state.emailPreference;
-  }
-
-  set contactPreference(value: ContactPreference) {
-    const request = this.request;
-    if (request != null) {
-      request.contactPreference = value;
-    }
-  }
-
-  get primaryTopic(): RequestTopic | null {
-    return this.request?.primaryTopic ?? null;
-  }
-
-  set primaryTopic(value: RequestTopic | null) {
-    const request = this.request;
-    if (request != null) {
-      request.primaryTopic = value;
-    }
-  }
-
-  get topics(): RequestTopic[] {
-    return this.request?.topics ?? [];
-  }
-
-  get notes(): string {
-    return this.request?.notes ?? '';
-  }
-
-  set notes(value: string) {
-    const request = this.request;
-    if (request != null) {
-      request.notes = value;
-    }
-  }
-
-  get canSubmit(): boolean {
-    return this.customerName !== '' && this.email !== '';
-  }
-
   submit(): void {
     this.state.submitRequest(this.requestId);
-  }
-
-  private get request() {
-    return this.state.readRequest(this.requestId);
   }
 }
 `);
 
-const FORM_TEMPLATE_SOURCE = sourceText(`<form class.bind="canSubmit ? 'form-ready' : 'form-pending'" submit.trigger="submit()">
+const FORM_TEMPLATE_SOURCE = sourceText(`<let request.bind="state.readRequest(requestId)"></let>
+<template if.bind="request != null">
+  <form class.bind="request.canSubmit ? 'form-ready' : 'form-pending'" submit.trigger="submit()">
   <__FIELD_SHELL_ELEMENT_NAME__
     input-id="customer-name"
     label="Name"
     type="text"
-    value.bind="customerName">
+    value.bind="request.customerName">
   </__FIELD_SHELL_ELEMENT_NAME__>
 
   <__FIELD_SHELL_ELEMENT_NAME__
     input-id="email"
     label="Email"
     type="email"
-    value.bind="email">
+    value.bind="request.email">
   </__FIELD_SHELL_ELEMENT_NAME__>
 
   <label>
-    <input type="checkbox" checked.bind="urgent">
+    <input type="checkbox" checked.bind="request.urgent">
     Urgent
   </label>
 
   <fieldset>
     <legend>Contact preference</legend>
     <label>
-      <input type="radio" model.bind="state.emailPreference" checked.bind="contactPreference">
+      <input type="radio" model.bind="state.emailPreference" checked.bind="request.contactPreference">
       Email
     </label>
     <label>
-      <input type="radio" model.bind="state.phonePreference" checked.bind="contactPreference">
+      <input type="radio" model.bind="state.phonePreference" checked.bind="request.contactPreference">
       Phone
     </label>
   </fieldset>
 
   <label for="primary-topic">Primary topic</label>
-  <select id="primary-topic" value.bind="primaryTopic">
+  <select id="primary-topic" value.bind="request.primaryTopic">
     <option model.bind="null">Choose...</option>
     <option model.bind="state.hardwareTopic">Hardware</option>
     <option model.bind="state.billingTopic">Billing</option>
@@ -630,15 +556,17 @@ const FORM_TEMPLATE_SOURCE = sourceText(`<form class.bind="canSubmit ? 'form-rea
   </select>
 
   <label for="topics">Additional topics</label>
-  <select id="topics" multiple value.bind="topics">
+  <select id="topics" multiple value.bind="request.topics">
     <option model.bind="state.hardwareTopic">Hardware</option>
     <option model.bind="state.billingTopic">Billing</option>
     <option model.bind="state.supportTopic">Support</option>
   </select>
 
   <label for="notes">Notes</label>
-  <textarea id="notes" value.bind="notes"></textarea>
+  <textarea id="notes" value.bind="request.notes"></textarea>
 
-  <button type="submit" disabled.bind="!canSubmit">Submit request</button>
-</form>
+    <button type="submit" disabled.bind="!request.canSubmit">Submit request</button>
+  </form>
+</template>
+<p else>Loading request...</p>
 `);

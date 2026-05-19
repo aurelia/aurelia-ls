@@ -22,6 +22,12 @@ import {
 import {
   TranslationBinding,
 } from '../template/runtime-binding.js';
+import {
+  runtimeAcceptedBindingExpressionAstForParse,
+} from '../template/expression-parse-projection.js';
+import {
+  collectRuntimeConnectableObservedDependencyDrafts,
+} from '../observation/connectable-observed-dependency.js';
 import type {
   SemanticI18nTranslationBindingRow,
   SemanticI18nTranslationBindingTargetRow,
@@ -72,6 +78,7 @@ export function readI18nTranslationBindingRows(
         const staticKeys = staticTargets.map((target) => target.key);
         const targetProperties = uniqueStrings(staticTargets.flatMap((target) => target.targetProperties));
         const targetKinds = uniqueStrings(staticTargets.flatMap((target) => target.targetKinds));
+        const parameterDependencies = parameterBindingObservedDependencies(store, group.parameterBindings);
         const issues = group.bindings.flatMap((binding) =>
           resource.runtimeAnalysis.i18nTranslationBinding.readIssuesForBinding(binding.productHandle)
         );
@@ -98,6 +105,15 @@ export function readI18nTranslationBindingRows(
           staticKeys,
           staticTargets,
           hasParameterBinding: group.parameterBindings.length > 0,
+          parameterSourceNames: uniqueStrings(parameterDependencies.flatMap((dependency) =>
+            dependency.sourceName == null ? [] : [dependency.sourceName]
+          )),
+          parameterSourceRootNames: uniqueStrings(parameterDependencies.flatMap((dependency) =>
+            dependency.sourceRootName == null ? [] : [dependency.sourceRootName]
+          )),
+          parameterMemberNames: uniqueStrings(parameterDependencies.flatMap((dependency) =>
+            dependency.memberName == null ? [] : [dependency.memberName]
+          )),
           issueCount: issues.length,
           frameworkErrorCodes: issues.flatMap((issue) =>
             issue.frameworkErrorCode == null ? [] : [String(issue.frameworkErrorCode)]
@@ -122,6 +138,19 @@ export function readI18nTranslationBindingRows(
 
 function effectiveKeyBinding(group: I18nTranslationBindingGroup): TranslationBinding | null {
   return group.keyBindings[group.keyBindings.length - 1] ?? null;
+}
+
+function parameterBindingObservedDependencies(
+  store: KernelStore,
+  bindings: readonly TranslationBinding[],
+) {
+  return bindings.flatMap((binding) => {
+    const parse = binding.expressionProductHandle == null
+      ? null
+      : store.productDetails.read(TemplateProductDetails.ExpressionParse, binding.expressionProductHandle);
+    const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+    return ast == null ? [] : collectRuntimeConnectableObservedDependencyDrafts(ast);
+  });
 }
 
 function staticI18nTranslationTargets(

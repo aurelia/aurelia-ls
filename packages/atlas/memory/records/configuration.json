@@ -397,9 +397,11 @@
         "Direct or evaluated AppTask registry values must keep their AppTask observation attached; do not let the synthetic registry object erase the lifecycle callback.",
         "AppTask factory calls are registry value creation, not standalone app configuration effects; registration admission is the boundary that should materialize the AppTask product.",
         "Keep service customizations framework-shaped and auLink-grounded; do not push one-off rules into compiler or binding materializers.",
+        "Only treat an AppTask callback parameter as a container when the AppTask key is IContainer. Direct service keys such as NodeObserverLocator and IAttrMapper bind the parameter to that service, while no-key tasks and arbitrary DI keys must not become container locals just because their callback body calls .get(...).",
         "Configuration recognition should identify service calls, while observation-owned helpers such as nodeObserverNodeConfigsFromUseConfigCall decode NodeObserverLocator config/accessor entries.",
         "Duplicate NodeObserverLocator config/global config mappings are configuration-owned diagnostics: publish ConfigurationIssue products with exact runtime-html AUR0653 authority and keep the rest of the valid service state available to compiler-world observer lookup.",
         "Configuration customization owns duplicate NodeObserverLocator mappings (AUR0653) and the allowDirtyCheck service-state handoff. The sibling node_observer_strategy_not_found code (AUR0652) is spent by observation target-access diagnostics only when observer lookup models the exact dirty-check-disabled framework path; host-node controller codes remain outside this frontier.",
+        "NodeObserverLocator.useConfig(...) service state is spent only when template/runtime binding semantics ask for an observer. Plain to-view .bind host-node access may still close through getAccessor/ElementPropertyAccessor unless an accessor override exists; two-way/from-view paths reach the configured observer.",
         "Attach ConfigurationIssue product details only after the issue kernel records are committed; sidecar details without materialized products are invalid.",
         "When recognition needs more expression closure, improve StaticEvaluator or the expression reader before adding ad hoc callback parsing."
       ],
@@ -446,6 +448,11 @@
           "filePath": "packages/semantic-runtime/src/configuration/framework-error-code.ts",
           "symbolName": "ConfigurationFrameworkErrorCode",
           "summary": "Exact framework package/enum/member bridge for configuration-owned framework error codes."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:node-observer-service-customization",
+          "summary": "Focused contract for AppTask NodeObserverLocator service customization, duplicate AUR0653 issues, and observer-lookup consumption of valid custom config."
         },
         {
           "kind": "lens",
@@ -498,7 +505,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-05-18"
     },
     {
       "id": "frontier:aurelia-app-world-composer",

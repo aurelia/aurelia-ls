@@ -63,7 +63,8 @@ import type {
   TemplateExpressionParse,
 } from '../template/value-site.js';
 import {
-  instructionScopeMap,
+  instructionScopeLookup,
+  type RuntimeInstructionScopeLookup,
 } from '../observation/runtime-binding-expression.js';
 import {
   I18nTranslationBindingFrameworkErrorCode,
@@ -119,8 +120,9 @@ class I18nTranslationBindingIssueSourceSet {
 }
 
 interface TranslationBindingIssueContext {
+  readonly runtimeRendering: RuntimeRenderingEmission;
   readonly evaluator: CheckerExpressionTypeEvaluator;
-  readonly instructionScopes: ReturnType<typeof instructionScopeMap>;
+  readonly instructionScopes: RuntimeInstructionScopeLookup;
 }
 
 /** Materializes i18n TranslationBinding.create/bind framework failures after renderer and scope handoff. */
@@ -151,8 +153,9 @@ export class I18nTranslationBindingIssueMaterializer {
     const records: KernelStoreRecord[] = [...source.records];
     const issues: RuntimeBindingIssue[] = [];
     const context: TranslationBindingIssueContext = {
+      runtimeRendering: input.runtimeRendering,
       evaluator: input.expressionWorld.evaluator(input.resourceScope),
-      instructionScopes: instructionScopeMap(input.scopes.instructionScopes),
+      instructionScopes: instructionScopeLookup(input.scopes.instructionScopes),
     };
 
     let groupIndex = 0;
@@ -253,7 +256,7 @@ export class I18nTranslationBindingIssueMaterializer {
     }
     const parse = this.readParse(expressionProductHandle);
     const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
-    const scope = context.instructionScopes.get(binding.instructionProductHandle) ?? null;
+    const scope = context.instructionScopes.scopeForBinding(context.runtimeRendering, binding);
     if (ast == null || scope == null) {
       return false;
     }

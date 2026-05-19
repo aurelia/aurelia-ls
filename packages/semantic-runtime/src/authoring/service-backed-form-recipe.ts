@@ -25,6 +25,11 @@ import {
   standardFormTemplateBindingExpectedEffects,
 } from './form-recipe-expected-effects.js';
 import {
+  requestCanSubmitComputedObserverDependencyEffect,
+  requestCanSubmitComputedObserverSourceEffect,
+  requestCanSubmitTemplateObservedDependencyEffect,
+} from './form-expected-effects.js';
+import {
   componentStyleAssetPlanStep,
   entrypointPlanStep,
   externalTemplatePlanStep,
@@ -97,6 +102,9 @@ export function buildServiceBackedFormPlan(request: ServiceBackedFormRecipeReque
         new AuthoringPreference('state-ownership', 'di-owned-state-class'),
         new AuthoringPreference('state-ownership', 'di-owned-service-layer'),
         new AuthoringPreference('component-interface', 'scalar-id-inputs'),
+        new AuthoringPreference('template-model-access', 'direct-state-domain-template-binding'),
+        new AuthoringPreference('template-model-access', 'template-local-domain-adaptation'),
+        new AuthoringPreference('template-model-access', 'meaningful-viewmodel-adaptation'),
         new AuthoringPreference('template-source-ownership', 'external-template-file'),
         new AuthoringPreference('style-resource-ownership', 'component-stylesheet'),
         new AuthoringPreference('style-binding-model', 'class-token-binding'),
@@ -326,19 +334,7 @@ function serviceBackedFormExpectedEffects(): readonly ExpectedSemanticEffect[] {
       new ExpectedSemanticEffectFilter('operationKind', 'call'),
       new ExpectedSemanticEffectFilter('isSelfInteraction', false),
     ]),
-    ExpectedSemanticEffect.signatureFact('Service-backed form component reads state projection properties.', 'service-interaction', 'di', 'state-model', 'present', null, [
-      new ExpectedSemanticEffectFilter('consumerRole', 'component-source'),
-      new ExpectedSemanticEffectFilter('targetRole', 'state-source'),
-      new ExpectedSemanticEffectFilter('operationKind', 'read'),
-      new ExpectedSemanticEffectFilter('isSelfInteraction', false),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Service-backed form input bindings hand off setter writes to DI state.', 'service-interaction-binding', 'template', 'template-binding', 'present', null, [
-      new ExpectedSemanticEffectFilter('bindingDirection', 'two-way'),
-      new ExpectedSemanticEffectFilter('interactionTargetRole', 'state-source'),
-      new ExpectedSemanticEffectFilter('interactionOperationKind', 'call'),
-      new ExpectedSemanticEffectFilter('interactionIsSelfInteraction', false),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Service-backed form template bindings read DI state projection properties.', 'service-interaction-binding', 'template', 'template-binding', 'present', null, [
+    ExpectedSemanticEffect.signatureFact('Service-backed form template bindings read DI state-backed request context.', 'service-interaction-binding', 'template', 'template-binding', 'present', null, [
       new ExpectedSemanticEffectFilter('interactionTargetRole', 'state-source'),
       new ExpectedSemanticEffectFilter('interactionOperationKind', 'read'),
       new ExpectedSemanticEffectFilter('interactionIsSelfInteraction', false),
@@ -350,6 +346,23 @@ function serviceBackedFormExpectedEffects(): readonly ExpectedSemanticEffect[] {
       new ExpectedSemanticEffectFilter('interactionOperationKind', 'read'),
       new ExpectedSemanticEffectFilter('interactionIsSelfInteraction', false),
     ]),
+    requestCanSubmitComputedObserverSourceEffect(
+      'Service-backed form models request submit readiness as a plain domain getter observer.',
+    ),
+    requestCanSubmitComputedObserverDependencyEffect(
+      'Service-backed form request submit-readiness getter observes customerName.',
+      'this.customerName',
+    ),
+    requestCanSubmitComputedObserverDependencyEffect(
+      'Service-backed form request submit-readiness getter observes email.',
+      'this.email',
+    ),
+    requestCanSubmitTemplateObservedDependencyEffect(
+      'Service-backed form template observes request.canSubmit without a view-model forwarding getter.',
+      'request.canSubmit',
+      'request',
+      'canSubmit',
+    ),
     ExpectedSemanticEffect.discriminatorTaste('Service-backed form app reports a DI-owned service layer.', 'state-ownership', 'di-owned-service-layer', 'service'),
   ];
 }

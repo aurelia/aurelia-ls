@@ -1,7 +1,3 @@
-import {
-  SourceFileAddress,
-  SourceSpanAddress,
-} from '../kernel/address.js';
 import { SemanticClaim, nullableClaim } from '../kernel/claim.js';
 import type {
   AddressHandle,
@@ -21,12 +17,7 @@ import type {
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ExpressionType } from '../expression/ast.js';
-import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
 import type { ExpressionParseResult } from '../expression/parse-result-algebra.js';
-import {
-  SourceFileRef,
-  sourceSpanFromBounds,
-} from '../expression/source-span.js';
 import type { AttributeClassification, AttributeSyntax } from './attribute-syntax.js';
 import type { BindingCommandExecutableReference } from './binding-command-reference.js';
 import type { TemplateExpressionParserService } from './compiler-world.js';
@@ -41,6 +32,7 @@ import {
   TemplateValueSite,
   type TemplateValueSiteKind,
 } from './value-site.js';
+import { runtimeExpressionParseContextForAddress } from './runtime-expression-source-address.js';
 
 export class TemplateValueSitePublicationRequest {
   constructor(
@@ -231,7 +223,7 @@ export class TemplateValueSitePublisher {
     const result = request.parser.parse(
       request.rawValue,
       entryFamily,
-      this.expressionParseContext(request.sourceAddressHandle),
+      runtimeExpressionParseContextForAddress(this.store, request.sourceAddressHandle),
     );
     return new ResolvedTemplateExpressionParseRequest(
       request.parseLocal,
@@ -299,20 +291,4 @@ export class TemplateValueSitePublisher {
     ];
   }
 
-  private expressionParseContext(addressHandle: AddressHandle | null): ExpressionParseContext | undefined {
-    if (addressHandle == null) {
-      return undefined;
-    }
-    const address = this.store.readAddress(addressHandle);
-    if (!(address instanceof SourceSpanAddress)) {
-      return undefined;
-    }
-    const fileAddress = this.store.readAddress(address.fileHandle);
-    const file = fileAddress instanceof SourceFileAddress
-      ? new SourceFileRef(fileAddress.handle, fileAddress.path)
-      : null;
-    return {
-      baseSpan: sourceSpanFromBounds(address.start, address.end, file),
-    };
-  }
 }

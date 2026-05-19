@@ -56,6 +56,27 @@ export function collectionElementTypeFor(
   return null;
 }
 
+/** Return the element type for mutable Array, tuple, or Set shapes. */
+export function mutableCollectionElementTypeFor(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): ts.Type | null {
+  const arrayElementType = mutableArrayElementTypeFor(checker, type);
+  if (arrayElementType != null) {
+    return arrayElementType;
+  }
+  const elementTypes = typeParts(type).flatMap((part) => {
+    const name = namedTypeSymbolName(part);
+    return name === 'Set'
+      ? [typeReferenceArguments(checker, part)[0] ?? null]
+      : [];
+  }).filter((part): part is ts.Type => part != null);
+  if (elementTypes.length > 0) {
+    return elementTypes[0]!;
+  }
+  return null;
+}
+
 /** Return the element type for Array and tuple shapes. */
 export function arrayElementTypeFor(
   checker: ts.TypeChecker,
@@ -66,6 +87,26 @@ export function arrayElementTypeFor(
       ? [checker.getIndexTypeOfType(part, ts.IndexKind.Number) ?? null]
       : []
   ).filter((part): part is ts.Type => part != null);
+  if (elementTypes.length > 0) {
+    return elementTypes[0]!;
+  }
+  return null;
+}
+
+/** Return the element type for mutable Array and tuple shapes. */
+export function mutableArrayElementTypeFor(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): ts.Type | null {
+  const elementTypes = typeParts(type).flatMap((part) => {
+    const name = namedTypeSymbolName(part);
+    if (name === 'ReadonlyArray') {
+      return [];
+    }
+    return checker.isArrayType(part) || checker.isTupleType(part)
+      ? [checker.getIndexTypeOfType(part, ts.IndexKind.Number) ?? null]
+      : [];
+  }).filter((part): part is ts.Type => part != null);
   if (elementTypes.length > 0) {
     return elementTypes[0]!;
   }
@@ -99,6 +140,23 @@ export function mapKeyTypeFor(
   return null;
 }
 
+/** Return the key type for mutable Map shapes. */
+export function mutableMapKeyTypeFor(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): ts.Type | null {
+  const keyTypes = typeParts(type).flatMap((part) => {
+    const name = namedTypeSymbolName(part);
+    return name === 'Map'
+      ? [typeReferenceArguments(checker, part)[0] ?? null]
+      : [];
+  }).filter((part): part is ts.Type => part != null);
+  if (keyTypes.length > 0) {
+    return keyTypes[0]!;
+  }
+  return null;
+}
+
 /** Return the value type for Map or ReadonlyMap shapes. */
 export function mapValueTypeFor(
   checker: ts.TypeChecker,
@@ -107,6 +165,23 @@ export function mapValueTypeFor(
   const valueTypes = typeParts(type).flatMap((part) => {
     const name = namedTypeSymbolName(part);
     return name === 'Map' || name === 'ReadonlyMap'
+      ? [typeReferenceArguments(checker, part)[1] ?? null]
+      : [];
+  }).filter((part): part is ts.Type => part != null);
+  if (valueTypes.length > 0) {
+    return valueTypes[0]!;
+  }
+  return null;
+}
+
+/** Return the value type for mutable Map shapes. */
+export function mutableMapValueTypeFor(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): ts.Type | null {
+  const valueTypes = typeParts(type).flatMap((part) => {
+    const name = namedTypeSymbolName(part);
+    return name === 'Map'
       ? [typeReferenceArguments(checker, part)[1] ?? null]
       : [];
   }).filter((part): part is ts.Type => part != null);

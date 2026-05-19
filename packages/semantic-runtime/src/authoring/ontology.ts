@@ -204,6 +204,8 @@ export type AuthoringTasteAxisKey =
   | 'state-ownership'
   /** How components expose selection, input, output, and attribute forwarding boundaries. */
   | 'component-interface'
+  /** How templates cross from component view-models into state, domain objects, and adapter members. */
+  | 'template-model-access'
   /** How route configuration, routeable components, and viewports own navigation structure. */
   | 'navigation-ownership'
   /** Where component template markup lives and how it is discovered. */
@@ -285,6 +287,16 @@ export type AuthoringTasteValueKey =
   | 'captured-attribute-forwarding'
   /** Components expose no public bindable interface in current facts. */
   | 'no-public-component-interface'
+  /** Templates bind directly through DI-owned state or domain object members instead of generated field facades. */
+  | 'direct-state-domain-template-binding'
+  /** Template locals or controller scopes adapt IDs/nullable lookups near the binding site. */
+  | 'template-local-domain-adaptation'
+  /** View-model getters/setters adapt real route, host, component, or view-specific concerns. */
+  | 'meaningful-viewmodel-adaptation'
+  /** Plain source-backed accessor getters are observable through ObserverLocator ComputedObserver semantics. */
+  | 'source-backed-getter-observation'
+  /** View-model accessors appear to only shorten another member path and may be removable boilerplate. */
+  | 'one-hop-forwarding-accessor-pressure'
   /** No router facts are visible for the opened app. */
   | 'no-router'
   /** Route configuration is visible as static/data-shaped config. */
@@ -478,6 +490,19 @@ export const AuthoringTasteAxes = {
     'primitive-policy',
     'How components expose public inputs, outputs, selection handles, and forwarded attributes.',
     ['public-inputs-present', 'scalar-id-inputs', 'object-inputs', 'callback-function-inputs', 'event-output-interface', 'captured-attribute-forwarding', 'no-public-component-interface'],
+  ),
+  TemplateModelAccess: new AuthoringTasteAxisDescriptor(
+    'template-model-access',
+    'Template Model Access',
+    'primitive-policy',
+    'How templates reach state/domain models and when view-model members are real adapters instead of boilerplate.',
+    [
+      'direct-state-domain-template-binding',
+      'template-local-domain-adaptation',
+      'meaningful-viewmodel-adaptation',
+      'source-backed-getter-observation',
+      'one-hop-forwarding-accessor-pressure',
+    ],
   ),
   NavigationOwnership: new AuthoringTasteAxisDescriptor(
     'navigation-ownership',
@@ -737,6 +762,36 @@ export const AuthoringTasteValueDescriptors = {
     'component-interface',
     'observed-shape',
     'No component public input surface is visible.',
+  ),
+  DirectStateDomainTemplateBinding: new AuthoringTasteValueDescriptor(
+    'direct-state-domain-template-binding',
+    'template-model-access',
+    'primitive-policy',
+    'Authoring may bind templates directly through DI-owned state or domain objects when the path is clear and typed.',
+  ),
+  TemplateLocalDomainAdaptation: new AuthoringTasteValueDescriptor(
+    'template-local-domain-adaptation',
+    'template-model-access',
+    'primitive-policy',
+    'Authoring may use template-local values and controller narrowing for ID-to-object or nullable-object adaptation.',
+  ),
+  MeaningfulViewmodelAdaptation: new AuthoringTasteValueDescriptor(
+    'meaningful-viewmodel-adaptation',
+    'template-model-access',
+    'primitive-policy',
+    'View-model accessors should represent real adaptation, projection, or host/routing handoff rather than one-hop forwarding.',
+  ),
+  SourceBackedGetterObservation: new AuthoringTasteValueDescriptor(
+    'source-backed-getter-observation',
+    'template-model-access',
+    'observed-shape',
+    'Binding observed-dependency rows prove ordinary source-backed accessor getters are read through the ComputedObserver path without @computed.',
+  ),
+  OneHopForwardingAccessorPressure: new AuthoringTasteValueDescriptor(
+    'one-hop-forwarding-accessor-pressure',
+    'template-model-access',
+    'derived-reading',
+    'A view-model accessor appears to only shorten another member path and should be reviewed before recommending it.',
   ),
   NoRouter: new AuthoringTasteValueDescriptor(
     'no-router',

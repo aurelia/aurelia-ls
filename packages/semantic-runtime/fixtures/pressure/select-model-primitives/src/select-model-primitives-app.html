@@ -10,6 +10,25 @@
   </label>
 
   <label>
+    Product by DOM value-bound id
+    <select value.bind="selectedValueBoundProductId">
+      <option model.bind="null">Choose...</option>
+      <option value.bind="1">Motherboard</option>
+      <option value.bind="2">CPU</option>
+    </select>
+  </label>
+
+  <label>
+    Product by repeated DOM value-bound id
+    <select value.bind="selectedRepeatedValueProductId">
+      <option model.bind="null">Choose...</option>
+      <option repeat.for="product of products" value.bind="product.id">
+        ${product.id} - ${product.name}
+      </option>
+    </select>
+  </label>
+
+  <label>
     Product by object
     <select value.bind="selectedProduct">
       <option model.bind="null">Choose...</option>
@@ -39,6 +58,18 @@
     <label>
       <input type="radio" name="nullable-choice" model.bind="false" checked.bind="nullableChoice">
       No
+    </label>
+  </fieldset>
+
+  <fieldset>
+    <legend>Numeric radio DOM values</legend>
+    <label>
+      <input type="radio" name="numeric-radio-choice" value.bind="1" checked.bind="numericRadioChoice">
+      First product
+    </label>
+    <label>
+      <input type="radio" name="numeric-radio-choice" value.bind="2" checked.bind="numericRadioChoice">
+      Second product
     </label>
   </fieldset>
 </section>

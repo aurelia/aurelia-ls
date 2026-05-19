@@ -22,6 +22,9 @@ export class CheckedSelectCustomMatcherApp {
   staticTags: string[] = [];
   selectedItemSet = new Set<MatchableItem>();
   selectedItemMap = new Map<MatchableItem, boolean>();
+  readonly readonlySelectedItems: readonly MatchableItem[] = [];
+  readonly readonlyItemSet: ReadonlySet<MatchableItem> = new Set();
+  readonly readonlyItemMap: ReadonlyMap<MatchableItem, boolean> = new Map();
   selectedOption: MatchableItem | null = null;
   selectedOptions: MatchableItem[] = [];
 

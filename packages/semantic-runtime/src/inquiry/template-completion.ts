@@ -310,6 +310,8 @@ export class TemplateCompletionCursorContext {
     readonly expressionFrontier: TemplateExpressionCompletionFrontier | null,
     /** Evaluator-owned subject for an open member-owner type, when narrower than the selected member token. */
     readonly memberOwnerTypeOpenSubject: CheckerExpressionTypeOpenSubject | null,
+    /** Source route that produced the member-owner value type, when narrower than the reusable type product. */
+    readonly memberOwnerTypeSourceAddressHandle: AddressHandle | null,
     /** Extra context gaps found while turning a cursor into product handles. */
     readonly missingInputs: readonly string[] = [],
   ) {}
@@ -339,6 +341,7 @@ type TemplateCompletionExpressionEvaluator = ReturnType<CheckerExpressionTypeWor
 interface DerivedMemberOwnerType {
   readonly productHandle: ProductHandle | null;
   readonly openSubject: CheckerExpressionTypeOpenSubject | null;
+  readonly sourceAddressHandle: AddressHandle | null;
 }
 
 /** Resolve a materialized template cursor into the product-handle completion query shape. */
@@ -386,6 +389,7 @@ class TemplateCompletionCursorContextBuilder {
         this.input.routeConfigProductHandles ?? [],
         this.input.i18nTranslationKeyProductHandles ?? [],
       ),
+      null,
       null,
       null,
       null,
@@ -446,6 +450,7 @@ class TemplateCompletionCursorContextBuilder {
       selectedMemberName,
       expressionResult == null ? null : expressionCompletionFrontier(expressionResult),
       memberOwnerType.openSubject,
+      memberOwnerType.sourceAddressHandle,
       uniqueValues(missingInputs),
     );
   }
@@ -936,7 +941,6 @@ function readValueSite(
   missingInputs: string[],
 ): TemplateValueSite | null {
   if (productHandle == null) {
-    missingInputs.push('attribute-value-site');
     return null;
   }
   const detail = store.productDetails.read(TemplateProductDetails.ValueSite, productHandle);
@@ -1528,6 +1532,7 @@ function deriveMemberOwnerTypeFromEvaluation(
     return {
       productHandle: evaluation.typeReference.productHandle,
       openSubject: null,
+      sourceAddressHandle: evaluation.sourceAddressHandle,
     };
   }
 
@@ -1535,6 +1540,7 @@ function deriveMemberOwnerTypeFromEvaluation(
   return {
     productHandle: null,
     openSubject: evaluation.subject,
+    sourceAddressHandle: evaluation.subject?.sourceAddressHandle ?? null,
   };
 }
 
@@ -1542,6 +1548,7 @@ function missingDerivedMemberOwnerType(): DerivedMemberOwnerType {
   return {
     productHandle: null,
     openSubject: null,
+    sourceAddressHandle: null,
   };
 }
 

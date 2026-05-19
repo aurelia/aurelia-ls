@@ -60,7 +60,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-05-19"
     },
     {
       "id": "frontier:compiled-template-materializer",
@@ -281,7 +281,7 @@
         "Use child materializer records for local behavior, but keep project-pass orchestration in this front-door pass.",
         "TemplateRuntimeAnalysisProjectContext carries compiled-template emissions so runtime rendering and scope construction can relate parent usage sites to child custom-element definitions without re-running the compiler front door.",
         "The project pass owns one CheckerExpressionTypeWorld for app and authoring resource runtime analysis, while each TemplateRuntimeAnalysisFrame records expression-cache deltas from a marker. Keep runtime/checker lifetime work here instead of recreating the world per resource.",
-        "Captured `...$attrs` work should keep the parent usage scope through dynamic instruction origin claims; do not fall back to definition-wide captured attribute buckets.",
+        "Captured `...$attrs` work should keep the parent usage scope through dynamic instruction context claims: syntax origin, captured hydration instruction, and captured runtime controller. The scope is the hydration-context controller scope's parent, matching framework SpreadBinding.bind. Do not rely on syntax-only provenance or fall back to definition-wide captured attribute buckets.",
         "Use opt-in fine-grained runtime-analysis phase telemetry when optimizing this frontier. Pair SEMANTIC_RUNTIME_TELEMETRY_FINE_PHASES=true with phase memory/kernel snapshots for density questions, or disable snapshots for cleaner CPU attribution.",
         "This frontier is nextActionPolicy=when-touched after the aggregate child custom-element usage bridge closed; use it as front-door grounding, while runtime rendering/controller records own usage-local child view expansion.",
         "Parent templates should hydrate child custom-element controllers, child view-model scopes, and aggregate child compiled-template views when renderer emulation created a child controller. This is required for wrapper/capture semantics such as field-shell `...$attrs`, because the child template's SpreadBinding must see the parent HydrateElementInstruction that captured the attributes.",
@@ -290,6 +290,7 @@
         "Conditional template-controller branches need an explicit pass-through child scope even when TypeChecker narrowing produces no slots; otherwise nested branch work can clear the parent `if` marker before `else` link-hook claims are published.",
         "The aggregate boundary is a memory/performance invariant, not just a recursion guard: a large-root canary dropped from roughly 388k records / 71k products / 404MiB construction heap to roughly 120k records / 23k products / 249MiB after child component internals stopped being duplicated under every parent usage site. If usage-local child views are needed, keep them aggregate and guarded rather than per-runtime-instance.",
         "Controller observer setup diagnostics should stay demand-driven: only invoke ObserverLocator/TypeChecker support when a bindable has coercion or change-callback semantics to validate, and cache target-type property checks per definition.",
+        "Repeated option `model/value` bindings are a concrete recursive-rendering canary. The same-node `option repeat.for=\"...\" value/model.bind=\"...\"` case now closes through recursive rendering emission because the parent select owns the authored option node and the child synthetic view supplies the binding/scope; deeper cases where nested controllers produce descendant option nodes still need explicit rendered topology.",
         "If a future inquiry only needs part of this pass, model that as inquiry depth/scope pressure instead of cloning a partial compiler pipeline."
       ],
       "nextActionPolicy": "when-touched",
@@ -647,6 +648,8 @@
       "rationale": "Value-converter behavior is runtime invocation pressure, not generic expression syntax. Keeping this materializer tracked prevents future framework-error work from rediscovering `sanitize` or routing converter issues through API-local diagnostics.",
       "guidance": [
         "Start here when work touches built-in or custom value-converter invocation effects, converter-owned diagnostics, or expression ASTs that contain `ValueConverterExpression` nodes.",
+        "Walk interpolation hole expressions when collecting value-converter applications: runtime-html binds and evaluates each InterpolationPartBinding expression, not only the outer Interpolation AST.",
+        "Source value-converter application and issue products to the exact converter name span when the binding carrier has an admitted source file; broad binding-carrier spans should be fallback only.",
         "Keep missing converter resource lookup in the runtime-html AST/binding-utils lane; this materializer owns effects after the converter resource is visible.",
         "The first modeled framework path is `SanitizeValueConverter.toView(...)`: visible `sanitize` plus no modeled app `ISanitizer` resolver claims runtime-html `method_not_implemented` / `AUR0099`, while app `ISanitizer` registrations suppress it.",
         "Before adding another converter-owned framework code, inspect `framework.errors` usage rows and use `framework.resources` / `framework.rendering` to confirm the owning runtime concept."
@@ -693,7 +696,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-13"
+      "updatedAt": "2026-05-19"
     },
     {
       "id": "frontier:binding-command-lowering-materializer",
@@ -1252,7 +1255,9 @@
         "Check framework compiler/rendering relationships before changing spread instruction lowering or product ownership.",
         "Keep RuntimeSpreadBindingCreator focused on the SpreadBinding.create side: controller parent walk, captured AttrSyntax lookup, and TemplateCompiler.compileSpread admission.",
         "Model ...$attrs transfer through runtime hydration-context/controller parent flow; definition-wide capture fallbacks merge unrelated component instances and should be treated as a modeling regression.",
-        "Treat unsupported spread cases as semantic-runtime compiler-host gaps before adding local renderer shortcuts, except for source-proved renderer-dispatch failures such as SpreadValueRenderer invalid targets, which belong in RuntimeRendererIssue before any binding exists."
+        "Treat unsupported spread cases as semantic-runtime compiler-host gaps before adding local renderer shortcuts, except for source-proved renderer-dispatch failures such as SpreadValueRenderer invalid targets, which belong in RuntimeRendererIssue before any binding exists.",
+        "Dynamic instructions produced by compileSpread should carry direct captured-attribute context instruction and context controller claims. Scope construction should spend those exact claims and then use the context controller scope's parent as the dynamic instruction scope, matching framework SpreadBinding.bind. If the exact controller or parent scope does not resolve, leave the dynamic instruction unscoped rather than falling back to root scope or syntax-only captured-attribute buckets, because repeated wrapper definitions under different template-controller scopes can otherwise merge.",
+        "Downstream value-channel, data-flow, i18n, composition, and bound-controller value evaluation should resolve dynamic spread-created binding sources through the binding render context and RuntimeInstructionScopeLookup, not by choosing the first scope for a reused instruction product."
       ],
       "anchors": [
         {
@@ -1718,6 +1723,8 @@
       "guidance": [
         "Start here when built-in binding-behavior effects, duplicate rate-limit/target-subscriber diagnostics, signal/update-trigger/self/attr/validate semantics, or binding behavior application products change.",
         "Keep expression parsing and behavior expression extraction below bindingBehaviorExpressions and runtimeAcceptedBindingExpressionAstForParse; do not reparse expression text in app/API diagnostics.",
+        "Walk interpolation hole expressions when collecting binding-behavior applications: runtime-html binds each InterpolationPartBinding expression and lets behaviors such as & state call useScope(...) for that hole.",
+        "Source binding-behavior application and issue products to the exact behavior name span when the binding carrier has an admitted source file; broad binding-carrier spans should be fallback only.",
         "Keep bind-time target facts flowing through RuntimeControllerBindEmission and RuntimeBindingBehaviorBindEffectReader before publishing framework-error authority.",
         "ValidationHtmlConfiguration admits ValidateBindingBehavior as a resource; validate-specific AUR4200-AUR4205 diagnostics must stay gated on resource visibility and closed parser-owned facts. AUR4206 is a malformed/foreign-AST fallback and should stay unclaimed until semantic-runtime admits that input surface.",
         "Use appendRuntimeBindingProductValue for emission binding indexes shared with value-converter materialization."
@@ -1783,7 +1790,7 @@
         }
       ],
       "createdAt": "2026-05-14",
-      "updatedAt": "2026-05-14"
+      "updatedAt": "2026-05-19"
     },
     {
       "id": "frontier:runtime-composition-materializer",
@@ -1807,6 +1814,9 @@
         "Runtime composition rows now report candidate resource-analysis coverage and candidate resource-controller counts by joining resolved component definitions back to their project-level template/runtime analyses.",
         "Runtime composition contexts distinguish absent, direct, promise-fulfilled, and open component/template/model inputs so generated fixtures can verify promise-valued `AuCompose` support without inferring it from component resolution alone.",
         "Closed static/value custom-element composition branches now materialize an aggregate composed child controller; TypeChecker-only candidate unions remain candidates rather than fake child controllers.",
+        "Parent-to-child component/model closure depends on `RuntimeBoundControllerValueTable` being threaded into child resource analysis and extended with the current resource's rendered controller values during runtime composition. Treat `Array.find receiver did not reduce to a known array` on bound child controller state as binding-source/evaluator pressure before adding AuCompose-local shortcuts.",
+        "Broad `Constructable` child composition can still close when the bound controller value table gives the child getter a concrete parent value and the evaluator binds receiver `this` for property method calls such as `entry.isApplicable(id)`. Exact evaluated object literals should read absent properties as `undefined`, not unknown shape.",
+        "`RuntimeCompositions` exposes `renderingContextKind` so definition-local resource analysis can be separated from recursive parent-supplied child instances. A public component's own template may honestly remain open when a required bindable is consumer-supplied even if all observed app use-sites close.",
         "Do not treat current candidate resolution, candidate resource-analysis coverage, or aggregate composed child-controller handoff as full recursive composition rendering. Child scope handoff, lifecycle run/deactivate errors, template-only runtime template compilation, and per-branch recursive rendering remain controller/composition lifecycle frontiers.",
         "Keep `RuntimeCompositions` and `pressure:app-api` buckets in sync so composition candidates, compiled-template coverage, candidate resource-analysis coverage, input fulfillment, composed child-controller counts, activation handoff kinds, and open composition rows stay visible in aggregate app pressure."
       ],
@@ -1835,10 +1845,22 @@
           "summary": "API projection for runtime composition rows."
         },
         {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-bound-controller-value.ts",
+          "symbolName": "RuntimeBoundControllerValueTable",
+          "summary": "Bound controller value table consumed by child binding-source evaluation and runtime composition."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/evaluator.ts",
+          "symbolName": "evaluateCallExpression",
+          "summary": "Static evaluator call semantics, including receiver-bound property method calls."
+        },
+        {
           "kind": "fixture",
           "path": "packages/semantic-runtime/fixtures/pressure/au-compose-dynamic-composition",
-          "scenario": "TypeChecker-visible AuCompose dynamic component candidates",
-          "summary": "Pressure fixture where a repeat-local model carries a custom-element class union into `component.bind`."
+          "scenario": "TypeChecker-visible AuCompose dynamic component candidates and bound child controller value flow",
+          "summary": "Pressure fixture where repeat-local and child-bound values carry constructable component inputs into `component.bind`."
         },
         {
           "kind": "lens",
@@ -1874,7 +1896,7 @@
       ],
       "nextActionPolicy": "when-touched",
       "createdAt": "2026-05-17",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-05-19"
     },
     {
       "id": "reuse:repeat-scope-value-carriers",

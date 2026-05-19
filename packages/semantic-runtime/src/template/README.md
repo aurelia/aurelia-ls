@@ -144,6 +144,12 @@ classification, expression parsing, and instruction lowering converge on the sam
   Controller containers now also spend local resource dependencies during root and child controller creation, mirroring
   `AppRoot` child-container creation and `Controller.$el` / `$attr` dependency registration before nested renderers
   perform resource lookup.
+  Runtime watchers are controller-owned binding products with their own lane:
+  `runtime-watcher.ts` mirrors `ComputedWatcher` and `ExpressionWatcher`,
+  `runtime-watcher-factory.ts` materializes them from `definition.watches` during controller creation, and
+  `runtime-watcher-publication.ts` records the controller ownership and binding identity. This mirrors Aurelia's
+  `createWatchers(...)` phase, where watchers are added to the controller before ordinary renderer-created bindings,
+  while keeping watcher source metadata distinct from property/listener/ref binding instructions.
   `SpreadBinding` is the deliberate exception to direct controller admission: it can own dynamically compiled inner
   bindings created by `TemplateCompiler.compileSpread(...)`, and those ownership edges are recorded as
   binding-to-binding claims so the later `Controller.bind` emulation still walks them.
@@ -159,6 +165,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   presence and fulfillment buckets, and open composition rows so dynamic composition cannot disappear behind ordinary
   controller totals. Component/template/model fulfillment distinguishes absent inputs from direct static fulfillment,
   promise-unwrapped fulfillment, and genuinely open inputs.
+  Rows also distinguish `definition-resource` analysis from `recursive-resource-instance` analysis. Definition-local
+  rows are allowed to preserve public bindable unknowns, while recursive rows can close when a parent controller supplies
+  concrete child values.
   The same context now reads static `SetPropertyInstruction` inputs for `model`, `scopeBehavior`, `tag`, and `flushMode`
   alongside dynamic property bindings. This is deliberate: literal AuCompose bindables are part of the hydrate
   instruction, while `component.bind`, `model.bind`, `composition.bind`, and `composing.bind` enter through
@@ -186,9 +195,12 @@ classification, expression parsing, and instruction lowering converge on the sam
   that performs captured-attribute command lowering, dynamic instruction allocation, dynamic value-site/expression
   publication, and `SpreadElementPropBindingInstruction` wrapping. Keep those responsibilities here instead of
   growing the rendering materializer into a second compiler. Dynamic spread-created instructions publish
-  `instruction.dynamic-instruction-originates-from-captured-attribute-syntax` claims so scope construction can
-  reconnect them to the parent `HydrateElementInstruction` that captured the attribute without a renderer-local
-  provenance side channel. `...$attrs` transfer walks the modeled runtime controller parent chain, matching
+  `instruction.dynamic-instruction-originates-from-captured-attribute-syntax`,
+  `instruction.dynamic-instruction-uses-captured-attribute-context-instruction`, and
+  `instruction.dynamic-instruction-uses-captured-attribute-context-controller` claims so scope construction can
+  reconnect them to the exact hydration instruction and runtime controller that captured the attribute without relying
+  on syntax-only provenance. This matters when the same wrapper definition is rendered under different template
+  controllers or parent scopes. `...$attrs` transfer walks the modeled runtime controller parent chain, matching
   `SpreadBinding.create`'s hydration-context ancestor lookup; do not reintroduce definition-wide capture fallbacks that
   merge unrelated uses of the same component definition. Dynamic spread compilation also publishes a template-compiler
   `no_spread_template_controller` (`AUR9998`) compiler issue when it reaches the `SpreadBinding.addChild` branch that
@@ -261,12 +273,17 @@ classification, expression parsing, and instruction lowering converge on the sam
   subscriber slot. `update_trigger_behavior_not_supported` (`AUR9993`) remains unclaimed because
   semantic-runtime does not yet model replacing the default `INodeObserverLocator` service; binding-behavior
   definition/registration failures remain resource/DI catalog pressure rather than bind-time behavior issues.
+  Interpolation bindings are handled as runtime-html handles them: each interpolation hole behaves like an
+  `InterpolationPartBinding` expression for bind-time behavior and value-converter publication, rather than treating the
+  outer interpolation string as an inert wrapper. Behavior application and issue products source to the exact behavior
+  name span when the carrier comes from an admitted source file, not just the whole binding carrier span.
 - `runtime-value-converter.ts` and `runtime-value-converter-materializer.ts` own value-converter invocation pressure
   that belongs to a rendered binding expression rather than to resource lookup. The first modeled path is
   `SanitizeValueConverter.toView`: when the compiler resource scope resolves the built-in `sanitize` converter and the
   active container tree has no modeled `ISanitizer` resolver, semantic-runtime spends runtime-html
   `method_not_implemented` (`AUR0099`) for the default throwing sanitizer. A modeled app `ISanitizer` registration
-  suppresses that issue.
+  suppresses that issue. Converter application and issue products source to the exact converter name span when possible,
+  including converter uses inside interpolation holes.
 - `template-runtime-analysis.ts` owns the post-compiled-template runtime/checker phase: runtime Rendering dispatch,
   template scope construction, `Controller.bind` emulation, i18n `TranslationBinding.create/bind` issue
   materialization, binding-behavior/value-converter application,
@@ -338,10 +355,16 @@ classification, expression parsing, and instruction lowering converge on the sam
   targeting comes from renderer dispatch and child-controller creation, not from tag-name heuristics. Property,
   interpolation, and spread-value bindings all use the same renderer-owned target
   handoff when the compiled target is a child controller, matching Aurelia's `getTarget(target)` renderer behavior
-  instead of treating interpolation as a node-only write. Object-side observation follows Aurelia's framework fallbacks: accessor lookups select the
-  runtime `PropertyAccessor`, while observer lookups select `ComputedObserver` for readonly getter-like members or
-  `SetterObserver` for ordinary and dynamically-created keys. The checker still contributes property existence,
-  writability, and type facts for downstream policy and data-flow products.
+  instead of treating interpolation as a node-only write. Object-side observation follows Aurelia's framework fallbacks:
+  accessor lookups select the runtime `PropertyAccessor`, while observer lookups select `ComputedObserver` for getter
+  descriptors, setter-only configurable accessor descriptors, and function-key observer requests, or `SetterObserver`
+  for ordinary and dynamically-created data keys.
+  The checker still contributes property existence, writability, and type facts for downstream policy and data-flow
+  products; TypeScript `readonly` is not itself an ObserverLocator computed-observer signal.
+  App-authored `NodeObserverLocator.useConfig(...)` service state is consumed only on observer lookup paths, matching the
+  framework split between `getAccessor(...)` and `getObserver(...)`: a host-node `.bind` can remain an element property
+  accessor, while `.two-way` / `.from-view` reaches the configured node observer unless an accessor override owns that
+  property.
 - `observation/binding-value-channel-materializer.ts` turns target-access and target-operation products into
   value-channel products before source/target flow is checked. This keeps special form-control semantics, such as static
   `SelectValueObserver` option domains, static multi-select array element domains, plain checkbox boolean flow, radio
@@ -388,6 +411,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   are guarded by controller definition ancestry so static analysis stays finite while still preserving usage-local
   wrapper/capture semantics. Repeated runtime instances still use aggregate compiled-template products rather than
   per-instance template products.
+  Aggregate child renderings are controller-topology evidence, not public binding-row ownership by themselves. API
+  projections that expose binding, target-access, value-channel, data-flow, and observed-dependency facts should prefer
+  the authored source span's owning template, because captured wrapper expressions can render inside the child template
+  while remaining source-owned by the parent usage template.
   Listener binding instructions receive a derived expression scope with the runtime
   `$event` override-context slot typed from DOM event maps for the event name. This models `ListenerBinding.callSource`
   rather than a completion special case, and it gives listener-returned functions the same first-argument event type

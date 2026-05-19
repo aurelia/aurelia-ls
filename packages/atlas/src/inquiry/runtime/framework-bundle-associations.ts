@@ -30,6 +30,7 @@ import {
   type FrameworkResourceCarrierRow,
 } from "./framework-entities.js";
 import {
+  resourceCarriersForDefinitionCall,
   resourceKindFromDefinitionCall,
   targetNameFromResourceDefinitionCall,
 } from "./framework-resources.js";
@@ -380,6 +381,27 @@ function associationsForRegistrationExpression(
     ? resourceKindFromDefinitionCall(current)
     : null;
   if (inlineResourceKind !== null && ts.isCallExpression(current)) {
+    const inlineResourceCarriers = resourceCarriersForDefinitionCall(
+      sourceProject,
+      sourceFile,
+      current,
+      row.packageId,
+      row.packageName,
+      { requireExportedTarget: true },
+    );
+    if (inlineResourceCarriers.length > 0) {
+      return inlineResourceCarriers.map((resourceCarrier) =>
+        associationRowForVisit(
+          visit,
+          FrameworkBundleAssociationKind.ResourceRegistration,
+          {
+            targetName:
+              resourceCarrier.targetName ?? resourceCarrier.sourceExportName,
+            resourceCarrier,
+          },
+        ),
+      );
+    }
     return [
       associationRowForVisit(
         visit,

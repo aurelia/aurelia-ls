@@ -134,6 +134,29 @@ export const FrameworkRouteEndpoints = {
     projection: "flow-sites",
     summary: "Observation subsystem flow site rows.",
   }),
+  ObservationDependencyCircuit: new FrameworkRouteEndpoint({
+    id: "framework.endpoint.observation.dependency-circuit",
+    lens: LensId.FrameworkObservation,
+    locus: RepoRootLocus,
+    projection: "dependency-circuit",
+    summary:
+      "Compact dependency-circuit roles derived from observation subsystem flow site rows.",
+  }),
+  ObservationCollectionMethods: new FrameworkRouteEndpoint({
+    id: "framework.endpoint.observation.collection-methods",
+    lens: LensId.FrameworkObservation,
+    locus: RepoRootLocus,
+    projection: "collection-methods",
+    summary:
+      "Collection observation method inventory across astEvaluate and ProxyObservable.",
+  }),
+  ObservationObserverLocatorDecisions: new FrameworkRouteEndpoint({
+    id: "framework.endpoint.observation.observer-locator-decisions",
+    lens: LensId.FrameworkObservation,
+    locus: RepoRootLocus,
+    projection: "observer-locator-decisions",
+    summary: "Compact ObserverLocator decision rows derived from source-backed flow sites.",
+  }),
   RenderingBindingAdmissions: new FrameworkRouteEndpoint({
     id: "framework.endpoint.rendering.binding-admissions",
     lens: LensId.FrameworkRendering,
@@ -377,6 +400,33 @@ export const FrameworkSemanticRoutes = {
     relation: NavigationRelation.FrameworkFlowOf,
     basis: SOURCE_CHECKER_BASIS,
     summary: "Observation lookup rows can navigate to subsystem flow sites.",
+  }),
+  ObservationToDependencyCircuit: new FrameworkSemanticRouteSpec({
+    id: "framework.route.observation.dependency-circuit",
+    navigationSpecId: "framework.flow",
+    target: FrameworkRouteEndpoints.ObservationDependencyCircuit,
+    relation: NavigationRelation.FrameworkFlowOf,
+    basis: SOURCE_CHECKER_BASIS,
+    summary:
+      "Observation flow rows can navigate to compact dependency-circuit roles.",
+  }),
+  ObservationToCollectionMethods: new FrameworkSemanticRouteSpec({
+    id: "framework.route.observation.collection-methods",
+    navigationSpecId: "framework.flow",
+    target: FrameworkRouteEndpoints.ObservationCollectionMethods,
+    relation: NavigationRelation.FrameworkFlowOf,
+    basis: SOURCE_CHECKER_BASIS,
+    summary:
+      "Observation flow rows can navigate to collection method inventory.",
+  }),
+  ObservationToObserverLocatorDecisions: new FrameworkSemanticRouteSpec({
+    id: "framework.route.observation.observer-locator-decisions",
+    navigationSpecId: "framework.flow",
+    target: FrameworkRouteEndpoints.ObservationObserverLocatorDecisions,
+    relation: NavigationRelation.FrameworkFlowOf,
+    basis: SOURCE_CHECKER_BASIS,
+    summary:
+      "Observation flow rows can navigate to the compact ObserverLocator decision table.",
   }),
   RenderingToBindingAdmissions: new FrameworkSemanticRouteSpec({
     id: "framework.route.rendering.binding-admissions",

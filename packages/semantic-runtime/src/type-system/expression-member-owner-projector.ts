@@ -77,6 +77,10 @@ export class CheckerExpressionMemberOwnerProjector {
       case 'Paren':
       case 'Unary':
         return this.evaluateAtOffset(expression.expression, offset, scope, `${localKey}:expression`, sourceAddressHandle, contextualType);
+      case 'BindingBehavior':
+      case 'ValueConverter':
+        return this.evaluateAtOffset(expression.expression, offset, scope, `${localKey}:expression`, sourceAddressHandle, contextualType)
+          ?? this.evaluateListAtOffset(expression.args, offset, scope, `${localKey}:args`, sourceAddressHandle);
       case 'AccessKeyed':
         return this.evaluateAtOffset(expression.object, offset, scope, `${localKey}:object`, sourceAddressHandle)
           ?? this.evaluateAtOffset(expression.key, offset, scope, `${localKey}:key`, sourceAddressHandle);

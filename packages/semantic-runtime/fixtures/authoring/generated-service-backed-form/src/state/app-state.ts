@@ -9,16 +9,22 @@ export interface RequestTopicSummary {
   label: string;
 }
 
-export interface ServiceRequest {
-  id: string;
-  customerName: string;
-  email: string;
-  urgent: boolean;
-  contactPreference: ContactPreference;
-  primaryTopic: RequestTopic | null;
-  topics: RequestTopic[];
-  notes: string;
-  submitCount: number;
+export class ServiceRequest {
+  constructor(
+    readonly id: string,
+    public customerName: string,
+    public email: string,
+    public urgent: boolean,
+    public contactPreference: ContactPreference,
+    public primaryTopic: RequestTopic | null,
+    public topics: RequestTopic[],
+    public notes: string,
+    public submitCount: number,
+  ) {}
+
+  get canSubmit(): boolean {
+    return this.customerName !== '' && this.email !== '';
+  }
 }
 
 export class AppState {
@@ -62,48 +68,6 @@ export class AppState {
       this.selectedRequestId = this.requestIds[0] ?? '';
     } finally {
       this.isLoadingRequests = false;
-    }
-  }
-
-  updateCustomerName(requestId: string, value: string): void {
-    const request = this.readRequest(requestId);
-    if (request != null) {
-      request.customerName = value;
-    }
-  }
-
-  updateEmail(requestId: string, value: string): void {
-    const request = this.readRequest(requestId);
-    if (request != null) {
-      request.email = value;
-    }
-  }
-
-  updateUrgency(requestId: string, value: boolean): void {
-    const request = this.readRequest(requestId);
-    if (request != null) {
-      request.urgent = value;
-    }
-  }
-
-  updateContactPreference(requestId: string, value: ContactPreference): void {
-    const request = this.readRequest(requestId);
-    if (request != null) {
-      request.contactPreference = value;
-    }
-  }
-
-  updatePrimaryTopic(requestId: string, value: RequestTopic | null): void {
-    const request = this.readRequest(requestId);
-    if (request != null) {
-      request.primaryTopic = value;
-    }
-  }
-
-  updateNotes(requestId: string, value: string): void {
-    const request = this.readRequest(requestId);
-    if (request != null) {
-      request.notes = value;
     }
   }
 

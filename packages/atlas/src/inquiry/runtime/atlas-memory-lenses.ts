@@ -9,6 +9,7 @@ import type { Inquiry } from "../inquiry.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import { PagedRowFamily } from "../paged-row-family.js";
 import { pageOffset, rowLimit } from "../paging.js";
+import { inquiryStringFilter } from "./lens-filter-utils.js";
 import {
   atlasMemoryNextPageContinuation,
   atlasMemoryProjectionContinuations,
@@ -45,6 +46,7 @@ import {
   staleAtlasMemoryRecordRows,
 } from "./atlas-memory-store.js";
 import {
+  atlasMemoryConsultRecordNextAction,
   atlasMemoryNextActionRows,
   type AtlasMemoryNextActionRow,
 } from "./atlas-memory-next-actions.js";
@@ -249,7 +251,7 @@ function answerAtlasMemoryNextActions(
   analysis: AtlasMemoryAnalysis,
   basis: readonly Basis[],
 ): Answer<AtlasMemoryValue> {
-  const rows = filterNextActions(atlasMemoryNextActionRows(analysis), inquiry);
+  const rows = atlasMemoryNextRowsForInquiry(analysis, inquiry);
   const rowFamily = new PagedRowFamily<AtlasMemoryNextActionRow>({
     id: "atlas.memory:next",
     rowLabel: "Atlas memory next action(s)",
@@ -284,6 +286,26 @@ function answerAtlasMemoryNextActions(
     }),
     openSeams: () => storageOpenSeams(analysis.issues),
   });
+}
+
+function atlasMemoryNextRowsForInquiry(
+  analysis: AtlasMemoryAnalysis,
+  inquiry: Inquiry,
+): readonly AtlasMemoryNextActionRow[] {
+  const rows = filterNextActions(atlasMemoryNextActionRows(analysis), inquiry);
+  if (rows.length > 0) {
+    return rows;
+  }
+  const recordId = inquiryStringFilter(inquiry, "recordId");
+  if (recordId === undefined) {
+    return rows;
+  }
+  return filterNextActions(
+    analysis.records
+      .filter((row) => row.id === recordId && row.nextActionPolicy !== "hidden")
+      .map(atlasMemoryConsultRecordNextAction),
+    inquiry,
+  );
 }
 
 function backingRecordsForNextActions(

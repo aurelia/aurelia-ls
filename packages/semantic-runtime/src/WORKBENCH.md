@@ -456,8 +456,9 @@ being forced into either an internal route or external-link bucket. Open seam pr
 kinds, not parse summary prose. If the blocked value comes from a runtime/local scope slot, the router seam should carry
 the binding-source slot reason alongside `router-instruction-needs-static-value`; do not hide that under a generic
 router expression failure.
-Parent-to-child controller property values are now carried by `RuntimeBoundControllerValueTable` in the binding-source
-layer. This matters when a child view-model method reads a bindable callback or scalar supplied by a parent template:
+Parent-to-child controller property values are now carried by `RuntimeBoundControllerValueTable` in
+`observation/runtime-bound-controller-value.ts`, with `RuntimeBindingSourceValueEvaluator` as a consumer. This matters
+when a child view-model method reads a bindable callback or scalar supplied by a parent template:
 the binding target is the child controller, while the source expression is evaluated in the parent scope. Template
 controller and narrowing scopes can copy a view-model binding context while legitimately changing the scope owner to a
 synthetic view, so value evaluation must be able to fall back from exact controller handles to an unambiguous
@@ -602,9 +603,12 @@ prints aggregate site kinds, outcomes, completion pressure classes, value-site k
 answer mismatches, cursor-info source coverage, focused selected-member coverage, hover/navigation targets, diagnostic
 signals, compact LSP envelopes, value-domain gaps, and bucketed missing-input reasons without paths, source text, or candidate names. Use it with
 `SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS` for external roots when a question is about hovers/completion/navigation
-pressure rather than whole app topology. Current sampled behavior is: generic expression scopes, binding-command names,
+pressure rather than whole app topology. It now mirrors app pressure's project-discovery override and requests paged
+runtime-summary project rows explicitly, so package-tsconfig monorepo roots do not accidentally report zero cursor
+pressure. Current sampled behavior is: generic expression scopes, binding-command names,
 resource names, bindable names, expression member owners, and parent repeat scopes are reachable; plain static platform
-attribute values are classified directly from HTML/syntax products and do not publish durable value-site products, while
+attribute values are classified directly from HTML/syntax products and do not publish durable value-site products or
+missing-input rows, while
 real platform interpolation values publish `plain-attribute-interpolation` and spend expression holes through normal expression completion; finite checker-backed static bindable domains offer literal
 `attribute-value` candidates; open-ended checker-backed scalar bindables are expected-empty completion sites; inline
 multi-binding custom-attribute values can offer bindable segment names from the resource definition; and router
@@ -879,6 +883,19 @@ A statically evaluated plain object, instance, boundary object, or non-resource 
 `object-view-model`, matching AuCompose's `_createComponentInstance(...)` branch where no custom-element definition is
 required. Object view-model rows reuse the same TypeChecker-backed activation handoff as custom-element candidates, but
 without compiled-template/candidate-runtime-analysis coverage because no custom-element definition exists.
+Recursive rendering pressure then exposed a parent-to-child value-flow gap rather than an AuCompose-only gap. A child
+resource that receives a broad `Constructable`-typed widget kit through bindables and resolves a concrete component with
+`widgets.find(entry => entry.isApplicable(id))` now closes because template runtime analysis threads an incremental
+`RuntimeBoundControllerValueTable` through project resource analysis, extends it with the current resource's rendered
+controller values during runtime composition, and records child controller definition target types. The evaluator also
+binds `this` for property method calls such as `entry.isApplicable(id)`, and exact evaluated object literals now return
+`undefined` for absent keys instead of fabricating unknown properties. Keep this as substrate: the table is still an
+incremental project pass, not a full recursive composition fixed point, so reversed or cyclic resource-order cases may
+need a deliberate project-level refinement later.
+`RuntimeCompositions` rows now also expose `renderingContextKind`: `definition-resource` means the row came from
+analyzing a resource's own template with public bindables still supplied by consumers, while
+`recursive-resource-instance` means a parent render pass supplied child controller values. App-pressure should read open
+rows through that context instead of treating every standalone definition-local open as an app use-site failure.
 Composition controller run/deactivate errors and recursive child composition hydration still need deeper composition
 lifecycle state before they can be claimed.
 The same controller issue lane now owns switch/case link-hook errors: `case` / `default-case` without a parent switch

@@ -16,6 +16,7 @@
       "guidance": [
         "Start here when cursor completion needs to choose site kind, active element, selected bindable, expression parse, binding scope, resource scope, or member-owner type.",
         "Keep source-span precision and missing-input reporting explicit; broad carrier/header spans should be treated as provenance pressure.",
+        "Plain static attribute values may classify as attribute-value sites without a TemplateValueSite product; that is an expected empty completion surface, not an attribute-value-site missing input.",
         "If another LSP-like feature needs similar cursor context, consider extracting a shared cursor-context substrate before duplicating this builder."
       ],
       "anchors": [
@@ -43,7 +44,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-18"
     },
     {
       "id": "frontier:query-claim-graph",
@@ -239,6 +240,134 @@
       ],
       "createdAt": "2026-05-17",
       "updatedAt": "2026-05-17"
+    },
+    {
+      "id": "frontier:semantic-contract-harness",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "testing",
+        "verification",
+        "inquiry",
+        "fixtures",
+        "framework-corpus"
+      ],
+      "summary": "Semantic contract verification should provide route-scoped regression witnesses without turning Aurelia framework tests or public DTOs into one large snapshot suite.",
+      "rationale": "auLink has been valuable as fast framework grounding, but inquiry policy, query-claim retention, invalidation, authoring expected effects, and public MCP answers now need behavior-level regression confidence. The durable shape should assert semantic products and expected effects selected by Work Router routes, while preserving the ability to refactor Atlas and semantic-runtime boldly when an ontology is wrong.",
+    "guidance": [
+      "Start here when testing strategy, semantic-runtime regression coverage, fixture verification, or public query budget checks are under discussion.",
+      "Use Work Router routes to select focused witnesses for changed observation, router, template, diagnostics, authoring, inquiry, or MCP surfaces.",
+      "Assert semantic effects and product facts rather than source snapshots or whole DTO dumps: resources, routes, bindings, controller topology, value channels, diagnostics, expected effects, retention policy, and answer budgets.",
+      "Runtime watcher, watcher observed-dependency, binding-owned trackable method dependency, template collection observation, computed-observer-source, and computed-observer-observed-dependency rows are now expected-effect targets. Use the proxy-observation, trackable-method-observation, template-collection-observation, and computed-observer-source contracts as the first patterns for row-backed observation witnesses.",
+      "Use Aurelia framework docs as promoted-pattern seeds and framework tests as behavior-grounding seeds; do not copy the full framework suite into the default lane.",
+        "Keep generated/recommendable fixtures and contrastive analysis fixtures distinct so authoring quality and analyzer robustness can both be checked.",
+        "Treat auLink as framework grounding, not behavior coverage. A link can show where semantic-runtime should mirror Aurelia; a contract should show what an answer or fixture must prove.",
+        "Give query/inquiry contracts cost and retention expectations when the consumer is MCP, LSP, diagnostics, authoring, AOT, or another profile with different budget needs.",
+        "Prefer a fast route-health/schema lane, a route-scoped semantic lane, a selected framework-corpus witness lane, and a slower confidence lane over one mandatory all-in suite.",
+        "Use `pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --list` or a route/domain filter before manually assembling contract scripts. The current suite is a first harness, not the final Atlas-selected contract algebra; it keeps child output compact on success and exposes `--verbose` for debugging."
+      ],
+      "nextActionPolicy": "when-touched",
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/expected-effect.ts",
+          "symbolName": "ExpectedSemanticEffect",
+          "summary": "Expected semantic effects are the contract vocabulary already used by authoring fixtures."
+        },
+    {
+      "kind": "source",
+      "filePath": "packages/semantic-runtime/src/authoring/verification.ts",
+      "symbolName": "readAuthoringVerificationSnapshot",
+      "summary": "Opened-app verification snapshot collector for row-backed expected effects."
+    },
+    {
+      "kind": "source",
+      "filePath": "packages/semantic-runtime/scripts/contract-suite.mjs",
+      "summary": "First route/domain/tier contract runner for selected semantic-runtime contract and authoring smoke witnesses."
+    },
+    {
+      "kind": "source",
+      "filePath": "packages/semantic-runtime/scripts/contract-proxy-observation.mjs",
+      "summary": "First route-scoped semantic contract witness for computed watcher ProxyObservable dependency rows."
+    },
+    {
+      "kind": "source",
+      "filePath": "packages/semantic-runtime/scripts/contract-trackable-method-observation.mjs",
+      "summary": "Route-scoped semantic contract witness for binding-owned @computed/@astTrack trackable method dependency rows."
+    },
+    {
+      "kind": "source",
+      "filePath": "packages/semantic-runtime/scripts/contract-computed-observer-source.mjs",
+      "summary": "Route-scoped semantic contract witness for getter ComputedObserver/ControlledComputedObserver source rows and dependency provenance."
+    },
+    {
+      "kind": "source",
+      "filePath": "packages/semantic-runtime/scripts/contract-template-collection-observation.mjs",
+      "summary": "Route-scoped semantic contract witness for TypeChecker-gated astEvaluate array collection reads and callback-local false-positive rejection."
+    },
+    {
+      "kind": "source",
+      "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraph",
+          "summary": "Query materialization and retention policy should become contractable for public answers."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.work-router",
+          "projection": "route-plan",
+          "summary": "Route-scoped witness selection should start from Work Router rather than a monolithic test command."
+        },
+        {
+          "kind": "lens",
+          "lensId": "framework.corpus",
+          "projection": "fixture-seeds",
+          "summary": "Docs/tests witness seeds for promoted-pattern and behavior-grounding examples."
+        },
+        {
+          "kind": "doc",
+          "path": ".temp/mcp-preview-and-testing-alignment-2026-05-18.md",
+          "summary": "Scratch alignment that captured the testing strategy before promotion."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/authoring/expected-effect.ts",
+          "symbolName": "ExpectedSemanticEffect"
+        },
+    {
+      "kind": "source-declaration-exists",
+      "filePath": "packages/semantic-runtime/src/authoring/verification.ts",
+      "symbolName": "readAuthoringVerificationSnapshot"
+    },
+    {
+      "kind": "source-file-exists",
+      "filePath": "packages/semantic-runtime/scripts/contract-suite.mjs"
+    },
+    {
+      "kind": "source-file-exists",
+      "filePath": "packages/semantic-runtime/scripts/contract-proxy-observation.mjs"
+    },
+    {
+      "kind": "source-file-exists",
+      "filePath": "packages/semantic-runtime/scripts/contract-trackable-method-observation.mjs"
+    },
+    {
+      "kind": "source-file-exists",
+      "filePath": "packages/semantic-runtime/scripts/contract-computed-observer-source.mjs"
+    },
+    {
+      "kind": "source-file-exists",
+      "filePath": "packages/semantic-runtime/scripts/contract-template-collection-observation.mjs"
+    },
+    {
+      "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraph"
+        }
+      ],
+      "createdAt": "2026-05-18",
+      "updatedAt": "2026-05-19"
     }
   ]
 }

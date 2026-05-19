@@ -58,7 +58,7 @@ import type {
   TemplateScopeConstructionEmission,
 } from '../template/template-controller-scope-materializer.js';
 import {
-  instructionScopeMap,
+  instructionScopeLookup,
   isRuntimeExpressionBinding,
 } from './runtime-binding-expression.js';
 import {
@@ -176,7 +176,7 @@ export class RuntimeBindingValueChannelMaterializer {
     const openSeams: OpenSeam[] = [];
     const source = this.recordsForSource(input.localKey);
     records.push(...source.records);
-    const instructionScopes = instructionScopeMap(input.scopes.instructionScopes);
+    const instructionScopes = instructionScopeLookup(input.scopes.instructionScopes);
     const evaluator = input.expressionWorld.evaluator(input.resourceScope);
 
     input.runtimeBindings.bindings.forEach((binding, index) => {

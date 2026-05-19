@@ -30,6 +30,8 @@ import type {
   SemanticRuntimeControllerChildViewRenderingState,
   SemanticRuntimeControllerLifecycleStepRow,
   SemanticRuntimeControllerRow,
+  SemanticRuntimeWatcherObservedDependencyRow,
+  SemanticRuntimeWatcherRow,
   SemanticRuntimeTemplateControllerLinkKind,
 } from './contracts.js';
 
@@ -96,6 +98,58 @@ export function readRuntimeControllerRows(
       runtimeControllerRow(renderingDefinitionNameForController(controller, resourcesByDefinition), controller, context)
     ),
   ]);
+}
+
+/** Controller-owned ComputedWatcher/ExpressionWatcher rows created from resource watch metadata. */
+export function readRuntimeWatcherRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): readonly SemanticRuntimeWatcherRow[] {
+  const context = runtimeControllerProjectionContext(emission, store, handles);
+  const resourcesByDefinition = runtimeTemplateResourcesByDefinition(emission.templates.resources);
+  return [
+    ...emission.templates.resources.flatMap((resource) =>
+      [
+        ...resource.runtimeAnalysis.runtimeRendering.controllers,
+        ...resource.runtimeAnalysis.runtimeComposition.composedControllers,
+      ].flatMap((controller) =>
+        runtimeWatcherRowsForController(resource.compilation.definition.name, controller, context)
+      )
+    ),
+    ...emission.routeComponentAgents.readControllers().flatMap((controller) =>
+      runtimeWatcherRowsForController(renderingDefinitionNameForController(controller, resourcesByDefinition), controller, context)
+    ),
+  ].sort((left, right) =>
+    `${left.renderingDefinitionName}:${left.controllerName}:${left.watchIndex}:${left.watcherKind}`
+      .localeCompare(`${right.renderingDefinitionName}:${right.controllerName}:${right.watchIndex}:${right.watcherKind}`)
+  );
+}
+
+/** Expression dependencies collected by controller-owned watcher execution paths. */
+export function readRuntimeWatcherObservedDependencyRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): readonly SemanticRuntimeWatcherObservedDependencyRow[] {
+  const context = runtimeControllerProjectionContext(emission, store, handles);
+  const resourcesByDefinition = runtimeTemplateResourcesByDefinition(emission.templates.resources);
+  return [
+    ...emission.templates.resources.flatMap((resource) =>
+      [
+        ...resource.runtimeAnalysis.runtimeRendering.controllers,
+        ...resource.runtimeAnalysis.runtimeComposition.composedControllers,
+      ].flatMap((controller) =>
+        runtimeWatcherObservedDependencyRowsForController(resource.compilation.definition.name, controller, context)
+      )
+    ),
+    ...emission.routeComponentAgents.readControllers().flatMap((controller) =>
+      runtimeWatcherObservedDependencyRowsForController(renderingDefinitionNameForController(controller, resourcesByDefinition), controller, context)
+    ),
+  ].sort((left, right) =>
+    `${left.renderingDefinitionName}:${left.controllerName}:${left.watchIndex}:${left.dependencyKind}:${left.memberName ?? ''}`
+      .localeCompare(`${right.renderingDefinitionName}:${right.controllerName}:${right.watchIndex}:${right.dependencyKind}:${right.memberName ?? ''}`)
+  );
 }
 
 function runtimeControllerProjectionContext(
@@ -199,6 +253,81 @@ function renderingDefinitionNameForController(
   return resource?.compilation.definition.name ?? controller.name ?? 'unknown';
 }
 
+function runtimeWatcherRowsForController(
+  renderingDefinitionName: string,
+  controller: RuntimeControllerFrame,
+  context: RuntimeControllerProjectionContext,
+): readonly SemanticRuntimeWatcherRow[] {
+  const state = runtimeControllerProjectionState(controller, context);
+  return controller.readWatchers().map((watcher) => ({
+    renderingDefinitionName,
+    controllerName: controller.name,
+    definitionName: definitionName(state.controllerDefinition),
+    definitionClassName: definitionClassName(state.controllerDefinition),
+    watcherKind: watcher.watcherKind,
+    dependencyEvaluationKind: watcher.dependencyEvaluationKind,
+    watchIndex: watcher.watchIndex,
+    expressionKind: watcher.expression.kind,
+    expressionPropertyKeyKind: watcher.expression.propertyKey?.kind ?? null,
+    expressionPropertyKey: watcher.expression.propertyKey?.text ?? null,
+    callbackKind: watcher.callback.kind,
+    callbackMethodNameKind: watcher.callback.methodName?.kind ?? null,
+    callbackMethodName: watcher.callback.methodName?.text ?? null,
+    flush: watcher.flush,
+    observedDependencies: watcher.observedDependencies.length,
+    source: describeAddress(context.store, watcher.sourceAddressHandle),
+    ...(context.handles ? {
+      handles: {
+        watcherProductHandle: watcher.productHandle,
+        watcherIdentityHandle: watcher.identityHandle,
+        controllerProductHandle: controller.productHandle,
+        controllerIdentityHandle: controller.identityHandle,
+        definitionProductHandle: watcher.definitionProductHandle,
+        sourceAddressHandle: watcher.sourceAddressHandle,
+      },
+    } : {}),
+  }));
+}
+
+function runtimeWatcherObservedDependencyRowsForController(
+  renderingDefinitionName: string,
+  controller: RuntimeControllerFrame,
+  context: RuntimeControllerProjectionContext,
+): readonly SemanticRuntimeWatcherObservedDependencyRow[] {
+  const state = runtimeControllerProjectionState(controller, context);
+  return controller.readWatchers().flatMap((watcher) =>
+    watcher.observedDependencies.map((dependency) => ({
+      renderingDefinitionName,
+      controllerName: controller.name,
+      definitionName: definitionName(state.controllerDefinition),
+      definitionClassName: definitionClassName(state.controllerDefinition),
+      watcherKind: watcher.watcherKind,
+      watchIndex: watcher.watchIndex,
+      dependencyKind: dependency.dependencyKind,
+      expressionKind: dependency.expressionKind,
+      sourceName: dependency.sourceName,
+      sourceRootName: dependency.sourceRootName,
+      memberName: dependency.memberName,
+      keyExpression: dependency.keyExpression,
+      methodName: dependency.methodName,
+      observedMemberKind: dependency.observedMemberKind,
+      observedMemberSource: describeAddress(context.store, dependency.observedMemberSourceAddressHandle),
+      spanStart: dependency.spanStart,
+      spanEnd: dependency.spanEnd,
+      source: describeAddress(context.store, dependency.sourceAddressHandle),
+      ...(context.handles ? {
+        handles: {
+          watcherProductHandle: watcher.productHandle,
+          observedDependencyProductHandle: dependency.productHandle,
+          observedDependencyIdentityHandle: dependency.identityHandle,
+          observedMemberSourceAddressHandle: dependency.observedMemberSourceAddressHandle,
+          sourceAddressHandle: dependency.sourceAddressHandle,
+        },
+      } : {}),
+    }))
+  );
+}
+
 function runtimeControllerDefinitionRowFields(
   state: RuntimeControllerProjectionState,
 ): Pick<SemanticRuntimeControllerRow, 'definitionKind' | 'definitionName' | 'definitionClassName' | 'instructionKind'> {
@@ -213,11 +342,12 @@ function runtimeControllerDefinitionRowFields(
 function runtimeControllerTreeRowFields(
   controller: RuntimeControllerFrame,
   state: RuntimeControllerProjectionState,
-): Pick<SemanticRuntimeControllerRow, 'parentControllerName' | 'childControllers' | 'runtimeBindings' | 'hasScope'> {
+): Pick<SemanticRuntimeControllerRow, 'parentControllerName' | 'childControllers' | 'runtimeBindings' | 'runtimeWatchers' | 'hasScope'> {
   return {
     parentControllerName: controller.parent?.name ?? null,
     childControllers: controller.readChildren().length,
     runtimeBindings: controller.readBindings().length,
+    runtimeWatchers: controller.readWatchers().length,
     hasScope: state.scope?.productHandle != null,
   };
 }

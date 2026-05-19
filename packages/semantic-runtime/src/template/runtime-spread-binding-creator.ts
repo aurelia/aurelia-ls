@@ -47,6 +47,8 @@ export interface RuntimeSpreadBindingCreationState {
 
 interface RuntimeCapturedAttributeUsage {
   readonly requestorDefinitionProductHandle: ProductHandle | null;
+  readonly contextInstructionProductHandle: ProductHandle;
+  readonly contextControllerProductHandle: ProductHandle;
   readonly captureSyntaxProductHandles: readonly ProductHandle[];
 }
 
@@ -101,6 +103,8 @@ export class RuntimeSpreadBindingCreator {
         state.dynamicInstructions,
         state.dynamicValueSites,
         state.dynamicExpressionParses,
+        usage.contextInstructionProductHandle,
+        usage.contextControllerProductHandle,
       ),
     );
     return this.runtimeResultForTemplateCompilerResult(spread, result);
@@ -145,6 +149,8 @@ export class RuntimeSpreadBindingCreator {
 
     return {
       requestorDefinitionProductHandle: contextController.definitionProductHandle ?? contextInstruction.definitionProductHandle,
+      contextInstructionProductHandle: contextInstruction.productHandle,
+      contextControllerProductHandle: contextController.productHandle,
       captureSyntaxProductHandles: contextInstruction.captureSyntaxProductHandles,
     };
   }

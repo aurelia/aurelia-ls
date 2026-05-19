@@ -141,6 +141,14 @@ export const KernelBindingKinds = {
       KernelVocabularySlot.BindingKind,
       'State plugin dispatch binding attached to a DOM event.',
     ),
+
+    /** Binding kind for resource watch metadata admitted as ComputedWatcher or ExpressionWatcher. */
+    Watcher: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'watcher',
+      KernelVocabularySlot.BindingKind,
+      'Controller-owned watcher binding created from resource watch metadata.',
+    ),
   },
   Instruction: {
   },

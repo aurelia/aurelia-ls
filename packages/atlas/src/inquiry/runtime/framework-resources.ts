@@ -10,6 +10,7 @@ import {
   type SourceProject,
   type TypeScriptExportNameEntry,
   type TypeScriptExportSurfaceEntry,
+  hasExportModifier,
 } from "../../source/index.js";
 import { FrameworkResourceDefinitionKind } from "../../framework/index.js";
 import {
@@ -152,7 +153,7 @@ export function scanFrameworkResourcePackageCarrierRows(
   packageName: string,
   exportName?: string,
 ): readonly FrameworkResourceCarrierRow[] {
-  return sourceProject
+  const rows = sourceProject
     .ownedImplementationSourceFilesForPackage(packageId)
     .flatMap((sourceFile) => [
       ...exportedClassDeclarations(sourceFile).flatMap((declaration) => {
@@ -195,7 +196,15 @@ export function scanFrameworkResourcePackageCarrierRows(
         packageName,
         exportName,
       ),
-    ])
+      ...resourceCarriersForNestedDefinitionCalls(
+        sourceProject,
+        sourceFile,
+        packageId,
+        packageName,
+        exportName,
+      ),
+    ]);
+  return [...uniqueById(rows)]
     .sort(
       (left, right) =>
         left.resourceKind.localeCompare(right.resourceKind) ||
@@ -618,29 +627,86 @@ export function resourceCarriersForTopLevelDefineCalls(
     if (!ts.isCallExpression(expression)) {
       continue;
     }
-    const resourceKind = resourceKindFromDefinitionCall(expression);
-    const targetExpression =
-      resourceTargetExpressionFromDefinitionCall(expression);
-    if (resourceKind === null || targetExpression === null) {
+    rows.push(
+      ...resourceCarriersForDefinitionCall(
+        sourceProject,
+        sourceFile,
+        expression,
+        packageId,
+        packageName,
+        { exportName },
+      ),
+    );
+  }
+  return uniqueById(rows);
+}
+
+export function resourceCarriersForNestedDefinitionCalls(
+  sourceProject: SourceProject,
+  sourceFile: ts.SourceFile,
+  packageId: string,
+  packageName: string,
+  exportName?: string,
+): readonly FrameworkResourceCarrierRow[] {
+  const rows: FrameworkResourceCarrierRow[] = [];
+  for (const call of callExpressionsIn(sourceFile)) {
+    if (hasEstablishedResourceCarrierScope(call)) {
       continue;
     }
-    const targetDeclarations = declarationsForExpressionSymbol(
-      sourceProject,
-      targetExpression,
-    ).filter(
-      (declaration) =>
-        sourceProject.packageForFileName(declaration.getSourceFile().fileName)
-          ?.id === packageId,
+    rows.push(
+      ...resourceCarriersForDefinitionCall(
+        sourceProject,
+        sourceFile,
+        call,
+        packageId,
+        packageName,
+        { exportName, requireExportedTarget: true },
+      ),
     );
-    for (const declaration of targetDeclarations) {
+  }
+  return uniqueById(rows);
+}
+
+export function resourceCarriersForDefinitionCall(
+  sourceProject: SourceProject,
+  sourceFile: ts.SourceFile,
+  call: ts.CallExpression,
+  packageId: string,
+  packageName: string,
+  options: {
+    readonly exportName?: string;
+    readonly requireExportedTarget?: boolean;
+  } = {},
+): readonly FrameworkResourceCarrierRow[] {
+  const resourceKind = resourceKindFromDefinitionCall(call);
+  const targetExpression = resourceTargetExpressionFromDefinitionCall(call);
+  if (resourceKind === null || targetExpression === null) {
+    return [];
+  }
+  const definitionExpression = call.arguments[0] ?? null;
+  const targetDeclarations = declarationsForExpressionSymbol(
+    sourceProject,
+    targetExpression,
+  ).filter((declaration) => {
+    const sourcePackage = sourceProject.packageForFileName(
+      declaration.getSourceFile().fileName,
+    );
+    return (
+      sourcePackage?.id === packageId &&
+      (options.requireExportedTarget !== true ||
+        hasExportedValueDeclaration(declaration))
+    );
+  });
+  return uniqueById(
+    targetDeclarations.flatMap((declaration) => {
       const value = valueDeclarationParts(declaration);
       const name = declarationNameText(declaration);
       if (
         value === null ||
         name === null ||
-        (exportName !== undefined && name !== exportName)
+        (options.exportName !== undefined && name !== options.exportName)
       ) {
-        continue;
+        return [];
       }
       const carrierEntry = exportSurfaceEntryForNamedDeclaration(
         sourceProject,
@@ -649,7 +715,7 @@ export function resourceCarriersForTopLevelDefineCalls(
         value.declarationNode,
         value.declarationKind,
       );
-      rows.push(
+      return [
         resourceCarrierRow(
           sourceProject,
           sourceFile,
@@ -658,24 +724,26 @@ export function resourceCarriersForTopLevelDefineCalls(
           carrierEntry,
           resourceKind,
           FrameworkResourceCarrierKind.DefineCall,
-          expression,
+          call,
           {
-            resourceName: readResourceName(
-              sourceProject,
-              expression.arguments[0] ?? expression,
-            ),
-            aliases: readStaticStringArrayProperty(
-              sourceProject,
-              expression.arguments[0] ?? expression,
-              "aliases",
-            ),
+            resourceName:
+              definitionExpression === null
+                ? null
+                : readResourceName(sourceProject, definitionExpression),
+            aliases:
+              definitionExpression === null
+                ? []
+                : readStaticStringArrayProperty(
+                    sourceProject,
+                    definitionExpression,
+                    "aliases",
+                  ),
             targetName: name,
           },
         ),
-      );
-    }
-  }
-  return uniqueById(rows);
+      ];
+    }),
+  );
 }
 
 export function resourceCarrierRow(
@@ -758,6 +826,33 @@ function hasSourceTargetRange(
   readonly span: NonNullable<SourceTargetRow["span"]>;
 } {
   return target.file !== undefined && target.span !== undefined;
+}
+
+function hasEstablishedResourceCarrierScope(call: ts.CallExpression): boolean {
+  let current: ts.Node | undefined = call.parent;
+  while (current !== undefined && !ts.isSourceFile(current)) {
+    if (ts.isVariableDeclaration(current)) {
+      const statement = current.parent.parent;
+      return ts.isVariableStatement(statement) && hasExportModifier(statement);
+    }
+    if (ts.isClassStaticBlockDeclaration(current)) {
+      const declaration = current.parent;
+      return ts.isClassDeclaration(declaration) && hasExportModifier(declaration);
+    }
+    if (ts.isExpressionStatement(current) && ts.isSourceFile(current.parent)) {
+      return true;
+    }
+    current = current.parent;
+  }
+  return false;
+}
+
+function hasExportedValueDeclaration(declaration: ts.Declaration): boolean {
+  if (ts.isVariableDeclaration(declaration)) {
+    const statement = declaration.parent.parent;
+    return ts.isVariableStatement(statement) && hasExportModifier(statement);
+  }
+  return hasExportModifier(declaration);
 }
 
 export function decoratorCalleeName(decorator: ts.Decorator): string | null {

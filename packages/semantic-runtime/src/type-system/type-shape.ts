@@ -217,6 +217,24 @@ export class CheckerTypeReference {
   ) {}
 }
 
+export function checkerTypeReferenceWithSource(
+  reference: CheckerTypeReference,
+  sourceAddressHandle: AddressHandle | null,
+): CheckerTypeReference {
+  if (sourceAddressHandle === reference.sourceAddressHandle) {
+    return reference;
+  }
+  return new CheckerTypeReference(
+    reference.productHandle,
+    reference.identityHandle,
+    reference.checkerKey,
+    reference.display,
+    reference.shapeKind,
+    reference.origin,
+    sourceAddressHandle,
+  );
+}
+
 export function sameCheckerTypeReference(
   left: CheckerTypeReference,
   right: CheckerTypeReference,

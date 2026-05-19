@@ -143,6 +143,42 @@ export function unwrapExpression(
   return current;
 }
 
+export function isFunctionLikeBoundary(
+  node: ts.Node,
+): boolean {
+  return ts.isArrowFunction(node)
+    || ts.isFunctionExpression(node)
+    || ts.isFunctionDeclaration(node)
+    || ts.isMethodDeclaration(node)
+    || ts.isGetAccessorDeclaration(node)
+    || ts.isSetAccessorDeclaration(node)
+    || ts.isConstructorDeclaration(node);
+}
+
+export function isNestedExecutionBoundary(
+  node: ts.Node,
+): boolean {
+  return isFunctionLikeBoundary(node)
+    || ts.isClassDeclaration(node)
+    || ts.isClassExpression(node);
+}
+
+export function typescriptExpressionSourceRootName(
+  expression: ts.Expression,
+): string | null {
+  const current = unwrapExpression(expression);
+  if (ts.isIdentifier(current)) {
+    return current.text;
+  }
+  if (current.kind === ts.SyntaxKind.ThisKeyword) {
+    return 'this';
+  }
+  if (ts.isPropertyAccessExpression(current) || ts.isElementAccessExpression(current)) {
+    return typescriptExpressionSourceRootName(current.expression);
+  }
+  return null;
+}
+
 export function hasModifier(node: ts.Node, kind: ts.SyntaxKind): boolean {
   return ts.canHaveModifiers(node)
     ? ts.getModifiers(node)?.some((modifier) => modifier.kind === kind) ?? false

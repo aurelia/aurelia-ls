@@ -501,6 +501,38 @@ export const KernelProductKinds = {
       KernelVocabularySlot.ProductKind,
       'A source-backed observation issue such as framework-rejected @observable decorator usage.',
     ),
+
+    /** Product kind for a valid @computed getter or method dependency declaration. */
+    ComputedDefinition: defineVocabulary(
+      KernelVocabularyNamespace.Observation,
+      'computed-definition',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed @computed getter or method dependency declaration that feeds computed observer or trackable-method dependency collection.',
+    ),
+
+    /** Product kind for a source-backed observer selected by ObserverLocator source-side semantics. */
+    SourceObserver: defineVocabulary(
+      KernelVocabularyNamespace.Observation,
+      'source-observer',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed observer selected by ObserverLocator source-side semantics, such as ComputedObserver or ControlledComputedObserver for an authored getter.',
+    ),
+
+    /** Product kind for a source-level IEffect produced by Aurelia observation APIs. */
+    RuntimeEffect: defineVocabulary(
+      KernelVocabularyNamespace.Observation,
+      'runtime-effect',
+      KernelVocabularySlot.ProductKind,
+      'A source-level IEffect produced by Observation.watch(...) or Observation.run(...).',
+    ),
+
+    /** Product kind for source-level ProxyObservable raw/unwrap escape calls. */
+    ProxyObservableEscape: defineVocabulary(
+      KernelVocabularyNamespace.Observation,
+      'proxy-observable-escape',
+      KernelVocabularySlot.ProductKind,
+      'A source-level ProxyObservable.getRaw(...) or ProxyObservable.unwrap(...) escape call.',
+    ),
   },
   RouteRecognizer: {
 
@@ -829,6 +861,14 @@ export const KernelProductKinds = {
       'Runtime binding instance emulated from renderer semantics and lowered instructions.',
     ),
 
+    /** Product kind for controller-owned watcher bindings created from resource watch metadata. */
+    RuntimeWatcher: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'runtime-watcher',
+      KernelVocabularySlot.ProductKind,
+      'Controller-owned ComputedWatcher or ExpressionWatcher binding created from resource watch metadata during controller hydration.',
+    ),
+
     /** Product kind for a framework-runtime issue discovered while a modeled runtime binding executes its own lifecycle. */
     RuntimeBindingIssue: defineVocabulary(
       KernelVocabularyNamespace.Binding,
@@ -891,6 +931,14 @@ export const KernelProductKinds = {
       'data-flow',
       KernelVocabularySlot.ProductKind,
       'Runtime binding data-flow edge connecting source expression scope lookup to target accessor or observer facts.',
+    ),
+
+    /** Product kind for one expression read that participates in runtime dependency collection. */
+    ObservedDependency: defineVocabulary(
+      KernelVocabularyNamespace.Binding,
+      'observed-dependency',
+      KernelVocabularySlot.ProductKind,
+      'Expression read observed by runtime binding or watcher evaluation through connectable dependency collection.',
     ),
 
     /** Product kind for a binding-behavior application over a runtime binding. */

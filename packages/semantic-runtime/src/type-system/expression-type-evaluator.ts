@@ -46,6 +46,7 @@ import {
 } from './binding-pattern-locals.js';
 import {
   CheckerTypeShapeAccess,
+  type CheckerTypeShapeMemberValueAccess,
 } from './checker-type-shape-access.js';
 import {
   CheckerExpressionType,
@@ -220,6 +221,49 @@ export class CheckerExpressionTypeEvaluator {
     );
   }
 
+  evaluateMemberValueAccessAtOffset(
+    expression: ExpressionAstNode,
+    offset: number,
+    memberName: string,
+    scope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null = null,
+    contextualType: CheckerTypeReference | null = null,
+  ): CheckerTypeShapeMemberValueAccess | null {
+    const owner = this.evaluateMemberOwnerAtOffset(
+      expression,
+      offset,
+      scope,
+      `${localKey}:owner`,
+      sourceAddressHandle,
+      contextualType,
+    );
+    const ownerReference = owner.kind === CheckerExpressionTypeEvaluationResultKind.Type
+      ? owner.typeReference
+      : owner.partialTypeReference;
+    if (ownerReference == null) {
+      return null;
+    }
+    const ownerShape = this.typeAccess.resolveReference(ownerReference);
+    return ownerShape == null
+      ? null
+      : this.typeAccess.memberValueAccess(ownerShape, memberName, `${localKey}:member:${localKeyPart(memberName)}`);
+  }
+
+  memberValueAccessForReference(
+    ownerReference: CheckerTypeReference | null,
+    memberName: string,
+    localKey: string,
+  ): CheckerTypeShapeMemberValueAccess | null {
+    if (ownerReference == null) {
+      return null;
+    }
+    const ownerShape = this.typeAccess.resolveReference(ownerReference);
+    return ownerShape == null
+      ? null
+      : this.typeAccess.memberValueAccess(ownerShape, memberName, `${localKey}:member:${localKeyPart(memberName)}`);
+  }
+
   evaluateIteratorElement(
     expression: ForOfStatement,
     scope: BindingScope,
@@ -391,6 +435,7 @@ export class CheckerExpressionTypeEvaluator {
       scope,
       `${localKey}:call-scope:${expression.name.name}`,
       sourceAddressHandle,
+      callee.sourceAddressHandle,
     );
   }
 
@@ -420,6 +465,7 @@ export class CheckerExpressionTypeEvaluator {
       scope,
       `${localKey}:global-call:${expression.name.name}`,
       sourceAddressHandle,
+      projected.sourceAddressHandle,
     );
   }
 
@@ -441,6 +487,7 @@ export class CheckerExpressionTypeEvaluator {
       scope,
       `${localKey}:construct-return`,
       sourceAddressHandle,
+      constructor.sourceAddressHandle,
     );
   }
 
@@ -473,6 +520,7 @@ export class CheckerExpressionTypeEvaluator {
       scope,
       `${localKey}:call-return:${expression.name.name}`,
       sourceAddressHandle,
+      memberType.sourceAddressHandle,
     );
   }
 
@@ -505,6 +553,7 @@ export class CheckerExpressionTypeEvaluator {
       scope,
       `${localKey}:call-function-return`,
       sourceAddressHandle,
+      callee.sourceAddressHandle,
     );
   }
 
@@ -538,6 +587,7 @@ export class CheckerExpressionTypeEvaluator {
       scope,
       `${localKey}:tag-return`,
       sourceAddressHandle,
+      tag.sourceAddressHandle,
     );
   }
 

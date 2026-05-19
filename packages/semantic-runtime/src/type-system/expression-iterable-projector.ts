@@ -110,7 +110,13 @@ export class CheckerExpressionIterableProjector {
     if (iterable.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return new CheckerExpressionIteratorProjection(iterable, iterable, iterable);
     }
-    const element = this.evaluateIterableElementType(expression, iterable.typeShape, `${localKey}:iterator-element`, sourceAddressHandle);
+    const iteratorSourceAddressHandle = iterable.sourceAddressHandle ?? sourceAddressHandle;
+    const element = this.evaluateIterableElementType(
+      expression,
+      iterable.typeShape,
+      `${localKey}:iterator-element`,
+      iteratorSourceAddressHandle,
+    );
     if (element.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return new CheckerExpressionIteratorProjection(iterable, element, element);
     }
@@ -118,7 +124,7 @@ export class CheckerExpressionIterableProjector {
       expression.declaration,
       element.typeShape,
       `${localKey}:iterator-local`,
-      sourceAddressHandle,
+      element.sourceAddressHandle ?? iteratorSourceAddressHandle,
     );
     return new CheckerExpressionIteratorProjection(iterable, element, locals);
   }
@@ -130,7 +136,7 @@ export class CheckerExpressionIterableProjector {
     sourceAddressHandle: AddressHandle | null = null,
   ): CheckerExpressionTypeEvaluation {
     if (iterableType.shapeKind === CheckerTypeShapeKind.Any) {
-      return this.support.type(iterableType, `Repeat local from iterable '${iterableType.display}' remains any.`);
+      return this.support.type(iterableType, `Repeat local from iterable '${iterableType.display}' remains any.`, sourceAddressHandle);
     }
 
     const checker = iterableType.carrier?.checker ?? null;

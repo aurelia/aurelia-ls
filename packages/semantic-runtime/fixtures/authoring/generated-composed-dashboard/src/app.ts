@@ -1,4 +1,4 @@
-import { customElement, type ICompositionController } from '@aurelia/runtime-html';
+import { customElement } from '@aurelia/runtime-html';
 import { resolve } from '@aurelia/kernel';
 import { ChartWidget } from './widgets/chart-widget';
 import { InventoryWidget } from './widgets/inventory-widget';
@@ -12,14 +12,10 @@ import template from './app.html';
 })
 export class DashboardApp {
   readonly state = resolve(DashboardState);
-  summaryComposition?: ICompositionController;
+  summaryComposition?: unknown;
   summaryPending?: Promise<void> | void;
 
   readonly summaryTemplate = '<p class="dashboard-summary">Alert summary is composed at runtime.</p>';
-
-  get isSummaryLoading(): boolean {
-    return this.summaryPending != null;
-  }
 
   getAsyncSummaryTemplate(): Promise<string> {
     return Promise.resolve(this.summaryTemplate);

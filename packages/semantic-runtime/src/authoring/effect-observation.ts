@@ -18,11 +18,18 @@ export interface ExpectedSemanticEffectObservationSnapshot {
   readonly serviceInteractions: readonly object[];
   readonly serviceInteractionBindings: readonly object[];
   readonly compiledResources: number;
+  readonly templateDiagnostics: ExpectedSemanticEffectObservableRows;
   readonly runtimeControllers: ExpectedSemanticEffectObservableRows;
+  readonly runtimeWatchers: ExpectedSemanticEffectObservableRows;
+  readonly runtimeWatcherObservedDependencies: ExpectedSemanticEffectObservableRows;
   readonly runtimeCompositions: readonly object[];
   readonly bindingTargetAccesses: ExpectedSemanticEffectObservableRows;
   readonly targetOperations: ExpectedSemanticEffectObservableRows;
   readonly bindingValueChannels: ExpectedSemanticEffectObservableRows;
+  readonly bindingObservedDependencies: ExpectedSemanticEffectObservableRows;
+  readonly computedObservationDefinitions: ExpectedSemanticEffectObservableRows;
+  readonly computedObserverSources: ExpectedSemanticEffectObservableRows;
+  readonly computedObserverObservedDependencies: ExpectedSemanticEffectObservableRows;
   readonly bindingBehaviorApplications: readonly object[];
   readonly i18nTranslationKeys: readonly object[];
   readonly i18nTranslationBindings: readonly object[];
@@ -35,7 +42,7 @@ export interface ExpectedSemanticEffectObservationSnapshot {
   readonly capabilities: readonly ExpectedSemanticEffectCapabilityRow[];
   readonly taste: readonly ExpectedSemanticEffectTasteAxisRow[];
   readonly repairClusters: readonly object[];
-  readonly openSeams: number;
+  readonly openSeams: ExpectedSemanticEffectObservableRows;
 }
 
 export type ExpectedSemanticEffectObservableRows =
@@ -191,8 +198,14 @@ export function observedCountForExpectedSemanticEffect(
       ).length;
     case 'template-compilation':
       return snapshot.compiledResources;
+    case 'template-diagnostic':
+      return filteredRowCount(snapshot.templateDiagnostics, expectedEffect.filters);
     case 'runtime-controller':
       return filteredRowCount(snapshot.runtimeControllers, expectedEffect.filters);
+    case 'runtime-watcher':
+      return filteredRowCount(snapshot.runtimeWatchers, expectedEffect.filters);
+    case 'runtime-watcher-observed-dependency':
+      return filteredRowCount(snapshot.runtimeWatcherObservedDependencies, expectedEffect.filters);
     case 'runtime-composition':
       return snapshot.runtimeCompositions.filter((composition) =>
         matchesFilters(composition, expectedEffect.filters)
@@ -203,6 +216,14 @@ export function observedCountForExpectedSemanticEffect(
       return filteredRowCount(snapshot.targetOperations, expectedEffect.filters);
     case 'binding-value-channel':
       return filteredRowCount(snapshot.bindingValueChannels, expectedEffect.filters);
+    case 'binding-observed-dependency':
+      return filteredRowCount(snapshot.bindingObservedDependencies, expectedEffect.filters);
+    case 'computed-observation-definition':
+      return filteredRowCount(snapshot.computedObservationDefinitions, expectedEffect.filters);
+    case 'computed-observer-source':
+      return filteredRowCount(snapshot.computedObserverSources, expectedEffect.filters);
+    case 'computed-observer-observed-dependency':
+      return filteredRowCount(snapshot.computedObserverObservedDependencies, expectedEffect.filters);
     case 'binding-behavior-application':
       return snapshot.bindingBehaviorApplications.filter((application) =>
         matchesFilters(application, expectedEffect.filters)
@@ -235,8 +256,10 @@ export function observedCountForExpectedSemanticEffect(
       return snapshot.repairClusters.filter((cluster) =>
         matchesFilters(cluster, expectedEffect.filters)
       ).length;
+    case 'open-seam':
+      return filteredRowCount(snapshot.openSeams, expectedEffect.filters);
     case 'open-seam-closure':
-      return snapshot.openSeams;
+      return filteredRowCount(snapshot.openSeams, expectedEffect.filters);
   }
 }
 

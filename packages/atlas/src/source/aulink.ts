@@ -57,6 +57,8 @@ export const enum AuLinkFrameworkTargetCompositionKind {
   InterfaceVariablePair = "interface-variable-pair",
   /** Type alias and variable declarations share the same framework export name. */
   TypeAliasVariablePair = "type-alias-variable-pair",
+  /** Function overload declarations plus their implementation share one framework export name. */
+  FunctionOverloadSet = "function-overload-set",
   /** More than one type-side or value-side declaration matched. */
   MultipleDeclarations = "multiple-declarations",
 }
@@ -649,10 +651,28 @@ function frameworkTargetCompositionKind(
   ) {
     return AuLinkFrameworkTargetCompositionKind.TypeAliasVariablePair;
   }
+  if (isFunctionOverloadSet(candidates, valueCandidates)) {
+    return AuLinkFrameworkTargetCompositionKind.FunctionOverloadSet;
+  }
   if (typeCandidates.length <= 1 && valueCandidates.length <= 1) {
     return AuLinkFrameworkTargetCompositionKind.SingleDeclaration;
   }
   return AuLinkFrameworkTargetCompositionKind.MultipleDeclarations;
+}
+
+function isFunctionOverloadSet(
+  candidates: readonly AuLinkFrameworkTargetCandidate[],
+  valueCandidates: readonly AuLinkFrameworkTargetCandidate[],
+): boolean {
+  if (
+    candidates.length < 2 ||
+    valueCandidates.length !== candidates.length ||
+    candidates.some((candidate) => candidate.kind !== SourceDeclarationKind.Function)
+  ) {
+    return false;
+  }
+  const symbolKeys = new Set(candidates.map((candidate) => candidate.symbolKey));
+  return symbolKeys.size === 1 && !symbolKeys.has(null);
 }
 
 function isTypeSideDeclaration(kind: SourceDeclarationKind): boolean {
@@ -684,9 +704,24 @@ function preferredValueCandidate(
 ): AuLinkFrameworkTargetCandidate | null {
   return candidates.find((candidate) => candidate.kind === SourceDeclarationKind.Class)
     ?? candidates.find((candidate) => candidate.kind === SourceDeclarationKind.Variable)
-    ?? candidates.find((candidate) => candidate.kind === SourceDeclarationKind.Function)
+    ?? preferredFunctionCandidate(candidates)
     ?? candidates.find((candidate) => candidate.kind === SourceDeclarationKind.Enum)
     ?? null;
+}
+
+function preferredFunctionCandidate(
+  candidates: readonly AuLinkFrameworkTargetCandidate[],
+): AuLinkFrameworkTargetCandidate | null {
+  const functionCandidates = candidates.filter((candidate) =>
+    candidate.kind === SourceDeclarationKind.Function,
+  );
+  if (functionCandidates.length === 0) {
+    return null;
+  }
+  return [...functionCandidates].sort((left, right) =>
+    (right.span.end - right.span.start) - (left.span.end - left.span.start) ||
+    left.span.start - right.span.start,
+  )[0] ?? null;
 }
 
 function frameworkTargetStatus(
@@ -706,6 +741,7 @@ function frameworkTargetStatus(
     case AuLinkFrameworkTargetCompositionKind.InterfaceClassPair:
     case AuLinkFrameworkTargetCompositionKind.InterfaceVariablePair:
     case AuLinkFrameworkTargetCompositionKind.TypeAliasVariablePair:
+    case AuLinkFrameworkTargetCompositionKind.FunctionOverloadSet:
       return AuLinkFrameworkTargetStatus.Resolved;
   }
 }

@@ -1,5 +1,7 @@
 import ts from "typescript";
 
+import { propertyNameText } from "../../source/semantic-surface/index.js";
+
 /** Source-file-local Aurelia imports shared by workspace and public-plugin architecture lenses. */
 export class AureliaSourceImports {
   readonly aureliaImportedNames = new Map<string, string>();
@@ -147,7 +149,7 @@ function readCommonJsRequireDeclarationInto(
     }
     const importedName = element.propertyName === undefined
       ? element.name.text
-      : bindingNameText(element.propertyName);
+      : propertyNameText(element.propertyName);
     if (importedName === null) {
       continue;
     }
@@ -273,13 +275,6 @@ function admitCommonJsNamedBinding(
       bindings.routerImportedNames.set(localName, importedName);
     }
   }
-}
-
-function bindingNameText(name: ts.PropertyName): string | null {
-  if (ts.isIdentifier(name) || ts.isStringLiteralLike(name) || ts.isNumericLiteral(name)) {
-    return name.text;
-  }
-  return null;
 }
 
 export function aureliaDecoratorExportNameForExpression(

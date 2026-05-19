@@ -56,6 +56,15 @@ import {
   readBindingDataFlowRows,
   readTargetOperationRows,
 } from './binding-projections.js';
+import {
+  resourceLocalBindingDataFlows,
+  resourceLocalBindingObservedDependencies,
+  resourceLocalBindingSourceOperations,
+  resourceLocalBindingTargetAccesses,
+  resourceLocalBindingTargetOperations,
+  resourceLocalBindingValueChannels,
+  resourceLocalRuntimeBindings,
+} from './runtime-resource-ownership.js';
 import { readRuntimeControllerRows } from './controller-projections.js';
 import type {
   SemanticBindingDataFlowRow,
@@ -101,6 +110,7 @@ export interface SemanticApplicationTemplateAsset {
   readonly source: SemanticSourceReference | null;
   readonly htmlNodes: number | null;
   readonly runtimeBindings: number | null;
+  readonly runtimeWatchers: number | null;
   readonly runtimeTargetOperations: number | null;
   readonly runtimeRendererTargetOperations: number | null;
   readonly runtimeBindingTargetAccesses: number | null;
@@ -108,6 +118,7 @@ export interface SemanticApplicationTemplateAsset {
   readonly runtimeBindingSourceOperations: number | null;
   readonly runtimeBindingValueChannels: number | null;
   readonly runtimeBindingDataFlows: number | null;
+  readonly runtimeBindingObservedDependencies: number | null;
   readonly openSeams: number | null;
   readonly handles?: {
     readonly sourceAddressHandle: AddressHandle | null;
@@ -1151,21 +1162,23 @@ function applicationTemplateAsset(
       + compilation.runtimeAnalysis.bindingValueChannel.openSeams.length
       + compilation.runtimeAnalysis.bindingDataFlow.openSeams.length
       + compilation.runtimeAnalysis.runtimeComposition.openSeams.length;
+  const targetOperations = compilation == null
+    ? []
+    : resourceLocalBindingTargetOperations(store, compilation);
   return {
     sourceKind: compilation?.compilation.unit.templateSource.sourceKind ?? definition.template?.kind ?? 'unknown',
     source: describeAddress(store, compilation?.compilation.definition.template?.addressHandle ?? sourceAddressHandle),
     htmlNodes: compilation?.compilation.html.nodes.length ?? null,
-    runtimeBindings: compilation?.runtimeAnalysis.runtimeRendering.bindings.length ?? null,
-    runtimeTargetOperations: compilation == null
-      ? null
-      : compilation.runtimeAnalysis.runtimeRendering.targetOperations.length
-        + compilation.runtimeAnalysis.controllerBind.targetOperations.length,
-    runtimeRendererTargetOperations: compilation?.runtimeAnalysis.runtimeRendering.targetOperations.length ?? null,
-    runtimeBindingTargetAccesses: compilation?.runtimeAnalysis.controllerBind.targetAccesses.length ?? null,
-    runtimeBindingTargetOperations: compilation?.runtimeAnalysis.controllerBind.targetOperations.length ?? null,
-    runtimeBindingSourceOperations: compilation?.runtimeAnalysis.controllerBind.sourceOperations.length ?? null,
-    runtimeBindingValueChannels: compilation?.runtimeAnalysis.bindingValueChannel.valueChannels.length ?? null,
-    runtimeBindingDataFlows: compilation?.runtimeAnalysis.bindingDataFlow.dataFlows.length ?? null,
+    runtimeBindings: compilation == null ? null : resourceLocalRuntimeBindings(store, compilation).length,
+    runtimeWatchers: compilation?.runtimeAnalysis.runtimeRendering.watchers.length ?? null,
+    runtimeTargetOperations: compilation == null ? null : targetOperations.length,
+    runtimeRendererTargetOperations: compilation == null ? null : targetOperations.filter((operation) => operation.binding == null).length,
+    runtimeBindingTargetAccesses: compilation == null ? null : resourceLocalBindingTargetAccesses(store, compilation).length,
+    runtimeBindingTargetOperations: compilation == null ? null : targetOperations.filter((operation) => operation.binding != null).length,
+    runtimeBindingSourceOperations: compilation == null ? null : resourceLocalBindingSourceOperations(store, compilation).length,
+    runtimeBindingValueChannels: compilation == null ? null : resourceLocalBindingValueChannels(store, compilation).length,
+    runtimeBindingDataFlows: compilation == null ? null : resourceLocalBindingDataFlows(store, compilation).length,
+    runtimeBindingObservedDependencies: compilation == null ? null : resourceLocalBindingObservedDependencies(store, compilation).length,
     openSeams: compilationOpenSeams,
     ...(handles ? {
       handles: {
@@ -1478,11 +1491,11 @@ function applicationServiceInteractionBindingCount(
     if (componentClassName == null || dataFlow.sourceName == null || componentMemberName == null) {
       continue;
     }
-    count += interactionsByComponentMember.get(componentMemberKey(componentClassName, componentMemberName))?.length ?? 0;
+    count += interactionsByComponentMember.get(semanticApplicationComponentMemberKey(componentClassName, componentMemberName))?.length ?? 0;
     const directRootName = singleSourceRootName(dataFlow.sourceRootName);
     if (
       directRootName != null
-      && (injectionSitesByComponentMember.get(componentMemberKey(componentClassName, directRootName)) ?? [])
+      && (injectionSitesByComponentMember.get(semanticApplicationComponentMemberKey(componentClassName, directRootName)) ?? [])
         .some((injection) => dataFlowRootSlotMatchesSourcePath(store, emission, dataFlow, directRootName, injection.sourcePath))
     ) {
       count += serviceInteractionOperationKindsForDataFlow(dataFlow).length;
@@ -1516,7 +1529,7 @@ function serviceInteractionSitesByComponentMember(
     ) {
       continue;
     }
-    const key = componentMemberKey(interaction.consumerClassName, interaction.consumerMemberName);
+    const key = semanticApplicationComponentMemberKey(interaction.consumerClassName, interaction.consumerMemberName);
     const rows = interactionsByMember.get(key) ?? [];
     rows.push(interaction);
     interactionsByMember.set(key, rows);
@@ -1539,7 +1552,7 @@ function serviceInjectionSitesByComponentMember(
     ) {
       continue;
     }
-    const key = componentMemberKey(injection.enclosingClassName, injection.enclosingMemberName);
+    const key = semanticApplicationComponentMemberKey(injection.enclosingClassName, injection.enclosingMemberName);
     const rows = injectionsByMember.get(key) ?? [];
     rows.push(injection);
     injectionsByMember.set(key, rows);
@@ -1560,7 +1573,7 @@ function serviceInjectionsByComponentMember(
     ) {
       continue;
     }
-    const key = componentMemberKey(injection.consumerClassName, injection.consumerMemberName);
+    const key = semanticApplicationComponentMemberKey(injection.consumerClassName, injection.consumerMemberName);
     const rows = injectionsByMember.get(key) ?? [];
     rows.push(injection);
     injectionsByMember.set(key, rows);
@@ -1581,7 +1594,7 @@ function directInjectionServiceInteractionBindingRowsForDataFlow(
   if (componentClassName == null || sourceName == null || sourceRootName == null) {
     return [];
   }
-  const injections = (injectionsByComponentMember.get(componentMemberKey(componentClassName, sourceRootName)) ?? [])
+  const injections = (injectionsByComponentMember.get(semanticApplicationComponentMemberKey(componentClassName, sourceRootName)) ?? [])
     .filter((injection) =>
       dataFlowRootSlotMatchesSourcePath(store, emission, dataFlow, sourceRootName, injection.consumerPath)
     );
@@ -1637,7 +1650,7 @@ function applicationServiceInteractionBindingRowsForDataFlow(
   if (componentClassName == null || dataFlow.sourceName == null || componentMemberName == null) {
     return [];
   }
-  const interactions = interactionsByComponentMember.get(componentMemberKey(componentClassName, componentMemberName)) ?? [];
+  const interactions = interactionsByComponentMember.get(semanticApplicationComponentMemberKey(componentClassName, componentMemberName)) ?? [];
   return interactions.map((interaction) => ({
     definitionName: dataFlow.definitionName,
     componentClassName,
@@ -1732,7 +1745,7 @@ function serviceInteractionsByComponentMember(
     if (interaction.consumerRole !== 'component-source' || interaction.consumerClassName == null || interaction.consumerMemberName == null) {
       continue;
     }
-    const key = componentMemberKey(interaction.consumerClassName, interaction.consumerMemberName);
+    const key = semanticApplicationComponentMemberKey(interaction.consumerClassName, interaction.consumerMemberName);
     const rows = interactionsByMember.get(key) ?? [];
     rows.push(interaction);
     interactionsByMember.set(key, rows);
@@ -1740,7 +1753,7 @@ function serviceInteractionsByComponentMember(
   return interactionsByMember;
 }
 
-function componentMemberKey(className: string, memberName: string): string {
+export function semanticApplicationComponentMemberKey(className: string, memberName: string): string {
   return `${className}\0${memberName}`;
 }
 

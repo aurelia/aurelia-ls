@@ -24,6 +24,7 @@ const pressureFixtureRoot = path.join(workspaceRoot, 'packages/semantic-runtime/
 const defaultRoot = path.join(workspaceRoot, 'packages/semantic-runtime/fixtures/authoring/storefront');
 const analysisDepth = process.env.SEMANTIC_RUNTIME_CURSOR_PRESSURE_DEPTH ?? 'binding-observation';
 const projectShapeFilter = pressureProjectShapeFilter();
+const projectDiscovery = pressureProjectDiscovery();
 const pageSize = integerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_PAGE_SIZE', 40);
 const projectLimit = integerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_PROJECT_LIMIT', 40);
 const templateLimit = integerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_TEMPLATE_LIMIT', 120);
@@ -49,6 +50,7 @@ console.log('scope: transient template-cursor pressure; paths, source text, and 
 console.log('note: missing-input values are bucketed so external app resource or domain names are not printed');
 console.log(`analysis-depth: ${analysisDepth}`);
 console.log(`project-shapes: ${projectShapeFilter == null ? 'all' : [...projectShapeFilter].join(',')}`);
+console.log(`project-discovery: ${projectDiscovery ?? 'default'}`);
 console.log(`default-analysis-policy: ${projectShapeFilter == null ? 'app-world,resource-library-authoring' : 'shape-filter-explicit'}`);
 console.log(`project-limit: ${projectLimit}`);
 console.log(`template-limit: ${templateLimit}`);
@@ -152,8 +154,8 @@ function printCursorAggregate(aggregate, requestMilliseconds) {
 }
 
 async function readCursorPressureForRoot(root) {
-  const runtime = await createSemanticRuntime({ workspaceRoot: root });
-  const summary = runtime.summary().value;
+  const runtime = await createSemanticRuntime({ workspaceRoot: root, projectDiscovery });
+  const summary = runtime.summary({ projectPage: { size: projectLimit } }).value;
   const aggregate = {
     projects: summary.projects.length,
     selectedProjects: 0,
@@ -1283,6 +1285,9 @@ function completionPressureClass(answer, valueSite, cursorInfoValue = null) {
   if (domainGap != null) {
     return `${domainGap}:${valueSite?.siteKind ?? 'unknown'}`;
   }
+  if (isExpectedEmptyPlainHtmlAttributeValue(answer, valueSite, cursorInfoValue, missingInputBuckets)) {
+    return 'expected-empty:plain-html-attribute-value';
+  }
   if (isExpectedEmptyAttributeValue(answer, valueSite)) {
     return `expected-empty:${valueSite.siteKind}`;
   }
@@ -1346,6 +1351,15 @@ function isExpectedEmptyAttributeValue(answer, valueSite) {
     )
     && answer.value.candidates.length === 0
     && answer.value.missingInputs.length === 0;
+}
+
+function isExpectedEmptyPlainHtmlAttributeValue(answer, valueSite, cursorInfoValue, missingInputBuckets) {
+  return answer.value.siteKind === 'attribute-value'
+    && valueSite == null
+    && cursorInfoValue?.valueSite == null
+    && cursorInfoValue?.selectedBindable == null
+    && answer.value.candidates.length === 0
+    && missingInputBuckets.length === 0;
 }
 
 function isExpectedEmptyOpenScalarBindable(answer, valueSite) {
@@ -1467,6 +1481,19 @@ function pressureProjectShapeFilter() {
     }
   }
   return new Set(values);
+}
+
+function pressureProjectDiscovery() {
+  const raw = process.env.SEMANTIC_RUNTIME_CURSOR_PRESSURE_PROJECT_DISCOVERY
+    ?? process.env.SEMANTIC_RUNTIME_PRESSURE_PROJECT_DISCOVERY;
+  if (raw == null || raw.trim().length === 0) {
+    return undefined;
+  }
+  const value = raw.trim();
+  if (value === 'single-root' || value === 'package-tsconfig') {
+    return value;
+  }
+  throw new Error(`Unsupported SEMANTIC_RUNTIME_CURSOR_PRESSURE_PROJECT_DISCOVERY '${raw}'.`);
 }
 
 function cursorPressureOutputMode() {

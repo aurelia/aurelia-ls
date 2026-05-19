@@ -10,6 +10,7 @@ import type { SourceSpan } from '../expression/source-span.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import {
+  checkerTypeReferenceWithSource,
   CheckerTypeShapeKind,
   type CheckerTypeReference,
   type CheckerTypeShape,
@@ -100,7 +101,15 @@ export class CheckerBindingPatternLocalTypeProjector {
     switch (pattern.$kind) {
       case 'BindingIdentifier':
         return new CheckerBindingPatternLocalProjection(
-          [new CheckerBindingPatternLocalType(pattern.name.name, sourceType?.toReference() ?? null)],
+          [new CheckerBindingPatternLocalType(
+            pattern.name.name,
+            sourceType == null
+              ? null
+              : checkerTypeReferenceWithSource(
+                  sourceType.toReference(),
+                  sourceType.sourceAddressHandle ?? sourceAddressHandle,
+                ),
+          )],
           [],
         );
       case 'BindingPatternDefault':

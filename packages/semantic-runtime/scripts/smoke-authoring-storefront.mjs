@@ -64,19 +64,19 @@ const verification = verifyAuthoringEffects(
       filter('targetType', 'HTMLInputElement'),
     ]),
     expectFact('Storefront preserves captured field-shell parent value flow.', 'binding-data-flow', 'present', null, [
-      filter('sourceName', 'email'),
+      filter('sourceName', 'state.checkout.email'),
       filter('targetKind', 'node'),
       filter('targetProperty', 'value'),
       filter('targetValueType', 'string'),
     ]),
     expectFact('Storefront preserves captured field-shell branch value flow.', 'binding-data-flow', 'present', null, [
-      filter('sourceName', 'postalCode'),
+      filter('sourceName', 'state.checkout.postalCode'),
       filter('targetKind', 'node'),
       filter('targetProperty', 'value'),
       filter('targetValueType', 'string'),
     ]),
     expectFact('Storefront preserves captured field-shell disabled data flow.', 'binding-data-flow', 'present', null, [
-      filter('sourceName', null),
+      filter('sourceName', 'false'),
       filter('targetKind', 'node'),
       filter('targetProperty', 'disabled'),
       filter('targetValueType', 'boolean'),
@@ -263,7 +263,7 @@ assert(capturedFieldShellAccesses.some((row) =>
 assert(capturedFieldShellFlows.some((row) =>
   row.bindingKind === 'property'
   && row.targetProperty === 'value'
-  && row.sourceName === 'email'
+  && row.sourceName === 'state.checkout.email'
   && row.sourceType === 'string'
   && row.targetValueType === 'string'
   && row.sourceToTargetAssignable === true
@@ -273,7 +273,7 @@ assert(capturedFieldShellFlows.some((row) =>
 assert(capturedFieldShellFlows.some((row) =>
   row.bindingKind === 'property'
   && row.targetProperty === 'value'
-  && row.sourceName === 'postalCode'
+  && row.sourceName === 'state.checkout.postalCode'
   && row.sourceType === 'string'
   && row.targetValueType === 'string'
   && row.sourceToTargetAssignable === true
@@ -284,6 +284,7 @@ assert(capturedFieldShellFlows.some((row) =>
   row.bindingKind === 'property'
   && row.targetProperty === 'disabled'
   && row.targetKind === 'node'
+  && row.sourceName === 'false'
   && row.sourceType === 'boolean'
   && row.targetValueType === 'boolean'
   && row.openReason == null

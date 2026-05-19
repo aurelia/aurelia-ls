@@ -29,6 +29,11 @@ export interface DeclarationSourcePublication {
   readonly records: readonly KernelStoreRecord[];
 }
 
+export interface CheckerNodeSourceSpanPublication {
+  readonly address: SourceSpanAddress;
+  readonly records: readonly KernelStoreRecord[];
+}
+
 interface DeclarationSourceSpan {
   readonly sourceFileAddress: SourceFileAddress;
   readonly sourceFileRecords: readonly KernelStoreRecord[];
@@ -52,6 +57,40 @@ export function sourceSpanForCheckerDeclaration(
     return null;
   }
   return declarationSourcePublication(store, symbol, span, role);
+}
+
+/** Materialize a navigable source span for a checker node without minting a declaration identity. */
+export function sourceSpanForCheckerNode(
+  store: KernelStore,
+  localKey: string,
+  node: ts.Node,
+  role: SourceSpanRole,
+): CheckerNodeSourceSpanPublication {
+  const sourceFile = node.getSourceFile();
+  const sourceFilePublication = sourceFileAddressForDeclaration(store, sourceFile);
+  const start = node.getStart(sourceFile);
+  const end = node.end;
+  const local = checkerNodeSourceLocal(sourceFilePublication.address, localKey, start, end, role);
+  const addressHandle = store.handles.address(`${local}:span`);
+  return {
+    address: new SourceSpanAddress(
+      addressHandle,
+      sourceFilePublication.address.handle,
+      start,
+      end,
+      role,
+    ),
+    records: [
+      ...sourceFilePublication.records,
+      new SourceSpanAddress(
+        addressHandle,
+        sourceFilePublication.address.handle,
+        start,
+        end,
+        role,
+      ),
+    ],
+  };
 }
 
 /**
@@ -130,6 +169,24 @@ function declarationSourceLocal(
     localKeyPart(span.sourceFileAddress.path),
     span.start,
     span.end,
+    role,
+  ].join(':');
+}
+
+function checkerNodeSourceLocal(
+  sourceFileAddress: SourceFileAddress,
+  localKey: string,
+  start: number,
+  end: number,
+  role: SourceSpanRole,
+): string {
+  return [
+    'type-system-node',
+    sourceFileAddress.workspaceKey,
+    localKeyPart(sourceFileAddress.path),
+    localKeyPart(localKey),
+    start,
+    end,
     role,
   ].join(':');
 }

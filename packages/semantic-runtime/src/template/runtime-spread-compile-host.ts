@@ -90,6 +90,8 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
     private readonly dynamicInstructions: TemplateInstruction[],
     private readonly dynamicValueSites: TemplateValueSite[],
     private readonly dynamicExpressionParses: TemplateExpressionParse[],
+    private readonly capturedAttributeContextInstructionProductHandle: ProductHandle,
+    private readonly capturedAttributeContextControllerProductHandle: ProductHandle,
   ) {
     this.valueSitePublisher = new TemplateValueSitePublisher(store);
     this.compilerIssuePublisher = new TemplateCompilerIssuePublisher(store);
@@ -506,6 +508,20 @@ export class RuntimeTemplateCompilerSpreadCompileHost implements TemplateCompile
         instruction.productHandle,
         KernelVocabulary.Instruction.DynamicInstructionOriginatesFromCapturedAttributeSyntax.key,
         syntax.productHandle,
+        this.source.provenanceHandle,
+      ));
+      this.records.push(new SemanticClaim(
+        this.store.handles.claim(`${request.localKey}:spread-compile:instruction-context-instruction:${instruction.productHandle}:${this.capturedAttributeContextInstructionProductHandle}`),
+        instruction.productHandle,
+        KernelVocabulary.Instruction.DynamicInstructionUsesCapturedAttributeContextInstruction.key,
+        this.capturedAttributeContextInstructionProductHandle,
+        this.source.provenanceHandle,
+      ));
+      this.records.push(new SemanticClaim(
+        this.store.handles.claim(`${request.localKey}:spread-compile:instruction-context-controller:${instruction.productHandle}:${this.capturedAttributeContextControllerProductHandle}`),
+        instruction.productHandle,
+        KernelVocabulary.Instruction.DynamicInstructionUsesCapturedAttributeContextController.key,
+        this.capturedAttributeContextControllerProductHandle,
         this.source.provenanceHandle,
       ));
     }

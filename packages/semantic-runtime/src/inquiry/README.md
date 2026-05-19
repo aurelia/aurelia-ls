@@ -256,7 +256,9 @@ selects the active frontier needed for the current answer. The value-site produc
 or attribute value an expression-completion site: cursor classification only enters expression inquiry when the cursor
 is inside an interpolation hole, command-owned expression, or expression/member frontier span. Plain text and plain
 attribute values remain non-expression sites even though the compiler may have materialized interpolation parse
-products for the surrounding authored value. Completed value-converter and binding-behavior names are also classified
+products for the surrounding authored value. A plain attribute value with no value-site product is an expected empty
+completion site, not an `attribute-value-site` missing-input row; a dangling value-site handle without details remains
+pressure. Completed value-converter and binding-behavior names are also classified
 by their authored name spans, not only by parser frontiers, so existing tail names can use the same resource-candidate
 lanes as incomplete `|` and `&` continuations.
 An interpolation frontier that only expects the final interpolation-hole close is not a completion blocker: Aurelia's
@@ -273,7 +275,10 @@ text, or candidate names. Use it for LSP-shaped pressure before assuming a gap b
 resource lookup, API wrapping, or domain-specific value completion. `SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS` accepts a
 path-delimited list of absolute or workspace-relative roots, so a single fixture or transient external checkout can be
 sampled without changing the script. The known `fixtures/authoring` and `fixtures/pressure` collection roots expand to
-their child fixture projects; use `SEMANTIC_RUNTIME_CURSOR_PRESSURE_OUTPUT=aggregate` for broad collection pressure and
+their child fixture projects; `SEMANTIC_RUNTIME_CURSOR_PRESSURE_PROJECT_DISCOVERY` mirrors
+`SEMANTIC_RUNTIME_PRESSURE_PROJECT_DISCOVERY` for monorepo/package-tsconfig roots. The script requests paged runtime
+summary rows explicitly, because `runtime.summary()` defaults to no project rows for large workspaces. Use
+`SEMANTIC_RUNTIME_CURSOR_PRESSURE_OUTPUT=aggregate` for broad collection pressure and
 `SEMANTIC_RUNTIME_CURSOR_PRESSURE_INPUT_LIMIT` for a cheap first canary. Diagnostic probes are scoped back to the
 compiled resource's own source spans before comparing direct substrate answers with the public API, so same-file
 multi-template diagnostics do not create false template-resource mismatches. `SEMANTIC_RUNTIME_CURSOR_PRESSURE_PROJECT_SHAPES`
@@ -283,6 +288,9 @@ env vars accept exact runtime shape tokens: `aurelia-app`, `aurelia-resource-lib
 `non-aurelia`. The
 public API comparison passes the sampled app's project key on purpose, so candidate mismatches point at cursor/API
 wrapping drift rather than at the direct runtime facade choosing a different cached app-world that also owns the source.
+Plain static HTML attribute values with no value-site product are classified as
+`expected-empty:plain-html-attribute-value` in that pressure view; if those rows appear as unexplained misses, the cursor
+classifier has drifted rather than the completion domain being incomplete.
 The
 command opts into the authoring-template lane by selecting admitted template
 source files per project, with the older per-project template cap only as a fallback when no template source file can be

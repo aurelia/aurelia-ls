@@ -123,6 +123,7 @@ import type {
 type AtlasWorkRouterProjection =
   | "summary"
   | "routes"
+  | "next"
   | "route-plan"
   | "next-questions"
   | "route-health"
@@ -181,6 +182,7 @@ export function answerAtlasWorkRouter(
         state,
         basis,
       );
+    case "next":
     case "route-plan":
     case "next-questions":
       return answerAtlasWorkRouterRoutePlans(
@@ -601,6 +603,7 @@ function atlasWorkRouterProjection(
 ): AtlasWorkRouterProjection {
   switch (inquiry.projection) {
     case "routes":
+    case "next":
     case "next-questions":
       return inquiry.projection;
     case "route-plan":
@@ -629,6 +632,8 @@ function routePlan(
     .filter((anchor): anchor is AtlasWorkRouteScriptAnchor => anchor.kind === "script");
   const docAnchors = route.anchors
     .filter((anchor): anchor is AtlasWorkRouteDocAnchor => anchor.kind === "doc");
+  const pathAnchors = route.anchors
+    .filter((anchor): anchor is AtlasWorkRoutePathAnchor => anchor.kind === "path");
   const corpusAnchors = route.anchors
     .filter((anchor): anchor is AtlasWorkRouteCorpusAnchor =>
       anchor.kind === "framework-corpus",
@@ -663,6 +668,7 @@ function routePlan(
     lensAnchors,
     scriptAnchors,
     docAnchors,
+    pathAnchors,
     memoryRecords,
     memoryNextActions,
     fixtureSeeds,
@@ -674,7 +680,7 @@ function routePlan(
       : undefined,
     cautions: route.cautions,
     summary:
-      `${route.title}: ${sourceAnchors.filter((row) => row.found).length}/${sourceAnchors.length} source anchor(s) found, ${lensAnchors.length} lens anchor(s), ${scriptAnchors.length} script anchor(s), ${docAnchors.length} doc anchor(s), ${memoryRecords.length} memory record(s), ${memoryNextActions.length} memory next action(s), ${fixtureSeeds.length} fixture seed(s), and ${expectedEffects.length} expected-effect descriptor(s).`,
+      `${route.title}: ${sourceAnchors.filter((row) => row.found).length}/${sourceAnchors.length} source anchor(s) found, ${lensAnchors.length} lens anchor(s), ${scriptAnchors.length} script anchor(s), ${docAnchors.length} doc anchor(s), ${pathAnchors.length} path anchor(s), ${memoryRecords.length} memory record(s), ${memoryNextActions.length} memory next action(s), ${fixtureSeeds.length} fixture seed(s), and ${expectedEffects.length} expected-effect descriptor(s).`,
   };
 }
 
@@ -2406,6 +2412,7 @@ function atlasWorkRouterProjectionContinuations(
 ): readonly Continuation[] {
   return [
     workRouterProjectionContinuation(inquiry, "routes", "Inspect matched work-route rows."),
+    workRouterProjectionContinuation(inquiry, "next", "Ask for checkpoint-friendly route plans and next actions."),
     workRouterProjectionContinuation(inquiry, "route-plan", "Join matched routes to live memory, source, and corpus pressure."),
     workRouterProjectionContinuation(inquiry, "workset", "Join the current git worktree to typed work routes."),
     workRouterProjectionContinuation(inquiry, "memory-coverage", "Check whether live Atlas memory next actions are structurally routeable."),
@@ -2443,7 +2450,7 @@ function workRouterProjectionContinuation(
   return {
     id: `atlas.work-router:${projection}`,
     kind: ContinuationKind.SwitchProjection,
-    priority: projection === "route-plan"
+    priority: projection === "next" || projection === "route-plan"
       ? ContinuationPriority.Primary
       : ContinuationPriority.Secondary,
     rationale,

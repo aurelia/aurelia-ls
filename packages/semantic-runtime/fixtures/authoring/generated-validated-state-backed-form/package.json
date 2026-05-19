@@ -8,6 +8,7 @@
   "dependencies": {
     "@aurelia/kernel": "^2.0.0-rc.1",
     "@aurelia/runtime-html": "^2.0.0-rc.1",
+    "@aurelia/validation": "^2.0.0-rc.1",
     "@aurelia/validation-html": "^2.0.0-rc.1"
   },
   "devDependencies": {

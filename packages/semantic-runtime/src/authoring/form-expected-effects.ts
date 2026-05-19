@@ -183,6 +183,37 @@ function stylePropertyDataFlowFilters(): readonly ExpectedSemanticEffectFilter[]
   ];
 }
 
+function stateRequestDataFlowFilters(
+  sourceName: string,
+  targetProperty: string,
+  valueChannelKind: string,
+): readonly ExpectedSemanticEffectFilter[] {
+  return [
+    new ExpectedSemanticEffectFilter('sourceRootName', 'request'),
+    new ExpectedSemanticEffectFilter('sourceName', sourceName),
+    new ExpectedSemanticEffectFilter('direction', 'two-way'),
+    new ExpectedSemanticEffectFilter('targetKind', 'node'),
+    new ExpectedSemanticEffectFilter('targetProperty', targetProperty),
+    new ExpectedSemanticEffectFilter('valueChannelKind', valueChannelKind),
+    new ExpectedSemanticEffectFilter('sourceToTargetAssignable', true),
+    new ExpectedSemanticEffectFilter('targetToSourceAssignable', true),
+    new ExpectedSemanticEffectFilter('frameworkErrorCode', null),
+  ];
+}
+
+function stateRequestObservedDependencyFilters(
+  sourceName: string,
+  memberName: string,
+): readonly ExpectedSemanticEffectFilter[] {
+  return [
+    new ExpectedSemanticEffectFilter('dependencyKind', 'template-expression-read'),
+    new ExpectedSemanticEffectFilter('expressionKind', 'AccessMember'),
+    new ExpectedSemanticEffectFilter('sourceRootName', 'request'),
+    new ExpectedSemanticEffectFilter('sourceName', sourceName),
+    new ExpectedSemanticEffectFilter('memberName', memberName),
+  ];
+}
+
 function formBindingEffect(
   summary: string,
   effectKind: 'binding-target-access' | 'binding-value-channel' | 'binding-data-flow',
@@ -333,6 +364,98 @@ export function stylePropertyDataFlowEffect(summary: string): ExpectedSemanticEf
   return formBindingEffect(summary, 'binding-data-flow', stylePropertyDataFlowFilters());
 }
 
+export function stateRequestFieldDataFlowEffect(
+  summary: string,
+  sourceName: string,
+  targetProperty: string,
+  valueChannelKind: string,
+): ExpectedSemanticEffect {
+  return formBindingEffect(
+    summary,
+    'binding-data-flow',
+    stateRequestDataFlowFilters(sourceName, targetProperty, valueChannelKind),
+  );
+}
+
+export function stateRequestFieldObservedDependencyEffect(
+  summary: string,
+  sourceName: string,
+  memberName: string,
+): ExpectedSemanticEffect {
+  return ExpectedSemanticEffect.fact(
+    summary,
+    'binding-observed-dependency',
+    'template',
+    'template-binding',
+    'present',
+    null,
+    stateRequestObservedDependencyFilters(sourceName, memberName),
+  );
+}
+
+export function requestCanSubmitComputedObserverSourceEffect(
+  summary: string,
+): ExpectedSemanticEffect {
+  return ExpectedSemanticEffect.signatureFact(
+    summary,
+    'computed-observer-source',
+    'di',
+    'state-model',
+    'present',
+    null,
+    [
+      new ExpectedSemanticEffectFilter('className', 'ServiceRequest'),
+      new ExpectedSemanticEffectFilter('memberName', 'canSubmit'),
+      new ExpectedSemanticEffectFilter('observerKind', 'computed-observer'),
+      new ExpectedSemanticEffectFilter('triggerKind', 'accessor-descriptor'),
+      new ExpectedSemanticEffectFilter('dependencyMode', 'proxy-auto-track'),
+    ],
+  );
+}
+
+export function requestCanSubmitComputedObserverDependencyEffect(
+  summary: string,
+  sourceName: 'this.customerName' | 'this.email',
+): ExpectedSemanticEffect {
+  return ExpectedSemanticEffect.signatureFact(
+    summary,
+    'computed-observer-observed-dependency',
+    'di',
+    'state-model',
+    'present',
+    null,
+    [
+      new ExpectedSemanticEffectFilter('className', 'ServiceRequest'),
+      new ExpectedSemanticEffectFilter('memberName', 'canSubmit'),
+      new ExpectedSemanticEffectFilter('dependencyKind', 'proxy-property-read'),
+      new ExpectedSemanticEffectFilter('sourceName', sourceName),
+    ],
+  );
+}
+
+export function requestCanSubmitTemplateObservedDependencyEffect(
+  summary: string,
+  sourceName: string,
+  sourceRootName: string,
+  memberName: string | null,
+): ExpectedSemanticEffect {
+  return ExpectedSemanticEffect.signatureFact(
+    summary,
+    'binding-observed-dependency',
+    'template',
+    'template-binding',
+    'present',
+    null,
+    [
+      new ExpectedSemanticEffectFilter('dependencyKind', 'template-expression-read'),
+      new ExpectedSemanticEffectFilter('sourceName', sourceName),
+      new ExpectedSemanticEffectFilter('sourceRootName', sourceRootName),
+      new ExpectedSemanticEffectFilter('memberName', memberName),
+      new ExpectedSemanticEffectFilter('observedMemberKind', 'accessor'),
+    ],
+  );
+}
+
 export function componentStylesheetEffect(summary: string): ExpectedSemanticEffect {
   return ExpectedSemanticEffect.fact(
     summary,
@@ -363,6 +486,24 @@ export function componentStylesheetTasteEffect(summary: string): ExpectedSemanti
     'style-resource-ownership',
     'component-stylesheet',
     'style',
+  );
+}
+
+export function sourceBackedGetterObservationTasteEffect(summary: string): ExpectedSemanticEffect {
+  return ExpectedSemanticEffect.signatureTaste(
+    summary,
+    'template-model-access',
+    'source-backed-getter-observation',
+    'state-model',
+  );
+}
+
+export function directStateDomainTemplateBindingTasteEffect(summary: string): ExpectedSemanticEffect {
+  return ExpectedSemanticEffect.signatureTaste(
+    summary,
+    'template-model-access',
+    'direct-state-domain-template-binding',
+    'template-binding',
   );
 }
 

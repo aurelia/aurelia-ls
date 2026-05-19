@@ -1,16 +1,28 @@
 export type ContactPreference = 'email' | 'phone';
 export type RequestTopic = 'hardware' | 'billing' | 'support';
 
-export interface ServiceRequest {
-  id: string;
-  customerName: string;
-  email: string;
-  urgent: boolean;
-  contactPreference: ContactPreference;
-  primaryTopic: RequestTopic | null;
-  topics: RequestTopic[];
-  notes: string;
-  submitCount: number;
+export interface SupportAgent {
+  readonly id: string;
+  readonly name: string;
+}
+
+export class ServiceRequest {
+  constructor(
+    readonly id: string,
+    public customerName: string,
+    public email: string,
+    public urgent: boolean,
+    public contactPreference: ContactPreference,
+    public primaryTopic: RequestTopic | null,
+    public assignee: SupportAgent | null,
+    public topics: RequestTopic[],
+    public notes: string,
+    public submitCount: number,
+  ) {}
+
+  get canSubmit(): boolean {
+    return this.customerName !== '' && this.email !== '';
+  }
 }
 
 export class AppState {
@@ -22,15 +34,15 @@ export class AppState {
   readonly hardwareTopic: RequestTopic = 'hardware';
   readonly billingTopic: RequestTopic = 'billing';
   readonly supportTopic: RequestTopic = 'support';
+  readonly supportAgents: readonly SupportAgent[] = [
+    { id: 'agent-ada', name: 'Ada' },
+    { id: 'agent-grace', name: 'Grace' },
+  ];
 
   private readonly requests = new Map<string, ServiceRequest>([
     ['request-1', createRequest('request-1', 'Ada Lovelace')],
     ['request-2', createRequest('request-2', 'Grace Hopper')],
   ]);
-
-  get selectedRequest(): ServiceRequest | null {
-    return this.readRequest(this.selectedRequestId);
-  }
 
   get submittedCount(): number {
     let count = 0;
@@ -50,18 +62,23 @@ export class AppState {
       request.submitCount += 1;
     }
   }
+
+  sameSupportAgent(left: SupportAgent | null, right: SupportAgent | null): boolean {
+    return left?.id === right?.id;
+  }
 }
 
 function createRequest(id: string, customerName: string): ServiceRequest {
-  return {
+  return new ServiceRequest(
     id,
     customerName,
-    email: `${customerName.toLowerCase().replace(' ', '.')}@example.test`,
-    urgent: false,
-    contactPreference: 'email',
-    primaryTopic: null,
-    topics: ['support'],
-    notes: '',
-    submitCount: 0,
-  };
+    `${customerName.toLowerCase().replace(' ', '.')}@example.test`,
+    false,
+    'email',
+    null,
+    null,
+    ['support'],
+    '',
+    0,
+  );
 }

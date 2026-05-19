@@ -163,7 +163,8 @@ export function bindingSourceAssignmentDiagnostic(
   const ownerType = dataFlow.sourceAssignmentTargetType ?? dataFlow.sourceType ?? null;
   const ownerSource = describeAddress(
     store,
-    ownerType?.sourceAddressHandle
+    dataFlow.sourceAssignmentTargetSourceAddressHandle
+      ?? ownerType?.sourceAddressHandle
       ?? null,
   );
   const valueTypeDisplay = dataFlow.targetValueType?.display ?? dataFlow.targetPropertyType?.display ?? null;
@@ -980,6 +981,11 @@ function readOwnerType(
 function memberOwnerTypeActionSource(
   memberOwnerType: SemanticTemplateCursorInfoResult['memberOwnerType'],
 ): SemanticTemplateCursorDiagnosticRow['source'] {
+  if (memberOwnerType?.source?.role === 'type'
+    || memberOwnerType?.shapeKind === CheckerTypeShapeKind.Any
+    || memberOwnerType?.shapeKind === CheckerTypeShapeKind.Unknown) {
+    return memberOwnerType.source ?? memberOwnerType.declarationSource ?? null;
+  }
   return memberOwnerType?.declarationSource ?? memberOwnerType?.source ?? null;
 }
 
@@ -1003,7 +1009,7 @@ function missingOwnerTypeDiagnostic(
     ? subjectTarget
     : missingScopeSlot
       ? suggestionActionTarget('scope-slot', source, selectedMemberName, null)
-      : suggestionActionTarget('owner-type', memberOwnerTypeActionSource(memberOwnerType) ?? source, selectedMemberName, memberOwnerType?.display ?? null);
+      : ownerTypeOrExpressionActionTarget(memberOwnerType, source, selectedMemberName);
   return [weakOwnerDiagnostic(
     missingInput,
     expressionMemberOwnerTypeMissingSummary(missingInput),
@@ -1040,7 +1046,7 @@ function indexSignatureOwnerDiagnostic(
     {
       suggestionKind: 'declare-explicit-member',
       actionKind: 'declare-member',
-      actionTarget: suggestionActionTarget('owner-type', memberOwnerTypeActionSource(memberOwnerType), selectedMemberName, memberOwnerType?.display ?? null),
+      actionTarget: ownerTypeOrExpressionActionTarget(memberOwnerType, source, selectedMemberName),
       summary: 'Declare a typed property on the owner type, or replace the broad index-signature record with an interface that includes this member.',
       targetMemberName: selectedMemberName,
       ownerTypeDisplay: memberOwnerType?.display ?? null,
@@ -1066,7 +1072,7 @@ function anyOwnerDiagnostic(
     {
       suggestionKind: 'replace-any-owner',
       actionKind: 'replace-owner-type',
-      actionTarget: suggestionActionTarget('owner-type', memberOwnerTypeActionSource(memberOwnerType), selectedMemberName, memberOwnerType?.display ?? null),
+      actionTarget: ownerTypeOrExpressionActionTarget(memberOwnerType, source, selectedMemberName),
       summary: 'Replace the any-typed owner with a named interface or class so template tooling can project members.',
       targetMemberName: selectedMemberName,
       ownerTypeDisplay: memberOwnerType?.display ?? null,
@@ -1092,7 +1098,7 @@ function emptyOwnerDiagnostic(
     {
       suggestionKind: 'inspect-owner-type',
       actionKind: 'inspect-owner-type',
-      actionTarget: suggestionActionTarget('owner-type', memberOwnerTypeActionSource(memberOwnerType), selectedMemberName, memberOwnerType?.display ?? null),
+      actionTarget: ownerTypeOrExpressionActionTarget(memberOwnerType, source, selectedMemberName),
       summary: 'Check whether the owner expression has the intended declared type and whether that type is visible to the TypeChecker.',
       targetMemberName: selectedMemberName,
       ownerTypeDisplay: memberOwnerType?.display ?? null,
@@ -1127,7 +1133,7 @@ function missingMemberDiagnostic(
     suggestion: {
       suggestionKind: declareMember ? 'declare-explicit-member' : 'inspect-owner-type',
       actionKind: declareMember ? 'declare-member' : 'inspect-owner-type',
-      actionTarget: suggestionActionTarget('owner-type', memberOwnerTypeActionSource(memberOwnerType), selectedMemberName, memberOwnerType?.display ?? null),
+      actionTarget: ownerTypeOrExpressionActionTarget(memberOwnerType, source, selectedMemberName),
       summary: declareMember
         ? 'Declare this member on the owner type, or change the expression so it targets the type that actually owns the member.'
         : 'Inspect the owner expression type; the member may belong on a callback return type, model type, or different expression.',
@@ -1244,6 +1250,17 @@ function weakOwnerDiagnostic(
     ownerTypeOrigin: memberOwnerType?.origin ?? null,
     suggestion,
   };
+}
+
+function ownerTypeOrExpressionActionTarget(
+  memberOwnerType: SemanticTemplateCursorInfoResult['memberOwnerType'],
+  expressionSource: SemanticSourceReference | null,
+  memberName: string | null,
+): SemanticTemplateCursorSuggestionActionTargetRow {
+  const ownerSource = memberOwnerTypeActionSource(memberOwnerType);
+  return ownerSource == null
+    ? suggestionActionTarget('expression', expressionSource, memberName, memberOwnerType?.display ?? null)
+    : suggestionActionTarget('owner-type', ownerSource, memberName, memberOwnerType?.display ?? null);
 }
 
 function suggestionActionTarget(

@@ -7,4 +7,15 @@ import template from './weak-owner-repair-app.html';
 })
 export class WeakOwnerRepairApp {
   readonly title = 'Weak owner repair pressure';
+  readonly anyRows: any[] = [];
+  readonly untypedRow: any = {};
+  readonly indexedRow: WeakIndexedRow = {};
+
+  makeUntypedRow(): any {
+    return {};
+  }
+}
+
+interface WeakIndexedRow {
+  [name: string]: string;
 }

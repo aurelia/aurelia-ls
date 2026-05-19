@@ -122,7 +122,9 @@ large monorepos stay summary-first. Use it before `openApp(...)` in monorepos so
 instead of paying broad app-world construction by accident. It is also claim-backed now, because project-selection
 answers are public query outcomes; cache inspection and disposal APIs remain direct control-plane calls so they do not
 distort the query graph they are inspecting or pruning. Pass `inquiryProfile` when a long-lived adapter wants that
-first project-selection answer counted with the same consumer lane as later routed app answers.
+first project-selection answer counted with the same consumer lane as later routed app answers. Scripts or adapters that
+need to iterate project rows must request `projectPage.size`; otherwise they should rely on the rollups and
+`appCandidates` only.
 `runtime.analysisCacheOverview(...)` is the session-retention x-ray for long-lived adapters such as MCP. It reports
 runtime-level static and routed-app query claims, cached app epochs, their construction inquiry profile/top phases, per-consumer
 query-claim graph telemetry, the small process-local project compiler-options cache, current process memory, and
@@ -429,6 +431,10 @@ interpolation or a weak/null target observer just to make an autofix look comple
 those dimensions without printing app-specific member names or paths, but the API keeps them available for future
 code-action planning, such as proposing an interface shape from repeated weak-owner member reads or deciding which
 member hints still need value-type inference.
+Cluster `key` values are compact fingerprints over that structural grouping input. Consumers should use
+`actionTargets`, `memberHints`, and source references for explanations or edits instead of parsing source spans back out
+of the key. `contract:template-diagnostics` includes a non-effect guard for this because key token economy is part of
+the public API shape even though the editable source loci live in structured rows.
 Clusters also publish a planning classification: `planKind`, likely `changeDomain`, and `planReadiness`. These are still
 semantic repair intents, not edits. A weak owner cluster can now say "strengthen this app-source owner type" and carry
 the observed member/type surface, while a router or evaluator seam can stay in the runtime-policy or substrate lane. The
@@ -469,9 +475,23 @@ slot itself has no TypeChecker-backed type, the diagnostic uses `expression-memb
 `declare-scope-slot-type` suggestion instead of pretending a member lookup happened on a known owner. The suggestion
 target comes from the evaluator's open subject, so an expression such as `item.label` can report the member span as the
 diagnostic source while grouping repair planning on the `item` scope slot and keeping `label` as member evidence.
+When a weak owner is known but the type product itself is source-independent, such as a projected `any` scalar, the
+cursor path first asks the expression evaluator for the value-producing source route. If that route came from an
+authored slot or member with an explicit type annotation or return type, the suggestion targets that type span even
+though the reusable `any` type shape has no source. If no value-type span is available, the suggestion can still target
+the member declaration/name route when that is the best actionable source. Only when no narrower route exists does the
+suggestion fall back to the authored expression source. This keeps repair planning actionable without pretending the
+semantic-runtime can edit a declaration it cannot locate.
+Repeat locals use the same policy. If `item` is weak because `items` is `any[]`, the cursor row should preserve the
+iterable/source-slot route that introduced `item`; if `item` is weak because the repeat source itself cannot be typed,
+the row stays in `declare-scope-slot-type` territory instead of inventing an owner type.
 Diagnostic rows keep `missingInput` as the primary compact reason and also expose `missingInputs` for the full reason
 set. Binding assignment strictness can legitimately carry multiple TypeScript-policy reasons for one authored source
 span, so consumers should aggregate `missingInputs` when they need pressure counts or code-action routing.
+Binding data-flow rows expose `sourceAssignmentTargetSource` when source writeability was resolved through a
+TypeChecker-backed scope/context member. Template diagnostics use the same address for their suggestion action target,
+which lets a future code action jump from `value.bind="priority"` or a custom two-way bindable directly to the
+authored getter/setter/member that receives the observer value.
 Runtime-unassignable target-to-source bindings are separate from TypeScript strictness. Aurelia's `astAssign` falls
 through without updating unsupported expression targets, so semantic-runtime reports those as
 `binding-source-assignment-runtime-noop` with `use-assignable-expression` guidance rather than as framework errors.
@@ -704,17 +724,31 @@ fulfillment fields so API callers can tell when a framework-supported promise-va
 unwrapped. Plain object and non-resource constructable components report
 `componentResolutionKind=object-view-model`; they can still contribute activation handoff rows, but they do not claim
 compiled-template or candidate resource-analysis coverage because no custom-element definition exists.
+Rows also carry `renderingContextKind` so callers can separate a resource's definition-local template analysis from
+recursive resource instances created while rendering a parent. That distinction matters for public components with
+consumer-supplied bindables: the definition row can remain open while concrete app use-sites close through
+parent-to-child value flow.
 `pressure:app-api` prints compact runtime-composition scope, flush, tag, component/template input presence, static
-component-name presence, input fulfillment, template-binding, composition-binding, composing-binding, and composed child-controller buckets
-so these context lanes stay visible during fixture sweeps without exposing concrete component names.
+component-name presence, input fulfillment, rendering context, template-binding, composition-binding, composing-binding,
+and composed child-controller buckets so these context lanes stay visible during fixture sweeps without exposing
+concrete component names.
 This lets fixture expansion ask "what does this app already satisfy?" before opening recipe source files or running a
 separate verifier pass.
 Closed-loop callers should derive expected effects with `expectedSemanticEffectsForPlan(plan)` and build verifier input
 with `readAuthoringVerificationSnapshot(app)`. The helper paginates the
 row-backed projections used by filtered effects instead of relying on each smoke or host to remember that behavior
-applications, runtime composition rows, target-access rows, value-channel rows, and data-flow rows must travel together
-with summary, topology, orientation, and open seams. Unsupported row-backed projections fail at snapshot construction
-time, so callers do not mistake a too-shallow analysis depth for absence of the expected semantic facts.
+applications, runtime watcher rows, watcher observed-dependency rows, runtime composition rows, target-access rows,
+value-channel rows, and data-flow rows must travel together with summary, topology, orientation, and open seams.
+Unsupported row-backed projections fail at snapshot construction time, so callers do not mistake a too-shallow analysis
+depth for absence of the expected semantic facts.
+`runtime-watcher`, `runtime-watcher-observed-dependency`, `binding-observed-dependency`,
+`computed-observer-source`, and `computed-observer-observed-dependency` expected effects form the first route-scoped
+semantic-contract lane for observation pressure. Focused fixtures assert controller-owned watcher admission, proxy
+dependency rows, TypeChecker-gated template collection reads, and getter source-observer rows without snapshotting the
+public API response.
+`template-diagnostic` expected effects are backed by `TemplateDiagnostics` rows. Use them when a route-scoped fixture
+needs to prove repair pressure such as weak owner typing, missing scope-slot type guidance, or diagnostic action-target
+selection without turning the whole diagnostics DTO into a snapshot.
 `TemplateDiagnostics` lifts those same weak-owner facts from a cursor answer into a file/app-locus answer. It scans the
 opened app's compiled template basis, or the requested `sourceFile` when supplied, through parser-owned member-name
 spans and returns exact source ranges for diagnostic rows. Keep this as an aggregation over the same cursor-info
@@ -1082,10 +1116,13 @@ property bindings and interpolations: accessor versus observer lookup, target ki
 strategy, DOM events, target/property type displays, target type source, writability, observability, authority, source
 address, and optional handles. This is the compact authoring pressure signal for form controls, class/style property access, and later
 TS-backed source/target flow through ObserverLocator-shaped semantics. Standards-shaped attribute access such as
-`data-*`, `aria-*`, and generated SVG-analyzer attributes reports the `data-attribute-accessor` strategy, matching
-Aurelia's `NodeObserverLocator` routing. Native node target types also distinguish exact DOM tag-map resolution from
-broad `HTMLElement`/`SVGElement` fallback, so unknown custom-host or web-component tags remain visible without
-tag-name heuristics. Target access rows can also carry exact framework error-code authority when the observer lookup
+`xlink:href` or `xml:lang` reports `attribute-ns-accessor` when Aurelia's `NodeObserverLocator` routes through
+`AttributeNSAccessor`; `data-*`, `aria-*`, and generated SVG-analyzer attributes outside that namespace table report the
+`data-attribute-accessor` strategy. The same `data-attribute-accessor` lane covers accessor-time attr writes such as
+`href.bind`; observer-forcing modes such as `href.two-way` follow `NodeObserverLocator.getObserver(...)` instead of that
+accessor-only branch. Native node target types also distinguish exact DOM tag-map resolution from broad
+`HTMLElement`/`SVGElement` fallback, so unknown custom-host or web-component tags remain visible without tag-name
+heuristics. Target access rows can also carry exact framework error-code authority when the observer lookup
 itself would throw. The current modeled case is runtime-html `node_observer_strategy_not_found` (`AUR0652`) when
 `NodeObserverLocator.allowDirtyCheck` is disabled and an existing native node property has no configured observer
 strategy; the row uses `diagnosticReason` for that closed framework rejection while `openReason` remains reserved for
@@ -1112,7 +1149,8 @@ stays open. These rows are consumed by value-channel and data-flow projections a
 compiler resource scope, rendered binding product, controller bind phase, and binding-behavior materializer have all had
 their say. Rows intentionally describe positive applications rather than errors: behavior name, owning binding kind,
 phase, argument count, static scalar/template literal argument values, target kind/property, source address, and
-optional handles. Authoring
+optional handles. Source addresses prefer the exact binding-behavior name span, including names inside interpolation
+holes, and only fall back to the broader binding carrier when no source file can be recovered. Authoring
 verification uses this lane for fact-level effects such as "the generated validated form actually produced `& validate`
 applications" before deriving higher-level validation ownership taste.
 
@@ -1148,6 +1186,12 @@ targeted CSS property. Text interpolation through `ContentBinding` reports `text
 `...$bindables` is a static DOM property. `SpreadBinding`-owned inner bindings created from captured `...$attrs` are
 reported through the same target-access, target-operation, value-channel, and data-flow projections as ordinary
 bindings, while their ownership remains a binding-to-binding runtime claim under the hood.
+Binding-family public rows are resource-local by authored source ownership, not by whichever recursive aggregate render
+pass materialized them first. Aggregate child custom-element rendering remains visible for controller topology, but API
+projections filter binding-backed rows to the resource whose template contains the binding source span. Captured
+`...$attrs` are the main canary: a forwarded inner input binding can render inside a wrapper component while its source
+expression still belongs to the parent usage template that authored the captured attribute. Render-controller ownership
+is only a fallback for rows that genuinely lack exact source spans.
 
 `BindingDataFlows` exposes the source/target edge after scopes plus target access or target operation are materialized.
 Rows report binding direction, parser publication state/result kind, value-site kind, source expression
@@ -1174,6 +1218,84 @@ template-to-state/service handoff as read/write interaction rows. This lets idio
 `state.member` without adding boilerplate view-model forwarding just to make topology visible. The join is scope-backed:
 the API reads the binding row's materialized `BindingScope`, locates the root slot, and requires that slot's source to
 match the injected member source before publishing a direct support-member handoff.
+
+`BindingObservedDependencies` exposes the concrete source-side reads that a source-to-target binding evaluation would
+collect through Aurelia's template connectable circuit. Rows preserve expression kind, source/root/member/key
+names, method name for calls, parser-local spans, source reference, and optional handles back to the runtime binding,
+data-flow edge, expression parse, and binding scope. Member reads also carry TypeChecker member kind and declaration
+source when the binding scope can close the owner expression. The `observedMemberSourceState` field distinguishes
+closed source routes from honest non-member carriers such as temporary collection call results, `$` runtime scope names,
+and genuinely open scope roots, so aggregate pressure does not treat every null declaration source as provenance loss.
+Root scope reads such as `state`, `request`, or repeat
+locals preserve the slot/context source when available, so inquiries can distinguish a template read of an accessor
+getter from a plain property and can still explain the scope root without treating the source-observer projection as
+concrete usage by itself. Use this query when authoring or diagnostics need to explain why `state.member`, nested collection callbacks, or direct
+object reads are observable without requiring view-model forwarding getters. It also carries the binding-owned
+execution rows for observed `@computed`/`@astTrack` method calls: explicit deps become declared dependency rows, while
+omitted deps use the framework proxy execution path for that method call. It is a binding-owned companion to
+`BindingDataFlows`, not a full watcher/computed getter executor.
+Authoring expected effects can filter `binding-observed-dependency` rows to prove direct state-member observation in
+generated fixtures without adding broad snapshots.
+
+`ComputedObservationDefinitions` exposes valid source-backed `@computed` getter and trackable-method declarations.
+Rows preserve member kind/name, explicit property keys, dependency-function count, proxy-auto-track/function/open
+dependency mode, flush/deep options, source reference, and optional handles. Use this query when authoring wants to
+distinguish ordinary template connectable reads from explicit computed/watch/trackable dependency declarations. Invalid
+decorator targets remain in
+`ObservationIssues`; this row family is for framework-accepted declarations that will later feed computed/watcher
+execution semantics. `@computed` is not a generic switch for making ordinary template reads observable, and it is not
+required for an ordinary accessor getter to be observed. Accessor descriptors and function-key observer requests enter
+`ComputedObserver` through `ObserverLocator`; `@computed` only contributes explicit computed metadata for getters or
+writes the same trackable-method marker consumed by `@astTrack` for methods.
+
+`ComputedObserverSources` exposes the getter source-observer side of that model. Plain getter descriptors publish
+`ComputedObserver` rows with proxy-auto dependency collection; decorated getters with explicit deps publish
+`ControlledComputedObserver` rows. `ComputedObserverObservedDependencies` is the source-observer companion row family:
+plain getter bodies and dependency functions publish proxy property/collection reads, explicit dependency strings
+publish expression-observer reads at the dependency literal span, and explicit dependency keys with `deep: true` publish
+the first TypeChecker-shaped `deep-property-read` / `deep-collection-read` rows for nested observable value shapes.
+These rows are source-backed getter capability/projection rows. A direct `ObserverLocator.getObserver(obj, fn)`
+function-key request is still a runtime `ComputedObserver` branch, but it is a concrete observer lookup call site and
+should be modeled by a call-site product, not folded into getter availability rows. Pair computed observer source rows
+with binding observed dependencies, runtime-effect rows, watcher rows, or target-access rows when the question is
+whether a concrete runtime lookup is actually used by a template, source API call, or watcher.
+
+`RuntimeEffects` exposes direct source-level `Observation.watch(...)` / `IObservation.watch(...)` and
+`Observation.run(...)` / `IObservation.run(...)` effects. Rows preserve the effect kind, the framework
+dependency-evaluation handoff, the static `immediate` option when closed, observed dependency count, source reference,
+and optional product handles. `RuntimeEffectObservedDependencies` is the source API companion row family: string watch
+expressions use the `ast-evaluate` path that mirrors `getExpressionObserver(...)`, function getters use the
+`observer-locator-function-key` path that mirrors `ObserverLocator.getObserver(obj, getter)`, and run closures use the
+`connectable-run` path for synchronous `@observable` getter reads inside the active `RunEffect` connectable window. These
+rows are intentionally effect-owned. Do not read them as resource `@watch` metadata, renderer-created bindings, or getter
+source-observer availability. Dynamic watch expressions publish an `open` source effect with no observed-dependency rows
+instead of disappearing. Async nested callbacks inside `Observation.run(...)` remain outside the synchronous connectable
+window.
+
+`ProxyObservableEscapes` exposes direct source-level `ProxyObservable.getRaw(...)` and `ProxyObservable.unwrap(...)`
+calls with the escape kind, argument source text, argument root, source reference, and optional handles. This is a
+neutral fact row for code that leaves Aurelia's proxy wrapper surface, not a diagnostic by itself. Pair it with observed
+dependency rows, type surfaces, and future policy when deciding whether an escape is appropriate for an external library,
+host object, serialization boundary, or unnecessary boilerplate.
+
+`RuntimeWatchers` exposes controller-owned `ComputedWatcher` and `ExpressionWatcher` products created from accepted
+resource watch metadata during controller hydration. Rows preserve the owning rendering/controller, source resource,
+watch index, expression/callback shape, flush mode, source reference, and optional product/identity handles. Computed
+watchers use Aurelia's `ProxyObservable` dependency collection path; expression watchers use the ordinary
+`astEvaluate`/connectable path. This query is intentionally separate from renderer-created `RuntimeBindings`: both are
+admitted through `Controller.addBinding(...)` in the framework, but watchers are set up from `definition.watches`
+before ordinary rendered bindings and need their own source/resource metadata handle.
+`RuntimeWatcherObservedDependencies` is the execution-detail companion for watcher reads that semantic-runtime can close
+today. Expression watchers parse the accepted string property key with Aurelia property-expression semantics and reuse
+the same connectable dependency collector as binding data-flow, so rows can explain `AccessScope`, `AccessMember`,
+`AccessKeyed`, and collection-call dependencies without reclassifying the watcher as an ordinary renderer binding.
+Computed watchers use a first `ProxyObservable` function-body projection to explain property and collection reads rooted
+in the wrapped dependency function parameter, including nested collection callback values and simple local aliases or
+object destructuring. Collection-call rows are TypeChecker-discriminated when receiver types are visible, so ordinary
+string/object methods can keep their property-read rows without being misreported as array/map/set proxy collection
+reads. This remains a conservative execution-detail lane: optional chaining, dynamic keys, derived aliases, computed
+getter observer execution rows, and deeper proxy/control-flow precision are still substrate frontiers rather than API
+wording policy.
 
 ## Fixture Pressure
 
