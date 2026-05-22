@@ -5,11 +5,6 @@ import {
   ApplicationTopologyBuilder,
 } from '../application/index.js';
 import {
-  CreateComponentOperation,
-  CreateServiceOperation,
-  CreateStateModelOperation,
-} from './operation.js';
-import {
   AuthoringIntent,
   AuthoringPlan,
   AuthoringPlanStep,
@@ -17,49 +12,43 @@ import {
 } from './plan.js';
 import {
   ExpectedSemanticEffect,
-  ExpectedSemanticEffectFilter,
 } from './expected-effect.js';
 import { AuthoringPreference } from './ontology.js';
 import {
-  classToggleDataFlowEffect,
-  classToggleStyleTasteEffect,
-  classToggleTargetAccessEffect,
-  classToggleValueChannelEffect,
-  classTokenStyleTasteEffect,
-  classTokenInterpolationDataFlowEffect,
-  classTokenTargetAccessEffect,
-  classTokenValueChannelEffect,
-  componentStylesheetCapabilityEffect,
-  componentStylesheetEffect,
-  componentStylesheetTasteEffect,
-  directStateDomainTemplateBindingTasteEffect,
-  sourceBackedGetterObservationTasteEffect,
-  stylePropertyDataFlowEffect,
-  stylePropertyStyleTasteEffect,
-  stylePropertyTargetAccessEffect,
-  stylePropertyValueChannelEffect,
-  styleRuleInterpolationDataFlowEffect,
-  styleRuleStyleTasteEffect,
-  styleRuleTargetAccessEffect,
-  styleRuleValueChannelEffect,
-} from './form-expected-effects.js';
-import { projectToolingExpectedEffects } from './project-tooling-expected-effects.js';
+  catalogAppExpectedEffects,
+  catalogAvailabilityTemplateExpectedEffects,
+  catalogListTemplateExpectedEffects,
+  catalogServicePlanStepExpectedEffects,
+  catalogStatePlanStepExpectedEffects,
+  catalogStatusTemplateExpectedEffects,
+} from './catalog-storefront-expected-effects.js';
 import {
-  promiseTemplateControllerRuntimeEffects,
-  switchTemplateControllerRuntimeEffects,
-  syntheticViewRuntimeEffect,
-  templateControllerRuntimeEffect,
-} from './template-controller-expected-effects.js';
-import {
+  componentPlanStep,
   componentStyleAssetPlanStep,
+  domainModelPlanStep,
   entrypointPlanStep,
   externalTemplatePlanStep,
   projectFilesPlanStep,
   rootComponentPlanStep,
+  servicePlanStep,
+  stateModelPlanStep,
   templateBindingPlanStep,
   verifyAppPlanStep,
-} from './form-recipe-plan-steps.js';
-import { catalogStorefrontSourcePlan } from './catalog-storefront-source-plan.js';
+} from './recipe-plan-steps.js';
+import {
+  catalogStorefrontDomainNamesFromParameters,
+  catalogStorefrontSourcePlan,
+  defaultCatalogStorefrontDomainNames,
+  type CatalogStorefrontDomainNames,
+} from './catalog-storefront-source-plan.js';
+import {
+  defaultCatalogStorefrontFieldSchema,
+  minimalCatalogStorefrontFieldSchema,
+  catalogStorefrontFieldFeatureProfile,
+  catalogStorefrontFieldSchemaFromParameter,
+  catalogStorefrontUsesReferencePresentation,
+  type CatalogStorefrontFieldSchema,
+} from './catalog-storefront-field-schema.js';
 
 export interface CatalogStorefrontRecipeRequest {
   /** Project root that the authored app should occupy. */
@@ -72,71 +61,68 @@ export interface CatalogStorefrontRecipeRequest {
   readonly rootStylePath?: string;
   readonly rootComponentClassName?: string;
   readonly rootElementName?: string;
-  readonly productModelPath?: string;
+  readonly modelPath?: string;
   readonly statePath?: string;
   readonly stateClassName?: string;
-  readonly productCollectionStateClassName?: string;
-  readonly cartStateClassName?: string;
+  readonly collectionStateClassName?: string;
+  readonly selectionStateClassName?: string;
   readonly servicePath?: string;
   readonly serviceClassName?: string;
-  readonly productListComponentPath?: string;
-  readonly productListTemplatePath?: string;
-  readonly productListClassName?: string;
-  readonly productListElementName?: string;
-  readonly productCardComponentPath?: string;
-  readonly productCardTemplatePath?: string;
-  readonly productCardClassName?: string;
-  readonly productCardElementName?: string;
+  readonly listComponentPath?: string;
+  readonly listTemplatePath?: string;
+  readonly listClassName?: string;
+  readonly listElementName?: string;
+  readonly cardComponentPath?: string;
+  readonly cardTemplatePath?: string;
+  readonly cardClassName?: string;
+  readonly cardElementName?: string;
+  readonly catalogEntityName?: string;
+  readonly catalogCollectionName?: string;
+  readonly catalogFields?: string;
+  readonly catalogOptions?: string;
 }
 
 interface CatalogStorefrontRecipeModel {
   readonly rootDir: string;
   readonly appName: string;
+  readonly catalogDomain: CatalogStorefrontDomainNames;
   readonly entrypointPath: string;
   readonly rootComponentPath: string;
   readonly rootTemplatePath: string;
   readonly rootStylePath: string;
   readonly rootComponentClassName: string;
   readonly rootElementName: string;
-  readonly productModelPath: string;
+  readonly modelPath: string;
   readonly statePath: string;
   readonly stateClassName: string;
-  readonly productCollectionStateClassName: string;
-  readonly cartStateClassName: string;
+  readonly collectionStateClassName: string;
+  readonly selectionStateClassName: string;
   readonly servicePath: string;
   readonly serviceClassName: string;
-  readonly productListComponentPath: string;
-  readonly productListTemplatePath: string;
-  readonly productListClassName: string;
-  readonly productListElementName: string;
-  readonly productCardComponentPath: string;
-  readonly productCardTemplatePath: string;
-  readonly productCardClassName: string;
-  readonly productCardElementName: string;
+  readonly listComponentPath: string;
+  readonly listTemplatePath: string;
+  readonly listClassName: string;
+  readonly listElementName: string;
+  readonly cardComponentPath: string;
+  readonly cardTemplatePath: string;
+  readonly cardClassName: string;
+  readonly cardElementName: string;
+  readonly catalogFieldSchema: CatalogStorefrontFieldSchema;
 }
 
 export function buildCatalogStorefrontPlan(request: CatalogStorefrontRecipeRequest): AuthoringPlan {
   const model = normalizeCatalogStorefrontRecipe(request);
   const topology = catalogStorefrontTopology(model);
+  const useReferencePresentation = catalogStorefrontUsesReferencePresentation(model.catalogFieldSchema);
 
   return new AuthoringPlan(
     new AuthoringIntent(
-      `Create ${model.appName} as an Aurelia catalog app with DI-owned composed state, a service boundary, and ID-based components.`,
+      useReferencePresentation
+        ? `Create ${model.appName} as an Aurelia catalog app with DI-owned composed state, a service boundary, and local object component boundaries.`
+        : `Create ${model.appName} as an Aurelia catalog app with DI-owned composed state, a service boundary, and a direct searchable list.`,
       topology,
       null,
-      [
-        new AuthoringPreference('state-ownership', 'di-owned-state-class'),
-        new AuthoringPreference('state-ownership', 'di-owned-service-layer'),
-        new AuthoringPreference('component-interface', 'scalar-id-inputs'),
-        new AuthoringPreference('template-model-access', 'direct-state-domain-template-binding'),
-        new AuthoringPreference('template-model-access', 'meaningful-viewmodel-adaptation'),
-        new AuthoringPreference('template-model-access', 'source-backed-getter-observation'),
-        new AuthoringPreference('template-source-ownership', 'external-template-file'),
-        new AuthoringPreference('template-rendering-boundary', 'template-controller-composition'),
-        new AuthoringPreference('style-resource-ownership', 'component-stylesheet'),
-        new AuthoringPreference('style-binding-model', 'class-token-binding'),
-        new AuthoringPreference('build-tool-profile', 'host-selected-build-tool'),
-      ],
+      catalogStorefrontPreferences(useReferencePresentation),
     ),
     catalogStorefrontPreconditions(),
     catalogStorefrontPlanSteps(model, topology),
@@ -145,31 +131,60 @@ export function buildCatalogStorefrontPlan(request: CatalogStorefrontRecipeReque
   );
 }
 
+export function catalogStorefrontPreferences(useReferencePresentation: boolean): readonly AuthoringPreference[] {
+  return [
+    new AuthoringPreference('state-ownership', 'di-owned-state-class'),
+    new AuthoringPreference('state-ownership', 'di-owned-service-layer'),
+    new AuthoringPreference('template-model-access', 'direct-state-domain-template-binding'),
+    new AuthoringPreference('template-model-access', 'source-backed-getter-observation'),
+    new AuthoringPreference('template-source-ownership', 'external-template-file'),
+    new AuthoringPreference('template-rendering-boundary', 'template-controller-composition'),
+    ...(useReferencePresentation
+      ? [
+        new AuthoringPreference('component-interface', 'object-inputs'),
+        new AuthoringPreference('template-model-access', 'meaningful-viewmodel-adaptation'),
+        new AuthoringPreference('style-resource-ownership', 'component-stylesheet'),
+        new AuthoringPreference('style-binding-model', 'class-token-binding'),
+      ]
+      : []),
+    new AuthoringPreference('build-tool-profile', 'host-selected-build-tool'),
+  ];
+}
+
 function normalizeCatalogStorefrontRecipe(request: CatalogStorefrontRecipeRequest): CatalogStorefrontRecipeModel {
+  const hasCatalogDomainOverride = request.catalogEntityName != null || request.catalogCollectionName != null;
+  const catalogDomain = hasCatalogDomainOverride
+    ? catalogStorefrontDomainNamesFromParameters(request.catalogEntityName ?? 'Item', request.catalogCollectionName)
+    : defaultCatalogStorefrontDomainNames();
+  const entityStem = catalogDomain.entityKebabName;
+  const entityClassStem = catalogDomain.entityClassName;
   return {
     rootDir: request.rootDir,
     appName: request.appName,
+    catalogDomain,
     entrypointPath: request.entrypointPath ?? 'src/main.ts',
     rootComponentPath: request.rootComponentPath ?? 'src/app.ts',
     rootTemplatePath: request.rootTemplatePath ?? 'src/app.html',
     rootStylePath: request.rootStylePath ?? 'src/app.css',
     rootComponentClassName: request.rootComponentClassName ?? 'App',
     rootElementName: request.rootElementName ?? 'app-root',
-    productModelPath: request.productModelPath ?? 'src/models/product.ts',
+    modelPath: request.modelPath ?? `src/models/${entityStem}.ts`,
     statePath: request.statePath ?? 'src/state/catalog-state.ts',
     stateClassName: request.stateClassName ?? 'CatalogState',
-    productCollectionStateClassName: request.productCollectionStateClassName ?? 'ProductCollectionState',
-    cartStateClassName: request.cartStateClassName ?? 'CartState',
-    servicePath: request.servicePath ?? 'src/services/product-catalog-service.ts',
-    serviceClassName: request.serviceClassName ?? 'ProductCatalogService',
-    productListComponentPath: request.productListComponentPath ?? 'src/components/product-list.ts',
-    productListTemplatePath: request.productListTemplatePath ?? 'src/components/product-list.html',
-    productListClassName: request.productListClassName ?? 'ProductList',
-    productListElementName: request.productListElementName ?? 'product-list',
-    productCardComponentPath: request.productCardComponentPath ?? 'src/components/product-card.ts',
-    productCardTemplatePath: request.productCardTemplatePath ?? 'src/components/product-card.html',
-    productCardClassName: request.productCardClassName ?? 'ProductCard',
-    productCardElementName: request.productCardElementName ?? 'product-card',
+    collectionStateClassName: request.collectionStateClassName ?? `${entityClassStem}CollectionState`,
+    selectionStateClassName: request.selectionStateClassName ?? 'SelectionState',
+    servicePath: request.servicePath ?? `src/services/${entityStem}-catalog-service.ts`,
+    serviceClassName: request.serviceClassName ?? `${entityClassStem}CatalogService`,
+    listComponentPath: request.listComponentPath ?? `src/components/${entityStem}-list.ts`,
+    listTemplatePath: request.listTemplatePath ?? `src/components/${entityStem}-list.html`,
+    listClassName: request.listClassName ?? `${entityClassStem}List`,
+    listElementName: request.listElementName ?? `${entityStem}-list`,
+    cardComponentPath: request.cardComponentPath ?? `src/components/${entityStem}-card.ts`,
+    cardTemplatePath: request.cardTemplatePath ?? `src/components/${entityStem}-card.html`,
+    cardClassName: request.cardClassName ?? `${entityClassStem}Card`,
+    cardElementName: request.cardElementName ?? `${entityStem}-card`,
+    catalogFieldSchema: catalogStorefrontFieldSchemaFromParameter(request.catalogFields, request.catalogOptions)
+      ?? (hasCatalogDomainOverride ? minimalCatalogStorefrontFieldSchema() : defaultCatalogStorefrontFieldSchema()),
   };
 }
 
@@ -184,97 +199,92 @@ function catalogStorefrontPlanSteps(
   model: CatalogStorefrontRecipeModel,
   topology: ApplicationTopology,
 ): readonly AuthoringPlanStep[] {
+  const featureProfile = catalogStorefrontFieldFeatureProfile(model.catalogFieldSchema);
+  const useReferencePresentation = catalogStorefrontUsesReferencePresentation(model.catalogFieldSchema);
   return [
     projectFilesPlanStep([
       model.entrypointPath,
       model.rootComponentPath,
       model.rootTemplatePath,
-      model.rootStylePath,
-      model.productModelPath,
+      ...(useReferencePresentation ? [model.rootStylePath] : []),
+      model.modelPath,
       model.statePath,
       model.servicePath,
-      model.productListComponentPath,
-      model.productListTemplatePath,
-      model.productCardComponentPath,
-      model.productCardTemplatePath,
+      model.listComponentPath,
+      model.listTemplatePath,
+      ...(useReferencePresentation ? [model.cardComponentPath, model.cardTemplatePath] : []),
     ]),
-    new AuthoringPlanStep(
-      new CreateStateModelOperation(model.statePath, model.stateClassName),
-      [
-        ExpectedSemanticEffect.signatureFact('Catalog state source should be visible in app topology.', 'service-class', 'di', 'state-model', 'present', null, [
-          new ExpectedSemanticEffectFilter('role', 'state-source'),
-          new ExpectedSemanticEffectFilter('className', model.stateClassName),
-        ]),
-        ExpectedSemanticEffect.signatureAtLeast('Catalog state should expose composed state objects.', 'state-composition', 'di', 2, 'state-model', [
-          new ExpectedSemanticEffectFilter('ownerClassName', model.stateClassName),
-        ]),
-        ExpectedSemanticEffect.signatureTaste('Authoring orientation should recognize DI-owned state.', 'state-ownership', 'di-owned-state-class', 'state-model'),
-        ExpectedSemanticEffect.signatureFact('Catalog product collection should use plain getter observation.', 'computed-observer-source', 'di', 'state-model', 'present', null, [
-          new ExpectedSemanticEffectFilter('memberName', 'ids'),
-          new ExpectedSemanticEffectFilter('observerKind', 'computed-observer'),
-          new ExpectedSemanticEffectFilter('triggerKind', 'accessor-descriptor'),
-          new ExpectedSemanticEffectFilter('dependencyMode', 'proxy-auto-track'),
-        ]),
-        ExpectedSemanticEffect.signatureFact('Catalog product collection plain getter should observe Map keys.', 'computed-observer-observed-dependency', 'di', 'state-model', 'present', null, [
-          new ExpectedSemanticEffectFilter('memberName', 'ids'),
-          new ExpectedSemanticEffectFilter('dependencyKind', 'proxy-collection-read'),
-          new ExpectedSemanticEffectFilter('sourceName', 'this.products'),
-          new ExpectedSemanticEffectFilter('methodName', 'keys'),
-        ]),
-      ],
+    domainModelPlanStep(model.modelPath, model.catalogDomain.entityClassName),
+    stateModelPlanStep(
+      model.statePath,
+      model.stateClassName,
+      catalogStatePlanStepExpectedEffects({
+        summaryPrefix: 'Catalog',
+        stateClassName: model.stateClassName,
+        domain: model.catalogDomain,
+        composedStateCount: useReferencePresentation ? 2 : 1,
+      }),
     ),
-    new AuthoringPlanStep(
-      new CreateServiceOperation(model.servicePath, model.serviceClassName),
-      [
-        ExpectedSemanticEffect.discriminatorFact('Catalog service source should be visible in app topology.', 'service-class', 'di', 'service', 'present', null, [
-          new ExpectedSemanticEffectFilter('role', 'service-source'),
-          new ExpectedSemanticEffectFilter('className', model.serviceClassName),
-        ]),
-        ExpectedSemanticEffect.discriminatorTaste('Authoring orientation should recognize a DI-owned service layer.', 'state-ownership', 'di-owned-service-layer', 'service'),
-      ],
+    servicePlanStep(
+      model.servicePath,
+      model.serviceClassName,
+      catalogServicePlanStepExpectedEffects({
+        summaryPrefix: 'Catalog',
+        serviceClassName: model.serviceClassName,
+      }),
     ),
     entrypointPlanStep(model.entrypointPath, model.rootComponentClassName),
     rootComponentPlanStep(model.rootComponentPath, model.rootComponentClassName, model.rootElementName),
-    componentStyleAssetPlanStep(model.rootStylePath),
+    ...(useReferencePresentation ? [componentStyleAssetPlanStep(model.rootStylePath)] : []),
     externalTemplatePlanStep(model.rootTemplatePath, model.rootComponentClassName, 'Root component'),
+    ...(useReferencePresentation
+      ? [templateBindingPlanStep(
+        model.rootTemplatePath,
+        'promise controller with pending, fulfilled, and rejected branches',
+        catalogStorefrontPromiseExpectedEffects(),
+      )]
+      : []),
+    componentPlanStep(model.listComponentPath, model.listClassName, model.listElementName, `${model.catalogDomain.entityTitle} list`),
+    externalTemplatePlanStep(model.listTemplatePath, model.listClassName, `${model.catalogDomain.entityTitle} list component`),
+    ...(useReferencePresentation
+      ? [
+        componentPlanStep(
+          model.cardComponentPath,
+          model.cardClassName,
+          model.cardElementName,
+          `${model.catalogDomain.entityTitle} card`,
+          'component',
+          [
+            ExpectedSemanticEffect.signatureTaste(`${model.catalogDomain.entityTitle} card should expose object-shaped input for local typed handoff.`, 'component-interface', 'object-inputs', 'component'),
+          ],
+        ),
+        externalTemplatePlanStep(model.cardTemplatePath, model.cardClassName, `${model.catalogDomain.entityTitle} card component`),
+      ]
+      : []),
     templateBindingPlanStep(
-      model.rootTemplatePath,
-      'promise controller with pending, fulfilled, and rejected branches',
-      catalogStorefrontPromiseExpectedEffects(),
+      model.listTemplatePath,
+      useReferencePresentation
+        ? `repeat.for list rendering and local ${model.catalogDomain.entityClassName} object handoff into ${model.cardElementName}`
+        : `repeat.for list rendering over direct ${model.catalogDomain.entityClassName} template locals`,
+      catalogStorefrontTemplateBindingExpectedEffects(model),
     ),
-    new AuthoringPlanStep(
-      new CreateComponentOperation(model.productListComponentPath, model.productListClassName, model.productListElementName),
-      [
-        ExpectedSemanticEffect.fact('Product list should be a custom element.', 'component', 'resource', 'component'),
-      ],
-    ),
-    externalTemplatePlanStep(model.productListTemplatePath, model.productListClassName, 'Product list component'),
-    new AuthoringPlanStep(
-      new CreateComponentOperation(model.productCardComponentPath, model.productCardClassName, model.productCardElementName),
-      [
-        ExpectedSemanticEffect.fact('Product card should be a custom element.', 'component', 'resource', 'component'),
-        ExpectedSemanticEffect.signatureTaste('Product card should expose scalar ID-shaped input.', 'component-interface', 'scalar-id-inputs', 'component'),
-      ],
-    ),
-    externalTemplatePlanStep(model.productCardTemplatePath, model.productCardClassName, 'Product card component'),
-    templateBindingPlanStep(
-      model.productListTemplatePath,
-      'repeat.for list rendering and scalar ID handoff into product-card',
-      catalogStorefrontTemplateBindingExpectedEffects(),
-    ),
-    templateBindingPlanStep(
-      model.productCardTemplatePath,
-      'switch controller for stock availability states',
-      catalogStorefrontSwitchExpectedEffects(),
-    ),
+    ...(featureProfile.hasAvailabilitySwitch
+      ? [templateBindingPlanStep(
+        model.cardTemplatePath,
+        'switch controller for stock availability states',
+        catalogStorefrontSwitchExpectedEffects(model),
+      )]
+      : []),
     verifyAppPlanStep(topology, catalogStorefrontExpectedEffects(model)),
   ];
 }
 
 function catalogStorefrontTopology(model: CatalogStorefrontRecipeModel): ApplicationTopology {
   const builder = new ApplicationTopologyBuilder(model.rootDir);
-  const card = addCatalogProductCard(builder, model);
-  const list = addCatalogProductList(builder, model, card);
+  const card = catalogStorefrontUsesReferencePresentation(model.catalogFieldSchema)
+    ? addCatalogCard(builder, model)
+    : null;
+  const list = addCatalogList(builder, model, card);
   const root = addCatalogRoot(builder, model, list);
   addCatalogState(builder, model);
   addCatalogService(builder, model);
@@ -282,31 +292,31 @@ function catalogStorefrontTopology(model: CatalogStorefrontRecipeModel): Applica
   return builder.toTopology();
 }
 
-function addCatalogProductCard(
+function addCatalogCard(
   builder: ApplicationTopologyBuilder,
   model: CatalogStorefrontRecipeModel,
 ): ApplicationComponentTopologyResult {
   return builder.component({
-    className: model.productCardClassName,
-    referenceFromPath: model.productListComponentPath,
-    sourcePath: model.productCardComponentPath,
-    elementName: model.productCardElementName,
-    templatePath: model.productCardTemplatePath,
+    className: model.cardClassName,
+    referenceFromPath: model.listComponentPath,
+    sourcePath: model.cardComponentPath,
+    elementName: model.cardElementName,
+    templatePath: model.cardTemplatePath,
   });
 }
 
-function addCatalogProductList(
+function addCatalogList(
   builder: ApplicationTopologyBuilder,
   model: CatalogStorefrontRecipeModel,
-  card: ApplicationComponentTopologyResult,
+  card: ApplicationComponentTopologyResult | null,
 ): ApplicationComponentTopologyResult {
   return builder.component({
-    className: model.productListClassName,
+    className: model.listClassName,
     referenceFromPath: model.rootComponentPath,
-    sourcePath: model.productListComponentPath,
-    elementName: model.productListElementName,
-    templatePath: model.productListTemplatePath,
-    dependencies: [card.reference],
+    sourcePath: model.listComponentPath,
+    elementName: model.listElementName,
+    templatePath: model.listTemplatePath,
+    dependencies: card == null ? [] : [card.reference],
   });
 }
 
@@ -315,17 +325,18 @@ function addCatalogRoot(
   model: CatalogStorefrontRecipeModel,
   list: ApplicationComponentTopologyResult,
 ): ApplicationComponentTopologyResult {
+  const useReferencePresentation = catalogStorefrontUsesReferencePresentation(model.catalogFieldSchema);
   return builder.component({
     className: model.rootComponentClassName,
     referenceFromPath: model.entrypointPath,
     sourcePath: model.rootComponentPath,
     elementName: model.rootElementName,
     templatePath: model.rootTemplatePath,
-    styles: [{
+    styles: useReferencePresentation ? [{
       path: model.rootStylePath,
       assetKind: 'component-stylesheet',
       sourceKind: 'css-import',
-    }],
+    }] : [],
     dependencies: [list.reference],
   });
 }
@@ -359,166 +370,57 @@ function addCatalogEntrypoint(
 ): void {
   builder.entrypoint({
     path: model.entrypointPath,
-    startupLane: 'new Aurelia().register(StandardConfiguration).app(...).start()',
+    startupLane: 'Aurelia.app(...).start()',
     rootComponent: root.reference,
     imports: [
-      new ApplicationImport('@aurelia/runtime-html', ['Aurelia', 'StandardConfiguration']),
+      new ApplicationImport('aurelia', [], 'Aurelia'),
       new ApplicationImport(root.reference.moduleSpecifier, [model.rootComponentClassName]),
     ],
   });
 }
 
-function catalogStorefrontTemplateBindingExpectedEffects(): readonly ExpectedSemanticEffect[] {
-  return [
-    ExpectedSemanticEffect.signatureFact('Catalog list should expose list-renderer component role.', 'component-role', 'template', 'template-binding', 'present', null, [
-      new ExpectedSemanticEffectFilter('roleKind', 'list-renderer'),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Catalog list should bind scalar product IDs into product-card.', 'binding-data-flow', 'template', 'template-binding', 'present', null, [
-      new ExpectedSemanticEffectFilter('sourceName', 'productId'),
-      new ExpectedSemanticEffectFilter('targetKind', 'controller-view-model'),
-      new ExpectedSemanticEffectFilter('targetProperty', 'productId'),
-      new ExpectedSemanticEffectFilter('targetValueType', 'string'),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Catalog list should observe direct DI state product IDs without VM forwarding getters.', 'binding-observed-dependency', 'template', 'template-binding', 'present', null, [
-      new ExpectedSemanticEffectFilter('sourceName', 'state.products.ids'),
-      new ExpectedSemanticEffectFilter('dependencyKind', 'template-expression-read'),
-    ]),
-    ExpectedSemanticEffect.signatureTaste('Authoring orientation should recognize scalar ID-shaped component inputs.', 'component-interface', 'scalar-id-inputs', 'component'),
-    ExpectedSemanticEffect.signatureTaste('Authoring orientation should recognize template-controller composition.', 'template-rendering-boundary', 'template-controller-composition', 'template-controller'),
-    templateControllerRuntimeEffect('Catalog list should materialize repeat template-controller hydration.', 'iteration', 'many'),
-    syntheticViewRuntimeEffect('Catalog list should materialize repeat synthetic-view hydration.', 'iteration', 'many'),
-    classTokenStyleTasteEffect('Authoring orientation should recognize class-token style binding.'),
-    classToggleStyleTasteEffect('Authoring orientation should recognize class-toggle style binding.'),
-    styleRuleStyleTasteEffect('Authoring orientation should recognize style-rule binding.'),
-    stylePropertyStyleTasteEffect('Authoring orientation should recognize style-property binding.'),
-  ];
+function catalogStorefrontTemplateBindingExpectedEffects(model?: CatalogStorefrontRecipeModel): readonly ExpectedSemanticEffect[] {
+  const useReferencePresentation = model == null
+    || catalogStorefrontUsesReferencePresentation(model.catalogFieldSchema);
+  return catalogListTemplateExpectedEffects({
+    summaryPrefix: 'Catalog list',
+    domain: model?.catalogDomain,
+    fieldSchema: model?.catalogFieldSchema,
+    includeLocalObjectBinding: useReferencePresentation,
+    includeReferencePresentation: useReferencePresentation,
+  });
 }
 
 function catalogStorefrontPromiseExpectedEffects(): readonly ExpectedSemanticEffect[] {
-  return promiseTemplateControllerRuntimeEffects('Catalog status');
+  return catalogStatusTemplateExpectedEffects('Catalog');
 }
 
-function catalogStorefrontSwitchExpectedEffects(): readonly ExpectedSemanticEffect[] {
-  return switchTemplateControllerRuntimeEffects('Catalog availability');
+function catalogStorefrontSwitchExpectedEffects(model: CatalogStorefrontRecipeModel): readonly ExpectedSemanticEffect[] {
+  return catalogAvailabilityTemplateExpectedEffects('Catalog', model.catalogFieldSchema);
 }
 
 function catalogStorefrontExpectedEffects(model: CatalogStorefrontRecipeModel): readonly ExpectedSemanticEffect[] {
-  return [
-    ExpectedSemanticEffect.fact('Catalog storefront reopens as an Aurelia project.', 'project-shape'),
-    ...projectToolingExpectedEffects('Catalog storefront'),
-    ExpectedSemanticEffect.fact('Catalog storefront has an app root.', 'app-root'),
-    ExpectedSemanticEffect.atLeast('Catalog storefront has root, list, and card custom elements.', 'component', 'resource', 3, 'component'),
-    ExpectedSemanticEffect.fact('Catalog storefront has an app-root component role.', 'component-role', 'resource', 'app-root', 'present', null, [
-      new ExpectedSemanticEffectFilter('roleKind', 'app-root'),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Catalog storefront has a component-composition host role.', 'component-role', 'resource', 'component', 'present', null, [
-      new ExpectedSemanticEffectFilter('roleKind', 'component-composition-host'),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Catalog storefront has a list-renderer component role.', 'component-role', 'template', 'template-binding', 'present', null, [
-      new ExpectedSemanticEffectFilter('roleKind', 'list-renderer'),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Catalog storefront has an event-surface component role.', 'component-role', 'template', 'template-binding', 'present', null, [
-      new ExpectedSemanticEffectFilter('roleKind', 'event-surface'),
-    ]),
-    ExpectedSemanticEffect.atLeast('Catalog storefront has external templates.', 'external-template', 'template', 3, 'template'),
-    componentStylesheetEffect('Catalog storefront has a component stylesheet.'),
-    componentStylesheetCapabilityEffect('Catalog storefront exposes verifiable style asset authoring.'),
-    ExpectedSemanticEffect.atLeast('Catalog storefront has compiled template facts.', 'template-compilation', 'template', 3, 'template'),
-    ExpectedSemanticEffect.fact('Catalog storefront has runtime controller facts.', 'runtime-controller', 'template', 'component'),
-    classTokenTargetAccessEffect('Catalog storefront has class interpolation target access.'),
-    classTokenValueChannelEffect('Catalog storefront has class-token value channels.'),
-    classTokenInterpolationDataFlowEffect('Catalog storefront has class interpolation data flow.'),
-    classToggleTargetAccessEffect('Catalog storefront has class-toggle target access.'),
-    classToggleValueChannelEffect('Catalog storefront has class-toggle value channels.'),
-    classToggleDataFlowEffect('Catalog storefront has class-toggle data flow.'),
-    styleRuleTargetAccessEffect('Catalog storefront has style interpolation target access.'),
-    styleRuleValueChannelEffect('Catalog storefront has style-rule value channels.'),
-    styleRuleInterpolationDataFlowEffect('Catalog storefront has style interpolation data flow.'),
-    stylePropertyTargetAccessEffect('Catalog storefront has style-property target access.'),
-    stylePropertyValueChannelEffect('Catalog storefront has style-property value channels.'),
-    stylePropertyDataFlowEffect('Catalog storefront has style-property data flow.'),
-    templateControllerRuntimeEffect('Catalog storefront has conditional template-controller rows.', 'conditional', 'optional'),
-    templateControllerRuntimeEffect('Catalog storefront has else template-controller rows.', 'conditional-else', 'optional'),
-    templateControllerRuntimeEffect('Catalog storefront has repeat template-controller rows.', 'iteration', 'many'),
-    syntheticViewRuntimeEffect('Catalog storefront has repeat synthetic-view rows.', 'iteration', 'many'),
-    ...promiseTemplateControllerRuntimeEffects('Catalog storefront has catalog-status'),
-    ...switchTemplateControllerRuntimeEffects('Catalog storefront has availability'),
-    ExpectedSemanticEffect.signatureFact('Catalog storefront has product-id binding data flow.', 'binding-data-flow', 'template', 'template-binding', 'present', null, [
-      new ExpectedSemanticEffectFilter('sourceName', 'productId'),
-      new ExpectedSemanticEffectFilter('targetKind', 'controller-view-model'),
-      new ExpectedSemanticEffectFilter('targetProperty', 'productId'),
-      new ExpectedSemanticEffectFilter('targetValueType', 'string'),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Catalog storefront exposes observed dependencies for direct state-member template reads.', 'binding-observed-dependency', 'template', 'template-binding', 'present', null, [
-      new ExpectedSemanticEffectFilter('sourceName', 'state.products.ids'),
-      new ExpectedSemanticEffectFilter('dependencyKind', 'template-expression-read'),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Catalog storefront exposes plain product collection getter observation.', 'computed-observer-source', 'di', 'state-model', 'present', null, [
-      new ExpectedSemanticEffectFilter('memberName', 'ids'),
-      new ExpectedSemanticEffectFilter('observerKind', 'computed-observer'),
-      new ExpectedSemanticEffectFilter('triggerKind', 'accessor-descriptor'),
-      new ExpectedSemanticEffectFilter('dependencyMode', 'proxy-auto-track'),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Catalog storefront exposes product collection getter dependency rows.', 'computed-observer-observed-dependency', 'di', 'state-model', 'present', null, [
-      new ExpectedSemanticEffectFilter('memberName', 'ids'),
-      new ExpectedSemanticEffectFilter('dependencyKind', 'proxy-collection-read'),
-      new ExpectedSemanticEffectFilter('sourceName', 'this.products'),
-      new ExpectedSemanticEffectFilter('methodName', 'keys'),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Catalog storefront exposes plain cart count getter observation.', 'computed-observer-source', 'di', 'state-model', 'present', null, [
-      new ExpectedSemanticEffectFilter('memberName', 'itemCount'),
-      new ExpectedSemanticEffectFilter('observerKind', 'computed-observer'),
-      new ExpectedSemanticEffectFilter('triggerKind', 'accessor-descriptor'),
-      new ExpectedSemanticEffectFilter('dependencyMode', 'proxy-auto-track'),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Catalog storefront has a state service-class row.', 'service-class', 'di', 'state-model', 'present', null, [
-      new ExpectedSemanticEffectFilter('role', 'state-source'),
-      new ExpectedSemanticEffectFilter('className', model.stateClassName),
-    ]),
-    ExpectedSemanticEffect.discriminatorFact('Catalog storefront has a service-layer service-class row.', 'service-class', 'di', 'service', 'present', null, [
-      new ExpectedSemanticEffectFilter('role', 'service-source'),
-      new ExpectedSemanticEffectFilter('className', model.serviceClassName),
-    ]),
-    ExpectedSemanticEffect.signatureAtLeast('Catalog storefront has composed state rows.', 'state-composition', 'di', 2, 'state-model', [
-      new ExpectedSemanticEffectFilter('ownerClassName', model.stateClassName),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Catalog components call the DI-owned state layer.', 'service-interaction', 'di', 'state-model', 'present', null, [
-      new ExpectedSemanticEffectFilter('consumerRole', 'component-source'),
-      new ExpectedSemanticEffectFilter('targetRole', 'state-source'),
-      new ExpectedSemanticEffectFilter('operationKind', 'call'),
-      new ExpectedSemanticEffectFilter('isSelfInteraction', false),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Catalog components read DI-owned state projections.', 'service-interaction', 'di', 'state-model', 'present', null, [
-      new ExpectedSemanticEffectFilter('consumerRole', 'component-source'),
-      new ExpectedSemanticEffectFilter('targetRole', 'state-source'),
-      new ExpectedSemanticEffectFilter('operationKind', 'read'),
-      new ExpectedSemanticEffectFilter('isSelfInteraction', false),
-    ]),
-    ExpectedSemanticEffect.discriminatorFact('Catalog state calls the injected service boundary.', 'service-interaction', 'di', 'service', 'present', null, [
-      new ExpectedSemanticEffectFilter('consumerRole', 'state-source'),
-      new ExpectedSemanticEffectFilter('targetRole', 'service-source'),
-      new ExpectedSemanticEffectFilter('operationKind', 'call'),
-      new ExpectedSemanticEffectFilter('isSelfInteraction', false),
-    ]),
-    ExpectedSemanticEffect.signatureFact('Catalog card disabled binding joins to state interaction.', 'service-interaction-binding', 'template', 'template-binding', 'present', null, [
-      new ExpectedSemanticEffectFilter('bindingSourceRootName', 'canAdd'),
-      new ExpectedSemanticEffectFilter('bindingTargetProperty', 'disabled'),
-      new ExpectedSemanticEffectFilter('interactionTargetRole', 'state-source'),
-      new ExpectedSemanticEffectFilter('interactionOperationKind', 'read'),
-      new ExpectedSemanticEffectFilter('interactionIsSelfInteraction', false),
-    ]),
-    ExpectedSemanticEffect.absent('Catalog storefront has no open semantic seams.', 'open-seam-closure'),
-    ExpectedSemanticEffect.capability('Catalog storefront exposes verifiable template composition.', 'template-composition', 'verifiable'),
-    ExpectedSemanticEffect.signatureTaste('Catalog storefront reports DI-owned state.', 'state-ownership', 'di-owned-state-class', 'state-model'),
-    ExpectedSemanticEffect.discriminatorTaste('Catalog storefront reports a DI-owned service layer.', 'state-ownership', 'di-owned-service-layer', 'service'),
-    ExpectedSemanticEffect.signatureTaste('Catalog storefront reports scalar ID component inputs.', 'component-interface', 'scalar-id-inputs', 'component'),
-    directStateDomainTemplateBindingTasteEffect('Catalog storefront reports direct state/domain template binding taste.'),
-    sourceBackedGetterObservationTasteEffect('Catalog storefront reports plain getter observation taste.'),
-    ExpectedSemanticEffect.signatureTaste('Catalog storefront reports template-controller composition.', 'template-rendering-boundary', 'template-controller-composition', 'template-controller'),
-    componentStylesheetTasteEffect('Catalog storefront reports component stylesheet taste.'),
-    classTokenStyleTasteEffect('Catalog storefront reports class-token style binding taste.'),
-    classToggleStyleTasteEffect('Catalog storefront reports class-toggle style binding taste.'),
-    styleRuleStyleTasteEffect('Catalog storefront reports style-rule binding taste.'),
-    stylePropertyStyleTasteEffect('Catalog storefront reports style-property binding taste.'),
-  ];
+  const useReferencePresentation = catalogStorefrontUsesReferencePresentation(model.catalogFieldSchema);
+  return catalogAppExpectedEffects({
+    summaryPrefix: 'Catalog storefront',
+    componentCount: useReferencePresentation ? 3 : 2,
+    componentCountSummary: useReferencePresentation ? 'root, list, and card custom elements' : 'root and list custom elements',
+    externalTemplateCount: useReferencePresentation ? 3 : 2,
+    compiledTemplateCount: useReferencePresentation ? 3 : 2,
+    stateClassName: model.stateClassName,
+    serviceClassName: model.serviceClassName,
+    cardClassName: model.cardClassName,
+    cardElementName: model.cardElementName,
+    domain: model.catalogDomain,
+    fieldSchema: model.catalogFieldSchema,
+    includeListRendererRole: true,
+    includeEventSurfaceRole: true,
+    includeCollectionKeyDependency: true,
+    includeSelectionCountGetter: useReferencePresentation,
+    includeComponentStylesheet: useReferencePresentation,
+    includeLocalObjectBinding: useReferencePresentation,
+    includeReferencePresentation: useReferencePresentation,
+    includeStatusPromise: useReferencePresentation,
+    composedStateCount: useReferencePresentation ? 2 : 1,
+  });
 }

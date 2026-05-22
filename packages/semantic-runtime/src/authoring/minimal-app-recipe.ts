@@ -4,13 +4,6 @@ import {
   ApplicationTopologyBuilder,
 } from '../application/index.js';
 import {
-  CreateEntrypointOperation,
-  CreateExternalTemplateOperation,
-  CreateProjectFilesOperation,
-  CreateRootComponentOperation,
-  VerifyAppOperation,
-} from './operation.js';
-import {
   AuthoringIntent,
   AuthoringPlan,
   AuthoringPlanStep,
@@ -20,6 +13,13 @@ import { ExpectedSemanticEffect } from './expected-effect.js';
 import { AuthoringPreference } from './ontology.js';
 import { minimalAppSourcePlan } from './minimal-app-source-plan.js';
 import { projectToolingExpectedEffects } from './project-tooling-expected-effects.js';
+import {
+  entrypointPlanStep,
+  externalTemplatePlanStep,
+  projectFilesPlanStep,
+  rootComponentPlanStep,
+  verifyAppPlanStep,
+} from './recipe-plan-steps.js';
 
 export interface MinimalAppRecipeRequest {
   /** Project root that the authored app should occupy. */
@@ -95,40 +95,29 @@ function minimalAppPlanSteps(
   topology: ApplicationTopology,
 ): readonly AuthoringPlanStep[] {
   return [
-    new AuthoringPlanStep(
-      new CreateProjectFilesOperation([
-        model.entrypointPath,
-        model.rootComponentPath,
-        model.rootTemplatePath,
-      ]),
+    projectFilesPlanStep([
+      model.entrypointPath,
+      model.rootComponentPath,
+      model.rootTemplatePath,
+    ]),
+    entrypointPlanStep(model.entrypointPath, model.rootComponentClassName),
+    rootComponentPlanStep(
+      model.rootComponentPath,
+      model.rootComponentClassName,
+      model.rootElementName,
       [
-        ExpectedSemanticEffect.fact('Project should reopen as an Aurelia app.', 'project-shape'),
-      ],
-    ),
-    new AuthoringPlanStep(
-      new CreateEntrypointOperation(model.entrypointPath, model.rootComponentClassName),
-      [
-        ExpectedSemanticEffect.fact('App root should be visible after reopen.', 'app-root', 'app', 'entrypoint'),
-      ],
-    ),
-    new AuthoringPlanStep(
-      new CreateRootComponentOperation(model.rootComponentPath, model.rootComponentClassName, model.rootElementName),
-      [
-        ExpectedSemanticEffect.fact('Root component should be a custom element.', 'component', 'resource', 'app-root'),
         ExpectedSemanticEffect.signatureTaste('Minimal app should use explicit decorator resource declaration.', 'resource-declaration-mode', 'decorator-resource-declaration', 'custom-element'),
       ],
     ),
-    new AuthoringPlanStep(
-      new CreateExternalTemplateOperation(model.rootTemplatePath, model.rootComponentClassName),
+    externalTemplatePlanStep(
+      model.rootTemplatePath,
+      model.rootComponentClassName,
+      'Root component',
       [
-        ExpectedSemanticEffect.signatureFact('Root component should use an external template.', 'external-template', 'template', 'template'),
         ExpectedSemanticEffect.signatureTaste('Minimal app should use an external root template.', 'template-source-ownership', 'external-template-file', 'template'),
       ],
     ),
-    new AuthoringPlanStep(
-      new VerifyAppOperation(topology),
-      minimalAppExpectedEffects(),
-    ),
+    verifyAppPlanStep(topology, minimalAppExpectedEffects()),
   ];
 }
 
@@ -143,10 +132,10 @@ function minimalAppTopology(model: MinimalAppRecipeModel): ApplicationTopology {
   });
   builder.entrypoint({
     path: model.entrypointPath,
-    startupLane: 'new Aurelia().register(StandardConfiguration).app(...).start()',
+    startupLane: 'Aurelia.app(...).start()',
     rootComponent: root.reference,
     imports: [
-      new ApplicationImport('@aurelia/runtime-html', ['Aurelia', 'StandardConfiguration']),
+      new ApplicationImport('aurelia', [], 'Aurelia'),
       new ApplicationImport(root.reference.moduleSpecifier, [model.rootComponentClassName]),
     ],
   });

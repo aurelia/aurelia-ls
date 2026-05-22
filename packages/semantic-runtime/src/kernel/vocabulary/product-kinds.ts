@@ -361,6 +361,14 @@ export const KernelProductKinds = {
       'A runtime RouteContext that connects a RouteConfigContext to parent/root context, DI container, and hosting viewport agent.',
     ),
 
+    /** Product kind for a source-backed RouteContext.getRouteParameters(...) call correlated with route path params. */
+    RouteContextParameterRead: defineVocabulary(
+      KernelVocabularyNamespace.Router,
+      'route-context-parameter-read',
+      KernelVocabularySlot.ProductKind,
+      'A source-backed RouteContext.getRouteParameters(...) read with declared parameter shape and known route path parameter alignment.',
+    ),
+
     /** Product kind for one routeable component input after source/resource convergence. */
     RouteableComponent: defineVocabulary(
       KernelVocabularyNamespace.Router,

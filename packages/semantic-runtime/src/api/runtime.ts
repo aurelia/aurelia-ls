@@ -42,7 +42,11 @@ import {
 } from './authoring-catalog.js';
 import {
   readSemanticAuthoringOrientation,
+  semanticAuthoringOrientationResultForDetail,
 } from './authoring-orientation.js';
+import {
+  readSemanticAuthoringGuidance,
+} from './authoring-guidance.js';
 import {
   readSemanticAuthoringRecipePlan,
 } from './authoring-plan.js';
@@ -76,6 +80,7 @@ import {
   semanticRuntimeAppWorldFreeQueryBatchKey,
   semanticRuntimeAppWorldFreeQueryKey,
   semanticRuntimeAppQueryCatalogKey,
+  semanticRuntimeAuthoringGuidanceKey,
   semanticRuntimeAuthoringRecipePlanKey,
   semanticRuntimeRoutedAppQueryBatchEpochKeys,
   semanticRuntimeRoutedAppQueryBatchKey,
@@ -122,15 +127,19 @@ import {
   type SemanticRuntimeInquiryProfile,
 } from '../telemetry/inquiry-profile.js';
 import {
+  formatSemanticRuntimeBytes,
   readSemanticRuntimeMemorySample,
   type SemanticRuntimeMemoryDelta,
 } from '../telemetry/memory.js';
 import {
   readBindingDataFlowRows,
+  readBindingDataFlowSummary,
+  readBindingObservedDependencySummary,
   readBindingObservedDependencyRows,
   readBindingBehaviorApplicationRows,
   readBindingSourceOperationRows,
   readBindingTargetAccessRows,
+  readBindingValueChannelSummary,
   readBindingValueChannelRows,
   readTargetOperationRows,
 } from './binding-projections.js';
@@ -204,7 +213,9 @@ import {
   SEMANTIC_TYPE_SYSTEM_DEPENDENCY_CACHE_CLEAR_POLICIES,
   type OpenSemanticAppOptions,
   type SemanticAppDiagnosticsResult,
+  type SemanticAppDiagnosticRow,
   type SemanticAppDiagnosticSummaryResult,
+  type SemanticAppDiagnosticSummaryRow,
   type SemanticAppOverviewRequest,
   type SemanticAppOverviewCollectionSummary,
   type SemanticAppOverviewResult,
@@ -236,16 +247,21 @@ import {
   type SemanticAuthoringCatalogResult,
   type SemanticAuthoringCatalogViewRequest,
   type SemanticAuthoringCatalogViewResult,
+  type SemanticAuthoringGuidanceRequest,
+  type SemanticAuthoringGuidanceResult,
   type SemanticAuthoringOrientationResult,
   type SemanticAuthoringRecipePlanRequest,
   type SemanticAuthoringRecipePlanResult,
   type SemanticBindingDataFlowResult,
+  type SemanticBindingDataFlowSummaryResult,
   type SemanticBindingObservedDependencyResult,
+  type SemanticBindingObservedDependencySummaryResult,
   type SemanticBindingBehaviorApplicationResult,
   type SemanticBindingSourceOperationResult,
   type SemanticBindingTargetAccessResult,
   type SemanticBindingTargetOperationResult,
   type SemanticBindingValueChannelResult,
+  type SemanticBindingValueChannelSummaryResult,
   type SemanticConfigurationIssuesResult,
   type SemanticDiIssuesResult,
   type SemanticDialogIssuesResult,
@@ -254,6 +270,7 @@ import {
   type SemanticI18nTranslationBindingsResult,
   type SemanticI18nTranslationKeysResult,
   type SemanticOpenSeamRow,
+  type SemanticOpenSeamSummaryRow,
   type SemanticOpenSeamSummaryResult,
   type SemanticOpenSeamsResult,
   type SemanticComputedObservationDefinitionsResult,
@@ -412,12 +429,25 @@ export class SemanticRuntime {
         analysisKind: project.analysisKind,
       }));
     const pagedProjects = pageRows(projects, summaryProjectPage(request.projectPage ?? undefined));
+    const projectShapeCounts = countProjectShapes(projects);
+    const projectAnalysisCounts = countProjectAnalysisKinds(projects);
+    const defaultAppProjectKey = appCandidates[0]?.projectKey ?? null;
     const value: SemanticRuntimeSummary = {
       workspaceRoot: this.workspace.rootDir,
       workspaceKey: this.workspace.workspaceKey,
-      projectShapeCounts: countProjectShapes(projects),
-      projectAnalysisCounts: countProjectAnalysisKinds(projects),
-      defaultAppProjectKey: appCandidates[0]?.projectKey ?? null,
+      displayText: semanticRuntimeSummaryDisplayText({
+        workspaceRoot: this.workspace.rootDir,
+        projectCount: projects.length,
+        returnedProjectCount: pagedProjects.page.returnedRows,
+        hasMoreProjectRows: pagedProjects.page.nextCursor != null,
+        projectShapeCounts,
+        projectAnalysisCounts,
+        defaultAppProjectKey,
+        appCandidates,
+      }),
+      projectShapeCounts,
+      projectAnalysisCounts,
+      defaultAppProjectKey,
       appCandidates,
       projects: pagedProjects.rows,
     };
@@ -448,16 +478,20 @@ export class SemanticRuntime {
         || Number(left.includeAuthoringTemplates) - Number(right.includeAuthoringTemplates)
         || left.authoringTemplateSourceFileCount - right.authoringTemplateSourceFileCount
       );
-    const value: SemanticRuntimeAnalysisCacheOverviewResult = {
+    const runtimeQueryClaimProfiles = this.runtimeQueryClaimProfileSummaries(rowLimit, request.includeQueryClaimRows === true);
+    const projectCompilerOptionsCache = projectCompilerOptionsCacheSummary();
+    const typeSystemDependencyCache = typeSystemDependencyCacheSummary(
+      rowLimit,
+      request.includeTypeSystemDependencyEntries === true,
+    );
+    const processMemory = readSemanticRuntimeMemorySample();
+    const valueWithoutDisplayText: Omit<SemanticRuntimeAnalysisCacheOverviewResult, 'displayText'> = {
       cachedAppCount: cachedApps.length,
       cachedApps,
-      runtimeQueryClaimProfiles: this.runtimeQueryClaimProfileSummaries(rowLimit, request.includeQueryClaimRows === true),
-      projectCompilerOptionsCache: projectCompilerOptionsCacheSummary(),
-      typeSystemDependencyCache: typeSystemDependencyCacheSummary(
-        rowLimit,
-        request.includeTypeSystemDependencyEntries === true,
-      ),
-      processMemory: readSemanticRuntimeMemorySample(),
+      runtimeQueryClaimProfiles,
+      projectCompilerOptionsCache,
+      typeSystemDependencyCache,
+      processMemory,
       workspaceKernel,
       retention: {
         runtimeCacheScope: 'semantic-runtime-session',
@@ -480,6 +514,10 @@ export class SemanticRuntime {
       },
       summary: `Semantic-runtime session retains ${cachedApps.length} cached app epoch(s) and ${workspaceKernel.totalRecords} kernel record(s).`,
     };
+    const value: SemanticRuntimeAnalysisCacheOverviewResult = {
+      ...valueWithoutDisplayText,
+      displayText: semanticRuntimeAnalysisCacheOverviewDisplayText(valueWithoutDisplayText),
+    };
     return answer(
       SemanticRuntimeAnswerOutcome.Hit,
       value.summary,
@@ -497,8 +535,8 @@ export class SemanticRuntime {
     if (this.appsByCacheKey.size === 0) {
       const disposedRuntimeQueryClaimRecords = this.disposeRuntimeQueryClaims(QueryClaimDisposalReason.SessionEnded);
       if (disposedRuntimeQueryClaimRecords > 0 || clearedTypeSystemDependencyCache.entries > 0) {
-        const workspaceKernel = this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });
-        const value: SemanticRuntimeAnalysisCacheClearResult = {
+      const workspaceKernel = this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });
+        const value = withAnalysisCacheClearDisplayText({
           typeSystemDependencyCacheClearPolicy,
           disposedCachedApps: 0,
           disposedQueryClaimRecords: disposedRuntimeQueryClaimRecords,
@@ -514,11 +552,11 @@ export class SemanticRuntime {
             `${clearedTypeSystemDependencyCache.entries} TypeScript dependency source-file cache file(s) ` +
             `using policy '${typeSystemDependencyCacheClearPolicy}'; ` +
             `workspace kernel retains ${workspaceKernel.totalRecords} record(s).`,
-        };
+        });
         return answer(SemanticRuntimeAnswerOutcome.Hit, value.summary, value);
       }
       const workspaceKernel = this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });
-      const value: SemanticRuntimeAnalysisCacheClearResult = {
+      const value = withAnalysisCacheClearDisplayText({
         typeSystemDependencyCacheClearPolicy,
         disposedCachedApps: 0,
         disposedQueryClaimRecords: 0,
@@ -530,14 +568,14 @@ export class SemanticRuntime {
         remainingCachedApps: 0,
         workspaceKernel,
         summary: `No cached app epochs to clear; workspace kernel retains ${workspaceKernel.totalRecords} record(s).`,
-      };
+      });
       return answer(SemanticRuntimeAnswerOutcome.Hit, value.summary, value);
     }
 
     const disposed = this.disposeCachedAppEpochs(QueryClaimDisposalReason.AppEpochDisposed);
     const disposedRuntimeQueryClaimRecords = this.disposeRuntimeQueryClaims(QueryClaimDisposalReason.SessionEnded);
     const workspaceKernel = this.workspace.store.readTelemetrySnapshot({ includeBreakdowns: false });
-    const value: SemanticRuntimeAnalysisCacheClearResult = {
+    const value = withAnalysisCacheClearDisplayText({
       typeSystemDependencyCacheClearPolicy,
       disposedCachedApps: disposed.apps,
       disposedQueryClaimRecords: disposed.queryClaimRecords + disposedRuntimeQueryClaimRecords,
@@ -553,7 +591,7 @@ export class SemanticRuntime {
         `${describeKernelDisposal(disposed.kernel)}, and ${clearedTypeSystemDependencyCache.entries} ` +
         `TypeScript dependency source-file cache file(s) using policy '${typeSystemDependencyCacheClearPolicy}'; ` +
         `workspace kernel now retains ${workspaceKernel.totalRecords} record(s).`,
-    };
+    });
     return answer(SemanticRuntimeAnswerOutcome.Hit, value.summary, value);
   }
 
@@ -840,6 +878,16 @@ export class SemanticRuntime {
         const value: SemanticRuntimeAppQueryBatchResult = {
           projectKey: null,
           analysisDepth: null,
+          displayText: appQueryBatchDisplayText({
+            projectKey: null,
+            analysisDepth: null,
+            rows,
+            appWorldOpened: false,
+            includeAuthoringTemplates: false,
+            authoringTemplateSourceFileCount: 0,
+            includeAppProfile: false,
+            includeAppQueryClaimProfiles: false,
+          }),
           includeAuthoringTemplates: false,
           authoringTemplateSourceFileCount: 0,
           authoringTemplateLimit: 0,
@@ -920,6 +968,16 @@ export class SemanticRuntime {
         const value: SemanticRuntimeAppQueryBatchResult = {
           projectKey: plan.project.projectKey,
           analysisDepth: plan.analysisDepth,
+          displayText: appQueryBatchDisplayText({
+            projectKey: plan.project.projectKey,
+            analysisDepth: plan.analysisDepth,
+            rows,
+            appWorldOpened: false,
+            includeAuthoringTemplates: false,
+            authoringTemplateSourceFileCount: 0,
+            includeAppProfile: false,
+            includeAppQueryClaimProfiles: false,
+          }),
           includeAuthoringTemplates: false,
           authoringTemplateSourceFileCount: 0,
           authoringTemplateLimit: 0,
@@ -1016,18 +1074,32 @@ export class SemanticRuntime {
         const rows = canonicalQueries.map((query, index) =>
           this.appWorldBatchRow(app, query, index, inquiryProfile)
         );
-        const appSummary = app.cacheSummary(8, false);
+        const includeAppProfile = request.includeAppProfile === true;
+        const includeAppQueryClaimProfiles = request.includeAppQueryClaimProfiles === true;
+        const appSummary = includeAppProfile || includeAppQueryClaimProfiles
+          ? app.cacheSummary(8, false)
+          : null;
         const value: SemanticRuntimeAppQueryBatchResult = {
           projectKey: plan.project.projectKey,
           analysisDepth: plan.analysisDepth,
+          displayText: appQueryBatchDisplayText({
+            projectKey: plan.project.projectKey,
+            analysisDepth: plan.analysisDepth,
+            rows,
+            appWorldOpened: true,
+            includeAuthoringTemplates: plan.includeAuthoringTemplates,
+            authoringTemplateSourceFileCount: plan.authoringTemplateSourceFiles.length,
+            includeAppProfile,
+            includeAppQueryClaimProfiles,
+          }),
           includeAuthoringTemplates: plan.includeAuthoringTemplates,
           authoringTemplateSourceFileCount: plan.authoringTemplateSourceFiles.length,
           authoringTemplateLimit: plan.authoringTemplateLimit,
           queryCount: rows.length,
           rows,
           appWorldOpened: true,
-          appProfile: appSummary.profile,
-          appQueryClaimProfiles: appSummary.queryClaimProfiles,
+          appProfile: includeAppProfile ? appSummary?.profile ?? null : null,
+          appQueryClaimProfiles: includeAppQueryClaimProfiles ? appSummary?.queryClaimProfiles ?? [] : [],
         };
         return answer(
           SemanticRuntimeAnswerOutcome.Hit,
@@ -1068,6 +1140,20 @@ export class SemanticRuntime {
         materializationPolicy: 'static-catalog',
       },
       () => readSemanticAuthoringCatalogView(request),
+    );
+  }
+
+  authoringGuidance(
+    request: SemanticAuthoringGuidanceRequest = {},
+  ): SemanticRuntimeAnswer<SemanticAuthoringGuidanceResult | null> {
+    return this.answerRuntimeQuery(
+      {
+        inquiryProfile: normalizeSemanticRuntimeInquiryProfile(request.inquiryProfile),
+        queryKind: 'authoring-guidance',
+        queryKey: semanticRuntimeAuthoringGuidanceKey(request),
+        materializationPolicy: 'static-catalog',
+      },
+      () => readSemanticAuthoringGuidance(request),
     );
   }
 
@@ -1609,6 +1695,299 @@ function summaryProjectPage(
   };
 }
 
+interface SemanticRuntimeSummaryDisplayInput {
+  readonly workspaceRoot: string;
+  readonly projectCount: number;
+  readonly returnedProjectCount: number;
+  readonly hasMoreProjectRows: boolean;
+  readonly projectShapeCounts: SemanticRuntimeSummary['projectShapeCounts'];
+  readonly projectAnalysisCounts: SemanticRuntimeSummary['projectAnalysisCounts'];
+  readonly defaultAppProjectKey: string | null;
+  readonly appCandidates: SemanticRuntimeSummary['appCandidates'];
+}
+
+function semanticRuntimeSummaryDisplayText(input: SemanticRuntimeSummaryDisplayInput): string {
+  const lines = [
+    `Workspace: ${input.workspaceRoot}`,
+    `Projects: ${input.projectCount}; shapes ${countRowsDisplay(input.projectShapeCounts, 'shapeKind')}; analysis ${countRowsDisplay(input.projectAnalysisCounts, 'analysisKind')}.`,
+    input.defaultAppProjectKey == null
+      ? 'Default app: none discovered; pass projectKey or an explicit projects array before opening an app.'
+      : `Default app: ${input.defaultAppProjectKey}.`,
+  ];
+  if (input.appCandidates.length > 0) {
+    lines.push(`App candidates: ${input.appCandidates.slice(0, 5).map((candidate) =>
+      `${candidate.projectKey} (${candidate.sourceFiles} source file(s), ${candidate.analysisKind})`
+    ).join('; ')}${input.appCandidates.length > 5 ? `; +${input.appCandidates.length - 5} more` : ''}.`);
+  }
+  if (input.returnedProjectCount === 0 && input.projectCount > 0) {
+    lines.push('Project rows: omitted by default; pass projectPage.size when package-level rows are needed.');
+  } else {
+    lines.push(`Project rows: returned ${input.returnedProjectCount}${input.hasMoreProjectRows ? ' with more rows available' : ''}.`);
+  }
+  lines.push('Next: open the default app with aurelia_app_overview, or pass projectKey for a selected app candidate.');
+  return lines.join('\n');
+}
+
+function countRowsDisplay<TRow extends { readonly count: number }>(
+  rows: readonly TRow[],
+  key: keyof TRow,
+): string {
+  if (rows.length === 0) {
+    return 'none';
+  }
+  return rows.map((row) => `${String(row[key])}=${row.count}`).join(', ');
+}
+
+function semanticRuntimeAnalysisCacheOverviewDisplayText(
+  value: Omit<SemanticRuntimeAnalysisCacheOverviewResult, 'displayText'>,
+): string {
+  const workspaceKernel = value.workspaceKernel;
+  const lines = [
+    `Analysis cache: ${value.cachedAppCount} cached app epoch(s); workspace kernel ${workspaceKernel.totalRecords} record(s), ${workspaceKernel.productDetails} product detail(s), ${workspaceKernel.hotDetails} hot detail(s), ${workspaceKernel.handleCharacters} handle character(s).`,
+    `Process memory: rss=${formatSemanticRuntimeBytes(value.processMemory.rssBytes)}, heapUsed=${formatSemanticRuntimeBytes(value.processMemory.heapUsedBytes)}, heapTotal=${formatSemanticRuntimeBytes(value.processMemory.heapTotalBytes)}, rssOther=${formatSemanticRuntimeBytes(value.processMemory.rssOtherBytes)}.`,
+    `TypeScript dependency cache: ${value.typeSystemDependencyCache.entries} file(s), ${value.typeSystemDependencyCache.sourceTextCharacters} source-text character(s), suggestedClearPolicy=${value.typeSystemDependencyCache.suggestedClearPolicy} (${value.typeSystemDependencyCache.dominantSourceTextBucket}).`,
+    `Project compiler-options cache: ${value.projectCompilerOptionsCache.entries} project-root shape(s), hits=${value.projectCompilerOptionsCache.hits}, misses=${value.projectCompilerOptionsCache.misses}, writes=${value.projectCompilerOptionsCache.writes}.`,
+  ];
+  if (value.runtimeQueryClaimProfiles.length > 0) {
+    lines.push(`Runtime query claims: ${value.runtimeQueryClaimProfiles.map((profile) =>
+      `${profile.inquiryProfile} retained=${profile.queryClaims.retainedRecords}/${profile.queryClaims.createdRecords}`
+    ).join('; ')}.`);
+  }
+  if (value.cachedApps.length === 0) {
+    lines.push('Cached apps: none; pass appRetention=retain-app on an app tool when multiple MCP calls should share one app epoch.');
+  } else {
+    lines.push(`Cached apps: ${value.cachedApps.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((app) =>
+      `${app.projectKey} depth=${app.analysisDepth} retainedClaims=${app.queryClaims.retainedRecords} appTime=${app.profile.totalMilliseconds.toFixed(1)}ms`
+    ).join(' | ')}${value.cachedApps.length > RUNTIME_DISPLAY_SAMPLE_LIMIT ? ` | +${value.cachedApps.length - RUNTIME_DISPLAY_SAMPLE_LIMIT} more` : ''}.`);
+  }
+  if ('recordKinds' in workspaceKernel) {
+    lines.push(`Kernel top records: ${countRowsKeyDisplay(workspaceKernel.recordKinds)}.`);
+    lines.push(`Kernel top products: ${countRowsKeyDisplay(workspaceKernel.productKinds)}.`);
+  } else {
+    lines.push('Breakdowns: omitted; pass includeKernelBreakdowns when the question is what retained records are made of.');
+  }
+  if (value.typeSystemDependencyCache.entries > 0) {
+    lines.push('Next: clear app epochs with aurelia_clear_analysis_cache; set typeSystemDependencyCacheClearPolicy only after the dependency-cache bucket above explains the CPU-vs-memory trade-off.');
+  } else {
+    lines.push('Next: inspect retained sessions after appRetention=retain-app, or leave default dispose-app for one-off MCP app-building calls.');
+  }
+  return lines.join('\n');
+}
+
+function withAnalysisCacheClearDisplayText(
+  value: Omit<SemanticRuntimeAnalysisCacheClearResult, 'displayText'>,
+): SemanticRuntimeAnalysisCacheClearResult {
+  return {
+    ...value,
+    displayText: semanticRuntimeAnalysisCacheClearDisplayText(value),
+  };
+}
+
+function semanticRuntimeAnalysisCacheClearDisplayText(
+  value: Omit<SemanticRuntimeAnalysisCacheClearResult, 'displayText'>,
+): string {
+  const lines = [
+    `Analysis cache clear: disposed ${value.disposedCachedApps} cached app epoch(s), ${value.disposedQueryClaimRecords} query-claim record(s), and ${value.disposedKernelRecords} kernel record(s); dependencyPolicy=${value.typeSystemDependencyCacheClearPolicy}.`,
+    `Kernel disposal: ${value.disposedProductDetails} product detail(s), ${value.disposedHotDetails} hot detail(s), ${value.disposedKernelHandleCharacters} handle character(s); remaining app epochs=${value.remainingCachedApps}, workspace kernel records=${value.workspaceKernel.totalRecords}.`,
+    `TypeScript dependency cache cleared: ${value.clearedTypeSystemDependencySourceFiles} file(s), ${value.clearedTypeSystemDependencySourceTextCharacters} source-text character(s), nodeModules=${value.clearedTypeSystemDependencyNodeModuleSourceFiles}, defaultLibraries=${value.clearedTypeSystemDependencyDefaultLibrarySourceFiles}, externalDeclarations=${value.clearedTypeSystemDependencyExternalDeclarationSourceFiles}.`,
+  ];
+  if (value.remainingCachedApps > 0) {
+    lines.push('Next: run analysis-cache overview with kernel breakdowns if retained epochs remain unexpectedly.');
+  } else {
+    lines.push('Next: reopen app tools as needed; default MCP app calls dispose app epochs unless appRetention=retain-app was requested.');
+  }
+  return lines.join('\n');
+}
+
+function countRowsKeyDisplay(rows: readonly { readonly key: string; readonly count: number }[]): string {
+  return rows.length === 0 ? 'none' : rows.map((row) => `${row.key}=${row.count}`).join(', ');
+}
+
+interface AppQueryBatchDisplayInput {
+  readonly projectKey: string | null;
+  readonly analysisDepth: SemanticRuntimeAppQueryBatchResult['analysisDepth'];
+  readonly rows: SemanticRuntimeAppQueryBatchResult['rows'];
+  readonly appWorldOpened: boolean;
+  readonly includeAuthoringTemplates: boolean;
+  readonly authoringTemplateSourceFileCount: number;
+  readonly includeAppProfile: boolean;
+  readonly includeAppQueryClaimProfiles: boolean;
+}
+
+function appQueryBatchDisplayText(input: AppQueryBatchDisplayInput): string {
+  const lines = [
+    input.projectKey == null
+      ? `Batch: ${input.rows.length} runtime-static query claim(s); no app epoch opened.`
+      : `Batch: ${input.rows.length} query claim(s) for ${input.projectKey}; analysisDepth=${input.analysisDepth}; appWorld=${input.appWorldOpened ? 'opened' : 'not opened'}.`,
+  ];
+  if (input.includeAuthoringTemplates) {
+    lines.push(`Authoring templates: included ${input.authoringTemplateSourceFileCount} selected source file(s).`);
+  }
+  for (const row of input.rows.slice(0, APP_QUERY_BATCH_DISPLAY_ROW_LIMIT)) {
+    lines.push(`${row.index + 1}. ${row.queryKind} [${row.materializationPolicy}]: ${row.answer.summary}`);
+    const childDisplay = firstSemanticDisplayTextLine(row.answer);
+    if (childDisplay != null) {
+      lines.push(`   ${childDisplay}`);
+    }
+  }
+  if (input.rows.length > APP_QUERY_BATCH_DISPLAY_ROW_LIMIT) {
+    lines.push(`... ${input.rows.length - APP_QUERY_BATCH_DISPLAY_ROW_LIMIT} more query claim(s) omitted from text.`);
+  }
+  if (input.includeAppProfile || input.includeAppQueryClaimProfiles) {
+    lines.push('Profiling fields were included by explicit request; keep them off for ordinary MCP app-building orientation.');
+  } else {
+    lines.push('Profiles: omitted; use includeAppProfile/includeAppQueryClaimProfiles only for telemetry work.');
+  }
+  return lines.join('\n');
+}
+
+const APP_QUERY_BATCH_DISPLAY_ROW_LIMIT = 8;
+
+function firstSemanticDisplayTextLine(answer: SemanticRuntimeAnswer<unknown>): string | null {
+  const value = answer.value;
+  if (value == null || typeof value !== 'object' || Array.isArray(value)) {
+    return null;
+  }
+  const displayText = (value as { readonly displayText?: unknown }).displayText;
+  if (typeof displayText !== 'string') {
+    return null;
+  }
+  const line = displayText.split(/\r?\n/u).map((part) => part.trim()).find((part) => part.length > 0) ?? null;
+  return line == null ? null : trimDisplayLine(line);
+}
+
+function trimDisplayLine(line: string): string {
+  return line.length <= 180
+    ? line
+    : `${line.slice(0, 177)}...`;
+}
+
+function openSeamsDisplayText(
+  rows: readonly SemanticOpenSeamRow[],
+  totalRows: number,
+): string {
+  const lines = [`Open seams: returned ${rows.length} of ${totalRows} row(s).`];
+  if (totalRows === 0) {
+    lines.push('Pressure: no open semantic seams in this app emission.');
+  } else {
+    lines.push(`Seam kinds: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.seamKindKey))}.`);
+    lines.push(`Reason kinds: ${runtimeListDisplay(runtimeUniqueValuesFromMany(rows, (row) => row.reasonKinds, RUNTIME_DISPLAY_LIST_LIMIT))}.`);
+    lines.push(`Samples: ${rows.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((row) =>
+      `${row.seamKindKey}: ${trimDisplayLine(row.summary)}`
+    ).join(' | ')}.`);
+    lines.push('Next: use open-seam-summary for clusters or page open-seams with handles when an exact runtime boundary needs follow-up.');
+  }
+  return lines.join('\n');
+}
+
+function openSeamSummaryDisplayText(
+  rows: readonly SemanticOpenSeamSummaryRow[],
+  totalOpenSeamRows: number,
+): string {
+  const lines = [`Open seam clusters: returned ${rows.length} cluster(s) covering ${totalOpenSeamRows} open semantic seam(s).`];
+  if (totalOpenSeamRows === 0) {
+    lines.push('Pressure: no open semantic seams in this app emission.');
+  } else {
+    lines.push(`Clusters: ${rows.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((row) =>
+      `${row.seamKindKey} x${row.count} (${runtimeListDisplay(row.reasonKinds)})`
+    ).join(' | ')}.`);
+    lines.push(`Source-file coverage: ${rows.reduce((sum, row) => sum + row.sourceFileCount, 0)} cluster source-file reference(s).`);
+    lines.push('Next: page raw open-seams only after the cluster identifies the runtime boundary or source family to inspect.');
+  }
+  return lines.join('\n');
+}
+
+function appDiagnosticsDisplayText(
+  rows: readonly SemanticAppDiagnosticRow[],
+  totalRows: number,
+): string {
+  const lines = [`Diagnostics: returned ${rows.length} of ${totalRows} row(s).`];
+  if (totalRows === 0) {
+    lines.push('Pressure: no app diagnostics in this locus.');
+  } else {
+    lines.push(`Severity: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.severity))}.`);
+    lines.push(`Domains: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.diagnosticDomain))}.`);
+    const frameworkCodes = runtimeUniqueValues(rows, (row) => row.frameworkErrorCode, RUNTIME_DISPLAY_LIST_LIMIT);
+    if (frameworkCodes.length > 0) {
+      lines.push(`Framework codes: ${frameworkCodes.join(', ')}.`);
+    }
+    lines.push(`Samples: ${rows.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((row) =>
+      `${row.diagnosticDomain}/${row.diagnosticKind}: ${trimDisplayLine(row.summary)}`
+    ).join(' | ')}.`);
+    lines.push('Next: use diagnostic-overview for clusters or page the related query kind for exact product-family rows.');
+  }
+  return lines.join('\n');
+}
+
+function appDiagnosticSummaryDisplayText(
+  rows: readonly SemanticAppDiagnosticSummaryRow[],
+  totalDiagnosticRows: number,
+): string {
+  const lines = [`Diagnostic clusters: returned ${rows.length} cluster(s) covering ${totalDiagnosticRows} diagnostic row(s).`];
+  if (totalDiagnosticRows === 0) {
+    lines.push('Pressure: no app diagnostics in this locus.');
+  } else {
+    lines.push(`Severity: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.severity))}.`);
+    lines.push(`Domains: ${runtimeCountMapDisplay(runtimeCountValues(rows, (row) => row.diagnosticDomain))}.`);
+    lines.push(`Clusters: ${rows.slice(0, RUNTIME_DISPLAY_SAMPLE_LIMIT).map((row) =>
+      `${row.diagnosticDomain}/${row.diagnosticKind} ${row.severity} x${row.count} -> ${row.relatedQueryKind}`
+    ).join(' | ')}.`);
+    lines.push('Next: page the related query kind or app diagnostics after selecting the highest-value cluster.');
+  }
+  return lines.join('\n');
+}
+
+const RUNTIME_DISPLAY_LIST_LIMIT = 6;
+const RUNTIME_DISPLAY_SAMPLE_LIMIT = 4;
+
+function runtimeCountValues<TRow>(
+  rows: readonly TRow[],
+  read: (row: TRow) => string | null,
+): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const value = read(row);
+    if (value != null) {
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+function runtimeUniqueValues<TRow>(
+  rows: readonly TRow[],
+  read: (row: TRow) => string | null,
+  limit: number,
+): readonly string[] {
+  return [...new Set(rows.map(read).filter((value): value is string => value != null))]
+    .sort((left, right) => left.localeCompare(right))
+    .slice(0, limit);
+}
+
+function runtimeUniqueValuesFromMany<TRow>(
+  rows: readonly TRow[],
+  read: (row: TRow) => readonly string[],
+  limit: number,
+): readonly string[] {
+  return [...new Set(rows.flatMap(read))]
+    .sort((left, right) => left.localeCompare(right))
+    .slice(0, limit);
+}
+
+function runtimeCountMapDisplay(counts: ReadonlyMap<string, number>): string {
+  if (counts.size === 0) {
+    return 'none';
+  }
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, count]) => `${key}=${count}`)
+    .join(', ');
+}
+
+function runtimeListDisplay(values: readonly unknown[]): string {
+  return values.length === 0 ? 'none' : values.map(String).join(', ');
+}
+
 function withAppWorldFreeEvaluationProfile<TValue>(
   result: SemanticRuntimeAnswer<TValue>,
   evaluation: StaticProjectEvaluationResult | null,
@@ -1728,7 +2107,10 @@ export class SemanticApp {
       case SemanticAppQueryKind.AuthoringCatalog:
         return this.answerQuery(query, () => this.authoringCatalog());
       case SemanticAppQueryKind.AuthoringOrientation:
-        return this.answerQuery(query, () => this.authoringOrientation());
+        return this.answerQuery(query, () => this.authoringOrientation(
+          query.page,
+          query.detail ?? SemanticRuntimeDetail.Compact,
+        ));
       case SemanticAppQueryKind.SourceFiles:
         return this.answerQuery(query, () => this.sourceFiles(query.page, query.detail));
       case SemanticAppQueryKind.UnresolvedModules:
@@ -1816,8 +2198,14 @@ export class SemanticApp {
         return this.answerQuery(query, () => this.bindingBehaviorApplications(query.page, query.detail));
       case SemanticAppQueryKind.BindingValueChannels:
         return this.answerQuery(query, () => this.bindingValueChannels(query.page, query.detail));
+      case SemanticAppQueryKind.BindingValueChannelSummary:
+        return this.answerQuery(query, () => this.bindingValueChannelSummary(query.page));
       case SemanticAppQueryKind.BindingDataFlows:
         return this.answerQuery(query, () => this.bindingDataFlows(query.page, query.detail));
+      case SemanticAppQueryKind.BindingDataFlowSummary:
+        return this.answerQuery(query, () => this.bindingDataFlowSummary(query.page));
+      case SemanticAppQueryKind.BindingObservedDependencySummary:
+        return this.answerQuery(query, () => this.bindingObservedDependencySummary(query.page));
       case SemanticAppQueryKind.BindingObservedDependencies:
         return this.answerQuery(query, () => this.bindingObservedDependencies(query.page, query.detail));
       default:
@@ -2029,18 +2417,36 @@ export class SemanticApp {
     });
   }
 
-  authoringOrientation(): SemanticRuntimeAnswer<SemanticAuthoringOrientationResult> {
+  authoringOrientation(
+    page?: SemanticRuntimePageInput,
+    detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+  ): SemanticRuntimeAnswer<SemanticAuthoringOrientationResult> {
     const claimed = this.answerPublicQueryIfNeeded<SemanticAuthoringOrientationResult>({
       kind: SemanticAppQueryKind.AuthoringOrientation,
+      page,
+      detail,
     });
     if (claimed != null) {
       return claimed;
     }
-    const value = readSemanticAuthoringOrientation(this.project, this.emission, this.runtime.workspace.store);
+    const orientation = semanticAuthoringOrientationResultForDetail(
+      readSemanticAuthoringOrientation(this.project, this.emission, this.runtime.workspace.store),
+      detail,
+    );
+    const pagedRepairClusters = page == null
+      ? null
+      : pageRows(orientation.repairClusters, page);
+    const value = pagedRepairClusters == null
+      ? orientation
+      : {
+          ...orientation,
+          repairClusters: pagedRepairClusters.rows,
+        };
     return answer(
-      SemanticRuntimeAnswerOutcome.Hit,
-      `Oriented authoring for '${value.project.projectKey}' across ${value.coverage.length} coverage row(s), ${value.capabilities.length} capability row(s), and ${value.openReasons.length} open reason kind(s).`,
+      pagedRepairClusters == null ? SemanticRuntimeAnswerOutcome.Hit : outcomeForPagedRows(pagedRepairClusters),
+      `Oriented authoring for '${value.project.projectKey}' across ${value.coverage.length} coverage row(s), ${value.capabilities.length} capability row(s), ${value.openReasons.length} open reason kind(s), and ${value.repairClusters.length}${pagedRepairClusters == null ? '' : ` of ${pagedRepairClusters.page.totalRows}`} repair cluster(s).`,
       value,
+      pagedRepairClusters?.page ?? null,
     );
   }
 
@@ -2089,7 +2495,10 @@ export class SemanticApp {
     return answer(
       outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} open semantic seam(s).`,
-      { rows: paged.rows },
+      {
+        displayText: openSeamsDisplayText(paged.rows, rows.length),
+        rows: paged.rows,
+      },
       paged.page,
     );
   }
@@ -2114,6 +2523,7 @@ export class SemanticApp {
       `Returned ${paged.rows.length} of ${rows.length} open seam cluster(s) covering ${seamRows.length} open semantic seam(s).`,
       {
         totalOpenSeamRows: seamRows.length,
+        displayText: openSeamSummaryDisplayText(paged.rows, seamRows.length),
         rows: paged.rows,
       },
       paged.page,
@@ -2159,7 +2569,10 @@ export class SemanticApp {
     return answer(
       outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} app diagnostic row(s).`,
-      { rows: paged.rows },
+      {
+        displayText: appDiagnosticsDisplayText(paged.rows, rows.length),
+        rows: paged.rows,
+      },
       paged.page,
     );
   }
@@ -2184,6 +2597,7 @@ export class SemanticApp {
       `Returned ${paged.rows.length} of ${rows.length} app diagnostic cluster(s) covering ${diagnosticRows.length} diagnostic row(s).`,
       {
         totalDiagnosticRows: diagnosticRows.length,
+        displayText: appDiagnosticSummaryDisplayText(paged.rows, diagnosticRows.length),
         rows: paged.rows,
       },
       paged.page,
@@ -2974,6 +3388,42 @@ export class SemanticApp {
     );
   }
 
+  bindingValueChannelSummary(
+    page?: SemanticRuntimePageInput,
+  ): SemanticRuntimeAnswer<SemanticBindingValueChannelSummaryResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticBindingValueChannelSummaryResult>({
+      kind: SemanticAppQueryKind.BindingValueChannelSummary,
+      page,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const unsupported = this.requireAnalysisDepth(
+      SemanticAppAnalysisDepth.BindingObservation,
+      'runtime binding value-channel summary rows',
+      {
+        displayText: 'Binding value-channel summary requires analysisDepth=\'binding-observation\'.',
+        totalRows: 0,
+        summaryRows: 0,
+        observerCouplingRows: 0,
+        channelsWithoutObserverCouplings: 0,
+        rows: [],
+        observerCouplings: [],
+      } satisfies SemanticBindingValueChannelSummaryResult,
+    );
+    if (unsupported != null) {
+      return unsupported;
+    }
+    const summary = readBindingValueChannelSummary(this.emission, this.runtime.workspace.store);
+    const paged = pageRows(summary.rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${summary.summaryRows} runtime binding value-channel summary row(s) over ${summary.totalRows} value-channel row(s).`,
+      { ...summary, rows: paged.rows },
+      paged.page,
+    );
+  }
+
   bindingDataFlows(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
@@ -3004,6 +3454,40 @@ export class SemanticApp {
     );
   }
 
+  bindingDataFlowSummary(
+    page?: SemanticRuntimePageInput,
+  ): SemanticRuntimeAnswer<SemanticBindingDataFlowSummaryResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticBindingDataFlowSummaryResult>({
+      kind: SemanticAppQueryKind.BindingDataFlowSummary,
+      page,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const unsupported = this.requireAnalysisDepth(
+      SemanticAppAnalysisDepth.BindingObservation,
+      'runtime binding data-flow summary rows',
+      {
+        displayText: 'Binding data-flow summary requires analysisDepth=\'binding-observation\'.',
+        totalRows: 0,
+        summaryRows: 0,
+        issueRows: [],
+        rows: [],
+      } satisfies SemanticBindingDataFlowSummaryResult,
+    );
+    if (unsupported != null) {
+      return unsupported;
+    }
+    const summary = readBindingDataFlowSummary(this.emission, this.runtime.workspace.store);
+    const paged = pageRows(summary.rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${summary.summaryRows} runtime binding data-flow summary row(s) over ${summary.totalRows} data-flow row(s), with ${summary.issueRows.length} issue summary row(s).`,
+      { ...summary, rows: paged.rows },
+      paged.page,
+    );
+  }
+
   bindingObservedDependencies(
     page?: SemanticRuntimePageInput,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
@@ -3030,6 +3514,40 @@ export class SemanticApp {
       outcomeForPagedRows(paged),
       `Returned ${paged.rows.length} of ${rows.length} runtime binding observed-dependency row(s).`,
       { rows: paged.rows },
+      paged.page,
+    );
+  }
+
+  bindingObservedDependencySummary(
+    page?: SemanticRuntimePageInput,
+  ): SemanticRuntimeAnswer<SemanticBindingObservedDependencySummaryResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticBindingObservedDependencySummaryResult>({
+      kind: SemanticAppQueryKind.BindingObservedDependencySummary,
+      page,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    const unsupported = this.requireAnalysisDepth(
+      SemanticAppAnalysisDepth.BindingObservation,
+      'runtime binding observed-dependency summary rows',
+      {
+        displayText: 'Binding observed-dependency summary requires analysisDepth=\'binding-observation\'.',
+        totalRows: 0,
+        summaryRows: 0,
+        memberSourceStateRows: [],
+        rows: [],
+      } satisfies SemanticBindingObservedDependencySummaryResult,
+    );
+    if (unsupported != null) {
+      return unsupported;
+    }
+    const summary = readBindingObservedDependencySummary(this.emission, this.runtime.workspace.store);
+    const paged = pageRows(summary.rows, page);
+    return answer(
+      outcomeForPagedRows(paged),
+      `Returned ${paged.rows.length} of ${summary.summaryRows} runtime binding observed-dependency summary row(s) over ${summary.totalRows} observed-dependency row(s), with ${summary.memberSourceStateRows.length} member-source-state summary row(s).`,
+      { ...summary, rows: paged.rows },
       paged.page,
     );
   }

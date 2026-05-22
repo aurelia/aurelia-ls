@@ -5,10 +5,6 @@ import {
   ApplicationTopologyBuilder,
 } from '../application/index.js';
 import {
-  CreateComponentOperation,
-  CreateStateModelOperation,
-} from './operation.js';
-import {
   AuthoringIntent,
   AuthoringPlan,
   AuthoringPlanStep,
@@ -25,13 +21,15 @@ import {
   templateControllerRuntimeEffect,
 } from './template-controller-expected-effects.js';
 import {
+  componentPlanStep,
   entrypointPlanStep,
   externalTemplatePlanStep,
   projectFilesPlanStep,
   rootComponentPlanStep,
+  stateModelPlanStep,
   templateBindingPlanStep,
   verifyAppPlanStep,
-} from './form-recipe-plan-steps.js';
+} from './recipe-plan-steps.js';
 import { composedDashboardSourcePlan } from './composed-dashboard-source-plan.js';
 
 export interface ComposedDashboardRecipeRequest {
@@ -90,6 +88,7 @@ export function buildComposedDashboardPlan(request: ComposedDashboardRecipeReque
       [
         new AuthoringPreference('state-ownership', 'di-owned-state-class'),
         new AuthoringPreference('template-model-access', 'direct-state-domain-template-binding'),
+        new AuthoringPreference('template-model-access', 'source-backed-getter-observation'),
         new AuthoringPreference('template-model-access', 'meaningful-viewmodel-adaptation'),
         new AuthoringPreference('template-source-ownership', 'external-template-file'),
         new AuthoringPreference('template-rendering-boundary', 'dynamic-component-composition'),
@@ -150,8 +149,9 @@ function composedDashboardPlanSteps(
       model.inventoryWidgetPath,
       model.inventoryWidgetTemplatePath,
     ]),
-    new AuthoringPlanStep(
-      new CreateStateModelOperation(model.statePath, model.stateClassName),
+    stateModelPlanStep(
+      model.statePath,
+      model.stateClassName,
       [
         ExpectedSemanticEffect.signatureFact('Dashboard state source should be visible in app topology.', 'service-class', 'di', 'state-model', 'present', null, [
           new ExpectedSemanticEffectFilter('role', 'state-source'),
@@ -163,19 +163,9 @@ function composedDashboardPlanSteps(
     entrypointPlanStep(model.entrypointPath, model.rootComponentClassName),
     rootComponentPlanStep(model.rootComponentPath, model.rootComponentClassName, model.rootElementName),
     externalTemplatePlanStep(model.rootTemplatePath, model.rootComponentClassName, 'Dashboard root component'),
-    new AuthoringPlanStep(
-      new CreateComponentOperation(model.chartWidgetPath, model.chartWidgetClassName, model.chartWidgetElementName),
-      [
-        ExpectedSemanticEffect.fact('Chart widget should be a custom element.', 'component', 'resource', 'component'),
-      ],
-    ),
+    componentPlanStep(model.chartWidgetPath, model.chartWidgetClassName, model.chartWidgetElementName, 'Chart widget'),
     externalTemplatePlanStep(model.chartWidgetTemplatePath, model.chartWidgetClassName, 'Chart widget component'),
-    new AuthoringPlanStep(
-      new CreateComponentOperation(model.inventoryWidgetPath, model.inventoryWidgetClassName, model.inventoryWidgetElementName),
-      [
-        ExpectedSemanticEffect.fact('Inventory widget should be a custom element.', 'component', 'resource', 'component'),
-      ],
-    ),
+    componentPlanStep(model.inventoryWidgetPath, model.inventoryWidgetClassName, model.inventoryWidgetElementName, 'Inventory widget'),
     externalTemplatePlanStep(model.inventoryWidgetTemplatePath, model.inventoryWidgetClassName, 'Inventory widget component'),
     templateBindingPlanStep(
       model.rootTemplatePath,
@@ -205,10 +195,10 @@ function composedDashboardTopology(model: ComposedDashboardRecipeModel): Applica
   });
   builder.entrypoint({
     path: model.entrypointPath,
-    startupLane: 'new Aurelia().register(StandardConfiguration).app(...).start()',
+    startupLane: 'Aurelia.app(...).start()',
     rootComponent: root.reference,
     imports: [
-      new ApplicationImport('@aurelia/runtime-html', ['Aurelia', 'StandardConfiguration']),
+      new ApplicationImport('aurelia', [], 'Aurelia'),
       new ApplicationImport(root.reference.moduleSpecifier, [model.rootComponentClassName]),
     ],
   });
@@ -267,6 +257,20 @@ function composedDashboardTemplateBindingExpectedEffects(): readonly ExpectedSem
     templateControllerRuntimeEffect('Dashboard root should materialize repeat template-controller hydration.', 'iteration', 'many'),
     syntheticViewRuntimeEffect('Dashboard root should materialize repeat synthetic-view hydration.', 'iteration', 'many'),
     ExpectedSemanticEffect.discriminatorTaste('Authoring orientation should recognize dynamic component composition.', 'template-rendering-boundary', 'dynamic-component-composition', 'template-binding'),
+    ExpectedSemanticEffect.signatureTaste('Authoring orientation should recognize direct dashboard state/domain template reads.', 'template-model-access', 'direct-state-domain-template-binding', 'template-binding'),
+    ExpectedSemanticEffect.signatureTaste('Authoring orientation should recognize real source-backed getter observation.', 'template-model-access', 'source-backed-getter-observation', 'component'),
+    ExpectedSemanticEffect.signatureFact('Chart widget should repeat points directly from its activated model.', 'binding-data-flow', 'template', 'template-binding', 'present', null, [
+      new ExpectedSemanticEffectFilter('definitionName', 'chart-widget'),
+      new ExpectedSemanticEffectFilter('sourceName', 'model.points'),
+      new ExpectedSemanticEffectFilter('sourceRootName', 'model'),
+      new ExpectedSemanticEffectFilter('targetProperty', 'items'),
+    ]),
+    ExpectedSemanticEffect.signatureFact('Inventory widget should repeat items directly from its activated model.', 'binding-data-flow', 'template', 'template-binding', 'present', null, [
+      new ExpectedSemanticEffectFilter('definitionName', 'inventory-widget'),
+      new ExpectedSemanticEffectFilter('sourceName', 'model.items'),
+      new ExpectedSemanticEffectFilter('sourceRootName', 'model'),
+      new ExpectedSemanticEffectFilter('targetProperty', 'items'),
+    ]),
   ];
 }
 
@@ -316,6 +320,20 @@ function composedDashboardExpectedEffects(model: ComposedDashboardRecipeModel): 
     ExpectedSemanticEffect.capability('Composed dashboard exposes verifiable template composition.', 'template-composition', 'verifiable'),
     ExpectedSemanticEffect.signatureTaste('Composed dashboard reports DI-owned state.', 'state-ownership', 'di-owned-state-class', 'state-model'),
     ExpectedSemanticEffect.discriminatorTaste('Composed dashboard reports dynamic component composition.', 'template-rendering-boundary', 'dynamic-component-composition', 'template-binding'),
+    ExpectedSemanticEffect.signatureTaste('Composed dashboard reports direct state/domain template access.', 'template-model-access', 'direct-state-domain-template-binding', 'template-binding'),
+    ExpectedSemanticEffect.signatureTaste('Composed dashboard reports source-backed getter observation.', 'template-model-access', 'source-backed-getter-observation', 'component'),
+    ExpectedSemanticEffect.signatureFact('Composed dashboard chart widget uses the activated model as the repeat source.', 'binding-data-flow', 'template', 'template-binding', 'present', null, [
+      new ExpectedSemanticEffectFilter('definitionName', 'chart-widget'),
+      new ExpectedSemanticEffectFilter('sourceName', 'model.points'),
+      new ExpectedSemanticEffectFilter('sourceRootName', 'model'),
+      new ExpectedSemanticEffectFilter('targetProperty', 'items'),
+    ]),
+    ExpectedSemanticEffect.signatureFact('Composed dashboard inventory widget uses the activated model as the repeat source.', 'binding-data-flow', 'template', 'template-binding', 'present', null, [
+      new ExpectedSemanticEffectFilter('definitionName', 'inventory-widget'),
+      new ExpectedSemanticEffectFilter('sourceName', 'model.items'),
+      new ExpectedSemanticEffectFilter('sourceRootName', 'model'),
+      new ExpectedSemanticEffectFilter('targetProperty', 'items'),
+    ]),
   ];
 }
 

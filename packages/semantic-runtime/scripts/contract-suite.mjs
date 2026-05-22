@@ -53,8 +53,41 @@ const contractSuites = [
   contract('observation', 'fast', [
     'observation',
     'binding',
+    'forms',
+    'value-channel',
+    'type-system',
+  ], 'contract-keyed-form-source-bindings.mjs', 'Keyed checkbox/select source writeback through array and record expressions.'),
+  contract('observation', 'fast', [
+    'observation',
+    'binding',
+    'forms',
+    'validation',
+    'type-system',
+  ], 'contract-dynamic-keyed-validation.mjs', 'Validate binding behavior over dynamic keyed form sources.'),
+  contract('observation', 'fast', [
+    'observation',
+    'binding',
+    'event',
+    'application',
+  ], 'contract-listener-method-reference.mjs', 'ListenerBinding method references, handler factories, and state call topology.'),
+  contract('observation', 'fast', [
+    'observation',
+    'binding',
     'type-system',
   ], 'contract-template-collection-observation.mjs', 'Template collection reads, callback locals, and dynamic keyed source routes.'),
+  contract('observation', 'fast', [
+    'observation',
+    'binding',
+    'data-flow',
+    'diagnostics',
+    'type-system',
+  ], 'contract-binding-data-flow-summary.mjs', 'Compact binding data-flow summary issue rollups.'),
+  contract('observation', 'fast', [
+    'observation',
+    'binding',
+    'authoring',
+    'mcp',
+  ], 'contract-binding-observed-dependency-summary.mjs', 'Compact binding observed-dependency summary and source-state rollups.'),
   contract('observation', 'fast', [
     'observation',
     'computed',
@@ -77,11 +110,29 @@ const contractSuites = [
     'type-system',
     'template',
   ], 'contract-expression-object-literal-shorthand.mjs', 'Expression object-literal shorthand semantics.'),
+  contract('authoring.app-shell', 'route', [
+    'authoring',
+    'fixtures',
+    'app-shell',
+    'resources',
+  ], 'smoke-authoring-minimal-app.mjs', 'Generated explicit minimal app semantic effects.'),
+  contract('authoring.app-shell', 'route', [
+    'authoring',
+    'fixtures',
+    'app-shell',
+    'resources',
+    'conventions',
+  ], 'smoke-authoring-convention-minimal-app.mjs', 'Generated convention minimal app semantic effects.'),
   contract('router', 'route', [
     'router',
     'binding',
     'runtime-boundary',
   ], 'contract-router-dynamic-pattern.mjs', 'Dynamic router href closure/open-boundary semantics.'),
+  contract('router', 'route', [
+    'router',
+    'binding',
+    'observation',
+  ], 'contract-router-active-link-state.mjs', 'Router activeClass and load.active from-view state semantics.'),
   contract('authoring.forms', 'route', [
     'authoring',
     'fixtures',
@@ -110,14 +161,43 @@ const contractSuites = [
     'authoring',
     'fixtures',
     'forms',
+    'validation',
+    'i18n',
+  ], 'smoke-authoring-localized-validated-state-backed-form.mjs', 'Generated localized validated state-backed form semantic effects.'),
+  contract('authoring.forms', 'route', [
+    'authoring',
+    'fixtures',
+    'forms',
+    'validation',
+    'style',
+  ], 'smoke-authoring-multi-step-state-backed-form.mjs', 'Generated multi-step state-backed form semantic effects.'),
+  contract('authoring.forms', 'route', [
+    'authoring',
+    'fixtures',
+    'forms',
     'router',
   ], 'smoke-authoring-routed-state-backed-form.mjs', 'Generated routed state-backed form semantic effects.'),
+  contract('authoring.forms', 'route', [
+    'authoring',
+    'fixtures',
+    'forms',
+    'router',
+    'service',
+  ], 'smoke-authoring-routed-service-backed-form.mjs', 'Generated routed service-backed form semantic effects.'),
+  contract('authoring.forms', 'route', [
+    'authoring',
+    'fixtures',
+    'forms',
+    'router',
+    'validation',
+    'i18n',
+  ], 'smoke-authoring-routed-localized-validated-state-backed-form.mjs', 'Generated routed localized validated state-backed form semantic effects.'),
   contract('authoring.state', 'route', [
     'authoring',
     'fixtures',
     'state',
     'plugin',
-  ], 'smoke-authoring-state-store-todo.mjs', 'Generated @aurelia/state todo semantic effects.'),
+  ], 'smoke-authoring-state-store-list.mjs', 'Generated @aurelia/state store-list semantic effects.'),
   contract('authoring.catalog', 'route', [
     'authoring',
     'fixtures',
@@ -125,6 +205,22 @@ const contractSuites = [
     'composition',
     'style',
   ], 'smoke-authoring-catalog-storefront.mjs', 'Generated catalog storefront semantic effects.'),
+  contract('authoring.catalog', 'route', [
+    'authoring',
+    'fixtures',
+    'state',
+    'router',
+    'composition',
+    'style',
+  ], 'smoke-authoring-routed-catalog-storefront.mjs', 'Generated routed catalog storefront semantic effects.'),
+  contract('authoring.catalog', 'route', [
+    'authoring',
+    'fixtures',
+    'state',
+    'router',
+    'forms',
+    'style',
+  ], 'smoke-authoring-routed-searchable-data-table.mjs', 'Generated routed searchable data-table semantic effects.'),
   contract('authoring.composition', 'route', [
     'authoring',
     'fixtures',
@@ -141,6 +237,13 @@ const contractSuites = [
     'state',
     'fixtures',
   ], 'contract-one-hop-forwarding-accessor.mjs', 'Contrastive one-hop state forwarding accessor authoring pressure.'),
+  contract('authoring.policy', 'route', [
+    'authoring',
+    'observation',
+    'state',
+    'fixtures',
+    'component',
+  ], 'contract-component-object-boundary.mjs', 'Local typed object component input and direct domain binding authoring pressure.'),
 ];
 
 const args = parseArgs(process.argv.slice(2));
@@ -272,7 +375,7 @@ function addFilter(parsed, kind, rawValue) {
 
 function selectedContracts(filters) {
   return contractSuites.filter((entry) => {
-    if (filters.routes.size > 0 && !filters.routes.has(entry.routeId)) {
+    if (filters.routes.size > 0 && !routeMatches(entry.routeId, filters.routes)) {
       return false;
     }
     if (filters.domains.size > 0 && !entry.domains.some((domain) => filters.domains.has(domain))) {
@@ -285,6 +388,15 @@ function selectedContracts(filters) {
   });
 }
 
+function routeMatches(routeId, routeFilters) {
+  for (const routeFilter of routeFilters) {
+    if (routeId === routeFilter || routeId.startsWith(`${routeFilter}.`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
 function printList() {
   console.log('semantic-runtime semantic contract suite');
   for (const entry of contractSuites) {
@@ -293,7 +405,7 @@ function printList() {
 }
 
 function printUsage() {
-  console.error('Usage: pnpm contract:suite -- [--route observation] [--domain forms] [--tier fast] [--list] [--skip-build] [--verbose]');
+  console.error('Usage: pnpm contract:suite -- [--route observation|authoring.forms|authoring] [--domain forms] [--tier fast] [--list] [--skip-build] [--verbose]');
 }
 
 function runCommand(command, commandArgs, options = {}) {

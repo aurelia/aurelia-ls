@@ -513,6 +513,8 @@ function memoryAnchorSearchGroups(row: AtlasMemoryRecordRow): readonly string[] 
         return [anchor.path, anchor.scenario ?? "", anchor.summary ?? ""];
       case "auLink":
         return [anchor.linkId, anchor.symbolName ?? "", anchor.summary ?? ""];
+      case "external":
+        return [anchor.url, anchor.summary ?? ""];
     }
   });
 }

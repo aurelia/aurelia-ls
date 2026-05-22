@@ -148,6 +148,10 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   router-resource values that cannot be a route string, routeable component, or viewport instruction publish
   `instrInvalid` / `AUR3400`; routeable classes/functions/promises that are not yet modeled stay open so this
   diagnostic does not mask missing routeable-instruction support.
+  Router-resource instruction products are emitted only for render contexts with an owning `RouteContext`. A child
+  component's standalone definition render is a potential reuse surface; if the same `load`/`href` closes when that
+  component is recursively rendered inside a routed parent, the standalone definition should not publish an app-level
+  `router-instruction-needs-route-context` seam.
 - Keep router issue ownership in router products even when the source span is a template value. API template diagnostics
   and cursor-info may project template-locus copies of router failures for LSP surfaces, but the owning rows remain
   `RouterIssues` / router-domain `AppDiagnostics`. Route-instruction issue provenance should prefer the narrowest
@@ -161,7 +165,9 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   `rcEagerPathGenerationFailed` / `AUR3166` authority; string route ids still follow the framework's non-throwing
   branch and stay open/not-eager when they cannot close. Closed object instruction `children` recurse through the
   generated component's `RouteConfigContext`, merge child query params, preserve viewport suffixes, and then re-enter
-  the ordinary static instruction-tree lane.
+  the ordinary static instruction-tree lane. The closed object can be a syntactic object literal or an equivalent
+  binding-source value, so app code may keep navigation intent objects in state/getters and bind them with ordinary
+  member/keyed expressions without duplicating route trees in template markup.
 - Resolve the owning router-resource `RouteContext` through modeled controller/container ancestry before falling back to
   route-config component-definition matching. `load` and `href` resolve `IContextRouter` / `IRouteContext` from the
   custom-attribute controller's container chain; ordinary child components inside a routed component can therefore
@@ -215,6 +221,10 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   by-route rows group values by the framework route identifier. Include-query variants intentionally repeat shared
   query values per active route node because the framework writes the same `ViewportInstructionTree.queryParams` onto
   every node before `RouteContext.getRouteParameters(...)` walks the context chain.
+- Materialize source-backed `RouteContext.getRouteParameters(...)` read products. These rows use the TypeChecker to
+  identify the framework method declaration, read the call's declared parameter shape, then correlate the enclosing
+  routed component with recognized route-config path parameters. This keeps route-param authoring honest: a view-model
+  can declare query values, but the API separately reports which keys are backed by `:path` segments.
 - Preserve the framework RouteExpression tree shape, not only flattened viewport instructions. Redirect parameter
   migration in `RouteTree.createConfiguredNode(...)` accepts only `Segment` / slash-scoped `Segment` chains; sibling
   composites and grouped expressions are known framework failures and should publish router issue products with
@@ -238,10 +248,11 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
 - Resolving `NavigationStrategy` components outside a concrete viewport instruction. `RouteConfig.component` /
   `AUR3558` stays unclaimed because navigation-strategy routeables remain referential/open until navigation supplies
   the instruction context.
-- Emulating dynamic `IRouteContext.getRouteParameters(...)` inputs. Static route rows expose parameter names and decoded
-  values from closed recognizer endpoints, and `RouteNode` rows expose child-first, parent-first, append, and by-route
-  aggregates over the materialized transition node chain, including closed static query parameters. Runtime query-merge
-  mutations and live active-navigation state remain route-context/runtime frontier work.
+- Emulating dynamic `IRouteContext.getRouteParameters(...)` values beyond static path/query facts. Static route rows
+  expose parameter names and decoded values from closed recognizer endpoints, `RouteNode` rows expose child-first,
+  parent-first, append, and by-route aggregates over the materialized transition node chain, and
+  `RouteContextParameterRead` rows align authored read shapes with route path parameters. Runtime query-merge mutations,
+  custom route-param object construction, and live active-navigation state remain route-context/runtime frontier work.
 - Resolving string or lazy-import routeables through a full `RouteConfigContext` dependency/resource scope. The current
   model handles dependency-array custom-element names for child route contexts and can claim the closed string miss
   where no component is known (`rtNoComponent` / `AUR3552`), but root-container registration visibility, imported view

@@ -118,6 +118,8 @@ export type ExpectedSemanticEffectRole =
   /** Required recipe-identifying effect; when it is absent, generic matching signatures should not make the app a candidate. */
   | 'discriminator';
 
+export type ExpectedSemanticEffectFilterValue = string | number | boolean | null;
+
 /** Field/value predicate for an expected effect when count alone is too broad. */
 export class ExpectedSemanticEffectFilter {
   readonly kind = 'expected-semantic-effect-filter' as const;
@@ -128,6 +130,12 @@ export class ExpectedSemanticEffectFilter {
     /** Expected scalar value. Keep source text out of fixture-independent expectations. */
     readonly value: string | number | boolean | null,
   ) {}
+}
+
+export function expectedSemanticEffectFilters(
+  ...entries: readonly (readonly [string, ExpectedSemanticEffectFilterValue])[]
+): readonly ExpectedSemanticEffectFilter[] {
+  return entries.map(([field, value]) => new ExpectedSemanticEffectFilter(field, value));
 }
 
 /** Semantic effect an authoring plan expects after its edits are applied and the app is reopened. */
@@ -323,6 +331,27 @@ export class ExpectedSemanticEffect {
       tasteAxisKey,
       tasteValueKey,
       role,
+    );
+  }
+
+  static absentTaste(
+    summary: string,
+    tasteAxisKey: AuthoringTasteAxisKey,
+    tasteValueKey: AuthoringTasteValueKey,
+    topologyNodeKind: AuthoringTargetKind | null = null,
+  ): ExpectedSemanticEffect {
+    return new ExpectedSemanticEffect(
+      summary,
+      topologyNodeKind,
+      'authoring-taste',
+      'authoring',
+      'absent',
+      null,
+      [],
+      null,
+      null,
+      tasteAxisKey,
+      tasteValueKey,
     );
   }
 

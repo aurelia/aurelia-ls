@@ -3,6 +3,10 @@ import {
   ExpectedSemanticEffectFilter,
   type ExpectedSemanticEffectScope,
 } from './expected-effect.js';
+import {
+  defaultStandardRequestFormDomainNames,
+  type StandardRequestFormDomainNames,
+} from './standard-request-form-source-templates.js';
 
 function nativeValueTargetFilters(): readonly ExpectedSemanticEffectFilter[] {
   return [
@@ -24,11 +28,31 @@ function customMatcherValueChannelFilters(): readonly ExpectedSemanticEffectFilt
   ];
 }
 
+function observerCouplingValueChannelFilters(
+  observerCoupling: string,
+): readonly ExpectedSemanticEffectFilter[] {
+  return [
+    new ExpectedSemanticEffectFilter('observerCouplings', observerCoupling),
+  ];
+}
+
 function primitiveValueChannelFilters(
   primitiveValueDisplay: string,
 ): readonly ExpectedSemanticEffectFilter[] {
   return [
     new ExpectedSemanticEffectFilter('primitiveValueDomainDisplays', primitiveValueDisplay),
+  ];
+}
+
+function eventHandlerValueChannelFilters(
+  targetEventName: string,
+): readonly ExpectedSemanticEffectFilter[] {
+  return [
+    new ExpectedSemanticEffectFilter('bindingKind', 'listener'),
+    new ExpectedSemanticEffectFilter('targetKind', 'node'),
+    new ExpectedSemanticEffectFilter('targetProperty', targetEventName),
+    new ExpectedSemanticEffectFilter('targetOperationKind', 'event-listener-add'),
+    new ExpectedSemanticEffectFilter('channelKind', 'event-handler-invocation'),
   ];
 }
 
@@ -80,6 +104,36 @@ function validationErrorsDataFlowFilters(): readonly ExpectedSemanticEffectFilte
     new ExpectedSemanticEffectFilter('direction', 'target-to-source'),
     new ExpectedSemanticEffectFilter('valueChannelKind', 'raw-property'),
     new ExpectedSemanticEffectFilter('sourceAssignmentKind', 'runtime-assignable'),
+  ];
+}
+
+function validationErrorClassDataFlowFilters(
+  sourceName: string,
+): readonly ExpectedSemanticEffectFilter[] {
+  return [
+    new ExpectedSemanticEffectFilter('targetKind', 'node'),
+    new ExpectedSemanticEffectFilter('targetProperty', 'class'),
+    new ExpectedSemanticEffectFilter('valueChannelKind', 'class-attribute-tokens'),
+    new ExpectedSemanticEffectFilter('sourceName', sourceName),
+  ];
+}
+
+export function validateBindingBehaviorExpectedFilters(
+  validationTrigger: string | null,
+): readonly ExpectedSemanticEffectFilter[] {
+  return [
+    new ExpectedSemanticEffectFilter('behaviorName', 'validate'),
+    ...(validationTrigger == null
+      ? []
+      : [new ExpectedSemanticEffectFilter('staticArgumentValues', validationTrigger)]),
+  ];
+}
+
+export function bindingBehaviorApplicationExpectedFilters(
+  behaviorName: string,
+): readonly ExpectedSemanticEffectFilter[] {
+  return [
+    new ExpectedSemanticEffectFilter('behaviorName', behaviorName),
   ];
 }
 
@@ -187,9 +241,10 @@ function stateRequestDataFlowFilters(
   sourceName: string,
   targetProperty: string,
   valueChannelKind: string,
+  domain: StandardRequestFormDomainNames,
 ): readonly ExpectedSemanticEffectFilter[] {
   return [
-    new ExpectedSemanticEffectFilter('sourceRootName', 'request'),
+    new ExpectedSemanticEffectFilter('sourceRootName', domain.entityVariableName),
     new ExpectedSemanticEffectFilter('sourceName', sourceName),
     new ExpectedSemanticEffectFilter('direction', 'two-way'),
     new ExpectedSemanticEffectFilter('targetKind', 'node'),
@@ -201,14 +256,32 @@ function stateRequestDataFlowFilters(
   ];
 }
 
+function stateRequestLetBindingDataFlowFilters(
+  domain: StandardRequestFormDomainNames,
+  sourceName = `state.${domain.readEntityMethodName}(${domain.selectionIdName})`,
+  sourceType = `${domain.entityClassName} | null`,
+): readonly ExpectedSemanticEffectFilter[] {
+  return [
+    new ExpectedSemanticEffectFilter('bindingKind', 'let'),
+    new ExpectedSemanticEffectFilter('sourceName', sourceName),
+    new ExpectedSemanticEffectFilter('sourceRootName', 'state'),
+    new ExpectedSemanticEffectFilter('sourceType', sourceType),
+    new ExpectedSemanticEffectFilter('targetKind', 'override-context'),
+    new ExpectedSemanticEffectFilter('targetProperty', domain.entityVariableName),
+    new ExpectedSemanticEffectFilter('valueChannelKind', 'scope-slot'),
+    new ExpectedSemanticEffectFilter('sourceToTargetAssignable', true),
+  ];
+}
+
 function stateRequestObservedDependencyFilters(
   sourceName: string,
   memberName: string,
+  domain: StandardRequestFormDomainNames,
 ): readonly ExpectedSemanticEffectFilter[] {
   return [
     new ExpectedSemanticEffectFilter('dependencyKind', 'template-expression-read'),
     new ExpectedSemanticEffectFilter('expressionKind', 'AccessMember'),
-    new ExpectedSemanticEffectFilter('sourceRootName', 'request'),
+    new ExpectedSemanticEffectFilter('sourceRootName', domain.entityVariableName),
     new ExpectedSemanticEffectFilter('sourceName', sourceName),
     new ExpectedSemanticEffectFilter('memberName', memberName),
   ];
@@ -252,6 +325,22 @@ export function nativeValueDataFlowEffect(
   return formBindingEffect(summary, 'binding-data-flow', nativeValueTargetFilters(), scope);
 }
 
+export function bindingBehaviorApplicationEffect(
+  summary: string,
+  behaviorName: string,
+  scope: ExpectedSemanticEffectScope = 'template',
+): ExpectedSemanticEffect {
+  return ExpectedSemanticEffect.fact(
+    summary,
+    'binding-behavior-application',
+    scope,
+    'template-binding',
+    'present',
+    null,
+    bindingBehaviorApplicationExpectedFilters(behaviorName),
+  );
+}
+
 export function checkedTargetAccessEffect(
   summary: string,
   scope: ExpectedSemanticEffectScope = 'template',
@@ -280,12 +369,28 @@ export function customMatcherValueChannelEffect(
   return formBindingEffect(summary, 'binding-value-channel', customMatcherValueChannelFilters(), scope);
 }
 
+export function observerCouplingValueChannelEffect(
+  summary: string,
+  observerCoupling: string,
+  scope: ExpectedSemanticEffectScope = 'template',
+): ExpectedSemanticEffect {
+  return formBindingEffect(summary, 'binding-value-channel', observerCouplingValueChannelFilters(observerCoupling), scope);
+}
+
 export function primitiveValueChannelEffect(
   summary: string,
   primitiveValueDisplay: string,
   scope: ExpectedSemanticEffectScope = 'template',
 ): ExpectedSemanticEffect {
   return formBindingEffect(summary, 'binding-value-channel', primitiveValueChannelFilters(primitiveValueDisplay), scope);
+}
+
+export function eventHandlerValueChannelEffect(
+  summary: string,
+  targetEventName = 'submit',
+  scope: ExpectedSemanticEffectScope = 'template',
+): ExpectedSemanticEffect {
+  return formBindingEffect(summary, 'binding-value-channel', eventHandlerValueChannelFilters(targetEventName), scope);
 }
 
 export function capturedFieldShellInputTypeEffect(summary: string): ExpectedSemanticEffect {
@@ -314,6 +419,13 @@ export function validationErrorsValueChannelEffect(summary: string): ExpectedSem
 
 export function validationErrorsDataFlowEffect(summary: string): ExpectedSemanticEffect {
   return formBindingEffect(summary, 'binding-data-flow', validationErrorsDataFlowFilters());
+}
+
+export function validationErrorClassDataFlowEffect(
+  summary: string,
+  sourceName: string,
+): ExpectedSemanticEffect {
+  return formBindingEffect(summary, 'binding-data-flow', validationErrorClassDataFlowFilters(sourceName));
 }
 
 export function classTokenTargetAccessEffect(summary: string): ExpectedSemanticEffect {
@@ -369,11 +481,29 @@ export function stateRequestFieldDataFlowEffect(
   sourceName: string,
   targetProperty: string,
   valueChannelKind: string,
+  domain: StandardRequestFormDomainNames = defaultStandardRequestFormDomainNames(),
 ): ExpectedSemanticEffect {
   return formBindingEffect(
     summary,
     'binding-data-flow',
-    stateRequestDataFlowFilters(sourceName, targetProperty, valueChannelKind),
+    stateRequestDataFlowFilters(sourceName, targetProperty, valueChannelKind, domain),
+  );
+}
+
+export function stateRequestLetBindingDataFlowEffect(
+  summary: string,
+  domain: StandardRequestFormDomainNames = defaultStandardRequestFormDomainNames(),
+  sourceName?: string,
+  sourceType?: string,
+): ExpectedSemanticEffect {
+  return ExpectedSemanticEffect.signatureFact(
+    summary,
+    'binding-data-flow',
+    'template',
+    'template-binding',
+    'present',
+    null,
+    stateRequestLetBindingDataFlowFilters(domain, sourceName, sourceType),
   );
 }
 
@@ -381,6 +511,7 @@ export function stateRequestFieldObservedDependencyEffect(
   summary: string,
   sourceName: string,
   memberName: string,
+  domain: StandardRequestFormDomainNames = defaultStandardRequestFormDomainNames(),
 ): ExpectedSemanticEffect {
   return ExpectedSemanticEffect.fact(
     summary,
@@ -389,12 +520,13 @@ export function stateRequestFieldObservedDependencyEffect(
     'template-binding',
     'present',
     null,
-    stateRequestObservedDependencyFilters(sourceName, memberName),
+    stateRequestObservedDependencyFilters(sourceName, memberName, domain),
   );
 }
 
 export function requestCanSubmitComputedObserverSourceEffect(
   summary: string,
+  domain: StandardRequestFormDomainNames = defaultStandardRequestFormDomainNames(),
 ): ExpectedSemanticEffect {
   return ExpectedSemanticEffect.signatureFact(
     summary,
@@ -404,7 +536,7 @@ export function requestCanSubmitComputedObserverSourceEffect(
     'present',
     null,
     [
-      new ExpectedSemanticEffectFilter('className', 'ServiceRequest'),
+      new ExpectedSemanticEffectFilter('className', domain.entityClassName),
       new ExpectedSemanticEffectFilter('memberName', 'canSubmit'),
       new ExpectedSemanticEffectFilter('observerKind', 'computed-observer'),
       new ExpectedSemanticEffectFilter('triggerKind', 'accessor-descriptor'),
@@ -415,7 +547,8 @@ export function requestCanSubmitComputedObserverSourceEffect(
 
 export function requestCanSubmitComputedObserverDependencyEffect(
   summary: string,
-  sourceName: 'this.customerName' | 'this.email',
+  sourceName: string,
+  domain: StandardRequestFormDomainNames = defaultStandardRequestFormDomainNames(),
 ): ExpectedSemanticEffect {
   return ExpectedSemanticEffect.signatureFact(
     summary,
@@ -425,7 +558,7 @@ export function requestCanSubmitComputedObserverDependencyEffect(
     'present',
     null,
     [
-      new ExpectedSemanticEffectFilter('className', 'ServiceRequest'),
+      new ExpectedSemanticEffectFilter('className', domain.entityClassName),
       new ExpectedSemanticEffectFilter('memberName', 'canSubmit'),
       new ExpectedSemanticEffectFilter('dependencyKind', 'proxy-property-read'),
       new ExpectedSemanticEffectFilter('sourceName', sourceName),
@@ -554,8 +687,8 @@ export function customMatcherComparisonTasteEffect(summary: string): ExpectedSem
 
 export function formValueChannelTasteEffects(
   nativeValueSummary: string,
-  checkedModelSummary: string,
-  selectModelSummary: string,
+  checkedModelSummary: string | null,
+  selectModelSummary: string | null,
 ): readonly ExpectedSemanticEffect[] {
   return [
     ExpectedSemanticEffect.signatureTaste(
@@ -564,17 +697,17 @@ export function formValueChannelTasteEffects(
       'native-control-value-binding',
       'template-binding',
     ),
-    ExpectedSemanticEffect.signatureTaste(
+    checkedModelSummary == null ? null : ExpectedSemanticEffect.signatureTaste(
       checkedModelSummary,
       'form-value-channel',
       'checked-model-binding',
       'template-binding',
     ),
-    ExpectedSemanticEffect.signatureTaste(
+    selectModelSummary == null ? null : ExpectedSemanticEffect.signatureTaste(
       selectModelSummary,
       'form-value-channel',
       'select-model-binding',
       'template-binding',
     ),
-  ];
+  ].filter((effect): effect is ExpectedSemanticEffect => effect != null);
 }

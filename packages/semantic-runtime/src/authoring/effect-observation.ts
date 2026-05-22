@@ -1,4 +1,8 @@
-import type { ExpectedSemanticEffect, ExpectedSemanticEffectCardinality } from './expected-effect.js';
+import type {
+  ExpectedSemanticEffect,
+  ExpectedSemanticEffectCardinality,
+  ExpectedSemanticEffectKind,
+} from './expected-effect.js';
 import { authoringSupportStateRank, type AuthoringSupportState } from './ontology.js';
 
 export type ExpectedSemanticEffectObservationOutcome =
@@ -58,6 +62,8 @@ export type ExpectedSemanticEffectRouteProductKind =
   | 'route-config'
   /** Runtime RouteContext topology product. */
   | 'route-context'
+  /** Source-backed RouteContext.getRouteParameters(...) read correlated with route path params. */
+  | 'route-context-parameter-read'
   /** Modeled au-viewport custom-element product. */
   | 'router-viewport'
   /** ViewportAgent product that hosts routed component activation. */
@@ -124,6 +130,44 @@ export interface ExpectedSemanticEffectObservationResult {
   readonly outcome: ExpectedSemanticEffectObservationOutcome;
 }
 
+type ExpectedSemanticEffectRowSource = (
+  snapshot: ExpectedSemanticEffectObservationSnapshot,
+) => ExpectedSemanticEffectObservableRows;
+
+const expectedSemanticEffectRowSources: Partial<Record<ExpectedSemanticEffectKind, ExpectedSemanticEffectRowSource>> = {
+  'project-tooling': (snapshot) => snapshot.projectSourceRoles,
+  'component': (snapshot) => snapshot.components,
+  'component-role': (snapshot) => snapshot.components
+    .flatMap((component) => readObjectArray(component, 'roles')),
+  'style-resource': (snapshot) => snapshot.styles,
+  'service-class': (snapshot) => snapshot.services,
+  'state-composition': (snapshot) => snapshot.stateCompositions,
+  'service-interaction': (snapshot) => snapshot.serviceInteractions,
+  'service-interaction-binding': (snapshot) => snapshot.serviceInteractionBindings,
+  'external-template': (snapshot) => snapshot.components
+    .filter((component) => readPath(component, 'template.source') != null),
+  'template-diagnostic': (snapshot) => snapshot.templateDiagnostics,
+  'runtime-controller': (snapshot) => snapshot.runtimeControllers,
+  'runtime-watcher': (snapshot) => snapshot.runtimeWatchers,
+  'runtime-watcher-observed-dependency': (snapshot) => snapshot.runtimeWatcherObservedDependencies,
+  'runtime-composition': (snapshot) => snapshot.runtimeCompositions,
+  'binding-target-access': (snapshot) => snapshot.bindingTargetAccesses,
+  'target-operation': (snapshot) => snapshot.targetOperations,
+  'binding-value-channel': (snapshot) => snapshot.bindingValueChannels,
+  'binding-observed-dependency': (snapshot) => snapshot.bindingObservedDependencies,
+  'computed-observation-definition': (snapshot) => snapshot.computedObservationDefinitions,
+  'computed-observer-source': (snapshot) => snapshot.computedObserverSources,
+  'computed-observer-observed-dependency': (snapshot) => snapshot.computedObserverObservedDependencies,
+  'binding-behavior-application': (snapshot) => snapshot.bindingBehaviorApplications,
+  'i18n-translation-key': (snapshot) => snapshot.i18nTranslationKeys,
+  'i18n-translation-binding': (snapshot) => snapshot.i18nTranslationBindings,
+  'state-store': (snapshot) => snapshot.stateStores,
+  'binding-data-flow': (snapshot) => snapshot.bindingDataFlows,
+  'authoring-repair': (snapshot) => snapshot.repairClusters,
+  'open-seam': (snapshot) => snapshot.openSeams,
+  'open-seam-closure': (snapshot) => snapshot.openSeams,
+};
+
 export function observeExpectedSemanticEffect(
   expectedEffect: ExpectedSemanticEffect,
   snapshot: ExpectedSemanticEffectObservationSnapshot,
@@ -151,97 +195,20 @@ export function observedCountForExpectedSemanticEffect(
   expectedEffect: ExpectedSemanticEffect,
   snapshot: ExpectedSemanticEffectObservationSnapshot,
 ): number | null {
+  const rowSource = expectedSemanticEffectRowSources[expectedEffect.effectKind];
+  if (rowSource !== undefined) {
+    return filteredRowCount(rowSource(snapshot), expectedEffect.filters);
+  }
+
   switch (expectedEffect.effectKind) {
     case 'project-shape':
       return snapshot.projectShapeKind === 'aurelia-app' ? 1 : 0;
-    case 'project-tooling':
-      return snapshot.projectSourceRoles.filter((role) =>
-        matchesFilters(role, expectedEffect.filters)
-      ).length;
     case 'app-root':
       return snapshot.appRoots;
     case 'resource-definition':
       return snapshot.resourceDefinitions;
-    case 'component':
-      return snapshot.components.filter((component) =>
-        matchesFilters(component, expectedEffect.filters)
-      ).length;
-    case 'component-role':
-      return snapshot.components
-        .flatMap((component) => readObjectArray(component, 'roles'))
-        .filter((role) => matchesFilters(role, expectedEffect.filters))
-        .length;
-    case 'style-resource':
-      return snapshot.styles.filter((style) =>
-        matchesFilters(style, expectedEffect.filters)
-      ).length;
-    case 'service-class':
-      return snapshot.services.filter((service) =>
-        matchesFilters(service, expectedEffect.filters)
-      ).length;
-    case 'state-composition':
-      return snapshot.stateCompositions.filter((composition) =>
-        matchesFilters(composition, expectedEffect.filters)
-      ).length;
-    case 'service-interaction':
-      return snapshot.serviceInteractions.filter((interaction) =>
-        matchesFilters(interaction, expectedEffect.filters)
-      ).length;
-    case 'service-interaction-binding':
-      return snapshot.serviceInteractionBindings.filter((binding) =>
-        matchesFilters(binding, expectedEffect.filters)
-      ).length;
-    case 'external-template':
-      return snapshot.components.filter((component) =>
-        readPath(component, 'template.source') != null &&
-        matchesFilters(component, expectedEffect.filters)
-      ).length;
     case 'template-compilation':
       return snapshot.compiledResources;
-    case 'template-diagnostic':
-      return filteredRowCount(snapshot.templateDiagnostics, expectedEffect.filters);
-    case 'runtime-controller':
-      return filteredRowCount(snapshot.runtimeControllers, expectedEffect.filters);
-    case 'runtime-watcher':
-      return filteredRowCount(snapshot.runtimeWatchers, expectedEffect.filters);
-    case 'runtime-watcher-observed-dependency':
-      return filteredRowCount(snapshot.runtimeWatcherObservedDependencies, expectedEffect.filters);
-    case 'runtime-composition':
-      return snapshot.runtimeCompositions.filter((composition) =>
-        matchesFilters(composition, expectedEffect.filters)
-      ).length;
-    case 'binding-target-access':
-      return filteredRowCount(snapshot.bindingTargetAccesses, expectedEffect.filters);
-    case 'target-operation':
-      return filteredRowCount(snapshot.targetOperations, expectedEffect.filters);
-    case 'binding-value-channel':
-      return filteredRowCount(snapshot.bindingValueChannels, expectedEffect.filters);
-    case 'binding-observed-dependency':
-      return filteredRowCount(snapshot.bindingObservedDependencies, expectedEffect.filters);
-    case 'computed-observation-definition':
-      return filteredRowCount(snapshot.computedObservationDefinitions, expectedEffect.filters);
-    case 'computed-observer-source':
-      return filteredRowCount(snapshot.computedObserverSources, expectedEffect.filters);
-    case 'computed-observer-observed-dependency':
-      return filteredRowCount(snapshot.computedObserverObservedDependencies, expectedEffect.filters);
-    case 'binding-behavior-application':
-      return snapshot.bindingBehaviorApplications.filter((application) =>
-        matchesFilters(application, expectedEffect.filters)
-      ).length;
-    case 'i18n-translation-key':
-      return snapshot.i18nTranslationKeys.filter((translationKey) =>
-        matchesFilters(translationKey, expectedEffect.filters)
-      ).length;
-    case 'i18n-translation-binding':
-      return snapshot.i18nTranslationBindings.filter((translationBinding) =>
-        matchesFilters(translationBinding, expectedEffect.filters)
-      ).length;
-    case 'state-store':
-      return snapshot.stateStores.filter((stateStore) =>
-        matchesFilters(stateStore, expectedEffect.filters)
-      ).length;
-    case 'binding-data-flow':
-      return filteredRowCount(snapshot.bindingDataFlows, expectedEffect.filters);
     case 'route':
       return expectedEffect.filters.length === 0
         ? snapshot.routeFacts
@@ -252,15 +219,8 @@ export function observedCountForExpectedSemanticEffect(
       return authoringCapabilityCount(expectedEffect, snapshot);
     case 'authoring-taste':
       return authoringTasteValueCount(expectedEffect, snapshot);
-    case 'authoring-repair':
-      return snapshot.repairClusters.filter((cluster) =>
-        matchesFilters(cluster, expectedEffect.filters)
-      ).length;
-    case 'open-seam':
-      return filteredRowCount(snapshot.openSeams, expectedEffect.filters);
-    case 'open-seam-closure':
-      return filteredRowCount(snapshot.openSeams, expectedEffect.filters);
   }
+  return null;
 }
 
 function routeFactRows(

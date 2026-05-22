@@ -1,5 +1,4 @@
-import { bindable, customElement } from '@aurelia/runtime-html';
-import { resolve } from '@aurelia/kernel';
+import { bindable, customElement, resolve } from 'aurelia';
 import { Product } from '../models/product';
 import { StorefrontState } from '../state/storefront-state';
 import template from './product-card.html';

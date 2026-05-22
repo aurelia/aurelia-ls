@@ -243,6 +243,16 @@ function normalizeAnchor(value: unknown): AtlasMemoryAnchor | null {
           summary: stringFieldValue(value, "summary"),
         };
     }
+    case "external": {
+      const url = stringFieldValue(value, "url");
+      return url === undefined
+        ? null
+        : {
+          kind: "external",
+          url,
+          summary: stringFieldValue(value, "summary"),
+        };
+    }
     default:
       return null;
   }

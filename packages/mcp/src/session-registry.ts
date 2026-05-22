@@ -68,7 +68,7 @@ export class SemanticRuntimeSessionRegistry {
       (total, session) => total + (session.analysisCacheClear?.value.clearedTypeSystemDependencySourceTextCharacters ?? 0),
       0,
     );
-    return {
+    const valueWithoutDisplayText: Omit<SemanticRuntimeSessionRegistryClearResult, 'displayText'> = {
       totalSessions: this.sessions.size,
       matchingSessions: sessions.length,
       typeSystemDependencyCacheClearPolicy: request.typeSystemDependencyCacheClearPolicy ?? 'preserve',
@@ -84,6 +84,10 @@ export class SemanticRuntimeSessionRegistry {
         `(${clearedTypeSystemDependencySourceTextCharacters} source-text character(s)) using policy ` +
         `'${request.typeSystemDependencyCacheClearPolicy ?? 'preserve'}'.`,
     };
+    return {
+      ...valueWithoutDisplayText,
+      displayText: semanticRuntimeSessionRegistryClearDisplayText(valueWithoutDisplayText),
+    };
   }
 
   async overview(
@@ -94,11 +98,15 @@ export class SemanticRuntimeSessionRegistry {
     const entries = [...this.sessions.values()]
       .filter((entry) => selectedKey == null || entry.key === selectedKey);
     const sessions = await Promise.all(entries.map((entry) => sessionSummary(entry, cacheRequest)));
-    return {
+    const valueWithoutDisplayText: Omit<SemanticRuntimeSessionRegistryOverview, 'displayText'> = {
       totalSessions: this.sessions.size,
       matchingSessions: sessions.length,
       sessions,
       summary: `MCP server has ${this.sessions.size} cached semantic-runtime session(s); ${sessions.length} match the requested selector.`,
+    };
+    return {
+      ...valueWithoutDisplayText,
+      displayText: semanticRuntimeSessionRegistryOverviewDisplayText(valueWithoutDisplayText),
     };
   }
 }
@@ -124,6 +132,7 @@ export interface SemanticRuntimeSessionRegistryOverview {
   readonly totalSessions: number;
   readonly matchingSessions: number;
   readonly sessions: readonly SemanticRuntimeSessionSummary[];
+  readonly displayText: string;
   readonly summary: string;
 }
 
@@ -147,8 +156,74 @@ export interface SemanticRuntimeSessionRegistryClearResult {
   readonly clearedTypeSystemDependencySourceFiles: number;
   readonly clearedTypeSystemDependencySourceTextCharacters: number;
   readonly sessions: readonly SemanticRuntimeSessionClearSummary[];
+  readonly displayText: string;
   readonly summary: string;
 }
+
+function semanticRuntimeSessionRegistryOverviewDisplayText(
+  value: Omit<SemanticRuntimeSessionRegistryOverview, 'displayText'>,
+): string {
+  const lines = [
+    `MCP analysis cache: ${value.matchingSessions} matching session(s) out of ${value.totalSessions} cached semantic-runtime session(s).`,
+  ];
+  if (value.sessions.length === 0) {
+    lines.push('Sessions: none. Open a workspace/app tool first; pass appRetention=retain-app only when several app calls should share one app epoch.');
+  } else {
+    lines.push(`Sessions: ${value.sessions.slice(0, SESSION_REGISTRY_DISPLAY_LIMIT).map((session, index) =>
+      `${index + 1}. ${session.runtimeState} ${session.workspaceRoot} (${session.projectDiscovery ?? 'default discovery'}): ${session.analysisCache?.summary ?? session.failureSummary ?? 'not inspected'}`
+    ).join(' | ')}${value.sessions.length > SESSION_REGISTRY_DISPLAY_LIMIT ? ` | +${value.sessions.length - SESSION_REGISTRY_DISPLAY_LIMIT} more` : ''}.`);
+    const cacheLines = value.sessions
+      .map((session) => firstSessionAnswerDisplayLine(session.analysisCache))
+      .filter((line): line is string => line != null)
+      .slice(0, SESSION_REGISTRY_DISPLAY_LIMIT);
+    if (cacheLines.length > 0) {
+      lines.push(`Runtime cache hints: ${cacheLines.join(' | ')}.`);
+    }
+  }
+  lines.push('Next: use includeKernelBreakdowns/includeDetailDensity for memory attribution, or aurelia_clear_analysis_cache to reclaim retained app epochs.');
+  return lines.join('\n');
+}
+
+function semanticRuntimeSessionRegistryClearDisplayText(
+  value: Omit<SemanticRuntimeSessionRegistryClearResult, 'displayText'>,
+): string {
+  const lines = [
+    `MCP analysis cache clear: ${value.matchingSessions} matching session(s) out of ${value.totalSessions}; disposed ${value.disposedCachedApps} app epoch(s), ${value.disposedKernelRecords} kernel record(s), and ${value.clearedTypeSystemDependencySourceFiles} dependency source-file cache file(s).`,
+    `Dependency clear policy: ${value.typeSystemDependencyCacheClearPolicy}; source-text characters cleared=${value.clearedTypeSystemDependencySourceTextCharacters}.`,
+  ];
+  const clearLines = value.sessions
+    .map((session) => firstSessionAnswerDisplayLine(session.analysisCacheClear))
+    .filter((line): line is string => line != null)
+    .slice(0, SESSION_REGISTRY_DISPLAY_LIMIT);
+  if (clearLines.length > 0) {
+    lines.push(`Runtime clear hints: ${clearLines.join(' | ')}.`);
+  }
+  lines.push('Next: re-open app tools as needed; a fresh analysis-cache overview should show whether retained sessions remain.');
+  return lines.join('\n');
+}
+
+function firstSessionAnswerDisplayLine(answer: SemanticRuntimeAnswer<unknown> | null): string | null {
+  const answerValue = answer?.value;
+  const displayText = answerValue != null
+    && typeof answerValue === 'object'
+    && !Array.isArray(answerValue)
+    && typeof (answerValue as { readonly displayText?: unknown }).displayText === 'string'
+      ? (answerValue as { readonly displayText: string }).displayText
+      : null;
+  if (typeof displayText !== 'string') {
+    return null;
+  }
+  const line = displayText.split(/\r?\n/u).map((part) => part.trim()).find((part) => part.length > 0) ?? null;
+  return line == null ? null : trimSessionDisplayLine(line);
+}
+
+function trimSessionDisplayLine(line: string): string {
+  return line.length <= 180
+    ? line
+    : `${line.slice(0, 177)}...`;
+}
+
+const SESSION_REGISTRY_DISPLAY_LIMIT = 4;
 
 export function normalizeRuntimeOptions(options: SemanticRuntimeOptions): SemanticRuntimeOptions {
   const workspaceRoot = path.resolve(options.workspaceRoot);

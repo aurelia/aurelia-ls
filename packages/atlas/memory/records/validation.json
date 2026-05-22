@@ -56,6 +56,11 @@
           "summary": "Pressure fixture for validation-html binding behavior over dynamic keyed writable source expressions."
         },
         {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:dynamic-keyed-validation",
+          "summary": "Focused contract for validate binding-behavior rows, dynamic keyed writable data-flow rows, observed dependencies, and no false diagnostics."
+        },
+        {
           "kind": "lens",
           "lensId": "framework.errors",
           "projection": "diagnostic-codes",
@@ -88,10 +93,14 @@
         {
           "kind": "source-file-exists",
           "filePath": "packages/semantic-runtime/fixtures/pressure/dynamic-keyed-validation/src/dynamic-keyed-validation-app.html"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-dynamic-keyed-validation.mjs"
         }
       ],
       "createdAt": "2026-05-14",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-05-20"
     },
     {
       "id": "frontier:validation-html-binding-property-info",
@@ -151,6 +160,11 @@
           "summary": "Contrastive validate binding-behavior pressure fixture."
         },
         {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:dynamic-keyed-validation",
+          "summary": "Focused contract for dynamic keyed validation behavior/data-flow closure."
+        },
+        {
           "kind": "lens",
           "lensId": "framework.errors",
           "projection": "diagnostic-frontiers",
@@ -192,10 +206,14 @@
         {
           "kind": "source-file-exists",
           "filePath": "packages/semantic-runtime/fixtures/pressure/dynamic-keyed-validation/src/dynamic-keyed-validation-app.html"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-dynamic-keyed-validation.mjs"
         }
       ],
       "createdAt": "2026-05-19",
-      "updatedAt": "2026-05-19"
+      "updatedAt": "2026-05-20"
     }
   ]
 }

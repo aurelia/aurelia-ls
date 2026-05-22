@@ -1,8 +1,12 @@
 import {
   AuthoringSourceEditPlan,
   type AuthoringSourceFileEdit,
+  referenceInstantiationSourceFiles,
+  referenceInstantiationSourcePattern,
   recipeSourceEditPolicy,
   recipeSourceFile,
+  sourcePatternAdaptationGroup,
+  sourcePatternParameter,
 } from './source-plan.js';
 import { aureliaRecipeProjectToolingPlan } from './package-tooling.js';
 import { moduleSpecifier } from '../application/module-specifier.js';
@@ -10,6 +14,8 @@ import {
   fillSourceTemplate,
   sourceText,
 } from './source-template.js';
+import { standardAureliaEntrypointFile } from './aurelia-entrypoint-source-plan.js';
+import { SourcePatternModules } from './source-pattern-modules.js';
 
 export interface ComposedDashboardSourcePlanModel {
   readonly rootDir: string;
@@ -36,11 +42,65 @@ export function composedDashboardSourcePlan(model: ComposedDashboardSourcePlanMo
   return new AuthoringSourceEditPlan(
     model.rootDir,
     recipeSourceEditPolicy('recipe-baseline'),
-    composedDashboardSourceFiles(model),
+    referenceInstantiationSourceFiles(composedDashboardSourceFiles(model)),
     aureliaRecipeProjectToolingPlan({
       appName: model.appName,
-      dependencySpecifiers: ['@aurelia/kernel'],
     }),
+    composedDashboardSourcePattern(model),
+  );
+}
+
+function composedDashboardSourcePattern(model: ComposedDashboardSourcePlanModel) {
+  return referenceInstantiationSourcePattern(
+    'composed-dashboard.reference-instantiation',
+    'Dynamic dashboard composition pattern',
+    'A complete reference instantiation of DI-owned dashboard state and dynamic AuCompose component selection across multiple widget component types.',
+    [
+      'Treat widget names, inventory/order labels, and sample widget data as replaceable defaults for the caller dashboard domain.',
+      'Keep the state-owned component selection and composition boundary when adapting; do not introduce framework composition only to avoid ordinary component dependencies.',
+    ],
+    'structural-baseline',
+    [
+      sourcePatternParameter(
+        'dashboard-widget',
+        'domain-entity',
+        'Dashboard widget model',
+        model.widgetModelName,
+        'Replace widget metadata and component selection fields with the caller dashboard domain.',
+      ),
+      sourcePatternParameter(
+        'dashboard-widget-set',
+        'domain-collection',
+        'Widget component set',
+        `${model.chartWidgetClassName}, ${model.inventoryWidgetClassName}`,
+        'Adapt the component registry and state-owned component selection boundary together.',
+      ),
+      sourcePatternParameter(
+        'dashboard-sample-data',
+        'sample-data',
+        'Reference widget data',
+        'chart and inventory widgets',
+        'Replace labels and sample metric data before emitting caller-specific code.',
+      ),
+    ],
+    [
+      SourcePatternModules.AppShell,
+      SourcePatternModules.DiStateBoundary,
+      SourcePatternModules.StateComposition,
+      SourcePatternModules.DomainClassModel,
+      SourcePatternModules.DynamicComposition,
+      SourcePatternModules.ListRendering,
+      SourcePatternModules.ComponentBoundary,
+      SourcePatternModules.TemplateControllerFlow,
+    ],
+    [
+      sourcePatternAdaptationGroup(
+        'dashboard-composition-model',
+        'Dashboard composition model',
+        'Widget model shape, component set, and sample widget data move together; changing only the class name would leave the dynamic composition contract misleading.',
+        ['dashboard-widget', 'dashboard-widget-set', 'dashboard-sample-data'],
+      ),
+    ],
   );
 }
 
@@ -60,16 +120,7 @@ function composedDashboardSourceFiles(
 }
 
 function composedDashboardEntrypointFile(model: ComposedDashboardSourcePlanModel): AuthoringSourceFileEdit {
-  return recipeSourceFile(
-    model.entrypointPath,
-    'entrypoint',
-    'typescript',
-    'create-entrypoint',
-    fillSourceTemplate(ENTRYPOINT_SOURCE, {
-      ROOT_COMPONENT_CLASS: model.rootComponentClassName,
-      ROOT_COMPONENT_MODULE: moduleSpecifier(model.entrypointPath, model.rootComponentPath, false),
-    }),
-  );
+  return standardAureliaEntrypointFile(model);
 }
 
 function composedDashboardRootComponentFile(model: ComposedDashboardSourcePlanModel): AuthoringSourceFileEdit {
@@ -171,20 +222,7 @@ function composedDashboardInventoryWidgetTemplateFile(model: ComposedDashboardSo
   );
 }
 
-const ENTRYPOINT_SOURCE = sourceText(`import { Aurelia, StandardConfiguration } from '@aurelia/runtime-html';
-import { __ROOT_COMPONENT_CLASS__ } from '__ROOT_COMPONENT_MODULE__';
-
-new Aurelia()
-  .register(StandardConfiguration)
-  .app({
-    host: document.body,
-    component: __ROOT_COMPONENT_CLASS__,
-  })
-  .start();
-`);
-
-const ROOT_COMPONENT_SOURCE = sourceText(`import { customElement } from '@aurelia/runtime-html';
-import { resolve } from '@aurelia/kernel';
+const ROOT_COMPONENT_SOURCE = sourceText(`import { customElement, resolve } from 'aurelia';
 import { __CHART_WIDGET_CLASS__ } from '__CHART_WIDGET_MODULE__';
 import { __INVENTORY_WIDGET_CLASS__ } from '__INVENTORY_WIDGET_MODULE__';
 import { __STATE_CLASS__ } from '__STATE_MODULE__';
@@ -219,7 +257,7 @@ export class __ROOT_COMPONENT_CLASS__ {
 const ROOT_TEMPLATE_SOURCE = sourceText(`<main class="dashboard-shell">
   <header>
     <h1>Operations Dashboard</h1>
-    <p>\${state.alertCount} active alert(s)</p>
+    <p>Active alerts: \${state.alertCount}</p>
   </header>
 
   <au-compose template.bind="summaryTemplate" scope-behavior="scoped" tag="aside" flush-mode="async" composition.bind="summaryComposition" composing.bind="summaryPending"></au-compose>
@@ -300,7 +338,7 @@ export class __STATE_CLASS__ {
 }
 `);
 
-const CHART_WIDGET_COMPONENT_SOURCE = sourceText(`import { customElement } from '@aurelia/runtime-html';
+const CHART_WIDGET_COMPONENT_SOURCE = sourceText(`import { customElement } from 'aurelia';
 import type { __WIDGET_MODEL_NAME__ } from '__STATE_MODULE__';
 import template from '__CHART_WIDGET_TEMPLATE_MODULE__';
 
@@ -309,32 +347,29 @@ import template from '__CHART_WIDGET_TEMPLATE_MODULE__';
   template,
 })
 export class __CHART_WIDGET_CLASS__ {
-  private model: __WIDGET_MODEL_NAME__ | null = null;
+  model: __WIDGET_MODEL_NAME__ | null = null;
 
   activate(model: __WIDGET_MODEL_NAME__): void {
     this.model = model;
   }
 
-  get points(): readonly number[] {
-    return this.model?.points ?? [];
-  }
-
   get peakLabel(): string {
-    const peak = Math.max(0, ...this.points);
+    const peak = Math.max(0, ...(this.model?.points ?? []));
     return peak === 0 ? 'No samples yet' : \`Peak \${peak}\`;
   }
 }
 `);
 
-const CHART_WIDGET_TEMPLATE_SOURCE = sourceText(`<div class="chart-widget">
+const CHART_WIDGET_TEMPLATE_SOURCE = sourceText(`<div if.bind="model" class="chart-widget">
   <p>\${peakLabel}</p>
   <ol>
-    <li repeat.for="point of points">\${point}</li>
+    <li repeat.for="point of model.points">\${point}</li>
   </ol>
 </div>
+<p else>No chart selected.</p>
 `);
 
-const INVENTORY_WIDGET_COMPONENT_SOURCE = sourceText(`import { customElement } from '@aurelia/runtime-html';
+const INVENTORY_WIDGET_COMPONENT_SOURCE = sourceText(`import { customElement } from 'aurelia';
 import type { __WIDGET_MODEL_NAME__ } from '__STATE_MODULE__';
 import template from '__INVENTORY_WIDGET_TEMPLATE_MODULE__';
 
@@ -343,22 +378,19 @@ import template from '__INVENTORY_WIDGET_TEMPLATE_MODULE__';
   template,
 })
 export class __INVENTORY_WIDGET_CLASS__ {
-  private model: __WIDGET_MODEL_NAME__ | null = null;
+  model: __WIDGET_MODEL_NAME__ | null = null;
 
   activate(model: __WIDGET_MODEL_NAME__): void {
     this.model = model;
   }
-
-  get items(): __WIDGET_MODEL_NAME__['items'] {
-    return this.model?.items ?? [];
-  }
 }
 `);
 
-const INVENTORY_WIDGET_TEMPLATE_SOURCE = sourceText(`<ul class="inventory-widget">
-  <li repeat.for="item of items" class="\${item.count <= 2 ? 'low-stock' : 'in-stock'}">
+const INVENTORY_WIDGET_TEMPLATE_SOURCE = sourceText(`<ul if.bind="model" class="inventory-widget">
+  <li repeat.for="item of model.items" class="\${item.count <= 2 ? 'low-stock' : 'in-stock'}">
     <span>\${item.label}</span>
     <strong>\${item.count}</strong>
   </li>
 </ul>
+<p else>No inventory selected.</p>
 `);

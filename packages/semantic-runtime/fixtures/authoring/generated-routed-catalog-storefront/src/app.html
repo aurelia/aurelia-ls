@@ -1,0 +1,30 @@
+<main class="catalog-shell ${state.selection.itemCount > 0 ? 'has-selection' : 'empty-selection'}">
+  <header>
+    <h1>Items</h1>
+    <p>Selected items: ${state.selection.itemCount}</p>
+    <div class="selection-progress" aria-hidden="true">
+      <span style="width: ${state.selectionProgressPercent}%"></span>
+    </div>
+    <section promise.bind="catalogStatus" aria-label="Catalog status">
+      <p pending>Checking catalog status...</p>
+      <p then="notice">${notice}</p>
+      <p catch="reason">${reason}</p>
+    </section>
+    <nav>
+      <a load="items">Items</a>
+      <a load="items/item-1?ref=featured#details">Featured detail</a>
+    </nav>
+  </header>
+
+  <section class="routed-layout">
+    <au-viewport name="main"></au-viewport>
+  </section>
+
+  <aside if.bind="state.selection.itemCount > 0" aria-label="Selected items">
+    <h2>Selected items</h2>
+    <ul>
+      <li repeat.for="name of state.selectedItemNames">${name}</li>
+    </ul>
+  </aside>
+  <p else>Select a featured Item.</p>
+</main>

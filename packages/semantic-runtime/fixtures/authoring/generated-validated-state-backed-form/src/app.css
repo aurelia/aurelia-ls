@@ -19,6 +19,11 @@ main {
   gap: 0.25rem;
 }
 
+.field-invalid {
+  border-left: 0.25rem solid #9e3a2d;
+  padding-left: 0.75rem;
+}
+
 .error {
   color: #9e3a2d;
   margin: 0;

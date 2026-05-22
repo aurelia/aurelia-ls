@@ -1,0 +1,31 @@
+<section>
+  <h2>Featured items</h2>
+  <p if.bind="state.items.isLoading">Loading items...</p>
+  <div else>
+    <form class="catalog-filters" submit.trigger="$event.preventDefault()">
+      <label>
+        Search
+        <input type="search" value.bind="state.items.searchText & debounce:150">
+      </label>
+      <label>
+        <input type="checkbox" checked.bind="state.items.onlyInStock">
+        In stock only
+      </label>
+      <label>
+        Badge
+        <select value.bind="state.items.badgeFilter">
+          <option repeat.for="badge of state.items.badgeFilters" model.bind="badge">${badge}</option>
+        </select>
+      </label>
+    </form>
+    <p if.bind="!state.items.hasItems">No featured items are available yet.</p>
+    <template else>
+      <p if.bind="!state.items.hasVisibleItems">No items match the current filters.</p>
+      <ul if.bind="state.items.hasVisibleItems" class="item-grid">
+        <li repeat.for="item of state.items.visibleItems">
+          <item-card item.bind="item"></item-card>
+        </li>
+      </ul>
+    </template>
+  </div>
+</section>

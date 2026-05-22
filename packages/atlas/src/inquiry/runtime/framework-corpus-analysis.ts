@@ -12,7 +12,7 @@ import { propertyNameText, SourceProjectMemo, type SourceProject } from "../../s
 import { escapeRegExp } from "../../text-regex.js";
 import type { SourceRange } from "../locus.js";
 
-export const FRAMEWORK_CORPUS_ANALYSIS_VERSION = "framework-corpus-analysis.v22";
+export const FRAMEWORK_CORPUS_ANALYSIS_VERSION = "framework-corpus-analysis.v26";
 
 const frameworkCorpusAnalysisMemo =
   new SourceProjectMemo<FrameworkCorpusAnalysis>();
@@ -66,6 +66,8 @@ export type FrameworkCorpusExpectedEffectHint =
   | "computed-observer-source"
   | "dependency-injection"
   | "external-template"
+  | "i18n-translation-binding"
+  | "i18n-translation-key"
   | "open-seam-closure"
   | "resource-definition"
   | "route"
@@ -90,11 +92,23 @@ export type FrameworkCorpusExpectedEffectSeedPolicy =
 
 export type FrameworkCorpusFixtureRecipeHint =
   | "minimal-app"
+  | "convention-minimal-app"
+  | "routed-app-shell"
   | "state-backed-form"
+  | "localized-state-backed-form"
   | "validated-state-backed-form"
+  | "localized-validated-state-backed-form"
+  | "multi-step-state-backed-form"
   | "service-backed-form"
   | "routed-state-backed-form"
+  | "routed-service-backed-form"
+  | "routed-localized-validated-state-backed-form"
+  | "catalog-storefront"
+  | "routed-catalog-storefront"
+  | "searchable-data-table"
+  | "routed-searchable-data-table"
   | "composed-dashboard"
+  | "state-store-list"
   | "pressure-fixture";
 
 export type FrameworkCorpusFixtureSeedClassificationKind =
@@ -708,7 +722,7 @@ function fixtureSeedForDocSnippet(
 }
 
 function docSnippetSeedUse(filePath: string): FrameworkCorpusFixtureSeedUse {
-  return filePath.includes("/testing/")
+  return filePath.includes("/testing/") || filePath.includes("/error-messages/")
     ? "behavior-grounding"
     : "authoring-taste";
 }
@@ -993,7 +1007,25 @@ function expectedEffectsForSourceText(
   if (hasAuComposeSurface(snippetText)) {
     effects.add("runtime-composition");
   }
+  if (hasI18nTranslationBindingSurface(snippetText)) {
+    effects.add("i18n-translation-binding");
+  }
+  if (hasI18nTranslationCatalogSurface(snippetText)) {
+    effects.add("i18n-translation-key");
+  }
   return [...effects].sort();
+}
+
+function hasI18nTranslationBindingSurface(snippetText: string): boolean {
+  return htmlLikeTagTexts(snippetText).some((tagText) =>
+    /\bt(?:\.bind)?\s*=/u.test(tagText) ||
+    /\bt-params\.(?:bind|one-time|to-view|from-view|two-way)\b/u.test(tagText)
+  );
+}
+
+function hasI18nTranslationCatalogSurface(snippetText: string): boolean {
+  return /\bI18nConfiguration(?:\.customize)?\b/u.test(snippetText) ||
+    /\bresources\s*:\s*\{[\s\S]{0,600}\b(?:translation|translations|en|de|fr|nl)\b/u.test(snippetText);
 }
 
 function hasValueChannelBindingSurface(snippetText: string): boolean {
@@ -1011,6 +1043,13 @@ function hasNativeFormControlSurface(snippetText: string): boolean {
 function hasNativeValueBindingSurface(snippetText: string): boolean {
   return htmlLikeTagTexts(snippetText).some((tagText) =>
     /^<\s*(?:input|select|textarea)\b/iu.test(tagText) &&
+    /\bvalue\.(?:bind|two-way|from-view|to-view)\b/u.test(tagText)
+  );
+}
+
+function hasNativeSelectBindingSurface(snippetText: string): boolean {
+  return htmlLikeTagTexts(snippetText).some((tagText) =>
+    /^<\s*select\b/iu.test(tagText) &&
     /\bvalue\.(?:bind|two-way|from-view|to-view)\b/u.test(tagText)
   );
 }
@@ -1072,6 +1111,22 @@ function hasTargetOperationSurface(snippetText: string): boolean {
 function hasValidationBindingBehaviorSurface(snippetText: string): boolean {
   return /&\s*validate(?:\b|:)/u.test(snippetText)
     || /\bvalidate binding behavior\b/iu.test(snippetText);
+}
+
+function hasMultiStepFormSurface(snippetText: string): boolean {
+  const hasStepFlowTerm =
+    /\b(?:wizard|multi[-\s]?step|currentStep|nextStep|previousStep)\b/iu.test(snippetText) ||
+    /(?:\bsteps?\b[\s\S]{0,240}\bprogress\b|\bprogress\b[\s\S]{0,240}\bsteps?\b)/iu.test(snippetText);
+  if (!hasStepFlowTerm) {
+    return false;
+  }
+  return hasNativeDataFormControlSurface(snippetText) ||
+    hasValidationBindingBehaviorSurface(snippetText) ||
+    htmlLikeTagTexts(snippetText).some((tagText) =>
+      /\b(?:if|repeat)\.(?:bind|for)\b/u.test(tagText) ||
+      /\b(?:class|style)\s*=\s*['"][^'"]*\$\{/u.test(tagText) ||
+      /\b[\w-]+\.(?:class|style)\s*=/u.test(tagText)
+    );
 }
 
 function hasTemplateObservedDependencySurface(snippetText: string): boolean {
@@ -1914,8 +1969,13 @@ function recipeHintsForConcepts(
   snippetText: string,
 ): readonly FrameworkCorpusFixtureRecipeHint[] {
   const set = new Set<FrameworkCorpusFixtureRecipeHint>();
+  const hasI18nSurface = concepts.includes("i18n");
   const hasValidationSurface = hasValidationBindingBehaviorSurface(snippetText);
   const hasRouterSurface = hasRouterAuthoringSurface(snippetText);
+  const hasMultiStepSurface = hasMultiStepFormSurface(snippetText);
+  const hasCatalogSurface = hasCatalogStorefrontSurface(snippetText);
+  const hasSearchableDataTable = hasSearchableDataTableSurface(snippetText);
+  const hasAureliaStateStore = hasAureliaStateStoreSurface(snippetText);
   const hasFormServiceSurface =
     concepts.includes("forms") &&
     concepts.includes("di") &&
@@ -1932,11 +1992,23 @@ function recipeHintsForConcepts(
   if (!hasSpecificAppPressure && (concepts.includes("templates") || concepts.includes("resources") || concepts.includes("styles"))) {
     set.add("minimal-app");
   }
+  if (!hasSpecificAppPressure && hasConventionMinimalAppSurface(snippetText)) {
+    set.add("convention-minimal-app");
+  }
   if (concepts.includes("forms") || concepts.includes("state")) {
     set.add("state-backed-form");
   }
+  if (hasI18nSurface && (concepts.includes("forms") || concepts.includes("state") || hasFormDataOrValidationSurface(snippetText))) {
+    set.add("localized-state-backed-form");
+  }
   if (hasValidationSurface) {
     set.add("validated-state-backed-form");
+  }
+  if (hasI18nSurface && hasValidationSurface) {
+    set.add("localized-validated-state-backed-form");
+  }
+  if (hasMultiStepSurface && (concepts.includes("forms") || hasFormDataOrValidationSurface(snippetText))) {
+    set.add("multi-step-state-backed-form");
   }
   if (hasStateOwnedServiceSurface) {
     set.add("service-backed-form");
@@ -1945,10 +2017,32 @@ function recipeHintsForConcepts(
     set.add("pressure-fixture");
   }
   if (hasRouterSurface) {
+    set.add("routed-app-shell");
     set.add("routed-state-backed-form");
+  }
+  if (hasRouterSurface && hasStateOwnedServiceSurface) {
+    set.add("routed-service-backed-form");
+  }
+  if (hasRouterSurface && hasI18nSurface && hasValidationSurface) {
+    set.add("routed-localized-validated-state-backed-form");
+  }
+  if (hasCatalogSurface) {
+    set.add("catalog-storefront");
+  }
+  if (hasRouterSurface && hasCatalogSurface) {
+    set.add("routed-catalog-storefront");
+  }
+  if (hasSearchableDataTable) {
+    set.add("searchable-data-table");
+  }
+  if (hasRouterSurface && hasSearchableDataTable) {
+    set.add("routed-searchable-data-table");
   }
   if (hasAuComposeSurface(snippetText)) {
     set.add("composed-dashboard");
+  }
+  if (hasAureliaStateStore) {
+    set.add("state-store-list");
   }
   if (concepts.includes("observation") || concepts.includes("bindables") || concepts.includes("styles")) {
     set.add("pressure-fixture");
@@ -2001,6 +2095,9 @@ function fixtureSeedClassificationReasons(
     if (hasNativeValueBindingSurface(snippetText)) {
       add("surface", "native-value-binding", "Snippet binds the native value property on an input, select, or textarea control.");
     }
+    if (hasNativeSelectBindingSurface(snippetText)) {
+      add("surface", "native-select-binding", "Snippet binds the native select value observer channel.");
+    }
     if (hasNativeCheckedBindingSurface(snippetText)) {
       add("surface", "native-checked-binding", "Snippet binds the native checked property on an input control.");
     }
@@ -2027,6 +2124,9 @@ function fixtureSeedClassificationReasons(
     }
     if (hasValidationBindingBehaviorSurface(snippetText)) {
       add("surface", "validation-binding-behavior", "Snippet contains validation binding-behavior syntax or validation-behavior prose.");
+    }
+    if (hasMultiStepFormSurface(snippetText)) {
+      add("surface", "multi-step-form", "Snippet contains wizard, step, or progress-shaped form flow surface.");
     }
     if (hasRouterAuthoringSurface(snippetText)) {
       add("surface", "router-authoring", "Snippet contains concrete Aurelia router API, route config, route decorator, viewport, or router package syntax.");
@@ -2066,6 +2166,18 @@ function fixtureSeedClassificationReasons(
     }
     if (hasStateSurface(snippetText)) {
       add("surface", "state-store", "Snippet contains a concrete state/store type, path, API, or DI resolution surface.");
+    }
+    if (hasCatalogStorefrontSurface(snippetText)) {
+      add("surface", "catalog-storefront", "Snippet contains product/catalog/cart/checkout vocabulary with list, state, or template surface evidence.");
+    }
+    if (hasSearchableDataTableSurface(snippetText)) {
+      add("surface", "searchable-data-table", "Snippet contains table/list management plus search, filter, sort, pagination, or selection surface evidence.");
+    }
+    if (hasAureliaStateStoreSurface(snippetText)) {
+      add("surface", "aurelia-state-store", "Snippet contains @aurelia/state store configuration, state binding behavior, or dispatch command syntax.");
+    }
+    if (hasConventionMinimalAppSurface(snippetText)) {
+      add("surface", "convention-resource", "Snippet contains convention-shaped Aurelia custom element/template resource evidence without requiring decorator syntax.");
     }
   }
   if (hasObserverLocatorDescriptorMatrixSurface(snippetText)) {
@@ -2123,16 +2235,40 @@ function recipeHintReason(
   switch (recipe) {
     case "minimal-app":
       return "Snippet has template/resource/style pressure without a more specific app, form, DI, state, validation, or router pressure.";
+    case "convention-minimal-app":
+      return "Snippet has convention-shaped Aurelia custom element/template evidence that can seed convention minimal app fixture work.";
     case "state-backed-form":
       return "Snippet has form or state pressure that can seed state-backed form fixture work.";
+    case "localized-state-backed-form":
+      return "Snippet has i18n plus form/state pressure that can seed localized form fixture work.";
     case "validated-state-backed-form":
       return "Snippet has validation binding-behavior pressure that can seed validated form fixture work.";
+    case "localized-validated-state-backed-form":
+      return "Snippet has both i18n and validation binding-behavior pressure that can seed combined plugin form fixture work.";
+    case "multi-step-state-backed-form":
+      return "Snippet has wizard, step, or progress-shaped form flow pressure that can seed a multi-step state-backed form recipe.";
     case "service-backed-form":
       return "Snippet has form + DI + service surface plus concrete state/store surface, matching the service-backed state recipe.";
+    case "routed-app-shell":
+      return "Snippet has concrete router authoring/runtime syntax that can seed a routed app shell without importing a form, catalog, or data-table domain model.";
     case "routed-state-backed-form":
       return "Snippet has concrete router authoring/runtime syntax that can seed routed state-backed fixture work.";
+    case "routed-service-backed-form":
+      return "Snippet combines router pressure with state-owned service form pressure, matching the routed service-backed form recipe.";
+    case "routed-localized-validated-state-backed-form":
+      return "Snippet has router, i18n, and validation pressure that can seed route-owned plugin form fixture work.";
+    case "catalog-storefront":
+      return "Snippet has product/catalog/cart/checkout pressure that can seed catalog storefront fixture work.";
+    case "routed-catalog-storefront":
+      return "Snippet combines router pressure with product/catalog/cart/checkout surface evidence that can seed routed catalog fixture work.";
+    case "searchable-data-table":
+      return "Snippet has table/list management pressure with search, filter, sort, pagination, or selection evidence.";
+    case "routed-searchable-data-table":
+      return "Snippet combines router pressure with searchable table/list management evidence.";
     case "composed-dashboard":
       return "Snippet has concrete AuCompose dynamic composition syntax that can seed composed dashboard fixture work.";
+    case "state-store-list":
+      return "Snippet has @aurelia/state store configuration, state binding behavior, or dispatch command pressure.";
     case "pressure-fixture":
       return pressureFixtureReason(concepts, snippetText);
   }
@@ -2178,6 +2314,72 @@ function hasServiceSurface(snippetText: string): boolean {
 
 function hasStateSurface(snippetText: string): boolean {
   return /\b(?:[A-Z][A-Za-z0-9]*State|IStore|Store<|getState\(|\.getState|stores\/|state\/|resolve\([^)]*(?:State|Store))/u.test(snippetText);
+}
+
+function hasConventionMinimalAppSurface(snippetText: string): boolean {
+  const hasRootComponentClass = /\bexport\s+class\s+(?:App|[A-Z][A-Za-z0-9]*App)\b/u.test(snippetText);
+  const hasTemplatePair = /\btemplateUrl\b|from\s+['"][^'"]+\.html['"]|<\s*template\b/iu.test(snippetText);
+  const hasConventionElementName = htmlLikeTagTexts(snippetText).some((tagText) =>
+    /^<\s*[a-z][\w]*-[\w-]+\b/u.test(tagText)
+  );
+  return hasRootComponentClass || hasTemplatePair || hasConventionElementName;
+}
+
+function hasCatalogStorefrontSurface(snippetText: string): boolean {
+  const hasCatalogVocabulary = /\b(?:catalog|storefront|product|products|cart|checkout)\b/iu.test(snippetText);
+  if (!hasCatalogVocabulary) {
+    return false;
+  }
+  return /\b(?:Product\s*\{|Product\[\]|filteredProducts|selectedCategories|addToCart|minPrice|maxPrice|inStock|price-low|price-high|product-card|catalog-header)\b/u.test(snippetText) ||
+    htmlLikeTagTexts(snippetText).some((tagText) =>
+      /\brepeat\.for\s*=\s*["'][^"']*\bproduct\b/u.test(tagText) ||
+      /\bclass\s*=\s*["'][^"']*(?:product|catalog|cart|checkout)/iu.test(tagText)
+    );
+}
+
+function hasSearchableDataTableSurface(snippetText: string): boolean {
+  const tagTexts = htmlLikeTagTexts(snippetText);
+  const hasTableOrListCarrier =
+    /\b(?:data[-\s]?table|DataTable|data[-_]?grid|DataGrid|filteredRows|selectedRows|visibleColumns)\b/iu.test(snippetText) ||
+    tagTexts.some((tagText) =>
+      /^<\s*(?:table|thead|tbody|tr|th|td)\b/iu.test(tagText) ||
+      /\bclass\s*=\s*["'][^"']*(?:data-table|table-|grid|list)/iu.test(tagText)
+    ) ||
+    tagTexts.some((tagText) => hasManagedRepeatListCarrier(tagText));
+  if (!hasTableOrListCarrier) {
+    return false;
+  }
+
+  const hasListManagementVocabulary = /\b(?:searchQuery|filterText|filtered[A-Z][A-Za-z0-9]*|sort(?:By|Column|Direction)?|currentPage|pageSize|pagination|selectedRows|selectAll|deleteSelected|visibleColumns|currentFilter|setFilter|clearSearch)\b/u.test(snippetText);
+  const hasControlSurface =
+    hasNativeValueBindingSurface(snippetText) ||
+    hasNativeSelectBindingSurface(snippetText) ||
+    hasNativeCheckedBindingSurface(snippetText) ||
+    hasOptionModelBindingSurface(snippetText) ||
+    hasBindingBehaviorApplicationSurface(snippetText);
+  return hasListManagementVocabulary && (hasControlSurface || hasComputedGetterSurface(snippetText) || /\bURLSearchParams\b|\bfetch\s*\(/u.test(snippetText));
+}
+
+function hasManagedRepeatListCarrier(tagText: string): boolean {
+  if (!/\brepeat\.for\s*=/u.test(tagText)) {
+    return false;
+  }
+  if (/^<\s*(?:option|template)\b/iu.test(tagText)) {
+    return false;
+  }
+  return /\brepeat\.for\s*=\s*["'][^"']*(?:filtered[A-Z][A-Za-z0-9]*|row|rows|item|items|user|users|product|products|todo|todos)\b/u.test(tagText) ||
+    /\bclass\s*=\s*["'][^"']*(?:row|item|card|list|product|todo|user)/iu.test(tagText);
+}
+
+function hasAureliaStateStoreSurface(snippetText: string): boolean {
+  if (/from\s+['"]@aurelia\/state['"]/u.test(snippetText) || /\b(?:StateDefaultConfiguration|withStore|IActionHandler)\b/u.test(snippetText)) {
+    return true;
+  }
+  return htmlLikeTagTexts(snippetText).some((tagText) =>
+    /\b(?:value|checked|textcontent)\.state\s*=/u.test(tagText) ||
+    /\b[\w-]+\.dispatch\s*=/u.test(tagText) ||
+    /&\s*state(?:\b|:)/u.test(tagText)
+  );
 }
 
 function hasRouterAuthoringSurface(snippetText: string): boolean {

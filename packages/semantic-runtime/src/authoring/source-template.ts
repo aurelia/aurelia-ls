@@ -3,7 +3,7 @@ export function fillSourceTemplate(
   values: Readonly<Record<string, string>>,
 ): string {
   const usedKeys = new Set<string>();
-  const text = template.replace(/__([A-Z0-9_]+)__/g, (placeholder, key: string) => {
+  const text = template.replace(/__([A-Z0-9_]+?)__/g, (placeholder, key: string) => {
     const value = values[key];
     if (!Object.hasOwn(values, key) || value == null) {
       throw new Error(`Source template placeholder ${placeholder} has no value.`);
@@ -18,6 +18,28 @@ export function fillSourceTemplate(
   return text;
 }
 
+export function sourceTemplateValuesUsedBy(
+  template: string,
+  values: Readonly<Record<string, string>>,
+): Readonly<Record<string, string>> {
+  const usedValues: Record<string, string> = {};
+  for (const match of template.matchAll(/__([A-Z0-9_]+?)__/g)) {
+    const key = match[1]!;
+    if (Object.hasOwn(usedValues, key)) {
+      continue;
+    }
+    if (!Object.hasOwn(values, key)) {
+      throw new Error(`Source template placeholder __${key}__ has no value.`);
+    }
+    usedValues[key] = values[key]!;
+  }
+  return usedValues;
+}
+
 export function sourceText(text: string): string {
   return text.replace(/\r\n/g, '\n');
+}
+
+export function indentSourceLines(text: string, indent: string): string {
+  return text.split('\n').map((line) => line.length === 0 ? '' : `${indent}${line}`).join('\n');
 }

@@ -4,8 +4,11 @@ import type { Container } from '../di/container.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
 import {
   EvaluationValueKind,
+  EvaluationUndefined,
   isEvaluationPrimitiveValue,
   readEvaluationPrimitive,
+  type EvaluationArrayValue,
+  type EvaluationObjectValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
 import {
@@ -414,8 +417,10 @@ function routerResourceInstructionSite(
 function routeContextCandidates(
   routeContexts: readonly RouteContextModel[] | null,
 ): readonly (RouteContextModel | null)[] {
+  // Router resources create ViewportInstructionTrees only once a concrete IRouteContext owner is known.
+  // Standalone component-definition renders are potential reuse surfaces, not app-level route instruction sites.
   return routeContexts == null || routeContexts.length === 0
-    ? [null]
+    ? []
     : routeContexts;
 }
 
@@ -1424,6 +1429,10 @@ function expressionRouterResourceValue(
   if (expression.$kind === 'Interpolation') {
     return interpolatedStringValue(store, expressionProductHandle, expressionSourceAddressHandle, scope, sourceValueEvaluator);
   }
+  const evaluatedInstruction = evaluatedRouterResourceValue(expression, expressionSourceAddressHandle, scope, sourceValueEvaluator, resourceIndex);
+  if (evaluatedInstruction != null) {
+    return evaluatedInstruction;
+  }
   return expressionStringValue(expression, expressionSourceAddressHandle, scope, sourceValueEvaluator)
     ?? invalidClosedRouterInstructionValue(expression, expressionSourceAddressHandle, scope, sourceValueEvaluator);
 }
@@ -1537,6 +1546,51 @@ function eagerInstructionFromObjectLiteral(
   };
 }
 
+function eagerInstructionFromObjectValue(
+  value: EvaluationObjectValue,
+  resourceIndex: ResourceDefinitionIndex,
+): EagerRouteInstructionRead {
+  const componentValue = readObjectValueProperty(value, 'component');
+  if (componentValue == null) {
+    return value.mayHaveUnknownProperties
+      ? {
+          state: 'dynamic',
+          reason: 'Eager router instruction object did not expose a statically known component property.',
+          reasonKinds: [OpenSeamReasonKind.RouterInstructionNeedsStaticValue],
+        }
+      : { state: 'missing' };
+  }
+  const component = eagerRouteComponentFromValue(componentValue, resourceIndex);
+  if (component.state === 'dynamic') {
+    return component;
+  }
+
+  const params = eagerRouteParametersFromValue(readObjectValueProperty(value, 'params'));
+  if (params.state === 'dynamic') {
+    return params;
+  }
+
+  const viewport = eagerRouteViewportFromValue(readObjectValueProperty(value, 'viewport') ?? EvaluationUndefined);
+  if (viewport.state === 'dynamic') {
+    return viewport;
+  }
+
+  const children = eagerRouteChildrenFromValue(readObjectValueProperty(value, 'children'), resourceIndex);
+  if (children.state === 'dynamic') {
+    return children;
+  }
+
+  return {
+    state: 'closed',
+    instruction: {
+      component: component.component,
+      params: params.params,
+      viewport: viewport.viewport,
+      children: children.children,
+    },
+  };
+}
+
 type EagerRouteComponentRead =
   | {
       readonly state: 'closed';
@@ -1563,6 +1617,13 @@ function eagerRouteComponent(
     };
   }
   const value = evaluated.value;
+  return eagerRouteComponentFromValue(value, resourceIndex);
+}
+
+function eagerRouteComponentFromValue(
+  value: EvaluationValue,
+  resourceIndex: ResourceDefinitionIndex,
+): EagerRouteComponentRead {
   if (value.kind === EvaluationValueKind.String) {
     return {
       state: 'closed',
@@ -1647,16 +1708,31 @@ function eagerRouteParameters(
       reasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
     };
   }
-  const values = new Map<string, EagerRouteParameterValue>();
-  for (const [name, property] of evaluated.value.properties) {
-    values.set(name, eagerRouteParameterValue(property.value));
+  return {
+    state: 'closed',
+    params: paramsFromObjectValue(evaluated.value),
+  };
+}
+
+function eagerRouteParametersFromValue(
+  value: EvaluationValue | null,
+): EagerRouteParametersRead {
+  if (value == null || value.kind === EvaluationValueKind.Null || value.kind === EvaluationValueKind.Undefined) {
+    return {
+      state: 'closed',
+      params: emptyEagerRouteParameters(),
+    };
+  }
+  if (value.kind !== EvaluationValueKind.Object) {
+    return {
+      state: 'dynamic',
+      reason: `Eager router instruction params reduced to '${value.kind}' instead of an object.`,
+      reasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
+    };
   }
   return {
     state: 'closed',
-    params: {
-      values,
-      mayHaveUnknownProperties: evaluated.value.mayHaveUnknownProperties,
-    },
+    params: paramsFromObjectValue(value),
   };
 }
 
@@ -1690,13 +1766,23 @@ function eagerRouteViewport(
   if (evaluated.value.kind === EvaluationValueKind.Null || evaluated.value.kind === EvaluationValueKind.Undefined) {
     return { state: 'closed', viewport: null };
   }
-  return evaluated.value.kind === EvaluationValueKind.String
-    ? { state: 'closed', viewport: evaluated.value.value }
-    : {
-        state: 'dynamic',
-        reason: `Eager router instruction viewport reduced to '${evaluated.value.kind}' instead of a string or null.`,
-        reasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
-      };
+  return eagerRouteViewportFromValue(evaluated.value);
+}
+
+function eagerRouteViewportFromValue(
+  value: EvaluationValue,
+): EagerRouteViewportRead {
+  if (value.kind === EvaluationValueKind.Null || value.kind === EvaluationValueKind.Undefined) {
+    return { state: 'closed', viewport: null };
+  }
+  if (value.kind === EvaluationValueKind.String) {
+    return { state: 'closed', viewport: value.value };
+  }
+  return {
+    state: 'dynamic',
+    reason: `Eager router instruction viewport reduced to '${value.kind}' instead of a string.`,
+    reasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
+  };
 }
 
 type EagerRouteChildrenRead =
@@ -1720,6 +1806,10 @@ function eagerRouteChildren(
     return { state: 'closed', children: [] };
   }
   if (expression.$kind !== 'ArrayLiteral') {
+    const evaluated = sourceValueEvaluator.evaluate(expression, scope);
+    if (evaluated.kind === RuntimeBindingSourceValueEvaluationKind.Value && evaluated.value?.kind === EvaluationValueKind.Array) {
+      return eagerRouteChildrenFromArrayValue(evaluated.value, resourceIndex);
+    }
     return {
       state: 'dynamic',
       reason: `Eager router instruction children reduced from '${expression.$kind}' instead of a static array literal.`,
@@ -1746,6 +1836,45 @@ function eagerRouteChildrenFromArray(
   return { state: 'closed', children };
 }
 
+function eagerRouteChildrenFromArrayValue(
+  value: EvaluationArrayValue,
+  resourceIndex: ResourceDefinitionIndex,
+): EagerRouteChildrenRead {
+  if (value.mayHaveUnknownElements || value.mayHaveUnknownOrder) {
+    return {
+      state: 'dynamic',
+      reason: 'Eager router instruction children reduced to an array with unknown membership or order.',
+      reasonKinds: [OpenSeamReasonKind.BindingSourceNeedsRuntimeValue],
+    };
+  }
+  const children: EagerPathGenerationInstruction[] = [];
+  for (const element of value.elements) {
+    const child = eagerRouteChildInstructionFromValue(element.value, resourceIndex);
+    if (child.state === 'dynamic') {
+      return child;
+    }
+    children.push(child.instruction);
+  }
+  return { state: 'closed', children };
+}
+
+function eagerRouteChildrenFromValue(
+  value: EvaluationValue | null,
+  resourceIndex: ResourceDefinitionIndex,
+): EagerRouteChildrenRead {
+  if (value == null || value.kind === EvaluationValueKind.Null || value.kind === EvaluationValueKind.Undefined) {
+    return { state: 'closed', children: [] };
+  }
+  if (value.kind !== EvaluationValueKind.Array) {
+    return {
+      state: 'dynamic',
+      reason: `Eager router instruction children reduced to '${value.kind}' instead of an array.`,
+      reasonKinds: [OpenSeamReasonKind.BindingSourceUnsupportedExpression],
+    };
+  }
+  return eagerRouteChildrenFromArrayValue(value, resourceIndex);
+}
+
 function eagerRouteChildInstruction(
   expression: ExpressionAstNode,
   scope: BindingScope,
@@ -1763,6 +1892,29 @@ function eagerRouteChildInstruction(
       : child;
   }
   const component = eagerRouteComponent(expression, scope, sourceValueEvaluator, resourceIndex);
+  return instructionFromComponentRead(component);
+}
+
+function eagerRouteChildInstructionFromValue(
+  value: EvaluationValue,
+  resourceIndex: ResourceDefinitionIndex,
+): Exclude<EagerRouteInstructionRead, { readonly state: 'missing' }> {
+  if (value.kind === EvaluationValueKind.Object) {
+    const child = eagerInstructionFromObjectValue(value, resourceIndex);
+    return child.state === 'missing'
+      ? {
+          state: 'dynamic',
+          reason: 'Eager child router instruction object did not expose a component property.',
+          reasonKinds: [OpenSeamReasonKind.RouterInstructionNeedsStaticValue],
+        }
+      : child;
+  }
+  return instructionFromComponentRead(eagerRouteComponentFromValue(value, resourceIndex));
+}
+
+function instructionFromComponentRead(
+  component: EagerRouteComponentRead,
+): Exclude<EagerRouteInstructionRead, { readonly state: 'missing' }> {
   return component.state === 'dynamic'
     ? component
     : {
@@ -1806,6 +1958,26 @@ function paramsFromObjectLiteral(
     values,
     mayHaveUnknownProperties: false,
   };
+}
+
+function paramsFromObjectValue(
+  value: EvaluationObjectValue,
+): EagerRouteParameters {
+  const values = new Map<string, EagerRouteParameterValue>();
+  for (const [name, property] of value.properties) {
+    values.set(name, eagerRouteParameterValue(property.value));
+  }
+  return {
+    values,
+    mayHaveUnknownProperties: value.mayHaveUnknownProperties,
+  };
+}
+
+function readObjectValueProperty(
+  value: EvaluationObjectValue,
+  name: string,
+): EvaluationValue | null {
+  return value.properties.get(name)?.value ?? null;
 }
 
 function eagerRouteParameterValue(
@@ -1876,6 +2048,61 @@ function interpolatedStringValue(
   }
   return dynamicRouteStringValue(expression.parts, expression.expressions.length, sourceAddressHandle)
     ?? evaluatedStringValue(expression, scope, sourceValueEvaluator, sourceAddressHandle);
+}
+
+function evaluatedRouterResourceValue(
+  expression: AcceptedBindingExpressionAst,
+  sourceAddressHandle: AddressHandle | null,
+  scope: BindingScope | null,
+  sourceValueEvaluator: RuntimeBindingSourceValueEvaluator | null,
+  resourceIndex: ResourceDefinitionIndex,
+): StaticRouterResourceValue | null {
+  if (scope == null || sourceValueEvaluator == null) {
+    return null;
+  }
+  const evaluation = sourceValueEvaluator.evaluate(expression, scope);
+  if (evaluation.kind === RuntimeBindingSourceValueEvaluationKind.Open || evaluation.value == null) {
+    return {
+      state: 'dynamic',
+      reason: evaluation.openReason,
+      reasonKinds: evaluation.openReasonKinds,
+      sourceAddressHandle,
+    };
+  }
+  if (evaluation.value.kind === EvaluationValueKind.String) {
+    return {
+      state: 'route-expression',
+      value: evaluation.value.value,
+      sourceAddressHandle,
+      dynamicPartCount: 0,
+    };
+  }
+  if (evaluation.value.kind === EvaluationValueKind.Object) {
+    const instruction = eagerInstructionFromObjectValue(evaluation.value, resourceIndex);
+    if (instruction.state === 'missing') {
+      return null;
+    }
+    if (instruction.state === 'dynamic') {
+      return {
+        state: 'dynamic',
+        reason: instruction.reason,
+        reasonKinds: instruction.reasonKinds,
+        sourceAddressHandle,
+      };
+    }
+    return {
+      state: 'eager-instruction',
+      instruction: instruction.instruction,
+      sourceAddressHandle,
+    };
+  }
+  return definitelyInvalidInstructionValueKind(evaluation.value.kind)
+    ? {
+        state: 'invalid-instruction',
+        actual: evaluation.value.kind,
+        sourceAddressHandle,
+      }
+    : null;
 }
 
 function evaluatedStringValue(

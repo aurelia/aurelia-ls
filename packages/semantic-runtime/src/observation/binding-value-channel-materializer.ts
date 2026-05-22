@@ -181,7 +181,10 @@ export class RuntimeBindingValueChannelMaterializer {
 
     input.runtimeBindings.bindings.forEach((binding, index) => {
       for (const emission of this.recordsForBindingValueChannels(input, source, {
-        input,
+        input: {
+          runtimeBindings: input.runtimeBindings,
+          controllerBind: input.controllerBind,
+        },
         instructionScopes,
         evaluator,
       }, binding, index)) {
@@ -299,6 +302,7 @@ export class RuntimeBindingValueChannelMaterializer {
       draft.primitiveValueDomain ?? [],
       draft.isCollection,
       draft.usesCustomMatcher ?? false,
+      draft.observerCouplings ?? [],
       draft.openReason,
       draft.openReasonKinds ?? [],
       binding.sourceAddressHandle,

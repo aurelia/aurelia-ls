@@ -1,0 +1,7 @@
+<nav>
+  <a load="route: home; active.bind: homeActive">Home</a>
+  <a load="route: settings; active.bind: settingsActive" active.class="settingsActive">Settings</a>
+</nav>
+
+<p>${homeActive ? 'Home route selected' : 'Choose a route'}</p>
+<au-viewport></au-viewport>

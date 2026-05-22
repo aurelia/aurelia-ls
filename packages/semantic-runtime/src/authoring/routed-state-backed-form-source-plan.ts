@@ -1,11 +1,15 @@
 import {
   AuthoringSourceEditPlan,
   type AuthoringSourceFileEdit,
+  referenceInstantiationSourceFiles,
   recipeSourceEditPolicy,
   recipeSourceFile,
+  sourcePatternAdaptationGroup,
+  sourcePatternParameter,
 } from './source-plan.js';
 import { aureliaRecipeProjectToolingPlan } from './package-tooling.js';
 import { moduleSpecifier } from '../application/module-specifier.js';
+import { configuredAureliaEntrypointFile } from './aurelia-entrypoint-source-plan.js';
 import {
   fillSourceTemplate,
   sourceText,
@@ -14,6 +18,36 @@ import {
   formFieldShellComponentFile,
   formFieldShellTemplateFile,
 } from './form-field-shell-source-plan.js';
+import {
+  stateBackedFormI18nTokens,
+  stateBackedFormValidationTokens,
+  type StateBackedFormI18nTokens,
+  type StateBackedFormValidationTokens,
+  type StateBackedFormValidationTriggerName,
+} from './state-backed-form-source-plan.js';
+import {
+  STANDARD_REQUEST_FORM_TEMPLATE_SOURCE,
+  STANDARD_REQUEST_FORM_COMPONENT_SOURCE,
+  STANDARD_REQUEST_SERVICE_SOURCE,
+  STANDARD_REQUEST_STATE_SOURCE,
+  starterRequestFormSourcePatternPolicy,
+  standardRequestFormSourcePattern,
+  standardRequestFormFieldTemplate,
+  standardRequestFormDomainTemplateTokensFor,
+  type StandardRequestFormDomainNames,
+} from './standard-request-form-source-templates.js';
+import {
+  standardRequestFormCustomServiceBackedStateSource,
+  standardRequestFormCustomServiceSource,
+  standardRequestFormCustomStateSource,
+  standardRequestFormCustomTemplateSource,
+  standardRequestFormFieldSchemaHasOptionDomains,
+  standardRequestFormFieldSchemaModules,
+  standardRequestFormFieldSchemaOptionParameterValue,
+  standardRequestFormFieldSchemaOptionSummary,
+  type StandardRequestFormFieldSchema,
+} from './standard-request-form-field-schema.js';
+import { SourcePatternModules } from './source-pattern-modules.js';
 
 export interface RoutedStateBackedFormSourcePlanModel {
   readonly rootDir: string;
@@ -26,6 +60,10 @@ export interface RoutedStateBackedFormSourcePlanModel {
   readonly rootElementName: string;
   readonly statePath: string;
   readonly stateClassName: string;
+  readonly servicePath?: string;
+  readonly serviceClassName?: string;
+  /** Include an injected service/repository boundary owned by the DI state class. */
+  readonly serviceEnabled?: boolean;
   readonly routeComponentPath: string;
   readonly routeTemplatePath: string;
   readonly routeComponentClassName: string;
@@ -55,53 +93,238 @@ export interface RoutedStateBackedFormSourcePlanModel {
   readonly fieldShellTemplatePath: string;
   readonly fieldShellClassName: string;
   readonly fieldShellElementName: string;
+  readonly requestDomain: StandardRequestFormDomainNames;
+  readonly requestFieldSchema: StandardRequestFormFieldSchema | null;
+  /** Include validation-html configuration, validation services, and validate binding behavior usage. */
+  readonly validationEnabled?: boolean;
+  /** Optional static validation trigger argument for generated `& validate` applications. */
+  readonly validationTrigger?: StateBackedFormValidationTriggerName | null;
+  /** Include i18n configuration, static translation resources, and translated template text. */
+  readonly i18nEnabled?: boolean;
 }
 
 export function routedStateBackedFormSourcePlan(
   model: RoutedStateBackedFormSourcePlanModel,
 ): AuthoringSourceEditPlan {
+  const validation = stateBackedFormValidationTokens(
+    model.validationEnabled === true,
+    model.validationTrigger ?? null,
+    model.requestDomain,
+    model.requestFieldSchema,
+  );
+  const i18n = stateBackedFormI18nTokens(model.i18nEnabled === true, model.requestDomain);
   return new AuthoringSourceEditPlan(
     model.rootDir,
     recipeSourceEditPolicy('recipe-baseline'),
-    routedStateBackedFormSourceFiles(model),
+    routedStateBackedFormSourceFilesWithAuthority(model, validation, i18n),
     aureliaRecipeProjectToolingPlan({
       appName: model.appName,
-      dependencySpecifiers: ['@aurelia/kernel', '@aurelia/router'],
+      dependencySpecifiers: routedStateBackedFormDependencySpecifiers(model),
     }),
+    routedStateBackedFormSourcePattern(model),
   );
+}
+
+function routedStateBackedFormSourcePattern(
+  model: RoutedStateBackedFormSourcePlanModel,
+) {
+  const capabilityPrefix = routedStateBackedFormPatternPrefix(model);
+  const policy = routedStateBackedFormUsesReferenceSourceAuthority(model)
+    ? undefined
+    : starterRequestFormSourcePatternPolicy();
+  return standardRequestFormSourcePattern(
+    `${capabilityPrefix}.${policy == null ? 'reference-instantiation' : 'starter'}`,
+    `${routedStateBackedFormPatternTitle(model)} routed request form pattern`,
+    policy == null
+      ? `A complete reference instantiation of route-owned request identity, routeable form composition, DI-owned state${routedStateBackedFormPatternCapabilitySummary(model)}.`
+      : `A caller-shaped starting scaffold for route-owned request identity, routeable form composition, DI-owned state${routedStateBackedFormPatternCapabilitySummary(model)}.`,
+    [
+      'Treat route IDs, route parameter names, query labels, and summary/detail labels as defaults to adapt to the caller navigation model.',
+      'Keep the route-owned identity and template-local request lookup shape when navigation owns selection.',
+    ],
+    [
+      sourcePatternParameter(
+        'request-route-parameter',
+        'route-identity',
+        'Request route parameter',
+        model.routeParameterName,
+        'Rename the route parameter and matching typed route-context access together when adapting navigation-owned request selection.',
+        'source-text-input',
+        'route-parameter-name',
+      ),
+      sourcePatternParameter(
+        'request-route-title',
+        'feature-copy',
+        'Request route title',
+        model.routeTitle,
+        'Rename the primary route title and navigation label without changing the routed form architecture.',
+        'source-text-input',
+        'route-title',
+      ),
+      sourcePatternParameter(
+        'request-routes',
+        'feature-copy',
+        'Request route labels',
+        `${model.summaryRoutePath}, ${model.routePath}`,
+        'Adapt route IDs, paths, titles, and summary/detail copy to the caller information architecture.',
+        'advisory-only',
+        'copy-text',
+      ),
+    ],
+    routedStateBackedFormSourcePatternModules(model),
+    [
+      sourcePatternAdaptationGroup(
+        'request-route-identity',
+        'Request route identity',
+        'Route parameter, primary route title, route labels, template-local request lookup, and navigation links move together when a routed form adapts its selected request identity.',
+        ['request-route-parameter', 'request-route-title', 'request-routes', 'request-selection-id'],
+      ),
+    ],
+    model.requestDomain,
+    model.requestFieldSchema?.sourceParameterValue,
+    standardRequestFormFieldSchemaOptionParameterValue(model.requestFieldSchema)
+      ?? standardRequestFormFieldSchemaOptionSummary(model.requestFieldSchema),
+    standardRequestFormFieldSchemaHasOptionDomains(model.requestFieldSchema)
+      ? 'source-text-input'
+      : 'advisory-only',
+    standardRequestFormFieldSchemaModules(model.requestFieldSchema),
+    undefined,
+    true,
+    policy,
+  );
+}
+
+function routedStateBackedFormSourcePatternModules(
+  model: RoutedStateBackedFormSourcePlanModel,
+) {
+  return [
+    SourcePatternModules.RouterShell,
+    SourcePatternModules.RouteContextSelection,
+    SourcePatternModules.RouteParameterSelection,
+    SourcePatternModules.RouteLinkNavigation,
+    ...(model.serviceEnabled === true
+      ? [
+        SourcePatternModules.StateOwnedServiceBoundary,
+        SourcePatternModules.ServiceBackedLoading,
+        SourcePatternModules.ServiceBackedSubmission,
+      ]
+      : []),
+    ...(model.i18nEnabled === true ? [SourcePatternModules.I18nPlugin] : []),
+    ...(model.validationEnabled === true ? [SourcePatternModules.ValidationPlugin] : []),
+  ];
+}
+
+function routedStateBackedFormPatternPrefix(
+  model: RoutedStateBackedFormSourcePlanModel,
+): string {
+  if (model.i18nEnabled === true && model.validationEnabled === true) {
+    return 'routed-localized-validated-state-backed-form';
+  }
+  if (model.serviceEnabled === true && model.validationEnabled === true) {
+    return 'routed-service-validated-state-backed-form';
+  }
+  if (model.validationEnabled === true) {
+    return 'routed-validated-state-backed-form';
+  }
+  if (model.serviceEnabled === true) {
+    return 'routed-service-backed-form';
+  }
+  return 'routed-state-backed-form';
+}
+
+function routedStateBackedFormPatternTitle(
+  model: RoutedStateBackedFormSourcePlanModel,
+): string {
+  if (model.i18nEnabled === true && model.validationEnabled === true) {
+    return 'Localized validated';
+  }
+  if (model.serviceEnabled === true && model.validationEnabled === true) {
+    return 'Service-backed validated';
+  }
+  if (model.validationEnabled === true) {
+    return 'Validated';
+  }
+  if (model.serviceEnabled === true) {
+    return 'Service-backed';
+  }
+  return 'State-backed';
+}
+
+function routedStateBackedFormPatternCapabilitySummary(
+  model: RoutedStateBackedFormSourcePlanModel,
+): string {
+  const parts: string[] = [];
+  if (model.serviceEnabled === true) {
+    parts.push('service loading/submission');
+  }
+  if (model.validationEnabled === true) {
+    parts.push('validation-html bindings');
+  }
+  if (model.i18nEnabled === true) {
+    parts.push('static i18n resources');
+  }
+  return parts.length === 0 ? '' : `, ${parts.join(', ')}`;
 }
 
 function routedStateBackedFormSourceFiles(
   model: RoutedStateBackedFormSourcePlanModel,
+  validation: StateBackedFormValidationTokens,
+  i18n: StateBackedFormI18nTokens,
 ): readonly AuthoringSourceFileEdit[] {
   return [
-    routedFormEntrypointFile(model),
+    routedFormEntrypointFile(model, validation, i18n),
     routedFormRootComponentFile(model),
     routedFormRootTemplateFile(model),
     routedFormRootStyleFile(model),
     routedFormStateFile(model),
+    ...routedFormServiceFiles(model),
     routedFormRouteComponentFile(model),
-    routedFormRouteTemplateFile(model),
+    routedFormRouteTemplateFile(model, i18n),
     routedFormSummaryRouteComponentFile(model),
     routedFormSummaryRouteTemplateFile(model),
     formFieldShellComponentFile(model),
     formFieldShellTemplateFile(model),
-    routedFormComponentFile(model),
-    routedFormTemplateFile(model),
+    routedFormComponentFile(model, validation),
+    routedFormTemplateFile(model, validation, i18n),
   ];
 }
 
-function routedFormEntrypointFile(model: RoutedStateBackedFormSourcePlanModel): AuthoringSourceFileEdit {
-  return recipeSourceFile(
-    model.entrypointPath,
-    'entrypoint',
-    'typescript',
-    'create-entrypoint',
-    fillSourceTemplate(ENTRYPOINT_SOURCE, {
-      ROOT_COMPONENT_CLASS: model.rootComponentClassName,
-      ROOT_COMPONENT_MODULE: moduleSpecifier(model.entrypointPath, model.rootComponentPath, false),
-    }),
-  );
+function routedStateBackedFormSourceFilesWithAuthority(
+  model: RoutedStateBackedFormSourcePlanModel,
+  validation: StateBackedFormValidationTokens,
+  i18n: StateBackedFormI18nTokens,
+): readonly AuthoringSourceFileEdit[] {
+  const files = routedStateBackedFormSourceFiles(model, validation, i18n);
+  return routedStateBackedFormUsesReferenceSourceAuthority(model)
+    ? referenceInstantiationSourceFiles(files)
+    : files;
+}
+
+function routedStateBackedFormUsesReferenceSourceAuthority(
+  model: RoutedStateBackedFormSourcePlanModel,
+): boolean {
+  return model.requestFieldSchema == null;
+}
+
+function routedFormEntrypointFile(
+  model: RoutedStateBackedFormSourcePlanModel,
+  validation: StateBackedFormValidationTokens,
+  i18n: StateBackedFormI18nTokens,
+): AuthoringSourceFileEdit {
+  return configuredAureliaEntrypointFile({
+    entrypointPath: model.entrypointPath,
+    rootComponentPath: model.rootComponentPath,
+    rootComponentClassName: model.rootComponentClassName,
+    configurationImports: `import { RouterConfiguration } from '@aurelia/router';\n${validation.entrypointImport}${i18n.entrypointImport}`,
+    registrationExpressions: [
+      `RouterConfiguration.customize({
+  useHref: false,
+  useUrlFragmentHash: true,
+})`,
+      ...validation.registrationExpressions,
+      ...i18n.registrationExpressions,
+    ],
+  });
 }
 
 function routedFormRootComponentFile(model: RoutedStateBackedFormSourcePlanModel): AuthoringSourceFileEdit {
@@ -141,7 +364,8 @@ function routedFormRootTemplateFile(model: RoutedStateBackedFormSourcePlanModel)
     'create-external-template',
     fillSourceTemplate(ROOT_TEMPLATE_SOURCE, {
       ROUTE_NAVIGATION_PATH: model.routeNavigationPath,
-      ROUTE_TITLE: model.routeTitle,
+      ROUTE_TITLE_ATTRIBUTE: model.i18nEnabled === true ? ' t="app.title"' : '',
+      ROUTE_TITLE_TEXT: model.i18nEnabled === true ? '' : model.routeTitle,
       ROUTE_VIEWPORT_NAME: model.routeViewportName,
       SUMMARY_ROUTE_VIEWPORT_NAME: model.summaryRouteViewportName,
     }),
@@ -159,15 +383,100 @@ function routedFormRootStyleFile(model: RoutedStateBackedFormSourcePlanModel): A
 }
 
 function routedFormStateFile(model: RoutedStateBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+  if (model.serviceEnabled === true) {
+    return recipeSourceFile(
+      model.statePath,
+      'state-model',
+      'typescript',
+      'create-state-model',
+      model.requestFieldSchema == null
+        ? fillSourceTemplate(SERVICE_BACKED_STATE_SOURCE, {
+          SERVICE_CLASS: requiredRoutedFormServiceClassName(model),
+          SERVICE_MODULE: routedFormServiceModuleSpecifier(model.statePath, model),
+          STATE_CLASS: model.stateClassName,
+          ...standardRequestFormDomainTemplateTokensFor(model.requestDomain, [
+            'REQUEST_COLLECTION_PROPERTY',
+            'REQUEST_ENTITY_CLASS',
+            'REQUEST_IDS_PROPERTY',
+            'REQUEST_LOAD_METHOD',
+            'REQUEST_LOADING_PROPERTY',
+            'REQUEST_READ_METHOD',
+            'REQUEST_REPLACE_METHOD',
+            'REQUEST_SELECTION_ID',
+            'REQUEST_SERVICE_PROPERTY',
+            'REQUEST_SUBMIT_METHOD',
+            'REQUEST_VARIABLE',
+          ]),
+        })
+        : standardRequestFormCustomServiceBackedStateSource(
+          model.stateClassName,
+          requiredRoutedFormServiceClassName(model),
+          routedFormServiceModuleSpecifier(model.statePath, model),
+          model.requestDomain,
+          model.requestFieldSchema,
+        ),
+    );
+  }
   return recipeSourceFile(
     model.statePath,
     'state-model',
     'typescript',
     'create-state-model',
-    fillSourceTemplate(STATE_SOURCE, {
-      STATE_CLASS: model.stateClassName,
-    }),
+    model.requestFieldSchema == null
+      ? fillSourceTemplate(STANDARD_REQUEST_STATE_SOURCE, {
+        STATE_CLASS: model.stateClassName,
+        ...standardRequestFormDomainTemplateTokensFor(model.requestDomain, [
+          'REQUEST_COLLECTION_PROPERTY',
+          'REQUEST_CREATE_FUNCTION',
+          'REQUEST_ENTITY_CLASS',
+          'REQUEST_IDS_PROPERTY',
+          'REQUEST_READ_METHOD',
+          'REQUEST_SAMPLE_ID_PREFIX',
+          'REQUEST_SELECTED_ID_PROPERTY',
+          'REQUEST_SELECTION_ID',
+          'REQUEST_SUBMIT_METHOD',
+          'REQUEST_VARIABLE',
+        ]),
+      })
+      : standardRequestFormCustomStateSource(
+        model.stateClassName,
+        model.requestDomain,
+        model.requestFieldSchema,
+      ),
   );
+}
+
+function routedFormServiceFiles(model: RoutedStateBackedFormSourcePlanModel): readonly AuthoringSourceFileEdit[] {
+  if (model.serviceEnabled !== true) {
+    return [];
+  }
+  return [
+    recipeSourceFile(
+      requiredRoutedFormServicePath(model),
+      'service',
+      'typescript',
+      'create-service',
+      model.requestFieldSchema == null
+        ? fillSourceTemplate(STANDARD_REQUEST_SERVICE_SOURCE, {
+          SERVICE_CLASS: requiredRoutedFormServiceClassName(model),
+          STATE_MODULE: moduleSpecifier(requiredRoutedFormServicePath(model), model.statePath, false),
+          ...standardRequestFormDomainTemplateTokensFor(model.requestDomain, [
+            'REQUEST_CREATE_FUNCTION',
+            'REQUEST_ENTITY_CLASS',
+            'REQUEST_LOAD_METHOD',
+            'REQUEST_SAMPLE_ID_PREFIX',
+            'REQUEST_SUBMIT_METHOD',
+            'REQUEST_VARIABLE_PARAMETER',
+          ]),
+        })
+        : standardRequestFormCustomServiceSource(
+          requiredRoutedFormServiceClassName(model),
+          moduleSpecifier(requiredRoutedFormServicePath(model), model.statePath, false),
+          model.requestDomain,
+          model.requestFieldSchema,
+        ),
+    ),
+  ];
 }
 
 function routedFormRouteComponentFile(model: RoutedStateBackedFormSourcePlanModel): AuthoringSourceFileEdit {
@@ -185,13 +494,23 @@ function routedFormRouteComponentFile(model: RoutedStateBackedFormSourcePlanMode
       ROUTE_QUERY_MODE_NAME: model.routeQueryModeName,
       ROUTE_QUERY_TAG_NAME: model.routeQueryTagName,
       ROUTE_TEMPLATE_MODULE: moduleSpecifier(model.routeComponentPath, model.routeTemplatePath, true),
+      ROUTE_BINDING_METHOD: model.serviceEnabled === true
+        ? `
+  binding(): void {
+    void this.state.${model.requestDomain.loadEntitiesMethodName}();
+  }
+`
+        : '',
       STATE_CLASS: model.stateClassName,
       STATE_MODULE: moduleSpecifier(model.routeComponentPath, model.statePath, false),
     }),
   );
 }
 
-function routedFormRouteTemplateFile(model: RoutedStateBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+function routedFormRouteTemplateFile(
+  model: RoutedStateBackedFormSourcePlanModel,
+  i18n: StateBackedFormI18nTokens,
+): AuthoringSourceFileEdit {
   return recipeSourceFile(
     model.routeTemplatePath,
     'template',
@@ -199,6 +518,13 @@ function routedFormRouteTemplateFile(model: RoutedStateBackedFormSourcePlanModel
     'create-external-template',
     fillSourceTemplate(ROUTE_TEMPLATE_SOURCE, {
       FORM_ELEMENT_NAME: model.formElementName,
+      ROUTE_HEADING: model.i18nEnabled === true ? '<h1 t="app.title"></h1>' : `<h1>${model.requestDomain.entityTitle} \${routeParams.${model.routeParameterName}}</h1>`,
+      ROUTE_PARAMETER_NAME: model.routeParameterName,
+      ROUTE_QUERY_MODE_NAME: model.routeQueryModeName,
+      ROUTE_SUBMITTED_COUNT: i18n.submittedCount,
+      ...standardRequestFormDomainTemplateTokensFor(model.requestDomain, [
+        'REQUEST_ID_ATTRIBUTE',
+      ]),
     }),
   );
 }
@@ -229,56 +555,133 @@ function routedFormSummaryRouteTemplateFile(model: RoutedStateBackedFormSourcePl
   );
 }
 
-function routedFormComponentFile(model: RoutedStateBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+function routedFormComponentFile(
+  model: RoutedStateBackedFormSourcePlanModel,
+  validation: StateBackedFormValidationTokens,
+): AuthoringSourceFileEdit {
   return recipeSourceFile(
     model.formComponentPath,
     'component',
     'typescript',
     'create-form-component',
-    fillSourceTemplate(FORM_COMPONENT_SOURCE, {
+    fillSourceTemplate(STANDARD_REQUEST_FORM_COMPONENT_SOURCE, {
       FORM_COMPONENT_CLASS: model.formComponentClassName,
       FORM_ELEMENT_NAME: model.formElementName,
       FIELD_SHELL_CLASS: model.fieldShellClassName,
       FIELD_SHELL_MODULE: moduleSpecifier(model.formComponentPath, model.fieldShellComponentPath, false),
       FORM_TEMPLATE_MODULE: moduleSpecifier(model.formComponentPath, model.formTemplatePath, true),
+      ...standardRequestFormDomainTemplateTokensFor(model.requestDomain, [
+        'REQUEST_SELECTION_ID',
+      ]),
+      STATE_IMPORTS: `${model.stateClassName}${validation.stateImport}`,
       STATE_CLASS: model.stateClassName,
       STATE_MODULE: moduleSpecifier(model.formComponentPath, model.statePath, false),
+      SUBMIT_METHOD: validation.submitMethod,
+      VALIDATION_CONSTRUCTOR: validation.constructorBody,
+      VALIDATION_FIELDS: validation.formFields,
+      VALIDATION_FORM_IMPORT: validation.formImport,
     }),
   );
 }
 
-function routedFormTemplateFile(model: RoutedStateBackedFormSourcePlanModel): AuthoringSourceFileEdit {
+function routedFormTemplateFile(
+  model: RoutedStateBackedFormSourcePlanModel,
+  validation: StateBackedFormValidationTokens,
+  i18n: StateBackedFormI18nTokens,
+): AuthoringSourceFileEdit {
+  if (model.requestFieldSchema != null) {
+    return recipeSourceFile(
+      model.formTemplatePath,
+      'template',
+      'html',
+      'create-external-template',
+      standardRequestFormCustomTemplateSource({
+        domain: model.requestDomain,
+        fieldSchema: model.requestFieldSchema,
+        fieldShellElementName: model.fieldShellElementName,
+        formSummary: i18n.formSummary,
+        submitTrigger: validation.submitTrigger,
+        submitLabel: i18n.submitLabel,
+        validationEnabled: model.validationEnabled === true,
+        validationTrigger: model.validationTrigger ?? null,
+      }),
+    );
+  }
   return recipeSourceFile(
     model.formTemplatePath,
     'template',
     'html',
     'create-external-template',
-    fillSourceTemplate(FORM_TEMPLATE_SOURCE, {
-      FIELD_SHELL_ELEMENT_NAME: model.fieldShellElementName,
+    fillSourceTemplate(STANDARD_REQUEST_FORM_TEMPLATE_SOURCE, {
+      CONTACT_PREFERENCE_LEGEND: i18n.contactPreferenceLegend,
+      CUSTOMER_NAME_FIELD: standardRequestFormFieldTemplate({
+        fieldShellElementName: model.fieldShellElementName,
+        inputId: 'customer-name',
+        label: 'Name',
+        type: 'text',
+        valueBinding: validation.customerNameBinding,
+        errorCollectionName: validation.customerNameErrorCollectionName,
+      }),
+      EMAIL_FIELD: standardRequestFormFieldTemplate({
+        fieldShellElementName: model.fieldShellElementName,
+        inputId: 'email',
+        label: 'Email',
+        type: 'email',
+        valueBinding: validation.emailBinding,
+        errorCollectionName: validation.emailErrorCollectionName,
+      }),
+      FORM_SUMMARY: i18n.formSummary,
+      PRIMARY_TOPIC_LEAD: '',
+      SUBMIT_TRIGGER: validation.submitTrigger,
+      SUBMIT_LABEL: i18n.submitLabel,
+      ...standardRequestFormDomainTemplateTokensFor(model.requestDomain, [
+        'REQUEST_ENTITY_LABEL_LOWER',
+        'REQUEST_READ_METHOD',
+        'REQUEST_SELECTION_ID',
+        'REQUEST_VARIABLE',
+      ]),
     }),
   );
 }
 
-const ENTRYPOINT_SOURCE = sourceText(`import { Aurelia, StandardConfiguration } from '@aurelia/runtime-html';
-import { RouterConfiguration } from '@aurelia/router';
-import { __ROOT_COMPONENT_CLASS__ } from '__ROOT_COMPONENT_MODULE__';
+function routedStateBackedFormDependencySpecifiers(
+  model: RoutedStateBackedFormSourcePlanModel,
+): readonly string[] {
+  const specifiers = new Set<string>(['@aurelia/router']);
+  if (model.validationEnabled === true) {
+    specifiers.add('@aurelia/validation');
+    specifiers.add('@aurelia/validation-html');
+  }
+  if (model.i18nEnabled === true) {
+    specifiers.add('@aurelia/i18n');
+  }
+  return [...specifiers];
+}
 
-new Aurelia()
-  .register(
-    StandardConfiguration,
-    RouterConfiguration.customize({
-      useHref: false,
-      useUrlFragmentHash: true,
-    }),
-  )
-  .app({
-    host: document.body,
-    component: __ROOT_COMPONENT_CLASS__,
-  })
-  .start();
-`);
+function requiredRoutedFormServicePath(model: RoutedStateBackedFormSourcePlanModel): string {
+  if (model.servicePath == null) {
+    throw new Error('Routed service-backed form source plan requires servicePath.');
+  }
+  return model.servicePath;
+}
 
-const ROOT_COMPONENT_SOURCE = sourceText(`import { customElement } from '@aurelia/runtime-html';
+function requiredRoutedFormServiceClassName(model: RoutedStateBackedFormSourcePlanModel): string {
+  if (model.serviceClassName == null) {
+    throw new Error('Routed service-backed form source plan requires serviceClassName.');
+  }
+  return model.serviceClassName;
+}
+
+function routedFormServiceModuleSpecifier(
+  fromPath: string,
+  model: RoutedStateBackedFormSourcePlanModel,
+): string {
+  return model.serviceEnabled === true
+    ? moduleSpecifier(fromPath, requiredRoutedFormServicePath(model), false)
+    : '';
+}
+
+const ROOT_COMPONENT_SOURCE = sourceText(`import { customElement } from 'aurelia';
 import { route } from '@aurelia/router';
 import { __ROUTE_COMPONENT_CLASS__ } from '__ROUTE_COMPONENT_MODULE__';
 import { __SUMMARY_ROUTE_COMPONENT_CLASS__ } from '__SUMMARY_ROUTE_COMPONENT_MODULE__';
@@ -318,7 +721,7 @@ export class __ROOT_COMPONENT_CLASS__ {}
 
 const ROOT_TEMPLATE_SOURCE = sourceText(`<main>
   <nav>
-    <a load="__ROUTE_NAVIGATION_PATH__">__ROUTE_TITLE__</a>
+    <a load="__ROUTE_NAVIGATION_PATH__"__ROUTE_TITLE_ATTRIBUTE__>__ROUTE_TITLE_TEXT__</a>
   </nav>
   <section class="routed-layout">
     <au-viewport name="__ROUTE_VIEWPORT_NAME__"></au-viewport>
@@ -349,12 +752,35 @@ const ROOT_STYLE_SOURCE = sourceText(`main {
 .form-pending {
   border-color: #9e3a2d;
 }
+
+.field-stack {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.field-invalid {
+  border-left: 0.25rem solid #9e3a2d;
+  padding-left: 0.75rem;
+}
+
+.error {
+  color: #9e3a2d;
+  margin: 0;
+}
 `);
 
-const STATE_SOURCE = sourceText(`export type ContactPreference = 'email' | 'phone';
+const SERVICE_BACKED_STATE_SOURCE = sourceText(`import { resolve } from 'aurelia';
+import { __SERVICE_CLASS__ } from '__SERVICE_MODULE__';
+
+export type ContactPreference = 'email' | 'phone';
 export type RequestTopic = 'hardware' | 'billing' | 'support';
 
-export class ServiceRequest {
+export interface SupportAgent {
+  readonly id: string;
+  readonly name: string;
+}
+
+export class __REQUEST_ENTITY_CLASS__ {
   constructor(
     readonly id: string,
     public customerName: string,
@@ -362,6 +788,7 @@ export class ServiceRequest {
     public urgent: boolean,
     public contactPreference: ContactPreference,
     public primaryTopic: RequestTopic | null,
+    public assignee: SupportAgent | null,
     public topics: RequestTopic[],
     public notes: string,
     public submitCount: number,
@@ -373,57 +800,72 @@ export class ServiceRequest {
 }
 
 export class __STATE_CLASS__ {
-  readonly requestIds = ['request-1', 'request-2'];
-  selectedRequestId = 'request-1';
+  private readonly __REQUEST_SERVICE_PROPERTY__ = resolve(__SERVICE_CLASS__);
+  private readonly __REQUEST_COLLECTION_PROPERTY__ = new Map<string, __REQUEST_ENTITY_CLASS__>();
 
   readonly emailPreference: ContactPreference = 'email';
   readonly phonePreference: ContactPreference = 'phone';
   readonly hardwareTopic: RequestTopic = 'hardware';
   readonly billingTopic: RequestTopic = 'billing';
   readonly supportTopic: RequestTopic = 'support';
+  readonly supportAgents: readonly SupportAgent[] = [
+    { id: 'agent-ada', name: 'Ada' },
+    { id: 'agent-grace', name: 'Grace' },
+  ];
 
-  private readonly requests = new Map<string, ServiceRequest>([
-    ['request-1', createRequest('request-1', 'Ada Lovelace')],
-    ['request-2', createRequest('request-2', 'Grace Hopper')],
-  ]);
+  __REQUEST_LOADING_PROPERTY__ = false;
+
+  get __REQUEST_IDS_PROPERTY__(): readonly string[] {
+    return [...this.__REQUEST_COLLECTION_PROPERTY__.keys()];
+  }
 
   get submittedCount(): number {
     let count = 0;
-    for (const request of this.requests.values()) {
-      count += request.submitCount;
+    for (const __REQUEST_VARIABLE__ of this.__REQUEST_COLLECTION_PROPERTY__.values()) {
+      count += __REQUEST_VARIABLE__.submitCount;
     }
     return count;
   }
 
-  readRequest(requestId: string): ServiceRequest | null {
-    return this.requests.get(requestId) ?? null;
+  __REQUEST_READ_METHOD__(__REQUEST_SELECTION_ID__: string): __REQUEST_ENTITY_CLASS__ | null {
+    return this.__REQUEST_COLLECTION_PROPERTY__.get(__REQUEST_SELECTION_ID__) ?? null;
   }
 
-  submitRequest(requestId: string): void {
-    const request = this.readRequest(requestId);
-    if (request != null) {
-      request.submitCount += 1;
+  async __REQUEST_LOAD_METHOD__(): Promise<void> {
+    if (this.__REQUEST_COLLECTION_PROPERTY__.size > 0 || this.__REQUEST_LOADING_PROPERTY__) {
+      return;
+    }
+
+    this.__REQUEST_LOADING_PROPERTY__ = true;
+    try {
+      this.__REQUEST_REPLACE_METHOD__(await this.__REQUEST_SERVICE_PROPERTY__.__REQUEST_LOAD_METHOD__());
+    } finally {
+      this.__REQUEST_LOADING_PROPERTY__ = false;
+    }
+  }
+
+  async __REQUEST_SUBMIT_METHOD__(__REQUEST_SELECTION_ID__: string): Promise<void> {
+    const __REQUEST_VARIABLE__ = this.__REQUEST_READ_METHOD__(__REQUEST_SELECTION_ID__);
+    if (__REQUEST_VARIABLE__ != null) {
+      __REQUEST_VARIABLE__.submitCount += 1;
+      await this.__REQUEST_SERVICE_PROPERTY__.__REQUEST_SUBMIT_METHOD__(__REQUEST_VARIABLE__);
+    }
+  }
+
+  sameSupportAgent(left: SupportAgent | null, right: SupportAgent | null): boolean {
+    return left?.id === right?.id;
+  }
+
+  private __REQUEST_REPLACE_METHOD__(__REQUEST_COLLECTION_PROPERTY__: readonly __REQUEST_ENTITY_CLASS__[]): void {
+    this.__REQUEST_COLLECTION_PROPERTY__.clear();
+    for (const __REQUEST_VARIABLE__ of __REQUEST_COLLECTION_PROPERTY__) {
+      this.__REQUEST_COLLECTION_PROPERTY__.set(__REQUEST_VARIABLE__.id, __REQUEST_VARIABLE__);
     }
   }
 }
-
-function createRequest(id: string, customerName: string): ServiceRequest {
-  return new ServiceRequest(
-    id,
-    customerName,
-    \`\${customerName.toLowerCase().replace(' ', '.')}@example.test\`,
-    false,
-    'email',
-    null,
-    ['support'],
-    '',
-    0,
-  );
-}
 `);
 
-const ROUTE_COMPONENT_SOURCE = sourceText(`import { customElement } from '@aurelia/runtime-html';
-import { resolve } from '@aurelia/kernel';
+const ROUTE_COMPONENT_SOURCE = sourceText(`import { customElement, resolve } from 'aurelia';
 import { IRouteContext } from '@aurelia/router';
 import { __FORM_COMPONENT_CLASS__ } from '__FORM_COMPONENT_MODULE__';
 import { __STATE_CLASS__ } from '__STATE_MODULE__';
@@ -436,19 +878,11 @@ import template from '__ROUTE_TEMPLATE_MODULE__';
 })
 export class __ROUTE_COMPONENT_CLASS__ {
   readonly state = resolve(__STATE_CLASS__);
-  private readonly routeParams = resolve(IRouteContext).getRouteParameters<{
+  readonly routeParams = resolve(IRouteContext).getRouteParameters<{
     __ROUTE_PARAMETER_NAME__: string;
     __ROUTE_QUERY_MODE_NAME__?: string;
     __ROUTE_QUERY_TAG_NAME__?: string | readonly string[];
   }, 'child-first'>({ includeQueryParams: true, mergeStrategy: 'child-first' });
-
-  get requestId(): string {
-    return this.routeParams.__ROUTE_PARAMETER_NAME__;
-  }
-
-  get routeMode(): string {
-    return this.routeParams.__ROUTE_QUERY_MODE_NAME__ ?? 'edit';
-  }
 
   get routeTagCount(): number {
     const tags = this.routeParams.__ROUTE_QUERY_TAG_NAME__;
@@ -457,22 +891,21 @@ export class __ROUTE_COMPONENT_CLASS__ {
     }
     return tags == null ? 0 : 1;
   }
-
+__ROUTE_BINDING_METHOD__\
 }
 `);
 
 const ROUTE_TEMPLATE_SOURCE = sourceText(`<section>
-  <h1>Service request \${requestId}</h1>
-  <p>Mode: \${routeMode} (\${routeTagCount} tag(s))</p>
+  __ROUTE_HEADING__
+  <p>Mode: \${routeParams.__ROUTE_QUERY_MODE_NAME__ ?? 'edit'}; tags: \${routeTagCount}</p>
 
-  <__FORM_ELEMENT_NAME__ request-id.bind="requestId"></__FORM_ELEMENT_NAME__>
+  <__FORM_ELEMENT_NAME__ __REQUEST_ID_ATTRIBUTE__.bind="routeParams.__ROUTE_PARAMETER_NAME__"></__FORM_ELEMENT_NAME__>
 
-  <p>\${state.submittedCount} submitted request(s)</p>
+  __ROUTE_SUBMITTED_COUNT__
 </section>
 `);
 
-const SUMMARY_ROUTE_COMPONENT_SOURCE = sourceText(`import { customElement } from '@aurelia/runtime-html';
-import { resolve } from '@aurelia/kernel';
+const SUMMARY_ROUTE_COMPONENT_SOURCE = sourceText(`import { customElement, resolve } from 'aurelia';
 import { __STATE_CLASS__ } from '__STATE_MODULE__';
 import template from '__SUMMARY_ROUTE_TEMPLATE_MODULE__';
 
@@ -487,86 +920,6 @@ export class __SUMMARY_ROUTE_COMPONENT_CLASS__ {
 
 const SUMMARY_ROUTE_TEMPLATE_SOURCE = sourceText(`<aside>
   <h2>Activity</h2>
-  <p>\${state.submittedCount} submitted request(s)</p>
+  <p>Submissions: \${state.submittedCount}</p>
 </aside>
-`);
-
-const FORM_COMPONENT_SOURCE = sourceText(`import { bindable, customElement } from '@aurelia/runtime-html';
-import { resolve } from '@aurelia/kernel';
-import { __STATE_CLASS__ } from '__STATE_MODULE__';
-import { __FIELD_SHELL_CLASS__ } from '__FIELD_SHELL_MODULE__';
-import template from '__FORM_TEMPLATE_MODULE__';
-
-@customElement({
-  name: '__FORM_ELEMENT_NAME__',
-  template,
-  dependencies: [__FIELD_SHELL_CLASS__],
-})
-export class __FORM_COMPONENT_CLASS__ {
-  readonly state = resolve(__STATE_CLASS__);
-
-  @bindable requestId = '';
-
-  submit(): void {
-    this.state.submitRequest(this.requestId);
-  }
-}
-`);
-
-const FORM_TEMPLATE_SOURCE = sourceText(`<let request.bind="state.readRequest(requestId)"></let>
-<template if.bind="request != null">
-  <form class.bind="request.canSubmit ? 'form-ready' : 'form-pending'" submit.trigger="submit()">
-  <__FIELD_SHELL_ELEMENT_NAME__
-    input-id="customer-name"
-    label="Name"
-    type="text"
-    value.bind="request.customerName">
-  </__FIELD_SHELL_ELEMENT_NAME__>
-
-  <__FIELD_SHELL_ELEMENT_NAME__
-    input-id="email"
-    label="Email"
-    type="email"
-    value.bind="request.email">
-  </__FIELD_SHELL_ELEMENT_NAME__>
-
-  <label>
-    <input type="checkbox" checked.bind="request.urgent">
-    Urgent
-  </label>
-
-  <fieldset>
-    <legend>Contact preference</legend>
-    <label>
-      <input type="radio" model.bind="state.emailPreference" checked.bind="request.contactPreference">
-      Email
-    </label>
-    <label>
-      <input type="radio" model.bind="state.phonePreference" checked.bind="request.contactPreference">
-      Phone
-    </label>
-  </fieldset>
-
-  <label for="primary-topic">Primary topic</label>
-  <select id="primary-topic" value.bind="request.primaryTopic">
-    <option model.bind="null">Choose...</option>
-    <option model.bind="state.hardwareTopic">Hardware</option>
-    <option model.bind="state.billingTopic">Billing</option>
-    <option model.bind="state.supportTopic">Support</option>
-  </select>
-
-  <label for="topics">Additional topics</label>
-  <select id="topics" multiple value.bind="request.topics">
-    <option model.bind="state.hardwareTopic">Hardware</option>
-    <option model.bind="state.billingTopic">Billing</option>
-    <option model.bind="state.supportTopic">Support</option>
-  </select>
-
-  <label for="notes">Notes</label>
-  <textarea id="notes" value.bind="request.notes"></textarea>
-
-    <button type="submit" disabled.bind="!request.canSubmit">Submit request</button>
-  </form>
-</template>
-<p else>Loading request...</p>
 `);

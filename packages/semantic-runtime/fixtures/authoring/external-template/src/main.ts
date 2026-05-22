@@ -1,10 +1,6 @@
-import { Aurelia, StandardConfiguration } from '@aurelia/runtime-html';
+import Aurelia from 'aurelia';
 import { AuthoringApp } from './app';
 
-new Aurelia()
-  .register(StandardConfiguration)
-  .app({
-    host: document.body,
-    component: AuthoringApp,
-  })
+Aurelia
+  .app(AuthoringApp)
   .start();

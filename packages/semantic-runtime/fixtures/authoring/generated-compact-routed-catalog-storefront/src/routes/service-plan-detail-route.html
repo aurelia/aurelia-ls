@@ -1,0 +1,18 @@
+<section class="service-plan-detail">
+  <a load="plans">All service plans</a>
+
+  <let servicePlan.bind="state.servicePlans.readServicePlan(routeParams.planId)"></let>
+  <template if.bind="servicePlan">
+    <h1>${servicePlan.name}</h1>
+    <p>${servicePlan.summary}</p>
+    <dl>
+      <dt>Name</dt>
+      <dd>${servicePlan.nameLabel}</dd>
+      <dt>Summary</dt>
+      <dd>${servicePlan.summaryLabel}</dd>
+      <dt>Opened from</dt>
+      <dd>${routeParams.ref ?? 'catalog'}</dd>
+    </dl>
+  </template>
+  <p else>Loading Service Plan ${routeParams.planId}...</p>
+</section>

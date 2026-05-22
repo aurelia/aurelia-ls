@@ -52,6 +52,13 @@ the template expression. Getter/setter rows still matter when the member perform
 projection, or service calls. The direct lane must still spend modeled `BindingScope.locate(...)` results: the root
 name only proves a DI support handoff when the resolved scope slot points back to the injected component member. Do not
 fall back to string-root matching for this join, because template locals can legally shadow names such as `state`.
+Listener bindings participate in this direct lane too. A template submit handler such as
+`submit.trigger="state.submitRequest(requestId)"` should close through the runtime listener binding, an
+`event-handler-invocation` value channel, and a topology `call` interaction against the injected state layer. A component
+method remains appropriate when it performs real validation, route, presentation, or argument adaptation, not merely to
+make the state call visible. Listener expressions may also evaluate to a function reference that Aurelia invokes with
+the DOM event; topology rows should keep the full authored `bindingSourceName` while reporting the invoked state member
+without call arguments as `interactionMemberName`.
 
 Authoring topology and reopened app topology both expose stylesheet ownership through the same style asset vocabulary:
 component/global ownership, asset kind, source kind, optional source file, and optional import specifier.

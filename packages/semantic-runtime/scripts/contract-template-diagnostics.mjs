@@ -12,6 +12,7 @@ import {
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const weakOwnerFixtureRoot = path.join(packageRoot, 'fixtures/pressure/weak-owner-repair-planning');
 const mixedFormFixtureRoot = path.join(packageRoot, 'fixtures/pressure/mixed-form-surfaces');
+const selectModelPrimitiveFixtureRoot = path.join(packageRoot, 'fixtures/pressure/select-model-primitives');
 const syntheticWritebackFixtureRoot = path.join(packageRoot, 'fixtures/pressure/synthetic-writeback-local');
 const viewFactoryProviderFixtureRoot = path.join(packageRoot, 'fixtures/pressure/runtime-html-view-factory-provider-errors');
 
@@ -180,6 +181,22 @@ const contracts = [
         ],
         'signature',
       ),
+      ExpectedSemanticEffect.exactly(
+        'Index-signature owners backed by external utility declarations should target the app owner expression source.',
+        'template-diagnostic',
+        'template',
+        1,
+        null,
+        [
+          effectFilter('diagnosticKind', 'weak-expression-member-owner'),
+          effectFilter('missingInput', 'expression-member-owner-type:index-signature-only'),
+          effectFilter('selectedMemberName', 'source'),
+          effectFilter('suggestion.suggestionKind', 'declare-explicit-member'),
+          effectFilter('suggestion.actionTarget.targetKind', 'owner-type'),
+          effectFilter('suggestion.actionTarget.source.path', 'src/app.ts'),
+        ],
+        'signature',
+      ),
       ExpectedSemanticEffect.atLeast(
         'Binding data-flow rows should preserve the declaration source for assignment repair targets.',
         'binding-data-flow',
@@ -215,6 +232,40 @@ const contracts = [
           effectFilter('diagnosticKind', 'binding-source-assignment-strictness'),
           effectFilter('selectedMemberName', 'priority'),
           effectFilter('suggestion.actionTarget.source.path', 'src/components/ticket-editor.ts'),
+        ],
+        'signature',
+      ),
+    ],
+  ),
+  await verifyFixture(
+    selectModelPrimitiveFixtureRoot,
+    'template-diagnostics-contract:select-model-primitives',
+    [
+      ExpectedSemanticEffect.exactly(
+        'Single-select primitive assignment strictness should explain option model/value domain alignment.',
+        'template-diagnostic',
+        'template',
+        2,
+        null,
+        [
+          effectFilter('diagnosticKind', 'binding-source-assignment-strictness'),
+          effectFilter('missingInput', 'binding-source-assignment:target-to-source-type-mismatch'),
+          effectFilter('suggestion.suggestionKind', 'align-assignment-type'),
+          effectFilter('suggestion.summary', 'Align the source member type with the single-select option domain; use model.bind for non-string domain values or type the source for the string/null value channel emitted by option value attributes.'),
+        ],
+        'signature',
+      ),
+      ExpectedSemanticEffect.exactly(
+        'Radio primitive assignment strictness should explain model.bind versus value attributes.',
+        'template-diagnostic',
+        'template',
+        2,
+        null,
+        [
+          effectFilter('diagnosticKind', 'binding-source-assignment-strictness'),
+          effectFilter('missingInput', 'binding-source-assignment:target-to-source-type-mismatch'),
+          effectFilter('suggestion.suggestionKind', 'align-assignment-type'),
+          effectFilter('suggestion.summary', 'Align the source member type with the radio model/value domain; use model.bind for non-string radio values or type the source for the string value channel emitted by value attributes.'),
         ],
         'signature',
       ),

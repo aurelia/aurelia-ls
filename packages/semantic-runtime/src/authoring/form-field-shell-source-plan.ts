@@ -39,7 +39,7 @@ export function formFieldShellTemplateFile(model: FormFieldShellSourcePlanModel)
   );
 }
 
-const FIELD_SHELL_COMPONENT_SOURCE = sourceText(`import { bindable, customElement } from '@aurelia/runtime-html';
+const FIELD_SHELL_COMPONENT_SOURCE = sourceText(`import { bindable, customElement } from 'aurelia';
 import template from '__FIELD_SHELL_TEMPLATE_MODULE__';
 
 @customElement({

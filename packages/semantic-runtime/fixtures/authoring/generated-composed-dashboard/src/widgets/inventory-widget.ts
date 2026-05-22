@@ -1,4 +1,4 @@
-import { customElement } from '@aurelia/runtime-html';
+import { customElement } from 'aurelia';
 import type { DashboardWidgetModel } from '../state/dashboard-state';
 import template from './inventory-widget.html';
 
@@ -7,13 +7,9 @@ import template from './inventory-widget.html';
   template,
 })
 export class InventoryWidget {
-  private model: DashboardWidgetModel | null = null;
+  model: DashboardWidgetModel | null = null;
 
   activate(model: DashboardWidgetModel): void {
     this.model = model;
-  }
-
-  get items(): DashboardWidgetModel['items'] {
-    return this.model?.items ?? [];
   }
 }

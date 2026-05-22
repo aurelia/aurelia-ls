@@ -162,6 +162,11 @@ type AtlasMemoryScriptAnchor =
       readonly linkId: string;
       readonly symbolName?: string;
       readonly summary?: string;
+    }
+  | {
+      readonly kind: "external";
+      readonly url: string;
+      readonly summary?: string;
     };
 
 assertKnownScriptArguments("atlas.memory", [
@@ -488,6 +493,8 @@ function anchorLabel(anchor: AtlasMemoryScriptAnchor): string {
       const symbol = anchor.symbolName === undefined ? "" : `#${anchor.symbolName}`;
       return `${anchor.kind} ${anchor.linkId}${symbol}${anchorSummary(anchor)}`;
     }
+    case "external":
+      return `${anchor.kind} ${anchor.url}${anchorSummary(anchor)}`;
   }
 }
 

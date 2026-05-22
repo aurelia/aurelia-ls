@@ -2,6 +2,8 @@ import type { KernelStore } from '../kernel/store.js';
 import {
   AttributeBinding,
   ContentBinding,
+  LetBinding,
+  ListenerBinding,
   PropertyBinding,
   RefBinding,
   SpreadValueBinding,
@@ -22,6 +24,10 @@ import {
   RuntimeBindingValueChannelAuthority,
   RuntimeBindingValueChannelKind,
 } from './runtime-binding-observation.js';
+import {
+  BuiltInTemplateControllerFlowKind,
+  type BuiltInTemplateControllerSemantics,
+} from '../template/template-controller-semantics.js';
 import { CheckedObserverChannelDrafts } from './checked-observer-channel-drafts.js';
 import { DirectBindingValueChannelDrafts } from './direct-binding-value-channel-drafts.js';
 import { RuntimeBindingValueChannelDraftSupport } from './binding-value-channel-draft-support.js';
@@ -68,7 +74,12 @@ class RuntimeBindingValueChannelDraftFrame {
     if (this.binding instanceof SpreadValueBinding && this.targetAccess == null) {
       return this.openSpreadBindingWithoutClosedBindable();
     }
-    if (this.binding instanceof AttributeBinding || this.binding instanceof ContentBinding) {
+    if (
+      this.binding instanceof AttributeBinding
+      || this.binding instanceof ContentBinding
+      || this.binding instanceof LetBinding
+      || this.binding instanceof ListenerBinding
+    ) {
       return this.directBinding.valueChannelDraftForTargetOperation(this.local, this.targetOperation, this.readSourceType);
     }
     if (this.targetAccess == null) {
@@ -85,6 +96,14 @@ class RuntimeBindingValueChannelDraftFrame {
 
   private closedTargetAccessDraft(): RuntimeBindingValueChannelDraft {
     const targetAccess = this.targetAccess!;
+    const customMatcher = this.directBinding.customMatcherFunctionValueChannelDraft(
+      this.local,
+      targetAccess,
+      this.readSourceType,
+    );
+    if (customMatcher != null) {
+      return customMatcher;
+    }
     switch (targetAccess.strategy) {
       case RuntimeBindingTargetAccessStrategy.ClassAttributeAccessor:
         return this.directBinding.classValueChannelDraft(this.binding, targetAccess, this.readSourceType);
@@ -98,15 +117,63 @@ class RuntimeBindingValueChannelDraftFrame {
       case RuntimeBindingTargetAccessStrategy.CheckedObserver:
         return this.checkedObserverDraft(targetAccess);
       default:
-        return {
-          channelKind: RuntimeBindingValueChannelKind.RawProperty,
-          authority: RuntimeBindingValueChannelAuthority.TargetAccess,
-          runtimeValueType: this.support.types.targetAccessRuntimeInputType(`${this.local}:target-access-input`, targetAccess),
-          valueDomain: [],
-          isCollection: null,
-          openReason: null,
-        };
+        return this.templateControllerValueChannelDraft(targetAccess)
+          ?? this.rawPropertyValueChannelDraft(targetAccess);
     }
+  }
+
+  private rawPropertyValueChannelDraft(targetAccess: RuntimeBindingTargetAccess): RuntimeBindingValueChannelDraft {
+    const elementModel = this.directBinding.elementModelValueChannelDraft(targetAccess, this.readSourceType);
+    if (elementModel != null) {
+      return elementModel;
+    }
+    return {
+      channelKind: RuntimeBindingValueChannelKind.RawProperty,
+      authority: RuntimeBindingValueChannelAuthority.TargetAccess,
+      runtimeValueType: this.support.types.targetAccessRuntimeInputType(`${this.local}:target-access-input`, targetAccess),
+      valueDomain: [],
+      isCollection: null,
+      openReason: null,
+    };
+  }
+
+  private templateControllerValueChannelDraft(targetAccess: RuntimeBindingTargetAccess): RuntimeBindingValueChannelDraft | null {
+    const semantics = this.support.templateControllerSemanticsForTargetAccess(targetAccess, this.context);
+    if (semantics == null || semantics.valueProperty !== targetAccess.targetProperty) {
+      return null;
+    }
+    const channelKind = templateControllerValueChannelKind(semantics);
+    if (channelKind === RuntimeBindingValueChannelKind.RawProperty) {
+      return null;
+    }
+    const sourceType = this.readSourceType();
+    const runtimeValueType = this.templateControllerRuntimeValueType(semantics, targetAccess, sourceType);
+    return {
+      channelKind,
+      authority: sourceType == null
+        && runtimeValueType == null
+        ? RuntimeBindingValueChannelAuthority.TargetAccess
+        : RuntimeBindingValueChannelAuthority.BindingExpressionAndTypeChecker,
+      runtimeValueType: runtimeValueType ?? this.support.types.targetAccessRuntimeInputType(`${this.local}:template-controller-input`, targetAccess),
+      valueDomain: [],
+      isCollection: null,
+      openReason: null,
+    };
+  }
+
+  private templateControllerRuntimeValueType(
+    semantics: BuiltInTemplateControllerSemantics,
+    targetAccess: RuntimeBindingTargetAccess,
+    sourceType: ReturnType<BindingSourceTypeReader>,
+  ): ReturnType<BindingSourceTypeReader> {
+    if (semantics.flowKind === BuiltInTemplateControllerFlowKind.PromiseFulfilled) {
+      return this.support.promiseFulfilledValueTypeForTemplateControllerBranch(
+        this.local,
+        targetAccess,
+        this.context,
+      ) ?? sourceType;
+    }
+    return sourceType;
   }
 
   private selectValueObserverDraft(targetAccess: RuntimeBindingTargetAccess): RuntimeBindingValueChannelDraft {
@@ -181,6 +248,33 @@ class RuntimeBindingValueChannelDraftFrame {
       isCollection: null,
       openReason: null,
     };
+  }
+}
+
+function templateControllerValueChannelKind(
+  semantics: BuiltInTemplateControllerSemantics,
+): RuntimeBindingValueChannelKind {
+  switch (semantics.flowKind) {
+    case BuiltInTemplateControllerFlowKind.Conditional:
+      return RuntimeBindingValueChannelKind.TemplateControllerTruthiness;
+    case BuiltInTemplateControllerFlowKind.ValueScope:
+      return RuntimeBindingValueChannelKind.TemplateControllerValueScope;
+    case BuiltInTemplateControllerFlowKind.Switch:
+      return RuntimeBindingValueChannelKind.TemplateControllerSwitchValue;
+    case BuiltInTemplateControllerFlowKind.SwitchCase:
+    case BuiltInTemplateControllerFlowKind.SwitchDefault:
+      return RuntimeBindingValueChannelKind.TemplateControllerSwitchCaseValue;
+    case BuiltInTemplateControllerFlowKind.Promise:
+      return RuntimeBindingValueChannelKind.TemplateControllerPromiseValue;
+    case BuiltInTemplateControllerFlowKind.PromisePending:
+    case BuiltInTemplateControllerFlowKind.PromiseFulfilled:
+    case BuiltInTemplateControllerFlowKind.PromiseRejected:
+      return RuntimeBindingValueChannelKind.TemplateControllerPromiseBranchValue;
+    case BuiltInTemplateControllerFlowKind.Iteration:
+      return RuntimeBindingValueChannelKind.TemplateControllerIteration;
+    case BuiltInTemplateControllerFlowKind.PassThrough:
+    case BuiltInTemplateControllerFlowKind.ConditionalElse:
+      return RuntimeBindingValueChannelKind.RawProperty;
   }
 }
 

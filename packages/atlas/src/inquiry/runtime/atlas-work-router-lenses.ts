@@ -58,6 +58,10 @@ import {
   readFrameworkCorpusAnalysis,
 } from "./framework-corpus-analysis.js";
 import { frameworkCorpusFixtureSeedMatchesClassification } from "./framework-corpus-classification.js";
+import {
+  frameworkCorpusFixtureSeedMatchesRecipeFilter,
+  frameworkCorpusFixtureSeedRecipeFilterScore,
+} from "./framework-corpus-recipe-matching.js";
 import { frameworkCorpusFixtureSeedQueryScore } from "./framework-corpus-row-relevance.js";
 import { optionalNextPageContinuation } from "./lens-continuation-utils.js";
 import {
@@ -2147,7 +2151,7 @@ function fixtureSeedMatchesRouteFilters(
   return (
     (filters.concept === undefined || row.concepts.includes(filters.concept as never)) &&
     (filters.effectKind === undefined || row.effectHints.includes(filters.effectKind as never)) &&
-    (filters.recipeKey === undefined || row.recipeHints.includes(filters.recipeKey as never)) &&
+    frameworkCorpusFixtureSeedMatchesRecipeFilter(row, filters.recipeKey) &&
     (filters.seedUse === undefined || row.seedUse === filters.seedUse)
   );
 }
@@ -2177,7 +2181,7 @@ function fixtureSeedAnchorScore(
   }
   if (
     anchor.recipeKey !== undefined &&
-    !row.recipeHints.includes(anchor.recipeKey as never)
+    !frameworkCorpusFixtureSeedMatchesRecipeFilter(row, anchor.recipeKey)
   ) {
     return 0;
   }
@@ -2199,7 +2203,7 @@ function fixtureSeedAnchorScore(
   }
   return (
     (anchor.effectKind === undefined ? 0 : 10) +
-    (anchor.recipeKey === undefined ? 0 : 8) +
+    (anchor.recipeKey === undefined ? 0 : 4 + frameworkCorpusFixtureSeedRecipeFilterScore(row, anchor.recipeKey) * 4) +
     (anchor.classificationKey === undefined ? 0 : 9) +
     (anchor.classificationKind === undefined ? 0 : 5) +
     (anchor.expectedEffectFilterField === undefined ? 0 : 6) +

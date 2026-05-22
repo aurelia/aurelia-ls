@@ -320,6 +320,9 @@ callback parameter typing, object-option typing, and nested literal context do n
   `declarationSourceAddressHandle` is the best TypeScript declaration span for navigation and owner-type repair
   planning. Do not overwrite either lane just to make a cursor answer look navigable; if the user-facing locus is an
   expression site, keep it on the expression/binding/diagnostic product that asked for the type.
+- API repair/action rows may still reject a declaration source as an edit target when the declaration belongs to
+  default-library or dependency code. In those cases the type provenance remains useful for navigation, but the
+  actionable source is the app expression/member that introduced the projected owner.
 - Member value routes add a narrower source lane on top of declaration source: an explicit property/parameter type
   annotation, function/method return type, or setter parameter type can be recorded with `SourceSpanRole.Type` and
   carried on the `CheckerTypeReference` for that value. Weak-owner repair planning should prefer that role when it

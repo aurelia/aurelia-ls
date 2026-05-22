@@ -1,6 +1,7 @@
 import type {
   OpenSemanticAppOptions,
   SemanticAuthoringCatalogViewRequest,
+  SemanticAuthoringGuidanceRequest,
   SemanticAuthoringRecipePlanRequest,
   SemanticAppQuery,
   SemanticRuntimeAppQueryBatchRequest,
@@ -21,6 +22,7 @@ export const aureliaMcpToolNames = {
   analysisCacheOverview: 'aurelia_analysis_cache_overview',
   clearAnalysisCache: 'aurelia_clear_analysis_cache',
   authoringCatalog: 'aurelia_authoring_catalog',
+  authoringGuidance: 'aurelia_app_building_guidance',
   authoringRecipePlan: 'aurelia_authoring_recipe_plan',
   appQueryCatalog: 'aurelia_app_query_catalog',
   appOverview: 'aurelia_app_overview',
@@ -79,6 +81,11 @@ export interface AureliaMcpAuthoringCatalogInput {
   readonly catalogView?: SemanticAuthoringCatalogViewRequest['view'];
 }
 
+export interface AureliaMcpAuthoringGuidanceInput extends SemanticAuthoringGuidanceRequest {
+  /** Optional host cwd hint for local clients that want all responses to carry a workspace label. */
+  readonly workspaceRoot?: string | null;
+}
+
 export interface AureliaMcpAuthoringRecipePlanInput extends SemanticAuthoringRecipePlanRequest {
   /** Optional host cwd hint for local clients that want all responses to carry a workspace label. */
   readonly workspaceRoot?: string | null;
@@ -102,6 +109,8 @@ export interface AureliaMcpAppQueryInput extends AureliaMcpOpenAppInput, Aurelia
 
 export interface AureliaMcpAppQueryBatchInput extends AureliaMcpOpenAppInput {
   readonly queries: SemanticRuntimeAppQueryBatchRequest['queries'];
+  readonly includeAppProfile?: SemanticRuntimeAppQueryBatchRequest['includeAppProfile'];
+  readonly includeAppQueryClaimProfiles?: SemanticRuntimeAppQueryBatchRequest['includeAppQueryClaimProfiles'];
 }
 
 export interface AureliaMcpAppOverviewInput extends AureliaMcpOpenAppInput {

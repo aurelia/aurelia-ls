@@ -1,0 +1,25 @@
+<section class="item-detail">
+  <a load="items">All items</a>
+
+  <let item.bind="state.items.readItem(routeParams.itemId)"></let>
+  <template if.bind="item">
+    <h1>${item.name}</h1>
+    <p>${item.summary}</p>
+    <dl>
+      <dt>Title</dt>
+      <dd>${item.titleLabel}</dd>
+      <dt>Description</dt>
+      <dd>${item.descriptionLabel}</dd>
+      <dt>Category</dt>
+      <dd>${item.categoryLabel}</dd>
+      <dt>Monthly Price</dt>
+      <dd>${item.monthlyPriceLabel}</dd>
+      <dt>Available</dt>
+      <dd>${item.availableLabel}</dd>
+      <dt>Opened from</dt>
+      <dd>${routeParams.ref ?? 'catalog'}</dd>
+    </dl>
+    <button type="button" click.trigger="state.selectItem(item.id)" disabled.bind="!item.inStock">Select</button>
+  </template>
+  <p else>Loading Item ${routeParams.itemId}...</p>
+</section>

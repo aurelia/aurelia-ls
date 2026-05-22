@@ -30,6 +30,10 @@ export class TrackableMethodDependenciesApp {
     value: 2,
   };
 
+  ordinaryCounter = {
+    value: 3,
+  };
+
   @computed
   featuredProductNames(): string {
     return this.products
@@ -67,5 +71,9 @@ export class TrackableMethodDependenciesApp {
   @astTrack({ deps: undefined })
   nullishAstTrackLabel(): string {
     return this.nullishAstTrackCounter.value.toString();
+  }
+
+  ordinaryCounterLabel(): string {
+    return this.ordinaryCounter.value.toString();
   }
 }

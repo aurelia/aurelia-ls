@@ -161,6 +161,8 @@ export class CheckerExpressionScopeNarrower {
       narrowedType,
       slot.sourceAddressHandle ?? sourceAddressHandle,
       slot.fieldProvenance,
+      slot.staticValue,
+      slot.memberTypes,
     );
     return lookup.lookupKind === BindingScopeLookupKind.OverrideContext
       ? new CheckerExpressionScopeNarrowingResult([], [narrowedSlot])

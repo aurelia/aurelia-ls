@@ -1,0 +1,73 @@
+main {
+  display: grid;
+  gap: 1rem;
+  max-width: 54rem;
+  margin: 0 auto;
+  padding: 2rem;
+}
+
+.wizard {
+  display: grid;
+  gap: 1rem;
+}
+
+.wizard-progress {
+  background: #e5e7eb;
+  border-radius: 999px;
+  overflow: hidden;
+}
+
+.wizard-progress-bar {
+  background: #2563eb;
+  height: 0.625rem;
+}
+
+.wizard-steps {
+  display: flex;
+  gap: 0.75rem;
+  list-style: none;
+  padding: 0;
+}
+
+.wizard-step {
+  color: #4b5563;
+}
+
+.wizard-step.active {
+  color: #111827;
+  font-weight: 700;
+}
+
+.wizard-step.complete {
+  color: #166534;
+}
+
+.wizard-ready {
+  border-color: #166534;
+}
+
+.wizard-pending {
+  border-color: #991b1b;
+}
+
+.field-stack {
+  display: grid;
+  gap: 0.25rem;
+}
+
+.field-invalid {
+  border-left: 0.25rem solid #991b1b;
+  padding-left: 0.75rem;
+}
+
+.error {
+  color: #991b1b;
+  margin: 0;
+}
+
+form {
+  border: 1px solid #d1d5db;
+  display: grid;
+  gap: 1rem;
+  padding: 1rem;
+}

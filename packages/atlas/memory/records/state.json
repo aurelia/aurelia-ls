@@ -21,6 +21,8 @@
         "State store lookup issues are post-template because state/dispatch binding commands and & state:'name' binding behaviors are visible only after template runtime products and expression parses exist.",
         ".state and .dispatch commands are full value-site/data-flow surfaces: StateBinding exposes store-state reads into target access/value-channel flow, and StateDispatchBinding exposes event listener target operations plus state-dispatch-action source operations/value channels.",
         "State-dispatch payload expressions reuse template listener event-scope typing: $event.currentTarget is refined from the authored host element, and native value-bearing form controls refine $event.target through the same DOM tag-name-map substrate as observer lookup.",
+        "The state-store list authoring recipe now verifies store-backed .state, .dispatch, & state, and interpolation-part data flow plus observed dependencies for store-scope reads such as title, label, collection rows, draft === \"\", and $event.target.value.",
+        "Framework corpus accepts state-store/store as query aliases for the stored state concept, so @aurelia/state route pressure can use plugin-specific vocabulary without splitting the corpus concept ontology.",
         "Remaining state-command pressure is dynamic store-name selection, broader non-form event-target policy, and a future policy for action payload target types, not basic command value-flow admission.",
         "Keep @fromState(...) target validation source-owned, not observation-owned; the shared decorator-target helper lives under type-system for this reason.",
         "Leave DevTools dispatch errors to runtime host/lifecycle substrates; semantic-runtime does not model browser extension availability or live DevTools message payloads."
@@ -105,7 +107,7 @@
         }
       ],
       "createdAt": "2026-05-14",
-      "updatedAt": "2026-05-19"
+      "updatedAt": "2026-05-20"
     }
   ]
 }

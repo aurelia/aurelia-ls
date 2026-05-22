@@ -2,6 +2,7 @@
 import path from 'node:path';
 import { z } from 'zod/v4';
 import { AureliaMcpSemanticRuntimeAdapter } from '../runtime-adapter.js';
+import { aureliaMcpResultText } from '../result-text.js';
 import {
   appDiagnosticsInputSchema,
   appOverviewInputSchema,
@@ -10,6 +11,7 @@ import {
   appQueryInputSchema,
   analysisCacheOverviewInputSchema,
   authoringCatalogInputSchema,
+  authoringGuidanceInputSchema,
   authoringOrientationInputSchema,
   authoringRecipePlanInputSchema,
   clearAnalysisCacheInputSchema,
@@ -20,6 +22,7 @@ import {
   templateDiagnosticsInputSchema,
   workspaceOverviewInputSchema,
 } from '../tool-schemas.js';
+import { aureliaMcpToolNames } from '../tool-contracts.js';
 import type {
   AureliaMcpAppDiagnosticsInput,
   AureliaMcpAppOverviewInput,
@@ -28,6 +31,7 @@ import type {
   AureliaMcpAppQueryCatalogInput,
   AureliaMcpAnalysisCacheOverviewInput,
   AureliaMcpAuthoringCatalogInput,
+  AureliaMcpAuthoringGuidanceInput,
   AureliaMcpAuthoringOrientationInput,
   AureliaMcpAuthoringRecipePlanInput,
   AureliaMcpClearAnalysisCacheInput,
@@ -44,6 +48,7 @@ const commandInputSchemas = {
   'analysis-cache-overview': z.object(analysisCacheOverviewInputSchema).strict(),
   'clear-analysis-cache': z.object(clearAnalysisCacheInputSchema).strict(),
   'authoring-catalog': z.object(authoringCatalogInputSchema).strict(),
+  'app-building-guidance': z.object(authoringGuidanceInputSchema).strict(),
   'authoring-recipe-plan': z.object(authoringRecipePlanInputSchema).strict(),
   'app-query-catalog': z.object(appQueryCatalogInputSchema).strict(),
   'app-overview': z.object(appOverviewInputSchema).strict(),
@@ -59,6 +64,27 @@ const commandInputSchemas = {
   'template-diagnostics': z.object(templateDiagnosticsInputSchema).strict(),
 } as const;
 
+const publicToolCommandAliases: Record<string, keyof typeof commandInputSchemas> = {
+  [aureliaMcpToolNames.workspaceOverview]: 'workspace-overview',
+  [aureliaMcpToolNames.analysisCacheOverview]: 'analysis-cache-overview',
+  [aureliaMcpToolNames.clearAnalysisCache]: 'clear-analysis-cache',
+  [aureliaMcpToolNames.authoringCatalog]: 'authoring-catalog',
+  [aureliaMcpToolNames.authoringGuidance]: 'app-building-guidance',
+  [aureliaMcpToolNames.authoringRecipePlan]: 'authoring-recipe-plan',
+  [aureliaMcpToolNames.appQueryCatalog]: 'app-query-catalog',
+  [aureliaMcpToolNames.appOverview]: 'app-overview',
+  [aureliaMcpToolNames.routerOverview]: 'router-overview',
+  [aureliaMcpToolNames.appQuery]: 'app-query',
+  [aureliaMcpToolNames.appQueryBatch]: 'app-query-batch',
+  [aureliaMcpToolNames.authoringOrientation]: 'authoring-orientation',
+  [aureliaMcpToolNames.openSeamOverview]: 'open-seam-overview',
+  [aureliaMcpToolNames.diagnosticOverview]: 'diagnostic-overview',
+  [aureliaMcpToolNames.appDiagnostics]: 'app-diagnostics',
+  [aureliaMcpToolNames.templateCursorInfo]: 'template-cursor-info',
+  [aureliaMcpToolNames.templateCompletions]: 'template-completions',
+  [aureliaMcpToolNames.templateDiagnostics]: 'template-diagnostics',
+};
+
 const adapter = new AureliaMcpSemanticRuntimeAdapter();
 const rawArgs = process.argv.slice(2);
 if (rawArgs.length === 0 || rawArgs[0] === '--help' || rawArgs[0] === '-h') {
@@ -66,10 +92,12 @@ if (rawArgs.length === 0 || rawArgs[0] === '--help' || rawArgs[0] === '-h') {
   process.exit(0);
 }
 try {
-  const { command, input } = parseInvocation(rawArgs);
+  const { command, input, outputMode } = parseInvocation(rawArgs);
   normalizeInvocationPaths(input);
   const result = await invoke(command, validateCommandInput(command, input));
-  process.stdout.write(`${JSON.stringify(result, null, 2)}\n`);
+  process.stdout.write(outputMode === 'text'
+    ? `${aureliaMcpResultText(result)}\n`
+    : `${JSON.stringify(result, null, 2)}\n`);
 } catch (error) {
   process.stderr.write(`${JSON.stringify({ error: serializeError(error) }, null, 2)}\n`);
   process.exitCode = 1;
@@ -93,6 +121,8 @@ async function invoke(command: string, input: Record<string, unknown>): Promise<
       return adapter.clearAnalysisCache(input as unknown as AureliaMcpClearAnalysisCacheInput);
     case 'authoring-catalog':
       return adapter.authoringCatalog(input as unknown as AureliaMcpAuthoringCatalogInput);
+    case 'app-building-guidance':
+      return adapter.authoringGuidance(input as unknown as AureliaMcpAuthoringGuidanceInput);
     case 'authoring-recipe-plan':
       return adapter.authoringRecipePlan(input as unknown as AureliaMcpAuthoringRecipePlanInput);
     case 'app-query-catalog':
@@ -124,18 +154,42 @@ async function invoke(command: string, input: Record<string, unknown>): Promise<
   }
 }
 
-function parseInvocation(args: readonly string[]): { command: string; input: Record<string, unknown> } {
-  const [command, ...rest] = args;
-  if (command == null || command === '--help' || command === '-h') {
+type DevInvokeOutputMode = 'json' | 'text';
+
+function parseInvocation(args: readonly string[]): {
+  command: string;
+  input: Record<string, unknown>;
+  outputMode: DevInvokeOutputMode;
+} {
+  const [rawCommand, ...rest] = args;
+  if (rawCommand == null || rawCommand === '--help' || rawCommand === '-h') {
     throw new Error(usage());
   }
+  const command = publicToolCommandAliases[rawCommand] ?? rawCommand;
   const input: Record<string, unknown> = {};
+  let outputMode: DevInvokeOutputMode = 'json';
   let projectRootDir: string | null = null;
   for (let index = 0; index < rest.length; index += 1) {
     const key = rest[index];
+    if (key == null) {
+      continue;
+    }
+    if (!key.startsWith('--') && looksLikeJsonObject(key)) {
+      Object.assign(input, parseJsonInput(key));
+      continue;
+    }
+    if (key === '--text') {
+      outputMode = 'text';
+      continue;
+    }
+    if (key === '--output') {
+      outputMode = parseOutputMode(requireValue(rest, index, key), key);
+      index += 1;
+      continue;
+    }
     if (key === '--input') {
       const raw = requireValue(rest, index, key);
-      Object.assign(input, JSON.parse(raw));
+      Object.assign(input, parseJsonInput(raw));
       index += 1;
       continue;
     }
@@ -184,6 +238,31 @@ function parseInvocation(args: readonly string[]): { command: string; input: Rec
       index += 1;
       continue;
     }
+    if (key === '--focus') {
+      input.focus = requireValue(rest, index, key);
+      index += 1;
+      continue;
+    }
+    if (key === '--featureGoal') {
+      input.featureGoal = requireValue(rest, index, key);
+      index += 1;
+      continue;
+    }
+    if (key === '--recipeLimit') {
+      input.recipeLimit = parseNonNegativeInteger(requireValue(rest, index, key), key);
+      index += 1;
+      continue;
+    }
+    if (key === '--principleLimit') {
+      input.principleLimit = parseNonNegativeInteger(requireValue(rest, index, key), key);
+      index += 1;
+      continue;
+    }
+    if (key === '--decisionLimit') {
+      input.decisionLimit = parseNonNegativeInteger(requireValue(rest, index, key), key);
+      index += 1;
+      continue;
+    }
     if (key === '--catalogView') {
       input.catalogView = requireValue(rest, index, key);
       index += 1;
@@ -200,23 +279,69 @@ function parseInvocation(args: readonly string[]): { command: string; input: Rec
       continue;
     }
     if (key === '--includeText') {
-      input.includeText = parseBoolean(requireValue(rest, index, key), key);
+      const option = readBooleanOption(rest, index, key);
+      input.includeText = option.value;
+      index = option.nextIndex;
+      continue;
+    }
+    if (key === '--recipeSourceFile' || key === '--sourceFilePaths') {
+      addStringListValues(input, 'sourceFilePaths', requireValue(rest, index, key));
+      index += 1;
+      continue;
+    }
+    if (key === '--sourceTextRequestHint' || key === '--sourceTextRequestHintKey' || key === '--sourceTextRequestHintKeys') {
+      addStringListValues(input, 'sourceTextRequestHintKeys', requireValue(rest, index, key));
+      index += 1;
+      continue;
+    }
+    if (key === '--sourceParameterValues') {
+      addSourceParameterValues(input, parseSourceParameterValues(requireValue(rest, index, key), key));
+      index += 1;
+      continue;
+    }
+    if (key === '--sourceParameterValue') {
+      addSourceParameterValues(input, [parseSourceParameterAssignment(requireValue(rest, index, key), key)]);
+      index += 1;
+      continue;
+    }
+    if (key === '--effectDetail') {
+      input.effectDetail = requireValue(rest, index, key);
+      index += 1;
+      continue;
+    }
+    if (key === '--usage') {
+      input.usage = requireValue(rest, index, key);
       index += 1;
       continue;
     }
     if (key === '--includeKernelBreakdowns') {
-      input.includeKernelBreakdowns = parseBoolean(requireValue(rest, index, key), key);
-      index += 1;
+      const option = readBooleanOption(rest, index, key);
+      input.includeKernelBreakdowns = option.value;
+      index = option.nextIndex;
       continue;
     }
     if (key === '--includeDetailDensity') {
-      input.includeDetailDensity = parseBoolean(requireValue(rest, index, key), key);
-      index += 1;
+      const option = readBooleanOption(rest, index, key);
+      input.includeDetailDensity = option.value;
+      index = option.nextIndex;
       continue;
     }
     if (key === '--includeQueryClaimRows') {
-      input.includeQueryClaimRows = parseBoolean(requireValue(rest, index, key), key);
-      index += 1;
+      const option = readBooleanOption(rest, index, key);
+      input.includeQueryClaimRows = option.value;
+      index = option.nextIndex;
+      continue;
+    }
+    if (key === '--includeAppProfile') {
+      const option = readBooleanOption(rest, index, key);
+      input.includeAppProfile = option.value;
+      index = option.nextIndex;
+      continue;
+    }
+    if (key === '--includeAppQueryClaimProfiles') {
+      const option = readBooleanOption(rest, index, key);
+      input.includeAppQueryClaimProfiles = option.value;
+      index = option.nextIndex;
       continue;
     }
     if (key === '--typeSystemDependencyCacheClearPolicy') {
@@ -230,13 +355,15 @@ function parseInvocation(args: readonly string[]): { command: string; input: Rec
       continue;
     }
     if (key === '--includeAuthoringTemplates') {
-      input.includeAuthoringTemplates = parseBoolean(requireValue(rest, index, key), key);
-      index += 1;
+      const option = readBooleanOption(rest, index, key);
+      input.includeAuthoringTemplates = option.value;
+      index = option.nextIndex;
       continue;
     }
     if (key === '--includeAuthoringOrientation') {
-      input.includeAuthoringOrientation = parseBoolean(requireValue(rest, index, key), key);
-      index += 1;
+      const option = readBooleanOption(rest, index, key);
+      input.includeAuthoringOrientation = option.value;
+      index = option.nextIndex;
       continue;
     }
     if (key === '--authoringTemplateSourceFile') {
@@ -269,7 +396,7 @@ function parseInvocation(args: readonly string[]): { command: string; input: Rec
       index += 1;
       continue;
     }
-    if (key === '--pageSize') {
+    if (key === '--pageSize' || key === '--page.size') {
       input.page = {
         ...(typeof input.page === 'object' && input.page != null ? input.page : {}),
         size: Number.parseInt(requireValue(rest, index, key), 10),
@@ -277,7 +404,7 @@ function parseInvocation(args: readonly string[]): { command: string; input: Rec
       index += 1;
       continue;
     }
-    if (key === '--pageCursor') {
+    if (key === '--pageCursor' || key === '--page.cursor') {
       input.page = {
         ...(typeof input.page === 'object' && input.page != null ? input.page : {}),
         cursor: requireValue(rest, index, key),
@@ -285,7 +412,7 @@ function parseInvocation(args: readonly string[]): { command: string; input: Rec
       index += 1;
       continue;
     }
-    if (key === '--projectPageSize') {
+    if (key === '--projectPageSize' || key === '--projectPage.size') {
       input.projectPage = {
         ...(typeof input.projectPage === 'object' && input.projectPage != null ? input.projectPage : {}),
         size: parseNonNegativeInteger(requireValue(rest, index, key), key),
@@ -293,7 +420,7 @@ function parseInvocation(args: readonly string[]): { command: string; input: Rec
       index += 1;
       continue;
     }
-    if (key === '--projectPageCursor') {
+    if (key === '--projectPageCursor' || key === '--projectPage.cursor') {
       input.projectPage = {
         ...(typeof input.projectPage === 'object' && input.projectPage != null ? input.projectPage : {}),
         cursor: requireValue(rest, index, key),
@@ -330,7 +457,14 @@ function parseInvocation(args: readonly string[]): { command: string; input: Rec
   }
   applyProjectRootShortcut(input, projectRootDir);
   validateInvocationInput(command, input);
-  return { command, input };
+  return { command, input, outputMode };
+}
+
+function parseOutputMode(value: string, key: string): DevInvokeOutputMode {
+  if (value === 'json' || value === 'text') {
+    return value;
+  }
+  throw new Error(`${key} expects json or text.`);
 }
 
 function validateInvocationInput(command: string, input: Record<string, unknown>): void {
@@ -400,12 +534,39 @@ function requireValue(args: readonly string[], index: number, key: string): stri
   return value;
 }
 
+function readBooleanOption(
+  args: readonly string[],
+  index: number,
+  key: string,
+): { value: boolean; nextIndex: number } {
+  const value = args[index + 1];
+  if (value == null || value.startsWith('--')) {
+    return { value: true, nextIndex: index };
+  }
+  return { value: parseBoolean(value, key), nextIndex: index + 1 };
+}
+
 function usage(): string {
   return [
     'Usage: pnpm --filter @aurelia-ls/mcp dev:invoke -- <command> --workspaceRoot <path> [options]',
-    'Commands: workspace-overview, analysis-cache-overview, clear-analysis-cache, authoring-catalog, authoring-recipe-plan, app-query-catalog, app-overview, router-overview, app-query, app-query-batch, authoring-orientation, open-seam-overview, diagnostic-overview, app-diagnostics, template-cursor-info, template-completions, template-diagnostics',
-    'Use --input <json> for full adapter input, or common flags such as --projectKey, --projectRootDir, --projectDiscovery, --analysisDepth, --includeAuthoringTemplates, --includeAuthoringOrientation, --includeKernelBreakdowns, --includeDetailDensity, --includeQueryClaimRows, --typeSystemDependencyCacheClearPolicy, --group, --queryKind, --sourceFile, --cursor file:line:character[:offset], --diagnosticProjection, --appRetention, --pageSize, --pageCursor, --projectPageSize, --projectPageCursor, --rowPageSize, and --rowLimit.',
+    'Commands: workspace-overview, analysis-cache-overview, clear-analysis-cache, authoring-catalog, app-building-guidance, authoring-recipe-plan, app-query-catalog, app-overview, router-overview, app-query, app-query-batch, authoring-orientation, open-seam-overview, diagnostic-overview, app-diagnostics, template-cursor-info, template-completions, template-diagnostics',
+    'Public tool names such as aurelia_app_building_guidance and aurelia_authoring_recipe_plan are accepted as aliases.',
+    'Use --text or --output text to print the same compact text returned through MCP content; JSON remains the default for structured inspection.',
+    'Use --input <json> or a positional JSON object for full adapter input, plus common flags such as --projectKey, --projectRootDir, --projectDiscovery, --analysisDepth, --includeText [true|false], --includeAuthoringTemplates [true|false], --includeAuthoringOrientation [true|false], --includeKernelBreakdowns [true|false], --includeDetailDensity [true|false], --includeQueryClaimRows [true|false], --includeAppProfile [true|false], --includeAppQueryClaimProfiles [true|false], --typeSystemDependencyCacheClearPolicy, --focus, --featureGoal, --recipeLimit, --principleLimit, --decisionLimit, --group, --queryKind, --sourceFile, --sourceFilePath, --recipeSourceFile, --sourceFilePaths <comma-separated paths>, --sourceTextRequestHintKey <hint>, --sourceParameterValue key=value, --sourceParameterValues <json-array or semicolon-separated key=value list>, --cursor file:line:character[:offset], --diagnosticProjection, --appRetention, --effectDetail, --usage, --pageSize/--page.size, --pageCursor/--page.cursor, --projectPageSize/--projectPage.size, --projectPageCursor/--projectPage.cursor, --rowPageSize, and --rowLimit.',
   ].join('\n');
+}
+
+function looksLikeJsonObject(value: string): boolean {
+  const trimmed = value.trim();
+  return trimmed.startsWith('{') && trimmed.endsWith('}');
+}
+
+function parseJsonInput(value: string): Record<string, unknown> {
+  const parsed: unknown = JSON.parse(value);
+  if (parsed == null || Array.isArray(parsed) || typeof parsed !== 'object') {
+    throw new Error('JSON input must be an object.');
+  }
+  return parsed as Record<string, unknown>;
 }
 
 function addStringListValue(input: Record<string, unknown>, key: string, value: string): void {
@@ -415,6 +576,95 @@ function addStringListValue(input: Record<string, unknown>, key: string, value: 
     return;
   }
   input[key] = [value];
+}
+
+function addStringListValues(input: Record<string, unknown>, key: string, value: string): void {
+  // PowerShell can hand pnpm an unquoted comma-separated path list as one space-joined token.
+  // Recipe source paths are repo-relative and should not contain spaces, so accept both separators here.
+  for (const part of value.split(/[,\s]+/u)) {
+    const trimmed = part.trim();
+    if (trimmed !== '') {
+      addStringListValue(input, key, trimmed);
+    }
+  }
+}
+
+function addSourceParameterValues(
+  input: Record<string, unknown>,
+  values: readonly { readonly key: string; readonly value: string }[],
+): void {
+  const existing = input.sourceParameterValues;
+  if (Array.isArray(existing)) {
+    existing.push(...values);
+    return;
+  }
+  input.sourceParameterValues = [...values];
+}
+
+function parseSourceParameterValues(
+  value: string,
+  key: string,
+): readonly { readonly key: string; readonly value: string }[] {
+  const trimmed = value.trim();
+  if (trimmed.startsWith('[')) {
+    return parseSourceParameterValuesJson(trimmed, key);
+  }
+  return trimmed
+    .split(/[\r\n;]+/u)
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0)
+    .map((part) => parseSourceParameterAssignment(part, key));
+}
+
+function parseSourceParameterValuesJson(
+  value: string,
+  key: string,
+): readonly { readonly key: string; readonly value: string }[] {
+  const parsed: unknown = JSON.parse(value);
+  if (!Array.isArray(parsed)) {
+    throw new Error(`${key} JSON must be an array of { key, value } objects.`);
+  }
+  return parsed.map((row, index) => {
+    if (row == null || Array.isArray(row) || typeof row !== 'object') {
+      throw new Error(`${key}[${index}] must be an object.`);
+    }
+    const candidate = row as { readonly key?: unknown; readonly value?: unknown };
+    if (typeof candidate.key !== 'string' || typeof candidate.value !== 'string') {
+      throw new Error(`${key}[${index}] must contain string key and value fields.`);
+    }
+    return normalizeSourceParameterValue(candidate.key, candidate.value, `${key}[${index}]`);
+  });
+}
+
+function parseSourceParameterAssignment(
+  value: string,
+  key: string,
+): { readonly key: string; readonly value: string } {
+  const separatorIndex = value.indexOf('=');
+  if (separatorIndex <= 0) {
+    throw new Error(`${key} expects key=value.`);
+  }
+  return normalizeSourceParameterValue(
+    value.slice(0, separatorIndex),
+    value.slice(separatorIndex + 1),
+    key,
+  );
+}
+
+function normalizeSourceParameterValue(
+  rawKey: string,
+  rawValue: string,
+  source: string,
+): { readonly key: string; readonly value: string } {
+  const parameterKey = rawKey.trim();
+  const parameterValue = rawValue.trim();
+  if (parameterKey.length === 0 || parameterValue.length === 0) {
+    throw new Error(`${source} must contain a non-empty key and value.`);
+  }
+  return {
+    key: parameterKey,
+    value: parameterValue,
+  };
 }
 
 function parseBoolean(value: string, key: string): boolean {

@@ -1,6 +1,7 @@
 import {
   ExpectedSemanticEffect,
   ExpectedSemanticEffectFilter,
+  expectedSemanticEffectFilters,
 } from './expected-effect.js';
 import {
   BuiltInTemplateControllerChildViewCardinality,
@@ -133,6 +134,40 @@ export function switchTemplateControllerRuntimeEffects(
       BuiltInTemplateControllerChildViewCardinality.Optional,
     ),
   ];
+}
+
+/** Expected binding-value-channel row for a built-in template-controller value handoff. */
+export function templateControllerValueChannelEffect(
+  summary: string,
+  channelKind: string,
+  runtimeValueType: string,
+  rawTargetPropertyType: string | null = 'unknown',
+): ExpectedSemanticEffect {
+  return ExpectedSemanticEffect.signatureFact(summary, 'binding-value-channel', 'template', 'template-binding', 'present', null, expectedSemanticEffectFilters(
+    ['targetKind', 'controller-view-model'],
+    ['targetProperty', 'value'],
+    ['channelKind', channelKind],
+    ['rawTargetPropertyType', rawTargetPropertyType],
+    ['runtimeValueType', runtimeValueType],
+  ));
+}
+
+/** Expected data-flow row for a built-in template-controller value handoff. */
+export function templateControllerValueDataFlowEffect(
+  summary: string,
+  valueChannelKind: string,
+  targetValueType: string,
+  sourceName?: string,
+  targetPropertyType: string = 'unknown',
+): ExpectedSemanticEffect {
+  return ExpectedSemanticEffect.signatureFact(summary, 'binding-data-flow', 'template', 'template-binding', 'present', null, expectedSemanticEffectFilters(
+    ...(sourceName === undefined ? [] : [['sourceName', sourceName] as const]),
+    ['targetKind', 'controller-view-model'],
+    ['targetProperty', 'value'],
+    ['targetPropertyType', targetPropertyType],
+    ['targetValueType', targetValueType],
+    ['valueChannelKind', valueChannelKind],
+  ));
 }
 
 function promiseBranchTemplateControllerRuntimeEffect(

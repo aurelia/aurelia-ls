@@ -1,5 +1,6 @@
 import {
   AuthoringSourceEditPlan,
+  domainNeutralSourcePattern,
   recipeSourceEditPolicy,
   recipeSourceFile,
 } from './source-plan.js';
@@ -9,6 +10,8 @@ import {
   fillSourceTemplate,
   sourceText,
 } from './source-template.js';
+import { standardAureliaEntrypointFile } from './aurelia-entrypoint-source-plan.js';
+import { SourcePatternModules } from './source-pattern-modules.js';
 
 export interface MinimalAppSourcePlanModel {
   readonly rootDir: string;
@@ -25,16 +28,7 @@ export function minimalAppSourcePlan(model: MinimalAppSourcePlanModel): Authorin
     model.rootDir,
     recipeSourceEditPolicy('recipe-baseline'),
     [
-      recipeSourceFile(
-        model.entrypointPath,
-        'entrypoint',
-        'typescript',
-        'create-entrypoint',
-        fillSourceTemplate(ENTRYPOINT_SOURCE, {
-          ROOT_COMPONENT_CLASS: model.rootComponentClassName,
-          ROOT_COMPONENT_MODULE: moduleSpecifier(model.entrypointPath, model.rootComponentPath, false),
-        }),
-      ),
+      standardAureliaEntrypointFile(model),
       recipeSourceFile(
         model.rootComponentPath,
         'root-component',
@@ -51,30 +45,31 @@ export function minimalAppSourcePlan(model: MinimalAppSourcePlanModel): Authorin
         'template',
         'html',
         'create-external-template',
-        ROOT_TEMPLATE_SOURCE,
+        MINIMAL_APP_ROOT_TEMPLATE_SOURCE,
       ),
     ],
     aureliaRecipeProjectToolingPlan({
       appName: model.appName,
     }),
+    domainNeutralSourcePattern(
+      'minimal-app.domain-neutral',
+      'Minimal Aurelia shell pattern',
+      'A domain-neutral app shell with an explicit entrypoint, root custom element, external template, and package/typecheck baseline.',
+      'none',
+      [
+        'Replace the greeting with the caller feature surface before treating this as production app code.',
+        'Use this as the smallest source-plan baseline before layering state, routing, forms, plugins, or domain services.',
+      ],
+      [],
+      [
+        SourcePatternModules.AppShell,
+      ],
+    ),
   );
 }
 
-const ENTRYPOINT_SOURCE = sourceText(`
-import { Aurelia, StandardConfiguration } from '@aurelia/runtime-html';
-import { __ROOT_COMPONENT_CLASS__ } from '__ROOT_COMPONENT_MODULE__';
-
-new Aurelia()
-  .register(StandardConfiguration)
-  .app({
-    host: document.body,
-    component: __ROOT_COMPONENT_CLASS__,
-  })
-  .start();
-`).trimStart();
-
 const ROOT_COMPONENT_SOURCE = sourceText(`
-import { customElement } from '@aurelia/runtime-html';
+import { customElement } from 'aurelia';
 import template from '__ROOT_TEMPLATE_MODULE__';
 
 @customElement({
@@ -86,7 +81,7 @@ export class __ROOT_COMPONENT_CLASS__ {
 }
 `).trimStart();
 
-const ROOT_TEMPLATE_SOURCE = sourceText(`
+export const MINIMAL_APP_ROOT_TEMPLATE_SOURCE = sourceText(`
 <main>
   <h1>\${message}</h1>
 </main>

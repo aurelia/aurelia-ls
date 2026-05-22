@@ -2,11 +2,13 @@ import type { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { CheckerExpressionTypeEvaluator } from '../type-system/expression-type-evaluator.js';
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
+import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
 import type { RuntimeExpressionBinding } from './runtime-binding-expression.js';
 import type { RuntimeInstructionScopeLookup } from './runtime-binding-expression.js';
 import type {
   RuntimeBindingValueChannelAuthority,
   RuntimeBindingValueChannelKind,
+  RuntimeBindingValueChannelCouplingKind,
   RuntimeBindingPrimitiveValue,
 } from './runtime-binding-observation.js';
 
@@ -20,6 +22,7 @@ export type RuntimeBindingValueChannelDraft = {
   readonly primitiveValueDomain?: readonly RuntimeBindingPrimitiveValue[];
   readonly isCollection: boolean | null;
   readonly usesCustomMatcher?: boolean;
+  readonly observerCouplings?: readonly RuntimeBindingValueChannelCouplingKind[];
   readonly openReason: string | null;
   readonly openReasonKinds?: readonly OpenSeamReasonKind[];
 };
@@ -27,6 +30,7 @@ export type RuntimeBindingValueChannelDraft = {
 export interface BindingValueChannelDraftContext {
   readonly input: {
     readonly runtimeBindings: RuntimeRenderingEmission;
+    readonly controllerBind: RuntimeControllerBindEmission;
   };
   readonly instructionScopes: RuntimeInstructionScopeLookup;
   readonly evaluator: CheckerExpressionTypeEvaluator;

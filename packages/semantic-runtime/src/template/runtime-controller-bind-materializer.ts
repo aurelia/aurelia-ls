@@ -17,14 +17,17 @@ import {
   ObserverLocatorLookupRequest,
   ObserverLocatorLookupResult,
 } from '../observation/observer-locator.js';
+import { instructionScopeLookup } from '../observation/runtime-binding-expression.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { HtmlElement, HtmlText } from './html-ir.js';
 import { TemplateProductDetails } from './product-details.js';
 import {
-  PropertyBinding,
   InterpolationBinding,
+  LetBinding,
+  LetBindingTargetContext,
+  PropertyBinding,
   RefBinding,
   type RuntimeBinding,
   type RuntimeBindingBindHost,
@@ -191,6 +194,7 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
 
   materializeTargetOperation(request: RuntimeBindingTargetOperationRequest): RuntimeBindingTargetOperation {
     return this.materializer.materializeTargetOperation(
+      this.input,
       request,
       this.targetControllerByBinding.get(request.binding.productHandle) ?? null,
       this.source,
@@ -328,6 +332,7 @@ export class RuntimeControllerBindMaterializer {
   }
 
   materializeTargetOperation(
+    input: RuntimeControllerBindMaterializationRequest,
     request: RuntimeBindingTargetOperationRequest,
     targetController: RuntimeControllerFrame | null,
     source: RuntimeControllerBindSourceSet,
@@ -336,9 +341,11 @@ export class RuntimeControllerBindMaterializer {
     targetOperations: RuntimeBindingTargetOperation[],
     openSeams: OpenSeam[],
   ): RuntimeBindingTargetOperation {
-    const target = this.targetOperationTarget(request.binding, targetController);
+    const target = this.targetOperationTarget(input, request.binding, targetController);
     const openReason = target.targetKind === RuntimeBindingTargetKind.Unknown
-      ? 'AttributeBinding.updateTarget did not carry a closed authored HTMLElement target.'
+      ? request.binding instanceof LetBinding
+        ? 'LetBinding.bind could not resolve the runtime Scope for its binding-context or override-context write.'
+        : 'AttributeBinding.updateTarget did not carry a closed authored HTMLElement target.'
       : null;
     const operationKind = openReason == null
       ? request.operationKind
@@ -464,9 +471,35 @@ export class RuntimeControllerBindMaterializer {
   }
 
   targetOperationTarget(
+    input: RuntimeControllerBindMaterializationRequest,
     binding: RuntimeBinding,
     targetController: RuntimeControllerFrame | null,
   ): RuntimeBindingTarget {
+    if (binding instanceof LetBinding) {
+      const scope = instructionScopeLookup(input.scopes.instructionScopes).scopeForBinding(input.runtimeRendering, binding);
+      if (scope == null) {
+        return new RuntimeBindingTarget(
+          RuntimeBindingTargetKind.Unknown,
+          null,
+          null,
+          null,
+          null,
+          null,
+        );
+      }
+      return new RuntimeBindingTarget(
+        binding.targetContext === LetBindingTargetContext.BindingContext
+          ? RuntimeBindingTargetKind.BindingContext
+          : RuntimeBindingTargetKind.OverrideContext,
+        null,
+        null,
+        binding.targetContext === LetBindingTargetContext.BindingContext
+          ? scope.bindingContext.contextType
+          : scope.overrideContext.contextType,
+        null,
+        null,
+      );
+    }
     const node = this.htmlNodeFor(binding.node);
     if (node == null) {
       return new RuntimeBindingTarget(

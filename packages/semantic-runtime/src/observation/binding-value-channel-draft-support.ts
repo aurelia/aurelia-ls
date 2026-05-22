@@ -20,11 +20,18 @@ import { runtimeAcceptedBindingExpressionAstForParse } from '../template/express
 import { TemplateProductDetails } from '../template/product-details.js';
 import {
   PropertyBinding,
+  RuntimeBindingTargetKind,
   SpreadValueBinding,
   type RuntimeBinding,
   type RuntimeBindingTargetAccess,
   type RuntimeBindingTargetOperation,
 } from '../template/runtime-binding.js';
+import {
+  runtimeHtmlTemplateControllerSemanticsForName,
+  type BuiltInTemplateControllerSemantics,
+} from '../template/template-controller-semantics.js';
+import type { RuntimeControllerFrame } from '../template/runtime-controller.js';
+import { CheckerAsyncTypeProjector } from '../type-system/checker-async-type-projector.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { TemplateExpressionParse } from '../template/value-site.js';
 import {
@@ -47,6 +54,7 @@ import {
 import {
   CheckerTypeProjectionOrigin,
   CheckerTypeShapeKind,
+  checkerTypeReferenceWithSource,
   sameCheckerTypeReference,
   type CheckerTypeReference,
   type CheckerTypeShape,
@@ -71,6 +79,7 @@ import type {
   RuntimeValueChannelBinding,
 } from './binding-value-channel-draft-types.js';
 import {
+  RuntimeBindingValueChannelCouplingKind,
   type RuntimeBindingPrimitiveValue,
 } from './runtime-binding-observation.js';
 import {
@@ -83,10 +92,14 @@ import {
 } from './runtime-binding-primitive-value.js';
 
 export class RuntimeBindingValueChannelTypeSupport {
+  private readonly asyncTypeProjector: CheckerAsyncTypeProjector;
+
   constructor(
     private readonly store: KernelStore,
     private readonly typeProjector: CheckerTypeProjector,
-  ) {}
+  ) {
+    this.asyncTypeProjector = new CheckerAsyncTypeProjector(store, typeProjector);
+  }
 
   projectCheckerType(
     local: string,
@@ -127,6 +140,38 @@ export class RuntimeBindingValueChannelTypeSupport {
       members: [],
       origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
       sourceAddressHandle: binding.sourceAddressHandle,
+    } satisfies CheckerSyntheticTypeProjectionRequest).toReference();
+  }
+
+  customMatcherFunctionType(
+    local: string,
+    sourceType: CheckerTypeReference | null,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference {
+    const sourceCarrier = this.readTypeShape(sourceType)?.carrier ?? null;
+    const booleanType = sourceCarrier == null
+      ? this.typeProjector.ensureSyntheticProjection({
+        localKey: `${local}:return`,
+        shapeKind: CheckerTypeShapeKind.Primitive,
+        display: 'boolean',
+        members: [],
+        origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
+        sourceAddressHandle,
+      } satisfies CheckerSyntheticTypeProjectionRequest).toReference()
+      : this.projectCheckerType(
+        `${local}:return`,
+        sourceCarrier.checker,
+        sourceCarrier.checker.getBooleanType(),
+        sourceAddressHandle,
+      );
+    return this.typeProjector.ensureSyntheticProjection({
+      localKey: local,
+      shapeKind: CheckerTypeShapeKind.Function,
+      display: '(left: unknown, right: unknown) => boolean',
+      members: [],
+      origin: CheckerTypeProjectionOrigin.SyntheticTemplateType,
+      sourceAddressHandle,
+      callReturnType: booleanType,
     } satisfies CheckerSyntheticTypeProjectionRequest).toReference();
   }
 
@@ -206,6 +251,16 @@ export class RuntimeBindingValueChannelTypeSupport {
     return sourceType ?? this.unknownRuntimeInputType(local, targetOperation.sourceAddressHandle);
   }
 
+  eventHandlerInvocationValueType(
+    sourceType: CheckerTypeReference | null,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    const shape = this.readTypeShape(sourceType);
+    return shape?.callReturnType == null
+      ? sourceType
+      : checkerTypeReferenceWithSource(shape.callReturnType, sourceAddressHandle);
+  }
+
   unknownRuntimeInputType(
     local: string,
     sourceAddressHandle: AddressHandle | null,
@@ -225,6 +280,16 @@ export class RuntimeBindingValueChannelTypeSupport {
     targetAccess: RuntimeBindingTargetAccess,
   ): CheckerTypeReference {
     return targetAccess.propertyType ?? this.unknownRuntimeInputType(local, targetAccess.sourceAddressHandle);
+  }
+
+  awaitedTypeReference(
+    local: string,
+    promiseType: CheckerTypeReference | null,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    return promiseType == null
+      ? null
+      : this.asyncTypeProjector.awaitedTypeReference(promiseType, local, sourceAddressHandle);
   }
 
   stringLiteralDomainType(
@@ -509,11 +574,78 @@ export class RuntimeBindingValueChannelDraftSupport {
     ) ?? null;
   }
 
+  propertyBindingForControllerTarget(
+    controller: RuntimeControllerFrame,
+    context: BindingValueChannelDraftContext,
+    targets: readonly string[],
+  ): PropertyBinding | null {
+    const targetAccess = context.input.controllerBind.targetAccesses.find((candidate) =>
+      candidate.targetKind === RuntimeBindingTargetKind.ControllerViewModel
+      && candidate.targetControllerProductHandle === controller.productHandle
+      && targets.includes(candidate.targetProperty)
+      && candidate.binding.productHandle != null
+    ) ?? null;
+    if (targetAccess?.binding.productHandle == null) {
+      return null;
+    }
+    return context.input.runtimeBindings.bindings.find((binding): binding is PropertyBinding =>
+      binding instanceof PropertyBinding
+      && binding.productHandle === targetAccess.binding.productHandle
+    ) ?? null;
+  }
+
   hasCustomMatcherBinding(
     node: HtmlElement,
     context: BindingValueChannelDraftContext,
   ): boolean {
     return this.propertyBindingForNodeTarget(node, context.input, ['matcher']) != null;
+  }
+
+  templateControllerSemanticsForTargetAccess(
+    targetAccess: RuntimeBindingTargetAccess,
+    context: BindingValueChannelDraftContext,
+  ): BuiltInTemplateControllerSemantics | null {
+    const controller = this.controllerForTargetAccess(targetAccess, context);
+    return controller?.name == null
+      ? null
+      : runtimeHtmlTemplateControllerSemanticsForName(controller.name);
+  }
+
+  controllerForTargetAccess(
+    targetAccess: RuntimeBindingTargetAccess,
+    context: BindingValueChannelDraftContext,
+  ): RuntimeControllerFrame | null {
+    if (
+      targetAccess.targetKind !== RuntimeBindingTargetKind.ControllerViewModel
+      || targetAccess.targetControllerProductHandle == null
+    ) {
+      return null;
+    }
+    return context.input.runtimeBindings.controllers.find((candidate) =>
+      candidate.productHandle === targetAccess.targetControllerProductHandle
+    ) ?? null;
+  }
+
+  promiseFulfilledValueTypeForTemplateControllerBranch(
+    local: string,
+    targetAccess: RuntimeBindingTargetAccess,
+    context: BindingValueChannelDraftContext,
+  ): CheckerTypeReference | null {
+    const branchController = this.controllerForTargetAccess(targetAccess, context);
+    const promiseController = nearestNamedControllerAncestor(branchController, 'promise');
+    const promiseValueBinding = promiseController == null
+      ? null
+      : this.propertyBindingForControllerTarget(promiseController, context, ['value']);
+    if (promiseValueBinding == null) {
+      return null;
+    }
+    const promiseValueScope = context.instructionScopes.scopeForBinding(context.input.runtimeBindings, promiseValueBinding);
+    const promiseType = this.sourceTypeForBinding(promiseValueBinding, promiseValueScope, context.evaluator, 'value');
+    return this.types.awaitedTypeReference(
+      `${local}:promise-fulfilled-value`,
+      promiseType,
+      targetAccess.sourceAddressHandle,
+    );
   }
 
   sourceTypeForBinding(
@@ -637,12 +769,35 @@ export class RuntimeBindingValueChannelDraftSupport {
   }
 }
 
+function nearestNamedControllerAncestor(
+  controller: RuntimeControllerFrame | null,
+  name: string,
+): RuntimeControllerFrame | null {
+  let current = controller?.parent ?? null;
+  while (current != null) {
+    if (current.name === name) {
+      return current;
+    }
+    current = current.parent;
+  }
+  return null;
+}
+
 function staticStringValue(value: string): BindingValueExpression {
   return {
     valueType: null,
     valueDomain: [value],
     primitiveValueDomain: runtimeBindingStringPrimitiveDomain([value]),
   };
+}
+
+export function withCustomMatcherCoupling(
+  couplings: readonly RuntimeBindingValueChannelCouplingKind[],
+  usesCustomMatcher: boolean,
+): readonly RuntimeBindingValueChannelCouplingKind[] {
+  return usesCustomMatcher
+    ? [...couplings, RuntimeBindingValueChannelCouplingKind.CustomMatcherComparison]
+    : couplings;
 }
 
 export function isBroadTypeShape(

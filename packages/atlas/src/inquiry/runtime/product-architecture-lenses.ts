@@ -30,7 +30,7 @@ import {
   sourceRangeFromOneBasedReference,
   type SourceProject,
 } from "../../source/index.js";
-import { groupByDefined, uniqueSortedStrings } from "../../collections.js";
+import { compareNullableStrings, groupByDefined, uniqueSortedStrings } from "../../collections.js";
 import {
   callDependencyRows,
   enrichProductArchitectureCallSiteRows,
@@ -48,6 +48,7 @@ import {
   type ProductArchitectureFunctionSurfaceRow,
   type ProductArchitectureModuleRow,
   type ProductArchitecturePhaseProfile,
+  type ProductArchitectureSourceTemplateRow,
   type ProductArchitectureSymbolDependencyRow,
   type ProductArchitectureSymbolReferenceRow,
 } from "./product-architecture-analysis.js";
@@ -95,8 +96,12 @@ export interface ProductArchitectureValue {
   readonly classSurfaces?: readonly ProductArchitectureClassSurfaceRow[];
   /** Function/method implementation surface rows when requested. */
   readonly functionSurfaces?: readonly ProductArchitectureFunctionSurfaceRow[];
+  /** sourceText(...) template rows when requested. */
+  readonly sourceTemplates?: readonly ProductArchitectureSourceTemplateRow[];
   /** Top-level helper-name duplicate groups when requested. */
   readonly functionDuplicateGroups?: readonly ProductArchitectureFunctionDuplicateGroupRow[];
+  /** Static source-template duplicate groups when requested. */
+  readonly sourceTemplateDuplicateGroups?: readonly ProductArchitectureSourceTemplateDuplicateGroupRow[];
   /** Function groups that share switch-dispatch topology when requested. */
   readonly functionControlFlowShapeGroups?: readonly ProductArchitectureFunctionControlFlowShapeGroupRow[];
   /** Checker-backed call or constructor invocation rows when requested. */
@@ -153,6 +158,8 @@ type ProductArchitectureProjection =
   | "cycles"
   | "classes"
   | "functions"
+  | "source-templates"
+  | "source-template-duplicates"
   | "function-duplicates"
   | "function-control-flow-shapes"
   | "call-sites"
@@ -221,6 +228,21 @@ export interface ProductArchitectureFunctionDuplicateGroupRow {
   readonly summary: string;
 }
 
+export interface ProductArchitectureSourceTemplateDuplicateGroupRow {
+  readonly id: string;
+  readonly templateFingerprint: string;
+  readonly templateCount: number;
+  readonly fileCount: number;
+  readonly templateLineCount: number;
+  readonly templateCharacterCount: number;
+  readonly templateNames: readonly string[];
+  readonly filePaths: readonly string[];
+  readonly placeholderNames: readonly string[];
+  readonly samples: readonly string[];
+  readonly source: ProductArchitectureSourceReference;
+  readonly summary: string;
+}
+
 export interface ProductArchitectureFunctionControlFlowShapeGroupRow {
   readonly id: string;
   readonly switchTopologyFingerprint: string;
@@ -231,6 +253,7 @@ export interface ProductArchitectureFunctionControlFlowShapeGroupRow {
   readonly switchTopologyCount: number;
   readonly functionKinds: readonly ProductArchitectureFunctionSurfaceRow["functionKind"][];
   readonly nameSamples: readonly string[];
+  readonly filePaths: readonly string[];
   readonly fileSamples: readonly string[];
   readonly source: ProductArchitectureSourceReference;
   readonly summary: string;
@@ -338,6 +361,29 @@ export function answerProductArchitecture(
         basis,
         (rows) => ({ ...productArchitectureBaseValue(analysis), functionSurfaces: rows }),
         productArchitectureSourceSpanEvidence,
+      );
+    case "source-templates":
+      return answerProductArchitectureRows(
+        inquiry,
+        "product.architecture:source-templates",
+        "semantic-runtime sourceText(...) template row(s)",
+        filterSourceTemplates(analysis.sourceTemplates, inquiry),
+        basis,
+        (rows) => ({ ...productArchitectureBaseValue(analysis), sourceTemplates: rows }),
+        productArchitectureSourceSpanEvidence,
+      );
+    case "source-template-duplicates":
+      return answerProductArchitectureRows(
+        inquiry,
+        "product.architecture:source-template-duplicates",
+        "semantic-runtime duplicate static source-template group(s)",
+        filterSourceTemplateDuplicateGroups(sourceTemplateDuplicateGroups(analysis.sourceTemplates), inquiry),
+        basis,
+        (rows) => ({
+          ...productArchitectureBaseValue(analysis),
+          sourceTemplateDuplicateGroups: rows,
+        }),
+        productArchitectureMaintenanceEvidence,
       );
     case "function-duplicates":
       return answerProductArchitectureRows(
@@ -674,6 +720,8 @@ function productArchitectureProjection(
     case "cycles":
     case "classes":
     case "functions":
+    case "source-templates":
+    case "source-template-duplicates":
     case "function-duplicates":
     case "function-control-flow-shapes":
     case "call-sites":
@@ -1023,6 +1071,112 @@ function filterFunctionSurfaces(
   return orderFunctionSurfaces(filtered, inquiryStringFilter(inquiry, "orderBy"));
 }
 
+function filterSourceTemplates(
+  rows: readonly ProductArchitectureSourceTemplateRow[],
+  inquiry: Inquiry,
+): readonly ProductArchitectureSourceTemplateRow[] {
+  const pathPrefix = pathPrefixFilter(inquiry);
+  const filtered = rows.filter((row) =>
+    matchesFilterValue(row.area, inquiryStringFilter(inquiry, "area")) &&
+    matchesFilterValue(row.filePath, inquiryStringFilter(inquiry, "filePath")) &&
+    matchesPathPrefix(row.filePath, pathPrefix) &&
+    matchesFilterValue(row.templateName, inquiryStringFilter(inquiry, "templateName")) &&
+    matchesFilterValue(row.argumentKind, inquiryStringFilter(inquiry, "argumentKind")) &&
+    matchesFilterValue(row.staticText, inquiryBooleanFilter(inquiry, "staticText")) &&
+    matchesFilterValue(row.templateFingerprint ?? "", inquiryStringFilter(inquiry, "templateFingerprint")) &&
+    atLeast(row.lineCount, inquiryNumberFilter(inquiry, "minLineCount")) &&
+    atLeast(row.templateLineCount, inquiryNumberFilter(inquiry, "minTemplateLineCount")) &&
+    atLeast(row.templateCharacterCount, inquiryNumberFilter(inquiry, "minTemplateCharacterCount")) &&
+    inquiryQueryMatches(inquiry, [
+      row.id,
+      row.area,
+      row.filePath,
+      row.templateName,
+      row.argumentKind,
+      row.templateFingerprint ?? "",
+      ...row.placeholderNames,
+      row.summary,
+    ]),
+  );
+  return orderSourceTemplates(filtered, inquiryStringFilter(inquiry, "orderBy"));
+}
+
+function sourceTemplateDuplicateGroups(
+  rows: readonly ProductArchitectureSourceTemplateRow[],
+): readonly ProductArchitectureSourceTemplateDuplicateGroupRow[] {
+  const staticRows = rows.filter(
+    (row): row is ProductArchitectureSourceTemplateRow & { readonly templateFingerprint: string } =>
+      row.templateFingerprint !== null,
+  );
+  return [...groupByDefined(staticRows, (row) => row.templateFingerprint).entries()]
+    .flatMap(([templateFingerprint, group]) => {
+      if (group.length < 2) {
+        return [];
+      }
+      const sortedRows = [...group].sort(compareSourceTemplateRows);
+      const templateNames = uniqueSortedStrings(sortedRows.map((row) => row.templateName));
+      const filePaths = uniqueSortedStrings(sortedRows.map((row) => row.filePath));
+      const placeholderNames = uniqueSortedStrings(sortedRows.flatMap((row) => row.placeholderNames));
+      return [{
+        id: `product.architecture:source-template-duplicates:${templateFingerprint}`,
+        templateFingerprint,
+        templateCount: sortedRows.length,
+        fileCount: filePaths.length,
+        templateLineCount: sortedRows.reduce((sum, row) => sum + row.templateLineCount, 0),
+        templateCharacterCount: sortedRows.reduce((sum, row) => sum + row.templateCharacterCount, 0),
+        templateNames,
+        filePaths,
+        placeholderNames,
+        samples: sortedRows.slice(0, 5).map((row) =>
+          `${row.templateName} at ${row.filePath}:${row.source.startLine}`
+        ),
+        source: sortedRows[0]!.source,
+        summary: `${sortedRows.length} static sourceText(...) template(s) share fingerprint ${templateFingerprint} across ${filePaths.length} file(s) and ${templateNames.length} carrier name(s).`,
+      } satisfies ProductArchitectureSourceTemplateDuplicateGroupRow];
+    })
+    .sort((left, right) =>
+      right.templateCount - left.templateCount ||
+      right.fileCount - left.fileCount ||
+      right.templateCharacterCount - left.templateCharacterCount ||
+      left.templateFingerprint.localeCompare(right.templateFingerprint)
+    );
+}
+
+function filterSourceTemplateDuplicateGroups(
+  rows: readonly ProductArchitectureSourceTemplateDuplicateGroupRow[],
+  inquiry: Inquiry,
+): readonly ProductArchitectureSourceTemplateDuplicateGroupRow[] {
+  const pathPrefix = pathPrefixFilter(inquiry);
+  const filtered = rows.filter((row) =>
+    matchesFilterValue(row.templateFingerprint, inquiryStringFilter(inquiry, "templateFingerprint")) &&
+    matchesAnyFilterValue(row.templateNames, inquiryStringFilter(inquiry, "templateName")) &&
+    (pathPrefix === undefined || row.filePaths.some((filePath) => matchesPathPrefix(filePath, pathPrefix))) &&
+    atLeast(row.templateCount, inquiryNumberFilter(inquiry, "minTemplateCount")) &&
+    atLeast(row.fileCount, inquiryNumberFilter(inquiry, "minFileCount")) &&
+    atLeast(row.templateLineCount, inquiryNumberFilter(inquiry, "minTemplateLineCount")) &&
+    atLeast(row.templateCharacterCount, inquiryNumberFilter(inquiry, "minTemplateCharacterCount")) &&
+    inquiryQueryMatches(inquiry, [
+      row.id,
+      row.templateFingerprint,
+      row.summary,
+      ...row.templateNames,
+      ...row.filePaths,
+      ...row.placeholderNames,
+      ...row.samples,
+    ]),
+  );
+  return orderSourceTemplateDuplicateGroups(filtered, inquiryStringFilter(inquiry, "orderBy"));
+}
+
+function compareSourceTemplateRows(
+  left: ProductArchitectureSourceTemplateRow,
+  right: ProductArchitectureSourceTemplateRow,
+): number {
+  return left.filePath.localeCompare(right.filePath) ||
+    left.source.startLine - right.source.startLine ||
+    left.templateName.localeCompare(right.templateName);
+}
+
 function functionDuplicateGroups(
   rows: readonly ProductArchitectureFunctionSurfaceRow[],
 ): readonly ProductArchitectureFunctionDuplicateGroupRow[] {
@@ -1159,6 +1313,7 @@ function functionControlFlowShapeGroups(
         switchTopologyCount: Math.max(...sortedRows.map((row) => row.switchTopologyCount)),
         functionKinds,
         nameSamples: names.slice(0, 8),
+        filePaths: files,
         fileSamples: files.slice(0, 5),
         source: sortedRows[0]!.source,
         summary: `${sortedRows.length} function surface(s) share one switch-dispatch topology across ${names.length} name(s) and ${files.length} file(s).`,
@@ -1177,8 +1332,11 @@ function filterFunctionControlFlowShapeGroups(
   rows: readonly ProductArchitectureFunctionControlFlowShapeGroupRow[],
   inquiry: Inquiry,
 ): readonly ProductArchitectureFunctionControlFlowShapeGroupRow[] {
+  const pathPrefix = pathPrefixFilter(inquiry);
   const filtered = rows.filter((row) =>
     matchesFilterValue(row.switchTopologyFingerprint, inquiryStringFilter(inquiry, "switchTopologyFingerprint")) &&
+    matchesAnyFilterValue(row.filePaths, inquiryStringFilter(inquiry, "filePath")) &&
+    (pathPrefix === undefined || row.filePaths.some((filePath) => matchesPathPrefix(filePath, pathPrefix))) &&
     atLeast(row.functionCount, inquiryNumberFilter(inquiry, "minFunctionCount")) &&
     atLeast(row.nameCount, inquiryNumberFilter(inquiry, "minNameCount")) &&
     atLeast(row.fileCount, inquiryNumberFilter(inquiry, "minFileCount")) &&
@@ -1190,6 +1348,7 @@ function filterFunctionControlFlowShapeGroups(
       row.summary,
       ...row.functionKinds,
       ...row.nameSamples,
+      ...row.filePaths,
       ...row.fileSamples,
     ]),
   );
@@ -2037,6 +2196,85 @@ function orderFunctionSurfaces(
     case "source":
     default:
       return rows;
+  }
+}
+
+function orderSourceTemplates(
+  rows: readonly ProductArchitectureSourceTemplateRow[],
+  orderBy: string | undefined,
+): readonly ProductArchitectureSourceTemplateRow[] {
+  switch (orderBy) {
+    case "lineCount":
+    case "size":
+      return [...rows].sort((left, right) =>
+        right.lineCount - left.lineCount ||
+        compareSourceTemplateRows(left, right),
+      );
+    case "templateLineCount":
+      return [...rows].sort((left, right) =>
+        right.templateLineCount - left.templateLineCount ||
+        compareSourceTemplateRows(left, right),
+      );
+    case "templateCharacterCount":
+      return [...rows].sort((left, right) =>
+        right.templateCharacterCount - left.templateCharacterCount ||
+        compareSourceTemplateRows(left, right),
+      );
+    case "templateName":
+      return [...rows].sort((left, right) =>
+        left.templateName.localeCompare(right.templateName) ||
+        compareSourceTemplateRows(left, right),
+      );
+    case "templateFingerprint":
+      return [...rows].sort((left, right) =>
+        compareNullableStrings(left.templateFingerprint, right.templateFingerprint) ||
+        compareSourceTemplateRows(left, right),
+      );
+    case "source":
+    case undefined:
+    default:
+      return rows;
+  }
+}
+
+function orderSourceTemplateDuplicateGroups(
+  rows: readonly ProductArchitectureSourceTemplateDuplicateGroupRow[],
+  orderBy: string | undefined,
+): readonly ProductArchitectureSourceTemplateDuplicateGroupRow[] {
+  switch (orderBy) {
+    case "fileCount":
+      return [...rows].sort((left, right) =>
+        right.fileCount - left.fileCount ||
+        right.templateCount - left.templateCount ||
+        left.templateFingerprint.localeCompare(right.templateFingerprint),
+      );
+    case "templateLineCount":
+    case "lineCount":
+    case "size":
+      return [...rows].sort((left, right) =>
+        right.templateLineCount - left.templateLineCount ||
+        right.templateCount - left.templateCount ||
+        left.templateFingerprint.localeCompare(right.templateFingerprint),
+      );
+    case "templateCharacterCount":
+      return [...rows].sort((left, right) =>
+        right.templateCharacterCount - left.templateCharacterCount ||
+        right.templateCount - left.templateCount ||
+        left.templateFingerprint.localeCompare(right.templateFingerprint),
+      );
+    case "templateFingerprint":
+      return [...rows].sort((left, right) =>
+        left.templateFingerprint.localeCompare(right.templateFingerprint),
+      );
+    case "templateCount":
+    case undefined:
+    default:
+      return [...rows].sort((left, right) =>
+        right.templateCount - left.templateCount ||
+        right.fileCount - left.fileCount ||
+        right.templateCharacterCount - left.templateCharacterCount ||
+        left.templateFingerprint.localeCompare(right.templateFingerprint),
+      );
   }
 }
 

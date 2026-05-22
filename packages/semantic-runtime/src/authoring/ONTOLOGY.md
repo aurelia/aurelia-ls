@@ -119,10 +119,11 @@ observed `direct-state-domain-template-binding` value is backed by topology serv
 is an injected state/domain member, and `source-backed-getter-observation` joins binding observed-dependency rows to
 ObserverLocator ComputedObserver rows for ordinary accessor descriptors so usage and source-observer availability stay
 separate. Its derived `one-hop-forwarding-accessor-pressure` value is
-reserved for a source-proven component accessor whose single return expression is a property chain rooted at an injected
-state/domain member; calculations, route adapters, service calls, and ID-to-object lookups are intentionally outside
-that first reading. Do not add `@computed` or one-hop view-model accessors just to make a getter observable or to
-shorten `state.member` paths. `form-value-channel` answers which observer/value-channel semantics are visible,
+reserved for a template-read, source-proven component accessor whose single return expression is a property chain
+rooted at an injected state/domain member; unused accessors, calculations, route adapters, service calls, and
+ID-to-object lookups are intentionally outside that first reading. Do not add `@computed` or one-hop view-model
+accessors just to make a getter observable or to shorten `state.member` paths. `form-value-channel` answers which
+observer/value-channel semantics are visible,
 including whether checked/select controls rely on app-authored custom matcher comparison. `validation-ownership`
 answers who owns validation, and `form-type-surface` records whether form-like value channels currently have strict or
 weak TypeChecker surfaces. `style-resource-ownership` answers where stylesheets or
@@ -142,7 +143,9 @@ about several of them at once.
 - `resource-authoring`: Aurelia resources: custom elements, attributes, template controllers, converters, behaviors,
   commands, and attribute patterns.
 - `component-composition`: role-specific components such as forms, routed pages, widgets, layouts, and async boundaries.
-- `domain-model`: state classes, repositories, use-case classes, and domain-owned app model surfaces.
+- `domain-model`: state classes, plain domain entities/value objects, repositories, use-case classes, and
+  domain-owned app model surfaces. Use separate operation/target rows for plain domain models versus DI services when
+  source plans need to preserve caller-domain adaptation boundaries.
 - `dependency-injection`: DI keys, registrations, injection sites, lifetimes, aliases, and container visibility.
 - `integration`: backend clients, platform adapters, environment boundaries, and external capability edges.
 - `routing`: route trees, routeable components, navigation surfaces, route hooks, and viewport/layout structure.

@@ -1,0 +1,8 @@
+<section>
+  <h1>${state.featuredProduct.name}</h1>
+  <ul>
+    <li repeat.for="product of state.products">
+      <product-summary-card product.bind="product"></product-summary-card>
+    </li>
+  </ul>
+</section>

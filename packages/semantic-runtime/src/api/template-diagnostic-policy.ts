@@ -8,6 +8,7 @@ import {
   RuntimeBindingDataFlow,
   RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceAssignmentReasonKind,
+  RuntimeBindingValueChannelKind,
 } from '../observation/runtime-binding-observation.js';
 import {
   RuntimeBindingScopeIssue,
@@ -59,6 +60,7 @@ import type {
 } from './contracts.js';
 import {
   describeAddress,
+  isExternalDependencySourceReference,
   type SemanticSourceReference,
 } from './source-reference.js';
 
@@ -940,7 +942,7 @@ function bindingSourceAssignmentSuggestion(
       suggestionKind: 'align-assignment-type',
       actionKind: 'change-member-type',
       actionTarget: bindingSourceAssignmentActionTarget(dataFlow, source, ownerSource, false),
-      summary: 'Align the source member type with the value written by the target observer, or narrow the target value channel.',
+      summary: bindingSourceAssignmentTypeMismatchSummary(dataFlow),
       valueTypeSource: valueTypeDisplay == null ? null : 'assignment-target',
     };
   }
@@ -952,6 +954,38 @@ function bindingSourceAssignmentSuggestion(
     summary: 'Inspect the source and owner type before choosing whether app source, runtime policy, or semantic substrate should change.',
     valueTypeSource: valueTypeDisplay == null ? null : 'assignment-target',
   };
+}
+
+function bindingSourceAssignmentTypeMismatchSummary(
+  dataFlow: RuntimeBindingDataFlow,
+): string {
+  switch (dataFlow.valueChannel?.channelKind) {
+    case RuntimeBindingValueChannelKind.SelectSingleOptionValue:
+      return 'Align the source member type with the single-select option domain; use model.bind for non-string domain values or type the source for the string/null value channel emitted by option value attributes.';
+    case RuntimeBindingValueChannelKind.SelectMultipleOptionValues:
+    case RuntimeBindingValueChannelKind.SelectDynamicOptionValue:
+      return 'Align the source member type with the select observer collection domain; make option model/value types explicit when the selected values are not ordinary DOM strings.';
+    case RuntimeBindingValueChannelKind.CheckedRadioValue:
+      return 'Align the source member type with the radio model/value domain; use model.bind for non-string radio values or type the source for the string value channel emitted by value attributes.';
+    case RuntimeBindingValueChannelKind.CheckedCollectionMembership:
+      return 'Align the collection element type with the checked model/value domain so membership writeback is TypeScript-visible.';
+    case RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean:
+      return 'Align the map key type with the checked model/value domain so keyed boolean writeback is TypeScript-visible.';
+    case RuntimeBindingValueChannelKind.RawProperty:
+      return bindingDataFlowTargetProperty(dataFlow) === 'value'
+        ? 'Align the source member type with the target value property; native value observers commonly write strings even when the control visually represents another domain.'
+        : 'Align the source member type with the value written by the target observer, or narrow the target value channel.';
+    default:
+      return 'Align the source member type with the value written by the target observer, or narrow the target value channel.';
+  }
+}
+
+function bindingDataFlowTargetProperty(
+  dataFlow: RuntimeBindingDataFlow,
+): string | null {
+  return dataFlow.targetAccess?.targetProperty
+    ?? dataFlow.targetOperation?.targetProperty
+    ?? null;
 }
 
 function bindingSourceAssignmentHasMissingMember(
@@ -985,6 +1019,9 @@ function memberOwnerTypeActionSource(
     || memberOwnerType?.shapeKind === CheckerTypeShapeKind.Any
     || memberOwnerType?.shapeKind === CheckerTypeShapeKind.Unknown) {
     return memberOwnerType.source ?? memberOwnerType.declarationSource ?? null;
+  }
+  if (isExternalDependencySourceReference(memberOwnerType?.declarationSource ?? null)) {
+    return memberOwnerType?.source ?? memberOwnerType?.declarationSource ?? null;
   }
   return memberOwnerType?.declarationSource ?? memberOwnerType?.source ?? null;
 }

@@ -10,6 +10,7 @@ import {
   type SemanticRouterViewportsResult,
   type SemanticRouteConfigsResult,
   type SemanticRouteContextsResult,
+  type SemanticRouteContextParameterReadsResult,
   type SemanticRouteNodesResult,
   type SemanticRouteTreesResult,
   type SemanticRuntimeAnswer,
@@ -27,6 +28,7 @@ export function readSemanticRouterOverview(
   const detail = request.detail ?? undefined;
   const routes = ask({ kind: SemanticAppQueryKind.Routes, page, detail }) as SemanticRuntimeAnswer<SemanticRouteConfigsResult>;
   const routeContexts = ask({ kind: SemanticAppQueryKind.RouteContexts, page, detail }) as SemanticRuntimeAnswer<SemanticRouteContextsResult>;
+  const routeContextParameterReads = ask({ kind: SemanticAppQueryKind.RouteContextParameterReads, page, detail }) as SemanticRuntimeAnswer<SemanticRouteContextParameterReadsResult>;
   const routerViewports = ask({ kind: SemanticAppQueryKind.RouterViewports, page, detail }) as SemanticRuntimeAnswer<SemanticRouterViewportsResult>;
   const viewportAgents = ask({ kind: SemanticAppQueryKind.ViewportAgents, page, detail }) as SemanticRuntimeAnswer<SemanticViewportAgentsResult>;
   const componentAgents = ask({ kind: SemanticAppQueryKind.ComponentAgents, page, detail }) as SemanticRuntimeAnswer<SemanticComponentAgentsResult>;
@@ -36,22 +38,28 @@ export function readSemanticRouterOverview(
   const routeTrees = ask({ kind: SemanticAppQueryKind.RouteTrees, page, detail }) as SemanticRuntimeAnswer<SemanticRouteTreesResult>;
   const routeNodes = ask({ kind: SemanticAppQueryKind.RouteNodes, page, detail }) as SemanticRuntimeAnswer<SemanticRouteNodesResult>;
   const routerIssues = ask({ kind: SemanticAppQueryKind.RouterIssues, page, detail }) as SemanticRuntimeAnswer<SemanticRouterIssuesResult>;
+  const counts = {
+    routes: totalRows(routes),
+    routeContexts: totalRows(routeContexts),
+    routeContextParameterReads: totalRows(routeContextParameterReads),
+    routerViewports: totalRows(routerViewports),
+    viewportAgents: totalRows(viewportAgents),
+    componentAgents: totalRows(componentAgents),
+    typedNavigationInstructions: totalRows(typedNavigationInstructions),
+    viewportInstructionTrees: totalRows(viewportInstructionTrees),
+    recognizedRoutes: totalRows(recognizedRoutes),
+    routeTrees: totalRows(routeTrees),
+    routeNodes: totalRows(routeNodes),
+    routerIssues: totalRows(routerIssues),
+  };
   const value = {
+    displayText: semanticRouterOverviewDisplayText(counts, page.size),
     counts: {
-      routes: totalRows(routes),
-      routeContexts: totalRows(routeContexts),
-      routerViewports: totalRows(routerViewports),
-      viewportAgents: totalRows(viewportAgents),
-      componentAgents: totalRows(componentAgents),
-      typedNavigationInstructions: totalRows(typedNavigationInstructions),
-      viewportInstructionTrees: totalRows(viewportInstructionTrees),
-      recognizedRoutes: totalRows(recognizedRoutes),
-      routeTrees: totalRows(routeTrees),
-      routeNodes: totalRows(routeNodes),
-      routerIssues: totalRows(routerIssues),
+      ...counts,
     },
     routes,
     routeContexts,
+    routeContextParameterReads,
     routerViewports,
     viewportAgents,
     componentAgents,
@@ -67,6 +75,7 @@ export function readSemanticRouterOverview(
     [
       'Read router overview:',
       `${value.counts.routes} route config(s),`,
+      `${value.counts.routeContextParameterReads} route-context parameter read(s),`,
       `${value.counts.routerViewports} router viewport(s),`,
       `${value.counts.viewportAgents} viewport agent(s),`,
       `${value.counts.componentAgents} component agent(s),`,
@@ -90,4 +99,24 @@ function normalizeRouterOverviewRowPageSize(value: number | null | undefined): n
   return Number.isFinite(value) && value >= 0
     ? Math.floor(value)
     : 0;
+}
+
+function semanticRouterOverviewDisplayText(
+  counts: SemanticRouterOverviewResult['counts'],
+  rowPageSize: number,
+): string {
+  const lines = [
+    `Router: ${counts.routes} route config(s), ${counts.routeContexts} route context(s), ${counts.routeContextParameterReads} route-context parameter read(s), ${counts.recognizedRoutes} recognized route row(s), ${counts.typedNavigationInstructions} typed navigation instruction(s).`,
+    `Runtime tree: ${counts.routerViewports} viewport(s), ${counts.viewportAgents} viewport agent(s), ${counts.componentAgents} component agent(s), ${counts.routeTrees} route tree(s), ${counts.routeNodes} route node(s).`,
+  ];
+  if (counts.routerIssues === 0) {
+    lines.push('Issues: no router issue rows.');
+  } else {
+    lines.push(`Issues: ${counts.routerIssues} router issue row(s); page router-issues before changing route config.`);
+  }
+  lines.push(rowPageSize === 0
+    ? 'Rows: omitted by default; pass rowPageSize when a few route/navigation samples are useful.'
+    : `Rows: requested up to ${rowPageSize} sample row(s) per router family.`);
+  lines.push('Next: page routes, typed-navigation-instructions, route-trees, or router-issues with aurelia_app_query when one family needs exact source spans.');
+  return lines.join('\n');
 }

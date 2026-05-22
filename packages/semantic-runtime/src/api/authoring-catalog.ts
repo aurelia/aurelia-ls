@@ -4,6 +4,7 @@ import {
   AuthoringCapabilityDescriptors,
   type AuthoringOpenReasonKind,
   AuthoringOperationFamilies,
+  type AuthoringPreference,
   AuthoringProfiles,
   AuthoringTasteAxes,
   type AuthoringTasteAxisDescriptor,
@@ -31,7 +32,6 @@ import type {
   SemanticAuthoringCatalogViewKind,
   SemanticAuthoringCatalogViewRequest,
   SemanticAuthoringCatalogViewResult,
-  SemanticAuthoringCatalogExpectedEffectSummaryRow,
   SemanticAuthoringCatalogOperationSummaryRow,
   SemanticAuthoringCatalogRecipeSummaryRow,
   SemanticAuthoringOperationCatalogRow,
@@ -49,6 +49,7 @@ import type {
   SemanticRuntimeAnswer,
 } from './contracts.js';
 import { semanticAuthoringExpectedEffectContractRow } from './authoring-effect-contracts.js';
+import { semanticAuthoringSourcePatternRow } from './authoring-source-pattern-row.js';
 import { answer } from './answer-helpers.js';
 
 export function readSemanticAuthoringCatalog(): SemanticAuthoringCatalogResult {
@@ -102,6 +103,17 @@ export function readSemanticAuthoringCatalog(): SemanticAuthoringCatalogResult {
   };
 }
 
+export function semanticAuthoringPreferenceCatalogRows(
+  preferences: readonly AuthoringPreference[],
+): readonly SemanticAuthoringPreferenceCatalogRow[] {
+  const tasteValuesByKey = new Map<AuthoringTasteValueKey, AuthoringTasteValueDescriptor>(
+    Object.values(AuthoringTasteValueDescriptors).map((value) => [value.key as AuthoringTasteValueKey, value]),
+  );
+  return preferences.map((preference) =>
+    authoringPreferenceCatalogRow(preference.axisKey, preference.valueKey, tasteValuesByKey)
+  );
+}
+
 export function readSemanticAuthoringCatalogAnswer(): SemanticRuntimeAnswer<SemanticAuthoringCatalogResult> {
   const value = readSemanticAuthoringCatalog();
   return answer(
@@ -131,17 +143,22 @@ function authoringCatalogView(
   view: Exclude<SemanticAuthoringCatalogViewKind, 'full'>,
 ): SemanticAuthoringCatalogViewResult {
   const recipeSummaries = catalog.recipes.map((recipe) => authoringCatalogRecipeSummary(recipe, view));
+  const operationSummaries = view === 'operations'
+    ? catalog.operations.map(authoringCatalogOperationSummary)
+    : undefined;
+  const counts: SemanticAuthoringCatalogViewResult['counts'] = {
+    operationFamilies: catalog.operationFamilies.length,
+    tasteAxes: catalog.tasteAxes.length,
+    tasteValues: catalog.tasteValues.length,
+    profiles: catalog.profiles.length,
+    capabilities: catalog.capabilities.length,
+    operations: catalog.operations.length,
+    recipes: catalog.recipes.length,
+  };
   return {
     view,
-    counts: {
-      operationFamilies: catalog.operationFamilies.length,
-      tasteAxes: catalog.tasteAxes.length,
-      tasteValues: catalog.tasteValues.length,
-      profiles: catalog.profiles.length,
-      capabilities: catalog.capabilities.length,
-      operations: catalog.operations.length,
-      recipes: catalog.recipes.length,
-    },
+    counts,
+    displayText: authoringCatalogViewDisplayText(view, counts, recipeSummaries, operationSummaries),
     operationFamilies: catalog.operationFamilies,
     tasteAxes: catalog.tasteAxes.map((axis) => ({
       axisKey: axis.axisKey,
@@ -158,32 +175,142 @@ function authoringCatalogView(
       productOpenReasonKinds: capability.productOpenReasonKinds,
     })),
     recipes: recipeSummaries,
-    ...(view === 'operations' ? {
-      operations: catalog.operations.map(authoringCatalogOperationSummary),
-    } : {}),
+    ...(operationSummaries == null ? {} : { operations: operationSummaries }),
   };
+}
+
+function authoringCatalogViewDisplayText(
+  view: Exclude<SemanticAuthoringCatalogViewKind, 'full'>,
+  counts: SemanticAuthoringCatalogViewResult['counts'],
+  recipes: readonly SemanticAuthoringCatalogRecipeSummaryRow[],
+  operations: readonly SemanticAuthoringCatalogOperationSummaryRow[] | undefined,
+): string {
+  const lines = [
+    `Catalog: ${counts.recipes} recipe(s), ${counts.operations} operation(s), ${counts.tasteAxes} taste axis row(s), ${counts.capabilities} capability row(s).`,
+  ];
+  if (view === 'overview') {
+    lines.push('View: overview keeps recipe summaries and scalar counts; use catalogView=recipes for expanded recipe comparison fields.');
+  } else if (view === 'recipes') {
+    lines.push('View: recipes expands operation kinds, lineage, taste keys, source-plan summaries, and expected-effect kind sets; use recipe plan for selected source text or row-level contracts.');
+    const patternSummary = catalogRecipePatternRoleSummary(recipes);
+    if (patternSummary.length > 0) {
+      lines.push(`Source pattern roles: ${patternSummary}.`);
+    }
+    const useSummary = catalogRecipePatternUsePolicySummary(recipes);
+    if (useSummary.length > 0) {
+      lines.push(`Source use policies: ${useSummary}.`);
+    }
+    const moduleKindSummary = catalogRecipePatternModuleKindSummary(recipes);
+    if (moduleKindSummary.length > 0) {
+      lines.push(`Source module kind coverage: ${moduleKindSummary}.`);
+    }
+  } else {
+    lines.push('View: operations adds operation rows; use this when choosing the semantic operation family before selecting a recipe.');
+  }
+  lines.push(`Recipe keys: ${recipes.map((recipe) => recipe.key).join(', ')}.`);
+  const previewRecipeRows = recipes.slice(0, 8).map((recipe) =>
+    `${recipe.key} (${recipe.supportState}, ${recipe.sourceFileCount}+${recipe.projectToolingFileCount} file(s), ${recipe.expectedEffectCount} effect(s))`
+  );
+  lines.push(`Recipes: ${previewRecipeRows.join('; ')}${recipes.length > previewRecipeRows.length ? `; plus ${recipes.length - previewRecipeRows.length} more` : ''}.`);
+  if (operations != null) {
+    const previewOperations = operations.slice(0, 8).map((operation) =>
+      `${operation.operationKind} -> ${operation.targetKind}`
+    );
+    lines.push(`Operations: ${previewOperations.join('; ')}${operations.length > previewOperations.length ? `; plus ${operations.length - previewOperations.length} more` : ''}.`);
+  }
+  lines.push('Next: use aurelia_app_building_guidance for public code-shape decisions, then aurelia_authoring_recipe_plan for a chosen recipe.');
+  return lines.join('\n');
+}
+
+function catalogRecipePatternUsePolicySummary(
+  recipes: readonly SemanticAuthoringCatalogRecipeSummaryRow[],
+): string {
+  const counts = new Map<string, number>();
+  for (const recipe of recipes) {
+    const usePolicy = recipe.sourcePlan?.pattern?.usePolicy;
+    if (usePolicy == null) {
+      continue;
+    }
+    counts.set(usePolicy, (counts.get(usePolicy) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((left, right) => left[0].localeCompare(right[0]))
+    .map(([usePolicy, count]) => `${usePolicy}=${count}`)
+    .join(', ');
+}
+
+function catalogRecipePatternRoleSummary(
+  recipes: readonly SemanticAuthoringCatalogRecipeSummaryRow[],
+): string {
+  const counts = new Map<string, number>();
+  for (const recipe of recipes) {
+    const role = recipe.sourcePlan?.pattern?.role;
+    if (role == null) {
+      continue;
+    }
+    counts.set(role, (counts.get(role) ?? 0) + 1);
+  }
+  return [...counts.entries()]
+    .sort((left, right) => left[0].localeCompare(right[0]))
+    .map(([role, count]) => `${role}=${count}`)
+    .join(', ');
+}
+
+function catalogRecipePatternModuleKindSummary(
+  recipes: readonly SemanticAuthoringCatalogRecipeSummaryRow[],
+): string {
+  const counts = new Map<string, number>();
+  for (const recipe of recipes) {
+    const kinds = uniqueValues(recipe.sourcePlan?.pattern?.modules.map((module) => module.kind) ?? []);
+    for (const kind of kinds) {
+      counts.set(kind, (counts.get(kind) ?? 0) + 1);
+    }
+  }
+  const rows = [...counts.entries()]
+    .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]));
+  const preview = rows.slice(0, 10)
+    .map(([kind, count]) => `${kind}=${count}`)
+    .join(', ');
+  return rows.length > 10
+    ? `${preview}, +${rows.length - 10} more`
+    : preview;
 }
 
 function authoringCatalogRecipeSummary(
   recipe: SemanticAuthoringRecipeCatalogRow,
   view: Exclude<SemanticAuthoringCatalogViewKind, 'full'>,
 ): SemanticAuthoringCatalogRecipeSummaryRow {
-  return {
+  const includeExpandedRecipeShape = view === 'recipes';
+  const row: SemanticAuthoringCatalogRecipeSummaryRow = {
     key: recipe.key,
     title: recipe.title,
-    operationKinds: recipe.operationKinds,
-    baseRecipeKeys: recipe.baseRecipeKeys,
-    lineageRecipeKeys: recipe.lineageRecipeKeys,
+    operationKindCount: recipe.operationKinds.length,
+    baseRecipeCount: recipe.baseRecipeKeys.length,
+    lineageRecipeCount: recipe.lineageRecipeKeys.length,
     specificityRank: recipe.specificityRank,
     supportState: recipe.supportState,
     summary: recipe.summary,
     openReasonKinds: recipe.openReasonKinds,
-    expectedEffectKinds: recipe.expectedEffectKinds,
+    preferenceCount: recipe.preferences.length,
     expectedEffectCount: recipe.expectedEffectCount,
+    sourceFileCount: recipe.sourcePlan?.fileCount ?? 0,
+    projectToolingFileCount: recipe.sourcePlan?.projectTooling?.fileCount ?? 0,
+  };
+  if (!includeExpandedRecipeShape) {
+    return row;
+  }
+  return {
+    ...row,
+    operationKinds: recipe.operationKinds,
+    baseRecipeKeys: recipe.baseRecipeKeys,
+    lineageRecipeKeys: recipe.lineageRecipeKeys,
+    tasteValueKeys: uniqueValues(recipe.preferences.map((preference) => preference.valueKey)),
+    expectedEffectKinds: recipe.expectedEffectKinds,
     sourcePlan: recipe.sourcePlan == null ? null : {
       conflictPolicy: recipe.sourcePlan.conflictPolicy,
       formattingPolicy: recipe.sourcePlan.formattingPolicy,
       packageToolingPolicy: recipe.sourcePlan.packageToolingPolicy,
+      pattern: recipe.sourcePlan.pattern,
       hasCompleteFileText: recipe.sourcePlan.hasCompleteFileText,
       fileCount: recipe.sourcePlan.fileCount,
       fileRoles: recipe.sourcePlan.fileRoles,
@@ -198,31 +325,6 @@ function authoringCatalogRecipeSummary(
         fileCount: recipe.sourcePlan.projectTooling.files.length,
       },
     },
-    ...(view === 'recipes' ? {
-      preferences: recipe.preferences,
-      expectedEffects: recipe.expectedEffects.map(authoringCatalogExpectedEffectSummary),
-    } : {}),
-  };
-}
-
-function authoringCatalogExpectedEffectSummary(
-  effect: SemanticAuthoringRecipeCatalogRow['expectedEffects'][number],
-): SemanticAuthoringCatalogExpectedEffectSummaryRow {
-  return {
-    effectKind: effect.effectKind,
-    scope: effect.scope,
-    role: effect.role,
-    topologyNodeKind: effect.topologyNodeKind,
-    cardinality: effect.cardinality,
-    count: effect.count,
-    semanticTargetKey: effect.semanticTargetKey,
-    filterCount: effect.filterCount,
-    filterFields: effect.filterFields,
-    capabilityKey: effect.capabilityKey,
-    minimumSupportState: effect.minimumSupportState,
-    tasteAxisKey: effect.tasteAxisKey,
-    tasteValueKey: effect.tasteValueKey,
-    summary: effect.summary,
   };
 }
 
@@ -394,6 +496,7 @@ function authoringSourcePlanCatalogRow(
     conflictPolicy: sourcePlan.policy.conflictPolicy,
     formattingPolicy: sourcePlan.policy.formattingPolicy,
     packageToolingPolicy: sourcePlan.policy.packageToolingPolicy,
+    pattern: semanticAuthoringSourcePatternRow(sourcePlan.pattern),
     projectTooling: authoringProjectToolingCatalogRow(sourcePlan.projectTooling),
     hasCompleteFileText: sourcePlan.hasCompleteFileText,
     fileCount: files.length,

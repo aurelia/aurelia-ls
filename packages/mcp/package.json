@@ -18,7 +18,8 @@
     "build": "tsc -p tsconfig.json",
     "clean": "node -e \"require('node:fs').rmSync('out', { recursive: true, force: true }); require('node:fs').rmSync('tsconfig.tsbuildinfo', { force: true })\"",
     "dev:invoke": "node ./out/dev/invoke.js",
-    "probe:stdio": "pnpm build && node scripts/probe-stdio.mjs"
+    "dev:prompt": "node ./out/dev/prompt.js",
+    "probe:stdio": "pnpm --filter @aurelia-ls/semantic-runtime build && pnpm build && node scripts/probe-stdio.mjs"
   },
   "dependencies": {
     "@aurelia-ls/semantic-runtime": "workspace:*",

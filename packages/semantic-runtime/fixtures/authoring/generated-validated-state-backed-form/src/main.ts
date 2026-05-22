@@ -1,11 +1,10 @@
-import { Aurelia, StandardConfiguration } from '@aurelia/runtime-html';
+import Aurelia from 'aurelia';
 import { ValidationHtmlConfiguration } from '@aurelia/validation-html';
 import { App } from './app';
 
-new Aurelia()
-  .register(StandardConfiguration, ValidationHtmlConfiguration)
-  .app({
-    host: document.body,
-    component: App,
-  })
+Aurelia
+  .register(
+    ValidationHtmlConfiguration
+  )
+  .app(App)
   .start();

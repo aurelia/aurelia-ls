@@ -23,6 +23,7 @@ expectValueChannel(
     channelKind: 'select-single-option-value',
     sourceName: 'likesTacos',
     primitiveValueDomainDisplays: ['null', 'true', 'false'],
+    observerCouplings: ['select-option-value-domain', 'select-option-list-mutation-observer'],
     sourceToTargetAssignable: true,
     targetToSourceAssignable: true,
   },
@@ -35,6 +36,7 @@ expectValueChannel(
     sourceName: 'selectedValueBoundProductId',
     valueDomain: ['1', '2'],
     primitiveValueDomainDisplays: ['null', '"1"', '"2"'],
+    observerCouplings: ['select-option-value-domain', 'select-option-list-mutation-observer'],
     sourceToTargetAssignable: true,
     targetToSourceAssignable: false,
     sourceAssignmentReasonKinds: ['target-to-source-type-mismatch'],
@@ -48,6 +50,7 @@ expectValueChannel(
     sourceName: 'selectedRepeatedValueProductId',
     targetValueType: 'string | null',
     primitiveValueDomainDisplays: ['null'],
+    observerCouplings: ['select-option-value-domain', 'select-option-list-mutation-observer'],
     sourceToTargetAssignable: true,
     targetToSourceAssignable: false,
     sourceAssignmentReasonKinds: ['target-to-source-type-mismatch'],
@@ -60,6 +63,7 @@ expectValueChannel(
     channelKind: 'checked-radio-value',
     sourceName: 'nullableChoice',
     primitiveValueDomainDisplays: ['null'],
+    observerCouplings: ['checked-element-value-domain', 'checked-element-value-observer', 'checked-radio-value-sync'],
     sourceToTargetAssignable: true,
     targetToSourceAssignable: true,
   },
@@ -72,6 +76,7 @@ expectValueChannel(
     sourceName: 'numericRadioChoice',
     valueDomain: ['1'],
     primitiveValueDomainDisplays: ['"1"'],
+    observerCouplings: ['checked-element-value-domain', 'checked-element-value-observer', 'checked-radio-value-sync'],
     sourceToTargetAssignable: true,
     targetToSourceAssignable: false,
     sourceAssignmentReasonKinds: ['target-to-source-type-mismatch'],
@@ -84,6 +89,7 @@ expectValueChannel(
     channelKind: 'checked-radio-value',
     sourceName: 'selectedItem',
     usesCustomMatcher: true,
+    observerCouplings: ['checked-element-value-domain', 'checked-element-value-observer', 'checked-radio-value-sync', 'custom-matcher-comparison'],
     sourceToTargetAssignable: true,
     targetToSourceAssignable: true,
   },
@@ -95,8 +101,29 @@ expectValueChannel(
     channelKind: 'select-single-option-value',
     sourceName: 'selectedOption',
     usesCustomMatcher: true,
+    observerCouplings: ['select-option-value-domain', 'select-option-list-mutation-observer', 'custom-matcher-comparison'],
     sourceToTargetAssignable: true,
     targetToSourceAssignable: true,
+  },
+);
+expectValueChannel(
+  'checked-select-custom-matcher',
+  'Boolean checkbox flow should ignore an authored matcher because CheckedObserver only compares model/value in radio and collection modes.',
+  {
+    channelKind: 'checked-boolean',
+    sourceName: 'booleanAcknowledged',
+    usesCustomMatcher: false,
+    observerCouplings: ['checked-boolean-sync'],
+    sourceToTargetAssignable: true,
+    targetToSourceAssignable: true,
+  },
+);
+expectMatcherFunctionChannels(
+  'checked-select-custom-matcher',
+  'Authored matcher.bind should materialize as a framework matcher function slot, not as an unknown raw property.',
+  {
+    sourceName: 'matchItems',
+    expectedCount: 10,
   },
 );
 expectValueChannel(
@@ -107,6 +134,7 @@ expectValueChannel(
     sourceName: 'selectedItems',
     usesCustomMatcher: true,
     isCollection: true,
+    observerCouplings: ['checked-element-value-domain', 'checked-element-value-observer', 'checked-collection-observer', 'checked-collection-membership-mutation', 'custom-matcher-comparison'],
     sourceToTargetAssignable: true,
     targetToSourceAssignable: true,
   },
@@ -119,6 +147,7 @@ expectValueChannel(
     sourceName: 'selectedItemSet',
     usesCustomMatcher: true,
     isCollection: true,
+    observerCouplings: ['checked-element-value-domain', 'checked-element-value-observer', 'checked-collection-observer', 'checked-collection-membership-mutation', 'custom-matcher-comparison'],
     sourceToTargetAssignable: true,
     targetToSourceAssignable: true,
   },
@@ -131,6 +160,7 @@ expectValueChannel(
     sourceName: 'selectedItemMap',
     usesCustomMatcher: true,
     isCollection: true,
+    observerCouplings: ['checked-element-value-domain', 'checked-element-value-observer', 'checked-collection-observer', 'checked-map-keyed-boolean-mutation', 'custom-matcher-comparison'],
     sourceToTargetAssignable: true,
     targetToSourceAssignable: true,
   },
@@ -143,6 +173,7 @@ expectValueChannel(
     sourceName: 'readonlyItemSet',
     usesCustomMatcher: true,
     isCollection: true,
+    observerCouplings: ['checked-collection-observer', 'checked-collection-membership-mutation'],
     sourceToTargetAssignable: true,
     targetToSourceAssignable: false,
   },
@@ -155,6 +186,7 @@ expectValueChannel(
     sourceName: 'readonlyItemMap',
     usesCustomMatcher: true,
     isCollection: true,
+    observerCouplings: ['checked-collection-observer', 'checked-map-keyed-boolean-mutation'],
     sourceToTargetAssignable: true,
     targetToSourceAssignable: false,
   },
@@ -167,6 +199,7 @@ expectValueChannel(
     sourceName: 'readonlySelectedItems',
     usesCustomMatcher: true,
     isCollection: true,
+    observerCouplings: ['select-option-value-domain', 'select-option-list-mutation-observer', 'select-array-observer', 'select-array-mutation', 'custom-matcher-comparison'],
     sourceToTargetAssignable: true,
     targetToSourceAssignable: false,
   },
@@ -179,6 +212,7 @@ expectValueChannel(
     sourceName: 'selectedFirst',
     isCollection: true,
     valueDomain: ['alpha', 'beta'],
+    observerCouplings: ['select-option-value-domain', 'select-option-list-mutation-observer', 'select-array-observer', 'select-array-mutation'],
     sourceToTargetAssignable: true,
     targetToSourceAssignable: true,
   },
@@ -191,6 +225,7 @@ expectValueChannel(
     sourceName: 'selectedDynamic',
     isCollection: null,
     valueDomain: ['alpha', 'beta'],
+    observerCouplings: ['select-option-value-domain', 'select-option-list-mutation-observer', 'select-dynamic-multiple-mode'],
     sourceToTargetAssignable: true,
     targetToSourceAssignable: true,
   },
@@ -201,6 +236,7 @@ expectValueChannel(
   {
     channelKind: 'select-single-option-value',
     sourceName: 'selectedTags',
+    observerCouplings: ['select-option-value-domain', 'select-option-list-mutation-observer'],
     sourceToTargetAssignable: false,
     targetToSourceAssignable: false,
     frameworkErrorCode: 'AUR0654',
@@ -220,6 +256,7 @@ const summary = {
         sourceToTargetAssignable: row.sourceToTargetAssignable,
         targetToSourceAssignable: row.targetToSourceAssignable,
         frameworkErrorCode: row.frameworkErrorCode,
+        observerCouplings: valueChannelForDataFlow(rows.valueChannels, row)?.observerCouplings ?? [],
       })),
   })),
 };
@@ -229,6 +266,13 @@ if (failures.length > 0) {
   process.exitCode = 1;
 } else {
   console.log(JSON.stringify({ ok: true, summary }, null, 2));
+}
+
+function valueChannelForDataFlow(valueChannels, dataFlow) {
+  return valueChannels.find((candidate) =>
+    candidate.channelKind === dataFlow.valueChannelKind
+    && candidate.source?.label === dataFlow.source?.label
+  ) ?? null;
 }
 
 async function readFixtureRows(fixtureName) {
@@ -241,6 +285,10 @@ async function readFixtureRows(fixtureName) {
     analysisDepth: 'binding-observation',
   });
   return {
+    dataFlowSummary: app.ask({
+      kind: 'binding-data-flow-summary',
+      page: { size: 0 },
+    }).value,
     valueChannels: app.ask({
       kind: 'binding-value-channels',
       page: { size: 1000 },
@@ -285,5 +333,39 @@ function expectValueChannel(fixtureName, summary, expected) {
     if (actualValue !== value) {
       failures.push(`${summary}: expected ${field}=${String(value)}, got ${String(actualValue)}.`);
     }
+  }
+}
+
+function expectMatcherFunctionChannels(fixtureName, summary, expected) {
+  const rows = fixtures.get(fixtureName);
+  const matcherRows = rows.dataFlows.filter((candidate) =>
+    candidate.targetProperty === 'matcher'
+    && (expected.sourceName === undefined || candidate.sourceName === expected.sourceName)
+  );
+  if (matcherRows.length === 0) {
+    failures.push(`${summary}: missing matcher.bind data-flow rows for ${expected.sourceName ?? 'any source'}.`);
+    return;
+  }
+  if (expected.expectedCount !== undefined && matcherRows.length !== expected.expectedCount) {
+    failures.push(`${summary}: expected ${expected.expectedCount} matcher.bind rows, got ${matcherRows.length}.`);
+  }
+  for (const row of matcherRows) {
+    if (row.valueChannelKind !== 'custom-matcher-function') {
+      failures.push(`${summary}: expected matcher.bind channel kind custom-matcher-function, got ${row.valueChannelKind}.`);
+    }
+    if (row.targetValueType !== '(left: unknown, right: unknown) => boolean') {
+      failures.push(`${summary}: expected matcher.bind target function type, got ${row.targetValueType}.`);
+    }
+    if (row.sourceToTargetAssignable !== true) {
+      failures.push(`${summary}: expected matcher.bind source-to-target assignable, got ${row.sourceToTargetAssignable}.`);
+    }
+  }
+
+  const matcherIssues = rows.dataFlowSummary.issueRows.filter((issue) =>
+    issue.issueKind === 'source-to-target-unknown'
+    && issue.targetProperties.includes('matcher')
+  );
+  if (matcherIssues.length > 0) {
+    failures.push(`${summary}: matcher.bind still appears in source-to-target-unknown issue rows.`);
   }
 }

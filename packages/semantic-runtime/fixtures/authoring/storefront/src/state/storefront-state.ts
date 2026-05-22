@@ -1,4 +1,4 @@
-import { resolve } from '@aurelia/kernel';
+import { resolve } from 'aurelia';
 import { Product } from '../models/product';
 import { ProductCatalogService } from '../services/product-catalog';
 

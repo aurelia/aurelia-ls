@@ -5,11 +5,6 @@ import {
   ApplicationTopologyBuilder,
 } from '../application/index.js';
 import {
-  CreateComponentOperation,
-  CreateServiceOperation,
-  CreateStateModelOperation,
-} from './operation.js';
-import {
   AuthoringIntent,
   AuthoringPlan,
   AuthoringPlanStep,
@@ -22,24 +17,39 @@ import {
 import { AuthoringPreference } from './ontology.js';
 import {
   standardFormAppExpectedEffects,
+  standardStateBackedRequestExpectedEffects,
   standardFormTemplateBindingExpectedEffects,
 } from './form-recipe-expected-effects.js';
 import {
-  requestCanSubmitComputedObserverDependencyEffect,
-  requestCanSubmitComputedObserverSourceEffect,
-  requestCanSubmitTemplateObservedDependencyEffect,
-} from './form-expected-effects.js';
+  standardFormTemplateBindingSummary,
+  standardFormValueChannelPreferences,
+} from './form-recipe-preferences.js';
 import {
+  componentPlanStep,
   componentStyleAssetPlanStep,
   entrypointPlanStep,
   externalTemplatePlanStep,
   formComponentPlanStep,
   projectFilesPlanStep,
   rootComponentPlanStep,
+  servicePlanStep,
+  stateModelPlanStep,
   templateBindingPlanStep,
   verifyAppPlanStep,
-} from './form-recipe-plan-steps.js';
-import { serviceBackedFormSourcePlan } from './service-backed-form-source-plan.js';
+} from './recipe-plan-steps.js';
+import {
+  serviceBackedFormSourcePlan,
+  serviceBackedFormUsesFieldShell,
+} from './service-backed-form-source-plan.js';
+import {
+  standardRequestFormDomainNamesFromParameters,
+  type StandardRequestFormBindingMode,
+  type StandardRequestFormDomainNames,
+} from './standard-request-form-source-templates.js';
+import {
+  standardRequestFormFieldSchemaFromRecipeRequest,
+  type StandardRequestFormFieldSchema,
+} from './standard-request-form-field-schema.js';
 
 export interface ServiceBackedFormRecipeRequest {
   /** Project root that the authored app should occupy. */
@@ -64,6 +74,10 @@ export interface ServiceBackedFormRecipeRequest {
   readonly fieldShellTemplatePath?: string;
   readonly fieldShellClassName?: string;
   readonly fieldShellElementName?: string;
+  readonly requestEntityName?: string;
+  readonly requestSelectionIdName?: string;
+  readonly requestFields?: string;
+  readonly requestOptions?: string;
 }
 
 interface ServiceBackedFormRecipeModel {
@@ -87,6 +101,9 @@ interface ServiceBackedFormRecipeModel {
   readonly fieldShellTemplatePath: string;
   readonly fieldShellClassName: string;
   readonly fieldShellElementName: string;
+  readonly requestDomain: StandardRequestFormDomainNames;
+  readonly requestFieldSchema: StandardRequestFormFieldSchema | null;
+  readonly requestBindingMode: StandardRequestFormBindingMode;
 }
 
 export function buildServiceBackedFormPlan(request: ServiceBackedFormRecipeRequest): AuthoringPlan {
@@ -101,16 +118,14 @@ export function buildServiceBackedFormPlan(request: ServiceBackedFormRecipeReque
       [
         new AuthoringPreference('state-ownership', 'di-owned-state-class'),
         new AuthoringPreference('state-ownership', 'di-owned-service-layer'),
-        new AuthoringPreference('component-interface', 'scalar-id-inputs'),
+        new AuthoringPreference('component-interface', model.requestBindingMode === 'single-draft-object' ? 'no-public-component-interface' : 'scalar-id-inputs'),
         new AuthoringPreference('template-model-access', 'direct-state-domain-template-binding'),
         new AuthoringPreference('template-model-access', 'template-local-domain-adaptation'),
         new AuthoringPreference('template-model-access', 'meaningful-viewmodel-adaptation'),
         new AuthoringPreference('template-source-ownership', 'external-template-file'),
         new AuthoringPreference('style-resource-ownership', 'component-stylesheet'),
         new AuthoringPreference('style-binding-model', 'class-token-binding'),
-        new AuthoringPreference('form-value-channel', 'native-control-value-binding'),
-        new AuthoringPreference('form-value-channel', 'checked-model-binding'),
-        new AuthoringPreference('form-value-channel', 'select-model-binding'),
+        ...standardFormValueChannelPreferences(model.requestFieldSchema),
         new AuthoringPreference('build-tool-profile', 'host-selected-build-tool'),
       ],
     ),
@@ -122,6 +137,7 @@ export function buildServiceBackedFormPlan(request: ServiceBackedFormRecipeReque
 }
 
 function normalizeServiceBackedFormRecipe(request: ServiceBackedFormRecipeRequest): ServiceBackedFormRecipeModel {
+  const requestDomain = standardRequestFormDomainNamesFromParameters(request.requestEntityName, request.requestSelectionIdName);
   return {
     rootDir: request.rootDir,
     appName: request.appName,
@@ -133,8 +149,8 @@ function normalizeServiceBackedFormRecipe(request: ServiceBackedFormRecipeReques
     rootElementName: request.rootElementName ?? 'app-root',
     statePath: request.statePath ?? 'src/state/app-state.ts',
     stateClassName: request.stateClassName ?? 'AppState',
-    servicePath: request.servicePath ?? 'src/services/request-service.ts',
-    serviceClassName: request.serviceClassName ?? 'RequestService',
+    servicePath: request.servicePath ?? `src/services/${requestDomain.sampleIdPrefix}-service.ts`,
+    serviceClassName: request.serviceClassName ?? requestDomain.serviceClassName,
     formComponentPath: request.formComponentPath ?? 'src/components/service-backed-form.ts',
     formTemplatePath: request.formTemplatePath ?? 'src/components/service-backed-form.html',
     formComponentClassName: request.formComponentClassName ?? 'ServiceBackedForm',
@@ -143,7 +159,20 @@ function normalizeServiceBackedFormRecipe(request: ServiceBackedFormRecipeReques
     fieldShellTemplatePath: request.fieldShellTemplatePath ?? 'src/components/field-shell.html',
     fieldShellClassName: request.fieldShellClassName ?? 'FieldShell',
     fieldShellElementName: request.fieldShellElementName ?? 'field-shell',
+    requestDomain,
+    requestFieldSchema: standardRequestFormFieldSchemaFromRecipeRequest(request.requestFields, request.requestOptions, request.requestEntityName),
+    requestBindingMode: serviceBackedFormRequestBindingMode(request),
   };
+}
+
+function serviceBackedFormRequestBindingMode(
+  request: ServiceBackedFormRecipeRequest,
+): StandardRequestFormBindingMode {
+  return request.requestEntityName != null
+    && request.requestFields != null
+    && request.requestSelectionIdName == null
+      ? 'single-draft-object'
+      : 'selected-existing-object';
 }
 
 function serviceBackedFormPreconditions(): readonly AuthoringPrecondition[] {
@@ -157,6 +186,7 @@ function serviceBackedFormPlanSteps(
   model: ServiceBackedFormRecipeModel,
   topology: ApplicationTopology,
 ): readonly AuthoringPlanStep[] {
+  const usesFieldShell = serviceBackedFormUsesFieldShell(model);
   return [
     projectFilesPlanStep([
       model.entrypointPath,
@@ -167,11 +197,16 @@ function serviceBackedFormPlanSteps(
       model.servicePath,
       model.formComponentPath,
       model.formTemplatePath,
-      model.fieldShellComponentPath,
-      model.fieldShellTemplatePath,
+      ...(usesFieldShell
+        ? [
+          model.fieldShellComponentPath,
+          model.fieldShellTemplatePath,
+        ]
+        : []),
     ]),
-    new AuthoringPlanStep(
-      new CreateStateModelOperation(model.statePath, model.stateClassName),
+    stateModelPlanStep(
+      model.statePath,
+      model.stateClassName,
       [
         ExpectedSemanticEffect.signatureFact('State source should be visible in app topology.', 'service-class', 'di', 'state-model', 'present', null, [
           new ExpectedSemanticEffectFilter('role', 'state-source'),
@@ -179,8 +214,9 @@ function serviceBackedFormPlanSteps(
         ExpectedSemanticEffect.signatureTaste('Authoring orientation should recognize DI-owned state.', 'state-ownership', 'di-owned-state-class', 'state-model'),
       ],
     ),
-    new AuthoringPlanStep(
-      new CreateServiceOperation(model.servicePath, model.serviceClassName),
+    servicePlanStep(
+      model.servicePath,
+      model.serviceClassName,
       [
         ExpectedSemanticEffect.discriminatorFact('Service source should be visible in app topology.', 'service-class', 'di', 'service', 'present', null, [
           new ExpectedSemanticEffectFilter('role', 'service-source'),
@@ -192,27 +228,28 @@ function serviceBackedFormPlanSteps(
     rootComponentPlanStep(model.rootComponentPath, model.rootComponentClassName, model.rootElementName),
     componentStyleAssetPlanStep(model.rootStylePath),
     externalTemplatePlanStep(model.rootTemplatePath, model.rootComponentClassName, 'Root component'),
-    new AuthoringPlanStep(
-      new CreateComponentOperation(model.fieldShellComponentPath, model.fieldShellClassName, model.fieldShellElementName),
-      [
-        ExpectedSemanticEffect.fact('Field shell should be a custom element.', 'component', 'resource', 'component'),
-      ],
-    ),
-    externalTemplatePlanStep(model.fieldShellTemplatePath, model.fieldShellClassName, 'Field shell component'),
+    ...(usesFieldShell
+      ? [
+        componentPlanStep(model.fieldShellComponentPath, model.fieldShellClassName, model.fieldShellElementName, 'Field shell'),
+        externalTemplatePlanStep(model.fieldShellTemplatePath, model.fieldShellClassName, 'Field shell component'),
+      ]
+      : []),
     formComponentPlanStep(model.formComponentPath, model.formComponentClassName, model.formElementName),
     externalTemplatePlanStep(model.formTemplatePath, model.formComponentClassName, 'Form component'),
     templateBindingPlanStep(
       model.formTemplatePath,
-      'native value binding, checked/model binding, select model binding, and DI state/service handoff',
-      standardFormTemplateBindingExpectedEffects(),
+      standardFormTemplateBindingSummary(model.requestFieldSchema, false, ['submit trigger', 'DI state/service handoff']),
+      standardFormTemplateBindingExpectedEffects({ fieldSchema: model.requestFieldSchema, usesFieldShell }),
     ),
-    verifyAppPlanStep(topology, serviceBackedFormExpectedEffects()),
+    verifyAppPlanStep(topology, serviceBackedFormExpectedEffects(model)),
   ];
 }
 
 function serviceBackedFormTopology(model: ServiceBackedFormRecipeModel): ApplicationTopology {
   const builder = new ApplicationTopologyBuilder(model.rootDir);
-  const fieldShell = addServiceBackedFieldShellComponent(builder, model);
+  const fieldShell = serviceBackedFormUsesFieldShell(model)
+    ? addServiceBackedFieldShellComponent(builder, model)
+    : null;
   const form = addServiceBackedFormComponent(builder, model, fieldShell);
   const root = addServiceBackedFormRoot(builder, model, form);
   addServiceBackedFormState(builder, model);
@@ -224,7 +261,7 @@ function serviceBackedFormTopology(model: ServiceBackedFormRecipeModel): Applica
 function addServiceBackedFormComponent(
   builder: ApplicationTopologyBuilder,
   model: ServiceBackedFormRecipeModel,
-  fieldShell: ApplicationComponentTopologyResult,
+  fieldShell: ApplicationComponentTopologyResult | null,
 ): ApplicationComponentTopologyResult {
   return builder.component({
     className: model.formComponentClassName,
@@ -232,7 +269,7 @@ function addServiceBackedFormComponent(
     sourcePath: model.formComponentPath,
     elementName: model.formElementName,
     templatePath: model.formTemplatePath,
-    dependencies: [fieldShell.reference],
+    dependencies: fieldShell == null ? [] : [fieldShell.reference],
   });
 }
 
@@ -298,23 +335,26 @@ function addServiceBackedFormEntrypoint(
 ): void {
   builder.entrypoint({
     path: model.entrypointPath,
-    startupLane: 'new Aurelia().register(StandardConfiguration).app(...).start()',
+    startupLane: 'Aurelia.app(...).start()',
     rootComponent: root.reference,
     imports: [
-      new ApplicationImport('@aurelia/runtime-html', ['Aurelia', 'StandardConfiguration']),
+      new ApplicationImport('aurelia', [], 'Aurelia'),
       new ApplicationImport(root.reference.moduleSpecifier, [model.rootComponentClassName]),
     ],
   });
 }
 
-function serviceBackedFormExpectedEffects(): readonly ExpectedSemanticEffect[] {
+function serviceBackedFormExpectedEffects(model: ServiceBackedFormRecipeModel): readonly ExpectedSemanticEffect[] {
+  const usesFieldShell = serviceBackedFormUsesFieldShell(model);
   return [
     ...standardFormAppExpectedEffects({
       summaryPrefix: 'Service-backed form app',
-      componentCount: 3,
-      componentCountSummary: 'root, form, and field shell custom elements',
-      externalTemplateCount: 3,
-      compiledTemplateCount: 3,
+      componentCount: usesFieldShell ? 3 : 2,
+      componentCountSummary: usesFieldShell ? 'root, form, and field shell custom elements' : 'root and form custom elements',
+      externalTemplateCount: usesFieldShell ? 3 : 2,
+      compiledTemplateCount: usesFieldShell ? 3 : 2,
+      fieldSchema: model.requestFieldSchema,
+      usesFieldShell,
     }),
     ExpectedSemanticEffect.signatureFact('Service-backed form app has a state service-class row.', 'service-class', 'di', 'state-model', 'present', null, [
       new ExpectedSemanticEffectFilter('role', 'state-source'),
@@ -322,17 +362,17 @@ function serviceBackedFormExpectedEffects(): readonly ExpectedSemanticEffect[] {
     ExpectedSemanticEffect.discriminatorFact('Service-backed form app has a service-layer service-class row.', 'service-class', 'di', 'service', 'present', null, [
       new ExpectedSemanticEffectFilter('role', 'service-source'),
     ]),
-    ExpectedSemanticEffect.signatureFact('Service-backed form component calls the DI-owned state layer.', 'service-interaction', 'di', 'state-model', 'present', null, [
-      new ExpectedSemanticEffectFilter('consumerRole', 'component-source'),
-      new ExpectedSemanticEffectFilter('targetRole', 'state-source'),
-      new ExpectedSemanticEffectFilter('operationKind', 'call'),
-      new ExpectedSemanticEffectFilter('isSelfInteraction', false),
-    ]),
     ExpectedSemanticEffect.discriminatorFact('DI-owned state calls the injected service boundary.', 'service-interaction', 'di', 'service', 'present', null, [
       new ExpectedSemanticEffectFilter('consumerRole', 'state-source'),
       new ExpectedSemanticEffectFilter('targetRole', 'service-source'),
       new ExpectedSemanticEffectFilter('operationKind', 'call'),
       new ExpectedSemanticEffectFilter('isSelfInteraction', false),
+    ]),
+    ExpectedSemanticEffect.signatureFact('Service-backed form submit listener calls the DI-owned state layer directly.', 'service-interaction-binding', 'template', 'template-binding', 'present', null, [
+      new ExpectedSemanticEffectFilter('bindingTargetProperty', 'submit'),
+      new ExpectedSemanticEffectFilter('interactionTargetRole', 'state-source'),
+      new ExpectedSemanticEffectFilter('interactionOperationKind', 'call'),
+      new ExpectedSemanticEffectFilter('interactionIsSelfInteraction', false),
     ]),
     ExpectedSemanticEffect.signatureFact('Service-backed form template bindings read DI state-backed request context.', 'service-interaction-binding', 'template', 'template-binding', 'present', null, [
       new ExpectedSemanticEffectFilter('interactionTargetRole', 'state-source'),
@@ -346,23 +386,7 @@ function serviceBackedFormExpectedEffects(): readonly ExpectedSemanticEffect[] {
       new ExpectedSemanticEffectFilter('interactionOperationKind', 'read'),
       new ExpectedSemanticEffectFilter('interactionIsSelfInteraction', false),
     ]),
-    requestCanSubmitComputedObserverSourceEffect(
-      'Service-backed form models request submit readiness as a plain domain getter observer.',
-    ),
-    requestCanSubmitComputedObserverDependencyEffect(
-      'Service-backed form request submit-readiness getter observes customerName.',
-      'this.customerName',
-    ),
-    requestCanSubmitComputedObserverDependencyEffect(
-      'Service-backed form request submit-readiness getter observes email.',
-      'this.email',
-    ),
-    requestCanSubmitTemplateObservedDependencyEffect(
-      'Service-backed form template observes request.canSubmit without a view-model forwarding getter.',
-      'request.canSubmit',
-      'request',
-      'canSubmit',
-    ),
+    ...standardStateBackedRequestExpectedEffects('Service-backed form', model.requestDomain, model.requestFieldSchema, model.requestBindingMode),
     ExpectedSemanticEffect.discriminatorTaste('Service-backed form app reports a DI-owned service layer.', 'state-ownership', 'di-owned-service-layer', 'service'),
   ];
 }

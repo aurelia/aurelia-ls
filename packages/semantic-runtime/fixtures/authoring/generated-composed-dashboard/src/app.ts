@@ -1,5 +1,4 @@
-import { customElement } from '@aurelia/runtime-html';
-import { resolve } from '@aurelia/kernel';
+import { customElement, resolve } from 'aurelia';
 import { ChartWidget } from './widgets/chart-widget';
 import { InventoryWidget } from './widgets/inventory-widget';
 import { DashboardState } from './state/dashboard-state';

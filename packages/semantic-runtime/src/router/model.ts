@@ -18,6 +18,7 @@ export const enum RouterModelKind {
   ContextRouter = 'context-router',
   CurrentRoute = 'current-route',
   RouteContext = 'route-context',
+  RouteContextParameterRead = 'route-context-parameter-read',
   RouteConfigContext = 'route-config-context',
   RouteConfig = 'route-config',
   RouteableComponent = 'routeable-component',
@@ -234,6 +235,16 @@ export type RouteContextField =
   | 'router'
   | 'routeConfigContext'
   | 'viewportAgent'
+  | 'source';
+
+export type RouteContextParameterReadField =
+  | 'component'
+  | 'routeConfigs'
+  | 'mergeStrategy'
+  | 'includeQueryParams'
+  | 'declaredParameters'
+  | 'routePathParameters'
+  | 'alignment'
   | 'source';
 
 export type RouteNodeField =
@@ -670,6 +681,56 @@ export class RouteContextModel {
 
   toReference(): RouterReference {
     return new RouterReference(this.productHandle, this.identityHandle, this.routerKind, this.sourceAddressHandle, this.localName);
+  }
+}
+
+export type RouteContextParameterMergeStrategy =
+  | 'child-first'
+  | 'parent-first'
+  | 'append'
+  | 'by-route'
+  | 'unknown';
+
+export type RouteContextParameterReadAlignment =
+  | 'aligned'
+  | 'query-or-open-parameters'
+  | 'open-declared-shape'
+  | 'missing-route-path-parameters'
+  | 'unknown-declared-parameters'
+  | 'unmatched-component';
+
+/** Source-backed RouteContext.getRouteParameters(...) read correlated with route-recognizer path parameters. */
+@auLink('router:RouteContext.getRouteParameters')
+export class RouteContextParameterReadModel {
+  readonly routerKind = RouterModelKind.RouteContextParameterRead;
+
+  constructor(
+    readonly productHandle: ProductHandle,
+    readonly identityHandle: IdentityHandle,
+    readonly componentClassName: string | null,
+    readonly component: RouteableComponentReference | null,
+    readonly routeConfigs: readonly RouteConfigReference[],
+    readonly mergeStrategy: RouteContextParameterMergeStrategy,
+    readonly includeQueryParams: boolean | null,
+    readonly declaredParameterNames: readonly string[],
+    readonly declaredOptionalParameterNames: readonly string[],
+    readonly declaredOpenKeySpace: boolean,
+    readonly routePathParameterNames: readonly string[],
+    readonly missingRoutePathParameterNames: readonly string[],
+    readonly declaredNonPathParameterNames: readonly string[],
+    readonly alignment: RouteContextParameterReadAlignment,
+    readonly sourceAddressHandle: AddressHandle | null,
+    readonly fieldProvenance: readonly FieldProvenance<RouteContextParameterReadField>[] = [],
+  ) {}
+
+  toReference(): RouterReference {
+    return new RouterReference(
+      this.productHandle,
+      this.identityHandle,
+      this.routerKind,
+      this.sourceAddressHandle,
+      this.componentClassName,
+    );
   }
 }
 

@@ -141,6 +141,16 @@ export interface AtlasMemoryAuLinkAnchor {
   readonly summary?: string;
 }
 
+/** External public reference carried by durable memory records. */
+export interface AtlasMemoryExternalAnchor {
+  /** Anchor discriminator. */
+  readonly kind: "external";
+  /** Public URL used as pressure input or migration context. */
+  readonly url: string;
+  /** Grounded explanation of why this external reference matters. */
+  readonly summary?: string;
+}
+
 /** One durable memory anchor. */
 export type AtlasMemoryAnchor =
   | AtlasMemorySourceAnchor
@@ -148,7 +158,8 @@ export type AtlasMemoryAnchor =
   | AtlasMemoryScriptAnchor
   | AtlasMemoryDocAnchor
   | AtlasMemoryFixtureAnchor
-  | AtlasMemoryAuLinkAnchor;
+  | AtlasMemoryAuLinkAnchor
+  | AtlasMemoryExternalAnchor;
 
 /** Exact query/search tokens contributed by a durable memory anchor. */
 export function atlasMemoryAnchorQueryValues(
@@ -178,6 +189,8 @@ export function atlasMemoryAnchorQueryValues(
       return [anchor.path, anchor.scenario, anchor.summary].filter(isDefinedMemorySearchValue);
     case "auLink":
       return [anchor.linkId, anchor.symbolName, anchor.summary].filter(isDefinedMemorySearchValue);
+    case "external":
+      return [anchor.url, anchor.summary].filter(isDefinedMemorySearchValue);
   }
 }
 

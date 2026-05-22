@@ -1,0 +1,32 @@
+<section>
+  <h2>Support Tickets</h2>
+
+  <label>
+    <span>Search</span>
+    <input type="search" value.bind="state.filters.searchQuery & debounce:300" placeholder="Search name">
+  </label>
+
+  <button type="button" if.bind="state.filters.hasActiveFilters" click.trigger="state.resetFilters()">
+    Reset search
+  </button>
+
+  <p if.bind="state.isLoading">Loading support tickets...</p>
+  <table else>
+    <thead>
+      <tr>
+          <th>Name</th>
+          <th>Detail</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr repeat.for="supportTicket of state.filteredSupportTickets; key.bind: supportTicket.id">
+          <td>${supportTicket.nameLabel}</td>
+          <td><a load.bind="'/tickets/' + supportTicket.id">Open</a></td>
+      </tr>
+    </tbody>
+  </table>
+
+  <p if.bind="!state.isLoading && state.filteredSupportTickets.length === 0">
+    No support tickets match the current search.
+  </p>
+</section>

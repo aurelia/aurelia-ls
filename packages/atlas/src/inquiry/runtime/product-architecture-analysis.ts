@@ -71,6 +71,10 @@ export interface ProductArchitectureRollup {
   readonly auLinkCatalogNameMatchCount: number;
   /** Number of function/method body surface rows discovered directly from semantic-runtime source. */
   readonly functionSurfaceCount: number;
+  /** Number of authoring source-template call rows discovered in semantic-runtime source. */
+  readonly sourceTemplateCount: number;
+  /** Number of source-template call rows whose text is statically visible. */
+  readonly staticSourceTemplateCount: number;
   /** Number of checker-backed call-site rows inside semantic-runtime source. */
   readonly callSiteCount: number;
   /** Number of call-site rows whose resolved target is another semantic-runtime source declaration. */
@@ -459,6 +463,40 @@ export interface ProductArchitectureFunctionSurfaceRow {
   readonly summary: string;
 }
 
+/** One sourceText(...) template carried by semantic-runtime authoring/source-plan code. */
+export interface ProductArchitectureSourceTemplateRow {
+  /** Stable row id. */
+  readonly id: string;
+  /** Constant/property/function carrier name surrounding the sourceText call, when visible. */
+  readonly templateName: string;
+  /** Source expression kind used as the template argument. */
+  readonly argumentKind:
+    | "string-literal"
+    | "no-substitution-template"
+    | "template-expression"
+    | "other";
+  /** True when the sourceText argument is a static string/template literal. */
+  readonly staticText: boolean;
+  /** Repository-relative source file path. */
+  readonly filePath: string;
+  /** Top-level source area. */
+  readonly area: string;
+  /** sourceText(...) call span line count in the authoring source file. */
+  readonly lineCount: number;
+  /** Static source-template text line count, or 0 when the argument is dynamic. */
+  readonly templateLineCount: number;
+  /** Static source-template text character count, or 0 when the argument is dynamic. */
+  readonly templateCharacterCount: number;
+  /** Stable normalized fingerprint of the static template text, when available. */
+  readonly templateFingerprint: string | null;
+  /** Placeholder names used by fillSourceTemplate-style replacement tokens. */
+  readonly placeholderNames: readonly string[];
+  /** Exact sourceText(...) call source range. */
+  readonly source: ProductArchitectureSourceReference;
+  /** Compact row summary. */
+  readonly summary: string;
+}
+
 /** One checker-backed call or constructor invocation inside semantic-runtime source. */
 export interface ProductArchitectureCallSiteRow {
   /** Stable row id. */
@@ -655,6 +693,8 @@ export interface ProductArchitectureAnalysis {
   readonly classSurfaces: readonly ProductArchitectureClassSurfaceRow[];
   /** Function/method implementation surface rows. */
   readonly functionSurfaces: readonly ProductArchitectureFunctionSurfaceRow[];
+  /** Authoring source-template call rows. */
+  readonly sourceTemplates: readonly ProductArchitectureSourceTemplateRow[];
   /** Checker-backed call or constructor invocation rows. */
   readonly callSites: readonly ProductArchitectureCallSiteRow[];
   /** Grouped checker-backed call dependency rows. */
@@ -900,6 +940,11 @@ function buildProductArchitectureAnalysis(
     ),
     rowCount,
   );
+  const sourceTemplates = phase(
+    "source template rows",
+    () => sourceFiles.flatMap(sourceTemplateRows),
+    rowCount,
+  );
   const callSites = includeCallSites
     ? phase(
       "checker call-site rows",
@@ -970,6 +1015,7 @@ function buildProductArchitectureAnalysis(
       cycles,
       classSurfaces,
       functionSurfaces,
+      sourceTemplates,
       callSites,
       callDependencies,
       symbolReferences,
@@ -989,6 +1035,7 @@ function buildProductArchitectureAnalysis(
     cycles,
     classSurfaces,
     functionSurfaces,
+    sourceTemplates,
     callSites,
     callDependencies,
     symbolReferences,
@@ -1620,6 +1667,116 @@ function functionSurfaceRows(
     left.source.startLine - right.source.startLine ||
     left.name.localeCompare(right.name),
   );
+}
+
+function sourceTemplateRows(
+  entry: SemanticRuntimeSourceFile,
+): readonly ProductArchitectureSourceTemplateRow[] {
+  const rows: ProductArchitectureSourceTemplateRow[] = [];
+  const visit = (node: ts.Node): void => {
+    if (ts.isCallExpression(node) && isSourceTextCall(node)) {
+      rows.push(sourceTemplateRow(entry, node));
+    }
+    ts.forEachChild(node, visit);
+  };
+  visit(entry.sourceFile);
+  return rows.sort((left, right) =>
+    left.filePath.localeCompare(right.filePath) ||
+    left.source.startLine - right.source.startLine ||
+    left.templateName.localeCompare(right.templateName),
+  );
+}
+
+function isSourceTextCall(node: ts.CallExpression): boolean {
+  return ts.isIdentifier(node.expression) && node.expression.text === "sourceText";
+}
+
+function sourceTemplateRow(
+  entry: SemanticRuntimeSourceFile,
+  node: ts.CallExpression,
+): ProductArchitectureSourceTemplateRow {
+  const source = sourceReferenceForEntryNode(entry, node);
+  const text = sourceTemplateArgumentText(node.arguments[0]);
+  const argumentKind = sourceTemplateArgumentKind(node.arguments[0]);
+  const placeholderNames = text === null
+    ? []
+    : uniqueSortedStrings([...text.matchAll(/__([A-Z0-9_]+)__/g)].map((match) => match[1]!));
+  const templateName = sourceTemplateCarrierName(node, entry.sourceFile) ?? "(anonymous sourceText)";
+  const templateLineCount = text === null ? 0 : sourceTemplateLineCount(text);
+  const templateCharacterCount = text?.length ?? 0;
+  return {
+    id: `product.arch:source-template:${entry.filePath}:${node.getStart(entry.sourceFile)}`,
+    templateName,
+    argumentKind,
+    staticText: text !== null,
+    filePath: entry.filePath,
+    area: entry.area,
+    lineCount: lineCountForSource(source),
+    templateLineCount,
+    templateCharacterCount,
+    templateFingerprint: text === null ? null : normalizedSourceFingerprint(text),
+    placeholderNames,
+    source,
+    summary: text === null
+      ? `${templateName} is a dynamic sourceText(...) template in ${entry.filePath}.`
+      : `${templateName} is a static sourceText(...) template with ${templateLineCount} line(s), ${templateCharacterCount} character(s), and ${placeholderNames.length} placeholder(s) in ${entry.filePath}.`,
+  };
+}
+
+function sourceTemplateArgumentText(argument: ts.Expression | undefined): string | null {
+  if (argument === undefined) {
+    return null;
+  }
+  if (ts.isStringLiteral(argument) || ts.isNoSubstitutionTemplateLiteral(argument)) {
+    return argument.text.replace(/\r\n/g, "\n");
+  }
+  return null;
+}
+
+function sourceTemplateArgumentKind(
+  argument: ts.Expression | undefined,
+): ProductArchitectureSourceTemplateRow["argumentKind"] {
+  if (argument === undefined) {
+    return "other";
+  }
+  if (ts.isStringLiteral(argument)) {
+    return "string-literal";
+  }
+  if (ts.isNoSubstitutionTemplateLiteral(argument)) {
+    return "no-substitution-template";
+  }
+  if (ts.isTemplateExpression(argument)) {
+    return "template-expression";
+  }
+  return "other";
+}
+
+function sourceTemplateCarrierName(
+  node: ts.Node,
+  sourceFile: ts.SourceFile,
+): string | null {
+  let current: ts.Node | undefined = node;
+  while (current !== undefined) {
+    const parent: ts.Node | undefined = current.parent;
+    if (parent === undefined) {
+      return null;
+    }
+    if (ts.isVariableDeclaration(parent) && ts.isIdentifier(parent.name)) {
+      return parent.name.text;
+    }
+    if (ts.isPropertyAssignment(parent)) {
+      return propertyNameText(parent.name, sourceFile);
+    }
+    if (ts.isPropertyDeclaration(parent)) {
+      return propertyNameText(parent.name, sourceFile);
+    }
+    current = parent;
+  }
+  return null;
+}
+
+function sourceTemplateLineCount(text: string): number {
+  return text.length === 0 ? 1 : text.split("\n").length;
 }
 
 function productClassSurfaceForDeclaration(
@@ -2720,6 +2877,7 @@ function productArchitectureRollup(
   cycles: readonly ProductArchitectureCycleRow[],
   classSurfaces: readonly ProductArchitectureClassSurfaceRow[],
   functionSurfaces: readonly ProductArchitectureFunctionSurfaceRow[],
+  sourceTemplates: readonly ProductArchitectureSourceTemplateRow[],
   callSites: readonly ProductArchitectureCallSiteRow[],
   callDependencies: readonly ProductArchitectureCallDependencyRow[],
   symbolReferences: readonly ProductArchitectureSymbolReferenceRow[],
@@ -2744,6 +2902,9 @@ function productArchitectureRollup(
       (row) => row.auLinkCatalogIdsForName.length > 0,
     ).length,
     functionSurfaceCount: functionSurfaces.length,
+    sourceTemplateCount: sourceTemplates.length,
+    staticSourceTemplateCount: sourceTemplates.filter((row) => row.staticText)
+      .length,
     callSiteCount: callSites.length,
     localCallSiteCount: callSites.filter((row) => row.local).length,
     crossAreaCallSiteCount: callSites.filter((row) => row.crossesArea).length,

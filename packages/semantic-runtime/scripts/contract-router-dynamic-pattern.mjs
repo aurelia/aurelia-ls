@@ -22,11 +22,36 @@ const app = await runtime.openApp({
 
 const expectedEffects = [
   ExpectedSemanticEffect.fact(
-    'Router href method returning a static internal route prefix should materialize recognized dynamic route facts.',
+    'Static load object literals should materialize eager child route instructions with closed params.',
     'route',
     'route',
     null,
     'present',
+    null,
+    [
+      effectFilter('routeProductKind', 'recognized-route'),
+      effectFilter('parameterValuePairs', 'productId=coffee'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.fact(
+    'Static load instructions reached through keyed binding-source values should materialize like equivalent object literals.',
+    'route',
+    'route',
+    null,
+    'present',
+    null,
+    [
+      effectFilter('routeProductKind', 'recognized-route'),
+      effectFilter('parameterValuePairs', 'productId=tea'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.atLeast(
+    'Router href methods and direct binary load bindings with static route prefixes should materialize recognized dynamic route facts.',
+    'route',
+    'route',
+    2,
     null,
     [
       effectFilter('routeProductKind', 'recognized-route'),

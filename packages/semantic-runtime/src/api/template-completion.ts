@@ -379,9 +379,13 @@ function withCursorDiagnostics(
   for (const diagnostic of [...value.diagnostics, ...diagnostics]) {
     byKey.set(cursorDiagnosticKey(diagnostic), diagnostic);
   }
-  return {
+  const nextValue = {
     ...value,
     diagnostics: [...byKey.values()],
+  };
+  return {
+    ...nextValue,
+    displayText: semanticTemplateCursorInfoDisplayText(nextValue),
   };
 }
 
@@ -434,17 +438,153 @@ export function readSemanticTemplateDiagnostics(
     diagnosticProjection,
   );
   const paged = pageTemplateDiagnosticRows(rows, page);
+  const scopedToSourceFile = sourceFile != null;
   return {
     schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
     outcome: paged.page.nextCursor == null
       ? SemanticRuntimeAnswerOutcome.Hit
       : SemanticRuntimeAnswerOutcome.Partial,
-    summary: sourceFile == null
+    summary: !scopedToSourceFile
       ? `Returned ${paged.rows.length} of ${rows.length} template diagnostic row(s) from the opened app basis.`
       : `Returned ${paged.rows.length} of ${rows.length} template diagnostic row(s) for the requested source file.`,
-    value: { rows: paged.rows },
+    value: {
+      displayText: semanticTemplateDiagnosticsDisplayText(paged.rows, rows.length, scopedToSourceFile),
+      rows: paged.rows,
+    },
     page: paged.page,
   };
+}
+
+function semanticTemplateDiagnosticsDisplayText(
+  rows: readonly SemanticTemplateDiagnosticRow[],
+  totalRows: number,
+  scopedToSourceFile: boolean,
+): string {
+  const lines = [
+    `Template diagnostics: returned ${rows.length} of ${totalRows} row(s) ${scopedToSourceFile ? 'for the requested source file' : 'from the opened app basis'}.`,
+  ];
+  if (totalRows === 0) {
+    lines.push('Pressure: no template diagnostics in this locus.');
+  } else {
+    lines.push(`Returned-page severity: ${formatCountMap(countValues(rows, (row) => row.severity))}.`);
+    lines.push(`Kinds: ${formatList(uniqueValues(rows, (row) => row.diagnosticKind, TEMPLATE_DISPLAY_LIST_LIMIT))}.`);
+    const frameworkCodes = uniqueValues(rows, (row) => row.frameworkErrorCode, TEMPLATE_DISPLAY_LIST_LIMIT);
+    if (frameworkCodes.length > 0) {
+      lines.push(`Framework codes: ${frameworkCodes.join(', ')}.`);
+    }
+    lines.push('Next: page raw diagnostics only after the severity/kind cluster identifies an actionable source locus.');
+  }
+  return lines.join('\n');
+}
+
+function semanticTemplateCompletionDisplayText(
+  value: Omit<SemanticTemplateCompletionResult, 'displayText'>,
+): string {
+  const lines = [
+    `Template completions: site=${value.siteKind}; candidates=${value.candidates.length}; template=${templateLocationDisplay(value.template)}.`,
+  ];
+  if (value.expressionFrontier != null) {
+    lines.push(`Expression frontier: ${value.expressionFrontier.frontierKind ?? 'none'}; continuations=${formatList(value.expressionFrontier.expectedContinuationClasses)}.`);
+  }
+  if (value.missingInputs.length > 0) {
+    lines.push(`Missing inputs: ${value.missingInputs.join(', ')}.`);
+  }
+  if (value.candidates.length > 0) {
+    lines.push(`Candidates: ${value.candidates.slice(0, TEMPLATE_DISPLAY_LIST_LIMIT).map((candidate) =>
+      `${candidate.name} (${candidate.candidateKind}/${candidate.sourceKind})`
+    ).join('; ')}${value.candidates.length > TEMPLATE_DISPLAY_LIST_LIMIT ? `; +${value.candidates.length - TEMPLATE_DISPLAY_LIST_LIMIT} more` : ''}.`);
+  }
+  lines.push('Next: use aurelia_template_cursor_info at the same cursor when selected member, bindable, owner type, or cursor diagnostics are needed.');
+  return lines.join('\n');
+}
+
+function semanticTemplateCursorInfoDisplayText(
+  value: Omit<SemanticTemplateCursorInfoResult, 'displayText'>,
+): string {
+  const lines = [
+    `Template cursor: site=${value.siteKind}; template=${templateLocationDisplay(value.template)}; html=${htmlCursorDisplay(value.html)}.`,
+  ];
+  if (value.valueSite != null) {
+    lines.push(`Value site: ${value.valueSite.siteKind}${value.valueSite.bindingCommandName == null ? '' : ` via ${value.valueSite.bindingCommandName}`}; value=${trimTemplateDisplay(value.valueSite.rawValue)}.`);
+  }
+  if (value.selectedDefinition != null) {
+    lines.push(`Selected resource: ${value.selectedDefinition.resourceKind} ${value.selectedDefinition.name ?? value.selectedDefinition.targetName ?? 'unnamed'}.`);
+  }
+  if (value.selectedBindable != null) {
+    lines.push(`Selected bindable: ${value.selectedBindable.attribute} (${value.selectedBindable.mode}).`);
+  }
+  if (value.selectedMember != null || value.memberOwnerType != null || value.selectedMemberName != null) {
+    lines.push(`Selected member: ${value.selectedMemberName ?? value.selectedMember?.name ?? 'none'}; owner=${value.memberOwnerType?.display ?? 'unknown'}; memberType=${value.selectedMember?.typeDisplay ?? 'unknown'}.`);
+  }
+  if (value.expressionFrontier != null) {
+    lines.push(`Expression frontier: ${value.expressionFrontier.frontierKind ?? 'none'}; continuations=${formatList(value.expressionFrontier.expectedContinuationClasses)}.`);
+  }
+  if (value.missingInputs.length > 0) {
+    lines.push(`Missing inputs: ${value.missingInputs.join(', ')}.`);
+  }
+  if (value.diagnostics.length === 0) {
+    lines.push('Diagnostics: none at this cursor.');
+  } else {
+    lines.push(`Diagnostics: ${value.diagnostics.length}; severities=${formatCountMap(countValues(value.diagnostics, (row) => row.severity))}; kinds=${formatList(uniqueValues(value.diagnostics, (row) => row.diagnosticKind, TEMPLATE_DISPLAY_LIST_LIMIT))}.`);
+  }
+  lines.push('Next: use aurelia_template_completions for candidate names, aurelia_template_diagnostics for file-level pressure, or binding summary queries for runtime value flow.');
+  return lines.join('\n');
+}
+
+const TEMPLATE_DISPLAY_LIST_LIMIT = 5;
+
+function templateLocationDisplay(
+  template: { readonly compilationLane: TemplateCompilationLane | null; readonly source: { readonly path?: string | null } | null },
+): string {
+  return `${template.compilationLane ?? 'unknown'}${template.source?.path == null ? '' : ` ${template.source.path}`}`;
+}
+
+function htmlCursorDisplay(row: SemanticTemplateCursorHtmlRow): string {
+  const tag = row.tagName == null ? row.nodeKind ?? 'unknown-node' : `<${row.tagName}>`;
+  return row.attributeName == null ? tag : `${tag}@${row.attributeName}`;
+}
+
+function formatList(values: readonly unknown[]): string {
+  return values.length === 0 ? 'none' : values.map(String).join(', ');
+}
+
+function countValues<TRow>(
+  rows: readonly TRow[],
+  read: (row: TRow) => string | null,
+): ReadonlyMap<string, number> {
+  const counts = new Map<string, number>();
+  for (const row of rows) {
+    const value = read(row);
+    if (value != null) {
+      counts.set(value, (counts.get(value) ?? 0) + 1);
+    }
+  }
+  return counts;
+}
+
+function uniqueValues<TRow>(
+  rows: readonly TRow[],
+  read: (row: TRow) => string | null,
+  limit: number,
+): readonly string[] {
+  return [...new Set(rows.map(read).filter((value): value is string => value != null))]
+    .sort((left, right) => left.localeCompare(right))
+    .slice(0, limit);
+}
+
+function formatCountMap(counts: ReadonlyMap<string, number>): string {
+  if (counts.size === 0) {
+    return 'none';
+  }
+  return [...counts.entries()]
+    .sort(([left], [right]) => left.localeCompare(right))
+    .map(([key, count]) => `${key}=${count}`)
+    .join(', ');
+}
+
+function trimTemplateDisplay(value: string): string {
+  const normalized = value.replace(/\s+/gu, ' ').trim();
+  return normalized.length <= 120 ? normalized : `${normalized.slice(0, 117)}...`;
 }
 
 function readTemplateCompletion(
@@ -1596,23 +1736,27 @@ function templateCompletionReadResult(
   includeHandles: boolean,
 ): TemplateCompletionReadResult {
   const rows = answer.value.candidates.map((candidate) => templateCompletionCandidateRow(candidate, includeHandles));
+  const value: Omit<SemanticTemplateCompletionResult, 'displayText'> = {
+    siteKind: answer.value.siteKind,
+    candidates: rows,
+    expressionFrontier: answer.value.expressionFrontier == null
+      ? null
+      : {
+        frontierKind: answer.value.expressionFrontier.frontierKind,
+        expectedContinuationClasses: answer.value.expressionFrontier.expectedContinuationClasses,
+      },
+    missingInputs: [...new Set([...context.cursorContext.missingInputs, ...answer.value.missingInputs])],
+    template: {
+      compilationLane: context.selection.lane,
+      source: describeAddress(store, context.selection.sourceAddressHandle),
+    },
+  };
   return {
     outcome: semanticOutcomeForInquiry(answer.outcome),
     summary: answer.summary,
     value: {
-      siteKind: answer.value.siteKind,
-      candidates: rows,
-      expressionFrontier: answer.value.expressionFrontier == null
-        ? null
-        : {
-          frontierKind: answer.value.expressionFrontier.frontierKind,
-          expectedContinuationClasses: answer.value.expressionFrontier.expectedContinuationClasses,
-        },
-      missingInputs: [...new Set([...context.cursorContext.missingInputs, ...answer.value.missingInputs])],
-      template: {
-        compilationLane: context.selection.lane,
-        source: describeAddress(store, context.selection.sourceAddressHandle),
-      },
+      displayText: semanticTemplateCompletionDisplayText(value),
+      ...value,
     },
     page: semanticTemplateCompletionPage(answer.page, rows.length),
   };
@@ -1644,6 +1788,16 @@ function missingTemplateCompletion(
     outcome: SemanticRuntimeAnswerOutcome.Miss,
     summary,
     value: {
+      displayText: semanticTemplateCompletionDisplayText({
+        siteKind: TemplateCompletionSiteKind.Unknown,
+        candidates: [],
+        expressionFrontier: null,
+        missingInputs,
+        template: {
+          compilationLane: null,
+          source: null,
+        },
+      }),
       siteKind: TemplateCompletionSiteKind.Unknown,
       candidates: [],
       expressionFrontier: null,
@@ -1666,23 +1820,27 @@ function missingTemplateCompletion(
 function missingTemplateCursorInfo(
   read: TemplateCompletionReadResult,
 ): SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult> {
+  const value: Omit<SemanticTemplateCursorInfoResult, 'displayText'> = {
+    siteKind: TemplateCompletionSiteKind.Unknown,
+    expressionFrontier: null,
+    missingInputs: read.value.missingInputs,
+    template: read.value.template,
+    html: emptyCursorHtmlRow(),
+    valueSite: null,
+    selectedDefinition: null,
+    selectedBindable: null,
+    selectedMemberName: null,
+    selectedMember: null,
+    memberOwnerType: null,
+    diagnostics: [],
+  };
   return {
     schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
     outcome: read.outcome,
     summary: read.summary,
     value: {
-      siteKind: TemplateCompletionSiteKind.Unknown,
-      expressionFrontier: null,
-      missingInputs: read.value.missingInputs,
-      template: read.value.template,
-      html: emptyCursorHtmlRow(),
-      valueSite: null,
-      selectedDefinition: null,
-      selectedBindable: null,
-      selectedMemberName: null,
-      selectedMember: null,
-      memberOwnerType: null,
-      diagnostics: [],
+      displayText: semanticTemplateCursorInfoDisplayText(value),
+      ...value,
     },
     page: null,
   };
@@ -1711,7 +1869,7 @@ function templateCursorInfoResult(
     query.locus.kind === InquiryLocusKind.SourceCursor ? query.locus.cursor.offset : null,
     valueSite?.siteKind ?? null,
   );
-  return {
+  const value: Omit<SemanticTemplateCursorInfoResult, 'displayText'> = {
     siteKind: query.siteKind,
     expressionFrontier: cursorContext.expressionFrontier == null
       ? null
@@ -1744,6 +1902,10 @@ function templateCursorInfoResult(
       expectedValueType?.display ?? null,
       expectedValueType?.source ?? null,
     ),
+  };
+  return {
+    displayText: semanticTemplateCursorInfoDisplayText(value),
+    ...value,
   };
 }
 

@@ -81,7 +81,11 @@
         "Prefer domain-object getters for real domain behavior such as submit readiness. Generated form recipes model `ServiceRequest.canSubmit` as a plain accessor getter and bind to `request.canSubmit`/`canSubmit`; semantic-runtime should prove that through computed-observer-source rows and binding-observed-dependency rows instead of regenerating a view-model `canSubmit` alias.",
         "When a binding source root is an injected state/service/model member, AppTopology.serviceInteractionBindings should publish direct read/write handoff rows from the binding data-flow instead of requiring a component-member TypeScript body.",
         "Keep the direct handoff scope-backed: use the binding row's materialized BindingScope to prove that the root slot resolves to the injected component member source, so template locals named `state` do not become false service/state interactions.",
-        "Ground ordinary `state.member` observability in Aurelia expression connectable reads. ProxyObservable feeds watcher/trackable/nested-collection reads into the same observation circuit, but it is not a reason to reintroduce forwarding getters."
+        "Ground ordinary `state.member` observability in Aurelia expression connectable reads. ProxyObservable feeds watcher/trackable/nested-collection reads into the same observation circuit, but it is not a reason to reintroduce forwarding getters.",
+        "Small state/domain methods invoked by templates can also be the low-boilerplate boundary, but direct template calls to ordinary methods should not promise hidden method-body dependency reads. Use binding data-flow/topology rows for the call itself, direct template member reads or getters for observed UI state, and explicit trackable/proxy contexts when method body dependency collection is actually framework-owned.",
+        "Listener bindings are part of the same direct handoff lane when no view-model adaptation is needed. A form can use `submit.trigger=\"state.submitRequest(requestId)\"`; semantic-runtime should project the ListenerBinding source expression, close the event listener target operation through an `event-handler-invocation` value channel, and expose the app-topology service interaction as a `call` against the injected state layer.",
+        "Listener expressions may also evaluate to a method reference or handler factory. Preserve the full binding source display, including arguments such as `$event`, while AppTopology reports the invoked support member name without call arguments.",
+        "Keep component listener methods for real adaptation such as validation controller orchestration, route/presentation policy, or argument shaping. Do not reintroduce a `submit()` forwarding method only to make template-to-state calls visible."
       ],
       "anchors": [
         {
@@ -95,6 +99,46 @@
           "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
           "symbolName": "serviceInteractionOperationKindsForDataFlow",
           "summary": "Read/write operation projection from binding direction and assignment policy."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-expression.ts",
+          "symbolName": "isRuntimeExpressionBinding",
+          "summary": "Runtime binding expression gate now includes ListenerBinding source expressions."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/observation/runtime-binding-observation.ts",
+          "symbolName": "RuntimeBindingValueChannelKind",
+          "summary": "Runtime value-channel vocabulary including event-handler-invocation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/form-expected-effects.ts",
+          "symbolName": "eventHandlerValueChannelEffect",
+          "summary": "Standard form expected effect for submit listener event-handler value channels."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/expression/expression-source-name.ts",
+          "symbolName": "expressionSourceName",
+          "summary": "Shared binding expression display helper, including listener call arguments such as `$event`."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
+          "symbolName": "serviceInteractionBindingMemberName",
+          "summary": "AppTopology support-member display helper that strips trailing call arguments from direct listener expressions."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/listener-method-reference",
+          "summary": "Pressure fixture for direct listener calls, method references, and handler factories against injected state."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:listener-method-reference",
+          "summary": "Focused contract for listener method-reference value channels and app-topology service interaction rows."
         },
         {
           "kind": "doc",
@@ -137,10 +181,29 @@
         {
           "kind": "source-file-exists",
           "filePath": "packages/semantic-runtime/fixtures/authoring/generated-state-backed-form/src/state/app-state.ts"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/authoring/form-expected-effects.ts",
+          "symbolName": "eventHandlerValueChannelEffect"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/expression/expression-source-name.ts",
+          "symbolName": "expressionSourceName"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/app-topology.ts",
+          "symbolName": "serviceInteractionBindingMemberName"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-listener-method-reference.mjs"
         }
       ],
       "createdAt": "2026-05-18",
-      "updatedAt": "2026-05-19"
+      "updatedAt": "2026-05-20"
     }
   ]
 }

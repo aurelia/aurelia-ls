@@ -1,10 +1,6 @@
-import { Aurelia, StandardConfiguration } from '@aurelia/runtime-html';
+import Aurelia from 'aurelia';
 import { StorefrontApp } from './app';
 
-new Aurelia()
-  .register(StandardConfiguration)
-  .app({
-    host: document.body,
-    component: StorefrontApp,
-  })
+Aurelia
+  .app(StorefrontApp)
   .start();

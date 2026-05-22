@@ -18,6 +18,7 @@ import {
   type AureliaMcpAppQueryBatchInput,
   type AureliaMcpAppQueryInput,
   type AureliaMcpAuthoringCatalogInput,
+  type AureliaMcpAuthoringGuidanceInput,
   type AureliaMcpAuthoringRecipePlanInput,
   type AureliaMcpAuthoringOrientationInput,
   type AureliaMcpAppQueryCatalogInput,
@@ -83,6 +84,24 @@ export class AureliaMcpSemanticRuntimeAdapter {
     );
   }
 
+  async authoringGuidance(input: AureliaMcpAuthoringGuidanceInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
+    const runtime = await this.sessions.runtime(runtimeOptions(input));
+    return toolResponse(
+      aureliaMcpToolNames.authoringGuidance,
+      input,
+      runtime.authoringGuidance({
+        focus: input.focus,
+        featureGoal: input.featureGoal,
+        detail: input.detail,
+        recipeKey: input.recipeKey,
+        recipeLimit: input.recipeLimit,
+        principleLimit: input.principleLimit,
+        decisionLimit: input.decisionLimit,
+        inquiryProfile: 'mcp-authoring',
+      }),
+    );
+  }
+
   async authoringRecipePlan(input: AureliaMcpAuthoringRecipePlanInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
     const runtime = await this.sessions.runtime(runtimeOptions(input));
     return toolResponse(
@@ -90,9 +109,14 @@ export class AureliaMcpSemanticRuntimeAdapter {
       input,
       runtime.authoringRecipePlan({
         recipeKey: input.recipeKey,
+        usage: input.usage,
         rootDir: input.rootDir,
         appName: input.appName,
         includeText: input.includeText,
+        sourceFilePaths: input.sourceFilePaths,
+        sourceTextRequestHintKeys: input.sourceTextRequestHintKeys,
+        sourceParameterValues: input.sourceParameterValues,
+        effectDetail: input.effectDetail,
         inquiryProfile: 'mcp-authoring',
       }),
     );
@@ -133,6 +157,8 @@ export class AureliaMcpSemanticRuntimeAdapter {
       authoringTemplateLimit: input.authoringTemplateLimit ?? undefined,
       telemetry: input.telemetry ?? undefined,
       appRetention: input.appRetention ?? 'dispose-app',
+      includeAppProfile: input.includeAppProfile ?? undefined,
+      includeAppQueryClaimProfiles: input.includeAppQueryClaimProfiles ?? undefined,
       inquiryProfile: 'mcp-orientation',
       queries: input.queries,
     });
@@ -159,7 +185,7 @@ export class AureliaMcpSemanticRuntimeAdapter {
   async authoringOrientation(input: AureliaMcpAuthoringOrientationInput): Promise<AureliaMcpResponse<SemanticRuntimeAnswer<unknown>>> {
     return this.answerAppQuery(aureliaMcpToolNames.authoringOrientation, input, {
       kind: SemanticAppQueryKind.AuthoringOrientation,
-      page: input.page ?? undefined,
+      page: input.page ?? { size: 20 },
       detail: input.detail ?? undefined,
     });
   }

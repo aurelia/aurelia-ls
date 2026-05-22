@@ -13,8 +13,9 @@ that every item belongs in one API surface. Update it when capability boundaries
   points.
 - [ ] Recipe model: compose operations into named flows without turning large requests into magic primitives. The
   minimal, state-backed form, localized state-backed form, validated state-backed form, service-backed form, routed
-  state-backed form, catalog storefront, and composed dashboard recipes produce typed operations and expected effects;
-  they also produce concrete source edits that are reopened from temporary apps during smoke verification. Richer repair
+  state-backed form, catalog storefront, searchable data table, and composed dashboard recipes produce typed operations
+  and expected effects; they also produce concrete source edits that are reopened from temporary apps during smoke
+  verification. Richer repair
   recipes remain open.
 - [ ] Plan builder: produce semantic operations, preconditions, expected effects, and topology expectations before file
   edits.

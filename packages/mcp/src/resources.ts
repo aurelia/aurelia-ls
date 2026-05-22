@@ -38,6 +38,17 @@ export function registerAureliaSemanticRuntimeResources(
   );
   registerStaticJsonResource(
     server,
+    'aurelia_app_building_guidance',
+    'aurelia://authoring/guidance',
+    'Aurelia App Building Guidance',
+    'Compact public guidance for low-boilerplate Aurelia app building through semantic-runtime recipe contracts.',
+    async () => (await adapter.authoringGuidance({
+      workspaceRoot: process.cwd(),
+      focus: 'app-building',
+    })).value,
+  );
+  registerStaticJsonResource(
+    server,
     'aurelia_app_query_catalog',
     'aurelia://semantic-runtime/app-queries',
     'Aurelia App Query Catalog',

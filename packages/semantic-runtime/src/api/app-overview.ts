@@ -39,16 +39,24 @@ export function readSemanticAppOverview(
       ask({ kind: SemanticAppQueryKind.AuthoringOrientation }) as SemanticRuntimeAnswer<SemanticAuthoringOrientationResult>,
     )
     : null;
-  return answer(
-    SemanticRuntimeAnswerOutcome.Hit,
-    `Read app overview: ${summary.summary} ${diagnostics.summary} ${openSeams.summary}`,
-    {
+  const value: SemanticAppOverviewResult = {
+    displayText: semanticAppOverviewDisplayText({
       summary,
       topology,
       diagnostics,
       openSeams,
       authoringOrientation,
-    },
+    }),
+    summary,
+    topology,
+    diagnostics,
+    openSeams,
+    authoringOrientation,
+  };
+  return answer(
+    SemanticRuntimeAnswerOutcome.Hit,
+    `Read app overview: ${summary.summary} ${diagnostics.summary} ${openSeams.summary}`,
+    value,
   );
 }
 
@@ -123,4 +131,40 @@ function summarizeCollectionValue(value: object): SemanticAppOverviewCollectionS
     }
   }
   return { counts, scalars };
+}
+
+function semanticAppOverviewDisplayText(value: Omit<SemanticAppOverviewResult, 'displayText'>): string {
+  const app = value.summary.value;
+  const topologyCounts = value.topology.value.counts;
+  const diagnosticRows = value.diagnostics.value.totalDiagnosticRows;
+  const openSeamRows = value.openSeams.value.totalOpenSeamRows;
+  const lines = [
+    `App: ${app.projectKey}; analysisDepth=${app.analysisDepth}; roots=${app.appRoots}; components=${topologyCounts.components ?? 0}; routes=${topologyCounts.routes ?? app.routeConfigs}; services=${topologyCounts.services ?? 0}; stateCompositions=${topologyCounts.stateCompositions ?? 0}.`,
+    app.analysisDepth === 'binding-observation'
+      ? `Bindings: ${app.runtimeBindings} runtime binding(s), ${app.runtimeBindingValueChannels} value channel(s), ${app.runtimeBindingDataFlows} data-flow row(s), ${app.runtimeBindingObservedDependencies} observed dependency row(s).`
+      : bindingProjectionDepthText(app),
+  ];
+  if (app.routeConfigs > 0 || app.typedNavigationInstructions > 0) {
+    lines.push(`Routing: ${app.routeConfigs} config(s), ${app.routeContexts} runtime context(s), ${app.typedNavigationInstructions} typed navigation instruction(s), ${app.componentAgents} component agent(s).`);
+  }
+  if (diagnosticRows === 0 && openSeamRows === 0) {
+    lines.push('Pressure: no diagnostic or open-seam clusters in the overview page.');
+  } else {
+    lines.push(`Pressure: ${diagnosticRows} diagnostic row(s) and ${openSeamRows} open seam row(s) in overview clusters.`);
+  }
+  if (value.authoringOrientation != null) {
+    const orientation = value.authoringOrientation.value;
+    lines.push(`Authoring: ${orientation.counts.recipes} recipe fit row(s), ${orientation.counts.capabilities} capability row(s), ${orientation.counts.repairClusters} repair cluster(s).`);
+  } else {
+    lines.push('Authoring: pass includeAuthoringOrientation=true when code-shape, recipe fit, or repair pressure should be part of the first app overview.');
+  }
+  lines.push('Next: use aurelia_app_query_batch for binding summaries, aurelia_router_overview for routed apps, or aurelia_authoring_orientation for low-boilerplate code-shape signals.');
+  return lines.join('\n');
+}
+
+function bindingProjectionDepthText(app: SemanticAppSummary): string {
+  if (app.analysisDepth === 'binding-targets') {
+    return `Bindings: ${app.runtimeBindings} runtime binding(s), ${app.runtimeBindingTargetAccesses} target access row(s); value-channel, data-flow, and observed-dependency rows require analysisDepth=binding-observation.`;
+  }
+  return `Bindings: ${app.runtimeBindings} runtime binding(s); target access, value-channel, data-flow, and observed-dependency projections require analysisDepth=binding-targets or binding-observation.`;
 }

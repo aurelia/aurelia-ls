@@ -36,11 +36,22 @@ import type {
 } from '../authoring/expected-effect.js';
 import type {
   AuthoringPackageToolingPolicy,
+  AuthoringSourceDomainModelPolicy,
   AuthoringSourceConflictPolicy,
   AuthoringSourceEditKind,
   AuthoringSourceFileRole,
   AuthoringSourceFormattingPolicy,
   AuthoringSourceLanguage,
+  AuthoringSourcePatternParameterApplicationPolicy,
+  AuthoringSourcePatternParameterApplicationState,
+  AuthoringSourcePatternParameterKind,
+  AuthoringSourcePatternParameterValueShape,
+  AuthoringSourcePatternRole,
+  AuthoringSourcePatternModuleKind,
+  AuthoringSourcePatternUsePolicy,
+  AuthoringSourceCodeEconomyPolicy,
+  AuthoringSourceDataPolicy,
+  AuthoringSourceStylePolicy,
   AuthoringSourceTextAuthority,
 } from '../authoring/source-plan.js';
 import type {
@@ -175,9 +186,11 @@ import type {
   RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceAssignmentReasonKind,
   RuntimeBindingDataFlowSourceKind,
+  RuntimeBindingDataFlowTypeMismatchKind,
   RuntimeBindingPrimitiveValueKind,
   RuntimeBindingPrimitiveValue,
   RuntimeBindingValueChannelAuthority,
+  RuntimeBindingValueChannelCouplingKind,
   RuntimeBindingValueChannelKind,
 } from '../observation/runtime-binding-observation.js';
 import type {
@@ -338,6 +351,7 @@ export const enum SemanticAppQueryKind {
   RouterOptions = 'router-options',
   Routes = 'routes',
   RouteContexts = 'route-contexts',
+  RouteContextParameterReads = 'route-context-parameter-reads',
   RoutePatterns = 'route-patterns',
   RouteEndpoints = 'route-endpoints',
   RouteRecognizerStates = 'route-recognizer-states',
@@ -369,7 +383,10 @@ export const enum SemanticAppQueryKind {
   BindingSourceOperations = 'binding-source-operations',
   BindingBehaviorApplications = 'binding-behavior-applications',
   BindingValueChannels = 'binding-value-channels',
+  BindingValueChannelSummary = 'binding-value-channel-summary',
   BindingDataFlows = 'binding-data-flows',
+  BindingDataFlowSummary = 'binding-data-flow-summary',
+  BindingObservedDependencySummary = 'binding-observed-dependency-summary',
   BindingObservedDependencies = 'binding-observed-dependencies',
 }
 
@@ -406,6 +423,7 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.RouterOptions,
   SemanticAppQueryKind.Routes,
   SemanticAppQueryKind.RouteContexts,
+  SemanticAppQueryKind.RouteContextParameterReads,
   SemanticAppQueryKind.RoutePatterns,
   SemanticAppQueryKind.RouteEndpoints,
   SemanticAppQueryKind.RouteRecognizerStates,
@@ -437,7 +455,10 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.BindingSourceOperations,
   SemanticAppQueryKind.BindingBehaviorApplications,
   SemanticAppQueryKind.BindingValueChannels,
+  SemanticAppQueryKind.BindingValueChannelSummary,
   SemanticAppQueryKind.BindingDataFlows,
+  SemanticAppQueryKind.BindingDataFlowSummary,
+  SemanticAppQueryKind.BindingObservedDependencySummary,
   SemanticAppQueryKind.BindingObservedDependencies,
 ] as const;
 
@@ -602,6 +623,19 @@ export interface SemanticRuntimeAppQueryBatchRequest {
   /** Override profile-default app-epoch retention for this routed batch. */
   readonly appRetention?: SemanticAppRetentionPolicy | null;
   /**
+   * Include the app construction profile in the public batch value.
+   *
+   * Omit for low-token orientation; telemetry remains available through the answer/profile and cache overview lanes.
+   * Profiling scripts should opt in explicitly when they need construction phase attribution after disposal.
+   */
+  readonly includeAppProfile?: boolean | null;
+  /**
+   * Include app-owned query-claim profile snapshots in the public batch value.
+   *
+   * Omit for low-token orientation; cache overview remains the focused query-claim inspection surface.
+   */
+  readonly includeAppQueryClaimProfiles?: boolean | null;
+  /**
    * Clear the process-local TypeScript dependency SourceFile cache at this answer boundary.
    *
    * Omit to use the inquiry-profile default. Recompute-friendly one-off lanes such as `mcp-orientation` clear this
@@ -625,6 +659,7 @@ export interface SemanticRuntimeAppQueryBatchResult {
   readonly projectKey: string | null;
   /** Null when every child query is runtime-static and no app-world analysis tier was selected. */
   readonly analysisDepth: SemanticAppAnalysisDepth | `${SemanticAppAnalysisDepth}` | null;
+  readonly displayText: string;
   readonly includeAuthoringTemplates: boolean;
   readonly authoringTemplateSourceFileCount: number;
   readonly authoringTemplateLimit: number | null;
@@ -632,9 +667,9 @@ export interface SemanticRuntimeAppQueryBatchResult {
   readonly rows: readonly SemanticRuntimeAppQueryBatchAnswerRow[];
   /** Whether answering this batch opened an app-world epoch. App-world-free batches stay false. */
   readonly appWorldOpened: boolean;
-  /** App construction profile when the batch had to open an app-world epoch; null for app-world-free routed batches. */
+  /** App construction profile when explicitly requested and the batch had to open an app-world epoch. */
   readonly appProfile: SemanticRuntimeCachedAppProfileSummary | null;
-  /** App-owned query-claim snapshots captured after child answers and before optional app-epoch disposal. */
+  /** App-owned query-claim snapshots when explicitly requested after child answers and before optional app-epoch disposal. */
   readonly appQueryClaimProfiles: readonly SemanticRuntimeCachedAppQueryClaimProfileSummary[];
 }
 
@@ -689,6 +724,7 @@ export interface SemanticAppQueryCatalogRow {
 export interface SemanticAppQueryCatalogResult {
   readonly totalRows: number;
   readonly returnedRows: number;
+  readonly displayText: string;
   readonly rows: readonly SemanticAppQueryCatalogRow[];
   readonly groups: readonly SemanticAppQueryCatalogGroupRow[];
 }
@@ -792,6 +828,7 @@ export type SemanticQueryClaimInvalidationKind = typeof SEMANTIC_QUERY_CLAIM_INV
 export interface SemanticRuntimeSummary {
   readonly workspaceRoot: string;
   readonly workspaceKey: string;
+  readonly displayText: string;
   readonly projectShapeCounts: readonly SemanticProjectShapeCount[];
   readonly projectAnalysisCounts: readonly SemanticProjectAnalysisCount[];
   readonly defaultAppProjectKey: string | null;
@@ -813,6 +850,7 @@ export interface SemanticRuntimeAnalysisCacheOverviewRequest {
 }
 
 export interface SemanticRuntimeAnalysisCacheOverviewResult {
+  readonly displayText: string;
   readonly cachedAppCount: number;
   readonly cachedApps: readonly SemanticRuntimeCachedAppSummary[];
   readonly runtimeQueryClaimProfiles: readonly SemanticRuntimeCachedAppQueryClaimProfileSummary[];
@@ -910,6 +948,7 @@ export interface SemanticRuntimeAnalysisCacheClearRequest {
 }
 
 export interface SemanticRuntimeAnalysisCacheClearResult {
+  readonly displayText: string;
   readonly typeSystemDependencyCacheClearPolicy: SemanticTypeSystemDependencyCacheClearPolicy;
   readonly disposedCachedApps: number;
   readonly disposedQueryClaimRecords: number;
@@ -1132,6 +1171,7 @@ export interface SemanticRuntimeCacheRetentionSummary {
 }
 
 export interface SemanticAppOverviewResult {
+  readonly displayText: string;
   readonly summary: SemanticRuntimeAnswer<SemanticAppSummary>;
   readonly topology: SemanticRuntimeAnswer<SemanticAppOverviewCollectionSummary>;
   readonly diagnostics: SemanticRuntimeAnswer<SemanticAppDiagnosticSummaryResult>;
@@ -1190,9 +1230,11 @@ export interface SemanticAppOverviewAuthoringRepairClusterSummary {
 }
 
 export interface SemanticRouterOverviewResult {
+  readonly displayText: string;
   readonly counts: SemanticRouterOverviewCounts;
   readonly routes: SemanticRuntimeAnswer<SemanticRouteConfigsResult>;
   readonly routeContexts: SemanticRuntimeAnswer<SemanticRouteContextsResult>;
+  readonly routeContextParameterReads: SemanticRuntimeAnswer<SemanticRouteContextParameterReadsResult>;
   readonly routerViewports: SemanticRuntimeAnswer<SemanticRouterViewportsResult>;
   readonly viewportAgents: SemanticRuntimeAnswer<SemanticViewportAgentsResult>;
   readonly componentAgents: SemanticRuntimeAnswer<SemanticComponentAgentsResult>;
@@ -1207,6 +1249,7 @@ export interface SemanticRouterOverviewResult {
 export interface SemanticRouterOverviewCounts {
   readonly routes: number;
   readonly routeContexts: number;
+  readonly routeContextParameterReads: number;
   readonly routerViewports: number;
   readonly viewportAgents: number;
   readonly componentAgents: number;
@@ -1510,6 +1553,15 @@ export interface SemanticAuthoringExpectedEffectRow extends SemanticAuthoringExp
   readonly currentOutcome: 'satisfied' | 'failed' | 'unsupported';
 }
 
+export interface SemanticAuthoringExpectedEffectHighlightRow {
+  readonly effectKind: ExpectedSemanticEffectKind | `${ExpectedSemanticEffectKind}`;
+  readonly scope: ExpectedSemanticEffectScope | `${ExpectedSemanticEffectScope}`;
+  readonly role: ExpectedSemanticEffectRole | `${ExpectedSemanticEffectRole}`;
+  readonly semanticTargetKey: string;
+  readonly filterFields: readonly string[];
+  readonly summary: string;
+}
+
 export interface SemanticAuthoringExpectedEffectFilterRow {
   readonly field: string;
   readonly value: string | number | boolean | null;
@@ -1539,6 +1591,7 @@ export interface SemanticAuthoringSourcePlanCatalogRow {
   readonly conflictPolicy: AuthoringSourceConflictPolicy | `${AuthoringSourceConflictPolicy}`;
   readonly formattingPolicy: AuthoringSourceFormattingPolicy | `${AuthoringSourceFormattingPolicy}`;
   readonly packageToolingPolicy: AuthoringPackageToolingPolicy | `${AuthoringPackageToolingPolicy}`;
+  readonly pattern: SemanticAuthoringSourcePatternRow | null;
   readonly projectTooling: SemanticAuthoringProjectToolingCatalogRow | null;
   readonly hasCompleteFileText: boolean;
   readonly fileCount: number;
@@ -1547,6 +1600,57 @@ export interface SemanticAuthoringSourcePlanCatalogRow {
   readonly editKinds: readonly (AuthoringSourceEditKind | `${AuthoringSourceEditKind}`)[];
   readonly textAuthorities: readonly (AuthoringSourceTextAuthority | `${AuthoringSourceTextAuthority}`)[];
   readonly files: readonly SemanticAuthoringSourceFileCatalogRow[];
+}
+
+export interface SemanticAuthoringSourcePatternRow {
+  readonly key: string;
+  readonly title: string;
+  readonly summary: string;
+  readonly role: AuthoringSourcePatternRole | `${AuthoringSourcePatternRole}`;
+  /** Derived public-client action for concrete source text carried by this pattern. */
+  readonly usePolicy: AuthoringSourcePatternUsePolicy | `${AuthoringSourcePatternUsePolicy}`;
+  readonly useSummary: string;
+  readonly domainModelPolicy: AuthoringSourceDomainModelPolicy | `${AuthoringSourceDomainModelPolicy}`;
+  readonly stylePolicy: AuthoringSourceStylePolicy | `${AuthoringSourceStylePolicy}`;
+  readonly dataPolicy: AuthoringSourceDataPolicy | `${AuthoringSourceDataPolicy}`;
+  readonly codeEconomyPolicy: AuthoringSourceCodeEconomyPolicy | `${AuthoringSourceCodeEconomyPolicy}`;
+  readonly adaptationNotes: readonly string[];
+  readonly moduleCount: number;
+  readonly modules: readonly SemanticAuthoringSourcePatternModuleRow[];
+  readonly parameterCount: number;
+  readonly parameters: readonly SemanticAuthoringSourcePatternParameterRow[];
+  readonly adaptationGroupCount: number;
+  readonly adaptationGroups: readonly SemanticAuthoringSourcePatternAdaptationGroupRow[];
+}
+
+export interface SemanticAuthoringSourcePatternModuleRow {
+  readonly key: string;
+  readonly kind: AuthoringSourcePatternModuleKind | `${AuthoringSourcePatternModuleKind}`;
+  readonly title: string;
+  readonly summary: string;
+}
+
+export interface SemanticAuthoringSourcePatternParameterRow {
+  readonly key: string;
+  readonly kind: AuthoringSourcePatternParameterKind | `${AuthoringSourcePatternParameterKind}`;
+  readonly applicationPolicy: AuthoringSourcePatternParameterApplicationPolicy | `${AuthoringSourcePatternParameterApplicationPolicy}`;
+  readonly valueShape: AuthoringSourcePatternParameterValueShape | `${AuthoringSourcePatternParameterValueShape}`;
+  readonly title: string;
+  readonly defaultValue: string | null;
+  readonly summary: string;
+}
+
+export type SemanticAuthoringSourcePatternAdaptationGroupApplicationPolicy =
+  | 'source-text-input'
+  | 'advisory-only'
+  | 'mixed';
+
+export interface SemanticAuthoringSourcePatternAdaptationGroupRow {
+  readonly key: string;
+  readonly title: string;
+  readonly summary: string;
+  readonly parameterKeys: readonly string[];
+  readonly applicationPolicy: SemanticAuthoringSourcePatternAdaptationGroupApplicationPolicy;
 }
 
 export interface SemanticAuthoringSourceFileCatalogRow {
@@ -1643,6 +1747,26 @@ export const SEMANTIC_AUTHORING_CATALOG_VIEWS = [
   'full',
 ] as const satisfies readonly SemanticAuthoringCatalogViewKind[];
 
+export const SEMANTIC_AUTHORING_GUIDANCE_FOCI = [
+  'app-shell',
+  'forms',
+  'state',
+  'routing',
+  'plugins',
+  'composition',
+  'diagnostics',
+  'app-building',
+] as const;
+
+export type SemanticAuthoringGuidanceFocus = typeof SEMANTIC_AUTHORING_GUIDANCE_FOCI[number];
+
+export const SEMANTIC_AUTHORING_GUIDANCE_DETAILS = [
+  'compact',
+  'recipes',
+] as const;
+
+export type SemanticAuthoringGuidanceDetail = typeof SEMANTIC_AUTHORING_GUIDANCE_DETAILS[number];
+
 export interface SemanticAuthoringCatalogViewRequest {
   /** Defaults to a compact overview. Use `full` only for local debugging or export. */
   readonly view?: SemanticAuthoringCatalogViewKind | null;
@@ -1663,6 +1787,7 @@ export interface SemanticAuthoringCatalogViewCounts {
 export interface SemanticAuthoringCatalogViewResult {
   readonly view: Exclude<SemanticAuthoringCatalogViewKind, 'full'>;
   readonly counts: SemanticAuthoringCatalogViewCounts;
+  readonly displayText: string;
   readonly operationFamilies: readonly SemanticAuthoringOperationFamilyCatalogRow[];
   readonly tasteAxes: readonly SemanticAuthoringCatalogTasteAxisSummaryRow[];
   readonly capabilities: readonly SemanticAuthoringCatalogCapabilitySummaryRow[];
@@ -1689,17 +1814,26 @@ export interface SemanticAuthoringCatalogCapabilitySummaryRow {
 export interface SemanticAuthoringCatalogRecipeSummaryRow {
   readonly key: string;
   readonly title: string;
-  readonly operationKinds: SemanticAuthoringRecipeCatalogRow['operationKinds'];
-  readonly baseRecipeKeys: readonly string[];
-  readonly lineageRecipeKeys: readonly string[];
+  readonly operationKindCount: number;
+  readonly operationKinds?: SemanticAuthoringRecipeCatalogRow['operationKinds'];
+  readonly baseRecipeCount: number;
+  readonly baseRecipeKeys?: readonly string[];
+  readonly lineageRecipeCount: number;
+  readonly lineageRecipeKeys?: readonly string[];
   readonly specificityRank: number;
   readonly supportState: SemanticAuthoringRecipeCatalogRow['supportState'];
   readonly summary: string;
   readonly openReasonKinds: SemanticAuthoringRecipeCatalogRow['openReasonKinds'];
-  readonly expectedEffectKinds: SemanticAuthoringRecipeCatalogRow['expectedEffectKinds'];
+  readonly preferenceCount: number;
+  readonly tasteValueKeys?: readonly (AuthoringTasteValueKey | `${AuthoringTasteValueKey}`)[];
+  readonly expectedEffectKinds?: SemanticAuthoringRecipeCatalogRow['expectedEffectKinds'];
   readonly expectedEffectCount: number;
-  readonly sourcePlan: SemanticAuthoringCatalogSourcePlanSummaryRow | null;
+  readonly sourceFileCount: number;
+  readonly projectToolingFileCount: number;
+  readonly sourcePlan?: SemanticAuthoringCatalogSourcePlanSummaryRow | null;
+  /** Omitted from compact public catalog views; use the full catalog when ontology summaries are needed inline. */
   readonly preferences?: readonly SemanticAuthoringPreferenceCatalogRow[];
+  /** Omitted from compact public catalog views; use the full catalog or authoringRecipePlan effectDetail=contracts. */
   readonly expectedEffects?: readonly SemanticAuthoringCatalogExpectedEffectSummaryRow[];
 }
 
@@ -1707,6 +1841,7 @@ export interface SemanticAuthoringCatalogSourcePlanSummaryRow {
   readonly conflictPolicy: SemanticAuthoringSourcePlanCatalogRow['conflictPolicy'];
   readonly formattingPolicy: SemanticAuthoringSourcePlanCatalogRow['formattingPolicy'];
   readonly packageToolingPolicy: SemanticAuthoringSourcePlanCatalogRow['packageToolingPolicy'];
+  readonly pattern: SemanticAuthoringSourcePatternRow | null;
   readonly hasCompleteFileText: boolean;
   readonly fileCount: number;
   readonly fileRoles: SemanticAuthoringSourcePlanCatalogRow['fileRoles'];
@@ -1756,28 +1891,231 @@ export interface SemanticAuthoringRecipePlanRequest {
   readonly inquiryProfile?: SemanticRuntimeInquiryProfile | `${SemanticRuntimeInquiryProfile}` | null;
   /** Recipe to build as a read-only semantic plan. */
   readonly recipeKey: string;
+  /** Whether this recipe is the source-plan baseline or a companion pattern read. Defaults to `source-plan-start`. */
+  readonly usage?: SemanticAuthoringRecipePlanUsage | `${SemanticAuthoringRecipePlanUsage}` | null;
   /** Root directory written into the source edit plan. Defaults to `.`. */
   readonly rootDir?: string | null;
   /** Display app name used by recipe-owned package/tooling text. */
   readonly appName?: string | null;
   /** Include concrete source and project-tooling text. Defaults to false for token economy. */
   readonly includeText?: boolean | null;
+  /** Optional relative source/tooling paths; implies selected text unless `includeText` is explicitly false. */
+  readonly sourceFilePaths?: readonly string[] | null;
+  /** Optional role-driven source text clusters from `sourcePlan.textRequestHints`; implies selected text unless `includeText` is explicitly false. */
+  readonly sourceTextRequestHintKeys?: readonly string[] | null;
+  /** Optional source-pattern values. Only parameters whose row says `source-text-input` are applied to emitted text today. */
+  readonly sourceParameterValues?: readonly SemanticAuthoringSourceParameterValueInput[] | null;
+  /** Include row-level expected-effect contracts. Defaults to compact for public app-building token economy. */
+  readonly effectDetail?: SemanticAuthoringRecipePlanEffectDetail | `${SemanticAuthoringRecipePlanEffectDetail}` | null;
+}
+
+export interface SemanticAuthoringSourceParameterValueInput {
+  readonly key: string;
+  readonly value: string;
+}
+
+export const SEMANTIC_AUTHORING_RECIPE_PLAN_EFFECT_DETAILS = [
+  'compact',
+  'contracts',
+] as const;
+
+export type SemanticAuthoringRecipePlanEffectDetail =
+  (typeof SEMANTIC_AUTHORING_RECIPE_PLAN_EFFECT_DETAILS)[number];
+
+export const SEMANTIC_AUTHORING_RECIPE_PLAN_USAGES = [
+  'source-plan-start',
+  'pattern-reference',
+] as const;
+
+export type SemanticAuthoringRecipePlanUsage =
+  (typeof SEMANTIC_AUTHORING_RECIPE_PLAN_USAGES)[number];
+
+export interface SemanticAuthoringGuidanceRequest {
+  /** Consumer lane behind this authoring answer; controls query-claim retention when read through SemanticRuntime. */
+  readonly inquiryProfile?: SemanticRuntimeInquiryProfile | `${SemanticRuntimeInquiryProfile}` | null;
+  /** Optional public app-building area to narrow the recipe and principle rows. Defaults to `app-building`. */
+  readonly focus?: SemanticAuthoringGuidanceFocus | null;
+  /** Optional user-facing feature goal used to apply explicit recipe signal ordering, not fuzzy search. */
+  readonly featureGoal?: string | null;
+  /** Defaults to `compact`; use `recipes` when callers need recipe preference rows inline. */
+  readonly detail?: SemanticAuthoringGuidanceDetail | `${SemanticAuthoringGuidanceDetail}` | null;
+  /** Optional exact recipe key when a caller already selected one from the authoring catalog. */
+  readonly recipeKey?: string | null;
+  /** Optional cap for returned recipe rows. Broad app-building guidance defaults to a small first-screen set. */
+  readonly recipeLimit?: number | null;
+  /** Optional cap for returned principle rows. Compact guidance defaults to the prose-highlight count. */
+  readonly principleLimit?: number | null;
+  /** Optional cap for returned decision rows. Compact guidance defaults to the prose-highlight count. */
+  readonly decisionLimit?: number | null;
+}
+
+export interface SemanticAuthoringGuidanceResult {
+  readonly focus: SemanticAuthoringGuidanceFocus;
+  readonly detail: SemanticAuthoringGuidanceDetail;
+  readonly featureGoal: string | null;
+  readonly featureGoalSignals: readonly SemanticAuthoringGuidanceFeatureSignalRow[];
+  readonly selectedRecipeKey: string | null;
+  readonly candidateRecipeCount: number;
+  readonly returnedRecipeCount: number;
+  readonly candidatePrincipleCount: number;
+  readonly returnedPrincipleCount: number;
+  readonly candidateDecisionCount: number;
+  readonly returnedDecisionCount: number;
+  readonly profile: SemanticAuthoringGuidanceProfileRow;
+  /** Short transport-friendly text that MCP shells can forward without composing product guidance locally. */
+  readonly displayText: string;
+  readonly principles: readonly SemanticAuthoringGuidancePrincipleRow[];
+  readonly decisions: readonly SemanticAuthoringGuidanceDecisionRow[];
+  readonly recipePlanSequence: readonly SemanticAuthoringGuidanceRecipePlanRow[];
+  readonly recipes: readonly SemanticAuthoringGuidanceRecipeRow[];
+  readonly followUps: readonly SemanticAuthoringGuidanceFollowUpRow[];
+}
+
+export interface SemanticAuthoringGuidanceProfileRow {
+  readonly key: string;
+  readonly title: string;
+  readonly summary: string;
+  readonly priority: readonly string[];
+  readonly nonGoals: readonly string[];
+}
+
+export type SemanticAuthoringGuidancePlanningLayer =
+  | 'architecture-choice'
+  | 'feature-surface'
+  | 'navigation-frame'
+  | 'framework-capability'
+  | 'integration-boundary'
+  | 'app-shell';
+
+export interface SemanticAuthoringGuidanceFeatureSignalRow {
+  readonly key: string;
+  readonly planningLayer: SemanticAuthoringGuidancePlanningLayer;
+  /** Exact matched phrase or explicit token-conjunction label, e.g. editable+fields. */
+  readonly matchedTerms: readonly string[];
+  readonly primaryWeight: number;
+  readonly recipeKeys: readonly string[];
+}
+
+export interface SemanticAuthoringGuidancePrincipleRow {
+  readonly key: string;
+  readonly title: string;
+  readonly summary: string;
+  readonly prefer: readonly string[];
+  readonly avoid: readonly string[];
+  readonly tasteValueKeys: readonly (AuthoringTasteValueKey | `${AuthoringTasteValueKey}`)[];
+  /** Empty in compact mode; pass `detail: "recipes"` when recipe membership is needed inline. */
+  readonly recipeKeys: readonly string[];
+}
+
+export interface SemanticAuthoringGuidanceDecisionRow {
+  readonly key: string;
+  readonly title: string;
+  readonly question: string;
+  readonly recommendation: string;
+  readonly chooseWhen: readonly string[];
+  readonly avoidWhen: readonly string[];
+  readonly tasteValueKeys: readonly (AuthoringTasteValueKey | `${AuthoringTasteValueKey}`)[];
+  /** Empty in compact mode; pass `detail: "recipes"` when recipe membership is needed inline. */
+  readonly recipeKeys: readonly string[];
+  readonly followUpSurfaces: readonly string[];
+}
+
+export interface SemanticAuthoringGuidanceRecipeRow {
+  readonly recipeKey: string;
+  readonly title: string;
+  readonly supportState: AuthoringSupportState | `${AuthoringSupportState}`;
+  readonly whenToUse: string;
+  readonly codeShape: string;
+  readonly prefer: readonly string[];
+  readonly avoid: readonly string[];
+  /** Empty in compact mode; pass `detail: "recipes"` when inline operation families are needed. */
+  readonly operationKinds: readonly (AuthoringOperationKind | `${AuthoringOperationKind}`)[];
+  readonly tasteValueKeys: readonly (AuthoringTasteValueKey | `${AuthoringTasteValueKey}`)[];
+  /** Empty in compact mode; pass `detail: "recipes"` when inline taste preference rows are needed. */
+  readonly tasteValues: readonly SemanticAuthoringPreferenceCatalogRow[];
+  /** Empty in compact mode; pass `detail: "recipes"` when inline expected-effect kind rows are needed. */
+  readonly expectedEffectKinds: readonly (ExpectedSemanticEffectKind | `${ExpectedSemanticEffectKind}`)[];
+  readonly expectedEffectCount: number;
+  readonly sourceFileCount: number;
+  readonly sourcePattern: SemanticAuthoringSourcePatternRow | null;
+  /** Empty in compact mode; pass `detail: "recipes"` when inline source role rows are needed. */
+  readonly sourceFileRoles: readonly (AuthoringSourceFileRole | `${AuthoringSourceFileRole}`)[];
+  readonly projectToolingPolicy: (AuthoringPackageToolingPolicy | `${AuthoringPackageToolingPolicy}`) | null;
+  readonly followUpSurfaces: readonly string[];
+}
+
+export interface SemanticAuthoringGuidanceRecipePlanRow {
+  readonly recipeKey: string;
+  readonly role: 'primary' | 'companion';
+  /** Optional label when a feature goal needs more than one instance of the same recipe shape. */
+  readonly instanceLabel?: string | null;
+  readonly usage: SemanticAuthoringRecipePlanUsage;
+  /** Deterministic feature-goal suggestions to pass as `sourceParameterValues`; callers should still review them. */
+  readonly suggestedSourceParameterValues: readonly SemanticAuthoringSourceParameterValueInput[];
+  /** Structured contract metadata for suggested values; clients should use this instead of parsing display text. */
+  readonly suggestedSourceParameterContracts: readonly SemanticAuthoringGuidanceSourceParameterContractRow[];
+  readonly newFeatureSignals: readonly string[];
+  readonly coveredFeatureSignals: readonly string[];
+  readonly uncoveredFeatureSignals: readonly string[];
+  readonly reason: string;
+  readonly followUpSurface: 'authoring-recipe-plan';
+}
+
+export interface SemanticAuthoringGuidanceSourceParameterContractRow {
+  readonly key: string;
+  readonly value: string;
+  readonly parameterKind: (AuthoringSourcePatternParameterKind | `${AuthoringSourcePatternParameterKind}`) | null;
+  readonly applicationPolicy: (AuthoringSourcePatternParameterApplicationPolicy | `${AuthoringSourcePatternParameterApplicationPolicy}`) | null;
+  readonly valueShape: (AuthoringSourcePatternParameterValueShape | `${AuthoringSourcePatternParameterValueShape}`) | null;
+  readonly summary: string;
+}
+
+export interface SemanticAuthoringGuidanceFollowUpRow {
+  readonly surface: string;
+  readonly purpose: string;
+  readonly whenToUse: string;
 }
 
 export interface SemanticAuthoringRecipePlanResult {
-  readonly recipe: SemanticAuthoringRecipeCatalogRow;
+  readonly recipe: SemanticAuthoringRecipePlanRecipeRow;
+  readonly usage: SemanticAuthoringRecipePlanUsage;
   readonly intent: SemanticAuthoringRecipePlanIntentRow;
+  /** Short transport-friendly text that MCP shells can forward without composing recipe guidance locally. */
+  readonly displayText: string;
   readonly preconditions: readonly SemanticAuthoringRecipePlanPreconditionRow[];
   readonly steps: readonly SemanticAuthoringRecipePlanStepRow[];
+  readonly expectedEffectDetail: SemanticAuthoringRecipePlanEffectDetail;
   readonly expectedEffectKinds: readonly (ExpectedSemanticEffectKind | `${ExpectedSemanticEffectKind}`)[];
   readonly expectedEffectCount: number;
+  /** Compact semantic promises sampled from signature/discriminator effects so clients need not request all contracts. */
+  readonly expectedEffectHighlights: readonly SemanticAuthoringExpectedEffectHighlightRow[];
+  /** Empty in compact mode; pass `effectDetail: "contracts"` when row-level verification contracts are needed. */
   readonly expectedEffects: readonly SemanticAuthoringExpectedEffectContractRow[];
   readonly sourcePlan: SemanticAuthoringRecipeSourcePlanRow | null;
+}
+
+export interface SemanticAuthoringRecipePlanRecipeRow {
+  readonly key: string;
+  readonly title: string;
+  readonly operationKinds: readonly (AuthoringOperationKind | `${AuthoringOperationKind}`)[];
+  readonly baseRecipeKeys: readonly string[];
+  readonly lineageRecipeKeys: readonly string[];
+  readonly specificityRank: number;
+  readonly supportState: AuthoringSupportState | `${AuthoringSupportState}`;
+  readonly summary: string;
+  readonly openReasonKinds: readonly (AuthoringOpenReasonKind | `${AuthoringOpenReasonKind}`)[];
+  readonly preferenceCount: number;
+  readonly expectedEffectCount: number;
+  readonly sourceFileCount: number;
+  readonly packageToolingPolicy: (AuthoringPackageToolingPolicy | `${AuthoringPackageToolingPolicy}`) | null;
 }
 
 export interface SemanticAuthoringRecipePlanIntentRow {
   readonly summary: string;
   readonly profileKey: string | null;
+  readonly preferenceCount: number;
+  readonly tasteValueKeys: readonly (AuthoringTasteValueKey | `${AuthoringTasteValueKey}`)[];
+  /** Empty in compact mode; use contract detail when inline recipe preference rows are needed beside plan steps. */
   readonly preferences: readonly SemanticAuthoringPreferenceCatalogRow[];
 }
 
@@ -1793,6 +2131,9 @@ export interface SemanticAuthoringRecipePlanStepRow {
   readonly targetKind: AuthoringTargetKind | `${AuthoringTargetKind}`;
   readonly expectedEffectKinds: readonly (ExpectedSemanticEffectKind | `${ExpectedSemanticEffectKind}`)[];
   readonly expectedEffectCount: number;
+  /** Empty in compact mode; top-level highlights carry the public semantic promises. */
+  readonly expectedEffectHighlights: readonly SemanticAuthoringExpectedEffectHighlightRow[];
+  /** Empty in compact mode; pass `effectDetail: "contracts"` when row-level verification contracts are needed. */
   readonly expectedEffects: readonly SemanticAuthoringExpectedEffectContractRow[];
 }
 
@@ -1801,10 +2142,51 @@ export interface SemanticAuthoringRecipeSourcePlanRow {
   readonly conflictPolicy: AuthoringSourceConflictPolicy | `${AuthoringSourceConflictPolicy}`;
   readonly formattingPolicy: AuthoringSourceFormattingPolicy | `${AuthoringSourceFormattingPolicy}`;
   readonly packageToolingPolicy: AuthoringPackageToolingPolicy | `${AuthoringPackageToolingPolicy}`;
+  readonly pattern: SemanticAuthoringSourcePatternRow | null;
+  readonly sourceParameterApplications: readonly SemanticAuthoringSourceParameterApplicationRow[];
   readonly hasCompleteFileText: boolean;
   readonly fileCount: number;
+  readonly textRequestHints: readonly SemanticAuthoringRecipeSourceTextRequestHintRow[];
+  readonly textSelection: SemanticAuthoringRecipeSourceTextSelectionRow;
   readonly files: readonly SemanticAuthoringRecipeSourceFilePlanRow[];
   readonly projectTooling: SemanticAuthoringRecipeProjectToolingPlanRow | null;
+}
+
+export interface SemanticAuthoringSourceParameterApplicationRow {
+  readonly key: string;
+  readonly requestedValue: string;
+  readonly defaultValue: string | null;
+  readonly applicationPolicy: AuthoringSourcePatternParameterApplicationPolicy | `${AuthoringSourcePatternParameterApplicationPolicy}` | null;
+  readonly valueShape: AuthoringSourcePatternParameterValueShape | `${AuthoringSourcePatternParameterValueShape}` | null;
+  readonly applicationState: AuthoringSourcePatternParameterApplicationState | `${AuthoringSourcePatternParameterApplicationState}`;
+  readonly summary: string;
+}
+
+export interface SemanticAuthoringRecipeSourceTextSelectionRow {
+  /** Normalized requested hint keys from `sourceTextRequestHintKeys`; empty when no hint selection was requested. */
+  readonly requestedHintKeys: readonly string[];
+  /** Requested hint keys that matched a generated `sourcePlan.textRequestHints` row. */
+  readonly matchedHintKeys: readonly string[];
+  /** Requested hint keys that did not match a generated `sourcePlan.textRequestHints` row. */
+  readonly unmatchedHintKeys: readonly string[];
+  /** Normalized requested paths from `sourceFilePaths`; empty when no path selection was requested. */
+  readonly requestedPaths: readonly string[];
+  /** Requested paths that matched generated source or project-tooling artifacts. */
+  readonly matchedPaths: readonly string[];
+  /** Requested paths that did not match a generated artifact. */
+  readonly unmatchedPaths: readonly string[];
+  /** Matched artifact paths whose concrete text is present in this response. */
+  readonly includedPaths: readonly string[];
+}
+
+export interface SemanticAuthoringRecipeSourceTextRequestHintRow {
+  readonly key: string;
+  readonly title: string;
+  readonly summary: string;
+  /** Paths to pass through `sourceFilePaths` when this source-file cluster is needed. */
+  readonly sourceFilePaths: readonly string[];
+  /** Project-tooling artifact paths to pass through `sourceFilePaths` when package/build setup is needed. */
+  readonly projectToolingPaths: readonly string[];
 }
 
 export interface SemanticAuthoringRecipeSourceFilePlanRow extends SemanticAuthoringSourceFileCatalogRow {
@@ -1906,6 +2288,8 @@ export interface SemanticAuthoringRepairClusterRow {
 
 export interface SemanticAuthoringOrientationResult {
   readonly project: SemanticAuthoringProjectOrientation;
+  /** Short transport-friendly text that MCP shells can forward without interpreting authoring ontology rows locally. */
+  readonly displayText: string;
   readonly coverage: readonly SemanticAuthoringCoverageRow[];
   readonly taste: readonly SemanticAuthoringTasteAxisRow[];
   readonly capabilities: readonly SemanticAuthoringCapabilityRow[];
@@ -2032,6 +2416,7 @@ export interface SemanticOpenSeamRow {
 }
 
 export interface SemanticOpenSeamsResult {
+  readonly displayText: string;
   readonly rows: readonly SemanticOpenSeamRow[];
 }
 
@@ -2046,6 +2431,7 @@ export interface SemanticOpenSeamSummaryRow {
 
 export interface SemanticOpenSeamSummaryResult {
   readonly totalOpenSeamRows: number;
+  readonly displayText: string;
   readonly rows: readonly SemanticOpenSeamSummaryRow[];
 }
 
@@ -2481,6 +2867,7 @@ export interface SemanticAppDiagnosticRow {
 }
 
 export interface SemanticAppDiagnosticsResult {
+  readonly displayText: string;
   readonly rows: readonly SemanticAppDiagnosticRow[];
 }
 
@@ -2499,6 +2886,7 @@ export interface SemanticAppDiagnosticSummaryRow {
 
 export interface SemanticAppDiagnosticSummaryResult {
   readonly totalDiagnosticRows: number;
+  readonly displayText: string;
   readonly rows: readonly SemanticAppDiagnosticSummaryRow[];
 }
 
@@ -2789,6 +3177,40 @@ export interface SemanticRouteContextRow {
 
 export interface SemanticRouteContextsResult {
   readonly rows: readonly SemanticRouteContextRow[];
+}
+
+export interface SemanticRouteContextParameterReadRow {
+  readonly projectKey: string;
+  readonly componentClassName: string | null;
+  readonly routeConfigCount: number;
+  readonly routeConfigIds: readonly string[];
+  readonly routeConfigPaths: readonly string[];
+  readonly mergeStrategy: string;
+  readonly includeQueryParams: boolean | null;
+  readonly declaredParameterNames: readonly string[];
+  readonly declaredOptionalParameterNames: readonly string[];
+  readonly declaredOpenKeySpace: boolean;
+  readonly routePathParameterNames: readonly string[];
+  readonly missingRoutePathParameterNames: readonly string[];
+  readonly declaredNonPathParameterNames: readonly string[];
+  readonly alignment: string;
+  readonly component: SemanticRouteConfigComponentRow | null;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly productHandle: ProductHandle;
+    readonly identityHandle: IdentityHandle;
+    readonly componentProductHandle: ProductHandle | null;
+    readonly componentIdentityHandle: IdentityHandle | null;
+    readonly componentResolvedProductHandle: ProductHandle | null;
+    readonly componentResolvedIdentityHandle: IdentityHandle | null;
+    readonly routeConfigProductHandles: readonly ProductHandle[];
+    readonly routeConfigIdentityHandles: readonly IdentityHandle[];
+    readonly sourceAddressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticRouteContextParameterReadsResult {
+  readonly rows: readonly SemanticRouteContextParameterReadRow[];
 }
 
 export interface SemanticRouterViewportRow {
@@ -3454,6 +3876,7 @@ export interface SemanticTemplateCompletionFrontierRow {
 }
 
 export interface SemanticTemplateCompletionResult {
+  readonly displayText: string;
   readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
   readonly candidates: readonly SemanticTemplateCompletionCandidateRow[];
   readonly expressionFrontier: SemanticTemplateCompletionFrontierRow | null;
@@ -3657,10 +4080,12 @@ export interface SemanticTemplateDiagnosticRow extends SemanticTemplateCursorDia
 }
 
 export interface SemanticTemplateDiagnosticsResult {
+  readonly displayText: string;
   readonly rows: readonly SemanticTemplateDiagnosticRow[];
 }
 
 export interface SemanticTemplateCursorInfoResult {
+  readonly displayText: string;
   readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}`;
   readonly expressionFrontier: SemanticTemplateCompletionFrontierRow | null;
   readonly missingInputs: readonly string[];
@@ -4060,6 +4485,7 @@ export interface SemanticBindingValueChannelRow {
   readonly primitiveValueDomainDisplays: readonly string[];
   readonly isCollection: boolean | null;
   readonly usesCustomMatcher: boolean;
+  readonly observerCouplings: readonly (RuntimeBindingValueChannelCouplingKind | `${RuntimeBindingValueChannelCouplingKind}`)[];
   readonly openReason: string | null;
   readonly openReasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
   readonly source: SemanticSourceReference | null;
@@ -4077,6 +4503,45 @@ export interface SemanticBindingValueChannelRow {
 
 export interface SemanticBindingValueChannelResult {
   readonly rows: readonly SemanticBindingValueChannelRow[];
+}
+
+export interface SemanticBindingValueChannelSummaryRow {
+  readonly channelKind: RuntimeBindingValueChannelKind | `${RuntimeBindingValueChannelKind}`;
+  readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
+  readonly targetProperty: string | null;
+  readonly count: number;
+  readonly bindingKinds: readonly (RuntimeBindingKind | `${RuntimeBindingKind}`)[];
+  readonly authorities: readonly (RuntimeBindingValueChannelAuthority | `${RuntimeBindingValueChannelAuthority}`)[];
+  readonly observerCouplings: readonly (RuntimeBindingValueChannelCouplingKind | `${RuntimeBindingValueChannelCouplingKind}`)[];
+  readonly runtimeValueTypes: readonly string[];
+  readonly runtimeValueTypeCount: number;
+  readonly primitiveValueDomainKinds: readonly (RuntimeBindingPrimitiveValueKind | `${RuntimeBindingPrimitiveValueKind}`)[];
+  readonly definitionNames: readonly string[];
+  readonly definitionCount: number;
+  readonly collectionCount: number;
+  readonly customMatcherCount: number;
+  readonly openCount: number;
+  readonly openReasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+}
+
+export interface SemanticBindingValueChannelCouplingSummaryRow {
+  readonly observerCoupling: RuntimeBindingValueChannelCouplingKind | `${RuntimeBindingValueChannelCouplingKind}`;
+  readonly count: number;
+  readonly channelKinds: readonly (RuntimeBindingValueChannelKind | `${RuntimeBindingValueChannelKind}`)[];
+  readonly targetProperties: readonly (string | null)[];
+  readonly targetPropertyCount: number;
+  readonly definitionNames: readonly string[];
+  readonly definitionCount: number;
+}
+
+export interface SemanticBindingValueChannelSummaryResult {
+  readonly displayText: string;
+  readonly totalRows: number;
+  readonly summaryRows: number;
+  readonly observerCouplingRows: number;
+  readonly channelsWithoutObserverCouplings: number;
+  readonly rows: readonly SemanticBindingValueChannelSummaryRow[];
+  readonly observerCouplings: readonly SemanticBindingValueChannelCouplingSummaryRow[];
 }
 
 export interface SemanticBindingDataFlowRow {
@@ -4108,6 +4573,8 @@ export interface SemanticBindingDataFlowRow {
   readonly sourceAssignmentReasonKinds: readonly (RuntimeBindingDataFlowSourceAssignmentReasonKind | `${RuntimeBindingDataFlowSourceAssignmentReasonKind}`)[];
   readonly sourceToTargetAssignable: boolean | null;
   readonly targetToSourceAssignable: boolean | null;
+  readonly sourceToTargetTypeMismatchKinds: readonly (RuntimeBindingDataFlowTypeMismatchKind | `${RuntimeBindingDataFlowTypeMismatchKind}`)[];
+  readonly targetToSourceTypeMismatchKinds: readonly (RuntimeBindingDataFlowTypeMismatchKind | `${RuntimeBindingDataFlowTypeMismatchKind}`)[];
   readonly frameworkErrorCode: string | null;
   readonly openReason: string | null;
   readonly source: SemanticSourceReference | null;
@@ -4131,6 +4598,92 @@ export interface SemanticBindingDataFlowRow {
 
 export interface SemanticBindingDataFlowResult {
   readonly rows: readonly SemanticBindingDataFlowRow[];
+}
+
+export interface SemanticNullableBooleanCountRow {
+  readonly yes: number;
+  readonly no: number;
+  readonly unknown: number;
+}
+
+export interface SemanticBindingDataFlowSummaryRow {
+  readonly direction: RuntimeBindingDataFlowDirection | `${RuntimeBindingDataFlowDirection}`;
+  readonly targetKind: RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null;
+  readonly targetProperty: string | null;
+  readonly valueChannelKind: RuntimeBindingValueChannelKind | `${RuntimeBindingValueChannelKind}` | null;
+  readonly sourceKind: RuntimeBindingDataFlowSourceKind | `${RuntimeBindingDataFlowSourceKind}`;
+  readonly count: number;
+  readonly bindingKinds: readonly (RuntimeBindingKind | `${RuntimeBindingKind}`)[];
+  readonly valueSiteKinds: readonly (TemplateValueSiteKind | `${TemplateValueSiteKind}`)[];
+  readonly sourceRootNames: readonly string[];
+  readonly sourceRootNameCount: number;
+  readonly sampleSourceNames: readonly string[];
+  readonly sourceNameCount: number;
+  readonly sourceTypes: readonly string[];
+  readonly sourceTypeCount: number;
+  readonly sourceTypeOpenKinds: readonly (CheckerExpressionTypeOpenKind | `${CheckerExpressionTypeOpenKind}`)[];
+  readonly sourceTypeOpenCount: number;
+  readonly targetValueTypes: readonly string[];
+  readonly targetValueTypeCount: number;
+  readonly sourceWritable: SemanticNullableBooleanCountRow;
+  readonly sourceToTargetAssignable: SemanticNullableBooleanCountRow;
+  readonly targetToSourceAssignable: SemanticNullableBooleanCountRow;
+  readonly sourceAssignmentKinds: readonly (RuntimeBindingDataFlowSourceAssignmentKind | `${RuntimeBindingDataFlowSourceAssignmentKind}`)[];
+  readonly sourceAssignmentReasonKinds: readonly (RuntimeBindingDataFlowSourceAssignmentReasonKind | `${RuntimeBindingDataFlowSourceAssignmentReasonKind}`)[];
+  readonly sourceToTargetTypeMismatchKinds: readonly (RuntimeBindingDataFlowTypeMismatchKind | `${RuntimeBindingDataFlowTypeMismatchKind}`)[];
+  readonly targetToSourceTypeMismatchKinds: readonly (RuntimeBindingDataFlowTypeMismatchKind | `${RuntimeBindingDataFlowTypeMismatchKind}`)[];
+  readonly frameworkErrorCodes: readonly string[];
+  readonly openCount: number;
+  readonly definitionNames: readonly string[];
+  readonly definitionCount: number;
+}
+
+export type SemanticBindingDataFlowIssueKind =
+  | 'source-type-unresolved'
+  | 'source-nullish-to-required-target'
+  | 'source-to-target-unassignable'
+  | 'source-to-target-unknown'
+  | 'target-empty-array-inferred'
+  | 'target-nullish-to-required-source'
+  | 'target-to-source-unassignable'
+  | 'target-to-source-unknown'
+  | 'source-not-writable'
+  | 'source-writable-unknown'
+  | 'framework-error'
+  | 'open-data-flow';
+
+export interface SemanticBindingDataFlowIssueSummaryRow {
+  readonly issueKind: SemanticBindingDataFlowIssueKind;
+  readonly count: number;
+  readonly directions: readonly (RuntimeBindingDataFlowDirection | `${RuntimeBindingDataFlowDirection}`)[];
+  readonly targetKinds: readonly (RuntimeBindingTargetKind | `${RuntimeBindingTargetKind}` | null)[];
+  readonly targetProperties: readonly (string | null)[];
+  readonly targetPropertyCount: number;
+  readonly valueChannelKinds: readonly (RuntimeBindingValueChannelKind | `${RuntimeBindingValueChannelKind}` | null)[];
+  readonly sourceKinds: readonly (RuntimeBindingDataFlowSourceKind | `${RuntimeBindingDataFlowSourceKind}`)[];
+  readonly sourceRootNames: readonly string[];
+  readonly sourceRootNameCount: number;
+  readonly sampleSourceNames: readonly string[];
+  readonly sourceNameCount: number;
+  readonly sourceTypes: readonly string[];
+  readonly sourceTypeCount: number;
+  readonly sourceTypeOpenKinds: readonly (CheckerExpressionTypeOpenKind | `${CheckerExpressionTypeOpenKind}`)[];
+  readonly sourceTypeOpenCount: number;
+  readonly targetValueTypes: readonly string[];
+  readonly targetValueTypeCount: number;
+  readonly sourceToTargetTypeMismatchKinds: readonly (RuntimeBindingDataFlowTypeMismatchKind | `${RuntimeBindingDataFlowTypeMismatchKind}`)[];
+  readonly targetToSourceTypeMismatchKinds: readonly (RuntimeBindingDataFlowTypeMismatchKind | `${RuntimeBindingDataFlowTypeMismatchKind}`)[];
+  readonly frameworkErrorCodes: readonly string[];
+  readonly definitionNames: readonly string[];
+  readonly definitionCount: number;
+}
+
+export interface SemanticBindingDataFlowSummaryResult {
+  readonly displayText: string;
+  readonly totalRows: number;
+  readonly summaryRows: number;
+  readonly issueRows: readonly SemanticBindingDataFlowIssueSummaryRow[];
+  readonly rows: readonly SemanticBindingDataFlowSummaryRow[];
 }
 
 export type SemanticObservedMemberSourceState =
@@ -4169,4 +4722,48 @@ export interface SemanticBindingObservedDependencyRow {
 
 export interface SemanticBindingObservedDependencyResult {
   readonly rows: readonly SemanticBindingObservedDependencyRow[];
+}
+
+export interface SemanticBindingObservedDependencySummaryRow {
+  readonly dependencyKind: RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`;
+  readonly bindingKind: RuntimeBindingKind | `${RuntimeBindingKind}`;
+  readonly observedMemberSourceState: SemanticObservedMemberSourceState;
+  readonly observedMemberKind: CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null;
+  readonly sourceRootName: string | null;
+  readonly count: number;
+  readonly expressionKinds: readonly string[];
+  readonly sourceRootNames: readonly string[];
+  readonly sourceRootNameCount: number;
+  readonly sampleSourceNames: readonly string[];
+  readonly sourceNameCount: number;
+  readonly memberNames: readonly string[];
+  readonly memberNameCount: number;
+  readonly methodNames: readonly string[];
+  readonly methodNameCount: number;
+  readonly keyExpressions: readonly string[];
+  readonly keyExpressionCount: number;
+  readonly definitionNames: readonly string[];
+  readonly definitionCount: number;
+  readonly sourceBackedCount: number;
+}
+
+export interface SemanticBindingObservedDependencyMemberSourceStateSummaryRow {
+  readonly observedMemberSourceState: SemanticObservedMemberSourceState;
+  readonly count: number;
+  readonly dependencyKinds: readonly (RuntimeObservedDependencyKind | `${RuntimeObservedDependencyKind}`)[];
+  readonly bindingKinds: readonly (RuntimeBindingKind | `${RuntimeBindingKind}`)[];
+  readonly observedMemberKinds: readonly (CheckerTypeMemberKind | `${CheckerTypeMemberKind}` | null)[];
+  readonly sourceRootNames: readonly string[];
+  readonly sourceRootNameCount: number;
+  readonly definitionNames: readonly string[];
+  readonly definitionCount: number;
+  readonly sourceBackedCount: number;
+}
+
+export interface SemanticBindingObservedDependencySummaryResult {
+  readonly displayText: string;
+  readonly totalRows: number;
+  readonly summaryRows: number;
+  readonly memberSourceStateRows: readonly SemanticBindingObservedDependencyMemberSourceStateSummaryRow[];
+  readonly rows: readonly SemanticBindingObservedDependencySummaryRow[];
 }

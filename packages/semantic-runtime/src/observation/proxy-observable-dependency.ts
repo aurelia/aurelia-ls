@@ -418,6 +418,14 @@ class RuntimeProxyObservedDependencyDraftCollector {
         for (const dependency of trackableDependencies) {
           this.add(dependency);
         }
+      } else if (
+        receiver != null
+        && propertyChainValueCanBeProxyWrapped(receiver)
+        && !usesInterceptedCollectionMethod
+      ) {
+        for (const dependency of this.ordinaryMethodDependenciesForCall(callee, node, receiver)) {
+          this.add(dependency);
+        }
       }
       if (
         receiver != null &&
@@ -638,7 +646,7 @@ class RuntimeProxyObservedDependencyDraftCollector {
     if (this.typeContext == null || this.propertyChainForExpression(callee.expression) == null) {
       return [];
     }
-    const method = this.trackableMethodDeclarationForCallee(callee);
+    const method = this.methodDeclarationForCallee(callee);
     if (method == null || this.trackableMethodStack.has(method)) {
       return [];
     }
@@ -672,6 +680,45 @@ class RuntimeProxyObservedDependencyDraftCollector {
     ];
   }
 
+  private ordinaryMethodDependenciesForCall(
+    callee: ts.PropertyAccessExpression,
+    call: ts.CallExpression,
+    receiver: PropertyChain,
+  ): readonly RuntimeObservedDependencyDraft[] {
+    if (this.typeContext == null) {
+      return [];
+    }
+    const method = this.methodDeclarationForCallee(callee);
+    if (method == null || this.trackableMethodStack.has(method) || readTrackableMethodDependency(method) != null) {
+      return [];
+    }
+    const body = functionBodyOrExpression(method);
+    if (body == null) {
+      return [];
+    }
+    const aliases = new Map(this.aliases);
+    aliases.set('this', aliasChain(receiver));
+    method.parameters.forEach((parameter, index) => {
+      if (!ts.isIdentifier(parameter.name)) {
+        return;
+      }
+      const argument = call.arguments[index] ?? null;
+      const argumentChain = argument == null ? null : this.propertyChainForExpression(argument);
+      if (argumentChain != null && propertyChainValueCanBeProxyWrapped(argumentChain)) {
+        aliases.set(parameter.name.text, aliasChain(argumentChain));
+      }
+    });
+    const nested = new RuntimeProxyObservedDependencyDraftCollector(
+      method.getSourceFile(),
+      this.rootNames,
+      this.typeContext,
+      aliases,
+      new Set([...this.trackableMethodStack, method]),
+    );
+    nested.visit(body);
+    return nested.read();
+  }
+
   private trackableReceiverDependencyDraft<TDraft extends RuntimeObservedDependencyDraft>(
     draft: TDraft,
     receiverType: ts.Type | null,
@@ -694,7 +741,7 @@ class RuntimeProxyObservedDependencyDraftCollector {
       : this.typeContext?.checker.getTypeAtLocation(programExpression) ?? null;
   }
 
-  private trackableMethodDeclarationForCallee(
+  private methodDeclarationForCallee(
     callee: ts.PropertyAccessExpression,
   ): ts.MethodDeclaration | null {
     const programCallee = this.typeContext?.readProgramNode(callee) ?? callee;
@@ -968,6 +1015,15 @@ function propertyChainForExpression(
       : null;
   }
   if (expression.kind === ts.SyntaxKind.ThisKeyword) {
+    const alias = aliases.get('this');
+    if (alias != null) {
+      return {
+        ...alias,
+        start: expression.getStart(expression.getSourceFile()),
+        end: expression.end,
+        observedSegmentStartIndex: alias.segments.length,
+      };
+    }
     return rootNames.has('this')
       ? {
         rootName: 'this',

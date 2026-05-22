@@ -1,4 +1,4 @@
-import { bindable, customElement } from '@aurelia/runtime-html';
+import { bindable, customElement } from 'aurelia';
 import template from './field-shell.html';
 
 @customElement({

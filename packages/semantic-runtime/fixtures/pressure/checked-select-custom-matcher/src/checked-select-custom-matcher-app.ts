@@ -18,6 +18,7 @@ export class CheckedSelectCustomMatcherApp {
 
   selectedItems: MatchableItem[] = [];
   selectedItem: MatchableItem | null = null;
+  booleanAcknowledged = false;
   staticChoice: 'alpha' | 'beta' = 'alpha';
   staticTags: string[] = [];
   selectedItemSet = new Set<MatchableItem>();

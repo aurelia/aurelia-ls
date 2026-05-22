@@ -9,6 +9,7 @@ import {
   appQueryInputSchema,
   analysisCacheOverviewInputSchema,
   authoringCatalogInputSchema,
+  authoringGuidanceInputSchema,
   authoringOrientationInputSchema,
   authoringRecipePlanInputSchema,
   aureliaMcpResponseOutputSchema,
@@ -29,6 +30,7 @@ import {
   type AureliaMcpAppQueryInput,
   type AureliaMcpAppQueryCatalogInput,
   type AureliaMcpAuthoringCatalogInput,
+  type AureliaMcpAuthoringGuidanceInput,
   type AureliaMcpAuthoringOrientationInput,
   type AureliaMcpAuthoringRecipePlanInput,
   type AureliaMcpClearAnalysisCacheInput,
@@ -39,6 +41,7 @@ import {
   type AureliaMcpTemplateDiagnosticsInput,
   type AureliaMcpWorkspaceOverviewInput,
 } from './tool-contracts.js';
+import { aureliaMcpResultText, isRecord } from './result-text.js';
 
 const readOnlyClosedWorldToolAnnotations: ToolAnnotations = {
   readOnlyHint: true,
@@ -105,10 +108,22 @@ export function registerAureliaSemanticRuntimeTools(
   );
 
   server.registerTool(
+    aureliaMcpToolNames.authoringGuidance,
+    {
+      title: 'Aurelia App Building Guidance',
+      description: 'Return compact semantic-runtime guidance for writing clean, scalable Aurelia app code and choosing recipe-backed follow-up queries.',
+      inputSchema: authoringGuidanceInputSchema,
+      outputSchema: aureliaMcpResponseOutputSchema,
+      annotations: readOnlyClosedWorldToolAnnotations,
+    },
+    async (input) => jsonResultFrom(() => adapter.authoringGuidance(input as AureliaMcpAuthoringGuidanceInput)),
+  );
+
+  server.registerTool(
     aureliaMcpToolNames.authoringRecipePlan,
     {
       title: 'Aurelia Authoring Recipe Plan',
-      description: 'Build a read-only semantic-runtime authoring recipe plan; concrete file text is opt-in.',
+      description: 'Build a read-only semantic-runtime authoring recipe plan with source-pattern policy, adaptation slots, optional sourceParameterValues for supported slots, and opt-in concrete file text narrowed with sourceFilePaths or sourceTextRequestHintKeys.',
       inputSchema: authoringRecipePlanInputSchema,
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
@@ -283,7 +298,7 @@ function jsonResult(value: unknown) {
     content: [
       {
         type: 'text' as const,
-        text: resultText(value),
+        text: aureliaMcpResultText(value),
       },
       ...resourceLinksForResult(value),
     ],
@@ -297,6 +312,8 @@ function resourceLinksForResult(value: unknown) {
   switch (value.tool) {
     case aureliaMcpToolNames.authoringCatalog:
       return authoringResourceLinks('catalog', 'recipes', 'operations');
+    case aureliaMcpToolNames.authoringGuidance:
+      return authoringResourceLinks('guidance', 'recipes');
     case aureliaMcpToolNames.authoringRecipePlan:
       return authoringResourceLinks('recipes', 'operations');
     case aureliaMcpToolNames.appQuery:
@@ -322,7 +339,7 @@ function semanticRuntimeResourceLink(view: 'app-queries') {
   };
 }
 
-function authoringResourceLinks(...views: readonly ('catalog' | 'recipes' | 'operations')[]) {
+function authoringResourceLinks(...views: readonly ('catalog' | 'recipes' | 'operations' | 'guidance')[]) {
   return views.map((view) => ({
     type: 'resource_link' as const,
     uri: `aurelia://authoring/${view}`,
@@ -332,10 +349,12 @@ function authoringResourceLinks(...views: readonly ('catalog' | 'recipes' | 'ope
   }));
 }
 
-function authoringResourceTitle(view: 'catalog' | 'recipes' | 'operations'): string {
+function authoringResourceTitle(view: 'catalog' | 'recipes' | 'operations' | 'guidance'): string {
   switch (view) {
     case 'catalog':
       return 'Aurelia Authoring Catalog Overview';
+    case 'guidance':
+      return 'Aurelia App Building Guidance';
     case 'recipes':
       return 'Aurelia Authoring Recipes';
     case 'operations':
@@ -343,10 +362,12 @@ function authoringResourceTitle(view: 'catalog' | 'recipes' | 'operations'): str
   }
 }
 
-function authoringResourceDescription(view: 'catalog' | 'recipes' | 'operations'): string {
+function authoringResourceDescription(view: 'catalog' | 'recipes' | 'operations' | 'guidance'): string {
   switch (view) {
     case 'catalog':
       return 'Compact overview of semantic-runtime authoring capabilities, recipes, taste axes, and product-open reasons.';
+    case 'guidance':
+      return 'Compact public guidance for low-boilerplate Aurelia app building through semantic-runtime recipe contracts.';
     case 'recipes':
       return 'Recipe contracts, preferences, expected effects, and source-plan metadata without concrete source text.';
     case 'operations':
@@ -359,35 +380,6 @@ function structuredContent(value: unknown): Record<string, unknown> {
     return value as Record<string, unknown>;
   }
   return { value };
-}
-
-function resultText(value: unknown): string {
-  if (isRecord(value)) {
-    const tool = typeof value.tool === 'string' ? value.tool : 'aurelia';
-    const payload = value.value;
-    if (isSemanticAnswer(payload)) {
-      return `${tool}: ${payload.summary}`;
-    }
-    if (isRecord(payload)) {
-      const lines = [`${tool}: returned structured semantic-runtime content.`];
-      for (const [key, child] of Object.entries(payload)) {
-        if (isSemanticAnswer(child)) {
-          lines.push(`${key}: ${child.summary}`);
-        }
-      }
-      return lines.join('\n');
-    }
-    return `${tool}: returned structured content.`;
-  }
-  return 'Aurelia MCP returned structured content.';
-}
-
-function isSemanticAnswer(value: unknown): value is { readonly summary: string } {
-  return isRecord(value) && typeof value.summary === 'string';
-}
-
-function isRecord(value: unknown): value is Record<string, unknown> {
-  return value != null && typeof value === 'object' && !Array.isArray(value);
 }
 
 function serializeError(error: unknown): { name: string; message: string } {

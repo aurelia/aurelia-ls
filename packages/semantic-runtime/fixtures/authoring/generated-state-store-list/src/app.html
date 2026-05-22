@@ -1,0 +1,18 @@
+<main class="task-shell">
+  <header>
+    <h1>${title & state}</h1>
+    <p>${label & state:'filters'}</p>
+  </header>
+
+  <section class="task-entry" aria-labelledby="new-task">
+    <label id="new-task" for="draft-task">New task</label>
+    <input id="draft-task" value.state="draft" input.dispatch="{ type: 'setDraft', value: $event.target.value }">
+    <button type="button" disabled.bind="draft === '' & state" click.dispatch="{ type: 'addTask' }">Add task</button>
+  </section>
+
+  <ul>
+    <li repeat.for="task of tasks & state">
+      <span>${task.title}</span>
+    </li>
+  </ul>
+</main>

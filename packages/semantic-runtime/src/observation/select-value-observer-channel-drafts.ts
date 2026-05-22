@@ -8,8 +8,6 @@ import {
   type RuntimeBindingTargetAccess,
 } from '../template/runtime-binding.js';
 import {
-  CheckerTypeShapeKind,
-  sameCheckerTypeReference,
   type CheckerTypeReference,
 } from '../type-system/type-shape.js';
 import { arrayElementTypeFor } from './checker-type-helpers.js';
@@ -26,6 +24,7 @@ import {
   isBroadTypeShape,
   sourceTypeHasAssignableArrayPart,
   stringLiteralTypesForDomain,
+  withCustomMatcherCoupling,
 } from './binding-value-channel-draft-support.js';
 import {
   runtimeBindingBooleanLiteralForExpression,
@@ -33,6 +32,7 @@ import {
 } from './runtime-binding-primitive-value.js';
 import {
   RuntimeBindingValueChannelAuthority,
+  RuntimeBindingValueChannelCouplingKind,
   RuntimeBindingValueChannelKind,
   type RuntimeBindingPrimitiveValue,
 } from './runtime-binding-observation.js';
@@ -55,6 +55,7 @@ export class SelectValueObserverChannelDrafts {
         runtimeValueType: targetAccess.propertyType,
         valueDomain: [],
         isCollection: null,
+        observerCouplings: [],
         openReason: 'SelectValueObserver value channel did not carry a closed authored <select> node.',
         openReasonKinds: [OpenSeamReasonKind.BindingValueChannelSelectTargetOpen],
       };
@@ -71,6 +72,7 @@ export class SelectValueObserverChannelDrafts {
         valueDomain: [],
         isCollection: true,
         usesCustomMatcher,
+        observerCouplings: selectMultipleObserverCouplings(usesCustomMatcher),
         openReason: multiple.openReason,
         openReasonKinds: multiple.openReasonKinds,
       };
@@ -108,6 +110,7 @@ export class SelectValueObserverChannelDrafts {
         valueDomain: [],
         isCollection: true,
         usesCustomMatcher,
+        observerCouplings: selectMultipleObserverCouplings(usesCustomMatcher),
         openReason: 'SelectValueObserver multiple option value channel could not close every option value through static value or expression-backed model/value binding.',
         openReasonKinds: [OpenSeamReasonKind.BindingValueChannelSelectOptionValueOpen],
       };
@@ -133,6 +136,7 @@ export class SelectValueObserverChannelDrafts {
         primitiveValueDomain,
         isCollection: true,
         usesCustomMatcher,
+        observerCouplings: selectMultipleObserverCouplings(usesCustomMatcher),
         openReason: 'SelectValueObserver did not expose any static or TypeChecker-backed option value type for the multi-select value channel.',
         openReasonKinds: [OpenSeamReasonKind.BindingValueChannelSelectOptionDomainOpen],
       };
@@ -146,6 +150,7 @@ export class SelectValueObserverChannelDrafts {
         primitiveValueDomain,
         isCollection: true,
         usesCustomMatcher,
+        observerCouplings: selectMultipleObserverCouplings(usesCustomMatcher),
         openReason: 'SelectValueObserver multiple mode requires a TypeChecker-visible array source before collection element mutation can close.',
         openReasonKinds: [OpenSeamReasonKind.BindingValueChannelSelectMultipleSourceOpen],
       };
@@ -159,6 +164,7 @@ export class SelectValueObserverChannelDrafts {
         primitiveValueDomain,
         isCollection: true,
         usesCustomMatcher,
+        observerCouplings: selectMultipleObserverCouplings(usesCustomMatcher),
         openReason: 'SelectValueObserver multiple mode mutates an array source; the binding source did not close as an array.',
         openReasonKinds: [OpenSeamReasonKind.BindingValueChannelSelectMultipleSourceOpen],
       };
@@ -174,6 +180,7 @@ export class SelectValueObserverChannelDrafts {
       primitiveValueDomain,
       isCollection: true,
       usesCustomMatcher,
+      observerCouplings: selectMultipleObserverCouplings(usesCustomMatcher),
       openReason: null,
     };
   }
@@ -222,6 +229,7 @@ export class SelectValueObserverChannelDrafts {
         valueDomain: [],
         isCollection: null,
         usesCustomMatcher,
+        observerCouplings: selectDynamicObserverCouplings(usesCustomMatcher),
         openReason: 'SelectValueObserver dynamic option value channel could not close every option value through static value or expression-backed model/value binding.',
         openReasonKinds: [OpenSeamReasonKind.BindingValueChannelSelectOptionValueOpen],
       };
@@ -245,6 +253,7 @@ export class SelectValueObserverChannelDrafts {
         primitiveValueDomain,
         isCollection: null,
         usesCustomMatcher,
+        observerCouplings: selectDynamicObserverCouplings(usesCustomMatcher),
         openReason: 'SelectValueObserver dynamic multiple mode needs a source type that can accept both single option values and array-valued selection updates.',
         openReasonKinds: [OpenSeamReasonKind.BindingValueChannelDynamicSelectMultiple],
       };
@@ -261,6 +270,7 @@ export class SelectValueObserverChannelDrafts {
       primitiveValueDomain,
       isCollection: null,
       usesCustomMatcher,
+      observerCouplings: selectDynamicObserverCouplings(usesCustomMatcher),
       openReason: null,
     };
   }
@@ -385,6 +395,7 @@ export class SelectValueObserverChannelDrafts {
         valueDomain: [],
         isCollection: false,
         usesCustomMatcher,
+        observerCouplings: selectSingleObserverCouplings(usesCustomMatcher),
         openReason: 'SelectValueObserver option value channel could not close every option value through static value or expression-backed model/value binding.',
         openReasonKinds: [OpenSeamReasonKind.BindingValueChannelSelectOptionValueOpen],
       };
@@ -408,6 +419,7 @@ export class SelectValueObserverChannelDrafts {
         valueDomain: [],
         isCollection: false,
         usesCustomMatcher,
+        observerCouplings: selectSingleObserverCouplings(usesCustomMatcher),
         openReason: 'SelectValueObserver did not expose any static or TypeChecker-backed <option> value type for the single-select value channel.',
         openReasonKinds: [OpenSeamReasonKind.BindingValueChannelSelectOptionDomainOpen],
       };
@@ -425,6 +437,7 @@ export class SelectValueObserverChannelDrafts {
       primitiveValueDomain,
       isCollection: false,
       usesCustomMatcher,
+      observerCouplings: selectSingleObserverCouplings(usesCustomMatcher),
       openReason: null,
     };
   }
@@ -458,19 +471,6 @@ export class SelectValueObserverChannelDrafts {
       : this.owner.types.unionValueType(`${local}:typed-options`, typed, binding.sourceAddressHandle);
   }
 
-  private commonOptionValueType(
-    optionValues: readonly BindingValueExpression[],
-  ): CheckerTypeReference | null {
-    const typed = this.typedOptionValues(optionValues);
-    if (typed.length === 0) {
-      return null;
-    }
-    const first = typed[0]!;
-    return typed.every((valueType) => sameCheckerTypeReference(first, valueType))
-      ? first
-      : null;
-  }
-
   private typedOptionValues(
     optionValues: readonly BindingValueExpression[],
   ): readonly CheckerTypeReference[] {
@@ -484,4 +484,34 @@ function uniquePrimitiveValueDomain(
   optionValues: readonly BindingValueExpression[],
 ): readonly RuntimeBindingPrimitiveValue[] {
   return uniqueRuntimeBindingPrimitiveValueDomain(optionValues.flatMap((option) => option.primitiveValueDomain));
+}
+
+function selectSingleObserverCouplings(
+  usesCustomMatcher: boolean,
+): readonly RuntimeBindingValueChannelCouplingKind[] {
+  return withCustomMatcherCoupling([
+    RuntimeBindingValueChannelCouplingKind.SelectOptionValueDomain,
+    RuntimeBindingValueChannelCouplingKind.SelectOptionListMutationObserver,
+  ], usesCustomMatcher);
+}
+
+function selectMultipleObserverCouplings(
+  usesCustomMatcher: boolean,
+): readonly RuntimeBindingValueChannelCouplingKind[] {
+  return withCustomMatcherCoupling([
+    RuntimeBindingValueChannelCouplingKind.SelectOptionValueDomain,
+    RuntimeBindingValueChannelCouplingKind.SelectOptionListMutationObserver,
+    RuntimeBindingValueChannelCouplingKind.SelectArrayObserver,
+    RuntimeBindingValueChannelCouplingKind.SelectArrayMutation,
+  ], usesCustomMatcher);
+}
+
+function selectDynamicObserverCouplings(
+  usesCustomMatcher: boolean,
+): readonly RuntimeBindingValueChannelCouplingKind[] {
+  return withCustomMatcherCoupling([
+    RuntimeBindingValueChannelCouplingKind.SelectOptionValueDomain,
+    RuntimeBindingValueChannelCouplingKind.SelectOptionListMutationObserver,
+    RuntimeBindingValueChannelCouplingKind.SelectDynamicMultipleMode,
+  ], usesCustomMatcher);
 }

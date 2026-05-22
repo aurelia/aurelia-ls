@@ -126,6 +126,8 @@ export const enum RuntimeBindingTargetKind {
   Host = 'host',
   Controller = 'controller',
   ControllerViewModel = 'controller-view-model',
+  BindingContext = 'binding-context',
+  OverrideContext = 'override-context',
   StateStore = 'state-store',
   Unknown = 'unknown',
 }
@@ -727,6 +729,16 @@ export class LetBinding {
   readScopeEffects(): readonly RuntimeBindingScopeEffectReference[] {
     return this.scopeEffects;
   }
+
+  bind(input: RuntimeBindingBindContext): RuntimeBindingBindContribution {
+    return input.targetOperation(
+      this,
+      this.targetContext === LetBindingTargetContext.BindingContext ? 'bindingContext' : 'overrideContext',
+      this.target,
+      RuntimeBindingTargetOperationKind.PropertySet,
+      [this.target],
+    );
+  }
 }
 
 /** Runtime ListenerBinding model produced by trigger/capture listener renderers. */
@@ -750,6 +762,10 @@ export class ListenerBinding {
     readonly sourceAddressHandle: AddressHandle | null,
     readonly fieldProvenance: readonly FieldProvenance<RuntimeBindingField>[] = [],
   ) {}
+
+  get target(): string {
+    return this.eventName;
+  }
 
   toReference(): RuntimeBindingReference {
     return new RuntimeBindingReference(this.bindingKind, this.productHandle, this.identityHandle, this.sourceAddressHandle);
@@ -1111,6 +1127,7 @@ export function bindRuntimeBinding(
 ): RuntimeBindingBindContribution {
   if (binding instanceof PropertyBinding
     || binding instanceof AttributeBinding
+    || binding instanceof LetBinding
     || binding instanceof InterpolationBinding
     || binding instanceof ContentBinding
     || binding instanceof ListenerBinding

@@ -1,7 +1,7 @@
 <main class="dashboard-shell">
   <header>
     <h1>Operations Dashboard</h1>
-    <p>${state.alertCount} active alert(s)</p>
+    <p>Active alerts: ${state.alertCount}</p>
   </header>
 
   <au-compose template.bind="summaryTemplate" scope-behavior="scoped" tag="aside" flush-mode="async" composition.bind="summaryComposition" composing.bind="summaryPending"></au-compose>

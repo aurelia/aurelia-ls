@@ -1,4 +1,8 @@
 import type ts from 'typescript';
+import {
+  isDefaultLibrarySourceFile,
+  normalizeTypeSystemPath,
+} from '../type-system/source-file-path.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import type {
@@ -23,6 +27,17 @@ export interface SemanticSourceReference {
   readonly scheme?: string;
   readonly value?: string;
   readonly anchor?: SemanticSourceReference | null;
+}
+
+export function isExternalDependencySourceReference(
+  source: SemanticSourceReference | null,
+): boolean {
+  if (source?.path == null) {
+    return false;
+  }
+  const normalized = normalizeTypeSystemPath(source.path);
+  return normalized.includes('/node_modules/')
+    || isDefaultLibrarySourceFile(normalized);
 }
 
 export function compilerWorldLabel(

@@ -24,13 +24,16 @@ Run route-scoped semantic contracts with:
 
 ```powershell
 pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --route observation
+pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --route authoring
 pnpm --filter @aurelia-ls/semantic-runtime contract:suite -- --domain forms --tier route
 ```
 
 The suite builds once, then runs the selected row-backed contracts or authoring smokes directly. Use `--list` to see the
-available routes, domains, tiers, and scripts. This is the first lightweight contract lane for bold refactors: it checks
-semantic effects and public product rows, not snapshots or internal helper shapes. Successful child scripts are compact
-by default; pass `--verbose` when a contract needs its full JSON output during debugging.
+available routes, domains, tiers, and scripts. Route filters accept exact route IDs or dotted route prefixes, so
+`--route authoring` selects the `authoring.*` generated-fixture and policy contracts. This is the first lightweight
+contract lane for bold refactors: it checks semantic effects and public product rows, not snapshots or internal helper
+shapes. Successful child scripts are compact by default; pass `--verbose` when a contract needs its full JSON output
+during debugging.
 
 Run the inquiry-aware construction/query telemetry lane with:
 
@@ -87,9 +90,10 @@ ownership. It also prints focused taste sections for style binding, style owners
 ownership, and validation ownership because those low-count values are often the exact signal needed for the next
 authoring or fixture pass. Build-tool profile is also printed as a focused taste section because generated recipe
 fixtures intentionally distinguish host-selected build-tool policy from observed typecheck-only project tooling.
-Recipe expected-effect output has two lanes: the all-recipe lane keeps cross-recipe failures visible, while the
-applicable-recipe lane filters out `not-applicable` recipes so generated fixture drift can be checked without mistaking
-missing discriminator facts from unrelated recipes for verifier failures.
+Recipe expected-effect output has three lanes: the intent-recipe lane uses the fixture folder name to check the recipe
+the fixture is meant to prove, the applicable-recipe lane keeps partial recipe candidates visible, and the all-recipe
+lane keeps cross-recipe contrast visible. Use the intent lane for generated fixture health; use applicable/all-candidate
+rows only after deciding whether a partial recipe candidate is actually relevant.
 Its timing section is phase-oriented: `open-app` is decomposed into app-world pass phases such as static evaluation,
 TypeChecker project construction, resource recognition, app-world composition, and template compilation so large-app
 friction can be attributed before deciding whether a manual deep dive is worth it.

@@ -33,6 +33,14 @@
   <fieldset>
     <legend>Static checkbox values</legend>
     <label>
+      <input
+        type="checkbox"
+        model.bind="items[0]"
+        checked.bind="booleanAcknowledged"
+        matcher.bind="matchItems">
+      Boolean checkbox ignores matcher
+    </label>
+    <label>
       <input type="checkbox" value="expedite" checked.bind="staticTags">
       Expedite
     </label>

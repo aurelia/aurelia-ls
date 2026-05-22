@@ -16,4 +16,17 @@ import { ProductsRoute } from './routes/products-route';
 export class RouterPatternApp {
   readonly productsRoute = ProductsRoute;
   readonly productDetailsRoute = ProductDetailsRoute;
+  readonly featuredInstructionIndex = 0;
+  readonly routeInstructions = [
+    {
+      component: ProductsRoute,
+      children: [
+        {
+          component: ProductDetailsRoute,
+          params: { productId: 'tea' },
+          viewport: 'details',
+        },
+      ],
+    },
+  ];
 }

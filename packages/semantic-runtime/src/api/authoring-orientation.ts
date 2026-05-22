@@ -113,6 +113,7 @@ import type {
   SemanticTemplateCursorSuggestionRow,
   SemanticTemplateCursorSuggestionValueTypeSource,
 } from './contracts.js';
+import { SemanticRuntimeDetail } from './contracts.js';
 import { readAppOpenSeams } from './open-seam-projections.js';
 import {
   readComputedObservationDefinitionRows,
@@ -209,6 +210,104 @@ export function readSemanticAuthoringOrientation(
   return authoringOrientationForFacts(orientationFacts(project, emission, store));
 }
 
+export function semanticAuthoringOrientationResultForDetail(
+  result: SemanticAuthoringOrientationResult,
+  detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}` = SemanticRuntimeDetail.Compact,
+): SemanticAuthoringOrientationResult {
+  if (detail === SemanticRuntimeDetail.Handles) {
+    return result;
+  }
+  return {
+    ...result,
+    coverage: result.coverage.map(compactAuthoringCoverageRow),
+    taste: result.taste.map(compactAuthoringTasteAxisRow),
+    capabilities: result.capabilities.map(compactAuthoringCapabilityRow),
+    operations: [],
+    surfaces: result.surfaces.map(compactAuthoringSurfaceRow),
+    recipes: result.recipes
+      .filter((row) => row.currentFitState !== 'not-applicable')
+      .map(compactAuthoringRecipeSeedRow),
+    repairs: [],
+    repairClusters: result.repairClusters.map(compactAuthoringRepairClusterRow),
+  };
+}
+
+function compactAuthoringCoverageRow(
+  row: SemanticAuthoringCoverageRow,
+): SemanticAuthoringCoverageRow {
+  return {
+    ...row,
+    summary: '',
+    evidence: [],
+  };
+}
+
+function compactAuthoringTasteAxisRow(
+  row: SemanticAuthoringTasteAxisRow,
+): SemanticAuthoringTasteAxisRow {
+  return {
+    ...row,
+    values: row.values.map(compactAuthoringTasteValueRow),
+    summary: '',
+  };
+}
+
+function compactAuthoringTasteValueRow(
+  row: SemanticAuthoringTasteValueRow,
+): SemanticAuthoringTasteValueRow {
+  return {
+    ...row,
+    summary: '',
+    ontologySummary: '',
+    observedSummary: '',
+    evidence: [],
+  };
+}
+
+function compactAuthoringCapabilityRow(
+  row: SemanticAuthoringCapabilityRow,
+): SemanticAuthoringCapabilityRow {
+  return {
+    ...row,
+    summary: '',
+    evidence: [],
+  };
+}
+
+function compactAuthoringSurfaceRow(
+  row: SemanticAuthoringAvailableSurfaceRow,
+): SemanticAuthoringAvailableSurfaceRow {
+  return {
+    ...row,
+    summary: '',
+    evidence: [],
+  };
+}
+
+function compactAuthoringRecipeSeedRow(
+  row: SemanticAuthoringRecipeSeedRow,
+): SemanticAuthoringRecipeSeedRow {
+  return {
+    ...row,
+    summary: '',
+    expectedEffectKinds: [],
+    expectedEffects: [],
+  };
+}
+
+function compactAuthoringRepairClusterRow(
+  row: SemanticAuthoringRepairClusterRow,
+): SemanticAuthoringRepairClusterRow {
+  return {
+    ...row,
+    actionTargets: [],
+    targetMemberNames: [],
+    memberHints: [],
+    ownerTypeDisplays: [],
+    valueTypeDisplays: [],
+  };
+}
+
 function orientationFacts(
   project: ProjectBootFrame,
   emission: AureliaAppWorldProjectEmission,
@@ -218,7 +317,7 @@ function orientationFacts(
     project,
     emission,
     store,
-    topology: readSemanticApplicationTopology(store, emission, false),
+    topology: readSemanticApplicationTopology(store, emission, false, { includeTypeSurfaces: true }),
     resourceDefinitions: readResourceDefinitionRows(emission, store, false),
     runtimeControllers: readRuntimeControllerRows(emission, store, false),
     runtimeWatchers: readRuntimeWatcherRows(emission, store, false),
@@ -253,6 +352,7 @@ function orientationFacts(
 function authoringOrientationForFacts(
   facts: OrientationFacts,
 ): SemanticAuthoringOrientationResult {
+  const project = projectOrientation(facts.project, facts.emission);
   const coverage = coverageRows(facts);
   const taste = tasteRows(facts);
   const capabilities = capabilityRows(facts);
@@ -264,18 +364,154 @@ function authoringOrientationForFacts(
     taste,
     repairClusters,
   );
+  const recipes = recipeRows(effectObservation);
+  const openReasons = openReasonRows(capabilities);
   return {
-    project: projectOrientation(facts.project, facts.emission),
+    project,
+    displayText: authoringOrientationDisplayText(
+      project,
+      coverage,
+      taste,
+      capabilities,
+      recipes,
+      repairClusters,
+      openReasons,
+    ),
     coverage,
     taste,
     capabilities,
     operations: operationRows(capabilities, facts),
     surfaces: surfaceRows(facts),
-    recipes: recipeRows(effectObservation),
+    recipes,
     repairs,
     repairClusters,
-    openReasons: openReasonRows(capabilities),
+    openReasons,
   };
+}
+
+const ORIENTATION_TASTE_AXIS_DISPLAY_ORDER: readonly AuthoringTasteAxisKey[] = [
+  'template-model-access',
+  'form-value-channel',
+  'navigation-ownership',
+  'state-ownership',
+  'component-interface',
+  'resource-admission-mode',
+  'template-source-ownership',
+];
+
+function authoringOrientationDisplayText(
+  project: SemanticAuthoringProjectOrientation,
+  coverage: readonly SemanticAuthoringCoverageRow[],
+  taste: readonly SemanticAuthoringTasteAxisRow[],
+  capabilities: readonly SemanticAuthoringCapabilityRow[],
+  recipes: readonly SemanticAuthoringRecipeSeedRow[],
+  repairClusters: readonly SemanticAuthoringRepairClusterRow[],
+  openReasons: readonly SemanticAuthoringOpenReasonRow[],
+): string {
+  const lines = [
+    `Project ${project.projectKey}: ${project.shapeKind}; ${project.sourceFiles} source file(s), ${coverage.length} coverage row(s), ${capabilities.length} capability row(s).`,
+  ];
+  const tasteHighlights = authoringOrientationTasteHighlights(taste, 4);
+  if (tasteHighlights.length > 0) {
+    lines.push(`Taste: ${tasteHighlights.join('; ')}.`);
+  }
+  const recipeHighlights = authoringOrientationRecipeHighlights(recipes, 4);
+  if (recipeHighlights.length > 0) {
+    lines.push(`Recipe fit: ${recipeHighlights.join('; ')}.`);
+  }
+  const repairHighlights = authoringOrientationRepairHighlights(repairClusters, 3);
+  if (repairHighlights.length > 0) {
+    lines.push(`Repair pressure: ${repairHighlights.join('; ')}.`);
+  }
+  if (openReasons.length > 0) {
+    lines.push(`Open reasons: ${openReasons.slice(0, 4).map((reason) => reason.reasonKind).join(', ')}${openReasons.length > 4 ? `, plus ${openReasons.length - 4} more` : ''}.`);
+  }
+  return lines.join('\n');
+}
+
+function authoringOrientationTasteHighlights(
+  taste: readonly SemanticAuthoringTasteAxisRow[],
+  limit: number,
+): readonly string[] {
+  const byAxis = new Map(taste.map((axis) => [axis.axisKey, axis]));
+  return [
+    ...ORIENTATION_TASTE_AXIS_DISPLAY_ORDER.flatMap((axisKey) => {
+      const axis = byAxis.get(axisKey);
+      return axis == null ? [] : [axis];
+    }),
+    ...taste.filter((axis) => !ORIENTATION_TASTE_AXIS_DISPLAY_ORDER.includes(axis.axisKey as AuthoringTasteAxisKey)),
+  ]
+    .filter((axis) => axis.values.length > 0)
+    .slice(0, limit)
+    .map((axis) => `${axis.axisKey}=${axis.values.slice(0, 3).map(authoringOrientationTasteValueSummary).join(', ')}${axis.values.length > 3 ? `, plus ${axis.values.length - 3} more` : ''}`);
+}
+
+function authoringOrientationTasteValueSummary(
+  value: SemanticAuthoringTasteValueRow,
+): string {
+  const evidenceCount = value.evidence.reduce((total, evidenceRow) => total + (evidenceRow.count ?? 1), 0);
+  return evidenceCount > 0
+    ? `${value.valueKey}(${evidenceCount})`
+    : `${value.valueKey}`;
+}
+
+function authoringOrientationRecipeHighlights(
+  recipes: readonly SemanticAuthoringRecipeSeedRow[],
+  limit: number,
+): readonly string[] {
+  const candidates = recipes
+    .filter((recipe) => recipe.currentFitState !== 'not-applicable')
+    .slice()
+    .sort((left, right) => recipeFitRank(right) - recipeFitRank(left) || right.specificityRank - left.specificityRank);
+  const satisfied = candidates.filter((recipe) => recipe.currentFitState === 'satisfied');
+  const partial = candidates.filter((recipe) => recipe.currentFitState === 'partial');
+  const unsupported = candidates.filter((recipe) => recipe.currentFitState === 'unsupported');
+  const primary = satisfied.length > 0
+    ? satisfied
+    : partial.length > 0 ? partial : unsupported;
+  const rows = primary.slice(0, limit).map(authoringOrientationRecipeSummary);
+  const remainingPrimary = primary.length - rows.length;
+  if (remainingPrimary > 0) {
+    rows.push(`${remainingPrimary} more ${primary[0]?.currentFitState ?? 'matching'} recipe candidate(s)`);
+  }
+  if (satisfied.length > 0 && partial.length > 0) {
+    rows.push(`${partial.length} partial recipe candidate(s) hidden from primary fit`);
+  }
+  if (satisfied.length + partial.length > 0 && unsupported.length > 0) {
+    rows.push(`${unsupported.length} unsupported recipe candidate(s)`);
+  }
+  return rows;
+}
+
+function authoringOrientationRecipeSummary(
+  recipe: SemanticAuthoringRecipeSeedRow,
+): string {
+  return `${recipe.key}:${recipe.currentFitState}(${recipe.satisfiedExpectedEffectCount}/${recipe.expectedEffectCount})`;
+}
+
+function recipeFitRank(
+  recipe: SemanticAuthoringRecipeSeedRow,
+): number {
+  switch (recipe.currentFitState) {
+    case 'satisfied':
+      return 4;
+    case 'partial':
+      return 3;
+    case 'unsupported':
+      return 2;
+    case 'not-applicable':
+      return 1;
+  }
+}
+
+function authoringOrientationRepairHighlights(
+  repairClusters: readonly SemanticAuthoringRepairClusterRow[],
+  limit: number,
+): readonly string[] {
+  return repairClusters
+    .filter((cluster) => cluster.count > 0)
+    .slice(0, limit)
+    .map((cluster) => `${cluster.repairKind}:${cluster.count}`);
 }
 
 function projectOrientation(
@@ -889,19 +1125,54 @@ function oneHopForwardingAccessorCount(facts: OrientationFacts): number {
     if (injectedMembers == null || injectedMembers.size === 0) {
       continue;
     }
+    const templateReadAccessorNames = templateReadAccessorNamesForComponent(
+      facts,
+      component.elementName,
+      componentSourcePath,
+    );
+    if (templateReadAccessorNames.size === 0) {
+      continue;
+    }
     const sourceFile = facts.emission.typeSystem.readSourceFileByPath(componentSourcePath);
     if (sourceFile == null) {
       continue;
     }
-    count += countOneHopForwardingAccessors(sourceFile, component.className, injectedMembers);
+    count += countOneHopForwardingAccessors(
+      sourceFile,
+      component.className,
+      injectedMembers,
+      templateReadAccessorNames,
+    );
   }
   return count;
+}
+
+function templateReadAccessorNamesForComponent(
+  facts: OrientationFacts,
+  definitionName: string,
+  componentSourcePath: string,
+): ReadonlySet<string> {
+  const names = new Set<string>();
+  for (const dependency of facts.bindingObservedDependencies) {
+    if (
+      dependency.definitionName !== definitionName
+      || dependency.observedMemberKind !== 'accessor'
+      || dependency.sourceName == null
+      || dependency.observedMemberSource?.path == null
+      || !sourcePathMatchesFileName(dependency.observedMemberSource.path, componentSourcePath)
+    ) {
+      continue;
+    }
+    names.add(dependency.sourceName);
+  }
+  return names;
 }
 
 function countOneHopForwardingAccessors(
   sourceFile: ts.SourceFile,
   className: string,
   injectedMembers: ReadonlySet<string>,
+  templateReadAccessorNames: ReadonlySet<string>,
 ): number {
   let count = 0;
   for (const statement of sourceFile.statements) {
@@ -909,7 +1180,13 @@ function countOneHopForwardingAccessors(
       continue;
     }
     for (const member of statement.members) {
-      if (ts.isGetAccessorDeclaration(member) && getterReturnsInjectedPropertyChain(member, injectedMembers)) {
+      if (
+        ts.isGetAccessorDeclaration(member)
+        && member.name != null
+        && ts.isIdentifier(member.name)
+        && templateReadAccessorNames.has(member.name.text)
+        && getterReturnsInjectedPropertyChain(member, injectedMembers)
+      ) {
         count++;
       }
     }
@@ -1025,12 +1302,23 @@ function navigationOwnershipValues(facts: OrientationFacts): readonly SemanticAu
 }
 
 function templateSourceOwnershipValues(facts: OrientationFacts): readonly SemanticAuthoringTasteValueRow[] {
+  const conventionTemplates = facts.resourceDefinitions.filter((definition) =>
+    definition.resourceKind === ResourceDefinitionKind.CustomElement
+    && definition.template?.source != null
+    && definition.declarationModes.includes('convention')
+  ).length;
   const externalTemplates = facts.topology.components.filter((component) =>
     component.template?.source != null
   ).length;
-  return externalTemplates === 0
-    ? []
-    : [tasteValue('external-template-file', 'certain', 'source', 'template', 'Component template assets have source references.', externalTemplates)];
+  const explicitExternalTemplates = Math.max(0, externalTemplates - conventionTemplates);
+  const values: SemanticAuthoringTasteValueRow[] = [];
+  if (explicitExternalTemplates > 0) {
+    values.push(tasteValue('external-template-file', 'certain', 'source', 'template', 'Component template assets have source references.', explicitExternalTemplates));
+  }
+  if (conventionTemplates > 0) {
+    values.push(tasteValue('convention-template-file', 'likely', 'framework-emulated', 'template', 'Component templates are paired through the currently modeled convention rules.', conventionTemplates));
+  }
+  return values;
 }
 
 function templateRenderingBoundaryValues(facts: OrientationFacts): readonly SemanticAuthoringTasteValueRow[] {
@@ -1073,6 +1361,7 @@ function formValueChannelValues(facts: OrientationFacts): readonly SemanticAutho
     || channel.channelKind === RuntimeBindingValueChannelKind.CheckedCollectionMembership
     || channel.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean
     || channel.channelKind === RuntimeBindingValueChannelKind.CheckedModel
+    || channel.channelKind === RuntimeBindingValueChannelKind.ElementModelValue
   ).length;
   const selectChannels = facts.bindingValueChannels.filter((channel) =>
     channel.channelKind === RuntimeBindingValueChannelKind.SelectSingleOptionValue
@@ -1189,6 +1478,7 @@ function isFormValueChannel(channel: SemanticBindingValueChannelRow): boolean {
     || channel.channelKind === RuntimeBindingValueChannelKind.CheckedCollectionMembership
     || channel.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean
     || channel.channelKind === RuntimeBindingValueChannelKind.CheckedModel
+    || channel.channelKind === RuntimeBindingValueChannelKind.ElementModelValue
     || channel.channelKind === RuntimeBindingValueChannelKind.SelectSingleOptionValue
     || channel.channelKind === RuntimeBindingValueChannelKind.SelectMultipleOptionValues
     || channel.channelKind === RuntimeBindingValueChannelKind.SelectDynamicOptionValue;
@@ -1201,11 +1491,22 @@ function isNativeControlValueChannel(channel: SemanticBindingValueChannelRow): b
 
 function isCustomControlValueChannel(channel: SemanticBindingValueChannelRow): boolean {
   return channel.targetKind === RuntimeBindingTargetKind.ControllerViewModel
+    && !isTemplateControllerValueChannel(channel.channelKind)
     && (
       channel.targetProperty === 'value'
       || channel.targetProperty === 'model'
       || channel.targetProperty === 'checked'
     );
+}
+
+function isTemplateControllerValueChannel(channelKind: SemanticBindingValueChannelRow['channelKind']): boolean {
+  return channelKind === RuntimeBindingValueChannelKind.TemplateControllerTruthiness
+    || channelKind === RuntimeBindingValueChannelKind.TemplateControllerValueScope
+    || channelKind === RuntimeBindingValueChannelKind.TemplateControllerSwitchValue
+    || channelKind === RuntimeBindingValueChannelKind.TemplateControllerSwitchCaseValue
+    || channelKind === RuntimeBindingValueChannelKind.TemplateControllerPromiseValue
+    || channelKind === RuntimeBindingValueChannelKind.TemplateControllerPromiseBranchValue
+    || channelKind === RuntimeBindingValueChannelKind.TemplateControllerIteration;
 }
 
 function styleResourceOwnershipValues(facts: OrientationFacts): readonly SemanticAuthoringTasteValueRow[] {

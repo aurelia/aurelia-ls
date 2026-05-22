@@ -438,6 +438,16 @@ export const LensCatalog: readonly LensSpec[] = [
           "Function, method, constructor, and accessor bodies with source-span size.",
       },
       {
+        id: "source-templates",
+        summary:
+          "sourceText(...) template call rows used by semantic-runtime authoring/source-plan code, with static-text fingerprints and source anchors.",
+      },
+      {
+        id: "source-template-duplicates",
+        summary:
+          "Grouped static sourceText(...) templates that share a normalized source-text fingerprint across carriers/files.",
+      },
+      {
         id: "function-duplicates",
         summary:
           "Grouped duplicate top-level helper names across files with exact body and AST body-shape fingerprint signals.",
@@ -652,6 +662,11 @@ export const LensCatalog: readonly LensSpec[] = [
           "labelLiteral",
           "fieldName",
           "functionCount",
+          "templateCount",
+          "templateName",
+          "templateLineCount",
+          "templateCharacterCount",
+          "templateFingerprint",
           "bodyFingerprint",
           "bodyShapeFingerprint",
           "switchTopologyFingerprint",
@@ -692,6 +707,42 @@ export const LensCatalog: readonly LensSpec[] = [
         id: "functionName",
         role: ParameterRole.Filter,
         summary: "Filter function rows by exact function surface name.",
+      },
+      {
+        id: "templateName",
+        role: ParameterRole.Filter,
+        summary: "Filter source-template rows or duplicate groups by exact sourceText(...) carrier name.",
+      },
+      {
+        id: "templateFingerprint",
+        role: ParameterRole.Filter,
+        summary: "Filter source-template rows or duplicate groups by normalized static template fingerprint.",
+      },
+      {
+        id: "argumentKind",
+        role: ParameterRole.Filter,
+        summary:
+          "Filter source-template rows by string-literal, no-substitution-template, template-expression, or other argument form.",
+      },
+      {
+        id: "staticText",
+        role: ParameterRole.Filter,
+        summary: "Filter source-template rows by whether sourceText(...) carries a static string/template literal.",
+      },
+      {
+        id: "minTemplateCount",
+        role: ParameterRole.Filter,
+        summary: "Filter source-template duplicate groups to at least this many sourceText(...) carriers.",
+      },
+      {
+        id: "minTemplateLineCount",
+        role: ParameterRole.Filter,
+        summary: "Filter source-template rows or duplicate groups by minimum static template line count.",
+      },
+      {
+        id: "minTemplateCharacterCount",
+        role: ParameterRole.Filter,
+        summary: "Filter source-template rows or duplicate groups by minimum static template character count.",
       },
       {
         id: "bodyFingerprint",

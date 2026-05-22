@@ -55,6 +55,10 @@ import {
   frameworkCorpusFixtureSeedMatchesClassification,
   normalizeFrameworkCorpusClassificationFilter,
 } from "./framework-corpus-classification.js";
+import {
+  frameworkCorpusFixtureSeedMatchesRecipeFilter,
+  frameworkCorpusFixtureSeedRecipeFilterScore,
+} from "./framework-corpus-recipe-matching.js";
 import { frameworkCorpusFixtureSeedQueryScore } from "./framework-corpus-row-relevance.js";
 
 export interface FrameworkCorpusValue {
@@ -393,7 +397,7 @@ function filterFixtureSeedRows(
     (filters.seedUse === undefined || row.seedUse === filters.seedUse) &&
     (filters.effectKind === undefined || row.effectHints.some((effect) => effect === filters.effectKind)) &&
     matchesExpectedEffectFilter(row, filters) &&
-    (filters.recipeKey === undefined || row.recipeHints.some((recipe) => recipe === filters.recipeKey)) &&
+    frameworkCorpusFixtureSeedMatchesRecipeFilter(row, filters.recipeKey) &&
     frameworkCorpusFixtureSeedMatchesClassification(row, filters) &&
     (filters.language === undefined || row.language === filters.language) &&
     (filters.snippetKind === undefined || row.snippetKind === filters.snippetKind) &&
@@ -470,15 +474,7 @@ function fixtureSeedFilterFocusScore(
   }
   if (
     filters.expectedEffectFilterField !== undefined &&
-    row.expectedEffects.some((effect) =>
-      effect.filters.some((filter) =>
-        filter.field === filters.expectedEffectFilterField &&
-        (
-          filters.expectedEffectFilterValue === undefined ||
-          String(filter.value ?? "") === filters.expectedEffectFilterValue
-        )
-      )
-    )
+    fixtureSeedHasExpectedEffectFilterField(row, filters.expectedEffectFilterField, filters.expectedEffectFilterValue)
   ) {
     score += 40;
   }
@@ -488,8 +484,9 @@ function fixtureSeedFilterFocusScore(
       score += runtimeCompositionFixtureSeedFocusScore(row);
     }
   }
-  if (filters.recipeKey !== undefined && row.recipeHints.includes(filters.recipeKey as never)) {
-    score += 30;
+  const recipeFilterScore = frameworkCorpusFixtureSeedRecipeFilterScore(row, filters.recipeKey);
+  if (recipeFilterScore > 0) {
+    score += recipeFilterScore === 2 ? 30 : 18;
   }
   if (
     filters.classificationKind !== undefined &&
@@ -512,6 +509,9 @@ function formFixtureSeedFocusScore(row: FrameworkCorpusFixtureSeedRow): number {
     score += 100;
   }
   if (frameworkCorpusFixtureSeedHasClassificationKey(row, "native-value-binding")) {
+    score += 90;
+  }
+  if (frameworkCorpusFixtureSeedHasClassificationKey(row, "native-select-binding")) {
     score += 90;
   }
   if (frameworkCorpusFixtureSeedHasClassificationKey(row, "native-checked-binding")) {
@@ -739,6 +739,11 @@ function frameworkCorpusConceptFilter(
   concept: string | undefined,
 ): string | undefined {
   switch (concept) {
+    case "state-store":
+    case "state-stores":
+    case "store":
+    case "stores":
+      return "state";
     case "template":
       return "templates";
     case "expressions":
@@ -759,10 +764,37 @@ function matchesExpectedEffectFilter(
   return row.expectedEffects.some((effect) =>
     (filters.effectKind === undefined || effect.effectKind === filters.effectKind) &&
     effect.filters.some((effectFilter) =>
-      (filters.expectedEffectFilterField === undefined || effectFilter.field === filters.expectedEffectFilterField) &&
+      (
+        filters.expectedEffectFilterField === undefined ||
+        expectedEffectFilterFieldMatches(effect.effectKind, effectFilter.field, filters.expectedEffectFilterField)
+      ) &&
       (filters.expectedEffectFilterValue === undefined || String(effectFilter.value ?? "") === filters.expectedEffectFilterValue)
     )
   );
+}
+
+function fixtureSeedHasExpectedEffectFilterField(
+  row: FrameworkCorpusFixtureSeedRow,
+  requestedField: string,
+  requestedValue: string | undefined,
+): boolean {
+  return row.expectedEffects.some((effect) =>
+    effect.filters.some((filter) =>
+      expectedEffectFilterFieldMatches(effect.effectKind, filter.field, requestedField) &&
+      (
+        requestedValue === undefined ||
+        String(filter.value ?? "") === requestedValue
+      )
+    )
+  );
+}
+
+function expectedEffectFilterFieldMatches(
+  effectKind: string,
+  filterField: string,
+  requestedField: string,
+): boolean {
+  return filterField === requestedField || `${effectKind}.${filterField}` === requestedField;
 }
 
 function matchesPathAndGroup(

@@ -55,6 +55,20 @@ function checkerSurfaceFromReference(
   shape: CheckerTypeShape | null,
 ): CheckerTypeSurface {
   const shapeKind = shape?.shapeKind ?? reference.shapeKind;
+  const carrierType = shape?.carrier?.type ?? null;
+  if (carrierType != null) {
+    const effectiveType = nonNullableSingleType(carrierType);
+    const effectiveSymbol = effectiveType.aliasSymbol ?? effectiveType.symbol ?? null;
+    const effectiveShapeKind = classifyCheckerTypeShape(effectiveType, effectiveSymbol);
+    return {
+      display: shape?.display ?? reference.display,
+      shapeKind,
+      effectiveShapeKind,
+      hasCallSignature: effectiveType.getCallSignatures().length > 0,
+      hasMembers: effectiveType.getProperties().length > 0,
+      isWeak: isWeakShape(shapeKind) || isWeakShape(effectiveShapeKind),
+    };
+  }
   const callReturnType = shape?.callReturnType ?? null;
   return {
     display: shape?.display ?? reference.display,
@@ -67,6 +81,10 @@ function checkerSurfaceFromReference(
 }
 
 function nonNullableSingleType(type: ts.Type): ts.Type {
+  const nonNullableType = type.getNonNullableType();
+  if (nonNullableType !== type) {
+    return nonNullableType;
+  }
   if (!type.isUnion()) {
     return type;
   }

@@ -123,7 +123,10 @@ printDocSnippets(value, displayRowLimit, detail);
 printTests(value, displayRowLimit);
 printTestSnippets(value, displayRowLimit, detail);
 printExpectedEffectDescriptors(value, displayRowLimit);
-printFixtureSeeds(value, displayRowLimit, detail);
+printFixtureSeeds(value, displayRowLimit, detail, {
+  classificationKind,
+  classificationKey,
+});
 printLegacyPackages(value, displayRowLimit);
 
 function printDocs(value: FrameworkCorpusValue | undefined, limit: number): void {
@@ -240,6 +243,7 @@ function printFixtureSeeds(
   value: FrameworkCorpusValue | undefined,
   limit: number,
   detail: boolean,
+  reasonFilter: FixtureSeedReasonFilter,
 ): void {
   const rows = value?.fixtureSeeds ?? [];
   if (rows.length === 0) {
@@ -250,14 +254,20 @@ function printFixtureSeeds(
   printEmptyRows(rows, "no framework fixture seed rows returned");
   for (const row of rows.slice(0, limit)) {
     const filters = fixtureSeedFilterSummary(row);
+    const reasons = fixtureSeedMatchingReasonSummary(row, reasonFilter);
     console.log(
-      `- ${row.filePath}:${row.source.start.line + 1}; ${row.sourceKind}; use=${row.seedUse}; expectedEffects=${row.effectHints.join(", ") || "<none>"}; filters=${filters}; recipes=${row.recipeHints.join(", ") || "<none>"}`,
+      `- ${row.filePath}:${row.source.start.line + 1}; ${row.sourceKind}; use=${row.seedUse}; expectedEffects=${row.effectHints.join(", ") || "<none>"}${reasons === undefined ? "" : `; reasons=${reasons}`}; filters=${filters}; recipes=${row.recipeHints.join(", ") || "<none>"}`,
     );
     if (detail) {
       console.log(`  ${row.preview}`);
       console.log(`  reasons: ${fixtureSeedReasonSummary(row)}`);
     }
   }
+}
+
+interface FixtureSeedReasonFilter {
+  readonly classificationKind: string | undefined;
+  readonly classificationKey: string | undefined;
 }
 
 function fixtureSeedFilterSummary(
@@ -277,4 +287,38 @@ function fixtureSeedReasonSummary(
     : row.classificationReasons
       .map((reason) => `${reason.kind}:${reason.key}`)
       .join(", ");
+}
+
+function fixtureSeedMatchingReasonSummary(
+  row: NonNullable<FrameworkCorpusValue["fixtureSeeds"]>[number],
+  filter: FixtureSeedReasonFilter,
+): string | undefined {
+  if (filter.classificationKind === undefined && filter.classificationKey === undefined) {
+    return undefined;
+  }
+  const normalized = normalizedClassificationFilter(filter);
+  const matchingReasons = row.classificationReasons.filter((reason) =>
+    (normalized.classificationKind === undefined || reason.kind === normalized.classificationKind) &&
+    (normalized.classificationKey === undefined || reason.key === normalized.classificationKey)
+  );
+  return matchingReasons.length === 0
+    ? "<none>"
+    : matchingReasons.map((reason) => `${reason.kind}:${reason.key}`).join(", ");
+}
+
+function normalizedClassificationFilter(
+  filter: FixtureSeedReasonFilter,
+): FixtureSeedReasonFilter {
+  const key = filter.classificationKey;
+  if (key === undefined) {
+    return filter;
+  }
+  const separatorIndex = key.indexOf(":");
+  if (separatorIndex < 0) {
+    return filter;
+  }
+  return {
+    classificationKind: filter.classificationKind ?? key.slice(0, separatorIndex),
+    classificationKey: key.slice(separatorIndex + 1),
+  };
 }

@@ -163,3 +163,17 @@ export function uniqueSortedStrings<TValue extends string>(
 ): TValue[] {
   return [...new Set(values)].sort((left, right) => left.localeCompare(right));
 }
+
+/** Sort nullable strings with concrete values first and null values last. */
+export function compareNullableStrings(left: string | null, right: string | null): number {
+  if (left === null && right === null) {
+    return 0;
+  }
+  if (left === null) {
+    return 1;
+  }
+  if (right === null) {
+    return -1;
+  }
+  return left.localeCompare(right);
+}

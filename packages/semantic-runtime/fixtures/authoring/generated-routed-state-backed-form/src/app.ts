@@ -1,4 +1,4 @@
-import { customElement } from '@aurelia/runtime-html';
+import { customElement } from 'aurelia';
 import { route } from '@aurelia/router';
 import { FormRoute } from './routes/form-route';
 import { SummaryRoute } from './routes/summary-route';

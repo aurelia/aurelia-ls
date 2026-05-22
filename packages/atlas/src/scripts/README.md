@@ -27,9 +27,10 @@ helpers.
   for exact intersections and use `--domainMode=any` for nearby-route-family exploration. `surfaceRole`
   narrows untracked product-class pressure by the product-architecture role classifier. `memory:next` prints the
   checkpoint-friendly ranked next-action lane computed from live memory state rather than stored as a static task list,
-  including shard path/line for record-backed next actions. Exact `--recordId` next reads can return a consult row for
-  reference or when-touched records so checkpoint recovery can land on durable guidance without turning those records
-  into global next-work. Source/file/auLink existence checks report `present`; they
+  including shard path/line for record-backed next actions. When a filtered `memory:next` read has no computed queue
+  rows, Atlas falls back to matching memory records and returns them as consult rows; this lets exact domain, path,
+  query, symbol, auLink, or record-id checkpoint reads land on durable guidance without turning those records into
+  global next-work. Source/file/auLink existence checks report `present`; they
   keep records grounded without making a pressure frontier live unless paired with a pressure-shaped live check.
 - [atlas-memory-write.ts](atlas-memory-write.ts) is the structured write-side helper for durable memory storage. Use
   `memory:write -- --mode=list-shards` to inspect shard targets, `memory:write -- --template ...` to print a record
@@ -112,8 +113,11 @@ helpers.
   supports exact `--calleeName`, `--callKind`, `--fromFilePath`, `--toFilePath`, `--targetPackageId`, `--local`,
   `--crossesArea`, and `--includeCallDetails=true` filters when a route needs concrete call edges. The
   `function-duplicates` projection also supports `--pathPrefix` and prints its duplicate groups directly, including
-  grouped files and samples in `--detail` mode. Use `--query=...` as an additional row-text filter, not as a replacement
-  for exact class, path, role, call-site, or area filters.
+  grouped files and samples in `--detail` mode. `source-templates` and `source-template-duplicates` expose
+  sourceText(...) authoring/source-plan templates by static fingerprint, carrier name, source anchor, line/character
+  counts, and placeholder names without printing generated source text. Use those projections before adding or widening
+  recipes so repeated generated artifacts become visible as recipe-maintenance pressure. Use `--query=...` as an
+  additional row-text filter, not as a replacement for exact class, path, role, call-site, or area filters.
 - [product-architecture-pressure.ts](product-architecture-pressure.ts) prints compact current semantic-runtime
   large-module, cross-area import, large-class, zero-method `*Input` envelope, behavioral `*Input` suffix, and
   function-call pressure rows with request timing and source line anchors from `product.architecture`. It also prints
@@ -121,7 +125,8 @@ helpers.
   treated as possible split-brain before manual grep without paging every function row into the script. The duplicate
   lane uses an AST body-shape fingerprint that normalizes local bindings and folds simple equivalent control flow such
   as ternaries, `if`/early-return pairs, expression branches, temporary return aliases, and stable
-  default-local-then-override returns. Product-record pressure
+  default-local-then-override returns. The pressure script also prints repeated static sourceText(...) template groups
+  so source-plan copy/paste can be addressed from source anchors rather than by manual grep. Product-record pressure
   groups KernelStoreRecord construction sites, KernelStoreBatch commit sites, FieldProvenance construction sites, and
   same-handle field-provenance fan-out by record kind, product vocabulary expression, field name, module, and owner so
   kernel/provenance flow can be inspected before opening source.
@@ -173,23 +178,29 @@ helpers.
   `--expectedEffectFilterField=channelKind`, `--expectedEffectFilterValue=style-property-value`,
   `--classificationKind=surface`, `--classificationKey=native-value-binding`,
   `--classificationKey=surface:au-compose`, `--classificationKey=surface:au-compose-flush-mode`,
-  `--classificationKey=surface:au-compose-object-component`, `--recipeKey=service-backed-form`, `--recipeKey=composed-dashboard`,
+  `--classificationKey=surface:au-compose-object-component`, `--classificationKey=surface:searchable-data-table`,
+  `--recipeKey=searchable-data-table`, `--recipeKey=routed-searchable-data-table`, `--recipeKey=composed-dashboard`,
   `--rows=...`, `--detail`, and `--json` when the pressure summary is too broad.
   For `fixture-seeds`, prefer `effectKind` and `recipeKey` for structural narrowing and `query` for source/content
-  concepts. Use the default all-token `query` mode for exact-ish narrowing; use `--queryMode=partial` only for
+  concepts. Composite `recipeKey` filters intentionally match the direct recipe lane plus declared ingredient seed lanes
+  such as routed recipe plus feature-surface recipe, because public docs/tests often ground those semantics in separate
+  snippets. Use the default all-token `query` mode for exact-ish narrowing; use `--queryMode=partial` only for
   exploratory multi-term sweeps where adjacent corpus examples are more useful than a zero-row answer. Use
   `seedUse=authoring-taste` or `seedUse=behavior-grounding` when choosing whether docs/tests are being
-  used for taste pressure or framework behavior pressure; framework testing docs are behavior-grounding even though
-  they are documentation snippets. `authoring-taste` expected effects themselves are orientation contracts and should
-  not be expected to have direct corpus seeds. Use expected-effect field/value filters when the seed must prove a
+  used for taste pressure or framework behavior pressure; framework testing and error-message docs are
+  behavior-grounding even though they are documentation snippets. `authoring-taste` expected effects themselves are
+  orientation contracts and should not be expected to have direct corpus seeds. Use expected-effect field/value filters when the seed must prove a
   concrete fact such as a validate trigger argument, a specific binding target property, or a class/style value-channel
   kind. AuCompose fixture seeds carry `runtime-composition` effect hints, `composed-dashboard` recipe hints, and
   narrow surface keys for component/model/template inputs, scope/flush/tag literals, composition/composing outputs, and
   object-shaped component values.
+  Searchable data-table and catalog storefront fixture seeds are keyed by explicit local syntax surfaces such as table/list
+  management controls, search/filter/sort/pagination/selection vocabulary, product/catalog/cart/checkout vocabulary, and
+  the matching structured recipe keys; use those recipe and surface filters before falling back to broad text queries.
   Router fixture seeds require
   concrete router authoring/runtime syntax such as `@aurelia/router`, `@route`, route config objects, or `au-viewport`;
   broad route/router prose remains corpus navigation pressure only. Use classification filters for exact reason lanes
-  such as `surface:native-value-binding`, `surface:native-checked-binding`, `surface:option-model-binding`, and
+  such as `surface:native-value-binding`, `surface:native-select-binding`, `surface:native-checked-binding`, `surface:option-model-binding`, and
   `surface:validation-binding-behavior`; surface reasons are local to docs fences and test `createFixture(...)` calls,
   while parent `describe`/`it` ranges remain carrier pressure. In
   `--detail` mode, fixture seeds print typed classification reasons so a row explains which concept, surface, effect,
@@ -197,7 +208,8 @@ helpers.
   TypeScript template strings and JavaScript control flow do not masquerade as Aurelia template pressure.
   `--concept=expression` is the TypeChecker-expression lane for interpolation, expression-bearing binding commands,
   parser/evaluator terms, value converters, binding behaviors, and AST expression examples; `--concept=template`
-  normalizes to the stored `templates` concept for convenience.
+  normalizes to the stored `templates` concept, and `--concept=state-store` normalizes to the stored `state`
+  concept for @aurelia/state store pressure.
 - [framework-observation-pressure.ts](framework-observation-pressure.ts) prints framework observation topology from
   `framework.observation`: observer entities, binding observer lookup and setup rows, observation flow sites,
   flow-to-entity links, and relationship axis distributions. Use it before changing semantic-runtime observer,

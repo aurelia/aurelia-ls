@@ -165,6 +165,30 @@ const expectedEffects = [
     ],
     'signature',
   ),
+  ExpectedSemanticEffect.fact(
+    'Undecorated method calls should expose the called method as an ordinary template read.',
+    'binding-observed-dependency',
+    'template',
+    null,
+    'present',
+    null,
+    [
+      effectFilter('dependencyKind', 'template-expression-read'),
+      effectFilter('sourceName', 'ordinaryCounterLabel'),
+      effectFilter('methodName', 'ordinaryCounterLabel'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.absent(
+    'Undecorated method calls should not proxy-observe their method body.',
+    'binding-observed-dependency',
+    'template',
+    null,
+    [
+      effectFilter('dependencyKind', 'proxy-property-read'),
+      effectFilter('sourceName', 'this.ordinaryCounter.value'),
+    ],
+  ),
 ];
 
 const snapshot = readAuthoringVerificationSnapshot(app);

@@ -366,6 +366,10 @@ export class RuntimeRenderingMaterializer {
   }
 
   private registerProductDetails(emission: RuntimeRenderingEmission): void {
+    this.store.productDetails.addAll(
+      ConfigurationProductDetails.Controller,
+      emission.controllers.map((controller) => controller.toControllerProduct()),
+    );
     this.store.productDetails.addAll(TemplateProductDetails.RuntimeBinding, emission.bindings);
     this.store.productDetails.addAll(TemplateProductDetails.RuntimeWatcher, emission.watchers);
     this.store.productDetails.addAll(

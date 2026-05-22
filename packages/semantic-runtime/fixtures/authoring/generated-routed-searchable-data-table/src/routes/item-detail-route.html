@@ -1,0 +1,25 @@
+<section class="detail-card">
+  <a load="items">Back to items</a>
+
+  <let item.bind="state.readItem(routeParams.itemId)"></let>
+  <template if.bind="item">
+    <h2>${item.nameLabel}</h2>
+    <dl>
+      <dt>Name</dt>
+      <dd>${item.nameLabel}</dd>
+      <dt>Category</dt>
+      <dd><span class.bind="item.categoryClass">${item.categoryLabel}</span></dd>
+      <dt>Status</dt>
+      <dd><span class.bind="item.statusClass">${item.statusLabel}</span></dd>
+      <dt>Updated Date</dt>
+      <dd>${item.updatedDateLabel}</dd>
+      <dt>Count</dt>
+      <dd>${item.countLabel}</dd>
+      <dt>Flagged</dt>
+      <dd>${item.flaggedLabel}</dd>
+      <dt>Opened from</dt>
+      <dd>${routeParams.ref ?? 'items'}</dd>
+    </dl>
+  </template>
+  <p else>Loading Item ${routeParams.itemId}...</p>
+</section>

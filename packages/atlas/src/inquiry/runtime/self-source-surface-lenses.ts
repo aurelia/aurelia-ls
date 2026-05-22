@@ -34,9 +34,7 @@ import {
 } from "./self-row-projection.js";
 import type { SelfValue } from "./self-value.js";
 import { orderClassSurfaceRows } from "./class-surface-order.js";
-
-
-
+import { compareNullableStrings } from "../../collections.js";
 
 
 export function answerSelfContractStringsProjection(
@@ -882,22 +880,6 @@ function orderAtlasSelfFunctionSurfaces(
     default:
       return rows;
   }
-}
-
-function compareNullableStrings(
-  left: string | null,
-  right: string | null,
-): number {
-  if (left === null && right === null) {
-    return 0;
-  }
-  if (left === null) {
-    return 1;
-  }
-  if (right === null) {
-    return -1;
-  }
-  return left.localeCompare(right);
 }
 
 function filterAtlasSelfVariableSurfaces(

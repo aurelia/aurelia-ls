@@ -9,7 +9,10 @@ import type { Inquiry } from "../inquiry.js";
 import { OutcomeKind, createAnswer, type Answer } from "../answer.js";
 import { PagedRowFamily } from "../paged-row-family.js";
 import { pageOffset, rowLimit } from "../paging.js";
-import { inquiryStringFilter } from "./lens-filter-utils.js";
+import {
+  inquiryStringFilter,
+  inquiryStringListFilter,
+} from "./lens-filter-utils.js";
 import {
   atlasMemoryNextPageContinuation,
   atlasMemoryProjectionContinuations,
@@ -297,15 +300,36 @@ function atlasMemoryNextRowsForInquiry(
     return rows;
   }
   const recordId = inquiryStringFilter(inquiry, "recordId");
-  if (recordId === undefined) {
+  if (recordId === undefined && !hasConsultableMemoryFilter(inquiry)) {
     return rows;
   }
-  return filterNextActions(
-    analysis.records
-      .filter((row) => row.id === recordId && row.nextActionPolicy !== "hidden")
-      .map(atlasMemoryConsultRecordNextAction),
-    inquiry,
-  );
+  return filterMemoryRows(analysis.records, inquiry)
+    .filter((row) => row.nextActionPolicy !== "hidden")
+    .map(atlasMemoryConsultRecordNextAction)
+    .sort(compareMemoryNextActionRowsByRank);
+}
+
+function hasConsultableMemoryFilter(inquiry: Inquiry): boolean {
+  return inquiryStringListFilter(inquiry, "domain").length > 0 ||
+    [
+      "query",
+      "kind",
+      "status",
+      "path",
+      "liveCheckKind",
+      "anchorKind",
+      "anchorLensId",
+      "auLinkId",
+      "symbolName",
+      "nextActionPolicy",
+    ].some((key) => inquiryStringFilter(inquiry, key) !== undefined);
+}
+
+function compareMemoryNextActionRowsByRank(
+  left: AtlasMemoryNextActionRow,
+  right: AtlasMemoryNextActionRow,
+): number {
+  return right.rank - left.rank || left.id.localeCompare(right.id);
 }
 
 function backingRecordsForNextActions(

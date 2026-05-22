@@ -1,0 +1,11 @@
+<main>
+  <h1 t="app.title"></h1>
+  <label for="request-selector" t="app.request"></label>
+  <select id="request-selector" value.bind="state.selectedRequestId">
+    <option repeat.for="requestId of state.requestIds" model.bind="requestId">${requestId}</option>
+  </select>
+
+  <state-backed-form request-id.bind="state.selectedRequestId"></state-backed-form>
+
+  <p t="app.submitted" t-params.bind="{ count: state.submittedCount }"></p>
+</main>

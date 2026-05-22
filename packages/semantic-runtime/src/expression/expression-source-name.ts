@@ -20,16 +20,17 @@ export function expressionSourceName(expression: ExpressionAstNode): string | nu
       return object == null ? `[${key}]` : `${object}[${key}]`;
     }
     case 'CallScope':
-      return `${expression.name.name}()`;
+      return `${expression.name.name}(${expressionSourceArgumentList(expression.args)})`;
     case 'CallGlobal':
-      return `${expression.name.name}()`;
+      return `${expression.name.name}(${expressionSourceArgumentList(expression.args)})`;
     case 'CallMember': {
       const object = expressionSourceName(expression.object);
-      return object == null ? `${expression.name.name}()` : `${object}.${expression.name.name}()`;
+      const args = expressionSourceArgumentList(expression.args);
+      return object == null ? `${expression.name.name}(${args})` : `${object}.${expression.name.name}(${args})`;
     }
     case 'CallFunction': {
       const func = expressionSourceName(expression.func);
-      return func == null ? null : `${func}()`;
+      return func == null ? null : `${func}(${expressionSourceArgumentList(expression.args)})`;
     }
     case 'PrimitiveLiteral':
       return primitiveExpressionDisplay(expression);
@@ -40,12 +41,20 @@ export function expressionSourceName(expression: ExpressionAstNode): string | nu
     case 'BindingBehavior':
       return expressionSourceName(expression.expression);
     case 'Binary':
-      return compactExpressionSourceNames([
+      return infixExpressionSourceName(
+        expressionSourceName(expression.left),
+        expression.operation,
+        expressionSourceName(expression.right),
+      ) ?? compactExpressionSourceNames([
         expressionSourceName(expression.left),
         expressionSourceName(expression.right),
       ]);
     case 'Conditional':
-      return compactExpressionSourceNames([
+      return conditionalExpressionSourceName(
+        expressionSourceName(expression.condition),
+        expressionSourceName(expression.yes),
+        expressionSourceName(expression.no),
+      ) ?? compactExpressionSourceNames([
         expressionSourceName(expression.condition),
         expressionSourceName(expression.yes),
         expressionSourceName(expression.no),
@@ -110,6 +119,36 @@ export function primitiveExpressionDisplay(expression: ExpressionAstNode): strin
   return expression.$kind === 'PrimitiveLiteral'
     ? JSON.stringify(expression.value)
     : null;
+}
+
+function expressionSourceArgumentList(
+  expressions: readonly ExpressionAstNode[],
+): string {
+  const parts: string[] = [];
+  for (const argument of expressions) {
+    const display = expressionSourceName(argument) ?? primitiveExpressionDisplay(argument);
+    if (display == null) {
+      return '';
+    }
+    parts.push(display);
+  }
+  return parts.join(', ');
+}
+
+function infixExpressionSourceName(
+  left: string | null,
+  operation: string,
+  right: string | null,
+): string | null {
+  return left == null || right == null ? null : `${left} ${operation} ${right}`;
+}
+
+function conditionalExpressionSourceName(
+  condition: string | null,
+  yes: string | null,
+  no: string | null,
+): string | null {
+  return condition == null || yes == null || no == null ? null : `${condition} ? ${yes} : ${no}`;
 }
 
 export function compactExpressionSourceNames(

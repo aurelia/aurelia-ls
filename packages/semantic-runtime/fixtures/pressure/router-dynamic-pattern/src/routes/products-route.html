@@ -1,5 +1,8 @@
 <nav>
   <a repeat.for="product of products" href="${productHref(product)}">${product.name}</a>
+  <button repeat.for="product of products" type="button" load.bind="'/products/' + product.id">
+    Load ${product.name}
+  </button>
   <a repeat.for="product of products" href="${externalHref(product)}" target="_blank" rel="noreferrer">
     External ${product.name}
   </a>

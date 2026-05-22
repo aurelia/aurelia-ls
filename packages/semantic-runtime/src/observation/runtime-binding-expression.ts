@@ -4,6 +4,8 @@ import {
   AttributeBinding,
   ContentBinding,
   InterpolationBinding,
+  LetBinding,
+  ListenerBinding,
   PropertyBinding,
   RefBinding,
   SpreadValueBinding,
@@ -19,6 +21,8 @@ import type {
 export type RuntimeExpressionBinding =
   | PropertyBinding
   | AttributeBinding
+  | LetBinding
+  | ListenerBinding
   | InterpolationBinding
   | ContentBinding
   | RefBinding
@@ -31,6 +35,8 @@ export function isRuntimeExpressionBinding(
 ): binding is RuntimeExpressionBinding {
   return binding instanceof PropertyBinding
     || binding instanceof AttributeBinding
+    || binding instanceof LetBinding
+    || binding instanceof ListenerBinding
     || binding instanceof InterpolationBinding
     || binding instanceof ContentBinding
     || binding instanceof RefBinding

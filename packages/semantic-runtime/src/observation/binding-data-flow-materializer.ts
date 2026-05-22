@@ -77,6 +77,7 @@ import {
   TypeSystemHotDetails,
 } from '../type-system/product-details.js';
 import {
+  checkerRepeatableElementTypeInfo,
   checkerNullishType,
   checkerTypeShapeIsDefinitelyNullish,
 } from '../type-system/checker-related-types.js';
@@ -84,6 +85,7 @@ import {
   checkerTypeReferenceAssignable,
 } from '../type-system/checker-type-assignability.js';
 import {
+  CheckerTypeShapeKind,
   type CheckerTypeReference,
   type CheckerTypeShape,
 } from '../type-system/type-shape.js';
@@ -125,6 +127,7 @@ import {
   RuntimeBindingDataFlowSourceAssignmentKind,
   RuntimeBindingDataFlowSourceAssignmentReasonKind,
   RuntimeBindingDataFlowSourceKind,
+  RuntimeBindingDataFlowTypeMismatchKind,
   RuntimeBindingObservedDependency,
   type RuntimeBindingPrimitiveValue,
   RuntimeObservedDependencyKind,
@@ -365,6 +368,8 @@ type DataFlowDraft = {
   readonly sourceAssignmentReasonKinds: readonly RuntimeBindingDataFlowSourceAssignmentReasonKind[];
   readonly sourceToTargetAssignable: boolean | null;
   readonly targetToSourceAssignable: boolean | null;
+  readonly sourceToTargetTypeMismatchKinds: readonly RuntimeBindingDataFlowTypeMismatchKind[];
+  readonly targetToSourceTypeMismatchKinds: readonly RuntimeBindingDataFlowTypeMismatchKind[];
   readonly frameworkErrorCode: ObservationFrameworkErrorCode | null;
   readonly openReason: string | null;
 };
@@ -401,6 +406,7 @@ function runtimeBindingDataFlowForDraft(
     draft.sourceAssignmentKind, draft.sourceAssignmentReason,
     draft.sourceAssignmentReasonKinds,
     draft.sourceToTargetAssignable, draft.targetToSourceAssignable,
+    draft.sourceToTargetTypeMismatchKinds, draft.targetToSourceTypeMismatchKinds,
     draft.frameworkErrorCode,
     draft.openReason,
     binding.sourceAddressHandle,
@@ -430,6 +436,8 @@ type DataFlowSourceProjection = {
 type DataFlowAssignability = {
   readonly sourceToTargetAssignable: boolean | null;
   readonly targetToSourceAssignable: boolean | null;
+  readonly sourceToTargetTypeMismatchKinds: readonly RuntimeBindingDataFlowTypeMismatchKind[];
+  readonly targetToSourceTypeMismatchKinds: readonly RuntimeBindingDataFlowTypeMismatchKind[];
 };
 
 const enum SourceWriteCapabilityKind {
@@ -1115,6 +1123,8 @@ class RuntimeBindingDataFlowDraftMaterializer {
       sourceAssignmentReasonKinds: sourceAssignment.reasonKinds,
       sourceToTargetAssignable: assignability.sourceToTargetAssignable,
       targetToSourceAssignable: assignability.targetToSourceAssignable,
+      sourceToTargetTypeMismatchKinds: assignability.sourceToTargetTypeMismatchKinds,
+      targetToSourceTypeMismatchKinds: assignability.targetToSourceTypeMismatchKinds,
       frameworkErrorCode,
       openReason,
     };
@@ -1551,14 +1561,42 @@ class BindingDataFlowAssignabilityEvaluator {
     targetValueType: CheckerTypeReference | null,
     valueChannel: RuntimeBindingValueChannel | null,
   ): DataFlowAssignability {
+    const sourceToTargetAssignable = directionIncludesSourceToTarget(direction)
+      ? this.isSourceAssignableToTarget(sourceType, targetValueType, valueChannel)
+      : null;
+    const targetToSourceAssignable = directionIncludesTargetToSource(direction)
+      ? this.isTargetAssignableToSource(targetValueType, sourceType, valueChannel)
+      : null;
     return {
-      sourceToTargetAssignable: directionIncludesSourceToTarget(direction)
-        ? this.isSourceAssignableToTarget(sourceType, targetValueType, valueChannel)
-        : null,
-      targetToSourceAssignable: directionIncludesTargetToSource(direction)
-        ? this.isTargetAssignableToSource(targetValueType, sourceType, valueChannel)
-        : null,
+      sourceToTargetAssignable,
+      targetToSourceAssignable,
+      sourceToTargetTypeMismatchKinds: sourceToTargetAssignable === false
+        && this.nullishTypeBlocksAssignment(sourceType, targetValueType)
+        ? [RuntimeBindingDataFlowTypeMismatchKind.SourceNullishToRequiredTarget]
+        : [],
+      targetToSourceTypeMismatchKinds: targetToSourceAssignable === false
+        && this.nullishTypeBlocksAssignment(targetValueType, sourceType)
+        ? [RuntimeBindingDataFlowTypeMismatchKind.TargetNullishToRequiredSource]
+        : [],
     };
+  }
+
+  private nullishTypeBlocksAssignment(
+    from: CheckerTypeReference | null,
+    to: CheckerTypeReference | null,
+  ): boolean {
+    const fromCarrier = this.typeAccess.readTypeShape(from)?.carrier ?? null;
+    const toCarrier = this.typeAccess.readTypeShape(to)?.carrier ?? null;
+    if (fromCarrier == null || toCarrier == null || fromCarrier.checker !== toCarrier.checker) {
+      return false;
+    }
+    if (!typeIncludesNullish(fromCarrier.checker, fromCarrier.type)) {
+      return false;
+    }
+    return fromCarrier.checker.isTypeAssignableTo(
+      fromCarrier.checker.getNonNullableType(fromCarrier.type),
+      toCarrier.type,
+    );
   }
 
   private isTypeAssignable(
@@ -1587,6 +1625,9 @@ class BindingDataFlowAssignabilityEvaluator {
         ? this.isPrimitiveDomainObservableFromSourceCollection(primitiveValueDomain, sourceType, valueChannel)
         : this.isTypeObservableFromSourceCollection(targetType, sourceType, valueChannel);
     }
+    if (valueChannel?.channelKind === RuntimeBindingValueChannelKind.TemplateControllerIteration) {
+      return this.typeAccess.isRepeatSourceRuntimeAccepted(sourceType);
+    }
     const checkerAssignable = this.isTypeAssignable(sourceType, targetType);
     if (checkerAssignable != null) {
       return checkerAssignable;
@@ -1605,6 +1646,8 @@ class BindingDataFlowAssignabilityEvaluator {
       return null;
     }
     switch (valueChannel.channelKind) {
+      case RuntimeBindingValueChannelKind.CustomMatcherFunction:
+        return this.typeAccess.isCallableBooleanFunction(sourceType);
       case RuntimeBindingValueChannelKind.SelectSingleOptionValue:
         return !this.typeAccess.isRuntimeArrayInstanceType(sourceType);
       case RuntimeBindingValueChannelKind.CheckedRadioValue:
@@ -1881,6 +1924,50 @@ class BindingDataFlowTypeAccess {
       : isRuntimeArrayInstanceType(carrier.checker, carrier.type);
   }
 
+  isRepeatSourceRuntimeAccepted(reference: CheckerTypeReference | null): boolean | null {
+    const carrier = this.readTypeShape(reference)?.carrier ?? null;
+    if (carrier == null) {
+      return null;
+    }
+    const repeatable = checkerRepeatableElementTypeInfo(carrier.checker, carrier.type);
+    if (repeatable.unsupportedConstituents > 0) {
+      return false;
+    }
+    if (repeatable.openConstituents > 0) {
+      return null;
+    }
+    return true;
+  }
+
+  isCallableBooleanFunction(reference: CheckerTypeReference | null): boolean | null {
+    const shape = this.readTypeShape(reference);
+    if (shape == null) {
+      return isLightweightCallableBooleanFunction(reference);
+    }
+    if (shape.callReturnType == null) {
+      const displayAcceptance = isBooleanLikeFunctionReturnDisplay(shape.display);
+      if (displayAcceptance != null) {
+        return displayAcceptance;
+      }
+      return shape.shapeKind === CheckerTypeShapeKind.Any || shape.shapeKind === CheckerTypeShapeKind.Unknown
+        ? null
+        : false;
+    }
+    return this.isBooleanReturnType(shape.callReturnType);
+  }
+
+  private isBooleanReturnType(reference: CheckerTypeReference | null): boolean | null {
+    if (reference == null) {
+      return null;
+    }
+    const returnShape = this.readTypeShape(reference);
+    const returnCarrier = returnShape?.carrier ?? null;
+    if (returnCarrier != null) {
+      return returnCarrier.checker.isTypeAssignableTo(returnCarrier.type, returnCarrier.checker.getBooleanType());
+    }
+    return isBooleanLikeTypeDisplay(returnShape?.display ?? reference.display ?? null);
+  }
+
   memberType(
     reference: CheckerTypeReference | null,
     propertyName: string,
@@ -1902,6 +1989,38 @@ class BindingDataFlowTypeAccess {
   ): CheckerTypeShapeMemberWriteAccess {
     return this.shapeAccess.memberWriteAccess(ownerType, memberName);
   }
+}
+
+function isBooleanLikeTypeDisplay(display: string | null): boolean | null {
+  if (display == null || display === 'unknown' || display === 'any') {
+    return null;
+  }
+  return display === 'boolean'
+    || display === 'true'
+    || display === 'false'
+    || display.split('|').map((part) => part.trim()).every((part) => part === 'true' || part === 'false');
+}
+
+function isLightweightCallableBooleanFunction(reference: CheckerTypeReference | null): boolean | null {
+  if (reference == null
+    || reference.shapeKind === CheckerTypeShapeKind.Any
+    || reference.shapeKind === CheckerTypeShapeKind.Unknown) {
+    return null;
+  }
+  if (reference.shapeKind !== CheckerTypeShapeKind.Function) {
+    return false;
+  }
+  return isBooleanLikeFunctionReturnDisplay(reference.display);
+}
+
+function isBooleanLikeFunctionReturnDisplay(display: string | null): boolean | null {
+  if (display == null) {
+    return null;
+  }
+  const arrowIndex = display.lastIndexOf('=>');
+  return arrowIndex < 0
+    ? null
+    : isBooleanLikeTypeDisplay(display.slice(arrowIndex + 2).trim());
 }
 
 function directionForBindingMode(bindingMode: TemplateBindingMode): RuntimeBindingDataFlowDirection {
@@ -2074,6 +2193,15 @@ function targetToSourceStrictnessReason(
       reason: `TypeChecker target-to-source assignment is not assignable (${typeDisplay(targetValueType)} -> ${typeDisplay(sourceType)}); Aurelia runtime still passes the observer value to astAssign.`,
     }
     : null;
+}
+
+function typeIncludesNullish(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): boolean {
+  return type.isUnion()
+    ? type.types.some((constituent) => checkerNullishType(checker, constituent))
+    : checkerNullishType(checker, type);
 }
 
 function typeDisplay(reference: CheckerTypeReference | null): string {

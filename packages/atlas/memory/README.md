@@ -199,6 +199,10 @@ JSON. Active live-frontier ranking spends live check pressure
 facts such as class lines/methods and Atlas source-file size/coupling instead
 of counting checks as the only proxy. When `--query=` is present, next-action ranks include the same relevance bonus as
 record rows so workstream-specific handles are not buried under global pressure that only mentions the term in prose.
+When a filtered `next` read has no computed queue rows, Atlas falls back to matching durable memory records and returns
+them as `consult-memory-record` rows. This is intentionally checkpoint-shaped: exact domain, path, query, symbol, lens,
+auLink, or record-id filters can still recover reference decisions and when-touched guidance without making those
+records part of the unfiltered work queue.
 In `memory:next --detail`, backing memory records remain present in the answer payload, but records already expanded as
 next actions are summarized in the printed `memory records` section to avoid repeating the same guidance block twice.
 When the workstream is already known, prefer structural narrowing such as

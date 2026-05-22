@@ -1,4 +1,4 @@
-import { customAttribute } from '@aurelia/runtime-html';
+import { customAttribute } from 'aurelia';
 
 @customAttribute('availability-badge')
 export class AvailabilityBadge {

@@ -6,6 +6,7 @@ import {
 } from '../configuration/scope.js';
 import type {
   AccessMemberExpression,
+  AccessKeyedExpression,
   AccessScopeExpression,
   BinaryExpression,
   CallFunctionExpression,
@@ -25,10 +26,8 @@ import {
   type StaticProjectEvaluationResult,
 } from '../evaluation/project-evaluation.js';
 import {
-  EvaluationBooleanValue,
   EvaluationBoundaryValue,
   EvaluationBoundaryKind,
-  EvaluationNullValue,
   EvaluationNumberValue,
   EvaluationObjectProperty,
   EvaluationStringPatternBuilder,
@@ -36,10 +35,12 @@ import {
   EvaluationUndefined,
   EvaluationValueKind,
   appendEvaluationStringLikePart,
+  evaluationPrimitiveValueFromExpressionValue,
   evaluationStringPatternFromConcatenation,
   isEvaluationPrimitiveValue,
   readEvaluationPrimitive,
   readEvaluationTruthiness,
+  EvaluationBooleanValue,
   type EvaluationClassValue,
   type EvaluationValue,
 } from '../evaluation/values.js';
@@ -129,7 +130,7 @@ export class RuntimeBindingSourceValueEvaluator {
   ): RuntimeBindingSourceValueEvaluation {
     switch (expression.$kind) {
       case 'PrimitiveLiteral':
-        return RuntimeBindingSourceValueEvaluation.value(primitiveValue(expression.value, null));
+        return RuntimeBindingSourceValueEvaluation.value(evaluationPrimitiveValueFromExpressionValue(expression.value));
       case 'AccessScope':
         return this.evaluateAccessScope(expression, scope);
       case 'AccessThis':
@@ -137,6 +138,8 @@ export class RuntimeBindingSourceValueEvaluator {
         return openNeedsRuntimeValue(`${expression.$kind} value evaluation needs a materialized binding-context instance.`);
       case 'AccessMember':
         return this.evaluateAccessMember(expression, scope);
+      case 'AccessKeyed':
+        return this.evaluateAccessKeyed(expression, scope);
       case 'CallScope':
         return this.evaluateCallScope(expression, scope);
       case 'CallMember':
@@ -230,6 +233,9 @@ export class RuntimeBindingSourceValueEvaluator {
         owner.openReasonKinds,
       );
     }
+    if (expression.optional && isNullishValue(owner.value)) {
+      return RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined);
+    }
     const localValue = localPropertyValue(owner.value, expression.name.name);
     if (localValue != null) {
       return RuntimeBindingSourceValueEvaluation.value(localValue);
@@ -239,6 +245,43 @@ export class RuntimeBindingSourceValueEvaluator {
       return openMemberNoStaticValue(`Member '${expression.name.name}' owner did not retain an evaluated source module.`);
     }
     const read = this.evaluationFrame.readPropertyValue(source, owner.value, expression.name.name, source.sourceFile);
+    return evaluationResult(read.value, read.openSeams.map((seam) => seam.summary));
+  }
+
+  private evaluateAccessKeyed(
+    expression: AccessKeyedExpression,
+    scope: BindingScope,
+  ): RuntimeBindingSourceValueEvaluation {
+    const owner = this.evaluateNode(expression.object, scope);
+    if (owner.kind === RuntimeBindingSourceValueEvaluationKind.Open || owner.value == null) {
+      return RuntimeBindingSourceValueEvaluation.open(
+        owner.openReason ?? 'Owner for keyed access did not close.',
+        owner.openReasonKinds,
+      );
+    }
+    if (expression.optional && isNullishValue(owner.value)) {
+      return RuntimeBindingSourceValueEvaluation.value(EvaluationUndefined);
+    }
+    const key = this.evaluateNode(expression.key, scope);
+    if (key.kind === RuntimeBindingSourceValueEvaluationKind.Open || key.value == null) {
+      return RuntimeBindingSourceValueEvaluation.open(
+        key.openReason ?? 'Keyed access key did not close.',
+        key.openReasonKinds,
+      );
+    }
+    const localValue = localKeyedValue(owner.value, key.value);
+    if (localValue != null) {
+      return RuntimeBindingSourceValueEvaluation.value(localValue);
+    }
+    const propertyName = propertyKeyString(key.value);
+    if (propertyName == null) {
+      return openUnsupportedExpression(`Keyed access key reduced to '${key.value.kind}', which is not a static property key.`);
+    }
+    const source = this.evaluationFrame.sourceForValue(owner.value);
+    if (source == null) {
+      return openMemberNoStaticValue(`Keyed access '${propertyName}' owner did not retain an evaluated source module.`);
+    }
+    const read = this.evaluationFrame.readPropertyValue(source, owner.value, propertyName, source.sourceFile);
     return evaluationResult(read.value, read.openSeams.map((seam) => seam.summary));
   }
 
@@ -519,6 +562,24 @@ export class RuntimeBindingSourceValueEvaluator {
       return this.evaluateShortCircuitBinary(expression, scope);
     }
     const left = this.evaluateNode(expression.left, scope);
+    if (expression.operation === '+') {
+      const leftValue = valueOrBoundaryForOpen(left, expression.left);
+      if (leftValue == null) {
+        return RuntimeBindingSourceValueEvaluation.open(
+          left.openReason ?? "Left operand for '+' did not close.",
+          left.openReasonKinds,
+        );
+      }
+      const right = this.evaluateNode(expression.right, scope);
+      const rightValue = valueOrBoundaryForOpen(right, expression.right);
+      if (rightValue == null) {
+        return RuntimeBindingSourceValueEvaluation.open(
+          right.openReason ?? "Right operand for '+' did not close.",
+          right.openReasonKinds,
+        );
+      }
+      return evaluatePlus(leftValue, rightValue);
+    }
     if (left.kind === RuntimeBindingSourceValueEvaluationKind.Open || left.value == null) {
       return RuntimeBindingSourceValueEvaluation.open(
         left.openReason ?? `Left operand for '${expression.operation}' did not close.`,
@@ -531,9 +592,6 @@ export class RuntimeBindingSourceValueEvaluator {
         right.openReason ?? `Right operand for '${expression.operation}' did not close.`,
         right.openReasonKinds,
       );
-    }
-    if (expression.operation === '+') {
-      return evaluatePlus(left.value, right.value);
     }
     return openUnsupportedExpression(`Binary operator '${expression.operation}' is type-visible but not value-reduced by binding-source value flow.`);
   }
@@ -603,12 +661,32 @@ function localPropertyValue(
   value: EvaluationValue,
   propertyName: string,
 ): EvaluationValue | null {
+  if (value.kind === EvaluationValueKind.Array && propertyName === 'length') {
+    return new EvaluationNumberValue(value.elements.length, null);
+  }
   if (
     value.kind === EvaluationValueKind.Object
     || value.kind === EvaluationValueKind.BoundaryObject
     || value.kind === EvaluationValueKind.Instance
   ) {
-    return value.properties.get(propertyName)?.value ?? null;
+    const property = value.properties.get(propertyName)?.value ?? null;
+    if (property != null) {
+      return property;
+    }
+    if (value.kind === EvaluationValueKind.Object && !value.mayHaveUnknownProperties) {
+      return EvaluationUndefined;
+    }
+    if (value.kind === EvaluationValueKind.BoundaryObject) {
+      return new EvaluationBoundaryValue(
+        value.boundaryKind,
+        `${value.path}.${propertyName}`,
+        value.node,
+      );
+    }
+    return null;
+  }
+  if (value.kind === EvaluationValueKind.ModuleNamespace) {
+    return value.exports.get(propertyName) ?? null;
   }
   if (value.kind === EvaluationValueKind.BoundaryValue) {
     return new EvaluationBoundaryValue(
@@ -618,6 +696,31 @@ function localPropertyValue(
     );
   }
   return null;
+}
+
+function localKeyedValue(
+  value: EvaluationValue,
+  key: EvaluationValue,
+): EvaluationValue | null {
+  if (value.kind === EvaluationValueKind.Array && key.kind === EvaluationValueKind.Number) {
+    if (value.mayHaveUnknownElements || value.mayHaveUnknownOrder) {
+      return null;
+    }
+    return value.elements.at(key.value)?.value ?? EvaluationUndefined;
+  }
+  const propertyName = propertyKeyString(key);
+  return propertyName == null ? null : localPropertyValue(value, propertyName);
+}
+
+function propertyKeyString(value: EvaluationValue): string | null {
+  if (!isEvaluationPrimitiveValue(value)) {
+    return null;
+  }
+  return String(readEvaluationPrimitive(value));
+}
+
+function isNullishValue(value: EvaluationValue): boolean {
+  return value.kind === EvaluationValueKind.Null || value.kind === EvaluationValueKind.Undefined;
 }
 
 export function bindingExpressionAstForProduct(
@@ -686,28 +789,20 @@ function boundaryValueForOpenArgument(
   );
 }
 
+function valueOrBoundaryForOpen(
+  evaluation: RuntimeBindingSourceValueEvaluation,
+  expression: ExpressionAstNode,
+): EvaluationValue | null {
+  if (evaluation.kind === RuntimeBindingSourceValueEvaluationKind.Value && evaluation.value != null) {
+    return evaluation.value;
+  }
+  return boundaryValueForOpenArgument(evaluation, expression);
+}
+
 function compactOpenReasonKinds(
   values: readonly OpenSeamReasonKind[],
 ): readonly OpenSeamReasonKind[] {
   return [...new Set(values)];
-}
-
-function primitiveValue(
-  value: null | undefined | number | boolean | string,
-  node: ts.Node | null,
-): EvaluationValue {
-  switch (typeof value) {
-    case 'string':
-      return new EvaluationStringValue(value, node);
-    case 'number':
-      return new EvaluationNumberValue(value, node);
-    case 'boolean':
-      return new EvaluationBooleanValue(value, node);
-    case 'undefined':
-      return EvaluationUndefined;
-    default:
-      return value === null ? new EvaluationNullValue(node) : EvaluationUndefined;
-  }
 }
 
 function evaluatePlus(

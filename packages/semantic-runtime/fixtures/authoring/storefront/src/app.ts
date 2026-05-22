@@ -1,5 +1,4 @@
-import { customElement } from '@aurelia/runtime-html';
-import { resolve } from '@aurelia/kernel';
+import { customElement, resolve } from 'aurelia';
 import { CartSummary } from './components/cart-summary';
 import { CheckoutForm } from './components/checkout-form';
 import { ProductList } from './components/product-list';

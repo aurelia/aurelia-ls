@@ -24,6 +24,8 @@ interface ProductArchitectureValue {
   readonly areaDependencies?: readonly SummaryRow[];
   readonly fieldProvenanceConstructions?: readonly SummaryRow[];
   readonly functionSurfaces?: readonly FunctionSurfaceRow[];
+  readonly sourceTemplates?: readonly SourceTemplateRow[];
+  readonly sourceTemplateDuplicateGroups?: readonly SourceTemplateDuplicateGroupRow[];
   readonly functionDuplicateGroups?: readonly FunctionDuplicateGroupRow[];
   readonly functionControlFlowShapeGroups?: readonly FunctionControlFlowShapeGroupRow[];
   readonly kernelRecordBatches?: readonly SummaryRow[];
@@ -88,6 +90,32 @@ interface FunctionDuplicateGroupRow {
   readonly source?: ScriptSourceRef;
 }
 
+interface SourceTemplateRow {
+  readonly templateName: string;
+  readonly argumentKind: string;
+  readonly staticText: boolean;
+  readonly filePath: string;
+  readonly lineCount: number;
+  readonly templateLineCount: number;
+  readonly templateCharacterCount: number;
+  readonly templateFingerprint: string | null;
+  readonly placeholderNames: readonly string[];
+  readonly source?: ScriptSourceRef;
+}
+
+interface SourceTemplateDuplicateGroupRow {
+  readonly templateFingerprint: string;
+  readonly templateCount: number;
+  readonly fileCount: number;
+  readonly templateLineCount: number;
+  readonly templateCharacterCount: number;
+  readonly templateNames: readonly string[];
+  readonly filePaths: readonly string[];
+  readonly placeholderNames: readonly string[];
+  readonly samples: readonly string[];
+  readonly source?: ScriptSourceRef;
+}
+
 interface FunctionControlFlowShapeGroupRow {
   readonly switchTopologyFingerprint: string;
   readonly functionCount: number;
@@ -97,6 +125,7 @@ interface FunctionControlFlowShapeGroupRow {
   readonly switchTopologyCount: number;
   readonly functionKinds: readonly string[];
   readonly nameSamples: readonly string[];
+  readonly filePaths: readonly string[];
   readonly fileSamples: readonly string[];
   readonly source?: ScriptSourceRef;
 }
@@ -145,6 +174,9 @@ const stringFilterArguments: readonly (readonly [string, string])[] = [
   ["--className=", "className"],
   ["--classNameSuffix=", "classNameSuffix"],
   ["--functionName=", "functionName"],
+  ["--templateName=", "templateName"],
+  ["--templateFingerprint=", "templateFingerprint"],
+  ["--argumentKind=", "argumentKind"],
   ["--functionKind=", "functionKind"],
   ["--parentFunctionName=", "parentFunctionName"],
   ["--calleeName=", "calleeName"],
@@ -168,6 +200,7 @@ const stringFilterArguments: readonly (readonly [string, string])[] = [
 const booleanFilterArguments: readonly (readonly [string, string])[] = [
   ["--exported=", "exported"],
   ["--static=", "static"],
+  ["--staticText=", "staticText"],
   ["--async=", "async"],
   ["--topLevel=", "topLevel"],
   ["--hasAuLink=", "hasAuLink"],
@@ -186,6 +219,9 @@ const numberFilterArguments: readonly (readonly [string, string])[] = [
   ["--minLineCount=", "minLineCount"],
   ["--minMethodCount=", "minMethodCount"],
   ["--minFunctionCount=", "minFunctionCount"],
+  ["--minTemplateCount=", "minTemplateCount"],
+  ["--minTemplateLineCount=", "minTemplateLineCount"],
+  ["--minTemplateCharacterCount=", "minTemplateCharacterCount"],
   ["--minNameCount=", "minNameCount"],
   ["--minFileCount=", "minFileCount"],
   ["--minSwitchTopologyCount=", "minSwitchTopologyCount"],
@@ -271,6 +307,12 @@ switch (projection) {
     break;
   case "functions":
     printFunctions(value?.functionSurfaces ?? []);
+    break;
+  case "source-templates":
+    printSourceTemplates(value?.sourceTemplates ?? []);
+    break;
+  case "source-template-duplicates":
+    printSourceTemplateDuplicateGroups(value?.sourceTemplateDuplicateGroups ?? []);
     break;
   case "function-duplicates":
     printFunctionDuplicateGroups(value?.functionDuplicateGroups ?? []);
@@ -360,6 +402,40 @@ function printFunctions(rows: readonly FunctionSurfaceRow[]): void {
   }
 }
 
+function printSourceTemplates(rows: readonly SourceTemplateRow[]): void {
+  console.log("");
+  console.log("source templates");
+  printEmptyRows(rows);
+  for (const row of rows) {
+    console.log(
+      `- ${row.templateName}: ${row.argumentKind}, static=${row.staticText}, template=${row.templateLineCount} line(s)/${row.templateCharacterCount} char(s), call=${row.lineCount} line(s) at ${sourceLabel(row)}`,
+    );
+    if (detail) {
+      console.log(`  fingerprint: ${row.templateFingerprint ?? "(dynamic)"}`);
+      printDetailList("placeholders", row.placeholderNames);
+    }
+  }
+}
+
+function printSourceTemplateDuplicateGroups(
+  rows: readonly SourceTemplateDuplicateGroupRow[],
+): void {
+  console.log("");
+  console.log("source template duplicate groups");
+  printEmptyRows(rows);
+  for (const row of rows) {
+    console.log(
+      `- ${row.templateCount} template(s), ${row.fileCount} file(s), ${row.templateLineCount} source line(s), ${row.templateCharacterCount} char(s), fingerprint=${row.templateFingerprint} at ${sourceLabel(row)}`,
+    );
+    if (detail) {
+      printDetailList("template names", row.templateNames);
+      printDetailList("files", row.filePaths);
+      printDetailList("placeholders", row.placeholderNames);
+      printDetailList("samples", row.samples);
+    }
+  }
+}
+
 function printFunctionControlFlowShapeGroups(
   rows: readonly FunctionControlFlowShapeGroupRow[],
 ): void {
@@ -372,7 +448,7 @@ function printFunctionControlFlowShapeGroups(
     );
     if (detail) {
       printDetailList("names", row.nameSamples);
-      printDetailList("files", row.fileSamples);
+      printDetailList("files", row.filePaths);
       printDetailList("kinds", row.functionKinds);
       console.log(`  switchTopologyFingerprint: ${row.switchTopologyFingerprint}`);
     }
@@ -456,7 +532,8 @@ Usage:
 
 Projections:
   summary, areas, dependencies, area-dependencies, declarations, cycles,
-  modules, classes, functions, function-duplicates, function-control-flow-shapes,
+  modules, classes, functions, source-templates, source-template-duplicates,
+  function-duplicates, function-control-flow-shapes,
   call-sites, call-dependencies, symbol-references, symbol-dependencies,
   kernel-records, kernel-batches, field-provenance
 

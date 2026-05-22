@@ -9,7 +9,15 @@ import {
   BindingScope,
 } from '../configuration/scope.js';
 import type { StaticProjectEvaluationResult } from '../evaluation/project-evaluation.js';
-import { RuntimeBindingSourceValueEvaluator } from '../observation/binding-source-value-evaluator.js';
+import {
+  EvaluationBoundaryKind,
+  EvaluationBoundaryValue,
+  type EvaluationValue,
+} from '../evaluation/values.js';
+import {
+  RuntimeBindingSourceValueEvaluator,
+  RuntimeBindingSourceValueEvaluationKind,
+} from '../observation/binding-source-value-evaluator.js';
 import type { RuntimeBoundControllerValueTable } from '../observation/runtime-bound-controller-value.js';
 import {
   BindingScopeConstructionEmission,
@@ -1103,13 +1111,47 @@ export class TemplateControllerScopeMaterializer {
     parent: BindingScope,
     effect: LetBindingScopeEffect,
   ): BindingContextSlotDraft {
+    const targetType = this.typeSupport.letTargetType(input, parent, effect);
     return new BindingContextSlotDraft(
       effect.target,
       null,
       null,
-      this.typeSupport.letTargetType(input, parent, effect),
+      targetType,
       effect.sourceAddressHandle,
+      [],
+      this.letStaticValue(input, parent, effect, targetType),
     );
+  }
+
+  private letStaticValue(
+    input: TemplateScopeConstructionRequest,
+    parent: BindingScope,
+    effect: LetBindingScopeEffect,
+    targetType: CheckerTypeReference | null,
+  ): EvaluationValue | null {
+    if (input.evaluation == null) {
+      return null;
+    }
+    const parse = this.typeSupport.readParse(effect.expressionProductHandle);
+    const expression = parse == null ? null : completedTemplateExpressionAstForParse(parse);
+    if (expression == null) {
+      return null;
+    }
+    const evaluation = new RuntimeBindingSourceValueEvaluator(
+      this.store,
+      input.evaluation,
+      input.boundControllerValues,
+    ).evaluate(expression, parent);
+    if (evaluation.kind === RuntimeBindingSourceValueEvaluationKind.Value && evaluation.value != null) {
+      return evaluation.value;
+    }
+    return targetType == null
+      ? null
+      : new EvaluationBoundaryValue(
+        EvaluationBoundaryKind.BindingScope,
+        `let.${effect.target}`,
+        null,
+      );
   }
 
   private registerControllerDetails(input: TemplateScopeConstructionRequest): void {

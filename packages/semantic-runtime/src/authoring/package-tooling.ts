@@ -115,7 +115,7 @@ function packageDependencies(
   dependencySpecifiers: readonly string[],
 ): readonly AuthoringPackageDependency[] {
   const specifiers = new Set<string>([
-    '@aurelia/runtime-html',
+    'aurelia',
     ...dependencySpecifiers,
   ]);
   const dependencies = [...specifiers].map((specifier) =>
@@ -129,7 +129,9 @@ function packageDependencies(
 }
 
 function aureliaPackageVersion(specifier: string): string {
-  return specifier.startsWith('@aurelia/') ? '^2.0.0-rc.1' : '*';
+  return specifier === 'aurelia' || specifier.startsWith('@aurelia/')
+    ? '^2.0.0-rc.1'
+    : '*';
 }
 
 function dependencyScopeRank(scope: AuthoringPackageDependencyScope): number {

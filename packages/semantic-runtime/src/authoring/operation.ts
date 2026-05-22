@@ -146,6 +146,16 @@ export class CreateServiceOperation extends AuthoringOperation<'create-service'>
   }
 }
 
+/** Create a plain domain entity, aggregate, value object, or app-owned model class. */
+export class CreateDomainModelOperation extends AuthoringOperation<'create-domain-model'> {
+  constructor(
+    readonly sourcePath: string,
+    readonly className: string,
+  ) {
+    super('create-domain-model', `Create domain model ${className}.`);
+  }
+}
+
 /** Add a template binding or control-flow usage to an authored template. */
 export class AddTemplateBindingOperation extends AuthoringOperation<'add-template-binding'> {
   constructor(

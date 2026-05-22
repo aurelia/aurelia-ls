@@ -6,6 +6,7 @@ import type {
   EndpointModel,
   RouteRecognizerIssueModel,
   RouterIssueModel,
+  RouteContextParameterReadModel,
   RecognizedRouteModel,
   RouteParameterValueModel,
   RouteQueryParameterValueModel,
@@ -36,6 +37,8 @@ import type {
   SemanticRouteContextRow,
   SemanticRouteConfigRow,
   SemanticRouteEndpointRow,
+  SemanticRouteContextParameterReadRow,
+  SemanticRouteContextParameterReadsResult,
   SemanticRecognizedRouteRow,
   SemanticRouteNodeRow,
   SemanticRouteParameterAggregateValueRow,
@@ -99,6 +102,22 @@ export function readRouteContextRows(
     .sort((left, right) =>
       `${left.label ?? ''}:${left.parentLabel ?? ''}:${left.source?.label ?? ''}`
         .localeCompare(`${right.label ?? ''}:${right.parentLabel ?? ''}:${right.source?.label ?? ''}`)
+    );
+}
+
+export function readRouteContextParameterReadRows(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  handles: boolean,
+): SemanticRouteContextParameterReadsResult['rows'] {
+  const routeConfigsByIdentity = new Map(
+    emission.routes.readRouteConfigs().map((routeConfig) => [routeConfig.identityHandle, routeConfig]),
+  );
+  return emission.routeContextParameterReads.readRouteContextParameterReads()
+    .map((read) => routeContextParameterReadRow(emission, store, read, routeConfigsByIdentity, handles))
+    .sort((left, right) =>
+      `${left.componentClassName ?? ''}:${left.alignment}:${left.source?.label ?? ''}`
+        .localeCompare(`${right.componentClassName ?? ''}:${right.alignment}:${right.source?.label ?? ''}`)
     );
 }
 
@@ -605,6 +624,54 @@ function routeContextRow(
         viewportAgentProductHandle: routeContext.viewportAgent?.productHandle ?? null,
         viewportAgentIdentityHandle: routeContext.viewportAgent?.identityHandle ?? null,
         sourceAddressHandle: routeContext.sourceAddressHandle,
+      },
+    } : {}),
+  };
+}
+
+function routeContextParameterReadRow(
+  emission: AureliaAppWorldProjectEmission,
+  store: KernelStore,
+  read: RouteContextParameterReadModel,
+  routeConfigsByIdentity: ReadonlyMap<RouteConfigModel['identityHandle'], RouteConfigModel>,
+  handles: boolean,
+): SemanticRouteContextParameterReadRow {
+  const routeConfigs = read.routeConfigs
+    .flatMap((reference) =>
+      reference.identityHandle == null
+        ? []
+        : [routeConfigsByIdentity.get(reference.identityHandle)].filter((routeConfig): routeConfig is RouteConfigModel => routeConfig != null)
+    );
+  return {
+    projectKey: emission.project.projectKey,
+    componentClassName: read.componentClassName,
+    routeConfigCount: routeConfigs.length,
+    routeConfigIds: routeConfigs.flatMap((routeConfig) => routeConfig.id == null ? [] : [routeConfig.id]),
+    routeConfigPaths: routeConfigs.flatMap((routeConfig) => routeConfig.paths),
+    mergeStrategy: read.mergeStrategy,
+    includeQueryParams: read.includeQueryParams,
+    declaredParameterNames: read.declaredParameterNames,
+    declaredOptionalParameterNames: read.declaredOptionalParameterNames,
+    declaredOpenKeySpace: read.declaredOpenKeySpace,
+    routePathParameterNames: read.routePathParameterNames,
+    missingRoutePathParameterNames: read.missingRoutePathParameterNames,
+    declaredNonPathParameterNames: read.declaredNonPathParameterNames,
+    alignment: read.alignment,
+    component: routeableComponentRow(store, read.component, handles),
+    source: describeAddress(store, read.sourceAddressHandle),
+    ...(handles ? {
+      handles: {
+        productHandle: read.productHandle,
+        identityHandle: read.identityHandle,
+        componentProductHandle: read.component?.productHandle ?? null,
+        componentIdentityHandle: read.component?.identityHandle ?? null,
+        componentResolvedProductHandle: read.component?.resolvedProductHandle ?? null,
+        componentResolvedIdentityHandle: read.component?.resolvedIdentityHandle ?? null,
+        routeConfigProductHandles: read.routeConfigs
+          .flatMap((routeConfig) => routeConfig.productHandle == null ? [] : [routeConfig.productHandle]),
+        routeConfigIdentityHandles: read.routeConfigs
+          .flatMap((routeConfig) => routeConfig.identityHandle == null ? [] : [routeConfig.identityHandle]),
+        sourceAddressHandle: read.sourceAddressHandle,
       },
     } : {}),
   };

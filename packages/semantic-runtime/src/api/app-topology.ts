@@ -1685,6 +1685,9 @@ function bindingComponentMemberNameForDataFlow(dataFlow: SemanticBindingDataFlow
 function serviceInteractionOperationKindsForDataFlow(
   dataFlow: SemanticBindingDataFlowRow,
 ): readonly ApplicationServiceInteractionOperationKind[] {
+  if (dataFlow.valueChannelKind === RuntimeBindingValueChannelKind.EventHandlerInvocation) {
+    return ['call'];
+  }
   switch (dataFlow.direction) {
     case RuntimeBindingDataFlowDirection.SourceToTarget:
       return ['read'];
@@ -1703,9 +1706,29 @@ function dataFlowIsWritable(dataFlow: SemanticBindingDataFlowRow): boolean {
 }
 
 function serviceInteractionBindingMemberName(sourceName: string, sourceRootName: string): string {
-  return sourceName === sourceRootName || !sourceName.startsWith(`${sourceRootName}.`)
+  const memberName = sourceName === sourceRootName || !sourceName.startsWith(`${sourceRootName}.`)
     ? sourceName
     : sourceName.slice(sourceRootName.length + 1);
+  return stripTrailingCallDisplay(memberName);
+}
+
+function stripTrailingCallDisplay(sourceName: string): string {
+  if (!sourceName.endsWith(')')) {
+    return sourceName;
+  }
+  let depth = 0;
+  for (let index = sourceName.length - 1; index >= 0; index -= 1) {
+    const char = sourceName[index];
+    if (char === ')') {
+      depth += 1;
+    } else if (char === '(') {
+      depth -= 1;
+      if (depth === 0) {
+        return sourceName.slice(0, index);
+      }
+    }
+  }
+  return sourceName;
 }
 
 function supportRoleFromFileRole(role: ApplicationFileRole | `${ApplicationFileRole}` | null): ApplicationSupportSourceRole | null {

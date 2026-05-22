@@ -16,7 +16,7 @@ const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.AppOverview, 'overview', 'Composed compact app answer for available diagnostics, open seams, topology counts, and opt-in authoring fit.', 'overview'),
   queryRow(SemanticAppQueryKind.AppTopology, 'overview', 'Compact topology counts and scalar facts from the opened app world; bindable type surfaces are opt-in.', 'overview'),
   queryRow(SemanticAppQueryKind.AuthoringCatalog, 'authoring', 'Static authoring ontology, operations, taste axes, and recipe contracts.', 'static-catalog', { materializationPolicy: 'static-catalog', runtimeBoundary: 'runtime-static' }),
-  queryRow(SemanticAppQueryKind.AuthoringOrientation, 'authoring', 'Opened-app authoring evidence, capability fit, recipe fit, repairs, and repair clusters.', 'overview', { minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
+  queryRow(SemanticAppQueryKind.AuthoringOrientation, 'authoring', 'Opened-app authoring evidence, capability fit, recipe fit, repairs, and repair clusters; compact detail omits per-recipe expected-effect rows and repair loci, use detail=handles for row-level contracts or repair planning.', 'overview', { minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation, pagingKind: 'offset-cursor', supportsDetail: true }),
   queryRow(SemanticAppQueryKind.SourceFiles, 'source', 'Admitted source files for the selected project; routed runtime calls can answer this from the booted project frame without opening an app epoch.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, runtimeBoundary: 'project-frame' }),
   queryRow(SemanticAppQueryKind.UnresolvedModules, 'source', 'Static evaluator module edges that could not be resolved; routed runtime calls can answer this from read-only Aurelia project evaluation without opening an app epoch.', 'row-table', { pagingKind: 'offset-cursor', runtimeBoundary: 'static-evaluation' }),
   queryRow(SemanticAppQueryKind.OpenSeams, 'diagnostics', 'Source-backed or product-backed semantic seams still open after app-world construction.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true }),
@@ -67,7 +67,10 @@ const semanticAppQueryCatalogRows = [
   queryRow(SemanticAppQueryKind.BindingSourceOperations, 'binding', 'Source-side binding operations such as ref assignment and captured binding fan-out.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingTargets }),
   queryRow(SemanticAppQueryKind.BindingBehaviorApplications, 'binding', 'Materialized binding behavior applications after compiler resource scope and bind phase.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingTargets }),
   queryRow(SemanticAppQueryKind.BindingValueChannels, 'binding', 'Runtime value-channel shape selected for DOM/native/custom binding targets.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
+  queryRow(SemanticAppQueryKind.BindingValueChannelSummary, 'binding', 'Grouped runtime value-channel and observer-coupling mechanisms for compact form/control explanation.', 'summary-row-table', { pagingKind: 'offset-cursor', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.BindingDataFlows, 'binding', 'Source-to-target and target-to-source binding data-flow rows with TypeChecker pressure.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
+  queryRow(SemanticAppQueryKind.BindingDataFlowSummary, 'binding', 'Grouped binding data-flow directions, value channels, assignability, and writeback pressure.', 'summary-row-table', { pagingKind: 'offset-cursor', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
+  queryRow(SemanticAppQueryKind.BindingObservedDependencySummary, 'binding', 'Grouped binding observed-dependency reads, source roots, member source states, and source-backed observation pressure.', 'summary-row-table', { pagingKind: 'offset-cursor', minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
   queryRow(SemanticAppQueryKind.BindingObservedDependencies, 'binding', 'Source-side expression dependency reads collected through template connectable observation during binding evaluation.', 'row-table', { pagingKind: 'offset-cursor', supportsDetail: true, minimumAnalysisDepth: SemanticAppAnalysisDepth.BindingObservation }),
 ] satisfies readonly SemanticAppQueryCatalogRow[];
 
@@ -89,10 +92,43 @@ export function readSemanticAppQueryCatalog(
     {
       totalRows: allRows.length,
       returnedRows: rows.length,
+      displayText: appQueryCatalogDisplayText(rows, allRows.length),
       rows,
       groups: groupRows(rows),
     },
   );
+}
+
+function appQueryCatalogDisplayText(
+  rows: readonly SemanticAppQueryCatalogRow[],
+  totalRows: number,
+): string {
+  const groups = groupRows(rows);
+  const lines = [
+    `App queries: ${rows.length} of ${totalRows} query kind(s) across ${groups.length} group(s).`,
+  ];
+  if (groups.length > 0) {
+    lines.push(`Groups: ${groups.map((group) => `${group.group}(${group.count})`).join(', ')}.`);
+  }
+  const previewRows = rows.slice(0, 12).map((row) =>
+    `${row.queryKind} [${row.resultRole}, depth=${row.minimumAnalysisDepth}, boundary=${row.runtimeBoundary}]`
+  );
+  if (previewRows.length > 0) {
+    lines.push(`Query kinds: ${previewRows.join('; ')}${rows.length > previewRows.length ? `; plus ${rows.length - previewRows.length} more` : ''}.`);
+  }
+  if (rows.some((row) => row.queryKind === SemanticAppQueryKind.BindingValueChannelSummary)
+    && rows.some((row) => row.queryKind === SemanticAppQueryKind.BindingDataFlowSummary)
+    && rows.some((row) => row.queryKind === SemanticAppQueryKind.BindingObservedDependencySummary)) {
+    lines.push('Binding triad: batch binding-value-channel-summary, binding-data-flow-summary, and binding-observed-dependency-summary; use page.size=0 for rollup-first reads.');
+  }
+  if (rows.some((row) => row.group === 'router')) {
+    lines.push('Router: start with router-overview before paging route, viewport, recognizer, or navigation row tables.');
+  }
+  if (rows.some((row) => row.materializationPolicy === 'query-type-projection' || row.requiresCursor)) {
+    lines.push('Type/cursor projection: cursor-locus and diagnostic projection queries may do answer-time TypeChecker work; request them only when the locus needs it.');
+  }
+  lines.push('Next: use aurelia_app_query_batch when several related app query rows are needed from one opened app world.');
+  return lines.join('\n');
 }
 
 export function semanticAppQueryCatalogRow(

@@ -58,6 +58,8 @@ export type AuthoringTargetKind =
   | 'attribute-pattern'
   /** Injectable service, repository, use-case class, or integration boundary. */
   | 'service'
+  /** Plain domain entity, aggregate, value object, or app-owned model class. */
+  | 'domain-model'
   /** Container registration, resolver, or DI key wiring. */
   | 'di-registration'
   /** Durable state/domain model owned outside a view-model instance. */
@@ -1520,7 +1522,15 @@ export const AuthoringOperationDescriptors = {
     'domain-model',
     'create',
     'service',
-    'Create an app service, repository, use-case class, or domain model class.',
+    'Create an app service, repository, use-case class, or integration-facing domain service.',
+    ['dependency-injection'],
+  ),
+  CreateDomainModel: new AuthoringOperationDescriptor(
+    'create-domain-model',
+    'domain-model',
+    'create',
+    'domain-model',
+    'Create a plain domain entity, aggregate, value object, or app-owned model class.',
     ['dependency-injection'],
   ),
   RegisterDependency: new AuthoringOperationDescriptor(

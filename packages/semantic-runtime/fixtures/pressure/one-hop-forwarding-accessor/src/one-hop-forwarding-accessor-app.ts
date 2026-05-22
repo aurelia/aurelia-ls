@@ -14,6 +14,10 @@ export class OneHopForwardingAccessorApp {
     return this.state.selectedName;
   }
 
+  get unusedSelectedName(): string {
+    return this.state.selectedName;
+  }
+
   get displayName(): string {
     return this.state.selectedName.toUpperCase();
   }

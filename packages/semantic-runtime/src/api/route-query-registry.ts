@@ -8,6 +8,7 @@ import type {
   SemanticRouterOptionsResult,
   SemanticRouteConfigsResult,
   SemanticRouteContextsResult,
+  SemanticRouteContextParameterReadsResult,
   SemanticRouteEndpointsResult,
   SemanticRouteNodesResult,
   SemanticRoutePatternsResult,
@@ -26,6 +27,7 @@ import {
   readRecognizedRouteRows,
   readRouteConfigRows,
   readRouteContextRows,
+  readRouteContextParameterReadRows,
   readRouteEndpointRows,
   readRouteNodeRows,
   readRoutePatternRows,
@@ -81,6 +83,13 @@ export const routeContextsRouteQuery = {
   answerRowLabel: 'runtime RouteContext row(s)',
   readRows: readRouteContextRows,
 } satisfies SemanticRouteQueryDescriptor<SemanticRouteContextsResult>;
+
+export const routeContextParameterReadsRouteQuery = {
+  queryKind: SemanticAppQueryKind.RouteContextParameterReads,
+  routeProductKind: 'route-context-parameter-read',
+  answerRowLabel: 'RouteContext.getRouteParameters(...) read row(s)',
+  readRows: readRouteContextParameterReadRows,
+} satisfies SemanticRouteQueryDescriptor<SemanticRouteContextParameterReadsResult>;
 
 export const routePatternsRouteQuery = {
   queryKind: SemanticAppQueryKind.RoutePatterns,
@@ -184,6 +193,7 @@ export const semanticRouteQueryDescriptors = [
   routerOptionsRouteQuery,
   routeConfigsRouteQuery,
   routeContextsRouteQuery,
+  routeContextParameterReadsRouteQuery,
   routePatternsRouteQuery,
   routeEndpointsRouteQuery,
   routeRecognizerStatesRouteQuery,
@@ -212,4 +222,3 @@ export function semanticRouteQueryDescriptorFor(
 ): SemanticRouteQueryDescriptor | null {
   return routeQueryDescriptorByKind.get(queryKind) ?? null;
 }
-

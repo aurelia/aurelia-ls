@@ -82,7 +82,7 @@ Do not add an app generator here until the semantic edit loop is real enough to 
   and attribute transfer.
 - Text interpolation now has the same direct-operation/data-flow spine: `ContentBinding.updateTarget(...)` publishes
   `text-content-set` operations, `text-content` value channels, and source-to-text data flows. Storefront currently
-  closes these rows for cart count, checkout progress text, and product count with zero open flow pressure.
+  closes these rows for selection count, checkout progress text, and product count with zero open flow pressure.
 - Listener bindings now expose their target-side subscription operation as `event-listener-add` rows. Storefront's
   checkout form `submit.trigger` closes as a listener-owned target operation while event-to-expression invocation flow
   remains a separate future product concern.
@@ -176,8 +176,11 @@ Do not add an app generator here until the semantic edit loop is real enough to 
   `buildValidatedStateBackedFormPlan(...)`, and `buildRoutedStateBackedFormPlan(...)` produce typed plans with topology,
   preferences, ordered operations, and expected
   semantic effects. `buildCatalogStorefrontPlan(...)` adds the first generated app-building recipe beyond forms: DI
-  composed state, catalog service loading, nested list/card components, scalar ID handoff, getter projections, service
-  interaction bindings, and state-composition verification. `buildComposedDashboardPlan(...)` adds the first generated
+  composed state, catalog service loading, nested list/card components, local object handoff, getter projections, service
+  interaction bindings, and state-composition verification. `buildRoutedCatalogStorefrontPlan(...)` composes that
+  catalog shape with common router authoring: `RouterConfiguration`, list/detail route configs,
+  `products/:productId`, a root static detail navigation target with query/fragment, data-driven card links,
+  `IRouteContext` parameter reads, viewport/component-agent products, and route-node aggregation effects. `buildComposedDashboardPlan(...)` adds the first generated
   dynamic-composition recipe: DI-owned widget state, repeated dashboard cards, TypeChecker-visible widget component
   unions, scoped template-only composition, async flush-mode composition, composition/composing from-view handoff, and
   `runtime-composition` expected effects over `api.RuntimeCompositions` rows, including candidate resource-analysis
@@ -186,11 +189,16 @@ Do not add an app generator here until the semantic edit loop is real enough to 
   adds static `@aurelia/i18n` plugin resources, `t`/`t-params.bind` usage, and `i18n-translation-key` expected effects
   over `api.I18nTranslationKeys` rows plus `i18n-translation-binding` expected effects over rendered
   `api.I18nTranslationBindings` target groups. State-backed, localized state-backed, validated state-backed,
-  service-backed, routed state-backed form, catalog, and composed-dashboard builders also attach source
+  service-backed, routed state-backed form, catalog, routed catalog, and composed-dashboard builders also attach source
   edit plans; the source edit boundary remains explicit through source text authority, conflict policy, formatting
   policy, and package-tooling policy rather than hidden in operation prose. The generated form builders now include a
   capture-based `field-shell` component, so recipe verification exercises recursive child custom-element rendering/scope
   handoff for recommendable app output rather than only the hand-authored storefront fixture.
+- Catalog and routed-catalog source generation is now field-profile sensitive. Rich unparameterized reference plans keep
+  category/select badge filters, price presentation, stock checked filters, availability switch flow, disabled actions,
+  and card class/style getters because the default field schema asks for them. Caller-domain-only catalog plans default
+  to `name, summary` and emit only search filtering plus the DI/service/list/card architecture, with expected effects and
+  source-pattern modules narrowed to that lean surface.
 - `template-controller-expected-effects.ts` is the shared recipe helper for row-backed runtime-controller verification.
   Use it when a generated fixture relies on built-in `if`/`else`/`repeat`/`promise` semantics so the expected effect
   verifies template-controller and synthetic-view handoff rows rather than a plain aggregate controller count. Promise
@@ -205,10 +213,12 @@ Do not add an app generator here until the semantic edit loop is real enough to 
   shapes. Current fit checks failed discriminators/signatures before unsupported row-backed effects, so non-applicable
   recipes do not become false unsupported candidates only because they have filtered runtime-controller expectations.
   `minimal-app`, `state-backed-form`, `localized-state-backed-form`, `validated-state-backed-form`,
-  `service-backed-form`, and `routed-state-backed-form` are plannable/editable because builders and expected effects
-  exist. Treat broader router
-  authoring beyond this generated recipe, such as guards, lifecycle hooks, route params, and repair/autofix policy, as
-  router substrate pressure rather than a reason to keep this verified recipe marked partial.
+  `localized-validated-state-backed-form`, `multi-step-state-backed-form`, `service-backed-form`, `routed-state-backed-form`,
+  `routed-localized-validated-state-backed-form`, `catalog-storefront`, `routed-catalog-storefront`, and
+  `searchable-data-table` are
+  plannable/editable because builders and expected effects exist. Treat broader router authoring beyond these generated
+  recipes, such as guards, lifecycle hooks, dynamic query merging, and repair/autofix policy, as router substrate
+  pressure rather than a reason to keep verified common-path recipes marked partial.
 - Import-aware Aurelia `resolve(...)` detection lives in `di/resolve-call-recognition.ts`. Authoring orientation uses
   that low-level signal to strengthen DI-owned state readings; folder roles such as `state/` and `services/` remain weak
   source-shape evidence, not DI proof. `api.AppTopology` now projects those resolve sites as `injections` rows, joining
@@ -257,8 +267,18 @@ Do not add an app generator here until the semantic edit loop is real enough to 
   `t`/`t-params.bind` lifecycles, not dynamic backend loading or runtime language switching.
 - `pnpm --filter @aurelia-ls/semantic-runtime smoke:validated-state-backed-form` writes the validated source plan into
   a temporary app, reopens it, and verifies validation-html registration, validation service usage, `& validate:'blur'`
-  binding behavior materialization through `BindingBehaviorApplications.staticArgumentValues`, and validation ownership
-  taste without making validation an implicit part of every form recipe.
+  binding behavior materialization through `BindingBehaviorApplications.staticArgumentValues`, validation-errors handoff,
+  error-array driven class data-flow for field presentation, and validation ownership taste without making validation an
+  implicit part of every form recipe.
+- `pnpm --filter @aurelia-ls/semantic-runtime smoke:localized-validated-state-backed-form` writes the combined plugin
+  source plan into a temporary app, reopens it, and verifies static i18n catalog/binding rows, validation-html
+  registration, validation rule/controller usage, `& validate:'blur'` binding behavior materialization, standard form
+  value channels, and zero open seams against the same DI-owned request model.
+- `pnpm --filter @aurelia-ls/semantic-runtime smoke:multi-step-state-backed-form` writes the wizard/progress source
+  plan into a temporary app, reopens it, and verifies DI-owned wizard/profile state, repeat/if controller rows,
+  validation-html usage, direct `state.profile.*` value flows, checked collection membership, class-token/class-toggle
+  channels including error-array driven field presentation, style interpolation, state-composition, service-interaction
+  binding, and getter observation.
 - `pnpm --filter @aurelia-ls/semantic-runtime smoke:service-backed-form` writes the service-backed source plan into a
   temporary app, reopens it, and verifies state/service topology rows, DI-owned service-layer taste, recursive
   child-component compilation, native form value channels, component/state interaction rows, state/service interaction
@@ -274,10 +294,21 @@ Do not add an app generator here until the semantic edit loop is real enough to 
   values plus child-first route-node parameter aggregation, and routed-component/form/data-entry component-role rows.
   Passing this smoke proves current static topology, recognizer parameter facts, and pre-activation route-tree viewport
   targeting, not full router activation or every `IRouteContext.getRouteParameters(...)` runtime strategy.
+- `pnpm --filter @aurelia-ls/semantic-runtime smoke:routed-localized-validated-state-backed-form` writes the routed
+  plugin form source plan into a temporary app, reopens it, and verifies router config/route-node/component-agent
+  effects, static i18n key/binding rows, validation-html setup, validate binding behavior rows, validation-errors
+  handoff, direct state-backed form value channels, and zero open seams on the same route-selected request model.
 - `pnpm --filter @aurelia-ls/semantic-runtime smoke:catalog-storefront` writes the catalog storefront source plan into a
   temporary app, reopens it, and verifies project tooling, list/card/root component roles, state composition,
-  component-to-state reads/calls, state-to-service calls, scalar ID binding data flow, binding-to-state interaction
-  joins, and zero open seams.
+  component-to-state calls, state-to-service calls, local product-object binding data flow, direct template bindings to state
+  projections and product-domain members, binding-to-state interaction joins, and zero open seams.
+- `pnpm --filter @aurelia-ls/semantic-runtime smoke:searchable-data-table` writes the searchable data-table source plan
+  into a temporary app, reopens it, and verifies composed DI-owned table state, state/service interaction rows, native
+  value/select/checked channels, option/input model identity handoff, `& debounce` binding behavior application, keyed
+  repeats, class/style channels, direct state/domain template reads, source-backed getter observation, and zero open
+  seams. Use it as the rich reference table verifier. The MCP-facing low-boilerplate canary is the domain-only
+  table recipe-plan path: caller entity/collection source parameters with no explicit `table-filter-fields` now emit
+  a compact search-only table profile and omit selection, checked collection, sorting, and pagination source.
 - `pnpm --filter @aurelia-ls/semantic-runtime smoke:composed-dashboard` writes the composed dashboard source plan into a
   temporary app, reopens it, and verifies project tooling, runtime composition candidate resolution, compiled widget
   templates, candidate resource-analysis coverage, DI-owned state taste, dynamic composition taste, activation model

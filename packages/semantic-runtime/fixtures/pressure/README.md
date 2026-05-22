@@ -72,6 +72,20 @@ still be realistic app code rather than artificial parser torture cases.
   every source-observer candidate as a template-read observation.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:one-hop-forwarding-accessor` is the focused semantic contract
   for this fixture.
+- `component-object-boundary` captures a local typed component boundary where a repeated `Product` instance flows into a
+  nullable object-shaped bindable, and the child template reads the object directly. It keeps direct object binding
+  visible as valid authoring pressure beside scalar-ID recipes: semantic-runtime must preserve the effective
+  non-nullable bindable shape, binding data-flow, binding observed-dependency, and plain getter ComputedObserver rows
+  without turning object handoff into either a universal recommendation or a diagnostic.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:component-object-boundary` is the focused semantic contract for
+  this fixture.
+- `listener-method-reference` captures Aurelia `ListenerBinding` source expressions that either invoke a state method
+  directly, evaluate to a method reference that Aurelia invokes with the DOM event, or return a handler function that
+  Aurelia then invokes. It preserves the split between authored binding-expression display (`state.submit($event)`),
+  event-handler invocation value channels, and AppTopology service-member names (`submit`) so low-boilerplate listener
+  guidance does not lose source precision or require forwarding component methods.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:listener-method-reference` is the focused semantic contract for
+  this fixture.
 - `weak-owner-repair-planning` captures missing repeat-local slot typing, an `any[]` repeat local, an `any`-typed owner
   property/method return, an index-signature-only owner, and a typed owner with a genuinely missing member. It exists to
   pressure repair planning around the difference between the diagnostic member span, the scope slot that needs typing,
@@ -79,6 +93,15 @@ still be realistic app code rather than artificial parser torture cases.
   that should receive a future owner-type repair, and the inspect-owner fallback for non-weak missing members.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:template-diagnostics` is the focused semantic contract for this
   fixture, including the shared repair cluster with member hints.
+- `binding-data-flow-issue-rollups` captures compact summary pressure for common existing-app repair classes:
+  unresolved source typing in a class-toggle expression, nullish source values bound into required target contracts,
+  nullish observer values written into required source members, and unannotated component bindables initialized with
+  empty arrays that TypeScript infers as `never[]`. It exists so MCP/LSP clients can route from
+  `binding-data-flow-summary` issue rows to source typing, source narrowing, optional receiving-side contracts, or
+  target-type repair before opening exact raw binding rows, without teaching authoring recipes to generate those weak
+  surfaces.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:binding-data-flow-summary` is the focused semantic contract for
+  these issue rollups.
 - `di-resource-duplicates` captures two source-registered runtime-html resources with the same custom-element name. It
   preserves the runtime-html definition registrar duplicate warning (`element_existed` / `AUR0153`) as a
   resource-registration issue without teaching authoring recipes to generate colliding resource names. Kernel
@@ -95,6 +118,16 @@ still be realistic app code rather than artificial parser torture cases.
   access and nested TypeChecker-visible keys, such as `person[field]` and `person[addressField][line1Field]`. It
   preserves framework-test-shaped validation binding pressure without teaching generated authoring recipes to prefer
   dynamic keyed form fields.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:dynamic-keyed-validation` is the focused semantic contract for
+  validate binding behavior rows, keyed writable data-flow rows, observed dependencies, and the absence of false
+  diagnostics.
+- `keyed-form-source-bindings` captures ordinary checked/select form bindings whose source expressions are array-index
+  or record-keyed writes, such as `state.flags[0]`, `state.itemNames[0]`, and
+  `state.selectedByTagId[tag.id]`. It preserves the handoff between checked/select value channels, keyed source display,
+  TypeChecker-backed write capability, and runtime assignability without teaching authoring recipes to prefer indexed
+  state over named domain properties.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:keyed-form-source-bindings` is the focused semantic contract for
+  this fixture.
 - `contextual-call-argument-completion` captures cursor member-owner projection inside callback arguments whose
   parameter type comes from a view-model method signature or a TypeChecker-visible collection method. It preserves
   contextual call-argument typing for completions without teaching authoring recipes to prefer callback-heavy template
@@ -122,9 +155,10 @@ still be realistic app code rather than artificial parser torture cases.
   `custom-matcher-comparison` taste across the exhaustive checked/select matrix. Generated authoring forms carry one
   deliberate object-select matcher example; this pressure fixture still owns the broader behavior-grounding surface. It
   is also part of `contract:select-checked-value-channels`, which protects checked array/set membership, map keyed-boolean
-  membership, radio object values, and select object values from collapsing into boolean or string-only channels. The
-  fixture also keeps readonly collection sources asymmetric: source-to-target observer synchronization can read
-  `ReadonlySet`, `ReadonlyMap`, and readonly arrays, while target-to-source flow rejects mutation.
+  membership, radio object values, select object values, and boolean checkbox matcher non-use from collapsing into
+  boolean or string-only channels. The fixture also keeps readonly collection sources asymmetric: source-to-target
+  observer synchronization can read `ReadonlySet`, `ReadonlyMap`, and readonly arrays, while target-to-source flow
+  rejects mutation.
 - `router-dynamic-pattern` captures router-resource `href` values produced by view-model methods returning a static
   route prefix with a runtime repeat-local hole, an external-link-like field, and a bare external-module boundary. It
   pressures evaluator string-pattern propagation, router recognition, and runtime-boundary repair planning without
@@ -132,6 +166,11 @@ still be realistic app code rather than artificial parser torture cases.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:router-dynamic-pattern` protects both sides of that split: the
   internal string-pattern link must materialize recognized route facts, while the bare external-module link must remain
   an explicit router open seam instead of being guessed as internal or reported as a router issue.
+- `router-active-link-state` captures the two active navigation surfaces from the router docs: `RouterConfiguration`
+  `activeClass` for low-boilerplate class-only styling, and `load`'s `active.bind` from-view handoff when application
+  state genuinely needs active-route status. `pnpm --filter @aurelia-ls/semantic-runtime
+  contract:router-active-link-state` protects router-options `activeClass`, `LoadCustomAttribute.active` target access,
+  raw-property value-channel/data-flow rows, and ordinary `active.class` class-toggle rows.
 - `router-eager-path-generation-errors` captures an object navigation instruction whose routeable component resolves to
   a child route with a missing required parameter. It preserves `RouteConfigContext._generateViewportInstruction`
   `rcEagerPathGenerationFailed` / `AUR3166` pressure without teaching authoring recipes to omit route params.

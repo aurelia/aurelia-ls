@@ -64,6 +64,18 @@ interface ProductArchitecturePressureValue {
     readonly repeatedBodyShapeFingerprintCount: number;
     readonly samples: readonly string[];
   }[];
+  readonly sourceTemplateDuplicateGroups?: readonly {
+    readonly templateFingerprint: string;
+    readonly templateCount: number;
+    readonly fileCount: number;
+    readonly templateLineCount: number;
+    readonly templateCharacterCount: number;
+    readonly templateNames: readonly string[];
+    readonly filePaths: readonly string[];
+    readonly placeholderNames: readonly string[];
+    readonly samples: readonly string[];
+    readonly source?: SourceRef;
+  }[];
   readonly functionControlFlowShapeGroups?: readonly {
     readonly switchTopologyFingerprint: string;
     readonly functionCount: number;
@@ -133,6 +145,7 @@ const [
   inputClassAnswer,
   auLinkNameMatchAnswer,
   duplicateFunctionAnswer,
+  sourceTemplateDuplicateAnswer,
   functionControlFlowShapeAnswer,
   kernelBatchRows,
   kernelRecordRows,
@@ -198,6 +211,16 @@ const [
   api.ask({
     lens: LensId.ProductArchitecture,
     locus: RepoRootLocus,
+    projection: "source-template-duplicates",
+    filters: {
+      minTemplateCount: 2,
+      orderBy: "templateCount",
+    },
+    budget: { rows: 80, evidencePerSubject: 1 },
+  }),
+  api.ask({
+    lens: LensId.ProductArchitecture,
+    locus: RepoRootLocus,
     projection: "function-control-flow-shapes",
     filters: {
       minFunctionCount: 2,
@@ -251,6 +274,10 @@ assertHitOrMissAnswer(
   duplicateFunctionAnswer,
 );
 assertHitOrMissAnswer(
+  "product.architecture:source-template-duplicates",
+  sourceTemplateDuplicateAnswer,
+);
+assertHitOrMissAnswer(
   "product.architecture:function-control-flow-shapes",
   functionControlFlowShapeAnswer,
 );
@@ -278,6 +305,8 @@ const duplicateFunctionPressureGroups = duplicateFunctionNameGroups.filter((grou
 );
 const functionControlFlowShapeGroups =
   answerValue<ProductArchitecturePressureValue>(functionControlFlowShapeAnswer)?.functionControlFlowShapeGroups ?? [];
+const sourceTemplateDuplicateGroups =
+  answerValue<ProductArchitecturePressureValue>(sourceTemplateDuplicateAnswer)?.sourceTemplateDuplicateGroups ?? [];
 const kernelRecordKindGroups = countEntriesBy(kernelRecordRows, (row) => row.recordKind);
 const kernelProductKindGroups = countEntriesBy(
   kernelRecordRows.filter((row) => row.productKindExpression !== null),
@@ -409,6 +438,22 @@ for (const group of functionControlFlowShapeGroups.slice(0, duplicateDisplayRows
   console.log(
     `- ${group.functionCount} function(s), ${group.nameCount} name(s), ${group.fileCount} file(s), ${group.lineCount} total line(s), ${group.switchTopologyCount} switch(es), names ${group.nameSamples.join(", ")}, files ${group.fileSamples.join("; ")}`,
   );
+}
+
+console.log("");
+console.log("repeated sourceText template pressure");
+console.log("filters: minTemplateCount=2/orderBy=templateCount; exact normalized static sourceText(...) bodies without printing generated source text");
+printEmptyRows(sourceTemplateDuplicateGroups);
+for (const group of sourceTemplateDuplicateGroups.slice(0, duplicateDisplayRows)) {
+  console.log(
+    `- ${group.templateCount} template(s), ${group.fileCount} file(s), ${group.templateLineCount} total source line(s), ${group.templateCharacterCount} total char(s), names ${group.templateNames.slice(0, 6).join(", ")}, files ${group.filePaths.slice(0, 4).join("; ")}, fingerprint ${group.templateFingerprint}`,
+  );
+  if (detail && group.placeholderNames.length > 0) {
+    console.log(`  placeholders: ${group.placeholderNames.join(", ")}`);
+  }
+  if (detail && group.samples.length > 0) {
+    console.log(`  samples: ${group.samples.join("; ")}`);
+  }
 }
 
 console.log("");

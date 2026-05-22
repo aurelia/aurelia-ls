@@ -2,10 +2,17 @@ import { readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
+  AuthoringVerificationRequest,
+  buildGeneratedAuthoringFixturePlan,
   createSemanticRuntime,
+  expectedSemanticEffectsForPlan,
+  generatedAuthoringFixturePlanRequestForFolderName,
+  readAuthoringVerificationSnapshot,
   SemanticAppQueryKind,
   SemanticProjectAnalysisKind,
   SemanticProjectShapeKind,
+  SemanticRuntimeDetail,
+  verifyAuthoringEffects,
 } from '../out/index.js';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
@@ -181,6 +188,13 @@ function printInputSummary(aggregate, requestMilliseconds) {
     metricPart('diagnostics', aggregate.templateDiagnostics),
     metricPart('appDiagnostics', aggregate.appDiagnostics),
     metricPart('resourceIssues', aggregate.resourceIssues),
+    metricPart(
+      'intentEffectFailures',
+      countMatchingEntries(
+        aggregate.authoringRecipeIntentExpectedEffectCurrentOutcomes,
+        (key) => key.endsWith(':failed'),
+      ),
+    ),
     metricPart('openFlows', aggregate.openBindingDataFlows),
     metricPart('openRuntimeCompositions', aggregate.openRuntimeCompositions),
     metricPart('assignmentPressure', aggregate.bindingDataFlowSourceAssignmentPressures),
@@ -196,6 +210,17 @@ function printInputSummary(aggregate, requestMilliseconds) {
 
 function metricPart(label, value) {
   return value > 0 ? `${label}=${value}` : null;
+}
+
+function countMatchingEntries(counts, predicate) {
+  return Object.entries(counts ?? {}).reduce(
+    (total, [key, value]) => (predicate(key) ? total + value : total),
+    0,
+  );
+}
+
+function matchingCounts(counts, predicate) {
+  return Object.fromEntries(Object.entries(counts ?? {}).filter(([key]) => predicate(key)));
 }
 
 function pressureFixtureLane(root) {
@@ -220,6 +245,19 @@ function pressureFixtureKey(root) {
     return `pressure:${fixtureRootName(resolvedRoot, pressureFixtureRoot)}`;
   }
   return 'custom-root';
+}
+
+function pressureFixtureIntentPlanRequest(root) {
+  const resolvedRoot = path.resolve(root);
+  if (!isPathAtOrUnder(resolvedRoot, authoringFixtureRoot)) {
+    return null;
+  }
+  const rootName = fixtureRootName(resolvedRoot, authoringFixtureRoot);
+  return generatedAuthoringFixturePlanRequestForFolderName(rootName);
+}
+
+function shouldVerifyFixtureIntentPlan(request) {
+  return request.sourceParameterValues.length > 0;
 }
 
 function fixtureRootName(resolvedRoot, fixtureRoot) {
@@ -488,6 +526,31 @@ function printAggregateCounts(aggregate) {
   printCounts('authoring recipe current fit states', aggregate.authoringRecipeCurrentFitStates, 18);
   printCounts('authoring recipe current fit specificity', aggregate.authoringRecipeCurrentFitSpecificity, 18);
   printCounts('authoring recipe expected effect roles', aggregate.authoringRecipeExpectedEffectRoles, 18);
+  printCounts('authoring intent recipe expected effect current outcomes', aggregate.authoringRecipeIntentExpectedEffectCurrentOutcomes, 18);
+  printCounts('authoring intent recipe expected effect fixture-lane outcomes', aggregate.authoringRecipeIntentExpectedEffectFixtureLaneOutcomes, 24);
+  printCounts('authoring intent recipe expected effect target outcomes', aggregate.authoringRecipeIntentExpectedEffectTargetOutcomes, 24);
+  printCounts('authoring intent recipe expected effect recipe target outcomes', aggregate.authoringRecipeIntentExpectedEffectRecipeTargetOutcomes, 24);
+  printCounts(
+    'authoring intent recipe expected effect current failures',
+    matchingCounts(aggregate.authoringRecipeIntentExpectedEffectCurrentOutcomes, (key) => key.endsWith(':failed')),
+    18,
+  );
+  printCounts(
+    'authoring intent recipe expected effect fixture-lane failures',
+    matchingCounts(aggregate.authoringRecipeIntentExpectedEffectFixtureLaneOutcomes, (key) => key.endsWith(':failed')),
+    24,
+  );
+  printCounts(
+    'authoring intent recipe expected effect target failures',
+    matchingCounts(aggregate.authoringRecipeIntentExpectedEffectTargetOutcomes, (key) => key.endsWith(':failed')),
+    24,
+  );
+  printCounts(
+    'authoring intent recipe expected effect recipe target failures',
+    matchingCounts(aggregate.authoringRecipeIntentExpectedEffectRecipeTargetOutcomes, (key) => key.endsWith(':failed')),
+    24,
+  );
+  printCounts('authoring intent project-tooling fixture-lane outcomes', aggregate.authoringRecipeIntentProjectToolingFixtureLaneOutcomes, 24);
   printCounts('authoring applicable recipe expected effect current outcomes', aggregate.authoringRecipeApplicableExpectedEffectCurrentOutcomes, 18);
   printCounts('authoring applicable recipe expected effect fixture-lane outcomes', aggregate.authoringRecipeApplicableExpectedEffectFixtureLaneOutcomes, 18);
   printCounts('authoring applicable recipe expected effect recipe fixture-lane outcomes', aggregate.authoringRecipeApplicableExpectedEffectRecipeFixtureLaneOutcomes, 18);
@@ -627,6 +690,7 @@ function printAggregateCounts(aggregate) {
   printCounts('binding value-channel kinds', aggregate.bindingValueChannelKinds);
   printCounts('binding value-channel target kinds', aggregate.bindingValueChannelTargetKinds);
   printCounts('binding value-channel matcher modes', aggregate.bindingValueChannelMatcherModes);
+  printCounts('binding value-channel observer couplings', aggregate.bindingValueChannelObserverCouplings, 18);
   printCounts('binding value-channel runtime type surfaces', aggregate.bindingValueChannelRuntimeTypeSurfaces, 18);
   printCounts('template diagnostic authorities', aggregate.templateDiagnosticAuthorities);
   printCounts('template diagnostic kinds', aggregate.templateDiagnosticKinds);
@@ -703,6 +767,7 @@ function printCompactAggregateCounts(aggregate) {
   printCompactCounts('projects.shape', aggregate.projectShapeKinds);
   printCompactCounts('inputs.fixture-lanes', aggregate.fixtureLaneKinds);
   printCompactCounts('inputs.fixture-keys', aggregate.fixtureKeys, 8);
+  printCompactCounts('inputs.fixture-intent-recipes', aggregate.fixtureIntentRecipeKeys, 24);
   printCompactCounts('projects.skipped-filter', aggregate.skippedProjectFilters);
   printCompactCounts('projects.analysis', aggregate.projectAnalysisKinds);
   printCompactCounts('projects.skipped-analysis', aggregate.skippedProjectAnalysisKinds);
@@ -724,6 +789,26 @@ function printCompactAggregateCounts(aggregate) {
   printCompactCounts('authoring.recipes', aggregate.authoringRecipeKeys);
   printCompactCounts('authoring.recipe-fit', aggregate.authoringRecipeCurrentFitStates);
   printCompactCounts('authoring.recipe-effects', aggregate.authoringRecipeExpectedEffects);
+  printCompactCounts('authoring.intent-effect-current-outcomes', aggregate.authoringRecipeIntentExpectedEffectCurrentOutcomes);
+  printCompactCounts('authoring.intent-effect-fixture-lane-outcomes', aggregate.authoringRecipeIntentExpectedEffectFixtureLaneOutcomes, 12);
+  printCompactCounts('authoring.intent-effect-target-outcomes', aggregate.authoringRecipeIntentExpectedEffectTargetOutcomes, 12);
+  printCompactCounts('authoring.intent-effect-recipe-target-outcomes', aggregate.authoringRecipeIntentExpectedEffectRecipeTargetOutcomes, 12);
+  printCompactCounts(
+    'authoring.intent-effect-current-failures',
+    matchingCounts(aggregate.authoringRecipeIntentExpectedEffectCurrentOutcomes, (key) => key.endsWith(':failed')),
+    12,
+  );
+  printCompactCounts(
+    'authoring.intent-effect-target-failures',
+    matchingCounts(aggregate.authoringRecipeIntentExpectedEffectTargetOutcomes, (key) => key.endsWith(':failed')),
+    12,
+  );
+  printCompactCounts(
+    'authoring.intent-effect-recipe-target-failures',
+    matchingCounts(aggregate.authoringRecipeIntentExpectedEffectRecipeTargetOutcomes, (key) => key.endsWith(':failed')),
+    12,
+  );
+  printCompactCounts('authoring.intent-project-tooling-fixture-lane-outcomes', aggregate.authoringRecipeIntentProjectToolingFixtureLaneOutcomes);
   printCompactCounts('authoring.applicable-effect-current-outcomes', aggregate.authoringRecipeApplicableExpectedEffectCurrentOutcomes);
   printCompactCounts('authoring.applicable-effect-fixture-lane-outcomes', aggregate.authoringRecipeApplicableExpectedEffectFixtureLaneOutcomes, 12);
   printCompactCounts('authoring.applicable-project-tooling-fixture-lane-outcomes', aggregate.authoringRecipeApplicableProjectToolingFixtureLaneOutcomes);
@@ -789,6 +874,7 @@ function printCompactAggregateCounts(aggregate) {
   printCompactCounts('bindings.value-channels', aggregate.bindingValueChannelKinds);
   printCompactCounts('bindings.value-channel-targets', aggregate.bindingValueChannelTargetKinds);
   printCompactCounts('bindings.value-channel-matchers', aggregate.bindingValueChannelMatcherModes);
+  printCompactCounts('bindings.value-channel-couplings', aggregate.bindingValueChannelObserverCouplings);
   printCompactCounts('bindings.value-channel-open', aggregate.bindingValueChannelOpenReasons);
   printCompactCounts('bindings.data-flow-kinds', aggregate.bindingDataFlowBindingKinds);
   printCompactCounts('bindings.data-flow-directions', aggregate.bindingDataFlowDirections);
@@ -851,6 +937,7 @@ function printRawAggregateCounts(aggregate) {
   printCounts('project shape kinds', aggregate.projectShapeKinds);
   printCounts('fixture lanes', aggregate.fixtureLaneKinds);
   printCounts('fixture keys', aggregate.fixtureKeys, 36);
+  printCounts('fixture intent recipes', aggregate.fixtureIntentRecipeKeys, 36);
   printCounts('skipped project filters', aggregate.skippedProjectFilters);
   printCounts('skipped project shape kinds', aggregate.skippedProjectShapeKinds);
   printCounts('project analysis kinds', aggregate.projectAnalysisKinds);
@@ -1018,6 +1105,31 @@ function printRawAggregateCounts(aggregate) {
   printCounts('authoring recipe current fit states', aggregate.authoringRecipeCurrentFitStates, 18);
   printCounts('authoring recipe current fit specificity', aggregate.authoringRecipeCurrentFitSpecificity, 18);
   printCounts('authoring recipe expected effect roles', aggregate.authoringRecipeExpectedEffectRoles, 18);
+  printCounts('authoring intent recipe expected effect current outcomes', aggregate.authoringRecipeIntentExpectedEffectCurrentOutcomes, 18);
+  printCounts('authoring intent recipe expected effect fixture-lane outcomes', aggregate.authoringRecipeIntentExpectedEffectFixtureLaneOutcomes, 24);
+  printCounts('authoring intent recipe expected effect target outcomes', aggregate.authoringRecipeIntentExpectedEffectTargetOutcomes, 24);
+  printCounts('authoring intent recipe expected effect recipe target outcomes', aggregate.authoringRecipeIntentExpectedEffectRecipeTargetOutcomes, 24);
+  printCounts(
+    'authoring intent recipe expected effect current failures',
+    matchingCounts(aggregate.authoringRecipeIntentExpectedEffectCurrentOutcomes, (key) => key.endsWith(':failed')),
+    18,
+  );
+  printCounts(
+    'authoring intent recipe expected effect fixture-lane failures',
+    matchingCounts(aggregate.authoringRecipeIntentExpectedEffectFixtureLaneOutcomes, (key) => key.endsWith(':failed')),
+    24,
+  );
+  printCounts(
+    'authoring intent recipe expected effect target failures',
+    matchingCounts(aggregate.authoringRecipeIntentExpectedEffectTargetOutcomes, (key) => key.endsWith(':failed')),
+    24,
+  );
+  printCounts(
+    'authoring intent recipe expected effect recipe target failures',
+    matchingCounts(aggregate.authoringRecipeIntentExpectedEffectRecipeTargetOutcomes, (key) => key.endsWith(':failed')),
+    24,
+  );
+  printCounts('authoring intent project-tooling fixture-lane outcomes', aggregate.authoringRecipeIntentProjectToolingFixtureLaneOutcomes, 24);
   printCounts('authoring applicable recipe expected effect current outcomes', aggregate.authoringRecipeApplicableExpectedEffectCurrentOutcomes, 18);
   printCounts('authoring applicable recipe expected effect fixture-lane outcomes', aggregate.authoringRecipeApplicableExpectedEffectFixtureLaneOutcomes, 24);
   printCounts('authoring applicable recipe expected effect recipe fixture-lane outcomes', aggregate.authoringRecipeApplicableExpectedEffectRecipeFixtureLaneOutcomes, 24);
@@ -1172,6 +1284,7 @@ function printRawAggregateCounts(aggregate) {
   printCounts('binding value-channel target kinds', aggregate.bindingValueChannelTargetKinds);
   printCounts('binding value-channel authorities', aggregate.bindingValueChannelAuthorities);
   printCounts('binding value-channel matcher modes', aggregate.bindingValueChannelMatcherModes);
+  printCounts('binding value-channel observer couplings', aggregate.bindingValueChannelObserverCouplings, 18);
   printCounts('binding value-channel raw target type surfaces', aggregate.bindingValueChannelRawTypeSurfaces, 18);
   printCounts('binding value-channel runtime type surfaces', aggregate.bindingValueChannelRuntimeTypeSurfaces, 18);
   printCounts('binding value-channel domain counts', aggregate.bindingValueChannelDomainCounts, 18);
@@ -1251,6 +1364,8 @@ function printRawAggregateCounts(aggregate) {
 async function readPressureForRoot(root) {
   const fixtureLane = pressureFixtureLane(root);
   const fixtureKey = pressureFixtureKey(root);
+  const fixtureIntentPlanRequest = pressureFixtureIntentPlanRequest(root);
+  const fixtureIntentRecipeKey = fixtureIntentPlanRequest?.intentRecipeKey ?? null;
   const timings = createTimingAccumulator();
   const runtime = await measure(timings, 'create-runtime', () =>
     createSemanticRuntime({
@@ -1366,6 +1481,7 @@ async function readPressureForRoot(root) {
     nonAppRootProjectOpenSeams: 0,
     fixtureLaneKinds: {},
     fixtureKeys: {},
+    fixtureIntentRecipeKeys: {},
     resourceKinds: {},
     skippedProjectFilters: {},
     resourceDeclarationModes: {},
@@ -1577,6 +1693,7 @@ async function readPressureForRoot(root) {
     bindingValueChannelTargetKinds: {},
     bindingValueChannelAuthorities: {},
     bindingValueChannelMatcherModes: {},
+    bindingValueChannelObserverCouplings: {},
     bindingValueChannelRawTypeSurfaces: {},
     bindingValueChannelRuntimeTypeSurfaces: {},
     bindingValueChannelDomainCounts: {},
@@ -1800,17 +1917,23 @@ async function readPressureForRoot(root) {
     authoringRecipeCurrentFitSpecificity: {},
     authoringRecipeExpectedEffectRoles: {},
     authoringRecipeExpectedEffectCurrentOutcomes: {},
+    authoringRecipeIntentExpectedEffectCurrentOutcomes: {},
     authoringRecipeApplicableExpectedEffectCurrentOutcomes: {},
     authoringRecipeExpectedEffectFixtureLaneOutcomes: {},
+    authoringRecipeIntentExpectedEffectFixtureLaneOutcomes: {},
+    authoringRecipeIntentExpectedEffectRecipeFixtureLaneOutcomes: {},
     authoringRecipeApplicableExpectedEffectFixtureLaneOutcomes: {},
     authoringRecipeApplicableExpectedEffectRecipeFixtureLaneOutcomes: {},
     authoringRecipeProjectToolingFixtureLaneOutcomes: {},
+    authoringRecipeIntentProjectToolingFixtureLaneOutcomes: {},
     authoringRecipeApplicableProjectToolingFixtureLaneOutcomes: {},
     authoringRecipeExpectedEffectTasteValueLayers: {},
     authoringRecipeExpectedEffectTasteLayerOutcomes: {},
     authoringRecipeExpectedEffectTargets: {},
     authoringRecipeExpectedEffectTargetOutcomes: {},
     authoringRecipeExpectedEffectRecipeTargetOutcomes: {},
+    authoringRecipeIntentExpectedEffectTargetOutcomes: {},
+    authoringRecipeIntentExpectedEffectRecipeTargetOutcomes: {},
     authoringRecipeApplicableExpectedEffectTargetOutcomes: {},
     authoringRecipeApplicableExpectedEffectRecipeTargetOutcomes: {},
     authoringRecipeSignatureEffectTargetOutcomes: {},
@@ -1833,6 +1956,7 @@ async function readPressureForRoot(root) {
 
   increment(aggregate.fixtureLaneKinds, fixtureLane);
   increment(aggregate.fixtureKeys, fixtureKey);
+  increment(aggregate.fixtureIntentRecipeKeys, fixtureIntentRecipeKey ?? 'none');
 
   for (const project of summary.projects) {
     if (project.hasAureliaAppEntrypointSignal) {
@@ -1953,10 +2077,27 @@ async function readPressureForRoot(root) {
       observeAuthoringCatalogPressure(aggregate, authoringCatalogAnswer.value);
 
       const authoringOrientationAnswer = await measure(timings, 'query-authoring-orientation', () =>
-        app.ask({ kind: SemanticAppQueryKind.AuthoringOrientation }),
+        app.ask({ kind: SemanticAppQueryKind.AuthoringOrientation, detail: SemanticRuntimeDetail.Handles }),
       );
       increment(aggregate.outcomes, `authoring-orientation:${authoringOrientationAnswer.outcome}`);
-      observeAuthoringOrientationPressure(aggregate, authoringOrientationAnswer.value, fixtureLane);
+      observeAuthoringOrientationPressure(aggregate, authoringOrientationAnswer.value, fixtureLane, fixtureIntentRecipeKey);
+
+      if (fixtureIntentPlanRequest != null && shouldVerifyFixtureIntentPlan(fixtureIntentPlanRequest)) {
+        const plan = buildGeneratedAuthoringFixturePlan(root, fixtureIntentPlanRequest);
+        const verificationSnapshot = await measure(timings, 'query-authoring-fixture-intent-snapshot', () =>
+          readAuthoringVerificationSnapshot(app),
+        );
+        const verification = verifyAuthoringEffects(
+          new AuthoringVerificationRequest(plan.expectedTopology, expectedSemanticEffectsForPlan(plan)),
+          verificationSnapshot,
+        );
+        observeFixtureIntentPlanVerificationPressure(
+          aggregate,
+          fixtureLane,
+          fixtureIntentPlanRequest.intentRecipeKey,
+          verification.effectResults,
+        );
+      }
 
       const stateStoreRows = await measure(timings, 'query-state-stores', () =>
         pagedRows(app, SemanticAppQueryKind.StateStores),
@@ -2638,6 +2779,9 @@ async function readPressureForRoot(root) {
           increment(aggregate.bindingValueChannelTargetKinds, row.targetKind ?? 'none');
           increment(aggregate.bindingValueChannelAuthorities, row.authority);
           increment(aggregate.bindingValueChannelMatcherModes, row.usesCustomMatcher === true ? 'custom-matcher' : 'default-matcher');
+          for (const coupling of row.observerCouplings ?? []) {
+            increment(aggregate.bindingValueChannelObserverCouplings, coupling);
+          }
           increment(aggregate.bindingValueChannelRawTypeSurfaces, typeSurfaceKey(row.rawTargetPropertyType));
           increment(aggregate.bindingValueChannelRuntimeTypeSurfaces, typeSurfaceKey(row.runtimeValueType));
           increment(aggregate.bindingValueChannelDomainCounts, cardinalityBucket(row.valueDomain?.length ?? 0));
@@ -2912,7 +3056,7 @@ function observeAuthoringCatalogPressure(aggregate, catalog) {
   }
 }
 
-function observeAuthoringOrientationPressure(aggregate, orientation, fixtureLane) {
+function observeAuthoringOrientationPressure(aggregate, orientation, fixtureLane, fixtureIntentRecipeKey) {
   if (orientation == null) {
     return;
   }
@@ -3022,6 +3166,7 @@ function observeAuthoringOrientationPressure(aggregate, orientation, fixtureLane
   }
   for (const recipe of recipes) {
     const isApplicableRecipe = recipe.currentFitState !== 'not-applicable';
+    const isIntentRecipe = fixtureIntentRecipeKey != null && recipe.key === fixtureIntentRecipeKey;
     increment(aggregate.authoringRecipeKeys, `${recipe.key}:${recipe.supportState}`);
     increment(aggregate.authoringRecipeSupportStates, recipe.supportState);
     increment(aggregate.authoringRecipeCurrentFitStates, `${recipe.key}:${recipe.currentFitState ?? 'unknown'}`);
@@ -3067,6 +3212,34 @@ function observeAuthoringOrientationPressure(aggregate, orientation, fixtureLane
         aggregate.authoringRecipeExpectedEffectRecipeTargetOutcomes,
         `${recipe.key}:${targetKey}:${effect.currentOutcome ?? 'unknown'}`,
       );
+      if (isIntentRecipe) {
+        increment(
+          aggregate.authoringRecipeIntentExpectedEffectCurrentOutcomes,
+          `${effect.effectKind}:${effect.currentOutcome ?? 'unknown'}`,
+        );
+        increment(
+          aggregate.authoringRecipeIntentExpectedEffectFixtureLaneOutcomes,
+          `${fixtureLane}:${effect.effectKind}:${effect.currentOutcome ?? 'unknown'}`,
+        );
+        increment(
+          aggregate.authoringRecipeIntentExpectedEffectRecipeFixtureLaneOutcomes,
+          `${fixtureLane}:${recipe.key}:${effect.effectKind}:${effect.currentOutcome ?? 'unknown'}`,
+        );
+        if (effect.effectKind === 'project-tooling') {
+          increment(
+            aggregate.authoringRecipeIntentProjectToolingFixtureLaneOutcomes,
+            `${fixtureLane}:${effect.currentOutcome ?? 'unknown'}`,
+          );
+        }
+        increment(
+          aggregate.authoringRecipeIntentExpectedEffectTargetOutcomes,
+          `${targetKey}:${effect.currentOutcome ?? 'unknown'}`,
+        );
+        increment(
+          aggregate.authoringRecipeIntentExpectedEffectRecipeTargetOutcomes,
+          `${recipe.key}:${targetKey}:${effect.currentOutcome ?? 'unknown'}`,
+        );
+      }
       if (isApplicableRecipe) {
         increment(
           aggregate.authoringRecipeApplicableExpectedEffectCurrentOutcomes,
@@ -3145,6 +3318,40 @@ function observeAuthoringOrientationPressure(aggregate, orientation, fixtureLane
   }
   for (const reason of openReasons) {
     increment(aggregate.authoringOpenReasonLoci, reason.locus);
+  }
+}
+
+function observeFixtureIntentPlanVerificationPressure(aggregate, fixtureLane, fixtureIntentRecipeKey, effectResults) {
+  for (const result of effectResults) {
+    const effect = result.expectedEffect;
+    const outcome = result.outcome ?? 'unknown';
+    const targetKey = effect.semanticTargetKey ?? effect.effectKind;
+    increment(
+      aggregate.authoringRecipeIntentExpectedEffectCurrentOutcomes,
+      `${effect.effectKind}:${outcome}`,
+    );
+    increment(
+      aggregate.authoringRecipeIntentExpectedEffectFixtureLaneOutcomes,
+      `${fixtureLane}:${effect.effectKind}:${outcome}`,
+    );
+    increment(
+      aggregate.authoringRecipeIntentExpectedEffectRecipeFixtureLaneOutcomes,
+      `${fixtureLane}:${fixtureIntentRecipeKey}:${effect.effectKind}:${outcome}`,
+    );
+    if (effect.effectKind === 'project-tooling') {
+      increment(
+        aggregate.authoringRecipeIntentProjectToolingFixtureLaneOutcomes,
+        `${fixtureLane}:${outcome}`,
+      );
+    }
+    increment(
+      aggregate.authoringRecipeIntentExpectedEffectTargetOutcomes,
+      `${targetKey}:${outcome}`,
+    );
+    increment(
+      aggregate.authoringRecipeIntentExpectedEffectRecipeTargetOutcomes,
+      `${fixtureIntentRecipeKey}:${targetKey}:${outcome}`,
+    );
   }
 }
 

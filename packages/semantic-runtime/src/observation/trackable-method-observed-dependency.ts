@@ -51,10 +51,11 @@ export interface RuntimeTrackableMethodObservedDependencyRequest {
 }
 
 /**
- * Collect dependencies that Aurelia adds when an observed template expression invokes an @computed/@astTrack method.
+ * Collect dependencies that Aurelia adds when an observed template expression invokes a trackable source method.
  *
- * Ordinary expression reads stay in `connectable-observed-dependency.ts`; this pass adds the method-declaration
- * execution dependencies that come from astEvaluate/ProxyObservable trackable-method handoff.
+ * Ordinary expression reads stay in `connectable-observed-dependency.ts`; this pass adds method-declaration execution
+ * dependencies for `@computed`/`@astTrack` methods only. Undecorated source-method bodies are not proxy-observed by
+ * `astEvaluate`; model them as ordinary method calls plus their argument/receiver reads, not hidden body subscriptions.
  */
 export function collectRuntimeTrackableMethodObservedDependencyDrafts(
   request: RuntimeTrackableMethodObservedDependencyRequest,
@@ -191,7 +192,29 @@ class RuntimeTrackableMethodObservedDependencyCollector {
     const ownerType = ownerEvaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
       ? ownerEvaluation.typeShape
       : null;
-    this.recordTrackableMember(ownerType, expression.name.name);
+    this.recordCallableMember(ownerType, expression);
+  }
+
+  private recordCallableMember(
+    ownerType: CheckerTypeShape | null,
+    expression: CallMemberExpression,
+  ): void {
+    const member = ownerType == null
+      ? null
+      : readOrProjectCheckerTypeMembers(
+        this.request.store,
+        ownerType,
+        ownerType.productHandle ?? `${this.request.localKey}:trackable-method-owner`,
+      ).find((candidate) => candidate.name === expression.name.name) ?? null;
+    if (member == null) {
+      return;
+    }
+    const trackableDependencies = trackableDependenciesForMember(this.request.store, member);
+    if (trackableDependencies.length > 0) {
+      for (const dependency of trackableDependencies) {
+        this.add(dependency);
+      }
+    }
   }
 
   private recordTrackableMember(
@@ -205,10 +228,9 @@ class RuntimeTrackableMethodObservedDependencyCollector {
         ownerType,
         ownerType.productHandle ?? `${this.request.localKey}:trackable-method-owner`,
       ).find((candidate) => candidate.name === methodName) ?? null;
-    if (member == null) {
-      return;
+    if (member != null) {
+      this.recordTrackableTypeMember(member);
     }
-    this.recordTrackableTypeMember(member);
   }
 
   private recordTrackableTypeMember(member: CheckerTypeMember): void {

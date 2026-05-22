@@ -1,5 +1,4 @@
-import { customElement } from '@aurelia/runtime-html';
-import { resolve } from '@aurelia/kernel';
+import { customElement, resolve } from 'aurelia';
 import { ServiceBackedForm } from './components/service-backed-form';
 import { AppState } from './state/app-state';
 import template from './app.html';

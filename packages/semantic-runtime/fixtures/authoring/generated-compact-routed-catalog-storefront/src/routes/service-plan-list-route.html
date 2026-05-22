@@ -1,0 +1,26 @@
+<section>
+  <h2>Featured service plans</h2>
+  <form submit.trigger="$event.preventDefault()">
+    <label>
+      Search
+      <input type="search" value.bind="state.servicePlans.searchText & debounce:150">
+    </label>
+  </form>
+  <p if.bind="state.servicePlans.isLoading">Loading service plans...</p>
+  <template else>
+    <p if.bind="!state.servicePlans.hasServicePlans">No featured service plans are available yet.</p>
+    <template else>
+      <p if.bind="!state.servicePlans.hasVisibleServicePlans">No service plans match the current filters.</p>
+      <ul if.bind="state.servicePlans.hasVisibleServicePlans">
+        <li repeat.for="servicePlan of state.servicePlans.items">
+          <article>
+            <h3>${servicePlan.name}</h3>
+            <p>${servicePlan.summary}</p>
+
+            <a load.bind="'/plans/' + servicePlan.id">View details</a>
+          </article>
+        </li>
+      </ul>
+    </template>
+  </template>
+</section>

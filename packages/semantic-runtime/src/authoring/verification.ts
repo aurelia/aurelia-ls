@@ -23,7 +23,7 @@ import type {
   SemanticTargetOperationRow,
   SemanticTemplateDiagnosticRow,
 } from '../api/contracts.js';
-import { SemanticAppQueryKind, SemanticRuntimeAnswerOutcome } from '../api/contracts.js';
+import { SemanticAppQueryKind, SemanticRuntimeAnswerOutcome, SemanticRuntimeDetail } from '../api/contracts.js';
 import type { SemanticApplicationTopologyResult } from '../api/app-topology.js';
 import { semanticRouteEffectQueryKinds } from '../api/route-effect-facts.js';
 import type {
@@ -110,7 +110,7 @@ export function readAuthoringVerificationSnapshot(
   const pageSize = normalizeVerificationSnapshotPageSize(options.pageSize);
   const summary = app.summary().value;
   const topology = readAnswerValue<SemanticApplicationTopologyResult>(app, SemanticAppQueryKind.AppTopology);
-  const authoringOrientation = readAnswerValue<SemanticAuthoringOrientationResult>(app, SemanticAppQueryKind.AuthoringOrientation);
+  const authoringOrientation = readAuthoringOrientationForVerification(app);
   return new AuthoringVerificationSnapshot(
     summary,
     topology,
@@ -207,6 +207,17 @@ function readAnswerValue<TValue>(
   const answer = app.ask({ kind });
   assertVerificationSnapshotAnswerSupported(answer, kind);
   return answer.value as TValue;
+}
+
+function readAuthoringOrientationForVerification(
+  app: AuthoringVerificationAppSnapshotSource,
+): SemanticAuthoringOrientationResult {
+  const answer = app.ask({
+    kind: SemanticAppQueryKind.AuthoringOrientation,
+    detail: SemanticRuntimeDetail.Handles,
+  });
+  assertVerificationSnapshotAnswerSupported(answer, SemanticAppQueryKind.AuthoringOrientation);
+  return answer.value as SemanticAuthoringOrientationResult;
 }
 
 function readPagedRows<TRow>(

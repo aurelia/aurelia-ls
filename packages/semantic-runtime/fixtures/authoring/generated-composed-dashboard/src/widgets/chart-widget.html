@@ -1,6 +1,7 @@
-<div class="chart-widget">
+<div if.bind="model" class="chart-widget">
   <p>${peakLabel}</p>
   <ol>
-    <li repeat.for="point of points">${point}</li>
+    <li repeat.for="point of model.points">${point}</li>
   </ol>
 </div>
+<p else>No chart selected.</p>

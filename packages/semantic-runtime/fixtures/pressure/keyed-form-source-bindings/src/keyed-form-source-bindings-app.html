@@ -1,0 +1,20 @@
+<section>
+  <label>
+    First flag
+    <input type="checkbox" checked.bind="state.flags[0]">
+  </label>
+
+  <label>
+    First item name
+    <select value.bind="state.itemNames[0]">
+      <option value="i-0">Initial</option>
+      <option value="i-1">Second</option>
+      <option value="i-2">Third</option>
+    </select>
+  </label>
+
+  <label repeat.for="tag of state.tags">
+    <input type="checkbox" checked.bind="state.selectedByTagId[tag.id]">
+    ${tag.label}
+  </label>
+</section>

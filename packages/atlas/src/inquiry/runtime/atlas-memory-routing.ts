@@ -346,6 +346,7 @@ function continuationForAnchor(
     case "script":
     case "doc":
     case "fixture":
+    case "external":
       return [];
     case "auLink":
       return [

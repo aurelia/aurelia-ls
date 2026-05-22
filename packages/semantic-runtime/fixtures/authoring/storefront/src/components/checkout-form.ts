@@ -1,5 +1,4 @@
-import { customElement } from '@aurelia/runtime-html';
-import { resolve } from '@aurelia/kernel';
+import { customElement, resolve } from 'aurelia';
 import { StorefrontState } from '../state/storefront-state';
 import { FieldShell } from './field-shell';
 import template from './checkout-form.html';

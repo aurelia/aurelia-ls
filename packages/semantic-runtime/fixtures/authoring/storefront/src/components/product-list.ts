@@ -1,5 +1,4 @@
-import { customElement } from '@aurelia/runtime-html';
-import { resolve } from '@aurelia/kernel';
+import { customElement, resolve } from 'aurelia';
 import { AvailabilityBadge } from './availability-badge';
 import { ProductCard } from './product-card';
 import { StorefrontState } from '../state/storefront-state';

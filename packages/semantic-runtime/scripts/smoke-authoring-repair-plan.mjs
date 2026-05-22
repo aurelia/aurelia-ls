@@ -26,7 +26,7 @@ const app = await runtime.openApp({
   projectKey: 'mixed-form-surfaces',
   analysisDepth: 'binding-observation',
 });
-const orientation = app.ask({ kind: 'authoring-orientation' }).value;
+const orientation = app.ask({ kind: 'authoring-orientation', detail: 'handles' }).value;
 const clusters = orientation.repairClusters;
 const plan = buildAuthoringRepairPlan({
   summary: 'Repair mixed form semantic pressure.',

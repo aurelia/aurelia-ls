@@ -7,8 +7,7 @@
   },
   "dependencies": {
     "@aurelia/i18n": "^2.0.0-rc.1",
-    "@aurelia/kernel": "^2.0.0-rc.1",
-    "@aurelia/runtime-html": "^2.0.0-rc.1"
+    "aurelia": "^2.0.0-rc.1"
   },
   "devDependencies": {
     "typescript": "^6.0.3"

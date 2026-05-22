@@ -22,12 +22,20 @@ import type { ObservationFrameworkErrorCode } from './framework-error-code.js';
 export const enum RuntimeBindingValueChannelKind {
   RawProperty = 'raw-property',
   RefTarget = 'ref-target',
+  ScopeSlot = 'scope-slot',
   TextContent = 'text-content',
   AttributeValue = 'attribute-value',
   ClassAttributeTokens = 'class-attribute-tokens',
   ClassToggle = 'class-toggle',
   StyleAttributeRules = 'style-attribute-rules',
   StylePropertyValue = 'style-property-value',
+  TemplateControllerTruthiness = 'template-controller-truthiness',
+  TemplateControllerValueScope = 'template-controller-value-scope',
+  TemplateControllerSwitchValue = 'template-controller-switch-value',
+  TemplateControllerSwitchCaseValue = 'template-controller-switch-case-value',
+  TemplateControllerPromiseValue = 'template-controller-promise-value',
+  TemplateControllerPromiseBranchValue = 'template-controller-promise-branch-value',
+  TemplateControllerIteration = 'template-controller-iteration',
   SelectSingleOptionValue = 'select-single-option-value',
   SelectMultipleOptionValues = 'select-multiple-option-values',
   SelectDynamicOptionValue = 'select-dynamic-option-value',
@@ -36,6 +44,9 @@ export const enum RuntimeBindingValueChannelKind {
   CheckedCollectionMembership = 'checked-collection-membership',
   CheckedMapKeyedBoolean = 'checked-map-keyed-boolean',
   CheckedModel = 'checked-model',
+  ElementModelValue = 'element-model-value',
+  CustomMatcherFunction = 'custom-matcher-function',
+  EventHandlerInvocation = 'event-handler-invocation',
   StateDispatchAction = 'state-dispatch-action',
   RejectedTargetAccess = 'rejected-target-access',
   Open = 'open',
@@ -51,6 +62,22 @@ export const enum RuntimeBindingValueChannelAuthority {
   BindingExpressionAndTypeChecker = 'binding-expression-and-type-checker',
   ObserverSemantics = 'observer-semantics',
   Open = 'open',
+}
+
+export const enum RuntimeBindingValueChannelCouplingKind {
+  SelectOptionValueDomain = 'select-option-value-domain',
+  SelectOptionListMutationObserver = 'select-option-list-mutation-observer',
+  SelectArrayObserver = 'select-array-observer',
+  SelectArrayMutation = 'select-array-mutation',
+  SelectDynamicMultipleMode = 'select-dynamic-multiple-mode',
+  CheckedElementValueDomain = 'checked-element-value-domain',
+  CheckedElementValueObserver = 'checked-element-value-observer',
+  CheckedCollectionObserver = 'checked-collection-observer',
+  CheckedBooleanSync = 'checked-boolean-sync',
+  CheckedRadioValueSync = 'checked-radio-value-sync',
+  CheckedCollectionMembershipMutation = 'checked-collection-membership-mutation',
+  CheckedMapKeyedBooleanMutation = 'checked-map-keyed-boolean-mutation',
+  CustomMatcherComparison = 'custom-matcher-comparison',
 }
 
 export const enum RuntimeBindingPrimitiveValueKind {
@@ -133,6 +160,11 @@ export const enum RuntimeBindingDataFlowSourceAssignmentReasonKind {
   TargetToSourceTypeMismatch = 'target-to-source-type-mismatch',
 }
 
+export const enum RuntimeBindingDataFlowTypeMismatchKind {
+  SourceNullishToRequiredTarget = 'source-nullish-to-required-target',
+  TargetNullishToRequiredSource = 'target-nullish-to-required-source',
+}
+
 export type RuntimeBindingDataFlowField =
   | 'binding'
   | 'targetAccess'
@@ -159,6 +191,8 @@ export type RuntimeBindingDataFlowField =
   | 'sourceAssignmentReasonKinds'
   | 'sourceToTargetAssignable'
   | 'targetToSourceAssignable'
+  | 'sourceToTargetTypeMismatchKinds'
+  | 'targetToSourceTypeMismatchKinds'
   | 'observedDependencies'
   | 'frameworkErrorCode'
   | 'openReason'
@@ -193,6 +227,7 @@ export type RuntimeBindingValueChannelField =
   | 'primitiveValueDomain'
   | 'isCollection'
   | 'usesCustomMatcher'
+  | 'observerCouplings'
   | 'openReason'
   | 'openReasonKinds'
   | 'source';
@@ -259,6 +294,7 @@ export class RuntimeBindingValueChannel {
     readonly primitiveValueDomain: readonly RuntimeBindingPrimitiveValue[],
     readonly isCollection: boolean | null,
     readonly usesCustomMatcher: boolean,
+    readonly observerCouplings: readonly RuntimeBindingValueChannelCouplingKind[],
     readonly openReason: string | null,
     readonly openReasonKinds: readonly OpenSeamReasonKind[],
     readonly sourceAddressHandle: AddressHandle | null,
@@ -305,6 +341,8 @@ export class RuntimeBindingDataFlow {
     readonly sourceAssignmentReasonKinds: readonly RuntimeBindingDataFlowSourceAssignmentReasonKind[],
     readonly sourceToTargetAssignable: boolean | null,
     readonly targetToSourceAssignable: boolean | null,
+    readonly sourceToTargetTypeMismatchKinds: readonly RuntimeBindingDataFlowTypeMismatchKind[],
+    readonly targetToSourceTypeMismatchKinds: readonly RuntimeBindingDataFlowTypeMismatchKind[],
     readonly frameworkErrorCode: ObservationFrameworkErrorCode | null,
     readonly openReason: string | null,
     readonly sourceAddressHandle: AddressHandle | null,

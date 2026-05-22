@@ -54,6 +54,10 @@ so global large-class pressure does not bury the most relevant local frontier.
 Exact `memory:next -- --recordId ...` reads also surface reference and
 when-touched records as consult rows, which keeps checkpoint recovery precise
 without promoting those records into the unfiltered global queue.
+Filtered `memory:next` reads with no computed queue rows, such as a domain that
+currently has only decisions/reference records, also fall back to consult rows
+for the matching records. This keeps exact checkpoint filters useful without
+making every decision a global task.
 Use `work:router -- --projection=workset` when the current dirty worktree itself
 is the canary; it groups changed files by typed route source/doc/path anchors
 and memory shards before you decide what to inspect next. Workset route rows carry

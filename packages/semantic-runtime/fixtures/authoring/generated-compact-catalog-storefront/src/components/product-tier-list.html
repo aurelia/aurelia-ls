@@ -1,0 +1,25 @@
+<section>
+  <h2>Featured product tiers</h2>
+  <form submit.trigger="$event.preventDefault()">
+    <label>
+      Search
+      <input type="search" value.bind="state.productTiers.searchText & debounce:150">
+    </label>
+  </form>
+  <p if.bind="state.productTiers.isLoading">Loading product tiers...</p>
+  <template else>
+    <p if.bind="!state.productTiers.hasProductTiers">No featured product tiers are available yet.</p>
+    <template else>
+      <p if.bind="!state.productTiers.hasVisibleProductTiers">No product tiers match the current filters.</p>
+      <ul if.bind="state.productTiers.hasVisibleProductTiers">
+        <li repeat.for="productTier of state.productTiers.items">
+          <article>
+            <h3>${productTier.name}</h3>
+            <p>${productTier.summary}</p>
+
+          </article>
+        </li>
+      </ul>
+    </template>
+  </template>
+</section>

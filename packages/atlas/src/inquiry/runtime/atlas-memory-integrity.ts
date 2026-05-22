@@ -78,6 +78,9 @@ function anchorIntegrityIssues(
   record: AtlasMemoryRecord,
 ): readonly AtlasMemoryStorageIssue[] {
   return (record.anchors ?? []).flatMap((anchor, index) => {
+    if (anchor.kind === "external") {
+      return [];
+    }
     if (anchor.kind !== "source" && anchor.kind !== "doc" && anchor.kind !== "fixture") {
       return anchor.kind === "lens"
         ? lensAnchorIntegrityIssues(record, anchor.lensId, anchor.projection, index)

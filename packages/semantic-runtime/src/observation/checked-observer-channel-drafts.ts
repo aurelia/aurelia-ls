@@ -12,9 +12,13 @@ import type {
   CheckedSourceShape,
   RuntimeBindingValueChannelDraft,
 } from './binding-value-channel-draft-types.js';
-import { RuntimeBindingValueChannelDraftSupport } from './binding-value-channel-draft-support.js';
+import {
+  RuntimeBindingValueChannelDraftSupport,
+  withCustomMatcherCoupling,
+} from './binding-value-channel-draft-support.js';
 import {
   RuntimeBindingValueChannelAuthority,
+  RuntimeBindingValueChannelCouplingKind,
   RuntimeBindingValueChannelKind,
 } from './runtime-binding-observation.js';
 
@@ -36,6 +40,7 @@ export class CheckedObserverChannelDrafts {
         runtimeValueType: targetAccess.propertyType,
         valueDomain: [],
         isCollection: null,
+        observerCouplings: [],
         openReason: 'CheckedObserver value channel did not carry a closed authored <input> node.',
       };
     }
@@ -55,6 +60,7 @@ export class CheckedObserverChannelDrafts {
           valueDomain: [],
           isCollection: null,
           usesCustomMatcher,
+          observerCouplings: checkedElementValueObserverCouplings(usesCustomMatcher),
           openReason: `CheckedObserver '${type}' mode can write booleans, radio/model values, arrays, sets, or maps depending on source value shape; this branch is not closed yet.`,
         };
     }
@@ -77,6 +83,7 @@ export class CheckedObserverChannelDrafts {
         valueDomain: [],
         isCollection: false,
         usesCustomMatcher,
+        observerCouplings: checkedRadioObserverCouplings(usesCustomMatcher),
         openReason: 'CheckedObserver radio value channel could not close the input model/value through static value or expression-backed binding.',
       };
     }
@@ -90,6 +97,7 @@ export class CheckedObserverChannelDrafts {
         primitiveValueDomain: elementValue.primitiveValueDomain,
         isCollection: false,
         usesCustomMatcher,
+        observerCouplings: checkedRadioObserverCouplings(usesCustomMatcher),
         openReason: null,
     };
   }
@@ -112,7 +120,8 @@ export class CheckedObserverChannelDrafts {
         runtimeValueType: this.owner.types.booleanValueType(`${local}:checked-boolean`, binding, sourceType),
         valueDomain: [],
         isCollection: false,
-        usesCustomMatcher,
+        usesCustomMatcher: false,
+        observerCouplings: checkedBooleanObserverCouplings(),
         openReason: null,
       };
     }
@@ -124,6 +133,7 @@ export class CheckedObserverChannelDrafts {
         valueDomain: [],
         isCollection: null,
         usesCustomMatcher,
+        observerCouplings: checkedElementValueObserverCouplings(usesCustomMatcher),
         openReason: 'CheckedObserver checkbox mode depends on the bound source value shape; static evaluation did not close boolean, collection, or map mode.',
       };
     }
@@ -149,6 +159,9 @@ export class CheckedObserverChannelDrafts {
         valueDomain: [],
         isCollection: sourceShape.kind === 'collection' || sourceShape.kind === 'map' ? true : null,
         usesCustomMatcher,
+        observerCouplings: sourceShape.kind === 'map'
+          ? checkedMapObserverCouplings(usesCustomMatcher)
+          : checkedCollectionObserverCouplings(usesCustomMatcher),
         openReason: 'CheckedObserver checkbox value channel could not close the input model/value through static value or expression-backed binding.',
       };
     }
@@ -163,6 +176,7 @@ export class CheckedObserverChannelDrafts {
         primitiveValueDomain: elementValue.primitiveValueDomain,
         isCollection: true,
         usesCustomMatcher,
+        observerCouplings: checkedCollectionObserverCouplings(usesCustomMatcher),
         openReason: null,
       };
     }
@@ -176,6 +190,7 @@ export class CheckedObserverChannelDrafts {
       primitiveValueDomain: elementValue.primitiveValueDomain,
       isCollection: true,
       usesCustomMatcher,
+      observerCouplings: checkedMapObserverCouplings(usesCustomMatcher),
       openReason: null,
     };
   }
@@ -189,4 +204,51 @@ export class CheckedObserverChannelDrafts {
       ?? this.owner.types.primitiveLiteralDomainType(local, elementValue.primitiveValueDomain, binding.sourceAddressHandle)
       ?? this.owner.types.stringLiteralDomainType(local, elementValue.valueDomain, binding.sourceAddressHandle);
   }
+}
+
+function checkedElementValueObserverCouplings(
+  usesCustomMatcher: boolean,
+): readonly RuntimeBindingValueChannelCouplingKind[] {
+  return withCustomMatcherCoupling([
+    RuntimeBindingValueChannelCouplingKind.CheckedElementValueDomain,
+    RuntimeBindingValueChannelCouplingKind.CheckedElementValueObserver,
+  ], usesCustomMatcher);
+}
+
+function checkedRadioObserverCouplings(
+  usesCustomMatcher: boolean,
+): readonly RuntimeBindingValueChannelCouplingKind[] {
+  return withCustomMatcherCoupling([
+    RuntimeBindingValueChannelCouplingKind.CheckedElementValueDomain,
+    RuntimeBindingValueChannelCouplingKind.CheckedElementValueObserver,
+    RuntimeBindingValueChannelCouplingKind.CheckedRadioValueSync,
+  ], usesCustomMatcher);
+}
+
+function checkedBooleanObserverCouplings(): readonly RuntimeBindingValueChannelCouplingKind[] {
+  return [
+    RuntimeBindingValueChannelCouplingKind.CheckedBooleanSync,
+  ];
+}
+
+function checkedCollectionObserverCouplings(
+  usesCustomMatcher: boolean,
+): readonly RuntimeBindingValueChannelCouplingKind[] {
+  return withCustomMatcherCoupling([
+    RuntimeBindingValueChannelCouplingKind.CheckedElementValueDomain,
+    RuntimeBindingValueChannelCouplingKind.CheckedElementValueObserver,
+    RuntimeBindingValueChannelCouplingKind.CheckedCollectionObserver,
+    RuntimeBindingValueChannelCouplingKind.CheckedCollectionMembershipMutation,
+  ], usesCustomMatcher);
+}
+
+function checkedMapObserverCouplings(
+  usesCustomMatcher: boolean,
+): readonly RuntimeBindingValueChannelCouplingKind[] {
+  return withCustomMatcherCoupling([
+    RuntimeBindingValueChannelCouplingKind.CheckedElementValueDomain,
+    RuntimeBindingValueChannelCouplingKind.CheckedElementValueObserver,
+    RuntimeBindingValueChannelCouplingKind.CheckedCollectionObserver,
+    RuntimeBindingValueChannelCouplingKind.CheckedMapKeyedBooleanMutation,
+  ], usesCustomMatcher);
 }

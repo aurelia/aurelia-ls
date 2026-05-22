@@ -1,4 +1,4 @@
-import { resolve } from '@aurelia/kernel';
+import { resolve } from 'aurelia';
 import { RequestService } from '../services/request-service';
 
 export type ContactPreference = 'email' | 'phone';
@@ -9,6 +9,11 @@ export interface RequestTopicSummary {
   label: string;
 }
 
+export interface SupportAgent {
+  readonly id: string;
+  readonly name: string;
+}
+
 export class ServiceRequest {
   constructor(
     readonly id: string,
@@ -17,6 +22,7 @@ export class ServiceRequest {
     public urgent: boolean,
     public contactPreference: ContactPreference,
     public primaryTopic: RequestTopic | null,
+    public assignee: SupportAgent | null,
     public topics: RequestTopic[],
     public notes: string,
     public submitCount: number,
@@ -40,6 +46,10 @@ export class AppState {
   readonly billingTopic: RequestTopic = 'billing';
   readonly supportTopic: RequestTopic = 'support';
   readonly supportTopicSummary: RequestTopicSummary = { id: 'support', label: 'Support' };
+  readonly supportAgents: readonly SupportAgent[] = [
+    { id: 'agent-ada', name: 'Ada' },
+    { id: 'agent-grace', name: 'Grace' },
+  ];
 
   get requestIds(): readonly string[] {
     return [...this.requests.keys()];
@@ -77,6 +87,10 @@ export class AppState {
       request.submitCount += 1;
       await this.requestService.submitRequest(request);
     }
+  }
+
+  sameSupportAgent(left: SupportAgent | null, right: SupportAgent | null): boolean {
+    return left?.id === right?.id;
   }
 
   private replaceRequests(requests: readonly ServiceRequest[]): void {

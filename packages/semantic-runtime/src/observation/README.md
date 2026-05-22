@@ -117,7 +117,14 @@ static type surfaces rather than hydrated runtime values.
   lets consumers join a concrete template read to an accessor getter declaration or DI-state root,
   while keeping `ComputedObserverSource` as source-observer availability/projection rather than treating every getter
   declaration as an observed runtime use. Template collection reads carry the observed collection owner rather than the
-  array method token: direct owners such as `items.map(...)` can point back to the `items` slot/member, while temporary
+  array method token. Runtime `LetBinding` participates in the same connectable/data-flow lane: its direct
+  `bindingContext`/`overrideContext` property set is published as a `scope-slot` value channel, so template-local
+  adaptation such as `<let product.bind="state.products.readProduct(productId)">` retains both the source expression
+  and the produced local slot target instead of only surfacing later `product.*` reads. Template method calls stay
+  framework-shaped: undecorated source-method bodies are not proxy-observed by `astEvaluate`, so binding-owned observed
+  dependencies should expose the called method and its receiver/argument reads, while only `@computed`/`@astTrack`
+  methods add method-declaration dependency rows. Direct collection-read owners such as `items.map(...)` can point back
+  to the `items` slot/member, while temporary
   call-result owners such as `items.map(...).join(...)` remain open instead of pretending the temporary array has a
   declaration source. Collection-read rows and callback-body descent intentionally use separate framework sets:
   `autoObserveArrayMethods` drives collection-read rows, so `includes(...)` observes the array collection without
@@ -202,6 +209,9 @@ static type surfaces rather than hydrated runtime values.
   observer-locator rules. TypeChecker facts such as property existence and writability remain attached to the
   target-access row so a later strictness/policy layer can decide whether a framework-valid dynamic write should become
   a diagnostic.
+  API-facing bindable type surfaces preserve both declared and effective shape. A nullable object bindable can still
+  display as `Product | null`, while its effective non-nullable shape is `class`/`object`/`interface` so authoring
+  orientation can distinguish object component handoff from scalar ID handoff without source-name guessing.
 - `binding-data-flow-materializer.ts` consumes target-access or target-operation products plus instruction `Scope`
   applications after template scope construction. The outer materializer owns product/seam publication; the draft
   collaborators own target value type selection, source-expression projection, source write capability, shared
@@ -293,6 +303,12 @@ static type surfaces rather than hydrated runtime values.
   evaluator reasons. `binding-source-evaluation-frame.ts` owns source-to-evaluated-module lookup and per-module
   `StaticEvaluator` reuse for one binding-source reduction, so follow-up property/getter/function reads keep the
   original module policy, runtime host, and evaluator guardrails instead of resetting them at each access.
+  `AccessKeyed` now participates in the same value-side reduction: exact array/object reads such as
+  `routeInstructions[featuredInstructionIndex]` can close to their element/property value, exact object misses reduce
+  to `undefined`, and unknown array membership/order stays open instead of guessing a value.
+  Binary `+` string concatenation preserves `BindingScope` boundary holes as `EvaluationStringPatternValue` when the
+  other side is string-shaped, so consumers such as router resources can close authored static prefixes like
+  `'/products/' + product.id` without inventing router-local expression evaluation.
   Call expressions remain closed only for evaluator-local function values whose arguments reduce or can carry
   binding-scope boundary values; arbitrary host/userland runtime calls stay open with the binding-layer cause.
   Open reductions carry typed reason kinds such as runtime-only source value, missing static scope slot value, missing
@@ -328,17 +344,18 @@ static type surfaces rather than hydrated runtime values.
   value-channel drafts, select/checked observer branches, data-flow assignability, and API projections should not
   grow local primitive switch walkers.
   Element values can come from static `value`/`model` attributes or from lowered sibling `model.bind`/`value.bind`
-  property bindings. Dynamic element-property and setter accessors may have no declared TypeScript property type, for
-  example `model` on options or inputs, while still being valid Aurelia runtime writes; those channels use `unknown` as
-  the runtime intake type rather than pretending the missing DOM property is an open observer failure.
+  property bindings. Dynamic `model.bind` on options and inputs is the `element-model-value` channel: select observers
+  read option models as their value domain, and checked observers can subscribe to input model/value changes. It should
+  not be reported as an unknown native DOM property assignment.
 - `runtime-binding-observation.ts` owns `RuntimeBindingValueChannel`, `RuntimeBindingDataFlow`, their references, and
   their value/data-flow enums. The framework-shaped binding classes still live in the template runtime model, but the
   products that explain observer/accessor value shape and source/target data flow are materialized, typed, and
   registered through the observation substrate. Data-flow products carry both a display source name and a root source
   name so downstream app-topology joins can connect member chains and single-root interpolations back to their owning
   component members without reparsing expression text. The display source name preserves dynamic keyed source routes
-  through the same helper used by observed-dependency rows, while `sourceRootName` keeps the owner join key stable.
-  They also preserve the expression evaluator's source open kind so diagnostics can distinguish TypeChecker strictness,
+  and call arguments such as `$event` through the same helper used by observed-dependency rows, while `sourceRootName`
+  keeps the owner join key stable. They also preserve the expression evaluator's source open kind so diagnostics can
+  distinguish TypeChecker strictness,
   assignment no-ops, and runtime `astEvaluate` callable errors without reparsing or reclassifying the binding
   expression at the API boundary.
 - `product-details.ts` owns observation detail slots for those value-channel and data-flow products.
@@ -352,6 +369,16 @@ static type surfaces rather than hydrated runtime values.
   runtime intake type even when the source expression cannot be typed: Aurelia's attribute/content bindings receive
   `unknown` and then apply class truthiness, style stringification, attribute removal/stringification, or text-content
   stringification. Missing source members should remain source diagnostics, not erase target-side operation semantics.
+- Built-in template-controller value bindings are modeled as value channels without rewriting the framework target
+  surface. Raw controller properties such as `If.value`, `Switch.value`, `Case.value`, and fulfilled/rejected promise
+  branch `value` stay `unknown`, while `PromiseTemplateController.value` stays `Promise<unknown>` because that is what
+  the framework class exposes. The transported runtime value is a separate `runtimeValueType`/data-flow
+  `targetValueType`: truthiness channels keep the source expression type, switch owner channels keep the switched enum
+  or scalar type, promise owner channels keep the promise type, and fulfilled branch channels unwrap the owning
+  `promise.bind` value through the TypeChecker. Repeat owner bindings use the `template-controller-iteration` channel
+  and shared repeat-source compatibility instead of comparing authored sources to the framework's generic `Repeat.items`
+  property type. This lookup uses Controller.bind target-access rows because runtime stores bindings with the owner that
+  performs binding, not necessarily on the target template-controller frame.
 
 ## Boundaries
 
@@ -408,10 +435,18 @@ against the map value type during data-flow assignability. Radio source-to-targe
 when present, so a source typed `boolean | null` can correctly drive individual `model.bind="true"`, `false`, and
 `null` radios. Primitive radio/checkbox model domains also synthesize their runtime value type directly from the
 primitive domain before falling back to string-token domains, so a closed `null`/boolean/number model is not dependent
-on a successful checker projection merely to avoid becoming an open channel. `matcher.bind` is preserved on
-checked/select value-channel
-rows as `usesCustomMatcher` so diagnostics and authoring can distinguish default runtime equality from an app-supplied
-comparison function; the analyzer still does not execute the matcher body or derive equality semantics from it.
+on a successful checker projection merely to avoid becoming an open channel. `matcher.bind` is preserved both as its
+own `custom-matcher-function` binding channel and as `usesCustomMatcher` on the checked/select value-channel rows that
+consume comparison, so diagnostics and authoring can distinguish the authored function slot from default runtime
+equality. The analyzer still does not execute the matcher body or derive equality semantics from it.
+The boolean checkbox branch is the intentional exception: `CheckedObserver` ignores matcher comparison when the bound
+source is boolean-like or otherwise falls through to plain checked-state writes, so those rows do not report
+`usesCustomMatcher` or the custom-matcher observer coupling even if a `matcher.bind` sibling is authored.
+Rows also carry `observerCouplings` so public consumers can see the observer mechanisms behind the channel without
+reverse-engineering them from the channel name: select option domains, select option-list mutation observation, select
+array observation/mutation, checked element `model`/`value` observation, checked collection observation, checked
+collection/map mutations, and custom matcher comparison are explicit tags. Those tags are intentionally
+framework-mechanism facts; data-flow rows still own directional assignability and exact source write diagnostics.
 Non-literal dynamic element values remain explicit pressure.
 The checkbox branch must decide from the bound source shape before demanding an element model/value: boolean-like and
 non-collection sources use the checked boolean channel, while collection/map-like sources need the element value channel
@@ -483,10 +518,10 @@ framework-wrapped calls such as `find`, `filter`, `flatMap`, `slice`, `map.get`,
 as `every`, `findIndex`, `has`, `flatMap`, and `slice` are covered by the proxy contract; mutating methods that the
 framework does not observe as collection reads should not be added just to make the method list look complete.
 The object proxy handler is a separate branch from those collection handlers: ordinary object method calls observe the
-method property before invocation, while intercepted array/map/set methods spend wrapper semantics instead of a
-method-property read. Trackable method calls inside proxy dependency functions add that same object-handler
-method-property read plus either method-body proxy reads or explicit dependency rows, matching
-`ProxyObservable.trackableMethod`. The same chain model
+method property before invocation and, when invoked with the proxied receiver, their body reads can continue through the
+same proxy collector. Intercepted array/map/set methods spend wrapper semantics instead of a method-property read.
+Trackable method calls inside proxy dependency functions add that same object-handler method-property read plus either
+method-body proxy reads or explicit dependency rows, matching `ProxyObservable.trackableMethod`. The same chain model
 now spends Aurelia's `@nowrap` escape hatch: class-level nowrap observes the owning proxied property but stops
 downstream reads under the raw returned value, while field-level nowrap suppresses observation of the field itself and
 returns a raw value for any later reads. This is intentionally grounded in framework `ProxyObservable.canWrap(...)` /

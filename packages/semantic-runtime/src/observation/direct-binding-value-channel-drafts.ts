@@ -1,7 +1,9 @@
 import { splitWhitespace } from '../strings.js';
+import { normalizeHtmlTagName } from '../template/html-ir.js';
 import {
   AttributeBinding,
   RuntimeBindingSourceOperationKind,
+  RuntimeBindingTargetKind,
   RuntimeBindingTargetOperationKind,
   type RuntimeBindingSourceOperation,
   type RuntimeBindingTargetAccess,
@@ -9,6 +11,7 @@ import {
 } from '../template/runtime-binding.js';
 import {
   RuntimeBindingValueChannelAuthority,
+  RuntimeBindingValueChannelCouplingKind,
   RuntimeBindingValueChannelKind,
 } from './runtime-binding-observation.js';
 import type {
@@ -48,13 +51,28 @@ export class DirectBindingValueChannelDrafts {
         openReason: targetOperation.openReason,
       };
     }
+    if (
+      targetOperation.operationKind === RuntimeBindingTargetOperationKind.PropertySet
+      && (targetOperation.targetKind === RuntimeBindingTargetKind.BindingContext
+        || targetOperation.targetKind === RuntimeBindingTargetKind.OverrideContext)
+    ) {
+      return {
+        channelKind: RuntimeBindingValueChannelKind.ScopeSlot,
+        authority: sourceType == null
+          ? RuntimeBindingValueChannelAuthority.TargetOperation
+          : RuntimeBindingValueChannelAuthority.BindingExpressionAndTypeChecker,
+        runtimeValueType: runtimeInputType,
+        valueDomain: targetOperation.affectedNames,
+        isCollection: false,
+        openReason: null,
+      };
+    }
 
     switch (targetOperation.operationKind) {
       case RuntimeBindingTargetOperationKind.PropertySet:
       case RuntimeBindingTargetOperationKind.AttributeSet:
       case RuntimeBindingTargetOperationKind.ClassListAdd:
       case RuntimeBindingTargetOperationKind.StyleCssTextAppend:
-      case RuntimeBindingTargetOperationKind.EventListenerAdd:
         return {
           channelKind: RuntimeBindingValueChannelKind.Open,
           authority: RuntimeBindingValueChannelAuthority.Open,
@@ -62,6 +80,21 @@ export class DirectBindingValueChannelDrafts {
           valueDomain: targetOperation.affectedNames,
           isCollection: null,
           openReason: 'Renderer-owned static target operation reached AttributeBinding value-channel materialization.',
+        };
+      case RuntimeBindingTargetOperationKind.EventListenerAdd:
+        const invocationValueType = this.owner.types.eventHandlerInvocationValueType(
+          sourceType,
+          targetOperation.sourceAddressHandle,
+        );
+        return {
+          channelKind: RuntimeBindingValueChannelKind.EventHandlerInvocation,
+          authority: sourceType == null
+            ? RuntimeBindingValueChannelAuthority.TargetOperation
+            : RuntimeBindingValueChannelAuthority.BindingExpressionAndTypeChecker,
+          runtimeValueType: invocationValueType,
+          valueDomain: targetOperation.affectedNames,
+          isCollection: false,
+          openReason: null,
         };
       case RuntimeBindingTargetOperationKind.TextContentSet:
         return {
@@ -201,6 +234,37 @@ export class DirectBindingValueChannelDrafts {
     };
   }
 
+  elementModelValueChannelDraft(
+    targetAccess: RuntimeBindingTargetAccess,
+    readSourceType: BindingSourceTypeReader,
+  ): RuntimeBindingValueChannelDraft | null {
+    if (targetAccess.targetProperty !== 'model') {
+      return null;
+    }
+    const element = this.owner.htmlElementFor(targetAccess.targetNode);
+    const tagName = element == null ? null : normalizeHtmlTagName(element.tagName);
+    if (tagName !== 'INPUT' && tagName !== 'OPTION') {
+      return null;
+    }
+    const sourceType = readSourceType();
+    return {
+      channelKind: RuntimeBindingValueChannelKind.ElementModelValue,
+      authority: sourceType == null
+        ? RuntimeBindingValueChannelAuthority.TargetAccess
+        : RuntimeBindingValueChannelAuthority.BindingExpressionAndTypeChecker,
+      runtimeValueType: sourceType ?? this.owner.types.unknownRuntimeInputType(`${targetAccess.productHandle}:element-model-input`, targetAccess.sourceAddressHandle),
+      valueDomain: [],
+      isCollection: false,
+      observerCouplings: tagName === 'OPTION'
+        ? [RuntimeBindingValueChannelCouplingKind.SelectOptionValueDomain]
+        : [
+          RuntimeBindingValueChannelCouplingKind.CheckedElementValueDomain,
+          RuntimeBindingValueChannelCouplingKind.CheckedElementValueObserver,
+        ],
+      openReason: null,
+    };
+  }
+
   styleValueChannelDraft(
     binding: RuntimeValueChannelBinding,
     targetAccess: RuntimeBindingTargetAccess,
@@ -257,6 +321,36 @@ export class DirectBindingValueChannelDrafts {
       runtimeValueType: sourceType ?? this.owner.types.targetAccessRuntimeInputType(`${targetAccess.productHandle}:attribute-input`, targetAccess),
       valueDomain: [],
       isCollection: null,
+      openReason: null,
+    };
+  }
+
+  customMatcherFunctionValueChannelDraft(
+    local: string,
+    targetAccess: RuntimeBindingTargetAccess,
+    readSourceType: BindingSourceTypeReader,
+  ): RuntimeBindingValueChannelDraft | null {
+    if (targetAccess.targetProperty !== 'matcher') {
+      return null;
+    }
+    const target = this.owner.htmlElementFor(targetAccess.targetNode);
+    const tagName = target == null ? null : normalizeHtmlTagName(target.tagName);
+    if (tagName !== 'INPUT' && tagName !== 'SELECT') {
+      return null;
+    }
+    const sourceType = readSourceType();
+    return {
+      channelKind: RuntimeBindingValueChannelKind.CustomMatcherFunction,
+      authority: sourceType == null
+        ? RuntimeBindingValueChannelAuthority.TargetAccess
+        : RuntimeBindingValueChannelAuthority.BindingExpressionAndTypeChecker,
+      runtimeValueType: this.owner.types.customMatcherFunctionType(
+        `${local}:custom-matcher-function`,
+        sourceType,
+        targetAccess.sourceAddressHandle,
+      ),
+      valueDomain: [],
+      isCollection: false,
       openReason: null,
     };
   }

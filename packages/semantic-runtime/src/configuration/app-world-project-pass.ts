@@ -83,6 +83,10 @@ import {
   type RouteRecognizerMaterializationProjectResult,
 } from '../router/route-recognizer-materialization.js';
 import {
+  RouteContextParameterReadMaterializer,
+  type RouteContextParameterReadProjectResult,
+} from '../router/route-context-parameter-read-materialization.js';
+import {
   RouteRuntimeTopologyProjectPass,
   type RouteRuntimeTopologyProjectResult,
 } from '../router/route-runtime-topology.js';
@@ -202,6 +206,7 @@ export type AureliaAppWorldProjectPhaseName =
   | 'router-options-materialization'
   | 'route-context-materialization'
   | 'route-recognizer-materialization'
+  | 'route-context-parameter-reads'
   | 'i18n-translation-catalog'
   | 'state-store-materialization'
   | 'state-source-issues'
@@ -279,6 +284,8 @@ export class AureliaAppWorldProjectEmission {
     readonly routeContexts: RouteConfigContextMaterializationProjectResult,
     /** Route-recognizer configurable-route facts parsed from authored route-config paths. */
     readonly routeRecognizer: RouteRecognizerMaterializationProjectResult,
+    /** Source-backed RouteContext.getRouteParameters(...) calls correlated with recognized route path params. */
+    readonly routeContextParameterReads: RouteContextParameterReadProjectResult,
     /** Configuration recognition and kernel emission over the project. */
     readonly configuration: ConfigurationRecognitionProjectResult,
     /** Static i18n translation keys admitted from configuration resources for authoring. */
@@ -366,6 +373,12 @@ class AureliaAppWorldProjectConstructionFrame {
     const routerOptions = this.materializeRouterOptions(configuration);
     const routeContexts = this.materializeRouteContexts(routes, routerOptions, configuration);
     const routeRecognizer = this.materializeRouteRecognizer(routeContexts);
+    const routeContextParameterReads = this.materializeRouteContextParameterReads(
+      typeSystem,
+      resourceIndex,
+      routes,
+      routeRecognizer,
+    );
     const i18n = this.materializeI18nTranslationCatalog(configuration);
     const stateBase = this.materializeStateBase(configuration, typeSystem);
     const validation = this.materializeValidationSourceIssues(typeSystem, configuration);
@@ -421,6 +434,7 @@ class AureliaAppWorldProjectConstructionFrame {
       routerOptions,
       routeContexts,
       routeRecognizer,
+      routeContextParameterReads,
       configuration,
       i18n,
       state,
@@ -612,6 +626,24 @@ class AureliaAppWorldProjectConstructionFrame {
         this.store,
         this.project,
         routeContexts,
+      )
+    );
+  }
+
+  private materializeRouteContextParameterReads(
+    typeSystem: TypeSystemProject,
+    resourceIndex: ResourceDefinitionIndex,
+    routes: RouteConfigRecognitionProjectResult,
+    routeRecognizer: RouteRecognizerMaterializationProjectResult,
+  ): RouteContextParameterReadProjectResult {
+    return this.measure('route-context-parameter-reads', () =>
+      new RouteContextParameterReadMaterializer().materializeAndEmit(
+        this.store,
+        this.project,
+        typeSystem,
+        resourceIndex,
+        routes,
+        routeRecognizer,
       )
     );
   }
