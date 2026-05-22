@@ -11,6 +11,13 @@ source, value, expression, or template-local slot.
 
 - Preserve current TypeChecker type/member surfaces for template and expression inquiry.
 - Build one TypeScript Program/checker epoch over the same parsed source files used by static evaluation.
+- Read ordinary TypeScript project diagnostics from that same Program/tsconfig epoch, including config read/parse/option
+  diagnostics, so API/MCP repair surfaces do not shell out to `tsc` or construct a second checker path.
+- Keep ordinary project diagnostics distinct from LanguageService suggestion/code-action diagnostics. The current public
+  surface is intentionally `tsc --noEmit`-shaped correctness pressure; quick fixes, suggestion diagnostics, and
+  organize-import style actions belong in a future LSP/code-action layer.
+- Preserve locus cost: project-wide diagnostic inquiries can spend and cache all project Program diagnostics, but a
+  source-file inquiry should read only that Program source or owning config file instead of paying for every app file.
 - Remap evaluator/source-discovery AST nodes to their Program-owned counterparts before calling TypeScript checker APIs.
 - Keep the checker epoch app-local: use the booted project root's `tsconfig.json` when present, otherwise fall back to
   Aurelia-app-shaped defaults instead of inheriting the semantic-runtime package's own build config.
@@ -135,12 +142,15 @@ Program file under exactly one owner, such as the project, the semantic-runtime 
 libraries, a node_modules package name, external declarations, or external source. Use the overlapping buckets for
 semantic role attribution and the group rows for "which package/source class is carrying the text" attribution before
 changing root admission, dependency-cache policy, or inquiry depth.
-`TypeSystemProject` roots the TypeScript Program from the boot-admitted app TS/JS source files, project-local TS/JS
-modules reached by static evaluation, and ambient app declarations. External static-evaluation dependencies still enter
-the source-file indexes and the compiler host can serve their parsed SourceFiles when the Program reaches them through
-imports, but external dependency modules are dependencies rather than root files. This keeps the checker epoch aligned
-with the evaluated app graph, so resource target nodes discovered by evaluation can be Program-owned without widening
-roots to every dependency source file.
+`TypeSystemProject` roots the TypeScript Program from the union of parsed tsconfig root filenames, evaluated
+project-local TS/JS sources, and semantic-runtime ambient declarations. These are checker roots for app semantic
+analysis, not the same thing as ordinary TypeScript diagnostic eligibility. Source-discovered Aurelia resources can be
+valid semantic inputs even when the app's tsconfig does not root them directly, and checker-facing observation/resource
+passes still need Program-owned nodes for those files. Ordinary TypeScript diagnostics keep a separate tsconfig-shaped
+source set: when parsed root filenames exist, diagnostic reads only iterate those root files; without a parsed tsconfig,
+diagnostic reads fall back to project-local Program sources. External static-evaluation dependencies still enter the
+source-file indexes and the compiler host can serve their parsed SourceFiles when the Program reaches them through
+imports, but external dependency modules are dependencies rather than semantic root files.
 Checker-facing code should not assume every AST node that reaches semantic-runtime is owned by the TypeScript Program.
 Static evaluation, source discovery, and resource convergence can carry parsed nodes with the same file/span but a
 different AST identity from the Program epoch. Use `TypeSystemProject.readProgramNode(...)` or higher-level helpers such

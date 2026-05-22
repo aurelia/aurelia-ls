@@ -156,6 +156,11 @@ import {
   appDiagnosticSummaryRows,
 } from './app-diagnostics.js';
 import {
+  readSemanticTypeScriptDiagnosticRows,
+  readSemanticTypeScriptDiagnostics,
+  readSemanticTypeScriptDiagnosticSummary,
+} from './typescript-diagnostics.js';
+import {
   readConfigurationIssueRows,
 } from './configuration-projections.js';
 import {
@@ -308,6 +313,8 @@ import {
   type SemanticTemplateCursorInfoResult,
   type SemanticTemplateDiagnosticsQuery,
   type SemanticTemplateDiagnosticsResult,
+  type SemanticTypeScriptDiagnosticsResult,
+  type SemanticTypeScriptDiagnosticSummaryResult,
 } from './contracts.js';
 import type {
   SemanticRuntimeDetailDensityRow,
@@ -1919,6 +1926,10 @@ function appDiagnosticsDisplayText(
   return lines.join('\n');
 }
 
+function includeTypeScriptDiagnostics(query: Pick<SemanticAppQuery, 'diagnosticProjection'>): boolean {
+  return query.diagnosticProjection !== 'available-products';
+}
+
 function appDiagnosticSummaryDisplayText(
   rows: readonly SemanticAppDiagnosticSummaryRow[],
   totalDiagnosticRows: number,
@@ -2123,6 +2134,10 @@ export class SemanticApp {
         return this.answerQuery(query, () => this.appDiagnostics(query));
       case SemanticAppQueryKind.AppDiagnosticSummary:
         return this.answerQuery(query, () => this.appDiagnosticSummary(query));
+      case SemanticAppQueryKind.TypeScriptDiagnostics:
+        return this.answerQuery(query, () => this.typeScriptDiagnostics(query.page, query.sourceFile));
+      case SemanticAppQueryKind.TypeScriptDiagnosticSummary:
+        return this.answerQuery(query, () => this.typeScriptDiagnosticSummary(query.page, query.sourceFile));
       case SemanticAppQueryKind.EvaluationIssues:
         return this.answerQuery(query, () => this.evaluationIssues(query.page, query.detail));
       case SemanticAppQueryKind.ConfigurationIssues:
@@ -2604,10 +2619,53 @@ export class SemanticApp {
     );
   }
 
+  typeScriptDiagnostics(
+    page?: SemanticRuntimePageInput,
+    sourceFile?: SemanticRuntimeSourceFileInput | null,
+  ): SemanticRuntimeAnswer<SemanticTypeScriptDiagnosticsResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticTypeScriptDiagnosticsResult>({
+      kind: SemanticAppQueryKind.TypeScriptDiagnostics,
+      page,
+      sourceFile,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    return readSemanticTypeScriptDiagnostics(
+      this.emission.typeSystem,
+      this.project.projectKey,
+      sourceFile,
+      page,
+    );
+  }
+
+  typeScriptDiagnosticSummary(
+    page?: SemanticRuntimePageInput,
+    sourceFile?: SemanticRuntimeSourceFileInput | null,
+  ): SemanticRuntimeAnswer<SemanticTypeScriptDiagnosticSummaryResult> {
+    const claimed = this.answerPublicQueryIfNeeded<SemanticTypeScriptDiagnosticSummaryResult>({
+      kind: SemanticAppQueryKind.TypeScriptDiagnosticSummary,
+      page,
+      sourceFile,
+    });
+    if (claimed != null) {
+      return claimed;
+    }
+    return readSemanticTypeScriptDiagnosticSummary(
+      this.emission.typeSystem,
+      this.project.projectKey,
+      sourceFile,
+      page,
+    );
+  }
+
   private appDiagnosticRowsForQuery(
     query: SemanticAppQuery,
     detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`,
   ) {
+    const typeScriptRows = includeTypeScriptDiagnostics(query)
+      ? readSemanticTypeScriptDiagnosticRows(this.emission.typeSystem, this.project.projectKey, query.sourceFile)
+      : [];
     const evaluationRows = readEvaluationIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const configurationRows = readConfigurationIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
     const diRows = readDiIssueRows(this.emission, this.runtime.workspace.store, includeHandles(detail));
@@ -2623,6 +2681,7 @@ export class SemanticApp {
     return appDiagnosticRows(
       this.project.projectKey,
       query,
+      typeScriptRows,
       evaluationRows,
       configurationRows,
       diRows,
@@ -3607,12 +3666,15 @@ function projectCompilerOptionsCacheSummary(): SemanticRuntimeProjectCompilerOpt
     clearedEntries: cache.clearedEntries,
     pathMappingCount: cache.pathMappingCount,
     pathMappingTargetCount: cache.pathMappingTargetCount,
+    configDiagnosticCount: cache.configDiagnosticCount,
+    configRootFileCount: cache.configRootFileCount,
     cacheScope: 'process',
     counterScope: 'process-lifetime',
     cachedValuePolicy: 'compiler-options-by-project-root',
     summary:
       `Project compiler-options cache retains ${cache.entries} project-root option shape(s) ` +
       `with ${cache.pathMappingCount} path mapping(s) and ${cache.pathMappingTargetCount} target(s); ` +
+      `cached config diagnostics=${cache.configDiagnosticCount}; config root files=${cache.configRootFileCount}; ` +
       `lifetime counters are ${cache.hits} hit(s), ${cache.misses} miss(es), ${cache.writes} write(s), ` +
       `${cache.clearOperations} clear operation(s), and ${cache.clearedEntries} cleared entry(s).`,
   };

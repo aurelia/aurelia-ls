@@ -170,8 +170,13 @@ optional kernel-density breakdowns. App-world cache identity is semantic shape
 fixture, AOT, and exploration queries while `SemanticApp.ask(...)` records those answers in separate profile-shaped
 query-claim graphs.
 The compiler-options cache is reported separately from TypeSystem dependency SourceFile caching because it retains only
-tsconfig/path-mapping shape by project root and returns cloned options to TypeScript consumers. Treat it as boot/input
-read amplification visibility, not as app-world semantic retention.
+tsconfig/path-mapping/root-file shape and config diagnostics by project root, then returns cloned options, root filenames,
+and diagnostic rows to TypeScript consumers. Treat it as boot/input read amplification visibility, not as app-world
+semantic retention.
+Ordinary TypeScript diagnostics exposed through `TypeScriptDiagnostics`, `TypeScriptDiagnosticSummary`, and unified app
+diagnostics are Program/tsconfig correctness rows. They intentionally do not include LanguageService suggestion
+diagnostics, quick fixes, organize-import actions, or refactor edits; those are a future LSP/code-action surface that
+should reuse the same project epoch without changing the meaning of the repair-oriented diagnostic overview.
 Query-claim records distinguish the exact answer locus from invalidation epoch keys. For example, a cursor query uses a
 cursor-shaped locus for reuse/history but also depends on its source-file epoch; adapters that keep a runtime session
 open across edits should call `runtime.disposeQueryClaims({ sourceFilePath })` after a source change when they only need
@@ -716,8 +721,13 @@ It also exposes ambient `resolve(...)` calls that are definitely evaluated witho
 (`no_active_container_for_resolve` / `AUR0016`) and activation-time `resolve(null)` / `resolve(undefined)` key
 validation (`null_undefined_key` / `AUR0014`), while leaving caller-dependent function/member calls as topology facts
 rather than exact diagnostics.
-`AppDiagnostics` is an aggregation query over configuration, DI, evaluation, observation, template, resource, router,
-and route-recognizer diagnostic products. It preserves
+`AppDiagnostics` is an aggregation query over ordinary TypeScript diagnostics plus configuration, DI, evaluation,
+observation, template, resource, router, and route-recognizer diagnostic products. TypeScript rows come from the same
+TypeSystemProject checker epoch as the rest of semantic-runtime, but diagnostic eligibility is tsconfig-shaped rather
+than identical to every semantic checker root. The Program may include evaluated project-local Aurelia resources so
+observation and template analysis can ask the checker about Program-owned nodes, while ordinary TypeScript diagnostics
+only iterate the parsed tsconfig diagnostic source set when one exists. Config read/parse/option diagnostics are kept on
+the same surface, so public adapters do not need to shell out to `tsc` or build a second Program. It preserves
 `diagnosticDomain` and `relatedQueryKind` so callers can drill back into the owning query instead of treating app
 diagnostics as a separate semantic layer. The owning diagnostic rows are collected before the app-level page is applied;
 do not page a child query and then aggregate it, or pressure summaries will hide high-volume diagnostic classes.
@@ -726,11 +736,18 @@ framework code, severity, and owning query. Use it before raw rows when a large 
 rather than the first source-ordered page. App diagnostic row and summary answers also own compact `displayText` with
 severity/domain/code rollups and top samples or clusters, so MCP/LSP callers can pick the owning query family before
 opening raw rows.
-Diagnostic queries accept `diagnosticProjection`. `available-products` limits the answer to diagnostics backed by the
-opened app-world; `type-projection` may run answer-time TypeChecker owner/member projection for weak-member diagnostics.
+`TypeScriptDiagnostics` and `TypeScriptDiagnosticSummary` are explicit drill-down queries for ordinary TypeScript
+errors, warnings, and messages when the unified app diagnostic rows point at `diagnosticDomain: "typescript"`.
+`diagnosticProjection` is honored by the diagnostic families that advertise it in the query catalog:
+`AppDiagnostics`, `AppDiagnosticSummary`, and `TemplateDiagnostics`. `available-products` limits those answers to
+diagnostics backed by the opened app-world and deliberately omits ordinary TypeScript Program diagnostics; leaving the
+projection unset or using `type-projection` includes TypeScript diagnostics and may run answer-time TypeChecker
+owner/member projection for weak-member diagnostics. The focused TypeScript diagnostic queries are already an explicit
+request for Program/tsconfig diagnostics, so they do not downshift to `available-products`.
 `AppOverview` uses `available-products` for its nested diagnostic summary so a compact first read does not publish
-query-time type products. Explicit `AppDiagnostics`, `AppDiagnosticSummary`, and `TemplateDiagnostics` calls still
-default to `type-projection` because those are deliberate diagnostic surfaces.
+query-time type products or full Program diagnostics. Explicit `AppDiagnostics`, `AppDiagnosticSummary`,
+`TypeScriptDiagnostics`, `TypeScriptDiagnosticSummary`, and `TemplateDiagnostics` calls still default to the repair
+surface because those are deliberate diagnostic reads.
 Public transport adapters should expose this projection as a caller choice instead of hiding it behind local defaults:
 summary/orientation flows can request `available-products`, while deeper repair or authoring flows can request
 `type-projection` and accept the measured CPU/memory cost.

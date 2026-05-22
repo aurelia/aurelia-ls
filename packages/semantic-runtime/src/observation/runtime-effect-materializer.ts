@@ -601,7 +601,10 @@ function collectRunEffectObservedDependencyDrafts(
     expression: ts.PropertyAccessExpression,
     typeSystem: TypeSystemProject,
   ): RuntimeObservedDependencyDraft | null {
-    const programExpression = typeSystem.readProgramNode(expression) ?? expression;
+    const programExpression = typeSystem.readProgramNode(expression);
+    if (programExpression == null) {
+      return null;
+    }
     const symbol = typeSystem.checker.getSymbolAtLocation(programExpression.name);
     if (!symbolHasObservableGetterDecorator(symbol)) {
       return null;

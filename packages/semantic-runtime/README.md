@@ -18,6 +18,8 @@ Run the aggregate app API pressure lane with:
 
 ```powershell
 pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api
+pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api -- --fixture typescript-project-diagnostics
+pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api -- --root packages/semantic-runtime/fixtures/pressure
 ```
 
 Run route-scoped semantic contracts with:
@@ -54,6 +56,10 @@ claims.
 Its default input set is discovered from `fixtures/authoring/generated-*`, `fixtures/authoring/storefront`, and every
 subfolder under `fixtures/pressure`, so adding a durable fixture makes it part of the broad aggregate lane without
 updating the script.
+Use `--fixture <name>` for a focused authoring or pressure fixture (`pressure:<name>` and `authoring:<name>` are accepted
+when the folder name exists in both lanes). Use `--root <path>` for one custom app root or a fixture collection root. The
+direct CLI filters are the preferred first narrowing step during semantic-runtime work because they make the selected
+locus visible in the printed request shape and avoid relying on lingering environment variables.
 
 Refresh durable generated authoring fixtures from their recipe source plans with:
 

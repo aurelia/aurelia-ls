@@ -85,12 +85,19 @@ export function semanticAppQueryMaterializationPolicy(
   query: SemanticAppQuery,
   catalogPolicy: SemanticQueryMaterializationPolicy,
 ): SemanticQueryMaterializationPolicy {
-  return query.diagnosticProjection === 'available-products'
+  return diagnosticProjectionControlsMaterialization(query)
+    && query.diagnosticProjection === 'available-products'
     && catalogPolicy === 'query-type-projection'
     ? 'projection-only'
     : query.includeTypeSurfaces === true
       ? 'query-type-projection'
     : catalogPolicy;
+}
+
+function diagnosticProjectionControlsMaterialization(query: SemanticAppQuery): boolean {
+  return query.kind === SemanticAppQueryKind.AppDiagnostics
+    || query.kind === SemanticAppQueryKind.AppDiagnosticSummary
+    || query.kind === SemanticAppQueryKind.TemplateDiagnostics;
 }
 
 export function semanticAppQueryBatchMaterializationPolicy(
@@ -193,6 +200,8 @@ export function defaultInquiryProfileForRoutedAppQuery(
     return request.kind === SemanticAppQueryKind.TemplateDiagnostics
       || request.kind === SemanticAppQueryKind.AppDiagnostics
       || request.kind === SemanticAppQueryKind.AppDiagnosticSummary
+      || request.kind === SemanticAppQueryKind.TypeScriptDiagnostics
+      || request.kind === SemanticAppQueryKind.TypeScriptDiagnosticSummary
       ? 'lsp-diagnostics'
       : 'mcp-orientation';
   }
@@ -211,6 +220,8 @@ export function defaultInquiryProfileForRoutedAppQueryBatch(
       query.kind === SemanticAppQueryKind.TemplateDiagnostics
       || query.kind === SemanticAppQueryKind.AppDiagnostics
       || query.kind === SemanticAppQueryKind.AppDiagnosticSummary
+      || query.kind === SemanticAppQueryKind.TypeScriptDiagnostics
+      || query.kind === SemanticAppQueryKind.TypeScriptDiagnosticSummary
     )
   )) {
     return 'lsp-diagnostics';

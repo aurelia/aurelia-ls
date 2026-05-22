@@ -1,4 +1,4 @@
-import { readdirSync } from 'node:fs';
+import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -27,7 +27,8 @@ const defaultAppApiPressureAnalysisKinds = new Set([
   SemanticProjectAnalysisKind.AppWorld,
   SemanticProjectAnalysisKind.ResourceLibraryAuthoring,
 ]);
-const roots = pressureRoots();
+const cliOptions = parsePressureCliOptions(process.argv.slice(2));
+const roots = pressureRoots(cliOptions);
 const analysisDepth = pressureAnalysisDepth();
 const projectShapeFilter = pressureProjectShapeFilter();
 const projectKeyFilter = pressureProjectKeyFilter();
@@ -45,6 +46,8 @@ console.log(`analysis-depth: ${analysisDepth}`);
 console.log(`project-shapes: ${projectShapeFilter == null ? 'all' : [...projectShapeFilter].join(',')}`);
 console.log(`project-keys: ${projectKeyFilter == null ? 'all' : `${projectKeyFilter.size} selected`}`);
 console.log(`project-root-dirs: ${projectRootDirFilter == null ? 'all' : `${projectRootDirFilter.length} selected`}`);
+console.log(`fixture-filter: ${cliOptions.fixtureNames.length === 0 ? 'all' : cliOptions.fixtureNames.join(',')}`);
+console.log(`root-filter: ${cliOptions.rootEntries.length === 0 ? 'all' : `${cliOptions.rootEntries.length} selected`}`);
 console.log(`project-discovery: ${projectDiscovery ?? 'default'}`);
 console.log(`default-analysis-policy: ${projectShapeFilter == null ? 'app-world,resource-library-authoring' : 'shape-filter-explicit'}`);
 console.log(`detail-mode: ${detailMode}`);
@@ -186,6 +189,7 @@ function printInputSummary(aggregate, requestMilliseconds) {
     metricPart('fetchClientIssues', aggregate.fetchClientIssues),
     metricPart('dialogIssues', aggregate.dialogIssues),
     metricPart('diagnostics', aggregate.templateDiagnostics),
+    metricPart('tsDiagnostics', aggregate.typeScriptDiagnostics),
     metricPart('appDiagnostics', aggregate.appDiagnostics),
     metricPart('resourceIssues', aggregate.resourceIssues),
     metricPart(
@@ -699,6 +703,12 @@ function printAggregateCounts(aggregate) {
   printCounts('template diagnostic missing inputs', aggregate.templateDiagnosticMissingInputs, 18);
   printCounts('template diagnostic missing input fixtures', aggregate.templateDiagnosticMissingInputFixtureKeys, 18);
   printCounts('template diagnostic suggestions', aggregate.templateDiagnosticSuggestions, 18);
+  printCounts('TypeScript diagnostic phases', aggregate.typeScriptDiagnosticPhases);
+  printCounts('TypeScript diagnostic categories', aggregate.typeScriptDiagnosticCategories);
+  printCounts('TypeScript diagnostic severities', aggregate.typeScriptDiagnosticSeverities);
+  printCounts('TypeScript diagnostic kinds', aggregate.typeScriptDiagnosticKinds, 18);
+  printCounts('TypeScript diagnostic source labels', aggregate.typeScriptDiagnosticSourceLabels, 18);
+  printCounts('TypeScript diagnostic source coverage', aggregate.typeScriptDiagnosticSourceCoverage);
   printCounts('app diagnostic domains', aggregate.appDiagnosticDomains);
   printCounts('app diagnostic kinds', aggregate.appDiagnosticKinds, 18);
   printCounts('app diagnostic framework error codes', aggregate.appDiagnosticFrameworkErrorCodes, 18);
@@ -918,6 +928,10 @@ function printCompactAggregateCounts(aggregate) {
   printCompactCounts('templates.missing-inputs', aggregate.templateDiagnosticMissingInputs);
   printCompactCounts('templates.missing-input-fixtures', aggregate.templateDiagnosticMissingInputFixtureKeys, 10);
   printCompactCounts('templates.suggestions', aggregate.templateDiagnosticSuggestions);
+  printCompactCounts('typescript.diagnostic-phases', aggregate.typeScriptDiagnosticPhases);
+  printCompactCounts('typescript.diagnostic-kinds', aggregate.typeScriptDiagnosticKinds);
+  printCompactCounts('typescript.diagnostic-source-labels', aggregate.typeScriptDiagnosticSourceLabels);
+  printCompactCounts('typescript.diagnostic-source-coverage', aggregate.typeScriptDiagnosticSourceCoverage);
   printCompactCounts('app.diagnostic-domains', aggregate.appDiagnosticDomains);
   printCompactCounts('app.diagnostic-kinds', aggregate.appDiagnosticKinds);
   printCompactCounts('app.diagnostic-error-codes', aggregate.appDiagnosticFrameworkErrorCodes);
@@ -1309,6 +1323,12 @@ function printRawAggregateCounts(aggregate) {
   printCounts('template diagnostic owner origins', aggregate.templateDiagnosticOwnerOrigins, 18);
   printCounts('template diagnostic site kinds', aggregate.templateDiagnosticSiteKinds, 18);
   printCounts('template diagnostic value-site kinds', aggregate.templateDiagnosticValueSiteKinds, 18);
+  printCounts('TypeScript diagnostic phases', aggregate.typeScriptDiagnosticPhases);
+  printCounts('TypeScript diagnostic categories', aggregate.typeScriptDiagnosticCategories);
+  printCounts('TypeScript diagnostic severities', aggregate.typeScriptDiagnosticSeverities);
+  printCounts('TypeScript diagnostic kinds', aggregate.typeScriptDiagnosticKinds, 18);
+  printCounts('TypeScript diagnostic source labels', aggregate.typeScriptDiagnosticSourceLabels, 18);
+  printCounts('TypeScript diagnostic source coverage', aggregate.typeScriptDiagnosticSourceCoverage);
   printCounts('validation issue kinds', aggregate.validationIssueKinds);
   printCounts('validation issue framework error codes', aggregate.validationIssueFrameworkErrorCodes, 18);
   printCounts('fetch-client issue kinds', aggregate.fetchClientIssueKinds);
@@ -1453,6 +1473,7 @@ async function readPressureForRoot(root) {
     bindables: 0,
     watches: 0,
     templateDiagnostics: 0,
+    typeScriptDiagnostics: 0,
     appDiagnostics: 0,
     configurationIssues: 0,
     evaluationIssues: 0,
@@ -1718,6 +1739,12 @@ async function readPressureForRoot(root) {
     templateDiagnosticOwnerOrigins: {},
     templateDiagnosticSiteKinds: {},
     templateDiagnosticValueSiteKinds: {},
+    typeScriptDiagnosticPhases: {},
+    typeScriptDiagnosticCategories: {},
+    typeScriptDiagnosticSeverities: {},
+    typeScriptDiagnosticKinds: {},
+    typeScriptDiagnosticSourceLabels: {},
+    typeScriptDiagnosticSourceCoverage: {},
     appDiagnosticDomains: {},
     appDiagnosticAuthorities: {},
     appDiagnosticKinds: {},
@@ -2379,6 +2406,21 @@ async function readPressureForRoot(root) {
         increment(aggregate.templateDiagnosticOwnerOrigins, row.ownerTypeOrigin ?? 'none');
         increment(aggregate.templateDiagnosticSiteKinds, row.siteKind);
         increment(aggregate.templateDiagnosticValueSiteKinds, row.valueSiteKind ?? 'none');
+      }
+
+      const typeScriptDiagnosticRows = await measure(timings, 'query-typescript-diagnostics', () =>
+        pagedRows(app, SemanticAppQueryKind.TypeScriptDiagnostics),
+      );
+      increment(aggregate.outcomes, `typescript-diagnostics:${typeScriptDiagnosticRows.outcome}`);
+      increment(aggregate.pageCounts, 'typescript-diagnostics', typeScriptDiagnosticRows.pages);
+      aggregate.typeScriptDiagnostics += typeScriptDiagnosticRows.rows.length;
+      for (const row of typeScriptDiagnosticRows.rows) {
+        increment(aggregate.typeScriptDiagnosticPhases, row.phase);
+        increment(aggregate.typeScriptDiagnosticCategories, row.category);
+        increment(aggregate.typeScriptDiagnosticSeverities, row.severity);
+        increment(aggregate.typeScriptDiagnosticKinds, row.diagnosticKind);
+        increment(aggregate.typeScriptDiagnosticSourceLabels, row.typescriptSource ?? 'none');
+        increment(aggregate.typeScriptDiagnosticSourceCoverage, row.source == null ? 'no-source' : 'source');
       }
 
       const appDiagnosticRows = await measure(timings, 'query-app-diagnostics', () =>
@@ -3537,17 +3579,99 @@ async function pagedRows(app, kind) {
   }
 }
 
-function pressureRoots() {
+function pressureRoots(options) {
+  const cliRoots = [
+    ...options.rootEntries.flatMap((entry) => fixtureCollectionRootsFor(resolvePressureRootEntry(entry))),
+    ...options.fixtureNames.flatMap((name) => fixtureRootsForName(name)),
+  ];
+  if (cliRoots.length > 0) {
+    return uniqueSortedPaths(cliRoots);
+  }
   const raw = process.env.SEMANTIC_RUNTIME_PRESSURE_ROOTS;
   if (raw == null || raw.trim().length === 0) {
     return defaultRoots;
   }
-  return [...new Set(raw
+  return uniqueSortedPaths(raw
     .split(path.delimiter)
     .map((entry) => entry.trim())
     .filter((entry) => entry.length > 0)
-    .map((entry) => path.isAbsolute(entry) ? path.resolve(entry) : path.resolve(workspaceRoot, entry))
-    .flatMap((root) => fixtureCollectionRootsFor(root)))]
+    .flatMap((entry) => fixtureCollectionRootsFor(resolvePressureRootEntry(entry))));
+}
+
+function parsePressureCliOptions(args) {
+  const fixtureNames = [];
+  const rootEntries = [];
+  for (let index = 0; index < args.length; index += 1) {
+    const arg = args[index];
+    if (arg === '--fixture' || arg === '--fixtures') {
+      fixtureNames.push(...splitCliList(requireCliValue(args, index, arg)));
+      index += 1;
+      continue;
+    }
+    if (arg === '--root' || arg === '--roots' || arg === '--pressureRoot' || arg === '--pressureRoots') {
+      rootEntries.push(...splitCliList(requireCliValue(args, index, arg)));
+      index += 1;
+      continue;
+    }
+    if (arg === '--help' || arg === '-h') {
+      console.log([
+        'Usage: pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api -- [--fixture <name>] [--root <path>]',
+        'Use --fixture pressure-name, pressure:<name>, or authoring:<name> for focused fixture pressure.',
+        'Use --root for a custom fixture root or fixture collection root.',
+      ].join('\n'));
+      process.exit(0);
+    }
+    throw new Error(`Unsupported app-api pressure argument '${arg}'. Use --fixture <name> or --root <path>.`);
+  }
+  return {
+    fixtureNames: [...new Set(fixtureNames)].sort((left, right) => left.localeCompare(right)),
+    rootEntries: [...new Set(rootEntries)].sort((left, right) => left.localeCompare(right)),
+  };
+}
+
+function requireCliValue(args, index, key) {
+  const value = args[index + 1];
+  if (value == null || value.startsWith('--')) {
+    throw new Error(`Missing value for ${key}.`);
+  }
+  return value;
+}
+
+function splitCliList(value) {
+  return value
+    .split(/[;,]/u)
+    .map((entry) => entry.trim())
+    .filter((entry) => entry.length > 0);
+}
+
+function resolvePressureRootEntry(entry) {
+  return path.isAbsolute(entry) ? path.resolve(entry) : path.resolve(workspaceRoot, entry);
+}
+
+function fixtureRootsForName(name) {
+  const candidates = fixtureRootCandidatesForName(name);
+  const roots = candidates.filter((candidate) => existsSync(candidate) && fixtureRootHasFiles(candidate));
+  if (roots.length === 0) {
+    throw new Error(`No pressure fixture matched '${name}'. Use pressure:<name>, authoring:<name>, or --root <path>.`);
+  }
+  return roots;
+}
+
+function fixtureRootCandidatesForName(name) {
+  if (name.startsWith('pressure:')) {
+    return [path.join(pressureFixtureRoot, name.slice('pressure:'.length))];
+  }
+  if (name.startsWith('authoring:')) {
+    return [path.join(authoringFixtureRoot, name.slice('authoring:'.length))];
+  }
+  return [
+    path.join(pressureFixtureRoot, name),
+    path.join(authoringFixtureRoot, name),
+  ];
+}
+
+function uniqueSortedPaths(paths) {
+  return [...new Set(paths.map((entry) => path.resolve(entry)))]
     .sort((left, right) => left.localeCompare(right));
 }
 

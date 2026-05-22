@@ -151,12 +151,18 @@ export class TypeSystemProject {
     readonly program: ts.Program,
     /** Checker owned by the current Program. */
     readonly checker: ts.TypeChecker,
+    /** Diagnostics observed while reading or parsing the project's tsconfig, if any. */
+    readonly configDiagnostics: readonly ts.Diagnostic[],
+    /** Absolute tsconfig path that produced configDiagnostics, when one was present. */
+    readonly configFilePath: string | null,
     /** Timing profile for this checker epoch. */
     readonly profile: TypeSystemProjectProfile,
     private readonly sourceFilesByModuleKey: ReadonlyMap<string, ts.SourceFile>,
     private readonly sourceFilesByPath: ReadonlyMap<string, ts.SourceFile>,
     private readonly moduleKeysByPath: ReadonlyMap<string, string>,
     private readonly programSourceFilesByPath: ReadonlyMap<string, ts.SourceFile>,
+    private readonly ambientSourcePaths: ReadonlySet<string>,
+    private readonly diagnosticSourcePaths: ReadonlySet<string> | null,
   ) {}
 
   /** Read a source file by evaluator module key. */
@@ -176,6 +182,19 @@ export class TypeSystemProject {
     return this.programSourceFilesByPath.get(canonicalTypeSystemPath(resolveProjectPath(this.project.rootDir, fileName)))
       ?? this.programSourceFilesByPath.get(canonicalTypeSystemPath(resolveWorkspacePath(this.project.workspaceRootDir, fileName)))
       ?? null;
+  }
+
+  /** Read Program-owned TS/JS source files admitted as app source by this project frame. */
+  readProjectProgramSourceFiles(): readonly ts.SourceFile[] {
+    const projectRootPath = canonicalTypeSystemPath(this.project.rootDir);
+    return [...this.programSourceFilesByPath.values()]
+      .filter((sourceFile) => typeSystemProjectProgramDiagnosticSourceFile(
+        sourceFile.fileName,
+        projectRootPath,
+        this.ambientSourcePaths,
+        this.diagnosticSourcePaths,
+      ))
+      .sort((left, right) => left.fileName.localeCompare(right.fileName));
   }
 
   /**
@@ -403,7 +422,12 @@ export class TypeSystemProjectBuilder {
       () => sourceFiles.byPath.size,
     );
 
-    const rootNames = typeSystemProgramRootNames(project, evaluatedSources, projectOptions.ambientSourceFiles);
+    const rootNames = typeSystemProgramRootNames(
+      project,
+      evaluatedSources,
+      projectOptions.configRootFileNames,
+      projectOptions.ambientSourceFiles,
+    );
     const program = measureTypeSystemProjectPhase(
       phases,
       'program',
@@ -434,6 +458,8 @@ export class TypeSystemProjectBuilder {
       evaluation,
       program,
       checker,
+      projectOptions.configDiagnostics,
+      projectOptions.configFilePath,
       {
         totalMilliseconds: performance.now() - started,
         phases,
@@ -461,6 +487,8 @@ export class TypeSystemProjectBuilder {
       sourceFiles.byPath,
       sourceFiles.moduleKeyByPath,
       programSourceFilesByPath,
+      ambientSourcePaths,
+      typeSystemDiagnosticSourcePaths(projectOptions.configRootFileNames),
     );
   }
 }
@@ -860,15 +888,25 @@ function normalizedTypeSystemPathSet(
 function typeSystemProgramRootNames(
   project: ProjectBootFrame,
   evaluatedSources: ReturnType<StaticProjectEvaluationResult['readEvaluatedSources']>,
+  configRootFileNames: readonly string[] | null,
   ambientSourceFiles: readonly ts.SourceFile[],
 ): readonly string[] {
   const rootNames: string[] = [];
   const seen = new Set<string>();
-  for (const admission of project.sourceFiles) {
-    if (!isTypeSystemProgramRootAdmission(admission)) {
-      continue;
+  if (configRootFileNames == null) {
+    for (const admission of project.sourceFiles) {
+      if (!isTypeSystemProgramRootAdmission(admission)) {
+        continue;
+      }
+      addUniqueTypeSystemRootName(rootNames, seen, resolveProjectPath(project.rootDir, admission.path));
     }
-    addUniqueTypeSystemRootName(rootNames, seen, resolveProjectPath(project.rootDir, admission.path));
+  } else {
+    for (const fileName of configRootFileNames) {
+      if (!isTypeSystemProgramRootSourceFile(fileName)) {
+        continue;
+      }
+      addUniqueTypeSystemRootName(rootNames, seen, fileName);
+    }
   }
   const projectRootPath = canonicalTypeSystemPath(project.rootDir);
   for (const source of evaluatedSources) {
@@ -885,6 +923,17 @@ function typeSystemProgramRootNames(
     addUniqueTypeSystemRootName(rootNames, seen, ambientSourceFile.fileName);
   }
   return rootNames;
+}
+
+function typeSystemDiagnosticSourcePaths(
+  configRootFileNames: readonly string[] | null,
+): ReadonlySet<string> | null {
+  if (configRootFileNames == null) {
+    return null;
+  }
+  return normalizedTypeSystemPathSet(
+    configRootFileNames.filter(isTypeSystemProgramRootSourceFile),
+  );
 }
 
 function addUniqueTypeSystemRootName(
@@ -906,6 +955,21 @@ function isTypeSystemProgramRootAdmission(
   return admission.role === SourceFileRole.AppSource
     && isStaticEvaluationSource(admission.language)
     && isTypeSystemProgramRootSourceFile(admission.path);
+}
+
+function typeSystemProjectProgramDiagnosticSourceFile(
+  fileName: string,
+  projectRootPath: string,
+  ambientSourcePaths: ReadonlySet<string>,
+  diagnosticSourcePaths: ReadonlySet<string> | null,
+): boolean {
+  const normalized = canonicalTypeSystemPath(fileName);
+  return isTypeSystemPathAtOrUnder(normalized, projectRootPath)
+    && !ambientSourcePaths.has(normalized)
+    && !normalized.includes('/node_modules/')
+    && !isDefaultLibrarySourceFile(normalized)
+    && isTypeSystemProgramRootSourceFile(normalized)
+    && (diagnosticSourcePaths == null || diagnosticSourcePaths.has(normalized));
 }
 
 function createTypeSystemCompilerHost(

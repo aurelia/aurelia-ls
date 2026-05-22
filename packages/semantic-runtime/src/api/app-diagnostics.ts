@@ -17,6 +17,7 @@ import type {
   SemanticRouteRecognizerIssueRow,
   SemanticStateIssueRow,
   SemanticTemplateDiagnosticRow,
+  SemanticTypeScriptDiagnosticRow,
   SemanticValidationIssueRow,
 } from './contracts.js';
 import type { SemanticSourceReference } from './source-reference.js';
@@ -24,6 +25,7 @@ import type { SemanticSourceReference } from './source-reference.js';
 export function appDiagnosticRows(
   projectKey: string,
   query: SemanticAppQuery,
+  typeScriptRows: readonly SemanticTypeScriptDiagnosticRow[],
   evaluationRows: readonly SemanticEvaluationIssueRow[],
   configurationRows: readonly SemanticConfigurationIssueRow[],
   diRows: readonly SemanticDiIssueRow[],
@@ -39,6 +41,9 @@ export function appDiagnosticRows(
 ): readonly SemanticAppDiagnosticRow[] {
   const sourceFilePath = query.sourceFile?.filePath ?? null;
   return [
+    ...typeScriptRows
+      .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
+      .map(typeScriptAppDiagnosticRow),
     ...evaluationRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
       .map(evaluationAppDiagnosticRow),
@@ -161,6 +166,22 @@ function templateDiagnosticContributesToAppDiagnostics(
   row: SemanticTemplateDiagnosticRow,
 ): boolean {
   return row.diagnosticKind !== 'router-framework-error';
+}
+
+function typeScriptAppDiagnosticRow(
+  row: SemanticTypeScriptDiagnosticRow,
+): SemanticAppDiagnosticRow {
+  return {
+    projectKey: row.projectKey,
+    diagnosticDomain: 'typescript',
+    diagnosticKind: row.diagnosticKind,
+    diagnosticAuthority: 'typescript',
+    frameworkErrorCode: null,
+    severity: row.severity,
+    summary: row.message,
+    source: row.source,
+    relatedQueryKind: 'typescript-diagnostics' satisfies `${SemanticAppQueryKind}`,
+  };
 }
 
 function evaluationAppDiagnosticRow(

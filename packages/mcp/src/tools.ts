@@ -171,7 +171,7 @@ export function registerAureliaSemanticRuntimeTools(
     aureliaMcpToolNames.appQuery,
     {
       title: 'Aurelia App Query',
-      description: 'Forward a semantic-runtime app query kind against an opened Aurelia app.',
+      description: 'Forward a semantic-runtime app query kind against an opened Aurelia app, including focused drill-downs such as typescript-diagnostics after a diagnostic overview cluster.',
       inputSchema: appQueryInputSchema,
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
@@ -183,7 +183,7 @@ export function registerAureliaSemanticRuntimeTools(
     aureliaMcpToolNames.appQueryBatch,
     {
       title: 'Aurelia App Query Batch',
-      description: 'Forward several semantic-runtime app query kinds through one opened Aurelia app and one query-claim disposal boundary.',
+      description: 'Forward several semantic-runtime app query kinds through one opened Aurelia app and one query-claim disposal boundary, including diagnostics plus focused TypeScript drill-downs.',
       inputSchema: appQueryBatchInputSchema,
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
@@ -219,7 +219,7 @@ export function registerAureliaSemanticRuntimeTools(
     aureliaMcpToolNames.diagnosticOverview,
     {
       title: 'Aurelia Diagnostic Overview',
-      description: 'Group app diagnostics by domain, kind, authority, severity, framework code, and owning query.',
+      description: 'Group app diagnostics, including ordinary TypeScript project diagnostics, by domain, kind, authority, severity, framework code, and owning query. Use this after lint, formatter, or autofix tools before declaring an app clean.',
       inputSchema: diagnosticOverviewInputSchema,
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,
@@ -231,7 +231,7 @@ export function registerAureliaSemanticRuntimeTools(
     aureliaMcpToolNames.appDiagnostics,
     {
       title: 'Aurelia App Diagnostics',
-      description: 'Read semantic-runtime diagnostics for an app or source file.',
+      description: 'Read semantic-runtime diagnostics for an app or source file, including ordinary TypeScript project diagnostics unless diagnosticProjection=available-products. Use after source-changing tools when exact rows are needed.',
       inputSchema: appDiagnosticsInputSchema,
       outputSchema: aureliaMcpResponseOutputSchema,
       annotations: readOnlyClosedWorldToolAnnotations,

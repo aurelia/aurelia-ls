@@ -196,11 +196,16 @@ catalogued `pagingKind` modes. It also exposes `minimumAnalysisDepth`, which the
 opens when the caller did not choose a depth. Pass `group` or `queryKind` when only one slice of the catalog is needed.
 The query catalog text is semantic-runtime-owned and includes the returned query kinds, result roles, depth/boundary
 costs, and batch/summary-first hints, so MCP clients do not need local query-selection prose.
-Diagnostic tools and the generic app query accept `diagnosticProjection`: `available-products` answers from diagnostics
-already materialized by the opened app-world, while `type-projection` may spend answer-time TypeChecker work for weak
-owner/member analysis. Keep orientation-style reads cheap unless the caller explicitly needs the richer diagnostic
-surface. Diagnostic and open-seam overview text is semantic-runtime-owned too: it reports severity/domain/code or
-seam-kind/reason-kind clusters before raw rows are paged.
+Diagnostic tools and the generic app query accept `diagnosticProjection` for query-catalog rows that advertise it:
+`available-products` answers from diagnostics already materialized by the opened app-world, while the explicit diagnostic
+surface includes ordinary TypeScript project diagnostics from semantic-runtime's Program/tsconfig epoch, including
+`tsconfig.json` read/parse/option diagnostics, and may spend answer-time TypeChecker work for weak owner/member analysis.
+Focused `typescript-diagnostics` and `typescript-diagnostic-summary` reads are already explicit Program/tsconfig
+diagnostic requests, so they do not downshift to `available-products`. Keep orientation-style reads cheap unless the
+caller explicitly needs the richer diagnostic surface. After lint or formatter autofixes, rerun
+`aurelia_diagnostic_overview`, `aurelia_app_diagnostics`, or `aurelia_app_query` with
+`queryKind=typescript-diagnostic-summary` before treating the app as clean. Diagnostic and open-seam overview text is
+semantic-runtime-owned too: it reports severity/domain/code or seam-kind/reason-kind clusters before raw rows are paged.
 All query tools are annotated as read-only, closed-world MCP tools. `aurelia_clear_analysis_cache` is annotated as a
 non-destructive, idempotent cache-management tool because it clears cached app epochs inside retained semantic-runtime
 sessions, not source files or project configuration. Use `aurelia_analysis_cache_overview` while hand-testing a

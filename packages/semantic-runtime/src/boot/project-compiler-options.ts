@@ -22,12 +22,23 @@ export interface ProjectCompilerOptionsCacheOverview {
   readonly clearedEntries: number;
   readonly pathMappingCount: number;
   readonly pathMappingTargetCount: number;
+  readonly configDiagnosticCount: number;
+  readonly configRootFileCount: number;
 }
 
 interface ProjectCompilerOptionsCacheEntry {
-  readonly options: ts.CompilerOptions;
+  readonly result: ProjectCompilerOptionsResult;
   readonly pathMappingCount: number;
   readonly pathMappingTargetCount: number;
+  readonly configDiagnosticCount: number;
+  readonly configRootFileCount: number;
+}
+
+export interface ProjectCompilerOptionsResult {
+  readonly options: ts.CompilerOptions;
+  readonly configFilePath: string | null;
+  readonly diagnostics: readonly ts.Diagnostic[];
+  readonly rootFileNames: readonly string[] | null;
 }
 
 const projectCompilerOptionsCache = new Map<string, ProjectCompilerOptionsCacheEntry>();
@@ -42,29 +53,42 @@ export function buildProjectCompilerOptions(
   rootDir: string,
   discoveryRootDirs: readonly string[] = [],
 ): ts.CompilerOptions {
+  return buildProjectCompilerOptionsResult(rootDir, discoveryRootDirs).options;
+}
+
+export function buildProjectCompilerOptionsResult(
+  rootDir: string,
+  discoveryRootDirs: readonly string[] = [],
+): ProjectCompilerOptionsResult {
   const cacheKey = projectCompilerOptionsCacheKey(rootDir, discoveryRootDirs);
   const cached = projectCompilerOptionsCache.get(cacheKey);
   if (cached != null) {
     projectCompilerOptionsCacheHits += 1;
-    return cloneCompilerOptions(cached.options);
+    return cloneProjectCompilerOptionsResult(cached.result);
   }
   projectCompilerOptionsCacheMisses += 1;
-  const options = buildProjectCompilerOptionsUncached(rootDir, discoveryRootDirs);
+  const result = buildProjectCompilerOptionsUncached(rootDir, discoveryRootDirs);
   projectCompilerOptionsCache.set(cacheKey, {
-    options: cloneCompilerOptions(options),
-    pathMappingCount: Object.keys(options.paths ?? {}).length,
-    pathMappingTargetCount: pathMappingTargetCount(options.paths),
+    result: cloneProjectCompilerOptionsResult(result),
+    pathMappingCount: Object.keys(result.options.paths ?? {}).length,
+    pathMappingTargetCount: pathMappingTargetCount(result.options.paths),
+    configDiagnosticCount: result.diagnostics.length,
+    configRootFileCount: result.rootFileNames?.length ?? 0,
   });
   projectCompilerOptionsCacheWrites += 1;
-  return options;
+  return result;
 }
 
 export function readProjectCompilerOptionsCacheOverview(): ProjectCompilerOptionsCacheOverview {
   let pathMappingCount = 0;
   let pathMappingTargetCount = 0;
+  let configDiagnosticCount = 0;
+  let configRootFileCount = 0;
   for (const entry of projectCompilerOptionsCache.values()) {
     pathMappingCount += entry.pathMappingCount;
     pathMappingTargetCount += entry.pathMappingTargetCount;
+    configDiagnosticCount += entry.configDiagnosticCount;
+    configRootFileCount += entry.configRootFileCount;
   }
   return {
     entries: projectCompilerOptionsCache.size,
@@ -75,6 +99,8 @@ export function readProjectCompilerOptionsCacheOverview(): ProjectCompilerOption
     clearedEntries: projectCompilerOptionsCacheClearedEntries,
     pathMappingCount,
     pathMappingTargetCount,
+    configDiagnosticCount,
+    configRootFileCount,
   };
 }
 
@@ -89,16 +115,26 @@ export function clearProjectCompilerOptionsCache(): ProjectCompilerOptionsCacheO
 function buildProjectCompilerOptionsUncached(
   rootDir: string,
   discoveryRootDirs: readonly string[],
-): ts.CompilerOptions {
+): ProjectCompilerOptionsResult {
   const defaults = defaultProjectCompilerOptions(rootDir, discoveryRootDirs);
   const configFile = path.join(rootDir, 'tsconfig.json');
   if (!ts.sys.fileExists(configFile)) {
-    return defaults;
+    return {
+      options: defaults,
+      configFilePath: null,
+      diagnostics: [],
+      rootFileNames: null,
+    };
   }
 
   const read = ts.readConfigFile(configFile, ts.sys.readFile);
   if (read.error != null || read.config == null) {
-    return defaults;
+    return {
+      options: defaults,
+      configFilePath: configFile,
+      diagnostics: read.error == null ? [] : [read.error],
+      rootFileNames: null,
+    };
   }
 
   const parsed = ts.parseJsonConfigFileContent(
@@ -120,7 +156,12 @@ function buildProjectCompilerOptionsUncached(
   if (parsed.options.lib == null) {
     delete merged.lib;
   }
-  return merged;
+  return {
+    options: merged,
+    configFilePath: configFile,
+    diagnostics: parsed.errors,
+    rootFileNames: parsed.fileNames,
+  };
 }
 
 function projectCompilerOptionsCacheKey(
@@ -131,6 +172,17 @@ function projectCompilerOptionsCacheKey(
     .map((entry) => normalizePosixPath(path.resolve(entry)))
     .join('|');
   return process.platform === 'win32' ? key.toLowerCase() : key;
+}
+
+function cloneProjectCompilerOptionsResult(
+  result: ProjectCompilerOptionsResult,
+): ProjectCompilerOptionsResult {
+  return {
+    options: cloneCompilerOptions(result.options),
+    configFilePath: result.configFilePath,
+    diagnostics: [...result.diagnostics],
+    rootFileNames: result.rootFileNames == null ? null : [...result.rootFileNames],
+  };
 }
 
 function cloneCompilerOptions(options: ts.CompilerOptions): ts.CompilerOptions {

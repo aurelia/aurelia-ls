@@ -4324,8 +4324,8 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     id: "semantic-runtime.type-system-project-epoch",
     title: "TypeSystem Project Epoch",
     summary:
-      "Route checker-epoch, TypeScript Program size, source admission, compiler-host cache, and type-system performance work through the shared TypeSystemProject boundary.",
-    domains: ["semantic-runtime", "type-system", "checker", "world-construction", "performance", "telemetry"],
+      "Route checker-epoch, ordinary TypeScript diagnostics, tsconfig diagnostics, TypeScript Program size, source admission, compiler-host cache, and type-system performance work through the shared TypeSystemProject boundary.",
+    domains: ["semantic-runtime", "type-system", "checker", "diagnostics", "world-construction", "performance", "telemetry"],
     roles: ["orient", "analyze", "refactor", "verify", "improve-atlas"],
     terms: [
       "TypeSystemProject",
@@ -4350,6 +4350,18 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "ambient source",
       "dependency declarations",
       "node_modules declarations",
+      "TypeScript diagnostics",
+      "typescript diagnostics",
+      "TS diagnostics",
+      "tsc diagnostics",
+      "tsconfig diagnostics",
+      "config diagnostics",
+      "ordinary TypeScript diagnostics",
+      "noEmit diagnostics",
+      "typescript-diagnostics",
+      "typescript-diagnostic-summary",
+      "TS5023",
+      "lint autofix type errors",
       "type-system telemetry",
       "program source-file composition",
     ],
@@ -4369,6 +4381,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         summary:
           "Program-size pressure should route through root/source-file composition telemetry and inquiry-depth policy.",
       },
+      {
+        query: "lint autofix introduced TypeScript errors diagnostic overview typescript-diagnostics",
+        summary:
+          "Ordinary TypeScript diagnostic visibility should route through TypeSystemProject and app diagnostics before MCP prompt wording or local tsc shell-outs.",
+      },
     ],
     anchors: [
       {
@@ -4378,6 +4395,22 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Current app-local TypeScript Program/checker epoch and source-file lookup API.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/diagnostics.ts",
+        symbolName: "readTypeSystemProjectDiagnostics",
+        role: "primary",
+        summary:
+        "Ordinary TypeScript diagnostic reader over the shared Program/tsconfig epoch.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/typescript-diagnostics.ts",
+        symbolName: "readSemanticTypeScriptDiagnostics",
+        role: "supporting",
+        summary:
+          "Public API projection for TypeScript diagnostics and summary rows.",
       },
       {
         kind: "source",
@@ -4447,12 +4480,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     authority: [
       "TypeSystemProject source for Program/checker epoch ownership.",
+      "Type-system diagnostic reader for ordinary TypeScript Program diagnostics.",
       "Type-system README and memory record for source admission and root-narrowing cautions.",
       "App telemetry for phase timing, source-file composition, and host cache stats.",
       "Aurelia resource/template/type semantics for deciding whether roots are semantic inputs or type-only dependencies.",
     ],
     cautions: [
       "Do not add a second TypeChecker Program path for a local feature; improve TypeSystemProject or downstream inquiry depth.",
+      "Do not shell out to tsc from MCP for project diagnostics; semantic-runtime should expose Program diagnostics through public app-query surfaces.",
       "A large Program root count is not automatically waste: source-shipped plugins and workspace packages may contain real Aurelia resources.",
       "Do not cache authored project source files behind a global dependency cache that hides edits.",
       "If an inquiry does not need checker facts, fix the app-query depth/materialization policy before narrowing TypeScript roots.",
@@ -4461,13 +4496,164 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Is the measured cost Program construction, checker creation, host source-file reads, or downstream type-shape projection?",
       "Are large roots semantic app/resource inputs, type-only dependencies, or artifacts of source admission?",
       "Which inquiry profile and app-query depth made this checker epoch necessary?",
+      "Should TypeScript diagnostics be part of the unified diagnostic answer, or a focused typescript-diagnostics row read?",
       "Can telemetry distinguish root-file pressure from final Program dependency closure before a refactor?",
     ],
     relatedRouteIds: [
       "semantic-runtime.type-system.expression-semantics",
       "semantic-runtime.inquiry-query-claim-graph",
+      "diagnostics.framework-error-grounding",
+      "mcp.developer-preview-shell",
       "semantic-runtime.evaluator.world-construction",
       "semantic-runtime.template-recursive-rendering",
+      "atlas.work-router.self-improvement",
+    ],
+  },
+  {
+    id: "semantic-runtime.lsp-edit-affordance-substrate",
+    title: "LSP Edit Affordance Substrate",
+    summary:
+      "Route rename, references-backed edits, code actions, organize imports, file rename edits, and future workspace-edit planning through a deliberate semantic-runtime substrate rather than one-off TypeScript LanguageService calls.",
+    domains: ["semantic-runtime", "lsp", "edits", "type-system", "template", "api", "inquiry"],
+    roles: ["orient", "analyze", "refactor", "verify", "improve-atlas"],
+    terms: [
+      "rename",
+      "safe rename",
+      "workspace edit",
+      "workspace edits",
+      "edit affordance",
+      "edit affordances",
+      "code action",
+      "code actions",
+      "quick fix",
+      "quick fixes",
+      "organize imports",
+      "file rename edits",
+      "refactor edits",
+      "references-backed edit",
+      "TypeScript LanguageService",
+      "LanguageService rename",
+      "template references",
+      "Aurelia references",
+      "template binding references",
+      "view-model rename",
+      "resource rename",
+      "route parameter rename",
+      "translation key rename",
+      "semantic edit plan",
+      "transactional edit",
+      "Roslyn workspace",
+      "Roslyn-like editing",
+    ],
+    queryCanaries: [
+      {
+        query: "rename a view model member used from Aurelia templates",
+        summary:
+          "Cross-language rename should route to edit-affordance planning instead of raw TypeScript rename or template completion code.",
+      },
+      {
+        query: "code action for a TypeScript diagnostic and an Aurelia template diagnostic",
+        summary:
+          "Diagnostics-to-edit planning should route to one edit substrate before individual diagnostic families invent fix payloads.",
+      },
+      {
+        query: "file rename edits should update imports routes templates and resource references",
+        summary:
+          "Workspace-level file/resource rename should keep TypeScript and Aurelia semantic references in one transaction model.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/project.ts",
+        symbolName: "TypeSystemProject",
+        role: "primary",
+        summary:
+          "Shared Program/checker epoch that any TypeScript-backed edit substrate must reuse rather than rebuild.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/source-reference.ts",
+        symbolName: "SemanticSourceReference",
+        role: "primary",
+        summary:
+          "Current public source-locus envelope; future edit spans must be at least this exact and may need a stricter edit range primitive.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/inquiry/template-completion.ts",
+        symbolName: "TemplateCompletionCursorContextBuilder",
+        role: "supporting",
+        summary:
+          "Existing cursor-locus substrate that should be generalized before other LSP-like features duplicate template site discovery.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+        symbolName: "QueryClaimGraph",
+        role: "supporting",
+        summary:
+          "Answer-boundary storage and invalidation layer for edit-preview answers that may depend on project/source epochs.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.TsType,
+        projection: "rename",
+        role: "grounding",
+        summary:
+          "Atlas TypeScript LanguageService rename lane is a precedent and pressure source, not a semantic-runtime product dependency.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.TsType,
+        projection: "references",
+        role: "grounding",
+        summary:
+          "TypeScript references are one input to cross-language edit planning, but Aurelia template/resource references must join them.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "lsp", "edits", "type-system", "template"],
+        role: "grounding",
+        summary:
+          "Memory records the intentional boundary for future workspace-edit planning.",
+      },
+      {
+        kind: "doc",
+        path: "packages/semantic-runtime/src/api/README.md",
+        role: "grounding",
+        summary:
+          "API boundary notes for public LSP/MCP-facing answers and source-reference precision.",
+      },
+    ],
+    authority: [
+      "TypeSystemProject for shared TypeScript Program/checker lifetime.",
+      "Atlas ts.type LanguageService edit affordance lanes as implementation precedent, not product API.",
+      "Template cursor/source-reference/query-claim substrates for cross-language locus, invalidation, and answer lifetime.",
+      "Aurelia semantic products for template, resource, route, i18n, and binding references that TypeScript rename cannot see.",
+    ],
+    cautions: [
+      "Do not add a naive rename endpoint that only wraps TypeScript LanguageService results; it will not scale to Aurelia templates, resources, routes, or generated edit transactions.",
+      "Do not add a second TypeScript Program or LanguageService path without first deciding how it shares the TypeSystemProject epoch and source-change invalidation.",
+      "Treat broad carrier spans as insufficient for edits. Rename and code actions need exact authored source ranges or an explicit missing-precision diagnostic.",
+      "Edit planning should grow toward Roslyn-like workspace operations: previewable, multi-file, transactional, explainable, and able to combine TypeScript and Aurelia semantic references.",
+    ],
+    nextQuestions: [
+      "Is the requested feature read-only navigation, edit preview, or edit application?",
+      "Which references are TypeScript-only, and which come from Aurelia template/resource/router/i18n products?",
+      "Does the existing cursor/context or source-reference substrate give exact edit ranges, or is provenance the first blocker?",
+      "Can QueryClaimGraph own the answer lifetime and invalidation keys for this edit plan?",
+      "Should this start as a formal edit-plan algebra before any public MCP/LSP tool is exposed?",
+    ],
+    relatedRouteIds: [
+      "semantic-runtime.type-system-project-epoch",
+      "semantic-runtime.type-system.expression-semantics",
+      "semantic-runtime.template-compiler-world",
+      "semantic-runtime.template-html-parsing",
+      "semantic-runtime.binding-scope",
+      "semantic-runtime.observation.binding-flow",
+      "semantic-runtime.inquiry-query-claim-graph",
+      "mcp.developer-preview-shell",
       "atlas.work-router.self-improvement",
     ],
   },

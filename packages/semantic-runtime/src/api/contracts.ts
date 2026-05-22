@@ -254,6 +254,10 @@ import type {
   CheckerExpressionTypeOpenKind,
 } from '../type-system/expression-type-evaluation.js';
 import type {
+  TypeSystemDiagnosticCategory,
+  TypeSystemDiagnosticPhase,
+} from '../type-system/diagnostics.js';
+import type {
   CheckerTypeMemberKind,
   CheckerTypeShapeKind,
 } from '../type-system/type-shape.js';
@@ -329,6 +333,8 @@ export const enum SemanticAppQueryKind {
   OpenSeamSummary = 'open-seam-summary',
   AppDiagnostics = 'app-diagnostics',
   AppDiagnosticSummary = 'app-diagnostic-summary',
+  TypeScriptDiagnostics = 'typescript-diagnostics',
+  TypeScriptDiagnosticSummary = 'typescript-diagnostic-summary',
   EvaluationIssues = 'evaluation-issues',
   ConfigurationIssues = 'configuration-issues',
   DiIssues = 'di-issues',
@@ -401,6 +407,8 @@ export const SEMANTIC_APP_QUERY_KINDS = [
   SemanticAppQueryKind.OpenSeamSummary,
   SemanticAppQueryKind.AppDiagnostics,
   SemanticAppQueryKind.AppDiagnosticSummary,
+  SemanticAppQueryKind.TypeScriptDiagnostics,
+  SemanticAppQueryKind.TypeScriptDiagnosticSummary,
   SemanticAppQueryKind.EvaluationIssues,
   SemanticAppQueryKind.ConfigurationIssues,
   SemanticAppQueryKind.DiIssues,
@@ -871,6 +879,8 @@ export interface SemanticRuntimeProjectCompilerOptionsCacheSummary {
   readonly clearedEntries: number;
   readonly pathMappingCount: number;
   readonly pathMappingTargetCount: number;
+  readonly configDiagnosticCount: number;
+  readonly configRootFileCount: number;
   readonly cacheScope: 'process';
   readonly counterScope: 'process-lifetime';
   readonly cachedValuePolicy: 'compiler-options-by-project-root';
@@ -2840,6 +2850,7 @@ export interface SemanticProxyObservableEscapesResult {
 }
 
 export type SemanticAppDiagnosticDomain =
+  | 'typescript'
   | 'evaluation'
   | 'configuration'
   | 'di'
@@ -2857,7 +2868,7 @@ export interface SemanticAppDiagnosticRow {
   readonly projectKey: string;
   readonly diagnosticDomain: SemanticAppDiagnosticDomain;
   readonly diagnosticKind: string;
-  readonly diagnosticAuthority: SemanticTemplateCursorDiagnosticAuthority | 'semantic-runtime-product';
+  readonly diagnosticAuthority: SemanticTemplateCursorDiagnosticAuthority | 'semantic-runtime-product' | 'typescript';
   readonly frameworkErrorCode: string | null;
   readonly frameworkRawErrorAuthority?: string | null;
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
@@ -2888,6 +2899,51 @@ export interface SemanticAppDiagnosticSummaryResult {
   readonly totalDiagnosticRows: number;
   readonly displayText: string;
   readonly rows: readonly SemanticAppDiagnosticSummaryRow[];
+}
+
+export interface SemanticTypeScriptDiagnosticRelatedInformationRow {
+  readonly category: TypeSystemDiagnosticCategory;
+  readonly code: number;
+  readonly message: string;
+  readonly typescriptSource: string | null;
+  readonly source: SemanticSourceReference | null;
+}
+
+export interface SemanticTypeScriptDiagnosticRow {
+  readonly projectKey: string;
+  readonly phase: TypeSystemDiagnosticPhase;
+  readonly category: TypeSystemDiagnosticCategory;
+  readonly code: number;
+  readonly diagnosticKind: string;
+  readonly severity: SemanticTemplateCursorDiagnosticSeverity;
+  readonly message: string;
+  readonly typescriptSource: string | null;
+  readonly source: SemanticSourceReference | null;
+  readonly relatedInformation: readonly SemanticTypeScriptDiagnosticRelatedInformationRow[];
+}
+
+export interface SemanticTypeScriptDiagnosticsResult {
+  readonly displayText: string;
+  readonly rows: readonly SemanticTypeScriptDiagnosticRow[];
+}
+
+export interface SemanticTypeScriptDiagnosticSummaryRow {
+  readonly phase: TypeSystemDiagnosticPhase;
+  readonly category: TypeSystemDiagnosticCategory;
+  readonly code: number;
+  readonly diagnosticKind: string;
+  readonly severity: SemanticTemplateCursorDiagnosticSeverity;
+  readonly typescriptSource: string | null;
+  readonly count: number;
+  readonly sourceFileCount: number;
+  readonly sampleMessage: string;
+  readonly sampleSources: readonly SemanticSourceReference[];
+}
+
+export interface SemanticTypeScriptDiagnosticSummaryResult {
+  readonly totalDiagnosticRows: number;
+  readonly displayText: string;
+  readonly rows: readonly SemanticTypeScriptDiagnosticSummaryRow[];
 }
 
 export type SemanticStateStoreOptionsOrHandlerKind =

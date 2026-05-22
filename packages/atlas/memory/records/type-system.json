@@ -8,15 +8,19 @@
         "semantic-runtime",
         "type-system",
         "checker",
+        "diagnostics",
         "world-construction",
         "performance",
         "telemetry"
       ],
-      "summary": "TypeSystemProject is the shared TypeScript Program/checker epoch that bridges static evaluation, framework resource projection, template scope, and inquiry.",
-      "rationale": "The semantic runtime should not grow isolated TypeChecker setup paths when a feature needs app-local checker facts. TypeSystemProject is the reusable epoch boundary over evaluated source files, ambient app declarations, compiler host setup, module export lookup, and runtime target type reads. App pressure can make TypeScript Program construction look like generic semantic-runtime bulk, so this frontier also owns phase item counts that distinguish authored source volume from checker/lib/declaration volume.",
+      "summary": "TypeSystemProject is the shared TypeScript Program/checker and tsconfig epoch that bridges static evaluation, ordinary TypeScript diagnostics, framework resource projection, template scope, and inquiry.",
+      "rationale": "The semantic runtime should not grow isolated TypeChecker setup paths when a feature needs app-local checker facts. TypeSystemProject is the reusable epoch boundary over evaluated source files, ambient app declarations, compiler host setup, module export lookup, runtime target type reads, tsconfig diagnostics, and ordinary TypeScript diagnostics. App pressure can make TypeScript Program construction look like generic semantic-runtime bulk, so this frontier also owns phase item counts that distinguish authored source volume from checker/lib/declaration volume.",
       "guidance": [
         "Start here when a feature needs a checker epoch, source-file lookup, module export type lookup, or runtime target instance type for a resource.",
         "Keep evaluator source admission and TypeChecker Program construction threaded through this epoch instead of rebuilding local programs.",
+        "Keep ordinary TypeScript and tsconfig diagnostics on this Program/tsconfig epoch. MCP and public API calls should use semantic-runtime's typescript-diagnostics surfaces instead of shelling out to tsc or rebuilding a separate Program.",
+        "Do not conflate Program/tsconfig correctness diagnostics with Atlas's LanguageService suggestion/code-action lane. Semantic-runtime's current TypeScript diagnostic surface is tsc/noEmit-shaped repair pressure; suggestions, quick fixes, refactors, and organize-imports belong in a later LSP/code-action surface over the same epoch.",
+        "Preserve diagnostic inquiry cost by locus. Project-wide diagnostics may spend and cache the full Program diagnostic set, but source-file diagnostics should use readTypeSystemProjectSourceDiagnostics so one file or tsconfig inquiry does not force every app source diagnostic.",
         "If app loading is slow, inspect TypeSystemProject phase timings and phase item counts before guessing at semantic-runtime bulk cost.",
         "Treat a large `type-system:program` item count as a substrate/admission/inquiry-depth question, not as evidence that a downstream template, authoring, or diagnostics materializer is inherently expensive.",
         "Keep TypeSystemProject profile item counts flowing through app pressure scripts so future performance work can compare evaluated source files, ambient sources, compiler-host files, final Program files, and source-file composition.",
@@ -25,11 +29,11 @@
         "Keep compiler-host source-text traffic visible beside hit/miss/write counts. Write text shows dependency/library SourceFiles admitted into the warm cache during cold Program construction; hit text shows how much cached SourceFile text the next Program reused.",
         "Keep optional phase-memory attribution flowing through routed app profile summaries. One-off public calls need to see whether TypeSystem Program construction is the heap/RSS frontier even after the app epoch and dependency SourceFile cache are disposed.",
         "Keep the TypeSystem compiler-options profile visible beside Program source-file counts. Target, module resolution, configured library count, baseUrl, and path-mapping counts explain whether TypeScript breadth came from app config, fallback fixture defaults, or source-map discovery before source admission is changed.",
-        "Project compiler options are boot-owned and process-cached by project root plus discovery roots, then cloned for each TypeScript consumer. If static evaluation and TypeSystem setup both need options for the same root/discovery set, the second read should hit that cache rather than rediscovering workspace/source-root mappings. Aurelia framework package type mappings are discovered dynamically from `aurelia/packages/*/package.json` plus `dist/types/index.d.ts`; do not reintroduce a hand-maintained package list, because generated fixtures may import validation-html, i18n, state, dialog, or other framework package APIs that need exact checker types.",
+        "Project compiler options are boot-owned and process-cached by project root plus discovery roots, then cloned for each TypeScript consumer alongside config root filenames and config diagnostic rows. If static evaluation and TypeSystem setup both need options for the same root/discovery set, the second read should hit that cache rather than rediscovering workspace/source-root mappings. Aurelia framework package type mappings are discovered dynamically from `aurelia/packages/*/package.json` plus `dist/types/index.d.ts`; do not reintroduce a hand-maintained package list, because generated fixtures may import validation-html, i18n, state, dialog, or other framework package APIs that need exact checker types.",
         "Out-of-tree generated fixtures must build TypeSystem compiler options with both the fixture root and the semantic-runtime workspace root as a discovery root. Otherwise local Aurelia checkout paths and workspace package mappings disappear, DI state projections degrade to `any`, and correct template scope/observer behavior can be mistaken for a binding semantics failure.",
         "No-tsconfig roots use semantic-runtime's fallback modern web library profile instead of TypeScript's full Latest library universe; real app tsconfig files remain authoritative and should keep TypeScript's own lib defaults when they omit an explicit lib.",
-        "Program roots should be boot-admitted app TS/JS source files, project-local TS/JS modules reached by static evaluation, and ambient declarations. Evaluated external dependency modules stay indexed and reachable through imports, but should not be counted as root files merely because static evaluation visited them.",
-        "Treat TypeSystem Program-node source-file misses as app-graph alignment pressure before adding local checker fallbacks. If a resource target node came from a project-local evaluated TS/JS module, that module should probably be a Program root; external/dependency misses need a separate admission policy.",
+        "Keep semantic checker roots distinct from TypeScript diagnostic eligibility. TypeSystemProject should root the Program with parsed tsconfig roots, evaluated project-local TS/JS sources, and ambient declarations so source-discovered Aurelia resources have Program-owned checker nodes; ordinary TypeScript diagnostics should separately iterate the tsconfig-shaped diagnostic source set so excluded unimported files do not become public TS diagnostics.",
+        "Treat TypeSystem Program-node source-file misses as app-graph alignment pressure before adding local checker fallbacks. If a resource target node came from a project-local evaluated TS/JS module, that module should be a semantic Program root even when it is not eligible for ordinary tsconfig diagnostics; external/dependency misses need a separate admission policy.",
         "Use the compiler-host source-file cache for node_modules files and external declaration files before adding a second checker host path. App pressure reports host source-cache hits, misses, writes, bypasses, cacheable-read lanes, bypass lanes, Program source-file composition, and source-text density by dependency class; current-project authored files should continue to bypass or come from evaluated sources so edits do not get hidden behind global cache state.",
         "Use TypeSystemProject.readProgramNode or readRuntimeTargetType before asking the TypeChecker about nodes that originated in evaluation, resource convergence, or source discovery. Checker APIs expect Program-owned nodes; alien AST identities can crash or return misleading symbols even when file/span text matches.",
         "Keep Program-node remap counters in app telemetry. A correctness guard that remaps by file/span/kind should stay visible as requests, cache hits, same-source hits, span hits, and misses so larger apps reveal if remapping becomes a DFS hotspot.",
@@ -60,6 +64,18 @@
           "symbolName": "TypeSystemProject",
           "line": 134,
           "summary": "Current app-local TypeScript Program/checker epoch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/diagnostics.ts",
+          "symbolName": "readTypeSystemProjectDiagnostics",
+          "summary": "Ordinary TypeScript Program and tsconfig diagnostics over the shared semantic-runtime checker epoch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/typescript-diagnostics.ts",
+          "symbolName": "readSemanticTypeScriptDiagnostics",
+          "summary": "Public API projection for TypeScript diagnostics and summaries."
         },
         {
           "kind": "source",
@@ -101,6 +117,16 @@
           "minMethodCount": 8
         },
         {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/diagnostics.ts",
+          "symbolName": "readTypeSystemProjectDiagnostics"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/typescript-diagnostics.ts",
+          "symbolName": "readSemanticTypeScriptDiagnostics"
+        },
+        {
           "kind": "product-large-class",
           "className": "TypeSystemProjectBuilder",
           "filePath": "packages/semantic-runtime/src/type-system/project.ts",
@@ -115,7 +141,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-17"
+      "updatedAt": "2026-05-22"
     },
     {
       "id": "reuse:checker-expression-type-world",

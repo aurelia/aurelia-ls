@@ -14,6 +14,7 @@ export * from './router-overview.js';
 export * from './source-reference.js';
 export * from './state-projections.js';
 export * from './template-completion.js';
+export * from './typescript-diagnostics.js';
 export {
   SEMANTIC_APP_ANALYSIS_DEPTHS,
   SemanticAppAnalysisDepth,

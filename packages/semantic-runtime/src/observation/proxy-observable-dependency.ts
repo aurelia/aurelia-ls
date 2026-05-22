@@ -744,7 +744,10 @@ class RuntimeProxyObservedDependencyDraftCollector {
   private methodDeclarationForCallee(
     callee: ts.PropertyAccessExpression,
   ): ts.MethodDeclaration | null {
-    const programCallee = this.typeContext?.readProgramNode(callee) ?? callee;
+    const programCallee = this.typeContext?.readProgramNode(callee) ?? null;
+    if (programCallee == null) {
+      return null;
+    }
     const symbol = this.typeContext?.checker.getSymbolAtLocation(programCallee.name) ?? null;
     const declaration = symbol?.declarations?.find(ts.isMethodDeclaration) ?? null;
     return declaration;
@@ -1132,7 +1135,10 @@ function observedMemberSourceForPropertyAccess(
   if (typeContext?.store == null) {
     return null;
   }
-  const programExpression = typeContext.readProgramNode(expression) ?? expression;
+  const programExpression = typeContext.readProgramNode(expression);
+  if (programExpression == null) {
+    return null;
+  }
   const symbol = typeContext.checker.getSymbolAtLocation(programExpression.name);
   return observedMemberSourceForCheckerSymbol(typeContext.store, symbol);
 }
@@ -1145,7 +1151,10 @@ function observedMemberSourceForElementAccess(
   if (typeContext?.store == null) {
     return null;
   }
-  const programOwner = typeContext.readProgramNode(expression.expression) ?? expression.expression;
+  const programOwner = typeContext.readProgramNode(expression.expression);
+  if (programOwner == null) {
+    return null;
+  }
   const ownerType = typeContext.checker.getTypeAtLocation(programOwner);
   const symbol = typeContext.checker.getPropertyOfType(ownerType, key)
     ?? typeContext.checker.getPropertyOfType(typeContext.checker.getApparentType(ownerType), key)
@@ -1201,12 +1210,17 @@ function propertyAccessHasNowrapDecorator(
   if (typeContext == null) {
     return false;
   }
-  const programExpression = typeContext.readProgramNode(expression) ?? expression;
-  const symbol = typeContext.checker.getSymbolAtLocation(programExpression.name);
+  const programExpression = typeContext.readProgramNode(expression);
+  const symbol = programExpression == null
+    ? null
+    : typeContext.checker.getSymbolAtLocation(programExpression.name);
   if (declarationsHaveNowrapDecorator(symbol?.declarations)) {
     return true;
   }
-  const programOwner = typeContext.readProgramNode(expression.expression) ?? expression.expression;
+  const programOwner = typeContext.readProgramNode(expression.expression);
+  if (programOwner == null) {
+    return false;
+  }
   const ownerType = typeContext.checker.getTypeAtLocation(programOwner);
   return checkerTypePropertyHasNowrapDecorator(typeContext.checker, ownerType, expression.name.text);
 }
@@ -1219,7 +1233,10 @@ function elementAccessHasNowrapProperty(
   if (typeContext == null) {
     return false;
   }
-  const programOwner = typeContext.readProgramNode(expression.expression) ?? expression.expression;
+  const programOwner = typeContext.readProgramNode(expression.expression);
+  if (programOwner == null) {
+    return false;
+  }
   const ownerType = typeContext.checker.getTypeAtLocation(programOwner);
   return checkerTypePropertyHasNowrapDecorator(typeContext.checker, ownerType, key);
 }
@@ -1232,7 +1249,10 @@ function propertyExpressionHasNowrapDecorator(
   if (typeContext == null) {
     return false;
   }
-  const programOwner = typeContext.readProgramNode(ownerExpression) ?? ownerExpression;
+  const programOwner = typeContext.readProgramNode(ownerExpression);
+  if (programOwner == null) {
+    return false;
+  }
   const ownerType = typeContext.checker.getTypeAtLocation(programOwner);
   return checkerTypePropertyHasNowrapDecorator(typeContext.checker, ownerType, propertyName);
 }
@@ -1245,7 +1265,10 @@ function observedMemberSourceForImplicitPropertyRead(
   if (typeContext?.store == null) {
     return null;
   }
-  const programReceiver = typeContext.readProgramNode(receiver) ?? receiver;
+  const programReceiver = typeContext.readProgramNode(receiver);
+  if (programReceiver == null) {
+    return null;
+  }
   const receiverType = typeContext.checker.getTypeAtLocation(programReceiver);
   const symbol = typeContext.checker.getPropertyOfType(receiverType, key)
     ?? typeContext.checker.getPropertyOfType(typeContext.checker.getApparentType(receiverType), key)

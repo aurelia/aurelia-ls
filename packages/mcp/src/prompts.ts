@@ -32,6 +32,7 @@ export function registerAureliaSemanticRuntimePrompts(
               'For large or dependency-heavy workspaces, start app overview with analysisDepth=runtime-topology and deepen only when binding/type details are needed.',
               'Use aurelia_authoring_orientation with analysisDepth=binding-observation when deciding code-shape taste, recipe fit, direct state/domain binding, getter observation, or forwarding-accessor pressure.',
               'For form/control explanations, use one aurelia_app_query_batch for binding-value-channel-summary, binding-data-flow-summary, and binding-observed-dependency-summary before paging raw binding rows; use page.size=0 for issue/source-state rollup first passes, leave includeAppProfile/includeAppQueryClaimProfiles unset unless profiling, and treat issue kinds such as source-type-unresolved or target-empty-array-inferred as repair-routing signals.',
+              'For repair work, use aurelia_diagnostic_overview or aurelia_app_diagnostics as the unified diagnostic surface; explicit diagnostic calls include ordinary TypeScript project diagnostics as well as modeled Aurelia/template diagnostics.',
               'Use aurelia_app_query_catalog before aurelia_app_query when the needed queryKind is not already obvious from a curated tool.',
               includeRouter === 'true'
                 ? 'Because routing is in scope, also call aurelia_router_overview with a small rowPageSize and report route, viewport, route-context, route-context-parameter-read, and router issue pressure.'
@@ -131,11 +132,11 @@ export function registerAureliaSemanticRuntimePrompts(
                 ? 'Because routing is in scope, call aurelia_router_overview with a small rowPageSize before editing route config, links, route params, or viewport layout; page route-context-parameter-reads when checking whether IRouteContext.getRouteParameters keys are route-backed or query/open.'
                 : 'Call aurelia_router_overview only if the guidance, app overview, or feature goal makes route/viewport facts relevant.',
               includeDiagnostics === 'true'
-                ? 'Because diagnostics are in scope, call aurelia_diagnostic_overview or aurelia_template_diagnostics before edits and use diagnostics as repair pressure.'
-                : 'Use diagnostics after editing only when the app overview or template work indicates weak typings, missing members, invalid commands, or binding assignability pressure.',
+                ? 'Because diagnostics are in scope, call aurelia_diagnostic_overview or aurelia_app_diagnostics before edits and use diagnostics as repair pressure; these explicit diagnostic calls include TypeScript project diagnostics, so do not treat lint success as typecheck success.'
+                : 'Use diagnostics after editing when the app overview or template work indicates weak typings, missing members, invalid commands, binding assignability pressure, or when lint/formatter autofixes may have changed TypeScript types.',
               'Prefer DI-owned state/domain classes, direct state/domain template reads, ordinary source-backed getters for real derived behavior, sparse component bindables, and decision-row guidance for ID/object handoff or proxy exits.',
               'Avoid one-hop view-model getters, callback bindables for non-leaf composition, broad observation disabling, and @computed unless explicit dependency or trackable-method semantics are intended.',
-              'After editing, reopen the app through aurelia_app_overview or focused app-query calls and compare the observed facts with the selected recipe intent.',
+              'After editing, reopen the app through aurelia_app_overview or focused app-query calls and compare the observed facts with the selected recipe intent; after lint or formatter autofixes, rerun aurelia_diagnostic_overview or query typescript-diagnostic-summary before declaring the app clean.',
               'Do not ask for Atlas, Work Router, corpus, or development-only memory through MCP; those are internal development tools outside the public shell.',
             ].join(' '),
           },

@@ -275,6 +275,13 @@ still be realistic app code rather than artificial parser torture cases.
   projection/shadow-DOM slot failures, local-template shape failures, custom-attribute multi-binding, `<let>`, and
   command-owned template syntax that maps to exact Aurelia template-compiler `ErrorNames` authority. It preserves
   framework-error-code diagnostic and repair pressure without teaching authoring recipes to generate malformed syntax.
+- `typescript-project-diagnostics` captures an ordinary TypeScript semantic error in project-local source and a
+  `tsconfig.json` option diagnostic so the semantic-runtime diagnostic surface reports `tsc`-equivalent failures beside
+  Aurelia diagnostics. It preserves the MCP repair-loop pressure where lint or formatter autofixes can introduce type
+  errors after Aurelia diagnostics were fixed, and where project configuration errors should not disappear behind app
+  analysis. `pnpm --filter @aurelia-ls/semantic-runtime contract:typescript-diagnostics` protects the focused
+  `typescript-diagnostics` / `typescript-diagnostic-summary` queries and the unified app diagnostic summary inclusion,
+  while keeping `diagnosticProjection=available-products` cheap.
 - `update-trigger-binding-behavior` captures valid and invalid built-in binding-behavior bind-time usage. It preserves
   runtime-html errors for `& updateTrigger`, `& signal`, `& self`, `& attr`, and double throttle/debounce rate limiting
   without teaching authoring recipes to generate those mistakes. It deliberately does not claim the custom

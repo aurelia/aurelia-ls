@@ -47,6 +47,92 @@
       "updatedAt": "2026-05-18"
     },
     {
+      "id": "intent:lsp-edit-affordance-substrate",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "inquiry",
+        "lsp",
+        "edits",
+        "type-system",
+        "template"
+      ],
+      "summary": "Rename, code actions, organize imports, file rename edits, and future workspace edits need a semantic-runtime edit-plan substrate instead of one-off TypeScript LanguageService wrappers.",
+      "rationale": "Atlas can already ask TypeScript LanguageService questions, but semantic-runtime must eventually serve MCP/LSP users across TypeScript and Aurelia semantics. A useful edit feature has to combine TypeScript references with template, resource, route, i18n, binding, and generated-source constraints, then produce previewable source edits with exact provenance and invalidation. A tiny rename wrapper would create an attractive shortcut that scales poorly.",
+      "guidance": [
+        "Do not implement semantic-runtime rename as a direct TypeScript LanguageService pass-through. Treat TypeScript rename as one reference source inside a broader edit-plan algebra.",
+        "Start from TypeSystemProject for Program/checker facts, but decide deliberately whether a future LanguageService can share the same epoch or needs an explicitly modeled companion lifetime.",
+        "Use Atlas `ts.type` rename, references, code-fixes, refactors, organize-imports, and file-rename-edits as pressure and implementation precedent, not as a semantic-runtime API dependency.",
+        "Cross-language edits must join Aurelia semantic references: template bindings, resource names, bindables, route parameters, translation keys, value converters, binding behaviors, and source-level configuration can all participate in edit reachability.",
+        "Edit ranges must use exact authored source references. A broad carrier span is a blocker for edit application, not a range to patch.",
+        "Grow this toward a Roslyn-like workspace operation model: previewable, multi-file, transactional, explainable, and able to separate read-only navigation, edit preview, and edit application.",
+        "Route edit-plan answers through QueryClaimGraph or an adjacent inquiry-owned lifetime so source/project epoch invalidation, retained previews, and answer-local TypeChecker products stay explicit.",
+        "If implementing the first slice, prefer a read-only edit-plan or rename-feasibility projection that reports missing semantic reference families over a small mutating MCP tool."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject",
+          "summary": "Shared Program/checker epoch that any TypeScript-backed edit plan must reuse or explicitly companion."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/source-reference.ts",
+          "symbolName": "SemanticSourceReference",
+          "summary": "Current public source-locus envelope; future edit ranges must be exact enough for source mutation."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/template-completion.ts",
+          "symbolName": "TemplateCompletionCursorContextBuilder",
+          "summary": "Existing cursor-locus substrate that should be generalized before other LSP-like features duplicate template site discovery."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraph",
+          "summary": "Answer-boundary lifetime and invalidation substrate for future edit-preview answers."
+        },
+        {
+          "kind": "lens",
+          "lensId": "ts.type",
+          "projection": "rename",
+          "summary": "Atlas TypeScript rename precedent."
+        },
+        {
+          "kind": "lens",
+          "lensId": "ts.type",
+          "projection": "code-fixes",
+          "summary": "Atlas TypeScript code-fix precedent."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/source-reference.ts",
+          "symbolName": "SemanticSourceReference"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/inquiry/template-completion.ts",
+          "symbolName": "TemplateCompletionCursorContextBuilder"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/inquiry/query-claim-graph.ts",
+          "symbolName": "QueryClaimGraph"
+        }
+      ],
+      "createdAt": "2026-05-22",
+      "updatedAt": "2026-05-22"
+    },
+    {
       "id": "frontier:query-claim-graph",
       "kind": "pressure-frontier",
       "domains": [

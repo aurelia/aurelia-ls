@@ -85,7 +85,7 @@
         "Keep router overview summary-first by default; row samples from many router families are an opt-in orientation cost, not the default MCP answer.",
         "Use `SemanticRuntime.analysisCacheOverview()` for long-lived adapter retention questions: it is the public x-ray for cached app epochs, query-claim retention, process memory, dependency cache density, and workspace kernel density; do not infer those facts from MCP-local session maps.",
         "Analysis-cache overview and clear answers should carry semantic-runtime-owned `displayText` for app epochs, workspace kernel mass, process memory, dependency-cache policy, compiler-options counters, query claims, and reclaimed records/details/handles. Transport session registries may add wrapper text for their own retained server sessions, but should forward nested semantic-runtime text rather than recomposing cache telemetry.",
-        "Read the project compiler-options cache row in analysis-cache overview before assuming repeated static-evaluation/type-system setup is unavoidable. That cache is boot/input wiring by project root and returns cloned options, separate from TypeScript Program or app-world retention.",
+        "Read the project compiler-options cache row in analysis-cache overview before assuming repeated static-evaluation/type-system setup is unavoidable. That cache is boot/input wiring by project root, returns cloned options plus config root-file and diagnostic counts, and is separate from TypeScript Program or app-world retention.",
         "Use `SemanticRuntime.disposeQueryClaims(...)` profileDisposals rows to verify which runtime-level and cached-app query-claim graphs were pruned by source, query, profile, or materialization-policy invalidation.",
         "Use `includeQueryClaimRows` with a small `rowLimit` when aggregate query-claim counters are not enough; do not add a transport-local query ledger before checking the graph-owned retained rows.",
         "Use the TypeSystem dependency-cache density fields in analysis-cache overview before treating TypeScript SourceFile retention as generic semantic-runtime memory pressure.",
@@ -217,13 +217,14 @@
         "framework-errors",
         "authoring"
       ],
-      "summary": "Semantic-runtime diagnostics have an app-level aggregation query; use this as domain guidance when diagnostic work is touched, not as a default autonomous frontier while framework-error gaps are closed.",
-      "rationale": "Template diagnostics cover parser, compiler, binding data-flow, and runtime AST expression-call pressure; resource convergence contributes bindable/process-content/watch/controller watcher issue products; configuration contributes source/API and framework-service issue products; and DI contributes container/resource/ambient-resolve issue products. Atlas framework.errors currently reports no active mapped diagnostic gaps, so this record should steer future diagnostic work only when a new exact framework-error or authoring-policy pressure appears. Product-owned issue records should remain in the substrate that owns the framework behavior, then aggregate through AppDiagnostics.",
+      "summary": "Semantic-runtime diagnostics have an app-level aggregation query over ordinary TypeScript and tsconfig diagnostics plus modeled Aurelia issue lanes; use this as domain guidance when diagnostic work is touched, not as a default autonomous frontier while framework-error gaps are closed.",
+      "rationale": "TypeScript diagnostics come from the semantic-runtime TypeSystemProject Program/tsconfig epoch, including tsconfig read/parse/option diagnostics and per-source Program diagnostics. Template diagnostics cover parser, compiler, binding data-flow, and runtime AST expression-call pressure; resource convergence contributes bindable/process-content/watch/controller watcher issue products; configuration contributes source/API and framework-service issue products; and DI contributes container/resource/ambient-resolve issue products. Atlas framework.errors currently reports no active mapped diagnostic gaps, so this record should steer future diagnostic work only when a new exact framework-error, ordinary TypeScript diagnostic, or authoring-policy pressure appears. Product-owned issue records should remain in the substrate that owns the framework behavior, then aggregate through AppDiagnostics.",
       "guidance": [
         "This frontier is nextActionPolicy=when-touched: do not choose it as an unfiltered autonomous next task while `pressure:framework-errors` continues to report zero active mapped diagnostic gaps.",
         "Start here when a framework error frontier points at non-template source such as @watch, bindable metadata, DI resolver calls, router config, AppTask/customization callbacks, observer service configuration, or package configuration.",
         "Do not attach framework-error-code authority at the API boundary. Add or reuse a product-owned issue/diagnostic record in the substrate that owns the framework behavior, then let the API aggregate it.",
-        "Keep template diagnostics as one diagnostic source, not the only diagnostics contract. AppDiagnostics currently aggregates configuration, DI, template, resource, router, and route-recognizer diagnostic products by source locus while preserving diagnosticDomain and relatedQueryKind.",
+        "Keep template diagnostics as one diagnostic source, not the only diagnostics contract. AppDiagnostics currently aggregates TypeScript, configuration, DI, template, resource, router, and route-recognizer diagnostic products by source locus while preserving diagnosticDomain and relatedQueryKind.",
+        "Keep ordinary TypeScript diagnostics TypeSystemProject-owned. Do not shell out to tsc from MCP or rebuild a local TypeScript Program in API code; use the shared Program/tsconfig epoch, including config root filenames and config diagnostics, and expose rows through typescript-diagnostics / typescript-diagnostic-summary plus the unified app diagnostic surfaces.",
         "When aggregating diagnostics, collect unpaged rows from each owning diagnostic family before applying the app-level page. Child-query paging before aggregation creates misleading pressure counts.",
         "Weak-owner template diagnostic suggestions should keep action targets source-bearing. For source-independent owner shapes such as any, prefer the value-producing type annotation or return type source route when one exists; if no navigable owner route exists, target the expression source rather than emitting owner-type:no-source.",
         "Repair cluster keys should stay compact fingerprints over grouping input. Source spans, member hints, owner/value types, and edit loci belong in the structured action-target and member-hint rows, not in a URL-encoded public key. `contract:template-diagnostics` guards this token-economy rule directly.",
@@ -249,6 +250,18 @@
           "filePath": "packages/semantic-runtime/src/api/app-diagnostics.ts",
           "symbolName": "appDiagnosticRows",
           "summary": "App-level diagnostic aggregation over owning diagnostic products."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/typescript-diagnostics.ts",
+          "symbolName": "readSemanticTypeScriptDiagnostics",
+          "summary": "TypeScript diagnostic projection over the shared semantic-runtime TypeSystemProject Program/tsconfig epoch."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/diagnostics.ts",
+          "symbolName": "readTypeSystemProjectDiagnostics",
+          "summary": "Ordinary TypeScript Program and tsconfig diagnostic reader."
         },
         {
           "kind": "source",
@@ -295,6 +308,16 @@
         },
         {
           "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/typescript-diagnostics.ts",
+          "symbolName": "readSemanticTypeScriptDiagnostics"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/diagnostics.ts",
+          "symbolName": "readTypeSystemProjectDiagnostics"
+        },
+        {
+          "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/api/configuration-projections.ts",
           "symbolName": "readConfigurationIssueRows"
         },
@@ -320,7 +343,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-14"
+      "updatedAt": "2026-05-22"
     },
     {
       "id": "decision:semantic-project-shape-open-policy",

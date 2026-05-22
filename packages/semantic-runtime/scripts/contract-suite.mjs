@@ -105,6 +105,11 @@ const contractSuites = [
     'template',
     'type-system',
   ], 'contract-template-diagnostics.mjs', 'Weak owner diagnostics, repair targets, assignment pressure, and compact repair clusters.'),
+  contract('diagnostics', 'fast', [
+    'diagnostics',
+    'type-system',
+    'mcp',
+  ], 'contract-typescript-diagnostics.mjs', 'Ordinary TypeScript Program diagnostics exposed through focused and unified app diagnostic queries.'),
   contract('expression', 'fast', [
     'expression',
     'type-system',

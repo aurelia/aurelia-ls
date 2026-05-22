@@ -361,8 +361,8 @@ function controlledComputedDeepObservedDependencyDrafts(
   if (site.dependency.dependencyKeys.length === 0) {
     return [];
   }
-  const getter = typeSystem.readProgramNode(site.getter) ?? site.getter;
-  if (!ts.isGetAccessorDeclaration(getter)) {
+  const getter = typeSystem.readProgramNode(site.getter);
+  if (getter == null || !ts.isGetAccessorDeclaration(getter)) {
     return [];
   }
   const classNode = getter.parent;
