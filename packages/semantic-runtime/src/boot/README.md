@@ -60,8 +60,11 @@ pressure layered later.
 
 Source roles are admission policy, not Aurelia meaning. They keep app-world passes from treating tests, declaration
 files, or known tooling configs as application modules while preserving those files for source inventory and later
-navigation. The classifier should stay conservative: a user-authored `config.ts` or generated-looking app module is
-still app source unless it matches a known tool/artifact lane.
+navigation. Boot discovery admits standard TypeScript/JavaScript module extensions (`.ts`, `.tsx`, `.mts`, `.cts`,
+`.js`, `.jsx`, `.mjs`, `.cjs`) plus framework assets. TypeSystem can still root local declaration admissions in
+no-tsconfig fallback mode so ambient modules and local type support participate in the checker without becoming
+static-evaluation entrypoints. The classifier should stay conservative: a user-authored `config.ts` or generated-looking
+app module is still app source unless it matches a known tool/artifact lane.
 
 Project discovery is also admission policy. A mixed monorepo should boot package/tsconfig roots as separate project
 frames so non-Aurelia packages do not enter one giant app-world pass. Nested project roots are excluded from their

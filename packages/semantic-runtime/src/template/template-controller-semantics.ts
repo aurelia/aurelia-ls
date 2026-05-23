@@ -32,6 +32,7 @@ export const enum BuiltInTemplateControllerFlowKind {
 export type BuiltInTemplateControllerValueProperty =
   | 'value'
   | 'items'
+  | 'target'
   | null;
 
 export const enum BuiltInTemplateControllerValueDomainKind {
@@ -79,6 +80,16 @@ export class RuntimeHtmlRepeatTemplateControllerSemantics implements BuiltInTemp
   readonly flowKind = BuiltInTemplateControllerFlowKind.Iteration;
 }
 
+@auLink('ui-virtualization:VirtualRepeat', { facet: 'template-controller-semantics' })
+export class UiVirtualizationVirtualRepeatTemplateControllerSemantics implements BuiltInTemplateControllerSemantics {
+  readonly controllerName = 'virtual-repeat';
+  readonly childScopeKind = BuiltInTemplateControllerChildScopeKind.IteratorBindingContext;
+  readonly valueProperty = 'items';
+  readonly valueDomainKind = BuiltInTemplateControllerValueDomainKind.Iterator;
+  readonly childViewCardinality = BuiltInTemplateControllerChildViewCardinality.Many;
+  readonly flowKind = BuiltInTemplateControllerFlowKind.Iteration;
+}
+
 @auLink('runtime-html:With', { facet: 'template-controller-semantics' })
 export class RuntimeHtmlWithTemplateControllerSemantics implements BuiltInTemplateControllerSemantics {
   readonly controllerName = 'with';
@@ -87,6 +98,16 @@ export class RuntimeHtmlWithTemplateControllerSemantics implements BuiltInTempla
   readonly valueDomainKind = BuiltInTemplateControllerValueDomainKind.OpenEnded;
   readonly childViewCardinality = BuiltInTemplateControllerChildViewCardinality.Single;
   readonly flowKind = BuiltInTemplateControllerFlowKind.ValueScope;
+}
+
+@auLink('runtime-html:Portal', { facet: 'template-controller-semantics' })
+export class RuntimeHtmlPortalTemplateControllerSemantics implements BuiltInTemplateControllerSemantics {
+  readonly controllerName = 'portal';
+  readonly childScopeKind = BuiltInTemplateControllerChildScopeKind.PassThrough;
+  readonly valueProperty = 'target';
+  readonly valueDomainKind = BuiltInTemplateControllerValueDomainKind.OpenEnded;
+  readonly childViewCardinality = BuiltInTemplateControllerChildViewCardinality.Single;
+  readonly flowKind = BuiltInTemplateControllerFlowKind.PassThrough;
 }
 
 @auLink('runtime-html:Switch', { facet: 'template-controller-semantics' })
@@ -164,6 +185,7 @@ export const runtimeHtmlTemplateControllerSemantics: readonly BuiltInTemplateCon
   new RuntimeHtmlElseTemplateControllerSemantics(),
   new RuntimeHtmlRepeatTemplateControllerSemantics(),
   new RuntimeHtmlWithTemplateControllerSemantics(),
+  new RuntimeHtmlPortalTemplateControllerSemantics(),
   new RuntimeHtmlSwitchTemplateControllerSemantics(),
   new RuntimeHtmlCaseTemplateControllerSemantics(),
   new RuntimeHtmlDefaultCaseTemplateControllerSemantics(),
@@ -173,9 +195,14 @@ export const runtimeHtmlTemplateControllerSemantics: readonly BuiltInTemplateCon
   new RuntimeHtmlRejectedTemplateControllerSemantics(),
 ];
 
-export function runtimeHtmlTemplateControllerSemanticsForName(
+export const frameworkTemplateControllerSemantics: readonly BuiltInTemplateControllerSemantics[] = [
+  ...runtimeHtmlTemplateControllerSemantics,
+  new UiVirtualizationVirtualRepeatTemplateControllerSemantics(),
+];
+
+export function frameworkTemplateControllerSemanticsForName(
   controllerName: string,
 ): BuiltInTemplateControllerSemantics | null {
   const key = controllerName.toLowerCase();
-  return runtimeHtmlTemplateControllerSemantics.find((semantics) => semantics.controllerName === key) ?? null;
+  return frameworkTemplateControllerSemantics.find((semantics) => semantics.controllerName === key) ?? null;
 }

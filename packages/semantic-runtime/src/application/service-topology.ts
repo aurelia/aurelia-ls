@@ -82,7 +82,7 @@ export function readApplicationServiceClassSites(
     if (role == null) {
       return [];
     }
-    const sourceFile = typeSystem.readSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     const classes = sourceFile == null ? [] : topLevelClasses(sourceFile);
     return classes.map((entry) => ({
       path: source.path,

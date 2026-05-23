@@ -10,7 +10,7 @@ import type { BindingBehaviorDefinition } from '../resources/binding-behavior-de
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { ValueConverterDefinition } from '../resources/value-converter-definition.js';
 import type { TemplateResourceScope } from '../template/compiler-world.js';
-import type { TemplateVisibleResource } from '../template/compiler-world-reference.js';
+import { findVisibleTemplateResource } from '../template/compiler-resource-lookup.js';
 import {
   STATE_BINDING_BEHAVIOR_NAME,
   type StateBindingScopeProjector,
@@ -18,6 +18,7 @@ import {
 import { CheckerExpressionAccessProjector } from './expression-access-projector.js';
 import {
   checkerExpressionCallArguments,
+  type CheckerExpressionCallArgument,
   CheckerExpressionCallProjector,
 } from './expression-call-projector.js';
 import {
@@ -26,6 +27,10 @@ import {
   CheckerExpressionTypeOpenKind,
 } from './expression-type-evaluation.js';
 import { CheckerExpressionTypeSupport } from './expression-type-support.js';
+import {
+  CheckerTypeMemberKind,
+  type CheckerTypeShape,
+} from './type-shape.js';
 
 export interface CheckerExpressionResourceProjectorHost {
   evaluateNode(
@@ -36,11 +41,13 @@ export interface CheckerExpressionResourceProjectorHost {
   ): CheckerExpressionTypeEvaluation;
 }
 
+export type RuntimeValueConverterMethodName = 'toView' | 'fromView';
+
 /**
  * Projects expression-level resource semantics for value converters and binding behaviors.
  *
  * The evaluator owns AST dispatch, while this projector owns compiler resource-scope lookup, converter target hydration,
- * `toView` call projection, and duplicate binding-behavior policy.
+ * value-converter method call projection, and duplicate binding-behavior policy.
  */
 export class CheckerExpressionResourceProjector {
   constructor(
@@ -63,13 +70,35 @@ export class CheckerExpressionResourceProjector {
       return inner;
     }
 
+    return this.evaluateValueConverterMethod(
+      expression,
+      'toView',
+      inner,
+      scope,
+      localKey,
+      sourceAddressHandle,
+    );
+  }
+
+  evaluateValueConverterMethod(
+    expression: ValueConverterExpression,
+    methodName: RuntimeValueConverterMethodName,
+    input: CheckerExpressionTypeEvaluation,
+    scope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerExpressionTypeEvaluation {
+    if (input.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
+      return input;
+    }
+
     const definition = this.findValueConverterDefinition(expression.name.name);
     if (definition == null) {
       return this.support.open(
         CheckerExpressionTypeOpenKind.MissingValueConverterResource,
         expression,
         `Value converter '${expression.name.name}' was not resolved through the current compiler resource scope.`,
-        inner.typeReference,
+        input.typeReference,
       );
     }
 
@@ -78,7 +107,7 @@ export class CheckerExpressionResourceProjector {
         CheckerExpressionTypeOpenKind.OpenValueConverter,
         expression,
         `Value converter '${definition.name}' does not carry a checker-visible target type yet.`,
-        inner.typeReference,
+        input.typeReference,
       );
     }
 
@@ -93,36 +122,38 @@ export class CheckerExpressionResourceProjector {
       return converterType;
     }
 
-    const toView = this.access.evaluateMemberOnType(
+    const method = this.access.evaluateMemberOnType(
       expression,
       converterType.typeShape,
-      'toView',
-      `${localKey}:converter:${definition.name}:toView`,
+      methodName,
+      `${localKey}:converter:${definition.name}:${methodName}`,
     );
-    if (toView.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
+    if (method.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
+      if (method.openKind === CheckerExpressionTypeOpenKind.MissingMember) {
+        return input;
+      }
       return this.support.open(
         CheckerExpressionTypeOpenKind.OpenValueConverter,
         expression,
-        `Value converter '${definition.name}' target type did not expose a checker-visible toView method.`,
+        `Value converter '${definition.name}' target type did not expose a checker-visible ${methodName} method.`,
         converterType.typeReference,
       );
     }
 
     return this.calls.evaluateCallReturn(
       expression,
-      toView.typeShape,
-      [
-        {
-          expression: expression.expression,
-          localKey: `${localKey}:converter:${definition.name}:toView-input`,
-          precomputedEvaluation: inner,
-        },
-        ...checkerExpressionCallArguments(expression.args, `${localKey}:converter:${definition.name}:toView-args`),
-      ],
+      method.typeShape,
+      this.valueConverterMethodArguments(
+        expression,
+        input,
+        converterType.typeShape,
+        `${localKey}:converter:${definition.name}:${methodName}`,
+        sourceAddressHandle,
+      ),
       scope,
-      `${localKey}:converter:${definition.name}:toView-return`,
+      `${localKey}:converter:${definition.name}:${methodName}-return`,
       sourceAddressHandle,
-      toView.sourceAddressHandle,
+      method.sourceAddressHandle,
     );
   }
 
@@ -212,6 +243,75 @@ export class CheckerExpressionResourceProjector {
     return this.host.evaluateNode(expression, scope, localKey, sourceAddressHandle);
   }
 
+  private valueConverterMethodArguments(
+    expression: ValueConverterExpression,
+    input: CheckerExpressionTypeEvaluation,
+    converterType: CheckerTypeShape,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): readonly CheckerExpressionCallArgument[] {
+    const args: CheckerExpressionCallArgument[] = [{
+      expression: expression.expression,
+      localKey: `${localKey}-input`,
+      precomputedEvaluation: input,
+    }];
+    if (this.valueConverterUsesCallerContext(expression, converterType, `${localKey}:with-context`)) {
+      args.push({
+        expression,
+        localKey: `${localKey}:caller-context`,
+        precomputedEvaluation: this.valueConverterCallerContext(expression, `${localKey}:caller-context`, sourceAddressHandle),
+      });
+    }
+    args.push(...checkerExpressionCallArguments(expression.args, `${localKey}-args`));
+    return args;
+  }
+
+  private valueConverterUsesCallerContext(
+    expression: ValueConverterExpression,
+    converterType: CheckerTypeShape,
+    localKey: string,
+  ): boolean {
+    const evaluation = this.access.evaluateMemberOnType(
+      expression,
+      converterType,
+      'withContext',
+      localKey,
+      converterType.sourceAddressHandle,
+    );
+    return evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
+      && evaluation.typeShape.display === 'true';
+  }
+
+  private valueConverterCallerContext(
+    expression: ValueConverterExpression,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerExpressionTypeEvaluation {
+    const unknown = this.support.synthesis.unknownTypeReference(`${localKey}:unknown`, sourceAddressHandle);
+    const contextType = this.support.synthesis.objectLiteralType(
+      [
+        {
+          name: 'source',
+          valueType: unknown,
+          memberKind: CheckerTypeMemberKind.Property,
+          isOptional: true,
+        },
+        {
+          name: 'binding',
+          valueType: unknown,
+          memberKind: CheckerTypeMemberKind.Property,
+        },
+      ],
+      localKey,
+      sourceAddressHandle,
+    );
+    return this.support.type(
+      contextType,
+      'Synthesized value-converter caller context for withContext invocation.',
+      sourceAddressHandle,
+    );
+  }
+
   private findValueConverterDefinition(name: string): ValueConverterDefinition | null {
     const resource = this.findVisibleResource(ResourceDefinitionKind.ValueConverter, name);
     const definition = resource?.definition ?? null;
@@ -231,18 +331,8 @@ export class CheckerExpressionResourceProjector {
   private findVisibleResource(
     resourceKind: ResourceDefinitionKind,
     name: string,
-  ): TemplateVisibleResource | null {
-    if (this.resourceScope == null) {
-      return null;
-    }
-    const lookup = name.toLowerCase();
-    return this.resourceScope.resources.find((resource) =>
-      resource.resourceKind === resourceKind
-      && (
-        resource.name.toLowerCase() === lookup
-        || resource.aliases.some((alias) => alias.toLowerCase() === lookup)
-      )
-    ) ?? null;
+  ) {
+    return findVisibleTemplateResource(this.resourceScope, resourceKind, name);
   }
 }
 

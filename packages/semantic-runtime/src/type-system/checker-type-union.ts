@@ -18,13 +18,16 @@ export function checkerBackedUnionTypeForReferences(
   }
   const carriers = references.map((reference) => readCheckerTypeShape(store, reference)?.carrier ?? null);
   const first = carriers[0] ?? null;
-  const unionFactory = first == null ? null : checkerUnionFactory(first.checker);
-  if (first == null || unionFactory == null || carriers.some((carrier) => carrier?.checker !== first.checker)) {
+  if (first == null || carriers.some((carrier) => carrier?.checker !== first.checker)) {
+    return null;
+  }
+  const unionType = checkerUnionType(first.checker, carriers.map((carrier) => carrier!.type));
+  if (unionType == null) {
     return null;
   }
   return {
     checker: first.checker,
-    type: unionFactory(uniqueCheckerTypes(carriers.map((carrier) => carrier!.type))),
+    type: unionType,
   };
 }
 
@@ -32,16 +35,31 @@ type TypeCheckerWithUnionFactory = ts.TypeChecker & {
   getUnionType?: (types: readonly ts.Type[]) => ts.Type;
 };
 
-function checkerUnionFactory(
+export function checkerUnionType(
   checker: ts.TypeChecker,
-): ((types: readonly ts.Type[]) => ts.Type) | null {
+  types: readonly ts.Type[],
+): ts.Type | null {
+  if (types.length === 0) {
+    return null;
+  }
+  const unique = uniqueCheckerTypes(types);
+  if (unique.length === 1) {
+    return unique[0]!;
+  }
   const candidate = (checker as TypeCheckerWithUnionFactory).getUnionType;
   return typeof candidate === 'function'
-    ? (types) => candidate.call(checker, types)
-    : null;
+    ? candidate.call(checker, unique)
+    : unique[0]!;
 }
 
-function uniqueCheckerTypes(types: readonly ts.Type[]): readonly ts.Type[] {
+export function checkerUnionTypeOrNever(
+  checker: ts.TypeChecker,
+  types: readonly ts.Type[],
+): ts.Type {
+  return checkerUnionType(checker, types) ?? checker.getNeverType();
+}
+
+export function uniqueCheckerTypes(types: readonly ts.Type[]): readonly ts.Type[] {
   const seen = new Set<ts.Type>();
   const result: ts.Type[] = [];
   for (const type of types) {

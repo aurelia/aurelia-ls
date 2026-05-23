@@ -12,6 +12,7 @@ export class SelectMultipleBindingOrderApp {
   selectedFirst: string[] = [];
   selectedMiddle: string[] = [];
   selectedLast: string[] = [];
+  selectedNullable: string[] | null = null;
   selectedSingle = 'alpha';
   selectedDynamic: string | string[] = [];
 }

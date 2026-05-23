@@ -1844,10 +1844,14 @@ function readCheckerDependencyReference(
   if (expression == null || context.typeSystem == null) {
     return null;
   }
+  const programExpression = context.typeSystem.readProgramExpression(expression);
+  if (programExpression == null) {
+    return null;
+  }
   const checker = context.typeSystem.checker;
-  const symbol = readAliasedValueSymbol(checker, expression);
+  const symbol = readAliasedValueSymbol(checker, programExpression);
   const declaration = symbol?.valueDeclaration ?? symbol?.declarations?.[0] ?? null;
-  const type = checker.getTypeAtLocation(expression);
+  const type = checker.getTypeAtLocation(programExpression);
   const moduleKey = declaration == null
     ? null
     : context.typeSystem.readModuleKeyForSourceFile(declaration.getSourceFile());

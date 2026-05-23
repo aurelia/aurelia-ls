@@ -14,6 +14,7 @@ const weakOwnerFixtureRoot = path.join(packageRoot, 'fixtures/pressure/weak-owne
 const mixedFormFixtureRoot = path.join(packageRoot, 'fixtures/pressure/mixed-form-surfaces');
 const selectModelPrimitiveFixtureRoot = path.join(packageRoot, 'fixtures/pressure/select-model-primitives');
 const syntheticWritebackFixtureRoot = path.join(packageRoot, 'fixtures/pressure/synthetic-writeback-local');
+const templateOverlayTypeErrorFixtureRoot = path.join(packageRoot, 'fixtures/pressure/template-overlay-type-errors');
 const viewFactoryProviderFixtureRoot = path.join(packageRoot, 'fixtures/pressure/runtime-html-view-factory-provider-errors');
 
 const contracts = [
@@ -155,6 +156,7 @@ const contracts = [
         [
           effectFilter('planKind', 'template-scope-slot-typing'),
           effectFilter('actionTargetKind', 'scope-slot'),
+          effectFilter('actionTargets.sourceRole', 'template'),
           effectFilter('targetMemberNames', 'label'),
           effectFilter('targetMemberNames', 'status'),
         ],
@@ -223,6 +225,22 @@ const contracts = [
         'signature',
       ),
       ExpectedSemanticEffect.exactly(
+        'The fulfillment setter diagnostic source should narrow to the authored expression target, not the whole binding attribute.',
+        'template-diagnostic',
+        'template',
+        1,
+        null,
+        [
+          effectFilter('diagnosticKind', 'binding-source-assignment-strictness'),
+          effectFilter('selectedMemberName', 'fulfillmentMethod'),
+          effectFilter('source.path', 'src/components/ticket-editor.html'),
+          effectFilter('source.start', 587),
+          effectFilter('source.end', 604),
+          effectFilter('source.role', 'binding-source-assignment'),
+        ],
+        'signature',
+      ),
+      ExpectedSemanticEffect.exactly(
         'The number input diagnostic should target the authored priority accessor.',
         'template-diagnostic',
         'template',
@@ -232,6 +250,22 @@ const contracts = [
           effectFilter('diagnosticKind', 'binding-source-assignment-strictness'),
           effectFilter('selectedMemberName', 'priority'),
           effectFilter('suggestion.actionTarget.source.path', 'src/components/ticket-editor.ts'),
+        ],
+        'signature',
+      ),
+      ExpectedSemanticEffect.exactly(
+        'The number input diagnostic source should narrow to the authored expression target, not the whole binding attribute.',
+        'template-diagnostic',
+        'template',
+        1,
+        null,
+        [
+          effectFilter('diagnosticKind', 'binding-source-assignment-strictness'),
+          effectFilter('selectedMemberName', 'priority'),
+          effectFilter('source.path', 'src/components/ticket-editor.html'),
+          effectFilter('source.start', 1843),
+          effectFilter('source.end', 1851),
+          effectFilter('source.role', 'binding-source-assignment'),
         ],
         'signature',
       ),
@@ -293,6 +327,29 @@ const contracts = [
         [
           effectFilter('sourceName', 'row.label'),
           effectFilter('sourceType', 'string'),
+        ],
+        'signature',
+      ),
+    ],
+  ),
+  await verifyFixture(
+    templateOverlayTypeErrorFixtureRoot,
+    'template-diagnostics-contract:template-overlay-type-errors',
+    [
+      ExpectedSemanticEffect.exactly(
+        'Nullish template overlay TypeScript diagnostics should propose guarding or narrowing the expression.',
+        'template-diagnostic',
+        'template',
+        1,
+        null,
+        [
+          effectFilter('diagnosticKind', 'template-expression-typescript-diagnostic'),
+          effectFilter('missingInput', 'typescript:TS18047'),
+          effectFilter('suggestion.suggestionKind', 'guard-nullish-expression'),
+          effectFilter('suggestion.actionKind', 'rewrite-expression'),
+          effectFilter('suggestion.actionTarget.targetKind', 'expression'),
+          effectFilter('source.role', 'typescript-overlay:semantic'),
+          effectFilter('source.sourceFileRole', 'template'),
         ],
         'signature',
       ),

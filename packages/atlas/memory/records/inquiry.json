@@ -53,14 +53,19 @@
         "semantic-runtime",
         "inquiry",
         "lsp",
+        "mcp",
         "edits",
+        "references",
         "type-system",
         "template"
       ],
-      "summary": "Rename, code actions, organize imports, file rename edits, and future workspace edits need a semantic-runtime edit-plan substrate instead of one-off TypeScript LanguageService wrappers.",
-      "rationale": "Atlas can already ask TypeScript LanguageService questions, but semantic-runtime must eventually serve MCP/LSP users across TypeScript and Aurelia semantics. A useful edit feature has to combine TypeScript references with template, resource, route, i18n, binding, and generated-source constraints, then produce previewable source edits with exact provenance and invalidation. A tiny rename wrapper would create an attractive shortcut that scales poorly.",
+      "summary": "IDE/MCP affordances need one semantic reference and edit-plan algebra for definition, references, hover, diagnostics, rename, code actions, organize imports, file rename edits, and future workspace edits.",
+      "rationale": "Atlas can already ask TypeScript LanguageService questions, but semantic-runtime must eventually serve the same semantic affordances to human IDE users and AI MCP users across TypeScript and Aurelia semantics. Navigation can tolerate partial reference confidence, while editing is the strictest consumer: it has to combine TypeScript references with template, resource, route, i18n, binding, and generated-source constraints, then produce previewable source edits with exact provenance and invalidation. A tiny rename wrapper would create an attractive shortcut that scales poorly.",
       "guidance": [
-        "Do not implement semantic-runtime rename as a direct TypeScript LanguageService pass-through. Treat TypeScript rename as one reference source inside a broader edit-plan algebra.",
+        "Treat MCP and IDE/LSP as clients of the same semantic-runtime affordance API. MCP should expose the same information and operations a developer IDE would use, with transport/display differences only.",
+        "Design around a Semantic IDE Affordance Algebra first: locus, semantic subject, reference role, affordance kind, editability, completeness, source precision, and invalidation epoch.",
+        "Do not implement semantic-runtime rename as a direct TypeScript LanguageService pass-through. Treat TypeScript rename as one reference source inside a broader definition/reference/edit-plan algebra.",
+        "Start with editing constraints because edits are the strictest consumer. If exact reference coverage and editability are sufficient for rename/code actions, read-only go-to-definition, find-all-references, hover, and highlights can share the same substrate with weaker completeness requirements.",
         "Start from TypeSystemProject for Program/checker facts, but decide deliberately whether a future LanguageService can share the same epoch or needs an explicitly modeled companion lifetime.",
         "Use Atlas `ts.type` rename, references, code-fixes, refactors, organize-imports, and file-rename-edits as pressure and implementation precedent, not as a semantic-runtime API dependency.",
         "Cross-language edits must join Aurelia semantic references: template bindings, resource names, bindables, route parameters, translation keys, value converters, binding behaviors, and source-level configuration can all participate in edit reachability.",
@@ -131,6 +136,96 @@
       ],
       "createdAt": "2026-05-22",
       "updatedAt": "2026-05-22"
+    },
+    {
+      "id": "reuse:app-builder-ide-fixture-flywheel",
+      "kind": "reuse-guide",
+      "domains": [
+        "semantic-runtime",
+        "app-builder",
+        "fixtures",
+        "authoring",
+        "inquiry",
+        "lsp",
+        "mcp",
+        "edits",
+        "references",
+        "expected-effects"
+      ],
+      "summary": "Editing, rename, and other IDE/MCP affordances need fixtures generated from app-builder pattern intent, not isolated hand-written source snippets alone.",
+      "rationale": "Edit affordances are the strictest consumer of semantic-runtime source precision. Dedicated fixtures must cover exact definition/reference families, editability, non-editable spans, route/template/resource/i18n/binding references, and expected edit plans. Larger generated app fixtures should come from the same app-builder pattern algebra used for public authoring so MCP and IDE features are pressure-tested against realistic low-boilerplate Aurelia code.",
+      "guidance": [
+        "Treat editing fixtures as a bridge between app-builder ontology and the Semantic IDE Affordance Algebra. Do not create a separate MCP-only or IDE-only fixture language.",
+        "Use tiered fixture lanes: small reference-contract fixtures for exact semantic subjects, medium edit-plan fixtures for multi-file expected edits, generated app fixtures for realistic pattern compositions, and contrast fixtures for analyzable shapes that should not become recommendable source.",
+        "Generated editing fixtures should declare expected definition targets, reference sets, source roles, editability blockers, rename plans or preview edits, diagnostics-to-repair facts, and exact source spans where possible.",
+        "When an editing fixture requires larger source, generate it from app-builder pattern compositions plus expected semantic effects rather than hard-coding another example domain in authoring.",
+        "App-builder expected effects should grow beyond app facts when needed: reference families and edit-plan expectations are semantic effects too, even if their first implementation lives in an IDE/edit contract layer.",
+        "Use TypeSystemProject, template overlays, binding/data-flow products, router/i18n/resource products, and SemanticSourceReference provenance as inputs. Overlay segments are evidence, not the authoritative edit surface by themselves.",
+        "A broad carrier span should fail an edit contract or report missing precision; it should not be silently used as a patch range.",
+        "If app-builder generated fixtures expose missing reference or provenance families, deepen the semantic-runtime substrate before adding fixture-local expectations."
+      ],
+      "anchors": [
+        {
+          "kind": "lens",
+          "lensId": "atlas.memory",
+          "projection": "next",
+          "filters": {
+            "domain": "app-builder"
+          },
+          "summary": "App-builder ontology memory owns reusable pattern intent and reference-domain separation."
+        },
+        {
+          "kind": "lens",
+          "lensId": "atlas.memory",
+          "projection": "next",
+          "filters": {
+            "domain": "edits"
+          },
+          "summary": "Semantic IDE affordance memory owns strict reference/edit requirements."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/expected-effect.ts",
+          "symbolName": "ExpectedSemanticEffect",
+          "summary": "Current authoring verification primitive that future edit/reference effects can extend or parallel."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/source-reference.ts",
+          "symbolName": "SemanticSourceReference",
+          "summary": "Public source-locus envelope that edit fixtures must pressure for exact authored ranges."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject",
+          "summary": "Shared Program/checker epoch for generated fixture diagnostics, references, and future edit plans."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/authoring",
+          "summary": "Generated recommendable fixture lane that should eventually include app-builder-generated IDE pressure apps."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure",
+          "summary": "Contrast and analyzer-pressure fixture lane for shapes semantic-runtime must understand but MCP should not recommend."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/api/source-reference.ts",
+          "symbolName": "SemanticSourceReference"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/type-system/project.ts",
+          "symbolName": "TypeSystemProject"
+        }
+      ],
+      "createdAt": "2026-05-23",
+      "updatedAt": "2026-05-23"
     },
     {
       "id": "frontier:query-claim-graph",

@@ -55,6 +55,8 @@ export const enum FrameworkRegistrationCapability {
   DialogServiceResolvers = 'dialog.service-resolvers',
   /** Dialog plugin lifecycle task that applies the configured global settings provider. */
   DialogLifecycleTasks = 'dialog.lifecycle-tasks',
+  /** UI virtualization plugin resource headers such as the `virtual-repeat` template controller. */
+  UiVirtualizationDefaultResources = 'ui-virtualization.default-resources',
   /** AppTask admission that is selected by lifecycle-slot dispatch rather than DI world spending. */
   AppTask = 'app-task',
 }
@@ -230,6 +232,16 @@ const frameworkRegistrationDescriptors: readonly FrameworkRegistrationDescriptor
     capabilities: [
       FrameworkRegistrationCapability.DialogServiceResolvers,
       FrameworkRegistrationCapability.DialogLifecycleTasks,
+    ],
+  },
+  {
+    kind: FrameworkRegistrationKind.UiVirtualizationDefaultConfiguration,
+    exportName: 'DefaultVirtualizationConfiguration',
+    moduleNames: ['@aurelia/ui-virtualization'],
+    role: FrameworkRegistrationRole.Configuration,
+    chainMethods: [],
+    capabilities: [
+      FrameworkRegistrationCapability.UiVirtualizationDefaultResources,
     ],
   },
   {

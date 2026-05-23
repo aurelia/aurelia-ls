@@ -19,7 +19,7 @@ import { ResourceProductDetails } from '../resources/product-details.js';
 import {
   BuiltInTemplateControllerFlowKind,
   type BuiltInTemplateControllerSemantics,
-  runtimeHtmlTemplateControllerSemanticsForName,
+  frameworkTemplateControllerSemanticsForName,
 } from '../template/template-controller-semantics.js';
 import { CustomAttributeDefinition } from '../resources/custom-attribute-definition.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
@@ -438,7 +438,7 @@ function semanticsForController(
   const templateControllerName = templateControllerNameForSemantics(controller);
   return templateControllerName == null
     ? null
-    : runtimeHtmlTemplateControllerSemanticsForName(templateControllerName);
+    : frameworkTemplateControllerSemanticsForName(templateControllerName);
 }
 
 function definitionLinkForViewFactory(

@@ -239,8 +239,24 @@ export function sameCheckerTypeReference(
   left: CheckerTypeReference,
   right: CheckerTypeReference,
 ): boolean {
-  return left.productHandle === right.productHandle
-    || (left.checkerKey === right.checkerKey && left.display === right.display);
+  if (left.productHandle != null && right.productHandle != null && left.productHandle === right.productHandle) {
+    return true;
+  }
+  if (left.checkerKey != null && right.checkerKey != null) {
+    return left.checkerKey === right.checkerKey && left.display === right.display;
+  }
+  if (left.display == null || left.display !== right.display || left.shapeKind !== right.shapeKind) {
+    return false;
+  }
+  return left.shapeKind === CheckerTypeShapeKind.Primitive
+    || (
+      left.origin === CheckerTypeProjectionOrigin.SyntheticTemplateType
+      && right.origin === CheckerTypeProjectionOrigin.SyntheticTemplateType
+    )
+    || (
+      left.origin === CheckerTypeProjectionOrigin.SyntheticExpressionType
+      && right.origin === CheckerTypeProjectionOrigin.SyntheticExpressionType
+    );
 }
 
 /** Type-system member detail visible to template/expression inquiry. */

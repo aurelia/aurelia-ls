@@ -416,12 +416,14 @@ function rankNextActionsForInquiry(
       const score = nextActionQueryRelevance(row, query);
       return {
         index,
+        score,
         exact: queryMatches(query, nextActionSearchText(row)),
         row: score === 0 ? row : { ...row, rank: row.rank + score },
       };
     })
     .sort((left, right) =>
       Number(right.exact) - Number(left.exact) ||
+      right.score - left.score ||
       right.row.rank - left.row.rank ||
       left.index - right.index,
     )

@@ -332,6 +332,7 @@ export type ProductArchitectureClassSurfaceRoleId =
   | "publisher"
   | "work-frame"
   | "data-carrier"
+  | "api-surface"
   | "service-surface"
   | "epoch-context"
   | "semantic-model"
@@ -346,6 +347,8 @@ export const ProductArchitectureClassSurfaceRole = {
   WorkFrame: "work-frame",
   /** Class is primarily an input/output/result/config envelope or immutable product carrier. */
   DataCarrier: "data-carrier",
+  /** Class is a public API/session facade that coordinates inquiry, cache, or app-opening entry points. */
+  ApiSurface: "api-surface",
   /** Class exposes reusable parser/projector/evaluator/catalog/service-like behavior. */
   ServiceSurface: "service-surface",
   /** Class owns a reusable program, project, graph, store, world, or checker epoch consumed by multiple phases. */
@@ -539,6 +542,14 @@ export interface ProductArchitectureCallSiteRow {
   readonly typeArgumentCount: number;
   /** Number of runtime arguments. */
   readonly argumentCount: number;
+  /** First runtime argument expression text, when present. Useful for ownership audits of API surfaces such as TypeChecker calls. */
+  readonly firstArgumentText: string | null;
+  /** Syntax kind of the first runtime argument expression, when present. */
+  readonly firstArgumentSyntaxKind: string | null;
+  /** Local origin category for the first argument, when Atlas can identify one cheaply from the same Program. */
+  readonly firstArgumentOriginKind: ProductArchitectureCallSiteArgumentOriginKind;
+  /** Local origin expression/declaration text for the first argument, when useful for ownership audits. */
+  readonly firstArgumentOriginText: string | null;
   /** Exact source range for the call site. */
   readonly source: ProductArchitectureSourceReference;
   /** Exact source range for the chosen target declaration when resolved. */
@@ -546,6 +557,18 @@ export interface ProductArchitectureCallSiteRow {
   /** Compact row summary. */
   readonly summary: string;
 }
+
+export type ProductArchitectureCallSiteArgumentOriginKind =
+  | "none"
+  | "literal-or-keyword"
+  | "local-variable"
+  | "parameter"
+  | "binding-element"
+  | "import"
+  | "property-or-element-access"
+  | "call-or-new-expression"
+  | "declaration"
+  | "expression";
 
 /** Grouped checker-backed call dependency between semantic-runtime and admitted package files. */
 export interface ProductArchitectureCallDependencyRow {
@@ -1829,6 +1852,12 @@ function classSurfaceRole(
       reason: "auLink-backed class or exact auLink catalog name match",
     };
   }
+  if (name === "SemanticApp" || name === "SemanticRuntime") {
+    return {
+      role: ProductArchitectureClassSurfaceRole.ApiSurface,
+      reason: "semantic-runtime public API/session facade",
+    };
+  }
   if (endsWithAny(name, ["Materializer", "Constructor", "ProjectPass", "Pass", "Builder"])) {
     return {
       role: ProductArchitectureClassSurfaceRole.ProductOwner,
@@ -2353,6 +2382,10 @@ function callSiteRowForExpression(
     signature: callSite.signature,
     typeArgumentCount: callSite.typeArgumentCount,
     argumentCount: callSite.argumentCount,
+    firstArgumentText: callSite.firstArgumentText,
+    firstArgumentSyntaxKind: callSite.firstArgumentSyntaxKind,
+    firstArgumentOriginKind: callSite.firstArgumentOriginKind,
+    firstArgumentOriginText: callSite.firstArgumentOriginText,
     source,
     targetSource,
     summary: callSiteSummary(
@@ -2375,6 +2408,10 @@ interface ProductArchitectureCallSiteFact {
   readonly signature: string | null;
   readonly typeArgumentCount: number;
   readonly argumentCount: number;
+  readonly firstArgumentText: string | null;
+  readonly firstArgumentSyntaxKind: string | null;
+  readonly firstArgumentOriginKind: ProductArchitectureCallSiteArgumentOriginKind;
+  readonly firstArgumentOriginText: string | null;
 }
 
 function lightweightCallSiteFact(
@@ -2386,6 +2423,7 @@ function lightweightCallSiteFact(
 ): ProductArchitectureCallSiteFact {
   const checker = sourceProject.checker;
   const callee = expression.expression;
+  const firstArgument = expression.arguments?.[0] ?? null;
   const signature = includeCallDetails
     ? checker.getResolvedSignature(expression)
     : undefined;
@@ -2408,7 +2446,179 @@ function lightweightCallSiteFact(
       : checker.signatureToString(signature, expression),
     typeArgumentCount: expression.typeArguments?.length ?? 0,
     argumentCount: expression.arguments?.length ?? 0,
+    firstArgumentText: firstArgument?.getText(sourceFile) ?? null,
+    firstArgumentSyntaxKind: firstArgument == null ? null : syntaxKindName(firstArgument.kind),
+    firstArgumentOriginKind: "none",
+    firstArgumentOriginText: null,
   };
+}
+
+interface ProductArchitectureCallSiteArgumentOrigin {
+  readonly originKind: ProductArchitectureCallSiteArgumentOriginKind;
+  readonly originText: string | null;
+}
+
+function callSiteArgumentOrigin(
+  sourceFile: ts.SourceFile,
+  expression: ts.Expression | null,
+): ProductArchitectureCallSiteArgumentOrigin {
+  if (expression == null) {
+    return { originKind: "none", originText: null };
+  }
+  if (isLiteralOrKeywordExpression(expression)) {
+    return { originKind: "literal-or-keyword", originText: expression.getText(sourceFile) };
+  }
+  if (ts.isCallExpression(expression) || ts.isNewExpression(expression)) {
+    return { originKind: "call-or-new-expression", originText: expression.expression.getText(sourceFile) };
+  }
+  if (ts.isPropertyAccessExpression(expression) || ts.isElementAccessExpression(expression)) {
+    return { originKind: "property-or-element-access", originText: expression.expression.getText(sourceFile) };
+  }
+  const declaration = ts.isIdentifier(expression)
+    ? syntacticLocalArgumentDeclaration(sourceFile, expression)
+    : null;
+  if (declaration == null) {
+    return { originKind: "expression", originText: expression.getText(sourceFile) };
+  }
+  if (ts.isVariableDeclaration(declaration)) {
+    const declarationSourceFile = declaration.getSourceFile();
+    return {
+      originKind: "local-variable",
+      originText: declaration.initializer?.getText(declarationSourceFile) ?? declaration.name.getText(declarationSourceFile),
+    };
+  }
+  if (ts.isParameter(declaration)) {
+    return {
+      originKind: "parameter",
+      originText: declaration.name.getText(declaration.getSourceFile()),
+    };
+  }
+  if (ts.isBindingElement(declaration)) {
+    return {
+      originKind: "binding-element",
+      originText: declaration.name.getText(declaration.getSourceFile()),
+    };
+  }
+  if (
+    ts.isImportSpecifier(declaration)
+    || ts.isImportClause(declaration)
+    || ts.isNamespaceImport(declaration)
+    || ts.isImportEqualsDeclaration(declaration)
+  ) {
+    return {
+      originKind: "import",
+      originText: declaration.getText(declaration.getSourceFile()),
+    };
+  }
+  return {
+    originKind: "declaration",
+    originText: syntaxKindName(declaration.kind),
+  };
+}
+
+function syntacticLocalArgumentDeclaration(
+  sourceFile: ts.SourceFile,
+  identifier: ts.Identifier,
+): ts.Declaration | null {
+  let current: ts.Node | undefined = identifier;
+  while ((current = current.parent) !== undefined) {
+    if (ts.isFunctionLike(current)) {
+      const parameter = current.parameters.find((candidate) =>
+        bindingNameContainsIdentifier(candidate.name, identifier.text)
+      ) ?? null;
+      if (parameter != null) {
+        return parameter;
+      }
+    }
+    if (ts.isBlock(current) || ts.isSourceFile(current) || ts.isModuleBlock(current)) {
+      const declaration = variableDeclarationBeforeIdentifier(current, identifier, sourceFile);
+      if (declaration != null) {
+        return declaration;
+      }
+    }
+  }
+  return importDeclarationForIdentifier(sourceFile, identifier.text);
+}
+
+function variableDeclarationBeforeIdentifier(
+  scope: ts.Block | ts.SourceFile | ts.ModuleBlock,
+  identifier: ts.Identifier,
+  sourceFile: ts.SourceFile,
+): ts.VariableDeclaration | null {
+  for (const statement of scope.statements) {
+    if (statement.pos > identifier.pos) {
+      break;
+    }
+    if (!ts.isVariableStatement(statement)) {
+      continue;
+    }
+    for (const declaration of statement.declarationList.declarations) {
+      if (
+        declaration.pos < identifier.pos &&
+        bindingNameContainsIdentifier(declaration.name, identifier.text)
+      ) {
+        return declaration;
+      }
+    }
+  }
+  return null;
+}
+
+function importDeclarationForIdentifier(
+  sourceFile: ts.SourceFile,
+  name: string,
+): ts.Declaration | null {
+  for (const statement of sourceFile.statements) {
+    if (!ts.isImportDeclaration(statement) || statement.importClause == null) {
+      continue;
+    }
+    const importClause = statement.importClause;
+    if (importClause.name?.text === name) {
+      return importClause;
+    }
+    const namedBindings = importClause.namedBindings;
+    if (namedBindings == null) {
+      continue;
+    }
+    if (ts.isNamespaceImport(namedBindings) && namedBindings.name.text === name) {
+      return namedBindings;
+    }
+    if (ts.isNamedImports(namedBindings)) {
+      const specifier = namedBindings.elements.find((element) => element.name.text === name) ?? null;
+      if (specifier != null) {
+        return specifier;
+      }
+    }
+  }
+  return null;
+}
+
+function bindingNameContainsIdentifier(
+  bindingName: ts.BindingName,
+  text: string,
+): boolean {
+  if (ts.isIdentifier(bindingName)) {
+    return bindingName.text === text;
+  }
+  return bindingName.elements.some((element) =>
+    !ts.isOmittedExpression(element) && bindingNameContainsIdentifier(element.name, text)
+  );
+}
+
+function isLiteralOrKeywordExpression(expression: ts.Expression): boolean {
+  return ts.isStringLiteralLike(expression)
+    || ts.isNumericLiteral(expression)
+    || ts.isBigIntLiteral(expression)
+    || expression.kind === ts.SyntaxKind.TrueKeyword
+    || expression.kind === ts.SyntaxKind.FalseKeyword
+    || expression.kind === ts.SyntaxKind.NullKeyword
+    || expression.kind === ts.SyntaxKind.UndefinedKeyword
+    || expression.kind === ts.SyntaxKind.ThisKeyword
+    || expression.kind === ts.SyntaxKind.SuperKeyword;
+}
+
+function syntaxKindName(kind: ts.SyntaxKind): string {
+  return ts.SyntaxKind[kind] ?? String(kind);
 }
 
 export function callDependencyRows(
@@ -2489,6 +2699,25 @@ export function enrichProductArchitectureCallSiteRows(
       ...row,
       calleeType: details.calleeType,
       signature: details.signature,
+    };
+  });
+}
+
+/** Add local first-argument origin details to an already-filtered call-site page. */
+export function enrichProductArchitectureCallSiteArgumentOriginRows(
+  sourceProject: SourceProject,
+  rows: readonly ProductArchitectureCallSiteRow[],
+): readonly ProductArchitectureCallSiteRow[] {
+  const expressions = new ProductArchitectureCallSiteExpressionCache(sourceProject);
+  return rows.map((row) => {
+    const expression = expressions.read(row);
+    const firstArgument = expression.arguments?.[0] ?? null;
+    const origin = callSiteArgumentOrigin(expression.getSourceFile(), firstArgument);
+    return {
+      ...row,
+      firstArgumentSyntaxKind: firstArgument == null ? null : syntaxKindName(firstArgument.kind),
+      firstArgumentOriginKind: origin.originKind,
+      firstArgumentOriginText: origin.originText,
     };
   });
 }

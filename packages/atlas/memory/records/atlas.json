@@ -294,7 +294,7 @@
         "Presence live checks report `present` and should ground records without making pressure-frontiers active; pair them with product-large-class or atlas-self-* checks when they should keep work live.",
         "When memory:next becomes flat or noisy, improve atlas-memory-next-actions, row filters, or routing continuations before adding another workbench note.",
         "Keep record-backed `memory:next` rows self-contained: the answer payload should include the backing memory records, and detailed script output should print anchors before bounded guidance so a checkpoint can jump to source, docs, scripts, lenses, or auLink handles without opening raw JSON. Use `--guidanceRows`, `--liveCheckRows`, `--anchorRows`, or explicit `--all-*` switches when the human output needs full expansion.",
-        "Keep query semantics aligned across records, frontiers, untracked frontiers, and next actions: exact all-token hits should rank first, and significant adjacent partial hits should be available for broad checkpoint phrases.",
+        "Keep query semantics aligned across records, frontiers, untracked frontiers, and next actions: explicit consultable filters should join matching record-backed rows into `memory:next` even when computed next actions exist, exact all-token hits should rank first, query relevance should outrank broad base pressure, and significant adjacent partial hits should be available for broad checkpoint phrases.",
         "Use separated CLI filters freely: memory scripts accept `--name value` as an exact record-id filter that defaults to `records`, `--limit` as a row-budget alias, and repeated `--domain` filters as all-of narrowing by default. Reach for `--domainMode=any` only when a deliberately broad OR-style sweep is more useful.",
         "Memory read scripts should reject unsupported flags instead of silently widening a narrowed inquiry; if a commonly attempted flag is useful, add it as a typed filter or documented alias.",
         "Keep the store, integrity policy, normalization, live-check evaluator, row filters/search, routing/evidence, lens projection answering, next-action ranking, read-script output, and write-script storage updates aligned; they are one substrate with separate responsibilities, not independent helpers.",
@@ -456,7 +456,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-05-23"
     },
     {
       "id": "reuse:product-architecture-field-provenance-pressure",

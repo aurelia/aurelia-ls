@@ -69,6 +69,7 @@ import {
 import {
   CheckerExpressionTypeEvaluationResultKind,
   CheckerExpressionTypeOpenKind,
+  type CheckerExpressionTypeEvaluation,
 } from '../type-system/expression-type-evaluation.js';
 import {
   type CheckerExpressionTypeWorld,
@@ -106,7 +107,7 @@ import {
 } from '../template/instruction-ir.js';
 import {
   BuiltInTemplateControllerFlowKind,
-  runtimeHtmlTemplateControllerSemanticsForName,
+  frameworkTemplateControllerSemanticsForName,
 } from '../template/template-controller-semantics.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import { ObservationProductDetails } from './product-details.js';
@@ -132,6 +133,7 @@ import {
   type RuntimeBindingPrimitiveValue,
   RuntimeObservedDependencyKind,
   type RuntimeBindingValueChannel,
+  RuntimeBindingValueChannelCouplingKind,
   RuntimeBindingValueChannelKind,
 } from './runtime-binding-observation.js';
 import {
@@ -170,6 +172,8 @@ import {
 } from '../template/runtime-expression-source-address.js';
 import {
   runtimeAcceptedBindingExpressionAstForParse,
+  runtimeAssignmentTargetAstForExpression,
+  runtimeAssignmentValueConverterChainForExpression,
 } from '../template/expression-parse-projection.js';
 import { unwrapExpressionAstNodeParens } from '../expression/parse-result-inspection.js';
 import {
@@ -186,6 +190,9 @@ import {
   type RuntimeInstructionScopeLookup,
   type RuntimeExpressionBinding,
 } from './runtime-binding-expression.js';
+import {
+  effectivePropertyBindingMode,
+} from '../template/runtime-binding-mode-behavior.js';
 
 type RuntimeDataFlowBinding = RuntimeExpressionBinding;
 
@@ -310,11 +317,16 @@ type SourceExpressionInfo = {
   readonly sourceRootName: string | null;
   readonly sourceWriteCapability: SourceWriteCapability | null;
   readonly sourceTypeHint?: CheckerTypeReference | null;
+  readonly sourceAssignmentValueTypeHint?: CheckerTypeReference | null;
+  readonly targetToSourceValueTypeHint?: CheckerTypeReference | null;
+  readonly targetToSourceValueTypeOpenReason?: string | null;
+  readonly targetToSourceValueTypeOpenKind?: CheckerExpressionTypeOpenKind | null;
 };
 
 type BindingDataFlowContext = {
   readonly evaluator: CheckerExpressionTypeEvaluator;
   readonly bindingExpressionScopes: RuntimeBindingExpressionScopeProjector;
+  readonly resourceScope: TemplateResourceScope | null;
 };
 
 type ObservedMemberProjection = {
@@ -431,6 +443,10 @@ type DataFlowSourceProjection = {
   readonly sourceType: CheckerTypeReference | null;
   readonly sourceTypeOpenReason: string | null;
   readonly sourceTypeOpenKind: CheckerExpressionTypeOpenKind | null;
+  readonly sourceAssignmentValueType: CheckerTypeReference | null;
+  readonly targetToSourceValueType: CheckerTypeReference | null;
+  readonly targetToSourceValueTypeOpenReason: string | null;
+  readonly targetToSourceValueTypeOpenKind: CheckerExpressionTypeOpenKind | null;
 };
 
 type DataFlowAssignability = {
@@ -508,6 +524,7 @@ export class RuntimeBindingDataFlowMaterializer {
     return new BindingDataFlowMaterializationFrame(source, instructionScopes, {
       evaluator,
       bindingExpressionScopes: new RuntimeBindingExpressionScopeProjector(this.store, input.expressionWorld),
+      resourceScope: input.resourceScope,
     });
   }
 
@@ -600,7 +617,7 @@ export class RuntimeBindingDataFlowMaterializer {
       records,
       openSeams,
       KernelVocabulary.Binding.OpenDataFlow.key,
-      target.valueChannel?.openReasonKinds ?? [],
+      openSeamReasonKindsForDataFlow(dataFlow, target),
     );
     return { openSeams, records };
   }
@@ -621,6 +638,7 @@ export class RuntimeBindingDataFlowMaterializer {
       context.evaluator,
       context.bindingExpressionScopes,
       strictBinding,
+      context.resourceScope,
       local,
     );
     const dataFlow = runtimeBindingDataFlowForDraft(
@@ -1045,9 +1063,10 @@ class RuntimeBindingDataFlowDraftMaterializer {
     evaluator: CheckerExpressionTypeEvaluator,
     bindingExpressionScopes: RuntimeBindingExpressionScopeProjector,
     strictBinding: boolean | null,
+    resourceScope: TemplateResourceScope | null,
     local: string,
   ): DataFlowDraft {
-    const direction = directionForBinding(binding);
+    const direction = directionForBinding(this.store, binding, resourceScope);
     const needsSourceWriteCapability = directionIncludesTargetToSource(direction);
     const sourceEvaluationConnectable = directionIncludesSourceToTarget(direction);
     const expressionFacts = this.dataFlowExpressionFacts(binding, scope, local);
@@ -1068,6 +1087,8 @@ class RuntimeBindingDataFlowDraftMaterializer {
       direction,
       sourceProjection.sourceType,
       targetTypes.targetValueType,
+      sourceProjection.sourceAssignmentValueType,
+      sourceProjection.targetToSourceValueType,
       target.valueChannel,
     );
     const sourceAssignment = sourceAssignmentForDataFlow({
@@ -1075,8 +1096,8 @@ class RuntimeBindingDataFlowDraftMaterializer {
       sourceInfo: sourceProjection.sourceInfo,
       targetToSourceAssignable: assignability.targetToSourceAssignable,
       valueChannel: target.valueChannel,
-      sourceType: sourceProjection.sourceType,
-      targetValueType: targetTypes.targetValueType,
+      sourceAssignmentValueType: sourceProjection.sourceAssignmentValueType,
+      targetToSourceValueType: sourceProjection.targetToSourceValueType,
     });
     const openReason = openReasonForDataFlow({
       direction,
@@ -1086,7 +1107,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
       valueChannel: target.valueChannel,
       scope,
       ast: expressionFacts.ast,
-      sourceOpenReason: null,
+      sourceOpenReason: sourceProjection.targetToSourceValueTypeOpenReason,
       sourceAssignmentKind: sourceAssignment.kind,
     });
     const frameworkErrorCode = this.frameworkErrorCodeForDataFlow(
@@ -1108,7 +1129,9 @@ class RuntimeBindingDataFlowDraftMaterializer {
       sourceTypeOpenReason: sourceProjection.sourceTypeOpenReason,
       sourceTypeOpenKind: sourceProjection.sourceTypeOpenKind,
       sourceAssignmentTargetType: needsSourceWriteCapability
-        ? sourceProjection.sourceInfo.sourceWriteCapability?.assignmentTargetType ?? sourceProjection.sourceType
+        ? sourceProjection.sourceAssignmentValueType
+          ?? sourceProjection.sourceInfo.sourceWriteCapability?.assignmentTargetType
+          ?? sourceProjection.sourceType
         : null,
       sourceAssignmentTargetSourceAddressHandle: needsSourceWriteCapability
         ? sourceProjection.sourceInfo.sourceWriteCapability?.assignmentTargetSourceAddressHandle ?? null
@@ -1267,6 +1290,16 @@ class BindingDataFlowSourceProjector {
         : spreadSourceTypeOpenReason != null
           ? CheckerExpressionTypeOpenKind.MissingMember
           : null;
+    const sourceAssignmentValueType = needsSourceWriteCapability
+      ? sourceInfo.sourceAssignmentValueTypeHint !== undefined
+        ? sourceInfo.sourceAssignmentValueTypeHint
+        : sourceType
+      : null;
+    const targetToSourceValueType = needsSourceWriteCapability
+      ? sourceInfo.targetToSourceValueTypeHint !== undefined
+        ? sourceInfo.targetToSourceValueTypeHint
+        : targetTypes.targetValueType
+      : null;
     return {
       sourceInfo: targetTypes.spreadTargetProperty == null
         ? sourceInfo
@@ -1274,6 +1307,10 @@ class BindingDataFlowSourceProjector {
       sourceType,
       sourceTypeOpenReason,
       sourceTypeOpenKind,
+      sourceAssignmentValueType,
+      targetToSourceValueType,
+      targetToSourceValueTypeOpenReason: sourceInfo.targetToSourceValueTypeOpenReason ?? null,
+      targetToSourceValueTypeOpenKind: sourceInfo.targetToSourceValueTypeOpenKind ?? null,
     };
   }
 
@@ -1330,20 +1367,20 @@ class BindingDataFlowSourceProjector {
     strictBinding: boolean | null,
     targetValueType: CheckerTypeReference | null,
   ): SourceExpressionInfo {
-    const unwrapped = unwrapExpressionAstNodeParens(expression);
+    const unwrapped = runtimeAssignmentTargetAstForExpression(expression);
+    const writeback = needsSourceWriteCapability
+      ? this.valueConverterWritebackProjection(
+        expression,
+        unwrapped,
+        scope,
+        evaluator,
+        local,
+        sourceAddressHandle,
+        strictBinding,
+        targetValueType,
+      )
+      : {};
     switch (unwrapped.$kind) {
-      case 'BindingBehavior':
-      case 'ValueConverter':
-        return this.sourceInfoForExpression(
-          unwrapped.expression,
-          scope,
-          evaluator,
-          local,
-          sourceAddressHandle,
-          needsSourceWriteCapability,
-          strictBinding,
-          targetValueType,
-        );
       case 'AccessScope':
         const syntheticWritebackTypeHint = needsSourceWriteCapability && isSyntheticWritebackLocal(unwrapped)
           ? targetValueType
@@ -1356,6 +1393,7 @@ class BindingDataFlowSourceProjector {
             ? this.sourceWriteCapability.forAccessScope(unwrapped, scope, targetValueType)
             : null,
           sourceTypeHint: syntheticWritebackTypeHint,
+          ...writeback,
         };
       case 'AccessMember':
         return {
@@ -1372,6 +1410,7 @@ class BindingDataFlowSourceProjector {
               strictBinding,
             )
             : null,
+          ...writeback,
         };
       case 'AccessKeyed':
         return {
@@ -1388,6 +1427,7 @@ class BindingDataFlowSourceProjector {
               strictBinding,
             )
             : null,
+          ...writeback,
         };
       case 'AccessThis':
         return {
@@ -1400,6 +1440,7 @@ class BindingDataFlowSourceProjector {
               RuntimeBindingDataFlowSourceAssignmentReasonKind.RuntimeExpressionUnassignable,
             )
             : null,
+          ...writeback,
         };
       default:
         return {
@@ -1412,8 +1453,76 @@ class BindingDataFlowSourceProjector {
               RuntimeBindingDataFlowSourceAssignmentReasonKind.RuntimeExpressionUnassignable,
             )
             : null,
+          ...writeback,
         };
     }
+  }
+
+  private valueConverterWritebackProjection(
+    expression: ExpressionAstNode,
+    unwrapped: ExpressionAstNode,
+    scope: BindingScope,
+    evaluator: CheckerExpressionTypeEvaluator,
+    local: string,
+    sourceAddressHandle: AddressHandle | null,
+    strictBinding: boolean | null,
+    targetValueType: CheckerTypeReference | null,
+  ): Pick<
+    SourceExpressionInfo,
+    | 'sourceAssignmentValueTypeHint'
+    | 'targetToSourceValueTypeHint'
+    | 'targetToSourceValueTypeOpenReason'
+    | 'targetToSourceValueTypeOpenKind'
+  > {
+    const converters = runtimeAssignmentValueConverterChainForExpression(expression);
+    if (converters.length === 0) {
+      return {};
+    }
+
+    const targetEvaluation = evaluator.evaluateWithScope(
+      unwrapped,
+      scope,
+      `${local}:assignment-target`,
+      sourceAddressHandle,
+      null,
+      { connectable: false, strict: strictBinding },
+    );
+    const sourceAssignmentValueTypeHint = targetEvaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
+      ? targetEvaluation.typeReference
+      : null;
+    if (targetValueType == null) {
+      return {
+        sourceAssignmentValueTypeHint,
+        targetToSourceValueTypeHint: null,
+      };
+    }
+
+    let current = targetValueType;
+    for (let index = 0; index < converters.length; index++) {
+      const converter = converters[index]!;
+      const evaluation = evaluator.evaluateValueConverterMethodFromType(
+        converter,
+        'fromView',
+        current,
+        scope,
+        `${local}:converter:${index}:${converter.name.name}:from-view`,
+        sourceAddressHandle,
+      );
+      if (evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
+        return {
+          sourceAssignmentValueTypeHint,
+          targetToSourceValueTypeHint: null,
+          targetToSourceValueTypeOpenReason: evaluation.summary,
+          targetToSourceValueTypeOpenKind: evaluation.openKind,
+        };
+      }
+      current = evaluation.typeReference;
+    }
+
+    return {
+      sourceAssignmentValueTypeHint,
+      targetToSourceValueTypeHint: current,
+    };
   }
 }
 
@@ -1506,15 +1615,15 @@ class BindingDataFlowSourceWriteCapabilityProjector {
     sourceAddressHandle: AddressHandle | null,
     strictBinding: boolean | null,
   ): SourceWriteCapability {
-    if (strictBinding !== true) {
-      return sourceWriteCapabilityWritable();
-    }
     const ownerEvaluation = evaluator.evaluateWithScope(
       expression.object,
       scope,
       `${local}:owner:keyed`,
       sourceAddressHandle,
     );
+    if (strictBinding !== true) {
+      return sourceWriteCapabilityWritable(null, sourceWriteCapabilitySourceForOwnerEvaluation(ownerEvaluation));
+    }
     if (ownerEvaluation.kind === CheckerExpressionTypeEvaluationResultKind.Open) {
       return sourceWriteCapabilityOpen(
         ownerEvaluation.summary,
@@ -1526,8 +1635,10 @@ class BindingDataFlowSourceWriteCapabilityProjector {
       ? sourceWriteCapabilityRuntimeUnassignable(
         'Aurelia strict astAssign rejects keyed assignment because the owner type is definitely nullish.',
         RuntimeBindingDataFlowSourceAssignmentReasonKind.NullishAssignment,
+        null,
+        sourceWriteCapabilitySourceForOwnerEvaluation(ownerEvaluation),
       )
-      : sourceWriteCapabilityWritable();
+      : sourceWriteCapabilityWritable(null, sourceWriteCapabilitySourceForOwnerEvaluation(ownerEvaluation));
   }
 
   private forSlot(slot: BindingContextSlot): SourceWriteCapability {
@@ -1559,13 +1670,15 @@ class BindingDataFlowAssignabilityEvaluator {
     direction: RuntimeBindingDataFlowDirection,
     sourceType: CheckerTypeReference | null,
     targetValueType: CheckerTypeReference | null,
+    sourceAssignmentValueType: CheckerTypeReference | null,
+    targetToSourceValueType: CheckerTypeReference | null,
     valueChannel: RuntimeBindingValueChannel | null,
   ): DataFlowAssignability {
     const sourceToTargetAssignable = directionIncludesSourceToTarget(direction)
       ? this.isSourceAssignableToTarget(sourceType, targetValueType, valueChannel)
       : null;
     const targetToSourceAssignable = directionIncludesTargetToSource(direction)
-      ? this.isTargetAssignableToSource(targetValueType, sourceType, valueChannel)
+      ? this.isTargetAssignableToSource(targetToSourceValueType, sourceAssignmentValueType, valueChannel)
       : null;
     return {
       sourceToTargetAssignable,
@@ -1575,7 +1688,7 @@ class BindingDataFlowAssignabilityEvaluator {
         ? [RuntimeBindingDataFlowTypeMismatchKind.SourceNullishToRequiredTarget]
         : [],
       targetToSourceTypeMismatchKinds: targetToSourceAssignable === false
-        && this.nullishTypeBlocksAssignment(targetValueType, sourceType)
+        && this.nullishTypeBlocksAssignment(targetToSourceValueType, sourceAssignmentValueType)
         ? [RuntimeBindingDataFlowTypeMismatchKind.TargetNullishToRequiredSource]
         : [],
     };
@@ -1652,6 +1765,7 @@ class BindingDataFlowAssignabilityEvaluator {
         return !this.typeAccess.isRuntimeArrayInstanceType(sourceType);
       case RuntimeBindingValueChannelKind.CheckedRadioValue:
       case RuntimeBindingValueChannelKind.CheckedBoolean:
+      case RuntimeBindingValueChannelKind.CheckedDynamicModelValue:
         return true;
       default:
         return null;
@@ -1665,6 +1779,14 @@ class BindingDataFlowAssignabilityEvaluator {
   ): boolean | null {
     const valueDomain = valueChannel?.valueDomain ?? [];
     const primitiveValueDomain = this.primitiveValueDomain(valueChannel);
+    if (valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedDynamicModelValue) {
+      return primitiveValueDomain.length > 0
+        ? this.isPrimitiveDomainAssignableToDynamicCheckedSource(primitiveValueDomain, sourceType, valueChannel)
+        : this.isTypeAssignableToDynamicCheckedSource(targetType, sourceType, valueChannel);
+    }
+    if (valueChannelHasCoupling(valueChannel, RuntimeBindingValueChannelCouplingKind.SelectDynamicArraySourceShape)) {
+      return null;
+    }
     if (valueChannelMutatesCollection(valueChannel)) {
       return primitiveValueDomain.length > 0
         ? this.isPrimitiveDomainAssignableToSourceMutation(primitiveValueDomain, sourceType, valueChannel)
@@ -1743,7 +1865,7 @@ class BindingDataFlowAssignabilityEvaluator {
     if (sourceCarrier == null) {
       return null;
     }
-    const elementType = valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean
+    const elementType = valueChannelUsesMapMutation(valueChannel, sourceCarrier.checker, sourceCarrier.type)
       ? mapKeyTypeFor(sourceCarrier.checker, sourceCarrier.type)
       : collectionElementTypeFor(sourceCarrier.checker, sourceCarrier.type);
     if (elementType == null) {
@@ -1752,7 +1874,7 @@ class BindingDataFlowAssignabilityEvaluator {
     const keyAssignable = values.every((value) =>
       runtimeBindingPrimitiveValueAssignableToType(value, sourceCarrier.checker, elementType)
     );
-    return valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean
+    return valueChannelUsesMapMutation(valueChannel, sourceCarrier.checker, sourceCarrier.type)
       ? keyAssignable && this.isBooleanObservableFromMapValue(sourceCarrier.checker, sourceCarrier.type)
       : keyAssignable;
   }
@@ -1769,13 +1891,13 @@ class BindingDataFlowAssignabilityEvaluator {
     if (sourceCarrier == null || valueCarrier == null || sourceCarrier.checker !== valueCarrier.checker) {
       return null;
     }
-    const elementType = valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean
+    const elementType = valueChannelUsesMapMutation(valueChannel, sourceCarrier.checker, sourceCarrier.type)
       ? mapKeyTypeFor(sourceCarrier.checker, sourceCarrier.type)
       : collectionElementTypeFor(sourceCarrier.checker, sourceCarrier.type);
     const keyAssignable = elementType == null
       ? null
       : sourceCarrier.checker.isTypeAssignableTo(valueCarrier.type, elementType);
-    if (valueChannel?.channelKind !== RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean || keyAssignable == null) {
+    if (!valueChannelUsesMapMutation(valueChannel, sourceCarrier.checker, sourceCarrier.type) || keyAssignable == null) {
       return keyAssignable;
     }
     return keyAssignable && this.isBooleanObservableFromMapValue(sourceCarrier.checker, sourceCarrier.type);
@@ -1791,7 +1913,7 @@ class BindingDataFlowAssignabilityEvaluator {
     if (sourceCarrier == null) {
       return null;
     }
-    const elementType = valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean
+    const elementType = valueChannelUsesMapMutation(valueChannel, sourceCarrier.checker, sourceCarrier.type)
       ? mutableMapKeyTypeFor(sourceCarrier.checker, sourceCarrier.type)
       : mutableCollectionElementTypeFor(sourceCarrier.checker, sourceCarrier.type);
     if (elementType == null) {
@@ -1802,7 +1924,7 @@ class BindingDataFlowAssignabilityEvaluator {
     const keyAssignable = values.every((value) =>
       sourceCarrier.checker.isTypeAssignableTo(sourceCarrier.checker.getStringLiteralType(value), elementType)
     );
-    return valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean
+    return valueChannelUsesMapMutation(valueChannel, sourceCarrier.checker, sourceCarrier.type)
       ? keyAssignable && this.isBooleanAssignableToMapValue(sourceCarrier.checker, sourceCarrier.type)
       : keyAssignable;
   }
@@ -1817,7 +1939,7 @@ class BindingDataFlowAssignabilityEvaluator {
     if (sourceCarrier == null) {
       return null;
     }
-    const elementType = valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean
+    const elementType = valueChannelUsesMapMutation(valueChannel, sourceCarrier.checker, sourceCarrier.type)
       ? mutableMapKeyTypeFor(sourceCarrier.checker, sourceCarrier.type)
       : mutableCollectionElementTypeFor(sourceCarrier.checker, sourceCarrier.type);
     if (elementType == null) {
@@ -1828,7 +1950,7 @@ class BindingDataFlowAssignabilityEvaluator {
     const keyAssignable = values.every((value) =>
       runtimeBindingPrimitiveValueAssignableToType(value, sourceCarrier.checker, elementType)
     );
-    return valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean
+    return valueChannelUsesMapMutation(valueChannel, sourceCarrier.checker, sourceCarrier.type)
       ? keyAssignable && this.isBooleanAssignableToMapValue(sourceCarrier.checker, sourceCarrier.type)
       : keyAssignable;
   }
@@ -1845,16 +1967,46 @@ class BindingDataFlowAssignabilityEvaluator {
     if (sourceCarrier == null || valueCarrier == null || sourceCarrier.checker !== valueCarrier.checker) {
       return null;
     }
-    const elementType = valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean
+    const elementType = valueChannelUsesMapMutation(valueChannel, sourceCarrier.checker, sourceCarrier.type)
       ? mutableMapKeyTypeFor(sourceCarrier.checker, sourceCarrier.type)
       : mutableCollectionElementTypeFor(sourceCarrier.checker, sourceCarrier.type);
     const keyAssignable = elementType == null
       ? (this.hasReadonlyCollectionSource(sourceCarrier.checker, sourceCarrier.type, valueChannel) ? false : null)
       : sourceCarrier.checker.isTypeAssignableTo(valueCarrier.type, elementType);
-    if (valueChannel?.channelKind !== RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean || keyAssignable == null) {
+    if (!valueChannelUsesMapMutation(valueChannel, sourceCarrier.checker, sourceCarrier.type) || keyAssignable == null) {
       return keyAssignable;
     }
     return keyAssignable && this.isBooleanAssignableToMapValue(sourceCarrier.checker, sourceCarrier.type);
+  }
+
+  private isPrimitiveDomainAssignableToDynamicCheckedSource(
+    values: readonly RuntimeBindingPrimitiveValue[],
+    sourceType: CheckerTypeReference | null,
+    valueChannel: RuntimeBindingValueChannel | null,
+  ): boolean | null {
+    const booleanAssignable = this.isBooleanAssignableToSource(sourceType);
+    const mutationAssignable = this.isPrimitiveDomainAssignableToSourceMutation(values, sourceType, valueChannel);
+    return combineDynamicCheckedAssignment(booleanAssignable, mutationAssignable);
+  }
+
+  private isTypeAssignableToDynamicCheckedSource(
+    valueType: CheckerTypeReference | null,
+    sourceType: CheckerTypeReference | null,
+    valueChannel: RuntimeBindingValueChannel | null,
+  ): boolean | null {
+    const booleanAssignable = this.isBooleanAssignableToSource(sourceType);
+    const mutationAssignable = this.isTypeAssignableToSourceMutationValue(valueType, sourceType, valueChannel);
+    return combineDynamicCheckedAssignment(booleanAssignable, mutationAssignable);
+  }
+
+  private isBooleanAssignableToSource(
+    sourceType: CheckerTypeReference | null,
+  ): boolean | null {
+    const sourceShape = this.typeAccess.readTypeShape(sourceType);
+    const sourceCarrier = sourceShape?.carrier ?? null;
+    return sourceCarrier == null
+      ? null
+      : sourceCarrier.checker.isTypeAssignableTo(sourceCarrier.checker.getBooleanType(), sourceCarrier.type);
   }
 
   private hasReadonlyCollectionSource(
@@ -1862,7 +2014,7 @@ class BindingDataFlowAssignabilityEvaluator {
     sourceType: ts.Type,
     valueChannel: RuntimeBindingValueChannel | null,
   ): boolean {
-    return valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean
+    return valueChannelUsesMapMutation(valueChannel, checker, sourceType)
       ? mapKeyTypeFor(checker, sourceType) != null
       : collectionElementTypeFor(checker, sourceType) != null;
   }
@@ -2038,9 +2190,13 @@ function directionForBindingMode(bindingMode: TemplateBindingMode): RuntimeBindi
   }
 }
 
-function directionForBinding(binding: RuntimeDataFlowBinding): RuntimeBindingDataFlowDirection {
+function directionForBinding(
+  store: KernelStore,
+  binding: RuntimeDataFlowBinding,
+  resourceScope: TemplateResourceScope | null,
+): RuntimeBindingDataFlowDirection {
   if (binding instanceof PropertyBinding) {
-    return directionForBindingMode(binding.bindingMode);
+    return directionForBindingMode(effectivePropertyBindingMode(store, binding, resourceScope));
   }
   if (binding instanceof RefBinding) {
     return RuntimeBindingDataFlowDirection.TargetToSource;
@@ -2111,7 +2267,7 @@ function templateControllerResultAlias(
     : controller.name;
   const semantics = controllerName == null
     ? null
-    : runtimeHtmlTemplateControllerSemanticsForName(controllerName);
+    : frameworkTemplateControllerSemanticsForName(controllerName);
   return semantics?.flowKind === BuiltInTemplateControllerFlowKind.PromiseFulfilled
     || semantics?.flowKind === BuiltInTemplateControllerFlowKind.PromiseRejected
     ? unwrapped.name.name
@@ -2123,8 +2279,8 @@ function sourceAssignmentForDataFlow(input: {
   readonly sourceInfo: SourceExpressionInfo;
   readonly targetToSourceAssignable: boolean | null;
   readonly valueChannel: RuntimeBindingValueChannel | null;
-  readonly sourceType: CheckerTypeReference | null;
-  readonly targetValueType: CheckerTypeReference | null;
+  readonly sourceAssignmentValueType: CheckerTypeReference | null;
+  readonly targetToSourceValueType: CheckerTypeReference | null;
 }): {
   readonly kind: RuntimeBindingDataFlowSourceAssignmentKind | null;
   readonly reason: string | null;
@@ -2143,17 +2299,25 @@ function sourceAssignmentForDataFlow(input: {
   }
   switch (sourceWriteCapability.capabilityKind) {
     case SourceWriteCapabilityKind.Writable: {
-      const typeReason = targetToSourceStrictnessReason(input.targetToSourceAssignable, input.targetValueType, input.sourceType);
+      const typeReason = targetToSourceStrictnessReason(
+        input.targetToSourceAssignable,
+        input.targetToSourceValueType,
+        input.sourceAssignmentValueType,
+      );
       return typeReason == null
         ? { kind: RuntimeBindingDataFlowSourceAssignmentKind.RuntimeAssignable, reason: null, reasonKinds: [] }
         : {
           kind: RuntimeBindingDataFlowSourceAssignmentKind.RuntimeAssignableWithTypeScriptStrictness,
           reason: typeReason.reason,
           reasonKinds: [typeReason.kind],
-        };
+      };
     }
     case SourceWriteCapabilityKind.TypeScriptStrictness: {
-      const typeReason = targetToSourceStrictnessReason(input.targetToSourceAssignable, input.targetValueType, input.sourceType);
+      const typeReason = targetToSourceStrictnessReason(
+        input.targetToSourceAssignable,
+        input.targetToSourceValueType,
+        input.sourceAssignmentValueType,
+      );
       const reasons = compactStrings([
         sourceWriteCapability.reason,
         typeReason?.reason,
@@ -2184,13 +2348,13 @@ function sourceAssignmentForDataFlow(input: {
 
 function targetToSourceStrictnessReason(
   targetToSourceAssignable: boolean | null,
-  targetValueType: CheckerTypeReference | null,
-  sourceType: CheckerTypeReference | null,
+  targetToSourceValueType: CheckerTypeReference | null,
+  sourceAssignmentValueType: CheckerTypeReference | null,
 ): { readonly kind: RuntimeBindingDataFlowSourceAssignmentReasonKind; readonly reason: string } | null {
   return targetToSourceAssignable === false
     ? {
       kind: RuntimeBindingDataFlowSourceAssignmentReasonKind.TargetToSourceTypeMismatch,
-      reason: `TypeChecker target-to-source assignment is not assignable (${typeDisplay(targetValueType)} -> ${typeDisplay(sourceType)}); Aurelia runtime still passes the observer value to astAssign.`,
+      reason: `TypeChecker target-to-source assignment is not assignable after observer and value-converter writeback (${typeDisplay(targetToSourceValueType)} -> ${typeDisplay(sourceAssignmentValueType)}); Aurelia runtime still passes the observer value to astAssign.`,
     }
     : null;
 }
@@ -2206,6 +2370,19 @@ function typeIncludesNullish(
 
 function typeDisplay(reference: CheckerTypeReference | null): string {
   return reference?.display ?? 'unknown';
+}
+
+function combineDynamicCheckedAssignment(
+  booleanAssignable: boolean | null,
+  mutationAssignable: boolean | null,
+): boolean | null {
+  if (booleanAssignable === false || mutationAssignable === false) {
+    return false;
+  }
+  if (booleanAssignable == null || mutationAssignable == null) {
+    return null;
+  }
+  return true;
 }
 
 function openReasonForDataFlow(input: {
@@ -2255,10 +2432,86 @@ function openReasonForDataFlow(input: {
   return distinctReasons.length === 0 ? null : distinctReasons.join(' ');
 }
 
+function openSeamReasonKindsForDataFlow(
+  dataFlow: RuntimeBindingDataFlow,
+  target: DataFlowTarget,
+): readonly OpenSeamReasonKind[] {
+  const reasons = [
+    ...(target.valueChannel?.openReasonKinds ?? []),
+    ...openSeamReasonKindsForExpressionOpen(dataFlow.sourceTypeOpenKind, dataFlow.sourceTypeOpenReason),
+  ];
+  return [...new Set(reasons)].sort((left, right) => left.localeCompare(right));
+}
+
+function openSeamReasonKindsForExpressionOpen(
+  openKind: CheckerExpressionTypeOpenKind | `${CheckerExpressionTypeOpenKind}` | null,
+  openReason: string | null,
+): readonly OpenSeamReasonKind[] {
+  if (openReason == null) {
+    return [];
+  }
+  switch (openKind) {
+    case CheckerExpressionTypeOpenKind.MissingBindingScope:
+    case CheckerExpressionTypeOpenKind.MissingAncestor:
+    case CheckerExpressionTypeOpenKind.MissingContext:
+    case CheckerExpressionTypeOpenKind.MissingContextType:
+    case CheckerExpressionTypeOpenKind.HostContextNotFound:
+    case CheckerExpressionTypeOpenKind.MissingSlotType:
+      return [OpenSeamReasonKind.BindingSourceSlotNoStaticValue];
+    case CheckerExpressionTypeOpenKind.MissingMember:
+    case CheckerExpressionTypeOpenKind.MissingMemberValueType:
+      return [OpenSeamReasonKind.BindingSourceMemberNoStaticValue];
+    case CheckerExpressionTypeOpenKind.UnsupportedGlobalAccess:
+    case CheckerExpressionTypeOpenKind.UnsupportedKeyedAccess:
+    case CheckerExpressionTypeOpenKind.UnsupportedCallTarget:
+    case CheckerExpressionTypeOpenKind.UnsupportedConstruct:
+    case CheckerExpressionTypeOpenKind.IncrementInConnectableEvaluation:
+    case CheckerExpressionTypeOpenKind.UnsupportedBindingPattern:
+    case CheckerExpressionTypeOpenKind.UnsupportedExpression:
+      return [OpenSeamReasonKind.BindingSourceUnsupportedExpression];
+    case CheckerExpressionTypeOpenKind.MissingValueConverterResource:
+    case CheckerExpressionTypeOpenKind.MissingBindingBehaviorResource:
+    case CheckerExpressionTypeOpenKind.MissingStateStore:
+    case CheckerExpressionTypeOpenKind.DuplicateBindingBehavior:
+    case CheckerExpressionTypeOpenKind.OpenValueConverter:
+      return [OpenSeamReasonKind.BindingSourceResourceOpen];
+    case CheckerExpressionTypeOpenKind.MissingTypeDetail:
+    case CheckerExpressionTypeOpenKind.MissingIterableElementType:
+    case CheckerExpressionTypeOpenKind.MissingChecker:
+    case CheckerExpressionTypeOpenKind.NullishMemberAccess:
+    case CheckerExpressionTypeOpenKind.NullishKeyedAccess:
+    case CheckerExpressionTypeOpenKind.NullishCallTarget:
+    case null:
+      return [OpenSeamReasonKind.BindingSourceTypeOpen];
+    default:
+      return [OpenSeamReasonKind.BindingSourceTypeOpen];
+  }
+}
+
 function valueChannelMutatesCollection(valueChannel: RuntimeBindingValueChannel | null): boolean {
   return valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedCollectionMembership
     || valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean
     || valueChannel?.channelKind === RuntimeBindingValueChannelKind.SelectMultipleOptionValues;
+}
+
+function valueChannelHasCoupling(
+  valueChannel: RuntimeBindingValueChannel | null,
+  coupling: RuntimeBindingValueChannelCouplingKind,
+): boolean {
+  return valueChannel?.observerCouplings.includes(coupling) === true;
+}
+
+function valueChannelUsesMapMutation(
+  valueChannel: RuntimeBindingValueChannel | null,
+  checker: ts.TypeChecker,
+  sourceType: ts.Type,
+): boolean {
+  if (valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean) {
+    return true;
+  }
+  return valueChannel?.channelKind === RuntimeBindingValueChannelKind.CheckedDynamicModelValue
+    && mapKeyTypeFor(checker, sourceType) != null
+    && collectionElementTypeFor(checker, sourceType) == null;
 }
 
 function openSourceExpressionInfo(needsSourceWriteCapability: boolean): SourceExpressionInfo {
@@ -2421,6 +2674,16 @@ function sourceWriteCapabilityForMemberAccess(
         sourceAddressHandle,
       );
   }
+}
+
+function sourceWriteCapabilitySourceForOwnerEvaluation(
+  evaluation: CheckerExpressionTypeEvaluation,
+): AddressHandle | null {
+  return evaluation.kind === CheckerExpressionTypeEvaluationResultKind.Type
+    ? evaluation.sourceAddressHandle
+    : evaluation.subject?.sourceAddressHandle
+      ?? evaluation.partialTypeReference?.sourceAddressHandle
+      ?? null;
 }
 
 function compactStrings(values: readonly (string | null | undefined)[]): readonly string[] {

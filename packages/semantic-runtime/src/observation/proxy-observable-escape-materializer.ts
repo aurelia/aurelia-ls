@@ -117,7 +117,7 @@ function readProxyObservableEscapeSites(
   typeSystem: TypeSystemProject,
 ): readonly ProxyObservableEscapeSite[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     if (sourceFile == null) {
       return [];
     }

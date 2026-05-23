@@ -52,6 +52,7 @@ import {
   RuntimeHtmlBuiltInResourceCatalogs,
   RouterBuiltInResourceCatalogs,
   StateBuiltInResourceCatalogs,
+  UiVirtualizationBuiltInResourceCatalogs,
   ValidationHtmlBuiltInResourceCatalogs,
   type BuiltInResource,
   type BuiltInResourceField,
@@ -875,6 +876,9 @@ function catalogInputsForFrameworkKind(
       case FrameworkRegistrationCapability.RouterDefaultResources:
         inputs.push(RouterBuiltInResourceCatalogs.DefaultResources);
         break;
+      case FrameworkRegistrationCapability.UiVirtualizationDefaultResources:
+        inputs.push(UiVirtualizationBuiltInResourceCatalogs.DefaultResources);
+        break;
       case FrameworkRegistrationCapability.StateDefaultResources:
         inputs.push(StateBuiltInResourceCatalogs.DefaultResources);
         break;
@@ -946,6 +950,8 @@ function resourceCatalogSummaryForFrameworkKind(frameworkKind: FrameworkRegistra
       return 'Router DefaultComponents admitted router services but no resource headers.';
     case FrameworkRegistrationKind.RouterDefaultResources:
       return 'Router DefaultResources spread admitted router custom-attribute and viewport resource headers.';
+    case FrameworkRegistrationKind.UiVirtualizationDefaultConfiguration:
+      return 'DefaultVirtualizationConfiguration admitted virtual-repeat template-controller resource headers.';
     case FrameworkRegistrationKind.StateDefaultConfiguration:
       return 'StateDefaultConfiguration admitted state binding-behavior resource headers.';
     case FrameworkRegistrationKind.DialogConfiguration:

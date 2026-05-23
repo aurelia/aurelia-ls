@@ -24,7 +24,9 @@ import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import type { ExpressionAstNode } from '../expression/ast.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
-import { ExpressionParseResultInspector } from '../expression/parse-result-inspection.js';
+import {
+  ExpressionParseResultInspector,
+} from '../expression/parse-result-inspection.js';
 import type { KernelStore } from '../kernel/store.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import {
@@ -42,7 +44,10 @@ import type { RuntimeRendererIssue } from '../template/runtime-renderer-issue.js
 import type { RouterIssueModel } from '../router/model.js';
 import type { TemplateExpressionParse } from '../template/value-site.js';
 import { TemplateValueSiteKind } from '../template/value-site.js';
-import { runtimeAcceptedBindingExpressionAstForParse } from '../template/expression-parse-projection.js';
+import {
+  runtimeAcceptedBindingExpressionAstForParse,
+  runtimeAssignmentTargetAstForParse,
+} from '../template/expression-parse-projection.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import type {
   HtmlAttribute,
@@ -55,10 +60,16 @@ import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
 import { CheckerExpressionTypeOpenKind } from '../type-system/expression-type-evaluation.js';
 import {
+  readTypeSystemOverlayDiagnostics,
+  type TypeSystemOverlayDiagnostic,
+} from '../type-system/diagnostics.js';
+import { semanticTypeScriptDiagnosticSeverity } from './typescript-diagnostics.js';
+import {
   RuntimeAstFrameworkErrorCode,
   RuntimeHtmlAstFrameworkErrorCode,
   type RuntimeHtmlAstFrameworkErrorCode as RuntimeHtmlAstFrameworkErrorCodeValue,
 } from '../type-system/framework-error-code.js';
+import { TypeSystemProjectBuilder } from '../type-system/project.js';
 import {
   CheckerTypeMemberKind,
   checkerIndexedAccessSupportsString,
@@ -103,6 +114,7 @@ import {
 } from './source-reference.js';
 import {
   bindingSourceAssignmentDiagnostic,
+  bindingDataFlowOpenDiagnostic,
   bindingDataFlowFrameworkErrorDiagnostic,
   bindingTargetAccessFrameworkErrorDiagnostic,
   bindingSourceAssignmentDiagnosticKind,
@@ -123,8 +135,15 @@ import {
   resourceLocalBindingDataFlows,
   resourceLocalBindingTargetAccesses,
 } from './runtime-resource-ownership.js';
+import {
+  TemplateTypeSystemOverlayBuilder,
+  type TemplateTypeSystemOverlayEmission,
+} from '../template/template-type-system-overlay.js';
+import { templateExpressionParsesForResource } from '../template/template-expression-selection.js';
 
 type TemplateCompilationLane = SemanticTemplateCompilationRow['compilationLane'];
+
+const templateOverlayDiagnosticsByEmission = new WeakMap<AureliaAppWorldProjectEmission, TemplateOverlayDiagnosticCache>();
 
 interface TemplateDiagnosticExpectedValueType {
   readonly display: string;
@@ -136,6 +155,16 @@ type TemplateCompletionResourceSelection = {
   readonly lane: TemplateCompilationLane;
   readonly sourceAddressHandle: SourceSpanAddress['handle'] | null;
 };
+
+interface TemplateOverlayDiagnosticSelection {
+  readonly selection: TemplateCompletionResourceSelection;
+  readonly emission: TemplateTypeSystemOverlayEmission;
+}
+
+interface TemplateOverlayDiagnosticCache {
+  readonly diagnostics: readonly TypeSystemOverlayDiagnostic[];
+  readonly selectionsByOriginKey: ReadonlyMap<string, TemplateOverlayDiagnosticSelection>;
+}
 
 interface TemplateCompletionReadResult {
   readonly outcome: SemanticRuntimeAnswerOutcome;
@@ -161,6 +190,7 @@ interface TemplateDiagnosticsScanContext {
   readonly expressionWorld: CheckerExpressionTypeWorld;
   readonly sourceTextCache: Map<string, TemplateSourceText | null>;
   readonly seenRows: Set<string>;
+  readonly semanticAgreementRows: Set<string>;
 }
 
 export function readSemanticTemplateCompletions(
@@ -189,6 +219,7 @@ export function readSemanticTemplateCursorInfo(
   emission: AureliaAppWorldProjectEmission,
   cursor: SemanticRuntimeSourceCursorInput | null | undefined,
   detail: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`,
+  diagnosticProjection: SemanticDiagnosticProjectionPolicy | `${SemanticDiagnosticProjectionPolicy}` | null | undefined = SemanticDiagnosticProjectionPolicy.TypeProjection,
 ): SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult> {
   const readContext = readContextForCursor(store, workspaceRootDir, projectRootDir, emission, cursor, new InquiryPageRequest(1, null));
   if ('outcome' in readContext) {
@@ -199,6 +230,7 @@ export function readSemanticTemplateCursorInfo(
     emission,
     readContext,
     detail === SemanticRuntimeDetail.Handles,
+    diagnosticProjection,
   );
   return {
     schemaVersion: SEMANTIC_RUNTIME_API_VERSION,
@@ -214,6 +246,7 @@ function readTemplateCursorInfoValue(
   emission: AureliaAppWorldProjectEmission,
   readContext: TemplateCompletionReadContext,
   includeHandles: boolean,
+  diagnosticProjection: SemanticDiagnosticProjectionPolicy | `${SemanticDiagnosticProjectionPolicy}` | null | undefined,
 ): {
   readonly value: SemanticTemplateCursorInfoResult;
   readonly missingInputs: readonly string[];
@@ -227,17 +260,69 @@ function readTemplateCursorInfoValue(
   });
   const missingInputs = [...new Set(cursorContext.missingInputs)];
   const cursorOffset = readContext.locus.cursor.offset;
+  const baseValue = templateCursorInfoResult(store, readContext.selection, cursorContext, includeHandles, missingInputs);
   return {
     missingInputs,
     value: withCursorDiagnostics(
-      templateCursorInfoResult(store, readContext.selection, cursorContext, includeHandles, missingInputs),
+      baseValue,
       [
+        ...templateOverlayTypeCursorDiagnostics(
+          store,
+          emission,
+          readContext.selection,
+          cursorOffset,
+          includeHandles,
+          diagnosticProjection,
+          baseValue.diagnostics,
+        ),
         ...bindingSourceAssignmentCursorDiagnostics(store, readContext.selection, cursorOffset),
         ...templateCompilerIssueCursorDiagnostics(store, readContext.selection, cursorOffset),
         ...routerIssueCursorDiagnostics(store, emission, cursorOffset),
       ],
     ),
   };
+}
+
+function templateOverlayTypeCursorDiagnostics(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  selection: TemplateCompletionResourceSelection,
+  cursorOffset: number | null,
+  includeHandles: boolean,
+  diagnosticProjection: SemanticDiagnosticProjectionPolicy | `${SemanticDiagnosticProjectionPolicy}` | null | undefined,
+  existingDiagnostics: readonly SemanticTemplateCursorDiagnosticRow[],
+): readonly SemanticTemplateCursorDiagnosticRow[] {
+  if (
+    cursorOffset == null
+    || normalizeSemanticDiagnosticProjectionPolicy(diagnosticProjection) !== SemanticDiagnosticProjectionPolicy.TypeProjection
+    || !semanticAppAnalysisDepthSatisfies(emission.analysisDepth, SemanticAppAnalysisDepth.BindingObservation)
+  ) {
+    return [];
+  }
+  const originKey = templateOverlayOriginKey(selection.resource);
+  const cache = templateOverlayDiagnosticCache(store, emission);
+  const semanticAgreementRows = new Set(existingDiagnostics.flatMap((diagnostic) => {
+    const source = diagnostic.source;
+    if (source == null) {
+      return [];
+    }
+    const key = semanticTemplateDiagnosticAgreementKey(diagnostic, source);
+    return key == null ? [] : [key];
+  }));
+  return cache.diagnostics.flatMap((diagnostic) => {
+    if (diagnostic.overlayOriginKey !== originKey) {
+      return [];
+    }
+    const source = sourceReferenceForOverlayDiagnostic(store, diagnostic);
+    if (source == null || !sourceReferenceContainsOffset(source, cursorOffset)) {
+      return [];
+    }
+    const agreementKey = templateOverlayDiagnosticAgreementKey(diagnostic, source);
+    if (agreementKey != null && semanticAgreementRows.has(agreementKey)) {
+      return [];
+    }
+    return [templateOverlayDiagnosticRow(store, selection, diagnostic, source, includeHandles)];
+  });
 }
 
 function bindingSourceAssignmentCursorDiagnostics(
@@ -253,7 +338,8 @@ function bindingSourceAssignmentCursorDiagnostics(
     if (span == null || !sourceSpanContainsOffset(span, cursorOffset)) {
       return [];
     }
-    const source = describeAddress(store, dataFlow.sourceAddressHandle);
+    const source = bindingSourceAssignmentDiagnosticSource(store, dataFlow)
+      ?? describeAddress(store, dataFlow.sourceAddressHandle);
     if (source == null) {
       return [];
     }
@@ -275,6 +361,10 @@ function bindingSourceAssignmentCursorDiagnostics(
     const frameworkDiagnostic = bindingDataFlowFrameworkErrorDiagnostic(dataFlow, source);
     if (frameworkDiagnostic != null) {
       diagnostics.push(frameworkDiagnostic);
+    }
+    const openDiagnostic = bindingDataFlowOpenDiagnostic(store, dataFlow, source);
+    if (openDiagnostic != null) {
+      diagnostics.push(openDiagnostic);
     }
     return diagnostics;
   });
@@ -668,6 +758,7 @@ export function readTemplateDiagnosticRows(
     ...selections.flatMap((selection) => routerIssueDiagnosticRowsForSelection(store, emission, selection, sourceFile, context)),
     ...selections.flatMap((selection) => targetAccessDiagnosticRowsForSelection(store, selection, sourceFile, context)),
     ...typeProjectionTemplateDiagnosticRows(store, workspaceRootDir, emission, selections, context, projectionPolicy),
+    ...templateOverlayTypeDiagnosticRows(store, emission, selections, sourceFile, context, projectionPolicy),
     ...selections.flatMap((selection) => bindingDataFlowDiagnosticRowsForSelection(store, selection, sourceFile, context)),
   ];
   return [...rows].sort((left, right) =>
@@ -697,6 +788,234 @@ function typeProjectionTemplateDiagnosticRows(
   return selections.flatMap((selection) => templateDiagnosticRowsForSelection(store, workspaceRootDir, selection, context));
 }
 
+function templateOverlayTypeDiagnosticRows(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+  selections: readonly TemplateCompletionResourceSelection[],
+  sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
+  context: TemplateDiagnosticsScanContext,
+  diagnosticProjection: SemanticDiagnosticProjectionPolicy,
+): readonly SemanticTemplateDiagnosticRow[] {
+  if (
+    diagnosticProjection !== SemanticDiagnosticProjectionPolicy.TypeProjection
+    || !semanticAppAnalysisDepthSatisfies(emission.analysisDepth, SemanticAppAnalysisDepth.BindingObservation)
+  ) {
+    return [];
+  }
+  const allowedOriginKeys = new Set(selections.map((selection) =>
+    templateOverlayOriginKey(selection.resource)
+  ));
+  const cache = templateOverlayDiagnosticCache(store, emission);
+  return cache.diagnostics.flatMap((diagnostic) => {
+    if (!allowedOriginKeys.has(diagnostic.overlayOriginKey)) {
+      return [];
+    }
+    const selection = cache.selectionsByOriginKey.get(diagnostic.overlayOriginKey);
+    if (selection == null) {
+      return [];
+    }
+    const source = sourceReferenceForOverlayDiagnostic(store, diagnostic);
+    if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
+      return [];
+    }
+    const row = templateOverlayDiagnosticRow(store, selection.selection, diagnostic, source, context.includeHandles);
+    const agreementKey = templateOverlayDiagnosticAgreementKey(diagnostic, source);
+    if (agreementKey != null && context.semanticAgreementRows.has(agreementKey)) {
+      return [];
+    }
+    const key = templateDiagnosticRowKey(row, source);
+    if (context.seenRows.has(key)) {
+      return [];
+    }
+    context.seenRows.add(key);
+    return [row];
+  });
+}
+
+function templateOverlayDiagnosticCache(
+  store: KernelStore,
+  emission: AureliaAppWorldProjectEmission,
+): TemplateOverlayDiagnosticCache {
+  const cached = templateOverlayDiagnosticsByEmission.get(emission);
+  if (cached != null) {
+    return cached;
+  }
+  const builder = new TemplateTypeSystemOverlayBuilder(store, emission.typeSystem);
+  const overlaySelections: TemplateOverlayDiagnosticSelection[] = templateResourceSelections(store, emission)
+    .map((selection): TemplateOverlayDiagnosticSelection => ({
+      selection,
+      emission: builder.build(selection.resource, selection.resource.compilation.localKey),
+    }))
+    .filter((selection) => selection.emission.overlaySource != null);
+  if (overlaySelections.length === 0) {
+    const empty = {
+      diagnostics: [],
+      selectionsByOriginKey: new Map(),
+    };
+    templateOverlayDiagnosticsByEmission.set(emission, empty);
+    return empty;
+  }
+  const overlaySources = overlaySelections.flatMap((selection) =>
+    selection.emission.overlaySource == null ? [] : [selection.emission.overlaySource]
+  );
+  const overlayTypeSystem = new TypeSystemProjectBuilder().build(
+    emission.project,
+    emission.evaluation,
+    { overlaySources },
+  );
+  const selectionsByOriginKey = new Map<string, TemplateOverlayDiagnosticSelection>();
+  for (const selection of overlaySelections) {
+    const overlaySource = selection.emission.overlaySource;
+    if (overlaySource != null) {
+      selectionsByOriginKey.set(overlaySource.originKey, selection);
+    }
+  }
+  const result = {
+    diagnostics: readTypeSystemOverlayDiagnostics(overlayTypeSystem)
+      .filter((diagnostic) =>
+        selectionsByOriginKey.has(diagnostic.overlayOriginKey)
+        && templateOverlayDiagnosticIsPublic(diagnostic)
+      ),
+    selectionsByOriginKey,
+  };
+  templateOverlayDiagnosticsByEmission.set(emission, result);
+  return result;
+}
+
+function templateOverlayOriginKey(
+  resource: TemplateResourceRuntimeAnalysisEmission,
+): string {
+  return `template-type-system-overlay:${resource.compilation.localKey}`;
+}
+
+function templateOverlayDiagnosticRow(
+  store: KernelStore,
+  selection: TemplateCompletionResourceSelection,
+  diagnostic: TypeSystemOverlayDiagnostic,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+  includeHandles: boolean,
+): SemanticTemplateDiagnosticRow {
+  const missingInput = `typescript:TS${diagnostic.diagnostic.code}`;
+  const suggestion = templateOverlayDiagnosticSuggestion(diagnostic, source);
+  return {
+    diagnosticKind: 'template-expression-typescript-diagnostic',
+    diagnosticAuthority: 'typescript',
+    frameworkErrorCode: null,
+    severity: semanticTypeScriptDiagnosticSeverity(diagnostic.diagnostic.category),
+    summary: `TS${diagnostic.diagnostic.code}: ${diagnostic.diagnostic.message}`,
+    missingInput,
+    missingInputs: [missingInput],
+    source,
+    selectedMemberName: null,
+    ownerTypeDisplay: null,
+    ownerTypeShapeKind: null,
+    ownerTypeOrigin: null,
+    suggestion,
+    siteKind: TemplateCompletionSiteKind.Expression,
+    valueSiteKind: TemplateValueSiteKind.BindingCommandValue,
+    template: {
+      compilationLane: selection.lane,
+      source: describeAddress(store, selection.sourceAddressHandle),
+    },
+    ...(includeHandles ? {
+      handles: {
+        sourceAddressHandle: diagnostic.authoredSource?.sourceAddressHandle ?? null,
+        semanticProductHandle: diagnostic.semanticProductHandle,
+        overlayOriginKey: diagnostic.overlayOriginKey,
+        overlayFileName: diagnostic.overlayFileName,
+        overlaySegmentLabel: diagnostic.segment?.label ?? null,
+      },
+    } : {}),
+  };
+}
+
+function templateOverlayDiagnosticSuggestion(
+  diagnostic: TypeSystemOverlayDiagnostic,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): NonNullable<SemanticTemplateDiagnosticRow['suggestion']> {
+  const nullish = templateOverlayDiagnosticIsNullish(diagnostic.diagnostic.code);
+  return {
+    suggestionKind: nullish ? 'guard-nullish-expression' : 'inspect-owner-type',
+    actionKind: nullish ? 'rewrite-expression' : 'inspect-owner-type',
+    actionTarget: {
+      targetKind: 'expression',
+      source,
+      memberName: null,
+      typeDisplay: null,
+    },
+    summary: nullish
+      ? `Guard or narrow the nullable template expression before reading through it for TS${diagnostic.diagnostic.code}.`
+      : `Inspect the template expression and its TypeScript owner surface for TS${diagnostic.diagnostic.code}.`,
+    targetMemberName: null,
+    ownerTypeDisplay: null,
+    valueTypeDisplay: null,
+    valueTypeSource: null,
+  };
+}
+
+function templateOverlayDiagnosticIsNullish(code: number): boolean {
+  switch (code) {
+    case 2532:
+    case 18047:
+    case 18048:
+      return true;
+    default:
+      return false;
+  }
+}
+
+function templateOverlayDiagnosticIsPublic(
+  diagnostic: TypeSystemOverlayDiagnostic,
+): boolean {
+  if (diagnostic.authoredSource == null || diagnostic.diagnostic.phase !== 'semantic') {
+    return false;
+  }
+
+  // The generated overlay is a checker surface, not user-authored TypeScript. Public rows initially admit only
+  // diagnostics whose codes describe the copied expression's type relationship; name-resolution holes, syntax errors,
+  // and implicit-any fallout are substrate pressure until the overlay can prove a more precise authored cause.
+  switch (diagnostic.diagnostic.code) {
+    case 2322:
+    case 2339:
+    case 2345:
+    case 2532:
+    case 2551:
+    case 2554:
+    case 2588:
+    case 18047:
+    case 18048:
+      return true;
+    default:
+      return false;
+  }
+}
+
+function sourceReferenceForOverlayDiagnostic(
+  store: KernelStore,
+  diagnostic: TypeSystemOverlayDiagnostic,
+): NonNullable<SemanticTemplateDiagnosticRow['source']> | null {
+  const authoredSource = diagnostic.authoredSource;
+  if (authoredSource == null) {
+    return null;
+  }
+  const source = describeAddress(store, authoredSource.sourceAddressHandle);
+  if (source == null) {
+    return null;
+  }
+  const start = authoredSource.sourceStart ?? source.start;
+  const end = authoredSource.sourceEnd ?? source.end;
+  return {
+    ...source,
+    kind: 'source-span-address',
+    label: source.path == null || start == null || end == null
+      ? source.label
+      : `${source.path}@${start}..${end}`,
+    start,
+    end,
+    role: `typescript-overlay:${diagnostic.diagnostic.phase}`,
+  };
+}
+
 function normalizeSemanticDiagnosticProjectionPolicy(
   policy: SemanticDiagnosticProjectionPolicy | `${SemanticDiagnosticProjectionPolicy}` | null | undefined,
 ): SemanticDiagnosticProjectionPolicy {
@@ -721,6 +1040,7 @@ function templateDiagnosticsScanContext(
     expressionWorld: new CheckerExpressionTypeWorld(store),
     sourceTextCache: new Map(),
     seenRows: new Set(),
+    semanticAgreementRows: new Set(),
   };
 }
 
@@ -775,7 +1095,7 @@ function templateDiagnosticRowsForMemberSpan(
   });
   const cursorInfo = templateCursorInfoResult(store, selection, cursorContext, context.includeHandles, [...new Set(cursorContext.missingInputs)]);
   return cursorInfo.diagnostics.flatMap((diagnostic) =>
-    templateDiagnosticRowForDiagnostic(diagnostic, cursorInfo, source.sourcePath, span, context.seenRows)
+    templateDiagnosticRowForDiagnostic(diagnostic, cursorInfo, source.sourcePath, span, context)
   );
 }
 
@@ -784,14 +1104,18 @@ function templateDiagnosticRowForDiagnostic(
   cursorInfo: SemanticTemplateCursorInfoResult,
   filePath: string,
   span: SourceSpan,
-  seenRows: Set<string>,
+  context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
   const source = sourceReferenceForSpan(filePath, span);
   const key = templateDiagnosticRowKey(diagnostic, source);
-  if (seenRows.has(key)) {
+  if (context.seenRows.has(key)) {
     return [];
   }
-  seenRows.add(key);
+  context.seenRows.add(key);
+  const agreementKey = semanticTemplateDiagnosticAgreementKey(diagnostic, source);
+  if (agreementKey != null) {
+    context.semanticAgreementRows.add(agreementKey);
+  }
   return [{
     ...diagnostic,
     source,
@@ -799,6 +1123,37 @@ function templateDiagnosticRowForDiagnostic(
     valueSiteKind: cursorInfo.valueSite?.siteKind ?? null,
     template: cursorInfo.template,
   }];
+}
+
+function semanticTemplateDiagnosticAgreementKey(
+  diagnostic: SemanticTemplateCursorDiagnosticRow,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): string | null {
+  return diagnostic.diagnosticKind === 'missing-expression-member'
+    ? templateTypeRelationshipAgreementKey(source, 'missing-member')
+    : null;
+}
+
+function templateOverlayDiagnosticAgreementKey(
+  diagnostic: TypeSystemOverlayDiagnostic,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): string | null {
+  switch (diagnostic.diagnostic.code) {
+    case 2339:
+    case 2551:
+      return templateTypeRelationshipAgreementKey(source, 'missing-member');
+    default:
+      return null;
+  }
+}
+
+function templateTypeRelationshipAgreementKey(
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+  kind: string,
+): string | null {
+  return source.path == null || source.start == null || source.end == null
+    ? null
+    : [source.path, source.start, source.end, kind].join(':');
 }
 
 function templateDiagnosticRowKey(
@@ -832,7 +1187,8 @@ function bindingDataFlowDiagnosticRowsForSelection(
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
   return resourceLocalBindingDataFlows(store, selection.resource).flatMap((dataFlow) => {
-    const source = describeAddress(store, dataFlow.sourceAddressHandle);
+    const source = bindingSourceAssignmentDiagnosticSource(store, dataFlow)
+      ?? describeAddress(store, dataFlow.sourceAddressHandle);
     if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
       return [];
     }
@@ -854,6 +1210,10 @@ function bindingDataFlowDiagnosticRowsForSelection(
     const frameworkDiagnostic = bindingDataFlowFrameworkErrorDiagnostic(dataFlow, source);
     if (frameworkDiagnostic != null) {
       diagnostics.push(frameworkDiagnostic);
+    }
+    const openDiagnostic = bindingDataFlowOpenDiagnostic(store, dataFlow, source);
+    if (openDiagnostic != null) {
+      diagnostics.push(openDiagnostic);
     }
     return diagnostics.flatMap((diagnostic) => {
       const key = templateDiagnosticRowKey(diagnostic, source);
@@ -912,7 +1272,7 @@ function expressionParseDiagnosticRowsForSelection(
   sourceFile: SemanticRuntimeSourceFileInput | null | undefined,
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
-  return templateExpressionParses(selection.resource).flatMap((parse) => {
+  return templateExpressionParsesForResource(selection.resource).flatMap((parse) => {
     const payload = expressionParseDiagnosticPayload(parse);
     if (payload == null) {
       return [];
@@ -1450,6 +1810,26 @@ function runtimeAstSelectedMemberName(
   }
 }
 
+function bindingSourceAssignmentDiagnosticSource(
+  store: KernelStore,
+  dataFlow: RuntimeBindingDataFlow,
+): NonNullable<SemanticTemplateDiagnosticRow['source']> | null {
+  const expression = sourceAssignmentDiagnosticExpression(store, dataFlow);
+  const span = expression?.span ?? null;
+  if (span?.file == null) {
+    return null;
+  }
+  return sourceReferenceForParserSpan(span.file.path, span, 'binding-source-assignment');
+}
+
+function sourceAssignmentDiagnosticExpression(
+  store: KernelStore,
+  dataFlow: RuntimeBindingDataFlow,
+): ExpressionAstNode | null {
+  const parse = expressionParseForProductHandle(store, dataFlow.expressionProductHandle);
+  return parse == null ? null : runtimeAssignmentTargetAstForParse(parse);
+}
+
 function runtimeAstDiagnosticExpression(
   store: KernelStore,
   dataFlow: RuntimeBindingDataFlow,
@@ -1556,7 +1936,7 @@ function expressionMemberNameSpans(
 ): readonly SourceSpan[] {
   const spans: SourceSpan[] = [];
   const seen = new Set<string>();
-  for (const parse of templateExpressionParses(resource)) {
+  for (const parse of templateExpressionParsesForResource(resource)) {
     for (const span of ExpressionParseResultInspector.memberNameSpans(parse.result)) {
       const key = `${span.start}:${span.end}`;
       if (seen.has(key)) {
@@ -1567,15 +1947,6 @@ function expressionMemberNameSpans(
     }
   }
   return spans.sort((left, right) => left.start - right.start || left.end - right.end);
-}
-
-function templateExpressionParses(
-  resource: TemplateResourceRuntimeAnalysisEmission,
-): readonly TemplateExpressionParse[] {
-  return [
-    ...resource.compilation.bindingCommandLowering.expressionParses,
-    ...resource.compilation.valueSites.parses,
-  ];
 }
 
 interface TemplateSourceText {

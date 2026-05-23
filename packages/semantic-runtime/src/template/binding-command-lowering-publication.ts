@@ -71,6 +71,9 @@ import {
   TemplateValueSitePublisher,
 } from './value-site-publication.js';
 import {
+  runtimeExpressionParseContextForSourceSpanAddress,
+} from './runtime-expression-source-address.js';
+import {
   HtmlAttribute,
   HtmlElementAttributeOwner,
   HtmlAttributeReference,
@@ -540,6 +543,7 @@ export class BindingCommandLoweringPublisher {
     expression: string,
     entryFamily: ExpressionType,
     sourceAddressHandle: AddressHandle | null,
+    sourceAddressRecord: SourceSpanAddress | null,
   ): PublishedMultiBindingExpressionParse {
     const publication = this.valueSitePublisher.publish(new TemplateValueSitePublicationRequest(
       `${local}:value-site`,
@@ -560,6 +564,7 @@ export class BindingCommandLoweringPublisher {
       `${segment.rawName}:Interpolation`,
       segment.productHandle,
       (result) => `${segment.rawName}:${result.kind}`,
+      runtimeExpressionParseContextForSourceSpanAddress(this.store, sourceAddressRecord),
     ));
     if (publication.parse == null) {
       throw new Error('Inline multi-binding expression parsing must publish an expression parse.');

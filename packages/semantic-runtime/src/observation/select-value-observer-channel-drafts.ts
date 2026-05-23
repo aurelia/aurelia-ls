@@ -10,12 +10,14 @@ import {
 import {
   type CheckerTypeReference,
 } from '../type-system/type-shape.js';
-import { arrayElementTypeFor } from './checker-type-helpers.js';
+import {
+  arrayElementTypeFor,
+  isRuntimeArrayInstanceType,
+} from './checker-type-helpers.js';
 import type {
   BindingSourceTypeReader,
   BindingValueChannelDraftContext,
   BindingValueExpression,
-  CheckedSourceShape,
   RuntimeBindingValueChannelDraft,
   SelectMultipleMode,
 } from './binding-value-channel-draft-types.js';
@@ -36,6 +38,12 @@ import {
   RuntimeBindingValueChannelKind,
   type RuntimeBindingPrimitiveValue,
 } from './runtime-binding-observation.js';
+
+type SelectMultipleSourceShape = {
+  readonly kind: 'collection' | 'dynamic' | 'other' | 'open';
+  readonly elementType?: CheckerTypeReference | null;
+  readonly sourceType?: CheckerTypeReference | null;
+};
 
 export class SelectValueObserverChannelDrafts {
   constructor(private readonly owner: RuntimeBindingValueChannelDraftSupport) {}
@@ -152,6 +160,20 @@ export class SelectValueObserverChannelDrafts {
         usesCustomMatcher,
         observerCouplings: selectMultipleObserverCouplings(usesCustomMatcher),
         openReason: 'SelectValueObserver multiple mode requires a TypeChecker-visible array source before collection element mutation can close.',
+        openReasonKinds: [OpenSeamReasonKind.BindingValueChannelSelectMultipleSourceOpen],
+      };
+    }
+    if (sourceShape.kind === 'dynamic') {
+      return {
+        channelKind: RuntimeBindingValueChannelKind.SelectMultipleOptionValues,
+        authority: RuntimeBindingValueChannelAuthority.Open,
+        runtimeValueType,
+        valueDomain,
+        primitiveValueDomain,
+        isCollection: true,
+        usesCustomMatcher,
+        observerCouplings: selectMultipleObserverCouplings(usesCustomMatcher, true),
+        openReason: 'SelectValueObserver multiple mode only mutates the source when the current runtime value is an Array; the binding source type also permits non-array values.',
         openReasonKinds: [OpenSeamReasonKind.BindingValueChannelSelectMultipleSourceOpen],
       };
     }
@@ -347,7 +369,7 @@ export class SelectValueObserverChannelDrafts {
   private selectMultipleSourceShape(
     local: string,
     sourceType: CheckerTypeReference | null,
-  ): CheckedSourceShape {
+  ): SelectMultipleSourceShape {
     const shape = this.owner.types.readTypeShape(sourceType);
     const carrier = shape?.carrier ?? null;
     if (carrier == null) {
@@ -362,7 +384,10 @@ export class SelectValueObserverChannelDrafts {
       };
     }
     return {
-      kind: 'collection',
+      kind: isRuntimeArrayInstanceType(carrier.checker, carrier.type)
+        ? 'collection'
+        : 'dynamic',
+      sourceType,
       elementType: this.owner.types.projectCheckerType(
         `${local}:element`,
         carrier.checker,
@@ -497,13 +522,20 @@ function selectSingleObserverCouplings(
 
 function selectMultipleObserverCouplings(
   usesCustomMatcher: boolean,
+  dynamicArraySource: boolean = false,
 ): readonly RuntimeBindingValueChannelCouplingKind[] {
-  return withCustomMatcherCoupling([
+  const couplings = [
     RuntimeBindingValueChannelCouplingKind.SelectOptionValueDomain,
     RuntimeBindingValueChannelCouplingKind.SelectOptionListMutationObserver,
     RuntimeBindingValueChannelCouplingKind.SelectArrayObserver,
     RuntimeBindingValueChannelCouplingKind.SelectArrayMutation,
-  ], usesCustomMatcher);
+  ];
+  return withCustomMatcherCoupling(
+    dynamicArraySource
+      ? [...couplings, RuntimeBindingValueChannelCouplingKind.SelectDynamicArraySourceShape]
+      : couplings,
+    usesCustomMatcher,
+  );
 }
 
 function selectDynamicObserverCouplings(

@@ -192,7 +192,7 @@ function readValidationIssueSourceSites(
 ): readonly ValidationIssueSourceSite[] {
   const defaultModelHydratorActive = validationDefaultModelHydratorActive(configuration);
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     if (sourceFile == null) {
       return [];
     }

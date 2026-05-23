@@ -28,6 +28,10 @@ import {
 } from '../evaluation/values.js';
 import { unwrapExpression } from '../evaluation/ts-syntax.js';
 import {
+  isAureliaResolveExpression,
+  isAureliaResolveWrapperExpression,
+} from '../di/resolve-expression.js';
+import {
   FrameworkRegistrationKind,
   RegistryBodyInterpretationState,
   RegistryBodyKind,
@@ -140,6 +144,11 @@ export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
     void host;
 
     const expression = unwrapExpression(call.expression);
+    const resolveValue = evaluateAureliaResolveCall(call, expression, environment, moduleKey, depth, host);
+    if (resolveValue != null) {
+      return resolveValue;
+    }
+
     if (
       ts.isPropertyAccessExpression(expression)
       && (expression.name.text === 'customize' || expression.name.text === 'withChild')
@@ -192,6 +201,53 @@ export const aureliaStaticEvaluationRuntimeHost: StaticEvaluationRuntimeHost = {
     return null;
   },
 };
+
+function evaluateAureliaResolveCall(
+  call: ts.CallExpression,
+  expression: ts.Expression,
+  environment: ModuleEnvironmentRecord,
+  moduleKey: string,
+  depth: number,
+  host: StaticIntrinsicEvaluationHost,
+): EvaluationValue | null {
+  if (!isAureliaResolveExpression(expression)) {
+    return null;
+  }
+  if (environment.readValue('this') == null) {
+    return null;
+  }
+  const keyExpression = call.arguments[0];
+  if (keyExpression == null || ts.isSpreadElement(keyExpression)) {
+    return host.unknown(
+      'Aurelia resolve(...) did not receive a direct DI key expression.',
+      call,
+      moduleKey,
+      EvaluationOpenSeamKind.DynamicCall,
+    );
+  }
+  if (isAureliaResolveWrapperExpression(unwrapExpression(keyExpression))) {
+    return host.unknown(
+      'Aurelia resolve(...) DI key wrapper resolution is not modeled by the evaluator-local activation slice yet.',
+      keyExpression,
+      moduleKey,
+      EvaluationOpenSeamKind.DynamicCall,
+    );
+  }
+
+  const key = host.evaluateExpression(keyExpression, environment, moduleKey, depth + 1);
+  if (key.kind === EvaluationValueKind.Unknown) {
+    return key;
+  }
+  if (key.kind !== EvaluationValueKind.Class) {
+    return host.unknown(
+      'Aurelia resolve(...) key did not reduce to an evaluator-local class; DI registration lookup is not modeled by this activation slice yet.',
+      keyExpression,
+      moduleKey,
+      EvaluationOpenSeamKind.DynamicCall,
+    );
+  }
+  return host.evaluateClassInstantiation(key, call, [], moduleKey, depth + 1);
+}
 
 export function aureliaFrameworkRegistrationKindForEvaluationValue(
   value: EvaluationValue | null,

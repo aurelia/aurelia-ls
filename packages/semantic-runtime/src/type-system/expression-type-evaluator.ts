@@ -17,6 +17,7 @@ import type {
   TaggedTemplateExpression,
   TemplateExpression,
   UnaryExpression,
+  ValueConverterExpression,
 } from '../expression/ast.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import { localKeyPart } from '../kernel/local-key.js';
@@ -72,7 +73,10 @@ import { CheckerExpressionContextualTypeProjector } from './expression-contextua
 import { CheckerExpressionAccessProjector } from './expression-access-projector.js';
 import { CheckerExpressionIterableProjector } from './expression-iterable-projector.js';
 import type { CheckerExpressionIteratorProjection } from './expression-iterable-projector.js';
-import { CheckerExpressionResourceProjector } from './expression-resource-projector.js';
+import {
+  CheckerExpressionResourceProjector,
+  type RuntimeValueConverterMethodName,
+} from './expression-resource-projector.js';
 import { CheckerExpressionScopeProjector } from './expression-scope-projector.js';
 
 export type CheckerExpressionTypeEvaluationRuntimeContext = {
@@ -196,6 +200,33 @@ export class CheckerExpressionTypeEvaluator {
     } finally {
       this.evaluationRuntimeContext = previousRuntimeContext;
     }
+  }
+
+  evaluateValueConverterMethodFromType(
+    expression: ValueConverterExpression,
+    methodName: RuntimeValueConverterMethodName,
+    inputType: CheckerTypeReference,
+    scope: BindingScope,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null = null,
+  ): CheckerExpressionTypeEvaluation {
+    const input = this.support.resolveReference(
+      expression,
+      inputType,
+      `${localKey}:input`,
+      CheckerExpressionTypeOpenKind.OpenValueConverter,
+      `Value converter '${expression.name.name}' ${methodName} input type could not be hydrated.`,
+      null,
+      inputType.sourceAddressHandle ?? sourceAddressHandle,
+    );
+    return this.resources.evaluateValueConverterMethod(
+      expression,
+      methodName,
+      input,
+      scope,
+      localKey,
+      sourceAddressHandle,
+    );
   }
 
   evaluateMemberOwnerAtOffset(

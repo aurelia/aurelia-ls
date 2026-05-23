@@ -171,6 +171,9 @@ function readImportEntries(statement: ts.ImportDeclaration): readonly Evaluation
       ),
     ];
   }
+  if (clause.isTypeOnly) {
+    return [];
+  }
 
   const entries: EvaluationImportEntry[] = [];
   if (clause.name != null) {
@@ -199,6 +202,9 @@ function readImportEntries(statement: ts.ImportDeclaration): readonly Evaluation
   }
 
   for (const element of named.elements) {
+    if (element.isTypeOnly) {
+      continue;
+    }
     entries.push(new EvaluationImportEntry(
       EvaluationImportKind.Named,
       moduleSpecifier,
@@ -264,6 +270,9 @@ function readDynamicImportEntries(sourceFile: ts.SourceFile): readonly Evaluatio
 }
 
 function readExportDeclarationEntries(statement: ts.ExportDeclaration): readonly EvaluationExportEntry[] {
+  if (statement.isTypeOnly) {
+    return [];
+  }
   if (statement.moduleSpecifier != null && !ts.isStringLiteral(statement.moduleSpecifier)) {
     return [];
   }
@@ -285,15 +294,17 @@ function readExportDeclarationEntries(statement: ts.ExportDeclaration): readonly
     return [];
   }
 
-  return statement.exportClause.elements.map((element) =>
-    new EvaluationExportEntry(
-      moduleSpecifier == null ? EvaluationExportKind.Local : EvaluationExportKind.ReExport,
-      element.name.text,
-      moduleSpecifier == null ? element.propertyName?.text ?? element.name.text : null,
-      moduleSpecifier,
-      element,
-    )
-  );
+  return statement.exportClause.elements
+    .filter((element) => !element.isTypeOnly)
+    .map((element) =>
+      new EvaluationExportEntry(
+        moduleSpecifier == null ? EvaluationExportKind.Local : EvaluationExportKind.ReExport,
+        element.name.text,
+        moduleSpecifier == null ? element.propertyName?.text ?? element.name.text : null,
+        moduleSpecifier,
+        element,
+      )
+    );
 }
 
 function readLocalExportEntries(statement: ts.Statement): readonly EvaluationExportEntry[] {
@@ -317,6 +328,10 @@ function readLocalExportEntries(statement: ts.Statement): readonly EvaluationExp
           ),
         ];
     });
+  }
+
+  if (ts.isInterfaceDeclaration(statement) || ts.isTypeAliasDeclaration(statement)) {
+    return [];
   }
 
   const named = readDeclarationName(statement);

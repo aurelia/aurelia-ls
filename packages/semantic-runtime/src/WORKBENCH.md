@@ -889,9 +889,10 @@ resource that receives a broad `Constructable`-typed widget kit through bindable
 `RuntimeBoundControllerValueTable` through project resource analysis, extends it with the current resource's rendered
 controller values during runtime composition, and records child controller definition target types. The evaluator also
 binds `this` for property method calls such as `entry.isApplicable(id)`, and exact evaluated object literals now return
-`undefined` for absent keys instead of fabricating unknown properties. Keep this as substrate: the table is still an
-incremental project pass, not a full recursive composition fixed point, so reversed or cyclic resource-order cases may
-need a deliberate project-level refinement later.
+`undefined` for absent keys instead of fabricating unknown properties. Keep this as substrate: project resource analysis
+now schedules compiled resources by rendered-child SCCs, so reversed resource registration does not hide acyclic
+parent-to-child values. Recursive groups remain finite aggregate boundaries and intentionally use only predecessor facts
+until runtime-state-specific composition lifecycle work exists.
 `RuntimeCompositions` rows now also expose `renderingContextKind`: `definition-resource` means the row came from
 analyzing a resource's own template with public bindables still supplied by consumers, while
 `recursive-resource-instance` means a parent render pass supplied child controller values. App-pressure should read open

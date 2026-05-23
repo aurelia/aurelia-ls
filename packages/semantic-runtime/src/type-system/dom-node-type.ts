@@ -14,7 +14,6 @@ import {
 } from './type-shape.js';
 import {
   firstSymbolDeclaration,
-  undefinedCheckerNode,
 } from './checker-node-helpers.js';
 
 export const enum CheckerDomNodeTypeSource {
@@ -26,7 +25,7 @@ export interface CheckerDomNodeTypeResolution {
   readonly checker: ts.TypeChecker;
   readonly type: ts.Type;
   readonly reference: CheckerTypeReference;
-  readonly location: ts.Node | null;
+  readonly location: ts.Node;
   readonly source: CheckerDomNodeTypeSource;
 }
 
@@ -40,6 +39,9 @@ export function resolveCheckerDomNodeType(
   sourceAddressHandle: AddressHandle | null,
 ): CheckerDomNodeTypeResolution | null {
   const location = checkerLookupLocation(typeSystem);
+  if (location == null) {
+    return null;
+  }
   const mappedType = resolveCheckerDomNodeTypeFromTagNameMap(typeSystem, tagName, namespace, location);
   if (mappedType != null) {
     return {
@@ -68,7 +70,7 @@ export function resolveCheckerDomNodeTypeFromTagNameMap(
   typeSystem: TypeSystemProject,
   tagName: string,
   namespace: HtmlNamespaceKind,
-  location: ts.Node | null,
+  location: ts.Node,
 ): ts.Type | null {
   const lowerTagName = tagName.toLowerCase();
   for (const mapName of tagNameMapNames(namespace)) {
@@ -79,7 +81,7 @@ export function resolveCheckerDomNodeTypeFromTagNameMap(
     if (tagSymbol != null) {
       return typeSystem.checker.getTypeOfSymbolAtLocation(
         tagSymbol,
-        location ?? firstSymbolDeclaration(tagSymbol) ?? undefinedCheckerNode(typeSystem.checker, 'semantic-runtime-dom-node-type.ts'),
+        firstSymbolDeclaration(tagSymbol) ?? location,
       );
     }
   }
@@ -89,11 +91,11 @@ export function resolveCheckerDomNodeTypeFromTagNameMap(
 export function globalDeclaredType(
   typeSystem: TypeSystemProject,
   name: string,
-  location: ts.Node | null,
+  location: ts.Node,
 ): ts.Type | null {
   const symbol = typeSystem.checker.resolveName(
     name,
-    location ?? undefinedCheckerNode(typeSystem.checker, 'semantic-runtime-dom-node-type.ts'),
+    location,
     ts.SymbolFlags.Interface,
     false,
   ) ?? null;

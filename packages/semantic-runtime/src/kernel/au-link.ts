@@ -8,6 +8,7 @@ export type PackageId =
   | 'state'
   | 'validation-html'
   | 'router'
+  | 'ui-virtualization'
   | 'route-recognizer';
 
 export type AuLinkFacet =
@@ -295,6 +296,7 @@ export function auLink(id: 'router:ComponentAgent'): ClassDecorator;
 export function auLink(id: 'router:HrefCustomAttribute'): ClassDecorator;
 export function auLink(id: 'router:LoadCustomAttribute'): ClassDecorator;
 export function auLink(id: 'router:ViewportCustomElement'): ClassDecorator;
+export function auLink(id: 'ui-virtualization:VirtualRepeat'): ClassDecorator;
 export function auLink(id: 'route-recognizer:RouteRecognizer'): ClassDecorator;
 export function auLink(id: 'route-recognizer:ConfigurableRoute'): ClassDecorator;
 export function auLink(id: 'route-recognizer:Endpoint'): ClassDecorator;

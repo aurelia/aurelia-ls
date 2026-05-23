@@ -538,6 +538,9 @@ without claiming code-action/source-edit policy is solved.
 - Treat repair rows as semantic handoffs from diagnostics/open seams to later operations, not as concrete source edits.
 - For open-seam repairs, separate the runtime boundary kind from the runtime intent needed to close it. For example, a
   dynamic router `href` can ask for href-ownership intent without pretending a source edit is already safe.
+- Keep open-seam repair kind, runtime boundary kind, and runtime intent kind derived from the same reason vocabulary.
+  Select observer source-shape pressure, missing binding resources, and checker/type-open binding sources should route as
+  runtime-boundary/intent pressure rather than as generic semantic-runtime substrate gaps once their reason kind is known.
 - When an open seam has source provenance, preserve it as a `runtime-boundary` action target. This keeps large repair
   clusters navigable without claiming that the product already knows the right source edit.
 - Treat large requests such as auth setup as recipes composed from smaller semantic operations.

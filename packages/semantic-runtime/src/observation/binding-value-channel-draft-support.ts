@@ -27,7 +27,7 @@ import {
   type RuntimeBindingTargetOperation,
 } from '../template/runtime-binding.js';
 import {
-  runtimeHtmlTemplateControllerSemanticsForName,
+  frameworkTemplateControllerSemanticsForName,
   type BuiltInTemplateControllerSemantics,
 } from '../template/template-controller-semantics.js';
 import type { RuntimeControllerFrame } from '../template/runtime-controller.js';
@@ -41,11 +41,15 @@ import {
   CheckerExpressionTypeEvaluationResultKind,
 } from '../type-system/expression-type-evaluation.js';
 import {
+  checkerNullishType,
+} from '../type-system/checker-related-types.js';
+import {
   CheckerTypeProjector,
   type CheckerTypeProjectionRequest,
   type CheckerSyntheticTypeProjectionRequest,
 } from '../type-system/checker-projector.js';
 import {
+  CheckerTypeShapeAccess,
   readCheckerTypeShape,
 } from '../type-system/checker-type-shape-access.js';
 import {
@@ -93,12 +97,14 @@ import {
 
 export class RuntimeBindingValueChannelTypeSupport {
   private readonly asyncTypeProjector: CheckerAsyncTypeProjector;
+  private readonly typeAccess: CheckerTypeShapeAccess;
 
   constructor(
     private readonly store: KernelStore,
     private readonly typeProjector: CheckerTypeProjector,
   ) {
     this.asyncTypeProjector = new CheckerAsyncTypeProjector(store, typeProjector);
+    this.typeAccess = new CheckerTypeShapeAccess(store, typeProjector);
   }
 
   projectCheckerType(
@@ -344,8 +350,14 @@ export class RuntimeBindingValueChannelTypeSupport {
     propertyName: string,
   ): CheckerTypeReference | null {
     const shape = this.readTypeShape(reference);
-    const member = shape?.members.find((candidate) => candidate.name === propertyName) ?? null;
-    return member?.valueType ?? null;
+    if (shape == null) {
+      return null;
+    }
+    return this.typeAccess.memberValueAccess(
+      shape,
+      propertyName,
+      `${reference?.productHandle ?? reference?.checkerKey ?? 'runtime-binding'}:member:${propertyName}`,
+    ).valueReference;
   }
 
   checkedSourceShape(
@@ -358,23 +370,60 @@ export class RuntimeBindingValueChannelTypeSupport {
         kind: 'open',
       };
     }
-    const collectionElementType = collectionElementTypeFor(carrier.checker, carrier.type);
-    if (collectionElementType != null) {
+    const classification = checkedSourceShapeClassification(carrier.checker, carrier.type);
+    if (classification.kind === 'open') {
       return {
-        kind: 'collection',
+        kind: 'open',
       };
     }
-    const mapKeyType = mapKeyTypeFor(carrier.checker, carrier.type);
-    if (mapKeyType != null) {
+    if (classification.kind === 'dynamic') {
+      const collectionElementType = classification.dynamicMode === 'collection-or-boolean'
+        ? collectionElementTypeFor(carrier.checker, carrier.type)
+        : mapKeyTypeFor(carrier.checker, carrier.type);
+      return {
+        kind: 'dynamic',
+        dynamicMode: classification.dynamicMode,
+        sourceType,
+        elementType: collectionElementType == null
+          ? null
+          : this.projectCheckerType(
+            `${sourceType?.productHandle ?? 'checked-source'}:${classification.dynamicMode}:element`,
+            carrier.checker,
+            collectionElementType,
+            sourceType?.sourceAddressHandle ?? null,
+          ),
+        mapValueType: classification.dynamicMode === 'map-or-boolean'
+          ? mapValueTypeForReference(this, sourceType, carrier.checker, carrier.type)
+          : null,
+      };
+    }
+    if (classification.kind === 'collection') {
+      const collectionElementType = collectionElementTypeFor(carrier.checker, carrier.type);
+      return {
+        kind: 'collection',
+        elementType: collectionElementType == null
+          ? null
+          : this.projectCheckerType(
+            `${sourceType?.productHandle ?? 'checked-source'}:collection-element`,
+            carrier.checker,
+            collectionElementType,
+            sourceType?.sourceAddressHandle ?? null,
+          ),
+      };
+    }
+    if (classification.kind === 'map') {
+      const mapKeyType = mapKeyTypeFor(carrier.checker, carrier.type);
       const mapValueType = mapValueTypeFor(carrier.checker, carrier.type);
       return {
         kind: 'map',
-        elementType: this.projectCheckerType(
-          `${sourceType?.productHandle ?? 'checked-source'}:map-key`,
-          carrier.checker,
-          mapKeyType,
-          sourceType?.sourceAddressHandle ?? null,
-        ),
+        elementType: mapKeyType == null
+          ? null
+          : this.projectCheckerType(
+            `${sourceType?.productHandle ?? 'checked-source'}:map-key`,
+            carrier.checker,
+            mapKeyType,
+            sourceType?.sourceAddressHandle ?? null,
+          ),
         mapValueType: mapValueType == null
           ? null
           : this.projectCheckerType(
@@ -385,7 +434,7 @@ export class RuntimeBindingValueChannelTypeSupport {
           ),
       };
     }
-    if (isBooleanLike(carrier.type)) {
+    if (classification.kind === 'boolean') {
       return {
         kind: 'boolean',
       };
@@ -398,6 +447,76 @@ export class RuntimeBindingValueChannelTypeSupport {
   readTypeShape(reference: CheckerTypeReference | null): CheckerTypeShape | null {
     return readCheckerTypeShape(this.store, reference);
   }
+}
+
+type CheckedSourceShapeClassification =
+  | { readonly kind: 'boolean' | 'collection' | 'map' | 'other' | 'open' }
+  | {
+    readonly kind: 'dynamic';
+    readonly dynamicMode: 'collection-or-boolean' | 'map-or-boolean';
+  };
+
+function checkedSourceShapeClassification(
+  checker: ts.TypeChecker,
+  sourceType: ts.Type,
+): CheckedSourceShapeClassification {
+  const runtimeKinds = new Set<'booleanish' | 'collection' | 'map' | 'other'>();
+  for (const part of sourceType.isUnion() ? sourceType.types : [sourceType]) {
+    if (checkerTypeShapePartIsOpen(part)) {
+      return { kind: 'open' };
+    }
+    if (mapKeyTypeFor(checker, part) != null) {
+      runtimeKinds.add('map');
+    } else if (collectionElementTypeFor(checker, part) != null) {
+      runtimeKinds.add('collection');
+    } else if (isBooleanLike(part)) {
+      runtimeKinds.add('booleanish');
+    } else if (checkerNullishType(checker, part)) {
+      runtimeKinds.add('other');
+    } else {
+      runtimeKinds.add('other');
+    }
+  }
+
+  if (runtimeKinds.has('collection') && runtimeKinds.has('map')) {
+    return { kind: 'open' };
+  }
+  if (runtimeKinds.has('collection') && runtimeKinds.size > 1) {
+    return { kind: 'dynamic', dynamicMode: 'collection-or-boolean' };
+  }
+  if (runtimeKinds.has('map') && runtimeKinds.size > 1) {
+    return { kind: 'dynamic', dynamicMode: 'map-or-boolean' };
+  }
+  if (runtimeKinds.has('collection')) {
+    return { kind: 'collection' };
+  }
+  if (runtimeKinds.has('map')) {
+    return { kind: 'map' };
+  }
+  return runtimeKinds.has('booleanish') && !runtimeKinds.has('other')
+    ? { kind: 'boolean' }
+    : { kind: 'other' };
+}
+
+function checkerTypeShapePartIsOpen(type: ts.Type): boolean {
+  return (type.flags & (ts.TypeFlags.Any | ts.TypeFlags.Unknown | ts.TypeFlags.TypeParameter)) !== 0;
+}
+
+function mapValueTypeForReference(
+  support: RuntimeBindingValueChannelTypeSupport,
+  sourceType: CheckerTypeReference | null,
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): CheckerTypeReference | null {
+  const mapValueType = mapValueTypeFor(checker, type);
+  return mapValueType == null
+    ? null
+    : support.projectCheckerType(
+      `${sourceType?.productHandle ?? 'checked-source'}:map-value`,
+      checker,
+      mapValueType,
+      sourceType?.sourceAddressHandle ?? null,
+    );
 }
 
 export class RuntimeBindingValueChannelDraftSupport {
@@ -608,7 +727,7 @@ export class RuntimeBindingValueChannelDraftSupport {
     const controller = this.controllerForTargetAccess(targetAccess, context);
     return controller?.name == null
       ? null
-      : runtimeHtmlTemplateControllerSemanticsForName(controller.name);
+      : frameworkTemplateControllerSemanticsForName(controller.name);
   }
 
   controllerForTargetAccess(

@@ -21,9 +21,12 @@ when a recipe uses a plugin. Convention-based fixtures may rely on the modeled A
 conventions instead of importing `customElement` when that shape is the recipe intent. Hand-authored recommendable
 fixtures should follow the same public-import policy unless they are deliberately demonstrating low-level package usage.
 Run `pnpm --filter @aurelia-ls/semantic-runtime check:authoring-fixtures` after materializing recipe fixtures when the
-source-plan TypeScript surface changes. The check uses a repo-local TypeScript overlay that maps generated
-`aurelia` and `@aurelia/*` dependencies to the in-repo framework declaration output, so it is a generated-code canary
-and not a substitute for installing each fixture as a standalone package.
+source-plan TypeScript surface changes. The check covers generated fixtures plus the hand-authored `storefront`
+fixture and uses a repo-local TypeScript overlay that maps fixture `aurelia` and `@aurelia/*` dependencies to the
+in-repo framework declaration output, so it is a fixture-code canary and not a substitute for installing each fixture
+as a standalone package. Keep fixture tsconfigs aligned with the current framework declaration posture; current
+decorator-authored fixtures use TypeScript's standard-decorator checking rather than legacy `experimentalDecorators`
+mode.
 Use `pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api` for the checkpoint-friendly compact fixture flywheel
 view before opening summary/raw pressure detail.
 Supplying `SEMANTIC_RUNTIME_PRESSURE_ROOTS=packages/semantic-runtime/fixtures/authoring` expands to the same durable

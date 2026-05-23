@@ -108,9 +108,11 @@ The tooling model keeps those consequences distinct:
   import identity when the key comes from framework/plugin packages. It is a source/type recognition surface for authoring and diagnostics;
   turning those sites into resolved container answers still belongs to controller hydration/activation semantics because
   the runtime helper depends on the currently active container.
-  Member ownership is still useful before full activation emulation: class fields initialized from `resolve(...)` can
-  ground later source reads and calls into the injected class even when a generated or external temp project has weak
-  package typing for the helper's return type.
+  Member ownership is still useful before full activation emulation: class fields initialized from direct
+  `resolve(ClassKey)` calls can ground later source reads and calls into an evaluator-local injected class when the
+  static evaluator is already executing an instance/member frame with `this`. Registered interface keys join through
+  `RuntimeBindingSourceActivationContext` when binding-source evaluation also has an active modeled container; wrapper
+  keys and unsupported resolver branches still belong to the DI world and activation model, not generic host guesses.
 - `DiInjectDecoratorSite` names import-aware `@inject`-family decorator sites that the kernel decorator will reject.
   It currently claims only TC39 decorator contexts whose runtime `context.kind` maps to method/getter/setter/accessor;
   legacy parameter decorators are deliberately not claimed as mapped framework errors.
@@ -190,6 +192,8 @@ The current spending path is intentionally narrow but end-to-end:
 
 - resolver-producing admissions with closed admitted keys become runtime-shaped `Resolver` products and
   `ContainerResolverSlot` products;
+  constructable factory values such as `Registration.singleton(IFoo, Foo)` retain the implementation declaration
+  identity so later activation reads can map the resolver value back to an evaluator-local class;
 - callback and cached-callback resolver admissions are closed at registration time. Their callback bodies are not
   executed while constructing the container world; a later activation/dependency inquiry should inspect those bodies if
   it needs service-locator reads or produced-value flow.

@@ -1200,6 +1200,337 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
   },
   {
+    id: "semantic-runtime.app-builder-pattern-ontology",
+    aliases: ["app-builder-pattern-ontology", "app-builder-reference-domain-separation"],
+    title: "App Builder Pattern Ontology",
+    summary:
+      "Route app-building ontology, reusable pattern composition, reference-domain separation, and catalog/storefront demotion through a durable Atlas-owned direction instead of temporary run notes or example-domain recipe keys.",
+    domains: [
+      "semantic-runtime",
+      "app-builder",
+      "authoring",
+      "ontology",
+      "fixtures",
+      "mcp",
+    ],
+    roles: ["orient", "author", "refactor", "document", "improve-atlas"],
+    terms: [
+      "app-builder",
+      "app builder",
+      "app-building pattern ontology",
+      "pattern ontology",
+      "reusable app-building patterns",
+      "app-building algebra",
+      "pattern composition",
+      "recipe ontology",
+      "recipe key",
+      "recipe-key inertia",
+      "fixture vs recipe",
+      "reference domain",
+      "reference-domain pack",
+      "reference-domain separation",
+      "example domain",
+      "domain-specific recipe",
+      "storefront fixture",
+      "catalog storefront",
+      "catalog-storefront",
+      "routed-catalog-storefront",
+      "demote catalog storefront",
+      "collection browser",
+      "collection-browser",
+      "collection-card-browser",
+      "collection table browser",
+      "resource-index",
+      "routed collection detail",
+      "routed-collection-detail",
+      "draft-form",
+      "routed-edit-form",
+      "service-backed-submit-form",
+      "sectioned-navigation-shell",
+      "state domain integration boundary",
+      "interaction mechanism",
+      "source-plan policy",
+      "apply-as-source-start",
+      "adapt-before-emitting",
+      "merge-selectively",
+      "analysis-pressure-only",
+      "public MCP guidance source parameters",
+      "reference app dump",
+      "fixture-shaped authoring pollution",
+    ],
+    queryCanaries: [
+      {
+        query: "app builder algebra authoring ontology reusable app-building patterns",
+        summary:
+          "Broad app-builder ontology work should route to the pattern ontology before adding more authoring recipe keys.",
+      },
+      {
+        query:
+          "catalog storefront authoring fixture reference domain app builder pattern ontology",
+        summary:
+          "Catalog/storefront should route as an ontology/reference-domain split, not as a durable recipe expansion.",
+      },
+      {
+        query: "fixture vs recipe reference domain collection-card-browser resource-index",
+        summary:
+          "Questions about example domains and reusable mechanics should route to app-builder pattern ontology.",
+      },
+      {
+        query: "MCP guidance should expose pattern composition not reference app dump",
+        summary:
+          "Public authoring output should route through source-parameter and pattern-composition policy.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/authoring/source-plan.ts",
+        symbolName: "AuthoringSourcePattern",
+        role: "primary",
+        summary:
+          "Current source-plan boundary between reusable architecture declarations and concrete source text.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/authoring/source-pattern-modules.ts",
+        symbolName: "SourcePatternModules",
+        role: "primary",
+        summary:
+          "Current reusable architecture capability vocabulary carried by source plans.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/authoring/expected-effect.ts",
+        symbolName: "ExpectedSemanticEffect",
+        role: "primary",
+        summary:
+          "Expected effects are the verification contract for lowered app-builder patterns.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/authoring/catalog-storefront-source-plan.ts",
+        symbolName: "catalogStorefrontSourcePlan",
+        role: "pressure",
+        summary:
+          "Current ontology-drift canary: reference-domain material still lives in the authoring source-plan layer.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/authoring/catalog-storefront-source-pattern.ts",
+        symbolName: "catalogStorefrontSourcePattern",
+        role: "pressure",
+        summary:
+          "Current source-pattern canary for separating reusable collection/card mechanics from storefront reference material.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/authoring/",
+        role: "pressure",
+        summary:
+          "Generated recommendable fixture outputs should stay distinct from reusable app-builder ontology.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/",
+        role: "pressure",
+        summary:
+          "Contrast and analyzer-pressure fixture outputs should stay separate from public authoring recommendations.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.AtlasMemory,
+        projection: "next",
+        role: "grounding",
+        summary:
+          "Atlas memory owns the durable app-builder direction; temporary run files may reference it but should not be authority for routing.",
+      },
+    ],
+    authority: [
+      "Atlas memory record intent:app-builder-pattern-ontology for durable direction.",
+      "semantic-runtime authoring source-plan and source-pattern modules as current pressure surfaces.",
+      "ExpectedSemanticEffect and fixture verification for proving generated app mechanics.",
+      "User direction that example domains belong in fixtures and reusable mechanics belong in app-builder/authoring lowering.",
+    ],
+    cautions: [
+      "Do not add another domain-named recipe when a pattern composition can represent the mechanics.",
+      "Do not let storefront/product/sample-data/CSS reference material remain in authoring core as durable ontology.",
+      "Do not make Atlas depend on `.temp` autonomous-run scaffolds for this direction.",
+      "Do not treat current app-builder absence as permission to keep deepening recipe-key inertia inside authoring.",
+    ],
+    nextQuestions: [
+      "Which authoring files are reusable lowering code versus reference-domain fixture material?",
+      "Which neutral pattern identity should replace the current catalog/storefront recipe identity?",
+      "Which source-plan parameters are real pattern slots versus adaptation scaffolding for a reference domain?",
+      "Where should reference-domain packs live so generated fixtures, pressure fixtures, and public authoring guidance remain distinct?",
+    ],
+    relatedRouteIds: [
+      "semantic-runtime.authoring-fixture-substrate-loop",
+      "authoring.forms.fixture-flywheel",
+      "semantic-runtime.app-builder-ide-fixture-flywheel",
+      "semantic-runtime.semantic-contract-verification",
+      "semantic-runtime.lsp-edit-affordance-substrate",
+      "mcp.developer-preview-shell",
+      "atlas.work-router.self-improvement",
+    ],
+  },
+  {
+    id: "semantic-runtime.app-builder-ide-fixture-flywheel",
+    aliases: ["app-builder-ide-fixture-flywheel", "editing-fixture-flywheel"],
+    title: "App Builder IDE Fixture Flywheel",
+    summary:
+      "Connect app-builder-generated fixtures with Semantic IDE/MCP affordance contracts so editing, rename, references, diagnostics-to-repair, and future workspace edits are tested against realistic Aurelia pattern compositions.",
+    domains: [
+      "semantic-runtime",
+      "app-builder",
+      "fixtures",
+      "authoring",
+      "lsp",
+      "mcp",
+      "edits",
+      "references",
+      "expected-effects",
+    ],
+    roles: ["orient", "author", "analyze", "verify", "improve-atlas"],
+    terms: [
+      "editing fixtures",
+      "edit fixtures",
+      "generated editing fixtures",
+      "app-builder generated fixtures",
+      "app builder generated fixtures",
+      "IDE fixture flywheel",
+      "MCP fixture flywheel",
+      "rename fixture",
+      "reference fixture",
+      "definition fixture",
+      "edit-plan fixture",
+      "expected edit plan",
+      "expected references",
+      "expected reference set",
+      "expected definition target",
+      "non-editable span",
+      "editability blocker",
+      "source span exactness",
+      "reference-contract fixture",
+      "large editing fixture",
+      "semantic IDE fixture",
+      "IDE affordance fixture",
+      "diagnostics to repair",
+      "template to TypeScript references",
+      "route parameter references",
+      "translation key references",
+      "resource rename fixture",
+      "source role editability",
+      "app-builder algebra generated edit fixtures",
+    ],
+    queryCanaries: [
+      {
+        query:
+          "editing fixtures app-builder algebra generated fixtures semantic IDE affordance authoring fixture flywheel",
+        summary:
+          "The coupled editing/app-builder/fixture thread should route to this bridge before splitting into authoring or IDE affordance substrates.",
+      },
+      {
+        query: "rename fixture expected reference set generated app builder source spans",
+        summary:
+          "Rename fixture planning should route through generated fixture and reference-contract expectations.",
+      },
+      {
+        query: "larger editing fixtures require app-builder fixture generation",
+        summary:
+          "Large edit fixtures should be generated from app-builder pattern compositions rather than hard-coded as another reference app.",
+      },
+      {
+        query: "diagnostics to repair expected edit plan exact source ranges",
+        summary:
+          "Diagnostics-to-edit pressure should route through the IDE fixture flywheel before local repair payloads are invented.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/source-reference.ts",
+        symbolName: "SemanticSourceReference",
+        role: "primary",
+        summary:
+          "Current source-locus envelope that editing fixtures must pressure for exact authored edit ranges.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/project.ts",
+        symbolName: "TypeSystemProject",
+        role: "primary",
+        summary:
+          "Shared TypeScript Program/checker epoch for generated fixture diagnostics and reference/edit analysis.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/authoring/expected-effect.ts",
+        symbolName: "ExpectedSemanticEffect",
+        role: "supporting",
+        summary:
+          "Current verification primitive that future IDE/edit effects can extend or sit beside.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/authoring/source-plan.ts",
+        symbolName: "AuthoringSourcePattern",
+        role: "supporting",
+        summary:
+          "Current source-plan metadata for generating realistic fixture source from pattern intent.",
+      },
+      {
+        kind: "lens",
+        lensId: LensId.TsType,
+        projection: "rename",
+        role: "grounding",
+        summary:
+          "Atlas TypeScript rename lane provides precedent and pressure for edit fixtures, not the whole semantic-runtime answer.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "app-builder", "authoring", "ontology"],
+        role: "grounding",
+        summary:
+          "App-builder ontology memory owns pattern intent and reference-domain separation.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "lsp", "mcp", "edits", "references"],
+        role: "grounding",
+        summary:
+          "Semantic IDE affordance memory owns strict reference/edit requirements.",
+      },
+    ],
+    authority: [
+      "App-builder pattern ontology for generating realistic low-boilerplate source.",
+      "Semantic IDE Affordance Substrate for definition/reference/edit algebra and strict source precision.",
+      "Expected semantic effects and future edit/reference effects for fixture verification.",
+      "TypeSystemProject, overlays, binding/data-flow, router, i18n, resource, and source-reference products as reference inputs.",
+    ],
+    cautions: [
+      "Do not make large editing fixtures another hard-coded domain inside authoring.",
+      "Do not treat overlay generated spans as authoritative edit ranges without joining authored source provenance.",
+      "Do not start with a mutating rename tool when the reference family and editability contract are still incomplete.",
+      "Do not let read-only navigation requirements hide stricter edit requirements; editing is the tightest consumer.",
+    ],
+    nextQuestions: [
+      "Which fixture tier is needed: reference-contract, edit-plan, generated app, or contrast fixture?",
+      "Which semantic subject and reference families must an edit fixture prove?",
+      "What exact source spans are editable, and which spans should explicitly block edit application?",
+      "Which app-builder pattern composition should generate the realistic source for this editing pressure?",
+    ],
+    relatedRouteIds: [
+      "semantic-runtime.app-builder-pattern-ontology",
+      "semantic-runtime.lsp-edit-affordance-substrate",
+      "semantic-runtime.authoring-fixture-substrate-loop",
+      "semantic-runtime.semantic-contract-verification",
+      "semantic-runtime.type-system-project-epoch",
+      "semantic-runtime.template-overlay-integration",
+      "mcp.developer-preview-shell",
+      "atlas.work-router.self-improvement",
+    ],
+  },
+  {
     id: "semantic-runtime.semantic-contract-verification",
     title: "Semantic Runtime Semantic Contract Verification",
     summary:
@@ -1973,6 +2304,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "semantic-runtime.select-checked-value-channels",
       "select-and-checked-value-channel-drafts",
       "frontier:select-and-checked-value-channel-drafts",
+      "bound-controller-value-flow",
+      "frontier:bound-controller-value-flow",
+      "runtime-binding-source-value-evaluator",
+      "frontier:runtime-binding-source-value-evaluator",
+      "binding-data-flow-materializer",
+      "frontier:binding-data-flow-materializer",
     ],
     title: "Observation And Binding Flow",
     summary:
@@ -2022,12 +2359,26 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "binding.open-data-flow",
       "binding.open-target-access",
       "binding.open-value-channel",
+      "source assignment",
+      "source write capability",
+      "observer write capability",
+      "fromView binding",
+      "from-view binding",
+      "twoWay binding",
+      "two-way binding",
+      ".from-view",
+      ".two-way",
       "binding source assignment",
       "binding source assignment runtime expression unassignable",
       "target source type mismatch",
       "target-to-source type mismatch",
       "target-to-source-type-mismatch",
       "binding data flow value channel",
+      "binding source value evaluator",
+      "RuntimeBindingSourceValueEvaluator",
+      "RuntimeBindingSourceEvaluationFrame",
+      "binding-source-needs-runtime-value",
+      "binding source needs runtime value",
       "select value channel",
       "select checked value channel contract",
       "select single option source-to-target",
@@ -2071,6 +2422,20 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "binding-source-slot-no-static-value",
       "RuntimeBoundControllerValueTable",
       "bound controller value flow",
+      "bound-controller-value-flow",
+      "bound controller resource order",
+      "parent before rendered child",
+      "parent-before-rendered-child",
+      "rendered child SCC",
+      "runtime analysis schedule",
+      "recursive resource analysis group",
+      "predecessor bound controller facts",
+      "HydrateElementInstruction definitionProductHandle",
+      "compiled resource runtime analysis order",
+      "template-overlay-bound-controller",
+      "parent-bound callback bindable",
+      "child root alias parent-bound callback",
+      "false TS2554 child bindable callback",
       "bound controller Array.find",
       "Array.find receiver did not reduce to a known array",
       "property method this binding",
@@ -2137,6 +2502,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "RuntimeBoundControllerValueTable bound controller value flow recursive rendering",
         summary:
           "Parent-to-child controller value flow belongs to observation/binding data flow even when recursive rendering exposes it.",
+      },
+      {
+        query: "bound controller resource order parent before rendered child HydrateElementInstruction SCC",
+        summary:
+          "Child-template overlay root typing should route through compiled-template rendered-child SCC scheduling before resourceScope-order assumptions.",
       },
       {
         query: "Array.find receiver did not reduce to a known array bound controller widget kit",
@@ -2233,6 +2603,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Parent-to-child bound controller value table feeds binding-source evaluation across recursive rendering contexts.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/template-compilation-project-pass.ts",
+        symbolName: "TemplateCompilationProjectPass",
+        role: "supporting",
+        summary:
+          "Runtime analysis order uses compiled custom-element child instructions and declared dependencies so parent-bound values are available before child overlays.",
       },
       {
         kind: "script",
@@ -2400,6 +2779,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Which framework tests demonstrate checked/select/class/style edge behavior?",
     ],
     relatedRouteIds: [
+      "semantic-runtime.template-overlay-integration",
       "semantic-runtime.proxy-observation-domain-modeling",
       "authoring.forms.fixture-flywheel",
       "semantic-runtime.template-recursive-rendering",
@@ -3540,11 +3920,19 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     roles: ["orient", "analyze", "refactor", "verify"],
     terms: [
       "recursive rendering",
+      "recursive custom element",
+      "self recursive custom element",
+      "recursive boundary",
+      "recursive hydration boundary",
       "template controller",
       "template controller cardinality",
       "controller semantics",
       "hydration",
       "compiled template",
+      "synthetic view",
+      "synthetic view scope",
+      "getter provenance",
+      "observed dependency provenance",
       "repeat for",
       "repeat value carrier",
       "repeat static value",
@@ -3579,6 +3967,15 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "renderingContextKind",
       "definition-resource",
       "recursive-resource-instance",
+      "runtime-state-specific recursive expansion",
+      "per-activation rendering",
+      "exact rendered tree",
+      "SSR SSG exact view tree",
+      "router activation lifecycle",
+      "viewport deactivate ordering",
+      "dynamic composition lifecycle",
+      "stateful recursive component diagnostics",
+      "two-way feedback rendering",
       "definition-local resource analysis",
       "bound controller Array.find",
       "Array.find receiver did not reduce to a known array",
@@ -3596,6 +3993,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "recursive hydration",
         summary:
           "Recursive hydration should keep routing to controller semantics rather than pretending hydration is absent.",
+      },
+      {
+        query: "recursive custom element synthetic view getter provenance",
+        summary:
+          "Self-recursive component, synthetic-view scope, and getter observed-dependency provenance pressure should land on recursive rendering.",
       },
       {
         query: "template controller cardinality",
@@ -3651,6 +4053,26 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "runtime composition renderingContextKind definition-resource recursive-resource-instance",
         summary:
           "Runtime composition context-kind pressure should distinguish public resource definition analysis from recursive parent-supplied use-site rows.",
+      },
+      {
+        query: "SSR SSG exact view tree per activation recursive rendering",
+        summary:
+          "Exact route/data render output requires runtime-state-specific recursive expansion rather than the finite overlay topology boundary.",
+      },
+      {
+        query: "router viewport activation reuse deactivate ordering recursive rendering",
+        summary:
+          "Router/viewport lifecycle ordering requires per-activation controller-state modeling before recursive expansion can answer it.",
+      },
+      {
+        query: "dynamic composition lifecycle run deactivate exact child rendering",
+        summary:
+          "Dynamic composition lifecycle consequences require runtime-state-specific expansion; candidate rows and aggregate child controllers are not enough.",
+      },
+      {
+        query: "stateful recursive component diagnostics runtime data depth",
+        summary:
+          "Recursive data structures that need concrete depth/cardinality should reopen runtime-state-specific expansion instead of stretching definition topology.",
       },
     ],
     anchors: [
@@ -3826,6 +4248,20 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Focused contract for bound controller values feeding AuCompose component/model resolution through a child custom element.",
       },
       {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:recursive-rendering",
+        role: "supporting",
+        summary:
+          "Focused contract for recursive custom-element finite boundaries, synthetic-view scope, bindable flow, and getter provenance.",
+      },
+      {
+        kind: "path",
+        pathPrefix: "packages/semantic-runtime/fixtures/pressure/recursive-custom-element-surfaces",
+        role: "pressure",
+        summary:
+          "Stress fixture for self-recursive custom elements, aggregate synthetic views, and controller-level recursive hydration boundaries.",
+      },
+      {
         kind: "path",
         pathPrefix: "packages/semantic-runtime/fixtures/authoring/generated-composed-dashboard",
         role: "pressure",
@@ -3898,12 +4334,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     cautions: [
       "Do not pretend hydration is absent; the current model already emulates non-recursive hydration.",
       "Recursive rendering is gated by runtime-dependent view-model state, so controller semantics must model cardinality and scope boundaries.",
+      "Do not require runtime-state-specific recursive expansion for template overlays, ordinary TypeChecker diagnostics, or definition-level topology; reopen it only for per-activation SSR/SSG output, router/viewport lifecycle ordering, dynamic composition lifecycle consequences, stateful recursive data, or feedback loops that alter subsequent rendering.",
       "Do not treat AuCompose candidate resolution as proof of recursive composed child hydration or lifecycle state.",
       "Split large controller-like surfaces only along framework interfaces when that increases clarity.",
     ],
     nextQuestions: [
       "Which nested scope facts need to be carried from template-controller semantics into TypeChecker evaluation?",
       "Is the composition question candidate resolution, activation model handoff, composed child rendering, or lifecycle run/deactivate state?",
+      "Does the product need per-activation truth, or can the finite aggregate definition-level boundary answer it?",
       "Which materializer step owns recursive descent for a known built-in controller?",
       "Which framework lifecycle/controller surfaces provide the right split points?",
     ],
@@ -3935,11 +4373,31 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "BindingScopeMaterializer",
       "BindingScopeLocatedLookup",
       "template visible names",
+      "template expression selection",
+      "template expression projection",
       "template scope type projector",
       "TemplateScopeTypeProjector",
+      "TemplateTypeSystemOverlayExpressionProjector",
+      "TemplateTypeSystemOverlayBuilder",
+      "scopeCreators",
+      "BindingScopeCreator",
+      "runtime assignment scope",
+      "runtime assignment expression scope",
+      "synthetic writeback local",
+      "inline multi-binding segment",
+      "repeat override local",
+      "$index",
+      "if condition overlay",
+      "synthetic-view overlay",
+      "listener event overlay",
+      "$event overlay",
+      "value converter overlay",
+      "value converter checker call",
+      "converter toView overlay",
       "template locals",
       "$parent",
       "$this",
+      "unsupported Aurelia expression overlay",
       "scope slot projection",
       "runtime binding context",
     ],
@@ -3953,6 +4411,51 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "BindingScopeMaterializer TemplateScopeTypeProjector slot projection",
         summary:
           "Scope materialization and checker projection should route together before cursor or diagnostic-local lookup is added.",
+      },
+      {
+        query: "template expression selection expression parse runtime scope lookup",
+        summary:
+          "Cursor inquiries, diagnostics, and overlays should share the expression/value-site to BindingScope selector before adding local lookup.",
+      },
+      {
+        query: "template expression projection value converter binding behavior parent this overlay",
+        summary:
+          "Aurelia-only expression forms should route through the copied-expression projector and semantic products before generated TypeScript text is widened.",
+      },
+      {
+        query: "template expression overlay repeat.for BindingScope ancestry",
+        summary:
+          "Generated template checker overlays should consume materialized BindingScope ancestry instead of reparsing template text for locals.",
+      },
+      {
+        query: "let binding scope effect replay overlay",
+        summary:
+          "Let-local overlay work should consume BindingScope creator handles before adding source-span heuristics.",
+      },
+      {
+        query: "synthetic-view copied scope slots creator handles branch condition",
+        summary:
+          "Same-level narrowed scopes should preserve creator handles from their base scope so overlays can replay copied slots before branch conditions.",
+      },
+      {
+        query: "listener event overlay $event BindingScope creator handles",
+        summary:
+          "Listener expressions should replay the listener-created scope before treating `$event` as a missing template name.",
+      },
+      {
+        query: "inline multi-binding segment runtime assignment expression scope",
+        summary:
+          "Assignable from-view/two-way custom-attribute locals should be modeled in scope construction and segment parse context before overlay source text is changed.",
+      },
+      {
+        query: "repeat override local $index overlay BindingScope slot",
+        summary:
+          "Repeat override locals should come from modeled BindingScope slots before generated overlay name-resolution diagnostics are considered.",
+      },
+      {
+        query: "value converter overlay toView checker call resource scope",
+        summary:
+          "Value-converter checker overlays should consume compiler resource-scope lookup and an importable converter target before generating TypeScript call text.",
       },
     ],
     anchors: [
@@ -3995,6 +4498,44 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Checker-backed bridge from runtime binding scopes to template-visible TypeScript symbols.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-expression-selection.ts",
+        role: "supporting",
+        summary:
+          "Shared expression/value-site and expression-parse to runtime-scope selector for cursor inquiries, diagnostics, and overlays.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-type-system-overlay-expression.ts",
+        symbolName: "TemplateTypeSystemOverlayExpressionProjector",
+        role: "supporting",
+        summary:
+          "Copied/generated authored expression projection and named unsupported Aurelia expression pressure for checker overlays.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/compiler-resource-lookup.ts",
+        role: "supporting",
+        summary:
+          "Shared compiler resource-scope lookup for value-converter and binding-behavior semantic consumers.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-type-system-overlay.ts",
+        symbolName: "TemplateTypeSystemOverlayBuilder",
+        role: "supporting",
+        summary:
+          "Checker-overlay consumer that replays authored template expressions through materialized BindingScope ancestry.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-type-system-overlay-plan.ts",
+        symbolName: "appendTemplateTypeSystemOverlayScopeBlock",
+        role: "supporting",
+        summary:
+          "Typed overlay layer and text-emission boundary for checker-visible template scope surfaces.",
       },
       {
         kind: "source",
@@ -4314,6 +4855,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Should parse-result-inspection own this traversal or should a corridor publish a better recovered node?",
     ],
     relatedRouteIds: [
+      "semantic-runtime.template-overlay-integration",
       "semantic-runtime.type-system.expression-semantics",
       "semantic-runtime.template-recursive-rendering",
       "semantic-runtime.evaluator.world-construction",
@@ -4324,7 +4866,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     id: "semantic-runtime.type-system-project-epoch",
     title: "TypeSystem Project Epoch",
     summary:
-      "Route checker-epoch, ordinary TypeScript diagnostics, tsconfig diagnostics, TypeScript Program size, source admission, compiler-host cache, and type-system performance work through the shared TypeSystemProject boundary.",
+      "Route checker-epoch, semantic overlay sources, ordinary TypeScript diagnostics, tsconfig diagnostics, TypeScript Program size, source admission, compiler-host cache, and type-system performance work through the shared TypeSystemProject boundary.",
     domains: ["semantic-runtime", "type-system", "checker", "diagnostics", "world-construction", "performance", "telemetry"],
     roles: ["orient", "analyze", "refactor", "verify", "improve-atlas"],
     terms: [
@@ -4347,7 +4889,41 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "program construction",
       "root narrowing",
       "source admission",
-      "ambient source",
+      "semantic overlay",
+      "type-system overlay",
+      "overlay source",
+      "TypeSystemOverlaySourceBuilder",
+      "TemplateTypeSystemOverlayBuilder",
+      "TemplateTypeSystemOverlayExpressionProjector",
+      "template expression selection",
+      "template expression projection",
+      "template type-system overlay",
+      "let scope overlay",
+      "scopeCreators",
+      "BindingScopeCreator",
+      "runtime assignment scope",
+      "runtime assignment expression scope",
+      "synthetic writeback local",
+      "inline multi-binding segment",
+      "repeat override local",
+      "$index",
+      "if condition overlay",
+      "synthetic-view overlay",
+      "listener event overlay",
+      "$event overlay",
+      "value converter overlay",
+      "value converter checker call",
+      "converter toView overlay",
+      "unsupported Aurelia expression overlay",
+      "template-expression-typescript-diagnostic",
+      "template overlay diagnostics",
+      "overlay diagnostic policy",
+      "typescript:TS2339",
+      "synthetic checker surface",
+      "Program-owned node",
+      "Program-owned SourceFile",
+      "readProgramNode",
+      "readProgramSourceFileByPath",
       "dependency declarations",
       "node_modules declarations",
       "TypeScript diagnostics",
@@ -4380,6 +4956,61 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "large TypeScript Program root count source admission inquiry depth",
         summary:
           "Program-size pressure should route through root/source-file composition telemetry and inquiry-depth policy.",
+      },
+      {
+        query: "synthetic checker surface overlay source Program-owned node",
+        summary:
+          "Aurelia constructs that need checker participation should route through TypeSystemProject overlays and Program-owned node access.",
+      },
+      {
+        query: "template expression selection runtime scope overlay diagnostics",
+        summary:
+          "Template overlays and diagnostics should share the semantic expression-to-scope selector before building TypeScript checker evidence.",
+      },
+      {
+        query: "template expression projection unsupported Aurelia syntax value converter binding behavior parent this",
+        summary:
+          "Copied-expression checker overlays should classify Aurelia-only syntax as semantic pressure before exposing TypeScript diagnostics.",
+      },
+      {
+        query: "template expression overlay binding scope repeat locals checker",
+        summary:
+          "Template expressions that need TypeScript participation should route through generated semantic overlays over materialized BindingScope ancestry.",
+      },
+      {
+        query: "let scope overlay scope effects TypeScript checker",
+        summary:
+          "Let-local checker surfaces should replay LetBindingScopeEffect through TemplateTypeSystemOverlayBuilder and BindingScope creator handles.",
+      },
+      {
+        query: "synthetic-view if condition overlay branch narrowing",
+        summary:
+          "Branch-scope checker overlays should replay base scope creators before emitting the built-in template-controller condition.",
+      },
+      {
+        query: "listener event overlay $event TypeScript checker",
+        summary:
+          "Listener `$event` checker surfaces should route through generated template overlays rather than global template-name fallbacks.",
+      },
+      {
+        query: "synthetic writeback inline multi-binding overlay exact segment expression",
+        summary:
+          "Writeback-local overlay gaps should route through binding-command segment source addresses, value-site parse context, and BindingScope runtime-assignment creators before overlay-specific fixes.",
+      },
+      {
+        query: "repeat override local $index overlay TypeScript checker",
+        summary:
+          "Repeat override locals should be emitted from semantic scope slots before raw checker name-resolution diagnostics are exposed.",
+      },
+      {
+        query: "value converter overlay toView TypeScript checker diagnostic",
+        summary:
+          "Importable value-converter checker calls should route through generated semantic overlays over recognized resource targets before adding local checker fallbacks.",
+      },
+      {
+        query: "template-expression-typescript-diagnostic overlay diagnostic policy",
+        summary:
+          "Public template TypeScript diagnostics should route through the type-projection overlay diagnostic policy before broadening exposed checker codes.",
       },
       {
         query: "lint autofix introduced TypeScript errors diagnostic overview typescript-diagnostics",
@@ -4418,7 +5049,61 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         symbolName: "TypeSystemProjectBuilder",
         role: "primary",
         summary:
-          "Builds the checker epoch from evaluated sources, ambient sources, compiler options, host, Program, and checker.",
+          "Builds the checker epoch from evaluated sources, semantic overlays, compiler options, host, Program, and checker.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/overlay.ts",
+        symbolName: "TypeSystemOverlaySource",
+        role: "primary",
+        summary:
+          "Program-owned virtual TypeScript source descriptor for Aurelia semantic checker surfaces.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/overlay.ts",
+        symbolName: "TypeSystemOverlaySourceBuilder",
+        role: "supporting",
+        summary:
+          "Generated overlay text builder that records exact generated source segments.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-expression-selection.ts",
+        role: "supporting",
+        summary:
+          "Shared template expression/value-site and runtime-scope selector used before checker overlay emission.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-type-system-overlay-expression.ts",
+        symbolName: "TemplateTypeSystemOverlayExpressionProjector",
+        role: "supporting",
+        summary:
+          "Projection boundary for copied/generated authored expressions and unsupported Aurelia syntax pressure before overlay emission.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/compiler-resource-lookup.ts",
+        role: "supporting",
+        summary:
+          "Shared compiler resource-scope lookup used before value-converter checker-call overlay emission.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-type-system-overlay.ts",
+        symbolName: "TemplateTypeSystemOverlayBuilder",
+        role: "supporting",
+        summary:
+          "Template overlay builder that replays authored expressions inside BindingScope ancestry for checker participation.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-type-system-overlay-plan.ts",
+        symbolName: "appendTemplateTypeSystemOverlayScopeBlock",
+        role: "supporting",
+        summary:
+          "Template overlay layer algebra and text-emission boundary for generated checker surfaces.",
       },
       {
         kind: "source",
@@ -4475,7 +5160,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         path: "packages/semantic-runtime/src/type-system/README.md",
         role: "grounding",
         summary:
-          "Type-system substrate docs explain Program source composition, compiler-host caching, and root-narrowing cautions.",
+          "Type-system substrate docs explain Program source composition, semantic overlays, compiler-host caching, and root-narrowing cautions.",
       },
     ],
     authority: [
@@ -4487,7 +5172,9 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
     cautions: [
       "Do not add a second TypeChecker Program path for a local feature; improve TypeSystemProject or downstream inquiry depth.",
+      "Do not pass evaluator/source-discovery AST nodes directly into checker APIs; remap them through TypeSystemProject or admit a semantic overlay first.",
       "Do not shell out to tsc from MCP for project diagnostics; semantic-runtime should expose Program diagnostics through public app-query surfaces.",
+      "Do not treat synthetic overlays as ordinary public TypeScript diagnostics; map overlay diagnostics back to authored Aurelia sources before surfacing them.",
       "A large Program root count is not automatically waste: source-shipped plugins and workspace packages may contain real Aurelia resources.",
       "Do not cache authored project source files behind a global dependency cache that hides edits.",
       "If an inquiry does not need checker facts, fix the app-query depth/materialization policy before narrowing TypeScript roots.",
@@ -4496,10 +5183,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Is the measured cost Program construction, checker creation, host source-file reads, or downstream type-shape projection?",
       "Are large roots semantic app/resource inputs, type-only dependencies, or artifacts of source admission?",
       "Which inquiry profile and app-query depth made this checker epoch necessary?",
+      "Does the feature need a Program-owned overlay source, a Program-node remap, or a purely semantic non-checker path?",
       "Should TypeScript diagnostics be part of the unified diagnostic answer, or a focused typescript-diagnostics row read?",
       "Can telemetry distinguish root-file pressure from final Program dependency closure before a refactor?",
     ],
     relatedRouteIds: [
+      "semantic-runtime.template-overlay-integration",
       "semantic-runtime.type-system.expression-semantics",
       "semantic-runtime.inquiry-query-claim-graph",
       "diagnostics.framework-error-grounding",
@@ -4510,15 +5199,296 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
     ],
   },
   {
-    id: "semantic-runtime.lsp-edit-affordance-substrate",
-    title: "LSP Edit Affordance Substrate",
+    id: "semantic-runtime.template-overlay-integration",
+    aliases: [
+      "template-overlay-integration",
+      "type-system-overlay-integration",
+      "frontier:template-overlay-integration-hardening",
+    ],
+    title: "Template Overlay Integration",
     summary:
-      "Route rename, references-backed edits, code actions, organize imports, file rename edits, and future workspace-edit planning through a deliberate semantic-runtime substrate rather than one-off TypeScript LanguageService calls.",
+      "Route template TypeScript overlay completion, diagnostics, provenance, rename readiness, and split-brain pressure through the semantic substrates overlays must spend: template scopes, binding/data-flow, observer channels, TypeSystemProject, i18n owners, and source addresses.",
+    domains: [
+      "semantic-runtime",
+      "template",
+      "overlay",
+      "type-system",
+      "diagnostics",
+      "provenance",
+      "lsp",
+    ],
+    roles: ["orient", "analyze", "refactor", "verify", "improve-atlas"],
+    terms: [
+      "template overlay integration",
+      "type-system overlay integration",
+      "overlay complete",
+      "overlay completeness",
+      "overlay hardening",
+      "overlay typechecking diagnostics rename provenance",
+      "overlay typechecking",
+      "overlay diagnostics",
+      "readTypeSystemOverlayDiagnostics",
+      "TemplateTypeSystemOverlayBuilder",
+      "TemplateTypeSystemOverlayExpressionProjector",
+      "templateTypeSystemOverlayExpressionSupportMatrix",
+      "templateTypeSystemOverlayPreludeHelpers",
+      "unsupportedOverlayExpressionSyntax",
+      "retired unsupportedOverlayExpressionSyntax",
+      "unsupported overlay expression",
+      "unsupported overlay expression syntax",
+      "overlay expression syntax support matrix",
+      "TypeSystemOverlaySource",
+      "TypeSystemOverlaySourceBuilder",
+      "generated overlay segment",
+      "authored source segment",
+      "overlay source segment",
+      "semantic overlay source mapping",
+      "synthetic checker surface",
+      "Program-owned overlay",
+      "split brain",
+      "split-brain",
+      "overlay semantic diagnostics split brain",
+      "overlay binding data-flow split brain",
+      "overlay evaluation split brain",
+      "statement-shaped overlay",
+      "statement overlay emission",
+      "DestructuringAssignment overlay",
+      "CustomExpression overlay",
+      "CustomExpression i18n overlay",
+      "translation binding overlay",
+      "promise-result overlay",
+      "template-controller overlay",
+      "binding data-flow overlay",
+      "observer channel overlay",
+      "from-view overlay",
+      "two-way overlay",
+      "rename provenance overlay",
+      "rename overlay provenance",
+      "LSP overlay",
+      "MCP overlay",
+    ],
+    queryCanaries: [
+      {
+        query: "overlay typechecking diagnostics rename provenance",
+        summary:
+          "Broad overlay/LSP integration questions must route to the overlay integration substrate before feature-local edits.",
+      },
+      {
+        query: "is overlay complete split brain binding data flow evaluation",
+        summary:
+          "Completeness checks should expose remaining semantic-owner risks rather than treating generated TypeScript as the whole truth.",
+      },
+      {
+        query: "CustomExpression i18n translation binding overlay unsupported syntax",
+        summary:
+          "CustomExpression pressure should route through owner-specific i18n semantics before generic overlay syntax handling.",
+      },
+      {
+        query: "unsupportedOverlayExpressionSyntax overlay expression syntax support matrix",
+        summary:
+          "The retired syntax-blacklist helper should route to the overlay expression support matrix and reuse guide, not to evaluator or parser work.",
+      },
+      {
+        query: "DestructuringAssignment statement-shaped overlay emission",
+        summary:
+          "Statement-shaped expression pressure should route to overlay plan/block emission instead of pretending it is a standalone expression.",
+      },
+      {
+        query: "rename overlay source segment authored source provenance",
+        summary:
+          "Rename and edit readiness should route through exact overlay/source-address mapping and the edit affordance route.",
+      },
+    ],
+    anchors: [
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-type-system-overlay.ts",
+        symbolName: "TemplateTypeSystemOverlayBuilder",
+        role: "primary",
+        summary:
+          "Generated TypeScript overlay builder that spends materialized BindingScope ancestry and semantic products.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-type-system-overlay-expression-support.ts",
+        symbolName: "templateTypeSystemOverlayExpressionSupportMatrix",
+        role: "primary",
+        summary:
+          "AST-kind support and owner matrix that prevents unsupported syntax from becoming overlay-local guesswork.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-type-system-overlay-expression.ts",
+        symbolName: "TemplateTypeSystemOverlayExpressionProjector",
+        role: "primary",
+        summary:
+          "Expression projector that copies source, lowers owner-modeled expressions, and records unsupported owner/frontier lanes.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-type-system-overlay-plan.ts",
+        symbolName: "appendTemplateTypeSystemOverlayScopeBlock",
+        role: "primary",
+        summary:
+          "Overlay layer and block-emission algebra; statement-shaped overlay pressure should land here or in a lower shared primitive.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/template/template-type-system-overlay-prelude.ts",
+        symbolName: "templateTypeSystemOverlayPreludeHelpers",
+        role: "supporting",
+        summary:
+          "Reusable helper inventory for emitted checker surfaces; non-helper overlay facts should stay in overlay layers.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/overlay.ts",
+        symbolName: "TypeSystemOverlaySource",
+        role: "primary",
+        summary:
+          "Program-owned overlay source and generated-segment metadata used for diagnostics and future edits.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/type-system/diagnostics.ts",
+        symbolName: "readTypeSystemOverlayDiagnostics",
+        role: "primary",
+        summary:
+          "Explicit overlay diagnostic lane that maps checker diagnostics through overlay segments to authored source.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/observation/binding-data-flow-materializer.ts",
+        symbolName: "RuntimeBindingDataFlowMaterializer",
+        role: "pressure",
+        summary:
+          "Binding and observer data-flow products must agree with overlay checker results for from-view/two-way/writeback semantics.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/i18n/translation-binding-issues.ts",
+        symbolName: "I18nTranslationBindingIssueMaterializer",
+        role: "pressure",
+        summary:
+          "Current owner lane for CustomExpression rather than a generic overlay expression path.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/api/source-reference.ts",
+        symbolName: "SemanticSourceReference",
+        role: "supporting",
+        summary:
+          "Public source reference envelope that future rename/edit planning must make exact enough to mutate.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:type-system-overlays",
+        role: "pressure",
+        summary:
+          "Focused contract for overlay sources, support matrix, generated-child splicing, diagnostics, and public overlay rows.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:template-controller-built-ins",
+        role: "pressure",
+        summary:
+          "Contract proving template-controller scope products are spent by overlays instead of approximated locally.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "template", "expression", "type-system", "overlay"],
+        role: "grounding",
+        summary:
+          "Overlay expression/prelude memory gives the support matrix, helper ownership, and unsupported owner/frontier lanes.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "template", "controller", "type-system", "overlay"],
+        role: "grounding",
+        summary:
+          "Template-controller overlay memory keeps promise/switch/repeat/with/virtual-repeat scope facts connected to overlays.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "observation", "binding", "data-flow", "type-system"],
+        role: "pressure",
+        summary:
+          "Binding data-flow memory is the main split-brain guard for TypeScript-accepted overlays versus Aurelia writeback semantics.",
+      },
+      {
+        kind: "memory",
+        domains: ["semantic-runtime", "lsp", "edits", "type-system", "template"],
+        role: "supporting",
+        summary:
+          "Edit-affordance memory records why rename/edit planning must join overlay provenance with Aurelia semantic references.",
+      },
+      {
+        kind: "doc",
+        path: "packages/semantic-runtime/src/template/README.md",
+        role: "grounding",
+        summary:
+          "Template docs record the current overlay and template-controller scope boundaries.",
+      },
+    ],
+    authority: [
+      "Template overlay support matrix and overlay plan/source mapping before generated TypeScript changes.",
+      "TypeSystemProject and overlay diagnostics for checker participation and authored-source diagnostic mapping.",
+      "Binding/data-flow and observer value-channel products for write direction and runtime binding semantics.",
+      "Owner-specific semantic products such as i18n TranslationBinding before handling opaque extension syntax.",
+      "Exact source-reference/provenance products before rename, edit, or MCP-facing fix planning.",
+    ],
+    cautions: [
+      "Do not call overlay complete just because generated TypeScript type-checks; binding data-flow, observer channels, and owner diagnostics may still disagree.",
+      "Do not solve unsupported overlay expressions by copying more syntax into TypeScript when an Aurelia owner product should provide the semantic fact.",
+      "Do not route rename through overlay spans alone; overlay segments are evidence that must join TypeScript and Aurelia semantic references.",
+      "Do not make overlay code a second evaluator. Static evaluation and binding-source value evaluation should feed overlay facts, not be reimplemented in generated TypeScript.",
+    ],
+    nextQuestions: [
+      "Which semantic product should own the fact the overlay needs: scope, binding/data-flow, observer, resource, i18n, router, or evaluator?",
+      "Is the gap a generated-source expression problem, a statement/block emission problem, or an owner-specific semantic product problem?",
+      "Can overlay diagnostics map to an exact authored source address, and is another semantic diagnostic already authoritative on that span?",
+      "Does this pressure affect rename/edit provenance, and if so which non-overlay reference families must be joined?",
+    ],
+    relatedRouteIds: [
+      "semantic-runtime.type-system-project-epoch",
+      "semantic-runtime.type-system.expression-semantics",
+      "semantic-runtime.observation.binding-flow",
+      "semantic-runtime.binding-scope",
+      "semantic-runtime.template-recursive-rendering",
+      "semantic-runtime.i18n.translation-binding",
+      "semantic-runtime.lsp-edit-affordance-substrate",
+      "diagnostics.template-repair-policy",
+      "semantic-runtime.evaluator.world-construction",
+      "atlas.work-router.self-improvement",
+    ],
+  },
+  {
+    id: "semantic-runtime.lsp-edit-affordance-substrate",
+    title: "Semantic IDE Affordance Substrate",
+    summary:
+      "Route IDE/MCP definition, references, hover, diagnostics-to-edit, rename, code actions, organize imports, file rename edits, and future workspace-edit planning through one deliberate semantic-runtime affordance substrate rather than one-off TypeScript LanguageService calls.",
     domains: ["semantic-runtime", "lsp", "edits", "type-system", "template", "api", "inquiry"],
     roles: ["orient", "analyze", "refactor", "verify", "improve-atlas"],
     terms: [
       "rename",
       "safe rename",
+      "go to definition",
+      "goto definition",
+      "find all references",
+      "find references",
+      "semantic references",
+      "semantic reference algebra",
+      "reference algebra",
+      "definition provider",
+      "reference provider",
+      "hover",
+      "quick info",
+      "document highlight",
+      "semantic IDE affordance algebra",
+      "semantic IDE affordance substrate",
+      "MCP IDE same API",
+      "IDE for AI",
+      "MCP as IDE for AI",
       "workspace edit",
       "workspace edits",
       "edit affordance",
@@ -4546,6 +5516,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Roslyn-like editing",
     ],
     queryCanaries: [
+      {
+        query: "goto definition find all references rename semantic reference edit algebra",
+        summary:
+          "Definition, references, and rename should route to the same semantic IDE affordance substrate; editing is the stricter consumer of the reference algebra.",
+      },
+      {
+        query: "MCP and IDE should use the same semantic-runtime API IDE for AI",
+        summary:
+          "MCP/IDE parity should route to semantic-runtime affordance/API design before transport-local tools are invented.",
+      },
       {
         query: "rename a view model member used from Aurelia templates",
         summary:
@@ -4631,21 +5611,25 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Atlas ts.type LanguageService edit affordance lanes as implementation precedent, not product API.",
       "Template cursor/source-reference/query-claim substrates for cross-language locus, invalidation, and answer lifetime.",
       "Aurelia semantic products for template, resource, route, i18n, and binding references that TypeScript rename cannot see.",
+      "SemanticRuntime/SemanticApp public API catalog as the shared surface for MCP and IDE/LSP adapters.",
     ],
     cautions: [
       "Do not add a naive rename endpoint that only wraps TypeScript LanguageService results; it will not scale to Aurelia templates, resources, routes, or generated edit transactions.",
+      "Do not build separate MCP-only and IDE-only semantic surfaces. Transport adapters may differ, but the semantic affordance answers should be shared.",
       "Do not add a second TypeScript Program or LanguageService path without first deciding how it shares the TypeSystemProject epoch and source-change invalidation.",
       "Treat broad carrier spans as insufficient for edits. Rename and code actions need exact authored source ranges or an explicit missing-precision diagnostic.",
       "Edit planning should grow toward Roslyn-like workspace operations: previewable, multi-file, transactional, explainable, and able to combine TypeScript and Aurelia semantic references.",
     ],
     nextQuestions: [
-      "Is the requested feature read-only navigation, edit preview, or edit application?",
+      "Is the requested feature read-only navigation, diagnostic explanation, edit preview, or edit application?",
       "Which references are TypeScript-only, and which come from Aurelia template/resource/router/i18n products?",
+      "What completeness and editability threshold does this affordance need: best-known navigation, classified references, or exact transactional edits?",
       "Does the existing cursor/context or source-reference substrate give exact edit ranges, or is provenance the first blocker?",
       "Can QueryClaimGraph own the answer lifetime and invalidation keys for this edit plan?",
       "Should this start as a formal edit-plan algebra before any public MCP/LSP tool is exposed?",
     ],
     relatedRouteIds: [
+      "semantic-runtime.template-overlay-integration",
       "semantic-runtime.type-system-project-epoch",
       "semantic-runtime.type-system.expression-semantics",
       "semantic-runtime.template-compiler-world",
@@ -4961,6 +5945,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Which source-slot or member-owner product should be reused before adding local TypeChecker walks?",
     ],
     relatedRouteIds: [
+      "semantic-runtime.template-overlay-integration",
       "semantic-runtime.observation.binding-flow",
       "semantic-runtime.binding-scope",
       "semantic-runtime.template-recursive-rendering",
@@ -5392,6 +6377,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "environment",
       "ModuleEnvironmentRecord",
       "EvaluationBinding",
+      "module graph",
+      "module graph evaluator",
+      "StaticModuleGraphEvaluator",
+      "readEvaluationModuleRecord",
+      "import type",
+      "type-only import",
+      "type-only export",
       "module source host",
       "FileSystemEvaluationModuleSourceHost",
       "FrameworkApiIssueMaterializer",
@@ -5445,6 +6437,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "synthetic evaluation context",
         summary:
           "Speculative context questions should preserve already-resolved evaluator/module state.",
+      },
+      {
+        query: "type-only import module graph evaluator",
+        summary:
+          "Type-only import/export admission bugs should route to the evaluator module graph before downstream feature patches.",
       },
       {
         query: "evaluation.unsupported-expression",
@@ -5557,6 +6554,21 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "grounding",
         summary:
           "Publishes exact AUR0021 diagnostics for aliasedResourcesRegistry and IModuleLoader.load inputs before DI spends registry effects.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/evaluation/module-graph.ts",
+        symbolName: "readEvaluationModuleRecord",
+        role: "supporting",
+        summary:
+          "Runtime-shaped module graph reader owns import/export admission and erases TypeScript type-only edges.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-module-graph",
+        role: "supporting",
+        summary:
+          "Focused contract for runtime import/export graph admission, including type-only edge erasure.",
       },
       {
         kind: "source",
@@ -5872,6 +6884,12 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
   },
   {
     id: "router.viewport.authoring-semantics",
+    aliases: [
+      "route-instruction-materialization-project-pass",
+      "frontier:route-instruction-materialization-project-pass",
+      "route-instruction-materialization",
+      "router.open-instruction",
+    ],
     title: "Router Viewport Authoring Semantics",
     summary:
       "Route router, au-viewport, RouteContext, route tree, route-recognizer, and routeable-component work through framework-grounded modeling before MCP or fixture authoring.",
@@ -6328,6 +7346,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "translation binding",
       "t-params",
       "translation key binding",
+      "CustomExpression",
+      "custom expression",
+      "opaque custom expression",
+      "custom-expression overlay",
+      "t custom expression",
       "I18nKeyEvaluationResult",
       "I18nService.evaluate",
       "i18n bridge role evidence",
@@ -6355,6 +7378,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "I18nKeyEvaluationResult bridge role evidence I18nService evaluate translation key",
         summary:
           "i18n key-evaluation bridge-role questions should route to the translation-binding lifecycle and key-evaluation substrate.",
+      },
+      {
+        query: "CustomExpression custom expression i18n translation binding overlay",
+        summary:
+          "CustomExpression pressure should route to i18n translation binding/key evaluation before generic overlay syntax skips.",
       },
     ],
     anchors: [
@@ -6414,6 +7442,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Keep translation-key catalog completion separate from translation-binding lifecycle diagnostics.",
       "Do not add an i18n-specific public API row before shared template/app diagnostics can surface the issue.",
       "Translation parameter joins should follow rendered binding products rather than string-matching template text.",
+      "Do not classify CustomExpression as generic unsupported syntax until the i18n translation binding path has been inspected.",
     ],
     nextQuestions: [
       "Is the pressure catalog completion, rendered key binding, parameter binding, or lifecycle diagnostic publication?",
@@ -6421,13 +7450,22 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Which exact i18n framework error code owns the diagnostic?",
     ],
     relatedRouteIds: [
+      "semantic-runtime.template-overlay-integration",
       "diagnostics.framework-error-grounding",
+      "semantic-runtime.type-system.expression-semantics",
       "semantic-runtime.template-recursive-rendering",
       "semantic-runtime.observation.binding-flow",
     ],
   },
   {
     id: "semantic-runtime.state.store-configuration",
+    aliases: [
+      "state-store-configuration",
+      "frontier:state-store-configuration",
+      "state-store",
+      "state-store-list",
+      "@aurelia/state-store",
+    ],
     title: "State Store Configuration",
     summary:
       "Route @aurelia/state store configuration, state binding syntax, store lookup issues, and exact raw framework Error authority through the state plugin substrate.",
@@ -6523,6 +7561,20 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "pressure",
         summary:
           "State docs/tests provide promoted store configuration and state binding examples before recipe authoring.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime smoke:state-store-list",
+        role: "supporting",
+        summary:
+          "Generated @aurelia/state store-list smoke for store configuration, .state/.dispatch, and & state binding behavior.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api -- --fixture generated-state-store-list",
+        role: "pressure",
+        summary:
+          "Reopen the generated state-store-list fixture through the app API pressure lane.",
       },
       {
         kind: "memory",
@@ -6818,6 +7870,7 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "Which query locus needs the diagnostic: cursor, file, app, authoring orientation, or repair plan?",
     ],
     relatedRouteIds: [
+      "semantic-runtime.template-overlay-integration",
       "semantic-runtime.type-system.expression-semantics",
       "semantic-runtime.observation.binding-flow",
       "semantic-runtime.binding-scope",

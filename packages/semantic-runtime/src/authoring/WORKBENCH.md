@@ -109,7 +109,8 @@ Do not add an app generator here until the semantic edit loop is real enough to 
 - `pnpm --filter @aurelia-ls/semantic-runtime smoke:storefront` rebuilds semantic-runtime and reopens the storefront
   fixture with semantic assertions for zero open seams, spread-value fan-out, ref source operations, and renderer-owned
   surrogate target operations plus closed field-shell capture forwarding. Keep it as a pressure smoke, not a brittle
-  golden snapshot.
+  golden snapshot. `check:authoring-fixtures` also includes `storefront`, so stale hand-authored fixture compiler
+  options cannot drift from the public app-diagnostic TypeScript surface.
 - `api.AuthoringOrientation` is now the first authoring-facing read surface. It aggregates project/source coverage,
   taste-axis evidence, capability support, operation support, available surfaces, recipe seeds, and open reasons from app topology,
   resources, runtime controllers, binding value channels, binding data flows, template diagnostics, and open seams.
@@ -151,6 +152,10 @@ Do not add an app generator here until the semantic edit loop is real enough to 
   non-current-window `target`, the cluster should also expose router href click-interception and external-href intent;
   this mirrors Aurelia's `HrefCustomAttribute` constructor gate without pretending the runtime URL-generation decision
   is statically solved.
+  Repair kind, runtime boundary kind, and runtime intent kind now share the same typed open-seam reason vocabulary.
+  Select multiple source-shape pressure, binding-source resource/type openings, and other known runtime-boundary seams
+  should not fall through to `extend-semantic-substrate` merely because the repair-kind classifier forgot a new reason
+  that the boundary/intent classifiers already understood.
 - `buildAuthoringRepairPlan(...)` turns repair clusters into `repair-app` operations plus expected `authoring-repair`
   closure effects. This is still a semantic negotiation plan: source edits, formatting, and runtime-policy decisions
   remain outside the builder. `repair-app` operation summaries preserve runtime boundary and intent kind buckets when a

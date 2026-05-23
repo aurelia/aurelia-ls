@@ -148,7 +148,12 @@ state, with special corridors split out by ownership:
   exclusion: once the receiver expression contains an optional-chain segment,
   a following template tag publishes the framework `AUR0172` failure, while an
   invalid `?.` continuation publishes `AUR0171`; post-receiver `..` and `...`
-  publish the framework expected-identifier failure (`AUR0153`).
+  publish the framework expected-identifier failure (`AUR0153`). `new`
+  expression parsing follows the framework left-hand-side split: member/keyed
+  constructor targets are parsed before constructor arguments, but call and
+  tagged-template tails resume only after the `NewExpression` is closed. This
+  keeps `new Foo()` from becoming a call-shaped constructor target and prevents
+  runtime AST diagnostics from seeing class construction as an ordinary call.
 - `completed-input-tail-corridor.ts`
   Value-converter and binding-behavior tails.
 - `completed-input-arrow-corridor.ts`

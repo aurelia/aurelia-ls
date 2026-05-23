@@ -1,8 +1,9 @@
 import ts from 'typescript';
-import type { ProjectBootFrame } from '../boot/frames.js';
+import type { ProjectBootFrame, SourceFileAdmission } from '../boot/frames.js';
 import { readSemanticProjectShape } from '../boot/project-shape.js';
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import { readDiResolveCallSites, type DiResolveCallSite } from '../di/resolve-call-recognition.js';
+import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import type { KernelStore } from '../kernel/store.js';
 import { SourceFileRole } from '../kernel/address.js';
 import {
@@ -197,6 +198,7 @@ interface RepairClusterMemberHintAccumulator {
 interface RepairClusterActionTargetAccumulator {
   targetKind: SemanticAuthoringRepairActionTargetRow['targetKind'];
   source: SemanticAuthoringRepairActionTargetRow['source'];
+  sourceRole: SemanticAuthoringRepairActionTargetRow['sourceRole'];
   typeDisplay: string | null;
   evidenceCount: number;
   memberNames: Set<string>;
@@ -357,7 +359,7 @@ function authoringOrientationForFacts(
   const taste = tasteRows(facts);
   const capabilities = capabilityRows(facts);
   const repairs = repairRows(facts);
-  const repairClusters = repairClusterRows(repairs);
+  const repairClusters = repairClusterRows(repairs, facts.project.projectKey, facts.project.sourceFiles);
   const effectObservation = expectedEffectObservationSnapshot(
     facts,
     capabilities,
@@ -857,6 +859,7 @@ function isPluginFrameworkRegistrationKind(kind: FrameworkRegistrationKind): boo
     case FrameworkRegistrationKind.RouterConfiguration:
     case FrameworkRegistrationKind.StateDefaultConfiguration:
     case FrameworkRegistrationKind.DialogConfiguration:
+    case FrameworkRegistrationKind.UiVirtualizationDefaultConfiguration:
       return true;
     case FrameworkRegistrationKind.StandardConfiguration:
     case FrameworkRegistrationKind.AppTask:
@@ -1133,7 +1136,7 @@ function oneHopForwardingAccessorCount(facts: OrientationFacts): number {
     if (templateReadAccessorNames.size === 0) {
       continue;
     }
-    const sourceFile = facts.emission.typeSystem.readSourceFileByPath(componentSourcePath);
+    const sourceFile = facts.emission.typeSystem.readProgramSourceFileByPath(componentSourcePath);
     if (sourceFile == null) {
       continue;
     }
@@ -1360,6 +1363,7 @@ function formValueChannelValues(facts: OrientationFacts): readonly SemanticAutho
     || channel.channelKind === RuntimeBindingValueChannelKind.CheckedRadioValue
     || channel.channelKind === RuntimeBindingValueChannelKind.CheckedCollectionMembership
     || channel.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean
+    || channel.channelKind === RuntimeBindingValueChannelKind.CheckedDynamicModelValue
     || channel.channelKind === RuntimeBindingValueChannelKind.CheckedModel
     || channel.channelKind === RuntimeBindingValueChannelKind.ElementModelValue
   ).length;
@@ -1477,6 +1481,7 @@ function isFormValueChannel(channel: SemanticBindingValueChannelRow): boolean {
     || channel.channelKind === RuntimeBindingValueChannelKind.CheckedRadioValue
     || channel.channelKind === RuntimeBindingValueChannelKind.CheckedCollectionMembership
     || channel.channelKind === RuntimeBindingValueChannelKind.CheckedMapKeyedBoolean
+    || channel.channelKind === RuntimeBindingValueChannelKind.CheckedDynamicModelValue
     || channel.channelKind === RuntimeBindingValueChannelKind.CheckedModel
     || channel.channelKind === RuntimeBindingValueChannelKind.ElementModelValue
     || channel.channelKind === RuntimeBindingValueChannelKind.SelectSingleOptionValue
@@ -2139,7 +2144,7 @@ function isRecipeSignatureEffect(
 function repairRows(facts: OrientationFacts): readonly SemanticAuthoringRepairRow[] {
   return [
     ...facts.templateDiagnostics.map((diagnostic, index) =>
-      repairRowForTemplateDiagnostic(diagnostic, index)
+      repairRowForTemplateDiagnostic(facts, diagnostic, index)
     ),
     ...facts.openSeams.map((seam, index) =>
       repairRowForOpenSeam(facts, seam, index)
@@ -2148,6 +2153,7 @@ function repairRows(facts: OrientationFacts): readonly SemanticAuthoringRepairRo
 }
 
 function repairRowForTemplateDiagnostic(
+  facts: OrientationFacts,
   diagnostic: SemanticTemplateDiagnosticRow,
   index: number,
 ): SemanticAuthoringRepairRow {
@@ -2161,6 +2167,7 @@ function repairRowForTemplateDiagnostic(
     authority: diagnosticAuthority(diagnostic),
     locus: 'template',
     source: diagnostic.source,
+    sourceRole: sourceRoleForReference(facts.project.projectKey, facts.project.sourceFiles, diagnostic.source),
     diagnosticKind: diagnostic.diagnosticKind,
     siteKind: diagnostic.siteKind,
     valueSiteKind: diagnostic.valueSiteKind,
@@ -2204,6 +2211,7 @@ function repairRowForOpenSeam(
   const runtimeBoundaryKinds = repairRuntimeBoundaryKindsForOpenSeamReasons(seam.reasonKinds);
   const runtimeIntentKinds = repairRuntimeIntentKindsForOpenSeamReasons(seam.reasonKinds);
   const source = describeAddress(facts.store, seam.addressHandle);
+  const actionTargetSource = repairActionTargetSourceForOpenSeam(facts, seam, source);
   return {
     key: `open-seam:${index}:${seam.seamKindKey}`,
     repairKind,
@@ -2213,6 +2221,7 @@ function repairRowForOpenSeam(
     authority: 'open',
     locus: 'app',
     source,
+    sourceRole: sourceRoleForReference(facts.project.projectKey, facts.project.sourceFiles, source),
     diagnosticKind: null,
     siteKind: null,
     valueSiteKind: null,
@@ -2221,10 +2230,55 @@ function repairRowForOpenSeam(
     openSeamReasonKinds: seam.reasonKinds,
     runtimeBoundaryKinds,
     runtimeIntentKinds,
-    suggestion: repairSuggestionForOpenSeam(seam, source),
+    suggestion: repairSuggestionForOpenSeam(seam, actionTargetSource),
     summary: repairSummaryForOpenSeam(seam.summary, repairKind),
     openReasonKinds: repairOpenReasonsForOpenSeam(repairKind),
   };
+}
+
+const OPEN_SEAM_ACTION_TARGET_REASON_PRIORITY = [
+  OpenSeamReasonKind.RouterHrefClickInterceptionTargetOpen,
+  OpenSeamReasonKind.RouterHrefClickInterceptionDisabled,
+  OpenSeamReasonKind.RouterHrefExternalityOpen,
+] as const;
+
+function repairActionTargetSourceForOpenSeam(
+  facts: OrientationFacts,
+  seam: OrientationFacts['openSeams'][number],
+  fallbackSource: SemanticSourceReference | null,
+): SemanticSourceReference | null {
+  for (const reasonKind of OPEN_SEAM_ACTION_TARGET_REASON_PRIORITY) {
+    const source = repairActionTargetSourceForOpenSeamReason(facts, seam, reasonKind);
+    if (source != null) {
+      return source;
+    }
+  }
+  for (const reason of seam.reasonSources) {
+    if (reason.addressHandle == null || !seam.reasonKinds.some((reasonKind) => reasonKind === reason.reasonKind)) {
+      continue;
+    }
+    const source = describeAddress(facts.store, reason.addressHandle);
+    if (source != null) {
+      return source;
+    }
+  }
+  return fallbackSource;
+}
+
+function repairActionTargetSourceForOpenSeamReason(
+  facts: OrientationFacts,
+  seam: OrientationFacts['openSeams'][number],
+  targetReasonKind: string,
+): SemanticSourceReference | null {
+  if (!seam.reasonKinds.some((reasonKind) => reasonKind === targetReasonKind)) {
+    return null;
+  }
+  const reason = seam.reasonSources.find((candidate) =>
+    candidate.reasonKind === targetReasonKind && candidate.addressHandle != null
+  );
+  return reason == null
+    ? null
+    : describeAddress(facts.store, reason.addressHandle);
 }
 
 function repairSuggestionForOpenSeam(
@@ -2252,10 +2306,12 @@ function repairSuggestionForOpenSeam(
 
 function repairClusterRows(
   rows: readonly SemanticAuthoringRepairRow[],
+  projectKey: string,
+  sources: readonly SourceFileAdmission[],
 ): readonly SemanticAuthoringRepairClusterRow[] {
   const clusters = new Map<string, RepairClusterAccumulator>();
   for (const row of rows) {
-    addRepairClusterRow(clusters, row);
+    addRepairClusterRow(clusters, row, projectKey, sources);
   }
   return [...clusters.entries()]
     .map(([key, cluster]) => repairClusterRow(key, cluster))
@@ -2269,24 +2325,30 @@ function repairClusterRows(
 function addRepairClusterRow(
   clusters: Map<string, RepairClusterAccumulator>,
   row: SemanticAuthoringRepairRow,
+  projectKey: string,
+  sources: readonly SourceFileAdmission[],
 ): void {
   const key = repairClusterKey(row);
   const existing = clusters.get(key);
   if (existing === undefined) {
-    clusters.set(key, newRepairCluster(row));
+    clusters.set(key, newRepairCluster(row, projectKey, sources));
     return;
   }
-  mergeRepairClusterRow(existing, row);
+  mergeRepairClusterRow(existing, row, projectKey, sources);
 }
 
-function newRepairCluster(row: SemanticAuthoringRepairRow): RepairClusterAccumulator {
+function newRepairCluster(
+  row: SemanticAuthoringRepairRow,
+  projectKey: string,
+  sources: readonly SourceFileAdmission[],
+): RepairClusterAccumulator {
   return {
     seed: row,
     count: 1,
     siteKinds: optionalSet(row.siteKind),
     valueSiteKinds: optionalSet(row.valueSiteKind),
     targetMemberNames: optionalSet(row.suggestion?.targetMemberName ?? null),
-    actionTargets: repairClusterActionTargetMap(row),
+    actionTargets: repairClusterActionTargetMap(row, projectKey, sources),
     memberHints: repairClusterMemberHintMap(row),
     ownerTypeDisplays: optionalSet(row.suggestion?.ownerTypeDisplay ?? null),
     valueTypeDisplays: optionalSet(row.suggestion?.valueTypeDisplay ?? null),
@@ -2303,12 +2365,14 @@ function newRepairCluster(row: SemanticAuthoringRepairRow): RepairClusterAccumul
 function mergeRepairClusterRow(
   cluster: RepairClusterAccumulator,
   row: SemanticAuthoringRepairRow,
+  projectKey: string,
+  sources: readonly SourceFileAdmission[],
 ): void {
   cluster.count += 1;
   addOptional(cluster.siteKinds, row.siteKind);
   addOptional(cluster.valueSiteKinds, row.valueSiteKind);
   addOptional(cluster.targetMemberNames, row.suggestion?.targetMemberName ?? null);
-  addRepairClusterActionTargetRow(cluster, row);
+  addRepairClusterActionTargetRow(cluster, row, projectKey, sources);
   addRepairClusterMemberHint(cluster, row);
   addOptional(cluster.ownerTypeDisplays, row.suggestion?.ownerTypeDisplay ?? null);
   addOptional(cluster.valueTypeDisplays, row.suggestion?.valueTypeDisplay ?? null);
@@ -2336,13 +2400,15 @@ function addRepairClusterActionTarget(
 
 function repairClusterActionTargetMap(
   row: SemanticAuthoringRepairRow,
+  projectKey: string,
+  sources: readonly SourceFileAdmission[],
 ): Map<string, RepairClusterActionTargetAccumulator> {
   const actionTargets = new Map<string, RepairClusterActionTargetAccumulator>();
   const target = row.suggestion?.actionTarget ?? null;
   if (target == null) {
     return actionTargets;
   }
-  const actionTarget = newRepairClusterActionTarget(row);
+  const actionTarget = newRepairClusterActionTarget(row, projectKey, sources);
   if (actionTarget != null) {
     actionTargets.set(repairActionTargetSurfaceKey(target), actionTarget);
   }
@@ -2352,6 +2418,8 @@ function repairClusterActionTargetMap(
 function addRepairClusterActionTargetRow(
   cluster: RepairClusterAccumulator,
   row: SemanticAuthoringRepairRow,
+  projectKey: string,
+  sources: readonly SourceFileAdmission[],
 ): void {
   const target = row.suggestion?.actionTarget ?? null;
   if (target == null) {
@@ -2360,7 +2428,7 @@ function addRepairClusterActionTargetRow(
   const key = repairActionTargetSurfaceKey(target);
   const existing = cluster.actionTargets.get(key);
   if (existing === undefined) {
-    const actionTarget = newRepairClusterActionTarget(row);
+    const actionTarget = newRepairClusterActionTarget(row, projectKey, sources);
     if (actionTarget != null) {
       cluster.actionTargets.set(key, actionTarget);
     }
@@ -2371,6 +2439,8 @@ function addRepairClusterActionTargetRow(
 
 function newRepairClusterActionTarget(
   row: SemanticAuthoringRepairRow,
+  projectKey: string,
+  sources: readonly SourceFileAdmission[],
 ): RepairClusterActionTargetAccumulator | null {
   const target = row.suggestion?.actionTarget ?? null;
   if (target == null) {
@@ -2379,6 +2449,7 @@ function newRepairClusterActionTarget(
   const accumulator: RepairClusterActionTargetAccumulator = {
     targetKind: target.targetKind,
     source: target.source,
+    sourceRole: sourceRoleForReference(projectKey, sources, target.source),
     typeDisplay: target.typeDisplay,
     evidenceCount: 0,
     memberNames: new Set(),
@@ -2471,6 +2542,7 @@ function repairClusterRow(
     actionTargetSourceCoverage: planning.actionTargetSourceCoverage,
     actionTargetCount: cluster.actionTargets.size,
     actionTargets: repairClusterActionTargets(cluster.actionTargets),
+    actionTargetSourceRoles: repairClusterActionTargetSourceRoles(cluster.actionTargets),
     count: cluster.count, targetMemberCount: cluster.targetMemberNames.size,
     targetMemberNames: sortedSetValues(cluster.targetMemberNames),
     memberHints: repairClusterMemberHints(cluster.memberHints),
@@ -2587,6 +2659,7 @@ function repairClusterActionTargets(
     .map((target) => ({
       targetKind: target.targetKind,
       source: target.source,
+      sourceRole: target.sourceRole,
       typeDisplay: target.typeDisplay,
       memberNames: sortedSetValues(target.memberNames),
       evidenceCount: target.evidenceCount,
@@ -2597,6 +2670,21 @@ function repairClusterActionTargets(
       || sourceReferenceSortKey(left.source).localeCompare(sourceReferenceSortKey(right.source))
       || (left.typeDisplay ?? '').localeCompare(right.typeDisplay ?? '')
     );
+}
+
+function repairClusterActionTargetSourceRoles(
+  actionTargets: ReadonlyMap<string, RepairClusterActionTargetAccumulator>,
+): SemanticAuthoringRepairClusterRow['actionTargetSourceRoles'] {
+  const roles = new Map<string, number>();
+  for (const target of actionTargets.values()) {
+    if (target.sourceRole == null) {
+      continue;
+    }
+    roles.set(target.sourceRole, (roles.get(target.sourceRole) ?? 0) + target.evidenceCount);
+  }
+  return [...roles.entries()]
+    .map(([role, count]) => ({ role, count }))
+    .sort((left, right) => right.count - left.count || left.role.localeCompare(right.role));
 }
 
 function repairClusterMemberHints(
@@ -2634,6 +2722,32 @@ function sourceReferenceSortKey(
   source: SemanticAuthoringRepairActionTargetRow['source'],
 ): string {
   return sourceReferenceClusterKey(source);
+}
+
+function sourceRoleForReference(
+  projectKey: string,
+  sources: readonly SourceFileAdmission[],
+  source: SemanticSourceReference | null,
+): SourceFileRole | `${SourceFileRole}` | null {
+  if (source == null) {
+    return null;
+  }
+  if (source.path != null) {
+    const sourcePath = source.path;
+    const role = sources.find((admission) => sourcePathMatchesFileName(admission.path, sourcePath))?.role ?? null;
+    if (role != null) {
+      return role;
+    }
+  }
+  if (source.sourceWorkspaceKey != null && source.sourceWorkspaceKey !== projectKey) {
+    return source.sourceFileRole === SourceFileRole.Declaration || source.sourceFileRole === SourceFileRole.Generated
+      ? source.sourceFileRole
+      : SourceFileRole.ExternalSource;
+  }
+  if (source.sourceFileRole != null) {
+    return source.sourceFileRole;
+  }
+  return sourceRoleForReference(projectKey, sources, source.anchor ?? null);
 }
 
 function sourceReferenceClusterKey(

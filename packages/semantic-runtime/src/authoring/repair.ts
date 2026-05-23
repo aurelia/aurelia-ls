@@ -100,6 +100,10 @@ export type AuthoringRepairRuntimeBoundaryKind =
   | 'binding-source-member'
   /** A binding source expression shape is outside the static value reader's modeled expression set. */
   | 'binding-source-expression'
+  /** A binding source expression has a checker-visible type surface that remains open. */
+  | 'binding-source-type'
+  /** A binding source expression depends on a missing/ambiguous Aurelia resource such as a converter or behavior. */
+  | 'binding-source-resource'
   /** Select observer modeling could not close the target element or observer value carrier. */
   | 'select-target'
   /** Select observer modeling could not close an option's value/model product. */
@@ -134,6 +138,8 @@ export type AuthoringRepairRuntimeIntentKind =
   | 'declare-async-boundary'
   /** Strengthen the source/type surface so binding values are visible without executing runtime state. */
   | 'strengthen-binding-source'
+  /** Register or disambiguate the Aurelia resource used by a binding source expression. */
+  | 'register-binding-resource'
   /** Rewrite an expression into a modeled binding expression shape. */
   | 'rewrite-binding-expression'
   /** Strengthen select value/option/domain typing or admit that the live DOM state remains dynamic. */
@@ -194,22 +200,12 @@ export function repairKindForOpenSeamReasons(
   reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[],
 ): AuthoringRepairKind {
   if (reasonKinds.some((reasonKind) =>
-    reasonKind === 'host-environment-value'
-    || reasonKind === 'external-module-value'
-    || reasonKind === 'async-execution-value'
-    || reasonKind === 'binding-source-needs-runtime-value'
-    || reasonKind === 'binding-source-slot-no-static-value'
-    || reasonKind === 'binding-source-member-no-static-value'
-    || reasonKind === 'binding-value-channel-dynamic-select-multiple'
-    || reasonKind === 'router-instruction-needs-route-context'
-    || reasonKind === 'router-instruction-needs-static-value'
-    || reasonKind === 'router-href-externality-open'
-    || reasonKind === 'router-href-click-interception-disabled'
-    || reasonKind === 'router-href-click-interception-target-open'
-    || reasonKind === 'router-instruction-missing-value'
-    || reasonKind === 'router-viewport-resolution-open'
-    || reasonKind === 'router-redirect-target-open'
+    reasonKind === 'binding-source-unsupported-expression'
   )) {
+    return 'rewrite-binding-source';
+  }
+  if (repairRuntimeBoundaryKindsForOpenSeamReasons(reasonKinds).length > 0
+    || repairRuntimeIntentKindsForOpenSeamReasons(reasonKinds).length > 0) {
     return 'resolve-runtime-boundary';
   }
   if (reasonKinds.length > 0) {
@@ -332,6 +328,10 @@ function runtimeBoundaryKindsForOpenSeamReason(
       return ['binding-source-member'];
     case 'binding-source-unsupported-expression':
       return ['binding-source-expression'];
+    case 'binding-source-type-open':
+      return ['binding-source-type'];
+    case 'binding-source-resource-open':
+      return ['binding-source-resource'];
     case 'binding-value-channel-select-target-open':
       return ['select-target'];
     case 'binding-value-channel-select-option-value-open':
@@ -376,7 +376,10 @@ function runtimeIntentKindsForOpenSeamReason(
     case 'binding-source-needs-runtime-value':
     case 'binding-source-slot-no-static-value':
     case 'binding-source-member-no-static-value':
+    case 'binding-source-type-open':
       return ['strengthen-binding-source'];
+    case 'binding-source-resource-open':
+      return ['register-binding-resource'];
     case 'binding-source-unsupported-expression':
       return ['rewrite-binding-expression'];
     case 'binding-value-channel-select-target-open':

@@ -1,12 +1,19 @@
 <nav>
   <a repeat.for="product of products" href="${productHref(product)}">${product.name}</a>
+  <a repeat.for="product of products" href="${routerLinks.detail(product)}">
+    Receiver ${product.name}
+  </a>
   <button repeat.for="product of products" type="button" load.bind="'/products/' + product.id">
     Load ${product.name}
   </button>
+  <a href="${stateBackedHref('state-coffee')}">State Coffee</a>
+  <a repeat.for="product of products" href="${stateBackedHref(product.id)}">
+    State lookup ${product.name}
+  </a>
   <a repeat.for="product of products" href="${externalHref(product)}" target="_blank" rel="noreferrer">
     External ${product.name}
   </a>
-  <a repeat.for="product of products" href="${externalPackageHref(product.id)}">
+  <a repeat.for="product of products" href="${externalPackageHref(product.id)}" target="_blank" rel="noreferrer">
     Vendor ${product.name}
   </a>
 </nav>

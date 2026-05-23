@@ -145,6 +145,10 @@ interface CallSiteRow {
   readonly crossesArea: boolean;
   readonly signature: string | null;
   readonly argumentCount: number;
+  readonly firstArgumentText?: string | null;
+  readonly firstArgumentSyntaxKind?: string | null;
+  readonly firstArgumentOriginKind?: string;
+  readonly firstArgumentOriginText?: string | null;
   readonly source?: ScriptSourceRef;
   readonly targetSource?: ScriptSourceRef | null;
 }
@@ -492,6 +496,12 @@ function printCallSites(rows: readonly CallSiteRow[]): void {
       }
       if (row.signature != null) {
         console.log(`  signature: ${row.signature}`);
+      }
+      if (row.firstArgumentText != null) {
+        console.log(`  first argument: ${row.firstArgumentText}`);
+        console.log(
+          `  first argument origin: ${row.firstArgumentOriginKind ?? "(unknown)"}${row.firstArgumentOriginText == null ? "" : `:${row.firstArgumentOriginText}`}`,
+        );
       }
       if (row.targetSource != null) {
         console.log(`  target source: ${sourceLabel({ source: row.targetSource })}`);

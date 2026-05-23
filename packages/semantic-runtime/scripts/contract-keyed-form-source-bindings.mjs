@@ -29,6 +29,7 @@ expectDataFlow('Array-index checkbox should be a keyed boolean source that can r
   sourceKind: 'keyed',
   valueChannelKind: 'checked-boolean',
   targetValueType: 'boolean',
+  sourceAssignmentTargetSourcePath: 'src/state/form-state.ts',
   sourceToTargetAssignable: true,
   targetToSourceAssignable: true,
 });
@@ -37,6 +38,7 @@ expectDataFlow('Array-index select should preserve keyed source display and stri
   sourceKind: 'keyed',
   valueChannelKind: 'select-single-option-value',
   targetValueType: "'i-0' | 'i-1' | 'i-2'",
+  sourceAssignmentTargetSourcePath: 'src/state/form-state.ts',
   sourceToTargetAssignable: true,
   targetToSourceAssignable: true,
 });
@@ -45,8 +47,71 @@ expectDataFlow('Record-keyed checkbox should bind through the repeat local key e
   sourceKind: 'keyed',
   valueChannelKind: 'checked-boolean',
   targetValueType: 'boolean',
+  sourceAssignmentTargetSourcePath: 'src/state/form-state.ts',
   sourceToTargetAssignable: true,
   targetToSourceAssignable: true,
+});
+expectDataFlow('Value converter fromView should make string input writeback assignable to a numeric source.', {
+  sourceName: 'state.quantity',
+  sourceKind: 'member',
+  sourceType: 'string',
+  sourceAssignmentTargetType: 'number',
+  sourceAssignmentTargetSourcePath: 'src/state/form-state.ts',
+  valueChannelKind: 'raw-property',
+  targetValueType: 'string',
+  sourceToTargetAssignable: true,
+  targetToSourceAssignable: true,
+  sourceAssignmentKind: 'runtime-assignable',
+});
+expectDataFlow('withContext value converter fromView should insert caller context before overload selection.', {
+  sourceName: 'state.contextualQuantity',
+  sourceKind: 'member',
+  sourceType: 'string',
+  sourceAssignmentTargetType: 'number',
+  sourceAssignmentTargetSourcePath: 'src/state/form-state.ts',
+  valueChannelKind: 'raw-property',
+  targetValueType: 'string',
+  sourceToTargetAssignable: true,
+  targetToSourceAssignable: true,
+  sourceAssignmentKind: 'runtime-assignable',
+});
+expectDataFlow('Missing converter fromView should fall back to the raw observer value and expose strictness pressure.', {
+  sourceName: 'state.fallbackQuantity',
+  sourceKind: 'member',
+  sourceType: 'string',
+  sourceAssignmentTargetType: 'number',
+  sourceAssignmentTargetSourcePath: 'src/state/form-state.ts',
+  valueChannelKind: 'raw-property',
+  targetValueType: 'string',
+  sourceToTargetAssignable: true,
+  targetToSourceAssignable: false,
+  sourceAssignmentKind: 'runtime-assignable-with-typescript-strictness',
+});
+expectDataFlow('fromView binding behavior should turn a default value binding into target-to-source data flow.', {
+  sourceName: 'state.modeFromViewText',
+  sourceKind: 'member',
+  direction: 'target-to-source',
+  sourceType: 'string',
+  sourceAssignmentTargetType: 'string',
+  sourceAssignmentTargetSourcePath: 'src/state/form-state.ts',
+  valueChannelKind: 'raw-property',
+  targetValueType: 'string',
+  sourceToTargetAssignable: null,
+  targetToSourceAssignable: true,
+  sourceAssignmentKind: 'runtime-assignable',
+});
+expectDataFlow('twoWay binding behavior should upgrade a to-view binding into two-way data flow.', {
+  sourceName: 'state.modeTwoWayText',
+  sourceKind: 'member',
+  direction: 'two-way',
+  sourceType: 'string',
+  sourceAssignmentTargetType: 'string',
+  sourceAssignmentTargetSourcePath: 'src/state/form-state.ts',
+  valueChannelKind: 'raw-property',
+  targetValueType: 'string',
+  sourceToTargetAssignable: true,
+  targetToSourceAssignable: true,
+  sourceAssignmentKind: 'runtime-assignable',
 });
 
 const keyedValueChannelRows = valueChannels.filter((row) =>
@@ -76,6 +141,25 @@ const summary = {
       sourceAssignmentReason: row.sourceAssignmentReason,
       openReason: row.openReason,
     })),
+  valueConverterWritebackFlows: dataFlows
+    .filter((row) =>
+      row.sourceName === 'state.quantity'
+      || row.sourceName === 'state.contextualQuantity'
+      || row.sourceName === 'state.fallbackQuantity'
+      || row.sourceName === 'state.modeFromViewText'
+      || row.sourceName === 'state.modeTwoWayText'
+    )
+    .map((row) => ({
+      sourceName: row.sourceName,
+      direction: row.direction,
+      sourceType: row.sourceType,
+      sourceAssignmentTargetType: row.sourceAssignmentTargetType,
+      targetValueType: row.targetValueType,
+      sourceToTargetAssignable: row.sourceToTargetAssignable,
+      targetToSourceAssignable: row.targetToSourceAssignable,
+      sourceAssignmentKind: row.sourceAssignmentKind,
+      sourceAssignmentReason: row.sourceAssignmentReason,
+    })),
   keyedValueChannelRows: keyedValueChannelRows.map((row) => ({
     channelKind: row.channelKind,
     targetProperty: row.targetProperty,
@@ -102,6 +186,12 @@ function expectDataFlow(message, expected) {
     return;
   }
   for (const [field, value] of Object.entries(expected)) {
+    if (field === 'sourceAssignmentTargetSourcePath') {
+      if (row.sourceAssignmentTargetSource?.path !== value) {
+        failures.push(`${message}: expected ${field}=${JSON.stringify(value)}, observed ${JSON.stringify(row.sourceAssignmentTargetSource?.path ?? null)}.`);
+      }
+      continue;
+    }
     if (row[field] !== value) {
       failures.push(`${message}: expected ${field}=${JSON.stringify(value)}, observed ${JSON.stringify(row[field])}.`);
     }

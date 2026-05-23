@@ -7,6 +7,11 @@ const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const require = createRequire(import.meta.url);
 
 const contractSuites = [
+  contract('evaluation', 'fast', [
+    'evaluation',
+    'module-graph',
+    'type-only-imports',
+  ], 'contract-evaluation-module-graph.mjs', 'Runtime-shaped module graph erases type-only imports/re-exports while preserving value import/export edges.'),
   contract('observation', 'fast', [
     'observation',
     'observer-locator',
@@ -99,6 +104,13 @@ const contractSuites = [
     'runtime-boundary',
     'template',
   ], 'contract-runtime-composition-bound-controller.mjs', 'AuCompose component/model values through parent-to-child bindable flow and static method this binding.'),
+  contract('template', 'fast', [
+    'template',
+    'rendering',
+    'controller',
+    'recursive-rendering',
+    'type-system',
+  ], 'contract-recursive-rendering.mjs', 'Recursive custom-element rendering boundary, synthetic-view scope, bindable flow, and getter dependency provenance.'),
   contract('diagnostics', 'fast', [
     'diagnostics',
     'repair',
@@ -110,6 +122,18 @@ const contractSuites = [
     'type-system',
     'mcp',
   ], 'contract-typescript-diagnostics.mjs', 'Ordinary TypeScript Program diagnostics exposed through focused and unified app diagnostic queries.'),
+  contract('diagnostics', 'fast', [
+    'diagnostics',
+    'type-system',
+    'overlay',
+    'template',
+  ], 'contract-type-system-overlays.mjs', 'Program-owned TypeScript overlay roots and template-adjacent semantic source segments with hidden ordinary diagnostic eligibility.'),
+  contract('template', 'fast', [
+    'template',
+    'controller',
+    'type-system',
+    'overlay',
+  ], 'contract-template-controller-built-ins.mjs', 'Built-in template-controller flow rows and overlay scope replay for if/else, repeat, with, promise, switch, and portal.'),
   contract('expression', 'fast', [
     'expression',
     'type-system',

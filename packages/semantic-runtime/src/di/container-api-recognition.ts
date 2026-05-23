@@ -69,7 +69,7 @@ export function readDiContainerApiCallSites(
 ): readonly DiContainerApiCallSite[] {
   const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileContainerApiCallSites(

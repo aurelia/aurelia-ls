@@ -1880,7 +1880,7 @@ function stateSourceClassDeclarations(
     if (supportSourceRoleForPath(source.path) !== 'state-source') {
       return [];
     }
-    const sourceFile = emission.typeSystem.readSourceFileByPath(source.path);
+    const sourceFile = emission.typeSystem.readProgramSourceFileByPath(source.path);
     return sourceFile == null ? [] : topLevelNamedClasses(source, sourceFile);
   });
 }

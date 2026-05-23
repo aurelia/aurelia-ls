@@ -19,6 +19,7 @@ import type {
 
 export const enum RuntimeValueConverterApplicationPhase {
   ToView = 'to-view',
+  FromView = 'from-view',
 }
 
 export type RuntimeValueConverterApplicationField =
@@ -64,6 +65,7 @@ export class RuntimeValueConverterApplication {
 
 export const enum RuntimeValueConverterIssuePhase {
   ToView = 'to-view',
+  FromView = 'from-view',
 }
 
 export const enum RuntimeValueConverterIssueKind {

@@ -314,6 +314,14 @@ function readObjectArray(row: object, field: string): readonly object[] {
 function readPath(row: object, fieldPath: string): unknown {
   let value: unknown = row;
   for (const segment of fieldPath.split('.')) {
+    if (Array.isArray(value)) {
+      value = value.flatMap((item) =>
+        item != null && typeof item === 'object'
+          ? [(item as Record<string, unknown>)[segment]]
+          : []
+      );
+      continue;
+    }
     if (value == null || typeof value !== 'object') {
       return undefined;
     }

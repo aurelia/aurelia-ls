@@ -123,7 +123,7 @@ expectMatcherFunctionChannels(
   'Authored matcher.bind should materialize as a framework matcher function slot, not as an unknown raw property.',
   {
     sourceName: 'matchItems',
-    expectedCount: 10,
+    expectedCount: 12,
   },
 );
 expectValueChannel(
@@ -163,6 +163,33 @@ expectValueChannel(
     observerCouplings: ['checked-element-value-domain', 'checked-element-value-observer', 'checked-collection-observer', 'checked-map-keyed-boolean-mutation', 'custom-matcher-comparison'],
     sourceToTargetAssignable: true,
     targetToSourceAssignable: true,
+  },
+);
+expectValueChannel(
+  'checked-select-custom-matcher',
+  'Checked checkbox source typed as collection or boolean should stay dynamic and require both branches to be valid.',
+  {
+    channelKind: 'checked-dynamic-model-value',
+    sourceName: 'selectedItemsOrBoolean',
+    usesCustomMatcher: true,
+    isCollection: null,
+    observerCouplings: ['checked-boolean-sync', 'checked-dynamic-source-shape', 'checked-collection-membership-mutation', 'custom-matcher-comparison'],
+    sourceToTargetAssignable: true,
+    targetToSourceAssignable: true,
+  },
+);
+expectValueChannel(
+  'checked-select-custom-matcher',
+  'Checked checkbox source typed as collection or null should reject the boolean write branch.',
+  {
+    channelKind: 'checked-dynamic-model-value',
+    sourceName: 'nullableSelectedItems',
+    usesCustomMatcher: true,
+    isCollection: null,
+    observerCouplings: ['checked-boolean-sync', 'checked-dynamic-source-shape', 'checked-collection-membership-mutation', 'custom-matcher-comparison'],
+    sourceToTargetAssignable: true,
+    targetToSourceAssignable: false,
+    sourceAssignmentReasonKinds: ['target-to-source-type-mismatch'],
   },
 );
 expectValueChannel(
@@ -219,6 +246,32 @@ expectValueChannel(
 );
 expectValueChannel(
   'select-multiple-binding-order',
+  'Nullable static multiple select sources should expose the runtime array-or-noop branch instead of pretending every source state mutates.',
+  {
+    channelKind: 'select-multiple-option-values',
+    sourceName: 'selectedNullable',
+    isCollection: true,
+    valueDomain: ['eta', 'theta'],
+    observerCouplings: ['select-option-value-domain', 'select-option-list-mutation-observer', 'select-array-observer', 'select-array-mutation', 'select-dynamic-array-source-shape'],
+    sourceToTargetAssignable: true,
+    targetToSourceAssignable: null,
+  },
+);
+expectTemplateDiagnostic(
+  'select-multiple-binding-order',
+  'Nullable static multiple select sources should surface a framework-runtime branch warning with a source-type repair target.',
+  {
+    diagnosticKind: 'binding-source-runtime-branch-open',
+    missingInput: 'binding-value-channel:select-multiple-source-open',
+    selectedMemberName: 'selectedNullable',
+    suggestionKind: 'align-assignment-type',
+    actionKind: 'change-member-type',
+    actionTargetKind: 'owner-type',
+    actionTargetMemberName: 'selectedNullable',
+  },
+);
+expectValueChannel(
+  'select-multiple-binding-order',
   'Dynamic multiple.bind selects should remain their own scalar-or-array channel.',
   {
     channelKind: 'select-dynamic-option-value',
@@ -248,6 +301,7 @@ const summary = {
     fixture,
     valueChannels: rows.valueChannels.length,
     dataFlows: rows.dataFlows.length,
+    templateDiagnostics: rows.templateDiagnostics.length,
     relevantDataFlows: rows.dataFlows
       .filter((row) => row.valueChannelKind?.includes('select') || row.valueChannelKind?.includes('checked'))
       .map((row) => ({
@@ -257,6 +311,15 @@ const summary = {
         targetToSourceAssignable: row.targetToSourceAssignable,
         frameworkErrorCode: row.frameworkErrorCode,
         observerCouplings: valueChannelForDataFlow(rows.valueChannels, row)?.observerCouplings ?? [],
+      })),
+    relevantTemplateDiagnostics: rows.templateDiagnostics
+      .filter((row) => row.missingInput?.includes('select') || row.selectedMemberName?.includes('selected'))
+      .map((row) => ({
+        diagnosticKind: row.diagnosticKind,
+        missingInput: row.missingInput,
+        selectedMemberName: row.selectedMemberName,
+        suggestionKind: row.suggestion?.suggestionKind ?? null,
+        actionTargetKind: row.suggestion?.actionTarget?.targetKind ?? null,
       })),
   })),
 };
@@ -297,6 +360,10 @@ async function readFixtureRows(fixtureName) {
       kind: 'binding-data-flows',
       page: { size: 1000 },
     }).value.rows,
+    templateDiagnostics: app.ask({
+      kind: 'template-diagnostics',
+      page: { size: 1000 },
+    }).value.rows,
   };
 }
 
@@ -333,6 +400,31 @@ function expectValueChannel(fixtureName, summary, expected) {
     if (actualValue !== value) {
       failures.push(`${summary}: expected ${field}=${String(value)}, got ${String(actualValue)}.`);
     }
+  }
+}
+
+function expectTemplateDiagnostic(fixtureName, summary, expected) {
+  const rows = fixtures.get(fixtureName);
+  const row = rows.templateDiagnostics.find((candidate) =>
+    candidate.diagnosticKind === expected.diagnosticKind
+    && candidate.missingInput === expected.missingInput
+    && candidate.selectedMemberName === expected.selectedMemberName
+  );
+  if (row == null) {
+    failures.push(`${summary}: missing template diagnostic ${expected.diagnosticKind} for ${expected.selectedMemberName}.`);
+    return;
+  }
+  if (row.suggestion?.suggestionKind !== expected.suggestionKind) {
+    failures.push(`${summary}: expected suggestion ${expected.suggestionKind}, received ${row.suggestion?.suggestionKind ?? 'none'}.`);
+  }
+  if (row.suggestion?.actionKind !== expected.actionKind) {
+    failures.push(`${summary}: expected action ${expected.actionKind}, received ${row.suggestion?.actionKind ?? 'none'}.`);
+  }
+  if (row.suggestion?.actionTarget?.targetKind !== expected.actionTargetKind) {
+    failures.push(`${summary}: expected action target kind ${expected.actionTargetKind}, received ${row.suggestion?.actionTarget?.targetKind ?? 'none'}.`);
+  }
+  if (row.suggestion?.actionTarget?.memberName !== expected.actionTargetMemberName) {
+    failures.push(`${summary}: expected action target member ${expected.actionTargetMemberName}, received ${row.suggestion?.actionTarget?.memberName ?? 'none'}.`);
   }
 }
 

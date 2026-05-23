@@ -33,6 +33,7 @@ import {
 import { compareNullableStrings, groupByDefined, uniqueSortedStrings } from "../../collections.js";
 import {
   callDependencyRows,
+  enrichProductArchitectureCallSiteArgumentOriginRows,
   enrichProductArchitectureCallSiteRows,
   profileProductArchitectureAnalysis,
   readProductArchitectureAnalysis,
@@ -813,6 +814,14 @@ function productArchitectureProjectionRequestsCallDetails(
     (inquiryBooleanFilter(inquiry, "includeCallDetails") ?? false);
 }
 
+function productArchitectureProjectionRequestsCallArgumentOrigins(
+  projection: ProductArchitectureProjection,
+  inquiry: Inquiry,
+): boolean {
+  return projection === "call-sites" &&
+    (inquiryBooleanFilter(inquiry, "includeCallArgumentOrigins") ?? false);
+}
+
 function filterAreas(
   rows: readonly ProductArchitectureAreaRow[],
   inquiry: Inquiry,
@@ -1403,13 +1412,14 @@ function callSiteRowsWithRequestedDetails(
   rows: readonly ProductArchitectureCallSiteRow[],
   inquiry: Inquiry,
 ): readonly ProductArchitectureCallSiteRow[] {
-  if (
+  const withCallDetails =
     !productArchitectureProjectionRequestsCallDetails("call-sites", inquiry) ||
     rows.every((row) => row.calleeType !== null)
-  ) {
-    return rows;
-  }
-  return enrichProductArchitectureCallSiteRows(sourceProject, rows);
+      ? rows
+      : enrichProductArchitectureCallSiteRows(sourceProject, rows);
+  return productArchitectureProjectionRequestsCallArgumentOrigins("call-sites", inquiry)
+    ? enrichProductArchitectureCallSiteArgumentOriginRows(sourceProject, withCallDetails)
+    : withCallDetails;
 }
 
 function callDependenciesForInquiry(

@@ -161,7 +161,7 @@ function readNullReturningRegistryNames(
 ): ReadonlySet<string> {
   const names = new Set<string>();
   for (const source of project.sourceFiles) {
-    const sourceFile = typeSystem.readSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     if (sourceFile == null) {
       continue;
     }

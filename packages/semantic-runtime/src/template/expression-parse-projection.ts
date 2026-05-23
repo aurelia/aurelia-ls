@@ -2,6 +2,7 @@ import {
   Interpolation,
   type ExpressionAstNode,
   type IsBindingBehavior,
+  type ValueConverterExpression,
 } from '../expression/ast.js';
 import {
   ExpressionExpectedContinuationClass,
@@ -11,6 +12,7 @@ import {
   InterpolationHoleBoundaryKind,
   type InterpolationFrontierPublication,
 } from '../expression/parse-result-algebra.js';
+import { unwrapExpressionAstNodeParens } from '../expression/parse-result-inspection.js';
 import type { TemplateExpressionParse } from './value-site.js';
 
 type IndexedBindingExpression = {
@@ -63,6 +65,56 @@ export function runtimeAcceptedBindingExpressionAstForParse(
 ): ExpressionAstNode | null {
   return bindingExpressionAstForParse(parse)
     ?? runtimeAcceptedInterpolationAst(parse.result);
+}
+
+/**
+ * Returns the expression shape Aurelia will hand to runtime assignment policy after transparent wrappers.
+ *
+ * Binding behaviors and value converters are authored as part of the expression, but the runtime writeback question is
+ * about the wrapped source target. Callers should still keep the original expression product as the semantic owner.
+ */
+export function runtimeAssignmentTargetAstForExpression(
+  expression: ExpressionAstNode,
+): ExpressionAstNode {
+  let current = unwrapExpressionAstNodeParens(expression);
+  for (;;) {
+    if (current.$kind !== 'BindingBehavior' && current.$kind !== 'ValueConverter') {
+      return current;
+    }
+    current = unwrapExpressionAstNodeParens(current.expression);
+  }
+}
+
+/**
+ * Returns value converters in the order `astAssign` spends them during writeback.
+ *
+ * For `source | first | second`, Aurelia calls `second.fromView(...)` first, then hands that result to
+ * `first.fromView(...)` before assigning the underlying source expression.
+ */
+export function runtimeAssignmentValueConverterChainForExpression(
+  expression: ExpressionAstNode,
+): readonly ValueConverterExpression[] {
+  const converters: ValueConverterExpression[] = [];
+  let current = unwrapExpressionAstNodeParens(expression);
+  for (;;) {
+    if (current.$kind === 'ValueConverter') {
+      converters.push(current);
+      current = unwrapExpressionAstNodeParens(current.expression);
+      continue;
+    }
+    if (current.$kind === 'BindingBehavior') {
+      current = unwrapExpressionAstNodeParens(current.expression);
+      continue;
+    }
+    return converters;
+  }
+}
+
+export function runtimeAssignmentTargetAstForParse(
+  parse: TemplateExpressionParse,
+): ExpressionAstNode | null {
+  const ast = runtimeAcceptedBindingExpressionAstForParse(parse);
+  return ast == null ? null : runtimeAssignmentTargetAstForExpression(ast);
 }
 
 function runtimeAcceptedInterpolationAst(

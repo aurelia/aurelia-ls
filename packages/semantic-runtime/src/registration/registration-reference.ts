@@ -56,6 +56,8 @@ export const enum FrameworkRegistrationKind {
   StateDefaultConfiguration = 'state-default-configuration',
   /** Dialog plugin configuration registry. */
   DialogConfiguration = 'dialog-configuration',
+  /** UI virtualization plugin configuration registry. */
+  UiVirtualizationDefaultConfiguration = 'ui-virtualization.default-configuration',
   /** RuntimeHtml DefaultComponents registration group. */
   RuntimeHtmlDefaultComponents = 'runtime-html.default-components',
   /** RuntimeHtml DefaultBindingSyntax registration group. */

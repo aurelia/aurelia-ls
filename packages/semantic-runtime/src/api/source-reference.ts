@@ -10,6 +10,7 @@ import type {
   GeneratedAddress,
   SemanticAddress,
   SourceFileAddress,
+  SourceFileRole,
   SourceSpanAddress,
   TemplateAddress,
   TemplateNodeAddress,
@@ -24,6 +25,8 @@ export interface SemanticSourceReference {
   readonly start?: number;
   readonly end?: number;
   readonly role?: string;
+  readonly sourceWorkspaceKey?: string;
+  readonly sourceFileRole?: SourceFileRole | `${SourceFileRole}`;
   readonly scheme?: string;
   readonly value?: string;
   readonly anchor?: SemanticSourceReference | null;
@@ -120,6 +123,8 @@ function describeSourceFileAddress(address: SourceFileAddress): SemanticSourceRe
     kind: address.kind,
     label: address.path,
     path: address.path,
+    sourceWorkspaceKey: address.workspaceKey,
+    sourceFileRole: address.role,
   };
 }
 
@@ -135,6 +140,8 @@ function describeSourceSpanAddress(
     start: address.start,
     end: address.end,
     role: address.role,
+    sourceWorkspaceKey: file?.sourceWorkspaceKey,
+    sourceFileRole: file?.sourceFileRole,
     anchor: file,
   };
 }

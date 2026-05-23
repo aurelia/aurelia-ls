@@ -13,6 +13,31 @@
     </select>
   </label>
 
+  <label>
+    Quantity
+    <input value.two-way="state.quantity | numberText">
+  </label>
+
+  <label>
+    Contextual quantity
+    <input value.two-way="state.contextualQuantity | contextualNumberText">
+  </label>
+
+  <label>
+    Fallback quantity
+    <input value.two-way="state.fallbackQuantity | numberTextReadonly">
+  </label>
+
+  <label>
+    Mode behavior from view
+    <input value.bind="state.modeFromViewText & fromView">
+  </label>
+
+  <label>
+    Mode behavior two way
+    <input value.to-view="state.modeTwoWayText & twoWay">
+  </label>
+
   <label repeat.for="tag of state.tags">
     <input type="checkbox" checked.bind="state.selectedByTagId[tag.id]">
     ${tag.label}

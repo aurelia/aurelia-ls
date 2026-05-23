@@ -82,7 +82,7 @@ export class CompletedInputLeftHandSideCorridor {
     return this.parseMemberExpression();
   }
 
-  private parseNewExpression(): ParseOutcome<NewExpression> {
+  private parseNewExpression(): ParsedLeftHandSide {
     const newTok = this.state.nextToken();
     const targetStart = this.state.peekToken();
     if (!this.deps.canStartPrimaryExpression(targetStart)) {
@@ -96,7 +96,15 @@ export class CompletedInputLeftHandSideCorridor {
       );
     }
 
-    const func = this.parseMemberExpression();
+    const primary = this.deps.parsePrimaryExpr();
+    if (isParseFailure(primary)) {
+      if (isParseCompanionFailure(primary)) {
+        return this.companionBuilder.widenNewExpressionFailure(primary, newTok);
+      }
+      return primary;
+    }
+
+    const func = this.parseLeftHandSideTail(primary, false);
     if (isParseFailure(func)) {
       if (isParseCompanionFailure(func)) {
         return this.companionBuilder.widenNewExpressionFailure(func, newTok);
@@ -120,11 +128,12 @@ export class CompletedInputLeftHandSideCorridor {
       args = parsedArgs;
     }
 
-    return new NewExpression(
+    const expression = new NewExpression(
       this.state.span(newTok.start, this.state.consumedEnd),
       func,
       args,
     );
+    return this.parseLeftHandSideTail(expression, true);
   }
 
   private parseMemberExpression(): ParsedLeftHandSide {
@@ -133,7 +142,14 @@ export class CompletedInputLeftHandSideCorridor {
       return primary;
     }
 
-    let expr: IsLeftHandSide = primary;
+    return this.parseLeftHandSideTail(primary, true);
+  }
+
+  private parseLeftHandSideTail(
+    base: IsLeftHandSide,
+    allowCall: boolean,
+  ): ParsedLeftHandSide {
+    let expr: IsLeftHandSide = base;
     while (true) {
       const t = this.state.peekToken();
 
@@ -186,6 +202,9 @@ export class CompletedInputLeftHandSideCorridor {
       }
 
       if (t.type === TokenType.OpenParen) {
+        if (!allowCall) {
+          break;
+        }
         const called = this.parseCallExpression(expr, false);
         if (isParseFailure(called)) {
           return called;
@@ -195,6 +214,9 @@ export class CompletedInputLeftHandSideCorridor {
       }
 
       if (t.type === TokenType.Backtick) {
+        if (!allowCall) {
+          break;
+        }
         if (this.hasOptionalChain(expr)) {
           return this.state.failures.hardError(
             'Invalid tagged template on optional chain',

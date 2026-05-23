@@ -96,6 +96,7 @@ export class SemanticAppTemplateQueries {
       this.emission,
       query.cursor,
       query.detail ?? SemanticRuntimeDetail.Compact,
+      query.diagnosticProjection,
     );
   }
 

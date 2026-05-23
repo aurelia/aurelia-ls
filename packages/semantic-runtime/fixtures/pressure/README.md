@@ -51,6 +51,9 @@ still be realistic app code rather than artificial parser torture cases.
   open.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:runtime-effect-observation` is the focused semantic contract
   for this fixture.
+- `style-resource-surfaces` captures local CSS side-effect imports, CSS module imports passed into
+  `cssModules(...)`, and CSS string imports passed into `shadowCSS(...)`. It preserves style asset topology and
+  style-registry call pressure without turning bundler CSS imports into ordinary TypeScript diagnostic noise.
 - `proxy-observable-escapes` captures direct source calls to `ProxyObservable.getRaw(...)` and
   `ProxyObservable.unwrap(...)`. It preserves neutral source-level facts about raw/proxy boundary crossings so later
   authoring or diagnostic policy can reason about external-library handoff and unnecessary escapes without baking that
@@ -66,6 +69,21 @@ still be realistic app code rather than artificial parser torture cases.
   connectable, so comparator member reads are template dependencies even though proxy sort comparator values stay raw.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:template-collection-observation` is the focused semantic
   contract for this fixture.
+- `template-controller-built-ins` captures all runtime-html built-in template-controller families in one small template:
+  `if`/`else`, `repeat`, `with`, `portal`, `promise`/`pending`/`then`/`catch`, and `switch`/`case`/`default-case`.
+  It preserves controller-flow rows, link hooks, child-view cardinality, `with.bind` non-nullish scope projection,
+  promise-result locals, repeat locals over arrays, maps, sets, and numeric counts, scalar and array-valued `case`
+  values, static multi-attribute `fall-through` branch unions, `default-case` discriminant exclusion, durable branch
+  `BindingScope` slot narrowing, and generated overlay type inference without treating the fixture as an authoring
+  recommendation.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:template-controller-built-ins` is the focused semantic contract
+  for this fixture.
+- `template-overlay-value-converter` captures modeled value-converter overlay calls, chained converters, contextual
+  converter arguments, converter argument diagnostics, repeat iterable converter sources, and the low-level generated
+  child splice contract used by `template-type-system-overlay-expression-support.ts`. The splice source is a projector
+  substrate proof, not a template-authoring recommendation for nested value-converter syntax.
+  `pnpm --filter @aurelia-ls/semantic-runtime contract:type-system-overlays` is the focused semantic contract for this
+  fixture family.
 - `one-hop-forwarding-accessor` captures a component getter that only returns a property chain rooted at a DI-injected
   state class, beside a meaningful presentation getter, an unused getter, and a direct `state.*` template binding. It
   exists to pressure authoring orientation toward low-boilerplate guidance without treating every getter as suspect or
@@ -140,6 +158,10 @@ still be realistic app code rather than artificial parser torture cases.
   `AUR4000`, `AUR4001`, and `AUR4002` diagnostic pressure without teaching generated authoring recipes to emit invalid
   translation bindings. Static translation catalogs and positive rendered binding groups are now covered separately by
   the generated localized authoring fixture through `api.I18nTranslationKeys` and `api.I18nTranslationBindings`.
+- `i18n-configuration-option-shape-errors` captures source-authored plugin option-shape mistakes, including the
+  tempting but invalid top-level `resources` assignment on `I18nConfigurationOptions`. It preserves the split between
+  framework configuration shape, TypeScript diagnostics, and semantic-runtime i18n catalog admission, where translation
+  resources live under `initOptions.resources`.
 - `implicit-binding-expression-inference` captures empty `.bind`, `.two-way`, and `.from-view` command values where
   Aurelia infers the source expression from the authored target name while target-property mapping remains separate. It
   preserves framework compiler behavior such as `minlength.bind` reading `minlength` even when the DOM target property
@@ -160,12 +182,14 @@ still be realistic app code rather than artificial parser torture cases.
   observer synchronization can read `ReadonlySet`, `ReadonlyMap`, and readonly arrays, while target-to-source flow
   rejects mutation.
 - `router-dynamic-pattern` captures router-resource `href` values produced by view-model methods returning a static
-  route prefix with a runtime repeat-local hole, an external-link-like field, and a bare external-module boundary. It
+  route prefix with a runtime repeat-local hole, an external-link-like field, and a bare external-module boundary with
+  a non-current-window target. It
   pressures evaluator string-pattern propagation, router recognition, and runtime-boundary repair planning without
   teaching semantic-runtime to classify arbitrary dynamic external links as internal routes.
   `pnpm --filter @aurelia-ls/semantic-runtime contract:router-dynamic-pattern` protects both sides of that split: the
   internal string-pattern link must materialize recognized route facts, while the bare external-module link must remain
-  an explicit router open seam instead of being guessed as internal or reported as a router issue.
+  an explicit router open seam with target-disposition pressure instead of being guessed as internal or reported as a
+  router issue.
 - `router-active-link-state` captures the two active navigation surfaces from the router docs: `RouterConfiguration`
   `activeClass` for low-boilerplate class-only styling, and `load`'s `active.bind` from-view handoff when application
   state genuinely needs active-route status. `pnpm --filter @aurelia-ls/semantic-runtime
@@ -230,7 +254,9 @@ still be realistic app code rather than artificial parser torture cases.
 - `select-multiple-binding-order` mirrors Aurelia runtime-html select observer tests where `multiple.bind="true"` can
   appear before, between, or after other bound attributes. It pressure-tests the value-channel handoff from bound
   `multiple` evidence into single, multiple, and dynamic `SelectValueObserver` modes, including a dynamic source that
-  must accept both scalar option values and array-valued selection updates. It is covered by
+  must accept both scalar option values and array-valued selection updates. It also keeps a static multiple select bound
+  to `T[] | null` so the framework's array-or-noop branch stays visible instead of being collapsed into guaranteed
+  collection mutation. It is covered by
   `contract:select-checked-value-channels` so the static/dynamic split remains explicit.
 - `select-model-primitives` mirrors Aurelia forms docs/tests where `option model.bind="null"`, boolean option models,
   object-valued option models, and nullable radio `model.bind` values are framework-valid. It preserves primitive
@@ -253,6 +279,12 @@ still be realistic app code rather than artificial parser torture cases.
   recursive rendering needs parent-to-child bound controller values, the static evaluator needs method-call `this`
   binding, and exact object literals should return `undefined` for absent properties instead of widening into unknown
   object shape.
+- `recursive-custom-element-surfaces` captures a self-recursive custom element whose child render is guarded by
+  runtime state. It preserves the finite aggregate rendering boundary: the first recursive surface should create
+  custom-element and synthetic-view controller rows, carry parent-to-child bindable flow through the active
+  synthetic-view scope, preserve getter observed-dependency provenance, and then stop at a controller-level
+  `recursive-hydration-boundary` instead of opening an unbounded render seam. It is covered by
+  `contract:recursive-rendering`.
 - `runtime-html-spread-renderer-errors` captures a valid custom-element bindable spread beside `$element.spread` on the
   same custom element. It preserves the `SpreadValueRenderer` dispatch failure for `spreading_invalid_target` /
   `AUR0820` without making invalid spread targets part of generated authoring recipes.

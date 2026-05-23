@@ -29,15 +29,20 @@ import {
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import type { Container } from '../di/container.js';
 import type { TemplateResourceScope } from './compiler-world.js';
+import { findVisibleTemplateResource } from './compiler-resource-lookup.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
 import { runtimeAcceptedBindingExpressionAstForParse } from './expression-parse-projection.js';
 import { TemplateProductDetails } from './product-details.js';
-import type { RuntimeBinding } from './runtime-binding.js';
+import {
+  PropertyBinding,
+  type RuntimeBinding,
+} from './runtime-binding.js';
 import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-expression-products.js';
 import { appendRuntimeBindingProductValue } from './runtime-binding-product-index.js';
 import { sourceAddressForRuntimeExpressionSpan } from './runtime-expression-source-address.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import type { TemplateExpressionParse } from './value-site.js';
+import { TemplateBindingMode } from './instruction-ir.js';
 import {
   RuntimeValueConverterApplication,
   RuntimeValueConverterApplicationPhase,
@@ -47,6 +52,9 @@ import {
   SanitizeValueConverter,
   type BuiltInValueConverterInvocationIssue,
 } from './runtime-value-converter.js';
+import {
+  effectivePropertyBindingMode,
+} from './runtime-binding-mode-behavior.js';
 
 export class RuntimeValueConverterMaterializationRequest {
   constructor(
@@ -99,7 +107,7 @@ class RuntimeValueConverterSourceSet {
 
 class RuntimeValueConverterPublication {
   constructor(
-    readonly application: RuntimeValueConverterApplication,
+    readonly applications: readonly RuntimeValueConverterApplication[],
     readonly issues: readonly RuntimeValueConverterIssue[],
     readonly records: readonly KernelStoreRecord[],
   ) {}
@@ -155,7 +163,7 @@ export class RuntimeValueConverterMaterializer {
           if (publication == null) {
             continue;
           }
-          applications.push(publication.application);
+          applications.push(...publication.applications);
           issues.push(...publication.issues);
           records.push(...publication.records);
         }
@@ -183,19 +191,27 @@ export class RuntimeValueConverterMaterializer {
       binding.sourceAddressHandle,
       converter.name.span,
     );
-    const application = this.applicationProduct(local, binding, converter, expressionSource.handle, source);
-    const issueProduct = issue == null
+    const applications = valueConverterApplicationPhasesForBinding(this.store, binding, input.resourceScope).map((phase) =>
+      this.applicationProduct(`${local}:phase:${phase}`, binding, converter, phase, expressionSource.handle, source)
+    );
+    const toViewApplication = applications.find((application) =>
+      application.phase === RuntimeValueConverterApplicationPhase.ToView
+    ) ?? null;
+    const issueProduct = issue == null || toViewApplication == null
       ? null
-      : this.issueProduct(`${local}:issue:${issue.issueKind}`, application, binding, issue, expressionSource.handle, source);
+      : this.issueProduct(`${local}:issue:${issue.issueKind}`, toViewApplication, binding, issue, expressionSource.handle, source);
+    const issueRecords = issueProduct == null || toViewApplication == null
+      ? []
+      : recordsForIssue(issueProduct, toViewApplication.identityHandle, source.provenanceHandle);
     return new RuntimeValueConverterPublication(
-      application,
+      applications,
       issueProduct == null ? [] : [issueProduct],
       [
         ...expressionSource.records,
-        ...recordsForApplication(application, binding.identityHandle, source.provenanceHandle),
-        ...(issueProduct == null
-          ? []
-          : recordsForIssue(issueProduct, application.identityHandle, source.provenanceHandle)),
+        ...applications.flatMap((application) =>
+          recordsForApplication(application, binding.identityHandle, source.provenanceHandle)
+        ),
+        ...issueRecords,
       ],
     );
   }
@@ -218,6 +234,7 @@ export class RuntimeValueConverterMaterializer {
     local: string,
     binding: RuntimeBinding,
     converter: ValueConverterExpression,
+    phase: RuntimeValueConverterApplicationPhase,
     sourceAddressHandle: AddressHandle | null,
     source: RuntimeValueConverterSourceSet,
   ): RuntimeValueConverterApplication {
@@ -225,7 +242,7 @@ export class RuntimeValueConverterMaterializer {
       this.store.handles.product(local),
       this.store.handles.identity(local),
       binding.toReference(),
-      RuntimeValueConverterApplicationPhase.ToView,
+      phase,
       converter.name.name,
       converter.args.length,
       sourceAddressHandle,
@@ -344,14 +361,32 @@ function valueConverterExpressions(expression: ExpressionAstNode): readonly Valu
   }
 }
 
+function valueConverterApplicationPhasesForBinding(
+  store: KernelStore,
+  binding: RuntimeBinding,
+  resourceScope: TemplateResourceScope | null,
+): readonly RuntimeValueConverterApplicationPhase[] {
+  if (!(binding instanceof PropertyBinding)) {
+    return [RuntimeValueConverterApplicationPhase.ToView];
+  }
+  switch (effectivePropertyBindingMode(store, binding, resourceScope)) {
+    case TemplateBindingMode.FromView:
+      return [RuntimeValueConverterApplicationPhase.FromView];
+    case TemplateBindingMode.TwoWay:
+      return [RuntimeValueConverterApplicationPhase.ToView, RuntimeValueConverterApplicationPhase.FromView];
+    case TemplateBindingMode.OneTime:
+    case TemplateBindingMode.ToView:
+    case TemplateBindingMode.Default:
+    case TemplateBindingMode.Open:
+      return [RuntimeValueConverterApplicationPhase.ToView];
+  }
+}
+
 function findValueConverterResource(
   resourceScope: TemplateResourceScope | null,
   name: string,
 ): TemplateVisibleResource | null {
-  return resourceScope?.resources.find((resource) =>
-    resource.resourceKind === ResourceDefinitionKind.ValueConverter
-    && (resource.name === name || resource.aliases.includes(name))
-  ) ?? null;
+  return findVisibleTemplateResource(resourceScope, ResourceDefinitionKind.ValueConverter, name);
 }
 
 function hasResolverForInterface(

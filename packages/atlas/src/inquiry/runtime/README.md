@@ -107,6 +107,10 @@ This is not a compatibility layer for old readers and not the default caller sur
   Route-plan memory previews use route memory anchors as the admission gate, then let the active query reorder the
   admitted records and next actions; if an exact pressure phrase routes correctly but previews the wrong frontier,
   improve the durable memory wording instead of widening fuzzy route matching.
+  Template overlay integration has its own route because generated TypeScript overlays sit at the join of template
+  scopes, binding/data-flow, observer channels, i18n owner surfaces, checker diagnostics, exact source provenance, and
+  future edit affordances. Overlay work should start there when the question is completeness, split-brain risk,
+  typechecking, diagnostics, rename, MCP, or LSP readiness.
   The `workset` projection joins the current git worktree to route source/doc/path anchors and memory shards
   so autonomous checkpoints can see which typed routes the dirty set actually touches. Workset-matched route rows use
   `workset-structural` authority so their route plans do not look like orientation-only catalog defaults.
@@ -401,7 +405,9 @@ This is not a compatibility layer for old readers and not the default caller sur
   flow-to-entity links, and normalized
   observation relationships derived from rendering plus observer-locator internals. Binding lookup and flow-to-entity semantic hops are emitted through
   declared semantic route specs with explicit source/checker basis. Narrow page projections intentionally compute only their
-  own row family; use `summary` when the full observation rollup is worth paying for. The dependency-circuit projection
+  own row family; use `summary` when the full observation rollup is worth paying for. The `binding-lookups` projection
+  names binding classes that call observer/accessor APIs; use `flow-sites` or `observer-locator-decisions` when the
+  question is about concrete runtime-html observer classes such as `CheckedObserver` or `SelectValueObserver`. The dependency-circuit projection
   keeps ordinary `astEvaluate` access reads, array collection reads, arrow callback body evaluation with the captured
   connectable, ProxyObservable traps, watcher/effect boundaries, and ObserverLocator decisions in one routeable view.
   Prefer that before manually reading framework observation source for callback/proxy/getter category questions.

@@ -60,7 +60,7 @@ export function readApplicationServiceInteractionSites(
   const targetBySourceAndClass = serviceTargetsBySourceAndClass(targets);
   const injectedMemberTargets = serviceTargetsByInjectedMember(injections, targetBySourceAndClass);
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileServiceInteractionSites(

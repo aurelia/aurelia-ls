@@ -51,6 +51,7 @@ import {
 import {
   atlasMemoryConsultRecordNextAction,
   atlasMemoryNextActionRows,
+  compareAtlasMemoryNextActionRowsByRank,
   type AtlasMemoryNextActionRow,
 } from "./atlas-memory-next-actions.js";
 import type { SourceProject } from "../../source/index.js";
@@ -295,18 +296,30 @@ function atlasMemoryNextRowsForInquiry(
   analysis: AtlasMemoryAnalysis,
   inquiry: Inquiry,
 ): readonly AtlasMemoryNextActionRow[] {
-  const rows = filterNextActions(atlasMemoryNextActionRows(analysis), inquiry);
-  if (rows.length > 0) {
-    return rows;
-  }
+  const computedRows = atlasMemoryNextActionRows(analysis);
+  return filterNextActions([
+    ...computedRows,
+    ...consultRecordNextRowsForInquiry(analysis, inquiry, computedRows),
+  ], inquiry);
+}
+
+function consultRecordNextRowsForInquiry(
+  analysis: AtlasMemoryAnalysis,
+  inquiry: Inquiry,
+  computedRows: readonly AtlasMemoryNextActionRow[],
+): readonly AtlasMemoryNextActionRow[] {
   const recordId = inquiryStringFilter(inquiry, "recordId");
   if (recordId === undefined && !hasConsultableMemoryFilter(inquiry)) {
-    return rows;
+    return [];
   }
+  const computedRecordIds = new Set(computedRows.flatMap((row) =>
+    row.record === undefined ? [] : [row.record.id]
+  ));
   return filterMemoryRows(analysis.records, inquiry)
     .filter((row) => row.nextActionPolicy !== "hidden")
+    .filter((row) => !computedRecordIds.has(row.id))
     .map(atlasMemoryConsultRecordNextAction)
-    .sort(compareMemoryNextActionRowsByRank);
+    .sort(compareAtlasMemoryNextActionRowsByRank);
 }
 
 function hasConsultableMemoryFilter(inquiry: Inquiry): boolean {
@@ -323,13 +336,6 @@ function hasConsultableMemoryFilter(inquiry: Inquiry): boolean {
       "symbolName",
       "nextActionPolicy",
     ].some((key) => inquiryStringFilter(inquiry, key) !== undefined);
-}
-
-function compareMemoryNextActionRowsByRank(
-  left: AtlasMemoryNextActionRow,
-  right: AtlasMemoryNextActionRow,
-): number {
-  return right.rank - left.rank || left.id.localeCompare(right.id);
 }
 
 function backingRecordsForNextActions(

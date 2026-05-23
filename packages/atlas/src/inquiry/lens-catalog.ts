@@ -3098,7 +3098,7 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "binding-lookups",
         summary:
-          "Binding class observer/accessor lookup rows through IObserverLocator-style APIs.",
+          "Binding class observer/accessor API-call rows through IObserverLocator-style APIs; use flow-sites or observer-locator-decisions for concrete CheckedObserver/SelectValueObserver behavior.",
       },
       {
         id: "binding-setups",
@@ -3113,7 +3113,7 @@ export const LensCatalog: readonly LensSpec[] = [
       {
         id: "flow-sites",
         summary:
-          "Source-backed observation flow sites inside locator, dirty-checker, collection, connectable, computed-observer, controlled-computed-observer, watcher, effect, and slot-watcher surfaces.",
+          "Source-backed observation flow sites inside locator, runtime-html node observers, dirty-checker, collection, connectable, computed-observer, controlled-computed-observer, watcher, effect, and slot-watcher surfaces.",
       },
       {
         id: "dependency-circuit",

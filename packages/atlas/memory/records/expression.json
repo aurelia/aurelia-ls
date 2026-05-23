@@ -299,6 +299,7 @@
         "For template expressions inside interpolation holes, prefer robust parser state/lookahead over permissive EOF shortcuts.",
         "Use expression-boundary-scanner for interpolation opener and close-boundary logic so template value-site classification and interpolation publication do not drift.",
         "Interpolation opener detection follows Aurelia's odd-backslash escape law, and text/template chunks should spend expression-scanner cooking helpers before becoming Interpolation.parts or TemplateExpression.cooked.",
+        "For `new` expressions, parse member/keyed constructor targets before constructor arguments, then resume call/tag tails only after the NewExpression closes. Do not let `new Foo()` become a NewExpression over CallScope; that leaks into runtime AST diagnostics as a false ordinary call.",
         "parse-result-inspection owns reusable AST traversal primitives for member-owner, member-name, visitor, and subtree kind checks; extend that traversal when a new expression kind appears instead of adding another local recursive switch."
       ],
       "anchors": [
@@ -519,7 +520,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-12"
+      "updatedAt": "2026-05-23"
     },
     {
       "id": "frontier:expression-parse-result-inspection",

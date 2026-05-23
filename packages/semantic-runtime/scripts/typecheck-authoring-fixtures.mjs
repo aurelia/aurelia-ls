@@ -16,7 +16,7 @@ try {
   );
   const fixtureRoots = requestedRoots.length > 0
     ? requestedRoots
-    : await generatedAuthoringFixtureRoots();
+    : await defaultAuthoringFixtureRoots();
   const pathMappings = await aureliaPackagePathMappings();
   const results = [];
 
@@ -40,10 +40,10 @@ try {
   await rm(tempRoot, { recursive: true, force: true });
 }
 
-async function generatedAuthoringFixtureRoots() {
+async function defaultAuthoringFixtureRoots() {
   const entries = await readdir(fixtureRoot, { withFileTypes: true });
   return entries
-    .filter((entry) => entry.isDirectory() && entry.name.startsWith('generated-'))
+    .filter((entry) => entry.isDirectory() && (entry.name.startsWith('generated-') || entry.name === 'storefront'))
     .map((entry) => path.join(fixtureRoot, entry.name));
 }
 

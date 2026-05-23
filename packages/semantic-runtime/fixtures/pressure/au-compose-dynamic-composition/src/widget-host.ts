@@ -1,4 +1,5 @@
-import { bindable, customElement, type Constructable } from '@aurelia/runtime-html';
+import { type Constructable } from '@aurelia/kernel';
+import { bindable, customElement } from '@aurelia/runtime-html';
 import { ChartWidget } from './widgets/chart-widget';
 import { InventoryWidget } from './widgets/inventory-widget';
 import template from './widget-host.html';

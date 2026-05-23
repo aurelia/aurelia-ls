@@ -196,7 +196,7 @@ export function entriesFromObjectProperties(
     entries: [...properties.values()].map((property) => ({
       name: property.name,
       value: property.value,
-      expression: ts.isExpression(property.node) ? property.node : null,
+      expression: property.node != null && ts.isExpression(property.node) ? property.node : null,
     })),
     mayHaveUnknownEntries: mayHaveUnknownProperties,
   };

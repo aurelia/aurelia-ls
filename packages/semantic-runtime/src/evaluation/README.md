@@ -107,6 +107,12 @@ configuration values to degrade when a recognizer asks a second question about t
 `StaticEvaluationExpressionReader` keeps one evaluator per reader for those follow-up reads, matching the
 binding-source evaluation frame's per-source evaluator lifetime so guardrails and seam checkpoints do not reset for
 every property or target probe.
+Product runtime hosts may expose framework-shaped intrinsics only at the host boundary. Aurelia's host handles a direct
+ambient `resolve(ClassKey)` call when the evaluator is already in an activation-like frame with `this`, and it asks the
+generic class-instantiation substrate to build that class value. Module/static contexts still fall through to the normal
+external-boundary path so DI issue publication can report absent active-container sites. Registered/interface-key lookup
+is handled by the binding-source activation context when an active modeled container is available; keep that DI-world
+join out of the generic static evaluator.
 `StaticEvaluationPolicy` also owns evaluator guardrails. Statement, depth, loop, and intrinsic-callback budgets are
 there to prevent runaway interpretation of arbitrary source, not to express user-facing query pagination. Intrinsics
 that speculate on a receiver or callback should use the evaluator checkpoint/restore lane so an abandoned attempt
@@ -149,6 +155,9 @@ The profile also reports evaluated-source composition: evaluated/open counts, pr
 counts, TS/JS versus asset source counts, and source-text characters per bucket. Use that before changing package-source
 mapping or root admission policy; a large evaluated-source count only becomes actionable once the source mass is
 attributed to app-authored code, source-shipped package code, workspace-external source, or asset modules.
+`module-graph.ts` is runtime-shaped, not TypeChecker-shaped. Type-only imports and type-only re-exports are not runtime
+edges and must stay out of the evaluator import/export graph. Otherwise ordinary type cycles can become artificial
+runtime cycles and turn closed class values into open import bindings during DI/source-value activation.
 
 `declaration-instantiation.ts` owns ECMAScript declaration-instantiation shape for a source file or interpreted block:
 import bindings, function hoists, and top-level class bindings. Keep this separate from statement execution so module
@@ -179,18 +188,39 @@ boundary back into `StaticEvaluator` for expression defaults, computed property 
 publication; keep it as environment-construction substrate rather than a feature-local destructuring helper.
 
 `operators.ts` owns primitive ECMAScript value algebra that does not need evaluator state. Keep pure operator semantics
-there instead of adding bottom-of-evaluator helper islands.
+there instead of adding bottom-of-evaluator helper islands. Binding-source value evaluation can reuse this same pure
+operator table after it has resolved Aurelia `Scope` reads; keep boundary-hole string-pattern handling in the
+binding-source layer, but keep ordinary equality/comparison/arithmetic closure here. Loose `==` / `!=` equality is
+primitive/nullish ECMAScript semantics, not a strict-equality alias: `null == undefined`, boolean-number coercion, and
+string-number comparison belong here so source-level guards such as `value == null ? ... : ...` close the same way for
+static evaluation and binding-source reads. Strict `===` / `!==` should remain exact evaluator-value equality unless
+the ECMAScript value model grows a real object/ToPrimitive lane.
+
+`representative-values.ts` owns conservative value summaries for places where semantic-runtime intentionally does not
+materialize every possible runtime instance. Repeated template views and speculative conditional branches can keep exact
+values only when every lane agrees, collapse string-like lanes to an `EvaluationStringPatternValue`, keep common object
+properties, and fall back to a binding-scope boundary for unrelated lanes. This is a shared evaluator primitive, not a
+router or template shortcut. Speculative branch evaluation should checkpoint and discard abandoned open seams; keeping
+statement-budget cost for a successful representative is intentional because the evaluator did real work to earn that
+precision.
 
 `property-access.ts` owns ECMAScript-shaped property and element access over evaluator values, including own-property
 read/write, getter invocation through the evaluator host, module namespace lookups, collection/string size and prototype
 boundary values, and RegExp instance fields. Keep recursion, policy, and unknown/open-seam construction on
 `StaticEvaluator`; keep property receiver/key semantics in this substrate instead of duplicating object access in
 recognizers.
+`EvaluationObjectProperty.node` is nullable because not every evaluator value is born from a TypeScript AST node:
+Aurelia binding-source evaluation can produce object values from template expression ASTs. Code that needs a TS-backed
+property declaration or initializer must check for a node explicitly instead of treating object values as implicitly
+TypeScript-authored.
 
 ## Watchpoints
 
 - Import bindings start as evaluator-local unknown values. They should become seams only when a materializer or
   expression actually depends on the imported value and module linking cannot close it.
+- Type-only imports and type-only re-exports are erased from the evaluator module graph. If a local class import opens
+  through a type-only cycle, inspect `readEvaluationModuleRecord(...)` before weakening DI activation, recipe expected
+  effects, or runtime composition closure.
 - Side-effect imports are execution edges, not value bindings. Local side-effect targets should be evaluated for their
   module-level declarations and effects, while unresolved relative targets should remain module-resolution seams and
   external side-effect package imports should stay boundaries rather than synthetic values.

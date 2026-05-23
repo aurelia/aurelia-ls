@@ -1,4 +1,4 @@
-import { customElement, type ICompositionController } from '@aurelia/runtime-html';
+import { AuCompose, customElement } from '@aurelia/runtime-html';
 import { ChartWidget } from './widgets/chart-widget';
 import { InventoryWidget } from './widgets/inventory-widget';
 import { WidgetHost, type WidgetKit } from './widget-host';
@@ -31,7 +31,7 @@ export class ComposeDashboardApp {
   };
   readonly summaryClass = SummaryPanel;
   readonly selectedWidgetId = 'stock';
-  composition: ICompositionController | null = null;
+  composition: AuCompose['composition'] | null = null;
 
   readonly kit: WidgetKit = {
     widgets: [

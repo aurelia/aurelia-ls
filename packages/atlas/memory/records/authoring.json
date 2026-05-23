@@ -63,6 +63,83 @@
       "updatedAt": "2026-05-21"
     },
     {
+      "id": "intent:app-builder-pattern-ontology",
+      "kind": "intentional-shape",
+      "domains": [
+        "semantic-runtime",
+        "app-builder",
+        "authoring",
+        "ontology",
+        "fixtures",
+        "mcp"
+      ],
+      "summary": "The app-builder direction is a composable pattern ontology for reusable app mechanics, not a catalog of example-domain recipes.",
+      "rationale": "The authoring package currently still carries fixture-shaped recipe gravity: domain names, sample data, presentation, and reference-app source can masquerade as reusable authoring ontology. Durable Atlas guidance should preserve the north-star distinction without depending on the temporary autonomous-run scaffold: reusable mechanics belong in app-builder/authoring lowering, while reference domains belong in fixture packs.",
+      "guidance": [
+        "Start from app-building pattern levels before adding or renaming authoring recipes: source/project shape, application frame, feature surface, state/domain/integration boundary, interaction mechanism, source-plan policy, and verification/effect promise.",
+        "Pattern names should describe reusable mechanics such as `draft-form`, `routed-app-shell`, `resource-index`, `collection-card-browser`, `routed-collection-detail`, `di-owned-app-state`, `native-select-value-channel`, or `route-parameter-selection`, not sample domains.",
+        "Example domains such as storefront, support inbox, document library, inventory admin, device list, course catalog, settings portal, project board, repository browser, and reporting dashboard are reference fixtures unless they introduce a reusable mechanic that cannot be expressed by existing patterns.",
+        "Keep app-builder direction in durable Atlas memory and Work Router routes. Scratch run documents may reference Atlas while they are useful, but Atlas should not depend on `.temp` autonomous-run files as authority.",
+        "Treat `catalog-storefront` as the current ontology-drift canary. Extract collection/card browsing, service-backed loading, local object handoff, routed collection detail, field rendering, class/style bindings, and domain getter observation into neutral pattern identities; move product/storefront copy, CSS, sample data, commerce presentation, and other reference-domain material to fixtures.",
+        "Do not let recipe-key inertia multiply combinations such as routed/localized/validated/service-backed variants when a pattern composition can represent the same mechanics across orthogonal axes.",
+        "Source-plan policy is part of the ontology: `apply-as-source-start` is caller-specific starter source, `adapt-before-emitting` is transfer material, `merge-selectively` is companion pattern material, and `analysis-pressure-only` is not public app source.",
+        "Expected semantic effects are the verification contract for lowered Aurelia authoring. If a pattern composition cannot say what facts reopening the generated app should prove, the pattern is still too textual.",
+        "The eventual `packages/semantic-runtime/src/app-builder/` layer should be framework-light or syntax-neutral first, then lower into Aurelia-specific authoring source plans and expected effects. Existing `src/authoring` files are the pressure surface until that home exists.",
+        "Public MCP guidance should expose the smallest pattern composition and source-parameter contract that satisfies the user intent, not a reference-app dump.",
+        "When Atlas or semantic-runtime finds a hard-coded app domain inside authoring, route it through app-builder/reference-domain separation before adding more local parameters."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/source-plan.ts",
+          "symbolName": "AuthoringSourcePattern",
+          "summary": "Current source-plan boundary between reusable architecture declarations and concrete source text."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/source-pattern-modules.ts",
+          "symbolName": "SourcePatternModules",
+          "summary": "Current reusable architecture capability vocabulary carried by source plans."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/expected-effect.ts",
+          "symbolName": "ExpectedSemanticEffect",
+          "summary": "Verification contract for lowered authoring and generated fixtures."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/authoring/catalog-storefront-source-plan.ts",
+          "symbolName": "catalogStorefrontSourcePlan",
+          "summary": "Ontology-drift canary: domain/reference material currently lives in authoring and should be split from reusable mechanics."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/authoring",
+          "summary": "Generated recommendable fixture lane and current home of generated recipe outputs."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure",
+          "summary": "Analyzer pressure fixture lane that should remain distinct from recommendable generated source."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/authoring/source-plan.ts",
+          "symbolName": "AuthoringSourcePattern"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/authoring/expected-effect.ts",
+          "symbolName": "ExpectedSemanticEffect"
+        }
+      ],
+      "createdAt": "2026-05-23",
+      "updatedAt": "2026-05-23"
+    },
+    {
       "id": "frontier:expected-semantic-effect",
       "kind": "pressure-frontier",
       "domains": [
@@ -226,9 +303,9 @@
         "AuCompose component values that are statically visible plain objects, instances, boundary objects, or non-resource constructables should resolve as `object-view-model`, not as an open custom-element lookup failure. Object-view-model rows reuse the TypeChecker-backed `activate(model)` assignability path, including constructable inputs whose activate method lives on the instance type. Custom-element candidate rows additionally own compiled-template and candidate-runtime-analysis coverage.",
         "Shared recommendable app plan steps live in `recipe-plan-steps.ts`; use those helpers for stable project files, entrypoint, root component, stylesheet, external template, plugin, plain domain model, state model, service, route, component, template binding, and verification operation-to-step boundaries, then keep recipe-specific expected effects and route/form discriminator choices local to the concrete recipe.",
         "`service-backed-form` is now service-backed state rather than a direct component-facing service facade: generated components resolve DI state, state resolves a service/repository boundary for loading and submission side effects, expected effects prove component-to-state binding handoff plus state-to-service calls, and direct component-to-service facades should be treated as observed app shape or contrastive pressure rather than the recommendable default.",
-        "`catalog-storefront` is the first generated app-building recipe beyond forms: generated components use local typed product-object handoff for the list/card boundary, DI-owned composed state, a state-owned service boundary, direct `state.*` and `product.*` bindings, native search/select/checked filter controls bound directly to nested catalog state, plain getter projections over entity lookups and collection-derived state, service interaction bindings, `state-composition` effects, row-backed conditional/repeat runtime-controller effects, promise owner plus linked `pending`/`then`/`catch` runtime-controller effects, switch owner plus linked `case`/`default-case` runtime-controller effects, class-token interpolation, style-rule interpolation, per-class `.class` toggles, per-property `.style` bindings, and zero-open-seam verification. Its expected effects prove direct DI-state projection joins, product-object component binding data flow, product-domain binding data flow, filter value/checked/select target access, value channels, data flow, debounce behavior, direct filter observed dependencies, plain getter `ComputedObserver` source rows plus observed proxy collection dependency rows, class/style target access, value-channel, data-flow, and narrow style-binding taste rows instead of only an orientation taste. Route/lazy selection can still use scalar identity when navigation or loading owns the boundary.",
+        "`catalog-storefront` is a historical generated-app canary, not a durable public recipe identity. The reusable mechanics it exposed are collection/card browsing, service-backed loading, local typed object handoff, DI-owned composed state, direct `state.*` and domain-object bindings, native search/select/checked filter controls, plain getter projections, service interaction bindings, `state-composition` effects, row-backed template-controller effects, promise/switch controller pressure, class/style bindings, and zero-open-seam verification. Product/storefront naming, commerce copy, CSS, sample data, and presentation belong in reference-domain fixtures. Its reusable expected effects should migrate toward neutral collection-browser/resource-index/card-browser patterns while still proving DI-state projection joins, object component binding data flow, domain binding data flow, filter value/checked/select target access, value channels, debounce behavior, observed dependencies, ComputedObserver source rows, class/style target access, and style-binding taste rows. Route/lazy selection can still use scalar identity when navigation or loading owns the boundary.",
         "`routed-app-shell` is the generic route-shell recipe: it registers RouterConfiguration, declares decorator route config, emits static load links plus a named au-viewport, reads route params/query values through IRouteContext, and verifies router options, route config, route recognizer products, query/fragment propagation, route-node aggregation, RouteContext/viewport/component-agent rows, routeable component roles, and zero open seams without importing a form, catalog, or data-table domain model. Use it as the MCP pattern-reference companion when a routed feature starts from another non-routed recipe.",
-        "`routed-catalog-storefront` is the first larger routed app-building recipe: it composes catalog-storefront state/service/component/filter patterns with list/detail route config, `products/:productId`, root static detail navigation with query and fragment values, data-driven product-card links, `IRouteContext` parameter reads, router `activeClass` for class-only active link styling, route-node/viewport/component-agent effects, local product-object card handoff, route-parameter selected detail state, direct product-domain detail/card bindings, and the catalog binding/observation/service-interaction contract. Source-parameterized compact routed-catalog starts should stay `apply-as-source-start` and presentation-free while preserving route-detail read-by-id and row detail links; unparameterized/rich plans remain reference instantiations for card object handoff, selection, stock/badge filters, promise/switch controllers, and class/style pressure. Reusable routed child components should use root-relative or parent-relative route instructions deliberately when linking outside their local route context. Use it as the first MCP-facing recipe canary for larger app scaffolding, while treating broader route-link closure, `load.active.bind` state handoff, guards, lifecycle hooks, and deeper viewport parity as router substrate pressure unless the app genuinely needs those semantics.",
+        "`routed-catalog-storefront` is the routed variant of the same historical reference-domain canary. Preserve the reusable mechanics as `collection-card-browser` plus `routed-collection-detail`, route config, route parameter selection, data-driven row/detail links, `IRouteContext` parameter reads, active-link styling, route-node/viewport/component-agent effects, local object handoff, and route-owned detail state. Product route names, storefront copy, product-card presentation, and rich stock/badge/sample data should migrate to reference fixtures. Source-parameterized compact routed collection starts should stay `apply-as-source-start` and presentation-free while preserving route-detail read-by-id and row detail links; unparameterized/rich plans remain reference instantiations for object handoff, selection, promise/switch controllers, and class/style pressure. Broader route-link closure, `load.active.bind` state handoff, guards, lifecycle hooks, and deeper viewport parity remain router substrate pressure unless the app genuinely needs those semantics.",
         "`searchable-data-table` is the generated low-boilerplate data-grid recipe: it uses a table component that resolves DI-owned composed state, state-owned service-backed loading, direct `state.*` and `user.*` template reads, native `value.bind`/select option `model.bind`/checkbox `checked.bind` channels, `& debounce`, keyed repeats, class-token/class-toggle/style channels, and ordinary getter ComputedObserver rows for filter/sort/page projections. Selection deliberately uses `Set<number>` because the framework CheckedObserver supports Array, Set, and Map mutation and the template compiler reorders checked/model/value/matcher instructions so the checked observer sees element model identity. Use it as the MCP-facing search/filter/sort/pagination/selection canary when authoring larger list-management surfaces; do not replace those value channels with manual DOM event plumbing or add view-model forwarding accessors merely to shorten state paths. Built-in template-controller value channels from `if`/`repeat` are template-composition evidence, not custom-control-binding taste.",
         "`routed-searchable-data-table` composes the data-grid recipe with common list/detail routing: the root registers RouterConfiguration, the list route hosts the table, row links use data-driven `load.bind` route params, the detail route owns IRouteContext parameter/query adaptation, and both routes share the same DI-owned table state/service loading boundary. Source-parameterized compact routed-table starts should stay `apply-as-source-start` and presentation-free while preserving row detail links; unparameterized/rich plans remain reference instantiations for search/filter/sort/pagination/selection and class/style pressure. Use it as the MCP-facing management-feature canary when search/filter/sort/pagination and route-owned detail selection must be planned together without forwarding getters or duplicated state.",
         "`composed-dashboard` is the first generated dynamic-composition recipe: it uses DI-owned widget state, repeated dashboard cards, a TypeChecker-visible union of widget component classes, `AuCompose` component/model handoff, async flush mode, a scoped template-only composition summary, promise-valued component/template inputs, a static string-component preview for closed-branch composed child-controller handoff, `runtime-composition` expected effects, row-backed repeat runtime-controller effects, direct activated-model widget template reads, source-backed getter-observation effects, and the `dynamic-component-composition` taste. Its runtime-composition effects check `activationHandoffKinds=model-assignable`, static/defaulted scope/flush/tag context fields, direct/promise/absent/open input fulfillment, `composition`/`composing` from-view binding presence, and `composedChildControllerCount=1`, so generated fixtures prove the widget model type reaches `activate(model)`, promise-valued inputs are unwrapped through the evaluator lane, static component handoff creates a modeled child controller, template-only composition inputs are modeled rather than only proving component lookup, and widget components bind through `model.items` / `model.points` instead of generating one-hop forwarding getters.",
@@ -477,6 +554,7 @@
         "Separate recommendable generated fixtures from stress pressure fixtures, then compare expected semantic effects against reopened app facts.",
         "Repair clusters must split by concrete action-target source when one exists; high-volume weak-owner diagnostics that all display as any still need one source-owner-type-strengthening cluster per actionable owner surface.",
         "For missing scope-slot typing, use the evaluator's open subject as the repair action target. The diagnostic member span and selected member names are evidence; the scope slot is the surface to repair.",
+        "Open-seam repair kind, runtime boundary kind, and runtime intent kind should derive from the same typed reason vocabulary. If a reason kind already maps to a boundary/intent such as select-multiple-state, binding-source-resource, or binding-source-type, it should not fall through to generic semantic-substrate repair pressure.",
         "If orientation cannot explain a recipe or repair gap, improve semantic-runtime substrate or Atlas visibility before adding generator-local policy."
       ],
       "anchors": [

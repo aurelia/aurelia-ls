@@ -2,6 +2,9 @@ import type { BindingBehaviorExpression } from '../expression/ast.js';
 import type { BindingScope } from '../configuration/scope.js';
 import { BindingScope as RuntimeBindingScope } from '../configuration/scope.js';
 import {
+  BindingScopeCreator,
+} from '../configuration/scope.js';
+import {
   BindingScopeMaterializer,
   type BindingScopeConstructionEmission,
 } from '../configuration/scope-materializer.js';
@@ -69,7 +72,7 @@ export class StateBindingScopeProjector {
     sourceAddressHandle: AddressHandle | null,
     ownerProductHandle: ProductHandle | null = null,
     ownerIdentityHandle: IdentityHandle | null = null,
-    scopeEffectOwnerProductHandles: readonly ProductHandle[] = [],
+    scopeCreators: readonly BindingScopeCreator[] = [],
   ): StateBindingScopeProjection {
     if (storeName === undefined) {
       return new StateBindingScopeProjection(
@@ -103,7 +106,7 @@ export class StateBindingScopeProjector {
       parent,
       stateType: configuredStore.initialStateType,
       sourceAddressHandle,
-      scopeEffectOwnerProductHandles,
+      scopeCreators,
     }));
     return new StateBindingScopeProjection(emission.scope, configuredStore, null, emission);
   }

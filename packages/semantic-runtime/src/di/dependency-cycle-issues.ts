@@ -202,7 +202,7 @@ function readDependencyCycleGraph(
   const classNames = new Set<string>();
   const singletonProviders = new Map<string, SingletonProvider>();
   for (const source of project.sourceFiles) {
-    const sourceFile = typeSystem.readSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     if (sourceFile == null) {
       continue;
     }

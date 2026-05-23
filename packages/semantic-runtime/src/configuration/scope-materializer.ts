@@ -29,6 +29,7 @@ import { KernelVocabulary } from '../kernel/vocabulary.js';
 import { ConfigurationProductDetails } from './product-details.js';
 import { BindingScopeSlotProjector } from './binding-scope-slot-projector.js';
 import {
+  BindingScopeCreatorKind,
   BindingContext,
   BindingContextSlotDraft,
   BindingScope,
@@ -257,6 +258,7 @@ export class BindingScopeMaterializer {
       input.ownerKind,
       source.sourceAddressHandle,
       [],
+      input.scopeCreators,
     );
   }
 
@@ -420,12 +422,13 @@ export class BindingScopeMaterializer {
     scope: BindingScope,
     provenanceHandle: ProvenanceHandle,
   ): readonly SemanticClaim[] {
-    return input.scopeEffectOwnerProductHandles.flatMap((ownerProductHandle, index) =>
-      this.isScopeEffectProduct(ownerProductHandle)
+    return input.scopeCreators.flatMap((creator, index) =>
+      creator.creatorKind === BindingScopeCreatorKind.RuntimeBindingScopeEffect
+      && this.isScopeEffectProduct(creator.productHandle)
         ? [
           new SemanticClaim(
             this.store.handles.claim(`binding-scope:${local}:scope-effect-owner:${index}`),
-            ownerProductHandle,
+            creator.productHandle,
             KernelVocabulary.Binding.ScopeEffectCreatesBindingScope.key,
             scope.productHandle,
             provenanceHandle,

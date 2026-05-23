@@ -322,6 +322,11 @@ selects the right semantic site.
 Cursor-info also carries template compiler diagnostics at the active cursor offset. Some malformed or recovery-heavy
 source positions are not completion sites and may still classify as `unknown`, but they should surface the exact
 framework-code diagnostic and syntax-rewrite suggestion instead of becoming a silent completion miss.
+Cursor-info also honors diagnostic projection as an inquiry cost switch. With `type-projection`, it can surface
+TypeScript overlay diagnostics whose mapped authored source contains the cursor, using the same public overlay
+diagnostic policy as file/app `TemplateDiagnostics`; with `available-products`, it stays on already materialized
+semantic rows. Keep this as one cursor-info diagnostic lane so hovers, MCP explanations, and LSP diagnostics agree on
+which authored span owns the issue.
 For app/file diagnostics, source text should be loaded from the admitted source-file address using workspace-root
 semantics. The selected app project may be nested below the workspace, while compiled template resources can also come
 from source-shipped package dependencies; resolving every address relative to the app project silently hides those

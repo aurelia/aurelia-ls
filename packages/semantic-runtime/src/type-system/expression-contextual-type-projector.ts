@@ -63,6 +63,8 @@ export class CheckerExpressionContextualTypeProjector {
       false,
       BindingScopeOwnerKind.SyntheticView,
       sourceAddressHandle,
+      [],
+      [],
     );
   }
 

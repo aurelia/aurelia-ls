@@ -1,4 +1,5 @@
 import ts from 'typescript';
+import type { ExpressionAstNode } from '../expression/ast.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import type { SourceSpan } from '../expression/source-span.js';
 import {
@@ -14,6 +15,7 @@ import {
   CheckerTypeMemberProjectionPolicy,
   type CheckerTypeProjectionRequest,
 } from '../type-system/checker-projector.js';
+import { readCheckerTypeShape } from '../type-system/checker-type-shape-access.js';
 import { CheckerAsyncTypeProjector } from '../type-system/checker-async-type-projector.js';
 import {
   CheckerExpressionTypeEvaluationResultKind,
@@ -21,7 +23,10 @@ import {
 } from '../type-system/expression-type-evaluation.js';
 import {
   checkerRepeatableElementTypeInfo,
+  checkerCollectionSymbolName,
+  checkerNumberIndexValueType,
 } from '../type-system/checker-related-types.js';
+import { checkerUnionType } from '../type-system/checker-type-union.js';
 import {
   CheckerBindingPatternLocalProjection,
   type CheckerBindingPatternLocalType,
@@ -48,6 +53,7 @@ import {
 import {
   type TemplateControllerValueTarget,
   templateControllerValueExpressionProductHandle,
+  templateControllerStaticValue,
 } from './template-controller-value.js';
 import type { TemplateScopeConstructionRequest } from './template-controller-scope-materializer.js';
 import {
@@ -300,6 +306,53 @@ export class TemplateScopeTypeProjector {
       : null;
   }
 
+  templateControllerObjectBindingContextType(
+    input: TemplateScopeConstructionRequest,
+    parent: BindingScope,
+    instruction: HydrateTemplateControllerInstruction,
+    localSuffix: string,
+  ): CheckerTypeReference | null {
+    const valueType = this.templateControllerValueType(input, parent, instruction, localSuffix);
+    return valueType == null
+      ? null
+      : this.nonNullishTypeReference(
+        valueType,
+        `${input.localKey}:scope:template-controller:${localSuffix}:value-context`,
+        instruction.sourceAddressHandle,
+      );
+  }
+
+  templateControllerMatchTypes(
+    input: TemplateScopeConstructionRequest,
+    parent: BindingScope,
+    instruction: HydrateTemplateControllerInstruction,
+    localSuffix: string,
+  ): readonly CheckerTypeReference[] | null {
+    const staticValue = templateControllerStaticValue(this.store, instruction);
+    if (staticValue != null) {
+      return [
+        this.literalTypeReference(
+          input,
+          staticValue,
+          `${input.localKey}:scope:template-controller:${localSuffix}:static-match`,
+          instruction.sourceAddressHandle,
+        ),
+      ].filter((reference): reference is CheckerTypeReference => reference != null);
+    }
+
+    const parse = this.readParse(templateControllerValueExpressionProductHandle(this.store, instruction));
+    const ast = parse == null ? null : completedTemplateExpressionAstForParse(parse);
+    return ast == null
+      ? null
+      : this.matchTypesForExpression(
+        input,
+        parent,
+        ast,
+        `${input.localKey}:scope:template-controller:${localSuffix}:match`,
+        instruction.sourceAddressHandle,
+      );
+  }
+
   promiseResultSlotDraft(
     input: TemplateScopeConstructionRequest,
     instruction: HydrateTemplateControllerInstruction,
@@ -352,6 +405,117 @@ export class TemplateScopeTypeProjector {
       `${input.localKey}:scope:template-controller:${localSuffix}:awaited`,
       promiseState.instruction.sourceAddressHandle,
     );
+  }
+
+  private nonNullishTypeReference(
+    reference: CheckerTypeReference,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    const shape = readCheckerTypeShape(this.store, reference);
+    const carrier = shape?.carrier ?? null;
+    if (carrier == null) {
+      return reference;
+    }
+    const narrowed = carrier.checker.getNonNullableType(carrier.type);
+    if (narrowed === carrier.type) {
+      return reference;
+    }
+    return this.typeProjector.ensureProjection({
+      localKey,
+      checker: carrier.checker,
+      type: narrowed,
+      origin: CheckerTypeProjectionOrigin.TypeChecker,
+      sourceNode: carrier.declarations[0] ?? null,
+      sourceAddressHandle,
+      display: carrier.checker.typeToString(narrowed),
+      memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
+    } satisfies CheckerTypeProjectionRequest).toReference();
+  }
+
+  private matchTypesForExpression(
+    input: TemplateScopeConstructionRequest,
+    parent: BindingScope,
+    expression: ExpressionAstNode,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): readonly CheckerTypeReference[] | null {
+    if (expression.$kind === 'Paren') {
+      return this.matchTypesForExpression(input, parent, expression.expression, `${localKey}:paren`, sourceAddressHandle);
+    }
+    if (expression.$kind === 'PrimitiveLiteral') {
+      const reference = this.literalTypeReference(input, expression.value, `${localKey}:literal`, sourceAddressHandle);
+      return reference == null ? null : [reference];
+    }
+    if (expression.$kind === 'ArrayLiteral') {
+      const references = expression.elements
+        .map((element, index) => element.$kind === 'PrimitiveLiteral'
+          ? this.literalTypeReference(input, element.value, `${localKey}:array:${index}`, sourceAddressHandle)
+          : null)
+        .filter((reference): reference is CheckerTypeReference => reference != null);
+      return references.length === expression.elements.length ? references : null;
+    }
+
+    const evaluation = this.typeEvaluator(input).evaluateWithScope(
+      expression,
+      parent,
+      `${localKey}:dynamic`,
+      sourceAddressHandle,
+    );
+    if (evaluation.kind !== CheckerExpressionTypeEvaluationResultKind.Type) {
+      return null;
+    }
+
+    const elementType = this.arrayElementType(evaluation.typeReference);
+    if (elementType != null) {
+      return [elementType];
+    }
+    return [evaluation.typeReference];
+  }
+
+  private arrayElementType(reference: CheckerTypeReference): CheckerTypeReference | null {
+    const shape = readCheckerTypeShape(this.store, reference);
+    const carrier = shape?.carrier ?? null;
+    if (carrier == null) {
+      return null;
+    }
+    const elementType = checkerArrayElementType(carrier.checker, carrier.type);
+    if (elementType == null) {
+      return null;
+    }
+    return this.typeProjector.ensureProjection({
+      localKey: `template-controller-match-array-element:${reference.productHandle ?? reference.checkerKey ?? reference.display ?? 'open'}`,
+      checker: carrier.checker,
+      type: elementType,
+      origin: CheckerTypeProjectionOrigin.TypeChecker,
+      sourceNode: carrier.declarations[0] ?? null,
+      sourceAddressHandle: reference.sourceAddressHandle,
+      display: carrier.checker.typeToString(elementType),
+      memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
+    } satisfies CheckerTypeProjectionRequest).toReference();
+  }
+
+  private literalTypeReference(
+    input: TemplateScopeConstructionRequest,
+    value: null | undefined | number | boolean | string,
+    localKey: string,
+    sourceAddressHandle: AddressHandle | null,
+  ): CheckerTypeReference | null {
+    if (input.typeSystem == null) {
+      return null;
+    }
+    const checker = input.typeSystem.checker;
+    const type = checkerLiteralType(checker, value);
+    return this.typeProjector.ensureProjection({
+      localKey,
+      checker,
+      type,
+      origin: CheckerTypeProjectionOrigin.TypeChecker,
+      sourceNode: checkerLookupLocation(input.typeSystem),
+      sourceAddressHandle,
+      display: typeof value === 'string' ? JSON.stringify(value) : checker.typeToString(type),
+      memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
+    } satisfies CheckerTypeProjectionRequest).toReference();
   }
 
   private typeEvaluator(input: TemplateScopeConstructionRequest) {
@@ -463,15 +627,18 @@ function listenerEventType(
   location: ts.Node | null,
   eventName: string,
 ): ts.Type | null {
-  return eventMapPropertyType(typeSystem, location, 'GlobalEventHandlersEventMap', eventName)
-    ?? eventMapPropertyType(typeSystem, location, 'HTMLElementEventMap', eventName)
-    ?? globalDeclaredType(typeSystem, 'CustomEvent', location)
-    ?? globalDeclaredType(typeSystem, 'Event', location);
+  const lookupLocation = location ?? checkerLookupLocation(typeSystem);
+  return lookupLocation == null
+    ? null
+    : eventMapPropertyType(typeSystem, lookupLocation, 'GlobalEventHandlersEventMap', eventName)
+      ?? eventMapPropertyType(typeSystem, lookupLocation, 'HTMLElementEventMap', eventName)
+      ?? globalDeclaredType(typeSystem, 'CustomEvent', lookupLocation)
+      ?? globalDeclaredType(typeSystem, 'Event', lookupLocation);
 }
 
 function eventMapPropertyType(
   typeSystem: TypeSystemProject,
-  location: ts.Node | null,
+  location: ts.Node,
   mapName: string,
   eventName: string,
 ): ts.Type | null {
@@ -493,4 +660,44 @@ function listenerTargetCanUseAttachedElement(node: HtmlElement): boolean {
     default:
       return false;
   }
+}
+
+function checkerLiteralType(
+  checker: ts.TypeChecker,
+  value: null | undefined | number | boolean | string,
+): ts.Type {
+  switch (typeof value) {
+    case 'string':
+      return checker.getStringLiteralType(value);
+    case 'number':
+      return checker.getNumberLiteralType(value);
+    case 'boolean':
+      return value ? checker.getTrueType() : checker.getFalseType();
+    case 'undefined':
+      return checker.getUndefinedType();
+    default:
+      return checker.getNullType();
+  }
+}
+
+function checkerArrayElementType(
+  checker: ts.TypeChecker,
+  type: ts.Type,
+): ts.Type | null {
+  if (type.isUnion()) {
+    const elementTypes = type.types
+      .map((part) => checkerArrayElementType(checker, part))
+      .filter((part): part is ts.Type => part != null);
+    return elementTypes.length === 0 ? null : checkerUnionType(checker, elementTypes);
+  }
+  if (checker.isArrayType(type) || checker.isTupleType(type)) {
+    return checkerNumberIndexValueType(checker, type);
+  }
+  const symbolName = checkerCollectionSymbolName(type);
+  if (symbolName === 'Array' || symbolName === 'ReadonlyArray') {
+    return checker.getTypeArguments(type as ts.TypeReference)[0]
+      ?? checkerNumberIndexValueType(checker, type)
+      ?? checker.getUnknownType();
+  }
+  return null;
 }

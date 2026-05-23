@@ -86,7 +86,7 @@ export function evaluateStaticPropertyValue(
 ): EvaluationValue {
   const ownProperty = readStaticOwnProperty(receiver, propertyName);
   if (ownProperty != null) {
-    if (ts.isGetAccessorDeclaration(ownProperty.node) && ownProperty.value.kind === EvaluationValueKind.Function) {
+    if (ownProperty.node != null && ts.isGetAccessorDeclaration(ownProperty.node) && ownProperty.value.kind === EvaluationValueKind.Function) {
       return host.evaluateFunctionWithArguments(
         ownProperty.value,
         node,

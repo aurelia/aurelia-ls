@@ -42,6 +42,7 @@ import {
   propertyNameText,
   unwrapExpression,
 } from "./framework-ts-utils.js";
+import { queryMatches } from "./lens-filter-utils.js";
 
 interface BindingAdmissionExpression {
   readonly bindingName: string;
@@ -205,12 +206,24 @@ export function readFrameworkBindingEffects(
     )
     .filter(
       (row) =>
-        filters.query === undefined ||
-        row.bindingName.includes(filters.query) ||
-        row.methodName.includes(filters.query) ||
-        row.effectKind.includes(filters.query) ||
-        row.effectName.includes(filters.query) ||
-        row.expression.text.includes(filters.query),
+        queryMatches(filters.query, [
+          row.packageId,
+          row.packageName,
+          row.bindingName,
+          row.methodName,
+          row.effectKind,
+          row.effectName,
+          row.expression.text,
+          row.expression.type,
+          row.expression.apparentType,
+          row.expression.symbolName ?? "",
+          row.expression.fullyQualifiedName ?? "",
+          row.callSite?.calleeName ?? "",
+          row.callSite?.callee.text ?? "",
+          row.callSite?.callee.type ?? "",
+          row.callSite?.callee.apparentType ?? "",
+          row.callSite?.signature ?? "",
+        ]),
     )
     .sort(
       (left, right) =>
@@ -248,14 +261,27 @@ export function readFrameworkBindingSetups(
     )
     .filter(
       (row) =>
-        filters.query === undefined ||
-        row.bindingName.includes(filters.query) ||
-        row.producerName.includes(filters.query) ||
-        row.setupKind.includes(filters.query) ||
-        row.setupMethodName.includes(filters.query) ||
-        row.receiverExpression.includes(filters.query) ||
-        row.bindingExpression.text.includes(filters.query) ||
-        row.setupArgument?.text.includes(filters.query) === true,
+        queryMatches(filters.query, [
+          row.packageId,
+          row.packageName,
+          row.bindingName,
+          row.producerName,
+          row.setupKind,
+          row.setupMethodName,
+          row.receiverExpression,
+          row.bindingExpression.text,
+          row.bindingExpression.type ?? "",
+          row.setupArgument?.text ?? "",
+          row.setupArgument?.type ?? "",
+          row.setupArgument?.apparentType ?? "",
+          row.setupArgument?.symbolName ?? "",
+          row.setupArgument?.fullyQualifiedName ?? "",
+          row.callSite.calleeName,
+          row.callSite.callee.text,
+          row.callSite.callee.type,
+          row.callSite.callee.apparentType,
+          row.callSite.signature ?? "",
+        ]),
     )
     .sort(
       (left, right) =>

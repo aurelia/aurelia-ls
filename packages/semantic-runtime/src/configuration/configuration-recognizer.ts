@@ -797,7 +797,7 @@ function recognizeRegisterArgumentExpression(
   admissionKind: RegistrationAdmissionKind,
   carrierKind: RegistrationCarrierKind,
 ): readonly RegisterArgumentObservation[] {
-  const factory = recognizeRegistrationFactoryArgument(argument, bindings, admissionKind, carrierKind);
+  const factory = recognizeRegistrationFactoryArgument(context, argument, bindings, admissionKind, carrierKind);
   if (factory != null) {
     return [registerArgumentObservation(factory)];
   }
@@ -1026,6 +1026,9 @@ function recognizeEvaluatedObjectMapArgument(
   const observations: RegisterArgumentObservation[] = [];
   for (const property of value.properties.values()) {
     if (!isRegisterObjectMapValue(property.value)) {
+      continue;
+    }
+    if (property.node == null) {
       continue;
     }
     const propertyExpression = objectMapPropertyExpression(property.node);
@@ -1284,6 +1287,7 @@ function unknownRegistrationArgument(
 }
 
 function recognizeRegistrationFactoryArgument(
+  context: ConfigurationRecognitionContext,
   expression: ts.Expression,
   bindings: ImportedBindings,
   admissionKind: RegistrationAdmissionKind,
@@ -1297,7 +1301,7 @@ function recognizeRegistrationFactoryArgument(
   const keyArgument = readRegistrationFactoryKeyArgument(match, openSeams);
   const valueArgument = readRegistrationFactoryValueArgument(match, openSeams);
 
-  return registrationAdmissionForFactoryCall(match, carrierKind, admissionKind, keyArgument, valueArgument, openSeams);
+  return registrationAdmissionForFactoryCall(context, match, carrierKind, admissionKind, keyArgument, valueArgument, openSeams);
 }
 
 function readRegistrationFactoryCallMatch(
@@ -1344,6 +1348,7 @@ function readRegistrationFactoryValueArgument(
 }
 
 function registrationAdmissionForFactoryCall(
+  context: ConfigurationRecognitionContext,
   match: RegistrationFactoryCallMatch,
   carrierKind: RegistrationCarrierKind,
   admissionKind: RegistrationAdmissionKind,
@@ -1360,9 +1365,40 @@ function registrationAdmissionForFactoryCall(
     keyArgument == null ? null : new RegistrationKeyObservation(readReferenceName(keyArgument), keyArgument),
     valueArgument == null || match.shape.value == null
       ? null
-      : new RegistrationValueObservation(match.shape.value.valueKind, readReferenceName(valueArgument), valueArgument, isDeclarationExpression(valueArgument)),
+      : registrationFactoryValueObservation(context, match, valueArgument),
     match.factoryName === 'defer' ? readDeferredRegistryParameters(match.call, isDeclarationExpression) : [],
     openSeams,
+  );
+}
+
+function registrationFactoryValueObservation(
+  context: ConfigurationRecognitionContext,
+  match: RegistrationFactoryCallMatch,
+  valueArgument: ts.Expression,
+): RegistrationValueObservation {
+  const valueKind = match.shape.value!.valueKind;
+  if (valueKind === RegistrationValueKind.Constructable) {
+    const read = context.expressionReader.evaluateExpression(valueArgument);
+    const value = read.value;
+    if (value != null && (value.kind === EvaluationValueKind.Class || value.kind === EvaluationValueKind.Function)) {
+      const valueSource = constructableValueSource(context, valueArgument, value);
+      return new RegistrationValueObservation(
+        valueKind,
+        readReferenceName(valueArgument) ?? evaluatedValueLocalName(value),
+        valueSource.node,
+        true,
+        null,
+        null,
+        valueSource.sourceFileAddressHandle,
+        valueSource.moduleKey,
+      );
+    }
+  }
+  return new RegistrationValueObservation(
+    valueKind,
+    readReferenceName(valueArgument),
+    valueArgument,
+    isDeclarationExpression(valueArgument),
   );
 }
 
@@ -1432,18 +1468,23 @@ function checkerRegistryValueSource(
   context: ConfigurationRecognitionContext,
   expression: ts.Expression,
 ): NamedRegistryValueSource | null {
-  const checker = context.typeSystem?.checker ?? null;
-  if (checker == null) {
+  const typeSystem = context.typeSystem;
+  if (typeSystem == null) {
     return null;
   }
 
   const current = unwrapExpression(expression);
-  const type = checker.getTypeAtLocation(current);
-  if (!checkerTypeHasCallableRegister(checker, type, current)) {
+  const programCurrent = typeSystem.readProgramExpression(current);
+  if (programCurrent == null) {
+    return null;
+  }
+  const checker = typeSystem.checker;
+  const type = checker.getTypeAtLocation(programCurrent);
+  if (!checkerTypeHasCallableRegister(checker, type, programCurrent)) {
     return null;
   }
 
-  const declaration = checkerValueDeclaration(checker, current);
+  const declaration = checkerValueDeclaration(checker, programCurrent);
   return declaration == null
     ? checkerRegistryExpressionSource(expression)
     : checkerRegistryDeclarationSource(context, expression, declaration);

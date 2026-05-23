@@ -1,4 +1,3 @@
-import { existsSync, readdirSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -14,6 +13,14 @@ import {
   SemanticRuntimeDetail,
   verifyAuthoringEffects,
 } from '../out/index.js';
+import {
+  TemplateTypeSystemOverlayBuilder,
+} from '../out/template/template-type-system-overlay.js';
+import {
+  fixtureChildRoots,
+  parsePressureRootCliOptions,
+  pressureRootsForOptions,
+} from './pressure-root-selection.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const workspaceRoot = path.resolve(packageRoot, '../..');
@@ -27,8 +34,19 @@ const defaultAppApiPressureAnalysisKinds = new Set([
   SemanticProjectAnalysisKind.AppWorld,
   SemanticProjectAnalysisKind.ResourceLibraryAuthoring,
 ]);
-const cliOptions = parsePressureCliOptions(process.argv.slice(2));
-const roots = pressureRoots(cliOptions);
+const pressureRootSelectionConfig = {
+  workspaceRoot,
+  authoringFixtureRoot,
+  pressureFixtureRoot,
+  defaultRoots,
+  envRootNames: ['SEMANTIC_RUNTIME_PRESSURE_ROOTS'],
+  includeAuthoringFixtureName: (name) => name.startsWith('generated-') || name === 'storefront',
+  usageName: 'pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api',
+  label: 'app-api pressure',
+  fixtureHelp: 'Use --fixture pressure-name, pressure:<name>, or authoring:<name> for focused fixture pressure.',
+};
+const cliOptions = parsePressureRootCliOptions(process.argv.slice(2), pressureRootSelectionConfig);
+const roots = pressureRootsForOptions(cliOptions, pressureRootSelectionConfig);
 const analysisDepth = pressureAnalysisDepth();
 const projectShapeFilter = pressureProjectShapeFilter();
 const projectKeyFilter = pressureProjectKeyFilter();
@@ -71,32 +89,6 @@ for (const [index, root] of roots.entries()) {
   }
 }
 
-function fixtureChildRoots(rootDir, includeName = () => true) {
-  return readdirSync(rootDir, { withFileTypes: true })
-    .filter((entry) => {
-      const childRoot = path.join(rootDir, entry.name);
-      return entry.isDirectory() && includeName(entry.name) && fixtureRootHasFiles(childRoot);
-    })
-    .map((entry) => path.join(rootDir, entry.name))
-    .sort((left, right) => path.basename(left).localeCompare(path.basename(right)));
-}
-
-function fixtureRootHasFiles(rootDir) {
-  const pending = [rootDir];
-  while (pending.length > 0) {
-    const currentDir = pending.pop();
-    for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
-      if (entry.isFile()) {
-        return true;
-      }
-      if (entry.isDirectory()) {
-        pending.push(path.join(currentDir, entry.name));
-      }
-    }
-  }
-  return false;
-}
-
 if (outputMode !== 'inputs' && rootAggregates.length > 0) {
   const aggregate = combinePressureAggregates(rootAggregates);
   console.log('');
@@ -111,7 +103,9 @@ function printInputSummary(aggregate, requestMilliseconds) {
   console.log(
     `- source/app: projects=${aggregate.projects}, selected=${aggregate.selectedProjects}, ` +
     `opened=${aggregate.openedAppWorlds}, files=${aggregate.sourceFiles}, templates=${aggregate.appRuntimeTemplatesSeen}, ` +
-    `resources=${aggregate.resourceDefinitions}, controllers=${aggregate.runtimeControllers}, runtimeWatchers=${aggregate.runtimeWatchers}, watcherObservedDeps=${aggregate.runtimeWatcherObservedDependencies}, ` +
+    `resources=${aggregate.resourceDefinitions}, templateOverlayProbes=${aggregate.templateOverlayExpressionProbes}, templateOverlaySkips=${aggregate.templateOverlaySkippedExpressions}, ` +
+    `templateOverlayScopeCreators=${aggregate.templateOverlayScopeCreators}, ` +
+    `controllers=${aggregate.runtimeControllers}, runtimeWatchers=${aggregate.runtimeWatchers}, watcherObservedDeps=${aggregate.runtimeWatcherObservedDependencies}, ` +
     `targetAccesses=${aggregate.bindingTargetAccesses}, behaviorApps=${aggregate.bindingBehaviorApplications}, valueChannels=${aggregate.bindingValueChannels}, dataFlows=${aggregate.bindingDataFlows}, observedDeps=${aggregate.bindingObservedDependencies}`,
   );
   console.log(
@@ -703,14 +697,21 @@ function printAggregateCounts(aggregate) {
   printCounts('template diagnostic missing inputs', aggregate.templateDiagnosticMissingInputs, 18);
   printCounts('template diagnostic missing input fixtures', aggregate.templateDiagnosticMissingInputFixtureKeys, 18);
   printCounts('template diagnostic suggestions', aggregate.templateDiagnosticSuggestions, 18);
+  printCounts('template overlay scope creator kinds', aggregate.templateOverlayScopeCreatorKinds, 18);
+  printCounts('template overlay scope creator fixtures', aggregate.templateOverlayScopeCreatorKindFixtureKeys, 18);
+  printCounts('template overlay skip reasons', aggregate.templateOverlaySkipReasons, 18);
+  printCounts('template overlay skip summaries', aggregate.templateOverlaySkipSummaries, 18);
+  printCounts('template overlay skip reason fixtures', aggregate.templateOverlaySkipReasonFixtureKeys, 18);
   printCounts('TypeScript diagnostic phases', aggregate.typeScriptDiagnosticPhases);
   printCounts('TypeScript diagnostic categories', aggregate.typeScriptDiagnosticCategories);
   printCounts('TypeScript diagnostic severities', aggregate.typeScriptDiagnosticSeverities);
   printCounts('TypeScript diagnostic kinds', aggregate.typeScriptDiagnosticKinds, 18);
-  printCounts('TypeScript diagnostic source labels', aggregate.typeScriptDiagnosticSourceLabels, 18);
+  printCounts('TypeScript diagnostic origins', aggregate.typeScriptDiagnosticOrigins, 18);
+  printCounts('TypeScript diagnostic source roles', aggregate.typeScriptDiagnosticSourceRoles, 18);
   printCounts('TypeScript diagnostic source coverage', aggregate.typeScriptDiagnosticSourceCoverage);
   printCounts('app diagnostic domains', aggregate.appDiagnosticDomains);
   printCounts('app diagnostic kinds', aggregate.appDiagnosticKinds, 18);
+  printCounts('app diagnostic source roles', aggregate.appDiagnosticSourceRoles, 18);
   printCounts('app diagnostic framework error codes', aggregate.appDiagnosticFrameworkErrorCodes, 18);
   printCounts('app diagnostic framework error code fixtures', aggregate.appDiagnosticFrameworkErrorCodeFixtureKeys, 18);
   printCounts('binding data-flow binding kinds', aggregate.bindingDataFlowBindingKinds);
@@ -928,12 +929,19 @@ function printCompactAggregateCounts(aggregate) {
   printCompactCounts('templates.missing-inputs', aggregate.templateDiagnosticMissingInputs);
   printCompactCounts('templates.missing-input-fixtures', aggregate.templateDiagnosticMissingInputFixtureKeys, 10);
   printCompactCounts('templates.suggestions', aggregate.templateDiagnosticSuggestions);
+  printCompactCounts('templates.overlay-scope-creators', aggregate.templateOverlayScopeCreatorKinds);
+  printCompactCounts('templates.overlay-scope-creator-fixtures', aggregate.templateOverlayScopeCreatorKindFixtureKeys, 10);
+  printCompactCounts('templates.overlay-skips', aggregate.templateOverlaySkipReasons);
+  printCompactCounts('templates.overlay-skip-summaries', aggregate.templateOverlaySkipSummaries);
+  printCompactCounts('templates.overlay-skip-fixtures', aggregate.templateOverlaySkipReasonFixtureKeys, 10);
   printCompactCounts('typescript.diagnostic-phases', aggregate.typeScriptDiagnosticPhases);
   printCompactCounts('typescript.diagnostic-kinds', aggregate.typeScriptDiagnosticKinds);
-  printCompactCounts('typescript.diagnostic-source-labels', aggregate.typeScriptDiagnosticSourceLabels);
+  printCompactCounts('typescript.diagnostic-origins', aggregate.typeScriptDiagnosticOrigins);
+  printCompactCounts('typescript.diagnostic-source-roles', aggregate.typeScriptDiagnosticSourceRoles);
   printCompactCounts('typescript.diagnostic-source-coverage', aggregate.typeScriptDiagnosticSourceCoverage);
   printCompactCounts('app.diagnostic-domains', aggregate.appDiagnosticDomains);
   printCompactCounts('app.diagnostic-kinds', aggregate.appDiagnosticKinds);
+  printCompactCounts('app.diagnostic-source-roles', aggregate.appDiagnosticSourceRoles);
   printCompactCounts('app.diagnostic-error-codes', aggregate.appDiagnosticFrameworkErrorCodes);
   printCompactCounts('app.diagnostic-error-code-fixtures', aggregate.appDiagnosticFrameworkErrorCodeFixtureKeys, 10);
 
@@ -1323,11 +1331,17 @@ function printRawAggregateCounts(aggregate) {
   printCounts('template diagnostic owner origins', aggregate.templateDiagnosticOwnerOrigins, 18);
   printCounts('template diagnostic site kinds', aggregate.templateDiagnosticSiteKinds, 18);
   printCounts('template diagnostic value-site kinds', aggregate.templateDiagnosticValueSiteKinds, 18);
+  printCounts('template overlay scope creator kinds', aggregate.templateOverlayScopeCreatorKinds, 18);
+  printCounts('template overlay scope creator fixtures', aggregate.templateOverlayScopeCreatorKindFixtureKeys, 18);
+  printCounts('template overlay skip reasons', aggregate.templateOverlaySkipReasons, 18);
+  printCounts('template overlay skip summaries', aggregate.templateOverlaySkipSummaries, 18);
+  printCounts('template overlay skip reason fixtures', aggregate.templateOverlaySkipReasonFixtureKeys, 18);
   printCounts('TypeScript diagnostic phases', aggregate.typeScriptDiagnosticPhases);
   printCounts('TypeScript diagnostic categories', aggregate.typeScriptDiagnosticCategories);
   printCounts('TypeScript diagnostic severities', aggregate.typeScriptDiagnosticSeverities);
   printCounts('TypeScript diagnostic kinds', aggregate.typeScriptDiagnosticKinds, 18);
-  printCounts('TypeScript diagnostic source labels', aggregate.typeScriptDiagnosticSourceLabels, 18);
+  printCounts('TypeScript diagnostic origins', aggregate.typeScriptDiagnosticOrigins, 18);
+  printCounts('TypeScript diagnostic source roles', aggregate.typeScriptDiagnosticSourceRoles, 18);
   printCounts('TypeScript diagnostic source coverage', aggregate.typeScriptDiagnosticSourceCoverage);
   printCounts('validation issue kinds', aggregate.validationIssueKinds);
   printCounts('validation issue framework error codes', aggregate.validationIssueFrameworkErrorCodes, 18);
@@ -1338,6 +1352,7 @@ function printRawAggregateCounts(aggregate) {
   printCounts('app diagnostic domains', aggregate.appDiagnosticDomains);
   printCounts('app diagnostic authorities', aggregate.appDiagnosticAuthorities);
   printCounts('app diagnostic kinds', aggregate.appDiagnosticKinds, 18);
+  printCounts('app diagnostic source roles', aggregate.appDiagnosticSourceRoles, 18);
   printCounts('app diagnostic framework error codes', aggregate.appDiagnosticFrameworkErrorCodes, 18);
   printCounts('app diagnostic framework error code fixtures', aggregate.appDiagnosticFrameworkErrorCodeFixtureKeys, 18);
   printCounts('binding data-flow binding kinds', aggregate.bindingDataFlowBindingKinds);
@@ -1472,6 +1487,9 @@ async function readPressureForRoot(root) {
     openRuntimeCompositions: 0,
     bindables: 0,
     watches: 0,
+    templateOverlayExpressionProbes: 0,
+    templateOverlaySkippedExpressions: 0,
+    templateOverlayScopeCreators: 0,
     templateDiagnostics: 0,
     typeScriptDiagnostics: 0,
     appDiagnostics: 0,
@@ -1739,15 +1757,22 @@ async function readPressureForRoot(root) {
     templateDiagnosticOwnerOrigins: {},
     templateDiagnosticSiteKinds: {},
     templateDiagnosticValueSiteKinds: {},
+    templateOverlaySkipReasons: {},
+    templateOverlaySkipSummaries: {},
+    templateOverlaySkipReasonFixtureKeys: {},
+    templateOverlayScopeCreatorKinds: {},
+    templateOverlayScopeCreatorKindFixtureKeys: {},
     typeScriptDiagnosticPhases: {},
     typeScriptDiagnosticCategories: {},
     typeScriptDiagnosticSeverities: {},
     typeScriptDiagnosticKinds: {},
-    typeScriptDiagnosticSourceLabels: {},
+    typeScriptDiagnosticOrigins: {},
+    typeScriptDiagnosticSourceRoles: {},
     typeScriptDiagnosticSourceCoverage: {},
     appDiagnosticDomains: {},
     appDiagnosticAuthorities: {},
     appDiagnosticKinds: {},
+    appDiagnosticSourceRoles: {},
     appDiagnosticFrameworkErrorCodes: {},
     appDiagnosticFrameworkErrorCodeFixtureKeys: {},
     bindingDataFlowBindingKinds: {},
@@ -2045,6 +2070,9 @@ async function readPressureForRoot(root) {
       aggregate.openedAppWorlds += 1;
       aggregate.appRuntimeTemplatesSeen += app.emission?.templates?.resources?.length ?? 0;
       aggregate.authoringTemplatesSeen += app.emission?.templates?.authoringResources?.length ?? 0;
+      await measure(timings, 'template-overlay-coverage', () =>
+        recordTemplateOverlayCoverage(aggregate, runtime.workspace.store, app.emission, fixtureKey)
+      );
       const appSummary = await measure(timings, 'app-summary', () =>
         app.summary().value,
       );
@@ -2419,7 +2447,8 @@ async function readPressureForRoot(root) {
         increment(aggregate.typeScriptDiagnosticCategories, row.category);
         increment(aggregate.typeScriptDiagnosticSeverities, row.severity);
         increment(aggregate.typeScriptDiagnosticKinds, row.diagnosticKind);
-        increment(aggregate.typeScriptDiagnosticSourceLabels, row.typescriptSource ?? 'none');
+        increment(aggregate.typeScriptDiagnosticOrigins, row.typescriptSource ?? 'none');
+        increment(aggregate.typeScriptDiagnosticSourceRoles, row.sourceRole ?? 'none');
         increment(aggregate.typeScriptDiagnosticSourceCoverage, row.source == null ? 'no-source' : 'source');
       }
 
@@ -2433,6 +2462,7 @@ async function readPressureForRoot(root) {
         increment(aggregate.appDiagnosticDomains, row.diagnosticDomain);
         increment(aggregate.appDiagnosticAuthorities, row.diagnosticAuthority);
         increment(aggregate.appDiagnosticKinds, row.diagnosticKind);
+        increment(aggregate.appDiagnosticSourceRoles, row.sourceRole ?? 'none');
         increment(aggregate.appDiagnosticFrameworkErrorCodes, row.frameworkErrorCode ?? 'none');
         if (row.frameworkErrorCode != null) {
           increment(aggregate.appDiagnosticFrameworkErrorCodeFixtureKeys, `${fixtureKey}:${row.frameworkErrorCode}`);
@@ -3559,6 +3589,37 @@ function sourceReferenceState(source) {
   return source == null ? 'no-source' : 'source';
 }
 
+function recordTemplateOverlayCoverage(aggregate, store, emission, fixtureKey) {
+  const builder = new TemplateTypeSystemOverlayBuilder(store, emission.typeSystem);
+  const resources = [
+    ...(emission.templates?.resources ?? []),
+    ...(emission.templates?.authoringResources ?? []),
+  ];
+  for (const resource of resources) {
+    for (const scope of resource.runtimeAnalysis.scopes.readScopes()) {
+      aggregate.templateOverlayScopeCreators += scope.scopeCreators.length;
+      for (const creator of scope.scopeCreators) {
+        increment(aggregate.templateOverlayScopeCreatorKinds, creator.creatorKind);
+        increment(aggregate.templateOverlayScopeCreatorKindFixtureKeys, `${fixtureKey}:${creator.creatorKind}`);
+      }
+    }
+    const overlay = builder.build(resource, resource.compilation.localKey);
+    aggregate.templateOverlayExpressionProbes += overlay.expressionProbes.length;
+    aggregate.templateOverlaySkippedExpressions += overlay.skippedExpressions.length;
+    for (const skipped of overlay.skippedExpressions) {
+      increment(aggregate.templateOverlaySkipReasons, skipped.reason);
+      increment(aggregate.templateOverlaySkipSummaries, templateOverlaySkipSummaryKey(skipped.summary));
+      increment(aggregate.templateOverlaySkipReasonFixtureKeys, `${fixtureKey}:${skipped.reason}`);
+    }
+  }
+}
+
+function templateOverlaySkipSummaryKey(summary) {
+  return String(summary)
+    .replace(/'[^']*'/gu, "'<value>'")
+    .replace(/"[^"]*"/gu, '"<value>"');
+}
+
 async function pagedRows(app, kind) {
   const rows = [];
   let cursor = null;
@@ -3577,116 +3638,6 @@ async function pagedRows(app, kind) {
       return { outcome, rows, pages };
     }
   }
-}
-
-function pressureRoots(options) {
-  const cliRoots = [
-    ...options.rootEntries.flatMap((entry) => fixtureCollectionRootsFor(resolvePressureRootEntry(entry))),
-    ...options.fixtureNames.flatMap((name) => fixtureRootsForName(name)),
-  ];
-  if (cliRoots.length > 0) {
-    return uniqueSortedPaths(cliRoots);
-  }
-  const raw = process.env.SEMANTIC_RUNTIME_PRESSURE_ROOTS;
-  if (raw == null || raw.trim().length === 0) {
-    return defaultRoots;
-  }
-  return uniqueSortedPaths(raw
-    .split(path.delimiter)
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0)
-    .flatMap((entry) => fixtureCollectionRootsFor(resolvePressureRootEntry(entry))));
-}
-
-function parsePressureCliOptions(args) {
-  const fixtureNames = [];
-  const rootEntries = [];
-  for (let index = 0; index < args.length; index += 1) {
-    const arg = args[index];
-    if (arg === '--fixture' || arg === '--fixtures') {
-      fixtureNames.push(...splitCliList(requireCliValue(args, index, arg)));
-      index += 1;
-      continue;
-    }
-    if (arg === '--root' || arg === '--roots' || arg === '--pressureRoot' || arg === '--pressureRoots') {
-      rootEntries.push(...splitCliList(requireCliValue(args, index, arg)));
-      index += 1;
-      continue;
-    }
-    if (arg === '--help' || arg === '-h') {
-      console.log([
-        'Usage: pnpm --filter @aurelia-ls/semantic-runtime pressure:app-api -- [--fixture <name>] [--root <path>]',
-        'Use --fixture pressure-name, pressure:<name>, or authoring:<name> for focused fixture pressure.',
-        'Use --root for a custom fixture root or fixture collection root.',
-      ].join('\n'));
-      process.exit(0);
-    }
-    throw new Error(`Unsupported app-api pressure argument '${arg}'. Use --fixture <name> or --root <path>.`);
-  }
-  return {
-    fixtureNames: [...new Set(fixtureNames)].sort((left, right) => left.localeCompare(right)),
-    rootEntries: [...new Set(rootEntries)].sort((left, right) => left.localeCompare(right)),
-  };
-}
-
-function requireCliValue(args, index, key) {
-  const value = args[index + 1];
-  if (value == null || value.startsWith('--')) {
-    throw new Error(`Missing value for ${key}.`);
-  }
-  return value;
-}
-
-function splitCliList(value) {
-  return value
-    .split(/[;,]/u)
-    .map((entry) => entry.trim())
-    .filter((entry) => entry.length > 0);
-}
-
-function resolvePressureRootEntry(entry) {
-  return path.isAbsolute(entry) ? path.resolve(entry) : path.resolve(workspaceRoot, entry);
-}
-
-function fixtureRootsForName(name) {
-  const candidates = fixtureRootCandidatesForName(name);
-  const roots = candidates.filter((candidate) => existsSync(candidate) && fixtureRootHasFiles(candidate));
-  if (roots.length === 0) {
-    throw new Error(`No pressure fixture matched '${name}'. Use pressure:<name>, authoring:<name>, or --root <path>.`);
-  }
-  return roots;
-}
-
-function fixtureRootCandidatesForName(name) {
-  if (name.startsWith('pressure:')) {
-    return [path.join(pressureFixtureRoot, name.slice('pressure:'.length))];
-  }
-  if (name.startsWith('authoring:')) {
-    return [path.join(authoringFixtureRoot, name.slice('authoring:'.length))];
-  }
-  return [
-    path.join(pressureFixtureRoot, name),
-    path.join(authoringFixtureRoot, name),
-  ];
-}
-
-function uniqueSortedPaths(paths) {
-  return [...new Set(paths.map((entry) => path.resolve(entry)))]
-    .sort((left, right) => left.localeCompare(right));
-}
-
-function fixtureCollectionRootsFor(root) {
-  if (samePath(root, authoringFixtureRoot)) {
-    return fixtureChildRoots(authoringFixtureRoot, (name) => name.startsWith('generated-') || name === 'storefront');
-  }
-  if (samePath(root, pressureFixtureRoot)) {
-    return fixtureChildRoots(pressureFixtureRoot);
-  }
-  return [root];
-}
-
-function samePath(left, right) {
-  return path.resolve(left) === path.resolve(right);
 }
 
 function pressureAnalysisDepth() {

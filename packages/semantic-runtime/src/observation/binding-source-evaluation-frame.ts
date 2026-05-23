@@ -13,9 +13,11 @@ import {
 } from '../evaluation/module-graph.js';
 import {
   type EvaluationClassValue,
-  type EvaluationFunctionValue,
   type EvaluationValue,
+  type EvaluationFunctionValue,
 } from '../evaluation/values.js';
+import type { Container } from '../di/container.js';
+import type { RuntimeBindingSourceActivationContext } from './binding-source-activation-context.js';
 
 /**
  * Per binding-source value read frame over the project evaluation output.
@@ -28,7 +30,11 @@ export class RuntimeBindingSourceEvaluationFrame {
   private readonly sourcesByFileName = new Map<string, EvaluatedProjectSource>();
   private readonly evaluatorsByModuleKey = new Map<string, StaticEvaluator>();
 
-  constructor(evaluation: StaticProjectEvaluationResult) {
+  constructor(
+    evaluation: StaticProjectEvaluationResult,
+    private readonly activationContext: RuntimeBindingSourceActivationContext | null = null,
+    private readonly readActiveContainer: () => Container | null = () => null,
+  ) {
     for (const source of evaluation.sources) {
       if (!isEvaluatedProjectSource(source)) {
         continue;
@@ -53,11 +59,13 @@ export class RuntimeBindingSourceEvaluationFrame {
     source: EvaluatedProjectSource,
     classValue: EvaluationClassValue,
     node: ts.Node,
+    argumentValues: readonly EvaluationValue[] = [],
   ): StaticExpressionEvaluationResult {
     return this.evaluatorForSource(source).evaluateClassValueInstantiation(
       classValue,
       source.moduleKey,
       node,
+      argumentValues,
     );
   }
 
@@ -80,12 +88,14 @@ export class RuntimeBindingSourceEvaluationFrame {
     callee: EvaluationFunctionValue,
     call: ts.Node,
     argumentValues: readonly EvaluationValue[],
+    thisValue: EvaluationValue | null = null,
   ): StaticExpressionEvaluationResult {
     return this.evaluatorForSource(source).evaluateFunctionValue(
       callee,
       call,
       source.moduleKey,
       argumentValues,
+      thisValue,
     );
   }
 
@@ -93,7 +103,10 @@ export class RuntimeBindingSourceEvaluationFrame {
     const moduleKey = normalizeModuleKey(source.moduleKey);
     let evaluator = this.evaluatorsByModuleKey.get(moduleKey);
     if (evaluator === undefined) {
-      evaluator = new StaticEvaluator(source.evaluation.policy, source.evaluation.runtimeHost);
+      const runtimeHost = this.activationContext == null
+        ? source.evaluation.runtimeHost
+        : this.activationContext.runtimeHostFor(source.evaluation.runtimeHost, this.readActiveContainer);
+      evaluator = new StaticEvaluator(source.evaluation.policy, runtimeHost);
       this.evaluatorsByModuleKey.set(moduleKey, evaluator);
     }
     return evaluator;

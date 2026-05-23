@@ -224,6 +224,10 @@ helpers.
   `--projection=flow-sites --surfaceKind=controlled-computed-observer --detail` before changing explicit dependency
   metadata semantics. `--projection=surface-methods --surfaceKind=attribute-ns-accessor --detail` exposes the
   runtime-html namespace attribute accessor surface that sits beside the generic data/SVG attribute accessor. Use
+  `--projection=flow-sites --surfaceKind=checked-observer` and
+  `--projection=flow-sites --surfaceKind=select-value-observer` for concrete checked/select observer behavior; the
+  `binding-lookups` projection names binding classes that call observer/accessor APIs, not the concrete observer
+  classes selected by runtime-html node configuration. Use
   `--projection=flow-sites` with `--siteKind=...` when observation flow needs a narrower
   source-backed read than the pressure rollup. Use `--projection=dependency-circuit --detail` to see the compact roles
   that stitch astEvaluate, connectable boundaries, ProxyObservable identity/escape paths, computed-observer dependency

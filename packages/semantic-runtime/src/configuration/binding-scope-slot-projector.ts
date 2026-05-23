@@ -1,13 +1,16 @@
 import type { KernelStore } from '../kernel/store.js';
-import { TypeSystemProductDetails } from '../type-system/product-details.js';
-import type {
+import { TypeSystemHotDetails, TypeSystemProductDetails } from '../type-system/product-details.js';
+import {
   CheckerTypeMember,
+  CheckerTypeProjectionOrigin,
   CheckerTypeShape,
 } from '../type-system/type-shape.js';
 import { checkerTypeMemberReachableIdentityHandle } from '../type-system/type-shape.js';
 import { checkerTypeReferenceWithSource } from '../type-system/type-shape.js';
+import { CheckerTypeMemberProjectionPolicy, CheckerTypeProjector } from '../type-system/checker-projector.js';
 import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
 import {
+  type BindingContextSlot,
   BindingContextSlotDraft,
   type BindingScopeConstructionRequest,
 } from './scope.js';
@@ -63,11 +66,11 @@ function addTypeShapeSlots(
     if (slotsByName.has(member.name)) {
       continue;
     }
-    slotsByName.set(member.name, slotDraftForTypeMember(store, member));
+    slotsByName.set(member.name, bindingContextSlotDraftForTypeMember(store, member));
   }
 }
 
-function slotDraftForTypeMember(
+export function bindingContextSlotDraftForTypeMember(
   store: KernelStore,
   member: CheckerTypeMember,
 ): BindingContextSlotDraft {
@@ -85,4 +88,35 @@ function slotDraftForTypeMember(
     checkerTypeMemberSourceAddressHandle(store, member),
     [],
   );
+}
+
+export function bindingContextSlotTargetTypeShape(
+  store: KernelStore,
+  projector: CheckerTypeProjector,
+  slot: BindingContextSlot | BindingContextSlotDraft,
+  localKey: string,
+): CheckerTypeShape | null {
+  const typeShape = slot.targetType?.productHandle == null
+    ? null
+    : store.productDetails.read(TypeSystemProductDetails.TypeShape, slot.targetType.productHandle);
+  if (typeShape != null) {
+    return typeShape;
+  }
+  const member = slot.targetProductHandle == null
+    ? null
+    : store.hotDetails.read(TypeSystemHotDetails.TypeMember, slot.targetProductHandle);
+  if (member?.carrier?.valueType == null) {
+    return null;
+  }
+  return projector.ensureProjection({
+    localKey,
+    checker: member.carrier.checker,
+    type: member.carrier.valueType,
+    origin: CheckerTypeProjectionOrigin.TypeChecker,
+    sourceNode: member.carrier.declarations[0] ?? null,
+    sourceAddressHandle: slot.targetType?.sourceAddressHandle ?? slot.sourceAddressHandle,
+    ownerIdentityHandle: slot.targetIdentityHandle,
+    display: slot.targetType?.display ?? member.valueType?.display ?? null,
+    memberProjection: CheckerTypeMemberProjectionPolicy.Lazy,
+  });
 }

@@ -137,7 +137,48 @@ export class CheckedObserverChannelDrafts {
         openReason: 'CheckedObserver checkbox mode depends on the bound source value shape; static evaluation did not close boolean, collection, or map mode.',
       };
     }
+    if (sourceShape.kind === 'dynamic') {
+      return this.checkedCheckboxDynamicValueChannelDraft(local, binding, targetAccess, sourceShape, input, context, usesCustomMatcher);
+    }
     return this.checkedCheckboxModelValueChannelDraft(local, binding, targetAccess, sourceShape, input, context, usesCustomMatcher);
+  }
+
+  private checkedCheckboxDynamicValueChannelDraft(
+    local: string,
+    binding: PropertyBinding,
+    targetAccess: RuntimeBindingTargetAccess,
+    sourceShape: CheckedSourceShape,
+    input: HtmlElement,
+    context: BindingValueChannelDraftContext,
+    usesCustomMatcher: boolean,
+  ): RuntimeBindingValueChannelDraft {
+    const elementValue = this.owner.inputRuntimeValue(local, input, context);
+    if (elementValue.valueType == null && elementValue.valueDomain.length === 0 && elementValue.primitiveValueDomain.length === 0) {
+      return {
+        channelKind: RuntimeBindingValueChannelKind.CheckedDynamicModelValue,
+        authority: RuntimeBindingValueChannelAuthority.Open,
+        runtimeValueType: targetAccess.propertyType,
+        valueDomain: [],
+        isCollection: null,
+        usesCustomMatcher,
+        observerCouplings: checkedDynamicObserverCouplings(sourceShape.dynamicMode, usesCustomMatcher),
+        openReason: 'CheckedObserver dynamic checkbox mode could not close the input model/value used by the collection or map branch.',
+      };
+    }
+    const elementValueType = this.elementValueType(`${local}:checked-dynamic-element-domain`, binding, elementValue);
+    return {
+      channelKind: RuntimeBindingValueChannelKind.CheckedDynamicModelValue,
+      authority: elementValue.valueType == null
+        ? RuntimeBindingValueChannelAuthority.StaticTemplateAndTypeChecker
+        : RuntimeBindingValueChannelAuthority.BindingExpressionAndTypeChecker,
+      runtimeValueType: elementValueType,
+      valueDomain: elementValue.valueDomain,
+      primitiveValueDomain: elementValue.primitiveValueDomain,
+      isCollection: null,
+      usesCustomMatcher,
+      observerCouplings: checkedDynamicObserverCouplings(sourceShape.dynamicMode, usesCustomMatcher),
+      openReason: null,
+    };
   }
 
   private checkedCheckboxModelValueChannelDraft(
@@ -229,6 +270,23 @@ function checkedBooleanObserverCouplings(): readonly RuntimeBindingValueChannelC
   return [
     RuntimeBindingValueChannelCouplingKind.CheckedBooleanSync,
   ];
+}
+
+function checkedDynamicObserverCouplings(
+  dynamicMode: CheckedSourceShape['dynamicMode'],
+  usesCustomMatcher: boolean,
+): readonly RuntimeBindingValueChannelCouplingKind[] {
+  const collectionCoupling = dynamicMode === 'map-or-boolean'
+    ? RuntimeBindingValueChannelCouplingKind.CheckedMapKeyedBooleanMutation
+    : RuntimeBindingValueChannelCouplingKind.CheckedCollectionMembershipMutation;
+  return withCustomMatcherCoupling([
+    RuntimeBindingValueChannelCouplingKind.CheckedBooleanSync,
+    RuntimeBindingValueChannelCouplingKind.CheckedDynamicSourceShape,
+    RuntimeBindingValueChannelCouplingKind.CheckedElementValueDomain,
+    RuntimeBindingValueChannelCouplingKind.CheckedElementValueObserver,
+    RuntimeBindingValueChannelCouplingKind.CheckedCollectionObserver,
+    collectionCoupling,
+  ], usesCustomMatcher);
 }
 
 function checkedCollectionObserverCouplings(

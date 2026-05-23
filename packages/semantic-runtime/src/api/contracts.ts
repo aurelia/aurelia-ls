@@ -3,6 +3,9 @@ import type {
   BootProjectInput,
 } from '../boot/frames.js';
 import type {
+  SourceFileRole,
+} from '../kernel/address.js';
+import type {
   AuthoringCapabilityKey,
   AuthoringConfidence,
   AuthoringEvidenceAuthority,
@@ -750,6 +753,8 @@ export interface SemanticTemplateCursorQuery {
   readonly authoringTemplateSourceFiles?: readonly string[] | null;
   /** Optional cap for standalone authoring templates compiled in this cursor query. */
   readonly authoringTemplateLimit?: number | null;
+  /** Controls whether cursor diagnostics may run TypeChecker-backed template overlay projection. */
+  readonly diagnosticProjection?: SemanticDiagnosticProjectionPolicy | `${SemanticDiagnosticProjectionPolicy}` | null;
   readonly page?: SemanticRuntimePageInput;
   readonly detail?: SemanticRuntimeDetail | `${SemanticRuntimeDetail}`;
 }
@@ -1103,7 +1108,7 @@ export interface SemanticRuntimeTypeSystemCompilerOptionsSummary {
 export interface SemanticRuntimeTypeSystemProgramSourceFileStats {
   readonly total: number;
   readonly evaluatedSources: number;
-  readonly ambientSources: number;
+  readonly overlaySources: number;
   readonly projectSources: number;
   readonly nodeModuleSources: number;
   readonly declarationSources: number;
@@ -1111,7 +1116,7 @@ export interface SemanticRuntimeTypeSystemProgramSourceFileStats {
   readonly externalSources: number;
   readonly sourceTextCharacters: number;
   readonly evaluatedSourceTextCharacters: number;
-  readonly ambientSourceTextCharacters: number;
+  readonly overlaySourceTextCharacters: number;
   readonly projectSourceTextCharacters: number;
   readonly nodeModuleSourceTextCharacters: number;
   readonly declarationSourceTextCharacters: number;
@@ -1120,7 +1125,7 @@ export interface SemanticRuntimeTypeSystemProgramSourceFileStats {
 }
 
 export type SemanticRuntimeTypeSystemProgramSourceFileGroupKind =
-  | 'ambient-source'
+  | 'overlay-source'
   | 'project-source'
   | 'node-module-package'
   | 'default-library'
@@ -2229,6 +2234,7 @@ export interface SemanticAuthoringRepairRow {
   readonly authority: AuthoringEvidenceAuthority | `${AuthoringEvidenceAuthority}`;
   readonly locus: SemanticAuthoringLocusKind;
   readonly source: SemanticSourceReference | null;
+  readonly sourceRole: SourceFileRole | `${SourceFileRole}` | null;
   readonly diagnosticKind: SemanticTemplateCursorDiagnosticKind | null;
   readonly siteKind: TemplateCompletionSiteKind | `${TemplateCompletionSiteKind}` | null;
   readonly valueSiteKind: TemplateValueSiteKind | `${TemplateValueSiteKind}` | null;
@@ -2254,6 +2260,7 @@ export interface SemanticAuthoringRepairMemberHintRow {
 export interface SemanticAuthoringRepairActionTargetRow {
   readonly targetKind: SemanticTemplateCursorSuggestionActionTargetKind;
   readonly source: SemanticSourceReference | null;
+  readonly sourceRole: SourceFileRole | `${SourceFileRole}` | null;
   readonly typeDisplay: string | null;
   readonly memberNames: readonly string[];
   readonly evidenceCount: number;
@@ -2280,6 +2287,7 @@ export interface SemanticAuthoringRepairClusterRow {
   readonly actionTargetSourceCoverage: 'all' | 'some' | 'none' | 'not-applicable';
   readonly actionTargetCount: number;
   readonly actionTargets: readonly SemanticAuthoringRepairActionTargetRow[];
+  readonly actionTargetSourceRoles: readonly SemanticSourceRoleCount[];
   readonly count: number;
   readonly targetMemberCount: number;
   readonly targetMemberNames: readonly string[];
@@ -2418,10 +2426,21 @@ export interface SemanticOpenSeamRow {
   readonly seamKindKey: OpenSeam['seamKindKey'];
   readonly summary: string;
   readonly reasonKinds: readonly (OpenSeamReasonKind | `${OpenSeamReasonKind}`)[];
+  readonly reasonSources: readonly SemanticOpenSeamReasonSource[];
   readonly source: SemanticSourceReference | null;
   readonly handles?: {
     readonly handle: OpenSeam['handle'];
     readonly addressHandle: AddressHandle | null;
+  };
+}
+
+export interface SemanticOpenSeamReasonSource {
+  readonly reasonKind: OpenSeamReasonKind | `${OpenSeamReasonKind}`;
+  readonly summary: string;
+  readonly source: SemanticSourceReference | null;
+  readonly handles?: {
+    readonly addressHandle: AddressHandle | null;
+    readonly evidenceHandle: OpenSeam['evidenceHandle'];
   };
 }
 
@@ -2874,6 +2893,8 @@ export interface SemanticAppDiagnosticRow {
   readonly severity: SemanticTemplateCursorDiagnosticSeverity;
   readonly summary: string;
   readonly source: SemanticSourceReference | null;
+  /** Boot-admitted source role when the diagnostic can be tied back to an authored project file. */
+  readonly sourceRole?: SourceFileRole | `${SourceFileRole}` | null;
   readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;
 }
 
@@ -2891,6 +2912,7 @@ export interface SemanticAppDiagnosticSummaryRow {
   readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;
   readonly count: number;
   readonly sourceFileCount: number;
+  readonly sourceRoles: readonly SemanticSourceRoleCount[];
   readonly sampleSummary: string;
   readonly sampleSources: readonly SemanticSourceReference[];
 }
@@ -2907,6 +2929,8 @@ export interface SemanticTypeScriptDiagnosticRelatedInformationRow {
   readonly message: string;
   readonly typescriptSource: string | null;
   readonly source: SemanticSourceReference | null;
+  /** Boot-admitted source role when TypeScript related information points at an authored project file. */
+  readonly sourceRole: SourceFileRole | `${SourceFileRole}` | null;
 }
 
 export interface SemanticTypeScriptDiagnosticRow {
@@ -2919,6 +2943,8 @@ export interface SemanticTypeScriptDiagnosticRow {
   readonly message: string;
   readonly typescriptSource: string | null;
   readonly source: SemanticSourceReference | null;
+  /** Boot-admitted source role; this is distinct from TypeScript's own optional diagnostic `source` label. */
+  readonly sourceRole: SourceFileRole | `${SourceFileRole}` | null;
   readonly relatedInformation: readonly SemanticTypeScriptDiagnosticRelatedInformationRow[];
 }
 
@@ -2936,6 +2962,7 @@ export interface SemanticTypeScriptDiagnosticSummaryRow {
   readonly typescriptSource: string | null;
   readonly count: number;
   readonly sourceFileCount: number;
+  readonly sourceRoles: readonly SemanticSourceRoleCount[];
   readonly sampleMessage: string;
   readonly sampleSources: readonly SemanticSourceReference[];
 }
@@ -4021,6 +4048,7 @@ export type SemanticTemplateCursorDiagnosticSeverity =
 export type SemanticTemplateCursorDiagnosticKind =
   | 'weak-expression-member-owner'
   | 'missing-expression-member'
+  | 'template-expression-typescript-diagnostic'
   | 'expression-runtime-evaluation-error'
   | 'expression-parse-error'
   | 'template-compiler-error'
@@ -4033,10 +4061,12 @@ export type SemanticTemplateCursorDiagnosticKind =
   | 'router-framework-error'
   | 'binding-target-access-framework-error'
   | 'binding-source-assignment-strictness'
-  | 'binding-source-assignment-runtime-noop';
+  | 'binding-source-assignment-runtime-noop'
+  | 'binding-source-runtime-branch-open';
 
 export type SemanticTemplateCursorDiagnosticAuthority =
   | 'semantic-authoring-policy'
+  | 'typescript'
   | 'framework-runtime-behavior'
   | 'framework-error-code';
 
@@ -4132,6 +4162,13 @@ export interface SemanticTemplateDiagnosticRow extends SemanticTemplateCursorDia
   readonly template: {
     readonly compilationLane: SemanticTemplateCompilationRow['compilationLane'] | null;
     readonly source: SemanticSourceReference | null;
+  };
+  readonly handles?: {
+    readonly sourceAddressHandle: AddressHandle | null;
+    readonly semanticProductHandle: ProductHandle | null;
+    readonly overlayOriginKey: string | null;
+    readonly overlayFileName: string | null;
+    readonly overlaySegmentLabel: string | null;
   };
 }
 

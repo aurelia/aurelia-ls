@@ -11,7 +11,7 @@ import type {
   AddressHandle,
   OpenSeamHandle,
 } from './handles.js';
-import { OpenSeam, type OpenSeamReasonKind } from './open-seam.js';
+import { OpenSeam, type OpenSeamReasonKind, type OpenSeamReasonSource } from './open-seam.js';
 import { ProvenanceRecord } from './provenance.js';
 import type {
   KernelStore,
@@ -28,6 +28,7 @@ export interface SourceOpenSeamInput {
   readonly end: number;
   readonly evidenceRoles: readonly EvidenceRole[];
   readonly reasonKinds?: readonly OpenSeamReasonKind[];
+  readonly reasonSources?: readonly OpenSeamReasonSource[];
   readonly includeProvenanceRecord?: boolean;
 }
 
@@ -98,6 +99,7 @@ export function recordsForSourceOpenSeam(
     addressHandle,
     evidenceHandle,
     input.reasonKinds ?? [],
+    input.reasonSources ?? [],
   ));
 
   return new SourceOpenSeamEmission(records, openSeamHandle);

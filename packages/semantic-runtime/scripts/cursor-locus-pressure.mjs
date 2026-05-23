@@ -1,4 +1,4 @@
-import { readFileSync, readdirSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import path from 'node:path';
 import { fileURLToPath } from 'node:url';
 import {
@@ -16,6 +16,10 @@ import {
 } from '../out/inquiry/locus.js';
 import { InquiryPageRequest } from '../out/inquiry/page.js';
 import { TemplateProductDetails } from '../out/template/product-details.js';
+import {
+  parsePressureRootCliOptions,
+  pressureRootsForOptions,
+} from './pressure-root-selection.mjs';
 
 const packageRoot = path.resolve(fileURLToPath(new URL('..', import.meta.url)));
 const workspaceRoot = path.resolve(packageRoot, '../..');
@@ -32,7 +36,6 @@ const sampleLimit = integerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_SAMPLE_LIMIT', 
 const perResourceLimit = integerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_PER_RESOURCE_LIMIT', 18);
 const inputLimit = optionalPositiveIntegerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_INPUT_LIMIT');
 const outputMode = cursorPressureOutputMode();
-const roots = limitedPressureRoots(pressureRoots(), inputLimit);
 const authoringTemplateLimitPerProject = integerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_AUTHORING_TEMPLATE_LIMIT_PER_PROJECT', 12);
 const authoringSourceFileLimitPerProject = integerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_AUTHORING_SOURCE_FILE_LIMIT_PER_PROJECT', 12);
 const diagnosticLocusLimitPerProject = integerEnv('SEMANTIC_RUNTIME_CURSOR_PRESSURE_DIAGNOSTIC_LOCUS_LIMIT_PER_PROJECT', 120);
@@ -40,10 +43,23 @@ const diagnosticReadLimitPerProject = integerEnv(
   'SEMANTIC_RUNTIME_CURSOR_PRESSURE_DIAGNOSTIC_READ_LIMIT_PER_PROJECT',
   Math.max(1000, diagnosticLocusLimitPerProject * 4),
 );
+const pressureRootSelectionConfig = {
+  workspaceRoot,
+  authoringFixtureRoot,
+  pressureFixtureRoot,
+  defaultRoots: [defaultRoot],
+  envRootNames: ['SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS', 'SEMANTIC_RUNTIME_PRESSURE_ROOTS'],
+  includeAuthoringFixtureName: (name) => name.startsWith('generated-') || name === 'storefront',
+  usageName: 'pnpm --filter @aurelia-ls/semantic-runtime pressure:cursor-loci',
+  label: 'cursor-locus pressure',
+  fixtureHelp: 'Use --fixture pressure-name, pressure:<name>, or authoring:<name> for focused cursor pressure.',
+};
+const cliOptions = parsePressureRootCliOptions(process.argv.slice(2), pressureRootSelectionConfig);
 const defaultCursorPressureAnalysisKinds = new Set([
   SemanticProjectAnalysisKind.AppWorld,
   SemanticProjectAnalysisKind.ResourceLibraryAuthoring,
 ]);
+const roots = limitedPressureRoots(pressureRootsForOptions(cliOptions, pressureRootSelectionConfig), inputLimit);
 
 console.log('semantic-runtime cursor locus pressure');
 console.log('scope: transient template-cursor pressure; paths, source text, and candidate names are omitted');
@@ -58,6 +74,8 @@ console.log(`sample-limit: ${sampleLimit}`);
 console.log(`per-resource-limit: ${perResourceLimit}`);
 console.log(`input-limit: ${inputLimit ?? 'none'}`);
 console.log(`output-mode: ${outputMode}`);
+console.log(`fixture-filter: ${cliOptions.fixtureNames.length === 0 ? 'all' : cliOptions.fixtureNames.join(',')}`);
+console.log(`root-filter: ${cliOptions.rootEntries.length === 0 ? 'all' : `${cliOptions.rootEntries.length} selected`}`);
 console.log(`authoring-template-limit-per-project: ${authoringTemplateLimitPerProject}`);
 console.log(`authoring-source-file-limit-per-project: ${authoringSourceFileLimitPerProject}`);
 console.log(`diagnostic-locus-limit-per-project: ${diagnosticLocusLimitPerProject}`);
@@ -1409,59 +1427,6 @@ function incrementAll(target, source) {
 
 function limitedPressureRoots(allRoots, limit) {
   return limit == null ? allRoots : allRoots.slice(0, limit);
-}
-
-function pressureRoots() {
-  const raw = process.env.SEMANTIC_RUNTIME_CURSOR_PRESSURE_ROOTS
-    ?? process.env.SEMANTIC_RUNTIME_PRESSURE_ROOTS
-    ?? defaultRoot;
-  const expanded = raw
-    .split(path.delimiter)
-    .map((root) => root.trim())
-    .filter((root) => root.length > 0)
-    .map((root) => path.isAbsolute(root) ? path.resolve(root) : path.resolve(workspaceRoot, root))
-    .flatMap((root) => fixturePressureRootsFor(root));
-  return [...new Set(expanded)];
-}
-
-function fixturePressureRootsFor(root) {
-  if (samePath(root, pressureFixtureRoot)) {
-    return fixtureChildRoots(pressureFixtureRoot);
-  }
-  if (samePath(root, authoringFixtureRoot)) {
-    return fixtureChildRoots(authoringFixtureRoot, (name) => name.startsWith('generated-') || name === 'storefront');
-  }
-  return [root];
-}
-
-function fixtureChildRoots(rootDir, includeName = () => true) {
-  return readdirSync(rootDir, { withFileTypes: true })
-    .filter((entry) => {
-      const childRoot = path.join(rootDir, entry.name);
-      return entry.isDirectory() && includeName(entry.name) && fixtureRootHasFiles(childRoot);
-    })
-    .map((entry) => path.join(rootDir, entry.name))
-    .sort((left, right) => path.basename(left).localeCompare(path.basename(right)));
-}
-
-function fixtureRootHasFiles(rootDir) {
-  const pending = [rootDir];
-  while (pending.length > 0) {
-    const currentDir = pending.pop();
-    for (const entry of readdirSync(currentDir, { withFileTypes: true })) {
-      if (entry.isFile()) {
-        return true;
-      }
-      if (entry.isDirectory()) {
-        pending.push(path.join(currentDir, entry.name));
-      }
-    }
-  }
-  return false;
-}
-
-function samePath(left, right) {
-  return path.resolve(left) === path.resolve(right);
 }
 
 function pressureProjectShapeFilter() {

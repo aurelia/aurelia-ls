@@ -54,7 +54,7 @@ export function readInvalidObservableDecoratorSites(
   typeSystem: TypeSystemProject,
 ): readonly ObservableDecoratorSite[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileInvalidObservableDecoratorSites(source.path, source.addressHandle, sourceFile);

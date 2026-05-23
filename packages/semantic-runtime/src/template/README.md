@@ -230,7 +230,10 @@ classification, expression parsing, and instruction lowering converge on the sam
   binding-pattern projector can prove or warn that the item shape is not object-compatible, or that an array-rest
   destructuring source is not an actual Array. Repeat source compatibility publishes the same issue product shape for
   runtime-html `repeat_non_iterable` (`AUR0777`) when a repeat source is outside the framework's built-in
-  `RepeatableHandlerResolver` categories.
+  `RepeatableHandlerResolver` categories. Static repeated-view values use the shared representative-value substrate:
+  exact per-instance views are not materialized, but common object fields and string-pattern prefixes can survive as a
+  conservative child-scope value. If a consumer needs correlated alternatives across fields from the same repeated item,
+  model that as a bounded value-flow frontier rather than teaching the consumer to special-case `repeat.for`.
 - `runtime-controller-issue.ts` owns framework-runtime diagnostics discovered while emulating controller construction or
   hydration. Runtime rendering uses it for renderer resource lookup failures when a lowered instruction carries a
   resource name but the rendering container cannot resolve it: missing custom elements (`AUR0752`), custom attributes
@@ -277,8 +280,16 @@ classification, expression parsing, and instruction lowering converge on the sam
   `InterpolationPartBinding` expression for bind-time behavior and value-converter publication, rather than treating the
   outer interpolation string as an inert wrapper. Behavior application and issue products source to the exact behavior
   name span when the carrier comes from an admitted source file, not just the whole binding carrier span.
+  Binding-mode behaviors (`oneTime`, `toView`, `fromView`, and `twoWay`) are modeled as resource-visible framework
+  bind-time effects, not parser aliases. Their effective mode is shared through `runtime-binding-mode-behavior.ts` so
+  controller bind target access, value-converter phases, bound-controller values, template-controller source assignment,
+  and observation data-flow all see the same post-`astBind` mode without letting unresolved behavior syntax silently
+  mutate binding direction.
 - `runtime-value-converter.ts` and `runtime-value-converter-materializer.ts` own value-converter invocation pressure
-  that belongs to a rendered binding expression rather than to resource lookup. The first modeled path is
+  that belongs to a rendered binding expression rather than to resource lookup. Application products now distinguish
+  `to-view` and `from-view` phases when binding mode proves target-to-source writeback; data-flow owns the exact
+  `fromView` return-type projection and assignment strictness, while this materializer owns phase publication and
+  converter-owned framework issues. The first modeled issue path is
   `SanitizeValueConverter.toView`: when the compiler resource scope resolves the built-in `sanitize` converter and the
   active container tree has no modeled `ISanitizer` resolver, semantic-runtime spends runtime-html
   `method_not_implemented` (`AUR0099`) for the default throwing sanitizer. A modeled app `ISanitizer` registration
@@ -317,8 +328,9 @@ classification, expression parsing, and instruction lowering converge on the sam
   switch cases/defaults link to `switch` when present. Keep these branch relationships in the controller graph rather
   than baking them into expression evaluation. `template-scope-type-projector.ts` owns the TypeChecker support used by
   this phase: listener `$event` types, repeat override locals, iterator local types, repeat source compatibility,
-  let-binding value types, promise result slot types, and template-controller primary value evaluation. Keep those reusable projection rules there
-  instead of duplicating them in cursor, diagnostic, or data-flow answer code.
+  let-binding value types, promise result slot types, template-controller primary value evaluation, and the non-nullish
+  object context used by `with.bind`. Keep those reusable projection rules there instead of duplicating them in cursor,
+  diagnostic, or data-flow answer code.
 - `runtime-controller.ts` is the mutable render-time controller frame used while renderer emulation runs. It freezes
   into auLink-backed controller products from `configuration/controller.ts` after scope projection has attached modeled
   `Scope` references; the frame itself is not the durable product. The frame keeps an exact local lifecycle timeline
@@ -388,19 +400,21 @@ classification, expression parsing, and instruction lowering converge on the sam
   runtime-shaped `Scope`, binding-context, and override-context products. Controller and `Scope` model classes own the
   construction shapes; the materializer only preserves template-order effects and commits records.
   It preserves the CE boundary-scope rule, repeat local binding-context rule, repeat override contextual names,
-  `with.bind` object binding-context rule, branch-local `if.bind`/`else` narrowing, promise result locals, and
-  let-binding target-context rule so expression inquiry can use the same scope substrate as runtime-shaped compilation.
+  `with.bind` non-nullish object binding-context rule, branch-local `if.bind`/`else` narrowing, switch/case branch
+  scope creators, promise result locals, and let-binding target-context rule so expression inquiry can use the same
+  scope substrate as runtime-shaped compilation.
   Listener and state-dispatch event scopes keep `$event` as the DOM event type, then attach member-type refinements for
   `$event.currentTarget` and native form-control `$event.target` through the authored host element. This preserves normal
   event members while letting form payload expressions such as `$event.target.value` close through the same DOM
   tag-name-map substrate as observer lookup.
-  It also models target-to-source bindable assignments that create runtime-only binding-context names for later
-  template expressions. A two-way/from-view bindable can write a previously undeclared scope name; later
-  sibling/descendant expressions should see that name after the instruction that wrote it. The slot stays runtime-only
-  for assignment policy, but can retain the bindable's TypeChecker member as a type carrier so repeat locals and
-  member completions degrade to the actual target type instead of to a missing-slot-type seam. When the bindable itself
-  is untyped, the remaining authoring pressure is honest `any`/weak-type pressure from the plugin or app surface, not
-  a lost scope handoff.
+  It also models target-to-source bindable assignments that create runtime-only binding-context names for the binding
+  expression itself and for later template expressions. A two-way/from-view bindable can write a previously undeclared
+  scope name; the source expression that names the slot should be analyzed with that runtime-assignment slot already
+  visible, and later sibling/descendant expressions should see the same name after the instruction that wrote it. The
+  slot stays runtime-only for assignment policy, but can retain the bindable's TypeChecker member as a type carrier so
+  repeat locals and member completions degrade to the actual target type instead of to a missing-slot-type seam. When
+  the bindable itself is untyped, the remaining authoring pressure is honest `any`/weak-type pressure from the plugin or
+  app surface, not a lost scope handoff.
   Dynamic instructions compiled from closed `...$attrs` captures reuse the hydration context that captured the
   attribute; nested `...$attrs` transfer moves to that context controller's parent. This lets wrapper components forward
   expressions such as `value.bind="email"` into an inner input while typechecking `email` against the parent view model.
@@ -424,7 +438,24 @@ classification, expression parsing, and instruction lowering converge on the sam
   direct `auLink` anchors to the runtime-html template-controller classes because they are the product-side behavior
   counterpart used by scope, controller, inquiry, and API projections. The value-domain kind is intentionally separate
   from bindable type projection: framework primary values such as `case.value` are open-ended, while secondary
-  bindables such as `case.fallThrough` still need their own finite/static or checker-backed domain.
+  bindables such as `case.fallThrough` still need their own finite/static or checker-backed domain. Static `case`
+  values can enter through compiler-lowered `SetPropertyInstruction`s while bound values enter through expression
+  sources. Static instruction values are runtime strings, so checker overlays must quote them as TypeScript string
+  literals instead of copying the raw attribute value as an expression. Consumers should read both static and bound
+  values through the template-controller value-source helper rather than assuming all controller values are property
+  bindings. Static `fall-through` follows runtime-html's `case` multi-attribute syntax
+  (`case="value:list; fall-through:true"`) rather than a sibling attribute on the controlled element. Runtime-html
+  built-in coverage is guarded by
+  `contract:template-controller-built-ins`, which exercises `if`, `else`, `repeat`, `with`, `portal`, `promise`,
+  `pending`, `then`, `catch`, `switch`, `case`, and `default-case` through controller rows and generated overlay type
+  inference. The same contract also compares `template-controller-semantics.ts` with
+  `RuntimeHtmlBuiltInResourceCatalogs.DefaultResources` and the framework-source-derived runtime-html target/name set,
+  so resource and semantics mirrors drift together instead of letting a fixture pass hide catalog skew. Atlas
+  `framework.resources -- --projection=convergence --resourceKind=template-controller` is the broader framework check:
+  it currently sees the twelve runtime-html controllers plus `ui-virtualization:VirtualRepeat`. The runtime-html
+  contract stays exact, while the full framework semantics catalog also covers `virtual-repeat` through the
+  `@aurelia/ui-virtualization` resource-admission path. Deeper virtualization service, DOM renderer, scroller, and
+  collection-strategy behavior remains separate plugin pressure.
 - `built-in-syntax.ts` records framework-provided attribute-pattern and binding-command handlers as concrete
   runtime-shaped model classes with `auLink` anchors.
 - `built-in-syntax-catalog-materializer.ts` materializes framework-owned syntax catalogs into kernel-backed catalog, executable,
@@ -539,3 +570,129 @@ Template compilation should now enter through a compilation unit. Avoid letting 
 the owner resource, compiler world, parse context, or runtime service set from source. If a materializer needs different
 context, add it to the unit/context model or create a nested child context instead of threading unrelated parameters
 through parser APIs.
+
+`template-type-system-overlay.ts` is the first checker-overlay consumer for template scope. It consumes compiled
+template/runtime products and emits a virtual TypeScript source that replays authored expression text in the current
+`BindingScope` ancestry rather than inventing TypeScript from projected display strings. The current supported lane is
+root view-model slot aliases, nested `repeat.for` scope blocks, `let` scope declarations from runtime scope effects,
+built-in `if`/`else` condition blocks, including fallback branches where the checker could not narrow but Aurelia
+still created a conditional child view, repeat override locals such as `$index`/`$odd`/`$length`, listener-event layers for `$event`
+expressions, `with.bind` non-nullish binding-context layers, `portal` pass-through child views, `promise`
+pending/result context layers, switch/case branch layers with a named `__au_switch_case(...)` helper, state binding
+scope layers,
+importable value-converter `toView(...)` call surfaces, and runtime-assignment slots introduced by from-view/two-way
+bindable flows. Runtime-assignment slots may reuse an already-visible in-scope alias when the
+materialized slot and alias carry the same checker reference; otherwise they use an importable target-member
+indexed-access type when the target bindable member is known. The overlay
+must not stringify projected display types as a shortcut. Unsupported owner kinds, non-importable view-models, and
+non-TypeScript-representable expression surfaces must stay explicit skips until the relevant runtime
+or parser semantics are modeled. `template-type-system-overlay-expression.ts` owns the copied-expression projection:
+it decides whether an Aurelia expression has a TypeScript-compatible authored source surface, and keeps value
+converters without an importable resource target, binding-behavior bind semantics, custom expressions, and
+statement-shaped bindings as named pressure instead of letting the checker report generated-source noise. Boundary
+`this` is TypeScript-compatible because the generated overlay is wrapped in a typed resource-template function.
+Importable value converters are projected as checker calls to the real converter instance
+type, with the converter name and each argument mapped back to authored template spans and the semantic expression
+product that generated the checker segment. Built-in converters can derive that importable target from the checker
+carrier declaration when resource identity metadata does not expose a module path. Missing converters deliberately use
+an unknown converter placeholder so the inner expression and arguments stay checker-visible while semantic diagnostics
+own the missing-resource issue. The same generated expression parts feed repeat iterable, let, condition, `with`,
+promise, and state-binding layers, so Aurelia-specific expression projection is not duplicated between standalone
+probes and controller/scope setup. `template-type-system-overlay-plan.ts`
+owns the intermediate overlay layer and emitter shape; keep construct planning from semantic products separate from
+generated TypeScript text emission as the supported Aurelia surface widens. Keep this builder downstream of scope materialization: if a future overlay needs a new local,
+route parameter, `$event`, or plugin scope fact, add that fact to the owning semantic materializer first instead of
+teaching the overlay builder to rediscover it from raw template text. `template-expression-selection.ts` owns shared
+template expression/value-site selection plus expression-parse to runtime-scope lookup; cursor inquiries, diagnostics,
+and overlays should reuse that selector so they agree on the semantic product locus before TypeScript projection
+starts. `BindingScope.scopeCreators` is the hot-object mirror for framework-semantic products that
+create or narrow a scope: runtime scope effects, listener events, state binding scopes, runtime assignments, and
+template-controller branch/value facts. Use it for consumers that need to replay scope causes in order, rather than
+searching by source address or trying to recover them from rendered instructions. Same-level synthetic scopes preserve
+creator facts from their base scope so overlay consumers can replay the let/repeat/runtime-assignment setup visible
+through copied scope slots before adding a branch condition. When `if.bind` or adjacent `else` cannot produce a
+narrowed TypeChecker scope, scope construction still records a `TemplateControllerCondition` creator with the original
+condition instruction and truthy/falsy polarity so overlay/inquiry consumers can replay the branch guard instead of
+losing it as an anonymous branch. `switch`/`case` overlay replay uses the authored switch expression in the generated
+guard so TypeScript narrows the same expression seen by case-body calls. Static `case="value"` sources, bound
+`case.bind` sources, scalar case values, and array-valued cases share the same value-source path and
+`__au_switch_case(...)` helper. Case branches replay blocking previous case values and static fall-through chains so
+a fall-through successor can narrow to the union of the matched starter cases plus its own case. `default-case`
+excludes readable direct case values. Dynamic/unknown fall-through or unreadable previous case values degrade that
+branch to a plain overlay block instead of inventing a predicate. The durable `BindingScope` branch path uses the same
+case-value and fall-through helpers through `TemplateControllerFlowScopeMaterializer` and
+`CheckerExpressionScopeNarrower`, so cursor inquiries, template diagnostics, and overlays share direct `AccessScope`
+and direct `AccessMember` equality-domain refinements instead of carrying separate switch policies. The `$event`
+overlay helper uses DOM event maps for the
+base event object and consumes `TemplateScopeTypeProjector` member refinements for `currentTarget`/`target` when the
+materialized `$event` slot exposes simple checker-visible target types. Keep further event precision in that
+scope-projection handoff rather than adding local HTML tag switches. `$this`, `$parent`, and boundary `this` source
+tokens now copy into TypeScript only when generated aliases can be derived from `BindingScope` replay or the
+resource-template function boundary: root `$this` points at the function `this`, repeat scopes declare `$parent` plus a
+current `$this` object synthesized from replayed binding-context slots
+such as `{ item }` or `{ key, entry }`, and nested repeat parent aliases carry a typed `$parent` chain so
+`$parent.$parent.*` follows Aurelia ancestor lookup without rewriting authored text. Non-replayed binding-pattern
+context shapes remain explicit skips rather than hidden generated-TypeScript name-resolution diagnostics. `with.bind`
+captures the outer `$this`, evaluates the source expression once, casts the generated binding context through
+`NonNullable<typeof source>`, and then projects ordinary local declarations such as `label` from the materialized
+binding-context slots; listener-event scopes nested under that value scope retain the generated `$parent` alias so
+`$parent` targets the outer component rather than the value object. Promise `then`/`catch` target expressions are
+promise-result scope declarations, not standalone expression probes. Promise `then` locals use the awaited parent
+promise type, promise `catch` locals use `unknown`, and state binding scopes use the modeled state context member
+expressions from `StateBindingScope` rather than searching by raw local names.
+`app-api-pressure.mjs` prints non-extractive overlay skip summary buckets so larger app-shaped probes can distinguish
+remaining ancestor-alias pressure from value-converter, binding-behavior, or custom-expression pressure without
+promoting source details.
+Binding behaviors are value-transparent for overlay expression checking: framework `astEvaluate` returns the wrapped
+expression, while bind-time behavior effects and diagnostics are owned by `runtime-binding-behavior-materializer.ts`.
+`template-type-system-overlay-prelude.ts` contains only emitted helper declarations, each with an owner and emitted-name
+inventory. Promise result locals, `$this`/`$parent` aliases, and temporary scope locals are generated layer facts rather
+than prelude helpers, so do not add empty prelude rows for constructs that emit no reusable declaration.
+`template-type-system-overlay-expression-support.ts` is the compact ownership matrix for every semantic-runtime
+expression AST kind. Read that table before adding another `UnsupportedSyntax` branch: ordinary TypeScript-shaped
+expressions can copy authored source, scope-root expressions depend on BindingScope alias replay, value converters
+lower through modeled value-converter call surfaces, binding behaviors unwrap to their inner expression, `repeat.for`,
+interpolation, and binding patterns are owner-handled, `CustomExpression` currently belongs to i18n translation binding,
+and destructuring assignment remains a statement-emission frontier. When a TypeScript-shaped parent contains a modeled
+generated child expression, the projector now splices the child parts into the authored parent source while preserving
+source segments for diagnostics. This is a substrate capability, not an authoring grammar claim: framework value
+converters are chain expressions, so app fixtures should not invent arbitrary `foo(value | converter)` template syntax.
+Named helper declarations still belong in `template-type-system-overlay-prelude.ts`; add helpers there rather than
+embedding ad hoc declarations in expression projection.
+The copied-expression projector may therefore unwrap the behavior node for value typing, but should not inline
+behavior-specific bind semantics into generated TypeScript. Value converters are intentionally different because
+`astEvaluate` delegates to `useConverter(...)` and the converter can change the value; the overlay represents them only
+when resource recognition supplies an importable converter target. The generated helper mirrors framework
+`useConverter(...)`: checker-visible `toView(value, ...args)` methods provide the result and argument policy,
+literal `withContext = true` inserts the caller-context parameter before authored converter arguments, and converter
+types without `toView` preserve the input value instead of producing a TypeScript-only missing-member error.
+
+Parent-to-child bindable values are also scope facts before they are overlay facts. `RuntimeBoundControllerValueTable`
+records property bindings that render against child controller view-models while evaluating in the parent scope.
+Scope construction projects unambiguous table entries into the child custom-element root `BindingContext`, and the
+overlay aliases those slots with importable member types when possible. This is what lets a child template type-check a
+parent-bound callback bindable against the parent's function type instead of the child class's placeholder initializer.
+Do not suppress TS2554/TS2345 in the overlay when this handoff is missing; fix the controller/scope value flow first.
+The project pass schedules runtime analysis over compiled resources by rendered-child dependency SCCs. Acyclic parents
+analyze before rendered children so child root overlays can spend completed parent-bound values; mutually recursive
+resources analyze as one finite group against predecessor facts only, which keeps recursive rendering deterministic
+instead of depending on app resource registration order.
+
+Inline custom-attribute multi-binding is a source-provenance and value-flow canary for the overlay path. Secondary segment addresses
+are created during binding-command lowering, so value-site publication must receive the freshly materialized
+`SourceSpanAddress` parse context directly instead of looking it up from the store before commit. Commanded segment
+execution must likewise use the segment value address as the expression source address. If a generated overlay starts
+copying the full attribute value instead of the segment expression, fix the lowering/value-site handoff first; do not
+repair it in the overlay builder.
+
+Public template diagnostics consume this overlay only under the `type-projection` diagnostic policy. The public row is a
+TypeScript-authority template diagnostic mapped through overlay segments back to the authored expression span, with a
+structured action target. Nullish overlay rows point at guarding or narrowing the expression; other admitted checker
+rows currently use inspection until a more precise semantic repair policy owns the code. Do not expose every checker
+diagnostic from the generated file: syntax errors,
+missing synthetic names, and implicit-any fallout are usually overlay/substrate pressure, not user-authored template
+truth. If the semantic template diagnostic lane already owns a missing-member diagnostic for the same authored span,
+the overlay suppresses the equivalent TS2339/TS2551 row; TypeScript-native rows such as argument mismatch remain public
+checker evidence. The admitted code policy currently proves argument mismatch, arity mismatch, and nullish access in
+the public fixture, plus value-converter argument mismatch in the value-converter fixture. Keep it narrow until ancestor
+scope aliases and event target/currentTarget refinements have first-class overlay semantics.

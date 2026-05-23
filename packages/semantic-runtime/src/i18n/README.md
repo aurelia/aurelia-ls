@@ -29,6 +29,10 @@ semicolon-separated segments, `[title]key` attribute targets, `[text]`/`[html]` 
 `textContent`/`img.src` target. `api.I18nTranslationBindings` exposes those groups as row facts with the rendered
 element tag, static/dynamic key shape, normalized target properties and target kinds, parameter presence, and lifecycle
 issue count; authoring verification uses the same rows through `i18n-translation-binding` expected effects.
+Framework i18n also uses expression-parser `CustomExpression` as an opaque carrier for static translation attribute
+raw values: the translation binding command creates it, and `TranslationBinding.create(...)` reparses its value as
+interpolation before binding. Treat `CustomExpression` pressure in this lane as i18n key/binding semantics first, not
+as a generic unsupported expression overlay problem.
 
 `translation-binding-issues.ts` owns the framework-grounded `TranslationBinding.create/bind` diagnostic lane. It consumes
 the shared groups after runtime rendering and template-scope construction, then emits runtime binding issues for missing

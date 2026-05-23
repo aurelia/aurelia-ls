@@ -19,7 +19,10 @@ import {
 } from '../telemetry/phase.js';
 import type { RouteConfigContextMaterializationProjectResult } from '../router/route-context-materialization.js';
 import type { RouteableComponentReference } from '../router/model.js';
-import type { AddressHandle } from '../kernel/handles.js';
+import type {
+  AddressHandle,
+  ProductHandle,
+} from '../kernel/handles.js';
 import { addressBelongsToSourceFiles, sourceFileAddressHandlesForFileNames } from '../kernel/source-address.js';
 import {
   CustomElementDefinition,
@@ -92,6 +95,9 @@ import {
   type CompiledTemplateEmission,
   type CompiledTemplateMaterializationRequest,
 } from './compiled-template-materializer.js';
+import {
+  HydrateElementInstruction,
+} from './instruction-ir.js';
 import {
   TemplateRuntimeAnalysisMaterializer,
   TemplateRuntimeAnalysisRequest,
@@ -461,26 +467,29 @@ export class TemplateCompilationProjectPass {
     phases: TemplateCompilationPhaseRecorder,
   ): readonly TemplateResourceRuntimeAnalysisEmission[] {
     const resources: TemplateResourceRuntimeAnalysisEmission[] = [];
-    for (const compilation of compilations) {
-      const boundControllerValues = runtimeBoundControllerValueTableForTemplateResources(resources);
-      resources.push(new TemplateResourceRuntimeAnalysisEmission(
-        compilation,
-        phases.measure(
-          'runtime-analysis',
-          () => this.analyzeResource(
-            compilation,
-            projectContext,
-            projectKey,
-            evaluation,
-            typeSystem,
-            resourceDefinitions,
-            runtimeAnalysisDepth,
-            expressionWorld,
-            phases.telemetry,
-            boundControllerValues,
+    for (const group of runtimeAnalysisScheduleGroups(compilations, resourceDefinitions)) {
+      const boundControllerValues = runtimeBoundControllerValueTableForTemplateResources(this.store, resources);
+      const groupResources = group.map((compilation) =>
+        new TemplateResourceRuntimeAnalysisEmission(
+          compilation,
+          phases.measure(
+            'runtime-analysis',
+            () => this.analyzeResource(
+              compilation,
+              projectContext,
+              projectKey,
+              evaluation,
+              typeSystem,
+              resourceDefinitions,
+              runtimeAnalysisDepth,
+              expressionWorld,
+              phases.telemetry,
+              boundControllerValues,
+            ),
           ),
-        ),
-      ));
+        )
+      );
+      resources.push(...groupResources);
     }
     return resources;
   }
@@ -890,6 +899,201 @@ function templateResourceCompilationKey(
   definition: CustomElementDefinition,
 ): string {
   return definition.productHandle ?? `${definition.key}:${definition.name}`;
+}
+
+function runtimeAnalysisScheduleGroups(
+  compilations: readonly TemplateResourceCompilationEmission[],
+  resourceDefinitions: ResourceDefinitionIndex | null,
+): readonly (readonly TemplateResourceCompilationEmission[])[] {
+  if (compilations.length < 2) {
+    return compilations.map((compilation) => [compilation]);
+  }
+
+  const byKey = new Map<string, TemplateResourceCompilationEmission>();
+  const keyByDefinitionProductHandle = new Map<ProductHandle, string>();
+  const originalIndexByKey = new Map<string, number>();
+  const keys = compilations.map((compilation, index) => {
+    const key = templateResourceCompilationKey(compilation.definition);
+    byKey.set(key, compilation);
+    originalIndexByKey.set(key, index);
+    if (compilation.definition.productHandle != null) {
+      keyByDefinitionProductHandle.set(compilation.definition.productHandle, key);
+    }
+    return key;
+  });
+  const outgoingByKey = runtimeAnalysisDependencyGraph(
+    compilations,
+    resourceDefinitions,
+    byKey,
+    keyByDefinitionProductHandle,
+  );
+  const groupKeys = stronglyConnectedRuntimeAnalysisGroups(keys, outgoingByKey, originalIndexByKey);
+  const scheduledGroupKeys = scheduleRuntimeAnalysisGroups(groupKeys, outgoingByKey, originalIndexByKey);
+  return scheduledGroupKeys.map((group) =>
+    group.map((key) => byKey.get(key)).filter((compilation): compilation is TemplateResourceCompilationEmission => compilation != null)
+  );
+}
+
+function runtimeAnalysisDependencyGraph(
+  compilations: readonly TemplateResourceCompilationEmission[],
+  resourceDefinitions: ResourceDefinitionIndex | null,
+  byKey: ReadonlyMap<string, TemplateResourceCompilationEmission>,
+  keyByDefinitionProductHandle: ReadonlyMap<ProductHandle, string>,
+): ReadonlyMap<string, ReadonlySet<string>> {
+  const outgoingByKey = new Map<string, Set<string>>();
+  for (const compilation of compilations) {
+    const parentKey = templateResourceCompilationKey(compilation.definition);
+    const childKeys = new Set<string>();
+    const addChildKey = (childKey: string | null): void => {
+      if (childKey != null && byKey.has(childKey) && childKey !== parentKey) {
+        childKeys.add(childKey);
+      }
+    };
+
+    if (resourceDefinitions != null) {
+      for (const dependency of directDependencyDefinitions(compilation.definition, resourceDefinitions)) {
+        if (!(dependency instanceof CustomElementDefinition)) {
+          continue;
+        }
+        addChildKey(templateResourceCompilationKey(dependency));
+      }
+    }
+    for (const instruction of compilation.compiledTemplate.instructions) {
+      if (!(instruction instanceof HydrateElementInstruction)) {
+        continue;
+      }
+      addChildKey(instruction.definitionProductHandle == null
+        ? null
+        : keyByDefinitionProductHandle.get(instruction.definitionProductHandle) ?? null);
+    }
+    outgoingByKey.set(parentKey, childKeys);
+  }
+  return outgoingByKey;
+}
+
+function stronglyConnectedRuntimeAnalysisGroups(
+  keys: readonly string[],
+  outgoingByKey: ReadonlyMap<string, ReadonlySet<string>>,
+  originalIndexByKey: ReadonlyMap<string, number>,
+): readonly (readonly string[])[] {
+  const indexByKey = new Map<string, number>();
+  const lowLinkByKey = new Map<string, number>();
+  const stack: string[] = [];
+  const keysOnStack = new Set<string>();
+  const groups: string[][] = [];
+  let nextIndex = 0;
+
+  const visit = (key: string): void => {
+    indexByKey.set(key, nextIndex);
+    lowLinkByKey.set(key, nextIndex);
+    nextIndex += 1;
+    stack.push(key);
+    keysOnStack.add(key);
+
+    for (const childKey of outgoingByKey.get(key) ?? []) {
+      if (!indexByKey.has(childKey)) {
+        visit(childKey);
+        lowLinkByKey.set(key, Math.min(lowLinkByKey.get(key)!, lowLinkByKey.get(childKey)!));
+      } else if (keysOnStack.has(childKey)) {
+        lowLinkByKey.set(key, Math.min(lowLinkByKey.get(key)!, indexByKey.get(childKey)!));
+      }
+    }
+
+    if (lowLinkByKey.get(key) !== indexByKey.get(key)) {
+      return;
+    }
+    const group: string[] = [];
+    while (stack.length > 0) {
+      const member = stack.pop()!;
+      keysOnStack.delete(member);
+      group.push(member);
+      if (member === key) {
+        break;
+      }
+    }
+    groups.push(group);
+  };
+
+  for (const key of keys) {
+    if (!indexByKey.has(key)) {
+      visit(key);
+    }
+  }
+
+  return groups.map((group) =>
+    group.sort((left, right) => originalIndexForKey(left, originalIndexByKey) - originalIndexForKey(right, originalIndexByKey))
+  );
+}
+
+function scheduleRuntimeAnalysisGroups(
+  groups: readonly (readonly string[])[],
+  outgoingByKey: ReadonlyMap<string, ReadonlySet<string>>,
+  originalIndexByKey: ReadonlyMap<string, number>,
+): readonly (readonly string[])[] {
+  const groupIndexByKey = new Map<string, number>();
+  groups.forEach((group, groupIndex) => {
+    for (const key of group) {
+      groupIndexByKey.set(key, groupIndex);
+    }
+  });
+
+  const incomingCountByGroup = new Map<number, number>();
+  const outgoingGroupsByGroup = new Map<number, Set<number>>();
+  groups.forEach((_, groupIndex) => incomingCountByGroup.set(groupIndex, 0));
+  for (const [parentKey, childKeys] of outgoingByKey) {
+    const parentGroup = groupIndexByKey.get(parentKey);
+    if (parentGroup == null) {
+      continue;
+    }
+    for (const childKey of childKeys) {
+      const childGroup = groupIndexByKey.get(childKey);
+      if (childGroup == null || childGroup === parentGroup) {
+        continue;
+      }
+      const outgoingGroups = outgoingGroupsByGroup.get(parentGroup) ?? new Set<number>();
+      outgoingGroupsByGroup.set(parentGroup, outgoingGroups);
+      if (outgoingGroups.has(childGroup)) {
+        continue;
+      }
+      outgoingGroups.add(childGroup);
+      incomingCountByGroup.set(childGroup, (incomingCountByGroup.get(childGroup) ?? 0) + 1);
+    }
+  }
+
+  const groupSortKey = (groupIndex: number): number =>
+    Math.min(...groups[groupIndex]!.map((key) => originalIndexForKey(key, originalIndexByKey)));
+  const ready = groups
+    .map((_, groupIndex) => groupIndex)
+    .filter((groupIndex) => incomingCountByGroup.get(groupIndex) === 0)
+    .sort((left, right) => groupSortKey(left) - groupSortKey(right));
+  const scheduledGroups: string[][] = [];
+  const emitted = new Set<number>();
+
+  while (ready.length > 0) {
+    const groupIndex = ready.shift()!;
+    if (emitted.has(groupIndex)) {
+      continue;
+    }
+    emitted.add(groupIndex);
+    scheduledGroups.push([...groups[groupIndex]!]);
+    for (const childGroup of outgoingGroupsByGroup.get(groupIndex) ?? []) {
+      const remaining = (incomingCountByGroup.get(childGroup) ?? 0) - 1;
+      incomingCountByGroup.set(childGroup, remaining);
+      if (remaining === 0) {
+        ready.push(childGroup);
+        ready.sort((left, right) => groupSortKey(left) - groupSortKey(right));
+      }
+    }
+  }
+
+  return scheduledGroups;
+}
+
+function originalIndexForKey(
+  key: string,
+  originalIndexByKey: ReadonlyMap<string, number>,
+): number {
+  return originalIndexByKey.get(key) ?? Number.MAX_SAFE_INTEGER;
 }
 
 function selectAuthoringTemplateDefinitions(

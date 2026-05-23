@@ -44,9 +44,9 @@ const serviceInteractions = topology.serviceInteractionBindings.filter((row) =>
 );
 
 const failures = [
-  listenerChannels.length === 3
+  listenerChannels.length === 4
     ? null
-    : `Expected 3 click listener event-handler invocation channels; observed ${listenerChannels.length}.`,
+    : `Expected 4 click listener event-handler invocation channels; observed ${listenerChannels.length}.`,
   listenerChannels.every((row) => row.runtimeValueType === 'boolean')
     ? null
     : `Expected every listener runtime value type to unwrap to boolean; observed ${JSON.stringify(listenerChannels.map((row) => ({
@@ -63,12 +63,18 @@ const failures = [
   sourceNames.has('state.submitWithEvent($event)')
     ? null
     : 'Expected an explicit event-call listener flow for state.submitWithEvent($event).',
+  sourceNames.has('state.submitWithButton($event.currentTarget)')
+    ? null
+    : 'Expected a refined current-target listener flow for state.submitWithButton($event.currentTarget).',
   serviceInteractions.some((row) => row.interactionMemberName === 'submitWithEvent')
     ? null
     : 'Expected app topology to expose submitWithEvent as a state call interaction.',
   serviceInteractions.some((row) => row.interactionMemberName === 'makeSubmitHandler')
     ? null
     : 'Expected app topology to expose makeSubmitHandler as a state call interaction.',
+  serviceInteractions.some((row) => row.interactionMemberName === 'submitWithButton')
+    ? null
+    : 'Expected app topology to expose submitWithButton as a state call interaction.',
 ].filter(Boolean);
 
 const summary = {

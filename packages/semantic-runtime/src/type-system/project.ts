@@ -26,6 +26,12 @@ import {
   isDefaultLibrarySourceFile,
   isTypeSystemPathAtOrUnder,
 } from './source-file-path.js';
+import {
+  createTypeSystemOverlaySourceFile,
+  typeSystemOverlaySegmentAt,
+  type TypeSystemOverlaySource,
+  type TypeSystemOverlaySourceSegment,
+} from './overlay.js';
 export {
   clearTypeSystemCompilerHostSourceFileCache,
   readTypeSystemCompilerHostSourceFileCacheOverview,
@@ -40,7 +46,7 @@ export type {
 export type TypeSystemProjectPhaseName =
   | 'evaluated-source-index'
   | 'project-options'
-  | 'ambient-source-index'
+  | 'overlay-source-index'
   | 'compiler-host'
   | 'program'
   | 'checker';
@@ -54,7 +60,7 @@ export interface TypeSystemProjectPhaseTiming {
 export interface TypeSystemProgramSourceFileStats {
   readonly total: number;
   readonly evaluatedSources: number;
-  readonly ambientSources: number;
+  readonly overlaySources: number;
   readonly projectSources: number;
   readonly nodeModuleSources: number;
   readonly declarationSources: number;
@@ -62,7 +68,7 @@ export interface TypeSystemProgramSourceFileStats {
   readonly externalSources: number;
   readonly sourceTextCharacters: number;
   readonly evaluatedSourceTextCharacters: number;
-  readonly ambientSourceTextCharacters: number;
+  readonly overlaySourceTextCharacters: number;
   readonly projectSourceTextCharacters: number;
   readonly nodeModuleSourceTextCharacters: number;
   readonly declarationSourceTextCharacters: number;
@@ -71,7 +77,7 @@ export interface TypeSystemProgramSourceFileStats {
 }
 
 export type TypeSystemProgramSourceFileGroupKind =
-  | 'ambient-source'
+  | 'overlay-source'
   | 'project-source'
   | 'node-module-package'
   | 'default-library'
@@ -124,6 +130,17 @@ export interface TypeSystemProgramNodeRemapStats {
   readonly spanMisses: number;
 }
 
+export interface TypeSystemProjectBuildOptions {
+  /**
+   * Additional Program-owned virtual TypeScript sources for Aurelia semantic representations.
+   *
+   * These are appended to the default semantic-runtime overlays and are checker roots, not ordinary TypeScript
+   * diagnostic roots. Use this path when a later pass has enough semantic information to represent template,
+   * controller, router, or plugin surfaces in TypeScript without growing a second checker setup path.
+   */
+  readonly overlaySources?: readonly TypeSystemOverlaySource[];
+}
+
 interface TypeSystemSourceFileIndexes {
   readonly byPath: Map<string, ts.SourceFile>;
   readonly byModuleKey: Map<string, ts.SourceFile>;
@@ -134,6 +151,7 @@ interface TypeSystemSourceFileIndexes {
 export class TypeSystemProject {
   private readonly moduleExportsBySpecifier = new Map<string, ReadonlyMap<string, ts.Symbol> | null>();
   private readonly programNodeRemapCache = new WeakMap<ts.Node, ts.Node | null>();
+  private readonly programNodeRemapSpanIndexesByPath = new Map<string, ReadonlyMap<string, ts.Node>>();
   private programNodeRemapRequests = 0;
   private programNodeRemapCacheHits = 0;
   private programNodeRemapCacheMisses = 0;
@@ -161,17 +179,24 @@ export class TypeSystemProject {
     private readonly sourceFilesByPath: ReadonlyMap<string, ts.SourceFile>,
     private readonly moduleKeysByPath: ReadonlyMap<string, string>,
     private readonly programSourceFilesByPath: ReadonlyMap<string, ts.SourceFile>,
-    private readonly ambientSourcePaths: ReadonlySet<string>,
+    private readonly overlaySourcesByPath: ReadonlyMap<string, TypeSystemOverlaySource>,
+    private readonly overlaySourcePaths: ReadonlySet<string>,
     private readonly diagnosticSourcePaths: ReadonlySet<string> | null,
   ) {}
 
-  /** Read a source file by evaluator module key. */
-  readSourceFileByModuleKey(moduleKey: string): ts.SourceFile | null {
+  /** Read an evaluator-owned source file by evaluator module key. */
+  readEvaluatedSourceFileByModuleKey(moduleKey: string): ts.SourceFile | null {
     return this.sourceFilesByModuleKey.get(normalizeModuleKey(moduleKey)) ?? null;
   }
 
-  /** Read a source file by absolute, project-relative, or workspace-relative path. */
-  readSourceFileByPath(fileName: string): ts.SourceFile | null {
+  /** Read the Program-owned source file associated with an evaluator module key. */
+  readProgramSourceFileByModuleKey(moduleKey: string): ts.SourceFile | null {
+    const evaluatedSourceFile = this.readEvaluatedSourceFileByModuleKey(moduleKey);
+    return evaluatedSourceFile == null ? null : this.readProgramSourceFileByPath(evaluatedSourceFile.fileName);
+  }
+
+  /** Read an evaluator-owned source file by absolute, project-relative, or workspace-relative path. */
+  readEvaluatedSourceFileByPath(fileName: string): ts.SourceFile | null {
     return this.sourceFilesByPath.get(canonicalTypeSystemPath(resolveProjectPath(this.project.rootDir, fileName)))
       ?? this.sourceFilesByPath.get(canonicalTypeSystemPath(resolveWorkspacePath(this.project.workspaceRootDir, fileName)))
       ?? null;
@@ -184,6 +209,33 @@ export class TypeSystemProject {
       ?? null;
   }
 
+  /** Read all semantic-runtime overlay sources admitted into this checker epoch. */
+  readOverlaySources(): readonly TypeSystemOverlaySource[] {
+    return [...this.overlaySourcesByPath.values()]
+      .sort((left, right) => left.fileName.localeCompare(right.fileName));
+  }
+
+  /** Read overlay metadata by absolute, project-relative, or workspace-relative generated source path. */
+  readOverlaySourceByPath(fileName: string): TypeSystemOverlaySource | null {
+    return this.overlaySourcesByPath.get(canonicalTypeSystemPath(resolveProjectPath(this.project.rootDir, fileName)))
+      ?? this.overlaySourcesByPath.get(canonicalTypeSystemPath(resolveWorkspacePath(this.project.workspaceRootDir, fileName)))
+      ?? null;
+  }
+
+  /** Read the overlay source metadata for a Program SourceFile, when the file is synthetic. */
+  readOverlaySourceForProgramSourceFile(sourceFile: ts.SourceFile): TypeSystemOverlaySource | null {
+    return this.overlaySourcesByPath.get(canonicalTypeSystemPath(sourceFile.fileName)) ?? null;
+  }
+
+  /** Read the overlay segment covering a generated source position, when one was declared. */
+  readOverlaySourceSegmentAt(
+    fileName: string,
+    position: number,
+  ): TypeSystemOverlaySourceSegment | null {
+    const source = this.readOverlaySourceByPath(fileName);
+    return source == null ? null : typeSystemOverlaySegmentAt(source, position);
+  }
+
   /** Read Program-owned TS/JS source files admitted as app source by this project frame. */
   readProjectProgramSourceFiles(): readonly ts.SourceFile[] {
     const projectRootPath = canonicalTypeSystemPath(this.project.rootDir);
@@ -191,7 +243,7 @@ export class TypeSystemProject {
       .filter((sourceFile) => typeSystemProjectProgramDiagnosticSourceFile(
         sourceFile.fileName,
         projectRootPath,
-        this.ambientSourcePaths,
+        this.overlaySourcePaths,
         this.diagnosticSourcePaths,
       ))
       .sort((left, right) => left.fileName.localeCompare(right.fileName));
@@ -223,7 +275,7 @@ export class TypeSystemProject {
       this.programNodeRemapCache.set(node, node);
       return node;
     }
-    const match = findProgramNodeBySpan(programSourceFile, node);
+    const match = this.readProgramNodeBySpan(programSourceFile, node);
     if (match == null) {
       this.programNodeRemapSpanMisses += 1;
     } else {
@@ -231,6 +283,17 @@ export class TypeSystemProject {
     }
     this.programNodeRemapCache.set(node, match);
     return match as TNode | null;
+  }
+
+  /** Read a Program-owned expression counterpart and reject impossible span matches explicitly. */
+  readProgramExpression<TExpression extends ts.Expression>(expression: TExpression): TExpression | null {
+    const node = this.readProgramNode(expression);
+    return node != null && ts.isExpression(node) ? node : null;
+  }
+
+  /** Read a Program-owned declaration counterpart and reject impossible span matches explicitly. */
+  readProgramDeclaration<TDeclaration extends ts.Declaration>(declaration: TDeclaration): TDeclaration | null {
+    return this.readProgramNode(declaration);
   }
 
   readProgramNodeRemapStats(): TypeSystemProgramNodeRemapStats {
@@ -243,6 +306,26 @@ export class TypeSystemProject {
       sourceFileMisses: this.programNodeRemapSourceFileMisses,
       spanMisses: this.programNodeRemapSpanMisses,
     };
+  }
+
+  private readProgramNodeBySpan<TNode extends ts.Node>(
+    programSourceFile: ts.SourceFile,
+    sourceNode: TNode,
+  ): TNode | null {
+    return this.readProgramNodeSpanIndex(programSourceFile).get(typeSystemProgramNodeSpanKey(sourceNode)) as TNode | undefined ?? null;
+  }
+
+  private readProgramNodeSpanIndex(
+    programSourceFile: ts.SourceFile,
+  ): ReadonlyMap<string, ts.Node> {
+    const sourcePath = canonicalTypeSystemPath(programSourceFile.fileName);
+    const cached = this.programNodeRemapSpanIndexesByPath.get(sourcePath);
+    if (cached != null) {
+      return cached;
+    }
+    const index = typeSystemProgramNodeSpanIndex(programSourceFile);
+    this.programNodeRemapSpanIndexesByPath.set(sourcePath, index);
+    return index;
   }
 
   /** Read the evaluator module key that owns a TypeChecker source file, when it is in the evaluated project graph. */
@@ -388,6 +471,7 @@ export class TypeSystemProjectBuilder {
   build(
     project: ProjectBootFrame,
     evaluation: StaticProjectEvaluationResult,
+    buildOptions: TypeSystemProjectBuildOptions = {},
   ): TypeSystemProject {
     const started = performance.now();
     const hostSourceFileCacheBefore = sharedCompilerHostSourceFileCache.snapshot();
@@ -404,14 +488,17 @@ export class TypeSystemProjectBuilder {
     const projectOptions = measureTypeSystemProjectPhase(phases, 'project-options', () =>
       buildWorkspaceTypeSystemProjectOptions(project.rootDir, project.workspaceRootDir)
     );
-    const ambientSourcePaths = normalizedTypeSystemPathSet(
-      projectOptions.ambientSourceFiles.map((sourceFile) => sourceFile.fileName),
+    const overlaySources = typeSystemProjectOverlaySources(projectOptions.overlaySources, buildOptions.overlaySources);
+    const overlaySourceFiles = overlaySources.map(createTypeSystemOverlaySourceFile);
+    const overlaySourcesByPath = typeSystemOverlaySourceIndex(overlaySources);
+    const overlaySourcePaths = normalizedTypeSystemPathSet(
+      overlaySourceFiles.map((sourceFile) => sourceFile.fileName),
     );
     measureTypeSystemProjectPhase(
       phases,
-      'ambient-source-index',
-      () => addAmbientSourceFiles(sourceFiles.byPath, projectOptions.ambientSourceFiles),
-      () => projectOptions.ambientSourceFiles.length,
+      'overlay-source-index',
+      () => addOverlaySourceFiles(sourceFiles.byPath, overlaySourceFiles),
+      () => overlaySourceFiles.length,
     );
 
     const options = projectOptions.compilerOptions;
@@ -426,7 +513,7 @@ export class TypeSystemProjectBuilder {
       project,
       evaluatedSources,
       projectOptions.configRootFileNames,
-      projectOptions.ambientSourceFiles,
+      overlaySourceFiles,
     );
     const program = measureTypeSystemProjectPhase(
       phases,
@@ -443,14 +530,14 @@ export class TypeSystemProjectBuilder {
       rootNames,
       project.rootDir,
       evaluatedSourcePaths,
-      ambientSourcePaths,
+      overlaySourcePaths,
       programSourceFilesByPath,
     );
     const programRootFileGroups = typeSystemRootFileGroups(
       rootNames,
       project.rootDir,
       evaluatedSourcePaths,
-      ambientSourcePaths,
+      overlaySourcePaths,
       programSourceFilesByPath,
     );
     return new TypeSystemProject(
@@ -473,21 +560,22 @@ export class TypeSystemProjectBuilder {
           programSourceFiles,
           project.rootDir,
           evaluatedSourcePaths,
-          ambientSourcePaths,
+          overlaySourcePaths,
         ),
         programRootFileGroups,
         programSourceFileGroups: typeSystemProgramSourceFileGroups(
           programSourceFiles,
           project.rootDir,
           evaluatedSourcePaths,
-          ambientSourcePaths,
+          overlaySourcePaths,
         ),
       },
       sourceFiles.byModuleKey,
       sourceFiles.byPath,
       sourceFiles.moduleKeyByPath,
       programSourceFilesByPath,
-      ambientSourcePaths,
+      overlaySourcesByPath,
+      overlaySourcePaths,
       typeSystemDiagnosticSourcePaths(projectOptions.configRootFileNames),
     );
   }
@@ -499,6 +587,32 @@ function typeSystemProgramSourceFileIndex(sourceFiles: readonly ts.SourceFile[])
     byPath.set(canonicalTypeSystemPath(sourceFile.fileName), sourceFile);
   }
   return byPath;
+}
+
+function typeSystemProjectOverlaySources(
+  defaultOverlaySources: readonly TypeSystemOverlaySource[],
+  additionalOverlaySources: readonly TypeSystemOverlaySource[] | undefined,
+): readonly TypeSystemOverlaySource[] {
+  if (additionalOverlaySources == null || additionalOverlaySources.length === 0) {
+    return defaultOverlaySources;
+  }
+  const sources: TypeSystemOverlaySource[] = [];
+  const seen = new Set<string>();
+  for (const source of [...defaultOverlaySources, ...additionalOverlaySources]) {
+    const key = canonicalTypeSystemPath(source.fileName);
+    if (seen.has(key)) {
+      continue;
+    }
+    seen.add(key);
+    sources.push(source);
+  }
+  return sources;
+}
+
+function typeSystemOverlaySourceIndex(
+  sources: readonly TypeSystemOverlaySource[],
+): ReadonlyMap<string, TypeSystemOverlaySource> {
+  return new Map(sources.map((source) => [canonicalTypeSystemPath(source.fileName), source] as const));
 }
 
 function typeSystemProjectCompilerOptionsProfile(
@@ -537,25 +651,22 @@ function enumName(
   return typeof label === 'string' ? label : String(value);
 }
 
-function findProgramNodeBySpan<TNode extends ts.Node>(
+function typeSystemProgramNodeSpanIndex(
   root: ts.SourceFile,
-  sourceNode: TNode,
-): TNode | null {
-  let match: ts.Node | null = null;
+): ReadonlyMap<string, ts.Node> {
+  const index = new Map<string, ts.Node>();
   const visit = (node: ts.Node): void => {
-    if (match != null) {
-      return;
-    }
-    if (node.kind === sourceNode.kind && node.pos === sourceNode.pos && node.end === sourceNode.end) {
-      match = node;
-      return;
-    }
-    if (node.pos <= sourceNode.pos && sourceNode.end <= node.end) {
-      ts.forEachChild(node, visit);
-    }
+    index.set(typeSystemProgramNodeSpanKey(node), node);
+    ts.forEachChild(node, visit);
   };
   visit(root);
-  return match as TNode | null;
+  return index;
+}
+
+function typeSystemProgramNodeSpanKey(
+  node: ts.Node,
+): string {
+  return `${node.kind}:${node.pos}:${node.end}`;
 }
 
 function typeSystemSourceFileIndexes(
@@ -577,12 +688,12 @@ function typeSystemSourceFileIndexes(
   return { byPath, byModuleKey, moduleKeyByPath };
 }
 
-function addAmbientSourceFiles(
+function addOverlaySourceFiles(
   byPath: Map<string, ts.SourceFile>,
-  ambientSourceFiles: readonly ts.SourceFile[],
+  overlaySourceFiles: readonly ts.SourceFile[],
 ): void {
-  for (const ambientSource of ambientSourceFiles) {
-    byPath.set(canonicalTypeSystemPath(ambientSource.fileName), ambientSource);
+  for (const overlaySource of overlaySourceFiles) {
+    byPath.set(canonicalTypeSystemPath(overlaySource.fileName), overlaySource);
   }
 }
 
@@ -590,11 +701,11 @@ function typeSystemProgramSourceFileStats(
   sourceFiles: readonly ts.SourceFile[],
   projectRootDir: string,
   evaluatedSourcePaths: ReadonlySet<string>,
-  ambientSourcePaths: ReadonlySet<string>,
+  overlaySourcePaths: ReadonlySet<string>,
 ): TypeSystemProgramSourceFileStats {
   const projectRootPath = canonicalTypeSystemPath(projectRootDir);
   let evaluatedSources = 0;
-  let ambientSources = 0;
+  let overlaySources = 0;
   let projectSources = 0;
   let nodeModuleSources = 0;
   let declarationSources = 0;
@@ -602,7 +713,7 @@ function typeSystemProgramSourceFileStats(
   let externalSources = 0;
   let sourceTextCharacters = 0;
   let evaluatedSourceTextCharacters = 0;
-  let ambientSourceTextCharacters = 0;
+  let overlaySourceTextCharacters = 0;
   let projectSourceTextCharacters = 0;
   let nodeModuleSourceTextCharacters = 0;
   let declarationSourceTextCharacters = 0;
@@ -617,9 +728,9 @@ function typeSystemProgramSourceFileStats(
       evaluatedSources += 1;
       evaluatedSourceTextCharacters += sourceTextLength;
     }
-    if (ambientSourcePaths.has(normalized)) {
-      ambientSources += 1;
-      ambientSourceTextCharacters += sourceTextLength;
+    if (overlaySourcePaths.has(normalized)) {
+      overlaySources += 1;
+      overlaySourceTextCharacters += sourceTextLength;
     }
     if (isTypeSystemPathAtOrUnder(normalized, projectRootPath)) {
       projectSources += 1;
@@ -644,7 +755,7 @@ function typeSystemProgramSourceFileStats(
   return {
     total: sourceFiles.length,
     evaluatedSources,
-    ambientSources,
+    overlaySources,
     projectSources,
     nodeModuleSources,
     declarationSources,
@@ -652,7 +763,7 @@ function typeSystemProgramSourceFileStats(
     externalSources,
     sourceTextCharacters,
     evaluatedSourceTextCharacters,
-    ambientSourceTextCharacters,
+    overlaySourceTextCharacters,
     projectSourceTextCharacters,
     nodeModuleSourceTextCharacters,
     declarationSourceTextCharacters,
@@ -665,7 +776,7 @@ function typeSystemProgramSourceFileGroups(
   sourceFiles: readonly ts.SourceFile[],
   projectRootDir: string,
   evaluatedSourcePaths: ReadonlySet<string>,
-  ambientSourcePaths: ReadonlySet<string>,
+  overlaySourcePaths: ReadonlySet<string>,
 ): readonly TypeSystemProgramSourceFileGroupStats[] {
   const projectRootPath = canonicalTypeSystemPath(projectRootDir);
   const groups = new Map<string, MutableTypeSystemProgramSourceFileGroupStats>();
@@ -677,7 +788,7 @@ function typeSystemProgramSourceFileGroups(
       sourceFile.isDeclarationFile,
       projectRootPath,
       evaluatedSourcePaths,
-      ambientSourcePaths,
+      overlaySourcePaths,
     );
   }
   return sortedTypeSystemProgramSourceFileGroups(groups);
@@ -687,12 +798,12 @@ function typeSystemRootFileStats(
   rootNames: readonly string[],
   projectRootDir: string,
   evaluatedSourcePaths: ReadonlySet<string>,
-  ambientSourcePaths: ReadonlySet<string>,
+  overlaySourcePaths: ReadonlySet<string>,
   programSourceFilesByPath: ReadonlyMap<string, ts.SourceFile>,
 ): TypeSystemProgramSourceFileStats {
   const projectRootPath = canonicalTypeSystemPath(projectRootDir);
   let evaluatedSources = 0;
-  let ambientSources = 0;
+  let overlaySources = 0;
   let projectSources = 0;
   let nodeModuleSources = 0;
   let declarationSources = 0;
@@ -700,7 +811,7 @@ function typeSystemRootFileStats(
   let externalSources = 0;
   let sourceTextCharacters = 0;
   let evaluatedSourceTextCharacters = 0;
-  let ambientSourceTextCharacters = 0;
+  let overlaySourceTextCharacters = 0;
   let projectSourceTextCharacters = 0;
   let nodeModuleSourceTextCharacters = 0;
   let declarationSourceTextCharacters = 0;
@@ -715,9 +826,9 @@ function typeSystemRootFileStats(
       evaluatedSources += 1;
       evaluatedSourceTextCharacters += sourceTextLength;
     }
-    if (ambientSourcePaths.has(normalized)) {
-      ambientSources += 1;
-      ambientSourceTextCharacters += sourceTextLength;
+    if (overlaySourcePaths.has(normalized)) {
+      overlaySources += 1;
+      overlaySourceTextCharacters += sourceTextLength;
     }
     if (isTypeSystemPathAtOrUnder(normalized, projectRootPath)) {
       projectSources += 1;
@@ -742,7 +853,7 @@ function typeSystemRootFileStats(
   return {
     total: rootNames.length,
     evaluatedSources,
-    ambientSources,
+    overlaySources,
     projectSources,
     nodeModuleSources,
     declarationSources,
@@ -750,7 +861,7 @@ function typeSystemRootFileStats(
     externalSources,
     sourceTextCharacters,
     evaluatedSourceTextCharacters,
-    ambientSourceTextCharacters,
+    overlaySourceTextCharacters,
     projectSourceTextCharacters,
     nodeModuleSourceTextCharacters,
     declarationSourceTextCharacters,
@@ -763,7 +874,7 @@ function typeSystemRootFileGroups(
   rootNames: readonly string[],
   projectRootDir: string,
   evaluatedSourcePaths: ReadonlySet<string>,
-  ambientSourcePaths: ReadonlySet<string>,
+  overlaySourcePaths: ReadonlySet<string>,
   programSourceFilesByPath: ReadonlyMap<string, ts.SourceFile>,
 ): readonly TypeSystemProgramSourceFileGroupStats[] {
   const projectRootPath = canonicalTypeSystemPath(projectRootDir);
@@ -778,7 +889,7 @@ function typeSystemRootFileGroups(
       sourceFile?.isDeclarationFile ?? normalized.endsWith('.d.ts'),
       projectRootPath,
       evaluatedSourcePaths,
-      ambientSourcePaths,
+      overlaySourcePaths,
     );
   }
   return sortedTypeSystemProgramSourceFileGroups(groups);
@@ -800,10 +911,10 @@ function recordTypeSystemProgramSourceFileGroup(
   isDeclarationFile: boolean,
   projectRootPath: string,
   evaluatedSourcePaths: ReadonlySet<string>,
-  ambientSourcePaths: ReadonlySet<string>,
+  overlaySourcePaths: ReadonlySet<string>,
 ): void {
   const normalized = canonicalTypeSystemPath(fileName);
-  const group = typeSystemProgramSourceFileGroup(normalized, projectRootPath, ambientSourcePaths);
+  const group = typeSystemProgramSourceFileGroup(normalized, projectRootPath, overlaySourcePaths);
   const key = `${group.groupKind}:${group.groupKey}`;
   const current = groups.get(key) ?? {
     groupKind: group.groupKind,
@@ -827,10 +938,10 @@ function recordTypeSystemProgramSourceFileGroup(
 function typeSystemProgramSourceFileGroup(
   normalizedFileName: string,
   projectRootPath: string,
-  ambientSourcePaths: ReadonlySet<string>,
+  overlaySourcePaths: ReadonlySet<string>,
 ): Pick<TypeSystemProgramSourceFileGroupStats, 'groupKind' | 'groupKey'> {
-  if (ambientSourcePaths.has(normalizedFileName)) {
-    return { groupKind: 'ambient-source', groupKey: 'semantic-runtime-ambient' };
+  if (overlaySourcePaths.has(normalizedFileName)) {
+    return { groupKind: 'overlay-source', groupKey: 'semantic-runtime-overlay' };
   }
   if (isDefaultLibrarySourceFile(normalizedFileName)) {
     return { groupKind: 'default-library', groupKey: 'typescript-default-library' };
@@ -889,7 +1000,7 @@ function typeSystemProgramRootNames(
   project: ProjectBootFrame,
   evaluatedSources: ReturnType<StaticProjectEvaluationResult['readEvaluatedSources']>,
   configRootFileNames: readonly string[] | null,
-  ambientSourceFiles: readonly ts.SourceFile[],
+  overlaySourceFiles: readonly ts.SourceFile[],
 ): readonly string[] {
   const rootNames: string[] = [];
   const seen = new Set<string>();
@@ -919,8 +1030,8 @@ function typeSystemProgramRootNames(
     }
     addUniqueTypeSystemRootName(rootNames, seen, source.sourceFile.fileName);
   }
-  for (const ambientSourceFile of ambientSourceFiles) {
-    addUniqueTypeSystemRootName(rootNames, seen, ambientSourceFile.fileName);
+  for (const overlaySourceFile of overlaySourceFiles) {
+    addUniqueTypeSystemRootName(rootNames, seen, overlaySourceFile.fileName);
   }
   return rootNames;
 }
@@ -952,7 +1063,7 @@ function addUniqueTypeSystemRootName(
 function isTypeSystemProgramRootAdmission(
   admission: Pick<SourceFileAdmission, 'language' | 'role' | 'path'>,
 ): boolean {
-  return admission.role === SourceFileRole.AppSource
+  return (admission.role === SourceFileRole.AppSource || admission.role === SourceFileRole.Declaration)
     && isStaticEvaluationSource(admission.language)
     && isTypeSystemProgramRootSourceFile(admission.path);
 }
@@ -960,12 +1071,12 @@ function isTypeSystemProgramRootAdmission(
 function typeSystemProjectProgramDiagnosticSourceFile(
   fileName: string,
   projectRootPath: string,
-  ambientSourcePaths: ReadonlySet<string>,
+  overlaySourcePaths: ReadonlySet<string>,
   diagnosticSourcePaths: ReadonlySet<string> | null,
 ): boolean {
   const normalized = canonicalTypeSystemPath(fileName);
   return isTypeSystemPathAtOrUnder(normalized, projectRootPath)
-    && !ambientSourcePaths.has(normalized)
+    && !overlaySourcePaths.has(normalized)
     && !normalized.includes('/node_modules/')
     && !isDefaultLibrarySourceFile(normalized)
     && isTypeSystemProgramRootSourceFile(normalized)

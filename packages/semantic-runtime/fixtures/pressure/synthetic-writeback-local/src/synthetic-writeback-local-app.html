@@ -1,5 +1,6 @@
 <template>
-  <table synthetic-table="data.bind: rows; display-data.bind: $displayData">
+  <table synthetic-table="data.bind: rows; display-data.bind: $displayData; active-row.two-way: $activeRow">
+    <caption>${$activeRow.label}</caption>
     <tr repeat.for="row of $displayData">
       <td>${row.label}</td>
     </tr>

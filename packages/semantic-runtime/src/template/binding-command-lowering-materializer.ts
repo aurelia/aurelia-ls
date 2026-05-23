@@ -1,4 +1,5 @@
 import { SemanticClaim } from '../kernel/claim.js';
+import type { SourceSpanAddress } from '../kernel/address.js';
 import {
   OpenSeam,
 } from '../kernel/open-seam.js';
@@ -23,6 +24,7 @@ import type {
   BindingIdentifierOrPattern,
   ExpressionType,
 } from '../expression/ast.js';
+import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
 import type {
   ExpressionParseResult,
   IteratorParseResult,
@@ -98,6 +100,9 @@ import {
   TemplateValueSitePublicationRequest,
   TemplateValueSitePublisher,
 } from './value-site-publication.js';
+import {
+  runtimeExpressionParseContextForSourceSpanAddress,
+} from './runtime-expression-source-address.js';
 import type { TemplateValueSiteEmission } from './value-site-materializer.js';
 import {
   HtmlAttribute,
@@ -342,6 +347,7 @@ class MaterializedMultiBindingSegment {
     readonly bindable: TemplateBindableReference | null,
     readonly commandMatch: CommandHandlerMatch | null,
     readonly sourceAddressHandle: AddressHandle | null,
+    readonly sourceAddressRecord: SourceSpanAddress | null,
     readonly records: readonly KernelStoreRecord[],
     readonly claims: readonly SemanticClaim[],
   ) {}
@@ -472,6 +478,7 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
     readonly commandReference: BindingCommandLowering['command'],
     readonly bindable: TemplateBindableReference | null,
     readonly parser: TemplateExpressionParserService,
+    readonly expressionParseContext: ExpressionParseContext | null = null,
   ) {
     this.valueSitePublisher = new TemplateValueSitePublisher(store);
   }
@@ -569,6 +576,7 @@ class CommandLoweringExecutionContext implements BindingCommandBuildContext {
       `${this.command.name}:${entryFamily}`,
       info.buildInputProductHandle,
       (result) => `${this.command.name}:${result.kind}`,
+      this.expressionParseContext,
     ));
     if (publication.parse == null || publication.result == null) {
       throw new Error('Binding command expression parsing must publish an expression parse.');
@@ -1057,6 +1065,7 @@ export class BindingCommandLoweringMaterializer {
       parsed.rawValue,
       'Interpolation',
       materializedSegment.sourceAddressHandle,
+      materializedSegment.sourceAddressRecord,
     );
     frame.recordExpressionPublication(publication);
     frame.recordDirectInstruction(this.publisher.createMultiBindingValueInstruction(
@@ -1105,6 +1114,8 @@ export class BindingCommandLoweringMaterializer {
       commandMatch,
       bindable,
       closedCommandReference,
+      materializedSegment.sourceAddressHandle,
+      runtimeExpressionParseContextForSourceSpanAddress(this.store, materializedSegment.sourceAddressRecord) ?? null,
     );
     frame.recordCommandExecution(loweringResult);
     frame.recordCommandIssue(this.publishCommandLoweringIssue(local, source, buildInput.input, loweringResult.result));
@@ -1157,6 +1168,7 @@ export class BindingCommandLoweringMaterializer {
       selection.bindable,
       selection.commandMatch,
       segmentAddress.handle,
+      segmentAddress.record,
       [
         ...(segmentAddress.record == null ? [] : [segmentAddress.record]),
         ...syntax.records,
@@ -1200,6 +1212,8 @@ export class BindingCommandLoweringMaterializer {
     commandMatch: CommandHandlerMatch,
     bindable: TemplateBindableReference | null = classification.bindable,
     commandReference: BindingCommandLowering['command'] = classification.bindingCommand ?? commandMatch.executable.toReference(),
+    expressionSourceAddressHandle: AddressHandle | null = attribute.valueAddressHandle ?? buildInput.sourceAddressHandle,
+    expressionParseContext: ExpressionParseContext | null = null,
   ): OpenLoweringResult {
     const executable = commandMatch.executable;
     if (executable.executionKind !== BindingCommandExecutionKind.BuiltIn || commandMatch.handler == null) {
@@ -1223,6 +1237,7 @@ export class BindingCommandLoweringMaterializer {
       commandReference,
       bindable,
       compilerWorld.expressionParser,
+      expressionParseContext,
     );
     const buildInfo = new BindingCommandBuildInfo(
       classification.ownerNode,
@@ -1233,7 +1248,7 @@ export class BindingCommandLoweringMaterializer {
       buildInput.bindableOwnerProductHandle,
       buildInput.definitionProductHandle,
       buildInput.sourceAddressHandle,
-      attribute.valueAddressHandle ?? buildInput.sourceAddressHandle,
+      expressionSourceAddressHandle,
     );
     let result: BindingCommandBuildResult;
     try {

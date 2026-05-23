@@ -645,6 +645,7 @@ function runtimeRendererCatalogInputsForAdmission(
       case FrameworkRegistrationCapability.StateBindingSyntax:
       case FrameworkRegistrationCapability.StateStoreResolvers:
       case FrameworkRegistrationCapability.StateStoreTasks:
+      case FrameworkRegistrationCapability.UiVirtualizationDefaultResources:
       case FrameworkRegistrationCapability.AppTask:
         break;
     }
@@ -698,6 +699,8 @@ function runtimeRendererCatalogSummaryForFrameworkKind(frameworkKind: FrameworkR
       return 'Router DefaultComponents admitted router services but no runtime renderers.';
     case FrameworkRegistrationKind.RouterDefaultResources:
       return 'Router DefaultResources admitted resources but no runtime renderers.';
+    case FrameworkRegistrationKind.UiVirtualizationDefaultConfiguration:
+      return 'DefaultVirtualizationConfiguration admitted virtual-repeat resources; virtualization DOM renderer services are not cataloged as template renderers.';
     case FrameworkRegistrationKind.StateDefaultConfiguration:
       return 'StateDefaultConfiguration admitted state runtime renderers.';
     case FrameworkRegistrationKind.DialogConfiguration:

@@ -390,6 +390,7 @@ class AureliaAppWorldProjectConstructionFrame {
     const routeRuntimeTopology = this.materializeRouteRuntimeTopology(routeContexts, templates);
     const routeInstructions = this.materializeRouteInstructions(
       evaluation,
+      typeSystem,
       resourceIndex,
       routerOptions,
       routeContexts,
@@ -811,6 +812,7 @@ class AureliaAppWorldProjectConstructionFrame {
 
   private materializeRouteInstructions(
     evaluation: StaticProjectEvaluationResult,
+    typeSystem: TypeSystemProject,
     resourceIndex: ResourceDefinitionIndex,
     routerOptions: RouterOptionsMaterializationProjectResult,
     routeContexts: RouteConfigContextMaterializationProjectResult,
@@ -829,6 +831,7 @@ class AureliaAppWorldProjectConstructionFrame {
         routerOptions,
         evaluation,
         resourceIndex,
+        typeSystem,
       )
     );
   }

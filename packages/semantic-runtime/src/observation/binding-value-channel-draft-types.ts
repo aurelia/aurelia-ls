@@ -39,9 +39,11 @@ export interface BindingValueChannelDraftContext {
 export type BindingSourceTypeReader = () => CheckerTypeReference | null;
 
 export type CheckedSourceShape = {
-  readonly kind: 'boolean' | 'collection' | 'map' | 'other' | 'open';
+  readonly kind: 'boolean' | 'collection' | 'map' | 'dynamic' | 'other' | 'open';
   readonly elementType?: CheckerTypeReference | null;
   readonly mapValueType?: CheckerTypeReference | null;
+  readonly sourceType?: CheckerTypeReference | null;
+  readonly dynamicMode?: 'collection-or-boolean' | 'map-or-boolean';
 };
 
 export type SelectMultipleMode =

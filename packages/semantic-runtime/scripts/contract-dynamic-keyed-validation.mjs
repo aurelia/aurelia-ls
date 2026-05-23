@@ -125,12 +125,19 @@ function expectKeyedDataFlow(message, sourceName) {
     valueChannelKind: 'raw-property',
     sourceWritable: true,
     sourceAssignmentKind: 'runtime-assignable',
+    sourceAssignmentTargetSourcePath: 'src/dynamic-keyed-validation-app.ts',
     sourceToTargetAssignable: true,
     targetToSourceAssignable: true,
     frameworkErrorCode: null,
     openReason: null,
   };
   for (const [field, value] of Object.entries(expected)) {
+    if (field === 'sourceAssignmentTargetSourcePath') {
+      if (row.sourceAssignmentTargetSource?.path !== value) {
+        failures.push(`${message}: expected ${field}=${JSON.stringify(value)}, observed ${JSON.stringify(row.sourceAssignmentTargetSource?.path ?? null)}.`);
+      }
+      continue;
+    }
     if (row[field] !== value) {
       failures.push(`${message}: expected ${field}=${JSON.stringify(value)}, observed ${JSON.stringify(row[field])}.`);
     }

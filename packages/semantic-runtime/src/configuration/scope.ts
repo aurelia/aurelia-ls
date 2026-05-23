@@ -24,6 +24,38 @@ export const enum BindingScopeOwnerKind {
   StateBinding = 'state-binding',
 }
 
+export const enum BindingScopeCreatorKind {
+  RuntimeBindingScopeEffect = 'runtime-binding-scope-effect',
+  RuntimeAssignment = 'runtime-assignment',
+  ListenerEvent = 'listener-event',
+  StateBinding = 'state-binding',
+  TemplateControllerCondition = 'template-controller-condition',
+  TemplateControllerBranch = 'template-controller-branch',
+  TemplateControllerValueScope = 'template-controller-value-scope',
+  TemplateControllerPromiseResult = 'template-controller-promise-result',
+}
+
+export const enum BindingScopeConditionPolarity {
+  Truthy = 'truthy',
+  Falsy = 'falsy',
+}
+
+/** Runtime product that created or meaningfully transformed a modeled Scope. */
+export class BindingScopeCreator {
+  constructor(
+    /** Framework-semantic reason the scope exists. */
+    readonly creatorKind: BindingScopeCreatorKind,
+    /** Product that owns the creator fact, usually an instruction or runtime scope-effect product. */
+    readonly productHandle: ProductHandle,
+    /** Source address for the creator product. */
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    /** Conditional branch polarity when the creator replays a template-controller condition. */
+    readonly conditionPolarity: BindingScopeConditionPolarity | null = null,
+    /** Names introduced by a runtime assignment scope, when the creator can name them precisely. */
+    readonly introducedSlotNames: readonly string[] = [],
+  ) {}
+}
+
 export const enum BindingScopeLookupKind {
   BindingContext = 'binding-context',
   OverrideContext = 'override-context',
@@ -201,8 +233,8 @@ export class BindingScopeConstructionRequest {
     readonly isBoundary: boolean = false,
     /** Source address for the scope owner, activation, or template boundary. */
     readonly sourceAddressHandle: AddressHandle | null = null,
-    /** Runtime binding scope effects that directly caused this Scope to be created. */
-    readonly scopeEffectOwnerProductHandles: readonly ProductHandle[] = [],
+    /** Runtime products and framework semantics that directly caused this Scope to be created. */
+    readonly scopeCreators: readonly BindingScopeCreator[] = [],
   ) {}
 }
 
@@ -347,6 +379,8 @@ export class BindingScope {
     readonly sourceAddressHandle: AddressHandle | null,
     /** Field-level provenance for scope construction. */
     readonly fieldProvenance: readonly FieldProvenance<BindingScopeField>[] = [],
+    /** Runtime products and framework semantics that directly caused this Scope to be created. */
+    readonly scopeCreators: readonly BindingScopeCreator[] = [],
   ) {}
 
   /** Runtime `Scope.fromParent` shape for repeat-item contexts. */
@@ -358,7 +392,7 @@ export class BindingScope {
     readonly localSlots: readonly BindingContextSlotDraft[];
     readonly overrideSlots: readonly BindingContextSlotDraft[];
     readonly sourceAddressHandle: AddressHandle | null;
-    readonly scopeEffectOwnerProductHandles?: readonly ProductHandle[];
+    readonly scopeCreators?: readonly BindingScopeCreator[];
   }): BindingScopeConstructionRequest {
     return new BindingScopeConstructionRequest(
       input.localKey,
@@ -373,7 +407,7 @@ export class BindingScope {
       input.overrideSlots,
       false,
       input.sourceAddressHandle,
-      input.scopeEffectOwnerProductHandles ?? [],
+      input.scopeCreators ?? [],
     );
   }
 
@@ -385,7 +419,7 @@ export class BindingScope {
     readonly parent: BindingScope;
     readonly contextType: CheckerTypeReference | null;
     readonly sourceAddressHandle: AddressHandle | null;
-    readonly scopeEffectOwnerProductHandles?: readonly ProductHandle[];
+    readonly scopeCreators?: readonly BindingScopeCreator[];
   }): BindingScopeConstructionRequest {
     return new BindingScopeConstructionRequest(
       input.localKey,
@@ -400,7 +434,7 @@ export class BindingScope {
       [],
       false,
       input.sourceAddressHandle,
-      input.scopeEffectOwnerProductHandles ?? [],
+      input.scopeCreators ?? [],
     );
   }
 
@@ -412,7 +446,7 @@ export class BindingScope {
     readonly parent: BindingScope;
     readonly stateType: CheckerTypeReference | null;
     readonly sourceAddressHandle: AddressHandle | null;
-    readonly scopeEffectOwnerProductHandles?: readonly ProductHandle[];
+    readonly scopeCreators?: readonly BindingScopeCreator[];
   }): BindingScopeConstructionRequest {
     return new BindingScopeConstructionRequest(
       input.localKey,
@@ -427,7 +461,7 @@ export class BindingScope {
       [],
       true,
       input.sourceAddressHandle,
-      input.scopeEffectOwnerProductHandles ?? [],
+      input.scopeCreators ?? [],
     );
   }
 
@@ -440,7 +474,7 @@ export class BindingScope {
     readonly bindingContextSlots?: readonly BindingContextSlotDraft[];
     readonly overrideContextSlots?: readonly BindingContextSlotDraft[];
     readonly sourceAddressHandle: AddressHandle | null;
-    readonly scopeEffectOwnerProductHandles?: readonly ProductHandle[];
+    readonly scopeCreators?: readonly BindingScopeCreator[];
   }): BindingScopeConstructionRequest {
     return new BindingScopeConstructionRequest(
       input.localKey,
@@ -461,7 +495,7 @@ export class BindingScope {
       ),
       input.base.isBoundary,
       input.sourceAddressHandle,
-      input.scopeEffectOwnerProductHandles ?? [],
+      mergeBindingScopeCreators(input.base.scopeCreators, input.scopeCreators ?? []),
     );
   }
 
@@ -474,7 +508,7 @@ export class BindingScope {
     readonly bindingContextSlots: readonly BindingContextSlotDraft[];
     readonly overrideContextSlots: readonly BindingContextSlotDraft[];
     readonly sourceAddressHandle: AddressHandle | null;
-    readonly scopeEffectOwnerProductHandles?: readonly ProductHandle[];
+    readonly scopeCreators?: readonly BindingScopeCreator[];
   }): BindingScopeConstructionRequest {
     return new BindingScopeConstructionRequest(
       input.localKey,
@@ -495,7 +529,7 @@ export class BindingScope {
       ],
       input.parent.isBoundary,
       input.sourceAddressHandle,
-      input.scopeEffectOwnerProductHandles ?? [],
+      input.scopeCreators ?? [],
     );
   }
 
@@ -620,4 +654,24 @@ export function mergeBindingContextSlotDrafts(
     byName.set(slot.name, slot);
   }
   return [...byName.values()];
+}
+
+export function mergeBindingScopeCreators(
+  base: readonly BindingScopeCreator[],
+  overlay: readonly BindingScopeCreator[],
+): readonly BindingScopeCreator[] {
+  const byKey = new Map<string, BindingScopeCreator>();
+  for (const creator of [...base, ...overlay]) {
+    byKey.set(bindingScopeCreatorKey(creator), creator);
+  }
+  return [...byKey.values()];
+}
+
+function bindingScopeCreatorKey(creator: BindingScopeCreator): string {
+  return [
+    creator.creatorKind,
+    creator.productHandle,
+    creator.conditionPolarity ?? '',
+    creator.introducedSlotNames.join(','),
+  ].join('|');
 }

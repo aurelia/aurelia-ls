@@ -66,7 +66,7 @@ export function readInvalidDiInjectDecoratorSites(
   typeSystem: TypeSystemProject,
 ): readonly DiInjectDecoratorSite[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileInvalidDiInjectDecoratorSites(source.path, source.addressHandle, sourceFile);

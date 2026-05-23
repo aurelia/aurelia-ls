@@ -17,6 +17,7 @@ import type {
 } from '../kernel/store.js';
 import { KernelVocabulary } from '../kernel/vocabulary.js';
 import type { ExpressionType } from '../expression/ast.js';
+import type { ExpressionParseContext } from '../expression/expression-parse-support.js';
 import type { ExpressionParseResult } from '../expression/parse-result-algebra.js';
 import type { AttributeClassification, AttributeSyntax } from './attribute-syntax.js';
 import type { BindingCommandExecutableReference } from './binding-command-reference.js';
@@ -54,6 +55,7 @@ export class TemplateValueSitePublicationRequest {
     readonly siteIdentityDiscriminator: string,
     readonly routeSubjectHandle: ProductHandle | null,
     readonly parseIdentityDiscriminator: ((result: ExpressionParseResult) => string) | null,
+    readonly parseContext: ExpressionParseContext | null = null,
   ) {}
 }
 
@@ -223,7 +225,7 @@ export class TemplateValueSitePublisher {
     const result = request.parser.parse(
       request.rawValue,
       entryFamily,
-      runtimeExpressionParseContextForAddress(this.store, request.sourceAddressHandle),
+      request.parseContext ?? runtimeExpressionParseContextForAddress(this.store, request.sourceAddressHandle),
     );
     return new ResolvedTemplateExpressionParseRequest(
       request.parseLocal,

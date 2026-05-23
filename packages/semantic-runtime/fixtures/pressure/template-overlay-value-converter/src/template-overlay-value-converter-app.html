@@ -1,0 +1,11 @@
+<template>
+  <p>${message | wordCount:minimumCount}</p>
+  <p>${message | wordCount:minimumText}</p>
+  <p>${message | wordCount:minimumCount | identityOnly}</p>
+  <p>${message | identityOnly:minimumText}</p>
+  <p>${message | contextualWord:minimumCount}</p>
+  <section if.bind="message | wordCount:minimumCount">
+    <span>${message}</span>
+  </section>
+  <p repeat.for="word of words | minimumLength:minimumCount">${word.toUpperCase()}</p>
+</template>

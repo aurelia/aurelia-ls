@@ -978,6 +978,7 @@ function syntaxCatalogInputsForAdmission(
       case FrameworkRegistrationCapability.StateRuntimeRenderers:
       case FrameworkRegistrationCapability.StateStoreResolvers:
       case FrameworkRegistrationCapability.StateStoreTasks:
+      case FrameworkRegistrationCapability.UiVirtualizationDefaultResources:
       case FrameworkRegistrationCapability.AppTask:
         break;
     }
@@ -1135,6 +1136,8 @@ function syntaxCatalogSummaryForFrameworkKind(frameworkKind: FrameworkRegistrati
       return 'Router DefaultComponents admitted router services but no template syntax catalogs.';
     case FrameworkRegistrationKind.RouterDefaultResources:
       return 'Router DefaultResources admitted resources but no template syntax catalogs.';
+    case FrameworkRegistrationKind.UiVirtualizationDefaultConfiguration:
+      return 'DefaultVirtualizationConfiguration admitted virtual-repeat resources but no additional template syntax catalogs.';
     case FrameworkRegistrationKind.StateDefaultConfiguration:
       return 'StateDefaultConfiguration admitted state template syntax catalogs.';
     case FrameworkRegistrationKind.DialogConfiguration:

@@ -135,7 +135,7 @@ class ClassBindableDecoratorFrame {
         ResourceIssueKind.InvalidBindableDecoratorUsageSymbol,
         'Class-level @bindable property names must be strings.',
         ResourceFrameworkErrorCode.InvalidBindableDecoratorUsageSymbol,
-        nameProperty.node,
+        nameProperty.node ?? argument,
         SourceSpanRole.Value,
       );
     }
@@ -524,7 +524,11 @@ function readCheckerBindableSetter(
   if (context.typeSystem == null) {
     return null;
   }
-  const type = context.typeSystem.checker.getTypeAtLocation(expression);
+  const programExpression = context.typeSystem.readProgramExpression(expression);
+  if (programExpression == null) {
+    return null;
+  }
+  const type = context.typeSystem.checker.getTypeAtLocation(programExpression);
   return context.typeSystem.checker.getPropertyOfType(type, 'set') == null
     ? null
     : new BindableSetterDefinition(BindableSetterKind.Open);

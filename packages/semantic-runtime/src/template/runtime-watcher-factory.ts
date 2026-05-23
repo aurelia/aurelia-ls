@@ -227,7 +227,7 @@ function sourceFileForTarget(
 ): ts.SourceFile | null {
   if (target.moduleKey != null) {
     for (const moduleKey of sourceModuleKeyCandidates(target.moduleKey)) {
-      const sourceFile = typeSystem.readSourceFileByModuleKey(moduleKey);
+      const sourceFile = typeSystem.readProgramSourceFileByModuleKey(moduleKey);
       if (sourceFile != null) {
         return sourceFile;
       }
@@ -236,7 +236,7 @@ function sourceFileForTarget(
   const sourceFileAddress = sourceFileAddressForAddress(store, target.addressHandle);
   return sourceFileAddress == null
     ? null
-    : typeSystem.readSourceFileByPath(sourceFileAddress.path);
+    : typeSystem.readProgramSourceFileByPath(sourceFileAddress.path);
 }
 
 function sourceModuleKeyCandidates(

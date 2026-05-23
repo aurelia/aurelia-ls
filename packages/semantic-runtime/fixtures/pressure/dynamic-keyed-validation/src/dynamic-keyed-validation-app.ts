@@ -1,8 +1,8 @@
 import { resolve } from '@aurelia/kernel';
 import { customElement } from '@aurelia/runtime-html';
+import { IValidationRules } from '@aurelia/validation';
 import {
   IValidationController,
-  IValidationRules,
 } from '@aurelia/validation-html';
 import template from './dynamic-keyed-validation-app.html';
 

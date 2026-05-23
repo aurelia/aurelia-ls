@@ -1,5 +1,7 @@
 import { BindingScope } from '../configuration/scope.js';
 import type { ProductHandle } from '../kernel/handles.js';
+import type { KernelStore } from '../kernel/store.js';
+import type { TemplateResourceScope } from '../template/compiler-world.js';
 import {
   TemplateBindingMode,
 } from '../template/instruction-ir.js';
@@ -12,6 +14,9 @@ import {
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { TemplateScopeConstructionEmission } from '../template/template-controller-scope-materializer.js';
+import {
+  effectivePropertyBindingMode,
+} from '../template/runtime-binding-mode-behavior.js';
 import { instructionScopeLookup } from './runtime-binding-expression.js';
 import {
   sameCheckerTypeReference,
@@ -41,6 +46,9 @@ export interface RuntimeBindingSourceValueRuntimeAnalysis {
 
 export interface RuntimeBindingSourceValueTemplateResource {
   readonly compilation: {
+    readonly compilerWorld: {
+      readonly resourceScope: TemplateResourceScope | null;
+    };
     readonly definition: {
       readonly productHandle: ProductHandle | null;
       readonly target: {
@@ -219,23 +227,28 @@ export class RuntimeBoundControllerValueTable {
 }
 
 export function runtimeBoundControllerValueTableForTemplateResources(
+  store: KernelStore,
   resources: readonly RuntimeBindingSourceValueTemplateResource[],
 ): RuntimeBoundControllerValueTable {
   return new RuntimeBoundControllerValueTable(
-    resources.flatMap((resource) => boundControllerValuesForRuntimeAnalysis(resource.runtimeAnalysis)),
+    resources.flatMap((resource) =>
+      boundControllerValuesForRuntimeAnalysis(store, resource.runtimeAnalysis, resource.compilation.compilerWorld.resourceScope)
+    ),
     resources.flatMap((resource) => controllerDefinitionsForRuntimeAnalysis(resource)),
   );
 }
 
 export function extendRuntimeBoundControllerValueTable(
+  store: KernelStore,
   base: RuntimeBoundControllerValueTable,
   rootDefinition: RuntimeControllerDefinitionReference,
   runtimeAnalysis: RuntimeBindingSourceValueRuntimeAnalysis,
+  resourceScope: TemplateResourceScope | null,
 ): RuntimeBoundControllerValueTable {
   return new RuntimeBoundControllerValueTable(
     [
       ...base.values,
-      ...boundControllerValuesForRuntimeAnalysis(runtimeAnalysis),
+      ...boundControllerValuesForRuntimeAnalysis(store, runtimeAnalysis, resourceScope),
     ],
     [
       ...base.readControllerDefinitions(),
@@ -246,7 +259,9 @@ export function extendRuntimeBoundControllerValueTable(
 }
 
 function boundControllerValuesForRuntimeAnalysis(
+  store: KernelStore,
   analysis: RuntimeBindingSourceValueRuntimeAnalysis,
+  resourceScope: TemplateResourceScope | null,
 ): readonly RuntimeBoundControllerPropertyValue[] {
   const bindingsByProductHandle = new Map<ProductHandle, RuntimeBinding>(analysis.runtimeRendering.bindings
     .map((binding) => [binding.productHandle, binding]));
@@ -263,7 +278,7 @@ function boundControllerValuesForRuntimeAnalysis(
       continue;
     }
     const binding = bindingsByProductHandle.get(targetAccess.binding.productHandle) ?? null;
-    const expressionProductHandle = sourceExpressionProductHandleForBoundControllerBinding(binding);
+    const expressionProductHandle = sourceExpressionProductHandleForBoundControllerBinding(store, binding, resourceScope);
     if (binding == null || expressionProductHandle === undefined) {
       continue;
     }
@@ -305,10 +320,12 @@ function controllerDefinitionsForRuntimeRendering(
 }
 
 function sourceExpressionProductHandleForBoundControllerBinding(
+  store: KernelStore,
   binding: RuntimeBinding | null,
+  resourceScope: TemplateResourceScope | null,
 ): ProductHandle | null | undefined {
   if (binding instanceof PropertyBinding) {
-    return propertyBindingCarriesSourceToTarget(binding)
+    return propertyBindingCarriesSourceToTarget(store, binding, resourceScope)
       ? binding.expressionProductHandle
       : undefined;
   }
@@ -318,8 +335,12 @@ function sourceExpressionProductHandleForBoundControllerBinding(
   return undefined;
 }
 
-function propertyBindingCarriesSourceToTarget(binding: PropertyBinding): boolean {
-  switch (binding.bindingMode) {
+function propertyBindingCarriesSourceToTarget(
+  store: KernelStore,
+  binding: PropertyBinding,
+  resourceScope: TemplateResourceScope | null,
+): boolean {
+  switch (effectivePropertyBindingMode(store, binding, resourceScope)) {
     case TemplateBindingMode.OneTime:
     case TemplateBindingMode.ToView:
     case TemplateBindingMode.TwoWay:

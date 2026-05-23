@@ -1417,6 +1417,7 @@ export class SemanticRuntime {
       inquiryProfile: 'lsp-cursor',
       cursor: canonicalizeSourceCursorInput(app.project, query.cursor),
       detail: query.detail,
+      diagnosticProjection: query.diagnosticProjection,
     }) as SemanticRuntimeAnswer<SemanticTemplateCursorInfoResult>;
   }
 
@@ -2554,6 +2555,17 @@ export class SemanticApp {
         seamKindKey: seam.seamKindKey,
         summary: seam.summary,
         reasonKinds: seam.reasonKinds,
+        reasonSources: seam.reasonSources.map((source) => ({
+          reasonKind: source.reasonKind,
+          summary: source.summary,
+          source: describeAddress(this.runtime.workspace.store, source.addressHandle),
+          ...(handles ? {
+            handles: {
+              addressHandle: source.addressHandle,
+              evidenceHandle: source.evidenceHandle ?? null,
+            },
+          } : {}),
+        })),
         source: describeAddress(this.runtime.workspace.store, seam.addressHandle),
         ...(handles ? {
           handles: {
@@ -2679,6 +2691,7 @@ export class SemanticApp {
     const routerRows = this.routeQueries.routerIssueRows(detail);
     const routeRows = this.routeQueries.routeRecognizerIssueRows(detail);
     return appDiagnosticRows(
+      this.project.sourceFiles,
       this.project.projectKey,
       query,
       typeScriptRows,

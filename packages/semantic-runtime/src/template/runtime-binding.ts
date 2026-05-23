@@ -417,7 +417,12 @@ export class RuntimeBindingBindContext {
     readonly localKey: string,
     readonly host: RuntimeBindingBindHost,
     readonly spreadValueTargetProperties: readonly string[] = [],
+    readonly propertyBindingMode: (binding: PropertyBinding) => TemplateBindingMode = (binding) => binding.bindingMode,
   ) {}
+
+  effectivePropertyBindingMode(binding: PropertyBinding): TemplateBindingMode {
+    return this.propertyBindingMode(binding);
+  }
 
   targetAccess(
     binding: RuntimeBinding,
@@ -652,7 +657,7 @@ export class PropertyBinding {
   bind(input: RuntimeBindingBindContext): RuntimeBindingBindContribution {
     return input.targetAccess(
       this,
-      targetAccessLookupForBindingMode(this.bindingMode),
+      targetAccessLookupForBindingMode(input.effectivePropertyBindingMode(this)),
       this.target,
     );
   }

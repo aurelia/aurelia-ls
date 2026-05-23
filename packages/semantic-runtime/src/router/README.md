@@ -136,9 +136,11 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   dynamic `href` value stays open with `router-href-externality-open` until semantic-runtime can either prove the
   external URL lane or close an internal route string. `RouterOptions.useHref=false`, non-anchor hosts, and a co-located
   `load` custom attribute also carry `router-href-click-interception-disabled`; anchor `target` values other than
-  `_self` carry `router-href-click-interception-target-open` because the framework compares them with the runtime
-  window name before deciding. Both reason kinds mirror the framework constructor/binding click-interception gates
-  without pretending URL generation is disabled. Dynamic `href` seams should anchor to the binding value source span when that
+  `_self` carry `router-href-click-interception-target-open` because framework `HrefCustomAttribute` disables
+  interception for those targets unless the literal target equals runtime `IWindow.name`. Semantic-runtime keeps that
+  window-name comparison open instead of converting `_blank` or named targets into unconditional disabled-interception
+  facts. Both reason kinds mirror the framework constructor/binding click-interception gates without pretending URL
+  generation is disabled. Dynamic `href` seams should anchor to the binding value source span when that
   span is known; the route context is the runtime seam owner, but the binding value is the source a user or future
   repair plan needs to inspect. Interpolation, template strings, string concatenation, and
   evaluator-local view-model method calls can preserve authored static route prefixes as string-pattern values with
@@ -167,7 +169,13 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
   generated component's `RouteConfigContext`, merge child query params, preserve viewport suffixes, and then re-enter
   the ordinary static instruction-tree lane. The closed object can be a syntactic object literal or an equivalent
   binding-source value, so app code may keep navigation intent objects in state/getters and bind them with ordinary
-  member/keyed expressions without duplicating route trees in template markup.
+  member/keyed expressions without duplicating route trees in template markup. Inline array/object expressions that
+  reduce to the same value shape follow that binding-source value path too, rather than requiring a router-local
+  expression evaluator. The same source-value path accepts the framework context forms `$this.member`,
+  `$parent.member`, and boundary `this.member` when the modeled `BindingScope` can resolve the member slot. It also
+  consumes evaluator-local class instances, receiver-aware object-method calls, and tagged-template/function results
+  when those reduce to the same object or route-string shape, instead of requiring route-instruction materialization to
+  learn those AST forms.
 - Resolve the owning router-resource `RouteContext` through modeled controller/container ancestry before falling back to
   route-config component-definition matching. `load` and `href` resolve `IContextRouter` / `IRouteContext` from the
   custom-attribute controller's container chain; ordinary child components inside a routed component can therefore
@@ -305,6 +313,16 @@ non-redirect recognized routes. Recognized route nodes can also materialize the 
 - Follow-up expression readers must preserve the `StaticModuleEvaluationResult` policy/runtime host. Re-reading route
   component expressions through a fresh evaluator amputates dynamic-import and framework intrinsics that the module graph
   already resolved.
+- Dynamic route values that call view-model methods should consume the binding-source evaluator's activation facts.
+  Direct `resolve(ClassKey)` state reads can close through the shared Aurelia evaluator host, and registered/interface
+  keys can close through `RuntimeBindingSourceActivationContext` when the router-resource render site carries an active
+  modeled controller/container ancestry. Router-resource binding scope lookup must use the same render-context-aware
+  instruction scope lookup as observation and overlay consumers: custom-attribute controllers are created from an
+  instruction, but the expression scope belongs to the controller that rendered that instruction sequence, often a
+  parent renderer or synthetic template-controller view. Summarized repeat-local string-pattern arguments remain honest
+  source-value pressure rather than router-local special cases; when the shared representative-value substrate can keep
+  the static route prefix, router materialization should consume it, and when a later lookup needs exact per-item
+  correlation it should stay as value-flow pressure rather than inventing href-local matching.
 - Router resources (`au-viewport`, `load`, `href`) are ordinary Aurelia resources supplied by router configuration.
   They flow through the same resource/registration/DI/compiler-world machinery as framework resources, not through a
   router-only shortcut.

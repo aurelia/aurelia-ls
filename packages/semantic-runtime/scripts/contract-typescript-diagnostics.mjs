@@ -15,6 +15,7 @@ const runtime = await createSemanticRuntime({
 const app = await runtime.openApp({
   analysisDepth: 'binding-observation',
 });
+const profile = app.cacheSummary(8, false).profile;
 
 const summary = app.ask({
   kind: SemanticAppQueryKind.TypeScriptDiagnosticSummary,
@@ -69,12 +70,23 @@ const availableProductsTypeScriptCluster = availableProductsSummary.rows.find((r
 const excludedFileDiagnostic = diagnostics.rows.find((row) =>
   row.source?.path.endsWith('excluded-diagnostics.ts') === true
 );
+const overlayGroup = profile.programRootFileGroups.find((row) => row.groupKind === 'overlay-source');
+const overlayDiagnostic = diagnostics.rows.find((row) =>
+  row.source?.path.includes('/.semantic-runtime/overlays/') === true
+  || row.source?.path.includes('\\.semantic-runtime\\overlays\\') === true
+);
 
 if (ts2322Diagnostic == null) {
   failures.push('Expected TypeScript diagnostics to include TS2322 in the project-local state source file.');
 }
+if (ts2322Diagnostic?.sourceRole !== 'app-source') {
+  failures.push(`Expected project-local TS2322 diagnostics to carry app-source role, observed ${ts2322Diagnostic?.sourceRole ?? 'missing'}.`);
+}
 if (ts2322Cluster == null || ts2322Cluster.count < 1) {
   failures.push('Expected TypeScript diagnostic summary to cluster TS2322.');
+}
+if (ts2322Cluster?.sourceRoles.some((row) => row.role === 'app-source' && row.count >= 1) !== true) {
+  failures.push('Expected TS2322 summary to retain app-source role counts.');
 }
 if (configDiagnostic == null) {
   failures.push('Expected TypeScript diagnostics to include tsconfig option diagnostics.');
@@ -82,17 +94,32 @@ if (configDiagnostic == null) {
 if (configDiagnostic?.source?.path.endsWith('tsconfig.json') !== true) {
   failures.push('Expected tsconfig option diagnostics to carry the config file source path.');
 }
+if (configDiagnostic?.sourceRole !== 'tooling-config') {
+  failures.push(`Expected tsconfig option diagnostics to carry tooling-config role, observed ${configDiagnostic?.sourceRole ?? 'missing'}.`);
+}
 if (configCluster == null || configCluster.count < 1) {
   failures.push('Expected TypeScript diagnostic summary to cluster tsconfig option diagnostics.');
 }
+if (configCluster?.sourceRoles.some((row) => row.role === 'tooling-config' && row.count >= 1) !== true) {
+  failures.push('Expected tsconfig diagnostic summary to retain tooling-config role counts.');
+}
 if (unifiedTypeScriptCluster == null || unifiedTypeScriptCluster.count < 1) {
   failures.push('Expected app diagnostic summary to include the TypeScript TS2322 cluster.');
+}
+if (unifiedTypeScriptCluster?.sourceRoles.some((row) => row.role === 'app-source' && row.count >= 1) !== true) {
+  failures.push('Expected unified app diagnostic summary to retain TypeScript source roles.');
 }
 if (availableProductsTypeScriptCluster != null) {
   failures.push('Expected available-products diagnostic projection to omit ordinary TypeScript diagnostics.');
 }
 if (excludedFileDiagnostic != null) {
   failures.push('Expected TypeScript diagnostics to respect tsconfig root-file selection and omit excluded source files.');
+}
+if (profile.programRootFiles.overlaySources < 1 || overlayGroup == null) {
+  failures.push('Expected TypeSystemProject roots to include a Program-owned semantic-runtime overlay source.');
+}
+if (overlayDiagnostic != null) {
+  failures.push('Expected semantic-runtime overlay sources to stay hidden from ordinary TypeScript diagnostics.');
 }
 if (ts2322Diagnostic?.severity !== 'error') {
   failures.push(`Expected TS2322 severity to be error, observed ${ts2322Diagnostic?.severity ?? 'missing'}.`);
@@ -134,6 +161,7 @@ if (failures.length > 0) {
       availableProductsTypeScriptCount: availableProductsSummary.rows
         .filter((row) => row.diagnosticDomain === 'typescript')
         .reduce((total, row) => total + row.count, 0),
+      overlayRootSources: profile.programRootFiles.overlaySources,
     },
   }, null, 2));
 }

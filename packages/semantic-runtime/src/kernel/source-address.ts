@@ -85,39 +85,17 @@ export function addressBelongsToSourceFiles(
   return sourceFileHandle != null && sourceFileHandles.has(sourceFileHandle);
 }
 
+interface AuthoredSourceAddress {
+  readonly sourceFile: SourceFileAddress | null;
+  readonly sourceSpan: SourceSpanAddress | null;
+}
+
 /** Narrow a kernel address to an exact source span, following template/generated anchors when possible. */
 export function sourceSpanAddressForAddress(
   store: KernelStore,
   addressHandle: AddressHandle | null,
-  seen: Set<AddressHandle> = new Set(),
 ): SourceSpanAddress | null {
-  if (addressHandle == null || seen.has(addressHandle)) {
-    return null;
-  }
-  seen.add(addressHandle);
-
-  const address = store.readAddress(addressHandle);
-  if (address == null) {
-    return null;
-  }
-
-  switch (address.kind) {
-    case 'source-file-address':
-      return null;
-    case 'source-span-address':
-      return address;
-    case 'template-address':
-      return sourceSpanAddressForAddress(store, address.authoredSourceHandle, seen);
-    case 'template-node-address':
-      return sourceSpanAddressForAddress(store, address.authoredSourceHandle, seen)
-        ?? sourceSpanAddressForAddress(store, address.templateHandle, seen);
-    case 'generated-address':
-      return address.anchorHandle != null && store.readAddress(address.anchorHandle as AddressHandle) != null
-        ? sourceSpanAddressForAddress(store, address.anchorHandle as AddressHandle, seen)
-        : null;
-    case 'external-address':
-      return null;
-  }
+  return authoredSourceAddressForAddress(store, addressHandle)?.sourceSpan ?? null;
 }
 
 export function sourceFileHandleForAddress(
@@ -130,8 +108,15 @@ export function sourceFileHandleForAddress(
 export function sourceFileAddressForAddress(
   store: KernelStore,
   addressHandle: AddressHandle | null,
-  seen: Set<AddressHandle> = new Set(),
 ): SourceFileAddress | null {
+  return authoredSourceAddressForAddress(store, addressHandle)?.sourceFile ?? null;
+}
+
+function authoredSourceAddressForAddress(
+  store: KernelStore,
+  addressHandle: AddressHandle | null,
+  seen: Set<AddressHandle> = new Set(),
+): AuthoredSourceAddress | null {
   if (addressHandle == null || seen.has(addressHandle)) {
     return null;
   }
@@ -144,17 +129,20 @@ export function sourceFileAddressForAddress(
 
   switch (address.kind) {
     case 'source-file-address':
-      return address;
+      return { sourceFile: address, sourceSpan: null };
     case 'source-span-address':
-      return sourceFileAddressForAddress(store, address.fileHandle, seen);
+      return {
+        sourceFile: authoredSourceAddressForAddress(store, address.fileHandle, seen)?.sourceFile ?? null,
+        sourceSpan: address,
+      };
     case 'template-address':
-      return sourceFileAddressForAddress(store, address.authoredSourceHandle, seen);
+      return authoredSourceAddressForAddress(store, address.authoredSourceHandle, seen);
     case 'template-node-address':
-      return sourceFileAddressForAddress(store, address.authoredSourceHandle, seen)
-        ?? sourceFileAddressForAddress(store, address.templateHandle, seen);
+      return authoredSourceAddressForAddress(store, address.authoredSourceHandle, seen)
+        ?? authoredSourceAddressForAddress(store, address.templateHandle, seen);
     case 'generated-address':
       return address.anchorHandle != null && store.readAddress(address.anchorHandle as AddressHandle) != null
-        ? sourceFileAddressForAddress(store, address.anchorHandle as AddressHandle, seen)
+        ? authoredSourceAddressForAddress(store, address.anchorHandle as AddressHandle, seen)
         : null;
     case 'external-address':
       return null;

@@ -190,7 +190,7 @@ function readComputedObserverSourceSites(
   typeSystem: TypeSystemProject,
 ): readonly ComputedObserverSourceSite[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileComputedObserverSourceSites(source.path, source.addressHandle, sourceFile);

@@ -47,7 +47,7 @@ export function readInvalidComputedDecoratorSites(
   typeSystem: TypeSystemProject,
 ): readonly ComputedDecoratorSite[] {
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileInvalidComputedDecoratorSites(source.path, source.addressHandle, sourceFile);

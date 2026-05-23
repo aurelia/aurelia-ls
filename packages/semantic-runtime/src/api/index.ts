@@ -1,5 +1,9 @@
 export * from './answer.js';
 export * from './app-query-catalog.js';
+export {
+  semanticAppQueryBatchMaterializationPolicy,
+  semanticAppQueryMaterializationPolicy,
+} from './app-query-policy.js';
 export * from './app-overview.js';
 export * from './app-topology.js';
 export * from './authoring-catalog.js';

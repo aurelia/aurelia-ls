@@ -1,4 +1,7 @@
 import {
+  BindingScopeConditionPolarity,
+  BindingScopeCreator,
+  BindingScopeCreatorKind,
   BindingScope,
 } from '../configuration/scope.js';
 import {
@@ -11,6 +14,7 @@ import {
   CheckerExpressionScopeNarrower,
   CheckerExpressionScopeNarrowingPolarity,
   type CheckerExpressionScopeNarrowingRequest,
+  type CheckerExpressionScopeNarrowingResult,
 } from '../type-system/expression-scope-narrower.js';
 import type { RuntimeControllerFrame } from './runtime-controller.js';
 import {
@@ -19,7 +23,7 @@ import {
 import {
   BuiltInTemplateControllerChildScopeKind,
   BuiltInTemplateControllerFlowKind,
-  runtimeHtmlTemplateControllerSemanticsForName,
+  frameworkTemplateControllerSemanticsForName,
 } from './template-controller-semantics.js';
 import {
   TemplateControllerPromiseResultKind,
@@ -29,6 +33,8 @@ import {
   templateControllerValueExpressionProductHandle,
   templateControllerValueTarget,
 } from './template-controller-value.js';
+import { staticTemplateControllerBooleanProperty } from './template-controller-value.js';
+import { templateControllerSwitchCaseBranch } from './template-controller-switch-branch.js';
 import type {
   TemplateScopeConstructionFrame,
   TemplateScopeConstructionRequest,
@@ -73,7 +79,7 @@ export class TemplateControllerFlowScopeMaterializer {
       return effectScope;
     }
 
-    const semantics = runtimeHtmlTemplateControllerSemanticsForName(instruction.controllerName);
+    const semantics = frameworkTemplateControllerSemanticsForName(instruction.controllerName);
     switch (semantics?.flowKind) {
       case BuiltInTemplateControllerFlowKind.ConditionalElse:
         return this.constructConditionalElseScope(frame, parent, instruction, controller, localSuffix);
@@ -90,7 +96,7 @@ export class TemplateControllerFlowScopeMaterializer {
         );
       case BuiltInTemplateControllerFlowKind.SwitchCase:
       case BuiltInTemplateControllerFlowKind.SwitchDefault:
-        return this.constructSwitchCaseScope(frame, parent, instruction, controller);
+        return this.constructSwitchCaseScope(frame, parent, instruction, controller, localSuffix);
       case BuiltInTemplateControllerFlowKind.ValueScope:
         return semantics.childScopeKind === BuiltInTemplateControllerChildScopeKind.ValueBindingContext
           ? this.constructValueScope(frame, parent, instruction, controller, localSuffix)
@@ -115,7 +121,7 @@ export class TemplateControllerFlowScopeMaterializer {
     instruction: HydrateTemplateControllerInstruction,
     childScope: BindingScope,
   ): void {
-    const semantics = runtimeHtmlTemplateControllerSemanticsForName(instruction.controllerName);
+    const semantics = frameworkTemplateControllerSemanticsForName(instruction.controllerName);
     if (semantics?.flowKind === BuiltInTemplateControllerFlowKind.Promise) {
       frame.flowState.forgetPromise(childScope);
     }
@@ -146,12 +152,14 @@ export class TemplateControllerFlowScopeMaterializer {
       if (emission != null) {
         return frame.addDerivedScope(emission);
       }
-      return frame.addDerivedScope(this.constructBranchScope(
+      return frame.addDerivedScope(this.constructConditionBranchScope(
         frame.input,
         parent,
+        previousIf,
         instruction,
         controller,
         `${localSuffix}:else-branch`,
+        BindingScopeConditionPolarity.Falsy,
       ));
     }
     return parent;
@@ -194,13 +202,120 @@ export class TemplateControllerFlowScopeMaterializer {
     parent: BindingScope,
     instruction: HydrateTemplateControllerInstruction,
     controller: RuntimeControllerFrame | null,
+    localSuffix: string,
   ): BindingScope {
     frame.flowState.clearBranch(parent);
     const switchInstruction = frame.flowState.readSwitch(parent);
     if (switchInstruction != null) {
       this.recordTemplateControllerLink(frame, controller, instruction, switchInstruction);
     }
-    return parent;
+    if (switchInstruction == null) {
+      return parent;
+    }
+    const flowKind = frameworkTemplateControllerSemanticsForName(instruction.controllerName)?.flowKind ?? null;
+    const narrowing = flowKind === BuiltInTemplateControllerFlowKind.SwitchCase
+      || flowKind === BuiltInTemplateControllerFlowKind.SwitchDefault
+      ? this.constructSwitchCaseNarrowing(frame, parent, switchInstruction, instruction, flowKind, localSuffix)
+      : null;
+    return frame.addDerivedScope(this.scopeMaterializer.prepare(BindingScope.fromNarrowedBindingScope({
+      localKey: `${frame.input.localKey}:scope:template-controller:${localSuffix}:switch-branch`,
+      ownerProductHandle: controller?.productHandle ?? instruction.productHandle,
+      ownerIdentityHandle: controller?.identityHandle ?? instruction.identityHandle,
+      base: parent,
+      bindingContextSlots: narrowing?.bindingContextSlots ?? [],
+      overrideContextSlots: narrowing?.overrideContextSlots ?? [],
+      sourceAddressHandle: instruction.sourceAddressHandle,
+      scopeCreators: [new BindingScopeCreator(
+        BindingScopeCreatorKind.TemplateControllerBranch,
+        instruction.productHandle,
+        instruction.sourceAddressHandle,
+      )],
+    })));
+  }
+
+  private constructSwitchCaseNarrowing(
+    frame: TemplateScopeConstructionFrame,
+    parent: BindingScope,
+    switchInstruction: HydrateTemplateControllerInstruction,
+    instruction: HydrateTemplateControllerInstruction,
+    flowKind: BuiltInTemplateControllerFlowKind.SwitchCase | BuiltInTemplateControllerFlowKind.SwitchDefault,
+    localSuffix: string,
+  ): CheckerExpressionScopeNarrowingResult | null {
+    const parse = this.typeSupport.readParse(templateControllerValueExpressionProductHandle(this.store, switchInstruction));
+    const switchExpression = parse == null ? null : completedTemplateExpressionAstForParse(parse);
+    if (switchExpression == null) {
+      return null;
+    }
+
+    if (flowKind === BuiltInTemplateControllerFlowKind.SwitchDefault) {
+      const excludedTypes = this.switchCaseMatchTypes(frame, parent, switchInstruction, localSuffix);
+      return excludedTypes == null || excludedTypes.length === 0
+        ? null
+        : this.scopeNarrower.narrowEqualityDomain({
+          localKey: `${frame.input.localKey}:scope:template-controller:${localSuffix}:switch-default`,
+          expression: switchExpression,
+          scope: parent,
+          excludeTypes: excludedTypes,
+          sourceAddressHandle: instruction.sourceAddressHandle,
+        });
+    }
+
+    const branch = templateControllerSwitchCaseBranch({
+      cases: this.switchCaseInstructions(frame, switchInstruction),
+      current: instruction,
+      readFallThrough: (candidate) =>
+        staticTemplateControllerBooleanProperty(this.store, candidate, 'fallThrough', false),
+    });
+    if (branch == null) {
+      return null;
+    }
+    const includeTypes = this.switchCaseMatchTypes(frame, parent, switchInstruction, localSuffix, branch.activeCases);
+    const excludeTypes = this.switchCaseMatchTypes(frame, parent, switchInstruction, localSuffix, branch.excludedCases);
+    if (includeTypes == null || excludeTypes == null || includeTypes.length === 0) {
+      return null;
+    }
+
+    return this.scopeNarrower.narrowEqualityDomain({
+      localKey: `${frame.input.localKey}:scope:template-controller:${localSuffix}:switch-case`,
+      expression: switchExpression,
+      scope: parent,
+      includeTypes,
+      excludeTypes,
+      sourceAddressHandle: instruction.sourceAddressHandle,
+    });
+  }
+
+  private switchCaseMatchTypes(
+    frame: TemplateScopeConstructionFrame,
+    parent: BindingScope,
+    switchInstruction: HydrateTemplateControllerInstruction,
+    localSuffix: string,
+    instructions: readonly HydrateTemplateControllerInstruction[] = this.switchCaseInstructions(frame, switchInstruction),
+  ) {
+    const result = instructions.map((instruction, index) =>
+      this.typeSupport.templateControllerMatchTypes(
+        frame.input,
+        parent,
+        instruction,
+        `${localSuffix}:case:${index}`,
+      )
+    );
+    return result.some((types) => types == null)
+      ? null
+      : result.flatMap((types) => types ?? []);
+  }
+
+  private switchCaseInstructions(
+    frame: TemplateScopeConstructionFrame,
+    switchInstruction: HydrateTemplateControllerInstruction,
+  ): readonly HydrateTemplateControllerInstruction[] {
+    const sequence = frame.readSequence(switchInstruction.childInstructionSequenceProductHandle);
+    return sequence?.instructions
+      .map((reference) => frame.readInstruction(reference.productHandle))
+      .filter((instruction): instruction is HydrateTemplateControllerInstruction =>
+        instruction instanceof HydrateTemplateControllerInstruction
+        && frameworkTemplateControllerSemanticsForName(instruction.controllerName)?.flowKind === BuiltInTemplateControllerFlowKind.SwitchCase
+      ) ?? [];
   }
 
   private constructValueScope(
@@ -259,12 +374,14 @@ export class TemplateControllerFlowScopeMaterializer {
     if (emission != null) {
       return frame.addDerivedScope(emission);
     }
-    return frame.addDerivedScope(this.constructBranchScope(
+    return frame.addDerivedScope(this.constructConditionBranchScope(
       frame.input,
       parent,
       instruction,
+      instruction,
       controller,
       `${localSuffix}:if-branch`,
+      BindingScopeConditionPolarity.Truthy,
     ));
   }
 
@@ -321,15 +438,25 @@ export class TemplateControllerFlowScopeMaterializer {
       bindingContextSlots: narrowing.bindingContextSlots,
       overrideContextSlots: narrowing.overrideContextSlots,
       sourceAddressHandle: ownerInstruction.sourceAddressHandle,
+      scopeCreators: [new BindingScopeCreator(
+        BindingScopeCreatorKind.TemplateControllerCondition,
+        conditionInstruction.productHandle,
+        conditionInstruction.sourceAddressHandle,
+        polarity === CheckerExpressionScopeNarrowingPolarity.Truthy
+          ? BindingScopeConditionPolarity.Truthy
+          : BindingScopeConditionPolarity.Falsy,
+      )],
     }));
   }
 
-  private constructBranchScope(
+  private constructConditionBranchScope(
     input: TemplateScopeConstructionRequest,
     parent: BindingScope,
+    conditionInstruction: HydrateTemplateControllerInstruction,
     instruction: HydrateTemplateControllerInstruction,
     controller: RuntimeControllerFrame | null,
     localSuffix: string,
+    polarity: BindingScopeConditionPolarity,
   ): BindingScopeConstructionEmission {
     return this.scopeMaterializer.prepare(BindingScope.fromNarrowedBindingScope({
       localKey: `${input.localKey}:scope:template-controller:${localSuffix}`,
@@ -339,6 +466,12 @@ export class TemplateControllerFlowScopeMaterializer {
       bindingContextSlots: [],
       overrideContextSlots: [],
       sourceAddressHandle: instruction.sourceAddressHandle,
+      scopeCreators: [new BindingScopeCreator(
+        BindingScopeCreatorKind.TemplateControllerCondition,
+        conditionInstruction.productHandle,
+        conditionInstruction.sourceAddressHandle,
+        polarity,
+      )],
     }));
   }
 
@@ -364,6 +497,18 @@ export class TemplateControllerFlowScopeMaterializer {
       bindingContextSlots: [this.typeSupport.promiseResultSlotDraft(input, instruction, promiseState, resultKind, localSuffix, target)],
       overrideContextSlots: [],
       sourceAddressHandle: instruction.sourceAddressHandle,
+      scopeCreators: [
+        new BindingScopeCreator(
+          BindingScopeCreatorKind.TemplateControllerValueScope,
+          promiseState.instruction.productHandle,
+          promiseState.instruction.sourceAddressHandle,
+        ),
+        new BindingScopeCreator(
+          BindingScopeCreatorKind.TemplateControllerPromiseResult,
+          instruction.productHandle,
+          instruction.sourceAddressHandle,
+        ),
+      ],
     }));
   }
 
@@ -380,7 +525,7 @@ export class TemplateControllerFlowScopeMaterializer {
       instruction,
       controller,
       localSuffix,
-      this.typeSupport.templateControllerValueType(input, parent, instruction, localSuffix),
+      this.typeSupport.templateControllerObjectBindingContextType(input, parent, instruction, localSuffix),
     );
   }
 
@@ -399,6 +544,11 @@ export class TemplateControllerFlowScopeMaterializer {
       parent,
       contextType,
       sourceAddressHandle: instruction.sourceAddressHandle,
+      scopeCreators: [new BindingScopeCreator(
+        BindingScopeCreatorKind.TemplateControllerValueScope,
+        instruction.productHandle,
+        instruction.sourceAddressHandle,
+      )],
     }));
   }
 }

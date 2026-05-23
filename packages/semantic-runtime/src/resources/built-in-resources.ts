@@ -15,6 +15,8 @@ export const enum BuiltInResourcePackage {
   I18n = 'i18n',
   /** Router package. */
   Router = 'router',
+  /** UI virtualization package. */
+  UiVirtualization = 'ui-virtualization',
   /** State package. */
   State = 'state',
   /** Validation HTML package. */
@@ -749,6 +751,7 @@ export type BuiltInResource =
   | RouterLoadCustomAttributeResource
   | RouterHrefCustomAttributeResource
   | RouterViewportCustomElementResource
+  | UiVirtualizationVirtualRepeatResource
   | StateBindingBehaviorResource
   | ValidationHtmlValidateBindingBehaviorResource
   | ValidationHtmlValidationErrorsCustomAttributeResource
@@ -923,6 +926,33 @@ export const RouterBuiltInResourceCatalogs = {
       new RouterLoadCustomAttributeResource(),
       new RouterHrefCustomAttributeResource(),
       new RouterViewportCustomElementResource(),
+    ],
+  },
+} as const satisfies Record<string, BuiltInResourceCatalogInput>;
+
+@auLink('ui-virtualization:VirtualRepeat', { facet: 'resource-definition' })
+export class UiVirtualizationVirtualRepeatResource {
+  readonly targetName = 'VirtualRepeat';
+  readonly resourceKind = ResourceDefinitionKind.TemplateController;
+  readonly name = 'virtual-repeat';
+  readonly aliases: readonly string[] = [];
+  readonly packageId = BuiltInResourcePackage.UiVirtualization;
+  readonly group = BuiltInResourceGroup.DefaultResources;
+
+  constructor(
+    readonly productHandle: ProductHandle | null = null,
+    readonly identityHandle: IdentityHandle | null = null,
+    readonly sourceAddressHandle: AddressHandle | null = null,
+    readonly fieldProvenance: readonly FieldProvenance<BuiltInResourceField>[] = [],
+  ) {}
+}
+
+export const UiVirtualizationBuiltInResourceCatalogs = {
+  DefaultResources: {
+    packageId: BuiltInResourcePackage.UiVirtualization,
+    group: BuiltInResourceGroup.DefaultResources,
+    resources: [
+      new UiVirtualizationVirtualRepeatResource(),
     ],
   },
 } as const satisfies Record<string, BuiltInResourceCatalogInput>;

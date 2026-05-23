@@ -20,6 +20,7 @@ import {
 import { instructionScopeLookup } from '../observation/runtime-binding-expression.js';
 import { CustomElementDefinition } from '../resources/custom-element-definition.js';
 import { ResourceProductDetails } from '../resources/product-details.js';
+import type { TemplateResourceScope } from './compiler-world.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { HtmlElement, HtmlText } from './html-ir.js';
 import { TemplateProductDetails } from './product-details.js';
@@ -66,6 +67,9 @@ import {
   RuntimeControllerBindPublisher,
   type RuntimeControllerBindSourceSet,
 } from './runtime-controller-bind-publication.js';
+import {
+  effectivePropertyBindingMode,
+} from './runtime-binding-mode-behavior.js';
 
 export interface RuntimeControllerBindMaterializationRequest {
   /** Store-local key shared with the template compilation pass. */
@@ -76,6 +80,8 @@ export interface RuntimeControllerBindMaterializationRequest {
   readonly scopes: TemplateScopeConstructionEmission;
   /** Current TypeChecker epoch used by ObserverLocator lookup, when available. */
   readonly typeSystem: TypeSystemProject | null;
+  /** Compiler resource scope visible when binding.bind executes binding behaviors. */
+  readonly resourceScope: TemplateResourceScope | null;
   /** App-authored NodeObserverLocator service state visible to this runtime binding analysis. */
   readonly nodeObserverLocatorConfiguration?: NodeObserverLocatorConfiguration | null;
 }
@@ -176,6 +182,7 @@ class RuntimeControllerBindMaterializationHost implements RuntimeControllerBindH
       binding instanceof SpreadValueBinding
         ? this.materializer.spreadValueTargetProperties(targetController)
         : [],
+      (propertyBinding) => effectivePropertyBindingMode(this.materializer.store, propertyBinding, this.input.resourceScope),
     );
   }
 

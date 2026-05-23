@@ -9,6 +9,8 @@ export function inferSourceLanguage(path: string): SourceLanguage {
   switch (extname(path).toLowerCase()) {
     case '.ts':
     case '.tsx':
+    case '.mts':
+    case '.cts':
       return SourceLanguage.TypeScript;
     case '.js':
     case '.jsx':
@@ -38,6 +40,9 @@ export function inferSourceFileRole(path: string): SourceFileRole {
   }
   if (isDeclarationFileName(baseName)) {
     return SourceFileRole.Declaration;
+  }
+  if (segments.includes('node_modules')) {
+    return SourceFileRole.ExternalSource;
   }
   if (isExampleSourcePath(segments, baseName)) {
     return SourceFileRole.ExampleSource;

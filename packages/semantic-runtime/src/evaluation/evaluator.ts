@@ -56,6 +56,7 @@ import {
   evaluateStaticBinaryOperator,
   staticTokenName,
 } from './operators.js';
+import { representativeEvaluationValues } from './representative-values.js';
 import {
   EvaluationBigIntValue,
   EvaluationBoundaryKind,
@@ -1175,6 +1176,8 @@ export class StaticEvaluator {
         this.evaluateExpression(expression, currentEnvironment, currentModuleKey, currentDepth),
       evaluateFunctionWithArguments: (callee, currentCall, argumentValues, currentModuleKey, currentDepth) =>
         this.evaluateFunctionWithArguments(callee, currentCall, argumentValues, currentModuleKey, currentDepth),
+      evaluateClassInstantiation: (callee, expression, argumentValues, currentModuleKey, currentDepth) =>
+        this.evaluateClassInstantiation(callee, expression, argumentValues, currentModuleKey, currentDepth),
       open: (seamKind, summary, node, currentModuleKey) =>
         this.open(seamKind, summary, node, currentModuleKey),
       unknown: (reason, node, currentModuleKey, seamKind) =>
@@ -1451,13 +1454,41 @@ export class StaticEvaluator {
       return this.materializeUnknownUse(condition, expression.condition, moduleKey, 'Conditional expression depended on an open condition.', EvaluationOpenSeamKind.DynamicBranch);
     }
     if (condition.kind === EvaluationValueKind.BoundaryValue) {
-      return boundaryDependencyValue(expression, condition);
+      return this.evaluateConditionalBranchRepresentative(expression, environment, moduleKey, depth + 1)
+        ?? boundaryDependencyValue(expression, condition);
     }
     const truthy = readEvaluationTruthiness(condition);
     if (truthy == null) {
-      return this.unknown('Conditional expression condition did not reduce to known truthiness.', expression.condition, moduleKey, EvaluationOpenSeamKind.DynamicBranch);
+      return this.evaluateConditionalBranchRepresentative(expression, environment, moduleKey, depth + 1)
+        ?? this.unknown('Conditional expression condition did not reduce to known truthiness.', expression.condition, moduleKey, EvaluationOpenSeamKind.DynamicBranch);
     }
     return this.evaluateExpression(truthy ? expression.whenTrue : expression.whenFalse, environment, moduleKey, depth + 1);
+  }
+
+  private evaluateConditionalBranchRepresentative(
+    expression: ts.ConditionalExpression,
+    environment: ModuleEnvironmentRecord,
+    moduleKey: string,
+    depth: number,
+  ): EvaluationValue | null {
+    const openStart = this.openSeams.length;
+    const statementStart = this.statementCount;
+    const whenTrue = this.evaluateExpression(expression.whenTrue, environment, moduleKey, depth + 1);
+    const whenFalse = this.evaluateExpression(expression.whenFalse, environment, moduleKey, depth + 1);
+    const representative = whenTrue.kind === EvaluationValueKind.Unknown || whenFalse.kind === EvaluationValueKind.Unknown
+      ? null
+      : representativeEvaluationValues(
+          [whenTrue, whenFalse],
+          `conditional.${expression.getStart(expression.getSourceFile())}`,
+          null,
+        );
+    if (representative == null) {
+      this.openSeams.splice(openStart);
+      this.statementCount = statementStart;
+      return null;
+    }
+    this.openSeams.splice(openStart);
+    return representative;
   }
 
   private applyAssignment(

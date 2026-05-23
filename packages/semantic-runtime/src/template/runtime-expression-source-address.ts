@@ -30,6 +30,13 @@ export function runtimeExpressionParseContextForAddress(
   carrierAddressHandle: AddressHandle | null,
 ): ExpressionParseContext | undefined {
   const sourceSpan = sourceSpanAddressForAddress(store, carrierAddressHandle);
+  return runtimeExpressionParseContextForSourceSpanAddress(store, sourceSpan);
+}
+
+export function runtimeExpressionParseContextForSourceSpanAddress(
+  store: KernelStore,
+  sourceSpan: SourceSpanAddress | null,
+): ExpressionParseContext | undefined {
   if (sourceSpan == null) {
     return undefined;
   }

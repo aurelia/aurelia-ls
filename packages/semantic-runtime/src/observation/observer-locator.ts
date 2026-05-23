@@ -14,7 +14,6 @@ import {
 } from '../type-system/checker-related-types.js';
 import {
   firstSymbolDeclaration,
-  undefinedCheckerNode,
 } from '../type-system/checker-node-helpers.js';
 import {
   CheckerTypeProjectionOrigin,
@@ -23,6 +22,7 @@ import {
 } from '../type-system/type-shape.js';
 import {
   CheckerDomNodeTypeSource,
+  checkerLookupLocation,
   resolveCheckerDomNodeType,
 } from '../type-system/dom-node-type.js';
 import {
@@ -141,7 +141,7 @@ type TypeResolution = {
   readonly checker: ts.TypeChecker;
   readonly type: ts.Type;
   readonly reference: CheckerTypeReference | null;
-  readonly location: ts.Node | null;
+  readonly location: ts.Node;
   readonly source: RuntimeBindingTargetTypeSource;
 };
 
@@ -1009,12 +1009,16 @@ export class ObserverLocator {
     if (carrier == null) {
       return null;
     }
+    const location = firstDeclaration(carrier) ?? checkerLookupLocation(input.typeSystem);
+    if (location == null) {
+      return null;
+    }
     const targetReference = shape?.toReference() ?? reference;
     return {
       checker: carrier.checker,
       type: carrier.type,
       reference: targetReference,
-      location: firstDeclaration(carrier),
+      location,
       source: RuntimeBindingTargetTypeSource.Reference,
     };
   }
@@ -1066,7 +1070,7 @@ export class ObserverLocator {
     const propertyType = input.projectPropertyType
       ? target.checker.getTypeOfSymbolAtLocation(
         symbol,
-        target.location ?? firstSymbolDeclaration(symbol) ?? undefinedCheckerNode(target.checker, 'semantic-runtime-observer-locator.ts'),
+        firstSymbolDeclaration(symbol) ?? target.location,
       )
       : null;
     return {

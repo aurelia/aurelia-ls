@@ -54,6 +54,74 @@
       "updatedAt": "2026-05-17"
     },
     {
+      "id": "frontier:open-seam-reason-provenance",
+      "kind": "pressure-frontier",
+      "domains": [
+        "semantic-runtime",
+        "kernel",
+        "open-seam",
+        "provenance",
+        "diagnostics",
+        "repair"
+      ],
+      "status": "active",
+      "nextActionPolicy": "when-touched",
+      "summary": "OpenSeam carries a primary unresolved site plus optional reasonSources for adjacent source/evidence sites that contributed individual reason kinds.",
+      "rationale": "Router href target pressure exposed the shape: the seam is correctly owned by the dynamic href value, but `router-href-click-interception-target-open` is contributed by the host target attribute. The kernel now has an OpenSeam.reasonSources carrier, router dynamic href seams publish source-bearing reason rows for the value, externality, and target-open facts, and authoring repair suggestions can choose action targets from those rows. Similar multi-site reasons can appear in binding value channels, observer selection, and framework error projections, so new consumers should extend the shared reason-source primitive instead of adding caller-local side tables.",
+      "guidance": [
+        "Treat `OpenSeam.addressHandle` as the primary unresolved seam site, not proof that every `reasonKind` came from the same source span.",
+        "When a repair or diagnostic needs to act on one reason inside a multi-reason seam, use `OpenSeam.reasonSources` and API `reasonSources` rows before adding feature-local evidence tables.",
+        "Keep compact open-seam summaries stable for routing, but preserve exact reason-level provenance through structured rows when the product needs edit targets or hover explanation.",
+        "Router dynamic href target-open pressure is the first proof lane: `contract:router-dynamic-pattern` expects the `router-href-click-interception-target-open` reason source and repair action target to be source-bearing.",
+        "Do not split one coherent runtime boundary into several open seams just to get per-reason source addresses; that loses the fact that the reasons describe one unresolved runtime decision."
+      ],
+      "anchors": [
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/open-seam.ts",
+          "symbolName": "OpenSeam",
+          "summary": "Current first-class open seam record with a primary address/evidence handle, reasonKinds, and optional reasonSources."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/kernel/source-open-seam.ts",
+          "symbolName": "recordsForSourceOpenSeam",
+          "summary": "Shared source-backed open-seam publication primitive."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/router/route-instruction-materialization.ts",
+          "symbolName": "hrefClickInterceptionFacts",
+          "summary": "Router href click-interception facts can contribute reason kinds from host attributes and router options."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/api/authoring-orientation.ts",
+          "symbolName": "repairActionTargetSourceForOpenSeam",
+          "summary": "Authoring repair target selection spends OpenSeam reasonSources before falling back to the seam primary source."
+        },
+        {
+          "kind": "fixture",
+          "path": "packages/semantic-runtime/fixtures/pressure/router-dynamic-pattern",
+          "summary": "Pressure fixture now includes a dynamic href seam whose target-open reason is contributed by the host target attribute."
+        }
+      ],
+      "liveChecks": [
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/kernel/open-seam.ts",
+          "symbolName": "OpenSeam"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/router/route-instruction-materialization.ts",
+          "symbolName": "hrefClickInterceptionFacts"
+        }
+      ],
+      "createdAt": "2026-05-23",
+      "updatedAt": "2026-05-23"
+    },
+    {
       "id": "frontier:product-detail-catalog",
       "kind": "intentional-shape",
       "domains": [

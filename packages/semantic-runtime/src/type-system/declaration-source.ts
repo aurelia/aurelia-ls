@@ -1,6 +1,7 @@
 import ts from 'typescript';
 import {
   SourceFileAddress,
+  SourceFileRole,
   SourceSpanAddress,
   SourceSpanRole,
 } from '../kernel/address.js';
@@ -231,8 +232,15 @@ function programSourceFileAddress(
     'type-system-program',
     path,
     inferSourceLanguage(path),
-    inferSourceFileRole(path),
+    programSourceFileRole(path),
   );
+}
+
+function programSourceFileRole(path: string): SourceFileRole {
+  const inferred = inferSourceFileRole(path);
+  return inferred === SourceFileRole.Declaration || inferred === SourceFileRole.Generated
+    ? inferred
+    : SourceFileRole.ExternalSource;
 }
 
 function programSourceFileAdmissionRecords(

@@ -13,6 +13,8 @@ export const enum OpenSeamReasonKind {
   BindingSourceSlotNoStaticValue = 'binding-source-slot-no-static-value',
   BindingSourceMemberNoStaticValue = 'binding-source-member-no-static-value',
   BindingSourceUnsupportedExpression = 'binding-source-unsupported-expression',
+  BindingSourceTypeOpen = 'binding-source-type-open',
+  BindingSourceResourceOpen = 'binding-source-resource-open',
   BindingValueChannelSelectTargetOpen = 'binding-value-channel-select-target-open',
   BindingValueChannelSelectOptionValueOpen = 'binding-value-channel-select-option-value-open',
   BindingValueChannelSelectOptionDomainOpen = 'binding-value-channel-select-option-domain-open',
@@ -28,6 +30,13 @@ export const enum OpenSeamReasonKind {
   RouterViewportResolutionOpen = 'router-viewport-resolution-open',
   RouterRedirectTargetOpen = 'router-redirect-target-open',
   SpreadHydrationContextOpen = 'spread-hydration-context-open',
+}
+
+export interface OpenSeamReasonSource {
+  readonly reasonKind: OpenSeamReasonKind | `${OpenSeamReasonKind}`;
+  readonly summary: string;
+  readonly addressHandle: AddressHandle | null;
+  readonly evidenceHandle?: EvidenceHandle | null;
 }
 
 /** First-class unresolved point that must not disappear behind nulls or missing arrays. */
@@ -48,5 +57,7 @@ export class OpenSeam {
     readonly evidenceHandle: EvidenceHandle | null = null,
     /** Stable machine-readable reasons that summarize the lower-level open pressure. */
     readonly reasonKinds: readonly OpenSeamReasonKind[] = [],
+    /** Optional per-reason source/evidence rows when one seam has adjacent contributing source sites. */
+    readonly reasonSources: readonly OpenSeamReasonSource[] = [],
   ) {}
 }

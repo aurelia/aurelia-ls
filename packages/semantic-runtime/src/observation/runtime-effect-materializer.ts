@@ -222,7 +222,7 @@ function readRuntimeEffectSourceSites(
 ): readonly RuntimeEffectSourceSite[] {
   const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     if (sourceFile == null) {
       return [];
     }

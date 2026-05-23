@@ -16,7 +16,7 @@ import {
   MaterializationRecord,
   MaterializedProduct,
 } from '../kernel/materialization.js';
-import { OpenSeam, type OpenSeamReasonKind } from '../kernel/open-seam.js';
+import { OpenSeam, type OpenSeamReasonKind, type OpenSeamReasonSource } from '../kernel/open-seam.js';
 import { ProvenanceRecord } from '../kernel/provenance.js';
 import type {
   KernelStore,
@@ -51,6 +51,7 @@ export interface RouterOpenSeamRecordSpec {
   readonly summary: string;
   readonly sourceAddressHandle: AddressHandle | null;
   readonly reasonKinds: readonly OpenSeamReasonKind[];
+  readonly reasonSources?: readonly OpenSeamReasonSource[];
   readonly evidenceKind: EvidenceKind;
   readonly evidenceRoles: readonly EvidenceRole[];
 }
@@ -159,6 +160,7 @@ export function routerOpenSeamRecords(
     spec.sourceAddressHandle,
     evidenceHandle,
     spec.reasonKinds,
+    spec.reasonSources ?? [],
   );
   return {
     openSeam,

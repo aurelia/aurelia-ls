@@ -18,7 +18,7 @@ export function readDiInterfaceKeyDeclarations(
 ): readonly DiInterfaceKeyDeclarationInfo[] {
   const declarations: DiInterfaceKeyDeclarationInfo[] = [];
   for (const source of project.sourceFiles) {
-    const sourceFile = typeSystem.readSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     if (sourceFile == null) {
       continue;
     }

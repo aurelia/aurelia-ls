@@ -1,5 +1,7 @@
 import ts from 'typescript';
 import type { TypeSystemProject } from './project.js';
+import type { TypeSystemOverlaySourceSegment } from './overlay.js';
+import type { AddressHandle, ProductHandle } from '../kernel/handles.js';
 import {
   sourcePathMatchesFileName,
 } from '../kernel/source-address.js';
@@ -44,8 +46,27 @@ export interface TypeSystemDiagnostic {
   readonly relatedInformation: readonly TypeSystemDiagnosticRelatedInformation[];
 }
 
+export interface TypeSystemOverlayDiagnosticAuthoredSource {
+  readonly semanticProductHandle: ProductHandle | null;
+  readonly sourceAddressHandle: AddressHandle;
+  readonly sourceStart: number | null;
+  readonly sourceEnd: number | null;
+  readonly label: string | null;
+}
+
+export interface TypeSystemOverlayDiagnostic {
+  readonly diagnostic: TypeSystemDiagnostic;
+  readonly overlaySourceKind: string;
+  readonly overlayOriginKey: string;
+  readonly overlayFileName: string;
+  readonly segment: TypeSystemOverlaySourceSegment | null;
+  readonly semanticProductHandle: ProductHandle | null;
+  readonly authoredSource: TypeSystemOverlayDiagnosticAuthoredSource | null;
+}
+
 const diagnosticsByProject = new WeakMap<TypeSystemProject, readonly TypeSystemDiagnostic[]>();
 const diagnosticsByProjectAndSource = new WeakMap<TypeSystemProject, Map<string, readonly TypeSystemDiagnostic[]>>();
+const overlayDiagnosticsByProject = new WeakMap<TypeSystemProject, readonly TypeSystemOverlayDiagnostic[]>();
 
 /** Read ordinary TypeScript project diagnostics from the Program epoch owned by semantic-runtime. */
 export function readTypeSystemProjectDiagnostics(
@@ -128,6 +149,99 @@ export function readTypeSystemProjectSourceDiagnostics(
   const result = [...deduplicateTypeSystemDiagnostics(diagnostics)].sort(compareTypeSystemDiagnostics);
   diagnosticsBySource.set(cacheKey, result);
   return result;
+}
+
+/** Read diagnostics from semantic-runtime overlays and map generated spans back to authored source segments when possible. */
+export function readTypeSystemOverlayDiagnostics(
+  typeSystem: TypeSystemProject,
+): readonly TypeSystemOverlayDiagnostic[] {
+  const cached = overlayDiagnosticsByProject.get(typeSystem);
+  if (cached != null) {
+    return cached;
+  }
+  const rows = typeSystem.readOverlaySources().flatMap((overlaySource) => {
+    const sourceFile = typeSystem.readProgramSourceFileByPath(overlaySource.fileName);
+    if (sourceFile == null) {
+      return [];
+    }
+    const diagnostics = [
+      ...typeSystem.program.getSyntacticDiagnostics(sourceFile).map((diagnostic) =>
+        typeSystemDiagnostic('syntactic', diagnostic)
+      ),
+      ...typeSystem.program.getSemanticDiagnostics(sourceFile).map((diagnostic) =>
+        typeSystemDiagnostic('semantic', diagnostic)
+      ),
+      ...typeSystem.program.getDeclarationDiagnostics(sourceFile).map((diagnostic) =>
+        typeSystemDiagnostic('declaration', diagnostic)
+      ),
+    ];
+    return diagnostics.map((diagnostic) => {
+      const segment = diagnostic.source?.start == null
+        ? null
+        : typeSystem.readOverlaySourceSegmentAt(overlaySource.fileName, diagnostic.source.start);
+      const authoredSource = authoredSourceForOverlayDiagnostic(segment, diagnostic);
+      return {
+        diagnostic,
+        overlaySourceKind: overlaySource.kind,
+        overlayOriginKey: overlaySource.originKey,
+        overlayFileName: overlaySource.fileName,
+        segment,
+        semanticProductHandle: segment?.semanticProductHandle ?? null,
+        authoredSource,
+      } satisfies TypeSystemOverlayDiagnostic;
+    });
+  });
+  const result = rows.sort((left, right) =>
+    compareTypeSystemDiagnostics(left.diagnostic, right.diagnostic)
+    || left.overlayOriginKey.localeCompare(right.overlayOriginKey)
+  );
+  overlayDiagnosticsByProject.set(typeSystem, result);
+  return result;
+}
+
+function authoredSourceForOverlayDiagnostic(
+  segment: TypeSystemOverlaySourceSegment | null,
+  diagnostic: TypeSystemDiagnostic,
+): TypeSystemOverlayDiagnosticAuthoredSource | null {
+  if (segment?.sourceAddressHandle == null) {
+    return null;
+  }
+  const copied = copiedSourceDiagnosticSpan(segment, diagnostic);
+  return {
+    semanticProductHandle: segment.semanticProductHandle,
+    sourceAddressHandle: segment.sourceAddressHandle,
+    sourceStart: copied?.start ?? segment.sourceStart,
+    sourceEnd: copied?.end ?? segment.sourceEnd,
+    label: segment.label,
+  };
+}
+
+function copiedSourceDiagnosticSpan(
+  segment: TypeSystemOverlaySourceSegment,
+  diagnostic: TypeSystemDiagnostic,
+): { readonly start: number; readonly end: number } | null {
+  if (
+    segment.sourceStart == null
+    || segment.sourceEnd == null
+    || diagnostic.source == null
+  ) {
+    return null;
+  }
+  const generatedLength = segment.generatedEnd - segment.generatedStart;
+  const sourceLength = segment.sourceEnd - segment.sourceStart;
+  if (generatedLength !== sourceLength || generatedLength < 0) {
+    return null;
+  }
+  const startOffset = clamp(diagnostic.source.start - segment.generatedStart, 0, generatedLength);
+  const endOffset = clamp(diagnostic.source.end - segment.generatedStart, startOffset, generatedLength);
+  return {
+    start: segment.sourceStart + startOffset,
+    end: segment.sourceStart + endOffset,
+  };
+}
+
+function clamp(value: number, min: number, max: number): number {
+  return Math.max(min, Math.min(max, value));
 }
 
 function typeSystemDiagnostic(

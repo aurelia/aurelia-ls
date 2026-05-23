@@ -38,10 +38,10 @@ export class SourceObservationEffectsApp {
       this.latestName = value;
     });
     this.observation.watch(this.state.profile, 'address.city', (value) => {
-      this.latestCity = value;
+      this.latestCity = String(value);
     }, { immediate: false });
     this.observation.watch(this.state.profile, this.cityExpression, (value) => {
-      this.latestDynamicCity = value;
+      this.latestDynamicCity = String(value);
     });
     this.container.get(IObservation).watch(this.state.profile, (profile) => profile.address.city, (value) => {
       this.latestContainerCity = value;

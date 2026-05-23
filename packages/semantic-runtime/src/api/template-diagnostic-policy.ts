@@ -1,3 +1,4 @@
+import ts from 'typescript';
 import {
   TemplateCompletionSiteKind,
   type TemplateCompletionCursorContext,
@@ -36,6 +37,7 @@ import {
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import {
   CheckerTypeMemberKind,
+  type CheckerTypeShape,
   CheckerTypeShapeKind,
 } from '../type-system/type-shape.js';
 import {
@@ -117,6 +119,9 @@ export function cursorDiagnosticRows(
     )];
   }
   if (selectedMember == null) {
+    if (missingMemberIsNullishUnionAccess(ownerType, selectedMemberName)) {
+      return [];
+    }
     return [missingMemberDiagnostic(
       source,
       selectedMemberName,
@@ -127,6 +132,33 @@ export function cursorDiagnosticRows(
     )];
   }
   return [];
+}
+
+function missingMemberIsNullishUnionAccess(
+  ownerType: CheckerTypeShape,
+  selectedMemberName: string,
+): boolean {
+  const carrier = ownerType.carrier;
+  if (ownerType.shapeKind !== CheckerTypeShapeKind.Union || carrier == null || !carrier.type.isUnion()) {
+    return false;
+  }
+  let hasNullishConstituent = false;
+  let hasNonNullishConstituent = false;
+  for (const constituent of carrier.type.types) {
+    if (checkerTypeIsNullishConstituent(constituent)) {
+      hasNullishConstituent = true;
+      continue;
+    }
+    hasNonNullishConstituent = true;
+    if (carrier.checker.getPropertyOfType(constituent, selectedMemberName) == null) {
+      return false;
+    }
+  }
+  return hasNullishConstituent && hasNonNullishConstituent;
+}
+
+function checkerTypeIsNullishConstituent(type: ts.Type): boolean {
+  return (type.flags & (ts.TypeFlags.Null | ts.TypeFlags.Undefined | ts.TypeFlags.Void)) !== 0;
 }
 
 export function bindingSourceAssignmentDiagnosticKind(
@@ -265,6 +297,57 @@ export function bindingDataFlowFrameworkErrorDiagnostic(
       ownerTypeDisplay: dataFlow.sourceType?.display ?? null,
       valueTypeDisplay: dataFlow.targetValueType?.display ?? dataFlow.targetPropertyType?.display ?? null,
       valueTypeSource: 'binding-target',
+    },
+  };
+}
+
+export function bindingDataFlowOpenDiagnostic(
+  store: KernelStore,
+  dataFlow: RuntimeBindingDataFlow,
+  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
+): SemanticTemplateCursorDiagnosticRow | null {
+  if (
+    dataFlow.openReason == null
+    || dataFlow.valueChannel?.channelKind !== RuntimeBindingValueChannelKind.SelectMultipleOptionValues
+    || dataFlow.targetToSourceAssignable !== null
+  ) {
+    return null;
+  }
+  const ownerType = dataFlow.sourceAssignmentTargetType ?? dataFlow.sourceType ?? null;
+  const ownerSource = describeAddress(
+    store,
+    dataFlow.sourceAssignmentTargetSourceAddressHandle
+      ?? ownerType?.sourceAddressHandle
+      ?? null,
+  );
+  const valueTypeDisplay = dataFlow.targetValueType?.display ?? dataFlow.targetPropertyType?.display ?? null;
+  return {
+    diagnosticKind: 'binding-source-runtime-branch-open',
+    diagnosticAuthority: 'framework-runtime-behavior',
+    frameworkErrorCode: null,
+    severity: 'warning',
+    summary: dataFlow.openReason,
+    missingInput: 'binding-value-channel:select-multiple-source-open',
+    missingInputs: ['binding-value-channel:select-multiple-source-open'],
+    source,
+    selectedMemberName: dataFlow.sourceName,
+    ownerTypeDisplay: ownerType?.display ?? null,
+    ownerTypeShapeKind: ownerType?.shapeKind ?? null,
+    ownerTypeOrigin: ownerType?.origin ?? null,
+    suggestion: {
+      suggestionKind: 'align-assignment-type',
+      actionKind: 'change-member-type',
+      actionTarget: suggestionActionTarget(
+        'owner-type',
+        ownerSource ?? source,
+        dataFlow.sourceName,
+        ownerType?.display ?? null,
+      ),
+      summary: 'Initialize the multi-select source as an array or separate nullable loading state from the selected-value collection.',
+      targetMemberName: dataFlow.sourceName,
+      ownerTypeDisplay: ownerType?.display ?? null,
+      valueTypeDisplay,
+      valueTypeSource: valueTypeDisplay == null ? null : 'binding-target',
     },
   };
 }

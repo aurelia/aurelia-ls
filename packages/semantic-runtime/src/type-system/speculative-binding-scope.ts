@@ -56,6 +56,7 @@ export function speculativeBindingScopeOverlay(
     BindingScopeOwnerKind.SyntheticView,
     sourceAddressHandle,
     request.base.fieldProvenance,
+    request.base.scopeCreators,
   );
 }
 

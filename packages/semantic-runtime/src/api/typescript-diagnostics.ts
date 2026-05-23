@@ -5,6 +5,7 @@ import {
 } from '../type-system/diagnostics.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { sourcePathMatchesFileName } from '../kernel/source-address.js';
+import type { SourceFileAdmission } from '../boot/frames.js';
 import {
   answer,
   outcomeForPagedRows,
@@ -75,7 +76,7 @@ export function readSemanticTypeScriptDiagnosticRows(
     ? readTypeSystemProjectDiagnostics(typeSystem)
     : readTypeSystemProjectSourceDiagnostics(typeSystem, sourceFilePath);
   return diagnostics
-    .map((diagnostic) => semanticTypeScriptDiagnosticRow(projectKey, diagnostic))
+    .map((diagnostic) => semanticTypeScriptDiagnosticRow(typeSystem, projectKey, diagnostic))
     .filter((row) => typeScriptDiagnosticMatchesSource(row, sourceFilePath));
 }
 
@@ -102,6 +103,7 @@ export function semanticTypeScriptDiagnosticSummaryRows(
         typescriptSource: row.typescriptSource,
         count: 0,
         sourceFiles: new Set<string>(),
+        sourceRoles: new Map<string, number>(),
         sampleMessage: row.message,
         sampleSources: [],
       };
@@ -110,6 +112,9 @@ export function semanticTypeScriptDiagnosticSummaryRows(
     cluster.count += 1;
     if (row.source?.path != null) {
       cluster.sourceFiles.add(row.source.path);
+    }
+    if (row.sourceRole != null) {
+      cluster.sourceRoles.set(row.sourceRole, (cluster.sourceRoles.get(row.sourceRole) ?? 0) + 1);
     }
     if (row.source != null && cluster.sampleSources.length < 3 && !cluster.sampleSources.some((source) => source.label === row.source?.label)) {
       cluster.sampleSources.push(row.source);
@@ -126,6 +131,7 @@ export function semanticTypeScriptDiagnosticSummaryRows(
       typescriptSource: cluster.typescriptSource,
       count: cluster.count,
       sourceFileCount: cluster.sourceFiles.size,
+      sourceRoles: typeScriptDiagnosticSourceRoleCounts(cluster.sourceRoles),
       sampleMessage: cluster.sampleMessage,
       sampleSources: cluster.sampleSources,
     }))
@@ -146,14 +152,17 @@ interface MutableTypeScriptDiagnosticSummary {
   readonly typescriptSource: string | null;
   count: number;
   readonly sourceFiles: Set<string>;
+  readonly sourceRoles: Map<string, number>;
   readonly sampleMessage: string;
   readonly sampleSources: SemanticSourceReference[];
 }
 
 function semanticTypeScriptDiagnosticRow(
+  typeSystem: TypeSystemProject,
   projectKey: string,
   diagnostic: TypeSystemDiagnostic,
 ): SemanticTypeScriptDiagnosticRow {
+  const sourceRole = sourceRoleForTypeSystemDiagnostic(typeSystem, diagnostic.source);
   return {
     projectKey,
     phase: diagnostic.phase,
@@ -164,14 +173,33 @@ function semanticTypeScriptDiagnosticRow(
     message: diagnostic.message,
     typescriptSource: diagnostic.typescriptSource,
     source: sourceReferenceForTypeSystemDiagnostic(diagnostic.source),
+    sourceRole,
     relatedInformation: diagnostic.relatedInformation.map((related): SemanticTypeScriptDiagnosticRelatedInformationRow => ({
       category: related.category,
       code: related.code,
       message: related.message,
       typescriptSource: related.typescriptSource,
       source: sourceReferenceForTypeSystemDiagnostic(related.source),
+      sourceRole: sourceRoleForTypeSystemDiagnostic(typeSystem, related.source),
     })),
   };
+}
+
+function sourceRoleForTypeSystemDiagnostic(
+  typeSystem: TypeSystemProject,
+  source: TypeSystemDiagnostic['source'],
+): SemanticTypeScriptDiagnosticRow['sourceRole'] {
+  if (source == null) {
+    return null;
+  }
+  return sourceAdmissionForDiagnosticFileName(typeSystem.project.sourceFiles, source.fileName)?.role ?? null;
+}
+
+function sourceAdmissionForDiagnosticFileName(
+  sources: readonly SourceFileAdmission[],
+  fileName: string,
+): SourceFileAdmission | null {
+  return sources.find((source) => sourcePathMatchesFileName(source.path, fileName)) ?? null;
 }
 
 function sourceReferenceForTypeSystemDiagnostic(
@@ -190,8 +218,8 @@ function sourceReferenceForTypeSystemDiagnostic(
   };
 }
 
-function semanticTypeScriptDiagnosticSeverity(
-  category: SemanticTypeScriptDiagnosticRow['category'],
+export function semanticTypeScriptDiagnosticSeverity(
+  category: TypeSystemDiagnostic['category'],
 ): SemanticTemplateCursorDiagnosticSeverity {
   switch (category) {
     case 'error':
@@ -260,6 +288,14 @@ function typeScriptDiagnosticCountDisplay<TRow>(
     .sort((left, right) => right[1] - left[1] || left[0].localeCompare(right[0]))
     .map(([key, count]) => `${key}=${count}`)
     .join(', ');
+}
+
+function typeScriptDiagnosticSourceRoleCounts(
+  roles: ReadonlyMap<string, number>,
+): SemanticTypeScriptDiagnosticSummaryRow['sourceRoles'] {
+  return [...roles.entries()]
+    .map(([role, count]) => ({ role, count }))
+    .sort((left, right) => right.count - left.count || left.role.localeCompare(right.role));
 }
 
 function trimTypeScriptDiagnosticMessage(message: string): string {

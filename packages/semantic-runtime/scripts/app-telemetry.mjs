@@ -12,6 +12,8 @@ import {
   SemanticAppQueryKind,
   SemanticProjectShapeKind,
   semanticAppQueryCatalogRow,
+  semanticAppQueryBatchMaterializationPolicy,
+  semanticAppQueryMaterializationPolicy,
   SEMANTIC_APP_ANALYSIS_DEPTHS,
   SEMANTIC_RUNTIME_INQUIRY_PROFILES,
   SEMANTIC_TYPE_SYSTEM_DEPENDENCY_CACHE_CLEAR_POLICIES,
@@ -260,13 +262,9 @@ async function profileRoot({ root, rootIndex, depth, profile, iteration, repeatC
     for (const query of queries) {
       const queryResult = measureQuery(app, query, queryIteration);
       run.queries.push(queryResult);
-      if (
-        queryResult.kernel.totalRecords !== 0
-        || queryResult.kernel.products !== 0
-        || queryResult.kernel.provenance !== 0
-      ) {
+      if (queryResultHasUnexpectedKernelGrowth(queryResult)) {
         run.warnings.push(
-          `query '${query.kind}' repeat ${queryIteration + 1}/${queryRepeatCount} grew kernel: records=${queryResult.kernel.totalRecords}, products=${queryResult.kernel.products}, provenance=${queryResult.kernel.provenance}`,
+          `query '${query.kind}' repeat ${queryIteration + 1}/${queryRepeatCount} grew kernel under ${queryResult.materializationPolicy}: records=${queryResult.kernel.totalRecords}, products=${queryResult.kernel.products}, provenance=${queryResult.kernel.provenance}`,
         );
       }
     }
@@ -286,9 +284,16 @@ async function profileRoot({ root, rootIndex, depth, profile, iteration, repeatC
     ? topTypeShapeDuplicateRows(runtime.workspace.store, 8)
     : [];
   const queryKernelGrowth = diffSemanticRuntimeKernelCounts(kernelAfterQueries, kernelAfterOpen);
-  if (queryKernelGrowth.totalRecords !== 0 || queryKernelGrowth.products !== 0 || queryKernelGrowth.provenance !== 0) {
+  if (
+    (
+      queryKernelGrowth.totalRecords !== 0
+      || queryKernelGrowth.products !== 0
+      || queryKernelGrowth.provenance !== 0
+    )
+    && run.queries.some(queryResultHasUnexpectedKernelGrowth)
+  ) {
     run.warnings.push(
-      `query projection grew kernel: records=${queryKernelGrowth.totalRecords}, products=${queryKernelGrowth.products}, provenance=${queryKernelGrowth.provenance}`,
+      `projection-only/static query projection grew kernel: records=${queryKernelGrowth.totalRecords}, products=${queryKernelGrowth.products}, provenance=${queryKernelGrowth.provenance}`,
     );
   }
   return finalizeRunMemory(run);
@@ -317,13 +322,9 @@ async function profileRoutedQueries(run, runtime, appCandidate, depth, profile, 
       if (!queryResult.retainedAnswerHit) {
         recordRoutedAppWorldFreeProfileSummary(run, queryResult.appWorldFreeProfile);
       }
-      if (
-        queryResult.kernel.totalRecords !== 0
-        || queryResult.kernel.products !== 0
-        || queryResult.kernel.provenance !== 0
-      ) {
+      if (queryResultHasUnexpectedKernelGrowth(queryResult)) {
         run.warnings.push(
-          `routed query '${query.kind}' repeat ${queryIteration + 1}/${queryRepeatCount} retained kernel: records=${queryResult.kernel.totalRecords}, products=${queryResult.kernel.products}, provenance=${queryResult.kernel.provenance}`,
+          `routed query '${query.kind}' repeat ${queryIteration + 1}/${queryRepeatCount} retained kernel under ${queryResult.materializationPolicy}: records=${queryResult.kernel.totalRecords}, products=${queryResult.kernel.products}, provenance=${queryResult.kernel.provenance}`,
         );
       }
     }
@@ -390,13 +391,9 @@ async function profileRoutedQueryBatch(run, runtime, appCandidate, depth, profil
     } else {
       recordRoutedAppWorldFreeProfileSummary(run, queryResult.appWorldFreeProfile);
     }
-    if (
-      queryResult.kernel.totalRecords !== 0
-      || queryResult.kernel.products !== 0
-      || queryResult.kernel.provenance !== 0
-    ) {
+    if (queryResultHasUnexpectedKernelGrowth(queryResult)) {
       run.warnings.push(
-        `routed query batch repeat ${queryIteration + 1}/${queryRepeatCount} retained kernel: records=${queryResult.kernel.totalRecords}, products=${queryResult.kernel.products}, provenance=${queryResult.kernel.provenance}`,
+        `routed query batch repeat ${queryIteration + 1}/${queryRepeatCount} retained kernel under ${queryResult.materializationPolicy}: records=${queryResult.kernel.totalRecords}, products=${queryResult.kernel.products}, provenance=${queryResult.kernel.provenance}`,
       );
     }
   }
@@ -851,6 +848,7 @@ function phaseDiffDetailDensityRows(phase, field) {
 }
 
 function measureQuery(app, query, queryIteration = 0) {
+  const materializationPolicy = telemetryQueryMaterializationPolicy(query);
   collectIfRequested();
   const retainedAnswerHitsBefore = queryRepeatCount > 1 ? app.queryClaims.snapshot().retainedAnswerHits : 0;
   const memoryBefore = readSemanticRuntimeMemorySample();
@@ -863,6 +861,7 @@ function measureQuery(app, query, queryIteration = 0) {
   const memoryAfter = readSemanticRuntimeMemorySample();
   return {
     label: queryLabel(query.kind, queryIteration),
+    materializationPolicy,
     outcome: answer.outcome,
     milliseconds,
     payloadBytes: jsonByteLength(answer.value),
@@ -878,6 +877,7 @@ function measureQuery(app, query, queryIteration = 0) {
 }
 
 async function measureRoutedQuery(runtime, appCandidate, depth, profile, query, queryIteration = 0) {
+  const materializationPolicy = telemetryQueryMaterializationPolicy(query);
   collectIfRequested();
   const retainedAnswerHitsBefore = queryRepeatCount > 1
     ? runtimeQueryClaimRetainedAnswerHits(runtime, profile)
@@ -911,6 +911,7 @@ async function measureRoutedQuery(runtime, appCandidate, depth, profile, query, 
   const memoryAfter = readSemanticRuntimeMemorySample();
   return {
     label: queryLabel(query.kind, queryIteration),
+    materializationPolicy,
     outcome: answer.outcome,
     milliseconds,
     payloadBytes: jsonByteLength(answer.value),
@@ -927,6 +928,7 @@ async function measureRoutedQuery(runtime, appCandidate, depth, profile, query, 
 }
 
 async function measureRoutedQueryBatch(runtime, appCandidate, depth, profile, queries, queryIteration = 0) {
+  const materializationPolicy = semanticAppQueryBatchMaterializationPolicy(queries);
   collectIfRequested();
   const retainedAnswerHitsBefore = queryRepeatCount > 1
     ? runtimeQueryClaimRetainedAnswerHits(runtime, profile)
@@ -958,6 +960,7 @@ async function measureRoutedQueryBatch(runtime, appCandidate, depth, profile, qu
   const memoryAfter = readSemanticRuntimeMemorySample();
   return {
     label: queryLabel('app-query-batch', queryIteration),
+    materializationPolicy,
     outcome: answer.outcome,
     milliseconds,
     payloadBytes: jsonByteLength(answer.value),
@@ -988,6 +991,22 @@ function queryLabel(kind, queryIteration) {
   return queryRepeatCount > 1
     ? `${kind}#${queryIteration + 1}`
     : kind;
+}
+
+function telemetryQueryMaterializationPolicy(query) {
+  const row = semanticAppQueryCatalogRow(query.kind);
+  return semanticAppQueryMaterializationPolicy(query, row.materializationPolicy);
+}
+
+function queryResultHasUnexpectedKernelGrowth(queryResult) {
+  if (
+    queryResult.kernel.totalRecords === 0
+    && queryResult.kernel.products === 0
+    && queryResult.kernel.provenance === 0
+  ) {
+    return false;
+  }
+  return queryResult.materializationPolicy !== 'query-type-projection';
 }
 
 async function measure(timings, label, read) {
@@ -1239,7 +1258,7 @@ function createProgramSourceFileAggregate() {
   return {
     total: 0,
     evaluatedSources: 0,
-    ambientSources: 0,
+    overlaySources: 0,
     projectSources: 0,
     nodeModuleSources: 0,
     declarationSources: 0,
@@ -1247,7 +1266,7 @@ function createProgramSourceFileAggregate() {
     externalSources: 0,
     sourceTextCharacters: 0,
     evaluatedSourceTextCharacters: 0,
-    ambientSourceTextCharacters: 0,
+    overlaySourceTextCharacters: 0,
     projectSourceTextCharacters: 0,
     nodeModuleSourceTextCharacters: 0,
     declarationSourceTextCharacters: 0,
@@ -1415,7 +1434,10 @@ function addToAggregate(aggregate, run, options = {}) {
   addProgramSourceFileGroups(aggregate.typeSystemProgramSourceFileGroups, run.typeSystemProgramSourceFileGroups);
   addProgramNodeRemaps(aggregate.typeSystemProgramNodeRemaps, run.typeSystemProgramNodeRemaps);
   for (const queryResult of run.queries) {
-    const current = aggregate.queries.get(queryResult.label) ?? {
+    const key = queryAggregateKey(queryResult);
+    const current = aggregate.queries.get(key) ?? {
+      label: queryResult.label,
+      materializationPolicy: queryResult.materializationPolicy ?? 'unknown',
       count: 0,
       milliseconds: 0,
       payloadBytes: 0,
@@ -1435,7 +1457,7 @@ function addToAggregate(aggregate, run, options = {}) {
     current.kernelProducts += queryResult.kernel.products;
     current.retainedAnswerHits += queryResult.retainedAnswerHit ? 1 : 0;
     addCountRows(current.productKinds, queryResult.productKinds);
-    aggregate.queries.set(queryResult.label, current);
+    aggregate.queries.set(key, current);
   }
   for (const warning of run.warnings) {
     aggregate.warnings.set(warning, (aggregate.warnings.get(warning) ?? 0) + 1);
@@ -1457,6 +1479,10 @@ function addAggregateGroup(aggregate, run) {
 
 function aggregateGroupKey(run) {
   return `${run.rootLabel}; shape=${run.projectShape}; depth=${run.depth}; profile=${run.profile}`;
+}
+
+function queryAggregateKey(queryResult) {
+  return `${queryResult.label}\0${queryResult.materializationPolicy ?? 'unknown'}`;
 }
 
 function addHostSourceFileCache(target, source) {
@@ -1538,15 +1564,41 @@ function addTypeSystemDependencyCacheLargestEntries(target, entries) {
   if (entries.length === 0) {
     return;
   }
-  target.largestEntries.push(...entries.map((entry) => ({
-    bucket: entry.bucket,
-    sourceTextCharacters: entry.sourceTextCharacters ?? 0,
-  })));
+  for (const entry of entries) {
+    const key = typeSystemDependencyCacheEntryAggregateKey(entry);
+    const existing = target.largestEntries.find((candidate) =>
+      typeSystemDependencyCacheEntryAggregateKey(candidate) === key
+    );
+    if (existing == null) {
+      target.largestEntries.push({
+        bucket: entry.bucket,
+        fileName: entry.fileName,
+        canonicalPath: entry.canonicalPath,
+        parseOptionKey: entry.parseOptionKey,
+        sourceTextCharacters: entry.sourceTextCharacters ?? 0,
+        sampleCount: 1,
+      });
+      continue;
+    }
+    existing.sourceTextCharacters = Math.max(existing.sourceTextCharacters, entry.sourceTextCharacters ?? 0);
+    existing.sampleCount += 1;
+  }
   target.largestEntries.sort((left, right) =>
     right.sourceTextCharacters - left.sourceTextCharacters
+    || (right.sampleCount ?? 0) - (left.sampleCount ?? 0)
     || left.bucket.localeCompare(right.bucket)
+    || (left.fileName ?? '').localeCompare(right.fileName ?? '')
+    || (left.parseOptionKey ?? '').localeCompare(right.parseOptionKey ?? '')
   );
   target.largestEntries.splice(20);
+}
+
+function typeSystemDependencyCacheEntryAggregateKey(entry) {
+  return [
+    entry.bucket ?? 'unknown',
+    entry.fileName ?? entry.canonicalPath ?? 'unknown',
+    entry.parseOptionKey ?? 'unknown',
+  ].join('\0');
 }
 
 function addTypeSystemDependencyCacheClear(target, source) {
@@ -1656,7 +1708,7 @@ function addProgramSourceFiles(target, source) {
   }
   target.total += source.total ?? 0;
   target.evaluatedSources += source.evaluatedSources ?? 0;
-  target.ambientSources += source.ambientSources ?? 0;
+  target.overlaySources += source.overlaySources ?? 0;
   target.projectSources += source.projectSources ?? 0;
   target.nodeModuleSources += source.nodeModuleSources ?? 0;
   target.declarationSources += source.declarationSources ?? 0;
@@ -1664,7 +1716,7 @@ function addProgramSourceFiles(target, source) {
   target.externalSources += source.externalSources ?? 0;
   target.sourceTextCharacters += source.sourceTextCharacters ?? 0;
   target.evaluatedSourceTextCharacters += source.evaluatedSourceTextCharacters ?? 0;
-  target.ambientSourceTextCharacters += source.ambientSourceTextCharacters ?? 0;
+  target.overlaySourceTextCharacters += source.overlaySourceTextCharacters ?? 0;
   target.projectSourceTextCharacters += source.projectSourceTextCharacters ?? 0;
   target.nodeModuleSourceTextCharacters += source.nodeModuleSourceTextCharacters ?? 0;
   target.declarationSourceTextCharacters += source.declarationSourceTextCharacters ?? 0;
@@ -2398,9 +2450,10 @@ function sortedPhaseKernelAggregate(rows) {
 }
 
 function sortedQueryAggregate(queries) {
-  return [...queries.entries()]
-    .map(([label, value]) => ({
-      label,
+  return [...queries.values()]
+    .map((value) => ({
+      label: value.label,
+      materializationPolicy: value.materializationPolicy,
       outcome: `${value.count} run(s)`,
       milliseconds: value.milliseconds,
       payloadBytes: value.payloadBytes,
@@ -2508,7 +2561,7 @@ function printTypeSystemDependencyCache(label, cache) {
     console.log(
       `${label} largest entries: ` +
       largestEntries.map((entry) =>
-        `${entry.bucket}:${formatCharacterCount(entry.sourceTextCharacters ?? 0)}`
+        formatTypeSystemDependencyCacheEntry(entry)
       ).join(', '),
     );
   }
@@ -2573,10 +2626,18 @@ function printTypeSystemDependencyCacheAggregate(label, cache) {
     console.log(
       `${label} largest entries: ` +
       cache.largestEntries.slice(0, 8).map((entry) =>
-        `${entry.bucket}:${formatCharacterCount(entry.sourceTextCharacters)}`
+        formatTypeSystemDependencyCacheEntry(entry)
       ).join(', '),
     );
   }
+}
+
+function formatTypeSystemDependencyCacheEntry(entry) {
+  const fileName = entry.fileName ?? entry.canonicalPath ?? 'unknown';
+  const fileBaseName = path.basename(fileName);
+  const parseOptionKey = entry.parseOptionKey == null ? '' : `@${entry.parseOptionKey}`;
+  const samples = entry.sampleCount == null || entry.sampleCount <= 1 ? '' : `/samples ${entry.sampleCount}`;
+  return `${entry.bucket}:${fileBaseName}${parseOptionKey}:${formatCharacterCount(entry.sourceTextCharacters ?? 0)}${samples}`;
 }
 
 function printExpressionCache(label, cache) {
@@ -2671,7 +2732,7 @@ function printProgramSourceFiles(label, counts) {
     return;
   }
   console.log(
-    `${label}: total=${counts.total ?? 0}, evaluated=${counts.evaluatedSources ?? 0}, ambient=${counts.ambientSources ?? 0}, ` +
+    `${label}: total=${counts.total ?? 0}, evaluated=${counts.evaluatedSources ?? 0}, overlay=${counts.overlaySources ?? 0}, ` +
     `project=${counts.projectSources ?? 0}, nodeModules=${counts.nodeModuleSources ?? 0}, declarations=${counts.declarationSources ?? 0}, ` +
     `defaultLibs=${counts.defaultLibrarySources ?? 0}, external=${counts.externalSources ?? 0}, ` +
     `sourceText=${formatCharacterCount(counts.sourceTextCharacters ?? 0)}, ` +
@@ -2873,7 +2934,9 @@ function printQueryRows(label, rows) {
   const parts = rows
     .slice(0, 12)
     .map((row) =>
-      `${row.label}=${row.milliseconds.toFixed(1)}ms/${row.outcome}/rows ${row.rowCount}/json ${formatSemanticRuntimeBytes(row.payloadBytes)}/heap ${formatSemanticRuntimeBytes(row.memory.heapUsedBytes)}`
+      `${row.label}=${row.milliseconds.toFixed(1)}ms/${row.outcome}`
+      + (row.materializationPolicy == null ? '' : `/policy ${row.materializationPolicy}`)
+      + `/rows ${row.rowCount}/json ${formatSemanticRuntimeBytes(row.payloadBytes)}/heap ${formatSemanticRuntimeBytes(row.memory.heapUsedBytes)}`
       + (row.retainedAnswerHit || row.retainedAnswerHits > 0 ? `/retainedHits ${row.retainedAnswerHits ?? 1}` : '')
       + (row.kernel == null || (row.kernel.totalRecords === 0 && row.kernel.products === 0) ? '' : `/kernel ${row.kernel.totalRecords}:${row.kernel.products}`)
       + (row.productKinds == null || row.productKinds.length === 0 ? '' : `/product-kinds ${compactCountRows(row.productKinds, 3)}`)
@@ -3121,7 +3184,7 @@ function telemetryQueryKinds() {
 }
 
 function telemetryOutputMode() {
-  const value = stringEnv('SEMANTIC_RUNTIME_TELEMETRY_OUTPUT') ?? 'runs';
+  const value = stringEnv('SEMANTIC_RUNTIME_TELEMETRY_OUTPUT') ?? 'aggregate';
   if (value === 'runs' || value === 'aggregate' || value === 'both') {
     return value;
   }

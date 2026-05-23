@@ -53,6 +53,18 @@ interface ProductArchitecturePressureValue {
     readonly crossAreaCallSiteCount: number;
     readonly source?: SourceRef;
   }[];
+  readonly callSites?: readonly {
+    readonly calleeName: string;
+    readonly calleeText: string;
+    readonly firstArgumentText?: string | null;
+    readonly firstArgumentSyntaxKind?: string | null;
+    readonly firstArgumentOriginKind?: string;
+    readonly firstArgumentOriginText?: string | null;
+    readonly fromFilePath: string;
+    readonly className: string | null;
+    readonly functionName: string | null;
+    readonly source?: SourceRef;
+  }[];
   readonly functionDuplicateGroups?: readonly {
     readonly name: string;
     readonly functionCount: number;
@@ -134,6 +146,17 @@ const inputEnvelopeDisplayRows = detail ? 20 : 8;
 const behavioralInputDisplayRows = detail ? 8 : 4;
 const duplicateDisplayRows = detail ? 12 : 6;
 const functionDisplayRows = detail ? 30 : 10;
+const checkerApiDisplayRows = detail ? 20 : 8;
+const checkerApiCalleeNames = [
+  "getTypeAtLocation",
+  "getSymbolAtLocation",
+  "getTypeOfSymbolAtLocation",
+  "getPropertyOfType",
+  "getTypeFromTypeNode",
+  "getApparentType",
+  "getIndexTypeOfType",
+  "getResolvedSignature",
+] as const;
 
 const api = createApi({ idleTtlMs: 120_000, requestTimeoutMs: 120_000 });
 
@@ -576,6 +599,52 @@ if (detail) {
   }
 }
 
+const checkerApiStarted = performance.now();
+const checkerApiAnswers = await Promise.all(checkerApiCalleeNames.map((calleeName) =>
+  api.ask({
+    lens: LensId.ProductArchitecture,
+    locus: RepoRootLocus,
+    projection: "call-sites",
+    filters: {
+      calleeName,
+      includeCallArgumentOrigins: true,
+    },
+    budget: { rows: 500, evidencePerSubject: 1 },
+  })
+));
+for (const [index, answer] of checkerApiAnswers.entries()) {
+  assertHitOrMissAnswer(`product.architecture:call-sites ${checkerApiCalleeNames[index]}`, answer);
+}
+const checkerApiCallSites = checkerApiAnswers.flatMap((answer) =>
+  answerValue<ProductArchitecturePressureValue>(answer)?.callSites ?? []
+);
+const checkerApiPressureRows = checkerApiCallPressureRows(checkerApiCallSites);
+
+console.log("");
+console.log("TypeScript checker API call pressure");
+console.log(`request: ${(performance.now() - checkerApiStarted).toFixed(1)}ms`);
+printEmptyRows(checkerApiPressureRows);
+for (const row of checkerApiPressureRows.slice(0, checkerApiDisplayRows)) {
+  console.log(
+    `- ${row.calleeName}: ${row.count} call(s), ${row.fileCount} file(s), ${row.ownerCount} owner(s), samples ${row.sampleOwners}, first ${row.firstSource}`,
+  );
+  if (detail) {
+    console.log(`  first arguments: ${row.firstArgumentShapes}`);
+    console.log(`  first argument origins: ${row.firstArgumentOrigins}`);
+  }
+}
+if (detail) {
+  console.log("TypeScript checker API call samples");
+  for (const row of checkerApiCallSites.slice(0, checkerApiDisplayRows)) {
+    const origin = row.firstArgumentOriginKind == null
+      ? ""
+      : `; origin=${row.firstArgumentOriginKind}${row.firstArgumentOriginText == null ? "" : `:${row.firstArgumentOriginText}`}`;
+    console.log(
+      `- ${row.calleeText}(${row.firstArgumentText ?? "..."}) in ${checkerApiCallOwner(row)} at ${sourceLabel(row)}${origin}`,
+    );
+  }
+}
+
 const functionStarted = performance.now();
 const functionAnswer = await api.ask({
   lens: LensId.ProductArchitecture,
@@ -606,6 +675,17 @@ for (const row of functions.slice(0, functionDisplayRows)) {
   console.log(
     `- ${row.name}: ${row.crossAreaCallSiteCount} cross-area call(s), ${row.callSiteCount} total call(s), ${row.lineCount} line(s) at ${sourceLabel(row)}`,
   );
+}
+
+interface CheckerApiCallPressureRow {
+  readonly calleeName: string;
+  readonly count: number;
+  readonly fileCount: number;
+  readonly ownerCount: number;
+  readonly sampleOwners: string;
+  readonly firstArgumentShapes: string;
+  readonly firstArgumentOrigins: string;
+  readonly firstSource: string;
 }
 
 interface KernelRecordOwnerPressureRow {
@@ -663,6 +743,78 @@ interface FieldProvenanceFanOutPressureRow {
   readonly fieldCount: number;
   readonly fields: string;
   readonly firstSource: string;
+}
+
+function checkerApiCallPressureRows(
+  rows: readonly NonNullable<ProductArchitecturePressureValue["callSites"]>[number][],
+): readonly CheckerApiCallPressureRow[] {
+  return [...groupBy(rows, (row) => row.calleeName).entries()]
+    .map(([calleeName, group]) => {
+      const files = new Set(group.map((row) => row.fromFilePath));
+      const owners = [...new Set(group.map(checkerApiCallOwner))].sort();
+      return {
+        calleeName,
+        count: group.length,
+        fileCount: files.size,
+        ownerCount: owners.length,
+        sampleOwners: owners.slice(0, 6).join(", "),
+        firstArgumentShapes: compactCountSummary(group, checkerApiFirstArgumentShape),
+        firstArgumentOrigins: compactCountSummary(group, checkerApiFirstArgumentOrigin),
+        firstSource: sourceLabel(group[0]!),
+      } satisfies CheckerApiCallPressureRow;
+    })
+    .sort((left, right) =>
+      right.count - left.count ||
+      right.fileCount - left.fileCount ||
+      left.calleeName.localeCompare(right.calleeName)
+    );
+}
+
+function checkerApiCallOwner(
+  row: NonNullable<ProductArchitecturePressureValue["callSites"]>[number],
+): string {
+  return `${row.className ?? "(none)"}.${row.functionName ?? "(top)"}`;
+}
+
+function checkerApiFirstArgumentShape(
+  row: NonNullable<ProductArchitecturePressureValue["callSites"]>[number],
+): string {
+  const text = row.firstArgumentText ?? "";
+  if (text.length === 0) {
+    return "(no first argument)";
+  }
+  if (/\bprogram[A-Z_]|^program[A-Z_]|readProgramNode\b/.test(text)) {
+    return "program-node-like";
+  }
+  if (/\bdeclaration\b|\blocation\b|\bsourceNode\b|\bsourceFile\b/.test(text)) {
+    return "declaration-or-location-like";
+  }
+  if (/\b(type|apparentType|mapType|ownerType|receiverType|parameterType|rawParameterType)\b/.test(text)) {
+    return "checker-type-like";
+  }
+  if (/\b(node|expression|current|receiver|argument|callee|name|member)\b/.test(text)) {
+    return "generic-syntax-name";
+  }
+  return "other";
+}
+
+function checkerApiFirstArgumentOrigin(
+  row: NonNullable<ProductArchitecturePressureValue["callSites"]>[number],
+): string {
+  const originKind = row.firstArgumentOriginKind ?? "unknown";
+  const originText = row.firstArgumentOriginText ?? "";
+  if (originKind === "local-variable") {
+    if (/\breadProgram(Node|Expression|Declaration|SourceFile)/.test(originText)) {
+      return "local-variable:program-remap";
+    }
+    if (/\bgetTypeAtLocation\b|\bgetPropertyOfType\b|\bgetApparentType\b/.test(originText)) {
+      return "local-variable:checker-result";
+    }
+  }
+  if (originKind === "parameter" && /\b(type|checker|symbol)\b/.test(row.firstArgumentText ?? "")) {
+    return "parameter:checker-carrier";
+  }
+  return originKind;
 }
 
 function kernelRecordFilePressureRows(

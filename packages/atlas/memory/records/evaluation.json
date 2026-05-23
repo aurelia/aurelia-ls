@@ -30,9 +30,12 @@
         "Binding patterns belong in evaluator environment construction. Variable declarations, function/constructor parameters, defaults, rest bindings, and loop declaration initializers should bind environment cells before recognizers inspect evaluated values.",
         "Property and element access belong in evaluation/property-access.ts. Reuse readStaticOwnProperty, writeStaticOwnProperty, and evaluateStaticPropertyValue for recognizers or follow-up expression reads instead of duplicating object/module/array/string/RegExp access semantics.",
         "Declaration instantiation belongs in evaluation/declaration-instantiation.ts. Module and block import/function/class binding setup should stay ahead of statement execution and should not be duplicated in module graph or recognizer code.",
+        "The evaluator module graph is runtime-shaped. Type-only imports and type-only re-exports should be erased before graph evaluation so TypeScript-only cycles do not become artificial runtime import cycles during DI/source-value activation.",
         "CommonJS carrier semantics belong in evaluation/commonjs.ts. StaticEvaluator materializes authored exports/module carriers there and StaticModuleGraphEvaluator reads export/require values through the same substrate.",
         "Class and function value execution belong in evaluation/class-values.ts and evaluation/function-values.ts. Keep class lifecycle and call-frame construction there while preserving StaticEvaluator as the owner of recursion, guardrails, and open seams.",
-        "Primitive operator value algebra belongs in evaluation/operators.ts instead of bottom-of-evaluator helper islands."
+        "Aurelia runtime-host intrinsics may ask StaticIntrinsicEvaluationHost for generic class instantiation, but product-specific calls such as ambient resolve(ClassKey) should stay at the host boundary and only close in activation-like frames with `this`; registered/interface DI keys join through binding-source activation context when an active modeled container is available, not through the generic evaluator.",
+        "Primitive operator value algebra belongs in evaluation/operators.ts instead of bottom-of-evaluator helper islands. Loose == and != must model primitive/nullish ECMAScript equality instead of aliasing strict equality; this keeps common guards such as value == null aligned across StaticEvaluator and binding-source value reads.",
+        "Representative evaluator values belong in evaluation/representative-values.ts. Repeated views and speculative conditionals should share the same conservative summary policy: unanimous exact values stay exact, string-like branches become string patterns, common object fields survive, and unrelated lanes become binding-scope boundaries."
       ],
       "anchors": [
         {
@@ -66,6 +69,11 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/operators.ts",
           "summary": "Pure primitive operator value algebra for the static evaluator."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/representative-values.ts",
+          "summary": "Shared conservative representative-value merge substrate for repeat locals and speculative conditional branches."
         },
         {
           "kind": "source",
@@ -160,7 +168,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-05-23"
     },
     {
       "id": "frontier:static-module-graph-evaluator",
@@ -175,6 +183,8 @@
       "rationale": "Feature pressure that needs imported values, plugin registry bodies, source package linking, or module namespaces should reuse the module graph evaluator instead of invoking StaticEvaluator over isolated files. This class is the boundary where ECMAScript module linking becomes evaluator-local values.",
       "guidance": [
         "Start here when a feature needs static import values, re-export resolution, namespace imports, CommonJS carriers, or dynamic import boundary propagation.",
+        "Keep type-only imports and type-only re-exports out of runtime import/export linkage. If a local imported class opens only through a type-only cycle, fix module-graph admission before weakening downstream composition, DI, router, or authoring expectations.",
+        "Use `contract:evaluation-module-graph` when changing import/export admission, especially around `import type`, type-only export declarations, mixed value/type specifiers, and runtime TypeScript declarations such as enums.",
         "Local side-effect imports are module execution edges. If resource/configuration/router pressure sees an admitted source file but no evaluated products from it, check `evaluateSideEffectImport` before adding feature-local discovery.",
         "Keep Aurelia-specific ownership in evaluation policy, runtimeHost, or downstream recognizers; the module graph evaluator should stay ECMAScript-shaped.",
         "If external app analysis loses product-specific intrinsics during follow-up expression reads, check that callers reuse this graph result and runtime host."
@@ -189,6 +199,12 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/evaluation/module-graph.ts",
+          "symbolName": "readEvaluationModuleRecord",
+          "summary": "Runtime-shaped import/export graph reader that erases type-only imports/re-exports."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/module-evaluator.ts",
           "line": 201,
           "summary": "Local side-effect import execution edge for modules that produce no import binding."
@@ -197,6 +213,11 @@
           "kind": "source",
           "filePath": "packages/semantic-runtime/src/evaluation/README.md",
           "summary": "Static evaluation module graph and expression-reader guidance."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:evaluation-module-graph",
+          "summary": "Focused runtime-shaped import/export graph contract for type-only edge erasure and value-edge preservation."
         }
       ],
       "liveChecks": [
@@ -213,7 +234,7 @@
         }
       ],
       "createdAt": "2026-05-12",
-      "updatedAt": "2026-05-15"
+      "updatedAt": "2026-05-23"
     },
     {
       "id": "frontier:evaluation-module-source-host",

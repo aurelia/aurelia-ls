@@ -168,7 +168,7 @@ function nodeObserverTypeFromConfig(
   config: EvaluationObjectValue,
 ): NodeObserverConfig['type'] | null {
   const property = config.properties.get('type');
-  if (property == null || !ts.isPropertyAssignment(property.node)) {
+  if (property?.node == null || !ts.isPropertyAssignment(property.node)) {
     return null;
   }
   const name = readReferenceName(property.node.initializer);

@@ -87,6 +87,8 @@ function builtInResourcePublicModuleSpecifier(
       return '@aurelia/i18n';
     case BuiltInResourcePackage.Router:
       return '@aurelia/router';
+    case BuiltInResourcePackage.UiVirtualization:
+      return '@aurelia/ui-virtualization';
     case BuiltInResourcePackage.State:
       return '@aurelia/state';
     case BuiltInResourcePackage.ValidationHtml:

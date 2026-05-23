@@ -35,6 +35,7 @@ import {
 import {
   RuntimeBindingSourceValueEvaluator,
 } from '../observation/binding-source-value-evaluator.js';
+import { RuntimeBindingSourceActivationContext } from '../observation/binding-source-activation-context.js';
 import {
   extendRuntimeBoundControllerValueTable,
   RuntimeBoundControllerValueTable,
@@ -238,6 +239,7 @@ class TemplateRuntimeAnalysisFrame {
   private readonly expressionCacheMarker: CheckerExpressionTypeEvaluationCacheMarker;
   private readonly telemetry: NormalizedSemanticRuntimeTelemetryOptions;
   private readonly boundControllerValues: RuntimeBoundControllerValueTable;
+  private readonly sourceValueActivationContext: RuntimeBindingSourceActivationContext | null;
 
   constructor(
     private readonly request: TemplateRuntimeAnalysisRequest,
@@ -252,6 +254,9 @@ class TemplateRuntimeAnalysisFrame {
       DEFAULT_SEMANTIC_RUNTIME_INQUIRY_PROFILE,
     );
     this.boundControllerValues = request.boundControllerValues;
+    this.sourceValueActivationContext = request.evaluation == null || request.typeSystem == null
+      ? null
+      : new RuntimeBindingSourceActivationContext(store, request.evaluation, request.typeSystem);
   }
 
   materialize(): TemplateRuntimeAnalysisEmission {
@@ -410,6 +415,8 @@ class TemplateRuntimeAnalysisFrame {
       resourceScope: this.request.compilerWorld.resourceScope,
       expressionWorld: this.expressionWorld,
       boundControllerValues: this.boundControllerValues,
+      sourceValueActivationContext: this.sourceValueActivationContext,
+      sourceValueDefaultContainer: this.request.compilerWorld.container,
       profiling: this.profilingSink(),
     } satisfies TemplateScopeConstructionRequest);
   }
@@ -423,6 +430,7 @@ class TemplateRuntimeAnalysisFrame {
       runtimeRendering,
       scopes,
       typeSystem: this.request.typeSystem,
+      resourceScope: this.request.compilerWorld.resourceScope,
       nodeObserverLocatorConfiguration: this.request.compilerWorld.nodeObserverLocatorConfiguration,
     } satisfies RuntimeControllerBindMaterializationRequest);
   }
@@ -502,6 +510,7 @@ class TemplateRuntimeAnalysisFrame {
     scopes: TemplateScopeConstructionEmission,
   ): RuntimeCompositionEmission {
     const runtimeAnalysisBoundControllerValues = extendRuntimeBoundControllerValueTable(
+      this.store,
       this.boundControllerValues,
       {
         controllerProductHandle: null,
@@ -513,6 +522,7 @@ class TemplateRuntimeAnalysisFrame {
         controllerBind,
         scopes,
       },
+      this.request.compilerWorld.resourceScope,
     );
     return this.services.runtimeComposition.materialize(new RuntimeCompositionMaterializationRequest(
       this.request.localKey,
@@ -524,7 +534,13 @@ class TemplateRuntimeAnalysisFrame {
       this.request.resourceDefinitions,
       this.request.evaluation == null
         ? null
-        : new RuntimeBindingSourceValueEvaluator(this.store, this.request.evaluation, runtimeAnalysisBoundControllerValues),
+        : new RuntimeBindingSourceValueEvaluator(
+            this.store,
+            this.request.evaluation,
+            runtimeAnalysisBoundControllerValues,
+            this.sourceValueActivationContext,
+            this.request.compilerWorld.container,
+          ),
     ));
   }
 

@@ -32,6 +32,8 @@ export const enum SourceFileRole {
   ToolingConfig = 'tooling-config',
   /** Type declaration source used by the checker but not evaluated as runtime code. */
   Declaration = 'declaration',
+  /** Non-declaration source observed through dependency/checker surfaces but not admitted as project source. */
+  ExternalSource = 'external-source',
   /** Generated source that should stay visible without being treated as authored app code. */
   Generated = 'generated',
   /** Use when the host or discovery cannot classify the source role yet. */

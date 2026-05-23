@@ -7,4 +7,28 @@
 <button type="button" load.bind="routeInstructions[featuredInstructionIndex]">
   Featured tea
 </button>
+<button type="button" load.bind="($this).routeInstructions[matchaInstructionIndex]">
+  Featured matcha
+</button>
+<button type="button" load.bind="this.routeInstructions[chamomileInstructionIndex]">
+  Featured chamomile
+</button>
+<button
+  type="button"
+  load.bind="([{ component: productsRoute, children: [{ component: productDetailsRoute, params: { productId: 'inline' }, viewport: 'details' }] }])[0]"
+>
+  Featured inline
+</button>
+<button type="button" load.bind="featuredInstructionIndex === 0 ? routeInstructions[jasmineInstructionIndex] : routeInstructions[chamomileInstructionIndex]">
+  Featured jasmine
+</button>
+<button type="button" load.bind="maybeRouteInstructionFactory?.() ?? routeInstructions[oolongInstructionIndex]">
+  Featured oolong
+</button>
+<button type="button" load.bind="new SenchaRouteInstruction()">
+  Featured sencha
+</button>
+<button type="button" load.bind="taggedInstruction`genmaicha`">
+  Featured genmaicha
+</button>
 <au-viewport></au-viewport>

@@ -94,6 +94,9 @@ inside the carrier.
 Checker keys are epoch keys for the projected static shape, not just declaration identities. Declared generic and
 library-backed types must include their display/instantiation in the key; `ReadonlyArray<unknown>` and
 `ReadonlyArray<string>` share a declaration but are different static surfaces for template analysis.
+Type-reference sameness must not treat missing product handles or missing checker keys as equality. A missing handle is
+open identity evidence, not proof that two projected references are the same type; same-reference checks should require
+matching product handles, matching checker keys, or a deliberately synthetic/primitive display match.
 The projector keeps an epoch-local checker-key/source index for convergence, but it must verify that the indexed
 product detail still exists before reuse. Query-local projections can now be reclaimed by `QueryClaimGraph` through the
 kernel mark/dispose boundary, so a stale index entry should be evicted and reprojected rather than returning a dead
@@ -112,6 +115,9 @@ checkout type-path map when this repository's `aurelia/packages/*/dist/types` tr
 does not silently load the full `Latest` library universe just because semantic-runtime wants current syntax parsing.
 Real app `tsconfig.json` files remain authoritative: when a project supplies config but omits `lib`, semantic-runtime
 lets TypeScript choose the normal library set for that config instead of injecting the fallback fixture profile.
+The same authority applies to decorator mode. The local Aurelia declarations currently use standard decorator shapes,
+so a fixture tsconfig that opts into legacy `experimentalDecorators` can legitimately produce TS1238/TS1240 rows. Fix
+the fixture config or keep it as explicit pressure; do not make ordinary diagnostics disappear in semantic-runtime.
 Out-of-tree temporary fixtures still need the analysis workspace as a discovery root. A generated project under the
 host temp directory may not contain the local Aurelia checkout or workspace package paths, but its TypeChecker epoch
 must still resolve those declarations relative to the semantic-runtime workspace that opened it. `TypeSystemProject`
@@ -120,7 +126,7 @@ framework imports degrade to `any`, which can look like a scope/observer bug eve
 
 Type-system profiles should keep time, item volume, and source-text mass visible. App-level pressure can make TypeScript Program
 construction look like undifferentiated semantic-runtime cost, but the useful question is often whether the epoch is
-spending on admitted app files, ambient declarations, framework/plugin declaration files, or a downstream inquiry depth
+spending on admitted app files, semantic-runtime overlay sources, framework/plugin declaration files, or a downstream inquiry depth
 that did not need checker facts at all. Keep phase item counts on the `TypeSystemProject` boundary and propagate them
 through pressure scripts before adding caches or narrowing source admission. The profile also carries a compact
 compiler-options summary (`target`, `moduleResolution`, configured library count, path mapping counts, and related
@@ -132,37 +138,148 @@ Aurelia resources that resource/configuration/template passes must understand. T
 policy change, not a generic performance cleanup. If most external roots are only type support, design a typed root
 admission policy; if they produce resource/configuration semantics, keep them as app-world inputs and optimize the
 downstream projections instead.
-Root/source Program stats include overlapping source-text buckets beside counts: evaluated, ambient, project,
+Root/source Program stats include overlapping source-text buckets beside counts: evaluated, overlay, project,
 node_modules, declaration, default-library, and external files can intentionally overlap because the question is both
 "what kind of files are present?" and "which bucket explains retained AST/text mass?". Use these rows before assuming a
 large Program count is the heap problem. A fixture can have a tiny project root and still retain most Program text in
 default libraries or framework declarations, which points at dependency-cache policy rather than app source admission.
 The profile also carries non-overlapping Program source-file group rows for the same epoch. Those rows group each
-Program file under exactly one owner, such as the project, the semantic-runtime ambient declaration, TypeScript default
+Program file under exactly one owner, such as the project, a semantic-runtime overlay source, TypeScript default
 libraries, a node_modules package name, external declarations, or external source. Use the overlapping buckets for
 semantic role attribution and the group rows for "which package/source class is carrying the text" attribution before
 changing root admission, dependency-cache policy, or inquiry depth.
 `TypeSystemProject` roots the TypeScript Program from the union of parsed tsconfig root filenames, evaluated
-project-local TS/JS sources, and semantic-runtime ambient declarations. These are checker roots for app semantic
-analysis, not the same thing as ordinary TypeScript diagnostic eligibility. Source-discovered Aurelia resources can be
-valid semantic inputs even when the app's tsconfig does not root them directly, and checker-facing observation/resource
-passes still need Program-owned nodes for those files. Ordinary TypeScript diagnostics keep a separate tsconfig-shaped
-source set: when parsed root filenames exist, diagnostic reads only iterate those root files; without a parsed tsconfig,
-diagnostic reads fall back to project-local Program sources. External static-evaluation dependencies still enter the
-source-file indexes and the compiler host can serve their parsed SourceFiles when the Program reaches them through
-imports, but external dependency modules are dependencies rather than semantic root files.
+project-local TS/JS sources, local declaration admissions when no tsconfig was present, and semantic-runtime overlay
+sources. These are checker roots for app semantic analysis, not the same thing as ordinary TypeScript diagnostic
+eligibility. Source-discovered Aurelia resources can be valid semantic inputs even when the app's tsconfig does not
+root them directly, and checker-facing observation/resource passes still need Program-owned nodes for those files.
+Ordinary TypeScript diagnostics keep a separate tsconfig-shaped source set: when parsed root filenames exist,
+diagnostic reads only iterate those root files; without a parsed tsconfig, diagnostic reads fall back to project-local
+Program sources. Local ambient module declarations are checker roots in that fallback mode so app-local declaration
+files can satisfy imports without being static-evaluation entrypoints. External static-evaluation dependencies still
+enter the source-file indexes and the compiler host can serve their parsed SourceFiles when the Program reaches them
+through imports, but external dependency modules are dependencies rather than semantic root files.
+`overlay.ts` owns Program-owned virtual TypeScript sources for semantic-runtime framework/app representations. The
+first overlay is the `*.html` module declaration; richer overlays should use the same lane for template/controller,
+route, i18n, or bindable surfaces when checker participation is valuable. Overlay sources are hidden from ordinary
+project diagnostics; use `readTypeSystemOverlayDiagnostics(...)` only when a caller explicitly wants checker diagnostics
+from synthetic sources mapped through overlay segments to authored Aurelia spans. `TypeSystemProjectBuilder.build(..., { overlaySources })` appends additional overlays to
+the default set through the same Program/compiler-host path, so later semantic passes can create an augmented checker
+epoch without inventing local TypeChecker setup. Overlay sources may also declare generated-span segments; use those
+segments as the diagnostic/hover/completion bridge back to authored Aurelia source instead of pointing public
+answers at `.semantic-runtime/overlays/*` files. Use `TypeSystemOverlaySourceBuilder` for generated overlays whose
+segments need exact generated offsets; segment end offsets are exclusive, matching TypeScript/source-span convention.
+Segments should also retain the semantic product handle that produced the generated text when one exists. Authored spans
+locate the user's code; product handles let later agreement/conflict checks join checker evidence back to
+semantic-runtime facts without relying only on file/span coincidence. Hand-counted offsets are a provenance smell once
+the surface grows past a tiny declaration.
+`contract:type-system-overlays` includes the current Aurelia proof lane: a generated template overlay imports a real
+fixture view-model type, aliases root binding-context slots, replays authored template expressions inside nested
+`repeat.for` blocks, `let` declarations, built-in `if`/`else` condition blocks, listener `$event` declarations with
+scope-projected `currentTarget`/`target` refinements when available, and
+repeat override locals such as `$index`, plus `with.bind`, promise result, state binding scope, importable
+value-converter `toView(...)`, missing-converter placeholder, and runtime-assignment slots that mirror `BindingScope`
+ancestry, and asks the checker for repeat-local, let-local, narrowed or non-narrowing branch, listener,
+value-scope parent, value-converter, promise, state, and mapped diagnostic expression types. The same contract proves that overlay checker
+diagnostics remain hidden from ordinary project diagnostics while
+the explicit overlay-diagnostic lane maps copied generated segments back to exact authored template spans when
+generated and source lengths match. Broad segment mapping remains the fallback for generated text that does not copy a
+source span one-for-one.
+The template overlay path now has a selector/expression/plan/emitter split: `template-expression-selection.ts` owns the
+shared expression/value-site and expression-parse to runtime-scope lookup used by cursor inquiries, diagnostics, and
+overlays; `template-type-system-overlay-expression.ts` owns copied authored expression projection and named
+unsupported-Aurelia-expression pressure; semantic product mapping lives in the template overlay builder; and
+`template-type-system-overlay-plan.ts` owns the typed overlay layers plus generated text emission. Keep those
+boundaries intact so future route/plugin/i18n constructs can add semantic facts before they become TypeScript text.
+The contract also includes the synthetic writeback multi-binding canary. That fixture proves inline
+custom-attribute segment expressions are parsed against their segment value span, assignable from-view/two-way source
+locals are visible while their own binding expression is checked, runtime-assignment locals reuse an already-visible
+same-type alias when one exists, and the generated overlay copies `rows`, `$displayData`, `$activeRow`,
+`$activeRow.label`, and `row.label` instead of the full authored multi-binding attribute value. A writeback slot
+without such a semantic alias now projects the target
+bindable member through an importable indexed-access type such as
+`SyntheticTableCustomAttribute["activeRow"]`, avoiding lossy display-string type serialization while still preserving
+private domain model names through the exported controller surface.
+The `template-overlay-scope-aliases` fixture keeps two alias classes separate: repeat override locals are represented
+as generated scope-layer declarations so `$index` typechecks as `number`, and binding-behavior value expressions are
+unwrapped according to runtime `astEvaluate` while bind-time behavior products retain behavior semantics. `$this` and
+single-hop `$parent` are also represented from `BindingScope` replay. Both identifier and destructured repeats synthesize
+the runtime binding context object from replayed binding-context slots, matching framework `BindingContext(local, item)`
+and destructuring `astAssign(...)` behavior; `$this.item.label`, `$this.key`, and `$this.entry.label` therefore
+typecheck without inventing TypeScript-only lookup rules. Nested repeat `$parent` aliases carry the parent chain so
+`$parent.item.label` and `$parent.$parent.title` remain source-backed observed dependencies and overlay expressions.
+`with.bind` scopes are also represented as binding-context-changing scope layers: current value members such as `label`
+come from the value scope, while listener-event expressions inside the value scope can still call the parent view-model
+through `$parent.selectById(id)` without confusing the value object with the parent component.
+Boundary `this` access is represented by wrapping the generated overlay in a function whose `this` parameter is the
+resource view-model type, matching the custom-element boundary for the resource template. The fixture also keeps a
+non-narrowing `if.bind`/`else` pair as a branch-creator canary: even when the checker has no slot refinement to publish,
+scope construction records the original condition plus polarity so the overlay can replay truthy and falsy branch
+guards. Non-replayed binding-pattern
+current-context aliases remain explicit pressure until the alias layer can represent them without obscuring Aurelia's
+runtime lookup rules.
+The `template-overlay-value-converter` fixture proves the first generated Aurelia-expression call surface: when resource
+recognition supplies an importable value-converter target, the overlay emits a typed `useConverter`-shaped helper rather
+than reinterpreting converter syntax locally. The helper calls the converter's `toView(value, ...args)` surface when it
+exists, inserts the framework caller-context slot when the converter has literal `withContext = true`, preserves the
+input value when the converter type has no `toView`, and still lets TypeScript report argument diagnostics such as
+TS2345 on authored converter arguments when the method exists. The same projection is accepted by overlay scope layers,
+so converter calls can participate in `if.bind` conditions and `repeat.for` iterable setup instead of being limited to
+standalone expression probes. Built-in converters whose resource metadata lacks an importable module path can derive
+their target type from checker carrier declarations. Missing converters use an unknown converter placeholder so
+TypeScript can still check the wrapped source expression and converter arguments while semantic diagnostics own the
+missing converter.
+Full app-pressure now reports zero template overlay skips across the in-repo pressure corpus; treat future skip
+reappearance as a signal to inspect the semantic owner first, not as a reason to add generated TypeScript fallbacks.
+Do not broaden this lane into a second `from-view`/`two-way` writeback authority. Source assignment is owned by binding
+data-flow because it has the binding direction, observer value channel, source write capability, target-to-source
+assignability, and framework `astAssign` policy. When a public diagnostic needs a precise user span, it should derive
+the assignment target through the shared runtime assignment-target AST helper while keeping the data-flow product as the
+semantic fact.
+`$this`, `$parent`, and boundary `this` expression source tokens are binding-context alias pressure, not ordinary
+TypeScript name-resolution failures. The overlay currently emits a typed resource-template function, binds root
+`$this` from that function `this`, and adds repeat-scope `$parent`/`$this` aliases from replayed binding-context slots.
+Nested repeat parent aliases carry a typed parent chain, so `$parent.$parent` can stay authored source text when the
+chain is available. Keep non-replayed binding-pattern current aliases as explicit skips until they can be derived from
+BindingScope ancestry without inventing TypeScript-only lookup rules.
+Template overlay diagnostics are now public only through the type-projection template diagnostic lane. That public
+projection is intentionally policy-filtered: the overlay source is generated TypeScript, so syntax/name-resolution and
+implicit-any diagnostics are substrate pressure unless the overlay can prove they came from an authored expression
+relationship. Public rows currently admit semantic TypeScript codes such as missing member, nullish access,
+type/argument mismatch, and readonly assignment, and carry `missingInput: "typescript:TS####"` plus a structured
+`inspect-owner-type` action target over the authored expression span. Missing-member overlay rows are suppressed when
+the semantic template diagnostic lane already owns the same authored span, so TypeScript becomes checker evidence
+rather than a duplicate issue. The public fixture currently keeps argument mismatch, arity mismatch, and nullish access
+rows as TypeScript-native overlay evidence, and the value-converter fixture adds converter argument mismatch over the
+same policy. Keep this policy narrow until ancestor aliases and event target/currentTarget refinements have first-class
+overlay semantics.
+Template cursor-info participates in that same public projection when a caller opts into
+`diagnosticProjection: "type-projection"`. Cursor-info does not run a separate hover checker; it filters mapped overlay
+diagnostic rows to the active authored cursor span and reuses the same duplicate-suppression and TypeScript-code
+admission policy as template diagnostics. This keeps cursor-time explanations aligned with file/app diagnostics while
+still allowing cheaper `available-products` cursor reads when TypeChecker overlay diagnostics are not needed.
 Checker-facing code should not assume every AST node that reaches semantic-runtime is owned by the TypeScript Program.
 Static evaluation, source discovery, and resource convergence can carry parsed nodes with the same file/span but a
-different AST identity from the Program epoch. Use `TypeSystemProject.readProgramNode(...)` or higher-level helpers such
-as `readRuntimeTargetType(...)` before calling `getTypeAtLocation`, `getSymbolAtLocation`, or symbol-at-location
-helpers. Returning unknown/open is better than asking the checker about an alien node and crashing the public API.
+different AST identity from the Program epoch. Prefer `TypeSystemProject.readProgramSourceFileByPath(...)` or
+`readProgramSourceFileByModuleKey(...)` when scanning source for checker-backed materialization. Use
+`TypeSystemProject.readProgramNode(...)` or higher-level helpers such as `readRuntimeTargetType(...)` before asking the
+checker about a node that originated outside the Program SourceFile. Returning unknown/open is better than asking the
+checker about an alien node and crashing the public API. Do not manufacture empty SourceFiles as fallback checker
+locations; a checker location must be a Program-owned source, a checker-owned declaration, or a missing overlay/source
+admission signal.
 Source addresses may carry host-facing workspace-relative paths, while project admissions carry project-relative paths.
-`TypeSystemProject.readSourceFileByPath(...)` and `readProgramSourceFileByPath(...)` accept absolute, project-relative,
-and workspace-relative paths so a materializer can start from a `SourceSpanAddress` without rebuilding path heuristics
-beside the checker epoch.
+`TypeSystemProject.readProgramSourceFileByPath(...)` accepts absolute, project-relative, and workspace-relative paths so
+a materializer can start from a `SourceSpanAddress` without rebuilding path heuristics beside the checker epoch.
+Evaluator-owned AST access is deliberately named `readEvaluatedSourceFileByPath(...)` / `readEvaluatedSourceFileByModuleKey(...)`
+so call sites do not accidentally use an evaluation SourceFile with the checker.
+Checker-observed source-file addresses keep their file-role metadata in public `SemanticSourceReference.sourceFileRole`
+and owner key in `sourceWorkspaceKey`. Dependency implementation files admitted through `node_modules` classify as
+`external-source`, even when the package is source-backed, so unified diagnostics and repair planning do not route
+dependency/plugin template overlay errors as editable app source.
 `readProgramNode(...)` has small per-epoch counters for request count, cache hits, same-source hits, span remaps, and
-misses. Keep those counters in routed app telemetry so a correctness guard does not silently become a repeated DFS
-hotspot on larger apps.
+misses. Span remaps use a lazy per-Program-source span index, so the correctness guard should not silently become a
+repeated DFS hotspot as overlays and source-discovery nodes multiply. Keep those counters in routed app telemetry so
+large apps can still reveal unexpected remap volume.
 `checker-type-assignability.ts` owns the small shared question "is this projected checker reference assignable to that
 one?". Binding data-flow and runtime composition both use it because the CPU/memory trade-off and checker-epoch
 fallback policy should not be reimplemented at every feature boundary. It only answers when the retained carriers share
@@ -171,9 +288,9 @@ assignability belongs in the caller's value-channel or lifecycle semantics.
 
 `compiler-host-source-file-cache.ts` owns a process-local compiler-host source-file cache for dependency/lib files:
 `node_modules` sources and declaration files outside the opened project root are cacheable, while evaluated app source
-files and project-local ambient stubs stay current-epoch reads. Evaluator asset modules such as HTML/CSS-generated
+files and project-local overlay stubs stay current-epoch reads. Evaluator asset modules such as HTML/CSS-generated
 default exports stay in the evaluation graph and do not become TypeScript Program roots; the checker epoch indexes
-TS/JS-shaped roots plus ambient declarations. This intentionally trades some session memory for much lower repeated
+TS/JS-shaped roots plus overlay sources. This intentionally trades some session memory for much lower repeated
 `ts.createProgram` cost across app epochs, especially when the local Aurelia framework checkout supplies many external
 `.d.ts` files. `pressure:app-api` and `profile:app-telemetry` report host source-cache hits, misses, writes, bypasses,
 hit/write source-text traffic, cacheable-read lanes, bypass lanes, and Program source-file composition next to
@@ -298,8 +415,10 @@ caller needs source type, element type, local projection, and repeatability diag
 re-enter the evaluator separately for each piece of repeat scope construction. Keep repeat-local scope work and
 diagnostics hooked through this projector instead of adding template-controller-specific repeat type paths.
 `expression-resource-projector.ts` owns expression-level resource semantics for value converters and binding behaviors:
-compiler resource-scope lookup, converter target hydration, `toView` call projection, and duplicate behavior checks.
-Keep those resource-expression policies there instead of threading resource lookups through the evaluator switch or
+compiler resource-scope lookup, converter target hydration, value-converter method projection, and duplicate behavior
+checks. `toView` and `fromView` both route through the same checker call projector; if the converter target does not
+expose the requested method, the framework `useConverter(...)` fallback leaves the value unchanged. Keep those
+resource-expression policies there instead of threading resource lookups through the evaluator switch or
 completion-specific helpers.
 `expression-member-owner-projector.ts` owns cursor-offset member-owner projection and delegates
 value evaluation plus arrow-function scope creation back to the evaluator, so completion and diagnostic code do not
@@ -351,6 +470,11 @@ callback parameter typing, object-option typing, and nested literal context do n
 - Member value types are currently stored as references without automatically materializing nested type-shape
   products. If member navigation or deep completion needs those products, add a projector continuation instead of
   stuffing more raw detail into completion answers.
+- Runtime scope slots may still need a concrete target type when a binding expression walks through composed state,
+  for example a parent binding `state.handleAction` that supplies a child bindable callback. The configuration layer's
+  `bindingContextSlotTargetTypeShape(...)` is the shared continuation for that case: it spends the slot's retained
+  checker member carrier and `CheckerTypeProjector.ensureProjection(...)`, keeping the member surface lazy while giving
+  scope construction, overlays, and future cursor inquiries one grounded way to continue through the slot.
 - Checker type members do not have standalone durable kernel identities by default. Their hot `productHandle` is an
   in-process follow-up key; value-type projections and scope slots should use the member declaration identity when one
   exists, otherwise the owning type-shape identity. Do not invent a `TypeSystemIdentity` only to parent a member value.
@@ -363,14 +487,21 @@ callback parameter typing, object-option typing, and nested literal context do n
   the product they actually need. Runtime binding-scope construction is also a legitimate enumeration consumer:
   `BindingScopeSlotProjector` may spend `readOrProjectCheckerTypeMembers(...)` so view-model fields such as route
   class references are visible to Aurelia expression lookup.
+- Checker member write access is also a source-routing substrate, not just a boolean writability helper. When
+  `CheckerTypeShapeAccess.memberWriteAccess(...)` falls back to a raw checker/apparent-property symbol, it materializes
+  the member's value/declaration source before returning. Binding data-flow spends that source as
+  `sourceAssignmentTargetSource`, so `from-view`/`two-way` repair targets can navigate to the authored member even when
+  the member surface was lazy before the writeability check.
 - The expression type evaluator is deliberately member-surface-oriented, not runtime-value-oriented. Value converters
-  can close over the checker-visible `toView` return type because the compiler resource scope supplies a runtime
-  definition; the call projector treats the converter's input expression as the first `toView` argument and then spends
-  converter arguments for overload selection. Call/construct projection is intentionally lazy: a single
+  can close over checker-visible `toView`/`fromView` return types because the compiler resource scope supplies a
+  runtime definition; the call projector treats the converter's input value as the first method argument, inserts a
+  synthesized caller-context argument for literal `withContext = true`, and then spends converter arguments for overload
+  selection. Missing converter methods are identity conversions, matching runtime-html `evaluatorUseConverter(...)`,
+  while missing converter resources remain open. Call/construct projection is intentionally lazy: a single
   arity-compatible signature does not cause argument evaluation just to re-prove the same return type, while overloaded
   surfaces can spend argument assignability to narrow the return lane. Generic inference from synthetic arguments,
-  `fromView`, custom expression plugins, and richer collection prototype semantics should stay explicit until binding
-  direction or plugin-specific substrate supplies the missing facts. When a converter declares `unknown[]` or another
+  custom expression plugins, and richer collection prototype semantics should stay explicit until binding direction or
+  plugin-specific substrate supplies the missing facts. When a converter declares `unknown[]` or another
   broad return surface, repeat locals derived from that converter should surface as weak-type pressure; do not infer
   element preservation unless a TypeChecker-visible signature or explicit converter model says so.
 - Value-converter and binding-behavior resource lookup belongs in expression evaluation because Aurelia's runtime
@@ -467,6 +598,9 @@ callback parameter typing, object-option typing, and nested literal context do n
   scope-name truthiness, loose nullish comparisons, simple boolean negation, truthy `&&`, falsy `||`, and adjacent
   `else` negative narrowing. Broader control-flow analysis should continue to land as named semantic profiles rather
   than as accidental evaluator behavior.
+- Template-controller branch replay is not the same as branch narrowing. When no narrowed slot can be published, the
+  scope still needs a `TemplateControllerCondition` creator carrying the condition instruction and polarity so overlays,
+  diagnostics, and future completion surfaces can reconstruct the child-view guard.
 - Expression-local branch narrowing reuses that same profile without publishing template-controller Scope products.
   Conditional branches and short-circuit right operands go through `CheckerExpressionBranchScopeProjector`, which spends
   `CheckerExpressionScopeNarrower` and `speculativeBindingScopeOverlay`; do not recreate branch-local lookup inside
@@ -474,6 +608,10 @@ callback parameter typing, object-option typing, and nested literal context do n
 - Promise template-controller result slots now cross from runtime activation semantics back into TypeChecker-backed
   expression scopes: `then="value"` receives the awaited `promise.bind` value type, while `catch="reason"` receives
   `unknown` because JavaScript promise rejection is not statically typed by `Promise<T>`.
+- `with.bind` and state binding scopes are ordinary binding-context replay lanes for overlays. `with.bind` locals come
+  from the value scope's binding context, and listener scopes nested under that value scope must inherit the generated
+  parent alias so `$parent` still targets the outer Aurelia scope. State locals come from the modeled
+  `StateBindingScope` context member expressions. Do not recover those locals from raw template names in answer code.
 - Repeat rest patterns stay open until the product has a precise array/object rest taxonomy. A destructured local gets
   a type when the runtime-shaped path to that local is known.
 - Binding-pattern local projection is split from the expression evaluator. The evaluator owns expression execution

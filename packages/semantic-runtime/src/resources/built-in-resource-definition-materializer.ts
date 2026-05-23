@@ -248,6 +248,11 @@ function builtInAttributeBindables(
       ]);
     case 'Repeat':
       return bindables(source, [{ name: 'items' }]);
+    case 'VirtualRepeat':
+      return bindables(source, [
+        { name: 'local' },
+        { name: 'items' },
+      ]);
     case 'With':
     case 'Switch':
     case 'PromiseTemplateController':
@@ -307,6 +312,7 @@ function builtInAttributeBindables(
 function builtInDefaultProperty(targetName: string): string {
   switch (targetName) {
     case 'Repeat':
+    case 'VirtualRepeat':
       return 'items';
     case 'Portal':
       return 'target';

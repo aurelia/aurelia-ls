@@ -85,6 +85,9 @@ The harness spends the app-query catalog's `pagingKind` instead of blindly attac
 `SEMANTIC_RUNTIME_TELEMETRY_QUERY_PAGE_SIZE` applies to cursor/offset-paged row tables, while
 `SEMANTIC_RUNTIME_TELEMETRY_ROW_SAMPLE_SIZE` opts router-overview-style row samples into the profile. Keep row samples
 at 0 for MCP-orientation payload checks unless the run is specifically testing router-family row samples.
+The default output is aggregate-only so autonomous checkpoints can read the pressure without a per-run wall of text.
+Set `SEMANTIC_RUNTIME_TELEMETRY_OUTPUT=runs` for detailed run rows, or `both` when a profiling pass needs the detailed
+rows and aggregate totals in one command.
 Set `SEMANTIC_RUNTIME_TELEMETRY_QUERY_KINDS=summary,app-overview` or another comma-separated app-query list when a
 profile preset is too broad for the question. This is the projection-cost lane: it lets a run isolate one public answer
 without editing the harness or accidentally treating a profile bundle as the cost of a single query.
@@ -109,6 +112,10 @@ workspace/runtime between samples. Retained-answer hits are marked on query rows
 counted again as newly spent app-world work.
 Aggregate timing rows print total time, sample count, and per-sample average. Use the average to compare repeated
 preserve/clear runs; use the cache and memory rows to decide whether the latency win is worth the retained heap.
+Query rows still print kernel deltas for `query-type-projection` answers, because those queries are allowed to publish
+answer-time TypeChecker products. The warnings lane is reserved for projection-only/static queries that grow or retain
+kernel state unexpectedly. Aggregate query rows are keyed by both query kind and materialization policy, so expected
+type-projection kernel growth does not get blended into a projection-only total for the same query kind.
 When a run includes multiple roots, depths, or profiles, aggregate output also prints grouped timing leaders. Read those
 before narrowing a rerun: they show which app/profile/depth group introduced the leading app phase, template phase, or
 app-world-free profile cost while keeping the global totals available for whole-run load. TypeSystem inner phases are
@@ -201,10 +208,10 @@ through disposal as well. Treat those rows as directional because GC and profili
 whether a memory frontier belongs to TypeSystem Program construction, template compilation/runtime analysis, resource
 publication, or a lower app-world phase before changing retention policy.
 Set `SEMANTIC_RUNTIME_TELEMETRY_TYPE_SYSTEM_CACHE_ENTRIES=true` only when a run needs largest-entry evidence behind a
-hot dependency-cache bucket. The terminal output prints bucket/size rows rather than source paths so fixture and
-external-root runs stay suitable for durable generalized notes. Aggregate output keeps only a bounded path-free top
-entry summary for the same reason; use per-run output only when you need to correlate the largest entries with a single
-sample.
+hot dependency-cache bucket. The terminal output prints bucket, basename, parse-option key, and size rather than full
+source paths so fixture and external-root runs stay suitable for durable generalized notes while still distinguishing
+repeated default-library or declaration parses. Aggregate output keeps only a bounded path-free top entry summary for
+the same reason; use per-run output only when you need to correlate the largest entries with a single sample.
 
 Detail density requires kernel breakdowns and is off by default. Use it when memory pressure needs an explanation of
 which hot sidecar families and direct fields are retaining mass. Do not enable it for ordinary adapter requests.

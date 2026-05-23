@@ -234,7 +234,8 @@ export class CheckerTypeShapeAccess {
         checkerSymbolMemberKind(checkerMember.symbol, checkerMember.declarations),
         checkerDeclarationsAreReadonly(checkerMember.declarations),
         checkerMember.declarations,
-        null,
+        this.checkerMemberValueSourceAddressHandle(checkerMember)
+          ?? this.checkerMemberSourceAddressHandle(checkerMember),
       );
     }
 
@@ -509,7 +510,8 @@ export function checkerTypeMemberWriteAccess(
     member.memberKind,
     member.isReadonly,
     member.carrier?.declarations ?? [],
-    checkerTypeMemberSourceAddressHandle(store, member),
+    checkerTypeMemberValueSourceAddressHandle(store, member)
+      ?? checkerTypeMemberSourceAddressHandle(store, member),
   );
 }
 

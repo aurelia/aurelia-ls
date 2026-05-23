@@ -73,6 +73,9 @@ import { RuntimeHtmlBindingBehaviorFrameworkErrorCode } from './framework-error-
 import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-expression-products.js';
 import { sourceAddressForRuntimeExpressionSpan } from './runtime-expression-source-address.js';
 import { appendRuntimeBindingProductValue } from './runtime-binding-product-index.js';
+import {
+  bindingModeForBindingBehaviorName,
+} from './runtime-binding-mode-behavior.js';
 
 export class RuntimeBindingBehaviorMaterializationRequest {
   constructor(
@@ -134,6 +137,18 @@ class RuntimeBindingBehaviorPublication {
 class BindingBehaviorBindState {
   private rateLimitBehaviorName: 'debounce' | 'throttle' | null = null;
   private targetSubscriberBehaviorName: string | null = null;
+
+  constructor(
+    private currentBindingMode: TemplateBindingMode | null,
+  ) {}
+
+  readBindingMode(): TemplateBindingMode | null {
+    return this.currentBindingMode;
+  }
+
+  setBindingMode(bindingMode: TemplateBindingMode): void {
+    this.currentBindingMode = bindingMode;
+  }
 
   hasDifferentRateLimitBehavior(behaviorName: 'debounce' | 'throttle'): boolean {
     return this.rateLimitBehaviorName != null
@@ -199,7 +214,7 @@ export class RuntimeBindingBehaviorMaterializer {
         if (ast == null) {
           return;
         }
-        const bindState = new BindingBehaviorBindState();
+        const bindState = new BindingBehaviorBindState(binding instanceof PropertyBinding ? binding.bindingMode : null);
         const behaviors = bindingBehaviorExpressions(ast);
         for (let behaviorIndex = 0; behaviorIndex < behaviors.length; behaviorIndex++) {
           const behavior = behaviors[behaviorIndex]!;
@@ -274,6 +289,14 @@ export class RuntimeBindingBehaviorMaterializer {
     effects: RuntimeBindingBehaviorBindEffects,
     resourceResolved: boolean,
   ): BuiltInBindingBehaviorBindIssue | null | undefined {
+    const bindingModeBehaviorMode = bindingModeForBindingBehaviorName(behavior.name.name);
+    if (bindingModeBehaviorMode != null) {
+      if (!resourceResolved) {
+        return undefined;
+      }
+      bindState.setBindingMode(bindingModeBehaviorMode);
+      return null;
+    }
     switch (behavior.name.name) {
       case 'attr':
         return this.afterTargetSubscriberEffects(behavior.name.name, bindState, effects, this.attr.bind({
@@ -307,9 +330,9 @@ export class RuntimeBindingBehaviorMaterializer {
           eventArgumentCount: behavior.args.length,
           bindingIsPropertyBinding: binding instanceof PropertyBinding,
           bindingAllowsTargetToSource: binding instanceof PropertyBinding
-            && bindingModeAllowsTargetToSource(binding.bindingMode),
+            && bindingModeAllowsTargetToSource(bindState.readBindingMode() ?? binding.bindingMode),
           hasNodeObserverConfig: binding instanceof PropertyBinding
-            && bindingModeAllowsTargetToSource(binding.bindingMode)
+            && bindingModeAllowsTargetToSource(bindState.readBindingMode() ?? binding.bindingMode)
             ? targetAccessHasNodeObserverConfig(targetAccess)
             : null,
           targetProperty: binding instanceof PropertyBinding ? binding.target : null,

@@ -5,6 +5,10 @@ import { unwrapExpression } from '../evaluation/ts-syntax.js';
 import type { AddressHandle } from '../kernel/handles.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import {
+  firstSymbolDeclaration,
+  symbolForExpression,
+} from '../type-system/checker-node-helpers.js';
+import {
   normalizeTypeSystemSourceFileName,
   typeSystemSourcePathIndex,
 } from '../type-system/source-path-index.js';
@@ -146,7 +150,7 @@ export function readDiResolveCallSites(
 ): readonly DiResolveCallSite[] {
   const sourcePathByFileName = typeSystemSourcePathIndex(project, typeSystem);
   return project.sourceFiles.flatMap((source) => {
-    const sourceFile = typeSystem.readSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     return sourceFile == null
       ? []
       : readSourceFileDiResolveCallSites(source.path, source.addressHandle, sourceFile, typeSystem, sourcePathByFileName);
@@ -501,7 +505,7 @@ function resolveKeyTarget(
   if (symbol == null) {
     return unresolvedKeyTarget(keyName, importReference);
   }
-  const declaration = symbol.declarations?.[0] ?? null;
+  const declaration = firstSymbolDeclaration(symbol);
   if (declaration == null) {
     return unresolvedKeyTarget(keyName, importReference);
   }
@@ -554,19 +558,6 @@ function importReferenceForKeyExpression(
       };
   }
   return null;
-}
-
-function symbolForExpression(
-  checker: ts.TypeChecker,
-  expression: ts.Expression,
-): ts.Symbol | null {
-  const symbol = checker.getSymbolAtLocation(expression);
-  if (symbol == null) {
-    return null;
-  }
-  return (symbol.flags & ts.SymbolFlags.Alias) !== 0
-    ? checker.getAliasedSymbol(symbol)
-    : symbol;
 }
 
 function keyNameForExpression(expression: ts.Expression): string | null {

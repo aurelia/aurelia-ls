@@ -507,6 +507,13 @@ capability, applicable recipe-fit, open-reason, and paged repair-cluster classif
 not-applicable recipe rows, repeated ontology prose, individual repair rows, action targets, member hints, and
 type-display arrays; request `detail: "handles"` when a repair planner or local diagnostic investigation needs those
 editable loci.
+Repair rows and action-target rows also carry source roles, following `SemanticSourceReference.anchor` when a diagnostic
+points at a generated/template-node carrier and reading `SemanticSourceReference.sourceFileRole` when a checker or
+dependency source address owns the file role directly. Keep these roles separate from `SemanticSourceReference.role`,
+which is a span role such as `type` or `binding-source-assignment`; source roles answer whether the edit target is app
+source, template, tooling config, declaration, external dependency source, or another admitted file class. Compact repair
+clusters retain action-target source-role counts even when exact action-target rows are elided, so MCP callers can route
+"fix this" requests without reopening a path-heavy detail answer first.
 Cluster `key` values are compact fingerprints over that structural grouping input. Consumers should use
 `actionTargets`, `memberHints`, and source references for explanations or edits instead of parsing source spans back out
 of the key. `contract:template-diagnostics` includes a non-effect guard for this because key token economy is part of
@@ -524,6 +531,9 @@ The cursor pressure script derives hover targets, navigation targets, diagnostic
 from this same result so feature pressure stays on the shared cursor-info substrate instead of becoming separate source
 scans. It labels index-signature selected members as synthetic so those rows do not look like lost TypeChecker
 declaration provenance.
+Like app API pressure, cursor-locus pressure accepts explicit `--fixture` and `--root` selectors for focused canary
+runs. Prefer those selectors over env-only root overrides when comparing cursor-info behavior across overlay, router,
+and form pressure fixtures; the printed aggregate still omits source text and raw paths.
 Completion pressure classes prefer cursor-diagnostic-backed labels when the LSP envelope already explains a miss or
 partial answer, but the script still prints the underlying `missingInputs` counters separately. That keeps actionable
 repair surfaces such as missing scope-slot types visible without making them look like unexplained autocomplete gaps.
@@ -561,6 +571,11 @@ semantic-runtime can edit a declaration it cannot locate.
 Repeat locals use the same policy. If `item` is weak because `items` is `any[]`, the cursor row should preserve the
 iterable/source-slot route that introduced `item`; if `item` is weak because the repeat source itself cannot be typed,
 the row stays in `declare-scope-slot-type` territory instead of inventing an owner type.
+When `TemplateCursorInfo` is requested with `diagnosticProjection: "type-projection"`, the cursor answer also consults
+the same template overlay diagnostic lane used by template diagnostics and keeps only overlay TypeScript diagnostics
+whose mapped authored span contains the active cursor. Missing-member overlay rows stay suppressed when the semantic
+template diagnostic lane already owns that span, so cursor hover/explanation surfaces can show TS2345/TS2554/nullish
+checker evidence without turning overlay diagnostics into a second public diagnostic system.
 Diagnostic rows keep `missingInput` as the primary compact reason and also expose `missingInputs` for the full reason
 set. Binding assignment strictness can legitimately carry multiple TypeScript-policy reasons for one authored source
 span, so consumers should aggregate `missingInputs` when they need pressure counts or code-action routing.
@@ -588,6 +603,11 @@ that controls commonly write strings even when their visual domain looks numeric
 Runtime-unassignable target-to-source bindings are separate from TypeScript strictness. Aurelia's `astAssign` falls
 through without updating unsupported expression targets, so semantic-runtime reports those as
 `binding-source-assignment-runtime-noop` with `use-assignable-expression` guidance rather than as framework errors.
+Source-assignment diagnostics are published from binding data-flow rather than template checker overlays, because
+data-flow already knows the binding direction, target observer/value channel, source write capability, and Aurelia
+`astAssign` policy. When a parse AST is available, the public diagnostic source narrows through
+`runtimeAssignmentTargetAstForParse(...)` to the authored assignment expression target (`binding-source-assignment`)
+instead of the whole binding attribute; repair action targets still use the TypeChecker member/declaration source.
 The reserved `$host` access scope is the exception on both read and write paths. A missing `$host` runtime context maps
 to `ast_$host_not_found` (`AUR0105`) during source evaluation, and framework `astAssign` throws
 `ast_no_assign_$host` (`AUR0106`) before ordinary scope lookup during writeback. Binding data-flow therefore reports
@@ -726,8 +746,9 @@ observation, template, resource, router, and route-recognizer diagnostic product
 TypeSystemProject checker epoch as the rest of semantic-runtime, but diagnostic eligibility is tsconfig-shaped rather
 than identical to every semantic checker root. The Program may include evaluated project-local Aurelia resources so
 observation and template analysis can ask the checker about Program-owned nodes, while ordinary TypeScript diagnostics
-only iterate the parsed tsconfig diagnostic source set when one exists. Config read/parse/option diagnostics are kept on
-the same surface, so public adapters do not need to shell out to `tsc` or build a second Program. It preserves
+only iterate the parsed tsconfig diagnostic source set when one exists. Semantic-runtime overlay sources are also
+checker roots, but their diagnostics stay hidden until a query can map a synthetic span back to authored Aurelia source.
+Config read/parse/option diagnostics are kept on the same surface, so public adapters do not need to shell out to `tsc` or build a second Program. It preserves
 `diagnosticDomain` and `relatedQueryKind` so callers can drill back into the owning query instead of treating app
 diagnostics as a separate semantic layer. The owning diagnostic rows are collected before the app-level page is applied;
 do not page a child query and then aggregate it, or pressure summaries will hide high-volume diagnostic classes.
@@ -738,12 +759,36 @@ severity/domain/code rollups and top samples or clusters, so MCP/LSP callers can
 opening raw rows.
 `TypeScriptDiagnostics` and `TypeScriptDiagnosticSummary` are explicit drill-down queries for ordinary TypeScript
 errors, warnings, and messages when the unified app diagnostic rows point at `diagnosticDomain: "typescript"`.
+Rows keep TypeScript's optional diagnostic `source` label separate from semantic-runtime's boot-admitted
+`sourceRole`. The latter is threaded from source discovery/admission, so public adapters can distinguish app-source,
+test-source, tooling-config, declaration, and other project roles without guessing from file names or shelling out to
+another checker process. Summary rows retain source-role counts for the same reason: a repair assistant can prioritize
+app-source errors while still reporting test/config pressure honestly.
+Unified app diagnostics also preserve source-file ownership for non-ordinary diagnostic lanes. `SemanticSourceReference`
+rows expose `sourceWorkspaceKey` and `sourceFileRole`; if a template overlay maps back to a source owned by another
+project or by a dependency path such as `node_modules`, the unified row reports `external-source` instead of treating
+that file as the opened app's editable source.
 `diagnosticProjection` is honored by the diagnostic families that advertise it in the query catalog:
 `AppDiagnostics`, `AppDiagnosticSummary`, and `TemplateDiagnostics`. `available-products` limits those answers to
 diagnostics backed by the opened app-world and deliberately omits ordinary TypeScript Program diagnostics; leaving the
 projection unset or using `type-projection` includes TypeScript diagnostics and may run answer-time TypeChecker
 owner/member projection for weak-member diagnostics. The focused TypeScript diagnostic queries are already an explicit
 request for Program/tsconfig diagnostics, so they do not downshift to `available-products`.
+`TemplateDiagnostics` also uses `type-projection` for generated template checker overlays. These rows have
+`diagnosticKind: "template-expression-typescript-diagnostic"` and `diagnosticAuthority: "typescript"`, but they are not
+ordinary `.ts` diagnostics: they come from a virtual TypeScript source that replays authored template expressions inside
+materialized binding-scope ancestry, then maps admitted checker diagnostics back to the authored template span. Keep the
+public admission policy narrow. Syntax/name-resolution/implicit-any complaints from generated overlay code are
+substrate pressure unless the overlay can prove a specific authored cause; public rows currently admit semantic
+missing-member, nullish access, type/argument mismatch, and readonly-assignment-style codes and carry
+`missingInput: "typescript:TS####"` plus a structured action target. Nullish overlay diagnostics use
+`guard-nullish-expression` because the authored repair is usually a guard, optional chain, or earlier narrowing step;
+other admitted checker rows stay on `inspect-owner-type` until the diagnostic policy can prove a more specific repair.
+When a semantic-runtime diagnostic already owns
+the same authored missing-member span, the overlay row is suppressed as duplicate checker evidence rather than surfaced
+as a second user issue; TypeScript-native rows such as argument mismatches, arity mismatches, and nullish access remain
+public. Template overlay rows share the same TypeScript diagnostic severity mapping as ordinary TypeScript diagnostic
+rows so unified diagnostic answers do not drift by lane.
 `AppOverview` uses `available-products` for its nested diagnostic summary so a compact first read does not publish
 query-time type products or full Program diagnostics. Explicit `AppDiagnostics`, `AppDiagnosticSummary`,
 `TypeScriptDiagnostics`, `TypeScriptDiagnosticSummary`, and `TemplateDiagnostics` calls still default to the repair
@@ -1050,6 +1095,8 @@ recipe, repair, and open-reason rows as the precise source of truth; the display
 intents, not edits: they classify whether the next move is to declare a member, strengthen an owner type, rewrite a
 binding source, resolve a runtime boundary, inspect an open seam, or improve semantic-runtime substrate. Concrete edit
 application and formatting policy stay outside this API until the source-edit boundary is designed.
+Expected-effect filters understand nested object arrays such as `actionTargets.sourceRole`; use that shape when a
+fixture needs to prove that a repair cluster kept a structured target role instead of relying on key text.
 Taste rows in the same orientation answer keep durable vocabulary separate from the opened app reading:
 `ontologySummary` explains the stable taste value, while `summary` / `observedSummary` explain the current evidence
 that made the value appear. Recipes should check value-level layer, confidence, and evidence before turning taste into
@@ -1252,7 +1299,8 @@ semantic gap.
 opening another project should not make seam rows bleed into the first app answer. The projection includes source-
 addressed seams owned by the app's admitted/evaluated sources plus emission-local DI, template, runtime rendering,
 observer, value-channel, and data-flow seams that may not have a precise authored address yet.
-Rows expose both human `summary` text and typed `reasonKinds`. Pressure scripts should aggregate the typed reason kinds
+Rows expose human `summary` text, typed `reasonKinds`, and optional `reasonSources` for reason-level source/evidence
+when one coherent seam has adjacent contributing source sites. Pressure scripts should aggregate the typed reason kinds
 when present, reserving summary text for human inspection and raw-detail debugging. For example, a router resource whose
 instruction value depends on host environment state remains a router open seam, but carries both
 `router-instruction-needs-static-value` and `host-environment-value` as stable machine-readable pressure.
@@ -1266,7 +1314,9 @@ not proven either the external lane or a static internal route string. Click-int
 `router-href-click-interception-disabled` is for proven disabled gates such as `useHref=false`, non-anchor hosts, or a
 co-located `load` custom attribute, while `router-href-click-interception-target-open` is for anchor `target` values
 that must be compared with the runtime window name. In both cases, `HrefCustomAttribute.valueChanged(...)` still needs
-the runtime value to decide whether to write the raw URL or generate an internal router URL.
+the runtime value to decide whether to write the raw URL or generate an internal router URL. Dynamic href seams keep the
+href value as the primary seam source, while `reasonSources` can point the target-open reason at the authored `target`
+attribute.
 Authoring orientation lifts that into runtime boundary and intent rows on repair clusters. The important distinction is
 whether the boundary is router href classification, static route instruction closure, or binding-source runtime value,
 and whether the next operation needs href ownership intent, an explicit external-href declaration, a static navigation
@@ -1276,7 +1326,11 @@ source-less app-level bucket.
 Observation-owned seams can also carry typed reasons. For example, `SelectValueObserver` channels distinguish unclosed
 option values, empty option domains, missing authored select targets, dynamic `multiple.bind` whose source cannot carry
 both runtime branches, and multi-select source-shape pressure; any data-flow row blocked by that channel preserves the
-same reason instead of flattening the pressure into an untyped binding seam.
+same reason instead of flattening the pressure into an untyped binding seam. Public template diagnostics project the
+static multi-select source-shape case as a framework-runtime-behavior warning, not as a framework error: if the source
+type permits non-array values such as `T[] | null`, Aurelia may no-op the writeback until the runtime value is already
+an array. The repair target should be the source member/type, with guidance to initialize the selected-value collection
+as an array or split nullable loading state away from the bound collection.
 
 `EvaluationIssues` exposes product-owned diagnostics from the static evaluation layer and framework-shaped evaluator
 handoffs. `ModuleLoader` transform-input validation reports `aliasedResourcesRegistry(...)` and
@@ -1463,6 +1517,12 @@ Framework `astAssign` only throws exact runtime codes for reserved `$host` assig
 member/keyed assignment (`AUR0116`), and destructuring source failures (`AUR0112`); non-assignable expression kinds
 such as calls or tagged templates are framework-runtime no-ops and should stay code-less diagnostics unless a future
 framework usage path changes that authority.
+Open binding data-flow seams carry typed `OpenSeamReasonKind` values for source-expression pressure as well as
+value-channel pressure. Missing value converters, binding behaviors, state stores, duplicate binding behaviors, and
+open converter call surfaces group as `binding-source-resource-open`; unresolved checker/type surfaces group as
+`binding-source-type-open`; unsupported expression forms, missing slots, and missing members use the existing
+binding-source expression/slot/member reason families. Public adapters should use these reason kinds for repair routing
+instead of parsing the prose `summary`.
 It also prints generalized reason-by-source-type, reason-by-assignment-target-type, reason-by-target-type, and
 reason-by-writeability cross-tabs. Use those before opening raw app rows: they reveal whether a pressure class is a
 real unsupported assignment, a readonly TypeChecker surface, an `unknown`/`any` target value channel, or a

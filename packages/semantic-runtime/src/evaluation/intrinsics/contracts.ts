@@ -3,6 +3,7 @@ import type { ModuleEnvironmentRecord } from '../environment.js';
 import type { StaticEvaluationGuardrails } from '../policy.js';
 import { EvaluationOpenSeamKind } from '../seams.js';
 import type {
+  EvaluationClassValue,
   EvaluationFunctionValue,
   EvaluationUnknownValue,
   EvaluationValue,
@@ -21,6 +22,14 @@ export interface StaticIntrinsicEvaluationHost {
   evaluateFunctionWithArguments(
     callee: EvaluationFunctionValue,
     call: ts.CallExpression,
+    argumentValues: readonly EvaluationValue[],
+    moduleKey: string,
+    depth: number,
+  ): EvaluationValue;
+
+  evaluateClassInstantiation(
+    callee: EvaluationClassValue,
+    expression: ts.Node,
     argumentValues: readonly EvaluationValue[],
     moduleKey: string,
     depth: number,

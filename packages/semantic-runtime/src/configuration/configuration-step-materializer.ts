@@ -1018,15 +1018,17 @@ function moduleItemValueSource(
         sourceFileAddressHandle: context.sourceFileAddressHandleForNode(item.value.declaration),
         moduleKey: item.value.environment.moduleKey,
       };
-    default:
+    default: {
+      const sourcePropertyNode = item.sourceProperty?.node ?? null;
       return {
-        node: item.sourceProperty?.node ?? context.sourceFile,
+        node: sourcePropertyNode ?? context.sourceFile,
         isDeclaration: false,
-        sourceFileAddressHandle: item.sourceProperty == null
+        sourceFileAddressHandle: sourcePropertyNode == null
           ? context.sourceFileAddressHandle
-          : context.sourceFileAddressHandleForNode(item.sourceProperty.node),
+          : context.sourceFileAddressHandleForNode(sourcePropertyNode),
         moduleKey: null,
       };
+    }
   }
 }
 

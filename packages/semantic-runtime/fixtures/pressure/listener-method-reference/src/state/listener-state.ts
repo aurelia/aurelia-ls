@@ -11,4 +11,10 @@ export class ListenerState {
   makeSubmitHandler(): (event: Event) => boolean {
     return (event: Event) => this.submitWithEvent(event);
   }
+
+  submitWithButton(button: HTMLButtonElement): boolean {
+    this.submittedCount += 1;
+    this.lastEventType = button.type;
+    return true;
+  }
 }

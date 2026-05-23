@@ -1,0 +1,25 @@
+<template>
+  <ul>
+    <li repeat.for="item of items">
+      ${item.missingLabel}
+    </li>
+  </ul>
+
+  <section if.bind="selectedItem">
+    ${selectedItem.missingStatus}
+  </section>
+
+  <p>${maybeItem.label}</p>
+
+  <button type="button" click.trigger="submit(selectedItem)">
+    Submit
+  </button>
+
+  <button type="button" click.trigger="submit('not-an-item')">
+    Submit invalid
+  </button>
+
+  <button type="button" click.trigger="submit(selectedItem, selectedItem)">
+    Submit twice
+  </button>
+</template>

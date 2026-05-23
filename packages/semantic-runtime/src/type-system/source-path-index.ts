@@ -9,7 +9,7 @@ export function typeSystemSourcePathIndex(
 ): ReadonlyMap<string, string> {
   const paths = new Map<string, string>();
   for (const source of project.sourceFiles) {
-    const sourceFile = typeSystem.readSourceFileByPath(source.path);
+    const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
     if (sourceFile != null) {
       paths.set(normalizeTypeSystemSourceFileName(sourceFile.fileName), source.path);
     }

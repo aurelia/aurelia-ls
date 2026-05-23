@@ -221,6 +221,11 @@ static type surfaces rather than hydrated runtime values.
   when the runtime data-flow itself cannot be closed honestly. TypeChecker source-expression gaps, such as a missing
   projected view-model member, stay on the data-flow row as `sourceTypeOpenReason` instead of becoming a binding open
   seam.
+  Property-binding directions use the effective binding mode after rendered, resource-visible binding-mode behaviors
+  have executed. A default `.bind` with a visible `& fromView` is therefore target-to-source, and `.to-view` with a
+  visible `& twoWay` becomes two-way for the same data-flow, value-channel, and source-assignment checks that ordinary
+  command modes use. The row may still expose the static source expression type even when source-to-target flow is
+  inactive; direction-specific assignability fields say which side actually participates.
   Runtime source evaluation resolves scopes through `RuntimeInstructionScopeLookup`: a binding's render context selects
   the concrete runtime controller that rendered that binding before the lookup falls back to a definition-level
   unambiguous instruction scope. This is important because compiled instruction products are reused across recursive
@@ -274,6 +279,14 @@ static type surfaces rather than hydrated runtime values.
   member as a Scope slot. The write-capability row also preserves the declaration source for the member reached through
   that fallback when the TypeChecker can expose it, so binding-assignment diagnostics and later repair planning can
   target the authored accessor/member instead of only the template expression.
+  Member writes that resolve through a lazy checker/apparent-property lookup need the same source route as eagerly
+  projected `CheckerTypeMember` rows. `CheckerTypeShapeAccess.memberWriteAccess(...)` materializes the member's
+  value/declaration source when it finds a checker symbol; observation should consume that access result rather than
+  reopening checker symbols locally.
+  Keyed writes preserve the evaluated owner route even when the assignment itself is ordinary runtime-writable. That
+  lets array, record, and nested dynamic-keyed form bindings keep an app-source `sourceAssignmentTargetSource` for
+  future repair planning instead of falling back to the template expression whenever the source is `person[field]` or
+  `state.items[index]`.
   Data-flow rows pass rendering-controller `strictBinding` into the TypeChecker evaluator because Aurelia only throws
   nullish member/keyed/call access errors in strict expression-evaluation mode. The evaluator projects `undefined` for
   optional and non-strict nullish reads, preserves open nullish results when strictness is unknown, and lets template
@@ -281,6 +294,20 @@ static type surfaces rather than hydrated runtime values.
   known true.
   Source writeability uses the same strict gate for `astAssign`: member/keyed writes through a definitely nullish owner
   report `AUR0116` as runtime-unassignable source-assignment pressure instead of TypeScript assignment strictness.
+  Public source-assignment diagnostics stay downstream of these data-flow rows. Template checker overlays may validate
+  expression reads, converter call surfaces, and scope replay, but they should not become a second writeback authority
+  for `from-view`/`two-way` assignment policy. The shared
+  `runtimeAssignmentTargetAstForExpression(...)` helper strips transparent parens, binding behaviors, and value
+  converters before write-capability projection, and API diagnostics use the parse-level companion to narrow the
+  user-facing source span while preserving the data-flow product as the semantic owner.
+  Value converters still affect the value being assigned: target-to-source data-flow spends the converter chain in the
+  same outer-to-inner order as Aurelia `astAssign`, projects each `fromView(value, ...args)` return through the
+  TypeChecker resource projector, and then compares the converted value against the unwrapped assignment target type.
+  Literal converter `withContext = true` inserts the framework caller-context argument before authored converter
+  arguments, so overload selection and target-to-source assignability match runtime-html `useConverter(...)`. Missing
+  `fromView` methods are identity conversions; a two-way `input value.two-way="state.quantity | numberText"` can
+  therefore read as `string` while writing back as `number`, whereas a converter with only `toView` leaves the raw
+  observer `string` visible as assignment strictness pressure.
   Source-to-target flow evaluates expressions with a connectable evaluation context, so `++`, `--`, and compound
   assignment report `AUR0113` through the TypeChecker evaluator before the API maps it to a framework diagnostic. Target
   writes that call `astAssign` with no connectable stay out of that lane.
@@ -290,22 +317,52 @@ static type surfaces rather than hydrated runtime values.
   unselected. A definitely array-valued source flowing into a non-multiple `SelectValueObserver` channel still publishes
   runtime-html `select_observer_array_on_non_multi_select` (`AUR0654`) on the data-flow product. The value channel owns
   whether the select is single, multiple, or dynamic; data flow owns the directional source-type comparison and the
-  exact framework-code claim.
+  exact framework-code claim. Static multi-select nullable source pressure is not an `AUR` error, but it is diagnostic
+  worthy: `SelectValueObserver.syncValue()` mutates only when the current source value is an Array, so a source type
+  such as `T[] | null` should surface as a framework-runtime-behavior warning whose repair points at the source member
+  type/initializer rather than at the select syntax alone.
   Target-side observer writes also publish exact runtime observation failures here when ObserverLocator has already
   selected the throwing observer: `CollectionSizeObserver` source-to-target writes spend `assign_readonly_size`
   (`AUR0220`), and getter-only `ComputedObserver` target writes spend
   `assign_readonly_readonly_property_from_computed` (`AUR0221`). Keep these on the data-flow edge rather than the
   target-access row because `getObserver(...)` succeeds and the framework throws only when the binding writes.
 - `binding-source-value-evaluator.ts` is the value-side companion to TypeChecker data flow. It evaluates Aurelia
-  binding-source ASTs against modeled `Scope` slots and the shared static ECMAScript evaluator, including guarded local
-  class getter and evaluator-local function reads. Consumers such as router resources can ask for a static source value
-  without moving binding lookup or getter execution into router-specific code. Host-dependent values stay open with
-  evaluator reasons. `binding-source-evaluation-frame.ts` owns source-to-evaluated-module lookup and per-module
+  binding-source ASTs against modeled `Scope` slots and the shared static ECMAScript evaluator, including `$this`,
+  `$parent`, and boundary `this` member reads through the same `BindingScope.locateThis(...)` / boundary traversal that
+  framework `astEvaluate` uses. Guarded local class getter and evaluator-local function reads stay on this path too.
+  Consumers such as router resources can ask for a static source value without moving binding lookup or getter
+  execution into router-specific code. Host-dependent values stay open with evaluator reasons.
+  `binding-source-evaluation-frame.ts` owns source-to-evaluated-module lookup and per-module
   `StaticEvaluator` reuse for one binding-source reduction, so follow-up property/getter/function reads keep the
   original module policy, runtime host, and evaluator guardrails instead of resetting them at each access.
+  Because the reused host carries Aurelia intrinsics, method-body reads can now reduce direct `resolve(ClassKey)` state
+  fields during activation-like instance evaluation instead of degrading the helper import to an external-module
+  boundary. `binding-source-activation-context.ts` is the DI-world join for registered/interface keys: when a
+  binding-source read has both `this` and an active modeled container, it can match resolver slots in the container
+  ancestry and activate source-visible singleton/transient class values through the evaluator. Unsupported resolver
+  branches remain open activation facts rather than feature-local guesses.
   `AccessKeyed` now participates in the same value-side reduction: exact array/object reads such as
   `routeInstructions[featuredInstructionIndex]` can close to their element/property value, exact object misses reduce
   to `undefined`, and unknown array membership/order stays open instead of guessing a value.
+  Array and object literals authored directly in Aurelia binding expressions are also binding-source values now:
+  literal element/property traversal stays in `RuntimeBindingSourceValueEvaluator`, with binding-scope holes preserved
+  as boundary values when the shape itself is static. Feature code such as router instruction materialization should
+  consume the closed value shape instead of growing local array/object expression evaluators.
+  Primitive binary operators that do not need binding scope state reuse `evaluation/operators.ts`, while binding-source
+  `+` still has a local first step for string-pattern concatenation over runtime boundary holes. Conditional expressions
+  with unknown truthiness may use the shared representative-value substrate to summarize both branches when their values
+  can be safely merged; that keeps conditional route strings, state-backed labels, and object-shaped binding values on
+  the binding-source value path without adding feature-local branch evaluators.
+  Optional call forms (`name?.()`, `owner?.method()`, `owner.method?.()`, and equivalent call-function forms) follow the
+  same runtime shape: once the callee or optional owner closes to `null`/`undefined`, binding-source value evaluation
+  returns `undefined` so higher expressions such as `??` can select a static fallback.
+  `CallMember` passes the evaluated owner as the callee receiver, matching framework `astEvaluate`'s
+  `fn.apply(instance, ...)`; this matters for object-literal methods and state-service methods that read `this`.
+  `New` expressions now close when the constructor reduces to an evaluator-local class. Constructor arguments are read
+  from `NewExpression.args`; if a future parser path starts carrying them on the constructor target again, fix the
+  expression parser rather than teaching this evaluator a second `new` dialect. Tagged templates close through
+  evaluator-local tag functions with a cooked string-array argument plus evaluated expression holes; host/global tags
+  and tags that need unavailable runtime state stay open on the binding-source lane.
   Binary `+` string concatenation preserves `BindingScope` boundary holes as `EvaluationStringPatternValue` when the
   other side is string-shaped, so consumers such as router resources can close authored static prefixes like
   `'/products/' + product.id` without inventing router-local expression evaluation.
@@ -316,10 +373,18 @@ static type surfaces rather than hydrated runtime values.
   still exposing the binding-layer cause. Scope-name reads consume `BindingScope.locate(...)` from the configuration
   substrate so bound-controller value handoff and TypeChecker expression lookup stay on one runtime `Scope` traversal
   rule instead of growing observation-local lookup forks.
+  Binding data-flow open seams also map TypeChecker expression-open kinds into reason kinds. Missing converters,
+  binding behaviors, state stores, duplicate binding behaviors, and open converter calls surface as
+  `binding-source-resource-open`; missing scope/context slots, member/type gaps, unsupported expression forms, and
+  nullish/open checker results stay grouped under source-slot/member/expression/type reason kinds. That keeps repair
+  planning structured without parsing the human `openReason` summary.
   `runtime-bound-controller-value.ts` owns the parent-to-child controller value table used by this evaluator and by
   router instruction materialization. Keep the value table separate from evaluator execution: the table is the
   binding/rendering handoff for values assigned to child controller view-model properties, while the evaluator decides
-  how to reduce a specific binding-source expression in a specific scope.
+  how to reduce a specific binding-source expression in a specific scope. Template scope construction also spends this
+  table when a child custom-element resource is analyzed after a parent has supplied an unambiguous bindable value. In
+  that lane the value becomes an explicit child root `BindingContext` slot so TypeChecker overlays and ordinary scope
+  lookup can agree with runtime hydration instead of reading only the child class's default bindable initializer.
 - `binding-value-channel-materializer.ts` publishes runtime value-channel products, claims, product-level provenance,
   and open seams between target-side products and data flow. Value-channel fields are generated from binding, target,
   observer, and checker facts, so they should not receive same-handle field provenance unless a future source product
@@ -412,8 +477,12 @@ boolean `value.bind` literals become string primitive entries such as `"1"` or `
 remains for actual static string values and presentation token domains. Non-literal DOM `value.bind` expressions use a
 checker-backed `string` projection when the expression can be evaluated through the TypeChecker; mixed option domains
 then form checker-owned unions such as `string | null` instead of falling back to the bound source type. Static
-multi-selects close the selected option element domain for TypeChecker-visible array sources. Dynamic `multiple.bind` is
-a distinct `select-dynamic-option-value`
+multi-selects close the selected option element domain for TypeChecker-visible array sources only when the source is
+definitely array-shaped at runtime. `SelectValueObserver.syncValue(...)` does not assign a fresh selected-values array
+when `select.multiple` is true and the current source value is not an Array; it returns a change notification with the
+existing value instead. A static multiple select whose source type also admits non-array values, such as `T[] | null`,
+therefore publishes `select-dynamic-array-source-shape` coupling and remains open instead of pretending every runtime
+state mutates the collection. Dynamic `multiple.bind` is a distinct `select-dynamic-option-value`
 channel when the source type is
 broad enough to carry both framework branches: single-select scalar updates and multi-select array mutation. This is
 common in wrapper components whose public value is intentionally weak or scalar-or-array; it should stay visible as a
@@ -442,20 +511,26 @@ equality. The analyzer still does not execute the matcher body or derive equalit
 The boolean checkbox branch is the intentional exception: `CheckedObserver` ignores matcher comparison when the bound
 source is boolean-like or otherwise falls through to plain checked-state writes, so those rows do not report
 `usesCustomMatcher` or the custom-matcher observer coupling even if a `matcher.bind` sibling is authored.
+Checkbox source unions that can be both collection-like and scalar/nullish are their own dynamic channel. The framework
+branches on the live current value: arrays/sets/maps mutate membership, while scalar/nullish values write the checked
+boolean back through `astAssign`. `checked-dynamic-model-value` therefore requires both the membership branch and the
+boolean assignment branch to be valid before target-to-source assignability closes; `Item[] | boolean` can close while
+`Item[] | null` remains a useful repair signal.
 Rows also carry `observerCouplings` so public consumers can see the observer mechanisms behind the channel without
 reverse-engineering them from the channel name: select option domains, select option-list mutation observation, select
-array observation/mutation, checked element `model`/`value` observation, checked collection observation, checked
-collection/map mutations, and custom matcher comparison are explicit tags. Those tags are intentionally
-framework-mechanism facts; data-flow rows still own directional assignability and exact source write diagnostics.
+array observation/mutation, select dynamic array-source branching, checked element `model`/`value` observation, checked collection observation, checked
+collection/map mutations, checked dynamic source-shape branching, and custom matcher comparison are explicit tags.
+Those tags are intentionally framework-mechanism facts; data-flow rows still own directional assignability and exact
+source write diagnostics.
 Non-literal dynamic element values remain explicit pressure.
 The checkbox branch must decide from the bound source shape before demanding an element model/value: boolean-like and
 non-collection sources use the checked boolean channel, while collection/map-like sources need the element value channel
 for membership semantics.
-`fixtures/pressure/checked-select-custom-matcher` intentionally covers the array, set, and map branches so the channel
-taxonomy cannot quietly collapse all checked collections into one array-only path. Collection channels split observer
-readability from source mutation. `ReadonlyArray`, `ReadonlySet`, and `ReadonlyMap` can still feed source-to-target
-checked/select synchronization, but target-to-source flow is rejected because Aurelia's event handlers mutate arrays,
-sets, and maps through `push`/`splice`, `add`/`delete`, and `set`.
+`fixtures/pressure/checked-select-custom-matcher` intentionally covers the array, set, map, and dynamic union branches
+so the channel taxonomy cannot quietly collapse all checked collections into one array-only path. Collection channels
+split observer readability from source mutation. `ReadonlyArray`, `ReadonlySet`, and `ReadonlyMap` can still feed
+source-to-target checked/select synchronization, but target-to-source flow is rejected because Aurelia's event handlers
+mutate arrays, sets, and maps through `push`/`splice`, `add`/`delete`, and `set`.
 
 The template compiler interaction matters here. Aurelia reorders `checked` with `model`/`value`/`matcher` instructions
 for order-sensitive inputs, and this substrate consumes the resulting lowered sibling `PropertyBinding` products rather

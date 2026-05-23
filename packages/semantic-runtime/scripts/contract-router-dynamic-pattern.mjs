@@ -5,6 +5,7 @@ import {
   createSemanticRuntime,
   ExpectedSemanticEffect,
   ExpectedSemanticEffectFilter,
+  SemanticAppQueryKind,
   readAuthoringVerificationSnapshot,
   verifyAuthoringEffects,
 } from '../out/index.js';
@@ -47,11 +48,115 @@ const expectedEffects = [
     ],
     'signature',
   ),
+  ExpectedSemanticEffect.fact(
+    'Keyed load instructions reached through $this binding-context members should share the same static binding-source value path.',
+    'route',
+    'route',
+    null,
+    'present',
+    null,
+    [
+      effectFilter('routeProductKind', 'recognized-route'),
+      effectFilter('parameterValuePairs', 'productId=matcha'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.fact(
+    'Keyed load instructions reached through boundary this members should share the same static binding-source value path.',
+    'route',
+    'route',
+    null,
+    'present',
+    null,
+    [
+      effectFilter('routeProductKind', 'recognized-route'),
+      effectFilter('parameterValuePairs', 'productId=chamomile'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.fact(
+    'Inline array/object route instruction values should reduce through binding-source value flow before router consumption.',
+    'route',
+    'route',
+    null,
+    'present',
+    null,
+    [
+      effectFilter('routeProductKind', 'recognized-route'),
+      effectFilter('parameterValuePairs', 'productId=inline'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.fact(
+    'Conditional route instructions should use binding-source equality reduction before selecting a static branch.',
+    'route',
+    'route',
+    null,
+    'present',
+    null,
+    [
+      effectFilter('routeProductKind', 'recognized-route'),
+      effectFilter('parameterValuePairs', 'productId=jasmine'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.fact(
+    'Optional call route instructions should reduce nullish calls to undefined and allow nullish fallback selection.',
+    'route',
+    'route',
+    null,
+    'present',
+    null,
+    [
+      effectFilter('routeProductKind', 'recognized-route'),
+      effectFilter('parameterValuePairs', 'productId=oolong'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.fact(
+    'New-expression route instructions should instantiate evaluator-local classes through binding-source value flow.',
+    'route',
+    'route',
+    null,
+    'present',
+    null,
+    [
+      effectFilter('routeProductKind', 'recognized-route'),
+      effectFilter('parameterValuePairs', 'productId=sencha'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.fact(
+    'Tagged-template route instructions should call evaluator-local tag functions with cooked string values.',
+    'route',
+    'route',
+    null,
+    'present',
+    null,
+    [
+      effectFilter('routeProductKind', 'recognized-route'),
+      effectFilter('parameterValuePairs', 'productId=genmaicha'),
+    ],
+    'signature',
+  ),
+  ExpectedSemanticEffect.fact(
+    'DI-resolved state route href methods should reuse evaluator-local activation facts instead of treating resolve(...) as an external module boundary.',
+    'route',
+    'route',
+    null,
+    'present',
+    null,
+    [
+      effectFilter('routeProductKind', 'recognized-route'),
+      effectFilter('parameterValuePairs', 'productId=state-coffee'),
+    ],
+    'signature',
+  ),
   ExpectedSemanticEffect.atLeast(
-    'Router href methods and direct binary load bindings with static route prefixes should materialize recognized dynamic route facts.',
+    'Router href methods, receiver-aware object methods, direct binary load bindings, and repeated state-backed lookup methods with static route prefixes should materialize recognized dynamic route facts.',
     'route',
     'route',
-    2,
+    4,
     null,
     [
       effectFilter('routeProductKind', 'recognized-route'),
@@ -60,7 +165,7 @@ const expectedEffects = [
     'signature',
   ),
   ExpectedSemanticEffect.fact(
-    'Bare external-module href values should stay as explicit router open seams until intent or value closure is known.',
+    'Bare external-module href values with a non-current-window target should stay as explicit router open seams until intent or value closure is known.',
     'open-seam',
     'app',
     null,
@@ -70,6 +175,7 @@ const expectedEffects = [
       effectFilter('seamKindKey', 'router.open-instruction'),
       effectFilter('reasonKinds', 'external-module-value'),
       effectFilter('reasonKinds', 'router-href-externality-open'),
+      effectFilter('reasonKinds', 'router-href-click-interception-target-open'),
     ],
     'signature',
   ),
@@ -92,9 +198,54 @@ const verification = verifyAuthoringEffects(
 const failures = verification.effectResults
   .filter((result) => result.outcome !== 'satisfied')
   .map((result) => result.summary);
+const typeScriptDiagnostics = app.ask({
+  kind: SemanticAppQueryKind.TypeScriptDiagnostics,
+  page: { size: 20 },
+}).value;
+const openSeams = app.ask({
+  kind: SemanticAppQueryKind.OpenSeams,
+  page: { size: 20 },
+}).value;
+const authoringOrientation = app.ask({
+  kind: SemanticAppQueryKind.AuthoringOrientation,
+  detail: 'handles',
+  page: { size: 20 },
+}).value;
+const unresolvedVendorModuleDiagnostic = typeScriptDiagnostics.rows.find((row) =>
+  row.diagnosticKind === 'TS2307'
+  && row.message.includes('router-pressure-vendor-links')
+);
+const targetOpenReasonSource = openSeams.rows
+  .flatMap((row) => row.reasonSources)
+  .find((source) => source.reasonKind === 'router-href-click-interception-target-open');
+const targetOpenRepair = authoringOrientation.repairs.find((repair) =>
+  repair.evidenceKind === 'open-seam'
+  && repair.openSeamReasonKinds.includes('router-href-click-interception-target-open')
+);
+
+if (unresolvedVendorModuleDiagnostic != null) {
+  failures.push('Expected no-tsconfig fallback checker roots to include local ambient module declarations.');
+}
+if (targetOpenReasonSource == null || targetOpenReasonSource.source == null) {
+  failures.push('Expected router href target-open reason to preserve a source-bearing reasonSource row.');
+}
+if (targetOpenRepair?.suggestion?.actionTarget?.source == null) {
+  failures.push('Expected router href target-open repair planning to use a source-bearing action target.');
+}
 
 const summary = {
   fixture: 'router-dynamic-pattern',
+  typeScriptDiagnosticRows: typeScriptDiagnostics.rows.length,
+  openSeamRows: openSeams.rows.length,
+  targetOpenReasonSource: targetOpenReasonSource == null ? null : {
+    reasonKind: targetOpenReasonSource.reasonKind,
+    hasSource: targetOpenReasonSource.source != null,
+  },
+  targetOpenRepair: targetOpenRepair == null ? null : {
+    repairKind: targetOpenRepair.repairKind,
+    actionTargetKind: targetOpenRepair.suggestion?.actionTarget?.targetKind ?? null,
+    hasActionTargetSource: targetOpenRepair.suggestion?.actionTarget?.source != null,
+  },
   expectedEffects: expectedEffects.length,
   verification: verification.effectResults.map((result) => ({
     effectKind: result.expectedEffect.effectKind,

@@ -1,6 +1,9 @@
-import path from 'node:path';
 import ts from 'typescript';
 import { buildProjectCompilerOptionsResult } from '../boot/project-compiler-options.js';
+import {
+  buildInitialTypeSystemOverlaySources,
+  type TypeSystemOverlaySource,
+} from './overlay.js';
 
 export class TypeSystemProjectOptions {
   constructor(
@@ -8,7 +11,7 @@ export class TypeSystemProjectOptions {
     readonly configFilePath: string | null,
     readonly configDiagnostics: readonly ts.Diagnostic[],
     readonly configRootFileNames: readonly string[] | null,
-    readonly ambientSourceFiles: readonly ts.SourceFile[],
+    readonly overlaySources: readonly TypeSystemOverlaySource[],
   ) {}
 }
 
@@ -19,7 +22,7 @@ export function buildTypeSystemProjectOptions(rootDir: string): TypeSystemProjec
     result.configFilePath,
     result.diagnostics,
     result.rootFileNames,
-    [semanticRuntimeAmbientSourceFile(rootDir)],
+    buildInitialTypeSystemOverlaySources(rootDir),
   );
 }
 
@@ -33,23 +36,6 @@ export function buildWorkspaceTypeSystemProjectOptions(
     result.configFilePath,
     result.diagnostics,
     result.rootFileNames,
-    [semanticRuntimeAmbientSourceFile(rootDir)],
-  );
-}
-
-function semanticRuntimeAmbientSourceFile(rootDir: string): ts.SourceFile {
-  const fileName = path.join(rootDir, '.semantic-runtime', 'ambient.d.ts');
-  return ts.createSourceFile(
-    fileName,
-    [
-      "declare module '*.html' {",
-      '  const template: string;',
-      '  export default template;',
-      '}',
-      '',
-    ].join('\n'),
-    ts.ScriptTarget.Latest,
-    false,
-    ts.ScriptKind.TS,
+    buildInitialTypeSystemOverlaySources(rootDir),
   );
 }

@@ -2057,7 +2057,7 @@ function intentionalUnclaimedFrameworkErrorReason(
     code.enumName === "ErrorNames" &&
     code.usageCount > 0
   ) {
-    return "ui-virtualization throws this from VirtualRepeat, virtual DOM renderer, scroller lookup, or collection-strategy runtime policy; semantic-runtime models core repeat but not the ui-virtualization plugin's renderer/scroller/strategy substrate yet.";
+    return "ui-virtualization throws this from VirtualRepeat, virtual DOM renderer, scroller lookup, or collection-strategy runtime policy; semantic-runtime models virtual-repeat as a template-controller resource/scope surface, but not the plugin's renderer/scroller/strategy substrate yet.";
   }
   if (
     code.packageId === "runtime" &&

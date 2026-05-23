@@ -16,7 +16,11 @@ export class SyntheticTableCustomAttribute {
   @bindable({ mode: BindingMode.twoWay })
   displayData: readonly SyntheticRow[] = [];
 
+  @bindable({ mode: BindingMode.twoWay })
+  activeRow: SyntheticRow = { id: 'pending', label: 'Pending' };
+
   binding(): void {
     this.displayData = this.data.filter((row) => row.label.length > 0);
+    this.activeRow = this.displayData[0] ?? this.activeRow;
   }
 }

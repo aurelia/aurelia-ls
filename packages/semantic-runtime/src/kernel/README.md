@@ -176,6 +176,10 @@ types, with Atlas reading those typed surfaces directly.
 - Generated compiler locations.
 - External locations such as package metadata or host-provided catalogs.
 
+`source-address.ts` is the shared narrowing layer from arbitrary kernel addresses back to authored source. Keep source
+file and source span recovery on the same traversal so template/generated anchors do not drift between hover,
+diagnostic, open-seam, and repair surfaces.
+
 `identity.ts` describes what semantic thing we believe something is:
 
 - TypeScript declarations without retaining checker-owned symbols.
@@ -218,6 +222,7 @@ generic generated identity bucket.
 - A controlled seam-kind key.
 - A compact summary.
 - Optional source address and direct evidence handles.
+- Optional reason-source rows when one coherent seam has reason kinds contributed by adjacent source sites.
 - Open seams answer "what remained unresolved and where can I inspect it?" not "how should an IDE, agent,
   diagnostic, or compiler rank the answer?"
 
@@ -226,7 +231,8 @@ source-file address plus an exact node/span and needs the standard source-span, 
 open-seam record bundle. Evaluation, resource recognition, and registration seams should share this path instead of
 locally minting parallel address/evidence/provenance/open-seam envelopes. When the unresolved boundary has a
 machine-readable reason, pass it through the shared primitive as `reasonKinds`; source precision and repair intent
-should travel together.
+should travel together. If only one reason inside a multi-reason seam has a distinct source site, such as router href
+target-open pressure from a neighboring `target` attribute, attach a `reasonSources` row instead of splitting the seam.
 
 `issue-publication.ts` is the shared publication primitive for source-backed diagnostics that are themselves modeled as
 semantic products. Use it when a domain issue needs the standard evidence, provenance, identity, materialized-product,

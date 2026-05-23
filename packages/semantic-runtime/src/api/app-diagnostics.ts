@@ -1,6 +1,8 @@
 import {
   sourcePathMatchesFileName,
 } from '../kernel/source-address.js';
+import { SourceFileRole } from '../kernel/address.js';
+import type { SourceFileAdmission } from '../boot/frames.js';
 import type {
   SemanticAppDiagnosticRow,
   SemanticAppDiagnosticSummaryRow,
@@ -23,6 +25,7 @@ import type {
 import type { SemanticSourceReference } from './source-reference.js';
 
 export function appDiagnosticRows(
+  sources: readonly SourceFileAdmission[],
   projectKey: string,
   query: SemanticAppQuery,
   typeScriptRows: readonly SemanticTypeScriptDiagnosticRow[],
@@ -43,43 +46,43 @@ export function appDiagnosticRows(
   return [
     ...typeScriptRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map(typeScriptAppDiagnosticRow),
+      .map((row) => typeScriptAppDiagnosticRow(row)),
     ...evaluationRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map(evaluationAppDiagnosticRow),
+      .map((row) => appDiagnosticRowWithSourceRole(evaluationAppDiagnosticRow(row), projectKey, sources)),
     ...configurationRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map(configurationAppDiagnosticRow),
+      .map((row) => appDiagnosticRowWithSourceRole(configurationAppDiagnosticRow(row), projectKey, sources)),
     ...diRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map(diAppDiagnosticRow),
+      .map((row) => appDiagnosticRowWithSourceRole(diAppDiagnosticRow(row), projectKey, sources)),
     ...observationRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map(observationAppDiagnosticRow),
+      .map((row) => appDiagnosticRowWithSourceRole(observationAppDiagnosticRow(row), projectKey, sources)),
     ...templateRows
       .filter(templateDiagnosticContributesToAppDiagnostics)
-      .map((row) => templateAppDiagnosticRow(projectKey, row)),
+      .map((row) => appDiagnosticRowWithSourceRole(templateAppDiagnosticRow(projectKey, row), projectKey, sources)),
     ...resourceRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map(resourceAppDiagnosticRow),
+      .map((row) => appDiagnosticRowWithSourceRole(resourceAppDiagnosticRow(row), projectKey, sources)),
     ...stateRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map(stateAppDiagnosticRow),
+      .map((row) => appDiagnosticRowWithSourceRole(stateAppDiagnosticRow(row), projectKey, sources)),
     ...validationRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map(validationAppDiagnosticRow),
+      .map((row) => appDiagnosticRowWithSourceRole(validationAppDiagnosticRow(row), projectKey, sources)),
     ...fetchClientRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map(fetchClientAppDiagnosticRow),
+      .map((row) => appDiagnosticRowWithSourceRole(fetchClientAppDiagnosticRow(row), projectKey, sources)),
     ...dialogRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map(dialogAppDiagnosticRow),
+      .map((row) => appDiagnosticRowWithSourceRole(dialogAppDiagnosticRow(row), projectKey, sources)),
     ...routerRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map(routerAppDiagnosticRow),
+      .map((row) => appDiagnosticRowWithSourceRole(routerAppDiagnosticRow(row), projectKey, sources)),
     ...routeRows
       .filter((row) => diagnosticSourceMatches(row.source, sourceFilePath))
-      .map(routeAppDiagnosticRow),
+      .map((row) => appDiagnosticRowWithSourceRole(routeAppDiagnosticRow(row), projectKey, sources)),
   ].sort((left, right) =>
     `${left.source?.path ?? ''}:${left.source?.start ?? 0}:${left.diagnosticDomain}:${left.diagnosticKind}`
       .localeCompare(`${right.source?.path ?? ''}:${right.source?.start ?? 0}:${right.diagnosticDomain}:${right.diagnosticKind}`)
@@ -103,6 +106,7 @@ export function appDiagnosticSummaryRows(
         relatedQueryKind: row.relatedQueryKind,
         count: 0,
         sourceFiles: new Set<string>(),
+        sourceRoles: new Map<string, number>(),
         sampleSummary: row.summary,
         sampleSources: [],
       };
@@ -111,6 +115,9 @@ export function appDiagnosticSummaryRows(
     cluster.count += 1;
     if (row.source?.path != null) {
       cluster.sourceFiles.add(row.source.path);
+    }
+    if (row.sourceRole != null) {
+      cluster.sourceRoles.set(row.sourceRole, (cluster.sourceRoles.get(row.sourceRole) ?? 0) + 1);
     }
     if (row.source != null && cluster.sampleSources.length < 3 && !cluster.sampleSources.some((source) => source.label === row.source?.label)) {
       cluster.sampleSources.push(row.source);
@@ -126,6 +133,7 @@ export function appDiagnosticSummaryRows(
       relatedQueryKind: cluster.relatedQueryKind,
       count: cluster.count,
       sourceFileCount: cluster.sourceFiles.size,
+      sourceRoles: appDiagnosticSourceRoleCounts(cluster.sourceRoles),
       sampleSummary: cluster.sampleSummary,
       sampleSources: cluster.sampleSources,
     }))
@@ -147,6 +155,7 @@ interface DiagnosticSummaryCluster {
   readonly relatedQueryKind: SemanticAppQueryKind | `${SemanticAppQueryKind}`;
   count: number;
   readonly sourceFiles: Set<string>;
+  readonly sourceRoles: Map<string, number>;
   readonly sampleSummary: string;
   readonly sampleSources: SemanticSourceReference[];
 }
@@ -180,8 +189,55 @@ function typeScriptAppDiagnosticRow(
     severity: row.severity,
     summary: row.message,
     source: row.source,
+    sourceRole: row.sourceRole,
     relatedQueryKind: 'typescript-diagnostics' satisfies `${SemanticAppQueryKind}`,
   };
+}
+
+function appDiagnosticSourceRoleCounts(
+  roles: ReadonlyMap<string, number>,
+): SemanticAppDiagnosticSummaryRow['sourceRoles'] {
+  return [...roles.entries()]
+    .map(([role, count]) => ({ role, count }))
+    .sort((left, right) => right.count - left.count || left.role.localeCompare(right.role));
+}
+
+function appDiagnosticRowWithSourceRole(
+  row: SemanticAppDiagnosticRow,
+  projectKey: string,
+  sources: readonly SourceFileAdmission[],
+): SemanticAppDiagnosticRow {
+  if (row.sourceRole != null) {
+    return row;
+  }
+  const sourceRole = sourceRoleForDiagnosticReference(projectKey, sources, row.source);
+  return sourceRole == null ? row : { ...row, sourceRole };
+}
+
+function sourceRoleForDiagnosticReference(
+  projectKey: string,
+  sources: readonly SourceFileAdmission[],
+  source: SemanticSourceReference | null,
+): SemanticAppDiagnosticRow['sourceRole'] {
+  if (source == null) {
+    return null;
+  }
+  if (source.path != null) {
+    const path = source.path;
+    const admission = sources.find((candidate) => sourcePathMatchesFileName(candidate.path, path)) ?? null;
+    if (admission != null) {
+      return admission.role;
+    }
+  }
+  if (source.sourceWorkspaceKey != null && source.sourceWorkspaceKey !== projectKey) {
+    return source.sourceFileRole === SourceFileRole.Declaration || source.sourceFileRole === SourceFileRole.Generated
+      ? source.sourceFileRole
+      : SourceFileRole.ExternalSource;
+  }
+  if (source.sourceFileRole != null) {
+    return source.sourceFileRole;
+  }
+  return sourceRoleForDiagnosticReference(projectKey, sources, source.anchor ?? null);
 }
 
 function evaluationAppDiagnosticRow(
@@ -385,5 +441,16 @@ function diagnosticSourceMatches(
   filePath: string | null,
 ): boolean {
   return filePath == null
-    || (source?.path != null && sourcePathMatchesFileName(source.path, filePath));
+    || diagnosticSourceReferenceMatches(source, filePath);
+}
+
+function diagnosticSourceReferenceMatches(
+  source: SemanticSourceReference | null,
+  filePath: string,
+): boolean {
+  if (source == null) {
+    return false;
+  }
+  return (source.path != null && sourcePathMatchesFileName(source.path, filePath))
+    || diagnosticSourceReferenceMatches(source.anchor ?? null, filePath);
 }

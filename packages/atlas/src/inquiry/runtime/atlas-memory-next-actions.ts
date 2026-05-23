@@ -81,7 +81,7 @@ export function atlasMemoryNextActionRows(
     ...analysis.records
       .filter((row) => row.kind === "reuse-guide")
       .map(reuseGuideNextAction),
-  ].sort(compareNextActions);
+  ].sort(compareAtlasMemoryNextActionRowsByRank);
 }
 
 /** Turn an exact durable-memory lookup into a consultable next-action row. */
@@ -315,6 +315,8 @@ function rolePressureBonus(frontier: AtlasMemoryUntrackedProductClassFrontier): 
       return 200;
     case "semantic-model":
       return 150;
+    case "api-surface":
+      return 125;
     case "work-frame":
       return 50;
     case "data-carrier":
@@ -331,7 +333,7 @@ function roleCountSummary(
     .join(", ");
 }
 
-function compareNextActions(
+export function compareAtlasMemoryNextActionRowsByRank(
   left: AtlasMemoryNextActionRow,
   right: AtlasMemoryNextActionRow,
 ): number {

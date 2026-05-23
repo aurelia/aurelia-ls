@@ -72,6 +72,24 @@
     <input
       type="checkbox"
       model.bind="item"
+      checked.bind="selectedItemsOrBoolean"
+      matcher.bind="matchItems">
+    ${item.label}
+  </label>
+
+  <label repeat.for="item of items">
+    <input
+      type="checkbox"
+      model.bind="item"
+      checked.bind="nullableSelectedItems"
+      matcher.bind="matchItems">
+    ${item.label}
+  </label>
+
+  <label repeat.for="item of items">
+    <input
+      type="checkbox"
+      model.bind="item"
       checked.bind="readonlyItemSet"
       matcher.bind="matchItems">
     ${item.label}

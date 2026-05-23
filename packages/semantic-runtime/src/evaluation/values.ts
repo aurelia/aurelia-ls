@@ -252,7 +252,7 @@ export class EvaluationObjectProperty {
     /** Property value after local evaluation. */
     readonly value: EvaluationValue,
     /** Source node that produced this property. */
-    readonly node: ts.Node,
+    readonly node: ts.Node | null,
   ) {}
 }
 

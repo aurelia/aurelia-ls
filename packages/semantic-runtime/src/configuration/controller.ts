@@ -10,6 +10,7 @@ import type { ResourceTargetReference } from '../resources/resource-reference.js
 import type { CheckerTypeReference } from '../type-system/type-shape.js';
 import {
   BindingContextKind,
+  type BindingContextSlotDraft,
   BindingScopeConstructionRequest,
   BindingScopeOwnerKind,
   type BindingScope,
@@ -287,6 +288,7 @@ export class DryCustomElementController {
     readonly ownerIdentityHandle: IdentityHandle | null;
     readonly parent: BindingScope | null;
     readonly viewModelType: CheckerTypeReference | null;
+    readonly bindingContextSlots?: readonly BindingContextSlotDraft[];
     readonly sourceAddressHandle: AddressHandle | null;
   }): BindingScopeConstructionRequest {
     return new BindingScopeConstructionRequest(
@@ -297,7 +299,7 @@ export class DryCustomElementController {
       input.parent,
       BindingContextKind.ViewModel,
       input.viewModelType,
-      [],
+      input.bindingContextSlots ?? [],
       null,
       [],
       true,

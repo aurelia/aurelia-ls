@@ -17,6 +17,10 @@ import {
 import {
   readAureliaResolverWrapperCall,
 } from './resolver-wrapper-recognition.js';
+import {
+  firstSymbolDeclaration,
+  symbolForExpression,
+} from '../type-system/checker-node-helpers.js';
 
 export type DiNullishKeyArgumentKind = NullishExpressionKind;
 
@@ -175,14 +179,8 @@ function declarationForExpression(
   checker: ts.TypeChecker,
   expression: ts.Expression,
 ): ts.Declaration | null {
-  const symbol = checker.getSymbolAtLocation(expression);
-  if (symbol == null) {
-    return null;
-  }
-  const target = (symbol.flags & ts.SymbolFlags.Alias) !== 0
-    ? checker.getAliasedSymbol(symbol)
-    : symbol;
-  return target.declarations?.[0] ?? null;
+  const symbol = symbolForExpression(checker, expression);
+  return symbol == null ? null : firstSymbolDeclaration(symbol);
 }
 
 function isAureliaInterfaceKeyDeclaration(

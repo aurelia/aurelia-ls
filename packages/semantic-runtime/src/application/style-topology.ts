@@ -90,7 +90,7 @@ function readSourceStyleAssetSites(
   if (source.role !== SourceFileRole.AppSource) {
     return [];
   }
-  const sourceFile = typeSystem.readSourceFileByPath(source.path);
+  const sourceFile = typeSystem.readProgramSourceFileByPath(source.path);
   if (sourceFile == null) {
     return [];
   }

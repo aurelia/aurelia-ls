@@ -84,12 +84,14 @@ import {
 } from '../template/html-ir.js';
 import {
   BuiltInTemplateControllerValueDomainKind,
-  runtimeHtmlTemplateControllerSemanticsForName,
+  frameworkTemplateControllerSemanticsForName,
 } from '../template/template-controller-semantics.js';
 import {
-  expressionProductHandlesForInstruction,
-  type TemplateInstruction,
-} from '../template/instruction-ir.js';
+  bindingScopeForTemplateExpressionParse,
+  templateExpressionParsesForResource,
+  templateScopeRangeAddressHandle,
+  templateValueSitesForResource,
+} from '../template/template-expression-selection.js';
 import {
   InquiryAnswer,
   InquiryContinuation,
@@ -473,7 +475,7 @@ class TemplateCompletionCursorContextBuilder {
 
   private valueSiteForOffset(offset: number): TemplateValueSite | null {
     return smallestContaining(
-      templateValueSitesForCursor(this.input.resource),
+      templateValueSitesForResource(this.input.resource),
       offset,
       (site) => sourceSpanFor(this.store, site.sourceAddressHandle),
     );
@@ -482,7 +484,7 @@ class TemplateCompletionCursorContextBuilder {
   private expressionParseForValueSite(valueSite: TemplateValueSite | null): TemplateExpressionParse | null {
     return valueSite == null
       ? null
-      : templateExpressionParsesForCursor(this.input.resource)
+      : templateExpressionParsesForResource(this.input.resource)
         .find((parse) => parse.site.productHandle === valueSite.productHandle) ?? null;
   }
 
@@ -1012,7 +1014,7 @@ function templateControllerSemanticsForValueSite(
     ?? null;
   return resourceName == null
     ? null
-    : runtimeHtmlTemplateControllerSemanticsForName(resourceName);
+    : frameworkTemplateControllerSemanticsForName(resourceName);
 }
 
 function bindableValueHasOpenEndedScalarDomain(
@@ -2299,24 +2301,6 @@ function isBindingCommandNameOffset(
     && offset <= span.start + attribute.rawName.length;
 }
 
-function templateValueSitesForCursor(
-  resource: TemplateResourceRuntimeAnalysisEmission,
-): readonly TemplateValueSite[] {
-  return [
-    ...resource.compilation.bindingCommandLowering.valueSites,
-    ...resource.compilation.valueSites.sites,
-  ];
-}
-
-function templateExpressionParsesForCursor(
-  resource: TemplateResourceRuntimeAnalysisEmission,
-): readonly TemplateExpressionParse[] {
-  return [
-    ...resource.compilation.bindingCommandLowering.expressionParses,
-    ...resource.compilation.valueSites.parses,
-  ];
-}
-
 function bindingScopeForCursor(
   store: KernelStore,
   resource: TemplateResourceRuntimeAnalysisEmission,
@@ -2325,7 +2309,7 @@ function bindingScopeForCursor(
 ): BindingScope | null {
   const instructionScope = expressionParse == null
     ? null
-    : bindingScopeForExpressionParse(resource, expressionParse);
+    : bindingScopeForTemplateExpressionParse(resource, expressionParse);
   if (instructionScope != null) {
     return instructionScope;
   }
@@ -2333,7 +2317,7 @@ function bindingScopeForCursor(
   const root = resource.runtimeAnalysis.scopes.rootScope;
   let best: { readonly scope: BindingScope; readonly span: SourceSpanAddress } | null = null;
   for (const scope of resource.runtimeAnalysis.scopes.readScopes()) {
-    const span = sourceSpanFor(store, scopeRangeAddressHandle(resource, scope));
+    const span = sourceSpanFor(store, templateScopeRangeAddressHandle(resource, scope));
     if (!cursorTouchesSpan(span, offset) || span == null) {
       continue;
     }
@@ -2348,21 +2332,6 @@ function bindingScopeForCursor(
   return best?.scope ?? root;
 }
 
-function bindingScopeForExpressionParse(
-  resource: TemplateResourceRuntimeAnalysisEmission,
-  expressionParse: TemplateExpressionParse,
-): BindingScope | null {
-  const instruction = resource.compilation.compiledTemplate.instructions.find((candidate) =>
-    expressionProductHandlesForInstruction(candidate).includes(expressionParse.productHandle)
-  ) ?? null;
-  if (instruction == null) {
-    return null;
-  }
-  return resource.runtimeAnalysis.scopes.instructionScopes.find((candidate) =>
-    candidate.instructionProductHandle === instruction.productHandle
-  )?.scope ?? null;
-}
-
 function scopeDepth(scope: BindingScope): number {
   let depth = 0;
   let current = scope.parent;
@@ -2371,43 +2340,6 @@ function scopeDepth(scope: BindingScope): number {
     current = current.parent;
   }
   return depth;
-}
-
-function scopeRangeAddressHandle(
-  resource: TemplateResourceRuntimeAnalysisEmission,
-  scope: BindingScope,
-): AddressHandle | null {
-  const ownerProductHandle = scope.bindingContext.ownerProductHandle;
-  if (ownerProductHandle == null) {
-    return scope.sourceAddressHandle;
-  }
-
-  const effect = resource.runtimeAnalysis.runtimeRendering.scopeEffects.find((candidate) =>
-    candidate.productHandle === ownerProductHandle
-  ) ?? null;
-  const controller = resource.runtimeAnalysis.runtimeRendering.controllers.find((candidate) =>
-    candidate.productHandle === ownerProductHandle
-  ) ?? null;
-  const instructionProductHandle = effect?.ownerInstructionProductHandle
-    ?? controller?.instructionProductHandle
-    ?? null;
-  if (instructionProductHandle == null) {
-    return scope.sourceAddressHandle;
-  }
-  const instruction = resource.compilation.compiledTemplate.instructions.find((candidate) =>
-    candidate.productHandle === instructionProductHandle
-  ) ?? null;
-  const nodeProductHandle = instruction == null ? null : instructionNodeProductHandle(instruction);
-  const node = nodeProductHandle == null
-    ? null
-    : resource.compilation.html.nodes.find((candidate) => candidate.productHandle === nodeProductHandle) ?? null;
-  return node?.sourceAddressHandle ?? scope.sourceAddressHandle;
-}
-
-function instructionNodeProductHandle(
-  instruction: TemplateInstruction,
-): ProductHandle | null {
-  return 'node' in instruction ? instruction.node.productHandle : null;
 }
 
 function selectedDefinitionForCursor(
