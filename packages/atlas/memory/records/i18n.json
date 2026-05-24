@@ -17,6 +17,7 @@
         "Keep translation-key catalog products separate from translation-binding lifecycle diagnostics: catalog completion comes from configuration resources, while lifecycle errors come from rendered binding products.",
         "Treat framework CustomExpression pressure in this lane as translation binding/key-expression pressure first: TranslationBindingCommand uses CustomExpression as an opaque carrier for static translation attribute raw values, and TranslationBinding.create reparses the value as interpolation.",
         "Use api.I18nTranslationBindings and i18n-translation-binding expected effects when a recipe needs to prove successful rendered t/t.bind/t-params.bind lifecycles; rows expose normalized targetProperties/targetKinds because the compiler target for t itself is not the same as TranslationBinding's runtime write target.",
+        "When i18n lifecycle diagnostics need a binding expression AST, use the shared template expression product helpers rather than re-owning expression product-detail reads in i18n.",
         "Surface i18n lifecycle diagnostics through shared template/app diagnostic projection instead of adding i18n-specific diagnostic rows; the translation-key catalog has its own query/effect lane."
       ],
       "anchors": [
@@ -78,7 +79,7 @@
           "className": "I18nTranslationBindingIssueMaterializer",
           "filePath": "packages/semantic-runtime/src/i18n/translation-binding-issues.ts",
           "minLineCount": 180,
-          "minMethodCount": 8
+          "minMethodCount": 7
         },
         {
           "kind": "source-declaration-exists",
@@ -92,7 +93,7 @@
         }
       ],
       "createdAt": "2026-05-13",
-      "updatedAt": "2026-05-23"
+      "updatedAt": "2026-05-24"
     },
     {
       "id": "frontier:i18n-translation-key-query-effect",

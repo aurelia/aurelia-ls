@@ -27,7 +27,6 @@ import {
   type AuthoredSourceText,
 } from '../kernel/authored-source-text.js';
 import type { SourceSpan } from '../expression/source-span.js';
-import type { ExpressionAstNode } from '../expression/ast.js';
 import { ExpressionParseResultKind } from '../expression/parse-result-algebra.js';
 import {
   ExpressionParseResultInspector,
@@ -49,11 +48,8 @@ import type { RuntimeRendererIssue } from '../template/runtime-renderer-issue.js
 import type { RouterIssueModel } from '../router/model.js';
 import type { TemplateExpressionParse } from '../template/value-site.js';
 import { TemplateValueSiteKind } from '../template/value-site.js';
-import {
-  runtimeAcceptedBindingExpressionAstForParse,
-  runtimeAssignmentTargetAstForParse,
-} from '../template/expression-parse-projection.js';
 import { TemplateProductDetails } from '../template/product-details.js';
+import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import type {
   HtmlAttribute,
   HtmlIrNode,
@@ -63,17 +59,11 @@ import { ResourceProductDetails } from '../resources/product-details.js';
 import type { FullResourceDefinition } from '../resources/resource-definition.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import { CheckerExpressionTypeWorld } from '../type-system/expression-type-world.js';
-import { CheckerExpressionTypeOpenKind } from '../type-system/expression-type-evaluation.js';
 import {
   readTypeSystemOverlayDiagnostics,
   type TypeSystemOverlayDiagnostic,
 } from '../type-system/diagnostics.js';
 import { semanticTypeScriptDiagnosticSeverity } from './typescript-diagnostics.js';
-import {
-  RuntimeAstFrameworkErrorCode,
-  RuntimeHtmlAstFrameworkErrorCode,
-  type RuntimeHtmlAstFrameworkErrorCode as RuntimeHtmlAstFrameworkErrorCodeValue,
-} from '../type-system/framework-error-code.js';
 import { TypeSystemProjectBuilder } from '../type-system/project.js';
 import {
   CheckerTypeMemberKind,
@@ -83,7 +73,6 @@ import {
 import { checkerTypeMemberSourceAddressHandle } from '../type-system/checker-type-member-source.js';
 import { readOrProjectCheckerTypeMembers } from '../type-system/checker-type-member-surface.js';
 import {
-  RuntimeBindingDataFlowDirection,
   type RuntimeBindingDataFlow,
 } from '../observation/runtime-binding-observation.js';
 import type { TemplateBindableReference } from '../template/compiler-world-reference.js';
@@ -118,14 +107,10 @@ import {
   sourceReferenceForParserSpan,
 } from './source-reference.js';
 import {
-  bindingSourceAssignmentDiagnostic,
-  bindingDataFlowOpenDiagnostic,
-  bindingDataFlowFrameworkErrorDiagnostic,
+  bindingDataFlowDiagnosticSource,
+  bindingDataFlowDiagnostics,
   bindingTargetAccessFrameworkErrorDiagnostic,
-  bindingSourceAssignmentDiagnosticKind,
-  bindingSourceAssignmentReasonKinds,
   cursorDiagnosticRows,
-  expressionRuntimeEvaluationErrorDiagnostic,
   expressionParseErrorDiagnostic,
   runtimeBindingIssueDiagnostic,
   runtimeBindingBehaviorIssueDiagnostic,
@@ -343,35 +328,12 @@ function bindingSourceAssignmentCursorDiagnostics(
     if (span == null || !sourceSpanContainsOffset(span, cursorOffset)) {
       return [];
     }
-    const source = bindingSourceAssignmentDiagnosticSource(store, dataFlow)
+    const source = bindingDataFlowDiagnosticSource(store, dataFlow)
       ?? describeAddress(store, dataFlow.sourceAddressHandle);
     if (source == null) {
       return [];
     }
-    const diagnostics: SemanticTemplateCursorDiagnosticRow[] = [];
-    const assignmentDiagnosticKind = bindingSourceAssignmentDiagnosticKind(dataFlow.sourceAssignmentKind);
-    if (assignmentDiagnosticKind != null) {
-      diagnostics.push(bindingSourceAssignmentDiagnostic(
-        store,
-        dataFlow,
-        bindingSourceAssignmentReasonKinds(dataFlow),
-        assignmentDiagnosticKind,
-        source,
-      ));
-    }
-    const runtimeDiagnostic = expressionRuntimeEvaluationDiagnosticForDataFlow(store, dataFlow, source);
-    if (runtimeDiagnostic != null) {
-      diagnostics.push(runtimeDiagnostic);
-    }
-    const frameworkDiagnostic = bindingDataFlowFrameworkErrorDiagnostic(dataFlow, source);
-    if (frameworkDiagnostic != null) {
-      diagnostics.push(frameworkDiagnostic);
-    }
-    const openDiagnostic = bindingDataFlowOpenDiagnostic(store, dataFlow, source);
-    if (openDiagnostic != null) {
-      diagnostics.push(openDiagnostic);
-    }
-    return diagnostics;
+    return bindingDataFlowDiagnostics(store, dataFlow, source);
   });
 }
 
@@ -1193,34 +1155,12 @@ function bindingDataFlowDiagnosticRowsForSelection(
   context: TemplateDiagnosticsScanContext,
 ): readonly SemanticTemplateDiagnosticRow[] {
   return resourceLocalBindingDataFlows(store, selection.resource).flatMap((dataFlow) => {
-    const source = bindingSourceAssignmentDiagnosticSource(store, dataFlow)
+    const source = bindingDataFlowDiagnosticSource(store, dataFlow)
       ?? describeAddress(store, dataFlow.sourceAddressHandle);
     if (source == null || !sourceReferenceMatchesFile(source, sourceFile)) {
       return [];
     }
-    const diagnostics: SemanticTemplateCursorDiagnosticRow[] = [];
-    const assignmentDiagnosticKind = bindingSourceAssignmentDiagnosticKind(dataFlow.sourceAssignmentKind);
-    if (assignmentDiagnosticKind != null) {
-      diagnostics.push(bindingSourceAssignmentDiagnostic(
-        store,
-        dataFlow,
-        bindingSourceAssignmentReasonKinds(dataFlow),
-        assignmentDiagnosticKind,
-        source,
-      ));
-    }
-    const runtimeDiagnostic = expressionRuntimeEvaluationDiagnosticForDataFlow(store, dataFlow, source);
-    if (runtimeDiagnostic != null) {
-      diagnostics.push(runtimeDiagnostic);
-    }
-    const frameworkDiagnostic = bindingDataFlowFrameworkErrorDiagnostic(dataFlow, source);
-    if (frameworkDiagnostic != null) {
-      diagnostics.push(frameworkDiagnostic);
-    }
-    const openDiagnostic = bindingDataFlowOpenDiagnostic(store, dataFlow, source);
-    if (openDiagnostic != null) {
-      diagnostics.push(openDiagnostic);
-    }
+    const diagnostics = bindingDataFlowDiagnostics(store, dataFlow, source);
     return diagnostics.flatMap((diagnostic) => {
       const key = templateDiagnosticRowKey(diagnostic, source);
       if (context.seenRows.has(key)) {
@@ -1700,216 +1640,8 @@ function valueSiteKindForDataFlow(
   store: KernelStore,
   expressionProductHandle: ProductHandle | null,
 ): SemanticTemplateDiagnosticRow['valueSiteKind'] {
-  const parse = expressionParseForProductHandle(store, expressionProductHandle);
+  const parse = readTemplateExpressionParse(store, expressionProductHandle);
   return parse?.site.siteKind ?? null;
-}
-
-function expressionRuntimeEvaluationDiagnosticForDataFlow(
-  store: KernelStore,
-  dataFlow: RuntimeBindingDataFlow,
-  source: NonNullable<SemanticTemplateDiagnosticRow['source']>,
-): SemanticTemplateCursorDiagnosticRow | null {
-  const frameworkErrorCode = runtimeAstFrameworkErrorCodeForDataFlow(store, dataFlow);
-  if (frameworkErrorCode == null) {
-    return null;
-  }
-  return expressionRuntimeEvaluationErrorDiagnostic(
-    frameworkErrorCode,
-    dataFlow.sourceTypeOpenReason ?? 'The TypeChecker projection reached a runtime expression-evaluation failure.',
-    source,
-    runtimeAstSelectedMemberName(store, dataFlow),
-  );
-}
-
-function runtimeAstFrameworkErrorCodeForDataFlow(
-  store: KernelStore,
-  dataFlow: RuntimeBindingDataFlow,
-): RuntimeAstFrameworkErrorCode | RuntimeHtmlAstFrameworkErrorCodeValue | null {
-  switch (dataFlow.sourceTypeOpenKind) {
-    case CheckerExpressionTypeOpenKind.HostContextNotFound:
-      return RuntimeAstFrameworkErrorCode.AstHostNotFound;
-    case CheckerExpressionTypeOpenKind.MissingValueConverterResource:
-      return RuntimeHtmlAstFrameworkErrorCode.AstConverterNotFound;
-    case CheckerExpressionTypeOpenKind.MissingBindingBehaviorResource:
-      return RuntimeHtmlAstFrameworkErrorCode.AstBehaviorNotFound;
-    case CheckerExpressionTypeOpenKind.DuplicateBindingBehavior:
-      return RuntimeHtmlAstFrameworkErrorCode.AstBehaviorDuplicated;
-    case CheckerExpressionTypeOpenKind.NullishMemberAccess:
-      return dataFlow.strictBinding === true ? RuntimeAstFrameworkErrorCode.AstNullishMemberAccess : null;
-    case CheckerExpressionTypeOpenKind.NullishKeyedAccess:
-      return dataFlow.strictBinding === true ? RuntimeAstFrameworkErrorCode.AstNullishKeyedAccess : null;
-    case CheckerExpressionTypeOpenKind.NullishCallTarget:
-      return dataFlow.strictBinding === true
-        ? runtimeAstCallTargetFrameworkErrorCode(store, dataFlow)
-        : null;
-    case CheckerExpressionTypeOpenKind.IncrementInConnectableEvaluation:
-      return dataFlowDirectionIncludesSourceToTarget(dataFlow.direction)
-        ? RuntimeAstFrameworkErrorCode.AstIncrementInfiniteLoop
-        : null;
-  }
-  if (
-    dataFlow.sourceTypeOpenKind !== CheckerExpressionTypeOpenKind.UnsupportedCallTarget
-    && dataFlow.sourceTypeOpenKind !== CheckerExpressionTypeOpenKind.UnsupportedConstruct
-  ) {
-    return null;
-  }
-  const expression = runtimeAstDiagnosticExpression(store, dataFlow);
-  if (expression == null) {
-    return null;
-  }
-  switch (expression.$kind) {
-    case 'CallScope':
-    case 'CallMember':
-      return RuntimeAstFrameworkErrorCode.AstNameIsNotAFunction;
-    case 'TaggedTemplate':
-      return RuntimeAstFrameworkErrorCode.AstTaggedNotAFunction;
-    case 'CallFunction':
-    case 'CallGlobal':
-    case 'New':
-      return RuntimeAstFrameworkErrorCode.AstNotAFunction;
-    default:
-      return dataFlow.sourceTypeOpenKind === CheckerExpressionTypeOpenKind.UnsupportedConstruct
-        ? RuntimeAstFrameworkErrorCode.AstNotAFunction
-        : null;
-  }
-}
-
-function runtimeAstCallTargetFrameworkErrorCode(
-  store: KernelStore,
-  dataFlow: RuntimeBindingDataFlow,
-): RuntimeAstFrameworkErrorCode | null {
-  const expression = runtimeAstDiagnosticExpression(store, dataFlow);
-  switch (expression?.$kind) {
-    case 'CallScope':
-    case 'CallMember':
-      return RuntimeAstFrameworkErrorCode.AstNameIsNotAFunction;
-    case 'CallFunction':
-    case 'CallGlobal':
-      return RuntimeAstFrameworkErrorCode.AstNotAFunction;
-    default:
-      return null;
-  }
-}
-
-function dataFlowDirectionIncludesSourceToTarget(
-  direction: RuntimeBindingDataFlowDirection | `${RuntimeBindingDataFlowDirection}`,
-): boolean {
-  return direction === RuntimeBindingDataFlowDirection.SourceToTarget
-    || direction === RuntimeBindingDataFlowDirection.TwoWay;
-}
-
-function runtimeAstSelectedMemberName(
-  store: KernelStore,
-  dataFlow: RuntimeBindingDataFlow,
-): string | null {
-  const expression = runtimeAstDiagnosticExpression(store, dataFlow);
-  switch (expression?.$kind) {
-    case 'CallScope':
-    case 'CallMember':
-    case 'CallGlobal':
-      return expression.name.name;
-    case 'BindingBehavior':
-    case 'ValueConverter':
-      return expression.name.name;
-    default:
-      return dataFlow.sourceName;
-  }
-}
-
-function bindingSourceAssignmentDiagnosticSource(
-  store: KernelStore,
-  dataFlow: RuntimeBindingDataFlow,
-): NonNullable<SemanticTemplateDiagnosticRow['source']> | null {
-  const expression = sourceAssignmentDiagnosticExpression(store, dataFlow);
-  const span = expression?.span ?? null;
-  if (span?.file == null) {
-    return null;
-  }
-  return sourceReferenceForParserSpan(span.file.path, span, 'binding-source-assignment');
-}
-
-function sourceAssignmentDiagnosticExpression(
-  store: KernelStore,
-  dataFlow: RuntimeBindingDataFlow,
-): ExpressionAstNode | null {
-  const parse = expressionParseForProductHandle(store, dataFlow.expressionProductHandle);
-  return parse == null ? null : runtimeAssignmentTargetAstForParse(parse);
-}
-
-function runtimeAstDiagnosticExpression(
-  store: KernelStore,
-  dataFlow: RuntimeBindingDataFlow,
-): ExpressionAstNode | null {
-  const parse = expressionParseForProductHandle(store, dataFlow.expressionProductHandle);
-  const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
-  return ast == null
-    ? null
-    : runtimeAstDiagnosticExpressionForOpenKind(ast, dataFlow.sourceTypeOpenKind);
-}
-
-function runtimeAstDiagnosticExpressionForOpenKind(
-  ast: ExpressionAstNode,
-  openKind: RuntimeBindingDataFlow['sourceTypeOpenKind'],
-): ExpressionAstNode {
-  switch (openKind) {
-    case CheckerExpressionTypeOpenKind.MissingValueConverterResource:
-      return firstRuntimeAstExpressionKind(ast, 'ValueConverter') ?? ast;
-    case CheckerExpressionTypeOpenKind.MissingBindingBehaviorResource:
-    case CheckerExpressionTypeOpenKind.DuplicateBindingBehavior:
-      return firstRuntimeAstExpressionKind(ast, 'BindingBehavior') ?? ast;
-    default:
-      return unwrapRuntimeAstDiagnosticExpression(ast);
-  }
-}
-
-function firstRuntimeAstExpressionKind(
-  expression: ExpressionAstNode,
-  kind: 'BindingBehavior' | 'ValueConverter',
-): ExpressionAstNode | null {
-  let current: ExpressionAstNode = expression;
-  for (;;) {
-    const wrapper = runtimeAstResourceWrapper(current);
-    if (wrapper == null) {
-      return null;
-    }
-    if (wrapper.$kind === kind) {
-      return wrapper;
-    }
-    current = wrapper.expression;
-  }
-}
-
-function unwrapRuntimeAstDiagnosticExpression(expression: ExpressionAstNode): ExpressionAstNode {
-  let current: ExpressionAstNode = expression;
-  for (;;) {
-    const wrapper = runtimeAstResourceWrapper(current);
-    if (wrapper == null) {
-      return current;
-    }
-    current = wrapper.expression;
-  }
-}
-
-type RuntimeAstResourceWrapper = Extract<
-  ExpressionAstNode,
-  { readonly $kind: 'BindingBehavior' | 'ValueConverter' }
->;
-
-function runtimeAstResourceWrapper(
-  expression: ExpressionAstNode,
-): RuntimeAstResourceWrapper | null {
-  return expression.$kind === 'BindingBehavior' || expression.$kind === 'ValueConverter'
-    ? expression
-    : null;
-}
-
-function expressionParseForProductHandle(
-  store: KernelStore,
-  expressionProductHandle: ProductHandle | null,
-): TemplateExpressionParse | null {
-  return expressionProductHandle == null
-    ? null
-    : store.productDetails.read(TemplateProductDetails.ExpressionParse, expressionProductHandle);
 }
 
 function templateResourceSelections(

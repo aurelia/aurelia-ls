@@ -52,7 +52,6 @@ import {
 import {
   RuntimeBindingSourceValueEvaluationKind,
   RuntimeBindingSourceValueEvaluator,
-  bindingExpressionAstForProduct,
 } from '../observation/binding-source-value-evaluator.js';
 import {
   instructionScopeLookup,
@@ -73,6 +72,7 @@ import {
 import {
   TemplateProductDetails,
 } from './product-details.js';
+import { bindingExpressionAstForProduct } from './expression-parse-product.js';
 import {
   HydrateElementInstruction,
   SetPropertyInstruction,

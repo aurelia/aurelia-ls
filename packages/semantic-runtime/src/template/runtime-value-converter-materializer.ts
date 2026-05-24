@@ -31,7 +31,7 @@ import type { Container } from '../di/container.js';
 import type { TemplateResourceScope } from './compiler-world.js';
 import { findVisibleTemplateResource } from './compiler-resource-lookup.js';
 import type { TemplateVisibleResource } from './compiler-world-reference.js';
-import { runtimeAcceptedBindingExpressionAstForParse } from './expression-parse-projection.js';
+import { bindingExpressionAstForProduct } from './expression-parse-product.js';
 import { TemplateProductDetails } from './product-details.js';
 import {
   PropertyBinding,
@@ -41,7 +41,6 @@ import { expressionProductHandlesForRuntimeBinding } from './runtime-binding-exp
 import { appendRuntimeBindingProductValue } from './runtime-binding-product-index.js';
 import { sourceAddressForRuntimeExpressionSpan } from './runtime-expression-source-address.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
-import type { TemplateExpressionParse } from './value-site.js';
 import { TemplateBindingMode } from './instruction-ir.js';
 import {
   RuntimeValueConverterApplication,
@@ -145,8 +144,7 @@ export class RuntimeValueConverterMaterializer {
 
     input.runtimeRendering.bindings.forEach((binding, bindingIndex) => {
       expressionProductHandlesForRuntimeBinding(binding).forEach((expressionProductHandle, expressionIndex) => {
-        const parse = this.readParse(expressionProductHandle);
-        const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+        const ast = bindingExpressionAstForProduct(this.store, expressionProductHandle);
         if (ast == null) {
           return;
         }
@@ -290,12 +288,6 @@ export class RuntimeValueConverterMaterializer {
       evidenceHandle,
       provenanceHandle,
     );
-  }
-
-  private readParse(productHandle: ProductHandle | null): TemplateExpressionParse | null {
-    return productHandle == null
-      ? null
-      : this.store.productDetails.read(TemplateProductDetails.ExpressionParse, productHandle);
   }
 }
 

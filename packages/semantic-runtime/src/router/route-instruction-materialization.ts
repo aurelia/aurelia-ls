@@ -47,7 +47,7 @@ import {
   PropertyBindingInstruction,
   SetPropertyInstruction,
 } from '../template/instruction-ir.js';
-import { runtimeAcceptedBindingExpressionAstForParse } from '../template/expression-parse-projection.js';
+import { bindingExpressionAstForProduct, readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import { RuntimeControllerCreationKind } from '../template/runtime-controller.js';
 import type { RuntimeControllerFrame } from '../template/runtime-controller.js';
@@ -1328,7 +1328,7 @@ type StaticRouterResourceValue =
 
 type StaticStringBindingValue = Extract<StaticRouterResourceValue, { readonly state: 'route-expression' }>;
 
-type AcceptedBindingExpressionAst = NonNullable<ReturnType<typeof runtimeAcceptedBindingExpressionAstForParse>>;
+type AcceptedBindingExpressionAst = NonNullable<ReturnType<typeof bindingExpressionAstForProduct>>;
 
 interface DynamicBindingReason {
   readonly summary: string | null;
@@ -2260,14 +2260,6 @@ function dynamicBindingReasonForEvaluation(
       };
 }
 
-function bindingExpressionAstForProduct(
-  store: KernelStore,
-  expressionProductHandle: ProductHandle,
-): AcceptedBindingExpressionAst | null {
-  const parse = store.productDetails.read(TemplateProductDetails.ExpressionParse, expressionProductHandle);
-  return parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
-}
-
 function expressionSourceAddressHandleForProduct(
   store: KernelStore,
   expressionProductHandle: ProductHandle | null,
@@ -2275,7 +2267,7 @@ function expressionSourceAddressHandleForProduct(
   if (expressionProductHandle == null) {
     return null;
   }
-  return store.productDetails.read(TemplateProductDetails.ExpressionParse, expressionProductHandle)?.sourceAddressHandle ?? null;
+  return readTemplateExpressionParse(store, expressionProductHandle)?.sourceAddressHandle ?? null;
 }
 
 function evaluatedBindingExpressionProduct(

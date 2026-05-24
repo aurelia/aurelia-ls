@@ -1236,6 +1236,7 @@
         "Use `BindingDataFlowSummary` before paging raw data-flow rows when an MCP/LSP answer needs compact source/target direction, value-channel family, assignability/writeback, source-root, issue rollups, or framework-code pressure.",
         "Treat `source-type-unresolved`, nullish source/target write-direction mismatch rows, and `target-empty-array-inferred` issue rollups as compact repair-routing signals: unresolved source typing points at source/scope typing that did not close, nullish rows point at narrowing or an optional receiving-side contract, and empty-array targets often mean an authored component property initialized to [] needs an explicit domain type before assignability can be trusted.",
         "Keep expression parsing as authored syntax and observation data-flow as runtime binding semantics over target products and Scope slots.",
+        "Use `template/expression-parse-product.ts` for product-handle reads before projecting runtime-accepted binding ASTs or runtime assignment targets. Observation, router, composition, binding behaviors, value converters, diagnostics, and i18n should not re-own product-detail reads just to unwrap parser results.",
         "When evaluating a runtime binding source, resolve the scope through RuntimeInstructionScopeLookup and the binding's rendering controller. Instruction products are definition-level identities and may be rendered under several controller/synthetic-view contexts; a global instruction-to-scope map is a modeling regression unless there is exactly one unambiguous scope.",
         "Target-side observer write failures belong here: spend runtime assign_readonly_size / AUR0220 for source-to-target writes through CollectionSizeObserver and assign_readonly_readonly_property_from_computed / AUR0221 for source-to-target writes through getter-only ComputedObserver targets.",
         "For select/radio value channels, keep data-flow assignability directional: observer source-to-target synchronization can accept null or non-matching scalar/object values even when target-to-source user-event writeback is narrowed to the option/model domain.",
@@ -1331,6 +1332,18 @@
         },
         {
           "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/expression-parse-product.ts",
+          "symbolName": "bindingExpressionAstForProduct",
+          "summary": "Shared product-handle to runtime-accepted binding AST reader consumed by observation, router, composition, i18n, binding-behavior, value-converter, and diagnostics code."
+        },
+        {
+          "kind": "source",
+          "filePath": "packages/semantic-runtime/src/template/expression-parse-product.ts",
+          "symbolName": "runtimeAssignmentTargetAstForProduct",
+          "summary": "Shared product-handle to runtime assignment target reader used by binding data-flow diagnostics without reparsing at the API layer."
+        },
+        {
+          "kind": "source",
           "filePath": "packages/semantic-runtime/src/type-system/expression-member-owner-projector.ts",
           "symbolName": "CheckerExpressionMemberOwnerProjector",
           "summary": "Offset-aware member-owner projector used by observed-dependency source routing and cursor/member inquiries."
@@ -1354,6 +1367,11 @@
           "kind": "script",
           "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:select-checked-value-channels",
           "summary": "Focused contract for directional select/checked value-channel data-flow semantics."
+        },
+        {
+          "kind": "script",
+          "command": "pnpm --filter @aurelia-ls/semantic-runtime contract:class-style-value-channels",
+          "summary": "Focused contract for class/style interpolation value channels, binding data-flow rows, and observed template source reads."
         },
         {
           "kind": "script",
@@ -1436,6 +1454,16 @@
         },
         {
           "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/expression-parse-product.ts",
+          "symbolName": "bindingExpressionAstForProduct"
+        },
+        {
+          "kind": "source-declaration-exists",
+          "filePath": "packages/semantic-runtime/src/template/expression-parse-product.ts",
+          "symbolName": "runtimeAssignmentTargetAstForProduct"
+        },
+        {
+          "kind": "source-declaration-exists",
           "filePath": "packages/semantic-runtime/src/observation/runtime-binding-expression-scope.ts",
           "symbolName": "RuntimeBindingExpressionScopeProjector"
         },
@@ -1446,6 +1474,10 @@
         {
           "kind": "source-file-exists",
           "filePath": "packages/semantic-runtime/scripts/contract-template-diagnostics.mjs"
+        },
+        {
+          "kind": "source-file-exists",
+          "filePath": "packages/semantic-runtime/scripts/contract-class-style-value-channels.mjs"
         }
       ],
       "createdAt": "2026-05-12",

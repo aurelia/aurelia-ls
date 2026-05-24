@@ -50,6 +50,7 @@ import {
 import type { TemplateExpressionParse } from './value-site.js';
 import { TemplateProductDetails } from './product-details.js';
 import { completedTemplateExpressionAstForParse } from './expression-parse-projection.js';
+import { readTemplateExpressionParse } from './expression-parse-product.js';
 import {
   TemplateControllerPromiseResultKind,
   type TemplateControllerPromiseState,
@@ -111,9 +112,7 @@ export class TemplateScopeTypeProjector {
   }
 
   readParse(productHandle: ProductHandle | null): TemplateExpressionParse | null {
-    return productHandle == null
-      ? null
-      : this.store.productDetails.read(TemplateProductDetails.ExpressionParse, productHandle);
+    return readTemplateExpressionParse(this.store, productHandle);
   }
 
   listenerEventSlot(

@@ -1,6 +1,6 @@
 import type { AureliaAppWorldProjectEmission } from '../configuration/app-world-project-pass.js';
 import type { KernelStore } from '../kernel/store.js';
-import { TemplateProductDetails } from '../template/product-details.js';
+import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import {
   RuntimeObservedDependencyKind,
   type RuntimeBindingDataFlow,
@@ -1283,7 +1283,5 @@ function expressionParseForDataFlow(
   store: KernelStore,
   dataFlow: RuntimeBindingDataFlow,
 ): TemplateExpressionParse | null {
-  return dataFlow.expressionProductHandle == null
-    ? null
-    : store.productDetails.read(TemplateProductDetails.ExpressionParse, dataFlow.expressionProductHandle);
+  return readTemplateExpressionParse(store, dataFlow.expressionProductHandle);
 }

@@ -174,6 +174,8 @@ function collectObservedDependencies(
     case 'ArrowFunction':
       return;
   }
+  const exhaustive: never = expression;
+  return exhaustive;
 }
 
 function collectBindingPatternObservedDependencies(

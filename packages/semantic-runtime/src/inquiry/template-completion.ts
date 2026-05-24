@@ -35,6 +35,7 @@ import {
 import {
   TemplateProductDetails,
 } from '../template/product-details.js';
+import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import { TypeSystemProductDetails } from '../type-system/product-details.js';
 import {
   CheckerExpressionTypeEvaluationResultKind,
@@ -867,7 +868,7 @@ function readExpressionParse(
   if (productHandle == null) {
     return null;
   }
-  const detail = store.productDetails.read(TemplateProductDetails.ExpressionParse, productHandle);
+  const detail = readTemplateExpressionParse(store, productHandle);
   if (detail == null) {
     missingInputs.push('expression-parse-detail');
   }

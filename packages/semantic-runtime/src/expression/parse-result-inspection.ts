@@ -256,6 +256,7 @@ function findInExpression<T>(
     ?? findInExpressionChildren(expression, (child) => findInExpression(child, select));
 }
 
+/** Walks every parser AST node using parser-owned child semantics shared by feature-level expression consumers. */
 export function visitExpressionAstNodes(
   expression: ExpressionAstNode,
   visit: (expression: ExpressionAstNode) => void,
@@ -309,6 +310,10 @@ function findInExpressionChildren<T>(
     case 'AccessKeyed':
       return findChild(expression.object)
         ?? findChild(expression.key);
+    case 'BindingBehavior':
+    case 'ValueConverter':
+      return findChild(expression.expression)
+        ?? findInExpressionList(expression.args, findChild);
     case 'CallFunction':
       return findChild(expression.func)
         ?? findInExpressionList(expression.args, findChild);
@@ -341,7 +346,8 @@ function findInExpressionChildren<T>(
     case 'Interpolation':
       return findInExpressionList(expression.expressions, findChild);
     case 'ForOfStatement':
-      return findChild(expression.iterable);
+      return findChild(expression.iterable)
+        ?? findChild(expression.declaration);
     case 'BindingPatternDefault':
       return findChild(expression.target)
         ?? findChild(expression.default);
@@ -365,7 +371,8 @@ function findInExpressionChildren<T>(
     case 'Custom':
       return null;
   }
-  return null;
+  const exhaustive: never = expression;
+  return exhaustive;
 }
 
 function findInExpressionList<T>(

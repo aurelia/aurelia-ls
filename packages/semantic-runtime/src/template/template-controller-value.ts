@@ -9,6 +9,7 @@ import {
 } from './instruction-ir.js';
 import { TemplateProductDetails } from './product-details.js';
 import { completedTemplateExpressionAstForParse } from './expression-parse-projection.js';
+import { readTemplateExpressionParse } from './expression-parse-product.js';
 import { frameworkTemplateControllerSemanticsForName } from './template-controller-semantics.js';
 
 export interface TemplateControllerValueTarget {
@@ -86,9 +87,7 @@ export function templateControllerValueTarget(
   instruction: HydrateTemplateControllerInstruction,
 ): TemplateControllerValueTarget | null {
   const productHandle = templateControllerValueExpressionProductHandle(store, instruction);
-  const parse = productHandle == null
-    ? null
-    : store.productDetails.read(TemplateProductDetails.ExpressionParse, productHandle);
+  const parse = readTemplateExpressionParse(store, productHandle);
   const expression = parse == null ? null : completedTemplateExpressionAstForParse(parse);
   const name = expression == null ? null : accessScopeTargetName(expression);
   return name == null

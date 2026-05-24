@@ -9,6 +9,7 @@ import {
 } from '../kernel/store.js';
 import { localKeyPart } from '../kernel/local-key.js';
 import { runtimeAcceptedBindingExpressionAstForParse } from '../template/expression-parse-projection.js';
+import { readTemplateExpressionParse } from '../template/expression-parse-product.js';
 import { expressionProductHandlesForRuntimeBinding } from '../template/runtime-binding-expression-products.js';
 import {
   StateBinding,
@@ -17,8 +18,6 @@ import {
 } from '../template/runtime-binding.js';
 import { bindingBehaviorExpressions, staticStringLiteralExpression } from '../template/binding-behavior-expression.js';
 import type { TemplateCompilationProjectEmission } from '../template/template-compilation-project-pass.js';
-import { TemplateProductDetails } from '../template/product-details.js';
-import type { TemplateExpressionParse } from '../template/value-site.js';
 import type { TypeSystemProject } from '../type-system/project.js';
 import { StateRawErrorAuthority } from './framework-raw-error-authority.js';
 import {
@@ -214,7 +213,7 @@ function stateBindingBehaviorStoreLookupSites(
   binding: RuntimeBinding,
 ): readonly StateStoreLookupSite[] {
   return expressionProductHandlesForRuntimeBinding(binding).flatMap((productHandle) => {
-    const parse = readExpressionParse(store, productHandle);
+    const parse = readTemplateExpressionParse(store, productHandle);
     const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
     if (ast == null || parse?.sourceAddressHandle == null) {
       return [];
@@ -240,15 +239,6 @@ function stateBindingBehaviorStoreLookupSites(
         ];
     });
   });
-}
-
-function readExpressionParse(
-  store: KernelStore,
-  productHandle: RuntimeBinding['productHandle'] | null,
-): TemplateExpressionParse | null {
-  return productHandle == null
-    ? null
-    : store.productDetails.read(TemplateProductDetails.ExpressionParse, productHandle);
 }
 
 function stateStoreLookupIssueMessage(site: StateStoreLookupSite): string {

@@ -37,6 +37,7 @@
     "contract:runtime-composition-bound-controller": "pnpm build && node scripts/contract-runtime-composition-bound-controller.mjs",
     "contract:recursive-rendering": "pnpm build && node scripts/contract-recursive-rendering.mjs",
     "contract:select-checked-value-channels": "pnpm build && node scripts/contract-select-checked-value-channels.mjs",
+    "contract:class-style-value-channels": "pnpm build && node scripts/contract-class-style-value-channels.mjs",
     "contract:keyed-form-source-bindings": "pnpm build && node scripts/contract-keyed-form-source-bindings.mjs",
     "contract:dynamic-keyed-validation": "pnpm build && node scripts/contract-dynamic-keyed-validation.mjs",
     "contract:template-diagnostics": "pnpm build && node scripts/contract-template-diagnostics.mjs",

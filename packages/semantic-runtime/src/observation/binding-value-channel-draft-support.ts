@@ -16,7 +16,7 @@ import {
   type HtmlAttribute,
   type HtmlNodeReference,
 } from '../template/html-ir.js';
-import { runtimeAcceptedBindingExpressionAstForParse } from '../template/expression-parse-projection.js';
+import { bindingExpressionAstForProduct } from '../template/expression-parse-product.js';
 import { TemplateProductDetails } from '../template/product-details.js';
 import {
   PropertyBinding,
@@ -33,7 +33,6 @@ import {
 import type { RuntimeControllerFrame } from '../template/runtime-controller.js';
 import { CheckerAsyncTypeProjector } from '../type-system/checker-async-type-projector.js';
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
-import type { TemplateExpressionParse } from '../template/value-site.js';
 import {
   CheckerExpressionTypeEvaluator,
 } from '../type-system/expression-type-evaluator.js';
@@ -575,8 +574,7 @@ export class RuntimeBindingValueChannelDraftSupport {
     context: BindingValueChannelDraftContext,
   ): BindingValueExpression {
     const scope = context.instructionScopes.scopeForBinding(context.input.runtimeBindings, binding);
-    const parse = this.readParse(binding.expressionProductHandle);
-    const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+    const ast = this.bindingExpressionAst(binding.expressionProductHandle);
     if (scope == null || ast == null) {
       return {
         valueType: null,
@@ -604,8 +602,7 @@ export class RuntimeBindingValueChannelDraftSupport {
     context: BindingValueChannelDraftContext,
     nullishDefault: string | null,
   ): BindingValueExpression {
-    const parse = this.readParse(binding.expressionProductHandle);
-    const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+    const ast = this.bindingExpressionAst(binding.expressionProductHandle);
     if (ast == null) {
       return {
         valueType: this.types.stringValueType(`${local}:dom-string`, binding),
@@ -776,8 +773,7 @@ export class RuntimeBindingValueChannelDraftSupport {
     if (scope == null) {
       return null;
     }
-    const parse = this.readParse(expressionProductHandleForBinding(binding));
-    const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+    const ast = this.bindingExpressionAst(expressionProductHandleForBinding(binding));
     if (ast == null) {
       return null;
     }
@@ -813,10 +809,9 @@ export class RuntimeBindingValueChannelDraftSupport {
     };
   }
 
-  readParse(productHandle: ProductHandle | null): TemplateExpressionParse | null {
-    return productHandle == null
-      ? null
-      : this.store.productDetails.read(TemplateProductDetails.ExpressionParse, productHandle);
+  /** Reads the runtime-accepted binding AST through the template expression product substrate. */
+  bindingExpressionAst(productHandle: ProductHandle | null): ExpressionAstNode | null {
+    return bindingExpressionAstForProduct(this.store, productHandle);
   }
 
   optionElementsFor(select: HtmlElement): readonly HtmlElement[] {

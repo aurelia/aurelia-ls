@@ -2,7 +2,6 @@ import ts from 'typescript';
 import { uniqueStrings } from '../kernel/collections.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
 import { HtmlElement, normalizeHtmlTagName } from '../template/html-ir.js';
-import { runtimeAcceptedBindingExpressionAstForParse } from '../template/expression-parse-projection.js';
 import {
   PropertyBinding,
   type RuntimeBindingTargetAccess,
@@ -354,8 +353,7 @@ export class SelectValueObserverChannelDrafts {
     binding: PropertyBinding,
     context: BindingValueChannelDraftContext,
   ): boolean | null {
-    const parse = this.owner.readParse(binding.expressionProductHandle);
-    const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+    const ast = this.owner.bindingExpressionAst(binding.expressionProductHandle);
     const literal = ast == null ? null : runtimeBindingBooleanLiteralForExpression(ast);
     if (literal != null) {
       return literal;

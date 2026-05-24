@@ -109,7 +109,7 @@ import {
   BuiltInTemplateControllerFlowKind,
   frameworkTemplateControllerSemanticsForName,
 } from '../template/template-controller-semantics.js';
-import { TemplateProductDetails } from '../template/product-details.js';
+import { bindingExpressionAstForProduct } from '../template/expression-parse-product.js';
 import { ObservationProductDetails } from './product-details.js';
 import {
   PropertyBinding,
@@ -165,14 +165,10 @@ import {
 import type { RuntimeRenderingEmission } from '../template/runtime-rendering-materializer.js';
 import type { RuntimeControllerBindEmission } from '../template/runtime-controller-bind-materializer.js';
 import type { RuntimeBindingValueChannelEmission } from './binding-value-channel-materializer.js';
-import type {
-  TemplateExpressionParse,
-} from '../template/value-site.js';
 import {
   sourceAddressForRuntimeExpressionBounds,
 } from '../template/runtime-expression-source-address.js';
 import {
-  runtimeAcceptedBindingExpressionAstForParse,
   runtimeAssignmentTargetAstForExpression,
   runtimeAssignmentValueConverterChainForExpression,
 } from '../template/expression-parse-projection.js';
@@ -1160,8 +1156,7 @@ class RuntimeBindingDataFlowDraftMaterializer {
     local: string,
   ): DataFlowExpressionFacts {
     const expressionProductHandle = expressionProductHandleForBinding(binding);
-    const parse = this.readParse(expressionProductHandle);
-    const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+    const ast = bindingExpressionAstForProduct(this.store, expressionProductHandle);
     return {
       expressionProductHandle,
       ast,
@@ -1183,12 +1178,6 @@ class RuntimeBindingDataFlowDraftMaterializer {
       targetPropertyType,
       targetValueType: target.valueChannel?.runtimeValueType ?? target.sourceOperation?.targetType ?? targetPropertyType,
     };
-  }
-
-  private readParse(productHandle: ProductHandle | null): TemplateExpressionParse | null {
-    return productHandle == null
-      ? null
-      : this.store.productDetails.read(TemplateProductDetails.ExpressionParse, productHandle);
   }
 }
 

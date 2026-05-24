@@ -64,6 +64,7 @@ import {
   LetBindingScopeEffect,
 } from './runtime-binding.js';
 import { TemplateProductDetails } from './product-details.js';
+import { readTemplateExpressionParse } from './expression-parse-product.js';
 import {
   DispatchBindingInstruction,
   HydrateTemplateControllerInstruction,
@@ -575,9 +576,7 @@ export class TemplateTypeSystemOverlayBuilder {
     readonly declaration: TemplateTypeSystemOverlaySourceSlice;
     readonly iterable: readonly TemplateTypeSystemOverlayExpressionPart[];
   } | null {
-    const parse = effect.iterableExpressionProductHandle == null
-      ? null
-      : this.store.productDetails.read(TemplateProductDetails.ExpressionParse, effect.iterableExpressionProductHandle);
+    const parse = readTemplateExpressionParse(this.store, effect.iterableExpressionProductHandle);
     if (parse?.result.kind !== ExpressionParseResultKind.IteratorSuccess) {
       return null;
     }
@@ -646,9 +645,7 @@ export class TemplateTypeSystemOverlayBuilder {
     effect: LetBindingScopeEffect,
     expressionContext: TemplateTypeSystemOverlayExpressionProjectionContext,
   ): readonly TemplateTypeSystemOverlayExpressionPart[] | null {
-    const parse = effect.expressionProductHandle == null
-      ? null
-      : this.store.productDetails.read(TemplateProductDetails.ExpressionParse, effect.expressionProductHandle);
+    const parse = readTemplateExpressionParse(this.store, effect.expressionProductHandle);
     const ast = parse == null ? null : completedTemplateExpressionAstForParse(parse);
     const source = ast == null ? null : this.expressions.copyableExpression(ast, expressionContext, effect.expressionProductHandle);
     return source == null ? null : overlayExpressionParts(source);
@@ -1155,9 +1152,7 @@ export class TemplateTypeSystemOverlayBuilder {
     expressionContext: TemplateTypeSystemOverlayExpressionProjectionContext,
   ): readonly TemplateTypeSystemOverlayExpressionPart[] | null {
     const expressionProductHandle = templateControllerValueExpressionProductHandle(this.store, instruction);
-    const parse = expressionProductHandle == null
-      ? null
-      : this.store.productDetails.read(TemplateProductDetails.ExpressionParse, expressionProductHandle);
+    const parse = readTemplateExpressionParse(this.store, expressionProductHandle);
     const ast = parse == null ? null : completedTemplateExpressionAstForParse(parse);
     const source = ast == null ? null : this.expressions.copyableExpression(ast, expressionContext, expressionProductHandle);
     return source == null ? null : overlayExpressionParts(source);

@@ -9,18 +9,13 @@ import {
 import {
   TemplateBindingMode,
 } from './instruction-ir.js';
-import {
-  TemplateProductDetails,
-} from './product-details.js';
 import type { TemplateResourceScope } from './compiler-world.js';
 import { findVisibleTemplateResource } from './compiler-resource-lookup.js';
 import { ResourceDefinitionKind } from '../resources/resource-kind.js';
 import {
   type PropertyBinding,
 } from './runtime-binding.js';
-import {
-  runtimeAcceptedBindingExpressionAstForParse,
-} from './expression-parse-projection.js';
+import { bindingExpressionAstForProduct } from './expression-parse-product.js';
 
 /** Binding mode selected by runtime-html BindingModeBehavior during astBind(...). */
 export function bindingModeForBindingBehaviorName(name: string): TemplateBindingMode | null {
@@ -82,10 +77,6 @@ export function bindingModeBehaviorExpressionsForExpressionProduct(
   store: KernelStore,
   expressionProductHandle: ProductHandle | null,
 ): readonly BindingBehaviorExpression[] {
-  if (expressionProductHandle == null) {
-    return [];
-  }
-  const parse = store.productDetails.read(TemplateProductDetails.ExpressionParse, expressionProductHandle);
-  const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+  const ast = bindingExpressionAstForProduct(store, expressionProductHandle);
   return ast == null ? [] : bindingBehaviorExpressions(ast);
 }

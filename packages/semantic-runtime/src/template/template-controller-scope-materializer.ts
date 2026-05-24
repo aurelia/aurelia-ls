@@ -93,6 +93,7 @@ import {
   type TemplateInstructionSequence,
 } from './instruction-ir.js';
 import { TemplateProductDetails } from './product-details.js';
+import { readTemplateExpressionParse } from './expression-parse-product.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import type { RuntimeControllerFrame } from './runtime-controller.js';
 import {
@@ -707,7 +708,7 @@ export class TemplateControllerScopeMaterializer {
     if (value.expressionProductHandle == null || value.sourceScope == null) {
       return [];
     }
-    const parse = this.store.productDetails.read(TemplateProductDetails.ExpressionParse, value.expressionProductHandle);
+    const parse = readTemplateExpressionParse(this.store, value.expressionProductHandle);
     const expression = parse == null ? null : bindingExpressionAstForParse(parse);
     if (expression == null) {
       return [];

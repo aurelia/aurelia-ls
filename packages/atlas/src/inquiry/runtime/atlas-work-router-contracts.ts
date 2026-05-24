@@ -46,6 +46,8 @@ export interface AtlasWorkRouteQueryCanary {
 export const enum AtlasWorkRouteCoverageDimension {
   /** Source-bearing routes should reuse shared authored-text and line/offset boundaries instead of local file reads. */
   AuthoredSourceTextBoundary = "authored-source-text-boundary",
+  /** Binding consumers should spend shared source, target, value-channel, assignment, and diagnostics products. */
+  BindingDataFlowSubstrate = "binding-data-flow-substrate",
   /** Checker-bearing routes should reuse TypeSystemProject/checker helpers instead of feature-local TypeChecker forks. */
   CheckerValueAccess = "checker-value-access",
   /** Public answer families still need intent-aware typed continuations threaded through route-local APIs. */

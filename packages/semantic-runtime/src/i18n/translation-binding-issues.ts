@@ -35,9 +35,7 @@ import {
   CheckerTypeShapeKind,
   type CheckerTypeReference,
 } from '../type-system/type-shape.js';
-import {
-  runtimeAcceptedBindingExpressionAstForParse,
-} from '../template/expression-parse-projection.js';
+import { bindingExpressionAstForProduct } from '../template/expression-parse-product.js';
 import type {
   TemplateResourceScope,
 } from '../template/compiler-world.js';
@@ -59,9 +57,6 @@ import {
 import type {
   TemplateScopeConstructionEmission,
 } from '../template/template-controller-scope-materializer.js';
-import type {
-  TemplateExpressionParse,
-} from '../template/value-site.js';
 import {
   instructionScopeLookup,
   type RuntimeInstructionScopeLookup,
@@ -254,8 +249,7 @@ export class I18nTranslationBindingIssueMaterializer {
     if (expressionProductHandle == null) {
       return false;
     }
-    const parse = this.readParse(expressionProductHandle);
-    const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+    const ast = bindingExpressionAstForProduct(this.store, expressionProductHandle);
     const scope = context.instructionScopes.scopeForBinding(context.runtimeRendering, binding);
     if (ast == null || scope == null) {
       return false;
@@ -335,10 +329,6 @@ export class I18nTranslationBindingIssueMaterializer {
       evidenceHandle,
       provenanceHandle,
     );
-  }
-
-  private readParse(productHandle: ProductHandle): TemplateExpressionParse | null {
-    return this.store.productDetails.read(TemplateProductDetails.ExpressionParse, productHandle);
   }
 }
 

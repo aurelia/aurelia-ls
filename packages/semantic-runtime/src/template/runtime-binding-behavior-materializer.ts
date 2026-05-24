@@ -26,7 +26,7 @@ import {
 import {
   bindingBehaviorExpressions,
 } from './binding-behavior-expression.js';
-import { runtimeAcceptedBindingExpressionAstForParse } from './expression-parse-projection.js';
+import { bindingExpressionAstForProduct } from './expression-parse-product.js';
 import { TemplateProductDetails } from './product-details.js';
 import {
   AttributeBinding,
@@ -46,7 +46,6 @@ import { TemplateBindingMode } from './instruction-ir.js';
 import type { RuntimeRenderingEmission } from './runtime-rendering-materializer.js';
 import type { RuntimeControllerBindEmission } from './runtime-controller-bind-materializer.js';
 import type { TemplateResourceScope } from './compiler-world.js';
-import type { TemplateExpressionParse } from './value-site.js';
 import {
   AttrBindingBehavior,
   DebounceBindingBehavior,
@@ -209,8 +208,7 @@ export class RuntimeBindingBehaviorMaterializer {
     input.runtimeRendering.bindings.forEach((binding, bindingIndex) => {
       const targetAccess = firstTargetAccess(input.controllerBind, binding);
       expressionProductHandlesForRuntimeBinding(binding).forEach((expressionProductHandle, expressionIndex) => {
-        const parse = this.readParse(expressionProductHandle);
-        const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+        const ast = bindingExpressionAstForProduct(this.store, expressionProductHandle);
         if (ast == null) {
           return;
         }
@@ -472,12 +470,6 @@ export class RuntimeBindingBehaviorMaterializer {
       evidenceHandle,
       provenanceHandle,
     );
-  }
-
-  private readParse(productHandle: ProductHandle | null): TemplateExpressionParse | null {
-    return productHandle == null
-      ? null
-      : this.store.productDetails.read(TemplateProductDetails.ExpressionParse, productHandle);
   }
 }
 

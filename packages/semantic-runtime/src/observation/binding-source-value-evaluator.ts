@@ -63,7 +63,6 @@ import {
   type EvaluationValue,
 } from '../evaluation/values.js';
 import type { KernelStore } from '../kernel/store.js';
-import type { ProductHandle } from '../kernel/handles.js';
 import type { Container } from '../di/container.js';
 import {
   TypeSystemHotDetails,
@@ -73,12 +72,7 @@ import {
   CheckerTypeMember,
 } from '../type-system/type-shape.js';
 import { OpenSeamReasonKind } from '../kernel/open-seam.js';
-import {
-  TemplateProductDetails,
-} from '../template/product-details.js';
-import {
-  runtimeAcceptedBindingExpressionAstForParse,
-} from '../template/expression-parse-projection.js';
+import { bindingExpressionAstForProduct } from '../template/expression-parse-product.js';
 import {
   PropertyBinding,
 } from '../template/runtime-binding.js';
@@ -1109,17 +1103,6 @@ function contextAccessExpression(
   return expression.$kind === 'AccessThis' || expression.$kind === 'AccessBoundary'
     ? expression
     : null;
-}
-
-export function bindingExpressionAstForProduct(
-  store: KernelStore,
-  expressionProductHandle: ProductHandle | null,
-): ExpressionAstNode | null {
-  if (expressionProductHandle == null) {
-    return null;
-  }
-  const parse = store.productDetails.read(TemplateProductDetails.ExpressionParse, expressionProductHandle);
-  return parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
 }
 
 function evaluationResult(

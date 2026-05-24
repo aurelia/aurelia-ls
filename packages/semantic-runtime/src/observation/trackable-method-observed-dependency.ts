@@ -168,6 +168,8 @@ class RuntimeTrackableMethodObservedDependencyCollector {
       case 'ObjectBindingPattern':
         return;
     }
+    const exhaustive: never = expression;
+    return exhaustive;
   }
 
   private recordCallScope(expression: CallScopeExpression): void {

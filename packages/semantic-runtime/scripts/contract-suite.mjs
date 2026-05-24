@@ -58,6 +58,12 @@ const contractSuites = [
   contract('observation', 'fast', [
     'observation',
     'binding',
+    'style',
+    'value-channel',
+  ], 'contract-class-style-value-channels.mjs', 'Class/style interpolation value channels, data flow, and observed template reads.'),
+  contract('observation', 'fast', [
+    'observation',
+    'binding',
     'forms',
     'value-channel',
     'type-system',

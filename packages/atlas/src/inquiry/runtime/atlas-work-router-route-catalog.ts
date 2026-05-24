@@ -3068,6 +3068,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "runtime expression unassignable",
       "runtime-expression-unassignable",
       "runtime-ast-errors",
+      "readTemplateExpressionParse",
+      "bindingExpressionAstForProduct",
+      "expression parse product",
+      "binding data flow diagnostics policy",
+      "bindingDataFlowDiagnostics",
       "astAssign",
       "host-access-scope-assignment",
       "nullish-assignment",
@@ -3206,9 +3211,28 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Runtime astAssign source-assignment pressure should route to binding data-flow before API diagnostic wording.",
       },
       {
+        query: "expression parse product binding data-flow diagnostics policy",
+        summary:
+          "Expression-parse product readers and binding-flow diagnostic assembly should route to shared template/data-flow substrates before cursor or API-local helpers are added.",
+      },
+      {
+        query: "bindingExpressionAstForProduct router composition binding source value evaluator",
+        summary:
+          "Product-handle to runtime-accepted binding AST questions should route to the template expression product primitive before feature-local observation/router helpers are added.",
+      },
+      {
         query: "ValidationController bridge role evidence validate property info",
         summary:
           "Validation controller property-info and validate binding-behavior questions should route through binding-flow and validation-html framework grounding before bridge evidence is closed.",
+      },
+    ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.BindingDataFlowSubstrate,
+        state: AtlasWorkRouteCoverageState.Partial,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        summary:
+          "Binding-flow owns the shared source/target/value-channel substrate: PropertyBinding, ObserverLocator, RuntimeBindingExpressionScopeProjector, RuntimeBindingSourceValueEvaluator, RuntimeBoundControllerValueTable, value-channel drafts, source writeability, value-converter writeback, assignability, data-flow summaries, and diagnostics policy are wired and covered by focused contracts. The remaining route-local obligation is to keep consumers from reintroducing local source/write/checker/value-channel policy and to close any gaps found by the binding-flow coverage pass.",
       },
     ],
     anchors: [
@@ -3238,6 +3262,51 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Binding value-channel vocabulary includes rejected target-access diagnostics.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/observation/binding-data-flow-materializer.ts",
+        symbolName: "RuntimeBindingDataFlowMaterializer",
+        role: "primary",
+        summary:
+          "Product owner for TypeChecker-backed source/target/value-channel data-flow rows and assignment facts.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/observation/binding-data-flow-materializer.ts",
+        symbolName: "BindingDataFlowSourceProjector",
+        role: "primary",
+        summary:
+          "Source projection boundary for binding expression typing, writeability, assignment target sources, and source open reasons.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/api/template-diagnostic-policy.ts",
+        symbolName: "bindingDataFlowDiagnostics",
+        role: "primary",
+        summary:
+          "Shared public diagnostic assembly for binding data-flow assignment, runtime expression, framework-error, and open-source rows.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/expression-parse-product.ts",
+        symbolName: "readTemplateExpressionParse",
+        role: "supporting",
+        summary:
+          "Shared product-detail reader for materialized template expression parses consumed by binding, router, overlay, i18n, and diagnostics paths.",
+      },
+      {
+        kind: "source",
+        filePath:
+          "packages/semantic-runtime/src/template/expression-parse-product.ts",
+        symbolName: "bindingExpressionAstForProduct",
+        role: "supporting",
+        summary:
+          "Shared product-handle to runtime-accepted binding AST reader used by observation, router, and composition without re-owning expression parse projection.",
       },
       {
         kind: "source",
@@ -3288,6 +3357,13 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "supporting",
         summary:
           "Focused contract for checked/select/radio/model/matcher value-channel semantics and directional assignability.",
+      },
+      {
+        kind: "script",
+        command: "pnpm --filter @aurelia-ls/semantic-runtime contract:class-style-value-channels",
+        role: "supporting",
+        summary:
+          "Focused contract for class/style interpolation value channels, data-flow rows, and observed template reads.",
       },
       {
         kind: "script",
@@ -3582,6 +3658,10 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
       "observed dependency product",
       "observed dependency publication",
       "observed dependency source route",
+      "expression AST traversal",
+      "expression AST child traversal",
+      "parse-result-inspection",
+      "visitExpressionAstNodes",
       "member-owner projection",
       "BindingBehavior member owner",
       "ValueConverter member owner",
@@ -3643,6 +3723,11 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Runtime observed-dependency publication should route to the shared product/source/claim envelope before copying record construction into binding or watcher materializers.",
       },
       {
+        query: "expression AST traversal BindingBehavior ValueConverter observed dependency",
+        summary:
+          "Expression traversal bugs should route through the parser-owned AST inspection helper before feature-local walkers are widened.",
+      },
+      {
         query: "one-hop forwarding accessor direct state template binding",
         summary:
           "One-hop state/domain accessors are authoring taste pressure over topology and observation facts, not generic getter or code-style cleanup.",
@@ -3656,6 +3741,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "component object boundary nullable object bindable direct Product template reads",
         summary:
           "Local object-shaped component input pressure should route to component-interface type surfaces plus binding data-flow, not ID-only recipe policy.",
+      },
+    ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.BindingDataFlowSubstrate,
+        state: AtlasWorkRouteCoverageState.Partial,
+        depth: AtlasWorkRouteCoverageDepth.Semantic,
+        ownerRouteId: "semantic-runtime.observation.binding-flow",
+        summary:
+          "Proxy observation and clean domain-modeling pressure depends on binding data-flow, value-channel, and observed-dependency products for ordinary template reads, object-shaped component inputs, collection reads, watcher/computed dependency rows, and proxy escape diagnostics. Coverage is partial because authoring/taste guidance should not treat those observations as recipe policy until app-builder ontology replaces the hard-coded fixture-like recipes.",
       },
     ],
     anchors: [
@@ -3903,6 +3998,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         role: "primary",
         summary:
           "Shared astEvaluate/connectable dependency collector used by binding data-flow and ExpressionWatcher products, with caller-owned collection-read policy for runtime array receivers.",
+      },
+      {
+        kind: "source",
+        filePath: "packages/semantic-runtime/src/expression/parse-result-inspection.ts",
+        symbolName: "visitExpressionAstNodes",
+        role: "supporting",
+        summary:
+          "Parser-owned expression AST traversal boundary; feature walkers should reuse or compare against this before inventing local child coverage.",
       },
       {
         kind: "source",
@@ -5145,6 +5248,16 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Value-converter checker overlays should consume compiler resource-scope lookup and an importable converter target before generating TypeScript call text.",
       },
     ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.BindingDataFlowSubstrate,
+        state: AtlasWorkRouteCoverageState.Partial,
+        depth: AtlasWorkRouteCoverageDepth.Semantic,
+        ownerRouteId: "semantic-runtime.observation.binding-flow",
+        summary:
+          "BindingScope, BindingContext, OverrideContext, RuntimeInstructionScopeLookup, scope-slot creators, synthetic writeback locals, repeat locals, and template-scope projection are semantic inputs to binding data flow. Coverage is partial because scope consumers must continue to prove they spend the materialized scope products instead of rebuilding parent/local lookup or target-to-source slots locally.",
+      },
+    ],
     anchors: [
       {
         kind: "source",
@@ -6147,6 +6260,14 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
           "Template overlays consume TypeSystemProject and checker helpers for Program-owned evidence, but overlay work remains a high-risk split-brain lane because generated TypeScript can look correct while binding/data-flow or observer semantics disagree. Keep checker lookups routed through type-system owners before broadening overlay-local diagnostics.",
       },
       {
+        dimension: AtlasWorkRouteCoverageDimension.BindingDataFlowSubstrate,
+        state: AtlasWorkRouteCoverageState.Partial,
+        depth: AtlasWorkRouteCoverageDepth.Semantic,
+        ownerRouteId: "semantic-runtime.observation.binding-flow",
+        summary:
+          "Template overlays should consume binding data-flow for fromView/twoWay writeback, checked/select/class/style value channels, target/source assignability, bound-controller values, and source open reasons. Coverage is partial because generated TypeScript can still diverge from Aurelia binding semantics if overlay helpers grow local writeback or value-channel policy.",
+      },
+      {
         dimension: AtlasWorkRouteCoverageDimension.IntentAwareContinuations,
         state: AtlasWorkRouteCoverageState.Covered,
         depth: AtlasWorkRouteCoverageDepth.Verified,
@@ -6706,6 +6827,24 @@ export const ATLAS_WORK_ROUTES: readonly AtlasWorkRoute[] = [
         query: "expression cache source span projection local key collision",
         summary:
           "Source-span/cache collisions should route to the evaluator projection-key boundary before changing TypeChecker projector reuse.",
+      },
+    ],
+    coverage: [
+      {
+        dimension: AtlasWorkRouteCoverageDimension.BindingDataFlowSubstrate,
+        state: AtlasWorkRouteCoverageState.Partial,
+        depth: AtlasWorkRouteCoverageDepth.Semantic,
+        ownerRouteId: "semantic-runtime.observation.binding-flow",
+        summary:
+          "CheckerExpressionTypeWorld, CheckerExpressionTypeEvaluator, CheckerTypeShapeAccess, binding-pattern local projection, member-owner projection, and primitive/source-open facts are shared by binding data-flow source typing and writeability. Coverage is partial until all binding-flow consumers can be checked for local TypeChecker helper forks and evaluator-local source/write policy.",
+      },
+      {
+        dimension: AtlasWorkRouteCoverageDimension.CheckerValueAccess,
+        state: AtlasWorkRouteCoverageState.Covered,
+        depth: AtlasWorkRouteCoverageDepth.Verified,
+        ownerRouteId: "semantic-runtime.type-system-project-epoch",
+        summary:
+          "Type-system expression semantics is a legitimate owner of checker value access; downstream binding, template, diagnostic, and cursor consumers should route through this substrate or TypeSystemProject helpers instead of direct TypeChecker reads.",
       },
     ],
     anchors: [

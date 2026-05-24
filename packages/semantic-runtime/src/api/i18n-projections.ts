@@ -19,12 +19,10 @@ import {
 import {
   TemplateProductDetails,
 } from '../template/product-details.js';
+import { bindingExpressionAstForProduct } from '../template/expression-parse-product.js';
 import {
   TranslationBinding,
 } from '../template/runtime-binding.js';
-import {
-  runtimeAcceptedBindingExpressionAstForParse,
-} from '../template/expression-parse-projection.js';
 import {
   collectRuntimeConnectableObservedDependencyDrafts,
 } from '../observation/connectable-observed-dependency.js';
@@ -145,10 +143,7 @@ function parameterBindingObservedDependencies(
   bindings: readonly TranslationBinding[],
 ) {
   return bindings.flatMap((binding) => {
-    const parse = binding.expressionProductHandle == null
-      ? null
-      : store.productDetails.read(TemplateProductDetails.ExpressionParse, binding.expressionProductHandle);
-    const ast = parse == null ? null : runtimeAcceptedBindingExpressionAstForParse(parse);
+    const ast = bindingExpressionAstForProduct(store, binding.expressionProductHandle);
     return ast == null ? [] : collectRuntimeConnectableObservedDependencyDrafts(ast);
   });
 }
